@@ -28,13 +28,22 @@ module interactions
    real(8),allocatable,private              :: kpt_xeps(:,:)
    integer,allocatable,private              :: kptPos_xeps(:)
    integer,allocatable,private              :: kptPos(:)
+   !
+   complex(8),allocatable                   :: den_smallk(:,:,:,:)
 
    !---------------------------------------------------------------------------!
    !PURPOSE: Rutines available for the user. Description only for interfaces.
    !---------------------------------------------------------------------------!
+   !variables
+   public :: den_smallk
    !subroutines
+   public :: calc_W_full
+   public :: calc_W_edmft
+   public :: calc_chi_full
+   public :: calc_chi_edmft
    public :: read_spex
    !public :: build_Umatrix
+   !public :: calc_QMCinteractions
    !public :: rescale_interaction
 
    !===========================================================================!
@@ -43,13 +52,359 @@ contains
 
 
    !---------------------------------------------------------------------------!
+   !PURPOSE: Lattice inversion to get fully screened interaction - GW+EDMFT
+   !---------------------------------------------------------------------------!
+   subroutine calc_W_full(Wmats,Umats,Pmats,Lttc)
+      !
+      use parameters
+      use utils_misc
+      use utils_fields
+      use crystal
+      use linalg, only : zeye, inv_her !or sym??
+      implicit none
+      !
+      type(BosonicField),intent(inout)      :: Wmats
+      type(BosonicField),intent(in)         :: Umats
+      type(BosonicField),intent(in)         :: Pmats
+      type(Lattice),intent(in)              :: Lttc
+      !
+      complex(8),allocatable                :: den(:,:)
+      real(8)                               :: Beta
+      integer                               :: Nbp,Nkpt,Nmats
+      integer                               :: ik,iw,ismall
+      !
+      !
+      write(*,*) "--- calc_W_full ---"
+      !
+      !
+      ! Check on the input Bosons
+      if(.not.Wmats%status) stop "Wmats not properly initialized."
+      if(.not.Umats%status) stop "Umats not properly initialized."
+      if(.not.Pmats%status) stop "Pmats not properly initialized."
+      if(Wmats%Nkpt.eq.0) stop "Wmats k dependent attributes not properly initialized."
+      if(Umats%Nkpt.eq.0) stop "Umats k dependent attributes not properly initialized."
+      if(Pmats%Nkpt.eq.0) stop "Pmats k dependent attributes not properly initialized."
+      !
+      Nbp = Wmats%Nbp
+      Nkpt = Wmats%Nkpt
+      Beta = Wmats%Beta
+      Nmats = Wmats%Npoints
+      !
+      if(all([Umats%Nbp-Nbp,Pmats%Nbp-Nbp].ne.[0,0])) stop "Either Umats and/or Pmats have different orbital dimension with respect to Wmats."
+      if(all([Umats%Nkpt-Nkpt,Pmats%Nkpt-Nkpt].ne.[0,0])) stop "Either Umats and/or Pmats have different number of Kpoints with respect to Wmats."
+      if(all([Umats%Beta-Beta,Pmats%Beta-Beta].ne.[0d0,0d0])) stop "Either Umats and/or Pmats have different Beta with respect to Wmats."
+      if(all([Umats%Npoints-Nmats,Pmats%Npoints-Nmats].ne.[0,0]))  write(*,"(A)") "Warning: Either Umats and/or Pmats have different number of Matsubara points. Computing up to the smaller."
+      Nmats = minval([Wmats%Npoints,Umats%Npoints,Pmats%Npoints])
+      !
+      if(SmallK_stored)then
+         if(allocated(den_smallk))deallocate(den_smallk)
+         allocate(den_smallk(Nbp,Nbp,Nmats,12))
+      endif
+      !
+      allocate(den(Nbp,Nbp))
+      Wmats%bare=czero; Wmats%bare_local=czero
+      Wmats%screened=czero; Wmats%screened_local=czero
+      !$OMP PARALLEL DEFAULT(NONE),&
+      !$OMP SHARED(Nbp,Nkpt,Nmats,Pmats,Umats,Wmats,SmallK_stored,den_smallk,Lttc),&
+      !$OMP PRIVATE(ik,iw,den,ismall)
+      !$OMP DO
+      do ik=1,Nkpt
+         !
+         ! [ 1 - U*Pi ]
+         den=dcmplx(0d0,0d0)
+         den = zeye(Nbp) - matmul(Umats%bare(:,:,ik),Pmats%bare(:,:,ik))
+         !
+         ! [ 1 - U*Pi ]^-1
+         call inv_her(den)
+         !
+         ! [ 1 - U*Pi ]^-1 * U
+         Wmats%bare(:,:,ik) = matmul(den,Umats%bare(:,:,ik))
+         !
+         do iw=1,Nmats
+            !
+            ! [ 1 - U*Pi ]
+            den=dcmplx(0d0,0d0)
+            den = zeye(Nbp) - matmul(Umats%screened(:,:,iw,ik),Pmats%screened(:,:,iw,ik))
+            !
+            ! [ 1 - U*Pi ]^-1
+            call inv_her(den)
+            !
+            ! [ 1 - U*Pi ]^-1 * U
+            Wmats%screened(:,:,iw,ik) = matmul(den,Umats%screened(:,:,iw,ik))
+            !
+            if(SmallK_stored)then
+               do ismall=1,12
+                  if (Lttc%small_ik(ismall,1).eq.ik) den_smallk(:,:,iw,ismall) = den
+               enddo
+            endif
+            !
+         enddo
+      enddo
+      !$OMP END DO
+      !$OMP END PARALLEL
+      !
+      call BosonicKsum(Wmats)
+      !
+   end subroutine calc_W_full
+
+
+   !---------------------------------------------------------------------------!
+   !PURPOSE: Lattice inversion to get fully screened interaction - EDMFT
+   !---------------------------------------------------------------------------!
+   subroutine calc_W_edmft(Wmats,Umats,Pmats)
+      !
+      use parameters
+      use utils_misc
+      use utils_fields
+      use crystal
+      use linalg, only : zeye, inv_her !or sym??
+      implicit none
+      !
+      type(BosonicField),intent(inout)      :: Wmats
+      type(BosonicField),intent(in)         :: Umats
+      type(BosonicField),intent(in)         :: Pmats
+      !
+      complex(8),allocatable                :: den(:,:)
+      real(8)                               :: Beta
+      integer                               :: Nbp,Nkpt,Nmats
+      integer                               :: ik,iw
+      !
+      !
+      write(*,*) "--- calc_W_edmft ---"
+      !
+      !
+      ! Check on the input Bosons
+      if(.not.Wmats%status) stop "Wmats not properly initialized."
+      if(.not.Umats%status) stop "Umats not properly initialized."
+      if(.not.Pmats%status) stop "Pmats not properly initialized."
+      if(Wmats%Nkpt.ne.0) stop "Wmats k dependent attributes is supposed to be unallocated."
+      if(Umats%Nkpt.eq.0) stop "Umats k dependent attributes not properly initialized."
+      if(Pmats%Nkpt.ne.0) stop "Pmats k dependent attributes is supposed to be unallocated."
+      !
+      Nbp = Wmats%Nbp
+      Nkpt = Umats%Nkpt
+      Beta = Wmats%Beta
+      Nmats = Wmats%Npoints
+      !
+      if(all([Umats%Nbp-Nbp,Pmats%Nbp-Nbp].ne.[0,0])) stop "Either Umats and/or Pmats have different orbital dimension with respect to Wmats."
+      if(all([Umats%Beta-Beta,Pmats%Beta-Beta].ne.[0d0,0d0])) stop "Either Umats and/or Pmats have different Beta with respect to Wmats."
+      if(all([Umats%Npoints-Nmats,Pmats%Npoints-Nmats].ne.[0,0]))  write(*,"(A)") "Warning: Either Umats and/or Pmats have different number of Matsubara points. Computing up to the smaller."
+      Nmats = minval([Wmats%Npoints,Umats%Npoints,Pmats%Npoints])
+      !
+      allocate(den(Nbp,Nbp))
+      Wmats%bare=czero; Wmats%bare_local=czero
+      Wmats%screened=czero; Wmats%screened_local=czero
+      !$OMP PARALLEL DEFAULT(NONE),&
+      !$OMP SHARED(Nbp,Nkpt,Nmats,Pmats,Umats,Wmats),&
+      !$OMP PRIVATE(ik,iw,den)
+      !$OMP DO
+      do ik=1,Nkpt
+         !
+         ! [ 1 - U*Pi ]
+         den=dcmplx(0d0,0d0)
+         den = zeye(Nbp) - matmul(Umats%bare(:,:,ik),Pmats%bare_local)
+         !
+         ! [ 1 - U*Pi ]^-1
+         call inv_her(den)
+         !
+         ! [ 1 - U*Pi ]^-1 * U
+         Wmats%bare_local = Wmats%bare_local + matmul(den,Umats%bare(:,:,ik))/Nkpt
+         !
+         do iw=1,Nmats
+            !
+            ! [ 1 - U*Pi ]
+            den=dcmplx(0d0,0d0)
+            den = zeye(Nbp) - matmul(Umats%screened(:,:,iw,ik),Pmats%screened_local(:,:,iw))
+            !
+            ! [ 1 - U*Pi ]^-1
+            call inv_her(den)
+            !
+            ! [ 1 - U*Pi ]^-1 * U
+            Wmats%screened_local(:,:,iw) = Wmats%screened_local(:,:,iw) + matmul(den,Umats%screened(:,:,iw,ik))/Nkpt
+            !
+         enddo
+      enddo
+      !$OMP END DO
+      !$OMP END PARALLEL
+      !
+   end subroutine calc_W_edmft
+
+
+   !---------------------------------------------------------------------------!
+   !PURPOSE: Computes [ 1 - U*Pi ]^-1 * Pi - GW+EDMFT
+   !---------------------------------------------------------------------------!
+   subroutine calc_chi_full(Chi,Umats,Pmats)
+      !
+      use parameters
+      use utils_misc
+      use utils_fields
+      use crystal
+      use linalg, only : zeye, inv_her !or sym??
+      implicit none
+      !
+      type(BosonicField),intent(inout)      :: Chi
+      type(BosonicField),intent(in)         :: Umats
+      type(BosonicField),intent(in)         :: Pmats
+      !
+      complex(8),allocatable                :: den(:,:)
+      real(8)                               :: Beta
+      integer                               :: Nbp,Nkpt,Nmats
+      integer                               :: ik,iw
+      !
+      !
+      write(*,*) "--- calc_chi_full ---"
+      !
+      !
+      ! Check on the input Bosons
+      if(.not.Chi%status) stop "Chi not properly initialized."
+      if(.not.Umats%status) stop "Umats not properly initialized."
+      if(.not.Pmats%status) stop "Pmats not properly initialized."
+      if(Chi%Nkpt.eq.0) stop "Chi k dependent attributes not properly initialized."
+      if(Umats%Nkpt.eq.0) stop "Umats k dependent attributes not properly initialized."
+      if(Pmats%Nkpt.eq.0) stop "Pmats k dependent attributes not properly initialized."
+      !
+      Nbp = Chi%Nbp
+      Nkpt = Chi%Nkpt
+      Beta = Chi%Beta
+      Nmats = Chi%Npoints
+      !
+      if(all([Umats%Nbp-Nbp,Pmats%Nbp-Nbp].ne.[0,0])) stop "Either Umats and/or Pmats have different orbital dimension with respect to Chi."
+      if(all([Umats%Nkpt-Nkpt,Pmats%Nkpt-Nkpt].ne.[0,0])) stop "Either Umats and/or Pmats have different number of Kpoints with respect to Chi."
+      if(all([Umats%Beta-Beta,Pmats%Beta-Beta].ne.[0d0,0d0])) stop "Either Umats and/or Pmats have different Beta with respect to Chi."
+      if(all([Umats%Npoints-Nmats,Pmats%Npoints-Nmats].ne.[0,0]))  write(*,"(A)") "Warning: Either Umats and/or Pmats have different number of Matsubara points. Computing up to the smaller."
+      Nmats = minval([Chi%Npoints,Umats%Npoints,Pmats%Npoints])
+      !
+      allocate(den(Nbp,Nbp))
+      Chi%bare=czero; Chi%bare_local=czero
+      Chi%screened=czero; Chi%screened_local=czero
+      !$OMP PARALLEL DEFAULT(NONE),&
+      !$OMP SHARED(Nbp,Nkpt,Nmats,Pmats,Umats,Chi),&
+      !$OMP PRIVATE(ik,iw,den)
+      !$OMP DO
+      do ik=1,Nkpt
+         !
+         ! [ 1 - U*Pi ]
+         den=dcmplx(0d0,0d0)
+         den = zeye(Nbp) - matmul(Umats%bare(:,:,ik),Pmats%bare(:,:,ik))
+         !
+         ! [ 1 - U*Pi ]^-1
+         call inv_her(den)
+         !
+         ! [ 1 - U*Pi ]^-1 * U
+         Chi%bare(:,:,ik) = matmul(den,Umats%bare(:,:,ik))
+         !
+         do iw=1,Nmats
+            !
+            ! [ 1 - U*Pi ]
+            den=dcmplx(0d0,0d0)
+            den = zeye(Nbp) - matmul(Umats%screened(:,:,iw,ik),Pmats%screened(:,:,iw,ik))
+            !
+            ! [ 1 - U*Pi ]^-1
+            call inv_her(den)
+            !
+            ! [ 1 - U*Pi ]^-1 * Pi
+            Chi%screened(:,:,iw,ik) = matmul(den,Pmats%screened(:,:,iw,ik))
+            !
+         enddo
+      enddo
+      !$OMP END DO
+      !$OMP END PARALLEL
+      !
+      call BosonicKsum(Chi)
+      !
+   end subroutine calc_chi_full
+
+
+   !---------------------------------------------------------------------------!
+   !PURPOSE: Computes [ 1 - U*Pi ]^-1 * Pi - EDMFT
+   !---------------------------------------------------------------------------!
+   subroutine calc_chi_edmft(Chi,Umats,Pmats)
+      !
+      use parameters
+      use utils_misc
+      use utils_fields
+      use crystal
+      use linalg, only : zeye, inv_her !or sym??
+      implicit none
+      !
+      type(BosonicField),intent(inout)      :: Chi
+      type(BosonicField),intent(in)         :: Umats
+      type(BosonicField),intent(in)         :: Pmats
+      !
+      complex(8),allocatable                :: den(:,:)
+      real(8)                               :: Beta
+      integer                               :: Nbp,Nkpt,Nmats
+      integer                               :: ik,iw
+      !
+      !
+      write(*,*) "--- calc_chi_edmft ---"
+      !
+      !
+      ! Check on the input Bosons
+      if(.not.Chi%status) stop "Chi not properly initialized."
+      if(.not.Umats%status) stop "Umats not properly initialized."
+      if(.not.Pmats%status) stop "Pmats not properly initialized."
+      if(Chi%Nkpt.ne.0) stop "Chi k dependent attributes is supposed to be unallocated."
+      if(Umats%Nkpt.eq.0) stop "Umats k dependent attributes not properly initialized."
+      if(Pmats%Nkpt.ne.0) stop "Pmats k dependent attributes is supposed to be unallocated."
+      !
+      Nbp = Chi%Nbp
+      Nkpt = Umats%Nkpt
+      Beta = Chi%Beta
+      Nmats = Chi%Npoints
+      !
+      if(all([Umats%Nbp-Nbp,Pmats%Nbp-Nbp].ne.[0,0])) stop "Either Umats and/or Pmats have different orbital dimension with respect to Chi."
+      if(all([Umats%Beta-Beta,Pmats%Beta-Beta].ne.[0d0,0d0])) stop "Either Umats and/or Pmats have different Beta with respect to Chi."
+      if(all([Umats%Npoints-Nmats,Pmats%Npoints-Nmats].ne.[0,0]))  write(*,"(A)") "Warning: Either Umats and/or Pmats have different number of Matsubara points. Computing up to the smaller."
+      Nmats = minval([Chi%Npoints,Umats%Npoints,Pmats%Npoints])
+      !
+      allocate(den(Nbp,Nbp))
+      Chi%bare=czero; Chi%bare_local=czero
+      Chi%screened=czero; Chi%screened_local=czero
+      !$OMP PARALLEL DEFAULT(NONE),&
+      !$OMP SHARED(Nbp,Nkpt,Nmats,Pmats,Umats,Chi),&
+      !$OMP PRIVATE(ik,iw,den)
+      !$OMP DO
+      do ik=1,Nkpt
+         !
+         ! [ 1 - U*Pi ]
+         den=dcmplx(0d0,0d0)
+         den = zeye(Nbp) - matmul(Umats%bare(:,:,ik),Pmats%bare_local)
+         !
+         ! [ 1 - U*Pi ]^-1
+         call inv_her(den)
+         !
+         ! [ 1 - U*Pi ]^-1 * U
+         Chi%bare_local = Chi%bare_local + matmul(den,Umats%bare(:,:,ik))/Nkpt
+         !
+         do iw=1,Nmats
+            !
+            ! [ 1 - U*Pi ]
+            den=dcmplx(0d0,0d0)
+            den = zeye(Nbp) - matmul(Umats%screened(:,:,iw,ik),Pmats%screened_local(:,:,iw))
+            !
+            ! [ 1 - U*Pi ]^-1
+            call inv_her(den)
+            !
+            ! [ 1 - U*Pi ]^-1 * Pi
+            Chi%screened_local(:,:,iw) = Chi%screened_local(:,:,iw) + matmul(den,Pmats%screened_local(:,:,iw))/Nkpt
+            !
+         enddo
+      enddo
+      !$OMP END DO
+      !$OMP END PARALLEL
+      !
+   end subroutine calc_chi_edmft
+
+
+   !---------------------------------------------------------------------------!
    !PURPOSE: Read XEPS.DAT file
    !---------------------------------------------------------------------------!
    subroutine read_xeps(path2xeps)
       !
+      use utils_misc
       use global_vars,                 only :  Nkpt,Nkpt3,kpt,Nkpt_irred
       use global_vars,                 only :  UseXepsKorder
-      use utils_misc
       implicit none
       !
       character(len=*),intent(in),optional  :: path2xeps
@@ -119,9 +474,9 @@ contains
       !
       use parameters
       use file_io
-      use global_vars,                 only :  pathINPUT,UfullStructure
       use utils_misc
       use utils_fields
+      use global_vars,                 only :  pathINPUT,UfullStructure
       implicit none
       !
       type(BosonicField),intent(inout)      :: Umats
@@ -136,7 +491,7 @@ contains
       integer                               :: iq,iw,iqread,Npb_spex
       integer                               :: idum,Nspin_spex,Norb_spex,Nfreq
       integer                               :: ib1,ib2,iw1,iw2
-      real(8),allocatable                   :: wread(:),wm_B(:)
+      real(8),allocatable                   :: wread(:),wmats(:)
       complex(8),allocatable                :: D1(:,:),D2(:,:),D3(:,:),imgFact(:,:,:)
       complex(8),allocatable                :: Utmp(:,:)
       type(BosonicField)                    :: Ureal
@@ -150,8 +505,8 @@ contains
       !
       ! Check on the input Boson
       if(.not.Umats%status) stop "BosonicField not properly initialized."
-      allocate(wm_B(Umats%Npoints));wm_B=0d0
-      wm_B = BosonicFreqMesh(Umats%Beta,Umats%Npoints)
+      allocate(wmats(Umats%Npoints));wmats=0d0
+      wmats = BosonicFreqMesh(Umats%Beta,Umats%Npoints)
       if(.not.LocalOnly)Nkpt = Umats%Nkpt
       !
       !
@@ -250,15 +605,15 @@ contains
             do ib2=1,Npb_spex
                if( abs(real(Ureal%bare_local(ib1,ib2))).lt.abs(aimag(Ureal%bare_local(ib1,ib2))))then
                   write(*,"(A,2I5)")"Element: ",ib1,ib2
-                  write(*,"(A,E10.4)")"Re[Ubare(w=inf)]: ",real(Ureal%bare_local(ib1,ib2))
-                  write(*,"(A,E10.4)")"Im[Ubare(w=inf)]: ",aimag(Ureal%bare_local(ib1,ib2))
+                  write(*,"(A,E14.7)")"Re[Ubare(w=inf)]: ",real(Ureal%bare_local(ib1,ib2))
+                  write(*,"(A,E14.7)")"Im[Ubare(w=inf)]: ",aimag(Ureal%bare_local(ib1,ib2))
                   stop "Something wrong: Uloc cannot have inverted Re/Im parity."
                endif
             enddo
          enddo
          !
          !$OMP PARALLEL DEFAULT(NONE),&
-         !$OMP SHARED(Npb_spex,wm_B,Nw_B,wread,Nfreq,Ureal,Umats),&
+         !$OMP SHARED(Npb_spex,wmats,wread,Nfreq,Ureal,Umats),&
          !$OMP PRIVATE(ib1,ib2,iw1,iw2,D1,D2,D3,Utmp)
          !$OMP DO
          do iw1=1,Umats%Npoints
@@ -275,12 +630,12 @@ contains
                !
                !D(-w)=-D(w), integrate using Simpson method
                if(wread(iw2).gt.0.d0) then
-                  Utmp(:,:) = Utmp(:,:) + ( D1(:,:)/(dcmplx(0.d0,wm_B(iw1))-wread(iw2)  ) - D1(:,:)/(dcmplx(0.d0,wm_B(iw1))+wread(iw2)  ) ) *(wread(iw2+1)-wread(iw2))/3.d0
-                  Utmp(:,:) = Utmp(:,:) + ( D2(:,:)/(dcmplx(0.d0,wm_B(iw1))-wread(iw2+1)) - D2(:,:)/(dcmplx(0.d0,wm_B(iw1))+wread(iw2+1)) ) *(wread(iw2+1)-wread(iw2))*4.d0/3.d0
-                  Utmp(:,:) = Utmp(:,:) + ( D3(:,:)/(dcmplx(0.d0,wm_B(iw1))-wread(iw2+2)) - D3(:,:)/(dcmplx(0.d0,wm_B(iw1))+wread(iw2+2)) ) *(wread(iw2+1)-wread(iw2))/3.d0
+                  Utmp(:,:) = Utmp(:,:) + ( D1(:,:)/(dcmplx(0.d0,wmats(iw1))-wread(iw2)  ) - D1(:,:)/(dcmplx(0.d0,wmats(iw1))+wread(iw2)  ) ) *(wread(iw2+1)-wread(iw2))/3.d0
+                  Utmp(:,:) = Utmp(:,:) + ( D2(:,:)/(dcmplx(0.d0,wmats(iw1))-wread(iw2+1)) - D2(:,:)/(dcmplx(0.d0,wmats(iw1))+wread(iw2+1)) ) *(wread(iw2+1)-wread(iw2))*4.d0/3.d0
+                  Utmp(:,:) = Utmp(:,:) + ( D3(:,:)/(dcmplx(0.d0,wmats(iw1))-wread(iw2+2)) - D3(:,:)/(dcmplx(0.d0,wmats(iw1))+wread(iw2+2)) ) *(wread(iw2+1)-wread(iw2))/3.d0
                elseif(dabs(wread(iw2)).lt.1.d-12) then
-                  Utmp(:,:) = Utmp(:,:) + ( D2(:,:)/(dcmplx(0.d0,wm_B(iw1))-wread(iw2+1)) - D2(:,:)/(dcmplx(0.d0,wm_B(iw1))+wread(iw2+1)) ) *(wread(iw2+1)-wread(iw2))*4.d0/3.d0
-                  Utmp(:,:) = Utmp(:,:) + ( D3(:,:)/(dcmplx(0.d0,wm_B(iw1))-wread(iw2+2)) - D3(:,:)/(dcmplx(0.d0,wm_B(iw1))+wread(iw2+2)) ) *(wread(iw2+1)-wread(iw2))/3.d0
+                  Utmp(:,:) = Utmp(:,:) + ( D2(:,:)/(dcmplx(0.d0,wmats(iw1))-wread(iw2+1)) - D2(:,:)/(dcmplx(0.d0,wmats(iw1))+wread(iw2+1)) ) *(wread(iw2+1)-wread(iw2))*4.d0/3.d0
+                  Utmp(:,:) = Utmp(:,:) + ( D3(:,:)/(dcmplx(0.d0,wmats(iw1))-wread(iw2+2)) - D3(:,:)/(dcmplx(0.d0,wmats(iw1))+wread(iw2+2)) ) *(wread(iw2+1)-wread(iw2))/3.d0
                endif
             enddo
             !
@@ -311,7 +666,7 @@ contains
             allocate(imgFact(Npb_spex,Npb_spex,2));imgFact=cone
             call cpu_time(start)
             !$OMP PARALLEL DEFAULT(NONE),&
-            !$OMP SHARED(Nk,Npb_spex,wm_B,wread,Nfreq,Ureal,Umats,UfullStructure),&
+            !$OMP SHARED(Npb_spex,wmats,wread,Nfreq,Ureal,Umats,UfullStructure),&
             !$OMP PRIVATE(iq,ib1,ib2,iw1,iw2,D1,D2,D3,Utmp,imgFact)
             !$OMP DO
             do iq=1,Umats%Nkpt
@@ -343,12 +698,12 @@ contains
                      !
                      !D(-w)=-D(w), integrate using Simpson method
                      if(wread(iw2).gt.0.d0) then
-                        Utmp(:,:) = Utmp(:,:) + ( D1(:,:)/(dcmplx(0.d0,wm_B(iw1))-wread(iw2)  ) - D1(:,:)/(dcmplx(0.d0,wm_B(iw1))+wread(iw2)  ) ) *(wread(iw2+1)-wread(iw2))/3.d0
-                        Utmp(:,:) = Utmp(:,:) + ( D2(:,:)/(dcmplx(0.d0,wm_B(iw1))-wread(iw2+1)) - D2(:,:)/(dcmplx(0.d0,wm_B(iw1))+wread(iw2+1)) ) *(wread(iw2+1)-wread(iw2))*4.d0/3.d0
-                        Utmp(:,:) = Utmp(:,:) + ( D3(:,:)/(dcmplx(0.d0,wm_B(iw1))-wread(iw2+2)) - D3(:,:)/(dcmplx(0.d0,wm_B(iw1))+wread(iw2+2)) ) *(wread(iw2+1)-wread(iw2))/3.d0
+                        Utmp(:,:) = Utmp(:,:) + ( D1(:,:)/(dcmplx(0.d0,wmats(iw1))-wread(iw2)  ) - D1(:,:)/(dcmplx(0.d0,wmats(iw1))+wread(iw2)  ) ) *(wread(iw2+1)-wread(iw2))/3.d0
+                        Utmp(:,:) = Utmp(:,:) + ( D2(:,:)/(dcmplx(0.d0,wmats(iw1))-wread(iw2+1)) - D2(:,:)/(dcmplx(0.d0,wmats(iw1))+wread(iw2+1)) ) *(wread(iw2+1)-wread(iw2))*4.d0/3.d0
+                        Utmp(:,:) = Utmp(:,:) + ( D3(:,:)/(dcmplx(0.d0,wmats(iw1))-wread(iw2+2)) - D3(:,:)/(dcmplx(0.d0,wmats(iw1))+wread(iw2+2)) ) *(wread(iw2+1)-wread(iw2))/3.d0
                      elseif(dabs(wread(iw2)).lt.1.d-12) then
-                        Utmp(:,:) = Utmp(:,:) + ( D2(:,:)/(dcmplx(0.d0,wm_B(iw1))-wread(iw2+1)) - D2(:,:)/(dcmplx(0.d0,wm_B(iw1))+wread(iw2+1)) ) *(wread(iw2+1)-wread(iw2))*4.d0/3.d0
-                        Utmp(:,:) = Utmp(:,:) + ( D3(:,:)/(dcmplx(0.d0,wm_B(iw1))-wread(iw2+2)) - D3(:,:)/(dcmplx(0.d0,wm_B(iw1))+wread(iw2+2)) ) *(wread(iw2+1)-wread(iw2))/3.d0
+                        Utmp(:,:) = Utmp(:,:) + ( D2(:,:)/(dcmplx(0.d0,wmats(iw1))-wread(iw2+1)) - D2(:,:)/(dcmplx(0.d0,wmats(iw1))+wread(iw2+1)) ) *(wread(iw2+1)-wread(iw2))*4.d0/3.d0
+                        Utmp(:,:) = Utmp(:,:) + ( D3(:,:)/(dcmplx(0.d0,wmats(iw1))-wread(iw2+2)) - D3(:,:)/(dcmplx(0.d0,wmats(iw1))+wread(iw2+2)) ) *(wread(iw2+1)-wread(iw2))/3.d0
                      endif
                   enddo
                   !
@@ -430,7 +785,7 @@ contains
             wread = H2eV*wread
             write(*,*)"read wread",wread   !!!!>>>>>TEST<<<<<!!!!
             do iw=1,Nfreq
-               if (dabs(wread(iw)-wm_B(iw)).gt.1.d-6) stop "wread.ne.wm_B"
+               if (dabs(wread(iw)-wmats(iw)).gt.1.d-6) stop "wread.ne.wmats"
             enddo
             !
             do iw=0,Nfreq
@@ -479,10 +834,10 @@ contains
       !
       use parameters
       use file_io
-      use global_vars,                 only :  Nkpt
-      use global_vars,                 only :  pathINPUT
       use utils_misc
       use utils_fields
+      use global_vars,                 only :  Nkpt
+      use global_vars,                 only :  pathINPUT
       implicit none
       !
       complex(8),allocatable,intent(inout)  :: Umat(:,:)
@@ -581,8 +936,8 @@ contains
    subroutine checkAnalyticContinuation(Umats,Ureal)
       !
       use parameters
-      use global_vars,                 only :  pathINPUT
       use utils_misc
+      use global_vars,                 only :  pathINPUT
       implicit none
       !
       type(BosonicField),intent(in)         :: Umats
@@ -607,7 +962,7 @@ contains
       ! Check the difference betqween bare values induced by thecutoff in the matsubara frequency
       unit = free_unit()
       open(unit=unit,file=reg(pathINPUT//"ACcutoffError.DAT"),form="formatted",status="unknown",position="rewind",action="write")
-      write(unit,"(A,1I5,A,1E6.2)")"Difference between Umats_bare value and last screened frequency: ",Nfreq," thresh:",thresh
+      write(unit,"(A,1I5,A,1E14.7)")"Difference between Umats_bare value and last screened frequency: ",Nfreq," thresh:",thresh
       !
       ReErrMat=0d0;ImErrMat=0d0
       do ib1=1,Nbp
@@ -623,11 +978,11 @@ contains
       enddo
       write(unit,"(A)")"Real part - local projection"
       do ib1=1,Nbp
-         write(unit,"(999E10.5)")(ReErrMat(ib1,ib2),ib2=1,Nbp)
+         write(unit,"(999E14.7)")(ReErrMat(ib1,ib2),ib2=1,Nbp)
       enddo
       write(unit,"(A)")"Imag part - local projection"
       do ib1=1,Nbp
-         write(unit,"(999E10.5)")(ImErrMat(ib1,ib2),ib2=1,Nbp)
+         write(unit,"(999E14.7)")(ImErrMat(ib1,ib2),ib2=1,Nbp)
       enddo
       !
       if((Umats%Nkpt.eq.Ureal%Nkpt).and.(Ureal%Nkpt.gt.0))then
@@ -649,11 +1004,11 @@ contains
             !
             write(unit,"(A,1I5)")"Real part - iq: ",iq
             do ib1=1,Nbp
-               write(unit,"(999E10.5)")(ReErrMat(ib1,ib2),ib2=1,Nbp)
+               write(unit,"(999E14.7)")(ReErrMat(ib1,ib2),ib2=1,Nbp)
             enddo
             write(unit,"(A,1I5)")"Imag part - iq: ",iq
             do ib1=1,Nbp
-               write(unit,"(999E10.5)")(ImErrMat(ib1,ib2),ib2=1,Nbp)
+               write(unit,"(999E14.7)")(ImErrMat(ib1,ib2),ib2=1,Nbp)
             enddo
             !
          enddo !iq
@@ -664,7 +1019,7 @@ contains
       ! Check that the screened and bare values of Umats and Ureal are close enough
       unit = free_unit()
       open(unit=unit,file=reg(pathINPUT//"ACcheck.DAT"),form="formatted",status="unknown",position="rewind",action="write")
-      write(unit,"(A,1E6.2)")"Difference between asymptotic behaviour of Ureal and Umats. Thresh:",thresh
+      write(unit,"(A,1E14.7)")"Difference between asymptotic behaviour of Ureal and Umats. Thresh:",thresh
       !
       ReErrMat=0d0;ImErrMat=0d0
       do ib1=1,Nbp
@@ -680,11 +1035,11 @@ contains
       enddo
       write(unit,"(A)")"Real part - local projection - screened limit"
       do ib1=1,Nbp
-         write(unit,"(999E10.5)")(ReErrMat(ib1,ib2),ib2=1,Nbp)
+         write(unit,"(999E14.7)")(ReErrMat(ib1,ib2),ib2=1,Nbp)
       enddo
       write(unit,"(A)")"Imag part - local projection - screened limit"
       do ib1=1,Nbp
-         write(unit,"(999E10.5)")(ImErrMat(ib1,ib2),ib2=1,Nbp)
+         write(unit,"(999E14.7)")(ImErrMat(ib1,ib2),ib2=1,Nbp)
       enddo
       !
       ReErrMat=0d0;ImErrMat=0d0
@@ -701,11 +1056,11 @@ contains
       enddo
       write(unit,"(A)")"Real part - local projection - bare limit"
       do ib1=1,Nbp
-         write(unit,"(999E10.5)")(ReErrMat(ib1,ib2),ib2=1,Nbp)
+         write(unit,"(999E14.7)")(ReErrMat(ib1,ib2),ib2=1,Nbp)
       enddo
       write(unit,"(A)")"Imag part - local projection - bare limit"
       do ib1=1,Nbp
-         write(unit,"(999E10.5)")(ImErrMat(ib1,ib2),ib2=1,Nbp)
+         write(unit,"(999E14.7)")(ImErrMat(ib1,ib2),ib2=1,Nbp)
       enddo
       !
       if((Umats%Nkpt.eq.Ureal%Nkpt).and.(Ureal%Nkpt.gt.0))then
@@ -728,11 +1083,11 @@ contains
             !
             write(unit,"(A,1I5)")"Real part - screened limit - iq: ",iq
             do ib1=1,Nbp
-               write(unit,"(999E10.5)")(ReErrMat(ib1,ib2),ib2=1,Nbp)
+               write(unit,"(999E14.7)")(ReErrMat(ib1,ib2),ib2=1,Nbp)
             enddo
             write(unit,"(A,1I5)")"Imag part - screened limit - iq: ",iq
             do ib1=1,Nbp
-               write(unit,"(999E10.5)")(ImErrMat(ib1,ib2),ib2=1,Nbp)
+               write(unit,"(999E14.7)")(ImErrMat(ib1,ib2),ib2=1,Nbp)
             enddo
             !
             ReErrMat=0d0;ImErrMat=0d0
@@ -750,11 +1105,11 @@ contains
             !
             write(unit,"(A,1I5)")"Real part - bare limit - iq: ",iq
             do ib1=1,Nbp
-               write(unit,"(999E10.5)")(ReErrMat(ib1,ib2),ib2=1,Nbp)
+               write(unit,"(999E14.7)")(ReErrMat(ib1,ib2),ib2=1,Nbp)
             enddo
             write(unit,"(A,1I5)")"Imag part - bare limit - iq: ",iq
             do ib1=1,Nbp
-               write(unit,"(999E10.5)")(ImErrMat(ib1,ib2),ib2=1,Nbp)
+               write(unit,"(999E14.7)")(ImErrMat(ib1,ib2),ib2=1,Nbp)
             enddo
             !
          enddo !iq
@@ -765,7 +1120,7 @@ contains
 
 
    !---------------------------------------------------------------------------!
-   !PURPOSE: Create the interaction tensor from user-given values of U and J
+   !PURPOSE: Create the static interaction tensor from user-given parameters
    !---------------------------------------------------------------------------!
    !subroutine build_Umatrix(Umat,Uaa,Uab,Jsf,Jph)
    !end subroutine build_Umatrix

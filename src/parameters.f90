@@ -29,7 +29,7 @@ module parameters
    !---------------------------------------------------------------------------!
    !PURPOSE: container for lattice data
    !---------------------------------------------------------------------------!
-   type lattice
+   type Lattice
       real(8),allocatable                   :: kpt(:,:)
       integer                               :: Nkpt3(3)
       complex(8),allocatable                :: Hk(:,:,:)                        ![Norb,Norb,Nkpt]
@@ -37,11 +37,13 @@ module parameters
       real(8),allocatable                   :: Ek(:,:)                          ![Norb,Nkpt]
       integer,allocatable                   :: kptsum(:,:)
       integer,allocatable                   :: kptdif(:,:)
+      integer,allocatable                   :: kprint(:)
       integer                               :: small_ik(12,2)
       integer                               :: Nkpt=0
       integer                               :: Norb=0
+      real(8)                               :: mu=0d0
       logical                               :: status=.false.
-   end type lattice
+   end type Lattice
 
 
    !---------------------------------------------------------------------------!

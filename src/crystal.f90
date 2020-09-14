@@ -1,4 +1,4 @@
-module lattice
+module crystal
 
    implicit none
    private
@@ -23,6 +23,8 @@ module lattice
    !
    real(8),allocatable                      :: rsite(:,:)
    real(8)                                  :: rlat(3,3)
+   integer,allocatable                      :: Kprint(:)
+   !
    real(8),private                          :: lat(3,3)
    real(8),private                          :: vol
    real(8),private                          :: rvol
@@ -33,9 +35,10 @@ module lattice
    !
    logical                                  :: Hk_stored=.false.
    logical                                  :: SmallK_stored=.false.            !Global flag needed by self-energy module
+   logical                                  :: Ruc_stored=.false.               !Global flag for routines that need positions within the u.c.
+   logical                                  :: Kprint_stored=.false.            !Global flag for routines that need to print on specific Kpoints.
    logical,private                          :: Lat_stored=.false.               !Internal flag for routines that need rlat
    logical,private                          :: Wig_stored=.false.               !Internal flag for routines performing Wannier interpolation
-   logical,private                          :: Ruc_stored=.false.               !Internal flag for routines that need positions within the u.c.
 
    !---------------------------------------------------------------------------!
    !PURPOSE: Rutines available for the user. Description only for interfaces.
@@ -43,6 +46,8 @@ module lattice
    !variables
    public :: Hk_stored
    public :: SmallK_stored
+   public :: Ruc_stored
+   public :: Kprint_stored
    public :: rlat
    !subroutines
    public :: read_lattice
@@ -111,22 +116,20 @@ contains
    subroutine read_Hk(pathINPUT,Hk,kpt,Ek,Zk)
       !
       use utils_misc
-      use linalg,                      only :  eigh
+      use linalg, only :  eigh
       implicit none
       !
       character(len=*),intent(in)           :: pathINPUT
       complex(8),intent(inout)              :: Hk(:,:,:)
       real(8),intent(inout)                 :: kpt(:,:)
-      real(8),intent(inout),optional        :: Ek(:,:)
-      complex(8),intent(inout),optional     :: Zk(:,:,:)
+      real(8),intent(inout)                 :: Ek(:,:)
+      complex(8),intent(inout)              :: Zk(:,:,:)
       !
       character(len=256)                    :: path
       integer                               :: unit,Nkpt,Norb
       integer                               :: iwan1,iwan2,ik
       integer                               :: idum1,idum2
       real(8)                               :: ReHk,ImHk
-      real(8),allocatable                   :: Ek_(:)
-      complex(8),allocatable                :: Zk_(:,:)
       logical                               :: filexists
       !
       !
@@ -146,11 +149,8 @@ contains
       !
       call assert_shape(Hk,[Norb,Norb,Nkpt],"read_Hk","Hk")
       call assert_shape(kpt,[3,Nkpt],"read_Hk","kpt")
-      if(present(Ek))call assert_shape(Ek,[Norb,Nkpt],"read_Hk","Ek")
-      if(present(Zk))call assert_shape(Zk,[Norb,Norb,Nkpt],"read_Hk","Zk")
-      !
-      allocate(Ek_(Norb));Ek_=0d0
-      allocate(Zk_(Norb,Norb));Zk_=dcmplx(0.d0,0.d0)
+      call assert_shape(Ek,[Norb,Nkpt],"read_Hk","Ek")
+      call assert_shape(Zk,[Norb,Norb,Nkpt],"read_Hk","Zk")
       !
       do ik=1,nkpt
          read(unit,*) idum1,idum2,kpt(:,ik)
@@ -166,11 +166,9 @@ contains
          !
          call check_Hermiticity(Hk(:,:,ik),eps)
          !
-         Ek_ = 0d0
-         Zk_ = Hk(:,:,ik)
-         call eigh(Zk_,Ek_)
-         if(present(Ek))Ek(:,ik) = Ek_
-         if(present(Zk))Zk(:,:,ik) = Zk_
+         Ek(:,ik) = 0d0
+         Zk(:,:,ik) = Hk(:,:,ik)
+         call eigh(Zk(:,:,ik),Ek(:,ik))
          !
       enddo
       !
@@ -755,4 +753,4 @@ contains
    end subroutine wannier_R2K
 
 
-end module lattice
+end module crystal

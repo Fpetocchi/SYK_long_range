@@ -362,8 +362,8 @@ contains
       !
       hardstop_=.true.
       if(present(hardstop))hardstop_=hardstop
-      !inquire(directory=reg(dir),exist=exists)                                 !<====================== IFORT / GFORTRAN
-      inquire(file=reg(dir),exist=exists)
+      inquire(directory=reg(dir),exist=exists)                                  !<====================== IFORT
+      !inquire(file=reg(dir),exist=exists)                                      !<====================== GFORTRAN
       if(.not.exists) then
          write(*,"(A)")"Unable to find directory: "//reg(dir)
          if(hardstop_) stop "Stop."

@@ -41,7 +41,6 @@ module fourier_transforms
    !---------------------------------------------------------------------------!
    real(8),parameter,private                :: pi=3.14159265358979323846d0
    complex(8),parameter,private             :: czero=dcmplx(0.d0,0.d0)
-   complex(8),parameter,private             :: img=dcmplx(0.d0,1.d0)
 
    !---------------------------------------------------------------------------!
    !PURPOSE: Rutines available for the user. Description only for interfaces.
@@ -364,7 +363,7 @@ contains
       allocate(Ge(Norb,Norb));Ge=czero
       allocate(Go(Norb,Norb));Go=czero
       !$OMP PARALLEL DEFAULT(NONE),&
-      !$OMP SHARED(Ntau,Nmats,img,Gmats,coswt,sinwt,Gitau),&
+      !$OMP SHARED(Ntau,Nmats,Gmats,coswt,sinwt,Gitau),&
       !$OMP PRIVATE(itau,iw,Ge,Go)
       !$OMP DO
       do itau=1,Ntau
@@ -374,7 +373,7 @@ contains
             Ge = Gmats(:,:,iw) + transpose(conjg(Gmats(:,:,iw)))
             Go = Gmats(:,:,iw) - transpose(conjg(Gmats(:,:,iw)))
             !
-            Gitau(:,:,itau) = Gitau(:,:,itau) + coswt(iw,itau)*Ge -img*sinwt(iw,itau)*Go
+            Gitau(:,:,itau) = Gitau(:,:,itau) + coswt(iw,itau)*Ge -dcmplx(0d0,1d0)*sinwt(iw,itau)*Go
             !
          enddo
       enddo
@@ -434,7 +433,7 @@ contains
       allocate(Ge(Norb,Norb));Ge=czero
       allocate(Go(Norb,Norb));Go=czero
       !$OMP PARALLEL DEFAULT(NONE),&
-      !$OMP SHARED(Nkpt,Ntau,Nmats,img,Gmats,coswt,sinwt,Gitau),&
+      !$OMP SHARED(Nkpt,Ntau,Nmats,Gmats,coswt,sinwt,Gitau),&
       !$OMP PRIVATE(ik,itau,iw,Ge,Go)
       !$OMP DO
       do ik=1,Nkpt
@@ -445,7 +444,7 @@ contains
                Ge = Gmats(:,:,iw,ik) + transpose(conjg(Gmats(:,:,iw,ik)))
                Go = Gmats(:,:,iw,ik) - transpose(conjg(Gmats(:,:,iw,ik)))
                !
-               Gitau(:,:,itau,ik) = Gitau(:,:,itau,ik) + coswt(iw,itau)*Ge -img*sinwt(iw,itau)*Go
+               Gitau(:,:,itau,ik) = Gitau(:,:,itau,ik) + coswt(iw,itau)*Ge -dcmplx(0d0,1d0)*sinwt(iw,itau)*Go
                !
             enddo
          enddo
@@ -508,7 +507,7 @@ contains
       allocate(Ge(Norb));Ge=czero
       allocate(Go(Norb));Go=czero
       !$OMP PARALLEL DEFAULT(NONE),&
-      !$OMP SHARED(Ntau,Nmats,img,Gmats,coswt,sinwt,Gitau),&
+      !$OMP SHARED(Ntau,Nmats,Gmats,coswt,sinwt,Gitau),&
       !$OMP PRIVATE(itau,iw,Ge,Go)
       !$OMP DO
       do itau=1,Ntau
@@ -518,7 +517,7 @@ contains
             Ge = Gmats(:,iw) + conjg(Gmats(:,iw))
             Go = Gmats(:,iw) - conjg(Gmats(:,iw))
             !
-            Gitau(:,itau) = Gitau(:,itau) + coswt(iw,itau)*Ge -img*sinwt(iw,itau)*Go
+            Gitau(:,itau) = Gitau(:,itau) + coswt(iw,itau)*Ge -dcmplx(0d0,1d0)*sinwt(iw,itau)*Go
             !
          enddo
       enddo
@@ -577,7 +576,7 @@ contains
       allocate(Ge(Norb));Ge=czero
       allocate(Go(Norb));Go=czero
       !$OMP PARALLEL DEFAULT(NONE),&
-      !$OMP SHARED(Nkpt,Ntau,Nmats,img,Gmats,coswt,sinwt,Gitau),&
+      !$OMP SHARED(Nkpt,Ntau,Nmats,Gmats,coswt,sinwt,Gitau),&
       !$OMP PRIVATE(ik,itau,iw,Ge,Go)
       !$OMP DO
       do ik=1,Nkpt
@@ -588,7 +587,7 @@ contains
                Ge = Gmats(:,iw,ik) + conjg(Gmats(:,iw,ik))
                Go = Gmats(:,iw,ik) - conjg(Gmats(:,iw,ik))
                !
-               Gitau(:,itau,ik) = Gitau(:,itau,ik) + coswt(iw,itau)*Ge -img*sinwt(iw,itau)*Go
+               Gitau(:,itau,ik) = Gitau(:,itau,ik) + coswt(iw,itau)*Ge -dcmplx(0d0,1d0)*sinwt(iw,itau)*Go
                !
             enddo
          enddo
@@ -647,7 +646,7 @@ contains
       allocate(RealG(Ntau));RealG=0d0
       allocate(ImagG(Ntau));ImagG=0d0
       !$OMP PARALLEL DEFAULT(NONE),&
-      !$OMP SHARED(Nmats,Norb,wmats,tau,Gitau),&
+      !$OMP SHARED(Nmats,Norb,wmats,tau,Gitau,Gmats),&
       !$OMP PRIVATE(iw,iwan1,iwan2,RealG,ImagG,rwcos,rwsin,cwcos,cwsin)
       !$OMP DO
       do iw=1,Nmats
@@ -716,7 +715,7 @@ contains
       allocate(RealG(Ntau));RealG=0d0
       allocate(ImagG(Ntau));ImagG=0d0
       !$OMP PARALLEL DEFAULT(NONE),&
-      !$OMP SHARED(Nkpt,Nmats,Norb,wmats,tau,Gitau),&
+      !$OMP SHARED(Nkpt,Nmats,Norb,wmats,tau,Gitau,Gmats),&
       !$OMP PRIVATE(ik,iw,iwan1,iwan2,RealG,ImagG,rwcos,rwsin,cwcos,cwsin)
       !$OMP DO
       do ik=1,Nkpt
@@ -789,7 +788,7 @@ contains
       allocate(RealG(Ntau));RealG=0d0
       allocate(ImagG(Ntau));ImagG=0d0
       !$OMP PARALLEL DEFAULT(NONE),&
-      !$OMP SHARED(Nmats,Norb,wmats,tau,Gitau),&
+      !$OMP SHARED(Nmats,Norb,wmats,tau,Gitau,Gmats),&
       !$OMP PRIVATE(iw,iwan1,RealG,ImagG,rwcos,rwsin,cwcos,cwsin)
       !$OMP DO
       do iw=1,Nmats
@@ -855,8 +854,8 @@ contains
       allocate(RealG(Ntau));RealG=0d0
       allocate(ImagG(Ntau));ImagG=0d0
       !$OMP PARALLEL DEFAULT(NONE),&
-      !$OMP SHARED(Nkpt,Nmats,Norb,wmats,tau,Gitau),&
-      !$OMP PRIVATE(ik,w,iwan1,RealG,ImagG,rwcos,rwsin,cwcos,cwsin)
+      !$OMP SHARED(Nkpt,Nmats,Norb,wmats,tau,Gitau,Gmats),&
+      !$OMP PRIVATE(ik,iw,iwan1,RealG,ImagG,rwcos,rwsin,cwcos,cwsin)
       !$OMP DO
       do ik=1,Nkpt
          do iw=1,Nmats
@@ -1064,7 +1063,7 @@ contains
       allocate(wcos(Ntau));wcos=0d0
       allocate(wsin(Ntau));wsin=0d0
       !$OMP PARALLEL DEFAULT(NONE),&
-      !$OMP SHARED(Nmats,Nbp,Ntau,wmats,tau,Uitau,img,Umats),&
+      !$OMP SHARED(Nmats,Nbp,Ntau,wmats,tau,Uitau,Umats),&
       !$OMP PRIVATE(iw,ib1,ib2,itau,RealU,ImagU,wcos,wsin)
       !$OMP DO
       do iw=1,Nmats
@@ -1080,7 +1079,7 @@ contains
                   !
                   Umats(ib1,ib2,iw) =   Umats(ib1,ib2,iw)                            &
                                     + ( RealU * wcos(itau) - ImagU * wsin(itau) )    &
-                                    + ( ImagU * wcos(itau) + RealU * wsin(itau) )*img
+                                    + ( ImagU * wcos(itau) + RealU * wsin(itau) )*dcmplx(0d0,1d0)
                   !
                enddo
             enddo
@@ -1138,7 +1137,7 @@ contains
       allocate(wcos(Ntau));wcos=0d0
       allocate(wsin(Ntau));wsin=0d0
       !$OMP PARALLEL DEFAULT(NONE),&
-      !$OMP SHARED(Nmats,Nkpt,Nbp,Ntau,wmats,tau,Uitau,img,Umats),&
+      !$OMP SHARED(Nmats,Nkpt,Nbp,Ntau,wmats,tau,Uitau,Umats),&
       !$OMP PRIVATE(iw,ik,ib1,ib2,itau,RealU,ImagU,wcos,wsin)
       !$OMP DO
       do iw=1,Nmats
@@ -1155,7 +1154,7 @@ contains
                      !
                      Umats(ib1,ib2,iw,ik) =   Umats(ib1,ib2,iw,ik)                           &
                                             + ( RealU * wcos(itau) - ImagU * wsin(itau) )    &
-                                            + ( ImagU * wcos(itau) + RealU * wsin(itau) )*img
+                                            + ( ImagU * wcos(itau) + RealU * wsin(itau) )*dcmplx(0d0,1d0)
                      !
                   enddo
                enddo

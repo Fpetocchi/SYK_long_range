@@ -31,7 +31,7 @@ module module_container
 
 
    !(c) Lattice related quantities. Depends on (a),(b) not on specific types.
-   use lattice, only:                        &
+   use crystal, only:                        &
    read_lattice                             ,&
    read_Hk                                  ,&
    fill_ksumkdiff                           ,&
@@ -77,6 +77,10 @@ module module_container
 
    !(h) Interactions container. Depends on (utils_misc),(parameters),(global_vars),(utils_fields),(file_io)
    use interactions, only:                   &
-   read_spex !build_Umatrix,rescale_interaction
+   read_spex                                ,&
+   calc_W_full                              ,&
+   calc_W_edmft                             ,&
+   calc_chi_full                            ,&
+   calc_chi_edmft !build_Umatrix,rescale_interaction
 
 end module module_container

@@ -1,16 +1,22 @@
 #
 # Compiler flags
-#FC     = ifort
-#FFLAGS = -assume byterecl -openmp -liomp5 -mkl=sequential
-FC     = gfortran
-FFLAGS = -openmp -cpp -ffree-line-length-none -ffast-math -march=native -funroll-all-loops -fno-protect-parens -flto -llapack
+#
+#FC     = gfortran
+#FFLAGS = -openmp -cpp -ffree-line-length-none -ffast-math -march=native -funroll-all-loops -fno-protect-parens -flto -llapack
+#DBGFFLAGS = -O0 -p -g -fbacktrace -Wline-truncation -Wsurprising -Waliasing -Wimplicit-interface -Wunused-parameter -fwhole-file -fcheck=all -pedantic -fbacktrace -fcheck=bounds -Wall #-Wcharacter-truncation
+#RELFFLAGS = -cpp -ffree-line-length-none -O3 -ffast-math -march=native -funroll-all-loops -fno-protect-parens -flto -mcmodel=medium
+#
+FC     = ifort
+FFLAGS = -assume byterecl -qopenmp -liomp5 -mkl=sequential
+DBGFFLAGS = -O0 -check bounds -traceback -fpe0 -check all -fp-model precise -fp-stack-check -p -g -warn -debug extended -warn interface
+RELFFLAGS = -xHost -O3 -ftz -mcmodel=large
 
 
 #
 # Project files-----------------------------------------------------------------
 EXECDIR = bin
 SRCDIR = src
-SRCS = linalg.f90 parameters.f90 global_vars.f90 utils_misc.f90 utils_fields.f90 file_io.f90 interactions.f90 lattice.f90 fourier_transforms.f90
+SRCS = linalg.f90 parameters.f90 global_vars.f90 utils_misc.f90 utils_fields.f90 file_io.f90 interactions.f90 crystal.f90 fourier_transforms.f90
 OBJS = $(SRCS:.f90=.o)
 EXE  = SelfConsistency
 
@@ -20,8 +26,7 @@ EXE  = SelfConsistency
 DBGDIR = debug
 DBGEXE = $(EXECDIR)/$(EXE)_debug
 DBGOBJS = $(addprefix $(DBGDIR)/, $(OBJS))
-#DBGFFLAGS = -O0 -check bounds -traceback -fpe0 -check all -fp-model precise -fp-stack-check -warn interface -p -g -warn -debug extended
-DBGFFLAGS = -O0 -p -g -fbacktrace -Wline-truncation -Wsurprising -Waliasing -Wimplicit-interface -Wunused-parameter -fwhole-file -fcheck=all -pedantic -fbacktrace -fcheck=bounds -Wall #-Wcharacter-truncation
+DBGFFLAGS += -module $(DBGDIR)
 
 
 #
@@ -29,8 +34,7 @@ DBGFFLAGS = -O0 -p -g -fbacktrace -Wline-truncation -Wsurprising -Waliasing -Wim
 RELDIR = release
 RELEXE = $(EXECDIR)/$(EXE)
 RELOBJS = $(addprefix $(RELDIR)/, $(OBJS))
-#RELFFLAGS = -O3 -ftz -xHost -mcmodel=large -M $(RELDIR)
-RELFFLAGS = -cpp -ffree-line-length-none -O3 -ffast-math -march=native -funroll-all-loops -fno-protect-parens -flto -mcmodel=medium
+RELFFLAGS += -module $(RELDIR)
 
 
 #
@@ -57,10 +61,10 @@ $(DBGDIR)/linalg.o: $(SRCDIR)/linalg.f90
 $(DBGDIR)/utils_misc.o: $(SRCDIR)/utils_misc.f90
 	$(FC) -c $(FFLAGS) $(DBGFFLAGS) -o $@ $<
 
-$(DBGDIR)/lattice.o: $(SRCDIR)/lattice.f90 $(DBGDIR)/utils_misc.o $(DBGDIR)/linalg.o
+$(DBGDIR)/crystal.o: $(SRCDIR)/crystal.f90 $(DBGDIR)/utils_misc.o $(DBGDIR)/linalg.o
 	$(FC) -c $(FFLAGS) $(DBGFFLAGS) -o $@ $<
 
-$(DBGDIR)/fourier_transforms.o: $(SRCDIR)/fourier_transforms.f90 $(DBGDIR)/utils_misc.o $(DBGDIR)/lattice.o
+$(DBGDIR)/fourier_transforms.o: $(SRCDIR)/fourier_transforms.f90 $(DBGDIR)/utils_misc.o $(DBGDIR)/crystal.o
 	$(FC) -c $(FFLAGS) $(DBGFFLAGS) -o $@ $<
 
 $(DBGDIR)/parameters.o: $(SRCDIR)/parameters.f90
@@ -104,10 +108,10 @@ $(RELDIR)/linalg.o: $(SRCDIR)/linalg.f90
 $(RELDIR)/utils_misc.o: $(SRCDIR)/utils_misc.f90
 	$(FC) -c $(FFLAGS) $(RELFFLAGS) -o $@ $<
 
-$(RELDIR)/lattice.o: $(SRCDIR)/lattice.f90 $(RELDIR)/utils_misc.o $(RELDIR)/linalg.o
+$(RELDIR)/crystal.o: $(SRCDIR)/crystal.f90 $(RELDIR)/utils_misc.o $(RELDIR)/linalg.o
 	$(FC) -c $(FFLAGS) $(RELFFLAGS) -o $@ $<
 
-$(RELDIR)/fourier_transforms.o: $(SRCDIR)/fourier_transforms.f90 $(RELDIR)/utils_misc.o $(RELDIR)/lattice.o
+$(RELDIR)/fourier_transforms.o: $(SRCDIR)/fourier_transforms.f90 $(RELDIR)/utils_misc.o $(RELDIR)/crystal.o
 	$(FC) -c $(FFLAGS) $(RELFFLAGS) -o $@ $<
 
 $(RELDIR)/parameters.o: $(SRCDIR)/parameters.f90

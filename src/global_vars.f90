@@ -2,7 +2,7 @@ module global_vars
 
    use parameters
    implicit none
-   
+
 
    ! COMMENTS:
    !
@@ -12,7 +12,14 @@ module global_vars
    !---------------------------------------------------------------------------!
    !PURPOSE: Parallelization integers
    !---------------------------------------------------------------------------!
-   integer                                  :: MpiComm,MpiErr,MpiRank,MpiSize
+   type MpiEnv
+      integer                               :: MpiComm
+      integer                               :: MpiErr
+      integer                               :: MpiRank
+      integer                               :: MpiSize
+      logical                               :: status=.false.
+   end type MpiEnv
+   !
    integer                                  :: Nthread
 
 

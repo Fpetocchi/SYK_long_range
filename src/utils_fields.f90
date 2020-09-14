@@ -79,7 +79,7 @@ contains
    subroutine selfAllocateLattice(lttc)
       use parameters
       implicit none
-      type(Lattice),intent(inout)    :: lttc
+      type(Lattice),intent(inout)             :: lttc
       !
       if(.not.lttc%status) stop "selfAllocateLattice: Field not properly initialized."
       if(lttc%Norb.eq.0) stop "selfAllocateLattice: Norb not defined."
@@ -103,12 +103,14 @@ contains
       if(allocated(lttc%kptdif))deallocate(lttc%kptdif)
       allocate(lttc%kptdif(lttc%Nkpt,lttc%Nkpt));lttc%kptdif=0
       !
+      !lttc%kprint allocated and initialized via specific subr in crystal module
+      !
    end subroutine selfAllocateLattice
    !
    subroutine selfDeallocateLattice(lttc)
       use parameters
       implicit none
-      type(Lattice),intent(inout)    :: lttc
+      type(Lattice),intent(inout)           :: lttc
       !
       if(.not.lttc%status) stop "selfDeallocateLattice: Field not properly initialized."
       if(lttc%Norb.eq.0) stop "selfDeallocateLattice: Norb not defined."
@@ -120,6 +122,7 @@ contains
       if(allocated(lttc%Ek))deallocate(lttc%Ek)
       if(allocated(lttc%kptsum))deallocate(lttc%kptsum)
       if(allocated(lttc%kptdif))deallocate(lttc%kptdif)
+      if(allocated(lttc%kprint))deallocate(lttc%kprint)
       lttc%Nkpt=0
       lttc%Nkpt3=0
       lttc%Norb=0
