@@ -59,7 +59,6 @@ contains
       use parameters
       use utils_misc
       use utils_fields
-      use crystal
       use linalg, only : zeye, inv_her !or sym??
       implicit none
       !
@@ -96,29 +95,19 @@ contains
       if(all([Umats%Npoints-Nmats,Pmats%Npoints-Nmats].ne.[0,0]))  write(*,"(A)") "Warning: Either Umats and/or Pmats have different number of Matsubara points. Computing up to the smaller."
       Nmats = minval([Wmats%Npoints,Umats%Npoints,Pmats%Npoints])
       !
-      if(SmallK_stored)then
+      if(Lttc%small_ik_stored)then
          if(allocated(den_smallk))deallocate(den_smallk)
          allocate(den_smallk(Nbp,Nbp,Nmats,12))
       endif
       !
       allocate(den(Nbp,Nbp))
-      Wmats%bare=czero; Wmats%bare_local=czero
-      Wmats%screened=czero; Wmats%screened_local=czero
+      call clear_attributes(Wmats)
+      Wmats%bare = Umats%bare
       !$OMP PARALLEL DEFAULT(NONE),&
-      !$OMP SHARED(Nbp,Nkpt,Nmats,Pmats,Umats,Wmats,SmallK_stored,den_smallk,Lttc),&
+      !$OMP SHARED(Nbp,Nkpt,Nmats,Pmats,Umats,Wmats,den_smallk,Lttc),&
       !$OMP PRIVATE(ik,iw,den,ismall)
       !$OMP DO
       do ik=1,Nkpt
-         !
-         ! [ 1 - U*Pi ]
-         den=dcmplx(0d0,0d0)
-         den = zeye(Nbp) - matmul(Umats%bare(:,:,ik),Pmats%bare(:,:,ik))
-         !
-         ! [ 1 - U*Pi ]^-1
-         call inv_her(den)
-         !
-         ! [ 1 - U*Pi ]^-1 * U
-         Wmats%bare(:,:,ik) = matmul(den,Umats%bare(:,:,ik))
          !
          do iw=1,Nmats
             !
@@ -132,7 +121,7 @@ contains
             ! [ 1 - U*Pi ]^-1 * U
             Wmats%screened(:,:,iw,ik) = matmul(den,Umats%screened(:,:,iw,ik))
             !
-            if(SmallK_stored)then
+            if(Lttc%small_ik_stored)then
                do ismall=1,12
                   if (Lttc%small_ik(ismall,1).eq.ik) den_smallk(:,:,iw,ismall) = den
                enddo
@@ -156,7 +145,6 @@ contains
       use parameters
       use utils_misc
       use utils_fields
-      use crystal
       use linalg, only : zeye, inv_her !or sym??
       implicit none
       !
@@ -177,9 +165,9 @@ contains
       if(.not.Wmats%status) stop "Wmats not properly initialized."
       if(.not.Umats%status) stop "Umats not properly initialized."
       if(.not.Pmats%status) stop "Pmats not properly initialized."
-      if(Wmats%Nkpt.ne.0) stop "Wmats k dependent attributes is supposed to be unallocated."
+      if(Wmats%Nkpt.ne.0) stop "Wmats k dependent attributes are supposed to be unallocated."
       if(Umats%Nkpt.eq.0) stop "Umats k dependent attributes not properly initialized."
-      if(Pmats%Nkpt.ne.0) stop "Pmats k dependent attributes is supposed to be unallocated."
+      if(Pmats%Nkpt.ne.0) stop "Pmats k dependent attributes are supposed to be unallocated."
       !
       Nbp = Wmats%Nbp
       Nkpt = Umats%Nkpt
@@ -192,23 +180,13 @@ contains
       Nmats = minval([Wmats%Npoints,Umats%Npoints,Pmats%Npoints])
       !
       allocate(den(Nbp,Nbp))
-      Wmats%bare=czero; Wmats%bare_local=czero
-      Wmats%screened=czero; Wmats%screened_local=czero
+      call clear_attributes(Wmats)
+      Wmats%bare_local = Umats%bare_local
       !$OMP PARALLEL DEFAULT(NONE),&
       !$OMP SHARED(Nbp,Nkpt,Nmats,Pmats,Umats,Wmats),&
       !$OMP PRIVATE(ik,iw,den)
       !$OMP DO
       do ik=1,Nkpt
-         !
-         ! [ 1 - U*Pi ]
-         den=dcmplx(0d0,0d0)
-         den = zeye(Nbp) - matmul(Umats%bare(:,:,ik),Pmats%bare_local)
-         !
-         ! [ 1 - U*Pi ]^-1
-         call inv_her(den)
-         !
-         ! [ 1 - U*Pi ]^-1 * U
-         Wmats%bare_local = Wmats%bare_local + matmul(den,Umats%bare(:,:,ik))/Nkpt
          !
          do iw=1,Nmats
             !
@@ -238,7 +216,6 @@ contains
       use parameters
       use utils_misc
       use utils_fields
-      use crystal
       use linalg, only : zeye, inv_her !or sym??
       implicit none
       !
@@ -275,23 +252,13 @@ contains
       Nmats = minval([Chi%Npoints,Umats%Npoints,Pmats%Npoints])
       !
       allocate(den(Nbp,Nbp))
-      Chi%bare=czero; Chi%bare_local=czero
-      Chi%screened=czero; Chi%screened_local=czero
+      call clear_attributes(Chi)
+      Chi%bare = Umats%bare
       !$OMP PARALLEL DEFAULT(NONE),&
       !$OMP SHARED(Nbp,Nkpt,Nmats,Pmats,Umats,Chi),&
       !$OMP PRIVATE(ik,iw,den)
       !$OMP DO
       do ik=1,Nkpt
-         !
-         ! [ 1 - U*Pi ]
-         den=dcmplx(0d0,0d0)
-         den = zeye(Nbp) - matmul(Umats%bare(:,:,ik),Pmats%bare(:,:,ik))
-         !
-         ! [ 1 - U*Pi ]^-1
-         call inv_her(den)
-         !
-         ! [ 1 - U*Pi ]^-1 * U
-         Chi%bare(:,:,ik) = matmul(den,Umats%bare(:,:,ik))
          !
          do iw=1,Nmats
             !
@@ -323,7 +290,6 @@ contains
       use parameters
       use utils_misc
       use utils_fields
-      use crystal
       use linalg, only : zeye, inv_her !or sym??
       implicit none
       !
@@ -344,9 +310,9 @@ contains
       if(.not.Chi%status) stop "Chi not properly initialized."
       if(.not.Umats%status) stop "Umats not properly initialized."
       if(.not.Pmats%status) stop "Pmats not properly initialized."
-      if(Chi%Nkpt.ne.0) stop "Chi k dependent attributes is supposed to be unallocated."
+      if(Chi%Nkpt.ne.0) stop "Chi k dependent attributes are supposed to be unallocated."
       if(Umats%Nkpt.eq.0) stop "Umats k dependent attributes not properly initialized."
-      if(Pmats%Nkpt.ne.0) stop "Pmats k dependent attributes is supposed to be unallocated."
+      if(Pmats%Nkpt.ne.0) stop "Pmats k dependent attributes are supposed to be unallocated."
       !
       Nbp = Chi%Nbp
       Nkpt = Umats%Nkpt
@@ -359,23 +325,13 @@ contains
       Nmats = minval([Chi%Npoints,Umats%Npoints,Pmats%Npoints])
       !
       allocate(den(Nbp,Nbp))
-      Chi%bare=czero; Chi%bare_local=czero
-      Chi%screened=czero; Chi%screened_local=czero
+      call clear_attributes(Chi)
+      Chi%bare_local = Umats%bare_local
       !$OMP PARALLEL DEFAULT(NONE),&
       !$OMP SHARED(Nbp,Nkpt,Nmats,Pmats,Umats,Chi),&
       !$OMP PRIVATE(ik,iw,den)
       !$OMP DO
       do ik=1,Nkpt
-         !
-         ! [ 1 - U*Pi ]
-         den=dcmplx(0d0,0d0)
-         den = zeye(Nbp) - matmul(Umats%bare(:,:,ik),Pmats%bare_local)
-         !
-         ! [ 1 - U*Pi ]^-1
-         call inv_her(den)
-         !
-         ! [ 1 - U*Pi ]^-1 * U
-         Chi%bare_local = Chi%bare_local + matmul(den,Umats%bare(:,:,ik))/Nkpt
          !
          do iw=1,Nmats
             !

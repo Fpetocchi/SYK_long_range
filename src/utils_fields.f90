@@ -9,6 +9,11 @@ module utils_fields
    !
    !
 
+   interface clear_attributes
+      module procedure clear_attributes_Fermion
+      module procedure clear_attributes_Boson
+   end interface clear_attributes
+
    !---------------------------------------------------------------------------!
    !PURPOSE: Rutines available for the user. Description only for interfaces.
    !---------------------------------------------------------------------------!
@@ -21,6 +26,7 @@ module utils_fields
    public :: selfDeallocateFermionicField
    public :: selfAllocateBosonicField
    public :: selfDeallocateBosonicField
+   public :: clear_attributes
 
    !===========================================================================!
 
@@ -61,10 +67,10 @@ contains
       !
       if(.not.W%status)stop "BosonicKsum. Field not allocated."
       !
-      W%bare_local=czero
+      if(allocated(W%bare_local))W%bare_local=czero
       W%screened_local=czero
       do ik=1,W%Nkpt
-         W%bare_local = W%bare_local + W%bare(:,:,ik)/W%Nkpt
+         if(allocated(W%bare_local))W%bare_local = W%bare_local + W%bare(:,:,ik)/W%Nkpt
          do in=1,W%Npoints
             W%screened_local(:,:,in) = W%screened_local(:,:,in) + W%screened(:,:,in,ik)/W%Nkpt
          enddo
@@ -178,24 +184,34 @@ contains
    !---------------------------------------------------------------------------!
    !PURPOSE: Allocate/deallocate Bosonic attributes in a consistent way
    !---------------------------------------------------------------------------!
-   subroutine selfAllocateBosonicField(W)
+   subroutine selfAllocateBosonicField(W,zerobare)
       use parameters
       implicit none
       type(BosonicField),intent(inout)      :: W
+      logical,intent(in),optional           :: zerobare
+      logical                               :: zerobare_
       !
       if(.not.W%status) stop "selfAllocateBosonicField: Field not properly initialized."
       if(W%Nbp.eq.0) stop "selfAllocateBosonicField: Nbp not defined."
       if(W%Npoints.eq.0) stop "selfAllocateBosonicField: Npoints not defined."
+      zerobare_=.false.
+      if(present(zerobare))zerobare_=zerobare
       !
       if(allocated(W%bare_local))deallocate(W%bare_local)
-      allocate(W%bare_local(W%Nbp,W%Nbp));W%bare_local=czero
+      if(.not.zerobare_)then
+         allocate(W%bare_local(W%Nbp,W%Nbp))
+         W%bare_local=czero
+      endif
       !
       if(allocated(W%screened_local))deallocate(W%screened_local)
       allocate(W%screened_local(W%Nbp,W%Nbp,W%Npoints));W%screened_local=czero
       !
       if(W%Nkpt.ne.0)then
          if(allocated(W%bare))deallocate(W%bare)
-         allocate(W%bare(W%Nbp,W%Nbp,W%Nkpt));W%bare=czero
+         if(.not.zerobare_)then
+            allocate(W%bare(W%Nbp,W%Nbp,W%Nkpt))
+            W%bare=czero
+         endif
          if(allocated(W%screened))deallocate(W%screened)
          allocate(W%screened(W%Nbp,W%Nbp,W%Npoints,W%Nkpt));W%screened=czero
       endif
@@ -224,6 +240,27 @@ contains
       !
    end subroutine selfDeallocateBosonicField
 
+
+   !---------------------------------------------------------------------------!
+   !PURPOSE: Clear the internal attributes of a Fermionic/Bosonic field
+   !---------------------------------------------------------------------------!
+   subroutine clear_attributes_Fermion(G)
+      use parameters
+      implicit none
+      type(FermionicField),intent(inout)    :: G
+      if(allocated(G%w))G%w=czero
+      if(allocated(G%wk))G%wk=czero
+   end subroutine clear_attributes_Fermion
+   !
+   subroutine clear_attributes_Boson(W)
+      use parameters
+      implicit none
+      type(BosonicField),intent(inout)      :: W
+      if(allocated(W%bare_local))W%bare_local=czero
+      if(allocated(W%screened_local))W%screened_local=czero
+      if(allocated(W%bare))W%bare=czero
+      if(allocated(W%screened))W%screened=czero
+   end subroutine clear_attributes_Boson
 
 
 

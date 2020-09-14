@@ -43,6 +43,7 @@ module parameters
       integer                               :: Norb=0
       real(8)                               :: mu=0d0
       logical                               :: status=.false.
+      logical                               :: small_ik_stored=.false.
    end type Lattice
 
 

@@ -63,7 +63,8 @@ module module_container
    selfAllocateFermionicField               ,&
    selfDeallocateFermionicField             ,&
    selfAllocateBosonicField                 ,&
-   selfDeallocateBosonicField
+   selfDeallocateBosonicField               ,&
+   clear_attributes
 
 
    !(g) Input/Output routines. Depends on (utils_misc),(parameters),(utils_fields)
@@ -75,7 +76,7 @@ module module_container
    read_BosonicField
 
 
-   !(h) Interactions container. Depends on (utils_misc),(parameters),(global_vars),(utils_fields),(file_io)
+   !(h) Interactions container. Depends on (utils_misc),(crystal),(parameters),(global_vars),(utils_fields),(file_io)
    use interactions, only:                   &
    read_spex                                ,&
    calc_W_full                              ,&

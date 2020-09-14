@@ -34,9 +34,7 @@ module crystal
    integer,allocatable,private              :: nrdegwig(:)
    !
    logical                                  :: Hk_stored=.false.
-   logical                                  :: SmallK_stored=.false.            !Global flag needed by self-energy module
    logical                                  :: Ruc_stored=.false.               !Global flag for routines that need positions within the u.c.
-   logical                                  :: Kprint_stored=.false.            !Global flag for routines that need to print on specific Kpoints.
    logical,private                          :: Lat_stored=.false.               !Internal flag for routines that need rlat
    logical,private                          :: Wig_stored=.false.               !Internal flag for routines performing Wannier interpolation
 
@@ -45,9 +43,7 @@ module crystal
    !---------------------------------------------------------------------------!
    !variables
    public :: Hk_stored
-   public :: SmallK_stored
    public :: Ruc_stored
-   public :: Kprint_stored
    public :: rlat
    !subroutines
    public :: read_lattice
@@ -328,8 +324,6 @@ contains
          write(*,"(3F5.2,1X)")kreal(:,i)
          write(*,"(1I5)")small_ik(i,2)
       enddo
-      !
-      SmallK_stored=.true.
       !
    end subroutine fill_smallk
 
