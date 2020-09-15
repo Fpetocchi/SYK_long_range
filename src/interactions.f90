@@ -28,14 +28,10 @@ module interactions
    real(8),allocatable,private              :: kpt_xeps(:,:)
    integer,allocatable,private              :: kptPos_xeps(:)
    integer,allocatable,private              :: kptPos(:)
-   !
-   complex(8),allocatable                   :: den_smallk(:,:,:,:)
 
    !---------------------------------------------------------------------------!
    !PURPOSE: Rutines available for the user. Description only for interfaces.
    !---------------------------------------------------------------------------!
-   !variables
-   public :: den_smallk
    !subroutines
    public :: calc_W_full
    public :: calc_W_edmft
@@ -68,9 +64,12 @@ contains
       type(Lattice),intent(in)              :: Lttc
       !
       complex(8),allocatable                :: den(:,:)
+      complex(8),allocatable                :: den_smallk(:,:,:,:)
+      complex(8),allocatable                :: den_smallk_avrg(:,:,:)
       real(8)                               :: Beta
       integer                               :: Nbp,Nkpt,Nmats
-      integer                               :: ik,iw,ismall
+      integer                               :: iq0,iq,iw
+      integer                               :: ismall,num_k
       !
       !
       write(*,*) "--- calc_W_full ---"
@@ -83,6 +82,7 @@ contains
       if(Wmats%Nkpt.eq.0) stop "Wmats k dependent attributes not properly initialized."
       if(Umats%Nkpt.eq.0) stop "Umats k dependent attributes not properly initialized."
       if(Pmats%Nkpt.eq.0) stop "Pmats k dependent attributes not properly initialized."
+      if(.not.Lttc%small_ik_stored) stop "Kpoints near Gamma not stored. W divergence cannot be cured."
       !
       Nbp = Wmats%Nbp
       Nkpt = Wmats%Nkpt
@@ -95,42 +95,75 @@ contains
       if(all([Umats%Npoints-Nmats,Pmats%Npoints-Nmats].ne.[0,0]))  write(*,"(A)") "Warning: Either Umats and/or Pmats have different number of Matsubara points. Computing up to the smaller."
       Nmats = minval([Wmats%Npoints,Umats%Npoints,Pmats%Npoints])
       !
-      if(Lttc%small_ik_stored)then
-         if(allocated(den_smallk))deallocate(den_smallk)
-         allocate(den_smallk(Nbp,Nbp,Nmats,12))
-      endif
-      !
+      allocate(den_smallk(Nbp,Nbp,Nmats,12))
+      allocate(den_smallk_avrg(Nbp,Nbp,Nmats))
       allocate(den(Nbp,Nbp))
       call clear_attributes(Wmats)
       Wmats%bare = Umats%bare
       !$OMP PARALLEL DEFAULT(NONE),&
-      !$OMP SHARED(Nbp,Nkpt,Nmats,Pmats,Umats,Wmats,den_smallk,Lttc),&
-      !$OMP PRIVATE(ik,iw,den,ismall)
+      !$OMP SHARED(iq0,Nbp,Nkpt,Nmats,Pmats,Umats,Wmats,den_smallk,Lttc),&
+      !$OMP PRIVATE(iq,iw,den,ismall)
       !$OMP DO
-      do ik=1,Nkpt
+      do iq=1,Nkpt
+         !
+         !avoid the gamma point
+         if(all(Lttc%kpt(:,iq).eq.[0d0,0d0,0d0]))then
+            iq0 = iq
+            cycle
+         endif
          !
          do iw=1,Nmats
             !
             ! [ 1 - U*Pi ]
             den=dcmplx(0d0,0d0)
-            den = zeye(Nbp) - matmul(Umats%screened(:,:,iw,ik),Pmats%screened(:,:,iw,ik))
+            den = zeye(Nbp) - matmul(Umats%screened(:,:,iw,iq),Pmats%screened(:,:,iw,iq))
             !
             ! [ 1 - U*Pi ]^-1
             call inv_her(den)
             !
             ! [ 1 - U*Pi ]^-1 * U
-            Wmats%screened(:,:,iw,ik) = matmul(den,Umats%screened(:,:,iw,ik))
+            Wmats%screened(:,:,iw,iq) = matmul(den,Umats%screened(:,:,iw,iq))
             !
-            if(Lttc%small_ik_stored)then
-               do ismall=1,12
-                  if (Lttc%small_ik(ismall,1).eq.ik) den_smallk(:,:,iw,ismall) = den
-               enddo
-            endif
+            do ismall=1,12
+               if (Lttc%small_ik(ismall,1).eq.iq) den_smallk(:,:,iw,ismall) = den
+            enddo
             !
          enddo
       enddo
       !$OMP END DO
       !$OMP END PARALLEL
+      deallocate(den)
+      write(*,"(A,1I7)") "Gamma point is at kpoint list index: ",iq0
+      !
+      !
+      ! Gamma point handling
+      num_k=1
+      do ismall=2,12
+         if (Lttc%small_ik(ismall,2).eq.1) num_k=num_k+1
+      enddo
+      !
+      !if num_k only is one include also next nearset points
+      if(num_k.eq.1)then
+         num_k=1
+         do ismall=2,12
+            if (Lttc%small_ik(ismall,2).le.2) num_k=num_k+1
+         enddo
+      endif
+      !
+      !calc average epsinv for small k
+      do ismall=1,num_k
+         den_smallk_avrg = den_smallk_avrg + den_smallk(:,:,:,ismall)/num_k
+      enddo
+      !
+      !W at gamma point should be real
+      den_smallk_avrg = real(den_smallk_avrg)
+      !
+      !Replace the Gamma point value
+      do iw=1,Nmats
+         Wmats%screened(:,:,iw,iq0) = matmul(den_smallk_avrg(:,:,iw),Umats%screened(:,:,iw,iq0))
+      enddo
+      !
+      deallocate(den_smallk,den_smallk_avrg)
       !
       call BosonicKsum(Wmats)
       !
@@ -140,7 +173,7 @@ contains
    !---------------------------------------------------------------------------!
    !PURPOSE: Lattice inversion to get fully screened interaction - EDMFT
    !---------------------------------------------------------------------------!
-   subroutine calc_W_edmft(Wmats,Umats,Pmats)
+   subroutine calc_W_edmft(Wmats,Umats,Pmats,Lttc)
       !
       use parameters
       use utils_misc
@@ -151,11 +184,15 @@ contains
       type(BosonicField),intent(inout)      :: Wmats
       type(BosonicField),intent(in)         :: Umats
       type(BosonicField),intent(in)         :: Pmats
+      type(Lattice),intent(in)              :: Lttc
       !
       complex(8),allocatable                :: den(:,:)
+      complex(8),allocatable                :: den_smallk(:,:,:,:)
+      complex(8),allocatable                :: den_smallk_avrg(:,:,:)
       real(8)                               :: Beta
       integer                               :: Nbp,Nkpt,Nmats
-      integer                               :: ik,iw
+      integer                               :: iq0,iq,iw
+      integer                               :: ismall,num_k
       !
       !
       write(*,*) "--- calc_W_edmft ---"
@@ -168,6 +205,7 @@ contains
       if(Wmats%Nkpt.ne.0) stop "Wmats k dependent attributes are supposed to be unallocated."
       if(Umats%Nkpt.eq.0) stop "Umats k dependent attributes not properly initialized."
       if(Pmats%Nkpt.ne.0) stop "Pmats k dependent attributes are supposed to be unallocated."
+      if(.not.Lttc%small_ik_stored) stop "Kpoints near Gamma not stored. W divergence cannot be cured."
       !
       Nbp = Wmats%Nbp
       Nkpt = Umats%Nkpt
@@ -179,31 +217,75 @@ contains
       if(all([Umats%Npoints-Nmats,Pmats%Npoints-Nmats].ne.[0,0]))  write(*,"(A)") "Warning: Either Umats and/or Pmats have different number of Matsubara points. Computing up to the smaller."
       Nmats = minval([Wmats%Npoints,Umats%Npoints,Pmats%Npoints])
       !
+      allocate(den_smallk(Nbp,Nbp,Nmats,12))
+      allocate(den_smallk_avrg(Nbp,Nbp,Nmats))
       allocate(den(Nbp,Nbp))
       call clear_attributes(Wmats)
       Wmats%bare_local = Umats%bare_local
       !$OMP PARALLEL DEFAULT(NONE),&
-      !$OMP SHARED(Nbp,Nkpt,Nmats,Pmats,Umats,Wmats),&
-      !$OMP PRIVATE(ik,iw,den)
+      !$OMP SHARED(iq0,Nbp,Nkpt,Nmats,Pmats,Umats,Wmats,den_smallk,Lttc),&
+      !$OMP PRIVATE(iq,iw,den,ismall)
       !$OMP DO
-      do ik=1,Nkpt
+      do iq=1,Nkpt
+         !
+         !avoid the gamma point
+         if(all(Lttc%kpt(:,iq).eq.[0d0,0d0,0d0]))then
+            iq0 = iq
+            cycle
+         endif
          !
          do iw=1,Nmats
             !
             ! [ 1 - U*Pi ]
             den=dcmplx(0d0,0d0)
-            den = zeye(Nbp) - matmul(Umats%screened(:,:,iw,ik),Pmats%screened_local(:,:,iw))
+            den = zeye(Nbp) - matmul(Umats%screened(:,:,iw,iq),Pmats%screened_local(:,:,iw))
             !
             ! [ 1 - U*Pi ]^-1
             call inv_her(den)
             !
             ! [ 1 - U*Pi ]^-1 * U
-            Wmats%screened_local(:,:,iw) = Wmats%screened_local(:,:,iw) + matmul(den,Umats%screened(:,:,iw,ik))/Nkpt
+            Wmats%screened_local(:,:,iw) = Wmats%screened_local(:,:,iw) + matmul(den,Umats%screened(:,:,iw,iq))/Nkpt
+            !
+            do ismall=1,12
+               if (Lttc%small_ik(ismall,1).eq.iq) den_smallk(:,:,iw,ismall) = den
+            enddo
             !
          enddo
       enddo
       !$OMP END DO
       !$OMP END PARALLEL
+      deallocate(den)
+      write(*,"(A,1I7)") "Gamma point is at kpoint list index: ",iq0
+      !
+      !
+      ! Gamma point handling
+      num_k=1
+      do ismall=2,12
+         if (Lttc%small_ik(ismall,2).eq.1) num_k=num_k+1
+      enddo
+      !
+      !if num_k only is one include also next nearset points
+      if(num_k.eq.1)then
+         num_k=1
+         do ismall=2,12
+            if (Lttc%small_ik(ismall,2).le.2) num_k=num_k+1
+         enddo
+      endif
+      !
+      !calc average epsinv for small k
+      do ismall=1,num_k
+         den_smallk_avrg = den_smallk_avrg + den_smallk(:,:,:,ismall)/num_k
+      enddo
+      !
+      !W at gamma point should be real
+      den_smallk_avrg = real(den_smallk_avrg)
+      !
+      !Add the Gamma point value
+      do iw=1,Nmats
+         Wmats%screened_local(:,:,iw) = Wmats%screened_local(:,:,iw) + matmul(den_smallk_avrg(:,:,iw),Umats%screened(:,:,iw,iq0))/Nkpt
+      enddo
+      !
+      deallocate(den_smallk,den_smallk_avrg)
       !
    end subroutine calc_W_edmft
 
@@ -211,7 +293,7 @@ contains
    !---------------------------------------------------------------------------!
    !PURPOSE: Computes [ 1 - U*Pi ]^-1 * Pi - GW+EDMFT
    !---------------------------------------------------------------------------!
-   subroutine calc_chi_full(Chi,Umats,Pmats)
+   subroutine calc_chi_full(Chi,Umats,Pmats,Lttc)
       !
       use parameters
       use utils_misc
@@ -222,11 +304,12 @@ contains
       type(BosonicField),intent(inout)      :: Chi
       type(BosonicField),intent(in)         :: Umats
       type(BosonicField),intent(in)         :: Pmats
+      type(Lattice),intent(in)              :: Lttc
       !
       complex(8),allocatable                :: den(:,:)
       real(8)                               :: Beta
       integer                               :: Nbp,Nkpt,Nmats
-      integer                               :: ik,iw
+      integer                               :: iq,iw
       !
       !
       write(*,*) "--- calc_chi_full ---"
@@ -255,22 +338,25 @@ contains
       call clear_attributes(Chi)
       Chi%bare = Umats%bare
       !$OMP PARALLEL DEFAULT(NONE),&
-      !$OMP SHARED(Nbp,Nkpt,Nmats,Pmats,Umats,Chi),&
-      !$OMP PRIVATE(ik,iw,den)
+      !$OMP SHARED(Nbp,Nkpt,Nmats,Pmats,Umats,Chi,Lttc),&
+      !$OMP PRIVATE(iq,iw,den)
       !$OMP DO
-      do ik=1,Nkpt
+      do iq=1,Nkpt
+         !
+         !avoid the gamma point
+         if(all(Lttc%kpt(:,iq).eq.[0d0,0d0,0d0]))cycle
          !
          do iw=1,Nmats
             !
             ! [ 1 - U*Pi ]
             den=dcmplx(0d0,0d0)
-            den = zeye(Nbp) - matmul(Umats%screened(:,:,iw,ik),Pmats%screened(:,:,iw,ik))
+            den = zeye(Nbp) - matmul(Umats%screened(:,:,iw,iq),Pmats%screened(:,:,iw,iq))
             !
             ! [ 1 - U*Pi ]^-1
             call inv_her(den)
             !
             ! [ 1 - U*Pi ]^-1 * Pi
-            Chi%screened(:,:,iw,ik) = matmul(den,Pmats%screened(:,:,iw,ik))
+            Chi%screened(:,:,iw,iq) = matmul(den,Pmats%screened(:,:,iw,iq))
             !
          enddo
       enddo
@@ -285,7 +371,7 @@ contains
    !---------------------------------------------------------------------------!
    !PURPOSE: Computes [ 1 - U*Pi ]^-1 * Pi - EDMFT
    !---------------------------------------------------------------------------!
-   subroutine calc_chi_edmft(Chi,Umats,Pmats)
+   subroutine calc_chi_edmft(Chi,Umats,Pmats,Lttc)
       !
       use parameters
       use utils_misc
@@ -296,11 +382,12 @@ contains
       type(BosonicField),intent(inout)      :: Chi
       type(BosonicField),intent(in)         :: Umats
       type(BosonicField),intent(in)         :: Pmats
+      type(Lattice),intent(in)              :: Lttc
       !
       complex(8),allocatable                :: den(:,:)
       real(8)                               :: Beta
       integer                               :: Nbp,Nkpt,Nmats
-      integer                               :: ik,iw
+      integer                               :: iq,iw
       !
       !
       write(*,*) "--- calc_chi_edmft ---"
@@ -328,16 +415,19 @@ contains
       call clear_attributes(Chi)
       Chi%bare_local = Umats%bare_local
       !$OMP PARALLEL DEFAULT(NONE),&
-      !$OMP SHARED(Nbp,Nkpt,Nmats,Pmats,Umats,Chi),&
-      !$OMP PRIVATE(ik,iw,den)
+      !$OMP SHARED(Nbp,Nkpt,Nmats,Pmats,Umats,Chi,Lttc),&
+      !$OMP PRIVATE(iq,iw,den)
       !$OMP DO
-      do ik=1,Nkpt
+      do iq=1,Nkpt
+         !
+         !avoid the gamma point
+         if(all(Lttc%kpt(:,iq).eq.[0d0,0d0,0d0]))cycle
          !
          do iw=1,Nmats
             !
             ! [ 1 - U*Pi ]
             den=dcmplx(0d0,0d0)
-            den = zeye(Nbp) - matmul(Umats%screened(:,:,iw,ik),Pmats%screened_local(:,:,iw))
+            den = zeye(Nbp) - matmul(Umats%screened(:,:,iw,iq),Pmats%screened_local(:,:,iw))
             !
             ! [ 1 - U*Pi ]^-1
             call inv_her(den)

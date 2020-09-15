@@ -293,7 +293,10 @@ contains
       call assert_shape(small_ik,[12,2],"fill_smallk","small_ik")
       !
       small_ik(:,1)=nkpt
-      do ik=2,nkpt
+      do ik=1,nkpt
+         !
+         !avoid the gamma point
+         if(all(kpt(:,ik).eq.[0d0,0d0,0d0]))cycle
          !
          kreal1 = kpt(1,ik)*rlat(:,1) + kpt(2,ik)*rlat(:,2) + kpt(3,ik)*rlat(:,3)
          do i=1,12
@@ -312,7 +315,7 @@ contains
       !find kpoints that are equally far from the origin
       small_ik(1,2)=1
       do i=2,12
-         if (abs((kreal(1,i-1)**2+kreal(2,i-1)**2+kreal(3,i-1)**2)-(kreal(1,i)**2+kreal(2,i)**2+kreal(3,i)**2)).lt.1d-9) then
+         if (abs((kreal(1,i-1)**2+kreal(2,i-1)**2+kreal(3,i-1)**2)-(kreal(1,i)**2+kreal(2,i)**2+kreal(3,i)**2)).lt.eps) then
             small_ik(i,2)=small_ik(i-1,2)
          else
             small_ik(i,2)=small_ik(i-1,2)+1
