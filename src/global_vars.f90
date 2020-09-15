@@ -36,20 +36,14 @@ module global_vars
    !---------------------------------------------------------------------------!
    !PURPOSE: K-points
    !---------------------------------------------------------------------------!
-   integer                                  :: Nkpt
    integer                                  :: Nkpt3(3)
-   real(8),allocatable                      :: kpt(:,:)                         ![(kx,ky,kz),ik]
-   integer                                  :: Nkpt_irred
-   integer,allocatable                      :: kptsum(:,:),kptdiff(:,:)
 
 
    !---------------------------------------------------------------------------!
    !PURPOSE: Orbital spaces
    !---------------------------------------------------------------------------!
    integer                                  :: Nsite
-   integer                                  :: NorbGW
-   integer                                  :: NpbGW
-
+   character        :: VH_type="Ubare"
 
    !---------------------------------------------------------------------------!
    !PURPOSE: Hamiltonian Parameters

@@ -99,6 +99,7 @@ module linalg
    public :: deye, zeye, zeros, ones                                            !numpy-like. Takes integer returns square matrix.
    public :: diag                                                               !numpy-like. Takes vector returns diagonal sqaure matrix.
    public :: diagonal                                                           !numpy-like. Takes sqaure matrix returns diagonal vector.
+   public :: rotate                                                             !numpy-like. Takes two sqaure matrix returns sqaure matrix.
 
    !===========================================================================!
 
@@ -132,6 +133,7 @@ contains
    ! - diag: construct real matrix from diagonal elements
    ! - trace: return trace along the main diagonal
    ! - Xeye: returns the identity matrix of size n x n
+   ! - Rotate: returns the rotated matrix of size n x n
    !---------------------------------------------------------------------------!
    include "linalg/linalg_auxiliary.f90"
 

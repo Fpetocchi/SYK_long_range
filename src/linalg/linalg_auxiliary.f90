@@ -108,6 +108,24 @@ end function zdiag
 
 
 !-------------------------------------------------------------------------------------------
+!PURPOSE:  Rotate matrix with a given rotation
+!-------------------------------------------------------------------------------------------
+function rotate(A,U) result(Arot)
+  complex(8),intent(in)        :: A(:,:)
+  complex(8),intent(in)        :: U(:,:)
+  complex(8),allocatable       :: Arot(:,:)
+  integer                      :: NA,NU
+  NA = size(A,dim=1) ; if(size(A,dim=2).ne.NA) stop "rotate: input matrix not square."
+  NU = size(U,dim=1) ; if(size(U,dim=2).ne.NU) stop "rotate: rotation matrix not square."
+  allocate(Arot(NA,NA));Arot=dcmplx(0d0,0d0)
+  Arot = matmul(transpose(conjg(U)),matmul(A,U))
+end function rotate
+
+
+
+
+
+!-------------------------------------------------------------------------------------------
 !PURPOSE:  return the diagonal of a matrix
 !-------------------------------------------------------------------------------------------
 pure function d_diagonal(A) result(dd)
@@ -127,6 +145,7 @@ pure function z_diagonal(A) result(dd)
      dd(i) = A(i,i)
   end do
 end function z_diagonal
+
 
 
 
@@ -274,8 +293,3 @@ pure function zones_7(n1,n2,n3,n4,n5,n6,n7) result(A)
   complex(8)          :: A(n1,n2,n3,n4,n5,n6,n7)
   A = one
 end function zones_7
-
-
-
-
-

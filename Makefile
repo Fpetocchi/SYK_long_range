@@ -16,7 +16,7 @@ RELFFLAGS = -xHost -O3 -ftz -mcmodel=large
 # Project files-----------------------------------------------------------------
 EXECDIR = bin
 SRCDIR = src
-SRCS = linalg.f90 parameters.f90 global_vars.f90 utils_misc.f90 utils_fields.f90 file_io.f90 interactions.f90 crystal.f90 fourier_transforms.f90 bubbles.f90
+SRCS = linalg.f90 parameters.f90 global_vars.f90 utils_misc.f90 utils_fields.f90 file_io.f90 interactions.f90 crystal.f90 fourier_transforms.f90 bubbles.f90 self_energy.f90
 OBJS = $(SRCS:.f90=.o)
 EXE  = SelfConsistency
 
@@ -61,7 +61,7 @@ $(DBGDIR)/linalg.o: $(SRCDIR)/linalg.f90
 $(DBGDIR)/utils_misc.o: $(SRCDIR)/utils_misc.f90
 	$(FC) -c $(FFLAGS) $(DBGFFLAGS) -o $@ $<
 
-$(DBGDIR)/crystal.o: $(SRCDIR)/crystal.f90 $(DBGDIR)/utils_misc.o $(DBGDIR)/linalg.o
+$(DBGDIR)/crystal.o: $(SRCDIR)/crystal.f90 $(DBGDIR)/linalg.o $(DBGDIR)/utils_misc.o
 	$(FC) -c $(FFLAGS) $(DBGFFLAGS) -o $@ $<
 
 $(DBGDIR)/fourier_transforms.o: $(SRCDIR)/fourier_transforms.f90 $(DBGDIR)/utils_misc.o $(DBGDIR)/crystal.o
@@ -83,6 +83,9 @@ $(DBGDIR)/interactions.o: $(SRCDIR)/interactions.f90 $(DBGDIR)/utils_misc.o $(DB
 	$(FC) -c $(FFLAGS) $(DBGFFLAGS) -o $@ $<
 
 $(DBGDIR)/bubbles.o: $(SRCDIR)/bubbles.f90 $(DBGDIR)/utils_misc.o $(DBGDIR)/crystal.o $(DBGDIR)/parameters.o $(DBGDIR)/global_vars.o $(DBGDIR)/utils_fields.o $(DBGDIR)/file_io.o $(DBGDIR)/fourier_transforms.o
+	$(FC) -c $(FFLAGS) $(DBGFFLAGS) -o $@ $<
+
+$(DBGDIR)/self_energy.o: $(SRCDIR)/self_energy.f90 $(DBGDIR)/linalg.o $(DBGDIR)/utils_misc.o $(DBGDIR)/crystal.o $(DBGDIR)/parameters.o $(DBGDIR)/global_vars.o $(DBGDIR)/utils_fields.o $(DBGDIR)/file_io.o $(DBGDIR)/fourier_transforms.o
 	$(FC) -c $(FFLAGS) $(DBGFFLAGS) -o $@ $<
 
 #
@@ -133,6 +136,9 @@ $(RELDIR)/interactions.o: $(SRCDIR)/interactions.f90 $(RELDIR)/utils_misc.o $(RE
 	$(FC) -c $(FFLAGS) $(RELFFLAGS) -o $@ $<
 
 $(RELDIR)/bubbles.o: $(SRCDIR)/bubbles.f90 $(RELDIR)/utils_misc.o $(RELDIR)/crystal.o $(RELDIR)/parameters.o $(RELDIR)/global_vars.o $(RELDIR)/utils_fields.o $(RELDIR)/file_io.o $(RELDIR)/fourier_transforms.o
+	$(FC) -c $(FFLAGS) $(RELFFLAGS) -o $@ $<
+
+$(RELDIR)/self_energy.o: $(SRCDIR)/self_energy.f90 $(RELDIR)/linalg.o $(RELDIR)/utils_misc.o $(RELDIR)/crystal.o $(RELDIR)/parameters.o $(RELDIR)/global_vars.o $(RELDIR)/utils_fields.o $(RELDIR)/file_io.o $(RELDIR)/fourier_transforms.o
 	$(FC) -c $(FFLAGS) $(RELFFLAGS) -o $@ $<
 
 #

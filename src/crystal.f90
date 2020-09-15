@@ -47,6 +47,7 @@ module crystal
    public :: rlat
    !subroutines
    public :: read_lattice
+   public :: read_xeps
    public :: read_Hk
    public :: fill_ksumkdiff
    public :: fill_smallk
@@ -107,9 +108,98 @@ contains
 
 
    !---------------------------------------------------------------------------!
+   !PURPOSE: Read XEPS.DAT file
+   !---------------------------------------------------------------------------!
+   subroutine read_xeps(pathINPUT,kpt,Nkpt3,UseXepsKorder,kptPos,Nkpt_irred)
+      !
+      use utils_misc
+      implicit none
+      !
+      character(len=*),intent(in)           :: pathINPUT
+      real(8),allocatable,intent(in)        :: kpt(:,:)
+      integer,intent(in)                    :: Nkpt3(3)
+      logical,intent(in)                    :: UseXepsKorder
+      integer,allocatable,intent(inout)     :: kptPos(:)
+      integer,intent(out)                   :: Nkpt_irred
+      !
+      character(len=256)                    :: path
+      real(8),allocatable                   :: Ene_xeps(:,:,:)
+      real(8),allocatable                   :: kpt_xeps(:,:)
+      integer,allocatable                   :: kptPos_xeps(:)
+      integer                               :: Nspin_xeps
+      integer                               :: Nkpt3_xeps(3)
+      integer                               :: Nkpt,Nkpt_xeps
+      integer                               :: Nkpt_xeps_irred
+      integer                               :: Nband_xeps
+      real(8)                               :: Efermi_xeps
+      logical                               :: UseDisentangledBS
+      integer                               :: ik,unit
+      logical                               :: dumlogical,filexists
+      !
+      !
+      write(*,*) "--- read_xeps ---"
+      !
+      !
+      path = pathINPUT//"XEPS.DAT"
+      call inquireFile(reg(path),filexists)
+      !
+      unit = free_unit()
+      open(unit,file=reg(path),form="unformatted",action="read")
+      read(unit) Nspin_xeps
+      read(unit) Nkpt3_xeps
+      read(unit) Nkpt_xeps
+      read(unit) Nkpt_xeps_irred
+      read(unit) Nband_xeps
+      read(unit) Efermi_xeps
+      read(unit) dumlogical
+      read(unit) UseDisentangledBS
+      !
+      allocate(kpt_xeps(3,Nkpt_xeps));kpt_xeps=0d0
+      allocate(kptPos_xeps(Nkpt_xeps));kptPos_xeps=0
+      allocate(Ene_xeps(Nband_xeps,Nkpt_xeps_irred,Nspin_xeps));Ene_xeps=0d0
+      !
+      read(unit) kpt_xeps
+      read(unit) kptPos_xeps
+      read(unit) Ene_xeps
+      !
+      close(unit)
+      !
+      Nkpt = size(kpt,dim=2)
+      Nkpt_irred = Nkpt
+      if(UseXepsKorder) Nkpt_irred = Nkpt_xeps_irred
+      !
+      ! Global checks
+      if(Nspin_xeps.ne.1)           stop "Nspin_xeps.ne.1 in XEPS.DAT"
+      if(Nkpt_xeps.ne.Nkpt)         stop "Nkpt_xeps.ne.Nkpt in XEPS.DAT"
+      if(Nkpt3_xeps(1).ne.Nkpt3(1)) stop "Nkpt(1)_xeps.ne.Nkpt(1) in XEPS.DAT"
+      if(Nkpt3_xeps(2).ne.Nkpt3(2)) stop "Nkpt(2)_xeps.ne.Nkpt(2) in XEPS.DAT"
+      if(Nkpt3_xeps(3).ne.Nkpt3(3)) stop "Nkpt(3)_xeps.ne.Nkpt(3) in XEPS.DAT"
+      !
+      ! Check of the K-point ordering
+      do ik=1,Nkpt
+         if (.not.keq(kpt_xeps(:,ik),kpt(:,ik))) then
+            write(*,*)"ik=",ik,"kpt(:,ik)=",kpt(:,ik),"kpt_loc(:,ik=)",kpt_xeps(:,ik)
+            !write(*,*) "kptp(ik)=",kptPos(ik),"kptp_loc(ik)=",kptPos_xeps(ik)
+            stop "K-points grid does not match"
+         endif
+      enddo
+      !
+      allocate(kptPos(Nkpt));kptPos=0
+      if(UseXepsKorder)then
+         kptPos=kptPos_xeps
+      else
+         do ik=1,Nkpt
+            kptPos(ik)=ik
+         enddo
+      endif
+      !
+   end subroutine read_xeps
+
+
+   !---------------------------------------------------------------------------!
    !PURPOSE: Read the Hamiltonian and kpoints providing Eigen-values/vectors
    !---------------------------------------------------------------------------!
-   subroutine read_Hk(pathINPUT,Hk,kpt,Ek,Zk)
+   subroutine read_Hk(pathINPUT,Hk,kpt,Ek,Zk,Hloc)
       !
       use utils_misc
       use linalg, only :  eigh
@@ -120,6 +210,7 @@ contains
       real(8),intent(inout)                 :: kpt(:,:)
       real(8),intent(inout)                 :: Ek(:,:)
       complex(8),intent(inout)              :: Zk(:,:,:)
+      complex(8),intent(inout)              :: Hloc(:,:)
       !
       character(len=256)                    :: path
       integer                               :: unit,Nkpt,Norb
@@ -148,6 +239,10 @@ contains
       call assert_shape(Ek,[Norb,Nkpt],"read_Hk","Ek")
       call assert_shape(Zk,[Norb,Norb,Nkpt],"read_Hk","Zk")
       !
+      Hk=dcmplx(0d0,0d0)
+      Zk=dcmplx(0d0,0d0)
+      Hloc=dcmplx(0d0,0d0)
+      Ek=0d0
       do ik=1,nkpt
          read(unit,*) idum1,idum2,kpt(:,ik)
          if (idum2.ne.ik) stop "ik"
@@ -156,9 +251,10 @@ contains
                read(unit,*) idum1,idum2,ReHk,ImHk
                if (idum1.ne.iwan1) stop "iwan1"
                if (idum2.ne.iwan2) stop "iwan2"
-               Hk(iwan1,iwan2,ik)=dcmplx(ReHk,ImHk)*H2eV
+               Hk(iwan1,iwan2,ik) = dcmplx(ReHk,ImHk)*H2eV
             enddo
          enddo
+         Hloc = Hloc + Hk(:,:,ik)/nkpt
          !
          call check_Hermiticity(Hk(:,:,ik),eps)
          !

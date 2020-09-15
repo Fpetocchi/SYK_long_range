@@ -12,7 +12,7 @@ module module_container
    inv, inv_sym, inv_her                    ,&
    det,trace                                ,&
    deye, zeye, zeros, ones                  ,&
-   diag, diagonal
+   diag, diagonal, rotate
 
 
    !(b) Standalone module. Can be used as generic library.
@@ -33,6 +33,7 @@ module module_container
    !(c) Lattice related quantities. Depends on (a),(b) not on specific types.
    use crystal, only:                        &
    read_lattice                             ,&
+   read_xeps                                ,&
    read_Hk                                  ,&
    fill_ksumkdiff                           ,&
    fill_smallk                              ,&
@@ -85,8 +86,17 @@ module module_container
    calc_chi_edmft !build_Umatrix,rescale_interaction
 
 
-   !(i) Bubble diagram container container. Depends on (utils_misc),(crystal),(parameters),(global_vars),(utils_fields),(fourier_transforms)
+   !(i) Bubble diagram container. Depends on (utils_misc),(crystal),(parameters),(global_vars),(utils_fields),(fourier_transforms)
    use bubbles, only:                        &
    calc_Pi !calc_Optcond,calc_Hall
+
+
+   !(i) Self-energy container. Depends on (linalg),(utils_misc),(crystal),(parameters),(global_vars),(utils_fields),(fourier_transforms)
+   use self_energy, only:                    &
+   calc_sigmaGW !calc_Optcond,calc_Hall
+
+
+
+
 
 end module module_container

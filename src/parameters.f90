@@ -35,15 +35,17 @@ module parameters
       complex(8),allocatable                :: Hk(:,:,:)                        ![Norb,Norb,Nkpt]
       complex(8),allocatable                :: Zk(:,:,:)                        ![Norb,Norb,Nkpt]
       real(8),allocatable                   :: Ek(:,:)                          ![Norb,Nkpt]
-      integer,allocatable                   :: kptsum(:,:)
-      integer,allocatable                   :: kptdif(:,:)
+      integer,allocatable                   :: kptPos(:)                        ![Nkpt]
+      integer,allocatable                   :: kptsum(:,:)                      ![Nkpt,Nkpt]
+      integer,allocatable                   :: kptdif(:,:)                      ![Nkpt,Nkpt]
       integer,allocatable                   :: kprint(:)
-      integer                               :: small_ik(12,2)
+      integer,allocatable                   :: small_ik(:,:)                    ![12,2]
       integer                               :: Nkpt=0
+      integer                               :: Nkpt_irred=0
       integer                               :: Norb=0
       real(8)                               :: mu=0d0
+      logical                               :: UseDisentangledBS=.false.
       logical                               :: status=.false.
-      logical                               :: small_ik_stored=.false.
    end type Lattice
 
 
@@ -75,6 +77,7 @@ module parameters
       integer                               :: Npoints=0
       integer                               :: Nkpt=0
       integer                               :: Nsite=1
+      integer                               :: iq_gamma=-1
       real(8)                               :: Beta=0d0
       logical                               :: status=.false.
    end type BosonicField

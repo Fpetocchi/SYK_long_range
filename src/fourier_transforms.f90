@@ -28,8 +28,8 @@ module fourier_transforms
    end interface Fitau2mats_vec
 
    interface Bmats2itau
-      module procedure Bmats2itau_Uw                                            !(beta,Uitau[Nbp,Nbp,Nmats],Umats[Nbp,Nbp,Ntau],tau_uniform)
-      module procedure Bmats2itau_Uwk                                           !(beta,Uitau[Nbp,Nbp,Nmats,Nkpt],Umats[Nbp,Nbp,Ntau,Nkpt],tau_uniform)
+      module procedure Bmats2itau_Uw                                            !(beta,Uitau[Nbp,Nbp,Nmats],Umats[Nbp,Nbp,Ntau],asympt_corr,tau_uniform)
+      module procedure Bmats2itau_Uwk                                           !(beta,Uitau[Nbp,Nbp,Nmats,Nkpt],Umats[Nbp,Nbp,Ntau,Nkpt],asympt_corr,tau_uniform)
    end interface Bmats2itau
    interface Bitau2mats
       module procedure Bitau2mats_Uw                                            !(beta,Uitau[Nbp,Nbp,Nmats],Umats[Nbp,Nbp,Ntau],tau_uniform)

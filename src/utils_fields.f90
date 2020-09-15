@@ -103,13 +103,17 @@ contains
       if(allocated(lttc%Ek))deallocate(lttc%Ek)
       allocate(lttc%Ek(lttc%Norb,lttc%Nkpt));lttc%Ek=0d0
       !
+      if(allocated(lttc%kptPos))deallocate(lttc%kptPos)
+      allocate(lttc%kptPos(lttc%Nkpt));lttc%kptPos=0
+      !
       if(allocated(lttc%kptsum))deallocate(lttc%kptsum)
       allocate(lttc%kptsum(lttc%Nkpt,lttc%Nkpt));lttc%kptsum=0
       !
       if(allocated(lttc%kptdif))deallocate(lttc%kptdif)
       allocate(lttc%kptdif(lttc%Nkpt,lttc%Nkpt));lttc%kptdif=0
       !
-      !lttc%kprint allocated and initialized via specific subr in crystal module
+      if(allocated(lttc%small_ik))deallocate(lttc%small_ik)
+      allocate(lttc%small_ik(12,2));lttc%small_ik=0
       !
    end subroutine selfAllocateLattice
    !
@@ -126,12 +130,17 @@ contains
       if(allocated(lttc%Hk))deallocate(lttc%Hk)
       if(allocated(lttc%Zk))deallocate(lttc%Zk)
       if(allocated(lttc%Ek))deallocate(lttc%Ek)
+      if(allocated(lttc%kptPos))deallocate(lttc%kptPos)
       if(allocated(lttc%kptsum))deallocate(lttc%kptsum)
       if(allocated(lttc%kptdif))deallocate(lttc%kptdif)
       if(allocated(lttc%kprint))deallocate(lttc%kprint)
-      lttc%Nkpt=0
+      if(allocated(lttc%small_ik))deallocate(lttc%small_ik)
       lttc%Nkpt3=0
+      lttc%Nkpt=0
+      lttc%Nkpt_irred=0
       lttc%Norb=0
+      lttc%mu=0d0
+      lttc%UseDisentangledBS=.false.
       lttc%status=.false.
       !
    end subroutine selfDeallocateLattice
@@ -235,6 +244,7 @@ contains
       W%Npoints=0
       W%Nkpt=0
       W%Nsite=1
+      W%iq_gamma=-1
       W%Beta=0d0
       W%status=.false.
       !

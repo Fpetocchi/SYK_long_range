@@ -15,21 +15,6 @@ module interactions
    end interface read_spex
 
    !---------------------------------------------------------------------------!
-   !PURPOSE: Module variables
-   !---------------------------------------------------------------------------!
-   integer,private                          :: Nspin_xeps
-   integer,private                          :: Nkpt3_xeps(3)
-   integer,private                          :: Nkpt_xeps
-   integer,private                          :: Nkpt_xeps_irred
-   integer,private                          :: Nband_xeps
-   real(8),private                          :: Efermi_xeps
-   logical,private                          :: UseDisentangledBS
-   real(8),allocatable,private              :: Ene_xeps(:,:,:)
-   real(8),allocatable,private              :: kpt_xeps(:,:)
-   integer,allocatable,private              :: kptPos_xeps(:)
-   integer,allocatable,private              :: kptPos(:)
-
-   !---------------------------------------------------------------------------!
    !PURPOSE: Rutines available for the user. Description only for interfaces.
    !---------------------------------------------------------------------------!
    !subroutines
@@ -68,21 +53,22 @@ contains
       complex(8),allocatable                :: den_smallk_avrg(:,:,:)
       real(8)                               :: Beta
       integer                               :: Nbp,Nkpt,Nmats
-      integer                               :: iq0,iq,iw
+      integer                               :: iq,iw
       integer                               :: ismall,num_k
       !
       !
       write(*,*) "--- calc_W_full ---"
       !
       !
-      ! Check on the input Bosons
+      ! Check on the input Fields
       if(.not.Wmats%status) stop "Wmats not properly initialized."
       if(.not.Umats%status) stop "Umats not properly initialized."
       if(.not.Pmats%status) stop "Pmats not properly initialized."
       if(Wmats%Nkpt.eq.0) stop "Wmats k dependent attributes not properly initialized."
       if(Umats%Nkpt.eq.0) stop "Umats k dependent attributes not properly initialized."
       if(Pmats%Nkpt.eq.0) stop "Pmats k dependent attributes not properly initialized."
-      if(.not.Lttc%small_ik_stored) stop "Kpoints near Gamma not stored. W divergence cannot be cured."
+      if(Umats%iq_gamma.lt.0) stop "Umats iq_gamma not defined."
+      if(allocated(Lttc%small_ik)) stop "Kpoints near Gamma not stored. W divergence cannot be cured."
       !
       Nbp = Wmats%Nbp
       Nkpt = Wmats%Nkpt
@@ -99,18 +85,18 @@ contains
       allocate(den_smallk_avrg(Nbp,Nbp,Nmats))
       allocate(den(Nbp,Nbp))
       call clear_attributes(Wmats)
+      !
+      ! Assuming that the Polarization vanishes at iw__>inf
       Wmats%bare = Umats%bare
+      !
       !$OMP PARALLEL DEFAULT(NONE),&
-      !$OMP SHARED(iq0,Nbp,Nkpt,Nmats,Pmats,Umats,Wmats,den_smallk,Lttc),&
+      !$OMP SHARED(Nbp,Nkpt,Nmats,Pmats,Umats,Wmats,den_smallk,Lttc),&
       !$OMP PRIVATE(iq,iw,den,ismall)
       !$OMP DO
       do iq=1,Nkpt
          !
          !avoid the gamma point
-         if(all(Lttc%kpt(:,iq).eq.[0d0,0d0,0d0]))then
-            iq0 = iq
-            cycle
-         endif
+         if(iq.eq.Umats%iq_gamma)cycle
          !
          do iw=1,Nmats
             !
@@ -133,7 +119,7 @@ contains
       !$OMP END DO
       !$OMP END PARALLEL
       deallocate(den)
-      write(*,"(A,1I7)") "Gamma point is at kpoint list index: ",iq0
+      write(*,"(A,1I7)") "Gamma point is at kpoint list index: ",Umats%iq_gamma
       !
       !
       ! Gamma point handling
@@ -160,11 +146,12 @@ contains
       !
       !Replace the Gamma point value
       do iw=1,Nmats
-         Wmats%screened(:,:,iw,iq0) = matmul(den_smallk_avrg(:,:,iw),Umats%screened(:,:,iw,iq0))
+         Wmats%screened(:,:,iw,Umats%iq_gamma) = matmul(den_smallk_avrg(:,:,iw),Umats%screened(:,:,iw,Umats%iq_gamma))
       enddo
       !
       deallocate(den_smallk,den_smallk_avrg)
       !
+      ! Fill the local attributes
       call BosonicKsum(Wmats)
       !
    end subroutine calc_W_full
@@ -191,21 +178,22 @@ contains
       complex(8),allocatable                :: den_smallk_avrg(:,:,:)
       real(8)                               :: Beta
       integer                               :: Nbp,Nkpt,Nmats
-      integer                               :: iq0,iq,iw
+      integer                               :: iq,iw
       integer                               :: ismall,num_k
       !
       !
       write(*,*) "--- calc_W_edmft ---"
       !
       !
-      ! Check on the input Bosons
+      ! Check on the input Fields
       if(.not.Wmats%status) stop "Wmats not properly initialized."
       if(.not.Umats%status) stop "Umats not properly initialized."
       if(.not.Pmats%status) stop "Pmats not properly initialized."
       if(Wmats%Nkpt.ne.0) stop "Wmats k dependent attributes are supposed to be unallocated."
       if(Umats%Nkpt.eq.0) stop "Umats k dependent attributes not properly initialized."
       if(Pmats%Nkpt.ne.0) stop "Pmats k dependent attributes are supposed to be unallocated."
-      if(.not.Lttc%small_ik_stored) stop "Kpoints near Gamma not stored. W divergence cannot be cured."
+      if(Umats%iq_gamma.lt.0) stop "Umats iq_gamma not defined."
+      if(allocated(Lttc%small_ik)) stop "Kpoints near Gamma not stored. W divergence cannot be cured."
       !
       Nbp = Wmats%Nbp
       Nkpt = Umats%Nkpt
@@ -221,18 +209,18 @@ contains
       allocate(den_smallk_avrg(Nbp,Nbp,Nmats))
       allocate(den(Nbp,Nbp))
       call clear_attributes(Wmats)
+      !
+      ! Assuming that the Polarization vanishes at iw__>inf
       Wmats%bare_local = Umats%bare_local
+      !
       !$OMP PARALLEL DEFAULT(NONE),&
-      !$OMP SHARED(iq0,Nbp,Nkpt,Nmats,Pmats,Umats,Wmats,den_smallk,Lttc),&
+      !$OMP SHARED(Nbp,Nkpt,Nmats,Pmats,Umats,Wmats,den_smallk,Lttc),&
       !$OMP PRIVATE(iq,iw,den,ismall)
       !$OMP DO
       do iq=1,Nkpt
          !
          !avoid the gamma point
-         if(all(Lttc%kpt(:,iq).eq.[0d0,0d0,0d0]))then
-            iq0 = iq
-            cycle
-         endif
+         if(iq.eq.Umats%iq_gamma)cycle
          !
          do iw=1,Nmats
             !
@@ -255,7 +243,7 @@ contains
       !$OMP END DO
       !$OMP END PARALLEL
       deallocate(den)
-      write(*,"(A,1I7)") "Gamma point is at kpoint list index: ",iq0
+      write(*,"(A,1I7)") "Gamma point is at kpoint list index: ",Umats%iq_gamma
       !
       !
       ! Gamma point handling
@@ -282,7 +270,7 @@ contains
       !
       !Add the Gamma point value
       do iw=1,Nmats
-         Wmats%screened_local(:,:,iw) = Wmats%screened_local(:,:,iw) + matmul(den_smallk_avrg(:,:,iw),Umats%screened(:,:,iw,iq0))/Nkpt
+         Wmats%screened_local(:,:,iw) = Wmats%screened_local(:,:,iw) + matmul(den_smallk_avrg(:,:,iw),Umats%screened(:,:,iw,Umats%iq_gamma))/Nkpt
       enddo
       !
       deallocate(den_smallk,den_smallk_avrg)
@@ -315,13 +303,14 @@ contains
       write(*,*) "--- calc_chi_full ---"
       !
       !
-      ! Check on the input Bosons
+      ! Check on the input Fields
       if(.not.Chi%status) stop "Chi not properly initialized."
       if(.not.Umats%status) stop "Umats not properly initialized."
       if(.not.Pmats%status) stop "Pmats not properly initialized."
       if(Chi%Nkpt.eq.0) stop "Chi k dependent attributes not properly initialized."
       if(Umats%Nkpt.eq.0) stop "Umats k dependent attributes not properly initialized."
       if(Pmats%Nkpt.eq.0) stop "Pmats k dependent attributes not properly initialized."
+      if(Umats%iq_gamma.lt.0) stop "Umats iq_gamma not defined."
       !
       Nbp = Chi%Nbp
       Nkpt = Chi%Nkpt
@@ -344,7 +333,7 @@ contains
       do iq=1,Nkpt
          !
          !avoid the gamma point
-         if(all(Lttc%kpt(:,iq).eq.[0d0,0d0,0d0]))cycle
+         if(iq.eq.Umats%iq_gamma)cycle
          !
          do iw=1,Nmats
             !
@@ -393,13 +382,14 @@ contains
       write(*,*) "--- calc_chi_edmft ---"
       !
       !
-      ! Check on the input Bosons
+      ! Check on the input Fields
       if(.not.Chi%status) stop "Chi not properly initialized."
       if(.not.Umats%status) stop "Umats not properly initialized."
       if(.not.Pmats%status) stop "Pmats not properly initialized."
       if(Chi%Nkpt.ne.0) stop "Chi k dependent attributes are supposed to be unallocated."
       if(Umats%Nkpt.eq.0) stop "Umats k dependent attributes not properly initialized."
       if(Pmats%Nkpt.ne.0) stop "Pmats k dependent attributes are supposed to be unallocated."
+      if(Umats%iq_gamma.lt.0) stop "Umats iq_gamma not defined."
       !
       Nbp = Chi%Nbp
       Nkpt = Umats%Nkpt
@@ -421,7 +411,7 @@ contains
       do iq=1,Nkpt
          !
          !avoid the gamma point
-         if(all(Lttc%kpt(:,iq).eq.[0d0,0d0,0d0]))cycle
+         if(iq.eq.Umats%iq_gamma)cycle
          !
          do iw=1,Nmats
             !
@@ -441,76 +431,6 @@ contains
       !$OMP END PARALLEL
       !
    end subroutine calc_chi_edmft
-
-
-   !---------------------------------------------------------------------------!
-   !PURPOSE: Read XEPS.DAT file
-   !---------------------------------------------------------------------------!
-   subroutine read_xeps(path2xeps)
-      !
-      use utils_misc
-      use global_vars,                 only :  Nkpt,Nkpt3,kpt,Nkpt_irred
-      use global_vars,                 only :  UseXepsKorder
-      implicit none
-      !
-      character(len=*),intent(in),optional  :: path2xeps
-      integer                               :: ik,unit
-      logical                               :: dumlogical
-      !
-      !
-      write(*,*) "--- read_xeps ---"
-      !
-      !
-      unit = free_unit()
-      open(unit,file=reg(path2xeps),form="unformatted",action="read")
-      read(unit) Nspin_xeps
-      read(unit) Nkpt3_xeps
-      read(unit) Nkpt_xeps
-      read(unit) Nkpt_xeps_irred
-      read(unit) Nband_xeps
-      read(unit) Efermi_xeps
-      read(unit) dumlogical
-      read(unit) UseDisentangledBS
-      !
-      allocate(kpt_xeps(3,Nkpt_xeps));kpt_xeps=0d0
-      allocate(kptPos_xeps(Nkpt_xeps));kptPos_xeps=0
-      allocate(Ene_xeps(Nband_xeps,Nkpt_xeps_irred,Nspin_xeps));Ene_xeps=0d0
-      !
-      read(unit) kpt_xeps
-      read(unit) kptPos_xeps
-      read(unit) Ene_xeps
-      !
-      close(unit)
-      !
-      Nkpt_irred = Nkpt
-      if(UseXepsKorder) Nkpt_irred = Nkpt_xeps_irred
-      !
-      ! Global checks
-      if(Nspin_xeps.ne.1)           stop "Nspin_xeps.ne.1 in XEPS.DAT"
-      if(Nkpt_xeps.ne.Nkpt)         stop "Nkpt_xeps.ne.Nkpt in XEPS.DAT"
-      if(Nkpt3_xeps(1).ne.Nkpt3(1)) stop "Nkpt(1)_xeps.ne.Nkpt(1) in XEPS.DAT"
-      if(Nkpt3_xeps(2).ne.Nkpt3(2)) stop "Nkpt(2)_xeps.ne.Nkpt(2) in XEPS.DAT"
-      if(Nkpt3_xeps(3).ne.Nkpt3(3)) stop "Nkpt(3)_xeps.ne.Nkpt(3) in XEPS.DAT"
-      !
-      ! Check of the K-point ordering
-      do ik=1,Nkpt
-         if (.not.keq(kpt_xeps(:,ik),kpt(:,ik))) then
-            write(*,*)"ik=",ik,"kpt(:,ik)=",kpt(:,ik),"kpt_loc(:,ik=)",kpt_xeps(:,ik)
-            !write(*,*) "kptp(ik)=",kptPos(ik),"kptp_loc(ik)=",kptPos_xeps(ik)
-            stop "K-points grid does not match"
-         endif
-      enddo
-      !
-      allocate(kptPos(Nkpt));kptPos=0
-      if(UseXepsKorder)then
-         kptPos=kptPos_xeps
-      else
-         do ik=1,Nkpt
-            kptPos(ik)=ik
-         enddo
-      endif
-      !
-   end subroutine read_xeps
 
 
    !---------------------------------------------------------------------------!
@@ -534,7 +454,7 @@ contains
       logical                               :: filexists,ACdone,doAC_
       character(len=256)                    :: file_spex,path,pathOUTPUT_
       integer                               :: unit,Nkpt
-      integer                               :: iq,iw,iqread,Npb_spex
+      integer                               :: iq,iw,iqread,Nbp_spex
       integer                               :: idum,Nspin_spex,Norb_spex,Nfreq
       integer                               :: ib1,ib2,iw1,iw2
       real(8),allocatable                   :: wread(:),wmats(:)
@@ -557,14 +477,14 @@ contains
       !
       !
       ! Read XEPS data
-      path = pathINPUT//"XEPS.DAT"
-      call inquireFile(reg(path),filexists)
-      call read_XEPS(reg(path))
+      !path = pathINPUT//"XEPS.DAT"
+      !call inquireFile(reg(path),filexists)
+      !call read_XEPS(reg(path))
       !
       !
       ! Check if the data on the Matsubara axis are present
       path = pathINPUT//"VW_imag" !/VW.Q0001.DAT"
-      call inquireDir(reg(path),ACdone)
+      call inquireDir(reg(path),ACdone,hardstop=.false.)
       doAC_ = .not.ACdone
       if(present(doAC)) doAC_ = doAC
       !
@@ -582,19 +502,19 @@ contains
          read(unit) iqread,Nspin_spex,Norb_spex,Nfreq
          close(unit)
          !
-         Npb_spex = Norb_spex**2
-         allocate(Utmp(Npb_spex,Npb_spex));Utmp=czero
+         Nbp_spex = Norb_spex**2
+         allocate(Utmp(Nbp_spex,Nbp_spex));Utmp=czero
          allocate(wread(Nfreq));wread=0d0
          write(*,"(A,I5)")"Real frequencies: ",Nfreq
          !
          ! Few checks
          if(Nspin_spex.ne.1) stop "Nspin_spex.ne.1"
-         if(Umats%Nbp.ne.Npb_spex) stop "Size of given BosonicField and VW_real orbital space do not coincide."
+         if(Umats%Nbp.ne.Nbp_spex) stop "Size of given BosonicField and VW_real orbital space do not coincide."
          if((.not.LocalOnly).and.(.not.allocated(Umats%bare))) stop "Requested K-dependence but bare attribute not allocated."
          if((.not.LocalOnly).and.(.not.allocated(Umats%screened))) stop "Requested K-dependence but screened attribute not allocated."
          !
          ! Allocate the Bosonic field on the real axis
-         Ureal%Nbp = Npb_spex
+         Ureal%Nbp = Nbp_spex
          Ureal%Npoints = Nfreq
          if(.not.LocalOnly)Ureal%Nkpt = Nkpt
          call selfAllocateBosonicField(Ureal)
@@ -638,17 +558,17 @@ contains
          enddo !iq
          !
          ! Allocate the temporary quantities needed by the Analytical continuation
-         allocate(D1(Npb_spex,Npb_spex));D1=czero
-         allocate(D2(Npb_spex,Npb_spex));D2=czero
-         allocate(D3(Npb_spex,Npb_spex));D3=czero
+         allocate(D1(Nbp_spex,Nbp_spex));D1=czero
+         allocate(D2(Nbp_spex,Nbp_spex));D2=czero
+         allocate(D3(Nbp_spex,Nbp_spex));D3=czero
          !
          !
          ! Analytical continuation of the local component to imag axis using spectral rep
          call cpu_time(start)
          !
          ! Check if any local Urpa component has inverted Im/Re symmetry
-         do ib1=1,Npb_spex
-            do ib2=1,Npb_spex
+         do ib1=1,Nbp_spex
+            do ib2=1,Nbp_spex
                if( abs(real(Ureal%bare_local(ib1,ib2))).lt.abs(aimag(Ureal%bare_local(ib1,ib2))))then
                   write(*,"(A,2I5)")"Element: ",ib1,ib2
                   write(*,"(A,E14.7)")"Re[Ubare(w=inf)]: ",real(Ureal%bare_local(ib1,ib2))
@@ -659,15 +579,15 @@ contains
          enddo
          !
          !$OMP PARALLEL DEFAULT(NONE),&
-         !$OMP SHARED(Npb_spex,wmats,wread,Nfreq,Ureal,Umats),&
+         !$OMP SHARED(Nbp_spex,wmats,wread,Nfreq,Ureal,Umats),&
          !$OMP PRIVATE(ib1,ib2,iw1,iw2,D1,D2,D3,Utmp)
          !$OMP DO
          do iw1=1,Umats%Npoints
             Utmp=czero
             do iw2=1,Nfreq-2,2
                !
-               do ib1=1,Npb_spex
-                  do ib2=1,Npb_spex
+               do ib1=1,Nbp_spex
+                  do ib2=1,Nbp_spex
                      D1(ib1,ib2) = -dimag( Ureal%screened_local(ib1,ib2,iw2)   )/pi
                      D2(ib1,ib2) = -dimag( Ureal%screened_local(ib1,ib2,iw2+1) )/pi
                      D3(ib1,ib2) = -dimag( Ureal%screened_local(ib1,ib2,iw2+2) )/pi
@@ -685,8 +605,8 @@ contains
                endif
             enddo
             !
-            do ib1=1,Npb_spex
-               do ib2=1,Npb_spex
+            do ib1=1,Nbp_spex
+               do ib2=1,Nbp_spex
                   Umats%screened_local(ib1,ib2,iw1) = Utmp(ib1,ib2) + Umats%bare_local(ib1,ib2)
                enddo
             enddo
@@ -703,16 +623,16 @@ contains
          if(.not.LocalOnly)then
             !
             ! Allocate the temporary quantities needed by the Analytical continuation
-            allocate(D1(Npb_spex,Npb_spex));D1=czero
-            allocate(D2(Npb_spex,Npb_spex));D2=czero
-            allocate(D3(Npb_spex,Npb_spex));D3=czero
+            allocate(D1(Nbp_spex,Nbp_spex));D1=czero
+            allocate(D2(Nbp_spex,Nbp_spex));D2=czero
+            allocate(D3(Nbp_spex,Nbp_spex));D3=czero
             !
             !
             ! Analytical continuation of all the K-points to imag axis using spectral rep
-            allocate(imgFact(Npb_spex,Npb_spex,2));imgFact=cone
+            allocate(imgFact(Nbp_spex,Nbp_spex,2));imgFact=cone
             call cpu_time(start)
             !$OMP PARALLEL DEFAULT(NONE),&
-            !$OMP SHARED(Npb_spex,wmats,wread,Nfreq,Ureal,Umats,UfullStructure),&
+            !$OMP SHARED(Nbp_spex,wmats,wread,Nfreq,Ureal,Umats,UfullStructure),&
             !$OMP PRIVATE(iq,ib1,ib2,iw1,iw2,D1,D2,D3,Utmp,imgFact)
             !$OMP DO
             do iq=1,Umats%Nkpt
@@ -720,8 +640,8 @@ contains
                ! Some elelments of U, usually the k-dependent one, have inverted Im/Re symmetry
                imgFact=cone
                if(UfullStructure)then
-                  do ib1=1,Npb_spex
-                     do ib2=1,Npb_spex
+                  do ib1=1,Nbp_spex
+                     do ib2=1,Nbp_spex
                         if( abs(real(Ureal%bare(ib1,ib2,iq))).lt.abs(aimag(Ureal%bare(ib1,ib2,iq))))then
                            imgFact(ib1,ib2,1) = -img !this correspond to dividing by I
                            imgFact(ib1,ib2,2) = +img !this correspond to multiplying by I
@@ -734,8 +654,8 @@ contains
                   Utmp=czero
                   do iw2=1,Nfreq-2,2
                      !
-                     do ib1=1,Npb_spex
-                        do ib2=1,Npb_spex
+                     do ib1=1,Nbp_spex
+                        do ib2=1,Nbp_spex
                            D1(ib1,ib2) = -dimag( ( imgFact(ib1,ib2,1) * Ureal%screened(ib1,ib2,iw2,iq)   ) )/pi
                            D2(ib1,ib2) = -dimag( ( imgFact(ib1,ib2,1) * Ureal%screened(ib1,ib2,iw2+1,iq) ) )/pi
                            D3(ib1,ib2) = -dimag( ( imgFact(ib1,ib2,1) * Ureal%screened(ib1,ib2,iw2+2,iq) ) )/pi
@@ -753,8 +673,8 @@ contains
                      endif
                   enddo
                   !
-                  do ib1=1,Npb_spex
-                     do ib2=1,Npb_spex
+                  do ib1=1,Nbp_spex
+                     do ib2=1,Nbp_spex
                         Umats%screened(ib1,ib2,iw1,iq) = imgFact(ib1,ib2,2)*Utmp(ib1,ib2) + Umats%bare(ib1,ib2,iq)
                      enddo
                   enddo
@@ -802,14 +722,14 @@ contains
          read(unit)idum,Nspin_spex,Norb_spex,Nfreq
          close(unit)
          !
-         Npb_spex = Norb_spex**2
-         allocate(Utmp(Npb_spex,Npb_spex));Utmp=czero
+         Nbp_spex = Norb_spex**2
+         allocate(Utmp(Nbp_spex,Nbp_spex));Utmp=czero
          allocate(wread(Nfreq));wread=0d0
          write(*,"(A,I5)")"Matsubara frequencies: ",Nfreq
          !
          ! Few checks
          if(Nspin_spex.ne.1) stop "Nspin_spex.ne.1"
-         if(Umats%Nbp.ne.Npb_spex) stop "Size of given BosonicField and VW_imag orbital space do not coincide."
+         if(Umats%Nbp.ne.Nbp_spex) stop "Size of given BosonicField and VW_imag orbital space do not coincide."
          if((.not.LocalOnly).and.(.not.allocated(Umats%bare))) stop "Requested K-dependence but bare attribute not allocated."
          if((.not.LocalOnly).and.(.not.allocated(Umats%screened))) stop "Requested K-dependence but screened attribute not allocated."
          if(Umats%Npoints.ne.Nfreq) stop "Number of Matsubara points and bosonic field mesh does not coincide."
@@ -858,8 +778,8 @@ contains
       ! Remove elements with inverted parity from the k-dependent fields.
       if(allocated(Umats%screened).and.allocated(Umats%bare).and.(.not.UfullStructure))then
          do iq=1,Nkpt
-            do ib1=1,Npb_spex
-               do ib2=1,Npb_spex
+            do ib1=1,Nbp_spex
+               do ib2=1,Nbp_spex
                   if (dabs(dimag(Umats%bare(ib1,ib2,iq))).gt.1.d-6) then
                      write(*,"(A,2I5)") "Warning Umats%bare imaginary. Set matrix element to static value",ib1,ib2
                      Umats%bare(ib1,ib2,iq) = Umats%screened(ib1,ib2,1,iq)
@@ -882,17 +802,16 @@ contains
       use file_io
       use utils_misc
       use utils_fields
-      use global_vars,                 only :  Nkpt
       use global_vars,                 only :  pathINPUT
       implicit none
       !
       complex(8),allocatable,intent(inout)  :: Umat(:,:)
       character(len=*),intent(in),optional  :: pathOUTPUT
       !
-      logical                               :: Umatsxists,Urealxists,XEPSxists
+      logical                               :: Umatsxists,Urealxists,SPEXxists
       character(len=256)                    :: file_spex,path,pathOUTPUT_
       integer                               :: unit
-      integer                               :: iq,iw,Npb_spex
+      integer                               :: iq,iw,Nbp_spex,Nkpt
       integer                               :: iqread,Nspin_spex,Norb_spex,Nfreq
       complex(8),allocatable                :: Utmp(:,:)
       type(BosonicField)                    :: Uread
@@ -909,7 +828,7 @@ contains
       path=pathINPUT//"Uloc_real.DAT"
       call inquireFile(reg(path),Urealxists,hardstop=.false.)
       path=pathINPUT//"VW_real" !/VW.Q0001.DAT"
-      call inquireDir(reg(path),XEPSxists,hardstop=.false.)      !
+      call inquireDir(reg(path),SPEXxists,hardstop=.false.)      !
       !
       if(Umatsxists)then
          !
@@ -937,28 +856,31 @@ contains
          call selfDeallocateBosonicField(Uread)
          return
          !
-      else if(XEPSxists)then
+      else if(SPEXxists)then
          !
+         Nkpt=0
          path = pathINPUT//"VW_real/"
-         do iq=1,Nkpt
+         do iq=1,2000
             !
             file_spex = reg(path)//"GWinput/VW_real/VW.Q"//str(iq)//".DAT"        !write(fn,"(a,a,i4.4,a)") reg(path),"GWinput/VW_real/VW.Q",iq,".DAT"
-            call inquireFile(reg(file_spex),XEPSxists)
+            call inquireFile(reg(file_spex),SPEXxists,hardstop=.false.)
+            if(.not.SPEXxists)cycle
+            Nkpt=Nkpt+1
             !
             unit = free_unit()
             open(unit,file=reg(file_spex),form="unformatted",action="read")
             read(unit)iqread,Nspin_spex,Norb_spex,Nfreq
             !
-            Npb_spex = Norb_spex**2
-            allocate(Utmp(Npb_spex,Npb_spex));Utmp=czero
-            if(iq.eq.1)call assert_shape(Umat,[Npb_spex,Npb_spex],"read_spex_Uloc","Umat")
+            Nbp_spex = Norb_spex**2
+            allocate(Utmp(Nbp_spex,Nbp_spex));Utmp=czero
+            if(iq.eq.1)call assert_shape(Umat,[Nbp_spex,Nbp_spex],"read_spex_Uloc","Umat")
             !
             read(unit) !wread
             !
             do iw=0,1
                read(unit) Utmp
                if(iw.eq.1) then
-                  Umat = Umat + H2eV*Utmp/(Nkpt**3)
+                  Umat = Umat + H2eV*Utmp
                endif
             enddo
             !
@@ -966,6 +888,7 @@ contains
             deallocate(Utmp)
             !
          enddo !iq
+         Umat = Umat/(Nkpt**3)
          call dump_matrix(Umat,reg(reg(pathOUTPUT_)//"Umat.DAT"))
          return
          !

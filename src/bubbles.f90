@@ -58,7 +58,7 @@ contains
       write(*,*) "--- calc_Pi_GkGk ---"
       !
       !
-      ! Check on the input Bosons
+      ! Check on the input Fields
       if(.not.Pmats%status) stop "Pmats not properly initialized."
       if(Pmats%Nkpt.eq.0) stop "Pmats k dependent attributes not properly initialized."
       !
@@ -172,8 +172,7 @@ contains
       complex(8),allocatable                :: Pq_tau(:,:,:)
       real(8),allocatable                   :: tau(:)
       real(8)                               :: Beta,tau2
-      integer                               :: Nbp,Nkpt,NaxisB
-      integer                               :: Norb,NmatsF,Ntau_
+      integer                               :: Nbp,Nkpt,Norb,Ntau_,NaxisB
       integer                               :: ik1,ik2,iq,itau,ispin
       integer                               :: m,n,mp,np,ib1,ib2
       logical                               :: tau_uniform_
@@ -195,7 +194,6 @@ contains
       Beta = Pout%Beta
       NaxisB = Pout%Npoints
       Norb = int(sqrt(dble(Nbp)))
-      NmatsF = Gmats%Npoints
       if(Gmats%Norb.ne.Norb) stop "Pout and Green's function have different orbital dimension."
       if(Gmats%Nkpt.ne.Nkpt) stop "Pout and Green's function have different number of Kpoints."
       if(.not.allocated(Lttc%kptdif)) stop "kptdif not allocated."
