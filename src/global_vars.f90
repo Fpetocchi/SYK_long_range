@@ -27,7 +27,7 @@ module global_vars
    !PURPOSE: Frequency and time Meshes
    !---------------------------------------------------------------------------!
    integer                                  :: Nw_F,Nw_B
-   integer                                  :: Ntau_F,Ntau_B
+   integer                                  :: Ntau
    real(8)                                  :: Beta
    real(8),allocatable                      :: tau_F(:),tau_B(:)
    real(8),allocatable                      :: wm_F(:),wm_B(:)

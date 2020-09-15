@@ -84,4 +84,9 @@ module module_container
    calc_chi_full                            ,&
    calc_chi_edmft !build_Umatrix,rescale_interaction
 
+
+   !(i) Bubble diagram container container. Depends on (utils_misc),(crystal),(parameters),(global_vars),(utils_fields),(fourier_transforms)
+   use bubbles, only:                        &
+   calc_Pi !calc_Optcond,calc_Hall
+
 end module module_container

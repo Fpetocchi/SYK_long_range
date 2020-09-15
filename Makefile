@@ -16,7 +16,7 @@ RELFFLAGS = -xHost -O3 -ftz -mcmodel=large
 # Project files-----------------------------------------------------------------
 EXECDIR = bin
 SRCDIR = src
-SRCS = linalg.f90 parameters.f90 global_vars.f90 utils_misc.f90 utils_fields.f90 file_io.f90 interactions.f90 crystal.f90 fourier_transforms.f90
+SRCS = linalg.f90 parameters.f90 global_vars.f90 utils_misc.f90 utils_fields.f90 file_io.f90 interactions.f90 crystal.f90 fourier_transforms.f90 bubbles.f90
 OBJS = $(SRCS:.f90=.o)
 EXE  = SelfConsistency
 
@@ -82,6 +82,9 @@ $(DBGDIR)/file_io.o: $(SRCDIR)/file_io.f90 $(DBGDIR)/utils_misc.o $(DBGDIR)/para
 $(DBGDIR)/interactions.o: $(SRCDIR)/interactions.f90 $(DBGDIR)/utils_misc.o $(DBGDIR)/parameters.o $(DBGDIR)/global_vars.o $(DBGDIR)/utils_fields.o $(DBGDIR)/file_io.o
 	$(FC) -c $(FFLAGS) $(DBGFFLAGS) -o $@ $<
 
+$(DBGDIR)/bubbles.o: $(SRCDIR)/bubbles.f90 $(DBGDIR)/utils_misc.o $(DBGDIR)/crystal.o $(DBGDIR)/parameters.o $(DBGDIR)/global_vars.o $(DBGDIR)/utils_fields.o $(DBGDIR)/file_io.o $(DBGDIR)/fourier_transforms.o
+	$(FC) -c $(FFLAGS) $(DBGFFLAGS) -o $@ $<
+
 #
 # Module contaier and main
 $(DBGDIR)/module_container.o: $(SRCDIR)/module_container.f90 $(DBGOBJS)
@@ -127,6 +130,9 @@ $(RELDIR)/file_io.o: $(SRCDIR)/file_io.f90 $(RELDIR)/utils_misc.o $(RELDIR)/para
 	$(FC) -c $(FFLAGS) $(RELFFLAGS) -o $@ $<
 
 $(RELDIR)/interactions.o: $(SRCDIR)/interactions.f90 $(RELDIR)/utils_misc.o $(RELDIR)/parameters.o $(RELDIR)/global_vars.o $(RELDIR)/utils_fields.o $(RELDIR)/file_io.o
+	$(FC) -c $(FFLAGS) $(RELFFLAGS) -o $@ $<
+
+$(RELDIR)/bubbles.o: $(SRCDIR)/bubbles.f90 $(RELDIR)/utils_misc.o $(RELDIR)/crystal.o $(RELDIR)/parameters.o $(RELDIR)/global_vars.o $(RELDIR)/utils_fields.o $(RELDIR)/file_io.o $(RELDIR)/fourier_transforms.o
 	$(FC) -c $(FFLAGS) $(RELFFLAGS) -o $@ $<
 
 #

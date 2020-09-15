@@ -320,7 +320,7 @@ contains
       implicit none
       !
       real(8),intent(in)                    :: beta
-      complex(8),intent(inout)              :: Gmats(:,:,:)
+      complex(8),intent(in)                 :: Gmats(:,:,:)
       complex(8),intent(inout)              :: Gitau(:,:,:)
       logical,intent(in),optional           :: asympt_corr
       logical,intent(in),optional           :: tau_uniform
@@ -389,7 +389,7 @@ contains
       implicit none
       !
       real(8),intent(in)                    :: beta
-      complex(8),intent(inout)              :: Gmats(:,:,:,:)
+      complex(8),intent(in)                 :: Gmats(:,:,:,:)
       complex(8),intent(inout)              :: Gitau(:,:,:,:)
       logical,intent(in),optional           :: asympt_corr
       logical,intent(in),optional           :: tau_uniform
@@ -465,7 +465,7 @@ contains
       implicit none
       !
       real(8),intent(in)                    :: beta
-      complex(8),intent(inout)              :: Gmats(:,:)
+      complex(8),intent(in)                 :: Gmats(:,:)
       complex(8),intent(inout)              :: Gitau(:,:)
       logical,intent(in),optional           :: asympt_corr
       logical,intent(in),optional           :: tau_uniform
@@ -533,7 +533,7 @@ contains
       implicit none
       !
       real(8),intent(in)                    :: beta
-      complex(8),intent(inout)              :: Gmats(:,:,:)
+      complex(8),intent(in)                 :: Gmats(:,:,:)
       complex(8),intent(inout)              :: Gitau(:,:,:)
       logical,intent(in),optional           :: asympt_corr
       logical,intent(in),optional           :: tau_uniform
@@ -608,7 +608,7 @@ contains
       implicit none
       !
       real(8),intent(in)                    :: beta
-      complex(8),intent(inout)              :: Gitau(:,:,:)
+      complex(8),intent(in)                 :: Gitau(:,:,:)
       complex(8),intent(inout)              :: Gmats(:,:,:)
       logical,intent(in),optional           :: tau_uniform
       !
@@ -676,7 +676,7 @@ contains
       implicit none
       !
       real(8),intent(in)                    :: beta
-      complex(8),intent(inout)              :: Gitau(:,:,:,:)
+      complex(8),intent(in)                 :: Gitau(:,:,:,:)
       complex(8),intent(inout)              :: Gmats(:,:,:,:)
       logical,intent(in),optional           :: tau_uniform
       !
@@ -751,7 +751,7 @@ contains
       implicit none
       !
       real(8),intent(in)                    :: beta
-      complex(8),intent(inout)              :: Gitau(:,:)
+      complex(8),intent(in)                 :: Gitau(:,:)
       complex(8),intent(inout)              :: Gmats(:,:)
       logical,intent(in),optional           :: tau_uniform
       !
@@ -816,7 +816,7 @@ contains
       implicit none
       !
       real(8),intent(in)                    :: beta
-      complex(8),intent(inout)              :: Gitau(:,:,:)
+      complex(8),intent(in)                 :: Gitau(:,:,:)
       complex(8),intent(inout)              :: Gmats(:,:,:)
       logical,intent(in),optional           :: tau_uniform
       !
@@ -888,7 +888,7 @@ contains
       implicit none
       !
       real(8),intent(in)                    :: beta
-      complex(8),intent(inout)              :: Umats(:,:,:)
+      complex(8),intent(in)                 :: Umats(:,:,:)
       complex(8),intent(inout)              :: Uitau(:,:,:)
       logical,intent(in),optional           :: asympt_corr
       logical,intent(in),optional           :: tau_uniform
@@ -953,7 +953,7 @@ contains
       implicit none
       !
       real(8),intent(in)                    :: beta
-      complex(8),intent(inout)              :: Umats(:,:,:,:)
+      complex(8),intent(in)                 :: Umats(:,:,:,:)
       complex(8),intent(inout)              :: Uitau(:,:,:,:)
       logical,intent(in),optional           :: asympt_corr
       logical,intent(in),optional           :: tau_uniform
@@ -1025,7 +1025,7 @@ contains
       implicit none
       !
       real(8),intent(in)                    :: beta
-      complex(8),intent(inout)              :: Uitau(:,:,:)
+      complex(8),intent(in)                 :: Uitau(:,:,:)
       complex(8),intent(inout)              :: Umats(:,:,:)
       logical,intent(in),optional           :: tau_uniform
       !
@@ -1098,7 +1098,7 @@ contains
       implicit none
       !
       real(8),intent(in)                    :: beta
-      complex(8),intent(inout)              :: Uitau(:,:,:,:)
+      complex(8),intent(in)                 :: Uitau(:,:,:,:)
       complex(8),intent(inout)              :: Umats(:,:,:,:)
       logical,intent(in),optional           :: tau_uniform
       !
