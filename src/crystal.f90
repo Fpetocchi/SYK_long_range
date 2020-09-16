@@ -13,11 +13,28 @@ module crystal
    ! qui mantengo il path allinputfile dato dall'utente perche cmq se leggo la Hk la devo leggere da qulahce parte
    ! per funzionare wannier intp devo leggere Hk perche' e' l'unico modo per dare il path
 
+   interface wannierinterpolation
+      module procedure wannierinterpolation_mat                                 !(nkpt3_orig(3),kpt_orig(3,Nkpt_orig),kpt_intp(3,Nkpt_intp),mat_K(Norb,Norb,Ndat,Nkpt_orig),mat_intp(Norb,Norb,Ndat,Nkpt_intp))
+      module procedure wannierinterpolation_vec                                 !(nkpt3_orig(3),kpt_orig(3,Nkpt_orig),kpt_intp(3,Nkpt_intp),mat_K(Norb,Ndat,Nkpt_orig),mat_intp(Norb,Ndat,Nkpt_intp))
+   end interface wannierinterpolation
+
+   interface wannier_K2R
+      module procedure wannier_K2R_mat                                          !(nkpt3_orig(3),kpt_orig(3,Nkpt_orig),mat_K(Norb,Norb,Ndat,Nkpt_orig),mat_R(internally allocated))
+      module procedure wannier_K2R_vec                                          !(nkpt3_orig(3),kpt_orig(3,Nkpt_orig),mat_K(Norb,Ndat,Nkpt_orig),mat_R(internally allocated))
+   end interface wannier_K2R
+
+   interface wannier_R2K
+      module procedure wannier_R2K_mat                                          !(nkpt3_orig(3),kpt_orig(3,Nkpt_orig),mat_R(Norb,Norb,Ndat,Nwig),mat_K(Norb,Norb,Ndat,Nkpt_orig))
+      module procedure wannier_R2K_vec                                          !(nkpt3_orig(3),kpt_orig(3,Nkpt_orig),mat_R(Norb,Ndat,Nwig),mat_K(Norb,Ndat,Nkpt_orig))
+   end interface wannier_R2K
+
    !---------------------------------------------------------------------------!
    !PURPOSE: Module variables
    !---------------------------------------------------------------------------!
    real(8),parameter,private                :: H2eV=27.2113831243217d0
    real(8),parameter,private                :: pi=3.14159265358979323846d0
+   complex(8),parameter,private             :: czero=dcmplx(0.d0,0.d0)
+   !
    real(8),parameter,private                :: eps=1e-9
    real(8),parameter,private                :: epsWig=1e-5
    !
@@ -53,7 +70,7 @@ module crystal
    public :: fill_smallk
    public :: set_siteposition
    public :: wannierinterpolation                                               ![Nkpt3_orig(3),Kpt_orig(3,Nkpt_orig),Kpt_intp(3,Nkpt_intp),Mat_orig(n,n,Npoins,Nkpt_orig),Mat_intp(n,n,Npoins,Nkpt_intp)]
-   public :: wannier_K2R_NN                                                     ![Nkpt3_orig(3),Kpt_orig(3,Nkpt_orig),Mat_orig(n,n,Npoins,Nkpt_orig),Mat_NNrs(n,n,Npoins,3)]
+   public :: wannier_K2R_NN                                                     ![Nkpt3_orig(3),Kpt_orig(3,Nkpt_orig),Mat_orig(n,n,Npoins,Nkpt_orig),mat_R_nn(n,n,Npoins,3)]
    public :: wannier_K2R
    public :: wannier_R2K
    !public :: add_crystalfields
@@ -78,7 +95,7 @@ contains
       logical                               :: filexists
       !
       !
-      write(*,*) "--- read_lattice ---"
+      write(*,"(A)") "--- read_lattice ---"
       !
       !
       ! Look for LATTC
@@ -100,7 +117,7 @@ contains
       !
       vol = det(lat)
       rvol = 8*pi**3 / vol
-      write(*,*)"Unit cell volume=",vol
+      write(*,"(A)")"Unit cell volume=",vol
       !
       Lat_stored=.true.
       !
@@ -137,7 +154,7 @@ contains
       logical                               :: dumlogical,filexists
       !
       !
-      write(*,*) "--- read_xeps ---"
+      write(*,"(A)") "--- read_xeps ---"
       !
       !
       path = pathINPUT//"XEPS.DAT"
@@ -178,8 +195,8 @@ contains
       ! Check of the K-point ordering
       do ik=1,Nkpt
          if (.not.keq(kpt_xeps(:,ik),kpt(:,ik))) then
-            write(*,*)"ik=",ik,"kpt(:,ik)=",kpt(:,ik),"kpt_loc(:,ik=)",kpt_xeps(:,ik)
-            !write(*,*) "kptp(ik)=",kptPos(ik),"kptp_loc(ik)=",kptPos_xeps(ik)
+            write(*,"(A)")"ik=",ik,"kpt(:,ik)=",kpt(:,ik),"kpt_loc(:,ik=)",kpt_xeps(:,ik)
+            !write(*,"(A)") "kptp(ik)=",kptPos(ik),"kptp_loc(ik)=",kptPos_xeps(ik)
             stop "K-points grid does not match"
          endif
       enddo
@@ -220,7 +237,7 @@ contains
       logical                               :: filexists
       !
       !
-      write(*,*) "--- read_Hk ---"
+      write(*,"(A)") "--- read_Hk ---"
       !
       !
       if(size(Hk,dim=1).ne.size(Hk,dim=2)) stop "Hamiltonian not square."
@@ -239,9 +256,9 @@ contains
       call assert_shape(Ek,[Norb,Nkpt],"read_Hk","Ek")
       call assert_shape(Zk,[Norb,Norb,Nkpt],"read_Hk","Zk")
       !
-      Hk=dcmplx(0d0,0d0)
-      Zk=dcmplx(0d0,0d0)
-      Hloc=dcmplx(0d0,0d0)
+      Hk=czero
+      Zk=czero
+      Hloc=czero
       Ek=0d0
       do ik=1,nkpt
          read(unit,*) idum1,idum2,kpt(:,ik)
@@ -292,7 +309,7 @@ contains
       integer,allocatable                   :: pkpt_(:,:,:)
       !
       !
-      write(*,*) "--- fill_ksumkdiff ---"
+      write(*,"(A)") "--- fill_ksumkdiff ---"
       !
       !
       Nkpt = size(kpt,dim=2)
@@ -381,7 +398,7 @@ contains
       real(8)                               :: kreal1(3),kreal(3,12)
       !
       !
-      write(*,*) "--- fill_smallk ---"
+      write(*,"(A)") "--- fill_smallk ---"
       if(.not.Lat_stored)stop "Lattice positions not stored. Either call read_lattice(path) or read_Hk(path,Hk,kpt)"
       !
       !
@@ -452,7 +469,7 @@ contains
       double precision             :: distmin
       !
       !
-      write(*,*) "--- calc_wignerseiz ---"
+      write(*,"(A)") "--- calc_wignerseiz ---"
       if(.not.Lat_stored)stop "Lattice positions not stored. Either call read_lattice(path) or read_Hk(path,Hk,kpt)."
       !
       !
@@ -486,7 +503,7 @@ contains
                   if (nwig.gt.10*nkpt) stop "nwig>10*nkpt"
                   rvecwig(:,nwig)=(/ir1,ir2,ir3/)
                   nrdegwig(nwig)=count(abs(distmin-dist(:)).le.epsWig)
-                  !write(*,*) nwig,rvecwig(:,nwig),nrdegwig(nwig)
+                  !write(*,"(A)") nwig,rvecwig(:,nwig),nrdegwig(nwig)
                endif
                !
             enddo
@@ -495,7 +512,7 @@ contains
       deallocate(dist)
       !
       if (abs(sum(1d0/nrdegwig(1:nwig))-nkpt).gt.epsWig) then
-         write(*,*) "Error: sum(1/nrdeg(:))=",sum(1d0/nrdegwig(1:nwig))
+         write(*,"(A)") "Error: sum(1/nrdeg(:))=",sum(1d0/nrdegwig(1:nwig))
          stop "nrdeg"
       endif
       !
@@ -512,7 +529,7 @@ contains
       implicit none
       real(8),intent(in)           :: Rsites(:,:)
       integer                      :: isite,Nsite
-      write(*,*) "--- calc_wignerseiz ---"
+      write(*,"(A)") "--- calc_wignerseiz ---"
       Nsite = size(Rsites,dim=1)
       if(allocated(rsite))deallocate(rsite)
       allocate(rsite(Nsite,3));rsite=0d0
@@ -526,7 +543,7 @@ contains
    !---------------------------------------------------------------------------!
    !PURPOSE: Interpolates a K-dependent matrix between two different K meshes
    !---------------------------------------------------------------------------!
-   subroutine wannierinterpolation(nkpt3_orig,kpt_orig,kpt_intp,mat_orig,mat_intp)
+   subroutine wannierinterpolation_mat(nkpt3_orig,kpt_orig,kpt_intp,mat_orig,mat_intp)
       !
       use utils_misc
       implicit none
@@ -542,13 +559,13 @@ contains
       integer                               :: ik,ir,id,i1,i2
       real(8)                               :: kR
       complex(8)                            :: cfac
-      complex(8),allocatable                :: matofR(:,:,:,:)
+      complex(8),allocatable                :: mat_R(:,:,:,:)
       !
       !
-      write(*,*) "--- wannierinterpolation ---"
+      write(*,"(A)") "--- wannierinterpolation_mat ---"
       if(.not.Wig_stored)then!stop "Wigner Seiz cell not initialized. Call calc_wignerseiz."
          write(*,"(A)") "Calculating Wigner Seiz."
-         call assert_shape(nkpt3_orig,[3],"wannierinterpolation","nkpt3_orig")
+         call assert_shape(nkpt3_orig,[3],"wannierinterpolation_mat","nkpt3_orig")
          call calc_wignerseiz(size(kpt_orig,dim=2),nkpt3_orig)
       endif
       !
@@ -564,12 +581,12 @@ contains
       Npoints = size(mat_orig,dim=3)
       if(size(mat_orig,dim=1).ne.size(mat_orig,dim=2)) stop "mat_orig not square."
       Nsize = size(mat_orig,dim=1)
-      call assert_shape(mat_intp,[Nsize,Nsize,Npoints,Nkpt_intp],"wannierinterpolation","mat_intp")
+      call assert_shape(mat_intp,[Nsize,Nsize,Npoints,Nkpt_intp],"wannierinterpolation_mat","mat_intp")
       !
       ! M(R)=\sum_{k} M(k)*exp[-ik*R]
-      allocate(matofR(Nsize,Nsize,Npoints,Nwig));matofR=dcmplx(0d0,0d0)
+      allocate(mat_R(Nsize,Nsize,Npoints,Nwig));mat_R=czero
       !$OMP PARALLEL DEFAULT(NONE),&
-      !$OMP SHARED(Nwig,Nkpt_orig,Npoints,Nsize,kpt_orig,rvecwig,mat_orig,matofR),&
+      !$OMP SHARED(Nwig,Nkpt_orig,Npoints,Nsize,kpt_orig,rvecwig,mat_orig,mat_R),&
       !$OMP PRIVATE(ir,ik,id,i1,i2,kR,cfac)
       !$OMP DO
       do ir=1,Nwig
@@ -582,7 +599,7 @@ contains
                do i1=1,Nsize
                   do i2=1,Nsize
                      !
-                     matofR(i1,i2,id,ir) = matofR(i1,i2,id,ir) + mat_orig(i1,i2,id,ik)*cfac
+                     mat_R(i1,i2,id,ir) = mat_R(i1,i2,id,ir) + mat_orig(i1,i2,id,ik)*cfac
                      !
                   enddo
                enddo
@@ -592,12 +609,12 @@ contains
       enddo ! ir
       !$OMP END DO
       !$OMP END PARALLEL
-      matofR = matofR/Nkpt_orig
+      mat_R = mat_R/Nkpt_orig
       !
       ! M(k_{intp})=\sum_{R} M(R)*exp[+ik_{intp}*R]
       mat_intp(:,:,:,:)=0
       !$OMP PARALLEL DEFAULT(NONE),&
-      !$OMP SHARED(Nwig,Nkpt_intp,Npoints,Nsize,kpt_intp,rvecwig,mat_intp,matofR,nrdegwig),&
+      !$OMP SHARED(Nwig,Nkpt_intp,Npoints,Nsize,kpt_intp,rvecwig,mat_intp,mat_R,nrdegwig),&
       !$OMP PRIVATE(ir,ik,id,i1,i2,kR,cfac)
       !$OMP DO
       do ik=1,Nkpt_intp
@@ -610,7 +627,7 @@ contains
                do i1=1,Nsize
                   do i2=1,Nsize
                      !
-                     mat_intp(i1,i2,id,ik) = mat_intp(i1,i2,id,ik) + matofR(i1,i2,id,ir)*cfac
+                     mat_intp(i1,i2,id,ik) = mat_intp(i1,i2,id,ik) + mat_R(i1,i2,id,ir)*cfac
                      !
                   enddo
                enddo
@@ -620,23 +637,116 @@ contains
       enddo ! ir
       !$OMP END DO
       !$OMP END PARALLEL
-      deallocate(matofR)
+      deallocate(mat_R)
       !
-   end subroutine wannierinterpolation
-
-
-   !---------------------------------------------------------------------------!
-   !PURPOSE: Extract from a K-dependent matrix the next-neighbor components
-   !---------------------------------------------------------------------------!
-   subroutine wannier_K2R_NN(nkpt3_orig,kpt_orig,mat_orig,mat_NNrs)
+   end subroutine wannierinterpolation_mat
+   !
+   subroutine wannierinterpolation_vec(nkpt3_orig,kpt_orig,kpt_intp,mat_orig,mat_intp)
       !
       use utils_misc
       implicit none
       !
       integer,intent(in)                    :: nkpt3_orig(:)
       real(8),intent(in)                    :: kpt_orig(:,:)
-      complex(8),intent(in)                 :: mat_orig(:,:,:,:)
-      complex(8),intent(inout)              :: mat_NNrs(:,:,:,:)
+      real(8),intent(in)                    :: kpt_intp(:,:)
+      complex(8),intent(in)                 :: mat_orig(:,:,:)
+      complex(8),intent(inout)              :: mat_intp(:,:,:)
+      !
+      integer                               :: Nkpt_orig,Nkpt_intp
+      integer                               :: Nsize,Npoints
+      integer                               :: ik,ir,id,i1
+      real(8)                               :: kR
+      complex(8)                            :: cfac
+      complex(8),allocatable                :: mat_R(:,:,:)
+      !
+      !
+      write(*,"(A)") "--- wannierinterpolation_vec ---"
+      if(.not.Wig_stored)then!stop "Wigner Seiz cell not initialized. Call calc_wignerseiz."
+         write(*,"(A)") "Calculating Wigner Seiz."
+         call assert_shape(nkpt3_orig,[3],"wannierinterpolation_vec","nkpt3_orig")
+         call calc_wignerseiz(size(kpt_orig,dim=2),nkpt3_orig)
+      endif
+      !
+      !
+      ! Size checks on Kpoint vectors
+      if(size(kpt_orig,dim=1).ne.3) stop "size(kpt_orig,dim=1).ne.3"
+      if(size(kpt_intp,dim=1).ne.3) stop "size(kpt_intp,dim=1).ne.3"
+      Nkpt_orig = size(kpt_orig,dim=2)
+      Nkpt_intp = size(kpt_intp,dim=2)
+      !if (Nkpt_orig.ne.size(nrdegwig)/2) stop 'nkpt'
+      !
+      ! Size checks on Matrices
+      Npoints = size(mat_orig,dim=2)
+      Nsize = size(mat_orig,dim=1)
+      call assert_shape(mat_intp,[Nsize,Npoints,Nkpt_intp],"wannierinterpolation_vec","mat_intp")
+      !
+      ! M(R)=\sum_{k} M(k)*exp[-ik*R]
+      allocate(mat_R(Nsize,Npoints,Nwig));mat_R=czero
+      !$OMP PARALLEL DEFAULT(NONE),&
+      !$OMP SHARED(Nwig,Nkpt_orig,Npoints,Nsize,kpt_orig,rvecwig,mat_orig,mat_R),&
+      !$OMP PRIVATE(ir,ik,id,i1,kR,cfac)
+      !$OMP DO
+      do ir=1,Nwig
+         do ik=1,Nkpt_orig
+            !
+            kR = 2*pi * dot_product(kpt_orig(:,ik),rvecwig(:,ir))
+            cfac = dcmplx(cos(kR),-sin(kR))
+            !
+            do id=1,Npoints
+               do i1=1,Nsize
+                  !
+                  mat_R(i1,id,ir) = mat_R(i1,id,ir) + mat_orig(i1,id,ik)*cfac
+                  !
+               enddo
+            enddo
+            !
+         enddo ! ik
+      enddo ! ir
+      !$OMP END DO
+      !$OMP END PARALLEL
+      mat_R = mat_R/Nkpt_orig
+      !
+      ! M(k_{intp})=\sum_{R} M(R)*exp[+ik_{intp}*R]
+      mat_intp=czero
+      !$OMP PARALLEL DEFAULT(NONE),&
+      !$OMP SHARED(Nwig,Nkpt_intp,Npoints,Nsize,kpt_intp,rvecwig,mat_intp,mat_R,nrdegwig),&
+      !$OMP PRIVATE(ir,ik,id,i1,kR,cfac)
+      !$OMP DO
+      do ik=1,Nkpt_intp
+         do ir=1,Nwig
+            !
+            kR = 2*pi * dot_product(kpt_intp(:,ik),rvecwig(:,ir))
+            cfac = dcmplx(cos(kR),+sin(kR))/nrdegwig(ir)
+            !
+            do id=1,Npoints
+               do i1=1,Nsize
+                  !
+                  mat_intp(i1,id,ik) = mat_intp(i1,id,ik) + mat_R(i1,id,ir)*cfac
+                  !
+               enddo
+            enddo
+            !
+         enddo ! ik
+      enddo ! ir
+      !$OMP END DO
+      !$OMP END PARALLEL
+      deallocate(mat_R)
+      !
+   end subroutine wannierinterpolation_vec
+
+
+   !---------------------------------------------------------------------------!
+   !PURPOSE: Extract from a K-dependent matrix the next-neighbor components
+   !---------------------------------------------------------------------------!
+   subroutine wannier_K2R_NN(nkpt3_orig,kpt_orig,mat_K,mat_R_nn)
+      !
+      use utils_misc
+      implicit none
+      !
+      integer,intent(in)                    :: nkpt3_orig(:)
+      real(8),intent(in)                    :: kpt_orig(:,:)
+      complex(8),intent(in)                 :: mat_K(:,:,:,:)
+      complex(8),intent(inout)              :: mat_R_nn(:,:,:,:)
       !
       integer                               :: Nkpt_orig
       integer                               :: Nsize,Npoints
@@ -646,12 +756,12 @@ contains
       complex(8)                            :: cfac
       !
       !
-      write(*,*) "--- wannier_K2R_NN ---"
+      write(*,"(A)") "--- wannier_K2R_NN ---"
       if(.not.Wig_stored)then!stop "Wigner Seiz cell not initialized. Call calc_wignerseiz."
          write(*,"(A)") "Calculating Wigner Seiz."
          call assert_shape(nkpt3_orig,[3],"wannier_K2R_NN","nkpt3_orig")
          call calc_wignerseiz(size(kpt_orig,dim=2),nkpt3_orig)
-      endif      !
+      endif
       !
       ! Size checks on Kpoint vectors
       if(size(kpt_orig,dim=1).ne.3) stop "size(kpt_orig,dim=1).ne.3"
@@ -659,14 +769,14 @@ contains
       !if (Nkpt_orig.ne.size(nrdegwig)/2) stop 'nkpt'
       !
       ! Size checks on Matrices
-      Npoints = size(mat_orig,dim=3)
-      if(size(mat_orig,dim=1).ne.size(mat_orig,dim=2)) stop "mat_orig not square."
-      Nsize = size(mat_orig,dim=1)
-      call assert_shape(mat_NNrs,[Nsize,Nsize,Npoints,3],"wannierinterpolation","mat_NNrs")
+      Npoints = size(mat_K,dim=3)
+      if(size(mat_K,dim=1).ne.size(mat_K,dim=2)) stop "mat_K not square."
+      Nsize = size(mat_K,dim=1)
+      call assert_shape(mat_R_nn,[Nsize,Nsize,Npoints,3],"wannierinterpolation","mat_R_nn")
       !
       ! M(R)=\sum_{k} M(k)*exp[-ik*R]
       !$OMP PARALLEL DEFAULT(NONE),&
-      !$OMP SHARED(Nwig,Nkpt_orig,Npoints,Nsize,kpt_orig,rvecwig,mat_orig,mat_NNrs),&
+      !$OMP SHARED(Nwig,Nkpt_orig,Npoints,Nsize,kpt_orig,rvecwig,mat_K,mat_R_nn),&
       !$OMP PRIVATE(Rx,Ry,Rz,ir2,ir,ik,id,i1,i2,kR,cfac)
       !$OMP DO
       do ir=1,Nwig
@@ -694,7 +804,7 @@ contains
                do i1=1,Nsize
                   do i2=1,Nsize
                      !
-                     mat_NNrs(i1,i2,id,ir2) = mat_NNrs(i1,i2,id,ir2) + mat_orig(i1,i2,id,ik)*cfac
+                     mat_R_nn(i1,i2,id,ir2) = mat_R_nn(i1,i2,id,ir2) + mat_K(i1,i2,id,ik)*cfac
                      !
                   enddo
                enddo
@@ -711,16 +821,19 @@ contains
 
    !---------------------------------------------------------------------------!
    !PURPOSE: Transforms a K-dependent matrix into Wannier basis
+   !Nwig might not be already available in the main program
+   !so I'm allocating here the mat_R which does not need to be allocated in
+   !the calling routine.
    !---------------------------------------------------------------------------!
-   subroutine wannier_K2R(nkpt3_orig,kpt_orig,mat_orig,matofR)
+   subroutine wannier_K2R_mat(nkpt3_orig,kpt_orig,mat_K,mat_R)
       !
       use utils_misc
       implicit none
       !
       integer,intent(in)                    :: nkpt3_orig(:)
       real(8),intent(in)                    :: kpt_orig(:,:)
-      complex(8),intent(in)                 :: mat_orig(:,:,:,:)
-      complex(8),intent(inout)              :: matofR(:,:,:,:)
+      complex(8),intent(in)                 :: mat_K(:,:,:,:)
+      complex(8),allocatable,intent(out)    :: mat_R(:,:,:,:)
       !
       integer                               :: Nkpt_orig
       integer                               :: Nsize,Npoints
@@ -729,7 +842,7 @@ contains
       complex(8)                            :: cfac
       !
       !
-      write(*,*) "--- wannier_K2R ---"
+      write(*,"(A)") "--- wannier_K2R_mat ---"
       if(.not.Wig_stored)then!stop "Wigner Seiz cell not initialized. Call calc_wignerseiz."
          write(*,"(A)") "Calculating Wigner Seiz."
          call assert_shape(nkpt3_orig,[3],"wannierinterpolation","nkpt3_orig")
@@ -743,13 +856,17 @@ contains
       !if (Nkpt_orig.ne.size(nrdegwig)/2) stop 'nkpt'
       !
       ! Size checks on Matrices
-      Npoints = size(mat_orig,dim=3)
-      if(size(mat_orig,dim=1).ne.size(mat_orig,dim=2)) stop "mat_orig not square."
-      Nsize = size(mat_orig,dim=1)
+      Npoints = size(mat_K,dim=3)
+      if(size(mat_K,dim=1).ne.size(mat_K,dim=2)) stop "mat_K not square."
+      Nsize = size(mat_K,dim=1)
+      if(.not.allocated(mat_R))then
+         allocate(mat_R(Nsize,Nsize,Npoints,Nwig))
+         mat_R=czero
+      endif
       !
       ! M(R)=\sum_{k} M(k)*exp[-ik*R]
       !$OMP PARALLEL DEFAULT(NONE),&
-      !$OMP SHARED(Nwig,Nkpt_orig,Npoints,Nsize,kpt_orig,rvecwig,mat_orig,matofR),&
+      !$OMP SHARED(Nwig,Nkpt_orig,Npoints,Nsize,kpt_orig,rvecwig,mat_K,mat_R),&
       !$OMP PRIVATE(ir,ik,id,i1,i2,kR,cfac)
       !$OMP DO
       do ir=1,Nwig
@@ -762,7 +879,7 @@ contains
                do i1=1,Nsize
                   do i2=1,Nsize
                      !
-                     matofR(i1,i2,id,ir) = matofR(i1,i2,id,ir) + mat_orig(i1,i2,id,ik)*cfac
+                     mat_R(i1,i2,id,ir) = mat_R(i1,i2,id,ir) + mat_K(i1,i2,id,ik)*cfac
                      !
                   enddo
                enddo
@@ -772,22 +889,87 @@ contains
       enddo ! ir
       !$OMP END DO
       !$OMP END PARALLEL
-      matofR = matofR/Nkpt_orig
+      mat_R = mat_R/Nkpt_orig
       !
-   end subroutine wannier_K2R
+   end subroutine wannier_K2R_mat
+   !
+   subroutine wannier_K2R_vec(nkpt3_orig,kpt_orig,mat_K,mat_R)
+      !
+      use utils_misc
+      implicit none
+      !
+      integer,intent(in)                    :: nkpt3_orig(:)
+      real(8),intent(in)                    :: kpt_orig(:,:)
+      complex(8),intent(in)                 :: mat_K(:,:,:)
+      complex(8),allocatable,intent(out)    :: mat_R(:,:,:)
+      !
+      integer                               :: Nkpt_orig
+      integer                               :: Nsize,Npoints
+      integer                               :: ik,ir,id,i1
+      real(8)                               :: kR
+      complex(8)                            :: cfac
+      !
+      !
+      write(*,"(A)") "--- wannier_K2R_vec ---"
+      if(.not.Wig_stored)then!stop "Wigner Seiz cell not initialized. Call calc_wignerseiz."
+         write(*,"(A)") "Calculating Wigner Seiz."
+         call assert_shape(nkpt3_orig,[3],"wannierinterpolation","nkpt3_orig")
+         call calc_wignerseiz(size(kpt_orig,dim=2),nkpt3_orig)
+      endif
+      !
+      !
+      ! Size checks on Kpoint vectors
+      if(size(kpt_orig,dim=1).ne.3) stop "size(kpt_orig,dim=1).ne.3"
+      Nkpt_orig = size(kpt_orig,dim=2)
+      !if (Nkpt_orig.ne.size(nrdegwig)/2) stop 'nkpt'
+      !
+      ! Size checks on Matrices
+      Npoints = size(mat_K,dim=2)
+      Nsize = size(mat_K,dim=1)
+      if(.not.allocated(mat_R))then
+         allocate(mat_R(Nsize,Npoints,Nwig))
+         mat_R=czero
+      endif
+      !
+      ! M(R)=\sum_{k} M(k)*exp[-ik*R]
+      !$OMP PARALLEL DEFAULT(NONE),&
+      !$OMP SHARED(Nwig,Nkpt_orig,Npoints,Nsize,kpt_orig,rvecwig,mat_K,mat_R),&
+      !$OMP PRIVATE(ir,ik,id,i1,kR,cfac)
+      !$OMP DO
+      do ir=1,Nwig
+         do ik=1,Nkpt_orig
+            !
+            kR = 2*pi * dot_product(kpt_orig(:,ik),rvecwig(:,ir))
+            cfac = dcmplx(cos(kR),-sin(kR))
+            !
+            do id=1,Npoints
+               do i1=1,Nsize
+                  !
+                  mat_R(i1,id,ir) = mat_R(i1,id,ir) + mat_K(i1,id,ik)*cfac
+                  !
+               enddo
+            enddo
+            !
+         enddo ! ik
+      enddo ! ir
+      !$OMP END DO
+      !$OMP END PARALLEL
+      mat_R = mat_R/Nkpt_orig
+      !
+   end subroutine wannier_K2R_vec
 
 
    !---------------------------------------------------------------------------!
    !PURPOSE: Transforms matrix in Wannier basis into K-space
    !---------------------------------------------------------------------------!
-   subroutine wannier_R2K(nkpt3_orig,kpt_intp,matofR,mat_intp)
+   subroutine wannier_R2K_mat(nkpt3_orig,kpt_intp,mat_R,mat_intp)
       !
       use utils_misc
       implicit none
       !
       integer,intent(in)                    :: nkpt3_orig(:)
       real(8),intent(in)                    :: kpt_intp(:,:)
-      complex(8),intent(in)                 :: matofR(:,:,:,:)
+      complex(8),intent(in)                 :: mat_R(:,:,:,:)
       complex(8),intent(inout)              :: mat_intp(:,:,:,:)
       !
       integer                               :: Nkpt_intp
@@ -797,7 +979,7 @@ contains
       complex(8)                            :: cfac
       !
       !
-      write(*,*) "--- wannier_R2K ---"
+      write(*,"(A)") "--- wannier_R2K_mat ---"
       if(.not.Wig_stored)then!stop "Wigner Seiz cell not initialized. Call calc_wignerseiz."
          write(*,"(A)") "Calculating Wigner Seiz."
          call assert_shape(nkpt3_orig,[3],"wannierinterpolation","nkpt3_orig")
@@ -811,15 +993,15 @@ contains
       !if (Nkpt_orig.ne.size(nrdegwig)/2) stop 'nkpt'
       !
       ! Size checks on Matrices
-      Npoints = size(matofR,dim=3)
-      if(size(matofR,dim=1).ne.size(matofR,dim=2)) stop "mat_orig not square."
-      Nsize = size(matofR,dim=1)
+      Npoints = size(mat_R,dim=3)
+      if(size(mat_R,dim=1).ne.size(mat_R,dim=2)) stop "mat_K not square."
+      Nsize = size(mat_R,dim=1)
       call assert_shape(mat_intp,[Nsize,Nsize,Npoints,Nkpt_intp],"wannierinterpolation","mat_intp")
       !
       ! M(k_{intp})=\sum_{R} M(R)*exp[+ik_{intp}*R]
-      mat_intp(:,:,:,:)=0
+      mat_intp=czero
       !$OMP PARALLEL DEFAULT(NONE),&
-      !$OMP SHARED(Nwig,Nkpt_intp,Npoints,Nsize,kpt_intp,rvecwig,mat_intp,matofR,nrdegwig),&
+      !$OMP SHARED(Nwig,Nkpt_intp,Npoints,Nsize,kpt_intp,rvecwig,mat_intp,mat_R,nrdegwig),&
       !$OMP PRIVATE(ir,ik,id,i1,i2,kR,cfac)
       !$OMP DO
       do ik=1,Nkpt_intp
@@ -832,7 +1014,7 @@ contains
                do i1=1,Nsize
                   do i2=1,Nsize
                      !
-                     mat_intp(i1,i2,id,ik) = mat_intp(i1,i2,id,ik) + matofR(i1,i2,id,ir)*cfac
+                     mat_intp(i1,i2,id,ik) = mat_intp(i1,i2,id,ik) + mat_R(i1,i2,id,ir)*cfac
                      !
                   enddo
                enddo
@@ -843,7 +1025,69 @@ contains
       !$OMP END DO
       !$OMP END PARALLEL
       !
-   end subroutine wannier_R2K
+   end subroutine wannier_R2K_mat
+   !
+   subroutine wannier_R2K_vec(nkpt3_orig,kpt_intp,mat_R,mat_intp)
+      !
+      use utils_misc
+      implicit none
+      !
+      integer,intent(in)                    :: nkpt3_orig(:)
+      real(8),intent(in)                    :: kpt_intp(:,:)
+      complex(8),intent(in)                 :: mat_R(:,:,:)
+      complex(8),intent(inout)              :: mat_intp(:,:,:)
+      !
+      integer                               :: Nkpt_intp
+      integer                               :: Nsize,Npoints
+      integer                               :: ik,ir,id,i1
+      real(8)                               :: kR
+      complex(8)                            :: cfac
+      !
+      !
+      write(*,"(A)") "--- wannier_R2K_vec ---"
+      if(.not.Wig_stored)then!stop "Wigner Seiz cell not initialized. Call calc_wignerseiz."
+         write(*,"(A)") "Calculating Wigner Seiz."
+         call assert_shape(nkpt3_orig,[3],"wannierinterpolation","nkpt3_orig")
+         call calc_wignerseiz(size(kpt_intp,dim=2),nkpt3_orig)
+      endif
+      !
+      !
+      ! Size checks on Kpoint vectors
+      if(size(kpt_intp,dim=1).ne.3) stop "size(kpt_intp,dim=1).ne.3"
+      Nkpt_intp = size(kpt_intp,dim=2)
+      !if (Nkpt_orig.ne.size(nrdegwig)/2) stop 'nkpt'
+      !
+      ! Size checks on Matrices
+      Npoints = size(mat_R,dim=2)
+      Nsize = size(mat_R,dim=1)
+      call assert_shape(mat_intp,[Nsize,Npoints,Nkpt_intp],"wannierinterpolation","mat_intp")
+      !
+      ! M(k_{intp})=\sum_{R} M(R)*exp[+ik_{intp}*R]
+      mat_intp=czero
+      !$OMP PARALLEL DEFAULT(NONE),&
+      !$OMP SHARED(Nwig,Nkpt_intp,Npoints,Nsize,kpt_intp,rvecwig,mat_intp,mat_R,nrdegwig),&
+      !$OMP PRIVATE(ir,ik,id,i1,kR,cfac)
+      !$OMP DO
+      do ik=1,Nkpt_intp
+         do ir=1,Nwig
+            !
+            kR = 2*pi * dot_product(kpt_intp(:,ik),rvecwig(:,ir))
+            cfac = dcmplx(cos(kR),+sin(kR))/nrdegwig(ir)
+            !
+            do id=1,Npoints
+               do i1=1,Nsize
+                  !
+                  mat_intp(i1,id,ik) = mat_intp(i1,id,ik) + mat_R(i1,id,ir)*cfac
+                  !
+               enddo
+            enddo
+            !
+         enddo ! ik
+      enddo ! ir
+      !$OMP END DO
+      !$OMP END PARALLEL
+      !
+   end subroutine wannier_R2K_vec
 
 
 end module crystal

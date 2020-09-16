@@ -31,9 +31,9 @@ contains
 
 
    !---------------------------------------------------------------------------!
-   !PURPOSE: Compute the GW self-energy. SigmaC and SigmaX are already summed
+   !PURPOSE: Compute the two GW self-energy components.
    !---------------------------------------------------------------------------!
-   subroutine calc_sigmaGW(Smats,Gmats,Wmats,Lttc,tau_uniform)
+   subroutine calc_sigmaGW(Smats_C,Smats_X,Gmats,Wmats,Lttc,tau_uniform)
       !
       use parameters
       use linalg
@@ -44,7 +44,8 @@ contains
       use global_vars, only : Ntau
       implicit none
       !
-      type(FermionicField),intent(inout)    :: Smats
+      type(FermionicField),intent(inout)    :: Smats_C
+      type(FermionicField),intent(inout)    :: Smats_X
       type(FermionicField),intent(in)       :: Gmats
       type(BosonicField),intent(in)         :: Wmats
       type(Lattice),intent(in)              :: Lttc
@@ -65,25 +66,28 @@ contains
       !
       !
       ! Check on the input Fields
-      if(.not.Smats%status) stop "Smats not properly initialized."
+      if(.not.Smats_C%status) stop "Smats_C not properly initialized."
+      if(.not.Smats_X%status) stop "Smats_X not properly initialized."
       if(.not.Gmats%status) stop "Gmats not properly initialized."
       if(.not.Wmats%status) stop "Wmats not properly initialized."
-      if(Smats%Nkpt.eq.0) stop "Smats k dependent attributes not properly initialized."
+      if(Smats_C%Nkpt.eq.0) stop "Smats_C k dependent attributes not properly initialized."
+      if(Smats_X%Nkpt.eq.0) stop "Smats_X k dependent attributes not properly initialized."
+      if(Smats_X%Npoints.ne.0) stop "Smats_X frequency dependent attributes are supposed to be unallocated."
       if(Gmats%Nkpt.eq.0) stop "Gmats k dependent attributes not properly initialized."
       if(Wmats%Nkpt.eq.0) stop "Wmats k dependent attributes not properly initialized."
       if(.not.allocated(Lttc%kptdif)) stop "kptdif not allocated."
       if(.not.allocated(Lttc%kptPos)) stop "kptPos not allocated."
       !
-      Norb = Smats%Norb
-      Nkpt = Smats%Nkpt
-      Beta = Smats%Beta
-      Nmats = Smats%Npoints
+      Norb = Smats_C%Norb
+      Nkpt = Smats_C%Nkpt
+      Beta = Smats_C%Beta
+      Nmats = Smats_C%Npoints
       Nbp = Norb**2
       !
-      if(all([Gmats%Norb-Norb,Wmats%Nbp-Nbp].ne.[0,0])) stop "Either Gmats and/or Wmats have different orbital dimension with respect to Smats."
-      if(all([Gmats%Beta-Beta,Wmats%Beta-Beta].ne.[0d0,0d0])) stop "Either Gmats and/or Wmats have different Beta with respect to Smats."
-      if(all([Gmats%Npoints-Nmats,Wmats%Npoints-Nmats].ne.[0,0]))  write(*,"(A)") "Warning: Either Wmats and/or Wmats have different number of Matsubara points. Computing up to the smaller."
-      Nmats = minval([Smats%Npoints,Wmats%Npoints,Wmats%Npoints])
+      if(all([Smats_X%Norb-Norb,Gmats%Norb-Norb,Wmats%Nbp-Nbp].ne.[0,0,0])) stop "Either Smats_X, Gmats or Wmats have different orbital dimension with respect to Smats_C."
+      if(all([Smats_X%Beta-Beta,Gmats%Beta-Beta,Wmats%Beta-Beta].ne.[0d0,0d0,0d0])) stop "Either Smats_X, Gmats or Wmats have different Beta with respect to Smats_C."
+      if(all([Gmats%Npoints-Nmats,Wmats%Npoints-Nmats].ne.[0,0]))  write(*,"(A)") "Warning: Either Smats_C, Gmats or Wmats have different number of Matsubara points. Computing up to the smaller."
+      Nmats = minval([Smats_C%Npoints,Wmats%Npoints,Wmats%Npoints])
       !
       tau_uniform_=.false.
       if(present(tau_uniform)) tau_uniform_ = tau_uniform
@@ -97,7 +101,8 @@ contains
       !
       allocate(Gitau(Norb,Norb,Ntau,Nkpt,Nspin));Gitau=czero
       do ispin=1,Nspin
-         call Fmats2itau_mat(Beta,Gmats%wk(:,:,:,:,ispin),Gitau(:,:,:,:,ispin),asympt_corr=.true.,tau_uniform=tau_uniform_)
+         call Fmats2itau_mat(Beta,Gmats%wks(:,:,:,:,ispin),Gitau(:,:,:,:,ispin), &
+         asympt_corr=.true.,tau_uniform=tau_uniform_,Nkpt3=Lttc%Nkpt3,kpt=Lttc%kpt)
       enddo
       !
       allocate(Witau(Nbp,Nbp,Ntau,Nkpt));Witau=czero
@@ -106,7 +111,7 @@ contains
          Witau(:,:,Ntau,:) = Witau(:,:,Ntau,:) - Wmats%bare
       enddo
       !
-      write(*,"(A)") "Sigma(tau) = Sigma_C(tau)"
+      write(*,"(A)") "Sigma_C(tau)"
       !Sigma_{m,n}(q,tau) = -Sum_{k,mp,np} W_{(m,mp);(n,np)}(q-k;tau)G_{mp,np}(k,tau)
       allocate(Sitau(Norb,Norb,Ntau,Nkpt,Nspin));Sitau=czero
       !$OMP PARALLEL DEFAULT(NONE),&
@@ -142,20 +147,21 @@ contains
       !$OMP END PARALLEL
       deallocate(Gitau,Witau)
       !
-      write(*,"(A)") "Sigma(tau)-->Sigma(iw)"
-      call clear_attributes(Smats)
+      write(*,"(A)") "Sigma_C(tau)-->Sigma_C(iw)"
+      call clear_attributes(Smats_C)
       do ispin=1,Nspin
          do iq=1,Lttc%Nkpt_irred
-            call Fitau2mats_mat(Beta,Sitau(:,:,:,iq,ispin),Smats%wk(:,:,:,iq,ispin),tau_uniform=tau_uniform_)
+            call Fitau2mats_mat(Beta,Sitau(:,:,:,iq,ispin),Smats_C%wks(:,:,:,iq,ispin),tau_uniform=tau_uniform_)
          enddo
       enddo
       deallocate(Sitau)
       !
-      write(*,"(A)") "Sigma(iw) = Sigma(iw) + Sigma_X"
+      write(*,"(A)") "Sigma_X"
+      call clear_attributes(Smats_X)
       !sigmax(r,r')=-g(r,r',tau=0-)*v(r-r')
       !Sigmax_nm(q) = Sum_kij V_{ni,jm}(q-k)G_ij(k,beta)
       !$OMP PARALLEL DEFAULT(NONE),&
-      !$OMP SHARED(Norb,Ntau,Lttc,Nkpt,Smats,Gitau,Wmats),&
+      !$OMP SHARED(Norb,Ntau,Lttc,Nkpt,Smats_X,Gitau,Wmats),&
       !$OMP PRIVATE(m,n,iq,ispin,ik1,ik2,mp,np,ib1,ib2)
       !$OMP DO
       do m=1,Norb
@@ -171,7 +177,7 @@ contains
                            ib1 = mp + Norb*(m-1)
                            ib2 = np + Norb*(n-1)
                            !
-                           Smats%wk(m,n,:,iq,ispin) = Smats%wk(m,n,:,iq,ispin) + Gitau(mp,np,Ntau,ik1,ispin)*Wmats%bare(ib1,ib2,ik2)/Nkpt
+                           Smats_X%ks(m,n,iq,ispin) = Smats_X%ks(m,n,iq,ispin) + Gitau(mp,np,Ntau,ik1,ispin)*Wmats%bare(ib1,ib2,ik2)/Nkpt
                            !
                         enddo
                      enddo
@@ -188,30 +194,44 @@ contains
          !sigma(ik)=sigma(kptp(ik))
          write(*,"(A)") "transformation to lda eigenbasis and back"
          !$OMP PARALLEL DEFAULT(NONE),&
-         !$OMP SHARED(Nmats,Lttc,Nkpt,Smats),&
+         !$OMP SHARED(Nmats,Lttc,Nkpt,Smats_X,Smats_C),&
          !$OMP PRIVATE(ispin,iw,iq)
          !$OMP DO
          do ispin=1,Nspin
-            do iw=1,Nmats
-               !
-               do iq=1,Lttc%Nkpt_irred
-                  Smats%wk(:,:,iw,iq,ispin) = rotate(Smats%wk(:,:,iw,iq,ispin),Lttc%Zk(:,:,iq))
+            !
+            !rotation to lda eigenbasis
+            do iq=1,Lttc%Nkpt_irred
+               Smats_X%ks(:,:,iq,ispin) = rotate(Smats_X%ks(:,:,iq,ispin),Lttc%Zk(:,:,iq))
+               do iw=1,Nmats
+                  Smats_C%wks(:,:,iw,iq,ispin) = rotate(Smats_C%wks(:,:,iw,iq,ispin),Lttc%Zk(:,:,iq))
                enddo
-               !
-               do iq=1,nkpt
-                  Smats%wk(:,:,iw,iq,ispin) = Smats%wk(:,:,iw,Lttc%kptPos(iq),ispin)
-               enddo
-               !
-               do iq=1,nkpt
-                  Smats%wk(:,:,iw,iq,ispin) = rotate(Smats%wk(:,:,iw,iq,ispin),transpose(conjg(Lttc%Zk(:,:,iq))))
-               enddo
-               !
             enddo
+            !
+            !fill up the missing Kpoints
+            do iq=1,nkpt
+               Smats_X%ks(:,:,iq,ispin) = Smats_X%ks(:,:,Lttc%kptPos(iq),ispin)
+               do iw=1,Nmats
+                  Smats_C%wks(:,:,iw,iq,ispin) = Smats_C%wks(:,:,iw,Lttc%kptPos(iq),ispin)
+               enddo
+            enddo
+            !
+            !rotate back
+            do iq=1,nkpt
+               Smats_X%ks(:,:,iq,ispin) = rotate(Smats_X%ks(:,:,iq,ispin),transpose(conjg(Lttc%Zk(:,:,iq))))
+               do iw=1,Nmats
+                  Smats_C%wks(:,:,iw,iq,ispin) = rotate(Smats_C%wks(:,:,iw,iq,ispin),transpose(conjg(Lttc%Zk(:,:,iq))))
+               enddo
+            enddo
+            !
          enddo
          !$OMP END DO
          !$OMP END PARALLEL
          !
       endif
+      !
+      ! Fill the local attributes
+      call FermionicKsum(Smats_C)
+      call FermionicKsum(Smats_X)
       !
    end subroutine calc_sigmaGW
 

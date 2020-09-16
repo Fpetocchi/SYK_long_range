@@ -214,7 +214,8 @@ contains
       !
       allocate(Gitau(Norb,Norb,Ntau_,Nkpt,Nspin));Gitau=czero
       do ispin=1,Nspin
-         call Fmats2itau_mat(Beta,Gmats%wk(:,:,:,:,ispin),Gitau(:,:,:,:,ispin),asympt_corr=.true.,tau_uniform=tau_uniform_)
+         call Fmats2itau_mat(Beta,Gmats%wks(:,:,:,:,ispin),Gitau(:,:,:,:,ispin), &
+         asympt_corr=.true.,tau_uniform=tau_uniform_,nkpt3=Lttc%Nkpt3,kpt=Lttc%kpt)
       enddo
       !
       allocate(Pq_tau(Nbp,Nbp,Ntau_))

@@ -61,10 +61,12 @@ module module_container
    use utils_fields, only:                   &
    FermionicKsum                            ,&
    BosonicKsum                              ,&
-   selfAllocateFermionicField               ,&
-   selfDeallocateFermionicField             ,&
-   selfAllocateBosonicField                 ,&
-   selfDeallocateBosonicField               ,&
+   AllocateFermionicField                   ,&
+   DeallocateFermionicField                 ,&
+   AllocateLattice                          ,&
+   DeallocateLattice                        ,&
+   AllocateBosonicField                     ,&
+   DeallocateBosonicField                   ,&
    clear_attributes
 
 

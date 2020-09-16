@@ -175,7 +175,7 @@ contains
       do iaxis=1,G%Npoints
          do iwan1=1,Norb
             do iwan2=1,Norb
-               write(unit,"(1E20.12,2I4,2E20.12)") axis_(iaxis),iwan1,iwan2,real(G%w(iwan1,iwan2,iaxis,ispin)),aimag(G%w(iwan1,iwan2,iaxis,ispin))
+               write(unit,"(1E20.12,2I4,2E20.12)") axis_(iaxis),iwan1,iwan2,real(G%ws(iwan1,iwan2,iaxis,ispin)),aimag(G%ws(iwan1,iwan2,iaxis,ispin))
             enddo
          enddo
       enddo
@@ -246,7 +246,7 @@ contains
                   write(unit) iaxis,axis_(iaxis)
                   do iwan1=1,Norb
                      do iwan2=1,Norb
-                        write(unit) iwan1,iwan2,real(G%wk(iwan1,iwan2,iaxis,ik,ispin)),aimag(G%wk(iwan1,iwan2,iaxis,ik,ispin))
+                        write(unit) iwan1,iwan2,real(G%wks(iwan1,iwan2,iaxis,ik,ispin)),aimag(G%wks(iwan1,iwan2,iaxis,ik,ispin))
                      enddo
                   enddo
                enddo !iaxis
@@ -267,7 +267,7 @@ contains
                   write(unit,"(1I7,1E20.12)") iaxis,axis_(iaxis)
                   do iwan1=1,Norb
                      do iwan2=1,Norb
-                        write(unit,"(2I4,2E20.12)") iwan1,iwan2,real(G%wk(iwan1,iwan2,iaxis,ik,ispin)),aimag(G%wk(iwan1,iwan2,iaxis,ik,ispin))
+                        write(unit,"(2I4,2E20.12)") iwan1,iwan2,real(G%wks(iwan1,iwan2,iaxis,ik,ispin)),aimag(G%wks(iwan1,iwan2,iaxis,ik,ispin))
                      enddo
                   enddo
                enddo !iaxis
@@ -351,7 +351,7 @@ contains
                read(unit,"(1F20.10,2I4,2E20.12)") axispoint,idum1,idum2,RealG,ImagG
                if (idum1.ne.iwan1) stop "iwan1 (screened) does not match"
                if (idum2.ne.iwan2) stop "iwan2 (screened) does not match"
-               G%w(iwan1,iwan2,iaxis,ispin) = dcmplx(RealG,ImagG)
+               G%ws(iwan1,iwan2,iaxis,ispin) = dcmplx(RealG,ImagG)
                !
             enddo
          enddo
@@ -449,7 +449,7 @@ contains
                      read(unit) idum1,idum2,RealG,ImagG
                      if (idum1.ne.iwan1) stop "iwan1 does not match"
                      if (idum2.ne.iwan2) stop "iwan2 does not match"
-                     G%wk(iwan1,iwan2,iaxis,ik,ispin) = dcmplx(RealG,ImagG)
+                     G%wks(iwan1,iwan2,iaxis,ik,ispin) = dcmplx(RealG,ImagG)
                      !
                   enddo
                enddo

@@ -129,7 +129,7 @@ contains
       integer                               :: Nmats,Ntau
       !
       !
-      write(*,*) "--- mats2itau_FermionicCoeff ---"
+      write(*,"(A)") "--- mats2itau_FermionicCoeff ---"
       !
       !
       Ntau = size(tau)
@@ -274,7 +274,7 @@ contains
       integer                               :: Nmats,Ntau
       !
       !
-      write(*,*) "--- mats2itau_BosonicCoeff ---"
+      write(*,"(A)") "--- mats2itau_BosonicCoeff ---"
       !
       !
       Ntau = size(tau)
@@ -334,7 +334,7 @@ contains
       logical                               :: tau_uniform_
       !
       !
-      write(*,*) "--- Fmats2itau_mat_Gw ---"
+      write(*,"(A)") "--- Fmats2itau_mat_Gw ---"
       !
       !
       Norb = size(Gmats,dim=1)
@@ -383,27 +383,36 @@ contains
       !
    end subroutine Fmats2itau_mat_Gw
    !
-   subroutine Fmats2itau_mat_Gwk(beta,Gmats,Gitau,asympt_corr,tau_uniform)
+   subroutine Fmats2itau_mat_Gwk(beta,Gmats,Gitau,asympt_corr,tau_uniform,nkpt3,kpt)
       !
       use utils_misc
+      use crystal
       implicit none
       !
       real(8),intent(in)                    :: beta
-      complex(8),intent(in)                 :: Gmats(:,:,:,:)
-      complex(8),intent(inout)              :: Gitau(:,:,:,:)
+      complex(8),intent(in),target          :: Gmats(:,:,:,:)
+      complex(8),intent(inout),target       :: Gitau(:,:,:,:)
       logical,intent(in),optional           :: asympt_corr
       logical,intent(in),optional           :: tau_uniform
+      integer,intent(in),optional           :: nkpt3(3)
+      real(8),intent(in),optional           :: kpt(:,:)
       !
       real(8),allocatable                   :: coswt(:,:),sinwt(:,:)
       real(8),allocatable                   :: tau(:)
+      complex(8),allocatable,target         :: Gmats_rs(:,:,:,:),Gitau_rs(:,:,:,:)
+      complex(8),pointer                    :: Gft_in(:,:,:,:),Gft_out(:,:,:,:)
       complex(8),allocatable                :: Ge(:,:),Go(:,:)
-      integer                               :: iw,itau,ik
-      integer                               :: Nmats,Ntau,Norb,Nkpt
+      integer                               :: iw,itau,idat
+      integer,pointer                       :: Ndat
+      integer,target                        :: Nwig
+      integer,target                        :: Nkpt
+      integer                               :: Ntau,Norb,Nmats
       logical                               :: asympt_corr_
       logical                               :: tau_uniform_
+      logical                               :: real_space
       !
       !
-      write(*,*) "--- Fmats2itau_mat_Gwk ---"
+      write(*,"(A)") "--- Fmats2itau_mat_Gwk ---"
       !
       !
       Norb = size(Gmats,dim=1)
@@ -412,6 +421,13 @@ contains
       Ntau = size(Gitau,dim=3)
       if(size(Gmats,dim=1).ne.size(Gmats,dim=2)) stop "Gmats not square."
       call assert_shape(Gitau,[Norb,Norb,Ntau,Nkpt],"Fmats2itau_mat_Gwk","Gitau")
+      !
+      real_space=.false.
+      if(present(nkpt3).and.present(kpt))then
+         real_space=.true.
+      else
+         stop "Either kpt or nkpt3 argument is missing."
+      endif
       !
       asympt_corr_ = .true.
       if(present(asympt_corr)) asympt_corr_ = asympt_corr
@@ -429,22 +445,41 @@ contains
       allocate(sinwt(Nmats,Ntau));sinwt=0d0
       call mats2itau_FermionicCoeff(tau,coswt,sinwt,asympt_corr_)
       !
+      !connect to the wanted Gf
+      if(real_space)then
+         !
+         call wannier_K2R(nkpt3,kpt,Gmats,Gmats_rs)
+         Nwig = size(Gmats_rs,dim=4)
+         allocate(Gitau_rs(Norb,Norb,Ntau,Nwig));Gitau_rs=czero
+         !
+         Gft_in  => Gmats_rs
+         Gft_out => Gitau_rs
+         Ndat => Nwig
+         !
+      else
+         !
+         Gft_in  => Gmats
+         Gft_out => Gitau
+         Ndat => Nkpt
+         !
+      endif
+      !
       Gitau=czero
       allocate(Ge(Norb,Norb));Ge=czero
       allocate(Go(Norb,Norb));Go=czero
       !$OMP PARALLEL DEFAULT(NONE),&
-      !$OMP SHARED(Nkpt,Ntau,Nmats,Gmats,coswt,sinwt,Gitau),&
-      !$OMP PRIVATE(ik,itau,iw,Ge,Go)
+      !$OMP SHARED(Ndat,Ntau,Nmats,coswt,sinwt,Gft_in,Gft_out),&
+      !$OMP PRIVATE(idat,itau,iw,Ge,Go)
       !$OMP DO
-      do ik=1,Nkpt
+      do idat=1,Ndat
          do itau=1,Ntau
             do iw=1,Nmats
                !
                ! Gab(iw) = Gba*(-iwn) --> Gab(iw) = Gba*(-iwn)
-               Ge = Gmats(:,:,iw,ik) + transpose(conjg(Gmats(:,:,iw,ik)))
-               Go = Gmats(:,:,iw,ik) - transpose(conjg(Gmats(:,:,iw,ik)))
+               Ge = Gft_in(:,:,iw,idat) + transpose(conjg(Gft_in(:,:,iw,idat)))
+               Go = Gft_in(:,:,iw,idat) - transpose(conjg(Gft_in(:,:,iw,idat)))
                !
-               Gitau(:,:,itau,ik) = Gitau(:,:,itau,ik) + coswt(iw,itau)*Ge -dcmplx(0d0,1d0)*sinwt(iw,itau)*Go
+               Gft_out(:,:,itau,idat) = Gft_out(:,:,itau,idat) + coswt(iw,itau)*Ge -dcmplx(0d0,1d0)*sinwt(iw,itau)*Go
                !
             enddo
          enddo
@@ -452,6 +487,13 @@ contains
       !$OMP END DO
       !$OMP END PARALLEL
       deallocate(coswt,sinwt,Ge,Go,tau)
+      !
+      if(real_space)then
+         deallocate(Gmats_rs)
+         call wannier_R2K(nkpt3,kpt,Gitau_rs,Gitau)
+         deallocate(Gitau_rs)
+      endif
+      nullify(Gft_in,Gft_out,Ndat)
       !
    end subroutine Fmats2itau_mat_Gwk
 
@@ -479,7 +521,7 @@ contains
       logical                               :: tau_uniform_
       !
       !
-      write(*,*) "--- Fmats2itau_vec_Gw ---"
+      write(*,"(A)") "--- Fmats2itau_vec_Gw ---"
       !
       !
       Norb = size(Gmats,dim=1)
@@ -527,27 +569,35 @@ contains
       !
    end subroutine Fmats2itau_vec_Gw
    !
-   subroutine Fmats2itau_vec_Gwk(beta,Gmats,Gitau,asympt_corr,tau_uniform)
+   subroutine Fmats2itau_vec_Gwk(beta,Gmats,Gitau,asympt_corr,tau_uniform,nkpt3,kpt)
       !
       use utils_misc
       implicit none
       !
       real(8),intent(in)                    :: beta
-      complex(8),intent(in)                 :: Gmats(:,:,:)
-      complex(8),intent(inout)              :: Gitau(:,:,:)
+      complex(8),intent(in),target          :: Gmats(:,:,:)
+      complex(8),intent(inout),target       :: Gitau(:,:,:)
       logical,intent(in),optional           :: asympt_corr
       logical,intent(in),optional           :: tau_uniform
+      integer,intent(in),optional           :: nkpt3(3)
+      real(8),intent(in),optional           :: kpt(:,:)
       !
       real(8),allocatable                   :: coswt(:,:),sinwt(:,:)
       real(8),allocatable                   :: tau(:)
+      complex(8),allocatable,target         :: Gmats_rs(:,:,:),Gitau_rs(:,:,:)
+      complex(8),pointer                    :: Gft_in(:,:,:),Gft_out(:,:,:)
       complex(8),allocatable                :: Ge(:),Go(:)
-      integer                               :: iw,itau,ik
-      integer                               :: Nmats,Ntau,Norb,Nkpt
+      integer                               :: iw,itau,idat
+      integer,pointer                       :: Ndat
+      integer,target                        :: Nwig
+      integer,target                        :: Nkpt
+      integer                               :: Ntau,Norb,Nmats
       logical                               :: asympt_corr_
       logical                               :: tau_uniform_
+      logical                               :: real_space
       !
       !
-      write(*,*) "--- Fmats2itau_vec_Gwk ---"
+      write(*,"(A)") "--- Fmats2itau_vec_Gwk ---"
       !
       !
       Norb = size(Gmats,dim=1)
@@ -555,6 +605,13 @@ contains
       Nkpt = size(Gmats,dim=3)
       Ntau = size(Gitau,dim=2)
       call assert_shape(Gitau,[Norb,Ntau,Nkpt],"Fmats2itau_vec_Gwk","Gitau")
+      !
+      real_space=.false.
+      if(present(nkpt3).and.present(kpt))then
+         real_space=.true.
+      else
+         stop "Either kpt or nkpt3 argument is missing."
+      endif
       !
       asympt_corr_ = .true.
       if(present(asympt_corr)) asympt_corr_ = asympt_corr
@@ -572,22 +629,41 @@ contains
       allocate(sinwt(Nmats,Ntau));sinwt=0d0
       call mats2itau_FermionicCoeff(tau,coswt,sinwt,asympt_corr_)
       !
+      !connect to the wanted Gf
+      if(real_space)then
+         !
+         call wannier_K2R(nkpt3,kpt,Gmats,Gmats_rs)
+         Nwig = size(Gmats_rs,dim=3)
+         allocate(Gitau_rs(Norb,Ntau,Nwig));Gitau_rs=czero
+         !
+         Gft_in  => Gmats_rs
+         Gft_out => Gitau_rs
+         Ndat => Nwig
+         !
+      else
+         !
+         Gft_in  => Gmats
+         Gft_out => Gitau
+         Ndat => Nkpt
+         !
+      endif
+      !
       Gitau=czero
       allocate(Ge(Norb));Ge=czero
       allocate(Go(Norb));Go=czero
       !$OMP PARALLEL DEFAULT(NONE),&
-      !$OMP SHARED(Nkpt,Ntau,Nmats,Gmats,coswt,sinwt,Gitau),&
-      !$OMP PRIVATE(ik,itau,iw,Ge,Go)
+      !$OMP SHARED(Ndat,Ntau,Nmats,coswt,sinwt,Gft_in,Gft_out),&
+      !$OMP PRIVATE(idat,itau,iw,Ge,Go)
       !$OMP DO
-      do ik=1,Nkpt
+      do idat=1,Ndat
          do itau=1,Ntau
             do iw=1,Nmats
                !
                ! Gab(iw) = Gba*(-iwn) --> Gab(-iw) = Gba*(iwn)
-               Ge = Gmats(:,iw,ik) + conjg(Gmats(:,iw,ik))
-               Go = Gmats(:,iw,ik) - conjg(Gmats(:,iw,ik))
+               Ge = Gft_in(:,iw,idat) + conjg(Gft_in(:,iw,idat))
+               Go = Gft_in(:,iw,idat) - conjg(Gft_in(:,iw,idat))
                !
-               Gitau(:,itau,ik) = Gitau(:,itau,ik) + coswt(iw,itau)*Ge -dcmplx(0d0,1d0)*sinwt(iw,itau)*Go
+               Gft_out(:,itau,idat) = Gft_out(:,itau,idat) + coswt(iw,itau)*Ge -dcmplx(0d0,1d0)*sinwt(iw,itau)*Go
                !
             enddo
          enddo
@@ -595,6 +671,13 @@ contains
       !$OMP END DO
       !$OMP END PARALLEL
       deallocate(coswt,sinwt,Ge,Go,tau)
+      !
+      if(real_space)then
+         deallocate(Gmats_rs)
+         call wannier_R2K(nkpt3,kpt,Gitau_rs,Gitau)
+         deallocate(Gitau_rs)
+      endif
+      nullify(Gft_in,Gft_out,Ndat)
       !
    end subroutine Fmats2itau_vec_Gwk
 
@@ -620,7 +703,7 @@ contains
       logical                               :: tau_uniform_
       !
       !
-      write(*,*) "--- Fitau2mats_mat_Gw ---"
+      write(*,"(A)") "--- Fitau2mats_mat_Gw ---"
       !
       !
       Norb = size(Gitau,dim=1)
@@ -688,7 +771,7 @@ contains
       logical                               :: tau_uniform_
       !
       !
-      write(*,*) "--- Fitau2mats_mat_Gwk ---"
+      write(*,"(A)") "--- Fitau2mats_mat_Gwk ---"
       !
       !
       Norb = size(Gitau,dim=1)
@@ -763,7 +846,7 @@ contains
       logical                               :: tau_uniform_
       !
       !
-      write(*,*) "--- Fitau2mats_vec_Gw ---"
+      write(*,"(A)") "--- Fitau2mats_vec_Gw ---"
       !
       !
       Norb = size(Gitau,dim=1)
@@ -828,7 +911,7 @@ contains
       logical                               :: tau_uniform_
       !
       !
-      write(*,*) "--- Fitau2mats_vec_Gwk ---"
+      write(*,"(A)") "--- Fitau2mats_vec_Gwk ---"
       !
       !
       Norb = size(Gitau,dim=1)
@@ -901,7 +984,7 @@ contains
       logical                               :: tau_uniform_
       !
       !
-      write(*,*) "--- Bmats2itau_Uw ---"
+      write(*,"(A)") "--- Bmats2itau_Uw ---"
       !
       !
       Nbp = size(Umats,dim=1)
@@ -966,7 +1049,7 @@ contains
       logical                               :: tau_uniform_
       !
       !
-      write(*,*) "--- Bmats2itau_Uwk ---"
+      write(*,"(A)") "--- Bmats2itau_Uwk ---"
       !
       !
       Nbp = size(Umats,dim=1)
@@ -1037,7 +1120,7 @@ contains
       logical                               :: tau_uniform_
       !
       !
-      write(*,*) "--- Bitau2mats_Uw ---"
+      write(*,"(A)") "--- Bitau2mats_Uw ---"
       !
       !
       Nbp = size(Uitau,dim=1)
@@ -1110,7 +1193,7 @@ contains
       logical                               :: tau_uniform_
       !
       !
-      write(*,*) "--- Bitau2mats_Uwk ---"
+      write(*,"(A)") "--- Bitau2mats_Uwk ---"
       !
       !
       Nbp = size(Uitau,dim=1)

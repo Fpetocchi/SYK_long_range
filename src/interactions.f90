@@ -514,14 +514,11 @@ contains
          if((.not.LocalOnly).and.(.not.allocated(Umats%screened))) stop "Requested K-dependence but screened attribute not allocated."
          !
          ! Allocate the Bosonic field on the real axis
-         Ureal%Nbp = Nbp_spex
-         Ureal%Npoints = Nfreq
-         if(.not.LocalOnly)Ureal%Nkpt = Nkpt
-         call selfAllocateBosonicField(Ureal)
+         call AllocateBosonicField(Ureal,Nbp_spex,Nfreq,Nkpt,"Uspex(w)")
          !
          ! Read VW_real accumulating local attribute and optionally storing the k-dependent part
          path = pathINPUT//"VW_real/"
-         do iq=1,Nkpt
+         do iq=1,Nkpt!METTIN UN IF CHE DOPENDE DA LOCAL ONLY
             !
             file_spex = reg(path)//"GWinput/VW_real/VW.Q"//str(iq)//".DAT"        !write(fn,"(a,a,i4.4,a)") reg(path),"GWinput/VW_real/VW.Q",iq,".DAT"
             call inquireFile(reg(file_spex),filexists)
@@ -705,7 +702,7 @@ contains
          endif
          !
          deallocate(wread)
-         call selfDeallocateBosonicField(Ureal)
+         call DeallocateBosonicField(Ureal)
          !
          !---------------------------------------------------------------------!
          !
@@ -832,28 +829,22 @@ contains
       !
       if(Umatsxists)then
          !
-         Uread%status = .true.
-         Uread%Nbp = size(Umat,dim=1)
-         Uread%Npoints = 2
-         call selfAllocateBosonicField(Uread)
+         call AllocateBosonicField(Uread,size(Umat,dim=1),1,0)
          !
          call read_BosonicField(Uread,reg(pathINPUT),"Uloc_mats.DAT")
          Umat = Uread%screened_local(:,:,1)
          call dump_matrix(Umat,reg(pathINPUT//"Umat.DAT"))
-         call selfDeallocateBosonicField(Uread)
+         call DeallocateBosonicField(Uread)
          return
          !
       else if(Urealxists)then
          !
-         Uread%status = .true.
-         Uread%Nbp = size(Umat,dim=1)
-         Uread%Npoints = 2
-         call selfAllocateBosonicField(Uread)
+         call AllocateBosonicField(Uread,size(Umat,dim=1),1,0)
          !
          call read_BosonicField(Uread,reg(pathINPUT),"Uloc_real.DAT")
          Umat = Uread%screened_local(:,:,1)
          call dump_matrix(Umat,reg(pathINPUT//"Umat.DAT"))
-         call selfDeallocateBosonicField(Uread)
+         call DeallocateBosonicField(Uread)
          return
          !
       else if(SPEXxists)then

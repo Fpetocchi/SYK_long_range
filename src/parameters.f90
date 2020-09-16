@@ -53,14 +53,17 @@ module parameters
    !PURPOSE: k-dependent and local matrices structures - axis independent
    !---------------------------------------------------------------------------!
    type FermionicField
-      complex(8),allocatable                :: wk(:,:,:,:,:)                    ![Norb,Norb,Npoints,Nkpt,Nspin]
-      complex(8),allocatable                :: w(:,:,:,:)                       ![Norb,Norb,Npoints,Nspin]
+      complex(8),allocatable                :: wks(:,:,:,:,:)                   ![Norb,Norb,Npoints,Nkpt,Nspin]
+      complex(8),allocatable                :: ws(:,:,:,:)                      ![Norb,Norb,Npoints,Nspin]
+      complex(8),allocatable                :: ks(:,:,:,:)                      ![Norb,Norb,Nkpt,Nspin]
+      complex(8),allocatable                :: s(:,:,:)                         ![Norb,Norb,Nkpt]
       integer                               :: Norb=0
       integer                               :: Npoints=0
       integer                               :: Nkpt=0
-      integer                               :: Nsite=1
+      integer                               :: Nsite=0
       real(8)                               :: Beta=0d0
       real(8)                               :: mu=0d0
+      logical                               :: local_filled=.false.
       logical                               :: status=.false.
    end type FermionicField
 
@@ -76,9 +79,10 @@ module parameters
       integer                               :: Nbp=0
       integer                               :: Npoints=0
       integer                               :: Nkpt=0
-      integer                               :: Nsite=1
+      integer                               :: Nsite=0
       integer                               :: iq_gamma=-1
       real(8)                               :: Beta=0d0
+      logical                               :: local_filled=.false.
       logical                               :: status=.false.
    end type BosonicField
 
