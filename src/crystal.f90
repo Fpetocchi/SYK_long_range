@@ -127,7 +127,7 @@ contains
    !---------------------------------------------------------------------------!
    !PURPOSE: Read XEPS.DAT file
    !---------------------------------------------------------------------------!
-   subroutine read_xeps(pathINPUT,kpt,Nkpt3,UseXepsKorder,kptPos,Nkpt_irred)
+   subroutine read_xeps(pathINPUT,kpt,Nkpt3,UseXepsKorder,kptPos,Nkpt_irred,UseDisentangledBS)
       !
       use utils_misc
       implicit none
@@ -138,6 +138,7 @@ contains
       logical,intent(in)                    :: UseXepsKorder
       integer,allocatable,intent(inout)     :: kptPos(:)
       integer,intent(out)                   :: Nkpt_irred
+      logical,intent(out)                   :: UseDisentangledBS
       !
       character(len=256)                    :: path
       real(8),allocatable                   :: Ene_xeps(:,:,:)
@@ -161,15 +162,11 @@ contains
       call inquireFile(reg(path),filexists)
       !
       unit = free_unit()
-      open(unit,file=reg(path),form="unformatted",action="read")
-      read(unit) Nspin_xeps
-      read(unit) Nkpt3_xeps
-      read(unit) Nkpt_xeps
-      read(unit) Nkpt_xeps_irred
-      read(unit) Nband_xeps
-      read(unit) Efermi_xeps
-      read(unit) dumlogical
-      read(unit) UseDisentangledBS
+      open(unit,file=reg(path),form="unformatted",action="read",position="rewind")
+      read(unit) Nspin_xeps,Nkpt3_xeps(:),Nkpt_xeps,Nkpt_xeps_irred, &
+                 Nband_xeps,Efermi_xeps,dumlogical,UseDisentangledBS
+      !
+      write(*,"(A,1F10.5)") "Fermi energy in XEPS: ",Efermi_xeps
       !
       allocate(kpt_xeps(3,Nkpt_xeps));kpt_xeps=0d0
       allocate(kptPos_xeps(Nkpt_xeps));kptPos_xeps=0

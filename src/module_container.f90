@@ -95,7 +95,8 @@ module module_container
 
    !(i) Self-energy container. Depends on (linalg),(utils_misc),(crystal),(parameters),(global_vars),(utils_fields),(fourier_transforms)
    use self_energy, only:                    &
-   calc_sigmaGW !calc_Optcond,calc_Hall
+   calc_sigmaGW                             ,&
+   calc_sigmaGW_DC
 
 
 

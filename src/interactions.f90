@@ -9,10 +9,10 @@ module interactions
    !
    !
 
-   interface read_spex
-      module procedure read_spex_full                                           ![BosonicField,LocalOnly,save2bin,pathOUTPUT(optional to change output path),doAC(optional to override AC)]
-      module procedure read_spex_Uloc0                                          ![Matrix,pathOUTPUT(optional to change output path)]
-   end interface read_spex
+   interface read_U_spex
+      module procedure read_U_spex_full                                         ![BosonicField,LocalOnly,save2bin,pathOUTPUT(optional to change output path),doAC(optional to override AC)]
+      module procedure read_U_spex_Uloc0                                        ![Matrix,pathOUTPUT(optional to change output path)]
+   end interface read_U_spex
 
    !---------------------------------------------------------------------------!
    !PURPOSE: Rutines available for the user. Description only for interfaces.
@@ -22,7 +22,7 @@ module interactions
    public :: calc_W_edmft
    public :: calc_chi_full
    public :: calc_chi_edmft
-   public :: read_spex
+   public :: read_U_spex
    !public :: build_Umatrix
    !public :: calc_QMCinteractions
    !public :: rescale_interaction
@@ -434,15 +434,15 @@ contains
 
 
    !---------------------------------------------------------------------------!
-   !PURPOSE: Read frequancy dependent interactions
+   !PURPOSE: Read frequancy dependent interactions from SPEX files.
    !---------------------------------------------------------------------------!
-   subroutine read_spex_full(Umats,save2bin,LocalOnly,pathOUTPUT,doAC)
+   subroutine read_U_spex_full(Umats,save2bin,LocalOnly,pathOUTPUT,doAC)
       !
       use parameters
       use file_io
       use utils_misc
       use utils_fields
-      use global_vars,                 only :  pathINPUT,UfullStructure
+      use global_vars, only :  pathINPUT,UfullStructure
       implicit none
       !
       type(BosonicField),intent(inout)      :: Umats
@@ -464,7 +464,7 @@ contains
       real                                  :: start,finish
       !
       !
-      write(*,*) "--- read_spex_full ---"
+      write(*,*) "--- read_U_spex_full ---"
       pathOUTPUT_ = pathINPUT
       if(present(pathOUTPUT)) pathOUTPUT_ = pathOUTPUT
       !
@@ -486,7 +486,7 @@ contains
       !
       !
       ! Check if the data on the Matsubara axis are present
-      path = pathINPUT//"VW_imag" !/VW.Q0001.DAT"
+      path = pathINPUT//"VW_imag"
       call inquireDir(reg(path),ACdone,hardstop=.false.)
       doAC_ = .not.ACdone
       if(present(doAC)) doAC_ = doAC
@@ -517,7 +517,7 @@ contains
          ! Look for the Number of SPEX files. Which are supposed to be ordered.
          Nkpt = 0
          do iq=1,2000
-            file_spex = reg(path)//"GWinput/VW_real/VW.Q"//str(iq)//".DAT"
+            file_spex = reg(path)//"VW_real/VW.Q"//str(iq,4)//".DAT"
             call inquireFile(reg(file_spex),filexists,hardstop=.false.)
             if(.not.filexists) exit
             Nkpt = Nkpt + 1
@@ -532,7 +532,7 @@ contains
          path = pathINPUT//"VW_real/"
          do iq=1,Nkpt
             !
-            file_spex = reg(path)//"GWinput/VW_real/VW.Q"//str(iq)//".DAT"
+            file_spex = reg(path)//"VW_real/VW.Q"//str(iq,4)//".DAT"
             call inquireFile(reg(file_spex),filexists) !redundant control
             !
             unit = free_unit()
@@ -744,7 +744,7 @@ contains
          ! Look for the Number of SPEX files. Which are supposed to be ordered.
          Nkpt = 0
          do iq=1,2000
-            file_spex = reg(path)//"GWinput/VW_imag/VW.Q"//str(iq)//".DAT"
+            file_spex = reg(path)//"VW_imag/VW.Q"//str(iq,4)//".DAT"
             call inquireFile(reg(file_spex),filexists,hardstop=.false.)
             if(.not.filexists) exit
             Nkpt = Nkpt + 1
@@ -756,7 +756,7 @@ contains
          path = pathINPUT//"VW_imag/"
          do iq=1,Nkpt
             !
-            file_spex = reg(path)//"GWinput/VW_imag/VW.Q"//str(iq)//".DAT"        !write(fn,"(a,a,i4.4,a)") reg(path),"GWinput/VW_imag/VW.Q",iq,".DAT"
+            file_spex = reg(path)//"VW_imag/VW.Q"//str(iq,4)//".DAT"        !write(fn,"(a,a,i4.4,a)") reg(path),"VW_imag/VW.Q",iq,".DAT"
             call inquireFile(reg(file_spex),filexists) !redundant control
             !
             unit = free_unit()
@@ -808,13 +808,13 @@ contains
          enddo
       endif
       !
-   end subroutine read_spex_full
+   end subroutine read_U_spex_full
 
 
    !---------------------------------------------------------------------------!
    !PURPOSE: Read screened interaction tensor from Ucrpa(0)
    !---------------------------------------------------------------------------!
-   subroutine read_spex_Uloc0(Umat,pathOUTPUT)
+   subroutine read_U_spex_Uloc0(Umat,pathOUTPUT)
       !
       use parameters
       use file_io
@@ -835,7 +835,7 @@ contains
       type(BosonicField)                    :: Uread
       !
       !
-      write(*,*) "--- read_spex_Uloc0 ---"
+      write(*,*) "--- read_U_spex_Uloc0 ---"
       pathOUTPUT_ = pathINPUT
       if(present(pathOUTPUT)) pathOUTPUT_ = pathOUTPUT
       !
@@ -874,11 +874,11 @@ contains
          path = pathINPUT//"VW_real/"
          do iq=1,2000
             !
-            file_spex = reg(path)//"GWinput/VW_real/VW.Q"//str(iq)//".DAT"        !write(fn,"(a,a,i4.4,a)") reg(path),"GWinput/VW_real/VW.Q",iq,".DAT"
+            file_spex = reg(path)//"VW_real/VW.Q"//str(iq,4)//".DAT"        !write(fn,"(a,a,i4.4,a)") reg(path),"VW_real/VW.Q",iq,".DAT"
             call inquireFile(reg(file_spex),SPEXxists,hardstop=.false.)
             !
             ! This mathod looks uglier than the previous but here I don't
-            !  have to store K-dep, just sum up what's present.
+            ! have to store K-dep, just sum up what's present.
             if(.not.SPEXxists)cycle
             Nkpt=Nkpt+1
             !
@@ -911,7 +911,7 @@ contains
          stop "No useful interaction file found."
       endif
       !
-   end subroutine read_spex_Uloc0
+   end subroutine read_U_spex_Uloc0
 
 
    !---------------------------------------------------------------------------!
