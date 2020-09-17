@@ -358,6 +358,7 @@ contains
       allocate(coswt(Nmats,Ntau));coswt=0d0
       allocate(sinwt(Nmats,Ntau));sinwt=0d0
       call mats2itau_FermionicCoeff(tau,coswt,sinwt,asympt_corr_)
+      deallocate(tau)
       !
       Gitau=czero
       allocate(Ge(Norb,Norb));Ge=czero
@@ -379,7 +380,7 @@ contains
       enddo
       !$OMP END DO
       !$OMP END PARALLEL
-      deallocate(coswt,sinwt,Ge,Go,tau)
+      deallocate(coswt,sinwt,Ge,Go)
       !
    end subroutine Fmats2itau_mat_Gw
    !
@@ -444,6 +445,7 @@ contains
       allocate(coswt(Nmats,Ntau));coswt=0d0
       allocate(sinwt(Nmats,Ntau));sinwt=0d0
       call mats2itau_FermionicCoeff(tau,coswt,sinwt,asympt_corr_)
+      deallocate(tau)
       !
       !connect to the wanted Gf
       if(real_space)then
@@ -486,7 +488,7 @@ contains
       enddo
       !$OMP END DO
       !$OMP END PARALLEL
-      deallocate(coswt,sinwt,Ge,Go,tau)
+      deallocate(coswt,sinwt,Ge,Go)
       !
       if(real_space)then
          deallocate(Gmats_rs)
@@ -544,6 +546,7 @@ contains
       allocate(coswt(Nmats,Ntau));coswt=0d0
       allocate(sinwt(Nmats,Ntau));sinwt=0d0
       call mats2itau_FermionicCoeff(tau,coswt,sinwt,asympt_corr_)
+      deallocate(tau)
       !
       Gitau=czero
       allocate(Ge(Norb));Ge=czero
@@ -565,7 +568,7 @@ contains
       enddo
       !$OMP END DO
       !$OMP END PARALLEL
-      deallocate(coswt,sinwt,Ge,Go,tau)
+      deallocate(coswt,sinwt,Ge,Go)
       !
    end subroutine Fmats2itau_vec_Gw
    !
@@ -628,6 +631,7 @@ contains
       allocate(coswt(Nmats,Ntau));coswt=0d0
       allocate(sinwt(Nmats,Ntau));sinwt=0d0
       call mats2itau_FermionicCoeff(tau,coswt,sinwt,asympt_corr_)
+      deallocate(tau)
       !
       !connect to the wanted Gf
       if(real_space)then
@@ -670,7 +674,7 @@ contains
       enddo
       !$OMP END DO
       !$OMP END PARALLEL
-      deallocate(coswt,sinwt,Ge,Go,tau)
+      deallocate(coswt,sinwt,Ge,Go)
       !
       if(real_space)then
          deallocate(Gmats_rs)
@@ -1007,6 +1011,7 @@ contains
       !
       allocate(coswt(Nmats,Ntau));coswt=0d0
       call mats2itau_BosonicCoeff(tau,coswt,asympt_corr_)
+      deallocate(tau)
       !
       Uitau=czero
       !$OMP PARALLEL DEFAULT(NONE),&
@@ -1026,7 +1031,7 @@ contains
       enddo
       !$OMP END DO
       !$OMP END PARALLEL
-      deallocate(coswt,tau)
+      deallocate(coswt)
       !
    end subroutine Bmats2itau_Uw
    !
@@ -1073,6 +1078,7 @@ contains
       !
       allocate(coswt(Nmats,Ntau));coswt=0d0
       call mats2itau_BosonicCoeff(tau,coswt,asympt_corr_)
+      deallocate(tau)
       !
       Uitau=czero
       !$OMP PARALLEL DEFAULT(NONE),&
@@ -1094,7 +1100,7 @@ contains
       enddo
       !$OMP END DO
       !$OMP END PARALLEL
-      deallocate(coswt,tau)
+      deallocate(coswt)
       !
    end subroutine Bmats2itau_Uwk
 

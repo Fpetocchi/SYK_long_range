@@ -54,7 +54,7 @@ contains
       complex(8),allocatable                :: Sitau(:,:,:,:,:)
       complex(8),allocatable                :: Gitau(:,:,:,:,:)
       complex(8),allocatable                :: Witau(:,:,:,:)
-      real(8),allocatable                   :: tau(:)
+      complex(8),allocatable                :: WmatsC(:,:,:,:)
       real(8)                               :: Beta
       integer                               :: Nbp,Nkpt,Norb,Nmats
       integer                               :: ik1,ik2,iq,iw,itau,ispin
@@ -92,13 +92,6 @@ contains
       tau_uniform_=.false.
       if(present(tau_uniform)) tau_uniform_ = tau_uniform
       !
-      allocate(tau(Ntau));tau=0d0
-      if(tau_uniform_)then
-         tau = linspace(0d0,beta,Ntau)
-      else
-         tau = denspace(beta,Ntau)
-      endif
-      !
       allocate(Gitau(Norb,Norb,Ntau,Nkpt,Nspin));Gitau=czero
       do ispin=1,Nspin
          call Fmats2itau_mat(Beta,Gmats%wks(:,:,:,:,ispin),Gitau(:,:,:,:,ispin), &
@@ -106,14 +99,16 @@ contains
       enddo
       !
       allocate(Witau(Nbp,Nbp,Ntau,Nkpt));Witau=czero
-      call Bmats2itau(Beta,Wmats%screened,Witau,asympt_corr=.true.,tau_uniform=tau_uniform_)
-      do itau=1,Ntau
-         Witau(:,:,Ntau,:) = Witau(:,:,Ntau,:) - Wmats%bare
+      allocate(WmatsC(Nbp,Nbp,Nmats,Nkpt));WmatsC=czero
+      do iw=1,Nmats
+         WmatsC(:,:,iw,:) = Wmats%screened(:,:,iw,:) - Wmats%bare
       enddo
+      call Bmats2itau(Beta,WmatsC,Witau,asympt_corr=.true.,tau_uniform=tau_uniform_)
+      deallocate(WmatsC)
       !
       write(*,"(A)") "Sigma_C(tau)"
       !Sigma_{m,n}(q,tau) = -Sum_{k,mp,np} W_{(m,mp);(n,np)}(q-k;tau)G_{mp,np}(k,tau)
-      allocate(Sitau(Norb,Norb,Ntau,Nkpt,Nspin));Sitau=czero
+      allocate(Sitau(Norb,Norb,Ntau,Lttc%Nkpt_irred,Nspin));Sitau=czero
       !$OMP PARALLEL DEFAULT(NONE),&
       !$OMP SHARED(Norb,Ntau,Lttc,Nkpt,Sitau,Gitau,Witau),&
       !$OMP PRIVATE(m,n,itau,iq,ispin,ik1,ik2,mp,np,ib1,ib2)
@@ -145,7 +140,7 @@ contains
       enddo
       !$OMP END DO
       !$OMP END PARALLEL
-      deallocate(Gitau,Witau)
+      deallocate(Witau)
       !
       write(*,"(A)") "Sigma_C(tau)-->Sigma_C(iw)"
       call clear_attributes(Smats_C)
@@ -189,6 +184,7 @@ contains
       enddo
       !$OMP END DO
       !$OMP END PARALLEL
+      deallocate(Gitau)
       !
       if(Lttc%Nkpt_irred.lt.Nkpt) then
          !sigma(ik)=sigma(kptp(ik))
@@ -234,6 +230,148 @@ contains
       call FermionicKsum(Smats_X)
       !
    end subroutine calc_sigmaGW
+
+
+   !---------------------------------------------------------------------------!
+   !PURPOSE: Compute the two GW self-energy components.
+   !---------------------------------------------------------------------------!
+   subroutine calc_sigmaGW_DC(Smats_Cdc,Smats_Xdc,Gmats,Wmats,tau_uniform)
+      !
+      use parameters
+      use linalg
+      use utils_misc
+      use utils_fields
+      use crystal
+      use fourier_transforms
+      use global_vars, only : Ntau
+      implicit none
+      !
+      type(FermionicField),intent(inout)    :: Smats_Cdc
+      type(FermionicField),intent(inout)    :: Smats_Xdc
+      type(FermionicField),intent(in)       :: Gmats
+      type(BosonicField),intent(in)         :: Wmats
+      logical,intent(in),optional           :: tau_uniform
+      !
+      complex(8),allocatable                :: Sitau_loc(:,:,:,:)
+      complex(8),allocatable                :: Gitau_loc(:,:,:,:)
+      complex(8),allocatable                :: Witau_loc(:,:,:)
+      complex(8),allocatable                :: WmatsC_loc(:,:,:)
+      real(8)                               :: Beta
+      integer                               :: Nbp,Nkpt,Norb,Nmats
+      integer                               :: iw,itau,ispin
+      integer                               :: m,n,mp,np,ib1,ib2
+      logical                               :: tau_uniform_
+      !
+      !
+      write(*,"(A)") "--- calc_sigmaGW_DC ---"
+      !
+      !
+      ! Check on the input Fields
+      if(.not.Smats_Cdc%status) stop "Smats_Cdc not properly initialized."
+      if(.not.Smats_Xdc%status) stop "Smats_Xdc not properly initialized."
+      if(.not.Gmats%status) stop "Gmats not properly initialized."
+      if(.not.Wmats%status) stop "Wmats not properly initialized."
+      if(Smats_Cdc%Nkpt.ne.0) stop "Smats_Cdc k dependent attributes are supposed to be unallocated."
+      if(Smats_Xdc%Nkpt.ne.0) stop "Smats_Cdc k dependent attributes are supposed to be unallocated."
+      if(Smats_Xdc%Npoints.ne.0) stop "Smats_Xdc frequency dependent attributes are supposed to be unallocated."
+      !
+      Norb = Smats_Cdc%Norb
+      Nkpt = Smats_Cdc%Nkpt
+      Beta = Smats_Cdc%Beta
+      Nmats = Smats_Cdc%Npoints
+      Nbp = Norb**2
+      !
+      if(all([Smats_Xdc%Norb-Norb,Gmats%Norb-Norb,Wmats%Nbp-Nbp].ne.[0,0,0])) stop "Either Smats_Xdc, Gmats or Wmats have different orbital dimension with respect to Smats_Cdc."
+      if(all([Smats_Xdc%Beta-Beta,Gmats%Beta-Beta,Wmats%Beta-Beta].ne.[0d0,0d0,0d0])) stop "Either Smats_Xdc, Gmats or Wmats have different Beta with respect to Smats_Cdc."
+      if(all([Gmats%Npoints-Nmats,Wmats%Npoints-Nmats].ne.[0,0]))  write(*,"(A)") "Warning: Either Smats_Cdc, Gmats or Wmats have different number of Matsubara points. Computing up to the smaller."
+      Nmats = minval([Smats_Cdc%Npoints,Wmats%Npoints,Wmats%Npoints])
+      !
+      tau_uniform_=.false.
+      if(present(tau_uniform)) tau_uniform_ = tau_uniform
+      !
+      allocate(Gitau_loc(Norb,Norb,Ntau,Nspin));Gitau_loc=czero
+      do ispin=1,Nspin
+         call Fmats2itau_mat(Beta,Gmats%ws(:,:,:,ispin),Gitau_loc(:,:,:,ispin), &
+                             asympt_corr=.true.,tau_uniform=tau_uniform_)
+      enddo
+      !
+      allocate(Witau_loc(Nbp,Nbp,Ntau));Witau_loc=czero
+      allocate(WmatsC_loc(Nbp,Nbp,Nmats));WmatsC_loc=czero
+      do iw=1,Nmats
+         WmatsC_loc(:,:,iw) = Wmats%screened_local(:,:,iw) - Wmats%bare_local
+      enddo
+      call Bmats2itau(Beta,WmatsC_loc,Witau_loc,asympt_corr=.true.,tau_uniform=tau_uniform_)
+      deallocate(WmatsC_loc)
+      !
+      write(*,"(A)") "Sigma_Cdc(tau)"
+      !Sigma_{m,n}(q,tau) = -Sum_{k,mp,np} W_{(m,mp);(n,np)}(q-k;tau)G_{mp,np}(k,tau)
+      allocate(Sitau_loc(Norb,Norb,Ntau,Nspin));Sitau_loc=czero
+      !$OMP PARALLEL DEFAULT(NONE),&
+      !$OMP SHARED(Norb,Ntau,Sitau_loc,Gitau_loc,Witau_loc),&
+      !$OMP PRIVATE(m,n,itau,ispin,mp,np,ib1,ib2)
+      !$OMP DO
+      do m=1,Norb
+         do n=1,Norb
+            do itau=1,Ntau
+               do ispin=1,Nspin
+                  !
+                  do mp=1,Norb
+                     do np=1,Norb
+                        !
+                        ib1 = mp + Norb*(m-1)
+                        ib2 = np + Norb*(n-1)
+                        !
+                        Sitau_loc(m,n,itau,ispin) = Sitau_loc(m,n,itau,ispin) - Gitau_loc(mp,np,itau,ispin)*Witau_loc(ib1,ib2,itau)
+                        !
+                     enddo
+                  enddo
+                  !
+               enddo
+            enddo
+         enddo
+      enddo
+      !$OMP END DO
+      !$OMP END PARALLEL
+      deallocate(Witau_loc)
+      !
+      write(*,"(A)") "Sigma_Cdc(tau)-->Sigma_Cdc(iw)"
+      call clear_attributes(Smats_Cdc)
+      do ispin=1,Nspin
+         call Fitau2mats_mat(Beta,Sitau_loc(:,:,:,ispin),Smats_Cdc%ws(:,:,:,ispin),tau_uniform=tau_uniform_)
+      enddo
+      deallocate(Sitau_loc)
+      !
+      write(*,"(A)") "Sigma_X"
+      call clear_attributes(Smats_Xdc)
+      !sigmax(r,r')=-g(r,r',tau=0-)*v(r-r')
+      !Sigmax_nm(q) = Sum_kij V_{ni,jm}(q-k)G_ij(k,beta)
+      !$OMP PARALLEL DEFAULT(NONE),&
+      !$OMP SHARED(Norb,Ntau,Smats_Xdc,Gitau_loc,Wmats),&
+      !$OMP PRIVATE(m,n,ispin,mp,np,ib1,ib2)
+      !$OMP DO
+      do m=1,Norb
+         do n=1,Norb
+            do ispin=1,Nspin
+               !
+               do mp=1,Norb
+                  do np=1,Norb
+                     !
+                     ib1 = mp + Norb*(m-1)
+                     ib2 = np + Norb*(n-1)
+                     !
+                     Smats_Xdc%s(m,n,ispin) = Smats_Xdc%s(m,n,ispin) + Gitau_loc(mp,np,Ntau,ispin)*Wmats%bare_local(ib1,ib2)
+                     !
+                  enddo
+               enddo
+               !
+            enddo
+         enddo
+      enddo
+      !$OMP END DO
+      !$OMP END PARALLEL
+      deallocate(Gitau_loc)
+      !
+   end subroutine calc_sigmaGW_DC
 
 
    !---------------------------------------------------------------------------!

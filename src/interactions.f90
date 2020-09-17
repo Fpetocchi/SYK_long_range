@@ -436,7 +436,7 @@ contains
    !---------------------------------------------------------------------------!
    !PURPOSE: Read frequancy dependent interactions
    !---------------------------------------------------------------------------!
-   subroutine read_spex_full(Umats,LocalOnly,save2bin,pathOUTPUT,doAC)
+   subroutine read_spex_full(Umats,save2bin,LocalOnly,pathOUTPUT,doAC)
       !
       use parameters
       use file_io
@@ -446,8 +446,8 @@ contains
       implicit none
       !
       type(BosonicField),intent(inout)      :: Umats
-      logical,intent(in)                    :: LocalOnly
       logical,intent(in)                    :: save2bin
+      logical,intent(in)                    :: LocalOnly
       character(len=*),intent(in),optional  :: pathOUTPUT
       logical,intent(in),optional           :: doAC
       !
@@ -471,9 +471,12 @@ contains
       !
       ! Check on the input Boson
       if(.not.Umats%status) stop "BosonicField not properly initialized."
+      if((.not.LocalOnly).and.(.not.allocated(Umats%bare))) stop "Requested k-dependence but bare attribute not allocated."
+      if((.not.LocalOnly).and.(.not.allocated(Umats%screened))) stop "Requested k-dependence but screened attribute not allocated."
+      if(LocalOnly.and.allocated(Umats%bare)) stop "Bare K-dependent attributes is present but not used."
+      if(LocalOnly.and.allocated(Umats%screened)) stop "Screened K-dependent attributes is present but not used."
       allocate(wmats(Umats%Npoints));wmats=0d0
       wmats = BosonicFreqMesh(Umats%Beta,Umats%Npoints)
-      if(.not.LocalOnly)Nkpt = Umats%Nkpt
       !
       !
       ! Read XEPS data
@@ -510,18 +513,27 @@ contains
          ! Few checks
          if(Nspin_spex.ne.1) stop "Nspin_spex.ne.1"
          if(Umats%Nbp.ne.Nbp_spex) stop "Size of given BosonicField and VW_real orbital space do not coincide."
-         if((.not.LocalOnly).and.(.not.allocated(Umats%bare))) stop "Requested K-dependence but bare attribute not allocated."
-         if((.not.LocalOnly).and.(.not.allocated(Umats%screened))) stop "Requested K-dependence but screened attribute not allocated."
+         !
+         ! Look for the Number of SPEX files. Which are supposed to be ordered.
+         Nkpt = 0
+         do iq=1,2000
+            file_spex = reg(path)//"GWinput/VW_real/VW.Q"//str(iq)//".DAT"
+            call inquireFile(reg(file_spex),filexists,hardstop=.false.)
+            if(.not.filexists) exit
+            Nkpt = Nkpt + 1
+         enddo
+         write(*,"(A1,1I6)") "The number of SPEX files (Nkpt) in VW_real is: ",Nkpt
+         if((.not.LocalOnly).and.(Umats%Nkpt.ne.Nkpt)) stop "Number of k-points of given BosonicField and number of VW_real k-points do not coincide."
          !
          ! Allocate the Bosonic field on the real axis
          call AllocateBosonicField(Ureal,Nbp_spex,Nfreq,Nkpt,"Uspex(w)")
          !
          ! Read VW_real accumulating local attribute and optionally storing the k-dependent part
          path = pathINPUT//"VW_real/"
-         do iq=1,Nkpt!METTIN UN IF CHE DOPENDE DA LOCAL ONLY
+         do iq=1,Nkpt
             !
-            file_spex = reg(path)//"GWinput/VW_real/VW.Q"//str(iq)//".DAT"        !write(fn,"(a,a,i4.4,a)") reg(path),"GWinput/VW_real/VW.Q",iq,".DAT"
-            call inquireFile(reg(file_spex),filexists)
+            file_spex = reg(path)//"GWinput/VW_real/VW.Q"//str(iq)//".DAT"
+            call inquireFile(reg(file_spex),filexists) !redundant control
             !
             unit = free_unit()
             open(unit,file=reg(file_spex),form="unformatted",action="read")
@@ -532,7 +544,7 @@ contains
             read(unit) wread
             wread = H2eV*wread
             write(*,*)"read wread",wread   !!!!>>>>>TEST<<<<<!!!!
-            if (dabs(wread(1)).gt.1.d-9) stop "wread(1) not zero"
+            if (dabs(wread(1)).gt.eps) stop "wread(1) not zero"
             !
             do iw=0,Nfreq
                read(unit) Utmp
@@ -727,16 +739,25 @@ contains
          ! Few checks
          if(Nspin_spex.ne.1) stop "Nspin_spex.ne.1"
          if(Umats%Nbp.ne.Nbp_spex) stop "Size of given BosonicField and VW_imag orbital space do not coincide."
-         if((.not.LocalOnly).and.(.not.allocated(Umats%bare))) stop "Requested K-dependence but bare attribute not allocated."
-         if((.not.LocalOnly).and.(.not.allocated(Umats%screened))) stop "Requested K-dependence but screened attribute not allocated."
-         if(Umats%Npoints.ne.Nfreq) stop "Number of Matsubara points and bosonic field mesh does not coincide."
+         if(Umats%Npoints.ne.Nfreq) stop "Number of VW_imag Matsubara points and bosonic field mesh does not coincide."
          !
-         ! Read VW_real accumulating local attribute and optionally storing the k-dependent part
+         ! Look for the Number of SPEX files. Which are supposed to be ordered.
+         Nkpt = 0
+         do iq=1,2000
+            file_spex = reg(path)//"GWinput/VW_imag/VW.Q"//str(iq)//".DAT"
+            call inquireFile(reg(file_spex),filexists,hardstop=.false.)
+            if(.not.filexists) exit
+            Nkpt = Nkpt + 1
+         enddo
+         write(*,"(A1,1I6)") "The number of SPEX files (Nkpt) in VW_imag is: ",Nkpt
+         if((.not.LocalOnly).and.(Umats%Nkpt.ne.Nkpt)) stop "Number of k-points of given BosonicField and number of VW_imag k-points do not coincide."
+         !
+         ! Read VW_imag accumulating local attribute and optionally storing the k-dependent part
          path = pathINPUT//"VW_imag/"
          do iq=1,Nkpt
             !
             file_spex = reg(path)//"GWinput/VW_imag/VW.Q"//str(iq)//".DAT"        !write(fn,"(a,a,i4.4,a)") reg(path),"GWinput/VW_imag/VW.Q",iq,".DAT"
-            call inquireFile(reg(file_spex),filexists)
+            call inquireFile(reg(file_spex),filexists) !redundant control
             !
             unit = free_unit()
             open(unit,file=reg(file_spex),form="unformatted",action="read")
@@ -748,17 +769,17 @@ contains
             wread = H2eV*wread
             write(*,*)"read wread",wread   !!!!>>>>>TEST<<<<<!!!!
             do iw=1,Nfreq
-               if (dabs(wread(iw)-wmats(iw)).gt.1.d-6) stop "wread.ne.wmats"
+               if (dabs(wread(iw)-wmats(iw)).gt.eps) stop "wread.ne.wmats"
             enddo
             !
             do iw=0,Nfreq
                read(unit) Utmp
                if(iw.eq.0) then
                   Umats%bare_local = Umats%bare_local + H2eV*Utmp/(Nkpt**3)
-                  Umats%bare(:,:,iq) = H2eV*Utmp/(Nkpt**2)
+                  if(.not.LocalOnly) Umats%bare(:,:,iq) = H2eV*Utmp/(Nkpt**2)
                else
                   Umats%screened_local(:,:,iw) = Umats%screened_local(:,:,iw) + H2eV*Utmp/(Nkpt**3)
-                  Umats%screened(:,:,iw,iq) = H2eV*Utmp/(Nkpt**2)
+                  if(.not.LocalOnly) Umats%screened(:,:,iw,iq) = H2eV*Utmp/(Nkpt**2)
                endif
             enddo
             !
@@ -855,6 +876,9 @@ contains
             !
             file_spex = reg(path)//"GWinput/VW_real/VW.Q"//str(iq)//".DAT"        !write(fn,"(a,a,i4.4,a)") reg(path),"GWinput/VW_real/VW.Q",iq,".DAT"
             call inquireFile(reg(file_spex),SPEXxists,hardstop=.false.)
+            !
+            ! This mathod looks uglier than the previous but here I don't
+            !  have to store K-dep, just sum up what's present.
             if(.not.SPEXxists)cycle
             Nkpt=Nkpt+1
             !
