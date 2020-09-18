@@ -9,6 +9,9 @@ module utils_misc
    !
    !
 
+   !---------------------------------------------------------------------------!
+   !PURPOSE: Module interfaces
+   !---------------------------------------------------------------------------!
    interface str
       module procedure str_i_to_ch
       module procedure str_i_to_ch_pad

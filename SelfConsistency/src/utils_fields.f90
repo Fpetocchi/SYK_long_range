@@ -9,6 +9,9 @@ module utils_fields
    !
    !
 
+   !---------------------------------------------------------------------------!
+   !PURPOSE: Module interfaces
+   !---------------------------------------------------------------------------!
    interface clear_attributes
       module procedure clear_attributes_Fermion
       module procedure clear_attributes_Boson

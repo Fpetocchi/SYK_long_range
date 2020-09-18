@@ -13,6 +13,9 @@ module crystal
    ! qui mantengo il path allinputfile dato dall'utente perche cmq se leggo la Hk la devo leggere da qulahce parte
    ! per funzionare wannier intp devo leggere Hk perche' e' l'unico modo per dare il path
 
+   !---------------------------------------------------------------------------!
+   !PURPOSE: Module interfaces
+   !---------------------------------------------------------------------------!
    interface wannierinterpolation
       module procedure wannierinterpolation_mat                                 !(nkpt3_orig(3),kpt_orig(3,Nkpt_orig),kpt_intp(3,Nkpt_intp),mat_K(Norb,Norb,Ndat,Nkpt_orig),mat_intp(Norb,Norb,Ndat,Nkpt_intp))
       module procedure wannierinterpolation_vec                                 !(nkpt3_orig(3),kpt_orig(3,Nkpt_orig),kpt_intp(3,Nkpt_intp),mat_K(Norb,Ndat,Nkpt_orig),mat_intp(Norb,Ndat,Nkpt_intp))

@@ -9,9 +9,12 @@ module bubbles
    !
    !
 
+   !---------------------------------------------------------------------------!
+   !PURPOSE: Module interfaces
+   !---------------------------------------------------------------------------!
    interface calc_Pi
       module procedure calc_Pi_GkGk                                             ![BosonicField,Lattice]
-      module procedure calc_Pi_selfcons                                         ![BosonicField,FermionicField,Lattice,tau_uniform(optional),tau_output(optional)]
+      module procedure calc_Pi_selfcons                                         ![BosonicField,FermionicField,Lattice,tau_output(optional)]
    end interface calc_Pi
 
    !---------------------------------------------------------------------------!
@@ -151,7 +154,7 @@ contains
    !---------------------------------------------------------------------------!
    !PURPOSE: Computes polarization bubble from the interacting Gf
    !---------------------------------------------------------------------------!
-   subroutine calc_Pi_selfcons(Pout,Gmats,Lttc,tau_uniform,tau_output)
+   subroutine calc_Pi_selfcons(Pout,Gmats,Lttc,tau_output)
       !
       use parameters
       use utils_misc
@@ -159,13 +162,12 @@ contains
       use fourier_transforms
       use crystal
       use fourier_transforms
-      use global_vars, only : Ntau
+      use input_vars, only : Ntau, tau_uniform
       implicit none
       !
       type(BosonicField),intent(inout)      :: Pout
       type(FermionicField),intent(in)       :: Gmats
       type(Lattice),intent(in)              :: Lttc
-      logical,intent(in),optional           :: tau_uniform
       logical,intent(in),optional           :: tau_output
       !
       complex(8),allocatable                :: Gitau(:,:,:,:,:)
@@ -175,7 +177,6 @@ contains
       integer                               :: Nbp,Nkpt,Norb,Ntau_,NaxisB
       integer                               :: ik1,ik2,iq,itau,ispin
       integer                               :: m,n,mp,np,ib1,ib2
-      logical                               :: tau_uniform_
       logical                               :: tau_output_
       !
       !
@@ -198,15 +199,13 @@ contains
       if(Gmats%Nkpt.ne.Nkpt) stop "Pout and Green's function have different number of Kpoints."
       if(.not.allocated(Lttc%kptdif)) stop "kptdif not allocated."
       !
-      tau_uniform_=.false.
-      if(present(tau_uniform)) tau_uniform_ = tau_uniform
       tau_output_=.false.
       if(present(tau_output)) tau_output_ = tau_output
       Ntau_ = Ntau
       if(tau_output_) Ntau_ = NaxisB
       !
       allocate(tau(Ntau_));tau=0d0
-      if(tau_uniform_)then
+      if(tau_uniform)then
          tau = linspace(0d0,beta,Ntau_)
       else
          tau = denspace(beta,Ntau_)
@@ -215,7 +214,7 @@ contains
       allocate(Gitau(Norb,Norb,Ntau_,Nkpt,Nspin));Gitau=czero
       do ispin=1,Nspin
          call Fmats2itau_mat(Beta,Gmats%wks(:,:,:,:,ispin),Gitau(:,:,:,:,ispin), &
-         asympt_corr=.true.,tau_uniform=tau_uniform_,nkpt3=Lttc%Nkpt3,kpt=Lttc%kpt)
+         asympt_corr=.true.,tau_uniform=tau_uniform,nkpt3=Lttc%Nkpt3,kpt=Lttc%kpt)
       enddo
       !
       allocate(Pq_tau(Nbp,Nbp,Ntau_))
@@ -261,7 +260,7 @@ contains
          if(tau_output_)then
             Pout%screened(:,:,:,iq) = Pq_tau
          else
-            call Bitau2mats(Beta,Pq_tau,Pout%screened(:,:,:,iq),tau_uniform=tau_uniform_)
+            call Bitau2mats(Beta,Pq_tau,Pout%screened(:,:,:,iq),tau_uniform=tau_uniform)
          endif
          !
       enddo

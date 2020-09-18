@@ -54,7 +54,7 @@ module module_container
 
 
    !(e) Standalone module. Contains input variables.
-   use global_vars
+   use input_vars
 
 
    !(f) Container attributes manipulations. Depends on parameters
@@ -79,7 +79,7 @@ module module_container
    read_BosonicField
 
 
-   !(h) Interactions container. Depends on (utils_misc),(crystal),(parameters),(global_vars),(utils_fields),(file_io)
+   !(h) Interactions container. Depends on (utils_misc),(crystal),(parameters),(input_vars),(utils_fields),(file_io)
    use interactions, only:                   &
    read_U_spex                              ,&
    calc_W_full                              ,&
@@ -88,16 +88,24 @@ module module_container
    calc_chi_edmft !build_Umatrix,rescale_interaction
 
 
-   !(i) Bubble diagram container. Depends on (utils_misc),(crystal),(parameters),(global_vars),(utils_fields),(fourier_transforms)
+   !(i) Bubble diagram container. Depends on (utils_misc),(crystal),(parameters),(input_vars),(utils_fields),(fourier_transforms)
    use bubbles, only:                        &
    calc_Pi !calc_Optcond,calc_Hall
 
 
-   !(i) Self-energy container. Depends on (linalg),(utils_misc),(crystal),(parameters),(global_vars),(utils_fields),(file_io),(fourier_transforms)
+   !(l) greens_function container. Depends on (linalg),(utils_misc),(crystal),(parameters),(input_vars),(utils_fields),(file_io),(fourier_transforms)
+   use greens_function, only:                &
+   calc_density
+
+
+   !(m) Self-energy container. Depends on (linalg),(utils_misc),(crystal),(parameters),(input_vars),(utils_fields),(file_io),(fourier_transforms),(greens_function)
    use self_energy, only:                    &
    calc_sigmaGW                             ,&
    calc_sigmaGW_DC                          ,&
    read_Sigma_spex
+
+
+
 
 
 end module module_container

@@ -16,7 +16,8 @@ RELFFLAGS = -xHost -O3 -ftz -mcmodel=large
 # Project files-----------------------------------------------------------------
 EXECDIR = bin
 SRCDIR = src
-SRCS = linalg.f90 parameters.f90 global_vars.f90 utils_misc.f90 utils_fields.f90 file_io.f90 interactions.f90 crystal.f90 fourier_transforms.f90 bubbles.f90 self_energy.f90
+SRCS = linalg.f90 parameters.f90 input_vars.f90 utils_misc.f90 utils_fields.f90 file_io.f90 interactions.f90 crystal.f90 \
+       fourier_transforms.f90 bubbles.f90 self_energy.f90 greens_function.f90
 OBJS = $(SRCS:.f90=.o)
 EXE  = SelfConsistency
 
@@ -70,7 +71,7 @@ $(DBGDIR)/fourier_transforms.o: $(SRCDIR)/fourier_transforms.f90 $(DBGDIR)/utils
 $(DBGDIR)/parameters.o: $(SRCDIR)/parameters.f90
 	$(FC) -c $(FFLAGS) $(DBGFFLAGS) -o $@ $<
 
-$(DBGDIR)/global_vars.o: $(SRCDIR)/global_vars.f90
+$(DBGDIR)/input_vars.o: $(SRCDIR)/input_vars.f90
 	$(FC) -c $(FFLAGS) $(DBGFFLAGS) -o $@ $<
 
 $(DBGDIR)/utils_fields.o: $(SRCDIR)/utils_fields.f90 $(DBGDIR)/parameters.o
@@ -79,13 +80,16 @@ $(DBGDIR)/utils_fields.o: $(SRCDIR)/utils_fields.f90 $(DBGDIR)/parameters.o
 $(DBGDIR)/file_io.o: $(SRCDIR)/file_io.f90 $(DBGDIR)/utils_misc.o $(DBGDIR)/parameters.o $(DBGDIR)/utils_fields.o
 	$(FC) -c $(FFLAGS) $(DBGFFLAGS) -o $@ $<
 
-$(DBGDIR)/interactions.o: $(SRCDIR)/interactions.f90 $(DBGDIR)/utils_misc.o $(DBGDIR)/parameters.o $(DBGDIR)/global_vars.o $(DBGDIR)/utils_fields.o $(DBGDIR)/file_io.o
+$(DBGDIR)/interactions.o: $(SRCDIR)/interactions.f90 $(DBGDIR)/utils_misc.o $(DBGDIR)/parameters.o $(DBGDIR)/input_vars.o $(DBGDIR)/utils_fields.o $(DBGDIR)/file_io.o
 	$(FC) -c $(FFLAGS) $(DBGFFLAGS) -o $@ $<
 
-$(DBGDIR)/bubbles.o: $(SRCDIR)/bubbles.f90 $(DBGDIR)/utils_misc.o $(DBGDIR)/crystal.o $(DBGDIR)/parameters.o $(DBGDIR)/global_vars.o $(DBGDIR)/utils_fields.o $(DBGDIR)/file_io.o $(DBGDIR)/fourier_transforms.o
+$(DBGDIR)/bubbles.o: $(SRCDIR)/bubbles.f90 $(DBGDIR)/utils_misc.o $(DBGDIR)/crystal.o $(DBGDIR)/parameters.o $(DBGDIR)/input_vars.o $(DBGDIR)/utils_fields.o $(DBGDIR)/file_io.o $(DBGDIR)/fourier_transforms.o
 	$(FC) -c $(FFLAGS) $(DBGFFLAGS) -o $@ $<
 
-$(DBGDIR)/self_energy.o: $(SRCDIR)/self_energy.f90 $(DBGDIR)/linalg.o $(DBGDIR)/utils_misc.o $(DBGDIR)/crystal.o $(DBGDIR)/parameters.o $(DBGDIR)/global_vars.o $(DBGDIR)/utils_fields.o $(DBGDIR)/file_io.o $(DBGDIR)/fourier_transforms.o
+$(DBGDIR)/greens_function.o: $(SRCDIR)/greens_function.f90 $(DBGDIR)/linalg.o $(DBGDIR)/utils_misc.o $(DBGDIR)/crystal.o $(DBGDIR)/parameters.o $(DBGDIR)/input_vars.o $(DBGDIR)/utils_fields.o $(DBGDIR)/file_io.o $(DBGDIR)/fourier_transforms.o
+	$(FC) -c $(FFLAGS) $(DBGFFLAGS) -o $@ $<
+
+$(DBGDIR)/self_energy.o: $(SRCDIR)/self_energy.f90 $(DBGDIR)/linalg.o $(DBGDIR)/utils_misc.o $(DBGDIR)/crystal.o $(DBGDIR)/parameters.o $(DBGDIR)/input_vars.o $(DBGDIR)/utils_fields.o $(DBGDIR)/file_io.o $(DBGDIR)/fourier_transforms.o $(DBGDIR)/greens_function.o
 	$(FC) -c $(FFLAGS) $(DBGFFLAGS) -o $@ $<
 
 #
@@ -123,7 +127,7 @@ $(RELDIR)/fourier_transforms.o: $(SRCDIR)/fourier_transforms.f90 $(RELDIR)/utils
 $(RELDIR)/parameters.o: $(SRCDIR)/parameters.f90
 	$(FC) -c $(FFLAGS) $(RELFFLAGS) -o $@ $<
 
-$(RELDIR)/global_vars.o: $(SRCDIR)/global_vars.f90
+$(RELDIR)/input_vars.o: $(SRCDIR)/input_vars.f90
 	$(FC) -c $(FFLAGS) $(RELFFLAGS) -o $@ $<
 
 $(RELDIR)/utils_fields.o: $(SRCDIR)/utils_fields.f90 $(RELDIR)/parameters.o
@@ -132,13 +136,16 @@ $(RELDIR)/utils_fields.o: $(SRCDIR)/utils_fields.f90 $(RELDIR)/parameters.o
 $(RELDIR)/file_io.o: $(SRCDIR)/file_io.f90 $(RELDIR)/utils_misc.o $(RELDIR)/parameters.o $(RELDIR)/utils_fields.o
 	$(FC) -c $(FFLAGS) $(RELFFLAGS) -o $@ $<
 
-$(RELDIR)/interactions.o: $(SRCDIR)/interactions.f90 $(RELDIR)/utils_misc.o $(RELDIR)/parameters.o $(RELDIR)/global_vars.o $(RELDIR)/utils_fields.o $(RELDIR)/file_io.o
+$(RELDIR)/interactions.o: $(SRCDIR)/interactions.f90 $(RELDIR)/utils_misc.o $(RELDIR)/parameters.o $(RELDIR)/input_vars.o $(RELDIR)/utils_fields.o $(RELDIR)/file_io.o
 	$(FC) -c $(FFLAGS) $(RELFFLAGS) -o $@ $<
 
-$(RELDIR)/bubbles.o: $(SRCDIR)/bubbles.f90 $(RELDIR)/utils_misc.o $(RELDIR)/crystal.o $(RELDIR)/parameters.o $(RELDIR)/global_vars.o $(RELDIR)/utils_fields.o $(RELDIR)/file_io.o $(RELDIR)/fourier_transforms.o
+$(RELDIR)/bubbles.o: $(SRCDIR)/bubbles.f90 $(RELDIR)/utils_misc.o $(RELDIR)/crystal.o $(RELDIR)/parameters.o $(RELDIR)/input_vars.o $(RELDIR)/utils_fields.o $(RELDIR)/file_io.o $(RELDIR)/fourier_transforms.o
 	$(FC) -c $(FFLAGS) $(RELFFLAGS) -o $@ $<
 
-$(RELDIR)/self_energy.o: $(SRCDIR)/self_energy.f90 $(RELDIR)/linalg.o $(RELDIR)/utils_misc.o $(RELDIR)/crystal.o $(RELDIR)/parameters.o $(RELDIR)/global_vars.o $(RELDIR)/utils_fields.o $(RELDIR)/file_io.o $(RELDIR)/fourier_transforms.o
+$(RELDIR)/greens_function.o: $(SRCDIR)/greens_function.f90 $(RELDIR)/linalg.o $(RELDIR)/utils_misc.o $(RELDIR)/crystal.o $(RELDIR)/parameters.o $(RELDIR)/input_vars.o $(RELDIR)/utils_fields.o $(RELDIR)/file_io.o $(RELDIR)/fourier_transforms.o
+	$(FC) -c $(FFLAGS) $(RELFFLAGS) -o $@ $<
+
+$(RELDIR)/self_energy.o: $(SRCDIR)/self_energy.f90 $(RELDIR)/linalg.o $(RELDIR)/utils_misc.o $(RELDIR)/crystal.o $(RELDIR)/parameters.o $(RELDIR)/input_vars.o $(RELDIR)/utils_fields.o $(RELDIR)/file_io.o $(RELDIR)/fourier_transforms.o $(RELDIR)/greens_function.o
 	$(FC) -c $(FFLAGS) $(RELFFLAGS) -o $@ $<
 
 #

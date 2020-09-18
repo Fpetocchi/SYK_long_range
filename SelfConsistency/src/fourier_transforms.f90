@@ -9,6 +9,9 @@ module fourier_transforms
    !
    !
 
+   !---------------------------------------------------------------------------!
+   !PURPOSE: Module interfaces
+   !---------------------------------------------------------------------------!
    interface Fmats2itau_mat
       module procedure Fmats2itau_mat_Gw                                        !(beta,Gmats[Norb,Norb,Ntau],Gitau[Norb,Norb,Nmats],asympt_corr,tau_uniform)
       module procedure Fmats2itau_mat_Gwk                                       !(beta,Gmats[Norb,Norb,Ntau,Nkpt],Gitau[Norb,Norb,Nmats,Nkpt],asympt_corr,tau_uniform)
@@ -314,7 +317,7 @@ contains
    !---------------------------------------------------------------------------!
    !PURPOSE: Perform the Fourier transform from mats to tau of a matrix Gf
    !---------------------------------------------------------------------------!
-   subroutine Fmats2itau_mat_Gw(beta,Gmats,Gitau,asympt_corr,tau_uniform)
+   subroutine Fmats2itau_mat_Gw(beta,Gmats,Gitau,asympt_corr,tau_uniform,atBeta)
       !
       use utils_misc
       implicit none
@@ -324,6 +327,7 @@ contains
       complex(8),intent(inout)              :: Gitau(:,:,:)
       logical,intent(in),optional           :: asympt_corr
       logical,intent(in),optional           :: tau_uniform
+      logical,intent(in),optional           :: atBeta
       !
       real(8),allocatable                   :: coswt(:,:),sinwt(:,:)
       real(8),allocatable                   :: tau(:)
@@ -332,6 +336,7 @@ contains
       integer                               :: Nmats,Ntau,Norb
       logical                               :: asympt_corr_
       logical                               :: tau_uniform_
+      logical                               :: atBeta_
       !
       !
       write(*,"(A)") "--- Fmats2itau_mat_Gw ---"
@@ -347,6 +352,8 @@ contains
       if(present(asympt_corr)) asympt_corr_ = asympt_corr
       tau_uniform_ = .false.
       if(present(tau_uniform)) tau_uniform_ = tau_uniform
+      atBeta_ = .false.
+      if(present(atBeta)) atBeta_ = atBeta
       !
       allocate(tau(Ntau));tau=0d0
       if(tau_uniform_)then
@@ -364,10 +371,11 @@ contains
       allocate(Ge(Norb,Norb));Ge=czero
       allocate(Go(Norb,Norb));Go=czero
       !$OMP PARALLEL DEFAULT(NONE),&
-      !$OMP SHARED(Ntau,Nmats,Gmats,coswt,sinwt,Gitau),&
+      !$OMP SHARED(atBeta_,Ntau,Nmats,Gmats,coswt,sinwt,Gitau),&
       !$OMP PRIVATE(itau,iw,Ge,Go)
       !$OMP DO
       do itau=1,Ntau
+         if(atBeta_.and.(itau.ne.Ntau))cycle
          do iw=1,Nmats
             !
             ! Gab(iw) = Gba*(-iwn) --> Gab(iw) = Gba*(-iwn)
@@ -384,7 +392,7 @@ contains
       !
    end subroutine Fmats2itau_mat_Gw
    !
-   subroutine Fmats2itau_mat_Gwk(beta,Gmats,Gitau,asympt_corr,tau_uniform,nkpt3,kpt)
+   subroutine Fmats2itau_mat_Gwk(beta,Gmats,Gitau,asympt_corr,tau_uniform,nkpt3,kpt,atBeta)
       !
       use utils_misc
       use crystal
@@ -397,6 +405,7 @@ contains
       logical,intent(in),optional           :: tau_uniform
       integer,intent(in),optional           :: nkpt3(3)
       real(8),intent(in),optional           :: kpt(:,:)
+      logical,intent(in),optional           :: atBeta
       !
       real(8),allocatable                   :: coswt(:,:),sinwt(:,:)
       real(8),allocatable                   :: tau(:)
@@ -411,6 +420,7 @@ contains
       logical                               :: asympt_corr_
       logical                               :: tau_uniform_
       logical                               :: real_space
+      logical                               :: atBeta_
       !
       !
       write(*,"(A)") "--- Fmats2itau_mat_Gwk ---"
@@ -434,6 +444,8 @@ contains
       if(present(asympt_corr)) asympt_corr_ = asympt_corr
       tau_uniform_ = .false.
       if(present(tau_uniform)) tau_uniform_ = tau_uniform
+      atBeta_ = .false.
+      if(present(atBeta)) atBeta_ = atBeta
       !
       allocate(tau(Ntau));tau=0d0
       if(tau_uniform_)then
@@ -470,11 +482,12 @@ contains
       allocate(Ge(Norb,Norb));Ge=czero
       allocate(Go(Norb,Norb));Go=czero
       !$OMP PARALLEL DEFAULT(NONE),&
-      !$OMP SHARED(Ndat,Ntau,Nmats,coswt,sinwt,Gft_in,Gft_out),&
+      !$OMP SHARED(atBeta_,Ndat,Ntau,Nmats,coswt,sinwt,Gft_in,Gft_out),&
       !$OMP PRIVATE(idat,itau,iw,Ge,Go)
       !$OMP DO
       do idat=1,Ndat
          do itau=1,Ntau
+            if(atBeta_.and.(itau.ne.Ntau))cycle
             do iw=1,Nmats
                !
                ! Gab(iw) = Gba*(-iwn) --> Gab(iw) = Gba*(-iwn)
@@ -503,7 +516,7 @@ contains
    !---------------------------------------------------------------------------!
    !PURPOSE: Perform the Fourier transform from mats to tau of a vector Gf
    !---------------------------------------------------------------------------!
-   subroutine Fmats2itau_vec_Gw(beta,Gmats,Gitau,asympt_corr,tau_uniform)
+   subroutine Fmats2itau_vec_Gw(beta,Gmats,Gitau,asympt_corr,tau_uniform,atBeta)
       !
       use utils_misc
       implicit none
@@ -513,6 +526,7 @@ contains
       complex(8),intent(inout)              :: Gitau(:,:)
       logical,intent(in),optional           :: asympt_corr
       logical,intent(in),optional           :: tau_uniform
+      logical,intent(in),optional           :: atBeta
       !
       real(8),allocatable                   :: coswt(:,:),sinwt(:,:)
       real(8),allocatable                   :: tau(:)
@@ -521,6 +535,7 @@ contains
       integer                               :: Nmats,Ntau,Norb
       logical                               :: asympt_corr_
       logical                               :: tau_uniform_
+      logical                               :: atBeta_
       !
       !
       write(*,"(A)") "--- Fmats2itau_vec_Gw ---"
@@ -535,6 +550,8 @@ contains
       if(present(asympt_corr)) asympt_corr_ = asympt_corr
       tau_uniform_ = .false.
       if(present(tau_uniform)) tau_uniform_ = tau_uniform
+      atBeta_ = .false.
+      if(present(atBeta)) atBeta_ = atBeta
       !
       allocate(tau(Ntau));tau=0d0
       if(tau_uniform_)then
@@ -552,10 +569,11 @@ contains
       allocate(Ge(Norb));Ge=czero
       allocate(Go(Norb));Go=czero
       !$OMP PARALLEL DEFAULT(NONE),&
-      !$OMP SHARED(Ntau,Nmats,Gmats,coswt,sinwt,Gitau),&
+      !$OMP SHARED(atBeta_,Ntau,Nmats,Gmats,coswt,sinwt,Gitau),&
       !$OMP PRIVATE(itau,iw,Ge,Go)
       !$OMP DO
       do itau=1,Ntau
+         if(atBeta_.and.(itau.ne.Ntau))cycle
          do iw=1,Nmats
             !
             ! Gab(iw) = Gba*(-iwn) --> Gab(-iw) = Gba*(iwn)
@@ -572,7 +590,7 @@ contains
       !
    end subroutine Fmats2itau_vec_Gw
    !
-   subroutine Fmats2itau_vec_Gwk(beta,Gmats,Gitau,asympt_corr,tau_uniform,nkpt3,kpt)
+   subroutine Fmats2itau_vec_Gwk(beta,Gmats,Gitau,asympt_corr,tau_uniform,nkpt3,kpt,atBeta)
       !
       use utils_misc
       implicit none
@@ -584,6 +602,7 @@ contains
       logical,intent(in),optional           :: tau_uniform
       integer,intent(in),optional           :: nkpt3(3)
       real(8),intent(in),optional           :: kpt(:,:)
+      logical,intent(in),optional           :: atBeta
       !
       real(8),allocatable                   :: coswt(:,:),sinwt(:,:)
       real(8),allocatable                   :: tau(:)
@@ -598,6 +617,7 @@ contains
       logical                               :: asympt_corr_
       logical                               :: tau_uniform_
       logical                               :: real_space
+      logical                               :: atBeta_
       !
       !
       write(*,"(A)") "--- Fmats2itau_vec_Gwk ---"
@@ -620,6 +640,8 @@ contains
       if(present(asympt_corr)) asympt_corr_ = asympt_corr
       tau_uniform_ = .false.
       if(present(tau_uniform)) tau_uniform_ = tau_uniform
+      atBeta_ = .false.
+      if(present(atBeta)) atBeta_ = atBeta
       !
       allocate(tau(Ntau));tau=0d0
       if(tau_uniform_)then
@@ -656,11 +678,12 @@ contains
       allocate(Ge(Norb));Ge=czero
       allocate(Go(Norb));Go=czero
       !$OMP PARALLEL DEFAULT(NONE),&
-      !$OMP SHARED(Ndat,Ntau,Nmats,coswt,sinwt,Gft_in,Gft_out),&
+      !$OMP SHARED(atBeta_,Ndat,Ntau,Nmats,coswt,sinwt,Gft_in,Gft_out),&
       !$OMP PRIVATE(idat,itau,iw,Ge,Go)
       !$OMP DO
       do idat=1,Ndat
          do itau=1,Ntau
+            if(atBeta_.and.(itau.ne.Ntau))cycle
             do iw=1,Nmats
                !
                ! Gab(iw) = Gba*(-iwn) --> Gab(-iw) = Gba*(iwn)

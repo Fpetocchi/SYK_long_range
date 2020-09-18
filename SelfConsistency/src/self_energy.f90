@@ -10,6 +10,11 @@ module self_energy
    !
 
    !---------------------------------------------------------------------------!
+   !PURPOSE: Module interfaces
+   !---------------------------------------------------------------------------!
+   !
+
+   !---------------------------------------------------------------------------!
    !PURPOSE: Module variables
    !---------------------------------------------------------------------------!
    !
@@ -30,7 +35,7 @@ contains
    !---------------------------------------------------------------------------!
    !PURPOSE: Compute the two GW self-energy components.
    !---------------------------------------------------------------------------!
-   subroutine calc_sigmaGW(Smats_C,Smats_X,Gmats,Wmats,Lttc,tau_uniform)
+   subroutine calc_sigmaGW(Smats_C,Smats_X,Gmats,Wmats,Lttc)
       !
       use parameters
       use linalg
@@ -38,7 +43,7 @@ contains
       use utils_fields
       use crystal
       use fourier_transforms
-      use global_vars, only : Ntau
+      use input_vars, only : Ntau, tau_uniform
       implicit none
       !
       type(FermionicField),intent(inout)    :: Smats_C
@@ -46,7 +51,6 @@ contains
       type(FermionicField),intent(in)       :: Gmats
       type(BosonicField),intent(in)         :: Wmats
       type(Lattice),intent(in)              :: Lttc
-      logical,intent(in),optional           :: tau_uniform
       !
       complex(8),allocatable                :: Sitau(:,:,:,:,:)
       complex(8),allocatable                :: Gitau(:,:,:,:,:)
@@ -56,7 +60,6 @@ contains
       integer                               :: Nbp,Nkpt,Norb,Nmats
       integer                               :: ik1,ik2,iq,iw,itau,ispin
       integer                               :: m,n,mp,np,ib1,ib2
-      logical                               :: tau_uniform_
       !
       !
       write(*,"(A)") "--- calc_sigmaGW ---"
@@ -87,13 +90,10 @@ contains
       if(all([Gmats%Npoints-Nmats,Wmats%Npoints-Nmats].ne.[0,0]))  write(*,"(A)") "Warning: Either Smats_C, Gmats or Wmats have different number of Matsubara points. Computing up to the smaller."
       Nmats = minval([Smats_C%Npoints,Wmats%Npoints,Wmats%Npoints])
       !
-      tau_uniform_=.false.
-      if(present(tau_uniform)) tau_uniform_ = tau_uniform
-      !
       allocate(Gitau(Norb,Norb,Ntau,Nkpt,Nspin));Gitau=czero
       do ispin=1,Nspin
          call Fmats2itau_mat(Beta,Gmats%wks(:,:,:,:,ispin),Gitau(:,:,:,:,ispin), &
-         asympt_corr=.true.,tau_uniform=tau_uniform_,Nkpt3=Lttc%Nkpt3,kpt=Lttc%kpt)
+         asympt_corr=.true.,tau_uniform=tau_uniform,Nkpt3=Lttc%Nkpt3,kpt=Lttc%kpt)
       enddo
       !
       allocate(Witau(Nbp,Nbp,Ntau,Nkpt));Witau=czero
@@ -101,7 +101,7 @@ contains
       do iw=1,Nmats
          WmatsC(:,:,iw,:) = Wmats%screened(:,:,iw,:) - Wmats%bare
       enddo
-      call Bmats2itau(Beta,WmatsC,Witau,asympt_corr=.true.,tau_uniform=tau_uniform_)
+      call Bmats2itau(Beta,WmatsC,Witau,asympt_corr=.true.,tau_uniform=tau_uniform)
       deallocate(WmatsC)
       !
       write(*,"(A)") "Sigma_C(tau)"
@@ -144,7 +144,7 @@ contains
       call clear_attributes(Smats_C)
       do ispin=1,Nspin
          do iq=1,Lttc%Nkpt_irred
-            call Fitau2mats_mat(Beta,Sitau(:,:,:,iq,ispin),Smats_C%wks(:,:,:,iq,ispin),tau_uniform=tau_uniform_)
+            call Fitau2mats_mat(Beta,Sitau(:,:,:,iq,ispin),Smats_C%wks(:,:,:,iq,ispin),tau_uniform=tau_uniform)
          enddo
       enddo
       deallocate(Sitau)
@@ -233,7 +233,7 @@ contains
    !---------------------------------------------------------------------------!
    !PURPOSE: Compute the two GW self-energy components.
    !---------------------------------------------------------------------------!
-   subroutine calc_sigmaGW_DC(Smats_Cdc,Smats_Xdc,Gmats,Wmats,tau_uniform)
+   subroutine calc_sigmaGW_DC(Smats_Cdc,Smats_Xdc,Gmats,Wmats)
       !
       use parameters
       use linalg
@@ -241,14 +241,13 @@ contains
       use utils_fields
       use crystal
       use fourier_transforms
-      use global_vars, only : Ntau
+      use input_vars, only : Ntau, tau_uniform
       implicit none
       !
       type(FermionicField),intent(inout)    :: Smats_Cdc
       type(FermionicField),intent(inout)    :: Smats_Xdc
       type(FermionicField),intent(in)       :: Gmats
       type(BosonicField),intent(in)         :: Wmats
-      logical,intent(in),optional           :: tau_uniform
       !
       complex(8),allocatable                :: Sitau_loc(:,:,:,:)
       complex(8),allocatable                :: Gitau_loc(:,:,:,:)
@@ -258,7 +257,6 @@ contains
       integer                               :: Nbp,Nkpt,Norb,Nmats
       integer                               :: iw,itau,ispin
       integer                               :: m,n,mp,np,ib1,ib2
-      logical                               :: tau_uniform_
       !
       !
       write(*,"(A)") "--- calc_sigmaGW_DC ---"
@@ -284,13 +282,10 @@ contains
       if(all([Gmats%Npoints-Nmats,Wmats%Npoints-Nmats].ne.[0,0]))  write(*,"(A)") "Warning: Either Smats_Cdc, Gmats or Wmats have different number of Matsubara points. Computing up to the smaller."
       Nmats = minval([Smats_Cdc%Npoints,Wmats%Npoints,Wmats%Npoints])
       !
-      tau_uniform_=.false.
-      if(present(tau_uniform)) tau_uniform_ = tau_uniform
-      !
       allocate(Gitau_loc(Norb,Norb,Ntau,Nspin));Gitau_loc=czero
       do ispin=1,Nspin
          call Fmats2itau_mat(Beta,Gmats%ws(:,:,:,ispin),Gitau_loc(:,:,:,ispin), &
-                             asympt_corr=.true.,tau_uniform=tau_uniform_)
+                             asympt_corr=.true.,tau_uniform=tau_uniform)
       enddo
       !
       allocate(Witau_loc(Nbp,Nbp,Ntau));Witau_loc=czero
@@ -298,7 +293,7 @@ contains
       do iw=1,Nmats
          WmatsC_loc(:,:,iw) = Wmats%screened_local(:,:,iw) - Wmats%bare_local
       enddo
-      call Bmats2itau(Beta,WmatsC_loc,Witau_loc,asympt_corr=.true.,tau_uniform=tau_uniform_)
+      call Bmats2itau(Beta,WmatsC_loc,Witau_loc,asympt_corr=.true.,tau_uniform=tau_uniform)
       deallocate(WmatsC_loc)
       !
       write(*,"(A)") "Sigma_Cdc(tau)"
@@ -335,7 +330,7 @@ contains
       write(*,"(A)") "Sigma_Cdc(tau)-->Sigma_Cdc(iw)"
       call clear_attributes(Smats_Cdc)
       do ispin=1,Nspin
-         call Fitau2mats_mat(Beta,Sitau_loc(:,:,:,ispin),Smats_Cdc%ws(:,:,:,ispin),tau_uniform=tau_uniform_)
+         call Fitau2mats_mat(Beta,Sitau_loc(:,:,:,ispin),Smats_Cdc%ws(:,:,:,ispin),tau_uniform=tau_uniform)
       enddo
       deallocate(Sitau_loc)
       !
@@ -381,8 +376,8 @@ contains
       use file_io
       use utils_misc
       use utils_fields
-      !use greens_functions
-      use global_vars, only :  pathINPUT, VH_type
+      use greens_function, only : calc_density
+      use input_vars, only :  pathINPUT, VH_type
       implicit none
       !
       complex(8),intent(in)                 :: density_GoWo(:,:)
@@ -390,7 +385,7 @@ contains
       type(BosonicField),intent(in)         :: Umats
       complex(8),intent(inout)              :: VH(:,:)
       !
-      complex(8),allocatable                :: density(:,:)
+      complex(8),allocatable                :: density(:,:),density_spin(:,:,:)
       complex(8),allocatable                :: Vgamma(:,:),Vevec(:,:)
       real(8),allocatable                   :: Veval(:)
       integer                               :: Norb,Nbp
@@ -412,8 +407,11 @@ contains
       Norb = Gmats%Norb
       Nbp = Umats%Nbp
       !
-      allocate(density(Norb,Norb))
-      !call calc_density(density,Gmats)
+      allocate(density(Norb,Norb));density=0d0
+      allocate(density_spin(Norb,Norb,Nspin));density_spin=0d0
+      call calc_density(Gmats,density_spin)
+      density = sum(density_spin,dim=3)
+      deallocate(density_spin)
       !
       select case(VH_type)
          case default
@@ -534,7 +532,7 @@ contains
       use file_io
       use utils_misc
       use utils_fields
-      use global_vars, only : pathINPUT,UseXepsKorder,paramagneticSPEX
+      use input_vars, only : pathINPUT, UseXepsKorder, paramagneticSPEX
       implicit none
       !
       type(FermionicField),intent(inout)    :: Smats_GoWo
@@ -910,7 +908,7 @@ contains
       use file_io
       use utils_misc
       use crystal
-      use global_vars, only : pathINPUT,UseXepsKorder,paramagneticSPEX
+      use input_vars, only : pathINPUT,UseXepsKorder,paramagneticSPEX
       implicit none
       !
       complex(8),intent(inout)              :: Vxc(:,:,:,:)

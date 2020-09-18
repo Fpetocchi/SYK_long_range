@@ -9,6 +9,9 @@ module linalg
    !
    !
 
+   !---------------------------------------------------------------------------!
+   !PURPOSE: Module interfaces
+   !---------------------------------------------------------------------------!
    interface eig
       module procedure deig
       module procedure zeig

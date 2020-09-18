@@ -12,6 +12,9 @@ module file_io
    ! stores data in readable format. That's why several routines to read data
    ! from standard format are missing.
 
+   !---------------------------------------------------------------------------!
+   !PURPOSE: Module interfaces
+   !---------------------------------------------------------------------------!
    interface dump_Matrix
       module procedure :: dump_Matrix_local                                     ![Umat,printpath]
       module procedure :: dump_Matrix_Kdep                                      ![Umat(:,:,:),dirpath,filename,binfmt,ispin(optional)]

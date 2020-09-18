@@ -9,6 +9,9 @@ module interactions
    !
    !
 
+   !---------------------------------------------------------------------------!
+   !PURPOSE: Module interfaces
+   !---------------------------------------------------------------------------!
    interface read_U_spex
       module procedure read_U_spex_full                                         ![BosonicField,LocalOnly,save2bin,pathOUTPUT(optional to change output path),doAC(optional to override AC)]
       module procedure read_U_spex_Uloc0                                        ![Matrix,pathOUTPUT(optional to change output path)]
@@ -442,7 +445,7 @@ contains
       use file_io
       use utils_misc
       use utils_fields
-      use global_vars, only :  pathINPUT,UfullStructure
+      use input_vars, only :  pathINPUT, UfullStructure
       implicit none
       !
       type(BosonicField),intent(inout)      :: Umats
@@ -820,7 +823,7 @@ contains
       use file_io
       use utils_misc
       use utils_fields
-      use global_vars,                 only :  pathINPUT
+      use input_vars, only :  pathINPUT
       implicit none
       !
       complex(8),allocatable,intent(inout)  :: Umat(:,:)
@@ -921,7 +924,7 @@ contains
       !
       use parameters
       use utils_misc
-      use global_vars,                 only :  pathINPUT
+      use input_vars, only :  pathINPUT
       implicit none
       !
       type(BosonicField),intent(in)         :: Umats
