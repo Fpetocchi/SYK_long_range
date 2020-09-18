@@ -98,6 +98,7 @@ module global_vars
    !---------------------------------------------------------------------------!
    logical                                  :: UseXepsKorder
    logical                                  :: UfullStructure
+   logical                                  :: paramagneticSPEX
 
 
 

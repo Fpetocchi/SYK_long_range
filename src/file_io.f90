@@ -6,18 +6,30 @@ module file_io
    !===========================================================================!
 
    ! COMMENTS:
-   ! LO SALVO KPT NEL FILE? SE SI COME LO PASSO IL VETTORE?
    ! all dirpaths must end with /
+   ! Here anything can be written in binfmt or in standard format however
+   ! the idea is that the main code as default writes in binary and only optionally
+   ! stores data in readable format. That's why several routines to read data
+   ! from standard format are missing.
+
+   interface dump_Matrix
+      module procedure :: dump_Matrix_local                                     ![Umat,printpath]
+      module procedure :: dump_Matrix_Kdep                                      ![Umat(:,:,:),dirpath,filename,binfmt,ispin(optional)]
+   end interface dump_Matrix
+   interface read_Matrix
+      module procedure :: read_Matrix_local                                     ![Umat,printpath]                (Reads only from formatted input.)
+      module procedure :: read_Matrix_Kdep                                      ![Umat(:,:,:),dirpath,filename]  (Reads only from unformatted input.)
+   end interface read_Matrix
 
    interface dump_FermionicField
       module procedure :: dump_FermionicField_local                             ![FermionicField,dirpath,filename,ispin,axis(optional for real freq. or tau)]     (Only local projection. Writes only to formatted output.)
-      module procedure :: dump_FermionicField_Kdep                              ![FermionicField,dirpath,filename,binfmt,axis(optional for real freq. or tau))]   (Fixed format: [filename]k.dat.[1,2]. Writes to format chosen by binfmt.)
+      module procedure :: dump_FermionicField_Kdep                              ![FermionicField,dirpath,filename,binfmt,axis(optional for real freq. or tau))]   (Fixed format: [filename]k.DAT.[1,2]. Writes to format chosen by binfmt.)
       module procedure :: dump_Field_component                                  ![Array,dirpath,filename,axis]
    end interface dump_FermionicField
 
    interface read_FermionicField
       module procedure :: read_FermionicField_local                             ![FermionicField,dirpath,filename,ispin,axis(optional for real freq. or tau)]     (Only local projection. Reads only from formatted input.)
-      module procedure :: read_FermionicField_Kdep                              ![FermionicField,dirpath,filename,axis(optional for real freq. or tau))]          (Fixed format: [filename]k.dat.[1,2]. Reads only from unformatted input.)
+      module procedure :: read_FermionicField_Kdep                              ![FermionicField,dirpath,filename,axis(optional for real freq. or tau))]          (Fixed format: [filename]k.DAT.[1,2]. Reads only from unformatted input.)
    end interface read_FermionicField
 
    interface dump_BosonicField
@@ -41,6 +53,7 @@ module file_io
    !---------------------------------------------------------------------------!
    !subroutines
    public :: dump_Matrix
+   public :: read_Matrix
    public :: dump_FermionicField
    public :: read_FermionicField
    public :: dump_BosonicField
@@ -54,7 +67,7 @@ contains
    !---------------------------------------------------------------------------!
    !PURPOSE: Write to file a generic matrix
    !---------------------------------------------------------------------------!
-   subroutine dump_matrix(Umat,printpath)
+   subroutine dump_Matrix_local(Umat,printpath)
       !
       use utils_misc
       implicit none
@@ -66,7 +79,7 @@ contains
       integer                               :: i,j
       !
       !
-      write(*,*) "--- dump_matrix ---"
+      write(*,"(A)") "--- dump_Matrix_local ---"
       write(*,"(A)") "Open "//reg(printpath)
       !
       !
@@ -81,7 +94,200 @@ contains
       enddo
       close(unit)
       !
-   end subroutine dump_matrix
+   end subroutine dump_Matrix_local
+
+
+   !---------------------------------------------------------------------------!
+   !PURPOSE: Read from file a square matrix
+   !---------------------------------------------------------------------------!
+   subroutine read_Matrix_local(Umat,readpath)
+      !
+      use utils_misc
+      implicit none
+      !
+      complex(8),intent(inout)              :: Umat(:,:)
+      character(len=*),intent(in)           :: readpath
+      !
+      logical                               :: filexists
+      real(8),allocatable                   :: RealM(:,:)
+      real(8),allocatable                   :: ImagM(:,:)
+      integer                               :: unit
+      integer                               :: i,j
+      !
+      !
+      write(*,"(A)") "--- read_Matrix_local ---"
+      write(*,"(A)") "Open "//reg(readpath)
+      !
+      call inquireFile(reg(readpath),filexists)
+      allocate(RealM(size(Umat,dim=1),size(Umat,dim=2)));RealM=0d0
+      allocate(ImagM(size(Umat,dim=1),size(Umat,dim=2)));ImagM=0d0
+      !
+      unit = free_unit()
+      open(unit,file=reg(readpath),form="unformatted",status="old",position="rewind",action="read")
+      do i=1,size(Umat,dim=1)
+         read(unit,"(999E20.12)") (RealM(i,j),j=1,size(Umat,dim=2))
+      enddo
+      read(unit,*)
+      do i=1,size(Umat,dim=1)
+         read(unit,"(999E20.12)") (ImagM(i,j),j=1,size(Umat,dim=2))
+      enddo
+      close(unit)
+      !
+      Umat = dcmplx(0d0,0d0)
+      Umat = RealM + dcmplx(0d0,1d0)*ImagM
+      !
+   end subroutine read_Matrix_local
+
+
+   !---------------------------------------------------------------------------!
+   !PURPOSE: Write to file a K-dependent matrix
+   !---------------------------------------------------------------------------!
+   subroutine dump_Matrix_Kdep(Umat,dirpath,filename,binfmt,ispin)
+      !
+      use utils_misc
+      use utils_fields
+      implicit none
+      !
+      complex(8),intent(in)                 :: Umat(:,:,:)
+      character(len=*),intent(in)           :: dirpath
+      character(len=*),intent(in)           :: filename
+      logical,intent(in)                    :: binfmt
+      integer,optional                      :: ispin
+      !
+      integer                               :: unit,ik,Norb,Nkpt
+      integer                               :: iwan1,iwan2
+      character(len=256)                    :: printpath
+      !
+      !
+      write(*,"(A)") "--- dump_Matrix_Kdep ---"
+      !
+      !
+      ! Check on the input matrix
+      Nkpt = size(Umat,dim=3)
+      Norb = size(Umat,dim=1)
+      if(Norb.ne.size(Umat,dim=2)) stop "The provided matrix is not square."
+      !
+      ! Create directory
+      call createDir(reg(dirpath))
+      !
+      ! Write to file
+      if(binfmt) then
+         !
+         if(present(ispin))then
+            printpath = reg(dirpath)//reg(filename)//"_k.DAT."//str(ispin)
+         else
+            printpath = reg(dirpath)//reg(filename)//"_k.DAT."
+         endif
+         write(*,"(A)") "Open "//reg(printpath)
+         !
+         unit = free_unit()
+         open(unit,file=reg(printpath),form="unformatted",status="unknown",position="rewind",action="write")
+         !
+         write(unit) Nkpt,Norb
+         do ik=1,Nkpt
+            write(unit) ik
+            do iwan1=1,Norb
+               do iwan2=1,Norb
+                  write(unit) iwan1,iwan2,real(Umat(iwan1,iwan2,ik)),aimag(Umat(iwan1,iwan2,ik))
+               enddo
+            enddo
+         enddo !ik
+         close(unit)
+         !
+      else
+         !
+         do ik=1,Nkpt
+            !
+            if(present(ispin))then
+               printpath = reg(dirpath)//reg(filename)//"_ik"//str(ik)//".DAT."//str(ispin)
+            else
+               printpath = reg(dirpath)//reg(filename)//"_ik"//str(ik)//".DAT."
+            endif
+            write(*,"(A)") "Open "//reg(printpath)
+            unit = free_unit()
+            open(unit,file=reg(printpath),form="formatted",status="unknown",position="rewind",action="write")
+            !
+            write(unit,"(2(A,1I7))") "ik",ik,"Norb",Norb
+            do iwan1=1,Norb
+               do iwan2=1,Norb
+                  write(unit,"(2I4,2E20.12)") iwan1,iwan2,real(Umat(iwan1,iwan2,ik)),aimag(Umat(iwan1,iwan2,ik))
+               enddo
+            enddo
+            !
+            close(unit)
+            !
+         enddo !ik
+         !
+      endif
+      !
+   end subroutine dump_Matrix_Kdep
+
+
+   !---------------------------------------------------------------------------!
+   !PURPOSE: Read from file a K-dependent matrix
+   !---------------------------------------------------------------------------!
+   subroutine read_Matrix_Kdep(Umat,dirpath,filename)
+      !
+      use parameters
+      use utils_misc
+      use utils_fields
+      implicit none
+      !
+      complex(8),intent(inout)              :: Umat(:,:,:)
+      character(len=*),intent(in)           :: dirpath
+      character(len=*),intent(in)           :: filename
+      !
+      integer                               :: unit
+      integer                               :: Norb,ik,Nkpt
+      integer                               :: iwan1,iwan2
+      integer                               :: idum1,idum2
+      integer                               :: Nkpt_read,Norb_read
+      real(8)                               :: RealM,ImagM
+      logical                               :: filexists
+      character(len=256)                    :: readpath
+      !
+      !
+      write(*,"(A)") "--- read_Matrix_Kdep ---"
+      readpath = dirpath//filename
+      write(*,"(A)") "Open "//reg(readpath)
+      !
+      ! Check on the input Matrix
+      Nkpt = size(Umat,dim=3)
+      Norb = size(Umat,dim=1)
+      if(Norb.ne.size(Umat,dim=2)) stop "The provided matrix is not square."
+      !
+      ! Check file existence
+      call inquireFile(reg(readpath),filexists)
+      !
+      !
+      unit = free_unit()
+      open(unit,file=reg(readpath),form="unformatted",status="old",position="rewind",action="read")
+      !
+      read(unit) Nkpt_read,Norb_read
+      !
+      if(Nkpt_read.ne.Nkpt) stop "File with wrong number of K-points."
+      if(Norb_read.ne.Norb) stop "File with wrong number of Wannier functions."
+      !
+      do ik=1,Nkpt
+         !
+         read(unit) idum1
+         if (idum2.ne.ik) stop "ik does not match"
+         !
+         do iwan1=1,Norb
+            do iwan2=1,Norb
+               !
+               read(unit) idum1,idum2,RealM,ImagM
+               if (idum1.ne.iwan1) stop "iwan1 does not match"
+               if (idum2.ne.iwan2) stop "iwan2 does not match"
+               Umat(iwan1,iwan2,ik) = dcmplx(RealM,ImagM)
+               !
+            enddo
+         enddo
+         !
+      enddo !ik
+      close(unit)
+      !
+   end subroutine read_Matrix_Kdep
 
 
    !---------------------------------------------------------------------------!
@@ -101,7 +307,7 @@ contains
       character(len=256)                    :: printpath
       !
       !
-      write(*,*) "--- dump_Field_component ---"
+      write(*,"(A)") "--- dump_Field_component ---"
       printpath = dirpath//filename
       write(*,"(A)") "Open "//reg(printpath)
       !
@@ -142,12 +348,12 @@ contains
       character(len=256)                    :: printpath
       !
       !
-      write(*,*) "--- dump_FermionicField_local ---"
+      write(*,"(A)") "--- dump_FermionicField_local ---"
       printpath = dirpath//filename
       write(*,"(A)") "Open "//reg(printpath)
       !
       !
-      ! Check on the input Boson
+      ! Check on the input Field
       if(.not.G%status) stop "Field not properly initialized."
       if(present(axis))then
          if(size(axis).ne.G%Npoints)write(*,"(A)")"Warning: axis provided but its length: "//str(size(axis))//" does not match with field mesh: "//str(G%Npoints)//". Writing up to the smaller."
@@ -205,10 +411,10 @@ contains
       character(len=256)                    :: printpath
       !
       !
-      write(*,*) "--- dump_FermionicField_Kdep ---"
+      write(*,"(A)") "--- dump_FermionicField_Kdep ---"
       !
       !
-      ! Check on the input Boson
+      ! Check on the input Field
       if(.not.G%status) stop "Field not properly initialized."
       if(G%Nkpt.eq.0) stop "K-dependent part not allocated."
       if(present(axis))then
@@ -233,7 +439,7 @@ contains
          !
          if(binfmt) then
             !
-            printpath = reg(dirpath)//reg(filename)//"k.dat."//str(ispin)
+            printpath = reg(dirpath)//reg(filename)//"_k.DAT."//str(ispin)
             write(*,"(A)") "Open "//reg(printpath)
             !
             unit = free_unit()
@@ -257,7 +463,7 @@ contains
             !
             do ik=1,G%Nkpt
                !
-               printpath = reg(dirpath)//"Gk_"//str(ik)//".dat."//str(ispin)
+               printpath = reg(dirpath)//reg(filename)//"_ik"//str(ik)//".DAT."//str(ispin)
                write(*,"(A)") "Open "//reg(printpath)
                unit = free_unit()
                open(unit,file=reg(printpath),form="formatted",status="unknown",position="rewind",action="write")
@@ -309,12 +515,11 @@ contains
       character(len=256)                    :: readpath
       !
       !
-      write(*,*) "--- read_FermionicField_local ---"
+      write(*,"(A)") "--- read_FermionicField_local ---"
       readpath = dirpath//filename
       write(*,"(A)") "Open "//reg(readpath)
       !
-      !
-      ! Check on the input Boson
+      ! Check on the input Field
       if(.not.G%status) stop "Field not properly initialized."
       Norb = G%Norb
       !
@@ -366,7 +571,7 @@ contains
 
 
    !---------------------------------------------------------------------------!
-   !PURPOSE: Read from file the local attributes of a Fermionic field
+   !PURPOSE: Read from file the k-dependent attributes of a Fermionic field
    !---------------------------------------------------------------------------!
    subroutine read_FermionicField_Kdep(G,dirpath,filename,axis)
       !
@@ -391,21 +596,20 @@ contains
       character(len=256)                    :: readpath
       !
       !
-      write(*,*) "--- read_FermionicField_Kdep ---"
+      write(*,"(A)") "--- read_FermionicField_Kdep ---"
       !
       !
-      ! Check on the input Boson
+      ! Check on the input Field
       if(.not.G%status) stop "Field not properly initialized."
       Norb = G%Norb
       !
-      ! Check file existence
-      call inquireFile(reg(readpath),filexists)
       !
       ! Read file
       do ispin=1,Nspin
          !
-         readpath = reg(dirpath)//reg(filename)//"k.dat."//str(ispin)
+         readpath = reg(dirpath)//reg(filename)//"_k.DAT."//str(ispin)
          write(*,"(A)") "Open "//reg(readpath)
+         call inquireFile(reg(readpath),filexists)
          !
          unit = free_unit()
          open(unit,file=reg(readpath),form="unformatted",status="old",position="rewind",action="read")
@@ -486,12 +690,12 @@ contains
       character(len=256)                    :: printpath
       !
       !
-      write(*,*) "--- dump_BosonicField_local ---"
+      write(*,"(A)") "--- dump_BosonicField_local ---"
       printpath = dirpath//filename
       write(*,"(A)") "Open "//reg(printpath)
       !
       !
-      ! Check on the input Boson
+      ! Check on the input Field
       if(.not.U%status) stop "Field not properly initialized."
       if(present(axis))then
          if(size(axis).ne.U%Npoints)write(*,"(A)")"Warning: axis provided but its length: "//str(size(axis))//" does not match with field mesh: "//str(U%Npoints)//". Writing up to the smaller."
@@ -570,10 +774,10 @@ contains
       character(len=256)                    :: printpath
       !
       !
-      write(*,*) "--- dump_BosonicField_Kdep_SPEXlike ---"
+      write(*,"(A)") "--- dump_BosonicField_Kdep_SPEXlike ---"
       !
       !
-      ! Check on the input Boson
+      ! Check on the input Field
       if(.not.U%status) stop "Field not properly initialized."
       if(U%Nkpt.eq.0) stop "K-dependent part not allocated."
       if(present(axis))then
@@ -648,12 +852,12 @@ contains
       character(len=256)                    :: readpath
       !
       !
-      write(*,*) "--- read_BosonicField_local ---"
+      write(*,"(A)") "--- read_BosonicField_local ---"
       readpath = dirpath//filename
       write(*,"(A)") "Open "//reg(readpath)
       !
       !
-      ! Check on the input Boson
+      ! Check on the input Field
       if(.not.U%status) stop "Field not properly initialized."
       Norb = int(sqrt(dble(U%Nbp)))
       !

@@ -127,7 +127,7 @@ contains
    !---------------------------------------------------------------------------!
    !PURPOSE: Read XEPS.DAT file
    !---------------------------------------------------------------------------!
-   subroutine read_xeps(pathINPUT,kpt,Nkpt3,UseXepsKorder,kptPos,Nkpt_irred,UseDisentangledBS)
+   subroutine read_xeps(pathINPUT,kpt,Nkpt3,UseXepsKorder,kptPos,Nkpt_irred,UseDisentangledBS,spex_para)
       !
       use utils_misc
       implicit none
@@ -139,6 +139,7 @@ contains
       integer,allocatable,intent(inout)     :: kptPos(:)
       integer,intent(out)                   :: Nkpt_irred
       logical,intent(out)                   :: UseDisentangledBS
+      logical,intent(in),optional           :: spex_para
       !
       character(len=256)                    :: path
       real(8),allocatable                   :: Ene_xeps(:,:,:)
@@ -150,7 +151,7 @@ contains
       integer                               :: Nkpt_xeps_irred
       integer                               :: Nband_xeps
       real(8)                               :: Efermi_xeps
-      logical                               :: UseDisentangledBS
+      logical                               :: spex_para_
       integer                               :: ik,unit
       logical                               :: dumlogical,filexists
       !
@@ -182,8 +183,11 @@ contains
       Nkpt_irred = Nkpt
       if(UseXepsKorder) Nkpt_irred = Nkpt_xeps_irred
       !
+      spex_para_=.true.
+      if(present(spex_para))spex_para_=spex_para
+      !
       ! Global checks
-      if(Nspin_xeps.ne.1)           stop "Nspin_xeps.ne.1 in XEPS.DAT"
+      if(spex_para_.and.(Nspin_xeps.ne.1)) stop "Nspin_xeps.ne.1 in XEPS.DAT"
       if(Nkpt_xeps.ne.Nkpt)         stop "Nkpt_xeps.ne.Nkpt in XEPS.DAT"
       if(Nkpt3_xeps(1).ne.Nkpt3(1)) stop "Nkpt(1)_xeps.ne.Nkpt(1) in XEPS.DAT"
       if(Nkpt3_xeps(2).ne.Nkpt3(2)) stop "Nkpt(2)_xeps.ne.Nkpt(2) in XEPS.DAT"

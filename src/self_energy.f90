@@ -81,6 +81,7 @@ contains
       Nmats = Smats_C%Npoints
       Nbp = Norb**2
       !
+      if(all([Lttc%Nkpt-Nkpt,Gmats%Nkpt-Nkpt,Wmats%Nkpt-Nkpt].ne.[0,0,0])) stop "Either Lattice, Gmats or Wmats have different number of k-points with respect to Smats_C."
       if(all([Smats_X%Norb-Norb,Gmats%Norb-Norb,Wmats%Nbp-Nbp].ne.[0,0,0])) stop "Either Smats_X, Gmats or Wmats have different orbital dimension with respect to Smats_C."
       if(all([Smats_X%Beta-Beta,Gmats%Beta-Beta,Wmats%Beta-Beta].ne.[0d0,0d0,0d0])) stop "Either Smats_X, Gmats or Wmats have different Beta with respect to Smats_C."
       if(all([Gmats%Npoints-Nmats,Wmats%Npoints-Nmats].ne.[0,0]))  write(*,"(A)") "Warning: Either Smats_C, Gmats or Wmats have different number of Matsubara points. Computing up to the smaller."
@@ -526,43 +527,49 @@ contains
    !---------------------------------------------------------------------------!
    !PURPOSE: Read self-energy from SPEX files.
    !---------------------------------------------------------------------------!
-   subroutine read_Sigma_spex(Smats,Lttc,save2bin,pathOUTPUT,doAC)
+   subroutine read_Sigma_spex(Smats_GoWo,Lttc,save2bin,Vxc,pathOUTPUT,doAC)
       !
+      use linalg
       use parameters
       use file_io
       use utils_misc
       use utils_fields
-      use crystal
-      use global_vars, only :  pathINPUT,UseXepsKorder
+      use global_vars, only : pathINPUT,UseXepsKorder,paramagneticSPEX
       implicit none
       !
-      type(BosonicField),intent(inout)      :: Smats
-      type(Lattice),intent(in)              :: Lttc
+      type(FermionicField),intent(inout)    :: Smats_GoWo
+      type(Lattice),intent(inout)           :: Lttc
       logical,intent(in)                    :: save2bin
+      complex(8),intent(inout),optional     :: Vxc(:,:,:,:)
       character(len=*),intent(in),optional  :: pathOUTPUT
       logical,intent(in),optional           :: doAC
       !
-      logical                               :: filexists,ACdone,doAC_
+      logical                               :: filexists,ACdone,doAC_,Vxcdone,doVxc
       logical                               :: UseDisentangledBS
       character(len=256)                    :: file_spex,path,pathOUTPUT_
       integer                               :: iseg,SigmaSegments
-      integer                               :: idum1,idum2,idum3,idum4
-      logical                               :: ldum,lexonly
-
-
-
-
-
-      integer                               :: unit,Nkpt
-      integer                               :: iq,iw,iqread,Nbp_spex
-
-      integer                               :: Nspin_spex,Norb_spex,Nfreq
-      integer                               :: ib1,ib2,iw1,iw2
+      integer                               :: iq,ik,iw,iw2,ispin,iwan1,iwan2,unit
+      integer                               :: Nkpt,Norb,Nmats,Nfreq
       real(8),allocatable                   :: wread(:),wmats(:)
-      complex(8),allocatable                :: D1(:,:),D2(:,:),D3(:,:),imgFact(:,:,:)
-      complex(8),allocatable                :: Utmp(:,:)
-      type(BosonicField)                    :: Ureal
       real                                  :: start,finish
+      !Uwan
+      integer                               :: Nspin_Uwan,Nkpt_Uwan
+      integer                               :: ib_Uwan1,ib_Uwan2,Norb_Uwan
+      complex(8),allocatable                :: Uwan(:,:,:,:)
+      !spex
+      integer                               :: ik_spex,Nspin_spex,Nkpt_irred_spex
+      integer                               :: ib,ib_sigma1,ib_sigma2,ispin_spex
+      integer                               :: Nspin_spex_old,Nkpt_irred_spex_old
+      integer                               :: ib_sigma1_old,ib_sigma2_old
+      integer                               :: iseg_old,Nfreq_old,Nkpt_old
+      logical                               :: ldum,lexonly
+      real(8)                               :: wS_old,wE_old
+      integer,allocatable                   :: NfreqSeg(:)
+      real(8)                               :: gamma1,gamma2
+      complex(8)                            :: trap
+      real(8),allocatable                   :: SigmaX_seg(:,:,:),SigmaX_tmp(:,:)
+      complex(8),allocatable                :: SigmaC_seg(:,:,:,:),SigmaC_tmp(:,:,:)
+      complex(8),allocatable                :: SigmaC_diag(:,:,:,:)
       !
       !
       write(*,"(A)") "--- read_Sigma_spex ---"
@@ -570,26 +577,22 @@ contains
       if(present(pathOUTPUT)) pathOUTPUT_ = pathOUTPUT
       !
       !
-      ! Check on the input Boson
-      if(.not.Smats%status) stop "FermionicField not properly initialized."
+      ! Check on the input Fields
+      if(.not.Smats_GoWo%status) stop "FermionicField not properly initialized."
       if(.not.Lttc%status) stop "Lattice container not properly initialized."
-      if(Lttc%mu.eq.0d0) stop "Chemical potwential in Lattice container not properly initialized (0d0)."
-      allocate(wmats(Smats%Npoints));wmats=0d0
-      wmats = FermionicFreqMesh(Smats%Beta,Smats%Npoints)
+      if(Lttc%Nkpt.ne.Smats_GoWo%Nkpt) stop "Lattice has different number of k-points with respect to Smats_GoWo."
       !
+      Norb = Smats_GoWo%Norb
+      Nkpt = Smats_GoWo%Nkpt
+      Nmats = Smats_GoWo%Npoints
+      !
+      allocate(wmats(Smats_GoWo%Npoints));wmats=0d0
+      wmats = FermionicFreqMesh(Smats_GoWo%Beta,Smats_GoWo%Npoints)
       !
       ! Read XEPS data
       path = pathINPUT//"XEPS.DAT"
       call inquireFile(reg(path),filexists)
-      allocate(kptPos_xeps(size(Lttc%kpt,dim=2)));kptPos_xeps=0
       call read_xeps(reg(path),Lttc%kpt,Lttc%Nkpt3,UseXepsKorder,Lttc%kptPos,Lttc%Nkpt_irred,UseDisentangledBS)
-      !
-      !
-      ! Read UWAN file
-
-
-
-      !
       !
       ! Check if the data on the Matsubara axis are present
       path = pathINPUT//"Sigma_imag" !/SIGMA.Q0001.DAT"
@@ -597,11 +600,44 @@ contains
       doAC_ = .not.ACdone
       if(present(doAC)) doAC_ = doAC
       !
+      ! Check if the Vxc_wann is present
+      path = pathINPUT//"Vxc_wann_k.DAT.1"
+      call inquireFile(reg(path),Vxcdone,hardstop=.false.)
+      doVxc = .not.Vxcdone .and. present(Vxc)
+      if(doVxc.and.(.not.doAC_))then
+         write(*,"(A)")"Sorry but I can't produce Vxc_wann without reading the self-energy."
+         write(*,"(A)")"Analytic continuation will be perforemd anyway."
+         doAC_ = .true.
+      endif
+      !
       !
       ! Perform cnalytical continuation on the self-energy on the real axis
-      if(doAC_) then
+      if(doAC_)then
          !
          !---------------------------------------------------------------------!
+         !
+         ! Read UWAN file
+         if(UseDisentangledBS)then
+            path = pathINPUT//"UWAN_NEW.DAT"
+         else
+            path = pathINPUT//"UWAN.DAT"
+         endif
+         call inquireFile(reg(path),filexists)
+         write(*,"(A)") "Opening "//reg(path)
+         unit = free_unit()
+         open(unit,file=reg(path),form="unformatted",action="read",position="rewind")
+         read(unit) Nspin_Uwan,Nkpt_Uwan,ib_Uwan1,ib_Uwan2,Norb_Uwan
+         if(paramagneticSPEX.and.(Nspin_Uwan.ne.1)) stop "UWAN file is not paramagnetic."
+         if(Nkpt_Uwan.ne.Nkpt) stop "UWAN file has wrong number of k-points (not irreducible)."
+         if(Norb_Uwan.ne.Norb) stop "UWAN file has wrong orbital dimension."
+         write(*,"(A,2I4)") "The band indexes in the UWAN rotation are: ",ib_Uwan1,ib_Uwan2
+         allocate(Uwan(ib_Uwan1:ib_Uwan2,Norb,Nkpt,Nspin_Uwan))
+         do ispin=1,Nspin_Uwan
+            do ik=1,Nkpt
+               read(unit) Uwan(:,:,ik,ispin)
+            enddo
+         enddo
+         close(unit)
          !
          ! Look for the Number of Sigma segments.
          SigmaSegments=0
@@ -638,9 +674,9 @@ contains
                call inquireFile(reg(file_spex),filexists) !redundant control
                !
                unit = free_unit()
-               open(unit,file=reg(path),form="unformatted",action="read")
+               open(unit,file=reg(path),form="unformatted",action="read",position="rewind")
                read(unit) ik_spex,Nspin_spex,Nkpt_irred_spex,ib_sigma1,ib_sigma2,ldum,lexonly,Nfreq
-               allocate(wread(Nfreq));wred=0d0
+               allocate(wread(Nfreq));wread=0d0
                read(unit) wread
                close(unit)
                if(lexonly) stop "lexonly"
@@ -655,8 +691,10 @@ contains
                wE_old = wread(Nfreq)
                !
                ! Eack k-point controls
-               if(Nspin_spex.ne.1) stop "Nspin_spex is expected to be 1."
-               if(ik.ne.ik_spex) stop "ik_spex mismatch."
+               if(ib_sigma1.gt.ib_Uwan1) stop "ib_sigma1>ib_Uwan1"
+               if(ib_sigma2.lt.ib_Uwan2) stop "ib_sigma2<ib_Uwan2"
+               if(paramagneticSPEX.and.(Nspin_spex.ne.1)) stop "Spex self-energy file is not paramagnetic."
+               if(ik.ne.ik_spex) stop "K-point index in SPEX not match the expected index."
                if(ik.gt.1)then
                   if(ib_sigma1_old.ne.ib_sigma1) stop "ib_sigma1 does not match with previous file."
                   if(Nspin_spex_old.ne.Nspin_spex) stop "Nspin_spex does not match with previous file."
@@ -664,30 +702,40 @@ contains
                   if(ib_sigma2_old.ne.ib_sigma2) stop "ib_sigma2 does not match with previous file."
                   if(iseg.eq.iseg_old)then
                      if(Nfreq_old.ne.Nfreq) stop "Nfreq does not match among different k-points same segment."
-                     if(wS_old.ne.wread(1))) stop "First freq does not match among different k-points same segment."
-                     if(wE_old.ne.wread(Nfreq))) stop "Last freq does not match among different k-points same segment."
+                     if(wS_old.ne.wread(1)) stop "First freq does not match among different k-points same segment."
+                     if(wE_old.ne.wread(Nfreq)) stop "Last freq does not match among different k-points same segment."
                   else
                      if(dabs(wread(1)-wE_old).gt.eps)then
-                        write(*,"(A,2F10.5)") "w_old, w(1):",w_old,w(1)
+                        write(*,"(A,2F10.5)") "w_old, w(1):",wE_old,wread(1)
                         write(*,"(A,2I5)") "iq,iseg:",ik,iseg
                         stop "Segments in sigma do not match."
-                    endif
+                     endif
+                  endif
                endif
                deallocate(wread)
                !
-            enddo
+            enddo !ik
+            !
+            !saving the number of frequency points in each segment
             NfreqSeg(iseg) = Nfreq
-         enddo
+            !
+         enddo !iseg
          write(*,"(A,2I4)") "The band indexes in the SPEX self-energy are: ",ib_sigma1,ib_sigma2
          !
+         allocate(SigmaC_diag(ib_sigma1:ib_sigma2,Nmats,Lttc%Nkpt_irred,Nspin_spex));SigmaC_diag=czero
+         !
+         ! Perform the transformation on each fraction of the real-axis
+         call cpu_time(start)
          do iseg=1,SigmaSegments
             !
-            allocate(SigmaX_GW(ib_sigma1:ib_sigma2,Lttc%Nkpt_irred,Nspin_spex))
-            allocate(SigmaC_GW(NfreqSeg(iseg),ib_sigma1:ib_sigma2,Lttc%Nkpt_irred,Nspin_spex))
+            allocate(SigmaX_seg(ib_sigma1:ib_sigma2,Lttc%Nkpt_irred,Nspin_spex));SigmaX_seg=0d0
+            allocate(SigmaC_seg(NfreqSeg(iseg),ib_sigma1:ib_sigma2,Lttc%Nkpt_irred,Nspin_spex));SigmaC_seg=czero
+            !
+            allocate(SigmaX_tmp(3,ib_sigma1:ib_sigma2));SigmaX_tmp=0d0
+            allocate(SigmaC_tmp(2,NfreqSeg(iseg),ib_sigma1:ib_sigma2));SigmaC_tmp=czero
             !
             allocate(wread(NfreqSeg(iseg)));wread=0d0
-            allocate(SigmaX_tmp(3,ib_sigma1:ib_sigma2))
-            allocate(SigmaC_tmp(2,NfreqSeg(iseg),ib_sigma1:ib_sigma2))
+            !
             do iq=1,Lttc%Nkpt_irred
                !
                file_spex = reg(path)//"Sigma_real_"//str(iq,1)//"/SIGMA.Q"//str(iq,4)//".DAT"
@@ -695,24 +743,24 @@ contains
                call inquireFile(reg(file_spex),filexists) !redundant control
                !
                unit = free_unit()
-               open(unit,file=reg(path),form="unformatted",action="read")
-               read(unit) idum1,idum2,idum3,ib_sigma1,ib_sigma2,ldum,lexonly,Nfreq
+               open(unit,file=reg(path),form="unformatted",action="read",position="rewind")
+               read(unit) ik_spex,Nspin_spex,Nkpt_irred_spex,ib_sigma1,ib_sigma2,ldum,lexonly,Nfreq
                read(unit) wread
                !
                do ispin=1,Nspin_spex
                   !
                   ! Every iq file contains all the different k component of the self-energy
-                  ! so that here ik=1 is the sum over all the interanl momentum q
+                  ! so that here ik=1 is the sum over all the internal momentum q
                   do ik=1,Lttc%Nkpt_irred
                      !
                      SigmaX_tmp=0d0;SigmaC_tmp=czero
-                     read(ifile) SigmaX_tmp
-                     read(ifile) SigmaC_tmp
+                     read(unit) SigmaX_tmp
+                     read(unit) SigmaC_tmp
                      !
                      do ib=ib_sigma1,ib_sigma2
-                        SigmaX_GW(ib,ik,ispin)=SigmaX_GW(ib,ik,ispin)+sum(SigmaX_tmp(:,ib))
+                        SigmaX_seg(ib,ik,ispin)=SigmaX_seg(ib,ik,ispin)+sum(SigmaX_tmp(:,ib))
                         do iw=1,NfreqSeg(iseg)
-                           SigmaC_GW(iw,ib,ik,ispin)=SigmaC_GW(iw,ib,ik,ispin)+sum(SigmaC_tmp(:,iw,ib))
+                           SigmaC_seg(iw,ib,ik,ispin)=SigmaC_seg(iw,ib,ik,ispin)+sum(SigmaC_tmp(:,iw,ib))
                         enddo !iw
                      enddo !ib
                      !
@@ -724,182 +772,106 @@ contains
             deallocate(SigmaX_tmp,SigmaC_tmp)
             !
             !
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+            do ik=1,Lttc%Nkpt_irred
+               do ib=ib_sigma1,ib_sigma2
+                  !
+                  ! Check that the GoWo self-energy is vanishing at w --> +/-inf
+                  if (iseg.eq.1.and.dabs(dimag(SigmaC_seg(1,ib,ik,1))).gt.1.d-6) then
+                     write(*,"(A2,2F10.5)") "NOTE!!!! SigmaC_spex(1) > 1.d-6: ",SigmaC_seg(1,ib,ik,1)
+                  endif
+                  if (iseg.eq.SigmaSegments.and.dabs(dimag(SigmaC_seg(NfreqSeg(iseg),ib,ik,1))).gt.1.d-6) then
+                     write(*,"(A2,2F10.5)") "NOTE!!!! SigmaC_spex(NW) > 1.d-6: ",SigmaC_seg(NfreqSeg(iseg),ib,ik,1)
+                  endif
+                  !
+                  !Calc Sigma along imag axis using
+                  !Sigmac(w)=int dw'Gamma(w')/(w-w')
+                  !Gamma= - 1/pi Im(Sigmac) Sign(w-mu)
+                  !$OMP PARALLEL DEFAULT(NONE),&
+                  !$OMP SHARED(Nspin_spex,ib,ik,iseg,Nmats,NfreqSeg,wread,wmats,SigmaC_seg,SigmaC_diag),&
+                  !$OMP PRIVATE(ispin,iw,iw2,gamma1,gamma2,trap)
+                  !$OMP DO
+                  do ispin=1,Nspin_spex
+                     do iw=1,Nmats
+                        do iw2=1,NfreqSeg(iseg)-1
+                           !
+                           !try trapetziodal method
+                           if(wread(iw2).lt.0.d0) then
+                              gamma1 = (+1.d0/pi) * dimag( SigmaC_seg(iw2,ib,ik,ispin)   )
+                           else
+                              gamma1 = (-1.d0/pi) * dimag( SigmaC_seg(iw2,ib,ik,ispin)   )
+                           endif
+                           if(wread(iw2+1).lt.0.d0) then
+                              gamma2 = (+1.d0/pi) * dimag( SigmaC_seg(iw2+1,ib,ik,ispin) )
+                           else
+                              gamma2 = (-1.d0/pi) * dimag( SigmaC_seg(iw2+1,ib,ik,ispin) )
+                           endif
+                           !
+                           trap = ( dcmplx(gamma1,0.d0) / (dcmplx(0.d0,wmats(iw)) - dcmplx(wread(iw2),0.d0)  )  &
+                                  + dcmplx(gamma2,0.d0) / (dcmplx(0.d0,wmats(iw)) - dcmplx(wread(iw2+1),0.d0))  )/2.d0
+                           !trap=(-dcmplx(gamma*w(iw2),gamma*w_F(iw))/(w_F(iw)**2 + w(iw2)**2) - dcmplx(gamma*w(iw2+1),gamma*w_F(iw))/(w_F(iw)**2 + w(iw2+1)**2))/2.d0
+                           SigmaC_diag(ib,iw,ik,ispin) = SigmaC_diag(ib,iw,ik,ispin) + dcmplx(wread(iw2+1)-wread(iw2),0.d0)*trap
+                           !
+                        enddo !iw2
+                     enddo !iw
+                  enddo !ispin
+                  !$OMP END DO
+                  !$OMP END PARALLEL
+               enddo !ib
+            enddo !ik
+            !
+            deallocate(wread)
+            deallocate(SigmaX_tmp,SigmaC_tmp,SigmaC_seg)
+            if(iseg.lt.SigmaSegments) deallocate(SigmaX_seg)
+            !
+         enddo !iseg
          !
-         ! Allocate the temporary quantities needed by the Analytical continuation
-         allocate(D1(Nbp_spex,Nbp_spex));D1=czero
-         allocate(D2(Nbp_spex,Nbp_spex));D2=czero
-         allocate(D3(Nbp_spex,Nbp_spex));D3=czero
          !
-         !
-         ! Analytical continuation of the local component to imag axis using spectral rep
-         call cpu_time(start)
-         !
-         ! Check if any local Urpa component has inverted Im/Re symmetry
-         do ib1=1,Nbp_spex
-            do ib2=1,Nbp_spex
-               if( abs(real(Ureal%bare_local(ib1,ib2))).lt.abs(aimag(Ureal%bare_local(ib1,ib2))))then
-                  write(*,"(A,2I5)")"Element: ",ib1,ib2
-                  write(*,"(A,E14.7)")"Re[Ubare(w=inf)]: ",real(Ureal%bare_local(ib1,ib2))
-                  write(*,"(A,E14.7)")"Im[Ubare(w=inf)]: ",aimag(Ureal%bare_local(ib1,ib2))
-                  stop "Something wrong: Uloc cannot have inverted Re/Im parity."
-               endif
+         call clear_attributes(Smats_GoWo)
+         !Sigma=sigmax+sigmac and transform to wannier basis
+         !$OMP PARALLEL DEFAULT(NONE),&
+         !$OMP SHARED(paramagneticSPEX,Nkpt,Norb,ib_Uwan1,ib_Uwan2,Nmats,Lttc,Uwan,SigmaC_diag,SigmaX_seg,Smats_GoWo),&
+         !$OMP PRIVATE(ispin,ispin_spex,ik,iwan1,iwan2,iw)
+         !$OMP DO
+         do ispin=1,Nspin
+            do ik=1,Nkpt
+               do iwan2=1,Norb
+                  do iwan1=1,Norb
+                     do iw=1,Nmats
+                        !
+                        ispin_spex=1
+                        if(.not.paramagneticSPEX)ispin_spex=ispin
+                        !
+                        Smats_GoWo%wks(iwan1,iwan2,iw,ik,ispin) = &
+                        + sum(conjg(Uwan(ib_Uwan1:ib_Uwan2,iwan1,ik,ispin_spex)) * SigmaC_diag(ib_Uwan1:ib_Uwan2,iw,Lttc%kptPos(ik),ispin_spex) * Uwan(ib_Uwan1:ib_Uwan2,iwan2,ik,ispin_spex))  &
+                        + sum(conjg(Uwan(ib_Uwan1:ib_Uwan2,iwan1,ik,ispin_spex)) * SigmaX_seg(ib_Uwan1:ib_Uwan2,Lttc%kptPos(ik),ispin_spex) * Uwan(ib_Uwan1:ib_Uwan2,iwan2,ik,ispin_spex))
+                        !
+                        Smats_GoWo%wks(iwan1,iwan2,iw,ik,ispin) = Smats_GoWo%wks(iwan1,iwan2,iw,ik,ispin) * H2eV
+                        !
+                     enddo
+                  enddo
+               enddo
             enddo
          enddo
-         !
-         !$OMP PARALLEL DEFAULT(NONE),&
-         !$OMP SHARED(Nbp_spex,wmats,wread,Nfreq,Ureal,Umats),&
-         !$OMP PRIVATE(ib1,ib2,iw1,iw2,D1,D2,D3,Utmp)
-         !$OMP DO
-         do iw1=1,Umats%Npoints
-            Utmp=czero
-            do iw2=1,Nfreq-2,2
-               !
-               do ib1=1,Nbp_spex
-                  do ib2=1,Nbp_spex
-                     D1(ib1,ib2) = -dimag( Ureal%screened_local(ib1,ib2,iw2)   )/pi
-                     D2(ib1,ib2) = -dimag( Ureal%screened_local(ib1,ib2,iw2+1) )/pi
-                     D3(ib1,ib2) = -dimag( Ureal%screened_local(ib1,ib2,iw2+2) )/pi
-                  enddo
-               enddo
-               !
-               !D(-w)=-D(w), integrate using Simpson method
-               if(wread(iw2).gt.0.d0) then
-                  Utmp(:,:) = Utmp(:,:) + ( D1(:,:)/(dcmplx(0.d0,wmats(iw1))-wread(iw2)  ) - D1(:,:)/(dcmplx(0.d0,wmats(iw1))+wread(iw2)  ) ) *(wread(iw2+1)-wread(iw2))/3.d0
-                  Utmp(:,:) = Utmp(:,:) + ( D2(:,:)/(dcmplx(0.d0,wmats(iw1))-wread(iw2+1)) - D2(:,:)/(dcmplx(0.d0,wmats(iw1))+wread(iw2+1)) ) *(wread(iw2+1)-wread(iw2))*4.d0/3.d0
-                  Utmp(:,:) = Utmp(:,:) + ( D3(:,:)/(dcmplx(0.d0,wmats(iw1))-wread(iw2+2)) - D3(:,:)/(dcmplx(0.d0,wmats(iw1))+wread(iw2+2)) ) *(wread(iw2+1)-wread(iw2))/3.d0
-               elseif(dabs(wread(iw2)).lt.1.d-12) then
-                  Utmp(:,:) = Utmp(:,:) + ( D2(:,:)/(dcmplx(0.d0,wmats(iw1))-wread(iw2+1)) - D2(:,:)/(dcmplx(0.d0,wmats(iw1))+wread(iw2+1)) ) *(wread(iw2+1)-wread(iw2))*4.d0/3.d0
-                  Utmp(:,:) = Utmp(:,:) + ( D3(:,:)/(dcmplx(0.d0,wmats(iw1))-wread(iw2+2)) - D3(:,:)/(dcmplx(0.d0,wmats(iw1))+wread(iw2+2)) ) *(wread(iw2+1)-wread(iw2))/3.d0
-               endif
-            enddo
-            !
-            do ib1=1,Nbp_spex
-               do ib2=1,Nbp_spex
-                  Umats%screened_local(ib1,ib2,iw1) = Utmp(ib1,ib2) + Umats%bare_local(ib1,ib2)
-               enddo
-            enddo
-            !
-         enddo !iw1
-         !
          !$OMP END DO
          !$OMP END PARALLEL
+         deallocate(Uwan,SigmaC_diag,SigmaX_seg)
+         !
          call cpu_time(finish)
-         deallocate(D1,D2,D3)
-         write(*,"(A)") "UcRPA(w) --> UcRPA(iw) cpu timing:", finish-start
+         write(*,"(A,1F10.5)") "Sigma_GoWo(q,w) --> Sigma_GoWo(q,iw) cpu timing:", finish-start
+         !
+         call FermionicKsum(Smats_GoWo)
+         !
+         ! Print out the transformed stuff
+         ! local
+         do ispin=1,Nspin_spex
+            call dump_FermionicField(Smats_GoWo,ispin,reg(pathOUTPUT_),"Sigma_GoWo_loc.DAT")
+         enddo
+         ! k-dependent
+         call dump_FermionicField(Smats_GoWo,reg(pathOUTPUT_)//"/Sigma_imag","Sigma_GoWo",.true.)
+         if(.not.save2bin)call dump_FermionicField(Smats_GoWo,reg(pathOUTPUT_)//"/Sigma_imag","Sigma_GoWo",.false.)
          !
          !
-         if(.not.LocalOnly)then
-            !
-            ! Allocate the temporary quantities needed by the Analytical continuation
-            allocate(D1(Nbp_spex,Nbp_spex));D1=czero
-            allocate(D2(Nbp_spex,Nbp_spex));D2=czero
-            allocate(D3(Nbp_spex,Nbp_spex));D3=czero
-            !
-            !
-            ! Analytical continuation of all the K-points to imag axis using spectral rep
-            allocate(imgFact(Nbp_spex,Nbp_spex,2));imgFact=cone
-            call cpu_time(start)
-            !$OMP PARALLEL DEFAULT(NONE),&
-            !$OMP SHARED(Nbp_spex,wmats,wread,Nfreq,Ureal,Umats,UfullStructure),&
-            !$OMP PRIVATE(iq,ib1,ib2,iw1,iw2,D1,D2,D3,Utmp,imgFact)
-            !$OMP DO
-            do iq=1,Umats%Nkpt
-               !
-               ! Some elelments of U, usually the k-dependent one, have inverted Im/Re symmetry
-               imgFact=cone
-               if(UfullStructure)then
-                  do ib1=1,Nbp_spex
-                     do ib2=1,Nbp_spex
-                        if( abs(real(Ureal%bare(ib1,ib2,iq))).lt.abs(aimag(Ureal%bare(ib1,ib2,iq))))then
-                           imgFact(ib1,ib2,1) = -img !this correspond to dividing by I
-                           imgFact(ib1,ib2,2) = +img !this correspond to multiplying by I
-                        endif
-                     enddo
-                  enddo
-               endif
-               !
-               do iw1=1,Umats%Npoints
-                  Utmp=czero
-                  do iw2=1,Nfreq-2,2
-                     !
-                     do ib1=1,Nbp_spex
-                        do ib2=1,Nbp_spex
-                           D1(ib1,ib2) = -dimag( ( imgFact(ib1,ib2,1) * Ureal%screened(ib1,ib2,iw2,iq)   ) )/pi
-                           D2(ib1,ib2) = -dimag( ( imgFact(ib1,ib2,1) * Ureal%screened(ib1,ib2,iw2+1,iq) ) )/pi
-                           D3(ib1,ib2) = -dimag( ( imgFact(ib1,ib2,1) * Ureal%screened(ib1,ib2,iw2+2,iq) ) )/pi
-                        enddo
-                     enddo
-                     !
-                     !D(-w)=-D(w), integrate using Simpson method
-                     if(wread(iw2).gt.0.d0) then
-                        Utmp(:,:) = Utmp(:,:) + ( D1(:,:)/(dcmplx(0.d0,wmats(iw1))-wread(iw2)  ) - D1(:,:)/(dcmplx(0.d0,wmats(iw1))+wread(iw2)  ) ) *(wread(iw2+1)-wread(iw2))/3.d0
-                        Utmp(:,:) = Utmp(:,:) + ( D2(:,:)/(dcmplx(0.d0,wmats(iw1))-wread(iw2+1)) - D2(:,:)/(dcmplx(0.d0,wmats(iw1))+wread(iw2+1)) ) *(wread(iw2+1)-wread(iw2))*4.d0/3.d0
-                        Utmp(:,:) = Utmp(:,:) + ( D3(:,:)/(dcmplx(0.d0,wmats(iw1))-wread(iw2+2)) - D3(:,:)/(dcmplx(0.d0,wmats(iw1))+wread(iw2+2)) ) *(wread(iw2+1)-wread(iw2))/3.d0
-                     elseif(dabs(wread(iw2)).lt.1.d-12) then
-                        Utmp(:,:) = Utmp(:,:) + ( D2(:,:)/(dcmplx(0.d0,wmats(iw1))-wread(iw2+1)) - D2(:,:)/(dcmplx(0.d0,wmats(iw1))+wread(iw2+1)) ) *(wread(iw2+1)-wread(iw2))*4.d0/3.d0
-                        Utmp(:,:) = Utmp(:,:) + ( D3(:,:)/(dcmplx(0.d0,wmats(iw1))-wread(iw2+2)) - D3(:,:)/(dcmplx(0.d0,wmats(iw1))+wread(iw2+2)) ) *(wread(iw2+1)-wread(iw2))/3.d0
-                     endif
-                  enddo
-                  !
-                  do ib1=1,Nbp_spex
-                     do ib2=1,Nbp_spex
-                        Umats%screened(ib1,ib2,iw1,iq) = imgFact(ib1,ib2,2)*Utmp(ib1,ib2) + Umats%bare(ib1,ib2,iq)
-                     enddo
-                  enddo
-                  !
-               enddo !iw1
-               !
-            enddo !iq
-            !
-            !$OMP END DO
-            !$OMP END PARALLEL
-            call cpu_time(finish)
-            deallocate(D1,D2,D3)
-            write(*,"(A)") "UcRPA(q,w) --> UcRPA(q,iw) cpu timing:", finish-start
-            !
-         endif !LocalOnly
-         call checkAnalyticContinuation(Umats,Ureal)
-         deallocate(Utmp)
-         !
-         ! Print out the transformed stuff - local
-         call dump_BosonicField(Umats,reg(pathOUTPUT_),"Uloc_mats.DAT")
-         call dump_BosonicField(Ureal,reg(pathOUTPUT_),"Uloc_real.DAT",wread)
-         !
-         ! Print out the transformed stuff - Kdep
-         call dump_BosonicField(Umats,reg(pathOUTPUT_//"VW_imag/"),.true.)
-         if(.not.save2bin)then
-            call dump_BosonicField(Umats,reg(pathOUTPUT_//"VW_imag_readable/"),save2bin)
-            call dump_BosonicField(Ureal,reg(pathOUTPUT_//"VW_real_readable/"),save2bin,axis=wread)
-         endif
-         !
-         deallocate(wread)
-         call DeallocateBosonicField(Ureal)
+         if(doVxc)call read_Vxc(Vxc,Lttc,ib_sigma1,ib_sigma2,save2bin)
          !
          !---------------------------------------------------------------------!
          !
@@ -907,94 +879,232 @@ contains
          !
          !---------------------------------------------------------------------!
          !
-         ! Allocations from dimensions written in W.Q0001.DAT file
-         path = pathINPUT//"VW_imag/VW.Q0001.DAT"
-         call inquireFile(reg(path),filexists)
+         ! Just read all
+         call clear_attributes(Smats_GoWo)
+         path = pathINPUT//"Sigma_imag"
+         call read_FermionicField_Kdep(Smats_GoWo,reg(path),"Sigma_GoWo")
          !
-         unit = free_unit()
-         open(unit,file=reg(path),form="unformatted",action="read")
-         read(unit)idum,Nspin_spex,Norb_spex,Nfreq
-         close(unit)
+         if(present(Vxc))then
+            Vxc=czero
+            call read_matrix(Vxc(:,:,:,1),pathINPUT,"Vxc_wann_k.DAT.1")
+            if(paramagneticSPEX)then
+               Vxc(:,:,:,2) = Vxc(:,:,:,1)
+            else
+               call read_matrix(Vxc(:,:,:,1),pathINPUT,"Vxc_wann_k.DAT.2")
+            endif
+         endif
          !
-         Nbp_spex = Norb_spex**2
-         allocate(Utmp(Nbp_spex,Nbp_spex));Utmp=czero
-         allocate(wread(Nfreq));wread=0d0
-         write(*,"(A,I5)")"Matsubara frequencies: ",Nfreq
          !
-         ! Few checks
-         if(Nspin_spex.ne.1) stop "Nspin_spex.ne.1"
-         if(Umats%Nbp.ne.Nbp_spex) stop "Size of given BosonicField and VW_imag orbital space do not coincide."
-         if(Umats%Npoints.ne.Nfreq) stop "Number of VW_imag Matsubara points and bosonic field mesh does not coincide."
-         !
-         ! Look for the Number of SPEX files. Which are supposed to be ordered.
-         Nkpt = 0
-         do iq=1,2000
-            file_spex = reg(path)//"VW_imag/VW.Q"//str(iq)//".DAT"
-            call inquireFile(reg(file_spex),filexists,hardstop=.false.)
-            if(.not.filexists) exit
-            Nkpt = Nkpt + 1
-         enddo
-         write(*,"(A1,1I6)") "The number of SPEX files (Nkpt) in VW_imag is: ",Nkpt
-         if((.not.LocalOnly).and.(Umats%Nkpt.ne.Nkpt)) stop "Number of k-points of given BosonicField and number of VW_imag k-points do not coincide."
-         !
-         ! Read VW_imag accumulating local attribute and optionally storing the k-dependent part
-         path = pathINPUT//"VW_imag/"
-         do iq=1,Nkpt
-            !
-            file_spex = reg(path)//"VW_imag/VW.Q"//str(iq)//".DAT"        !write(fn,"(a,a,i4.4,a)") reg(path),"VW_imag/VW.Q",iq,".DAT"
-            call inquireFile(reg(file_spex),filexists) !redundant control
-            !
-            unit = free_unit()
-            open(unit,file=reg(file_spex),form="unformatted",action="read")
-            read(unit) iqread,Nspin_spex,Norb_spex,Nfreq
-            write(*,"(A)")"read iq",iq   !!!!>>>>>TEST<<<<<!!!!
-            if (iq.ne.iqread) stop "iqread.ne.iq"
-            !
-            read(unit) wread
-            wread = H2eV*wread
-            write(*,"(A)")"read wread",wread   !!!!>>>>>TEST<<<<<!!!!
-            do iw=1,Nfreq
-               if (dabs(wread(iw)-wmats(iw)).gt.eps) stop "wread.ne.wmats"
-            enddo
-            !
-            do iw=0,Nfreq
-               read(unit) Utmp
-               if(iw.eq.0) then
-                  Umats%bare_local = Umats%bare_local + H2eV*Utmp/(Nkpt**3)
-                  if(.not.LocalOnly) Umats%bare(:,:,iq) = H2eV*Utmp/(Nkpt**2)
-               else
-                  Umats%screened_local(:,:,iw) = Umats%screened_local(:,:,iw) + H2eV*Utmp/(Nkpt**3)
-                  if(.not.LocalOnly) Umats%screened(:,:,iw,iq) = H2eV*Utmp/(Nkpt**2)
-               endif
-            enddo
-            !
-            close(unit)
-            !
-         enddo !iq
-         !
-         deallocate(wread,Utmp)
-         !
-         !---------------------------------------------------------------------!
-         !
-      endif
-      !
-      ! Remove elements with inverted parity from the k-dependent fields.
-      if(allocated(Umats%screened).and.allocated(Umats%bare).and.(.not.UfullStructure))then
-         do iq=1,Nkpt
-            do ib1=1,Nbp_spex
-               do ib2=1,Nbp_spex
-                  if (dabs(dimag(Umats%bare(ib1,ib2,iq))).gt.1.d-6) then
-                     write(*,"(A,2I5)") "Warning Umats%bare imaginary. Set matrix element to static value",ib1,ib2
-                     Umats%bare(ib1,ib2,iq) = Umats%screened(ib1,ib2,1,iq)
-                     Umats%screened(ib1,ib2,:,iq) = Umats%screened(ib1,ib2,1,iq)
-                  endif
-               enddo
-            enddo
-         enddo
       endif
       !
    end subroutine read_Sigma_spex
 
 
+   !---------------------------------------------------------------------------!
+   !PURPOSE: Read the exchange potential from gwa file.
+   !---------------------------------------------------------------------------!
+   subroutine read_Vxc(Vxc,Lttc,ib_sigma1,ib_sigma2,save2bin)
+      !
+      use linalg
+      use parameters
+      use file_io
+      use utils_misc
+      use crystal
+      use global_vars, only : pathINPUT,UseXepsKorder,paramagneticSPEX
+      implicit none
+      !
+      complex(8),intent(inout)              :: Vxc(:,:,:,:)
+      type(Lattice),intent(inout)           :: Lttc
+      integer,intent(in)                    :: ib_sigma1,ib_sigma2
+      logical,intent(in)                    :: save2bin
+      !
+      logical                               :: filexists,UseDisentangledBS
+      character(len=256)                    :: path
+      integer                               :: ik,ispin,iwan1,iwan2,unit
+      integer                               :: Nkpt,Norb,ispin_spex
+      !Uwan
+      integer                               :: Nspin_Uwan,Nkpt_Uwan
+      integer                               :: ib_Uwan1,ib_Uwan2,Norb_Uwan
+      complex(8),allocatable                :: Uwan(:,:,:,:)
+      !gwa
+      integer                               :: idum,l,i,j
+      integer                               :: lcutd,ntypd,nlod,neigd,ncent
+      integer                               :: n_stride,n_start,n_size,n_rank
+      real(8)                               :: rdum,latpar,lat2(3,3)
+      logical                               :: invs,l_soc
+      integer(8)                            :: irecl
+      complex(8),allocatable                :: vxcmat(:,:)
+      !DISENT_EVEC
+      integer                               :: unit_dis
+      integer                               :: Nspin_disent,Nkpt_irred_disent,Norb_disent
+      integer                               :: ib_Dwan1,ib_Dwan2
+      complex(8),allocatable                :: dis_evec(:,:),cmat(:,:)
+      !eig and vxcfull
+      integer                               :: unit_eig,unit_vxc
+      integer                               :: nband,nrec
+      real(8),allocatable                   :: vxc_diag(:,:,:)
+      !
+      !
+      write(*,"(A)") "--- read_Vxc ---"
+      !
+      !
+      ! Check on the input Vxc matrix
+      Norb = size(Vxc,dim=1)
+      if(Norb.ne.size(Vxc,dim=2)) stop "Vxc is not a square matrix."
+      Nkpt = size(Vxc,dim=3)
+      if(.not.Lttc%status) stop "Lattice container not properly initialized."
+      if(Lttc%Nkpt.ne.Nkpt) stop "Lattice has different number of k-points with respect to Vxc."
+      !
+      ! Read XEPS data
+      path = pathINPUT//"XEPS.DAT"
+      call inquireFile(reg(path),filexists)
+      call read_xeps(reg(path),Lttc%kpt,Lttc%Nkpt3,UseXepsKorder,Lttc%kptPos,Lttc%Nkpt_irred,UseDisentangledBS)
+      !
+      ! Read UWAN file
+      if(UseDisentangledBS)then
+         path = pathINPUT//"UWAN_NEW.DAT"
+      else
+         path = pathINPUT//"UWAN.DAT"
+      endif
+      call inquireFile(reg(path),filexists)
+      write(*,"(A)") "Opening "//reg(path)
+      unit = free_unit()
+      open(unit,file=reg(path),form="unformatted",action="read",position="rewind")
+      read(unit) Nspin_Uwan,Nkpt_Uwan,ib_Uwan1,ib_Uwan2,Norb_Uwan
+      if(paramagneticSPEX.and.(Nspin_Uwan.ne.1)) stop "UWAN file is not paramagnetic."
+      if(Nkpt_Uwan.ne.Nkpt) stop "UWAN file has wrong number of k-points (not irreducible)."
+      if(Norb_Uwan.ne.Norb) stop "UWAN file has wrong orbital dimension."
+      write(*,"(A,2I4)") "The band indexes in the UWAN rotation are: ",ib_Uwan1,ib_Uwan2
+      allocate(Uwan(ib_Uwan1:ib_Uwan2,Norb,Nkpt,Nspin_Uwan))
+      do ispin=1,Nspin_Uwan
+         do ik=1,Nkpt
+            read(unit) Uwan(:,:,ik,ispin)
+         enddo
+      enddo
+      close(unit)
+      !
+      ! Read gwa file
+      path = pathINPUT//"gwa.DAT"
+      call inquireFile(reg(path),filexists)
+      write(*,"(A)") "Opening "//reg(path)
+      unit = free_unit()
+      open(unit,file=reg(path),form="unformatted",action="read",position="rewind")
+      read(unit) idum,ncent,ntypd,l,nlod
+      read(unit) (idum,i=1,ncent),(idum,i=1,ntypd),(idum,i=1,ntypd*(l+1)),&
+           (rdum,i=1,ntypd),(rdum,i=1,3*ncent),&
+           latpar,lat2,rdum,neigd,lcutd
+      read(unit) invs,l_soc
+      read(unit,iostat=i) irecl,n_start,n_stride,n_rank,n_size
+      close(unit)
+      allocate(vxcmat(neigd,neigd));vxcmat=czero
+      !
+      ! Read DISENT_EVEC file
+      if(UseDisentangledBS) then
+         path = pathINPUT//"DISENT_EVEC.DAT"
+         call inquireFile(reg(path),filexists)
+         write(*,"(A)") "Opening "//reg(path)
+         unit_dis = free_unit()
+         open(unit_dis,file=reg(path),form="unformatted",action="read",position="rewind")
+         read(unit_dis) Nspin_disent,Nkpt_irred_disent,Norb_disent,ib_Dwan1,ib_Dwan2
+         if (Nspin_disent.ne.Nspin_Uwan) stop 'DISENT_EVEC.DAT: nspin'
+         if (Nkpt_irred_disent.ne.Lttc%Nkpt_irred) stop 'DISENT_EVEC.DAT: nkpt1'
+         if (Norb_disent.ne.Norb) stop 'DISENT_EVEC.DAT: nwan'
+         if (ib_Dwan1.ne.ib_Uwan1) stop 'DISENT_EVEC.DAT: ib_wan1'
+         if (ib_Dwan2.ne.ib_Uwan2) then
+            write(*,"(A2I4)") 'ib_Uwan2,ib_Dwan2',ib_Uwan2, ib_Dwan2
+         endif
+         allocate(dis_evec(ib_Uwan1:ib_Dwan2,ib_Uwan1:ib_Dwan2));dis_evec=czero
+         allocate(cmat(ib_Uwan1:ib_Dwan2,ib_Uwan2:ib_Dwan2));cmat=czero
+      endif
+      !
+      ! Read eig and vxcfull files
+      path = pathINPUT//"eig.DAT"
+      call inquireFile(reg(path),filexists)
+      write(*,"(A)") "Opening "//reg(path)
+      open(unit_eig,file=reg(path),form='unformatted',access='direct',action='read',recl=irecl)
+      path = pathINPUT//"vxcfull.DAT"
+      call inquireFile(reg(path),filexists)
+      write(*,"(A)") "Opening "//reg(path)
+      open(unit_vxc,file=reg(path),form='unformatted',action='read')
+      !
+      ! Read diagonal Vxc
+      allocate(vxc_diag(ib_sigma1:ib_sigma2,Lttc%Nkpt_irred,Nspin_Uwan));vxc_diag=0d0
+      do ispin=1,Nspin_Uwan
+         do ik=1,Lttc%Nkpt_irred
+            nrec = Lttc%Nkpt_irred*(ispin-1)+(ik-1)*n_stride+n_start ! according to
+            nrec = n_size*(nrec-1) + n_rank + 1                        ! eigen.f (Fleur)
+            read(unit_eig,rec=nrec) ((rdum,l=0,lcutd),i=1,ntypd),rdum,rdum, &
+                                    ((rdum,l=1,nlod),i=1,ntypd),(rdum,i=1,3),rdum,nband
+            !write(*,*) 'ispin,ik,neigd,nband=',ispin,ik,neigd,nband
+            if (nband.lt.1.or.nband.gt.neigd) then
+               write(*,*) 'ispin,ik,neigd,nband=',ispin,ik,neigd,nband
+               stop 'read_vxc:nband'
+            endif
+            read(unit_vxc) ((vxcmat(i,j),i=1,j),j=1,nband)
+            do j=1,nband
+               do i=1,j-1
+                  vxcmat(j,i)=conjg(vxcmat(i,j))
+               enddo
+            enddo
+            !do i=1,nbandmax
+            do i=ib_sigma1,ib_sigma2
+               vxc_diag(i,ik,ispin)=dble(vxcmat(i,i))
+            enddo
+            if(UseDisentangledBS) then
+               read(unit_dis) dis_evec(:,:)
+               cmat(:,:)=matmul(vxcmat(ib_Uwan1:ib_Dwan2,ib_Uwan1:ib_Dwan2),dis_evec)
+               do i=ib_Uwan1,ib_Uwan2
+                  vxc_diag(i,ik,ispin)=dble(dot_product(dis_evec(:,i),cmat(:,i)))
+                  !F.N:
+                  !write(*,*) 'vxc i=',i,'ik=',ik
+                  !write(*,*) vxc(i,ik,ispin)
+               enddo
+            endif
+
+         enddo ! ik
+      enddo ! ispin
+      close(unit_eig)
+      close(unit_vxc)
+      !
+      if(UseDisentangledBS) then
+         close(unit_dis)
+         deallocate(cmat,dis_evec)
+      endif
+      deallocate(vxcmat)
+      !
+      !
+      Vxc=czero
+      ! Transform to wannier basis
+      !Sigma=sigmax+sigmac and transform to wannier basis
+      !$OMP PARALLEL DEFAULT(NONE),&
+      !$OMP SHARED(paramagneticSPEX,Norb,Nkpt,ib_Uwan1,ib_Uwan2,Lttc,Uwan,vxc_diag,Vxc),&
+      !$OMP PRIVATE(ispin,ispin_spex,iwan1,iwan2)
+      !$OMP DO
+      do ispin=1,Nspin
+         do ik=1,Nkpt
+            do iwan2=1,Norb
+               do iwan1=1,Norb
+                  !
+                  ispin_spex=1
+                  if(.not.paramagneticSPEX)ispin_spex=ispin
+                  !
+                  Vxc(iwan1,iwan2,ik,ispin) = sum(conjg(Uwan(ib_Uwan1:ib_Uwan2,iwan1,ik,ispin_spex)) * vxc_diag(ib_Uwan1:ib_Uwan2,Lttc%kptPos(ik),ispin_spex) * Uwan(ib_Uwan1:ib_Uwan2,iwan2,ik,ispin_spex))
+                  !
+                  Vxc(iwan1,iwan2,ik,ispin) = Vxc(iwan1,iwan2,ik,ispin) * H2eV
+                  !
+               enddo
+            enddo
+         enddo
+      enddo
+      !$OMP END DO
+      !$OMP END PARALLEL
+      deallocate(vxc_diag,Uwan)
+      !
+      do ispin=1,Nspin_Uwan
+         call dump_matrix(Vxc(:,:,:,ispin),pathINPUT,"Vxc_wann",.true.,ispin=ispin)
+         if(.not.save2bin)call dump_matrix(Vxc(:,:,:,ispin),pathINPUT,"Vxc_wann",.false.,ispin=ispin)
+      enddo
+      !
+    end subroutine read_vxc
 
 end module self_energy

@@ -81,7 +81,7 @@ module module_container
 
    !(h) Interactions container. Depends on (utils_misc),(crystal),(parameters),(global_vars),(utils_fields),(file_io)
    use interactions, only:                   &
-   read_spex                                ,&
+   read_U_spex                              ,&
    calc_W_full                              ,&
    calc_W_edmft                             ,&
    calc_chi_full                            ,&
@@ -93,13 +93,11 @@ module module_container
    calc_Pi !calc_Optcond,calc_Hall
 
 
-   !(i) Self-energy container. Depends on (linalg),(utils_misc),(crystal),(parameters),(global_vars),(utils_fields),(fourier_transforms)
+   !(i) Self-energy container. Depends on (linalg),(utils_misc),(crystal),(parameters),(global_vars),(utils_fields),(file_io),(fourier_transforms)
    use self_energy, only:                    &
    calc_sigmaGW                             ,&
-   calc_sigmaGW_DC
-
-
-
+   calc_sigmaGW_DC                          ,&
+   read_Sigma_spex
 
 
 end module module_container

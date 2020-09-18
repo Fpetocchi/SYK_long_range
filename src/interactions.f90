@@ -76,7 +76,7 @@ contains
       Nmats = Wmats%Npoints
       !
       if(all([Umats%Nbp-Nbp,Pmats%Nbp-Nbp].ne.[0,0])) stop "Either Umats and/or Pmats have different orbital dimension with respect to Wmats."
-      if(all([Umats%Nkpt-Nkpt,Pmats%Nkpt-Nkpt].ne.[0,0])) stop "Either Umats and/or Pmats have different number of Kpoints with respect to Wmats."
+      if(all([Umats%Nkpt-Nkpt,Pmats%Nkpt-Nkpt].ne.[0,0])) stop "Either Umats and/or Pmats have different number of k-points with respect to Wmats."
       if(all([Umats%Beta-Beta,Pmats%Beta-Beta].ne.[0d0,0d0])) stop "Either Umats and/or Pmats have different Beta with respect to Wmats."
       if(all([Umats%Npoints-Nmats,Pmats%Npoints-Nmats].ne.[0,0]))  write(*,"(A)") "Warning: Either Umats and/or Pmats have different number of Matsubara points. Computing up to the smaller."
       Nmats = minval([Wmats%Npoints,Umats%Npoints,Pmats%Npoints])
@@ -318,7 +318,7 @@ contains
       Nmats = Chi%Npoints
       !
       if(all([Umats%Nbp-Nbp,Pmats%Nbp-Nbp].ne.[0,0])) stop "Either Umats and/or Pmats have different orbital dimension with respect to Chi."
-      if(all([Umats%Nkpt-Nkpt,Pmats%Nkpt-Nkpt].ne.[0,0])) stop "Either Umats and/or Pmats have different number of Kpoints with respect to Chi."
+      if(all([Umats%Nkpt-Nkpt,Pmats%Nkpt-Nkpt].ne.[0,0])) stop "Either Umats and/or Pmats have different number of k-points with respect to Chi."
       if(all([Umats%Beta-Beta,Pmats%Beta-Beta].ne.[0d0,0d0])) stop "Either Umats and/or Pmats have different Beta with respect to Chi."
       if(all([Umats%Npoints-Nmats,Pmats%Npoints-Nmats].ne.[0,0]))  write(*,"(A)") "Warning: Either Umats and/or Pmats have different number of Matsubara points. Computing up to the smaller."
       Nmats = minval([Chi%Npoints,Umats%Npoints,Pmats%Npoints])
