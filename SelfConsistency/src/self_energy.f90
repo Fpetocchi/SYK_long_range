@@ -170,7 +170,7 @@ contains
                            ib1 = mp + Norb*(m-1)
                            ib2 = np + Norb*(n-1)
                            !
-                           Smats_X%ks(m,n,iq,ispin) = Smats_X%ks(m,n,iq,ispin) + Gitau(mp,np,Ntau,ik1,ispin)*Wmats%bare(ib1,ib2,ik2)/Nkpt
+                           Smats_XG%N_ks(m,n,iq,ispin) = Smats_XG%N_ks(m,n,iq,ispin) + Gitau(mp,np,Ntau,ik1,ispin)*Wmats%bare(ib1,ib2,ik2)/Nkpt
                            !
                         enddo
                      enddo
@@ -195,7 +195,7 @@ contains
             !
             !rotation to lda eigenbasis
             do iq=1,Lttc%Nkpt_irred
-               Smats_X%ks(:,:,iq,ispin) = rotate(Smats_X%ks(:,:,iq,ispin),Lttc%Zk(:,:,iq))
+               Smats_XG%N_ks(:,:,iq,ispin) = rotate(Smats_XG%N_ks(:,:,iq,ispin),Lttc%Zk(:,:,iq))
                do iw=1,Nmats
                   Smats_C%wks(:,:,iw,iq,ispin) = rotate(Smats_C%wks(:,:,iw,iq,ispin),Lttc%Zk(:,:,iq))
                enddo
@@ -203,7 +203,7 @@ contains
             !
             !fill up the missing Kpoints
             do iq=1,nkpt
-               Smats_X%ks(:,:,iq,ispin) = Smats_X%ks(:,:,Lttc%kptPos(iq),ispin)
+               Smats_XG%N_ks(:,:,iq,ispin) = Smats_XG%N_ks(:,:,Lttc%kptPos(iq),ispin)
                do iw=1,Nmats
                   Smats_C%wks(:,:,iw,iq,ispin) = Smats_C%wks(:,:,iw,Lttc%kptPos(iq),ispin)
                enddo
@@ -211,7 +211,7 @@ contains
             !
             !rotate back
             do iq=1,nkpt
-               Smats_X%ks(:,:,iq,ispin) = rotate(Smats_X%ks(:,:,iq,ispin),transpose(conjg(Lttc%Zk(:,:,iq))))
+               Smats_XG%N_ks(:,:,iq,ispin) = rotate(Smats_XG%N_ks(:,:,iq,ispin),transpose(conjg(Lttc%Zk(:,:,iq))))
                do iw=1,Nmats
                   Smats_C%wks(:,:,iw,iq,ispin) = rotate(Smats_C%wks(:,:,iw,iq,ispin),transpose(conjg(Lttc%Zk(:,:,iq))))
                enddo
@@ -517,6 +517,7 @@ contains
                if(Vtype.eq.-1) exit
             enddo
          end subroutine read_Vgamma
+         !
       !
    end subroutine calc_VH
 

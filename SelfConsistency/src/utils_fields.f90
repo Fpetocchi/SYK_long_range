@@ -48,10 +48,10 @@ contains
       if(.not.G%status)stop "FermionicKsum. Field not properly initialized."
       if(G%Nkpt.eq.0)stop "FermionicKsum. Field k dependent attributes not properly initialized."
       !
-      G%s=czero
+      G%N_s=czero
       do ispin=1,Nspin
          do ik=1,G%Nkpt
-            G%s(:,:,ispin) = G%s(:,:,ispin) + G%ks(:,:,ik,ispin)/G%Nkpt
+            G%N_s(:,:,ispin) = G%N_s(:,:,ispin) + G%N_ks(:,:,ik,ispin)/G%Nkpt
          enddo
       enddo
       !
@@ -187,19 +187,19 @@ contains
       if(Npoints.eq.0) write(*,"(A)") "AllocateFermionicField: frequency dependent attributes are not going to be allocated."
       if(Nkpt.eq.0) write(*,"(A)") "AllocateFermionicField: K-dependent attributes are not going to be allocated."
       !
-      if(allocated(G%s))deallocate(G%s)
-      if(allocated(G%ks))deallocate(G%ks)
+      if(allocated(G%N_s))deallocate(G%N_s)
+      if(allocated(G%N_ks))deallocate(G%N_ks)
       if(allocated(G%ws))deallocate(G%ws)
       if(allocated(G%wks))deallocate(G%wks)
       !
-      allocate(G%s(Norb,Norb,Nspin));G%s=czero
+      allocate(G%N_s(Norb,Norb,Nspin));G%N_s=czero
       !
       if((Npoints.eq.0).and.(Nkpt.ne.0))then
-         allocate(G%ks(Norb,Norb,Nkpt,Nspin));G%ks=czero
+         allocate(G%N_ks(Norb,Norb,Nkpt,Nspin));G%N_ks=czero
       elseif((Npoints.ne.0).and.(Nkpt.eq.0))then
          allocate(G%ws(Norb,Norb,Npoints,Nspin));G%ws=czero
       else
-         allocate(G%ks(Norb,Norb,Nkpt,Nspin));G%ks=czero
+         allocate(G%N_ks(Norb,Norb,Nkpt,Nspin));G%N_ks=czero
          allocate(G%ws(Norb,Norb,Npoints,Nspin));G%ws=czero
          allocate(G%wks(Norb,Norb,Npoints,Nkpt,Nspin));G%wks=czero
       endif
@@ -217,8 +217,8 @@ contains
       if(present(name)) write(*,"(A)") "Deallocation of "//trim(name)
       if(.not.G%status) stop "DeallocateFermionicField: container is unallocated."
       !
-      if(allocated(G%s))deallocate(G%s)
-      if(allocated(G%ks))deallocate(G%ks)
+      if(allocated(G%N_s))deallocate(G%N_s)
+      if(allocated(G%N_ks))deallocate(G%N_ks)
       if(allocated(G%ws))deallocate(G%ws)
       if(allocated(G%wks))deallocate(G%wks)
       !
@@ -307,9 +307,9 @@ contains
       use parameters
       implicit none
       type(FermionicField),intent(inout)    :: G
-      if(allocated(G%s))G%s=czero
+      if(allocated(G%N_s))G%N_s=czero
       if(allocated(G%ws))G%ws=czero
-      if(allocated(G%ks))G%ks=czero
+      if(allocated(G%N_ks))G%N_ks=czero
       if(allocated(G%wks))G%wks=czero
    end subroutine clear_attributes_Fermion
    !
