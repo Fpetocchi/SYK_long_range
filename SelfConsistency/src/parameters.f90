@@ -56,7 +56,7 @@ module parameters
       complex(8),allocatable                :: wks(:,:,:,:,:)                   ![Norb,Norb,Npoints,Nkpt,Nspin]
       complex(8),allocatable                :: ws(:,:,:,:)                      ![Norb,Norb,Npoints,Nspin]
       complex(8),allocatable                :: N_ks(:,:,:,:)                    ![Norb,Norb,Nkpt,Nspin]
-      complex(8),allocatable                :: N_s(:,:,:)                       ![Norb,Norb,Nkpt]
+      complex(8),allocatable                :: N_s(:,:,:)                       ![Norb,Norb,Nspin]
       integer                               :: Norb=0
       integer                               :: Npoints=0
       integer                               :: Nkpt=0

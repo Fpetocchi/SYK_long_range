@@ -219,6 +219,7 @@ contains
 
    !---------------------------------------------------------------------------!
    !PURPOSE: Read the Hamiltonian and kpoints providing Eigen-values/vectors
+   !by now only for paramagnetic Hk
    !---------------------------------------------------------------------------!
    subroutine read_Hk(pathINPUT,Hk,kpt,Ek,Zk,Hloc)
       !
