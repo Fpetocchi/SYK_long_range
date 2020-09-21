@@ -40,10 +40,13 @@ module input_vars
    !---------------------------------------------------------------------------!
    logical                                  :: tau_uniform
    integer                                  :: Ntau
+   integer                                  :: Nreal
+   real(8)                                  :: wrealMax,eta
+   real(8)                                  :: wmatsMax
 
 
    !---------------------------------------------------------------------------!
-   !PURPOSE: paths
+   !PURPOSE: paths. Directories must end with "/"
    !---------------------------------------------------------------------------!
    character(len=256)                       :: pathINPUT="GWinput/"
 

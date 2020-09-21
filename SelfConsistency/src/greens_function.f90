@@ -35,6 +35,7 @@ module greens_function
    public :: calc_density
    public :: set_density
    public :: calc_Gmats
+   public :: calc_Glda
 
    !===========================================================================!
 
@@ -298,7 +299,6 @@ contains
    end subroutine calc_Gmats
 
 
-
    !---------------------------------------------------------------------------!
    !PURPOSE: Set the density of a Green's function and returns the adjusted mu
    !---------------------------------------------------------------------------!
@@ -544,6 +544,203 @@ contains
       !
       !
    end subroutine set_density_NonInt
+
+
+   !---------------------------------------------------------------------------!
+   !PURPOSE: Prints lda Gf on different axis. mu=0
+   !---------------------------------------------------------------------------!
+   subroutine calc_Glda(mu,Beta,Lttc,verbose,pathOUTPUT)
+      !
+      use parameters
+      use linalg
+      use utils_misc
+      use file_io
+      use input_vars, only : pathINPUT
+      use input_vars, only : Nreal, wrealMax, eta
+      use input_vars, only : wmatsMax
+      use input_vars, only : Ntau, tau_uniform
+      implicit none
+      !
+      real(8),intent(in)                    :: mu
+      real(8),intent(in)                    :: Beta
+      type(Lattice),intent(in)              :: Lttc
+      integer,intent(in)                    :: verbose
+      character(len=*),intent(in),optional  :: pathOUTPUT
+      !
+      character(len=256)                    :: pathOUTPUT_
+      real(8),allocatable                   :: axis(:)
+      complex(8),allocatable                :: zeta(:,:,:),invGf(:,:)
+      complex(8),allocatable                :: Gitau(:,:,:),Gftmp(:,:)
+      complex(8),allocatable                :: Gprint_Hk(:,:,:)
+      complex(8),allocatable                :: Gprint_Ek(:,:)
+      integer                               :: iwan1,iwan2,ik,iw,itau
+      integer                               :: Norb,Nkpt,Nmats
+      !
+      !
+      write(*,"(A)") "--- calc_Glda ---"
+      pathOUTPUT_ = pathINPUT//"LDA/"
+      if(present(pathOUTPUT)) pathOUTPUT_ = pathOUTPUT//"LDA/"
+      !
+      !
+      ! Check on the input Fields
+      if(.not.Lttc%status) stop "Lttc not properly initialized."
+      if(Lttc%Nkpt.eq.0) stop "Lttc k dependent attributes not properly initialized."
+      !
+      Norb = Lttc%Norb
+      Nkpt = Lttc%Nkpt
+      !
+      !Everything is paramagnetic
+      select case(verbose)
+         !
+         !
+         !verbose=1: print G(w) in diagonal and Wannier basis
+         case default
+            !
+            allocate(axis(Nreal));axis=0d0
+            axis = linspace(-wrealMax,+wrealMax,Nreal)
+            allocate(zeta(Norb,Norb,Nmats));zeta=czero
+            do iwan1=1,Norb
+               do iw=1,Nreal
+                  zeta(iwan1,iwan1,iw) = dcmplx(  axis(iw) + mu , eta )
+               enddo
+            enddo
+            !
+            allocate(Gprint_Ek(Norb,Nreal));Gprint_Ek=czero
+            allocate(Gprint_Hk(Norb,Norb,Nreal));Gprint_Hk=czero
+            !
+            allocate(invGf(Norb,Norb));invGf=czero
+            !$OMP PARALLEL DEFAULT(NONE),&
+            !$OMP SHARED(Norb,Nreal,Nkpt,mu,zeta,eta,axis,Lttc,Gprint_Ek,Gprint_Hk),&
+            !$OMP PRIVATE(iwan1,ik,iw,invGf)
+            !$OMP DO
+            do ik=1,Nkpt
+               do iw=1,Nreal
+                  !
+                  do iwan1=1,Norb
+                     Gprint_Ek(iwan1,iw) = Gprint_Ek(iwan1,iw) + 1d0/( dcmplx(  axis(iw) + mu , eta ) - Lttc%Ek(iwan1,ik) )/Nkpt
+                  enddo
+                  !
+                  invGf = zeta(:,:,iw) - Lttc%Hk(:,:,ik)
+                  !
+                  call inv(invGf)
+                  Gprint_Hk(:,:,iw) = Gprint_Hk(:,:,iw) + invGf/Nkpt
+                  !
+               enddo
+            enddo
+            !$OMP END DO
+            !$OMP END PARALLEL
+            deallocate(zeta,invGf)
+            !
+            ! Print
+            do iwan1=1,Norb
+               call dump_FermionicField(Gprint_Ek(iwan1,:),pathOUTPUT_,"Greal_Ek_"//str(iwan1)//".lda",axis)
+               do iwan2=1,Norb
+                  call dump_FermionicField(Gprint_Hk(iwan1,iwan2,:),pathOUTPUT_,"Greal_Hk_"//str(iwan1)//str(iwan2)//".lda",axis)
+               enddo
+            enddo
+            deallocate(axis,Gprint_Hk,Gprint_Ek)
+         !
+         !
+         !verbose=2: print G(iw) in diagonal and Wannier basis
+         case(2)
+            !
+            Nmats = int(Beta*wmatsMax/(2d0*pi))
+            !
+            allocate(axis(Nmats));axis=0d0
+            axis = FermionicFreqMesh(Beta,Nmats)
+            allocate(zeta(Norb,Norb,Nmats));zeta=czero
+            do iwan1=1,Norb
+               do iw=1,Nmats
+                  zeta(iwan1,iwan1,iw) = dcmplx( mu , axis(iw) )
+               enddo
+            enddo
+            !
+            allocate(Gprint_Ek(Norb,Nmats));Gprint_Ek=czero
+            allocate(Gprint_Hk(Norb,Norb,Nmats));Gprint_Hk=czero
+            !
+            allocate(invGf(Norb,Norb));invGf=czero
+            !$OMP PARALLEL DEFAULT(NONE),&
+            !$OMP SHARED(Norb,Nmats,Nkpt,mu,zeta,axis,Lttc,Gprint_Ek,Gprint_Hk),&
+            !$OMP PRIVATE(iwan1,ik,iw,invGf)
+            !$OMP DO
+            do ik=1,Nkpt
+               do iw=1,Nmats
+                  !
+                  do iwan1=1,Norb
+                     Gprint_Ek(iwan1,iw) = Gprint_Ek(iwan1,iw) + 1d0/( dcmplx( mu , axis(iw) ) - Lttc%Ek(iwan1,ik) )/Nkpt
+                  enddo
+                  !
+                  invGf = zeta(:,:,iw) - Lttc%Hk(:,:,ik)
+                  !
+                  call inv(invGf)
+                  Gprint_Hk(:,:,iw) = Gprint_Hk(:,:,iw) + invGf/Nkpt
+                  !
+               enddo
+            enddo
+            !$OMP END DO
+            !$OMP END PARALLEL
+            deallocate(zeta,invGf)
+            !
+            ! Print
+            do iwan1=1,Norb
+               call dump_FermionicField(Gprint_Ek(iwan1,:),pathOUTPUT_,"Gmats_Ek_"//str(iwan1)//".lda",axis)
+               do iwan2=1,Norb
+                  call dump_FermionicField(Gprint_Hk(iwan1,iwan2,:),pathOUTPUT_,"Gmats_Hk_"//str(iwan1)//str(iwan2)//".lda",axis)
+               enddo
+            enddo
+            deallocate(axis,Gprint_Hk,Gprint_Ek)
+
+         !
+         !verbose=3: print G(tau) in diagonal and Wannier basis
+         case(3)
+            !
+            allocate(axis(Ntau));axis=0d0
+            if(tau_uniform)then
+               axis = linspace(0d0,Beta,Ntau)
+            else
+               axis = denspace(Beta,Ntau)
+            endif
+            !
+            allocate(Gitau(Norb,Ntau,Nkpt));Gitau=czero
+            call calc_G0_tau(Gitau,mu,Beta,Lttc%Ek)
+            !
+            allocate(Gprint_Ek(Norb,Ntau));Gprint_Ek=czero
+            allocate(Gprint_Hk(Norb,Norb,Ntau));Gprint_Hk=czero
+            allocate(Gftmp(Norb,Norb));Gftmp=czero
+            !$OMP PARALLEL DEFAULT(NONE),&
+            !$OMP SHARED(Norb,Ntau,Nkpt,Lttc,Gitau,Gprint_Ek,Gprint_Hk),&
+            !$OMP PRIVATE(iwan1,ik,iw,Gftmp)
+            !$OMP DO
+            do itau=1,Ntau
+               do ik=1,Nkpt
+                  !
+                  do iwan1=1,Norb
+                     Gprint_Ek(iwan1,itau) = Gprint_Ek(iwan1,itau) + Gitau(iwan1,itau,ik)/Nkpt
+                  enddo
+                  !
+                  Gftmp = diag( Gitau(:,itau,ik) )
+                  !
+                  Gprint_Hk(:,:,itau) = Gprint_Hk(:,:,itau) + Gftmp/Nkpt
+                  !
+               enddo
+            enddo
+            !$OMP END DO
+            !$OMP END PARALLEL
+            deallocate(Gitau,Gftmp)
+            !
+            ! Print
+            do iwan1=1,Norb
+               call dump_FermionicField(Gprint_Ek(iwan1,:),pathOUTPUT_,"Gitau_Ek_"//str(iwan1)//".lda",axis)
+               do iwan2=1,Norb
+                  call dump_FermionicField(Gprint_Hk(iwan1,iwan2,:),pathOUTPUT_,"Gitau_Hk_"//str(iwan1)//str(iwan2)//".lda",axis)
+               enddo
+            enddo
+            deallocate(axis,Gprint_Hk,Gprint_Ek)
+            !
+            !
+      end select
+      !
+   end subroutine calc_Glda
 
 
 

@@ -38,7 +38,9 @@ module module_container
    fill_ksumkdiff                           ,&
    fill_smallk                              ,&
    wannierinterpolation                     ,&
-   wannier_K2R,wannier_R2K,wannier_K2R_NN   !,&
+   wannier_K2R                              ,&
+   wannier_R2K                              ,&
+   wannier_K2R_NN!                          ,&
    !add_crystalfields
 
 
@@ -49,15 +51,16 @@ module module_container
    Bmats2itau,Bitau2mats
 
 
-   !(d) Contains units and definitions of lattice, fermionic and bosnoic types.
+   !(e) Contains units and definitions of lattice, fermionic and bosnoic types.
    use parameters
 
 
-   !(e) Standalone module. Contains input variables.
-   use input_vars
+   !(f) Standalone module. Contains input variables.
+   use input_vars!                           &
+   !read_inputfile
 
 
-   !(f) Container attributes manipulations. Depends on parameters
+   !(g) Container attributes manipulations. Depends on (e)
    use utils_fields, only:                   &
    FermionicKsum                            ,&
    BosonicKsum                              ,&
@@ -67,10 +70,12 @@ module module_container
    DeallocateLattice                        ,&
    AllocateBosonicField                     ,&
    DeallocateBosonicField                   ,&
-   clear_attributes
+   clear_attributes!                        ,&
+   !reshuffle_imp2loc                       ,&
+   !reshuffle_loc2imp
 
 
-   !(g) Input/Output routines. Depends on (utils_misc),(parameters),(utils_fields)
+   !(h) Input/Output routines. Depends on (b),(e),(g)
    use file_io, only:                        &
    dump_Matrix                              ,&
    dump_FermionicField                      ,&
@@ -79,33 +84,37 @@ module module_container
    read_BosonicField
 
 
-   !(h) Interactions container. Depends on (utils_misc),(crystal),(parameters),(input_vars),(utils_fields),(file_io)
+   !(i) Interactions container. Depends on (b),(c),(e),(f),(g),(h)
    use interactions, only:                   &
    read_U_spex                              ,&
    calc_W_full                              ,&
    calc_W_edmft                             ,&
    calc_chi_full                            ,&
-   calc_chi_edmft !build_Umatrix,rescale_interaction
+   calc_chi_edmft !                         ,&
+   !build_Umatrix                           ,&
+   !rescale_interaction
 
 
-   !(i) Bubble diagram container. Depends on (utils_misc),(crystal),(parameters),(input_vars),(utils_fields),(fourier_transforms)
+   !(j) Bubble diagram container. Depends on (b),(c),(d),(e),(f),(g)
    use bubbles, only:                        &
-   calc_Pi !calc_Optcond,calc_Hall
+   calc_Pi!                                 ,&
+   !calc_Optcond                            ,&
+   !calc_Hall
 
 
-   !(l) greens_function container. Depends on (linalg),(utils_misc),(crystal),(parameters),(input_vars),(utils_fields),(file_io),(fourier_transforms)
+   !(k) greens_function container. Depends on (a),(b),(c),(d),(e),(f),(g),(h)
    use greens_function, only:                &
-   calc_density
+   calc_density                             ,&
+   set_density                              ,&
+   calc_Gmats                               ,&
+   calc_Glda
 
 
-   !(m) Self-energy container. Depends on (linalg),(utils_misc),(crystal),(parameters),(input_vars),(utils_fields),(file_io),(fourier_transforms),(greens_function)
+   !(l) Self-energy container. Depends on (a),(b),(c),(d),(e),(f),(g),(h),(k)
    use self_energy, only:                    &
    calc_sigmaGW                             ,&
    calc_sigmaGW_DC                          ,&
    read_Sigma_spex
-
-
-
 
 
 end module module_container
