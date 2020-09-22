@@ -38,6 +38,7 @@ int main(int argc, char *argv[])
    int Norb;
    int Nspin;
    int Nsite;
+   double density;
    std::vector<int> SiteTime;
    std::vector<std::string> SiteName;
    std::vector<std::string> SiteDir;
@@ -67,15 +68,17 @@ int main(int argc, char *argv[])
       // iteration folder
       IterationDir = argv[2];
       //
-      find_param(argv[1], "Nspin"  , Nspin  );
-      find_param(argv[1], "Norb"   , Norb   );
-      find_param(argv[1], "Ntau"   , Ntau   );
-      find_param(argv[1], "Nsite"  , Nsite  );
+      find_param(argv[1], "Nspin"  , Nspin   );
+      find_param(argv[1], "Norb"   , Norb    );
+      find_param(argv[1], "Ntau"   , Ntau    );
+      find_param(argv[1], "Nsite"  , Nsite   );
+      find_param(argv[1], "dens"   , density );
       //
       std::cout << "Nspin= " << Nspin << std::endl;
       std::cout << "Norb= " << Norb << std::endl;
       std::cout << "Ntau= " << Ntau << std::endl;
       std::cout << "Nsite= " << Nsite << std::endl;
+      std::cout << "dens= " << density << std::endl;
       //
       for(int isite=0; isite < Nsite; isite++)
       {

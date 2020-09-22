@@ -16,6 +16,8 @@
 #include <cassert>
 #include <sys/stat.h>
 //
+#include <Eigen/Core>
+//
 using namespace std;
 //
 #ifndef CPLX
@@ -249,6 +251,69 @@ void print_line_star(int width) {
 void print_line_dot(int width) {
   std::cout << std::string(width, '.') << std::endl;
 }
+
+
+//------------------------------------------------------------------------------
+
+
+void read_vector( std::string path, Eigen::VectorXd &vec)
+{
+   ifstream file( path );
+   for (int ifl= 0; ifl<(int)vec.size(); ifl++) file >> vec(ifl);
+   file.close();
+}
+
+
+void read_hybridization( std::string path, std::vector<Eigen::VectorXd>  &hyb)
+{
+   int Nflavor = hyb[0].size();
+   int Ntau = hyb.size();
+   ifstream file( path );
+   //
+   for (int itau= 0; itau<Ntau; itau++)
+   {
+      Eigen::VectorXd hyb_t(Nflavor);
+      double tau;
+      //
+      file >> tau;
+      for (int ifl= 0; ifl<Nflavor; ifl++) file >> hyb_t(ifl);
+      //
+      hyb[itau] = hyb_t;
+   }
+   file.close();
+
+   // Here Delta(-tau) is actually needed
+   std::reverse(hyb.begin(),hyb.end());
+
+}
+
+
+void read_Kfunct( std::string path, std::vector<Eigen::MatrixXd>  &Kfunct)
+{
+   int Nflavor = Kfunct[0].rows();
+   int Ntau = Kfunct.size();
+   ifstream file( path );
+   //
+   for (int itau= 0; itau<Ntau; itau++)
+   {
+      Eigen::MatrixXd Kfunct_t(Nflavor,Nflavor);
+      double tau;
+      file >> tau;
+      for (int ifl= 0; ifl<Nflavor; ifl++)
+      {
+         for (int jfl= 0; jfl<Nflavor; jfl++)
+         {
+            file >> Kfunct_t(ifl,jfl);
+         }
+      }
+      //
+      Kfunct[itau] = Kfunct_t;
+   }
+   file.close();
+
+}
+
+
 
 
 
