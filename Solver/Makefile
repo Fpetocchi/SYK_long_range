@@ -1,25 +1,82 @@
-PALM_ROOT = $(HOME)/work/ALPS
-include $(PALM_ROOT)/share/alps/include.mk
+#
+# Compiler flags
+#
+CC = gcc
+CXX = mpicxx
 
-ECHO = echo
-RM = rm -rf
+CFLAGS = -lstdc++ -lm -std=c++11#-std=c++0x -stdlib=libc++ -lgsl -lgslcblas
+DBGCFLAGS = -O0 -Wall -Wextra -fmax-errors=1 -pedantic -ggdb
+RELCFLAGS = -O3 -fpermissive
 
-.C.o:
-	$(CXX) -c $(CPPFLAGS) $(CXXFLAGS) -o $@  $<
+#
+# Project files-----------------------------------------------------------------
+INCLDIR = include
+EXECDIR = bin
+SRCDIR = src
+SRCS = main.cpp
+CFLAGS +=-I $(INCLDIR)/eigen
+OBJS = $(SRCS:.cpp=.o)
+EXE  = Solver_ct_hyb
 
 
-all: sw
+#
+# Debug build settings----------------------------------------------------------
+DBGDIR = debug
+DBGEXE = $(EXECDIR)/$(EXE)_debug
+DBGOBJS = $(addprefix $(DBGDIR)/, $(OBJS))
+#DBGCFLAGS += -odir $(DBGDIR)
 
-sw: impurity.o main.o
-	$(CXX) -o $@ $(CPPFLAGS) $(CXXFLAGS) main.o impurity.o $(LDFLAGS) $(LIBS)
 
-MPI_sw: impurity.o main.o
-	$(CXX) -o $@ $(CPPFLAGS_MPI) $(CXXFLAGS) main.o impurity.o $(LDFLAGS_MPI)         $(LIBS_MPI)
+#
+# Release build settings--------------------------------------------------------
+RELDIR = release
+RELEXE = $(EXECDIR)/$(EXE)
+RELOBJS = $(addprefix $(RELDIR)/, $(OBJS))
+#RELCFLAGS += -odir $(RELDIR)
+
+
+#
+# All rules---------------------------------------------------------------------
+.PHONY: all clean debug prep release remake
+
+
+#
+# Default build-----------------------------------------------------------------
+all: prep release
+
+
+#
+# Debug rules-------------------------------------------------------------------
+debug: prep $(DBGEXE)
+
+$(DBGDIR)/%.o: $(SRCDIR)/%.cpp
+	$(CXX) $(CFLAGS) $(DBGCFLAGS) -c $< -o $@
+
+$(DBGEXE): $(DBGOBJS)
+	$(CXX) $(CFLAGS) $(DBGCFLAGS) $^ -o $@
+
+
+
+#
+# Release rules-----------------------------------------------------------------
+release: prep $(RELEXE)
+
+$(RELDIR)/%.o: $(SRCDIR)/%.cpp
+	$(CXX) $(CFLAGS) $(RELCFLAGS) -c $< -o $@
+
+$(RELEXE): $(RELOBJS)
+	$(CXX) $(CFLAGS) $(RELCFLAGS) $^ -o $@
+
+
+#
+# Other rules-------------------------------------------------------------------
+prep:
+	@mkdir -p $(DBGDIR) $(RELDIR) $(EXECDIR)
+
+remake: clean all
 
 clean:
-	$(RM) ti_files *.o *~  sw MPI_sw
+	rm -rf $(RELEXE) $(RELOBJS) $(DBGEXE) $(DBGOBJS) $(DBGDIR) $(RELDIR) $(EXECDIR)
 
-impurity.o: impurity.C impurity.h
-
-evaluate: evaluate.o
-	$(CXX) -o $@ $(CPPFLAGS) $(CXXFLAGS) evaluate.o $(LDFLAGS) $(LIBS)
+info:
+	echo "tumadre"
