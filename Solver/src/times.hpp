@@ -23,7 +23,7 @@
 
 std::default_random_engine generator;
 
-double flat_distribution()
+double rndm()
 {
    std::uniform_real_distribution<double> distribution_flat(0.0,1.0);
    double r = distribution_flat(generator);
@@ -72,10 +72,10 @@ typedef Eigen::MatrixXd dense_matrix;
 typedef Eigen::VectorXd vector_t;                                               //typedef std::vector<double> vector_t;
 typedef std::set<times> segment_container_t;
 typedef Eigen::VectorXd hybridization_t;                                        //all the orbitals(diagonal) at given itau
-typedef std::vector<Eigen::VectorXd> hybridization_container_t;                 //all the orbitals(diagonal) for a list of Ntau
 typedef Eigen::MatrixXd Kfunct_t;                                               //all the orbitals(Norb**2 x Norb**2) at given itau
+typedef std::vector<Eigen::VectorXd> hybridization_container_t;                 //all the orbitals(diagonal) for a list of Ntau
 typedef std::vector<Eigen::MatrixXd> Kfunct_container_t;                        //all the orbitals(Norb**2 x Norb**2) for a list of Ntau
-
+typedef std::chrono::time_point<std::chrono::system_clock> duration;
 
 //------------------------------------------------------------------------------
 

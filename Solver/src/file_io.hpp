@@ -288,6 +288,23 @@ void read_hybridization( std::string path, std::vector<Eigen::VectorXd>  &hyb)
 }
 
 
+void read_Umat( std::string path, Eigen::MatrixXd  &Umat)
+{
+   int Nflavor = Umat.rows();
+   ifstream file( path );
+   //
+   for (int ifl= 0; ifl<Nflavor; ifl++)
+   {
+      for (int jfl= 0; jfl<Nflavor; jfl++)
+      {
+         file >> Umat(ifl,jfl);
+      }
+   }
+   file.close();
+
+}
+
+
 void read_Kfunct( std::string path, std::vector<Eigen::MatrixXd>  &Kfunct)
 {
    int Nflavor = Kfunct[0].rows();

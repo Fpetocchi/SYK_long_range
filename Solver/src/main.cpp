@@ -20,10 +20,6 @@ using namespace std;
 
 
 
-
-
-
-
 //std::random_device generator;
 //std::default_random_engine generator;
 
@@ -133,9 +129,7 @@ int main(int argc, char *argv[])
       //..................................................
       //           SETUP THE RANDOM GENERATOR SEED
       //..................................................
-      unsigned long seed = std::chrono::duration_cast<std::chrono::milliseconds>
-      (std::chrono::system_clock::now().time_since_epoch()).count()-1566563000000;
-      generator.seed(abs(seed));
+
 
 
 
