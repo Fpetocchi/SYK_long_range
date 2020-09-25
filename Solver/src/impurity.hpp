@@ -47,16 +47,15 @@ public:
    void init(path);
    void reset_mu(double mu_new) {mu = mu_new; mu_is_reset=true;}
    //
-   void(ct_hyb::*dostep)(bool) = NULL;
+   void solve(bool);
    //
    void print_results(path);
    bool is_thermalized() const;
    double work_done() const;
 
 private:
-   //
-   //void dostep_istantaneous(bool);
-   //void dostep_retarded(bool);
+   // Pointer to the internal function
+   void(ct_hyb::*dostep)(void) = NULL;
    // Input vars
    double                              mu;                                      // chemical potential
    double                              Beta;                                    // inverse temperature
@@ -131,17 +130,8 @@ private:
       //read the istantaneous interaction ( Eigen::MatrixXd )
       read_EigenMat(inputDir+"/Uloc.DAT", Uloc, Nflavor, Nflavor);
 
-      //
-      if(retarded==true)
-      {
-         //read the screening function ( std::vector<std::vector<std::vector<double>>> )
-         read_VecVecVec(inputDir+"/K.DAT", K_table, Nflavor, Nflavor, Ntau_p1);
-         dostep = &ct_hyb::dostep_retarded;
-      }
-      else
-      {
-         dostep = &ct_hyb::dostep_istantaneous;
-      }
+      //read the screening function ( std::vector<std::vector<std::vector<double>>> )
+      if(retarded==true) read_VecVecVec(inputDir+"/K.DAT", K_table, Nflavor, Nflavor, Ntau_p1);
 
       //
       //initialize segment container ( std::vector<std::set<times>> )
@@ -187,22 +177,52 @@ private:
    //---------------------------------------------------------------------------
 
 
-   void dostep_retarded(bool atBeta)
+   void solve(bool &atBeta)
    {
+      //
+      bool finalize=false;
+
       //
       if(!initialized)
       {
          std::cout << " Solver is not initialized - Exiting." << std::endl;
          exit(1);
       }
-
-      //
-      double s=1;
-      bool finalize=false;
-
-      //
-      do
+      else
       {
+         std::cout << " Solver is about to start." << std::endl;
+         //
+         if((retarded==true)&&(atBeta==false))  dostep = &ct_hyb::dostep_retarded_full;
+         if((retarded==true)&&(atBeta==true))   dostep = &ct_hyb::dostep_retarded_atBeta;
+         if((retarded==false)&&(atBeta==false)) dostep = &ct_hyb::dostep_istantaneous_full;
+         if((retarded==false)&&(atBeta==true))  dostep = &ct_hyb::dostep_istantaneous_atBeta;
+         //
+         do
+         {
+            dostep();
+
+            //
+            //accumulate_observables()
+
+            //
+            // Global time condition
+            finalize = check_timer();
+
+         }while( !finalize );
+
+      }
+
+   }
+
+
+   //---------------------------------------------------------------------------
+
+
+   void dostep_retarded_full()
+   {
+         //
+         double s=1;
+
          // The measurments I'm going to do regardless from the time
          for (int imeas=0; imeas<Nmeas; imeas++)
          {
@@ -261,12 +281,23 @@ private:
          // measure spin histogram
          Szhist = measure_Szhist( nt );
 
-         //
-         // Global time condition
-         finalize = check_timer();
+   }
 
-      }while( !finalize );
 
+   //---------------------------------------------------------------------------
+
+
+   void dostep_retarded_atBeta()
+   {
+      //
+      if(!initialized)
+      {
+         std::cout << " Solver is not initialized - Exiting." << std::endl;
+         exit(1);
+      }
+
+      //
+      bool finalize=false;
 
    }
 
@@ -274,7 +305,25 @@ private:
    //---------------------------------------------------------------------------
 
 
-   void dostep_istantaneous(bool atBeta)
+   void dostep_istantaneous_full()
+   {
+      //
+      if(!initialized)
+      {
+         std::cout << " Solver is not initialized - Exiting." << std::endl;
+         exit(1);
+      }
+
+      //
+      bool finalize=false;
+
+   }
+
+
+   //---------------------------------------------------------------------------
+
+
+   void dostep_istantaneous_atBeta()
    {
       //
       if(!initialized)
