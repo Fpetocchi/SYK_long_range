@@ -20,6 +20,7 @@
 //
 #include "times.hpp"
 #include "file_io.hpp"
+#include "observables.hpp"
 
 
 //============================================================================//
@@ -28,11 +29,10 @@
 class ct_hyb
 {
 public:
-   ct_hyb(double mu, double beta, int Nspin, int Norb, int Ntau,
-          int MaxTime, int CheckTime, int Therm, int Nmeas, bool retarded ):
-          mu(mu), Beta(beta),Nspin(Nspin), Norb(Norb), Ntau(Ntau),
-          MaxTime(MaxTime), CheckTime(CheckTime), Therm(Therm), Nmeas(Nmeas),
-          retarded(retarded) {}
+   ct_hyb(double mu, double beta, int Nspin, int Norb, int Ntau, int Norder,
+          int MaxTime, int Therm, int Nmeas, bool retarded ):
+          mu(mu), Beta(beta),Nspin(Nspin), Norb(Norb), Ntau(Ntau), Norder(Norder),
+          MaxTime(MaxTime), Therm(Therm), Nmeas(Nmeas), retarded(retarded) {}
    //
    double get_mu(void)const {return mu;}
    double get_Beta(void)const {return Beta;}
@@ -47,39 +47,52 @@ public:
    void init(path);
    void reset_mu(double mu_new) {mu = mu_new; mu_is_reset=true;}
    //
-   void dostep(bool);
+   void(ct_hyb::*dostep)(bool) = NULL;
    //
    void print_results(path);
    bool is_thermalized() const;
    double work_done() const;
 
 private:
-   double                              mu;
-   double                              Beta;
+   //
+   //void dostep_istantaneous(bool);
+   //void dostep_retarded(bool);
+   // Input vars
+   double                              mu;                                      // chemical potential
+   double                              Beta;                                    // inverse temperature
    int                                 Nspin;
    int                                 Norb;
    int                                 Ntau;
-   int                                 MaxTime;
-   int                                 CheckTime;
-   int                                 Therm;
-   int                                 Nmeas;
-   bool                                retarded;
-   //
+   int                                 Norder;                                  // Max perturbation order
+   int                                 MaxTime;                                 // Max runtime
+   int                                 Therm;                                   // Thernalization sweeps
+   int                                 Nmeas;                                   // Number of sweeps between expensive measurments
+   bool                                retarded;                                // flag to switch on retarded interactions
+   // Internal vars
    duration                            Tstart,Tnow;
    bool                                mu_is_reset=false;
    bool                                initialized=false;
-   int                                 Nflavor=Nspin*Norb;                      // spin-orbitla flavours
-   int                                 sweeps;                                  // sweeps done
-   int                                 thermalization_sweeps=Therm;             // sweeps to be done for equilibration
-   vector_t                            Eloc;                                    // mu-<\epsilon>
-   dense_matrix                        Uloc;                                       // U matrix
-   std::vector<segment_container_t >   segments;                                // stores configurations with 0,1,... segments (but not full line)
+   int                                 Nflavor=Nspin*Norb;                      // Spin-orbital flavours
+   int                                 Ntau_p1=Ntau+1;                          // Spin-orbital flavours
+   int                                 sweeps;                                  // Sweeps done
+   int                                 thermalization_sweeps=Therm;             // REMOVE
+   Vec                                 Eloc;                                    // mu-<\epsilon>
+   Mat                                 Uloc;                                    // Istantaneous U matrix
+   std::vector<segment_container_t>    segments;                                // Stores configurations with 0,1,... segments (but not full line)
    std::vector<int>                    full_line;                               // if 1 means that particle occupies full time-line
-   std::vector<double>                 sign;                                    // sign of Z_n_up [actually not needed for density-density]
-   std::vector<dense_matrix>           M;                                       // inverse hybridization matrix
-   std::valarray<double>               G_Nmeas;                                 // Nmeasured GF
-   hybridization_container_t           F,G;                                     // F_up(\tau) = -G_{0,down}^{-1}(-\tau) + (iw + mu)
-   Kfunct_container_t                  K_table;                                 // K function matrix for retarded interactions
+   VecMat                              M;                                       // Inverse hybridization matrix
+   VecVec                              F;                                       // F_up(\tau) = -G_{0,down}^{-1}(-\tau) + (iw + mu)
+   VecVecVec                           K_table;                                 // K function matrix for retarded interactions
+   // Observables
+   double                              sign_meas;                               // Total Sign
+   Vec                                 sign;                                    // Sign per flavor
+   Vec                                 Nloc;                                    // Density per flavor
+   Vec                                 Pert;                                    // Perturbation order
+   Vec                                 Nhist;                                   //
+   Vec                                 Szhist;                                  //
+   VecVec                              G;                                       // Impurity Green's function
+   VecVec                              nt;                                      // n(\tau)
+   VecVec                              nnt;                                     // Charge susceptibility
 
 
    //---------------------------------------------------------------------------
@@ -103,47 +116,59 @@ private:
    //---------------------------------------------------------------------------
 
 
-   void init(path &inputDir)
+   void init(path &inputDir, bool &atBeta)
    {
       //
-      //set the local energies
-      Eloc.resize(Nflavor);
-      read_vector(inputDir+"/Eloc.DAT", Eloc);
-      for (int ifl=0; ifl<Nflavor; ifl++) Eloc(ifl) = mu - Eloc(ifl);
+      //set the local energies ( std::vector<double> )
+      read_Vec(inputDir+"/Eloc.DAT", Eloc, Nflavor);
+      for (int ifl=0; ifl<Nflavor; ifl++) Eloc[ifl] = mu - Eloc[ifl];
 
       //
-      //read the hybridization function (std::vector<Eigen::VectorXd>)
-      F.resize(Ntau+1,vector_t(Nflavor));
-      read_hybridization(inputDir+"/Delta.DAT", F);
+      //read the hybridization function ( std::vector<std::vector<double>> )
+      read_VecVec(inputDir+"/Delta.DAT", F, Nflavor, Ntau_p1, true);
 
       //
-      //read the istantaneous interaction (Eigen::MatrixXd)
-      Uloc.resize(Nflavor,Nflavor);
-      read_Umat(inputDir+"/Uloc.DAT", Uloc);
+      //read the istantaneous interaction ( Eigen::MatrixXd )
+      read_EigenMat(inputDir+"/Uloc.DAT", Uloc, Nflavor, Nflavor);
 
       //
-      //read the screening function (std::vector<Eigen::MatrixXd>)
       if(retarded==true)
       {
-         K_table.resize(Ntau+1,dense_matrix(Nflavor,Nflavor));
-         read_Kfunct(inputDir+"/K.DAT", K_table);
+         //read the screening function ( std::vector<std::vector<std::vector<double>>> )
+         read_VecVecVec(inputDir+"/K.DAT", K_table, Nflavor, Nflavor, Ntau_p1);
+         dostep = &ct_hyb::dostep_retarded;
+      }
+      else
+      {
+         dostep = &ct_hyb::dostep_istantaneous;
       }
 
       //
-      //initialize the Green's function (std::vector<Eigen::VectorXd>)
-      G.resize(Ntau+1,vector_t(Nflavor));
-
-      //
-      //initialize segment container (std::vector<std::set<times>>)
+      //initialize segment container ( std::vector<std::set<times>> )
       segments.resize(Nflavor);
       for (int ifl=0; ifl<Nflavor; ifl++)segments[ifl].clear();
 
       //
-      //initialize full_line (std::vector<int>)
+      //initialize full_line ( std::vector<int> )
       full_line.resize(Nflavor,0);
 
       //
-      // initialize seed aggiungi qualcosa che dipenda dal task
+      //initialize empty Inverse hybridization matrix M ( std::vector<Eigen::MatrixXd> )
+      M.resize(Nflavor,Mat::Zero(Nflavor,Nflavor));
+
+      //
+      //initialize observables
+      sign.resize(Nflavor,0.0);                                                 // ( std::vector<double> )
+      Nloc.resize(Nflavor,0.0);                                                 // ( std::vector<double> )
+      Nhist.resize(Nflavor+1,0.0);                                              // ( std::vector<double> )
+      Szhist.resize(Nflavor/2+1,0.0);                                           // ( std::vector<double> )
+      Pert.resize(Norder*Nflavor,0.0);                                          // ( std::vector<double> )
+      G.resize(Nflavor,std::vector<double>(Ntau_p1,0.0));                       // ( std::vector<std::vector<double>> )
+      nt.resize(Nflavor,std::vector<double>(Ntau_p1,0.0));                      // ( std::vector<std::vector<double>> )
+      nnt.resize(Nflavor*(Nflavor+1)/2,std::vector<double>(Ntau_p1,0.0));       // ( std::vector<std::vector<double>> )
+      sign_meas=0.0;
+      //
+      // initialize seed - aggiungi qualcosa che dipenda dal task
       unsigned long seed = std::chrono::duration_cast<std::chrono::milliseconds>
       (std::chrono::system_clock::now().time_since_epoch()).count()-1566563000000;
       generator.seed(abs(seed));
@@ -162,7 +187,94 @@ private:
    //---------------------------------------------------------------------------
 
 
-   void dostep(bool &atBeta)
+   void dostep_retarded(bool atBeta)
+   {
+      //
+      if(!initialized)
+      {
+         std::cout << " Solver is not initialized - Exiting." << std::endl;
+         exit(1);
+      }
+
+      //
+      double s=1;
+      bool finalize=false;
+
+      //
+      do
+      {
+         // The measurments I'm going to do regardless from the time
+         for (int imeas=0; imeas<Nmeas; imeas++)
+         {
+            //
+            //Flavor loop
+            for (int ifl=0; ifl<Nflavor; ifl++)
+            {
+                //
+                // insert or remove full line
+//                if (segments[ifl].size() == 0) insert_remove_full_line(rndm(), Eloc[ifl], Umat, Beta, full_line[ifl], segments, full_line, ifl);
+//                insert_remove_antisegment(rndm(), Beta*rndm(), Ntau, Beta, Eloc[ifl], Umat, F[ifl], full_line[ifl], segments[ifl], M[ifl], sign[ifl], segments, full_line, ifl, K_table);
+                //
+                if (!full_line[ifl])
+                {
+                   //
+                   // local update
+//                   insert_remove_segment(rndm(), Beta*rndm(), Ntau, Beta, Eloc[ifl], Umat, F[ifl], segments[ifl], M[ifl], sign[ifl], segments, full_line, ifl, K_table);
+                   //
+                   // shift segments
+//                   for (int k=0; k<N_shift; k++) shift_segment(rndm(), segments[ifl], Ntau, Beta, Eloc[ifl], Umat, F[ifl], M[ifl], sign[ifl], segments, full_line, ifl, K_table);
+                   //
+                   // flip segment
+                   //for (int i=0; i<N_flip; i++)flip_segment(rndm(), segments_up, Ntau, Beta, M_up, sign_up, sign_down, F_down, M_down, segments_down, full_line_down);
+                }
+                //
+                // measure perturbation order
+                if (segments[ifl].size()<Norder) Pert[ifl*Norder+segments[ifl].size()] += 1;
+                //
+                // measure Green's functions
+                if (segments[ifl].size()>0) G[ifl] = measure_G( segments[ifl], M[ifl], Ntau_p1, Beta );
+                //
+                // collect the sign among the segments
+                s *= sign[ifl];
+                //
+                // Measure the flavour occupation
+//                Nloc[ifl] += compute_overlap(full_segment, segments[ifl], full_line[ifl], Beta)/Beta;
+            } // end Flavor loop
+            //
+            //
+            sign_meas += s;
+         }  // end Nmeas loop
+
+         //
+         // measure n_a(\tau)
+         nt = measure_nt( segments, full_line, Ntau_p1, Beta );
+
+         //
+         // measure n_a(\tau)n_b(0)
+         nnt = measure_nnt( nt );
+
+         //
+         // measure density histogram
+         Nhist = measure_Nhist( nt );
+
+         //
+         // measure spin histogram
+         Szhist = measure_Szhist( nt );
+
+         //
+         // Global time condition
+         finalize = check_timer();
+
+      }while( !finalize );
+
+
+   }
+
+
+   //---------------------------------------------------------------------------
+
+
+   void dostep_istantaneous(bool atBeta)
    {
       //
       if(!initialized)
@@ -173,97 +285,7 @@ private:
 
       //
       bool finalize=false;
-      do
-      {
-         // The measurments I'm going to do anyway
-         for (int imeas=0; imeas<Nmeas; imeas++)
-         {
-            //Flavor loop
-             for (int ifl=0; ifl<FLAVORS; ifl++)
-             {
-                //
-                // insert or remove full line
-                 if (segments[ifl].size() == 0) insert_remove_full_line(rndm, Eloc(ifl), Umat, Beta, full_line[ifl], segments, full_line, ifl);
 
-                 insert_remove_antisegment(rndm, Beta*rndm(), N, Beta, mu_e[ifl], u, F[ifl], full_line[ifl], segments[ifl], M[ifl], sign[ifl], segments, full_line, ifl, K_table);
-
-                 if (!full_line[ifl])
-                 {
-                     // local update
-                     insert_remove_segment(rndm, Beta*rndm(), N, Beta, mu_e[ifl], u, F[ifl], segments[ifl], M[ifl], sign[ifl], segments, full_line, ifl, K_table);
-
-                     // shift segments
-                     for (int k=0; k<N_shift; k++) shift_segment(rndm, segments[ifl], N, Beta, mu_e[ifl], u, F[ifl], M[ifl], sign[ifl], segments, full_line, ifl, K_table);
-
-                     /*
-                      // flip segment
-                      for (int i=0; i<N_flip; i++)
-                      flip_segment(rndm, segments_up, N, Beta, M_up, sign_up, sign_down, F_down, M_down, segments_down, full_line_down);
-                     */
-                 }
-
-                 // measure perturbation order
-
-                 if (segments[ifl].size()<N_order)
-                     order_meas[ifl*N_order+segments[ifl].size()] += 1;
-
-
-                 // measure Green functions
-
-                 if (segments[ifl].size()>0) {
-                     for (int i=0; i<M[ifl].size1(); i++) {
-                         (i==0 ? it1 = segments[ifl].begin() : it1++);
-                         for (int k=0; k<M[ifl].size1(); k++) {
-                             (k==0 ? it2 = segments[ifl].begin() : it2++);
-                             if (M[ifl](k,i)!=0) {
-                                 double argument = it1->t_end()-it2->t_start();
-                                 double bubble_sign=1;
-                                 if (argument > 0) {
-                                     bubble_sign = 1;
-                                 }
-                                 else {
-                                     bubble_sign = -1;
-                                     argument += Beta;
-                                 }
-
-                                 int index = argument/Beta*N+0.5;
-                                 G_meas[ifl*(N+1)+index] += M[ifl](k,i)*bubble_sign/(Beta*Beta);
-                             }
-                         }
-                     }
-                 }
-
-                 s *= sign[ifl];
-
-                 n_meas[ifl] += compute_overlap(full_segment, segments[ifl], full_line[ifl], Beta)/Beta;
-
-             }
-
-             sign_meas += s;
-
-             // swap updates may be needed in case of trapping in a symmetry-broken state
-             /*
-              if (i%N_swap==1) {
-              int orbital=rndm()*(FLAVORS/2);
-              if (M[2*orbital].size1()!=0 && M[2*orbital+1].size1()!=0)
-              swap_segments(rndm, Beta, F[orbital], F[orbital+1], segments[orbital], segments[orbital+1], full_line[orbital], full_line[orbital+1], sign[orbital], sign[orbital+1], M[orbital], M[orbital+1]);
-              }
-             */
-
-             /*
-              // global spin flip (does not require overlap calculation)
-              if (i%N_swap==1){
-              //check if doable
-              bool ok=true;
-              for(int j=0; j<FLAVORS; j++) if(M[j].size1()==0) ok=false;
-              if(ok) swap_spins(rndm, Beta, FLAVORS, F, segments, full_line, sign, M);
-              }
-             */
-
-
-         }
-
-      }while( !finalize );
    }
 
 

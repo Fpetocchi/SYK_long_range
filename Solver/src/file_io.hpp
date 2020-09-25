@@ -256,78 +256,157 @@ void print_line_dot(int width) {
 //------------------------------------------------------------------------------
 
 
-void read_vector( std::string path, Eigen::VectorXd &vec)
+void read_Vec( std::string path, std::vector<double> &Vec, int &idim)
 {
+   //
+   Vec = std::vector<double>(idim,0.0); //.resize(Nflavor,0.0);
    ifstream file( path );
-   for (int ifl= 0; ifl<(int)vec.size(); ifl++) file >> vec(ifl);
+   //
+   for (int i= 0; i<(int)Vec.size(); i++) file >> Vec[i];
+   file.close();
+}
+void read_EigenVec( std::string path, Eigen::VectorXd &Vec, int &idim)
+{
+   //
+   Vec.setZero(idim);
+   ifstream file( path );
+   //
+   for (int i= 0; i<idim; i++) file >> Vec(i);
    file.close();
 }
 
 
-void read_hybridization( std::string path, std::vector<Eigen::VectorXd>  &hyb)
+//------------------------------------------------------------------------------
+
+
+void read_Mat( std::string path, std::vector<std::vector<double>>  &Mat, int &idim, int &jdim , bool reverse_last=false)
 {
-   int Nflavor = hyb[0].size();
-   int Ntau = hyb.size();
+   //
+   Mat = std::vector<std::vector<double>>(idim,std::vector<double>(jdim,0.0));
+   ifstream file( path );
+   //
+   for (int i= 0; i<idim; i++)
+   {
+      for (int j= 0; j<jdim; j++)
+      {
+         file >> Mat[i][j];
+      }
+      if(reverse_last==true)std::reverse(Mat[i].begin(),Mat[i].end());
+   }
+   file.close();
+}
+void read_VecVec( std::string path, std::vector<std::vector<double>>  &VecVec, int &idim, int &jdim , bool reverse_last=false)
+{
+   // F.resize(Nflavor,std::vector<double>(Ntau+1,0.0));  //( std::vector<Eigen::VectorXd> ) -> F.resize(Ntau+1,Vec::Zero(Nflavor));
+   VecVec = std::vector<std::vector<double>>(idim,std::vector<double>(jdim,0.0));
+   ifstream file( path );
+   //
+   for (int i= 0; i<idim; i++)
+   {
+      for (int j= 0; j<jdim; j++)
+      {
+         file >> VecVec[i][j];
+      }
+      if(reverse_last==true)std::reverse(VecVec[i].begin(),VecVec[i].end());
+   }
+   file.close();
+}
+void read_EigenMat( std::string path, Eigen::MatrixXd  &Mat, int &idim, int &jdim , bool reverse_last=false)
+{
+   //
+   Mat.setZero(idim,jdim);
+   ifstream file( path );
+   //
+   for (int i= 0; i<idim; i++)
+   {
+      for (int j= 0; j<jdim; j++)
+      {
+         file >> Mat(i,j);
+      }
+   }
+   file.close();
+   if(reverse_last==true)Mat.rowwise().reverse();
+}
+
+
+//------------------------------------------------------------------------------
+
+
+void read_VecVecVec( std::string path, std::vector<std::vector<std::vector<double>>>  &VecVecVec, int &idim, int &jdim, int &kdim )
+{
+   ////for (int ifl=0; ifl<Nflavor; ifl++)K_table.push_back( std::vector<std::vector<double>> (Nflavor, std::vector<double>(Ntau+1,0.0))); //( std::vector<Eigen::MatrixXd> ) -> K_table.resize(Nflavor,Mat::Zero(Nflavor,Ntau+1));
+   VecVecVec = std::vector<std::vector<std::vector<double>>>(idim,std::vector<std::vector<double>>(jdim,std::vector<double>(kdim,0.0)));
+   ifstream file( path );
+   //
+   for (int i= 0; i<idim; i++)
+   {
+      for (int j= 0; j<jdim; j++)
+      {
+         for (int k= 0; k<kdim; j++)
+         {
+            file >> VecVecVec[i][j][k];
+         }
+      }
+   }
+   file.close();
+}
+
+
+//------------------------------------------------------------------------------
+
+
+void read_VecEigenVec_WRONG( std::string path, std::vector<Eigen::VectorXd>  &EigenVec )
+{
+   //
+   int Nflavor = EigenVec[0].size();
+   int Ntau = EigenVec.size();
    ifstream file( path );
    //
    for (int itau= 0; itau<Ntau; itau++)
    {
-      Eigen::VectorXd hyb_t(Nflavor);
+      //
+      Eigen::VectorXd EigenVec_t;
+      EigenVec_t.setZero(Nflavor);
       double tau;
       //
       file >> tau;
-      for (int ifl= 0; ifl<Nflavor; ifl++) file >> hyb_t(ifl);
+      for (int i= 0; i<Nflavor; i++) file >> EigenVec_t(i);
       //
-      hyb[itau] = hyb_t;
+      EigenVec[itau] = EigenVec_t;
    }
    file.close();
 
    // Here Delta(-tau) is actually needed
-   std::reverse(hyb.begin(),hyb.end());
-
+   std::reverse(EigenVec.begin(),EigenVec.end());
 }
 
 
-void read_Umat( std::string path, Eigen::MatrixXd  &Umat)
+void read_VecEigenMat_WRONG( std::string path, std::vector<Eigen::MatrixXd>  &EigenMat)
 {
-   int Nflavor = Umat.rows();
-   ifstream file( path );
    //
-   for (int ifl= 0; ifl<Nflavor; ifl++)
-   {
-      for (int jfl= 0; jfl<Nflavor; jfl++)
-      {
-         file >> Umat(ifl,jfl);
-      }
-   }
-   file.close();
-
-}
-
-
-void read_Kfunct( std::string path, std::vector<Eigen::MatrixXd>  &Kfunct)
-{
-   int Nflavor = Kfunct[0].rows();
-   int Ntau = Kfunct.size();
+   int Nflavor = EigenMat[0].rows();
+   int Ntau = EigenMat.size();
    ifstream file( path );
    //
    for (int itau= 0; itau<Ntau; itau++)
    {
-      Eigen::MatrixXd Kfunct_t(Nflavor,Nflavor);
+      //
+      Eigen::MatrixXd EigenMat_t;
+      EigenMat_t.setZero(Nflavor,Nflavor);
       double tau;
+      //
       file >> tau;
-      for (int ifl= 0; ifl<Nflavor; ifl++)
+      for (int i= 0; i<Nflavor; i++)
       {
-         for (int jfl= 0; jfl<Nflavor; jfl++)
+         for (int j= 0; j<Nflavor; j++)
          {
-            file >> Kfunct_t(ifl,jfl);
+            file >> EigenMat_t(i,j);
          }
       }
       //
-      Kfunct[itau] = Kfunct_t;
+      EigenMat[itau] = EigenMat_t;
    }
    file.close();
-
 }
 
 

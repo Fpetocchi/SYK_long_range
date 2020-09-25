@@ -68,14 +68,14 @@ inline bool operator==(times t1, times t2) {
 
 
 typedef std::string path;
-typedef Eigen::MatrixXd dense_matrix;
-typedef Eigen::VectorXd vector_t;                                               //typedef std::vector<double> vector_t;
 typedef std::set<times> segment_container_t;
-typedef Eigen::VectorXd hybridization_t;                                        //all the orbitals(diagonal) at given itau
-typedef Eigen::MatrixXd Kfunct_t;                                               //all the orbitals(Norb**2 x Norb**2) at given itau
-typedef std::vector<Eigen::VectorXd> hybridization_container_t;                 //all the orbitals(diagonal) for a list of Ntau
-typedef std::vector<Eigen::MatrixXd> Kfunct_container_t;                        //all the orbitals(Norb**2 x Norb**2) for a list of Ntau
+typedef Eigen::MatrixXd Mat;
+typedef std::vector<double> Vec;
+typedef std::vector<std::vector<double>> VecVec;
+typedef std::vector<std::vector<std::vector<double>>> VecVecVec;
+typedef std::vector<Eigen::MatrixXd> VecMat;
 typedef std::chrono::time_point<std::chrono::system_clock> duration;
+
 
 //------------------------------------------------------------------------------
 
