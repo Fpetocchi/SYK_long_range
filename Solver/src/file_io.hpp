@@ -355,62 +355,36 @@ void read_VecVecVec( std::string path, std::vector<std::vector<std::vector<doubl
 //------------------------------------------------------------------------------
 
 
-void read_VecEigenVec_WRONG( std::string path, std::vector<Eigen::VectorXd>  &EigenVec )
+void print_Vec( std::string path, std::vector<double> &Vec, unsigned long long int &Norm)
 {
    //
-   int Nflavor = EigenVec[0].size();
-   int Ntau = EigenVec.size();
-   ifstream file( path );
+   FILE * printFile;
+   const char * file=path.c_str();
+   printFile = fopen(file ,"w");
+   int Nrows = Vec.size();
    //
-   for (int itau= 0; itau<Ntau; itau++)
-   {
-      //
-      Eigen::VectorXd EigenVec_t;
-      EigenVec_t.setZero(Nflavor);
-      double tau;
-      //
-      file >> tau;
-      for (int i= 0; i<Nflavor; i++) file >> EigenVec_t(i);
-      //
-      EigenVec[itau] = EigenVec_t;
-   }
-   file.close();
-
-   // Here Delta(-tau) is actually needed
-   std::reverse(EigenVec.begin(),EigenVec.end());
+   for (int irow= 0; irow<Nrows; irow++) fprintf (printFile , "%i\t%.20e\n",irow,Vec[irow]/Norm);
+   fclose(printFile);
 }
 
 
-void read_VecEigenMat_WRONG( std::string path, std::vector<Eigen::MatrixXd>  &EigenMat)
+void print_VecVec( std::string path, std::vector<std::vector<double>> &VecVec, unsigned long long int &Norm)
 {
    //
-   int Nflavor = EigenMat[0].rows();
-   int Ntau = EigenMat.size();
-   ifstream file( path );
+   FILE * printFile;
+   const char * file=path.c_str();
+   printFile = fopen(file ,"w");
+   int Nrows = VecVec.size();
+   int Ncols = VecVec[0].size();
    //
-   for (int itau= 0; itau<Ntau; itau++)
+   for (int irow= 0; irow<Nrows; irow++)
    {
-      //
-      Eigen::MatrixXd EigenMat_t;
-      EigenMat_t.setZero(Nflavor,Nflavor);
-      double tau;
-      //
-      file >> tau;
-      for (int i= 0; i<Nflavor; i++)
-      {
-         for (int j= 0; j<Nflavor; j++)
-         {
-            file >> EigenMat_t(i,j);
-         }
-      }
-      //
-      EigenMat[itau] = EigenMat_t;
+      fprintf (printFile , "%i\t",irow);
+      for (int icol= 0; icol<Ncols; icol++) fprintf (printFile , "%.20e\t",(VecVec[irow][icol])/Norm);
+      fprintf (printFile , "\n");
    }
-   file.close();
+   fclose(printFile);
 }
-
-
-
 
 
 

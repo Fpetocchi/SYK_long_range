@@ -23,7 +23,6 @@ using namespace std;
 //std::default_random_engine generator;
 
 
-
 int main(int argc, char *argv[])
 {
    //..................................................

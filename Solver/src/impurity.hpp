@@ -18,7 +18,7 @@
 #include <Eigen/Core>
 #include <Eigen/Dense>
 //
-#include "times.hpp"
+#include "segments.hpp"
 #include "file_io.hpp"
 #include "observables.hpp"
 #include "moves.hpp"
@@ -31,9 +31,10 @@ class ct_hyb
 {
 public:
    ct_hyb(double mu, double beta, int Nspin, int Norb, int Ntau, int Norder,
-          int MaxTime, int Therm, int Nmeas, bool retarded ):
-          mu(mu), Beta(beta),Nspin(Nspin), Norb(Norb), Ntau(Ntau), Norder(Norder),
-          MaxTime(MaxTime), Therm(Therm), Nmeas(Nmeas), retarded(retarded) {}
+          int Therm, int Nmeas, int Nshift, bool PrintTime, bool retarded ):
+   mu(mu), Beta(beta),Nspin(Nspin), Norb(Norb), Ntau(Ntau), Norder(Norder),
+   Therm(Therm), Nmeas(Nmeas), Nshift(Nshift), PrintTime(PrintTime), retarded(retarded)
+   {}
    //
    double get_mu(void)const {return mu;}
    double get_Beta(void)const {return Beta;}
@@ -41,22 +42,15 @@ public:
    int get_Norb(void)const {return Norb;}
    int get_Nflavor(void)const {return Nspin*Norb;}
    int get_Ntau(void)const {return Ntau;}
-   int get_MaxTime(void)const {return MaxTime;}
    int get_Nmeas(void)const {return Nmeas;}
-   bool get_retarded(void)const {return retarded;}
    //
-   void init(path);
    void reset_mu(double mu_new) {mu = mu_new; mu_is_reset=true;}
    //
-   void solve(bool);
-   //
-   void print_results(path);
-   bool is_thermalized() const;
-   double work_done() const;
 
 private:
    // Pointer to the internal function defining the solution mode
    void(ct_hyb::*dostep)(void) = NULL;
+   VecVecVec *K_table_ptr = NULL;
    // Input vars
    double                              mu;                                      // chemical potential
    double                              Beta;                                    // inverse temperature
@@ -64,17 +58,19 @@ private:
    int                                 Norb;
    int                                 Ntau;
    int                                 Norder;                                  // Max perturbation order
-   int                                 MaxTime;                                 // Max runtime
    int                                 Therm;                                   // Thernalization sweeps
    int                                 Nmeas;                                   // Number of sweeps between expensive measurments
+   int                                 Nshift;
+   int                                 PrintTime;
    bool                                retarded;                                // flag to switch on retarded interactions
    // Internal vars
+   path                                resultsDir;
    duration                            Tstart,Tnow;
    bool                                mu_is_reset=false;
    bool                                initialized=false;
    int                                 Nflavor=Nspin*Norb;                      // Spin-orbital flavours
    int                                 Ntau_p1=Ntau+1;                          // Spin-orbital flavours
-   int                                 sweeps;                                  // Sweeps done
+   unsigned long long int              sweeps;                                  // Sweeps done
    int                                 thermalization_sweeps=Therm;             // REMOVE
    Vec                                 Eloc;                                    // mu-<\epsilon>
    Mat                                 Uloc;                                    // Istantaneous U matrix
@@ -103,7 +99,7 @@ private:
       Tstart = std::chrono::system_clock::now();
    }
 
-   bool check_timer(void)
+   inline bool check_timer(int MaxTime)
    {
       bool stop=false;
       Tnow = std::chrono::system_clock::now();
@@ -116,8 +112,12 @@ private:
    //---------------------------------------------------------------------------
 
 
-   void init(path &inputDir, bool &atBeta)
+   void init(path &inputDir)
    {
+      //
+      // This can be made optional
+      resultsDir = inputDir;
+
       //
       //set the local energies ( std::vector<double> )
       read_Vec(inputDir+"/Eloc.DAT", Eloc, Nflavor);
@@ -158,6 +158,12 @@ private:
       nt.resize(Nflavor,std::vector<double>(Ntau_p1,0.0));                      // ( std::vector<std::vector<double>> )
       nnt.resize(Nflavor*(Nflavor+1)/2,std::vector<double>(Ntau_p1,0.0));       // ( std::vector<std::vector<double>> )
       sign_meas=0.0;
+      sweeps=0;
+
+      //
+      K_table_ptr = NULL;
+      if(retarded==true) K_table_ptr = &K_table;
+
       //
       // initialize seed - aggiungi qualcosa che dipenda dal task
       unsigned long seed = std::chrono::duration_cast<std::chrono::milliseconds>
@@ -169,20 +175,16 @@ private:
       start_timer();
 
       //
-      std::cout << " Solver is initialized." << std::endl;
       initialized=true;
-
+      std::cout << " Solver is initialized and timer has started." << std::endl;
    }
 
 
    //---------------------------------------------------------------------------
 
 
-   void solve(bool &atBeta)
+   void solve(int MaxTime, bool atBeta=false)
    {
-      //
-      bool finalize=false;
-
       //
       if(!initialized)
       {
@@ -191,156 +193,156 @@ private:
       }
       else
       {
+         //
+         if(atBeta==false) dostep = &ct_hyb::dostep_full;
+         if(atBeta==true)  dostep = &ct_hyb::dostep_atBeta;
+
+         //
          std::cout << " Solver is about to start." << std::endl;
-         //
-         if((retarded==true)&&(atBeta==false))  dostep = &ct_hyb::dostep_retarded_full;
-         if((retarded==true)&&(atBeta==true))   dostep = &ct_hyb::dostep_retarded_atBeta;
-         if((retarded==false)&&(atBeta==false)) dostep = &ct_hyb::dostep_istantaneous_full;
-         if((retarded==false)&&(atBeta==true))  dostep = &ct_hyb::dostep_istantaneous_atBeta;
-         //
-         do
-         {
-            //((ct_hyb*)this)->ct_hyb::dostep;
 
+         //
+         while( !check_timer(MaxTime) )
+         {
+            //
             (this->*dostep)();
-
-            //this->ct_hyb::dostep;
-
-            //
-            //accumulate_observables()
+            sweeps++;
 
             //
-            // Global time condition
-            finalize = check_timer();
-
-         }while( !finalize );
-
-      }
-
-   }
-
-
-   //---------------------------------------------------------------------------
-
-
-   void dostep_retarded_full()
-   {
-         //
-         double s=1;
-
-         // The measurments I'm going to do regardless from the time
-         for (int imeas=0; imeas<Nmeas; imeas++)
-         {
-            //
-            //Flavor loop
-            for (int ifl=0; ifl<Nflavor; ifl++)
+            if( check_timer(PrintTime) )
             {
-                //
-                // insert or remove full line
-                if (segments[ifl].size() == 0) insert_remove_full_line( Eloc[ifl], Uloc, Beta, full_line[ifl], segments, full_line, ifl );
-                insert_remove_antisegment( Beta*rndm(), Beta, Eloc[ifl], Uloc, F[ifl], full_line[ifl], segments[ifl], M[ifl], sign[ifl], segments, full_line, ifl, K_table );
-                //
-                if (!full_line[ifl])
-                {
-                   //
-                   // local update
-//                   insert_remove_segment(rndm(), Beta*rndm(), Ntau, Beta, Eloc[ifl], Umat, F[ifl], segments[ifl], M[ifl], sign[ifl], segments, full_line, ifl, K_table);
-                   //
-                   // shift segments
-//                   for (int k=0; k<N_shift; k++) shift_segment(rndm(), segments[ifl], Ntau, Beta, Eloc[ifl], Umat, F[ifl], M[ifl], sign[ifl], segments, full_line, ifl, K_table);
-                   //
-                   // flip segment
-                   //for (int i=0; i<N_flip; i++)flip_segment(rndm(), segments_up, Ntau, Beta, M_up, sign_up, sign_down, F_down, M_down, segments_down, full_line_down);
-                }
-                //
-                // measure perturbation order
-                if (segments[ifl].size()<(int)Norder) Pert[ifl*Norder+segments[ifl].size()] += 1;
-                //
-                // measure Green's functions
-                if (segments[ifl].size()>0) G[ifl] = measure_G( segments[ifl], M[ifl], Ntau_p1, Beta );
-                //
-                // collect the sign among the segments
-                s *= sign[ifl];
-                //
-                // Measure the flavour occupation
-//                Nloc[ifl] += compute_overlap(full_segment, segments[ifl], full_line[ifl], Beta)/Beta;
-            } // end Flavor loop
+               std::cout << " Printing observables." << std::endl;
+               std::cout << " Partial sweeps: " << sweeps << std::endl;
+               print_observables(sweeps);
+            }
+
+         }
+
+         //
+         std::cout << " Solver is done." << std::endl;
+         std::cout << " Printing observables." << std::endl;
+         std::cout << " Total sweeps: " << sweeps << std::endl;
+         print_observables(sweeps);
+
+      }
+
+   }
+
+
+   //---------------------------------------------------------------------------
+
+
+   void dostep_full()
+   {
+      //
+      times full_segment(0,Beta);
+      double s=1;
+      VecVec Gtmp(Nflavor,Vec(Ntau_p1,0.0));
+
+      // The measurments I'm going to do regardless from the time
+      for (int imeas=0; imeas<Nmeas; imeas++)
+      {
+         for (int ifl=0; ifl<Nflavor; ifl++)
+         {
+
+            // insert or remove full line
+            if (segments[ifl].size() == 0) insert_remove_full_line( Eloc[ifl], Uloc, Beta, full_line[ifl], segments, full_line, ifl );
+            insert_remove_antisegment( Beta*rndm(), Beta, Eloc[ifl], Uloc, F[ifl], full_line[ifl], segments[ifl], M[ifl], sign[ifl], segments, full_line, ifl, K_table_ptr );
+
             //
+            if (!full_line[ifl])
+            {
+               // local update
+               insert_remove_segment( Beta*rndm(), Beta, Eloc[ifl], Uloc, F[ifl], segments[ifl], M[ifl], sign[ifl], segments, full_line, ifl, K_table_ptr);
+               // shift segments
+               for (int k=0; k<Nshift; k++) shift_segment( segments[ifl], Beta, Eloc[ifl], Uloc, F[ifl], M[ifl], sign[ifl], segments, full_line, ifl, K_table_ptr);
+               // flip segment
+               //for (int i=0; i<N_flip; i++)flip_segment( segments_up, Ntau, Beta, M_up, sign_up, sign_down, F_down, M_down, segments_down, full_line_down);
+            }
+
+            //.........................Cheap measurments........................
+            // perturbation order
+            if (segments[ifl].size()<(unsigned int)Norder) Pert[ifl*Norder+segments[ifl].size()] += (1./Nmeas);
+            // Green's functions
+            if (segments[ifl].size()>0)  Gtmp[ifl] = measure_G( segments[ifl], M[ifl], Ntau_p1, Beta, (double)(Ntau/Nmeas)); //accumulate_G( G[ifl], segments[ifl], M[ifl], Ntau_p1, Beta, (double)(Ntau/Nmeas));
+            // sign among the segments
+            s *= sign[ifl];
+            // flavour occupation
+            Nloc[ifl] += compute_overlap(full_segment, segments[ifl], full_line[ifl], Beta)/(Beta*Nmeas);
+
+         }
+
+         //
+         sign_meas += s/Nmeas;
+
+      }
+
+      //.........................Expensive measurments..........................
+      // n_a(\tau)
+      nt = measure_nt( segments, full_line, Ntau_p1, Beta );
+      // correct G(0^+)and G(beta^-)
+      //correct_G( nt, Gtmp )
+      accumulate_G( G, Gtmp );
+      // n_a(\tau)n_b(0)
+      accumulate_nnt( nnt, nt );
+      // density histogram
+      accumulate_Nhist( Nhist, nt );
+      // spin histogram
+      accumulate_Szhist( Szhist, nt );
+
+   }
+
+
+   //---------------------------------------------------------------------------
+
+
+   void dostep_atBeta()
+   {
+      //
+      times full_segment(0,Beta);
+
+      // The measurments I'm going to do regardless from the time
+      for (int imeas=0; imeas<Nmeas; imeas++)
+      {
+         //
+         //Flavor loop
+         for (int ifl=0; ifl<Nflavor; ifl++)
+         {
+
+            // insert or remove full line
+            if (segments[ifl].size() == 0) insert_remove_full_line( Eloc[ifl], Uloc, Beta, full_line[ifl], segments, full_line, ifl );
+            insert_remove_antisegment( Beta*rndm(), Beta, Eloc[ifl], Uloc, F[ifl], full_line[ifl], segments[ifl], M[ifl], sign[ifl], segments, full_line, ifl, K_table_ptr );
+
             //
-            sign_meas += s;
-         }  // end Nmeas loop
+            if (!full_line[ifl])
+            {
+               // local update
+               insert_remove_segment( Beta*rndm(), Beta, Eloc[ifl], Uloc, F[ifl], segments[ifl], M[ifl], sign[ifl], segments, full_line, ifl, K_table_ptr);
+               // shift segments
+               for (int k=0; k<Nshift; k++) shift_segment( segments[ifl], Beta, Eloc[ifl], Uloc, F[ifl], M[ifl], sign[ifl], segments, full_line, ifl, K_table_ptr);
+               // flip segment
+               //for (int i=0; i<N_flip; i++)flip_segment( segments_up, Ntau, Beta, M_up, sign_up, sign_down, F_down, M_down, segments_down, full_line_down);
+            }
 
-         //
-         // measure n_a(\tau)
-         nt = measure_nt( segments, full_line, Ntau_p1, Beta );
+            //.........................Cheap measurments........................
+            // flavour occupation
+            Nloc[ifl] += compute_overlap(full_segment, segments[ifl], full_line[ifl], Beta)/(Beta*Nmeas);
 
-         //
-         // measure n_a(\tau)n_b(0)
-         nnt = measure_nnt( nt );
-
-         //
-         // measure density histogram
-         Nhist = measure_Nhist( nt );
-
-         //
-         // measure spin histogram
-         Szhist = measure_Szhist( nt );
-
+         }
+      }
    }
 
 
    //---------------------------------------------------------------------------
 
 
-   void dostep_retarded_atBeta()
+   void print_observables(unsigned long long int &iterations)
    {
-      //
-      if(!initialized)
-      {
-         std::cout << " Solver is not initialized - Exiting." << std::endl;
-         exit(1);
-      }
-
-      //
-      bool finalize=false;
-
+      print_Vec(resultsDir+"/Nloc.DAT", Nloc, iterations);
+      print_Vec(resultsDir+"/PertOrder.DAT", Pert, iterations);
+      print_VecVec(resultsDir+"/Gimp.DAT", G, iterations);
+      print_VecVec(resultsDir+"/nnt.DAT", nnt, iterations);
    }
 
-
-   //---------------------------------------------------------------------------
-
-
-   void dostep_istantaneous_full()
-   {
-      //
-      if(!initialized)
-      {
-         std::cout << " Solver is not initialized - Exiting." << std::endl;
-         exit(1);
-      }
-
-      //
-      bool finalize=false;
-
-   }
-
-
-   //---------------------------------------------------------------------------
-
-
-   void dostep_istantaneous_atBeta()
-   {
-      //
-      if(!initialized)
-      {
-         std::cout << " Solver is not initialized - Exiting." << std::endl;
-         exit(1);
-      }
-
-      //
-      bool finalize=false;
-
-   }
 
 
 };

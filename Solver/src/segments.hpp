@@ -1,5 +1,5 @@
-#ifndef ___TIMES___
-#define ___TIMES___
+#ifndef ___SEGMENTS___
+#define ___SEGMENTS___
 
 #include <iostream>
 #include <fstream>
@@ -78,6 +78,9 @@ typedef std::chrono::time_point<std::chrono::system_clock> duration;
 
 
 //------------------------------------------------------------------------------
+
+
+inline int cycle(int i, int size) {return (i>0 ? i-1 : size-1);}
 
 
 template <class G> inline double interpolate_F(double t, double Beta, G& F)
@@ -405,6 +408,48 @@ void compute_M_remove_anti(Mat &M, int s, int r)
 }
 
 
+template <class G, class S> void compute_M_shift( times &new_segment, int k, Mat &M,
+   S &segments_old, G &F, double Beta, double det_rat)
+{
+   //
+   std::vector<double> R(M.rows(),0), M_k(M.rows(),0), Fe(M.rows(),0);
+   typename S::iterator it=segments_old.begin();
+
+   //
+   for (int i=0; i<M_k.size(); i++)
+   {
+      M_k[i] = M(i,k);
+      Fe[i] = interpolate_F(new_segment.t_end()-it->t_start(), Beta, F);
+      it++;
+   }
+
+   //
+   for (int i=0; i<R.size(); i++)
+   {
+      if (i!=k)
+      {
+         for (int j=0; j<R.size(); j++) R[i] += Fe[j]*M(j,i);
+      }
+   }
+
+   //
+   for (int m=0; m<M.rows(); m++)
+   {
+      if (m!=k)
+      {
+         for (int n=0; n<M.rows(); n++) M(n,m) -= M_k[n]*R[m]/det_rat;
+      }
+      else
+      {
+         for (int n=0; n<M.rows(); n++) M(n,m) = M_k[n]/det_rat;
+      }
+   }
+
+   //
+   return;
+}
+
+
 //------------------------------------------------------------------------------
 
 
@@ -439,6 +484,33 @@ template <class G, class S, class V> double det_rat_up(times &new_segment, Mat  
    }
 
    //
+   if (det_rat < 0)
+   {
+      det_rat_sign = -1;
+      det_rat *= -1;
+   }
+   else
+   {
+      det_rat_sign = 1;
+   }
+
+   //
+   return det_rat;
+}
+
+
+template <class S> double det_rat_down(int k, Mat &M, S &segments_old, double &det_rat_sign)
+{
+   //
+   double det_rat = M(k,k);
+
+   // take care of sign changes produced by segments which "wind around"
+   if (k==segments_old.size()-1)
+   {
+      typename S::iterator it=segments_old.end(); it--;
+      if (it->t_end() < it->t_start()) det_rat *= -1;
+   }
+
    if (det_rat < 0)
    {
       det_rat_sign = -1;
@@ -543,6 +615,50 @@ template <class G, class S> double det_rat_remove_anti(times anti_segment, int r
 }
 
 
+template <class G, class S> double det_rat_shift(times &new_segment, int k, Mat &M,
+   S &segments_old, G &F, double Beta, double &det_rat_sign, double &overlap)
+{
+   //
+   typename S::iterator it;
+   double det_rat = 0;
+
+   //
+   it=segments_old.begin();
+   for (int i=0; i<M.rows(); i++)
+   {
+      det_rat += interpolate_F(new_segment.t_end()-it->t_start(), Beta, F)*M(i,k);
+      it++;
+   }
+
+   // take care of sign changes produced by segments which "wind around"
+   overlap = 1;
+   if (k==segments_old.size()-1)
+   {
+      it--;
+      // check if last segment has been shifted across beta
+      if ((new_segment.t_end()-new_segment.t_start())*(it->t_end()-it->t_start())<0)
+      {
+         det_rat *= -1;
+         overlap = -1;
+      }
+   }
+
+   //
+   if (det_rat < 0)
+   {
+      det_rat_sign = -1;
+      det_rat *= -1;
+   }
+   else
+   {
+      det_rat_sign = 1;
+   }
+
+   //
+   return det_rat;
+}
+
+
 //------------------------------------------------------------------------------
 
 
@@ -557,8 +673,8 @@ inline double H(double tau, double Beta, std::vector<double>& K_table)
 
 
 //version without self-interaction
-template <class S> double nonlocal(double ts, double te, S &other_segments, double Beta,
-   int this_flavor, VecVecVec &K_table, int insert_remove)
+template <class S> double nonlocal(double ts, double te, S &other_segments,
+   double Beta, int this_flavor, VecVecVec &K_table, int insert_remove)
 {
    //
    double nonloc=0.0;
@@ -569,7 +685,8 @@ template <class S> double nonlocal(double ts, double te, S &other_segments, doub
    {
       for(std::set<times>::iterator it=other_segments[flavor].begin(); it!=other_segments[flavor].end(); it++)
       {
-         nonloc += -H(it->t_end()-te, Beta, K_table[flavor][this_flavor])+H(it->t_end()-ts, Beta, K_table[flavor][this_flavor])+H(it->t_start()-te, Beta, K_table[flavor][this_flavor])-H(it->t_start()-ts, Beta, K_table[flavor][this_flavor]);
+         nonloc += -H(it->t_end()-te, Beta, K_table[flavor][this_flavor]  ) +H(it->t_end()-ts, Beta, K_table[flavor][this_flavor]  )
+                   +H(it->t_start()-te, Beta, K_table[flavor][this_flavor]) -H(it->t_start()-ts, Beta, K_table[flavor][this_flavor]);
       }
    }
 
@@ -583,6 +700,30 @@ template <class S> double nonlocal(double ts, double te, S &other_segments, doub
       // note: H(0)=0 in the model without self-interaction, so the first term is zero
       nonloc -= -2*H(0, Beta, K_table[this_flavor][this_flavor])+H(te-ts, Beta, K_table[this_flavor][this_flavor]);
    }
+
+   //
+   return nonloc;
+}
+
+
+template <class S> double nonlocal_shift(double te_ins, double te_rem, S &other_segments,
+   double beta, int this_flavor, VecVecVec &K_table)
+{
+   //
+   double nonloc=0.;
+
+   for (int flavor=0; flavor<other_segments.size(); flavor++)
+   {
+      for(std::set<times>::iterator it=other_segments[flavor].begin(); it!=other_segments[flavor].end(); it++)
+      {
+         nonloc += -H(it->t_end()-te_ins, beta, K_table[flavor][this_flavor])+H(it->t_start()-te_ins, beta, K_table[flavor][this_flavor]);
+         nonloc -= -H(it->t_end()-te_rem, beta, K_table[flavor][this_flavor])+H(it->t_start()-te_rem, beta, K_table[flavor][this_flavor]);
+      }
+   }
+
+   //
+   nonloc -= -H(te_rem-te_ins, beta, K_table[this_flavor][this_flavor]); // inexistent bond
+   nonloc += -H(te_rem-te_rem, beta, K_table[this_flavor][this_flavor]); // local contribution at te doesn't change
 
    //
    return nonloc;
