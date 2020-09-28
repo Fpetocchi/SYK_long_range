@@ -79,7 +79,7 @@ std::vector<std::vector<double>> measure_nt( std::vector<segment_container_t> &s
       if (segments[ifl].size()==0)
       {
          if (full_line[ifl]==0)
-            for (int i=0; i<n_tau[ifl].size(); ++i) n_tau[ifl][i]=0;
+            for (int i=0; i<(int)n_tau[ifl].size(); ++i) n_tau[ifl][i]=0;
       }
       else
       {
@@ -102,7 +102,7 @@ std::vector<std::vector<double>> measure_nt( std::vector<segment_container_t> &s
          }
          //
          // fill vector with occupation number
-         for (int i=1; i<n_tau[ifl].size(); i++)
+         for (int i=1; i<(int)n_tau[ifl].size(); i++)
          {
             if (n_tau[ifl][i]==-1)
                n_tau[ifl][i]=1-n_tau[ifl][i-1];
@@ -164,7 +164,7 @@ std::vector<std::vector<double>> measure_nnt_standalone( std::vector<segment_con
       if (segments[ifl].size()==0)
       {
          if (full_line[ifl]==0)
-            for (int i=0; i<n_vectors[ifl].size(); ++i) n_vectors[ifl][i]=0;
+            for (int i=0; i<(int)n_vectors[ifl].size(); ++i) n_vectors[ifl][i]=0;
       }
       else
       {
@@ -187,7 +187,7 @@ std::vector<std::vector<double>> measure_nnt_standalone( std::vector<segment_con
          }
          //
          // fill vector with occupation number
-         for (int i=1; i<n_vectors[ifl].size(); i++)
+         for (int i=1; i<(int)n_vectors[ifl].size(); i++)
          {
             if (n_vectors[ifl][i]==-1)
                n_vectors[ifl][i]=1-n_vectors[ifl][i-1];

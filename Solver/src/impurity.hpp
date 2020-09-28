@@ -21,6 +21,7 @@
 #include "times.hpp"
 #include "file_io.hpp"
 #include "observables.hpp"
+#include "moves.hpp"
 
 
 //============================================================================//
@@ -54,7 +55,7 @@ public:
    double work_done() const;
 
 private:
-   // Pointer to the internal function
+   // Pointer to the internal function defining the solution mode
    void(ct_hyb::*dostep)(void) = NULL;
    // Input vars
    double                              mu;                                      // chemical potential
@@ -199,7 +200,11 @@ private:
          //
          do
          {
-            dostep();
+            //((ct_hyb*)this)->ct_hyb::dostep;
+
+            (this->*dostep)();
+
+            //this->ct_hyb::dostep;
 
             //
             //accumulate_observables()
@@ -232,8 +237,8 @@ private:
             {
                 //
                 // insert or remove full line
-//                if (segments[ifl].size() == 0) insert_remove_full_line(rndm(), Eloc[ifl], Umat, Beta, full_line[ifl], segments, full_line, ifl);
-//                insert_remove_antisegment(rndm(), Beta*rndm(), Ntau, Beta, Eloc[ifl], Umat, F[ifl], full_line[ifl], segments[ifl], M[ifl], sign[ifl], segments, full_line, ifl, K_table);
+                if (segments[ifl].size() == 0) insert_remove_full_line( Eloc[ifl], Uloc, Beta, full_line[ifl], segments, full_line, ifl );
+                insert_remove_antisegment( Beta*rndm(), Beta, Eloc[ifl], Uloc, F[ifl], full_line[ifl], segments[ifl], M[ifl], sign[ifl], segments, full_line, ifl, K_table );
                 //
                 if (!full_line[ifl])
                 {
@@ -249,7 +254,7 @@ private:
                 }
                 //
                 // measure perturbation order
-                if (segments[ifl].size()<Norder) Pert[ifl*Norder+segments[ifl].size()] += 1;
+                if (segments[ifl].size()<(int)Norder) Pert[ifl*Norder+segments[ifl].size()] += 1;
                 //
                 // measure Green's functions
                 if (segments[ifl].size()>0) G[ifl] = measure_G( segments[ifl], M[ifl], Ntau_p1, Beta );
