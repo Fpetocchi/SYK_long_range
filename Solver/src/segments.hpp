@@ -662,31 +662,29 @@ template <class G, class S> double det_rat_shift(times &new_segment, int k, Mat 
 //------------------------------------------------------------------------------
 
 
-inline double H(double tau, double Beta, std::vector<double>& K_table)
+inline double H(double tau, double Beta, std::vector<double>& Kab)
 {
    if (tau<0) tau+=Beta;
-   double i=tau/Beta*(K_table.size()-1);
+   double i=tau/Beta*(Kab.size()-1);
    int i_lower=(int) i;
    //
-   return K_table[i_lower]+(i-i_lower)*(K_table[i_lower+1]-K_table[i_lower]);
+   return Kab[i_lower]+(i-i_lower)*(Kab[i_lower+1]-Kab[i_lower]);
 }
 
 
 //version without self-interaction
-template <class S> double nonlocal(double ts, double te, S &other_segments,
+template <class S> double nonlocal_full(double ts, double te, S &other_segments,
    double Beta, int this_flavor, VecVecVec &K_table, int insert_remove)
 {
    //
    double nonloc=0.0;
-   int FLAVORS=other_segments.size();
-
    //
-   for (int flavor=0; flavor<FLAVORS; flavor++)
+   for (int flavor=0; flavor<other_segments.size(); flavor++)
    {
       for(std::set<times>::iterator it=other_segments[flavor].begin(); it!=other_segments[flavor].end(); it++)
       {
-         nonloc += -H(it->t_end()-te, Beta, K_table[flavor][this_flavor]  ) +H(it->t_end()-ts, Beta, K_table[flavor][this_flavor]  )
-                   +H(it->t_start()-te, Beta, K_table[flavor][this_flavor]) -H(it->t_start()-ts, Beta, K_table[flavor][this_flavor]);
+         nonloc += -H( it->t_end()-te  , Beta, K_table[flavor][this_flavor] ) +H( it->t_end()-ts  , Beta, K_table[flavor][this_flavor] );
+         nonloc += +H( it->t_start()-te, Beta, K_table[flavor][this_flavor] ) -H( it->t_start()-ts, Beta, K_table[flavor][this_flavor] );
       }
    }
 
@@ -706,12 +704,47 @@ template <class S> double nonlocal(double ts, double te, S &other_segments,
 }
 
 
-template <class S> double nonlocal_shift(double te_ins, double te_rem, S &other_segments,
+template <class S> double nonlocal(double ts, double te, S &other_segments,
+   double Beta, int this_flavor, VecVecVec &K_table, int insert_remove)
+{
+   //
+   double nonloc=0.0;
+   int this_orb=this_flavor/2;
+   //
+   for (int flavor=0; flavor<=this_flavor; flavor++) // for (int flavor=0; flavor<other_segments.size(); flavor++)
+   {
+      int other_orb=flavor/2;
+      double fact=2.0;
+      if(other_orb==this_orb)fact=1.0;
+      for(std::set<times>::iterator it=other_segments[flavor].begin(); it!=other_segments[flavor].end(); it++)
+      {
+         nonloc += ( -H( it->t_end()-te  , Beta, K_table[this_orb][other_orb] ) +H( it->t_end()-ts  , Beta, K_table[this_orb][other_orb] ) )*fact;
+         nonloc += ( +H( it->t_start()-te, Beta, K_table[this_orb][other_orb] ) -H( it->t_start()-ts, Beta, K_table[this_orb][other_orb] ) )*fact;
+      }
+   }
+
+   //
+   if (insert_remove==0) // insert
+   {
+      nonloc += H(te-ts, Beta, K_table[this_orb][this_orb]);
+   }
+   else // remove
+   {
+      // note: H(0)=0 in the model without self-interaction, so the first term is zero
+      nonloc -= -2*H(0, Beta, K_table[this_orb][this_orb])+H(te-ts, Beta, K_table[this_orb][this_orb]);
+   }
+
+   //
+   return nonloc;
+}
+
+
+template <class S> double nonlocal_shift_full(double te_ins, double te_rem, S &other_segments,
    double beta, int this_flavor, VecVecVec &K_table)
 {
    //
    double nonloc=0.;
-
+   //
    for (int flavor=0; flavor<other_segments.size(); flavor++)
    {
       for(std::set<times>::iterator it=other_segments[flavor].begin(); it!=other_segments[flavor].end(); it++)
@@ -724,6 +757,34 @@ template <class S> double nonlocal_shift(double te_ins, double te_rem, S &other_
    //
    nonloc -= -H(te_rem-te_ins, beta, K_table[this_flavor][this_flavor]); // inexistent bond
    nonloc += -H(te_rem-te_rem, beta, K_table[this_flavor][this_flavor]); // local contribution at te doesn't change
+
+   //
+   return nonloc;
+}
+
+
+template <class S> double nonlocal_shift(double te_ins, double te_rem, S &other_segments,
+   double beta, int this_flavor, VecVecVec &K_table)
+{
+   //
+   double nonloc=0.;
+   int this_orb=this_flavor/2;
+   //
+   for (int flavor=0; flavor<=this_flavor; flavor++) // for (int flavor=0; flavor<other_segments.size(); flavor++)
+   {
+      int other_orb=flavor/2;
+      double fact=2.0;
+      if(other_orb==this_orb)fact=1.0;
+      for(std::set<times>::iterator it=other_segments[flavor].begin(); it!=other_segments[flavor].end(); it++)
+      {
+         nonloc += ( -H(it->t_end()-te_ins, beta, K_table[this_orb][other_orb])+H(it->t_start()-te_ins, beta, K_table[this_orb][other_orb]) )*fact;
+         nonloc -= ( -H(it->t_end()-te_rem, beta, K_table[this_orb][other_orb])+H(it->t_start()-te_rem, beta, K_table[this_orb][other_orb]) )*fact;
+      }
+   }
+
+   //
+   nonloc -= -H(te_rem-te_ins, beta, K_table[this_orb][this_orb]); // inexistent bond
+   nonloc += -H(te_rem-te_rem, beta, K_table[this_orb][this_orb]); // local contribution at te doesn't change
 
    //
    return nonloc;

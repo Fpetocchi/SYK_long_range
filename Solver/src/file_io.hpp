@@ -252,6 +252,10 @@ void print_line_dot(int width) {
   std::cout << std::string(width, '.') << std::endl;
 }
 
+void print_line_space(int width) {
+  std::cout << std::string(width, ' ') << std::endl;
+}
+
 
 //------------------------------------------------------------------------------
 
@@ -262,7 +266,7 @@ void read_Vec( std::string path, std::vector<double> &Vec, int &idim)
    Vec = std::vector<double>(idim,0.0); //.resize(Nflavor,0.0);
    ifstream file( path );
    //
-   for (int i= 0; i<(int)Vec.size(); i++) file >> Vec[i];
+   for (int i=0; i<(int)Vec.size(); i++) file >> Vec[i];
    file.close();
 }
 void read_EigenVec( std::string path, Eigen::VectorXd &Vec, int &idim)
@@ -271,7 +275,7 @@ void read_EigenVec( std::string path, Eigen::VectorXd &Vec, int &idim)
    Vec.setZero(idim);
    ifstream file( path );
    //
-   for (int i= 0; i<idim; i++) file >> Vec(i);
+   for (int i=0; i<idim; i++) file >> Vec(i);
    file.close();
 }
 
@@ -285,9 +289,9 @@ void read_Mat( std::string path, std::vector<std::vector<double>>  &Mat, int &id
    Mat = std::vector<std::vector<double>>(idim,std::vector<double>(jdim,0.0));
    ifstream file( path );
    //
-   for (int i= 0; i<idim; i++)
+   for (int i=0; i<idim; i++)
    {
-      for (int j= 0; j<jdim; j++)
+      for (int j=0; j<jdim; j++)
       {
          file >> Mat[i][j];
       }
@@ -301,9 +305,9 @@ void read_VecVec( std::string path, std::vector<std::vector<double>>  &VecVec, i
    VecVec = std::vector<std::vector<double>>(idim,std::vector<double>(jdim,0.0));
    ifstream file( path );
    //
-   for (int i= 0; i<idim; i++)
+   for (int i=0; i<idim; i++)
    {
-      for (int j= 0; j<jdim; j++)
+      for (int j=0; j<jdim; j++)
       {
          file >> VecVec[i][j];
       }
@@ -317,9 +321,9 @@ void read_EigenMat( std::string path, Eigen::MatrixXd  &Mat, int &idim, int &jdi
    Mat.setZero(idim,jdim);
    ifstream file( path );
    //
-   for (int i= 0; i<idim; i++)
+   for (int i=0; i<idim; i++)
    {
-      for (int j= 0; j<jdim; j++)
+      for (int j=0; j<jdim; j++)
       {
          file >> Mat(i,j);
       }
@@ -332,21 +336,44 @@ void read_EigenMat( std::string path, Eigen::MatrixXd  &Mat, int &idim, int &jdi
 //------------------------------------------------------------------------------
 
 
-void read_VecVecVec( std::string path, std::vector<std::vector<std::vector<double>>>  &VecVecVec, int &idim, int &jdim, int &kdim )
+void read_VecVecVec_extended( std::string path, std::vector<std::vector<std::vector<double>>>  &VecVecVec, int &idim, int &jdim, int &kdim )
 {
-   ////for (int ifl=0; ifl<Nflavor; ifl++)K_table.push_back( std::vector<std::vector<double>> (Nflavor, std::vector<double>(Ntau+1,0.0))); //( std::vector<Eigen::MatrixXd> ) -> K_table.resize(Nflavor,Mat::Zero(Nflavor,Ntau+1));
+   // for (int ifl=0; ifl<Nflavor; ifl++)K_table.push_back( std::vector<std::vector<double>> (Nflavor, std::vector<double>(Ntau+1,0.0))); //( std::vector<Eigen::MatrixXd> ) -> K_table.resize(Nflavor,Mat::Zero(Nflavor,Ntau+1));
    VecVecVec = std::vector<std::vector<std::vector<double>>>(idim,std::vector<std::vector<double>>(jdim,std::vector<double>(kdim,0.0)));
    ifstream file( path );
    //
-   for (int i= 0; i<idim; i++)
+   for (int i=0; i<idim; i++)
    {
-      for (int j= 0; j<jdim; j++)
+      for (int j=0; j<jdim; j++)
       {
-         for (int k= 0; k<kdim; j++)
+         for (int k=0; k<kdim; j++)
          {
             file >> VecVecVec[i][j][k];
          }
       }
+   }
+   file.close();
+}
+
+
+void read_VecVecVec( std::string path, std::vector<std::vector<std::vector<double>>>  &VecVecVec, int &idim, int &kdim )
+{
+   //VecVecVec.resize(idim);
+   VecVecVec.clear();
+   ifstream file( path );
+   //
+   for (int i=0; i<idim; i++)
+   {
+      int ColDim = i+1 ;
+      std::vector<std::vector<double>> ColVec(ColDim,std::vector<double>(kdim,0.0));
+      for (int j=0; j<ColDim; j++)
+      {
+         for (int k=0; k<kdim; j++)
+         {
+            file >> ColVec[j][k];
+         }
+      }
+      VecVecVec.push_back(ColVec);
    }
    file.close();
 }
@@ -363,7 +390,7 @@ void print_Vec( std::string path, std::vector<double> &Vec, unsigned long long i
    printFile = fopen(file ,"w");
    int Nrows = Vec.size();
    //
-   for (int irow= 0; irow<Nrows; irow++) fprintf (printFile , "%i\t%.20e\n",irow,Vec[irow]/Norm);
+   for (int irow=0; irow<Nrows; irow++) fprintf (printFile , "%i\t%.20e\n",irow,Vec[irow]/Norm);
    fclose(printFile);
 }
 
@@ -377,10 +404,10 @@ void print_VecVec( std::string path, std::vector<std::vector<double>> &VecVec, u
    int Nrows = VecVec.size();
    int Ncols = VecVec[0].size();
    //
-   for (int irow= 0; irow<Nrows; irow++)
+   for (int irow=0; irow<Nrows; irow++)
    {
       fprintf (printFile , "%i\t",irow);
-      for (int icol= 0; icol<Ncols; icol++) fprintf (printFile , "%.20e\t",(VecVec[irow][icol])/Norm);
+      for (int icol=0; icol<Ncols; icol++) fprintf (printFile , "%.20e\t",(VecVec[irow][icol])/Norm);
       fprintf (printFile , "\n");
    }
    fclose(printFile);

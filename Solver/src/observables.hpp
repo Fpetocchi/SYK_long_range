@@ -12,6 +12,7 @@
 #include <time.h>
 #include <string>
 //
+#include <algorithm>
 #include <set>
 #include "segments.hpp"
 
@@ -106,7 +107,6 @@ void measure_and_accumulate_G( Vec &G, segment_container_t &segment, Mat &M, int
 void accumulate_G( VecVec &G, VecVec &Gtmp)
 {
    //
-   std::set<times>::iterator it1, it2;
    int Nflavor = Gtmp.size();
    int Ntau_p1 = Gtmp[0].size();
 
@@ -118,6 +118,81 @@ void accumulate_G( VecVec &G, VecVec &Gtmp)
          G[ifl][itau] += Gtmp[ifl][itau];
       }
    }
+}
+
+
+void correct_G( Vec &nloc, int &binlength, VecVec &G, VecVec &Gerr)
+{
+   //
+   int Nflavor = G.size();
+   int Ntau_p1 = G[0].size();
+
+   // density replacement
+   for (int ifl=0; ifl<Nflavor; ifl++)
+   {
+      G[ifl][Ntau_p1] = -nloc[ifl];
+      G[ifl][0] = -1.0+nloc[ifl];
+   }
+
+   // bin average - v1
+   if(binlength>0)
+   {
+      double Nsample = (double)(2*binlength +1);
+      for (int ifl=0; ifl<Nflavor; ifl++)
+      {
+         Vec Gsym(Ntau_p1,0.0);
+         for (int itau=binlength; itau<Ntau_p1-binlength; itau++)
+         {
+            //
+            double avrg=0.0;
+            for(int ibin=itau-binlength; ibin<=itau+binlength; ibin++) avrg += G[ifl][ibin] / Nsample;
+            //
+            Gsym[itau]=avrg;
+            //
+            double stderr=0.0;
+            for(int ibin=itau-binlength; ibin<=itau+binlength; ibin++) stderr += pow((G[ifl][ibin]-avrg),2) / (Nsample-1);
+            Gerr[ifl][itau] = sqrt(stderr);
+         }
+         for (int itau=binlength; itau<Ntau_p1-binlength; itau++) G[ifl][itau] = Gsym[itau];
+      }
+   }
+
+   // bin average - v2
+   /*
+   if(binlength>0)
+   {
+      double Nsample = (double)(2*binlength +1);
+      for (int ifl=0; ifl<Nflavor; ifl++)
+      {
+         Vec Gsym(binlength+1,0.0);
+         for (int itau=binlength; itau<Ntau_p1-binlength; itau++)
+         {
+            //
+            double avrg=0.0;
+            for(int ibin=itau-binlength; ibin<=itau+binlength; ibin++) avrg += G[ifl][ibin] / Nsample;
+            if(itau>2*binlength)
+            {
+               G[ifl][itau-(binlength+1)] = Gsym[0];
+               Gsym.erase(Gsym.begin());
+               Gsym.push_back(avrg);
+               // put the reamaining
+               if(itau==Ntau_p1-binlength-1)
+               {
+                  for (int ibin=binlength; ibin<binlength+1; ibin++) G[ifl][itau-(binlength+1)+ibin] = Gsym[ibin];
+               }
+            }
+            else
+            {
+               Gsym.push_back(avrg);
+            }
+            //
+            double stderr=0.0;
+            for(int ibin=itau-binlength; ibin<=itau+binlength; ibin++) stderr += pow((G[ifl][ibin]-avrg),2) / (Nsample-1);
+            Gerr[ifl][itau] = sqrt(stderr);
+         }
+      }
+   }
+   */
 }
 
 
