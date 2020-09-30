@@ -253,8 +253,8 @@ void print_line_dot(int width) {
   std::cout << std::string(width, '.') << std::endl;
 }
 
-void print_line_space(int width) {
-  std::cout << std::string(width, ' ') << std::endl;
+void print_line_space(int height) {
+  for(int i=0; i<height; i++) std::cout << " " << std::endl;
 }
 
 
@@ -371,7 +371,7 @@ void read_VecVecVec( std::string path, std::vector<std::vector<std::vector<doubl
 //------------------------------------------------------------------------------
 
 
-void print_Vec( std::string path, std::vector<double> &Vec, unsigned long long int &Norm)
+void print_Vec( std::string path, std::vector<double> &Vec, unsigned long long int &Norm, double Beta=0.0)
 {
    //
    FILE * printFile;
@@ -379,24 +379,41 @@ void print_Vec( std::string path, std::vector<double> &Vec, unsigned long long i
    printFile = fopen(file ,"w");
    int Nrows = Vec.size();
    //
-   for (int irow=0; irow<Nrows; irow++) fprintf (printFile , "%i\t%.20e\n",irow,Vec[irow]/Norm);
+   if(Beta==0.0)
+   {
+      for(int irow=0; irow<Nrows; irow++) fprintf (printFile , "%i\t%.20e\n",irow,Vec[irow]/Norm);
+   }
+   else
+   {
+      double deltaTau=Beta/(Nrows-1);
+      for(int irow=0; irow<Nrows; irow++) fprintf (printFile , "%.20e\t%.20e\n",irow*deltaTau,Vec[irow]/Norm);
+   }
+
    fclose(printFile);
 }
 
 
-void print_VecVec( std::string path, std::vector<std::vector<double>> &VecVec, unsigned long long int &Norm)
+void print_VecVec( std::string path, std::vector<std::vector<double>> &VecVec, unsigned long long int &Norm, double Beta=0.0)
 {
    //
    FILE * printFile;
    const char * file=path.c_str();
    printFile = fopen(file ,"w");
-   int Nrows = VecVec.size();
-   int Ncols = VecVec[0].size();
+   int Ncols = VecVec.size();
+   int Nrows = VecVec[0].size();
    //
-   for (int irow=0; irow<Nrows; irow++)
+   for(int irow=0; irow<Nrows; irow++)
    {
-      fprintf (printFile , "%i\t",irow);
-      for (int icol=0; icol<Ncols; icol++) fprintf (printFile , "%.20e\t",(VecVec[irow][icol])/Norm);
+      if(Beta==0.0)
+      {
+         fprintf (printFile , "%i\t",irow);
+      }
+      else
+      {
+         double deltaTau=Beta/(Nrows-1);
+         fprintf (printFile , "%.20e\t",irow*deltaTau);
+      }
+      for (int icol=0; icol<Ncols; icol++) fprintf (printFile , "%.20e\t",(VecVec[icol][irow])/Norm);
       fprintf (printFile , "\n");
    }
    fclose(printFile);

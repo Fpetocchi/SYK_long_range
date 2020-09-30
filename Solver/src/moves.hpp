@@ -64,7 +64,7 @@ template <class S> void insert_remove_full_line(double Eo, Mat &Umat, double Bet
 template <class S, class G> void insert_remove_antisegment( double t, double Beta,
    double Eo, Mat &Umat, G &F, int &full_line, S &segments, Mat &M, double sign,
    std::vector<S> &other_segments, std::vector<int> &other_full_line,
-   int this_flavor, VecVecVec *K_table)
+   int this_flavor, VecVecVec &K_table)
 {
    //
    double t_up;                 // distance to next segment up (t_start)
@@ -101,12 +101,7 @@ template <class S, class G> void insert_remove_antisegment( double t, double Bet
 
          //
          double nonloc=0.0;
-         if(K_table!=NULL)
-         {
-            VecVecVec K = *K_table;
-            nonloc=nonlocal(segment_remove.t_end(), segment_remove.t_start(), other_segments, Beta, this_flavor, K, 0);
-         }
-
+         if(K_table.size()>0) nonloc=nonlocal(segment_remove.t_end(), segment_remove.t_start(), other_segments, Beta, this_flavor, K_table, 0);
 
          //
          log_prob = log(Beta*Beta*det_rat)-length*Eo+otherlength_u-nonloc;
@@ -154,11 +149,7 @@ template <class S, class G> void insert_remove_antisegment( double t, double Bet
 
             //
             double nonloc=0.0;
-            if(K_table!=NULL)
-            {
-               VecVecVec K = *K_table;
-               nonloc=nonlocal(anti_segment.t_end(), anti_segment.t_start(), other_segments, Beta, this_flavor, K, 0);
-            }
+            if(K_table.size()>0) nonloc=nonlocal(anti_segment.t_end(), anti_segment.t_start(), other_segments, Beta, this_flavor, K_table, 0);
 
             //
             double log_prob, overlap, det_rat, det_rat_sign;
@@ -264,11 +255,7 @@ template <class S, class G> void insert_remove_antisegment( double t, double Bet
 
       //
       double nonloc=0.0;
-      if(K_table!=NULL)
-      {
-         VecVecVec K = *K_table;
-         nonloc=nonlocal(anti_segment.t_end(), anti_segment.t_start(), other_segments, Beta, this_flavor, K, 1);
-      }
+      if(K_table.size()>0) nonloc=nonlocal(anti_segment.t_end(), anti_segment.t_start(), other_segments, Beta, this_flavor, K_table, 1);
 
       //
       double log_prob, det_rat, det_rat_sign;
@@ -325,11 +312,7 @@ template <class S, class G> void insert_remove_antisegment( double t, double Bet
 
       //
       double nonloc=0.0;
-      if(K_table!=NULL)
-      {
-         VecVecVec K = *K_table;
-         nonloc=nonlocal(anti_segment.t_end(), anti_segment.t_start(), other_segments, Beta, this_flavor, K, 1);
-      }
+      if(K_table.size()>0) nonloc=nonlocal(anti_segment.t_end(), anti_segment.t_start(), other_segments, Beta, this_flavor, K_table, 1);
 
       //
       double log_prob = log(Beta*Beta/det_rat)-length*Eo+otherlength_u-nonloc;
@@ -349,7 +332,7 @@ template <class S, class G> void insert_remove_antisegment( double t, double Bet
 template <class S, class G> void insert_remove_segment( double t, double Beta,
    double Eo, Mat &Umat, G &F, S &segments, Mat &M, double &sign,
    std::vector<S>& other_segments, std::vector<int> other_full_line,
-   int this_flavor, VecVecVec *K_table)
+   int this_flavor, VecVecVec &K_table)
 {
    //
    double t_up;                 // distance to next segment up
@@ -390,11 +373,7 @@ template <class S, class G> void insert_remove_segment( double t, double Beta,
 
          //
          double nonloc=0.0;
-         if(K_table!=NULL)
-         {
-            VecVecVec K = *K_table;
-            nonloc=nonlocal(segment_insert.t_start(), segment_insert.t_end(), other_segments, Beta, this_flavor, K, 0);
-         }
+         if(K_table.size()>0) nonloc=nonlocal(segment_insert.t_start(), segment_insert.t_end(), other_segments, Beta, this_flavor, K_table, 0);
 
          //
          double log_prob, overlap, det_rat, det_rat_sign;
@@ -447,11 +426,7 @@ template <class S, class G> void insert_remove_segment( double t, double Beta,
 
       //
       double nonloc=0.0;
-      if(K_table!=NULL)
-      {
-         VecVecVec K = *K_table;
-         nonloc=nonlocal(segment_remove.t_start(), segment_remove.t_end(), other_segments, Beta, this_flavor, K, 1);
-      }
+      if(K_table.size()>0) nonloc=nonlocal(segment_remove.t_start(), segment_remove.t_end(), other_segments, Beta, this_flavor, K_table, 1);
 
       //
       double log_prob, det_rat, det_rat_sign;
@@ -474,7 +449,7 @@ template <class S, class G> void insert_remove_segment( double t, double Beta,
 
 template <class S, class G> void shift_segment( S &segments, double Beta, double Eo,
    Mat &Umat, G &F, Mat &M, double &sign, std::vector<S> &other_segments,
-   std::vector<int> &other_full_line, int this_flavor, VecVecVec *K_table)
+   std::vector<int> &other_full_line, int this_flavor, VecVecVec &K_table)
 {
    //
    int size = segments.size();
@@ -515,11 +490,7 @@ template <class S, class G> void shift_segment( S &segments, double Beta, double
 
    //
    double nonloc=0.0;
-   if(K_table!=NULL)
-   {
-      VecVecVec K = *K_table;
-      nonloc=nonlocal_shift(new_t_end, s->t_end(), other_segments, Beta, this_flavor, K);
-   }
+   if(K_table.size()>0) nonloc=nonlocal_shift(new_t_end, s->t_end(), other_segments, Beta, this_flavor, K_table);
 
    //
    double det_rat, det_rat_sign, overlap;

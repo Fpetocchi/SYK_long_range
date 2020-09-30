@@ -116,10 +116,6 @@ public:
       sweeps=0;
 
       //
-      K_table_ptr = NULL;
-      if(retarded==true) K_table_ptr = &K_table;
-
-      //
       // initialize seed - aggiungi qualcosa che dipenda dal task
       unsigned long seed = std::chrono::duration_cast<std::chrono::milliseconds>
       (std::chrono::system_clock::now().time_since_epoch()).count()-1566563000000;
@@ -127,7 +123,6 @@ public:
 
       //
       initialized=true;
-      //std::cout << " Nflavor: "<< Nflavor << std::endl;
       std::cout << " Solver is initialized." << std::endl;
    }
 
@@ -151,44 +146,44 @@ public:
 
          //
          start_timer();
-         std::cout << " Solver is about to start." << std::endl;
+         std::cout << " Solver has started." << std::endl;
 
          //
-         while( !check_timer(MaxTime) )
+         while( !check_timer_global(MaxTime) )
          {
             //
             (this->*dostep)();
             sweeps++;
-
             //
-            if( check_timer(PrintTime) )
+            if( check_timer_print(PrintTime) )
             {
+           //    //print_line_space(1);
+               print_line_dot(80);
+               print_duration();
                std::cout << " Printing observables." << std::endl;
                std::cout << " Partial sweeps: " << sweeps << std::endl;
                std::cout << " Average sign: " << sign_meas/sweeps << std::endl;
                print_observables(sweeps);
+               print_line_dot(80);
             }
-
          }
 
          //
+         //print_line_space(2);
+         print_line_equal(80);
          print_duration();
-
-         //
          std::cout << " Solver is done. Results written to: " << resultsDir << std::endl;
          std::cout << " Printing observables." << std::endl;
          std::cout << " Total sweeps: " << sweeps << std::endl;
          std::cout << " Average sign: " << sign_meas/sweeps << std::endl;
          print_observables(sweeps);
-
+         print_line_equal(80);
       }
-
    }
 
 private:
    // Pointer to the internal function defining the solution mode
    void(ct_hyb::*dostep)(void) = NULL;
-   VecVecVec *K_table_ptr = NULL;
    // Input vars
    double                              mu;                                      // chemical potential
    double                              Beta;                                    // inverse temperature
@@ -204,7 +199,8 @@ private:
    bool                                retarded;                                // flag to switch on retarded interactions
    // Internal vars
    path                                resultsDir;
-   duration                            Tstart,Tnow;
+   duration                            Tstart;
+   int                                 TimeStamp;
    bool                                mu_is_reset=false;
    bool                                initialized=false;
    int                                 Nflavor=Nspin*Norb;                      // Spin-orbital flavours
@@ -236,21 +232,32 @@ private:
 
    void start_timer(void)
    {
+      TimeStamp=1;
       Tstart = std::chrono::system_clock::now();
    }
 
-   inline bool check_timer(int MaxTime)
+   inline bool check_timer_global(double DeltaMin)
    {
       bool stop=false;
-      Tnow = std::chrono::system_clock::now();
+      duration Tnow = std::chrono::system_clock::now();
       std::chrono::duration<double> runtime_seconds = Tnow-Tstart;
-      if(runtime_seconds.count() > 60*MaxTime) stop=true;
+      if(runtime_seconds.count() > 60*DeltaMin) stop=true;
+      return stop;
+   }
+
+   inline bool check_timer_print(double DeltaMin)
+   {
+      bool stop=false;
+      duration Tnow = std::chrono::system_clock::now();
+      std::chrono::duration<double> runtime_seconds = Tnow-Tstart;
+      if(runtime_seconds.count() > 60*(DeltaMin*TimeStamp)) stop=true;
+      if(stop==true) TimeStamp++;
       return stop;
    }
 
    void print_duration()
    {
-      Tnow = std::chrono::system_clock::now();
+      duration Tnow = std::chrono::system_clock::now();
       std::chrono::duration<double> runtime_seconds = Tnow-Tstart;
       std::cout << " Timestamp: " << runtime_seconds.count() << std::endl;
    }
@@ -274,21 +281,20 @@ private:
          {
             // insert or remove full line
             if (segments[ifl].size() == 0) insert_remove_full_line( Eloc[ifl], Uloc, Beta, full_line[ifl], segments, full_line, ifl );
-            insert_remove_antisegment( Beta*rndm(), Beta, Eloc[ifl], Uloc, F[ifl], full_line[ifl], segments[ifl], M[ifl], sign[ifl], segments, full_line, ifl, K_table_ptr );
+            insert_remove_antisegment( Beta*rndm(), Beta, Eloc[ifl], Uloc, F[ifl], full_line[ifl], segments[ifl], M[ifl], sign[ifl], segments, full_line, ifl, K_table );
 
             //
             if (!full_line[ifl])
             {
                // local update
-               insert_remove_segment( Beta*rndm(), Beta, Eloc[ifl], Uloc, F[ifl], segments[ifl], M[ifl], sign[ifl], segments, full_line, ifl, K_table_ptr);
+               insert_remove_segment( Beta*rndm(), Beta, Eloc[ifl], Uloc, F[ifl], segments[ifl], M[ifl], sign[ifl], segments, full_line, ifl, K_table);
                // shift segments
-               for (int k=0; k<Nshift; k++) shift_segment( segments[ifl], Beta, Eloc[ifl], Uloc, F[ifl], M[ifl], sign[ifl], segments, full_line, ifl, K_table_ptr);
+               for (int k=0; k<Nshift; k++) shift_segment( segments[ifl], Beta, Eloc[ifl], Uloc, F[ifl], M[ifl], sign[ifl], segments, full_line, ifl, K_table );
                // flip segment
                //for (int i=0; i<N_flip; i++)flip_segment( segments_up, Ntau, Beta, M_up, sign_up, sign_down, F_down, M_down, segments_down, full_line_down);
             }
 
-
-
+            //
             //.........................Cheap measurments........................
             // perturbation order
             if (segments[ifl].size()<(unsigned int)Norder) Pert[ifl*Norder+segments[ifl].size()] += (1./Nmeas);
@@ -298,36 +304,27 @@ private:
             s *= sign[ifl];
             // flavour occupation
             Nloc[ifl] += compute_overlap(full_segment, segments[ifl], full_line[ifl], Beta)/(Beta*Nmeas);
-
+            //..................................................................
          }
-
          //
          sign_meas += s/Nmeas;
-
       }
 
 
       //.........................Expensive measurments..........................
       // n_a(\tau)
-      std::cout << " obs1" << std::endl;
       nt = measure_nt( segments, full_line, Ntau_p1, Beta );
       // correct G(0^+)and G(beta^-) and estimate the error
-      std::cout << " obs2" << std::endl;
       correct_G( Nloc, binlength, G_tmp, Gerr_tmp );
-      std::cout << " obs3" << std::endl;
       if(binlength>0)accumulate_G( Gerr, Gerr_tmp );
-      std::cout << " obs4" << std::endl;
       accumulate_G( G, G_tmp );
       // n_a(\tau)n_b(0)
-      std::cout << " obs5" << std::endl;
       accumulate_nnt( nnt, nt );
       // density histogram
-      std::cout << " obs6" << std::endl;
       accumulate_Nhist( Nhist, nt );
       // spin histogram
-      std::cout << " obs7" << std::endl;
       accumulate_Szhist( Szhist, nt );
-
+      //........................................................................
    }
 
 
@@ -342,22 +339,19 @@ private:
       // The measurments I'm going to do regardless from the time
       for (int imeas=0; imeas<Nmeas; imeas++)
       {
-         //
-         //Flavor loop
          for (int ifl=0; ifl<Nflavor; ifl++)
          {
-
             // insert or remove full line
             if (segments[ifl].size() == 0) insert_remove_full_line( Eloc[ifl], Uloc, Beta, full_line[ifl], segments, full_line, ifl );
-            insert_remove_antisegment( Beta*rndm(), Beta, Eloc[ifl], Uloc, F[ifl], full_line[ifl], segments[ifl], M[ifl], sign[ifl], segments, full_line, ifl, K_table_ptr );
+            insert_remove_antisegment( Beta*rndm(), Beta, Eloc[ifl], Uloc, F[ifl], full_line[ifl], segments[ifl], M[ifl], sign[ifl], segments, full_line, ifl, K_table );
 
             //
             if (!full_line[ifl])
             {
                // local update
-               insert_remove_segment( Beta*rndm(), Beta, Eloc[ifl], Uloc, F[ifl], segments[ifl], M[ifl], sign[ifl], segments, full_line, ifl, K_table_ptr);
+               insert_remove_segment( Beta*rndm(), Beta, Eloc[ifl], Uloc, F[ifl], segments[ifl], M[ifl], sign[ifl], segments, full_line, ifl, K_table );
                // shift segments
-               for (int k=0; k<Nshift; k++) shift_segment( segments[ifl], Beta, Eloc[ifl], Uloc, F[ifl], M[ifl], sign[ifl], segments, full_line, ifl, K_table_ptr);
+               for (int k=0; k<Nshift; k++) shift_segment( segments[ifl], Beta, Eloc[ifl], Uloc, F[ifl], M[ifl], sign[ifl], segments, full_line, ifl, K_table );
                // flip segment
                //for (int i=0; i<N_flip; i++)flip_segment( segments_up, Ntau, Beta, M_up, sign_up, sign_down, F_down, M_down, segments_down, full_line_down);
             }
@@ -365,7 +359,6 @@ private:
             //.........................Cheap measurments........................
             // flavour occupation
             Nloc[ifl] += compute_overlap(full_segment, segments[ifl], full_line[ifl], Beta)/(Beta*Nmeas);
-
          }
       }
    }
@@ -377,9 +370,21 @@ private:
    void print_observables(unsigned long long int &iterations)
    {
       print_Vec(resultsDir+"/Nloc.DAT", Nloc, iterations);
+      std::cout << " Nloc.DAT printed" << std::endl;
       print_Vec(resultsDir+"/PertOrder.DAT", Pert, iterations);
-      print_VecVec(resultsDir+"/Gimp.DAT", G, iterations);
-      print_VecVec(resultsDir+"/nnt.DAT", nnt, iterations);
+      std::cout << " PertOrder.DAT printed" << std::endl;
+      print_VecVec(resultsDir+"/Gimp.DAT", G, iterations, Beta);
+      std::cout << " Gimp.DAT printed" << std::endl;
+      if(binlength>0)
+      {
+         print_VecVec(resultsDir+"/Gerr.DAT", Gerr, iterations, Beta);
+         std::cout << " Gerr.DAT printed" << std::endl;
+      }
+      if(retarded==true)
+      {
+         print_VecVec(resultsDir+"/nnt.DAT", nnt, iterations, Beta);
+         std::cout << " nnt.DAT printed" << std::endl;
+      }
    }
 
 

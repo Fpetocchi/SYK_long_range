@@ -712,7 +712,6 @@ template <class S> double nonlocal(double ts, double te, S &other_segments,
    double nonloc=0.0;
    int this_orb=this_flavor/2;
    //
-   std::cout << " nonlocal before." << std::endl;
    for (int flavor=0; flavor<=this_flavor; flavor++) // for (int flavor=0; flavor<other_segments.size(); flavor++)
    {
       int other_orb=flavor/2;
@@ -724,7 +723,6 @@ template <class S> double nonlocal(double ts, double te, S &other_segments,
          nonloc += ( +H( it->t_start()-te, Beta, K_table[this_orb][other_orb] ) -H( it->t_start()-ts, Beta, K_table[this_orb][other_orb] ) )*fact;
       }
    }
-   std::cout << " nonlocal middle." << std::endl;
 
    //
    if (insert_remove==0) // insert
@@ -736,8 +734,6 @@ template <class S> double nonlocal(double ts, double te, S &other_segments,
       // note: H(0)=0 in the model without self-interaction, so the first term is zero
       nonloc -= -2*H(0, Beta, K_table[this_orb][this_orb])+H(te-ts, Beta, K_table[this_orb][this_orb]);
    }
-
-   std::cout << " nonlocal after." << std::endl;
 
    //
    return nonloc;

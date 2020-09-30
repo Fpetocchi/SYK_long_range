@@ -139,10 +139,11 @@ int main(int argc, char *argv[])
       //..................................................
       //                    Solver setup
       //..................................................
+      print_line_space(1);
       std::vector<ct_hyb> ImpurityList;
       for(int isite=0; isite < Nsite; isite++)
       {
-         std::cout << " \nisite = " << isite << std::endl;
+         std::cout << " isite = " << isite << std::endl;
          std::cout << " Name = " << SiteName[isite] << std::endl;
          std::cout << " Norb = " << SiteNorb[isite] << std::endl;
          std::cout << " Time = " << SiteTime[isite] << std::endl;
@@ -161,7 +162,6 @@ int main(int argc, char *argv[])
          }
          std::cout << std::endl;
       }
-      print_line_space(1);
 
 
 
@@ -170,6 +170,7 @@ int main(int argc, char *argv[])
       //..................................................
       if(density>0.0)
       {
+         print_line_space(1);
          int QuickTime=120;
          double trial_density;
          double mu_start=mu;
