@@ -321,7 +321,7 @@ void read_EigenMat( std::string path, Eigen::MatrixXd  &Mat, int &idim, int &jdi
 //------------------------------------------------------------------------------
 
 
-void read_VecVec( std::string path, std::vector<std::vector<double>>  &VecVec, int &idim, int &jdim, bool axis, bool reverse_last )
+void read_VecVec( std::string path, std::vector<std::vector<double>>  &VecVec, int &idim, int &jdim, bool axis, bool Delta_like )
 {
    VecVec.resize(idim,std::vector<double>(jdim,0.0));
    ifstream file( path );
@@ -338,9 +338,15 @@ void read_VecVec( std::string path, std::vector<std::vector<double>>  &VecVec, i
    file.close();
 
    //
-   if(reverse_last==true)
+   if(Delta_like==true)
    {
+      //Delta(-tau)
       for (int i=0; i<idim; i++) std::reverse(VecVec[i].begin(),VecVec[i].end());
+      //-Delta(-tau)
+      for (int j=0; j<jdim; j++)
+      {
+         for (int i=0; i<idim; i++) VecVec[i][j]*=-1.0;
+      }
    }
 }
 
