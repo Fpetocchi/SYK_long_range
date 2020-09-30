@@ -385,11 +385,9 @@ private:
          print_VecVec(resultsDir+"/Gerr"+pad, Gerr, iterations, Beta);
          std::cout << " Gerr"+pad+" printed" << std::endl;
       }
-      if(retarded==true)
-      {
-         print_VecVec(resultsDir+"/nnt"+pad, nnt, iterations, Beta);
-         std::cout << " nnt"+pad+" printed" << std::endl;
-      }
+      //
+      print_VecVec(resultsDir+"/nnt"+pad, nnt, iterations, Beta);
+      std::cout << " nnt"+pad+" printed" << std::endl;
    }
 
 
