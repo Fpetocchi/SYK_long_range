@@ -266,7 +266,6 @@ VecVec measure_nnt( VecVec &n_tau)
    {
       for (int jfl=0; jfl<=ifl; ++jfl)
       {
-         position++;
          for (int i=0; i<Ntau_p1; ++i)
          {
             for (int index=0; index<Ntau_p1; ++index)
@@ -276,6 +275,7 @@ VecVec measure_nnt( VecVec &n_tau)
                nn_corr_meas[position][index] += n_tau[ifl][i]*n_tau[jfl][j] / (double)Ntau_p1;
             }
          }
+         position++;
          //for (int i=0; i<Ntau_p1; ++i)nn_corr_meas[position][i]/=(Ntau_p1);
       }
    }
@@ -296,7 +296,6 @@ void accumulate_nnt( VecVec &nn_corr_meas, VecVec &n_tau)
    {
       for (int jfl=0; jfl<=ifl; ++jfl)
       {
-         position++;
          for (int i=0; i<Ntau_p1; ++i)
          {
             for (int index=0; index<Ntau_p1; ++index)
@@ -304,10 +303,9 @@ void accumulate_nnt( VecVec &nn_corr_meas, VecVec &n_tau)
                int j=i+index;
                if (j>Ntau_p1) j -= Ntau_p1;
                nn_corr_meas[position][index] += n_tau[ifl][i]*n_tau[jfl][j] / (double)Ntau_p1;
-              // std::cout << ifl << " " << jfl << " " << position << std::endl;
-              // std::cout << i << " " << index << " " << j << std::endl;
             }
          }
+         position++;
          //for (int i=0; i<Ntau_p1; ++i)nn_corr_meas[position][i]/=(Ntau_p1);
       }
    }
