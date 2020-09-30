@@ -21,10 +21,9 @@
 //============================================================================//
 
 
-Vec measure_G( segment_container_t &segment, Mat &M, int &Ntau_p1, double &Beta, double Norm)
+void measure_G( Vec &G, segment_container_t &segment, Mat &M, int &Ntau_p1, double &Beta, double Norm)
 {
    //
-   Vec G(Ntau_p1,0.0);
    std::set<times>::iterator it1, it2;
 
    //
@@ -59,9 +58,6 @@ Vec measure_G( segment_container_t &segment, Mat &M, int &Ntau_p1, double &Beta,
          }
       }
    }
-
-   //
-   return G;
 }
 
 

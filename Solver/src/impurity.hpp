@@ -103,7 +103,7 @@ public:
 
       //
       //initialize observables
-      sign.resize(Nflavor,0.0);                                                 // ( std::vector<double> )
+      sign.resize(Nflavor,1.0);                                                 // ( std::vector<double> )
       Nloc.resize(Nflavor,0.0);                                                 // ( std::vector<double> )
       Nhist.resize(Nflavor+1,0.0);                                              // ( std::vector<double> )
       Szhist.resize(Nflavor/2+1,0.0);                                           // ( std::vector<double> )
@@ -300,7 +300,7 @@ private:
             // perturbation order
             if (segments[ifl].size()<(unsigned int)Norder) Pert[ifl*Norder+segments[ifl].size()] += (1./Nmeas);
             // Green's functions
-            if (segments[ifl].size()>0)  G_tmp[ifl] = measure_G( segments[ifl], M[ifl], Ntau_p1, Beta, (double)(Ntau/Nmeas)); //accumulate_G( G[ifl], segments[ifl], M[ifl], Ntau_p1, Beta, (double)(Ntau/Nmeas));
+            if (segments[ifl].size()>0) measure_G( G_tmp[ifl], segments[ifl], M[ifl], Ntau_p1, Beta, (double)(Ntau/Nmeas)); //accumulate_G( G[ifl], segments[ifl], M[ifl], Ntau_p1, Beta, (double)(Ntau/Nmeas));
             // sign among the segments
             s *= sign[ifl];
             // flavour occupation
@@ -308,7 +308,7 @@ private:
             //..................................................................
          }
          //
-         sign_meas += s/Nmeas;
+         sign_meas += s/(double)Nmeas;
       }
 
 
@@ -379,11 +379,11 @@ private:
       //
       print_Vec(resultsDir+"/PertOrder"+pad, Pert, iterations);
       std::cout << " PertOrder"+pad+" printed" << std::endl;
-      //
+      //Density correction
       for (int ifl=0; ifl<Nflavor; ifl++)
       {
-         G[ifl][0] = -1.0+Nloc[ifl];
-         G[ifl][Ntau_p1] = -Nloc[ifl];
+         G[ifl].front() = +Nloc[ifl]-(long double)iterations ;
+         G[ifl].back()  = -Nloc[ifl];
       }
       print_VecVec(resultsDir+"/Gimp"+pad, G, iterations, Beta);
       std::cout << " Gimp"+pad+" printed" << std::endl;
