@@ -8,6 +8,7 @@
 #include <math.h>
 #include <time.h>
 #include <string>
+#include <cstdlib>
 //
 #include "file_io.hpp"
 #include "impurity.hpp"

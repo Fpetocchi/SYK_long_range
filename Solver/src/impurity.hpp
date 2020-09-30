@@ -11,6 +11,7 @@
 #include <math.h>
 #include <time.h>
 #include <string>
+#include <cstdlib>
 //
 #include <set>
 #include <valarray>
@@ -122,9 +123,7 @@ public:
       // initialize seed - aggiungi qualcosa che dipenda dal task
       unsigned long seed = std::chrono::duration_cast<std::chrono::milliseconds>
       (std::chrono::system_clock::now().time_since_epoch()).count()-1566563000000;
-      generator.seed(abs(seed));
-
-
+      generator.seed(fabs(seed));
 
       //
       initialized=true;
@@ -273,7 +272,6 @@ private:
       {
          for (int ifl=0; ifl<Nflavor; ifl++)
          {
-
             // insert or remove full line
             if (segments[ifl].size() == 0) insert_remove_full_line( Eloc[ifl], Uloc, Beta, full_line[ifl], segments, full_line, ifl );
             insert_remove_antisegment( Beta*rndm(), Beta, Eloc[ifl], Uloc, F[ifl], full_line[ifl], segments[ifl], M[ifl], sign[ifl], segments, full_line, ifl, K_table_ptr );
@@ -288,6 +286,8 @@ private:
                // flip segment
                //for (int i=0; i<N_flip; i++)flip_segment( segments_up, Ntau, Beta, M_up, sign_up, sign_down, F_down, M_down, segments_down, full_line_down);
             }
+
+
 
             //.........................Cheap measurments........................
             // perturbation order
@@ -306,18 +306,26 @@ private:
 
       }
 
+
       //.........................Expensive measurments..........................
       // n_a(\tau)
+      std::cout << " obs1" << std::endl;
       nt = measure_nt( segments, full_line, Ntau_p1, Beta );
       // correct G(0^+)and G(beta^-) and estimate the error
+      std::cout << " obs2" << std::endl;
       correct_G( Nloc, binlength, G_tmp, Gerr_tmp );
+      std::cout << " obs3" << std::endl;
       if(binlength>0)accumulate_G( Gerr, Gerr_tmp );
+      std::cout << " obs4" << std::endl;
       accumulate_G( G, G_tmp );
       // n_a(\tau)n_b(0)
+      std::cout << " obs5" << std::endl;
       accumulate_nnt( nnt, nt );
       // density histogram
+      std::cout << " obs6" << std::endl;
       accumulate_Nhist( Nhist, nt );
       // spin histogram
+      std::cout << " obs7" << std::endl;
       accumulate_Szhist( Szhist, nt );
 
    }

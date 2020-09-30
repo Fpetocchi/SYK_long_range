@@ -11,6 +11,7 @@
 #include <math.h>
 #include <time.h>
 #include <string>
+#include <cstdlib>
 //
 #include <algorithm>
 #include <set>
@@ -303,6 +304,8 @@ void accumulate_nnt( VecVec &nn_corr_meas, VecVec &n_tau)
                int j=i+index;
                if (j>Ntau_p1) j -= Ntau_p1;
                nn_corr_meas[position][index] += n_tau[ifl][i]*n_tau[jfl][j] / (double)Ntau_p1;
+              // std::cout << ifl << " " << jfl << " " << position << std::endl;
+              // std::cout << i << " " << index << " " << j << std::endl;
             }
          }
          //for (int i=0; i<Ntau_p1; ++i)nn_corr_meas[position][i]/=(Ntau_p1);

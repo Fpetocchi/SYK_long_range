@@ -11,6 +11,7 @@
 #include <math.h>
 #include <time.h>
 #include <string>
+#include <cstdlib>
 //
 #include "segments.hpp"
 
