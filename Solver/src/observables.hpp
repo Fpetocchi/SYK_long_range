@@ -134,7 +134,7 @@ void correct_G( Vec &nloc, int &binlength, VecVec &G, VecVec &Gerr)
       G[ifl][0] = -1.0+nloc[ifl];
    }
 
-   // bin average - v1
+   // bin average - v1 - less efficient memory wise but safer
    if(binlength>0)
    {
       double Nsample = (double)(2*binlength +1);

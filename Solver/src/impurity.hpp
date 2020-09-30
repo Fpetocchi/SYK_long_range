@@ -78,14 +78,14 @@ public:
 
       //
       //read the hybridization function ( std::vector<std::vector<double>> )
-      read_VecVec(inputDir+"/Delta.DAT", F, Nflavor, Ntau_p1, true);
+      read_VecVec(inputDir+"/Delta.DAT", F, Nflavor, Ntau_p1, true, true);
 
       //
       //read the istantaneous interaction ( Eigen::MatrixXd )
       read_EigenMat(inputDir+"/Uloc.DAT", Uloc, Nflavor, Nflavor);
 
       //read the screening function ( std::vector<std::vector<std::vector<double>>> )
-      if(retarded==true) read_VecVecVec(inputDir+"/K.DAT", K_table, Norb, Ntau_p1); // read_VecVecVec_extended(inputDir+"/K.DAT", K_table, Nflavor, Nflavor, Ntau_p1);
+      if(retarded==true) read_VecVecVec(inputDir+"/K.DAT", K_table, Norb, Ntau_p1, true); // read_VecVecVec_extended(inputDir+"/K.DAT", K_table, Nflavor, Nflavor, Ntau_p1);
 
       //
       //initialize segment container ( std::vector<std::set<times>> )
@@ -98,7 +98,7 @@ public:
 
       //
       //initialize empty Inverse hybridization matrix M ( std::vector<Eigen::MatrixXd> )
-      M.resize(Nflavor,Mat::Zero(Nflavor,Nflavor));
+      M.resize(Nflavor); //,Mat::Zero(Nflavor,Nflavor));
 
       //
       //initialize observables
@@ -124,13 +124,12 @@ public:
       (std::chrono::system_clock::now().time_since_epoch()).count()-1566563000000;
       generator.seed(abs(seed));
 
-      //
-      //start the timer for the calculation
-      start_timer();
+
 
       //
       initialized=true;
-      std::cout << " Solver is initialized and timer has started." << std::endl;
+      //std::cout << " Nflavor: "<< Nflavor << std::endl;
+      std::cout << " Solver is initialized." << std::endl;
    }
 
 
@@ -152,6 +151,7 @@ public:
          if(atBeta==true)  dostep = &ct_hyb::dostep_atBeta;
 
          //
+         start_timer();
          std::cout << " Solver is about to start." << std::endl;
 
          //
@@ -173,7 +173,10 @@ public:
          }
 
          //
-         std::cout << " Solver is done." << std::endl;
+         print_duration();
+
+         //
+         std::cout << " Solver is done. Results written to: " << resultsDir << std::endl;
          std::cout << " Printing observables." << std::endl;
          std::cout << " Total sweeps: " << sweeps << std::endl;
          std::cout << " Average sign: " << sign_meas/sweeps << std::endl;
@@ -242,8 +245,15 @@ private:
       bool stop=false;
       Tnow = std::chrono::system_clock::now();
       std::chrono::duration<double> runtime_seconds = Tnow-Tstart;
-      if(runtime_seconds.count() > MaxTime) stop=true;
+      if(runtime_seconds.count() > 60*MaxTime) stop=true;
       return stop;
+   }
+
+   void print_duration()
+   {
+      Tnow = std::chrono::system_clock::now();
+      std::chrono::duration<double> runtime_seconds = Tnow-Tstart;
+      std::cout << " Timestamp: " << runtime_seconds.count() << std::endl;
    }
 
 

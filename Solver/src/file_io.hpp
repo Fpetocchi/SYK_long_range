@@ -283,7 +283,7 @@ void read_EigenVec( std::string path, Eigen::VectorXd &Vec, int &idim)
 //------------------------------------------------------------------------------
 
 
-void read_Mat( std::string path, std::vector<std::vector<double>>  &Mat, int &idim, int &jdim , bool reverse_last=false)
+void read_Mat( std::string path, std::vector<std::vector<double>>  &Mat, int &idim, int &jdim )
 {
    //
    Mat = std::vector<std::vector<double>>(idim,std::vector<double>(jdim,0.0));
@@ -295,27 +295,12 @@ void read_Mat( std::string path, std::vector<std::vector<double>>  &Mat, int &id
       {
          file >> Mat[i][j];
       }
-      if(reverse_last==true)std::reverse(Mat[i].begin(),Mat[i].end());
    }
    file.close();
 }
-void read_VecVec( std::string path, std::vector<std::vector<double>>  &VecVec, int &idim, int &jdim , bool reverse_last=false)
-{
-   // F.resize(Nflavor,std::vector<double>(Ntau+1,0.0));  //( std::vector<Eigen::VectorXd> ) -> F.resize(Ntau+1,Vec::Zero(Nflavor));
-   VecVec = std::vector<std::vector<double>>(idim,std::vector<double>(jdim,0.0));
-   ifstream file( path );
-   //
-   for (int i=0; i<idim; i++)
-   {
-      for (int j=0; j<jdim; j++)
-      {
-         file >> VecVec[i][j];
-      }
-      if(reverse_last==true)std::reverse(VecVec[i].begin(),VecVec[i].end());
-   }
-   file.close();
-}
-void read_EigenMat( std::string path, Eigen::MatrixXd  &Mat, int &idim, int &jdim , bool reverse_last=false)
+
+
+void read_EigenMat( std::string path, Eigen::MatrixXd  &Mat, int &idim, int &jdim )
 {
    //
    Mat.setZero(idim,jdim);
@@ -329,51 +314,54 @@ void read_EigenMat( std::string path, Eigen::MatrixXd  &Mat, int &idim, int &jdi
       }
    }
    file.close();
-   if(reverse_last==true)Mat.rowwise().reverse();
 }
 
 
 //------------------------------------------------------------------------------
 
 
-void read_VecVecVec_extended( std::string path, std::vector<std::vector<std::vector<double>>>  &VecVecVec, int &idim, int &jdim, int &kdim )
+void read_VecVec( std::string path, std::vector<std::vector<double>>  &VecVec, int &idim, int &jdim, bool axis, bool reverse_last )
 {
-   // for (int ifl=0; ifl<Nflavor; ifl++)K_table.push_back( std::vector<std::vector<double>> (Nflavor, std::vector<double>(Ntau+1,0.0))); //( std::vector<Eigen::MatrixXd> ) -> K_table.resize(Nflavor,Mat::Zero(Nflavor,Ntau+1));
-   VecVecVec = std::vector<std::vector<std::vector<double>>>(idim,std::vector<std::vector<double>>(jdim,std::vector<double>(kdim,0.0)));
+   VecVec.resize(idim,std::vector<double>(jdim,0.0));
    ifstream file( path );
+   double dum;
    //
-   for (int i=0; i<idim; i++)
+   for (int j=0; j<jdim; j++)
    {
-      for (int j=0; j<jdim; j++)
+      if(axis==true)file >> dum;
+      for (int i=0; i<idim; i++)
       {
-         for (int k=0; k<kdim; j++)
+         file >> VecVec[i][j];
+      }
+   }
+   file.close();
+
+   //
+   if(reverse_last==true)
+   {
+      for (int i=0; i<idim; i++) std::reverse(VecVec[i].begin(),VecVec[i].end());
+   }
+}
+
+
+void read_VecVecVec( std::string path, std::vector<std::vector<std::vector<double>>>  &VecVecVec, int &idim, int &kdim , bool axis )
+{
+   //
+   VecVecVec.resize(idim);
+   for (int i=0; i<idim; i++)VecVecVec[i].resize(idim-i,std::vector<double>(kdim,0.0));
+   ifstream file( path );
+   double dum;
+   //
+   for (int k=0; k<kdim; k++)
+   {
+      if(axis==true) file >> dum;
+      for (int i=0; i<idim; i++)
+      {
+         for (int j=0; j<=i; j++)
          {
             file >> VecVecVec[i][j][k];
          }
       }
-   }
-   file.close();
-}
-
-
-void read_VecVecVec( std::string path, std::vector<std::vector<std::vector<double>>>  &VecVecVec, int &idim, int &kdim )
-{
-   //VecVecVec.resize(idim);
-   VecVecVec.clear();
-   ifstream file( path );
-   //
-   for (int i=0; i<idim; i++)
-   {
-      int ColDim = i+1 ;
-      std::vector<std::vector<double>> ColVec(ColDim,std::vector<double>(kdim,0.0));
-      for (int j=0; j<ColDim; j++)
-      {
-         for (int k=0; k<kdim; j++)
-         {
-            file >> ColVec[j][k];
-         }
-      }
-      VecVecVec.push_back(ColVec);
    }
    file.close();
 }

@@ -467,6 +467,11 @@ template <class G, class S, class V> double det_rat_up(times &new_segment, Mat  
    double det_rat = interpolate_F(new_segment.t_end()-new_segment.t_start(), Beta, F);
 
    //
+   std::cout << " tests." << std::endl;
+   std::cout << Fe.size() << std::endl;
+   std::cout << Fs.size() << std::endl;
+   std::cout << segments_old.size() << std::endl;
+
    for (int i=0; i<M.rows(); i++)
    {
       for (int j=0; j<M.rows(); j++) det_rat -= Fe[i]*M(i,j)*Fs[j];

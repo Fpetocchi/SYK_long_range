@@ -133,6 +133,12 @@ int main(int argc, char *argv[])
          //
       }
 
+
+
+      //..................................................
+      //                    Solver setup
+      //..................................................
+      std::vector<ct_hyb> ImpurityList;
       for(int isite=0; isite < Nsite; isite++)
       {
          std::cout << " \nisite = " << isite << std::endl;
@@ -143,7 +149,9 @@ int main(int argc, char *argv[])
 
          if(PathExist(strcpy(new char[SiteDir[isite].length() + 1], SiteDir[isite].c_str())))
          {
-            std::cout << " (Found) ";
+            std::cout << " (Found) - ";
+            ImpurityList.push_back(ct_hyb( mu, Beta, Nspin, SiteNorb[isite], Ntau, Norder, Nmeas, Nshift, PrintTime, binlength, retarded ));
+            ImpurityList[isite].init( SiteDir[isite] );
          }
          else
          {
@@ -152,17 +160,8 @@ int main(int argc, char *argv[])
          }
          std::cout << std::endl;
       }
+      print_line_space(1);
 
-
-      //..................................................
-      //                    Solver setup
-      //..................................................
-      std::vector<ct_hyb> ImpurityList;
-      for(int isite=0; isite < Nsite; isite++)
-      {
-         ImpurityList.push_back(ct_hyb( mu, Beta, Nspin, SiteNorb[isite], Ntau, Norder, Nmeas, Nshift, PrintTime, binlength, retarded ));
-         ImpurityList[isite].init( SiteDir[isite] );
-      }
 
 
       //..................................................
