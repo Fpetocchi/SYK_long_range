@@ -316,8 +316,11 @@ private:
       // n_a(\tau)
       nt = measure_nt( segments, full_line, Ntau_p1, Beta );
       // correct G(0^+)and G(beta^-) and estimate the error
-      correct_G( Nloc, binlength, G_tmp, Gerr_tmp );
-      if(binlength>0)accumulate_G( Gerr, Gerr_tmp );
+      if(binlength>0)
+      {
+         binAverageVec( binlength, G_tmp, Gerr_tmp );
+         accumulate_G( Gerr, Gerr_tmp );
+      }
       accumulate_G( G, G_tmp );
       // n_a(\tau)n_b(0)
       accumulate_nnt( nnt, nt );
@@ -377,6 +380,11 @@ private:
       print_Vec(resultsDir+"/PertOrder"+pad, Pert, iterations);
       std::cout << " PertOrder"+pad+" printed" << std::endl;
       //
+      for (int ifl=0; ifl<Nflavor; ifl++)
+      {
+         G[ifl][0] = -1.0+Nloc[ifl];
+         G[ifl][Ntau_p1] = -Nloc[ifl];
+      }
       print_VecVec(resultsDir+"/Gimp"+pad, G, iterations, Beta);
       std::cout << " Gimp"+pad+" printed" << std::endl;
       //

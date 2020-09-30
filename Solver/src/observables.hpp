@@ -122,18 +122,11 @@ void accumulate_G( VecVec &G, VecVec &Gtmp)
 }
 
 
-void correct_G( Vec &nloc, int &binlength, VecVec &G, VecVec &Gerr)
+void binAverageVec( int &binlength, VecVec &G, VecVec &Gerr)
 {
    //
    int Nflavor = G.size();
    int Ntau_p1 = G[0].size();
-
-   // density replacement
-   for (int ifl=0; ifl<Nflavor; ifl++)
-   {
-      G[ifl][Ntau_p1] = -nloc[ifl];
-      G[ifl][0] = -1.0+nloc[ifl];
-   }
 
    // bin average - v1 - less efficient memory wise but safer
    if(binlength>0)
