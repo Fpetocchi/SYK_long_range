@@ -160,7 +160,7 @@ int main(int argc, char *argv[])
             std::cout << " (Not Found) - Exiting." << std::endl;
             exit(1);
          }
-         std::cout << std::endl;
+         print_line_space(1);
       }
 
 
@@ -274,7 +274,7 @@ int main(int argc, char *argv[])
       cout << endl;
       cout << "Time [total] = " << runtime_seconds.count() << "s\n";
       print_line_star(60);
-
+      exit(1);
    } // try
    catch (char *message)
    {

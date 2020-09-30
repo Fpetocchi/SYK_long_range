@@ -146,6 +146,8 @@ public:
 
          //
          start_timer();
+         print_line_space(1);
+         print_line_equal(80);
          std::cout << " Solver has started." << std::endl;
 
          //
@@ -157,27 +159,26 @@ public:
             //
             if( check_timer_print(PrintTime) )
             {
-           //    //print_line_space(1);
-               print_line_dot(80);
+               print_line_space(1);
                print_duration();
                std::cout << " Printing observables." << std::endl;
                std::cout << " Partial sweeps: " << sweeps << std::endl;
                std::cout << " Average sign: " << sign_meas/sweeps << std::endl;
-               print_observables(sweeps);
-               print_line_dot(80);
+               path pad="_";
+               print_observables(sweeps,pad.append(std::to_string(PrintTime*(TimeStamp-1))).append(".DAT"));
             }
          }
 
          //
-         //print_line_space(2);
-         print_line_equal(80);
+         print_line_space(2);
+         print_line_minus(80);
          print_duration();
          std::cout << " Solver is done. Results written to: " << resultsDir << std::endl;
          std::cout << " Printing observables." << std::endl;
          std::cout << " Total sweeps: " << sweeps << std::endl;
          std::cout << " Average sign: " << sign_meas/sweeps << std::endl;
-         print_observables(sweeps);
-         print_line_equal(80);
+         print_observables(sweeps,".DAT");
+         print_line_minus(80);
       }
    }
 
@@ -367,23 +368,27 @@ private:
    //---------------------------------------------------------------------------
 
 
-   void print_observables(unsigned long long int &iterations)
+   void print_observables(unsigned long long int &iterations, path pad)
    {
-      print_Vec(resultsDir+"/Nloc.DAT", Nloc, iterations);
-      std::cout << " Nloc.DAT printed" << std::endl;
-      print_Vec(resultsDir+"/PertOrder.DAT", Pert, iterations);
-      std::cout << " PertOrder.DAT printed" << std::endl;
-      print_VecVec(resultsDir+"/Gimp.DAT", G, iterations, Beta);
-      std::cout << " Gimp.DAT printed" << std::endl;
+      //
+      print_Vec(resultsDir+"/Nloc"+pad, Nloc, iterations);
+      std::cout << " Nloc"+pad+" printed" << std::endl;
+      //
+      print_Vec(resultsDir+"/PertOrder"+pad, Pert, iterations);
+      std::cout << " PertOrder"+pad+" printed" << std::endl;
+      //
+      print_VecVec(resultsDir+"/Gimp"+pad, G, iterations, Beta);
+      std::cout << " Gimp"+pad+" printed" << std::endl;
+      //
       if(binlength>0)
       {
-         print_VecVec(resultsDir+"/Gerr.DAT", Gerr, iterations, Beta);
-         std::cout << " Gerr.DAT printed" << std::endl;
+         print_VecVec(resultsDir+"/Gerr"+pad, Gerr, iterations, Beta);
+         std::cout << " Gerr"+pad+" printed" << std::endl;
       }
       if(retarded==true)
       {
-         print_VecVec(resultsDir+"/nnt.DAT", nnt, iterations, Beta);
-         std::cout << " nnt.DAT printed" << std::endl;
+         print_VecVec(resultsDir+"/nnt"+pad, nnt, iterations, Beta);
+         std::cout << " nnt"+pad+" printed" << std::endl;
       }
    }
 
