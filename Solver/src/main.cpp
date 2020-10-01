@@ -90,7 +90,6 @@ int main(int argc, char *argv[])
          std::cout << " Norder= " << Norder << std::endl;
          std::cout << " Nmeas= " << Nmeas << std::endl;
          std::cout << " Nshift= " << Nshift << std::endl;
-         std::cout << " Nshift= " << Nshift << std::endl;
          std::cout << " PrintTime= " << PrintTime << std::endl;
          std::cout << " binlength= " << binlength << std::endl;
          std::cout << " retarded= " << retarded << std::endl;
