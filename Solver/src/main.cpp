@@ -32,7 +32,7 @@ int main(int argc, char *argv[])
    int Nsite,Nspin,Ntau;
    int Norder,Nmeas,Nshift;
    int PrintTime,binlength,verbosity,muIter;
-   double Beta,mu,muStep,muErr,density;
+   double Beta,mu,muStep,muTime,muErr,density;
    bool retarded;
    std::vector<int> SiteTime;
    std::vector<int> SiteNorb;
@@ -77,26 +77,31 @@ int main(int argc, char *argv[])
       find_param(argv[1], "density"    , density   );
       find_param(argv[1], "muStep"     , muStep    );
       find_param(argv[1], "muIter"     , muIter    );
+      find_param(argv[1], "muTime"     , muTime    );
       find_param(argv[1], "muErr"      , muErr     );
       //
       if(verbosity>=1)
       {
-         std::cout << "mu= " << mu << std::endl;
-         std::cout << "beta= " << Beta << std::endl;
-         std::cout << "Nsite= " << Nsite << std::endl;
-         std::cout << "Nspin= " << Nspin << std::endl;
-         std::cout << "Ntau= " << Ntau << std::endl;
-         std::cout << "Norder= " << Norder << std::endl;
-         std::cout << "Nmeas= " << Nmeas << std::endl;
-         std::cout << "Nshift= " << Nshift << std::endl;
-         std::cout << "Nshift= " << Nshift << std::endl;
-         std::cout << "PrintTime= " << PrintTime << std::endl;
-         std::cout << "binlength= " << binlength << std::endl;
-         std::cout << "retarded= " << retarded << std::endl;
-         std::cout << "muStep= " << muStep << std::endl;
-         std::cout << "muIter= " << muIter << std::endl;
-         std::cout << "muErr= " << muErr << std::endl;
-         std::cout << "density= " << density << std::endl;
+         std::cout << " mu= " << mu << std::endl;
+         std::cout << " beta= " << Beta << std::endl;
+         std::cout << " Nsite= " << Nsite << std::endl;
+         std::cout << " Nspin= " << Nspin << std::endl;
+         std::cout << " Ntau= " << Ntau << std::endl;
+         std::cout << " Norder= " << Norder << std::endl;
+         std::cout << " Nmeas= " << Nmeas << std::endl;
+         std::cout << " Nshift= " << Nshift << std::endl;
+         std::cout << " Nshift= " << Nshift << std::endl;
+         std::cout << " PrintTime= " << PrintTime << std::endl;
+         std::cout << " binlength= " << binlength << std::endl;
+         std::cout << " retarded= " << retarded << std::endl;
+         if(density>0.0)
+         {
+            std::cout << " density= " << density << std::endl;
+            std::cout << " muStep= " << muStep << std::endl;
+            std::cout << " muIter= " << muIter << std::endl;
+            std::cout << " muErr= " << muErr << std::endl;
+            std::cout << " muTime= " << muTime << std::endl;
+         }
       }
 
       //
@@ -152,7 +157,7 @@ int main(int argc, char *argv[])
          if(PathExist(strcpy(new char[SiteDir[isite].length() + 1], SiteDir[isite].c_str())))
          {
             std::cout << " (Found) - ";
-            ImpurityList.push_back(ct_hyb( mu, Beta, Nspin, SiteNorb[isite], Ntau, Norder, Nmeas, Nshift, PrintTime, binlength, retarded ));
+            ImpurityList.push_back(ct_hyb( SiteName[isite], mu, Beta, Nspin, SiteNorb[isite], Ntau, Norder, Nmeas, Nshift, PrintTime, binlength, retarded ));
             ImpurityList[isite].init( SiteDir[isite] );
          }
          else
@@ -171,10 +176,9 @@ int main(int argc, char *argv[])
       if(density>0.0)
       {
          print_line_space(1);
-         int QuickTime=120;
          double trial_density;
          double mu_start=mu;
-         double mu_new;
+         double mu_new,mu_last;
          std::vector<double>Ntmp(Nsite,0.0);
 
          //
@@ -182,8 +186,8 @@ int main(int argc, char *argv[])
          std::cout << " Starting chemical potential: " << mu_start << std::endl;
          for(int isite=0; isite < Nsite; isite++)
          {
-            std::cout << " Quick solution (120sec) of site: " << SiteName[isite] << std::endl;
-            ImpurityList[isite].solve( QuickTime, true );
+            std::cout << " Quick solution ("+std::to_string((int)(muTime*60))+"sec) of site " << SiteName[isite] << std::endl;
+            ImpurityList[isite].solve( muTime, true );
             Ntmp[isite]=ImpurityList[isite].get_Density();
             std::cout << " Site density: " << Ntmp[isite] << std::endl;
          }
@@ -192,9 +196,8 @@ int main(int argc, char *argv[])
          print_line_space(1);
 
          //
-         print_line_minus(80);
          double muSign = (trial_density < density) ? +1.0 : -1.0;
-         for (int imu=0; imu < muIter; imu++)
+         for (int imu=1; imu < muIter; imu++)
          {
             //
             mu_new = mu_start + imu*muStep*muSign;
@@ -202,9 +205,9 @@ int main(int argc, char *argv[])
             //
             for(int isite=0; isite < Nsite; isite++)
             {
-               std::cout << " Quick solution (120sec) of site: " << SiteName[isite] << std::endl;
+               std::cout << " Quick solution ("+std::to_string((int)(muTime*60))+"sec) of site " << SiteName[isite] << std::endl;
                ImpurityList[isite].reset_mu( mu_new );
-               ImpurityList[isite].solve( QuickTime, true );
+               ImpurityList[isite].solve( muTime, true );
                Ntmp[isite]=ImpurityList[isite].get_Density();
                std::cout << " Site density: " << Ntmp[isite] << std::endl;
             }
@@ -214,12 +217,13 @@ int main(int argc, char *argv[])
             //
             if((muSign>0.0)&&(trial_density > density)) break;
             if((muSign<0.0)&&(trial_density < density)) break;
+            mu_last=mu_new;
          }
 
          //
-         print_line_minus(80);
-         double mu_below=std::min(mu_new,mu_start);
-         double mu_above=std::max(mu_new,mu_start);
+         print_line_space(1);
+         double mu_below=std::min(mu_new,mu_last);
+         double mu_above=std::max(mu_new,mu_last);
          for (int imu=0; imu < muIter; imu++)
          {
             //
@@ -229,9 +233,9 @@ int main(int argc, char *argv[])
             //
             for(int isite=0; isite < Nsite; isite++)
             {
-               std::cout << " Quick solution (120sec) of site: " << SiteName[isite] << std::endl;
+               std::cout << " Quick solution ("+std::to_string((int)(muTime*60))+"sec) of site " << SiteName[isite] << std::endl;
                ImpurityList[isite].reset_mu( mu_new );
-               ImpurityList[isite].solve( QuickTime, true );
+               ImpurityList[isite].solve( muTime, true );
                Ntmp[isite]=ImpurityList[isite].get_Density();
                std::cout << " Site density: " << Ntmp[isite] << std::endl;
             }
@@ -243,12 +247,12 @@ int main(int argc, char *argv[])
             if(trial_density < density) mu_below=mu_new;
             if(fabs(trial_density-density)<muErr)
             {
-               std::cout << " Found correct chemical potential: " << mu_new << std::endl;
+               std::cout << " Found correct chemical potential after "+std::to_string(imu)+" iterations: " << mu_new << std::endl;
                break;
             }
             else if(imu == muIter-1)
             {
-               std::cout << " *NOT* found correct chemical potential. Last value: " << mu_new << std::endl;
+               std::cout << " *NOT* found correct chemical potential after "+std::to_string(muIter)+" iterations. Last value: " << mu_new << std::endl;
                break;
             }
          }

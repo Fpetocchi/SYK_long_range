@@ -31,11 +31,13 @@
 class ct_hyb
 {
 public:
-   ct_hyb(double mu, double beta, int Nspin, int Norb, int Ntau, int Norder,
+   ct_hyb(path SiteName, double mu, double beta, int Nspin, int Norb, int Ntau, int Norder,
           int Nmeas, int Nshift, int PrintTime, int binlength, bool retarded ):
-   mu(mu), Beta(beta),Nspin(Nspin), Norb(Norb), Ntau(Ntau), Norder(Norder),
-   Nmeas(Nmeas), Nshift(Nshift), PrintTime(PrintTime),
-   binlength(binlength),retarded(retarded)
+   SiteName(SiteName),
+   mu(mu), Beta(beta),
+   Nspin(Nspin), Norb(Norb), Ntau(Ntau),
+   Norder(Norder), Nmeas(Nmeas), Nshift(Nshift),
+   PrintTime(PrintTime), binlength(binlength), retarded(retarded)
    {}
    //
    double get_mu(void)const {return mu;}
@@ -46,7 +48,7 @@ public:
    int get_Ntau(void)const {return Ntau;}
    int get_Nmeas(void)const {return Nmeas;}
    Vec get_Nloc(void)const {return Nloc;}
-   double get_Density(void)const {return std::accumulate(Nloc.begin(), Nloc.end(), 0.0);}
+   double get_Density(void)const {return std::accumulate(Nloc.begin(), Nloc.end(), 0.0)/sweeps;}
    void reset_mu(double mu_new) {mu = mu_new; mu_is_reset=true;}
 
 
@@ -75,7 +77,7 @@ public:
       //
       //set the local energies ( std::vector<double> )
       read_Vec(inputDir+"/Eloc.DAT", Eloc, Nflavor);
-      for (int ifl=0; ifl<Nflavor; ifl++) Eloc[ifl] = mu - Eloc[ifl];
+      set_levels();
 
       //
       //read the hybridization function ( std::vector<std::vector<double>> )
@@ -99,7 +101,7 @@ public:
 
       //
       //initialize empty Inverse hybridization matrix M ( std::vector<Eigen::MatrixXd> )
-      M.resize(Nflavor); //,Mat::Zero(Nflavor,Nflavor));
+      M.resize(Nflavor);
 
       //
       //initialize observables
@@ -130,7 +132,7 @@ public:
    //---------------------------------------------------------------------------
 
 
-   void solve(int MaxTime, bool atBeta=false)
+   void solve(double MaxTime, bool atBeta=false)
    {
       //
       if(!initialized)
@@ -141,14 +143,35 @@ public:
       else
       {
          //
+         bool PrintCheck;
          if(atBeta==false) dostep = &ct_hyb::dostep_full;
          if(atBeta==true)  dostep = &ct_hyb::dostep_atBeta;
 
          //
          start_timer();
-         print_line_space(1);
-         print_line_equal(80);
-         std::cout << " Solver has started." << std::endl;
+         if(atBeta==false)
+         {
+            print_line_space(1);
+            print_line_equal(80);
+            std::cout << " Solver for impurity "+SiteName+" has started." << std::endl;
+         }
+
+         //
+         if(mu_is_reset==true)
+         {
+            // Internal vars reset
+            set_levels();
+            for (int ifl=0; ifl<Nflavor; ifl++)
+            {
+               segments[ifl].clear();
+               M[ifl].resize(0,0);
+               Nloc[ifl]=0.0;
+               sign[ifl]=1.0;
+            }
+            full_line.resize(Nflavor,0);
+            sign_meas=0.0;
+            sweeps=0;
+         }
 
          //
          while( !check_timer_global(MaxTime) )
@@ -157,28 +180,39 @@ public:
             (this->*dostep)();
             sweeps++;
             //
-            if( check_timer_print(PrintTime) )
+            if( check_timer_print(PrintTime) && (atBeta==false) )
             {
                print_line_space(1);
-               print_duration();
-               std::cout << " Printing observables." << std::endl;
+               print_duration("min");
                std::cout << " Partial sweeps: " << sweeps << std::endl;
                std::cout << " Average sign: " << sign_meas/sweeps << std::endl;
+               std::cout << " Density: " << get_Density() << std::endl;
+               std::cout << " Printing observables." << std::endl;
                path pad="_";
                print_observables(sweeps,pad.append(std::to_string(PrintTime*(TimeStamp-1))).append(".DAT"));
             }
          }
+         mu_is_reset=false;
 
          //
-         print_line_space(2);
-         print_line_minus(80);
-         print_duration();
-         std::cout << " Solver is done. Results written to: " << resultsDir << std::endl;
-         std::cout << " Printing observables." << std::endl;
-         std::cout << " Total sweeps: " << sweeps << std::endl;
-         std::cout << " Average sign: " << sign_meas/sweeps << std::endl;
-         print_observables(sweeps,".DAT");
-         print_line_minus(80);
+         if(atBeta==false)
+         {
+            print_line_space(2);
+            print_line_minus(80);
+            print_duration("min");
+            std::cout << " Solver for impurity "+SiteName+" is done. Results written to: " << resultsDir << std::endl;
+            std::cout << " Total sweeps: " << sweeps << std::endl;
+            std::cout << " Average sign: " << sign_meas/sweeps << std::endl;
+            std::cout << " Density: " << get_Density() << std::endl;
+            std::cout << " Printing observables." << std::endl;
+            print_observables(sweeps,".DAT",binlength);
+            print_line_minus(80);
+         }
+         else
+         {
+            print_duration("sec");
+            std::cout << " Solver for impurity "+SiteName+" is done." << std::endl;
+         }
       }
    }
 
@@ -199,6 +233,7 @@ private:
    int                                 binlength;
    bool                                retarded;                                // flag to switch on retarded interactions
    // Internal vars
+   path                                SiteName;
    path                                resultsDir;
    duration                            Tstart;
    int                                 TimeStamp;
@@ -208,7 +243,8 @@ private:
    int                                 Ntau_p1=Ntau+1;                          // Spin-orbital flavours
    unsigned long long int              sweeps;                                  // Sweeps done
    int                                 thermalization_sweeps=Therm;             // REMOVE
-   Vec                                 Eloc;                                    // mu-<\epsilon>
+   Vec                                 Levels;                                  // mu-<\epsilon>
+   Vec                                 Eloc;                                    // <\epsilon>
    Mat                                 Uloc;                                    // Istantaneous U matrix
    std::vector<segment_container_t>    segments;                                // Stores configurations with 0,1,... segments (but not full line)
    std::vector<int>                    full_line;                               // if 1 means that particle occupies full time-line
@@ -256,11 +292,13 @@ private:
       return stop;
    }
 
-   void print_duration()
+   void print_duration(path kind="sec")
    {
       duration Tnow = std::chrono::system_clock::now();
       std::chrono::duration<double> runtime_seconds = Tnow-Tstart;
-      std::cout << " Timestamp: " << runtime_seconds.count() << std::endl;
+      if(kind=="sec")std::cout << " Timestamp(sec): " << runtime_seconds.count() << std::endl;
+      if(kind=="min")std::cout << " Timestamp(min): " << runtime_seconds.count()/60 << std::endl;
+      if(kind=="hrs")std::cout << " Timestamp(hrs): " << runtime_seconds.count()/3600 << std::endl;
    }
 
 
@@ -273,7 +311,6 @@ private:
       times full_segment(0,Beta);
       double s=1;
       VecVec G_tmp(Nflavor,Vec(Ntau_p1,0.0));
-      VecVec Gerr_tmp(Nflavor,Vec(Ntau_p1,0.0));
 
       // The measurments I'm going to do regardless from the time
       for (int imeas=0; imeas<Nmeas; imeas++)
@@ -281,16 +318,16 @@ private:
          for (int ifl=0; ifl<Nflavor; ifl++)
          {
             // insert or remove full line
-            if (segments[ifl].size() == 0) insert_remove_full_line( Eloc[ifl], Uloc, Beta, full_line[ifl], segments, full_line, ifl );
-            insert_remove_antisegment( Beta*rndm(), Beta, Eloc[ifl], Uloc, F[ifl], full_line[ifl], segments[ifl], M[ifl], sign[ifl], segments, full_line, ifl, K_table );
+            if (segments[ifl].size() == 0) insert_remove_full_line( Levels[ifl], Uloc, Beta, full_line[ifl], segments, full_line, ifl );
+            insert_remove_antisegment( Beta*rndm(), Beta, Levels[ifl], Uloc, F[ifl], full_line[ifl], segments[ifl], M[ifl], sign[ifl], segments, full_line, ifl, K_table );
 
             //
             if (!full_line[ifl])
             {
                // local update
-               insert_remove_segment( Beta*rndm(), Beta, Eloc[ifl], Uloc, F[ifl], segments[ifl], M[ifl], sign[ifl], segments, full_line, ifl, K_table);
+               insert_remove_segment( Beta*rndm(), Beta, Levels[ifl], Uloc, F[ifl], segments[ifl], M[ifl], sign[ifl], segments, full_line, ifl, K_table);
                // shift segments
-               for (int k=0; k<Nshift; k++) shift_segment( segments[ifl], Beta, Eloc[ifl], Uloc, F[ifl], M[ifl], sign[ifl], segments, full_line, ifl, K_table );
+               for (int k=0; k<Nshift; k++) shift_segment( segments[ifl], Beta, Levels[ifl], Uloc, F[ifl], M[ifl], sign[ifl], segments, full_line, ifl, K_table );
                // flip segment
                //for (int i=0; i<N_flip; i++)flip_segment( segments_up, Ntau, Beta, M_up, sign_up, sign_down, F_down, M_down, segments_down, full_line_down);
             }
@@ -315,12 +352,7 @@ private:
       //.........................Expensive measurments..........................
       // n_a(\tau)
       nt = measure_nt( segments, full_line, Ntau_p1, Beta );
-      // correct G(0^+)and G(beta^-) and estimate the error
-      if(binlength>0)
-      {
-         binAverageVec( binlength, G_tmp, Gerr_tmp );
-         accumulate_G( Gerr, Gerr_tmp );
-      }
+      // G(\tau)
       accumulate_G( G, G_tmp );
       // n_a(\tau)n_b(0)
       accumulate_nnt( nnt, nt );
@@ -346,16 +378,16 @@ private:
          for (int ifl=0; ifl<Nflavor; ifl++)
          {
             // insert or remove full line
-            if (segments[ifl].size() == 0) insert_remove_full_line( Eloc[ifl], Uloc, Beta, full_line[ifl], segments, full_line, ifl );
-            insert_remove_antisegment( Beta*rndm(), Beta, Eloc[ifl], Uloc, F[ifl], full_line[ifl], segments[ifl], M[ifl], sign[ifl], segments, full_line, ifl, K_table );
+            if (segments[ifl].size() == 0) insert_remove_full_line( Levels[ifl], Uloc, Beta, full_line[ifl], segments, full_line, ifl );
+            insert_remove_antisegment( Beta*rndm(), Beta, Levels[ifl], Uloc, F[ifl], full_line[ifl], segments[ifl], M[ifl], sign[ifl], segments, full_line, ifl, K_table );
 
             //
             if (!full_line[ifl])
             {
                // local update
-               insert_remove_segment( Beta*rndm(), Beta, Eloc[ifl], Uloc, F[ifl], segments[ifl], M[ifl], sign[ifl], segments, full_line, ifl, K_table );
+               insert_remove_segment( Beta*rndm(), Beta, Levels[ifl], Uloc, F[ifl], segments[ifl], M[ifl], sign[ifl], segments, full_line, ifl, K_table );
                // shift segments
-               for (int k=0; k<Nshift; k++) shift_segment( segments[ifl], Beta, Eloc[ifl], Uloc, F[ifl], M[ifl], sign[ifl], segments, full_line, ifl, K_table );
+               for (int k=0; k<Nshift; k++) shift_segment( segments[ifl], Beta, Levels[ifl], Uloc, F[ifl], M[ifl], sign[ifl], segments, full_line, ifl, K_table );
                // flip segment
                //for (int i=0; i<N_flip; i++)flip_segment( segments_up, Ntau, Beta, M_up, sign_up, sign_down, F_down, M_down, segments_down, full_line_down);
             }
@@ -371,7 +403,17 @@ private:
    //---------------------------------------------------------------------------
 
 
-   void print_observables(unsigned long long int &iterations, path pad)
+   void set_levels()
+   {
+      Levels.resize(Nflavor,0.0);
+      for (int ifl=0; ifl<Nflavor; ifl++) Levels[ifl] = mu - Eloc[ifl];
+   }
+
+
+   //---------------------------------------------------------------------------
+
+
+   void print_observables(unsigned long long int &iterations, path pad, int bins=0)
    {
       //
       print_Vec(resultsDir+"/Nloc"+pad, Nloc, iterations);
@@ -379,20 +421,23 @@ private:
       //
       print_Vec(resultsDir+"/PertOrder"+pad, Pert, iterations);
       std::cout << " PertOrder"+pad+" printed" << std::endl;
+      //average ove binlength and error estimate
+      if(bins>0)
+      {
+         VecVec Gerr(Nflavor,Vec(Ntau_p1,0.0));
+         binAverageVec( bins, G, Gerr );
+         print_VecVec(resultsDir+"/Gerr"+pad, Gerr, iterations, Beta);
+         std::cout << " Gerr"+pad+" printed" << std::endl;
+      }
       //Density correction
       for (int ifl=0; ifl<Nflavor; ifl++)
       {
          G[ifl].front() = +Nloc[ifl]-(long double)iterations ;
          G[ifl].back()  = -Nloc[ifl];
       }
+      //
       print_VecVec(resultsDir+"/Gimp"+pad, G, iterations, Beta);
       std::cout << " Gimp"+pad+" printed" << std::endl;
-      //
-      if(binlength>0)
-      {
-         print_VecVec(resultsDir+"/Gerr"+pad, Gerr, iterations, Beta);
-         std::cout << " Gerr"+pad+" printed" << std::endl;
-      }
       //
       print_VecVec(resultsDir+"/nnt"+pad, nnt, iterations, Beta);
       std::cout << " nnt"+pad+" printed" << std::endl;

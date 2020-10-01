@@ -54,47 +54,7 @@ void measure_G( Vec &G, segment_container_t &segment, Mat &M, int &Ntau_p1, doub
             //
             int index = argument/Beta*(Ntau_p1-1)+0.5;
             //G_meas[ifl*(Ntau+1)+index] += M(k,i)*bubble_sign/(Beta*Beta);
-            G[index] += Norm*M(k,i)*bubble_sign/(Beta*Beta);
-         }
-      }
-   }
-}
-
-
-void measure_and_accumulate_G( Vec &G, segment_container_t &segment, Mat &M, int &Ntau_p1, double &Beta, double Norm)
-{
-   //
-   std::set<times>::iterator it1, it2;
-
-   //
-   for (int i=0; i<M.rows(); i++)
-   {
-      //
-      (i==0 ? it1 = segment.begin() : it1++);
-      //
-      for (int k=0; k<M.rows(); k++)
-      {
-         //
-         (k==0 ? it2 = segment.begin() : it2++);
-         //
-         if (M(k,i)!=0)
-         {
-            double argument = it1->t_end()-it2->t_start();
-            double bubble_sign=1;
-            //
-            if (argument > 0)
-            {
-               bubble_sign = 1;
-            }
-            else
-            {
-               bubble_sign = -1;
-               argument += Beta;
-            }
-            //
-            int index = argument/Beta*(Ntau_p1-1)+0.5;
-            //G_meas[ifl*(Ntau+1)+index] += M(k,i)*bubble_sign/(Beta*Beta);
-            G[index] += Norm*M(k,i)*bubble_sign/(Beta*Beta);
+            G[index] -= Norm*M(k,i)*bubble_sign/(Beta*Beta);
          }
       }
    }
