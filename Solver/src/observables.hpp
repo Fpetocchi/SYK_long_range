@@ -22,28 +22,34 @@
 //============================================================================//
 
 
-template<typename T> void normalize_Vec( std::vector<double> &Vec, T &Norm)
+template<typename T> Vec normalize_Vec( Vec &Vec_in, T &Norm)
 {
-   int Nrows=Vec.size();
-   for (int irow=0; irow<Nrows; irow++) Vec[irow]/=(double) Norm;
+   int Nrows=Vec_in.size();
+   Vec Vec_out(Nrows,0.0);
+   for (int irow=0; irow<Nrows; irow++) Vec_out[irow]=Vec_in[irow]=(double) Norm;
+   return Vec_out;
 }
-template<typename T> void normalize_VecVec( std::vector<std::vector<double>> &VecVec, T &Norm)
+template<typename T> VecVec normalize_VecVec( VecVec &VecVec_in, T &Norm)
 {
-   int Ncols=VecVec.size();
-   int Nrows=VecVec[0].size();
-   for (int icol=0; icol<Nrows; icol++)
+   int Ncols=VecVec_in.size();
+   int Nrows=VecVec_in[0].size();
+   VecVec VecVec_out(Ncols,Vec(Nrows,0.0));
+   for (int icol=0; icol<Ncols; icol++)
    {
-      for (int irow=0; irow<Nrows; irow++) VecVec[icol][irow]/=(double) Norm;
+      for (int irow=0; irow<Nrows; irow++) VecVec_out[icol][irow]=VecVec_in[icol][irow]/(double) Norm;
    }
+   return VecVec_out;
 }
-template<typename T> void normalize_VecVec( std::vector<std::vector<double>> &VecVec, std::vector<T> &NormCol)
+template<typename T> VecVec normalize_VecVec( VecVec &VecVec_in, std::vector<T> &NormCol)
 {
-   int Ncols=VecVec.size();
-   int Nrows=VecVec[0].size();
-   for (int icol=0; icol<Nrows; icol++)
+   int Ncols=VecVec_in.size();
+   int Nrows=VecVec_in[0].size();
+   VecVec VecVec_out(Ncols,Vec(Nrows,0.0));
+   for (int icol=0; icol<Ncols; icol++)
    {
-      for (int irow=0; irow<Nrows; irow++) VecVec[icol][irow]/=(double) NormCol[icol];
+      for (int irow=0; irow<Nrows; irow++) VecVec_out[icol][irow]=VecVec_in[icol][irow]/(double) NormCol[icol];
    }
+   return VecVec_out;
 }
 
 

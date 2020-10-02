@@ -245,27 +245,27 @@ bool PathExist(char* s)
 
 
 void print_line_minus(int width, bool flag=true) {
-  if(flag==true)std::cout << std::string(width, '-') << std::endl;
+  if(flag)std::cout << std::string(width, '-') << std::endl;
 }
 
 void print_line_plus(int width, bool flag=true) {
-  if(flag==true)std::cout << std::string(width, '+') << std::endl;
+  if(flag)std::cout << std::string(width, '+') << std::endl;
 }
 
 void print_line_equal(int width, bool flag=true) {
-  if(flag==true)std::cout << std::string(width, '=') << std::endl;
+  if(flag)std::cout << std::string(width, '=') << std::endl;
 }
 
 void print_line_star(int width, bool flag=true) {
-  if(flag==true)std::cout << std::string(width, '*') << std::endl;
+  if(flag)std::cout << std::string(width, '*') << std::endl;
 }
 
 void print_line_dot(int width, bool flag=true) {
-  if(flag==true)std::cout << std::string(width, '.') << std::endl;
+  if(flag)std::cout << std::string(width, '.') << std::endl;
 }
 
 void print_line_space(int height, bool flag=true) {
-  if(flag==true)
+  if(flag)
   {
      for(int i=0; i<height; i++) std::cout << " " << std::endl;
   }
@@ -343,7 +343,7 @@ void read_VecVec( std::string path, std::vector<std::vector<double>>  &VecVec, i
    //
    for (int j=0; j<jdim; j++)
    {
-      if(axis==true)file >> dum;
+      if(axis)file >> dum;
       for (int i=0; i<idim; i++)
       {
          file >> VecVec[i][j];
@@ -352,7 +352,7 @@ void read_VecVec( std::string path, std::vector<std::vector<double>>  &VecVec, i
    file.close();
 
    //
-   if(Delta_like==true)
+   if(Delta_like)
    {
       //Delta(-tau)
       for (int i=0; i<idim; i++) std::reverse(VecVec[i].begin(),VecVec[i].end());
@@ -375,7 +375,7 @@ void read_VecVecVec( std::string path, std::vector<std::vector<std::vector<doubl
    //
    for (int k=0; k<kdim; k++)
    {
-      if(axis==true) file >> dum;
+      if(axis) file >> dum;
       for (int i=0; i<idim; i++)
       {
          for (int j=0; j<=i; j++)
@@ -391,7 +391,7 @@ void read_VecVecVec( std::string path, std::vector<std::vector<std::vector<doubl
 //------------------------------------------------------------------------------
 
 
-void print_Vec( std::string path, std::vector<double> &Vec, double Beta=0.0)
+void print_Vec( std::string path, std::vector<double> &Vec, double Beta=0.0, double Norm=1.0)
 {
    //
    FILE * printFile;
@@ -406,14 +406,14 @@ void print_Vec( std::string path, std::vector<double> &Vec, double Beta=0.0)
    else
    {
       double deltaTau=Beta/(Nrows-1);
-      for(int irow=0; irow<Nrows; irow++) fprintf (printFile , "%.20e\t%.20e\n",irow*deltaTau,Vec[irow]);
+      for(int irow=0; irow<Nrows; irow++) fprintf (printFile , "%.20e\t%.20e\n",irow*deltaTau,Vec[irow]/Norm);
    }
 
    fclose(printFile);
 }
 
 
-void print_VecVec( std::string path, std::vector<std::vector<double>> &VecVec, double Beta=0.0)
+void print_VecVec( std::string path, std::vector<std::vector<double>> &VecVec, double Beta=0.0, double Norm=1.0)
 {
    //
    FILE * printFile;
@@ -433,7 +433,7 @@ void print_VecVec( std::string path, std::vector<std::vector<double>> &VecVec, d
          double deltaTau=Beta/(Nrows-1);
          fprintf (printFile , "%.20e\t",irow*deltaTau);
       }
-      for (int icol=0; icol<Ncols; icol++) fprintf (printFile , "%.20e\t",(VecVec[icol][irow]));
+      for (int icol=0; icol<Ncols; icol++) fprintf (printFile , "%.20e\t",VecVec[icol][irow]/Norm);
       fprintf (printFile , "\n");
    }
    fclose(printFile);

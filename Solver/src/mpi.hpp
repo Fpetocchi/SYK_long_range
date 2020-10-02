@@ -14,6 +14,7 @@
 #include <cstdlib>
 #include <mpi.h>
 //
+#include <unistd.h>
 #include "file_io.hpp"
 
 
@@ -42,8 +43,10 @@ class CustomMPI
          if(master_!=0) MPImaster=master_;
          //
          print_line_star(80,is_master());
+         sleep(1);
          printf(" Rank %d out of %d available processors is alive and ready to rock.\n",MPIrank, MPIsize);
-         printf(" Master is: %d. \n",MPImaster);
+         if(is_master())printf(" Master is %d. \n",MPImaster);
+         sleep(1);
          print_line_star(80,is_master());
          print_line_space(1,is_master());
          //
@@ -54,8 +57,8 @@ class CustomMPI
 
       void report(std::string message, bool allranks=false)
       {
-         if(MPI_is_init==false) StopError(" MPI environment is not initialized. Exiting.");
-         if(allranks==false)
+         if(!MPI_is_init) StopError(" MPI environment is not initialized. Exiting.");
+         if(!allranks)
          {
             if(MPIrank==MPImaster) printf("%s\n", message.c_str());
          }
@@ -67,7 +70,7 @@ class CustomMPI
 
       void barrier(void)
       {
-         if(MPI_is_init==false) StopError(" MPI environment is not initialized. Exiting.");
+         if(!MPI_is_init) StopError(" MPI environment is not initialized. Exiting.");
          MPI_Barrier(MPI_COMM_WORLD);
       }
 
@@ -84,7 +87,7 @@ class CustomMPI
       void allreduce( unsigned long long int &RankInt, unsigned long long int &WorldInt, bool average=false, path location="none")
       {
          if(location!="none")report("allreduce(int) called in: "+location);
-         if(MPI_is_init==false) StopError(" MPI environment is not initialized. Exiting.");
+         if(!MPI_is_init) StopError(" MPI environment is not initialized. Exiting.");
          //
          if(MPIsize==1)
          {
@@ -93,14 +96,14 @@ class CustomMPI
          else
          {
             MPI_Allreduce(&RankInt, &WorldInt, 1, MPI_UNSIGNED_LONG_LONG, MPI_SUM, MPI_COMM_WORLD);
-            if(average==true)WorldInt/=MPIsize;
+            if(average)WorldInt/=MPIsize;
          }
       }
 
       void allreduce( double &RankFloat, double &WorldFloat, bool average=false, path location="none")
       {
          if(location!="none")report("allreduce(float) called in: "+location);
-         if(MPI_is_init==false) StopError(" MPI environment is not initialized. Exiting.");
+         if(!MPI_is_init) StopError(" MPI environment is not initialized. Exiting.");
          //
          if(MPIsize==1)
          {
@@ -109,14 +112,14 @@ class CustomMPI
          else
          {
             MPI_Allreduce(&RankFloat, &WorldFloat, 1, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
-            if(average==true)WorldFloat/=MPIsize;
+            if(average) WorldFloat/=MPIsize;
          }
       }
 
       void allreduce( std::vector<double> &RankVec, std::vector<double> &WorldVec, bool average=false, path location="none")
       {
          if(location!="none")report("allreduce(Vec) called in: "+location);
-         if(MPI_is_init==false) StopError(" MPI environment is not initialized. Exiting.");
+         if(!MPI_is_init) StopError(" MPI environment is not initialized. Exiting.");
          //
          if(MPIsize==1)
          {
@@ -128,7 +131,7 @@ class CustomMPI
             for(int i=0; i < iDim; i++)
             {
                MPI_Allreduce(&RankVec[i], &WorldVec[i], 1, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
-               if(average==true)WorldVec[i]/=MPIsize;
+               if(average) WorldVec[i]/=MPIsize;
             }
          }
       }
@@ -136,7 +139,7 @@ class CustomMPI
       void allreduce( std::vector<std::vector<double>> &RankVecVec, std::vector<std::vector<double>> &WorldVecVec, bool average=false, path location="none")
       {
          if(location!="none")report("allreduce(VecVec) called in: "+location);
-         if(MPI_is_init==false) StopError(" MPI environment is not initialized. Exiting.");
+         if(!MPI_is_init) StopError(" MPI environment is not initialized. Exiting.");
          //
          if(MPIsize==1)
          {
@@ -151,7 +154,7 @@ class CustomMPI
                for(int j=0; j < jDim; j++)
                {
                   MPI_Allreduce(&RankVecVec[i][j], &WorldVecVec[i][j], 1, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
-                  if(average==true)WorldVecVec[i][j]/=MPIsize;
+                  if(average) WorldVecVec[i][j]/=MPIsize;
                }
             }
          }

@@ -34,7 +34,7 @@ int main(int argc, char *argv[])
    //                           input variables                               //
    //.........................................................................//
    int Nsite,Nspin,Ntau;
-   int Norder,Nmeas,Nshift;
+   int Norder,Nmeas,Ntherm=1000,Nshift;
    int PrintTime,binlength,verbosity,muIter;
    double Beta,mu,muStep,muTime,muErr,density;
    bool retarded;
@@ -68,6 +68,7 @@ int main(int argc, char *argv[])
       find_param(argv[1], "Ntau"       , Ntau      );
       find_param(argv[1], "Norder"     , Norder    );
       find_param(argv[1], "Nmeas"      , Nmeas     );
+      find_param(argv[1], "Ntherm"     , Ntherm     );
       find_param(argv[1], "Nshift"     , Nshift    );
       find_param(argv[1], "PrintTime"  , PrintTime );
       find_param(argv[1], "verbosity"  , verbosity );
@@ -88,8 +89,9 @@ int main(int argc, char *argv[])
          mpi.report(" Ntau= "+str(Ntau));
          mpi.report(" Norder= "+str(Norder));
          mpi.report(" Nmeas= "+str(Nmeas));
+         mpi.report(" Ntherm= "+str(Ntherm));
          mpi.report(" Nshift= "+str(Nshift));
-         mpi.report(" PrintTime= "+str(PrintTime));
+         mpi.report(" PrintTime= "+str(PrintTime)+"min");
          mpi.report(" binlength= "+str(binlength));
          mpi.report(" retarded= "+str(retarded));
          if(density>0.0)
@@ -98,7 +100,7 @@ int main(int argc, char *argv[])
             mpi.report(" muStep= "+str(muStep));
             mpi.report(" muIter= "+str(muIter));
             mpi.report(" muErr= "+str(muErr));
-            mpi.report(" muTime= "+str(muTime));
+            mpi.report(" muTime= "+str(muTime)+"min");
          }
       }
 
@@ -147,15 +149,15 @@ int main(int argc, char *argv[])
          mpi.report(" isite = "+str(isite));
          mpi.report(" Name = "+SiteName[isite]);
          mpi.report(" Norb = "+str(SiteNorb[isite]));
-         mpi.report(" Time = "+str(SiteTime[isite]));
+         mpi.report(" Time = "+str(SiteTime[isite])+"min");
 
          //
          if(PathExist(strcpy(new char[SiteDir[isite].length() + 1], SiteDir[isite].c_str())))
          {
             mpi.report(" Folder = "+SiteDir[isite]+" (Found).");
             ImpurityList.push_back(ct_hyb( SiteName[isite], mu, Beta, Nspin, SiteNorb[isite],
-                                           Ntau, Norder, Nmeas, Nshift, retarded,
-                                           PrintTime, binlength, mpi, true));
+                                           Ntau, Norder, Nmeas, Ntherm, Nshift, retarded,
+                                           PrintTime, binlength, mpi ));
             ImpurityList[isite].init( SiteDir[isite] );
          }
          else
@@ -174,7 +176,7 @@ int main(int argc, char *argv[])
          print_line_space(1,mpi.is_master());
          double trial_density;
          double mu_start=mu;
-         double mu_new,mu_last;
+         double mu_new,mu_last=mu;
          std::vector<double>Ntmp(Nsite,0.0);
 
          //
@@ -272,9 +274,9 @@ int main(int argc, char *argv[])
       Tend = std::chrono::system_clock::now();
       std::chrono::duration<double> runtime_seconds = Tend-Tstart;
       cout << endl;
-      cout << "Time [total] = " << runtime_seconds.count() << "s\n";
-      print_line_star(60);
-      exit(1);
+      mpi.report(" Time [total] = "+str(runtime_seconds.count()));
+      print_line_star(60,mpi.is_master());
+      mpi.finalize();
    } // try
    catch (char *message)
    {
