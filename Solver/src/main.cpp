@@ -9,9 +9,11 @@
 #include <time.h>
 #include <string>
 #include <cstdlib>
+#include <mpi.h>
 //
 #include "file_io.hpp"
 #include "impurity.hpp"
+#include "mpi.hpp"
 //
 using namespace std;
 
@@ -19,16 +21,18 @@ using namespace std;
 //============================================================================//
 
 
-
-//std::random_device generator;
-//std::default_random_engine generator;
-
-
 int main(int argc, char *argv[])
 {
-   //..................................................
-   //               input variables
-   //..................................................
+   //.........................................................................//
+   //                           MPI Environment                               //
+   //.........................................................................//
+   CustomMPI mpi;
+   mpi.init();
+
+
+   //.........................................................................//
+   //                           input variables                               //
+   //.........................................................................//
    int Nsite,Nspin,Ntau;
    int Norder,Nmeas,Nshift;
    int PrintTime,binlength,verbosity,muIter;
@@ -41,26 +45,21 @@ int main(int argc, char *argv[])
    char* IterationDir;
 
 
-   //..................................................
-   //                 start global timer
-   //..................................................
-   std::chrono::time_point<std::chrono::system_clock> start, end, start_tot, end_tot;
-   print_line_star(80);
-   start_tot = std::chrono::system_clock::now();
+   //.........................................................................//
+   //                         start global timer                              //
+   //.........................................................................//
+   std::chrono::time_point<std::chrono::system_clock> Tstart, Tend;
+   Tstart = std::chrono::system_clock::now();
 
 
-   //..................................................
-   //                      main code
-   //..................................................
    try
    {
-      //..................................................
-      //                read inputfile
-      //..................................................
+      //......................................................................//
+      //                           read inputfile                             //
+      //......................................................................//
       if(argc<2) throw("COMMAND LINE ARGUMENT MISSING");
       //
-      // iteration folder
-      IterationDir = argv[2];
+      IterationDir = argv[2]; // iteration folder
       //
       find_param(argv[1], "mu"         , mu        );
       find_param(argv[1], "beta"       , Beta      );
@@ -80,34 +79,33 @@ int main(int argc, char *argv[])
       find_param(argv[1], "muTime"     , muTime    );
       find_param(argv[1], "muErr"      , muErr     );
       //
-      if(verbosity>=1)
+      if(verbosity>=1 && mpi.is_master())
       {
-         std::cout << " mu= " << mu << std::endl;
-         std::cout << " beta= " << Beta << std::endl;
-         std::cout << " Nsite= " << Nsite << std::endl;
-         std::cout << " Nspin= " << Nspin << std::endl;
-         std::cout << " Ntau= " << Ntau << std::endl;
-         std::cout << " Norder= " << Norder << std::endl;
-         std::cout << " Nmeas= " << Nmeas << std::endl;
-         std::cout << " Nshift= " << Nshift << std::endl;
-         std::cout << " PrintTime= " << PrintTime << std::endl;
-         std::cout << " binlength= " << binlength << std::endl;
-         std::cout << " retarded= " << retarded << std::endl;
+         mpi.report(" mu= "+str(mu));
+         mpi.report(" beta= "+str(Beta));
+         mpi.report(" Nsite= "+str(Nsite));
+         mpi.report(" Nspin= "+str(Nspin));
+         mpi.report(" Ntau= "+str(Ntau));
+         mpi.report(" Norder= "+str(Norder));
+         mpi.report(" Nmeas= "+str(Nmeas));
+         mpi.report(" Nshift= "+str(Nshift));
+         mpi.report(" PrintTime= "+str(PrintTime));
+         mpi.report(" binlength= "+str(binlength));
+         mpi.report(" retarded= "+str(retarded));
          if(density>0.0)
          {
-            std::cout << " density= " << density << std::endl;
-            std::cout << " muStep= " << muStep << std::endl;
-            std::cout << " muIter= " << muIter << std::endl;
-            std::cout << " muErr= " << muErr << std::endl;
-            std::cout << " muTime= " << muTime << std::endl;
+            mpi.report(" density= "+str(density));
+            mpi.report(" muStep= "+str(muStep));
+            mpi.report(" muIter= "+str(muIter));
+            mpi.report(" muErr= "+str(muErr));
+            mpi.report(" muTime= "+str(muTime));
          }
       }
 
       //
       for(int isite=0; isite < Nsite; isite++)
       {
-         //
-         std::string ss=std::to_string(isite+1);
+         std::string ss=str(isite+1);
          const char * s  = ss.c_str();
          char lineN[5];
          char lineT[5];
@@ -139,60 +137,59 @@ int main(int argc, char *argv[])
       }
 
 
-
-      //..................................................
-      //                    Solver setup
-      //..................................................
-      print_line_space(1);
+      //......................................................................//
+      //                             Solver setup                             //
+      //......................................................................//
+      print_line_space(1,mpi.is_master());
       std::vector<ct_hyb> ImpurityList;
       for(int isite=0; isite < Nsite; isite++)
       {
-         std::cout << " isite = " << isite << std::endl;
-         std::cout << " Name = " << SiteName[isite] << std::endl;
-         std::cout << " Norb = " << SiteNorb[isite] << std::endl;
-         std::cout << " Time = " << SiteTime[isite] << std::endl;
-         std::cout << " Folder = " << SiteDir[isite];
+         mpi.report(" isite = "+str(isite));
+         mpi.report(" Name = "+SiteName[isite]);
+         mpi.report(" Norb = "+str(SiteNorb[isite]));
+         mpi.report(" Time = "+str(SiteTime[isite]));
 
+         //
          if(PathExist(strcpy(new char[SiteDir[isite].length() + 1], SiteDir[isite].c_str())))
          {
-            std::cout << " (Found) - ";
-            ImpurityList.push_back(ct_hyb( SiteName[isite], mu, Beta, Nspin, SiteNorb[isite], Ntau, Norder, Nmeas, Nshift, PrintTime, binlength, retarded ));
+            mpi.report(" Folder = "+SiteDir[isite]+" (Found).");
+            ImpurityList.push_back(ct_hyb( SiteName[isite], mu, Beta, Nspin, SiteNorb[isite],
+                                           Ntau, Norder, Nmeas, Nshift, retarded,
+                                           PrintTime, binlength, mpi, true));
             ImpurityList[isite].init( SiteDir[isite] );
          }
          else
          {
-            std::cout << " (Not Found) - Exiting." << std::endl;
-            exit(1);
+            mpi.StopError(" Folder = "+SiteDir[isite]+" (Not Found) - Exiting. \n");
          }
-         print_line_space(1);
+         print_line_space(1,mpi.is_master());
       }
 
 
-
-      //..................................................
-      //             Chemical potential Lookup
-      //..................................................
+      //......................................................................//
+      //                     Chemical potential Lookup                        //
+      //......................................................................//
       if(density>0.0)
       {
-         print_line_space(1);
+         print_line_space(1,mpi.is_master());
          double trial_density;
          double mu_start=mu;
          double mu_new,mu_last;
          std::vector<double>Ntmp(Nsite,0.0);
 
          //
-         print_line_minus(80);
-         std::cout << " Starting chemical potential: " << mu_start << std::endl;
+         print_line_minus(80,mpi.is_master());
+         mpi.report(" Starting chemical potential: "+str(mu_start));
          for(int isite=0; isite < Nsite; isite++)
          {
-            std::cout << " Quick solution ("+std::to_string((int)(muTime*60))+"sec) of site " << SiteName[isite] << std::endl;
+            mpi.report(" Quick solution ("+str((int)(muTime*60))+"sec) of site "+SiteName[isite]);
             ImpurityList[isite].solve( muTime, true );
             Ntmp[isite]=ImpurityList[isite].get_Density();
-            std::cout << " Site density: " << Ntmp[isite] << std::endl;
+            mpi.report(" Site density: "+str(Ntmp[isite]));
          }
          trial_density = std::accumulate(Ntmp.begin(), Ntmp.end(), 0.0);
-         std::cout << " Total density: " << trial_density << std::endl;
-         print_line_space(1);
+         mpi.report(" Total density: "+str(trial_density));
+         print_line_space(1,mpi.is_master());
 
          //
          double muSign = (trial_density < density) ? +1.0 : -1.0;
@@ -200,19 +197,19 @@ int main(int argc, char *argv[])
          {
             //
             mu_new = mu_start + imu*muStep*muSign;
-            std::cout << " Setting chemical potential: " << mu_new << std::endl;
+            mpi.report(" Setting chemical potential: "+str(mu_new));
             //
             for(int isite=0; isite < Nsite; isite++)
             {
-               std::cout << " Quick solution ("+std::to_string((int)(muTime*60))+"sec) of site " << SiteName[isite] << std::endl;
+               mpi.report(" Quick solution ("+str((int)(muTime*60))+"sec) of site "+SiteName[isite]);
                ImpurityList[isite].reset_mu( mu_new );
                ImpurityList[isite].solve( muTime, true );
                Ntmp[isite]=ImpurityList[isite].get_Density();
-               std::cout << " Site density: " << Ntmp[isite] << std::endl;
+               mpi.report(" Site density: "+str(Ntmp[isite]));
             }
             trial_density = std::accumulate(Ntmp.begin(), Ntmp.end(), 0.0);
-            std::cout << " Total density: " << trial_density << std::endl;
-            print_line_space(1);
+            mpi.report(" Total density: "+str(trial_density));
+            print_line_space(1,mpi.is_master());
             //
             if((muSign>0.0)&&(trial_density > density)) break;
             if((muSign<0.0)&&(trial_density < density)) break;
@@ -220,38 +217,38 @@ int main(int argc, char *argv[])
          }
 
          //
-         print_line_space(1);
+         print_line_space(1,mpi.is_master());
          double mu_below=std::min(mu_new,mu_last);
          double mu_above=std::max(mu_new,mu_last);
          for (int imu=0; imu < muIter; imu++)
          {
             //
-            std::cout << " Chemical potential boundaries: " << mu_below  << " - "  << mu_above << std::endl;
+            mpi.report(" Chemical potential boundaries: "+str(mu_below)+" / "+str(mu_above));
             mu_new = (mu_below+mu_above)/2.0;
-            std::cout << " Setting chemical potential: " << mu_new << std::endl;
+            mpi.report(" Setting chemical potential: "+str(mu_new));
             //
             for(int isite=0; isite < Nsite; isite++)
             {
-               std::cout << " Quick solution ("+std::to_string((int)(muTime*60))+"sec) of site " << SiteName[isite] << std::endl;
+               mpi.report(" Quick solution ("+str((int)(muTime*60))+"sec) of site "+SiteName[isite]);
                ImpurityList[isite].reset_mu( mu_new );
                ImpurityList[isite].solve( muTime, true );
                Ntmp[isite]=ImpurityList[isite].get_Density();
-               std::cout << " Site density: " << Ntmp[isite] << std::endl;
+               mpi.report(" Site density: "+str(Ntmp[isite]));
             }
             trial_density = std::accumulate(Ntmp.begin(), Ntmp.end(), 0.0);
-            std::cout << " Total density: " << trial_density << " Error: " << fabs(trial_density-density) << std::endl;
-            print_line_space(1);
+            mpi.report(" Total density: "+str(trial_density)+" Error: "+str(fabs(trial_density-density)));
+            print_line_space(1,mpi.is_master());
             //
             if(trial_density > density) mu_above=mu_new;
             if(trial_density < density) mu_below=mu_new;
             if(fabs(trial_density-density)<muErr)
             {
-               std::cout << " Found correct chemical potential after "+std::to_string(imu)+" iterations: " << mu_new << std::endl;
+               mpi.report(" Found correct chemical potential after "+str(imu)+" iterations: "+str(mu_new));
                break;
             }
             else if(imu == muIter-1)
             {
-               std::cout << " *NOT* found correct chemical potential after "+std::to_string(muIter)+" iterations. Last value: " << mu_new << std::endl;
+               mpi.report(" *NOT* found chemical potential after "+str(muIter)+" iterations. Last value: "+str(mu_new));
                break;
             }
          }
@@ -272,8 +269,8 @@ int main(int argc, char *argv[])
       //..................................................
       //                 stop global timer
       //..................................................
-      end_tot = std::chrono::system_clock::now();
-      std::chrono::duration<double> runtime_seconds = end_tot-start_tot;
+      Tend = std::chrono::system_clock::now();
+      std::chrono::duration<double> runtime_seconds = Tend-Tstart;
       cout << endl;
       cout << "Time [total] = " << runtime_seconds.count() << "s\n";
       print_line_star(60);
@@ -290,4 +287,7 @@ int main(int argc, char *argv[])
       cerr << "\n input_file [ --test ]\n" << endl;
    }
    return 0;
- }
+}
+
+
+//============================================================================//

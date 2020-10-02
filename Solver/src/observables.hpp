@@ -12,6 +12,7 @@
 #include <time.h>
 #include <string>
 #include <cstdlib>
+#include <mpi.h>
 //
 #include <algorithm>
 #include <set>
@@ -19,6 +20,34 @@
 
 
 //============================================================================//
+
+
+template<typename T> void normalize_Vec( std::vector<double> &Vec, T &Norm)
+{
+   int Nrows=Vec.size();
+   for (int irow=0; irow<Nrows; irow++) Vec[irow]/=(double) Norm;
+}
+template<typename T> void normalize_VecVec( std::vector<std::vector<double>> &VecVec, T &Norm)
+{
+   int Ncols=VecVec.size();
+   int Nrows=VecVec[0].size();
+   for (int icol=0; icol<Nrows; icol++)
+   {
+      for (int irow=0; irow<Nrows; irow++) VecVec[icol][irow]/=(double) Norm;
+   }
+}
+template<typename T> void normalize_VecVec( std::vector<std::vector<double>> &VecVec, std::vector<T> &NormCol)
+{
+   int Ncols=VecVec.size();
+   int Nrows=VecVec[0].size();
+   for (int icol=0; icol<Nrows; icol++)
+   {
+      for (int irow=0; irow<Nrows; irow++) VecVec[icol][irow]/=(double) NormCol[icol];
+   }
+}
+
+
+//------------------------------------------------------------------------------
 
 
 void measure_G( Vec &G, segment_container_t &segment, Mat &M, int &Ntau_p1, double &Beta, double Norm)
@@ -407,6 +436,8 @@ void accumulate_Szhist( Vec &szhist, VecVec &n_tau)
    }
 }
 
+
+//============================================================================//
 
 
 #endif

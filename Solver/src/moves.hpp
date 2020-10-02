@@ -12,6 +12,7 @@
 #include <time.h>
 #include <string>
 #include <cstdlib>
+#include <mpi.h>
 //
 #include "segments.hpp"
 
@@ -509,5 +510,9 @@ template <class S, class G> void shift_segment( S &segments, double Beta, double
       if(sit==segments.end()){std::cerr<<"segment could not be inserted! exiting."<<std::endl;}
    }
 }
+
+
+//============================================================================//
+
 
 #endif

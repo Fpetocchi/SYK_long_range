@@ -12,6 +12,7 @@
 #include <time.h>
 #include <string>
 #include <cstdlib>
+#include <mpi.h>
 //
 #include <set>
 #include <algorithm>
@@ -791,7 +792,8 @@ template <class S> double nonlocal_shift(double te_ins, double te_rem, S &other_
    return nonloc;
 }
 
-//------------------------------------------------------------------------------
+
+//============================================================================//
 
 
 #endif
