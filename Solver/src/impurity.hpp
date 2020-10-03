@@ -102,7 +102,7 @@ class ct_hyb
 
          //
          //read the hybridization function ( std::vector<std::vector<double>> )
-         read_VecVec(inputDir+"/Delta.DAT", F, Nflavor, Ntau_p1, true, false);
+         read_VecVec(inputDir+"/Delta.DAT", F, Nflavor, Ntau_p1, true, false);  // last flag is to reverse the tau index
 
          //
          //read the istantaneous interaction ( Eigen::MatrixXd )
@@ -228,10 +228,10 @@ class ct_hyb
             }
             mu_is_reset=false;
 
-            // TESTING-TESTING-TESTING-TESTING-TESTING-TESTING-TESTING-TESTING-
-            mpi.report(" RankSweeps: "+str(RankSweeps),true);
-            mpi.report(" Dens: "+str(std::accumulate(Nloc.begin(), Nloc.end(), 0.0)/RankSweeps),true);
-            // TESTING-TESTING-TESTING-TESTING-TESTING-TESTING-TESTING-TESTING-
+            // TESTING>>>
+            //mpi.report(" RankSweeps: "+str(RankSweeps),true);
+            //mpi.report(" Dens: "+str(std::accumulate(Nloc.begin(), Nloc.end(), 0.0)/RankSweeps),true);
+            // >>>TESTING
 
             //
             if(!atBeta)

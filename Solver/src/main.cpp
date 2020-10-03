@@ -157,7 +157,7 @@ int main(int argc, char *argv[])
             mpi.report(" Folder = "+SiteDir[isite]+" (Found).");
             ImpurityList.push_back(ct_hyb( SiteName[isite], mu, Beta, Nspin, SiteNorb[isite],
                                            Ntau, Norder, Nmeas, Ntherm, Nshift, retarded,
-                                           PrintTime, binlength, mpi ));
+                                           PrintTime, binlength, mpi, false ));
             ImpurityList[isite].init( SiteDir[isite] );
          }
          else
