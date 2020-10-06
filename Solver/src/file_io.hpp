@@ -17,6 +17,7 @@
 #include "string.h"
 #include <cassert>
 #include <sys/stat.h>
+#include <sstream>
 //
 #include <Eigen/Core>
 //
@@ -37,10 +38,19 @@ char* delimiter=" =";
 //------------------------------------------------------------------------------
 
 
-template<typename T> std::string str( T data )
+template<typename T> std::string str_va( T data )
 {
    std::string namedata = std::to_string(data);
    return namedata;
+}
+
+template <typename T>
+std::string str( T data, const int n = 10)
+{
+    std::ostringstream namedata;
+    namedata.precision(n);
+    namedata << std::fixed << data;
+    return namedata.str();
 }
 
 
@@ -298,7 +308,7 @@ void read_EigenVec( std::string path, Eigen::VectorXd &Vec, int &idim)
 //------------------------------------------------------------------------------
 
 
-void read_Mat( std::string path, std::vector<std::vector<double>>  &Mat, int &idim, int &jdim )
+void read_Mat( std::string path, std::vector<std::vector<double>> &Mat, int &idim, int &jdim )
 {
    //
    Mat = std::vector<std::vector<double>>(idim,std::vector<double>(jdim,0.0));
@@ -315,7 +325,7 @@ void read_Mat( std::string path, std::vector<std::vector<double>>  &Mat, int &id
 }
 
 
-void read_EigenMat( std::string path, Eigen::MatrixXd  &Mat, int &idim, int &jdim )
+void read_EigenMat( std::string path, Eigen::MatrixXd &Mat, int &idim, int &jdim )
 {
    //
    Mat.setZero(idim,jdim);
@@ -335,7 +345,7 @@ void read_EigenMat( std::string path, Eigen::MatrixXd  &Mat, int &idim, int &jdi
 //------------------------------------------------------------------------------
 
 
-void read_VecVec( std::string path, std::vector<std::vector<double>>  &VecVec, int &idim, int &jdim, bool axis, bool Delta_like )
+void read_VecVec( std::string path, std::vector<std::vector<double>> &VecVec, int &idim, int &jdim, bool axis, bool Delta_like )
 {
    VecVec.resize(idim,std::vector<double>(jdim,0.0));
    ifstream file( path );
@@ -365,7 +375,7 @@ void read_VecVec( std::string path, std::vector<std::vector<double>>  &VecVec, i
 }
 
 
-void read_VecVecVec( std::string path, std::vector<std::vector<std::vector<double>>>  &VecVecVec, int &idim, int &kdim , bool axis )
+void read_VecVecVec( std::string path, std::vector<std::vector<std::vector<double>>> &VecVecVec, int &idim, int &kdim , bool axis )
 {
    //
    VecVecVec.resize(idim);
@@ -381,6 +391,30 @@ void read_VecVecVec( std::string path, std::vector<std::vector<std::vector<doubl
          for (int j=0; j<=i; j++)
          {
             file >> VecVecVec[i][j][k];
+         }
+      }
+   }
+   file.close();
+}
+
+
+void read_VecVecVec( std::string path, std::vector<std::vector<std::vector<double>>> &VecVecVec, int &idim, bool axis )
+{
+   //
+   VecVecVec.resize(idim);
+   for (int i=0; i<idim; i++)VecVecVec[i].resize(idim-i);
+   ifstream file( path );
+   double dum;
+   //
+   while(!file.fail())
+   {
+      if(axis) file >> dum;
+      for (int i=0; i<idim; i++)
+      {
+         for (int j=0; j<=i; j++)
+         {
+            file >> dum;
+            if ( !file.fail() ) VecVecVec[i][j].push_back(dum);
          }
       }
    }
@@ -434,6 +468,37 @@ void print_VecVec( std::string path, std::vector<std::vector<double>> &VecVec, d
          fprintf (printFile , "%.20e\t",irow*deltaTau);
       }
       for (int icol=0; icol<Ncols; icol++) fprintf (printFile , "%.20e\t",VecVec[icol][irow]/Norm);
+      fprintf (printFile , "\n");
+   }
+   fclose(printFile);
+}
+
+
+void print_VecVecVec( std::string path, std::vector<std::vector<std::vector<double>>> &VecVecVec, double Beta=0.0, double Norm=1.0)
+{
+   //
+   FILE * printFile;
+   const char * file=path.c_str();
+   printFile = fopen(file ,"w");
+   int Ncols1 = VecVecVec.size();
+   int Ncols2 = VecVecVec[0].size();
+   int Nrows = VecVecVec[0][0].size();
+   //
+   for(int irow=0; irow<Nrows; irow++)
+   {
+      if(Beta==0.0)
+      {
+         fprintf (printFile , "%i\t",irow);
+      }
+      else
+      {
+         double deltaTau=Beta/(Nrows-1);
+         fprintf (printFile , "%.20e\t",irow*deltaTau);
+      }
+      for (int icol1=0; icol1<Ncols1; icol1++)
+      {
+         for (int icol2=0; icol2<Ncols2; icol2++) fprintf (printFile , "%.20e\t",VecVecVec[icol1][icol2][irow]/Norm);
+      }
       fprintf (printFile , "\n");
    }
    fclose(printFile);

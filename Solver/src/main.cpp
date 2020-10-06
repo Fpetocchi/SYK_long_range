@@ -33,11 +33,17 @@ int main(int argc, char *argv[])
    //.........................................................................//
    //                           input variables                               //
    //.........................................................................//
-   int Nsite,Nspin,Ntau;
-   int Norder,Nmeas,Ntherm=1000,Nshift;
-   int PrintTime,binlength,verbosity,muIter;
-   double Beta,mu,muStep,muTime,muErr,density;
-   bool retarded;
+   // Global Vars
+   double mu,Beta;
+   int Nspin,Ntau,Norder,Nmeas,Ntherm,Nshift,printTime,verbosity;
+   bool paramagnet,retarded,nnt_meas,test_mpi;
+   // Post-processing of the Green's function
+   int binlength,binstart;
+   // Density lookup algorithm (dichotomy)
+   int muIter;
+   double density,muStep,muTime,muErr;
+   // Site Dependent Vars
+   int Nsite;
    std::vector<int> SiteTime;
    std::vector<int> SiteNorb;
    std::vector<std::string> SiteName;
@@ -59,41 +65,56 @@ int main(int argc, char *argv[])
       //......................................................................//
       if(argc<2) throw("COMMAND LINE ARGUMENT MISSING");
       //
-      IterationDir = argv[2]; // iteration folder
-      //
+      // Iteration folder
+      IterationDir = argv[2];
+      // Global Vars
       find_param(argv[1], "mu"         , mu        );
       find_param(argv[1], "beta"       , Beta      );
-      find_param(argv[1], "Nsite"      , Nsite     );
       find_param(argv[1], "Nspin"      , Nspin     );
       find_param(argv[1], "Ntau"       , Ntau      );
       find_param(argv[1], "Norder"     , Norder    );
       find_param(argv[1], "Nmeas"      , Nmeas     );
-      find_param(argv[1], "Ntherm"     , Ntherm     );
+      find_param(argv[1], "Ntherm"     , Ntherm    );
       find_param(argv[1], "Nshift"     , Nshift    );
-      find_param(argv[1], "PrintTime"  , PrintTime );
-      find_param(argv[1], "verbosity"  , verbosity );
-      find_param(argv[1], "binlength"  , binlength );
+      find_param(argv[1], "printTime"  , printTime );
+      find_param(argv[1], "paramagnet" , paramagnet  );
       find_param(argv[1], "retarded"   , retarded  );
+      find_param(argv[1], "nnt_meas"   , nnt_meas  );
+      find_param(argv[1], "verbosity"  , verbosity );
+      find_param(argv[1], "test_mpi"   , test_mpi  );
+      // Post-processing of the Green's function
+      find_param(argv[1], "binlength"  , binlength );
+      find_param(argv[1], "binstart"   , binstart  );
+      // Density lookup algorithm (dichotomy)
       find_param(argv[1], "density"    , density   );
       find_param(argv[1], "muStep"     , muStep    );
       find_param(argv[1], "muIter"     , muIter    );
       find_param(argv[1], "muTime"     , muTime    );
       find_param(argv[1], "muErr"      , muErr     );
+      // Site Dependent Vars
+      find_param(argv[1], "Nsite"      , Nsite     );
       //
       if(verbosity>=1 && mpi.is_master())
       {
          mpi.report(" mu= "+str(mu));
          mpi.report(" beta= "+str(Beta));
-         mpi.report(" Nsite= "+str(Nsite));
          mpi.report(" Nspin= "+str(Nspin));
          mpi.report(" Ntau= "+str(Ntau));
          mpi.report(" Norder= "+str(Norder));
          mpi.report(" Nmeas= "+str(Nmeas));
          mpi.report(" Ntherm= "+str(Ntherm));
          mpi.report(" Nshift= "+str(Nshift));
-         mpi.report(" PrintTime= "+str(PrintTime)+"min");
-         mpi.report(" binlength= "+str(binlength));
+         mpi.report(" printTime= "+str(printTime)+"min");
          mpi.report(" retarded= "+str(retarded));
+         mpi.report(" paramagnet= "+str(paramagnet));
+         mpi.report(" nnt_meas= "+str(nnt_meas));
+         mpi.report(" test_mpi= "+str(test_mpi));
+         if(binlength>0)
+         {
+            mpi.report(" binlength= "+str(binlength));
+            mpi.report(" binstart= "+str(binstart));
+         }
+         mpi.report(" Nsite= "+str(Nsite));
          if(density>0.0)
          {
             mpi.report(" density= "+str(density));
@@ -156,8 +177,9 @@ int main(int argc, char *argv[])
          {
             mpi.report(" Folder = "+SiteDir[isite]+" (Found).");
             ImpurityList.push_back(ct_hyb( SiteName[isite], mu, Beta, Nspin, SiteNorb[isite],
-                                           Ntau, Norder, Nmeas, Ntherm, Nshift, retarded,
-                                           PrintTime, binlength, mpi, false ));
+                                           Ntau, Norder, Nmeas, Ntherm, Nshift,
+                                           paramagnet, retarded, nnt_meas,
+                                           printTime, std::vector<int> { binlength,binstart }, mpi, test_mpi ));
             ImpurityList[isite].init( SiteDir[isite] );
          }
          else

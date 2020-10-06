@@ -44,7 +44,7 @@ class CustomMPI
          //
          print_line_star(80,is_master());
          sleep(1);
-         printf(" Rank %d out of %d available processors is alive and ready to rock.\n",MPIrank, MPIsize);
+         printf(" Rank %d out of %d available processors is alive.\n",MPIrank, MPIsize);
          if(is_master())printf(" Master is %d. \n",MPImaster);
          sleep(1);
          print_line_star(80,is_master());

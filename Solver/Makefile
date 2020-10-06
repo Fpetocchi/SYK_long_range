@@ -16,7 +16,7 @@ SRCDIR = src
 SRCS = main.cpp
 CFLAGS +=-I $(INCLDIR)/eigen
 OBJS = $(SRCS:.cpp=.o)
-EXE  = Solver_ct_hyb
+EXE  = ct_hyb
 
 
 #
@@ -42,12 +42,12 @@ RELOBJS = $(addprefix $(RELDIR)/, $(OBJS))
 
 #
 # Default build-----------------------------------------------------------------
-all: prep release
+all: prepREL release
 
 
 #
 # Debug rules-------------------------------------------------------------------
-debug: prep $(DBGEXE)
+debug: prepDBG $(DBGEXE)
 
 $(DBGDIR)/%.o: $(SRCDIR)/%.cpp
 	$(CXX) $(CFLAGS) $(DBGCFLAGS) -c $< -o $@
@@ -59,7 +59,7 @@ $(DBGEXE): $(DBGOBJS)
 
 #
 # Release rules-----------------------------------------------------------------
-release: prep $(RELEXE)
+release: prepREL $(RELEXE)
 
 $(RELDIR)/%.o: $(SRCDIR)/%.cpp
 	$(CXX) $(CFLAGS) $(RELCFLAGS) -c $< -o $@
@@ -72,6 +72,12 @@ $(RELEXE): $(RELOBJS)
 # Other rules-------------------------------------------------------------------
 prep:
 	@mkdir -p $(DBGDIR) $(RELDIR) $(EXECDIR)
+
+prepREL:
+	@mkdir -p $(RELDIR) $(EXECDIR)
+
+prepDBG:
+	@mkdir -p $(DBGDIR) $(EXECDIR)
 
 remake: clean all
 

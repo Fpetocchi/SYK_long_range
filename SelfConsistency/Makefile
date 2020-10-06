@@ -45,12 +45,12 @@ RELFFLAGS += -module $(RELDIR)
 
 #
 # Default build-----------------------------------------------------------------
-all: prep release
+all: prepREL release
 
 
 #
 # Debug rules-------------------------------------------------------------------
-debug: prep $(DBGEXE)
+debug: prepDBG $(DBGEXE)
 
 #$(DBGEXE): $(DBGOBJS)
 #	$(FC) $(FFLAGS) $(DBGFFLAGS) -o $(DBGEXE) $^
@@ -106,7 +106,7 @@ $(DBGEXE): $(DBGDIR)/main.o $(DBGDIR)/module_container.o
 
 #
 # Release rules-----------------------------------------------------------------
-release: prep $(RELEXE)
+release: prepREL $(RELEXE)
 
 #$(RELEXE): $(RELOBJS)
 #	$(FC) $(FFLAGS) $(RELFFLAGS) -o $(RELEXE) $^
@@ -164,6 +164,12 @@ $(RELEXE): $(RELDIR)/main.o $(RELDIR)/module_container.o
 # Other rules-------------------------------------------------------------------
 prep:
 	@mkdir -p $(DBGDIR) $(RELDIR) $(EXECDIR)
+
+prepREL:
+	@mkdir -p $(RELDIR) $(EXECDIR)
+
+prepDBG:
+	@mkdir -p $(DBGDIR) $(EXECDIR)
 
 remake: clean all
 

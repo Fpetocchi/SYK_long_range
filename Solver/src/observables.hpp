@@ -56,7 +56,7 @@ template<typename T> VecVec normalize_VecVec( VecVec &VecVec_in, std::vector<T> 
 //------------------------------------------------------------------------------
 
 
-void measure_G( Vec &G, segment_container_t &segment, Mat &M, int &Ntau_p1, double &Beta, double Norm)
+void measure_G( Vec &G, segment_container_t &segment, Mat &M, int &Ntau_p1, double &Beta, double Norm=1.0)
 {
    //
    std::set<times>::iterator it1, it2;
@@ -113,11 +113,13 @@ void accumulate_G( VecVec &G, VecVec &Gtmp)
 }
 
 
-void binAverageVec( int &binlength, VecVec &G, VecVec &Gerr)
+void binAverageVec( std::vector<int> &bins, VecVec &G, VecVec &Gerr)
 {
    //
    int Nflavor = G.size();
    int Ntau_p1 = G[0].size();
+   int binlength = bins[0];
+   int binstart = bins[1];
 
    // bin average - v1 - less efficient memory wise but safer
    if(binlength>0)
@@ -125,8 +127,9 @@ void binAverageVec( int &binlength, VecVec &G, VecVec &Gerr)
       double Nsample = (double)(2*binlength +1);
       for (int ifl=0; ifl<Nflavor; ifl++)
       {
+         //
          Vec Gsym(Ntau_p1,0.0);
-         for (int itau=binlength; itau<Ntau_p1-binlength; itau++)
+         for (int itau=binlength+binstart; itau<Ntau_p1-binlength-binstart; itau++)
          {
             //
             double avrg=0.0;
@@ -138,7 +141,8 @@ void binAverageVec( int &binlength, VecVec &G, VecVec &Gerr)
             for(int ibin=itau-binlength; ibin<=itau+binlength; ibin++) stderr += pow((G[ifl][ibin]-avrg),2) / (Nsample-1);
             Gerr[ifl][itau] = sqrt(stderr);
          }
-         for (int itau=binlength; itau<Ntau_p1-binlength; itau++) G[ifl][itau] = Gsym[itau];
+         //
+         for (int itau=binlength+binstart; itau<Ntau_p1-binlength-binstart; itau++) G[ifl][itau] = Gsym[itau];
       }
    }
 
@@ -178,6 +182,36 @@ void binAverageVec( int &binlength, VecVec &G, VecVec &Gerr)
       }
    }
    */
+}
+
+
+//------------------------------------------------------------------------------
+
+
+void spin_symm( Vec &Vec )
+{
+   int Nflavor = Vec.size();
+   for (int ifl=0; ifl<(Nflavor/2); ++ifl)
+   {
+      double val = ( Vec[2*ifl] + Vec[2*ifl+1] ) /2.0;
+      Vec[2*ifl] = val;
+      Vec[2*ifl+1] = val;
+   }
+}
+
+void spin_symm( VecVec &VecVec )
+{
+   int Nflavor = VecVec.size();
+   int Ntau_p1 = VecVec[0].size();
+   for (int i=0; i<Ntau_p1; ++i)
+   {
+      for (int ifl=0; ifl<(Nflavor/2); ++ifl)
+      {
+         double val = ( VecVec[2*ifl][i] + VecVec[2*ifl+1][i] ) /2.0;
+         VecVec[2*ifl][i] = val;
+         VecVec[2*ifl+1][i] = val;
+      }
+   }
 }
 
 
