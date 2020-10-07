@@ -107,9 +107,12 @@ class ct_hyb
          //
          //read the istantaneous interaction ( Eigen::MatrixXd )
          read_EigenMat(inputDir+"/Uloc.DAT", Uloc, Nflavor, Nflavor);
-         mu_correction=0.0;
-         for(int iorb=0; iorb < Norb; iorb+=2) mu_correction += Uloc(iorb,iorb+1)/2.0;
-         mpi.report(" Correction of the chemical potential is: "+str(mu_correction),testing_mpi);
+         mu_correction.resize(Norb);
+         for(int iorb=0; iorb < Norb; iorb+=2)
+         {
+            mu_correction[iorb] += Uloc(iorb,iorb+1)/2.0;
+            mpi.report(" Orbital "+str(iorb)+" correction of the local level is: "+str(mu_correction[iorb],4),testing_mpi);
+         }
 
          //
          //set the local energies ( std::vector<double> )
@@ -307,7 +310,6 @@ class ct_hyb
       // Input vars
       path                                SiteName;
       double                              mu;                                   // chemical potential
-      double                              mu_correction;                        // chemical potential correction due to the interaction shift
       double                              Beta;                                 // inverse temperature
       int                                 Nspin;
       int                                 Norb;
@@ -335,6 +337,7 @@ class ct_hyb
       unsigned long long int              RankSweeps,WorldSweeps;               // Sweeps done
       // Input data
       Vec                                 Levels;                               // mu-<\epsilon>
+      Vec                                 mu_correction;                        // chemical potential correction due to the interaction shift
       Vec                                 Eloc;                                 // <\epsilon>
       Mat                                 Uloc;                                 // Istantaneous U matrix
       VecVec                              F;                                    // F_up(\tau) = -G_{0,down}^{-1}(-\tau) + (iw + mu)
@@ -387,9 +390,9 @@ class ct_hyb
       {
          duration Tnow = std::chrono::system_clock::now();
          std::chrono::duration<double> runtime_seconds = Tnow-Tstart;
-         if(kind=="sec")mpi.report(" Timestamp(sec): "+str(runtime_seconds.count()));
-         if(kind=="min")mpi.report(" Timestamp(min): "+str(runtime_seconds.count()/60));
-         if(kind=="hrs")mpi.report(" Timestamp(hrs): "+str(runtime_seconds.count()/3600));
+         if(kind=="sec")mpi.report(" Timestamp(sec): "+str(runtime_seconds.count()),3);
+         if(kind=="min")mpi.report(" Timestamp(min): "+str(runtime_seconds.count()/60),3);
+         if(kind=="hrs")mpi.report(" Timestamp(hrs): "+str(runtime_seconds.count()/3600),3);
       }
 
       //----------------------------------------------------------------------//
@@ -496,7 +499,7 @@ class ct_hyb
       void set_levels()
       {
          Levels.resize(Nflavor,0.0);
-         for (int ifl=0; ifl<Nflavor; ifl++) Levels[ifl] = mu - Eloc[ifl] + mu_correction;
+         for (int ifl=0; ifl<Nflavor; ifl++) Levels[ifl] = mu - Eloc[ifl] + mu_correction[(int)(ifl/2)];
       }
 
       //----------------------------------------------------------------------//
