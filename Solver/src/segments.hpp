@@ -693,23 +693,22 @@ template <class S>  double nonlocal(double ts, double te, S &other_segments,
                    +H(it->t_start()-te, Beta, K_table[flavor][this_flavor])
                    -H(it->t_start()-ts, Beta, K_table[flavor][this_flavor]);
          */
-         int this_orb  = (std::max(flavor,this_flavor))/2;
-         int other_orb = (std::min(flavor,this_flavor))/2;
-         nonloc += -H(it->t_end()-te  , Beta, K_table[this_orb][other_orb])
-                   +H(it->t_end()-ts  , Beta, K_table[this_orb][other_orb])
-                   +H(it->t_start()-te, Beta, K_table[this_orb][other_orb])
-                   -H(it->t_start()-ts, Beta, K_table[this_orb][other_orb]);
+         int diag_flavor  = std::max(flavor,this_flavor);
+         int offdiag_flavor = std::min(flavor,this_flavor);
+         nonloc += -H(it->t_end()-te  , Beta, K_table[diag_flavor][offdiag_flavor])
+                   +H(it->t_end()-ts  , Beta, K_table[diag_flavor][offdiag_flavor])
+                   +H(it->t_start()-te, Beta, K_table[diag_flavor][offdiag_flavor])
+                   -H(it->t_start()-ts, Beta, K_table[diag_flavor][offdiag_flavor]);
       }
    }
    //
-   int this_orb  = (int)(this_flavor/2);
    if (insert_remove==0) // insert
    {
-      nonloc += H(te-ts, Beta, K_table[this_orb][this_orb]);
+      nonloc += H(te-ts, Beta, K_table[this_flavor][this_flavor]);
    }
    else // remove
    {
-      nonloc -= -2*H(0, Beta, K_table[this_orb][this_orb])+H(te-ts, Beta, K_table[this_orb][this_orb]);
+      nonloc -= -2*H(0, Beta, K_table[this_flavor][this_flavor])+H(te-ts, Beta, K_table[this_flavor][this_flavor]);
    }
    //
    return nonloc;
@@ -729,16 +728,15 @@ template <class S> double nonlocal_shift(double te_ins, double te_rem, S &other_
          nonloc += -H(it->t_end()-te_ins, Beta, K_table[flavor][this_flavor])+H(it->t_start()-te_ins, Beta, K_table[flavor][this_flavor]);
          nonloc -= -H(it->t_end()-te_rem, Beta, K_table[flavor][this_flavor])+H(it->t_start()-te_rem, Beta, K_table[flavor][this_flavor]);
          */
-         int this_orb  = (std::max(flavor,this_flavor))/2;
-         int other_orb = (std::min(flavor,this_flavor))/2;
-         nonloc += -H(it->t_end()-te_ins, Beta, K_table[this_orb][other_orb])+H(it->t_start()-te_ins, Beta, K_table[this_orb][other_orb]);
-         nonloc -= -H(it->t_end()-te_rem, Beta, K_table[this_orb][other_orb])+H(it->t_start()-te_rem, Beta, K_table[this_orb][other_orb]);
+         int diag_flavor  = std::max(flavor,this_flavor);
+         int offdiag_flavor = std::min(flavor,this_flavor);
+         nonloc += -H(it->t_end()-te_ins, Beta, K_table[diag_flavor][offdiag_flavor])+H(it->t_start()-te_ins, Beta, K_table[diag_flavor][offdiag_flavor]);
+         nonloc -= -H(it->t_end()-te_rem, Beta, K_table[diag_flavor][offdiag_flavor])+H(it->t_start()-te_rem, Beta, K_table[diag_flavor][offdiag_flavor]);
       }
    }
    //
-   int this_orb  = (int)(this_flavor/2);
-   nonloc -= -H(te_rem-te_ins, Beta, K_table[this_orb][this_orb]); // inexistent bond
-   nonloc += -H(te_rem-te_rem, Beta, K_table[this_orb][this_orb]); // local contribution at te doesn't change
+   nonloc -= -H(te_rem-te_ins, Beta, K_table[this_flavor][this_flavor]); // inexistent bond
+   nonloc += -H(te_rem-te_rem, Beta, K_table[this_flavor][this_flavor]); // local contribution at te doesn't change
    //
    return nonloc;
 }

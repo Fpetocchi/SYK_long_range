@@ -17,6 +17,16 @@ module interactions
       module procedure read_U_spex_Uloc0                                        ![Matrix,pathOUTPUT(optional to change output path)]
    end interface read_U_spex
 
+   interface build_Uqmc
+      module procedure build_Uqmc_singlParam                  ! (Solver Format) ![Matrix,Uaa_screened,Uab_screened,J_screened]
+      module procedure build_Uqmc_multiParam                  ! (Solver Format) ![Matrix,Vector,Matrix,Matrix]
+   end interface build_Uqmc
+
+   interface build_Ugw
+      module procedure build_Ugw_singlParam                   !   (GW Format)   ![Matrix,Uaa_screened,Uab_screened,J_screened,vector_g,vector_w0]
+      module procedure build_Ugw_multiParam                   !   (GW Format)   ![Matrix,Vector,Matrix,Matrix,vector_g,vector_w0]
+   end interface build_Ugw
+
    !---------------------------------------------------------------------------!
    !PURPOSE: Rutines available for the user. Description only for interfaces.
    !---------------------------------------------------------------------------!
@@ -26,8 +36,10 @@ module interactions
    public :: calc_chi_full
    public :: calc_chi_edmft
    public :: read_U_spex
-   !public :: build_Umatrix
-   !public :: calc_QMCinteractions
+   public :: build_Uqmc
+   public :: build_Ugw
+   public :: calc_QMCinteractions
+   !public :: calc_Kfunct
    !public :: rescale_interaction
 
    !===========================================================================!
@@ -44,6 +56,7 @@ contains
       use utils_misc
       use utils_fields
       use linalg, only : zeye, inv_her !or sym??
+      use input_vars, only : HandleGammaPoint
       implicit none
       !
       type(BosonicField),intent(inout)      :: Wmats
@@ -148,9 +161,11 @@ contains
       den_smallk_avrg = real(den_smallk_avrg)
       !
       !Replace the Gamma point value
-      do iw=1,Nmats
-         Wmats%screened(:,:,iw,Umats%iq_gamma) = matmul(den_smallk_avrg(:,:,iw),Umats%screened(:,:,iw,Umats%iq_gamma))
-      enddo
+      if(HandleGammaPoint)then
+         do iw=1,Nmats
+            Wmats%screened(:,:,iw,Umats%iq_gamma) = matmul(den_smallk_avrg(:,:,iw),Umats%screened(:,:,iw,Umats%iq_gamma))
+         enddo
+      endif
       !
       deallocate(den_smallk,den_smallk_avrg)
       !
@@ -169,6 +184,7 @@ contains
       use utils_misc
       use utils_fields
       use linalg, only : zeye, inv_her !or sym??
+      use input_vars, only : HandleGammaPoint
       implicit none
       !
       type(BosonicField),intent(inout)      :: Wmats
@@ -272,9 +288,11 @@ contains
       den_smallk_avrg = real(den_smallk_avrg)
       !
       !Add the Gamma point value
-      do iw=1,Nmats
-         Wmats%screened_local(:,:,iw) = Wmats%screened_local(:,:,iw) + matmul(den_smallk_avrg(:,:,iw),Umats%screened(:,:,iw,Umats%iq_gamma))/Nkpt
-      enddo
+      if(HandleGammaPoint)then
+         do iw=1,Nmats
+            Wmats%screened_local(:,:,iw) = Wmats%screened_local(:,:,iw) + matmul(den_smallk_avrg(:,:,iw),Umats%screened(:,:,iw,Umats%iq_gamma))/Nkpt
+         enddo
+      endif
       !
       deallocate(den_smallk,den_smallk_avrg)
       !
@@ -1109,9 +1127,456 @@ contains
    !---------------------------------------------------------------------------!
    !PURPOSE: Create the static interaction tensor from user-given parameters
    !---------------------------------------------------------------------------!
-   !subroutine build_Umatrix(Umat,Uaa,Uab,Jsf,Jph)
-   !end subroutine build_Umatrix
+   subroutine build_Uqmc_singlParam(Umat,Uaa,Uab,J)
+      !
+      use parameters
+      use file_io
+      use utils_misc
+      use utils_fields
+      implicit none
+      !
+      complex(8),allocatable,intent(inout)  :: Umat(:,:)
+      real(8),intent(in)                    :: Uaa,Uab,J
+      !
+      integer                               :: Nbp,Norb
+      integer                               :: ib1,ib2
+      integer                               :: iorb,jorb,ispin,jspin
+      logical                               :: Uaa_flag,Ust_flag,Usc_flag
+      !
+      !
+      write(*,*) "--- build_Uqmc_singlParam ---"
+      !
+      !
+      ! Check on the input matrices
+      Nbp = size(Umat,dim=1)
+      Norb = Nbp/2
+      if(mod(Nbp,2).ne.0.0) stop "Wrong matrix dimension."
+      call assert_shape(Umat,[Nbp,Nbp],"build_Uqmc_singlParam","Umat")
+      !
+      do ib1=1,Nspin*Norb
+         do ib2=1,Nspin*Norb
+            !
+            iorb = (ib1+mod(ib1,2))/2
+            jorb = (ib2+mod(ib2,2))/2
+            ispin = abs(mod(ib1,2)-2)
+            jspin = abs(mod(ib2,2)-2)
+            !
+            Uaa_flag = (iorb.eq.jorb).and.(ispin.ne.jspin)
+            Ust_flag = (iorb.ne.jorb).and.(ispin.ne.jspin)
+            Usc_flag = (iorb.ne.jorb).and.(ispin.eq.jspin)
+            !
+            if(Uaa_flag) Umat(ib1,ib2) = dcmplx(Uaa,0d0)
+            if(Ust_flag) Umat(ib1,ib2) = dcmplx(Uab,0d0)
+            if(Usc_flag) Umat(ib1,ib2) = dcmplx(Uab-J,0d0)
+            !
+         enddo
+      enddo
+      !
+   end subroutine build_Uqmc_singlParam
+   !
+   !
+   subroutine build_Uqmc_multiParam(Umat,Uaa,Uab,J)
+      !
+      use parameters
+      use file_io
+      use utils_misc
+      use utils_fields
+      implicit none
+      !
+      complex(8),allocatable,intent(inout)  :: Umat(:,:)
+      real(8),allocatable,intent(in)        :: Uaa(:),Uab(:,:),J(:,:)
+      !
+      integer                               :: Nbp,Norb
+      integer                               :: ib1,ib2
+      integer                               :: iorb,jorb,ispin,jspin
+      logical                               :: Uaa_flag,Ust_flag,Usc_flag
+      !
+      !
+      write(*,*) "--- build_Uqmc_multiParam ---"
+      !
+      !
+      ! Check on the input matrices
+      Nbp = size(Umat,dim=1)
+      Norb = Nbp/2
+      if(mod(Nbp,2).ne.0.0) stop "Wrong matrix dimension."
+      call assert_shape(Umat,[Nbp,Nbp],"build_Uqmc_multiParam","Umat")
+      call assert_shape(Uaa,[Norb],"build_Uqmc_multiParam","Uaa")
+      call assert_shape(Uab,[Norb,Norb],"build_Uqmc_multiParam","Uab")
+      call assert_shape(J,[Norb,Norb],"build_Uqmc_multiParam","J")
+      !
+      do ib1=1,Nspin*Norb
+         do ib2=1,Nspin*Norb
+            !
+            iorb = (ib1+mod(ib1,2))/2
+            jorb = (ib2+mod(ib2,2))/2
+            ispin = abs(mod(ib1,2)-2)
+            jspin = abs(mod(ib2,2)-2)
+            !
+            Uaa_flag = (iorb.eq.jorb).and.(ispin.ne.jspin)
+            Ust_flag = (iorb.ne.jorb).and.(ispin.ne.jspin)
+            Usc_flag = (iorb.ne.jorb).and.(ispin.eq.jspin)
+            !
+            if(Uaa_flag) Umat(ib1,ib2) = dcmplx(Uaa(iorb),0d0)
+            if(Ust_flag) Umat(ib1,ib2) = dcmplx(Uab(iorb,jorb),0d0)
+            if(Usc_flag) Umat(ib1,ib2) = dcmplx(Uab(iorb,jorb)-J(iorb,jorb),0d0)
+            !
+         enddo
+      enddo
+      !
+   end subroutine build_Uqmc_multiParam
 
+
+   !---------------------------------------------------------------------------!
+   !PURPOSE: Create the freq. dependent interaction tensor from user-given parameters
+   !---------------------------------------------------------------------------!
+   subroutine build_Ugw_singlParam(Umats,Uaa,Uab,J,g_eph,wo_eph)
+      !
+      use parameters
+      use file_io
+      use utils_misc
+      use utils_fields
+      use input_vars, only : Nreal, wrealMax
+      implicit none
+      !
+      type(BosonicField),intent(inout)      :: Umats
+      real(8),intent(in)                    :: Uaa,Uab,J
+      real(8),allocatable,intent(in)        :: g_eph(:),wo_eph(:)
+      !
+      integer                               :: Nbp,Norb,Nph
+      integer                               :: m,n,mp,np,ib1,ib2
+      integer                               :: iw,iw1,iw2,iph,iwp
+      logical                               :: Uaa_flag,Ust_flag,Jh_flag
+      real(8)                               :: RealU,ImagU
+      real(8),allocatable                   :: wreal(:),wmats(:)
+      complex(8),allocatable                :: D1(:,:),D2(:,:),D3(:,:)
+      complex(8),allocatable                :: Utmp(:,:)
+      type(BosonicField)                    :: Ureal
+      real                                  :: start,finish
+      !
+      !
+      write(*,*) "--- build_Ugw_singlParam ---"
+      !
+      !
+      ! Check on the input field
+      if(.not.Umats%status) stop "BosonicField not properly initialized."
+      if(size(g_eph).ne.size(wo_eph)) stop "Phonon sizes does not match."
+      !
+      Nbp = Umats%Nbp
+      Norb = int(sqrt(dble(Nbp)))
+      Nph = size(g_eph)
+      !
+      allocate(wmats(Umats%Npoints));wmats=0d0
+      wmats = BosonicFreqMesh(Umats%Beta,Umats%Npoints)
+      allocate(wreal(Nreal));wreal=0d0
+      wreal = linspace(0d0,+wrealMax,Nreal)
+      !
+      call AllocateBosonicField(Ureal,Nbp,Nreal,0)
+      !
+      !setting the bare values
+      do m=1,Norb
+         do n=1,Norb
+            do mp=1,Norb
+               do np=1,Norb
+                  !
+                  ib1 = mp + Norb*(m-1)
+                  ib2 = np + Norb*(n-1)
+                  !
+                  Uaa_flag = (ib1.eq.ib2)
+                  Ust_flag = (m.eq.mp).and.(n.eq.np).and.(.not.Uaa_flag)
+                  Jh_flag  = (mp.ne.m).and.(((mp.eq.np).and.(m.eq.n)).or.((mp.eq.n).and.(m.eq.np)))
+                  !
+                  if(Uaa_flag) Umats%bare_local(ib1,ib2) = dcmplx(Uaa,0d0)
+                  if(Ust_flag) Umats%bare_local(ib1,ib2) = dcmplx(Uab,0d0)
+                  if(Jh_flag)  Umats%bare_local(ib1,ib2) = dcmplx(J,0d0)
+                  !
+               enddo
+            enddo
+         enddo
+      enddo
+      !
+      !setting the phonons
+      do ib1=1,Nbp
+         do ib2=1,Nbp
+            do iph=1,Nph
+               iwp=minloc(wreal-wo_eph(iph),dim=1)
+               do iw=1,Nreal
+                  !
+                  RealU = 2*(g_eph(iph)**2)*wo_eph(iph) / ( (wreal(iw)**2) - (wo_eph(iph)**2) )
+                  ImagU=0d0
+                  if(iw.eq.iwp) ImagU = -pi*(g_eph(iph)**2)
+                  !
+                  Ureal%screened_local(ib1,ib2,iw) = Umats%bare_local(ib1,ib2) + dcmplx(RealU,ImagU)
+                  !
+               enddo
+            enddo
+         enddo
+      enddo
+      !
+      ! Allocate the temporary quantities needed by the Analytical continuation
+      allocate(Utmp(Nbp,Nbp));Utmp=czero
+      allocate(D1(Nbp,Nbp));D1=czero
+      allocate(D2(Nbp,Nbp));D2=czero
+      allocate(D3(Nbp,Nbp));D3=czero
+      !
+      ! Analytical continuation of the local component to imag axis using spectral rep
+      call cpu_time(start)
+      !$OMP PARALLEL DEFAULT(NONE),&
+      !$OMP SHARED(Nbp,wmats,wreal,Nreal,Ureal,Umats),&
+      !$OMP PRIVATE(ib1,ib2,iw1,iw2,D1,D2,D3,Utmp)
+      !$OMP DO
+      do iw1=1,Umats%Npoints
+         Utmp=czero
+         do iw2=1,Nreal-2,2
+            !
+            do ib1=1,Nbp
+               do ib2=1,Nbp
+                  D1(ib1,ib2) = -dimag( Ureal%screened_local(ib1,ib2,iw2)   )/pi
+                  D2(ib1,ib2) = -dimag( Ureal%screened_local(ib1,ib2,iw2+1) )/pi
+                  D3(ib1,ib2) = -dimag( Ureal%screened_local(ib1,ib2,iw2+2) )/pi
+               enddo
+            enddo
+            !
+            !D(-w)=-D(w), integrate using Simpson method
+            if(wreal(iw2).gt.0.d0) then
+               Utmp(:,:) = Utmp(:,:) + ( D1(:,:)/(dcmplx(0.d0,wmats(iw1))-wreal(iw2)  ) - D1(:,:)/(dcmplx(0.d0,wmats(iw1))+wreal(iw2)  ) ) *(wreal(iw2+1)-wreal(iw2))/3.d0
+               Utmp(:,:) = Utmp(:,:) + ( D2(:,:)/(dcmplx(0.d0,wmats(iw1))-wreal(iw2+1)) - D2(:,:)/(dcmplx(0.d0,wmats(iw1))+wreal(iw2+1)) ) *(wreal(iw2+1)-wreal(iw2))*4.d0/3.d0
+               Utmp(:,:) = Utmp(:,:) + ( D3(:,:)/(dcmplx(0.d0,wmats(iw1))-wreal(iw2+2)) - D3(:,:)/(dcmplx(0.d0,wmats(iw1))+wreal(iw2+2)) ) *(wreal(iw2+1)-wreal(iw2))/3.d0
+            elseif(dabs(wreal(iw2)).lt.1.d-12) then
+               Utmp(:,:) = Utmp(:,:) + ( D2(:,:)/(dcmplx(0.d0,wmats(iw1))-wreal(iw2+1)) - D2(:,:)/(dcmplx(0.d0,wmats(iw1))+wreal(iw2+1)) ) *(wreal(iw2+1)-wreal(iw2))*4.d0/3.d0
+               Utmp(:,:) = Utmp(:,:) + ( D3(:,:)/(dcmplx(0.d0,wmats(iw1))-wreal(iw2+2)) - D3(:,:)/(dcmplx(0.d0,wmats(iw1))+wreal(iw2+2)) ) *(wreal(iw2+1)-wreal(iw2))/3.d0
+            endif
+         enddo
+         !
+         do ib1=1,Nbp
+            do ib2=1,Nbp
+               Umats%screened_local(ib1,ib2,iw1) = Utmp(ib1,ib2) + Umats%bare_local(ib1,ib2)
+            enddo
+         enddo
+         !
+      enddo !iw1
+      !
+      !$OMP END DO
+      !$OMP END PARALLEL
+      call cpu_time(finish)
+      deallocate(D1,D2,D3,Utmp,wmats,wreal)
+      call DeallocateBosonicField(Ureal)
+      write(*,*) "Ue-ph(w) --> Ue-ph(iw) cpu timing:", finish-start
+      !
+   end subroutine build_Ugw_singlParam
+   !
+   subroutine build_Ugw_multiParam(Umats,Uaa,Uab,J,g_eph,wo_eph)
+      !
+      use parameters
+      use file_io
+      use utils_misc
+      use utils_fields
+      use input_vars, only : Nreal, wrealMax
+      implicit none
+      !
+      type(BosonicField),intent(inout)      :: Umats
+      real(8),allocatable,intent(in)        :: Uaa(:),Uab(:,:),J(:,:)
+      real(8),allocatable,intent(in)        :: g_eph(:),wo_eph(:)
+      !
+      integer                               :: Nbp,Norb,Nph
+      integer                               :: m,n,mp,np,ib1,ib2
+      integer                               :: iw,iw1,iw2,iph,iwp
+      logical                               :: Uaa_flag,Ust_flag,Jh_flag
+      real(8)                               :: RealU,ImagU
+      real(8),allocatable                   :: wreal(:),wmats(:)
+      complex(8),allocatable                :: D1(:,:),D2(:,:),D3(:,:)
+      complex(8),allocatable                :: Utmp(:,:)
+      type(BosonicField)                    :: Ureal
+      real                                  :: start,finish
+      !
+      !
+      write(*,*) "--- build_Ugw_multiParam ---"
+      !
+      !
+      ! Check on the input field
+      if(.not.Umats%status) stop "BosonicField not properly initialized."
+      if(size(g_eph).ne.size(wo_eph)) stop "Phonon sizes does not match."
+      !
+      Nbp = Umats%Nbp
+      Norb = int(sqrt(dble(Nbp)))
+      Nph = size(g_eph)
+      !
+      call assert_shape(Uaa,[Norb],"build_Ugw_multiParam","Uaa")
+      call assert_shape(Uab,[Norb,Norb],"build_Ugw_multiParam","Uab")
+      call assert_shape(J,[Norb,Norb],"build_Ugw_multiParam","J")
+      !
+      allocate(wmats(Umats%Npoints));wmats=0d0
+      wmats = BosonicFreqMesh(Umats%Beta,Umats%Npoints)
+      allocate(wreal(Nreal));wreal=0d0
+      wreal = linspace(0d0,+wrealMax,Nreal)
+      !
+      call AllocateBosonicField(Ureal,Nbp,Nreal,0)
+      !
+      !setting the bare values
+      do m=1,Norb
+         do n=1,Norb
+            do mp=1,Norb
+               do np=1,Norb
+                  !
+                  ib1 = mp + Norb*(m-1)
+                  ib2 = np + Norb*(n-1)
+                  !
+                  Uaa_flag = (ib1.eq.ib2)
+                  Ust_flag = (m.eq.mp).and.(n.eq.np).and.(.not.Uaa_flag)
+                  Jh_flag  = (mp.ne.m).and.(((mp.eq.np).and.(m.eq.n)).or.((mp.eq.n).and.(m.eq.np)))
+                  !
+                  if(Uaa_flag) Umats%bare_local(ib1,ib2) = dcmplx(Uaa(m),0d0)
+                  if(Ust_flag) Umats%bare_local(ib1,ib2) = dcmplx(Uab(m,n),0d0)
+                  if(Jh_flag)  Umats%bare_local(ib1,ib2) = dcmplx(J(mp,np),0d0)
+                  !
+               enddo
+            enddo
+         enddo
+      enddo
+      !
+      !setting the phonons
+      do ib1=1,Nbp
+         do ib2=1,Nbp
+            do iph=1,Nph
+               iwp=minloc(wreal-wo_eph(iph),dim=1)
+               do iw=1,Nreal
+                  !
+                  RealU = 2*(g_eph(iph)**2)*wo_eph(iph) / ( (wreal(iw)**2) - (wo_eph(iph)**2) )
+                  ImagU=0d0
+                  if(iw.eq.iwp) ImagU = -pi*(g_eph(iph)**2)
+                  !
+                  Ureal%screened_local(ib1,ib2,iw) = Umats%bare_local(ib1,ib2) + dcmplx(RealU,ImagU)
+                  !
+               enddo
+            enddo
+         enddo
+      enddo
+      !
+      ! Allocate the temporary quantities needed by the Analytical continuation
+      allocate(Utmp(Nbp,Nbp));Utmp=czero
+      allocate(D1(Nbp,Nbp));D1=czero
+      allocate(D2(Nbp,Nbp));D2=czero
+      allocate(D3(Nbp,Nbp));D3=czero
+      !
+      ! Analytical continuation of the local component to imag axis using spectral rep
+      call cpu_time(start)
+      !$OMP PARALLEL DEFAULT(NONE),&
+      !$OMP SHARED(Nbp,wmats,wreal,Nreal,Ureal,Umats),&
+      !$OMP PRIVATE(ib1,ib2,iw1,iw2,D1,D2,D3,Utmp)
+      !$OMP DO
+      do iw1=1,Umats%Npoints
+         Utmp=czero
+         do iw2=1,Nreal-2,2
+            !
+            do ib1=1,Nbp
+               do ib2=1,Nbp
+                  D1(ib1,ib2) = -dimag( Ureal%screened_local(ib1,ib2,iw2)   )/pi
+                  D2(ib1,ib2) = -dimag( Ureal%screened_local(ib1,ib2,iw2+1) )/pi
+                  D3(ib1,ib2) = -dimag( Ureal%screened_local(ib1,ib2,iw2+2) )/pi
+               enddo
+            enddo
+            !
+            !D(-w)=-D(w), integrate using Simpson method
+            if(wreal(iw2).gt.0.d0) then
+               Utmp(:,:) = Utmp(:,:) + ( D1(:,:)/(dcmplx(0.d0,wmats(iw1))-wreal(iw2)  ) - D1(:,:)/(dcmplx(0.d0,wmats(iw1))+wreal(iw2)  ) ) *(wreal(iw2+1)-wreal(iw2))/3.d0
+               Utmp(:,:) = Utmp(:,:) + ( D2(:,:)/(dcmplx(0.d0,wmats(iw1))-wreal(iw2+1)) - D2(:,:)/(dcmplx(0.d0,wmats(iw1))+wreal(iw2+1)) ) *(wreal(iw2+1)-wreal(iw2))*4.d0/3.d0
+               Utmp(:,:) = Utmp(:,:) + ( D3(:,:)/(dcmplx(0.d0,wmats(iw1))-wreal(iw2+2)) - D3(:,:)/(dcmplx(0.d0,wmats(iw1))+wreal(iw2+2)) ) *(wreal(iw2+1)-wreal(iw2))/3.d0
+            elseif(dabs(wreal(iw2)).lt.1.d-12) then
+               Utmp(:,:) = Utmp(:,:) + ( D2(:,:)/(dcmplx(0.d0,wmats(iw1))-wreal(iw2+1)) - D2(:,:)/(dcmplx(0.d0,wmats(iw1))+wreal(iw2+1)) ) *(wreal(iw2+1)-wreal(iw2))*4.d0/3.d0
+               Utmp(:,:) = Utmp(:,:) + ( D3(:,:)/(dcmplx(0.d0,wmats(iw1))-wreal(iw2+2)) - D3(:,:)/(dcmplx(0.d0,wmats(iw1))+wreal(iw2+2)) ) *(wreal(iw2+1)-wreal(iw2))/3.d0
+            endif
+         enddo
+         !
+         do ib1=1,Nbp
+            do ib2=1,Nbp
+               Umats%screened_local(ib1,ib2,iw1) = Utmp(ib1,ib2) + Umats%bare_local(ib1,ib2)
+            enddo
+         enddo
+         !
+      enddo !iw1
+      !
+      !$OMP END DO
+      !$OMP END PARALLEL
+      call cpu_time(finish)
+      deallocate(D1,D2,D3,Utmp,wmats,wreal)
+      call DeallocateBosonicField(Ureal)
+      write(*,*) "Ue-ph(w) --> Ue-ph(iw) cpu timing:", finish-start
+      !
+   end subroutine build_Ugw_multiParam
+
+
+   !---------------------------------------------------------------------------!
+   !PURPOSE:
+   !---------------------------------------------------------------------------!
+   subroutine calc_QMCinteractions(Uinst,Kfunct,Umats)
+      !
+      use parameters
+      use file_io
+      use utils_misc
+      use utils_fields
+      use input_vars, only : Ntau
+      implicit none
+      !
+      type(BosonicField),intent(in)         :: Umats
+      real(8),intent(inout)                 :: Uinst(:,:)
+      real(8),intent(inout),optional        :: Kfunct(:,:,:)
+      !
+      integer                               :: Nbp,Norb
+      integer                               :: ib1,ib2,iorb,jorb,ispin,jspin
+      integer                               :: iu1,iu2,ix1,ix2,ip1,ip2
+      logical                               :: Uaa_flag,Ust_flag,Usc_flag
+      real(8),allocatable                   :: wmats(:)
+      !
+      !
+      write(*,*) "--- calc_QMCinteractions ---"
+      !
+      !
+      ! Check on the input field
+      if(.not.Umats%status) stop "BosonicField not properly initialized."
+      !
+      Nbp = Umats%Nbp
+      Norb = int(sqrt(dble(Nbp)))
+      !
+      call assert_shape(Uinst,[Norb*Nspin,Norb*Nspin],"calc_QMCinteractions","Uinst")
+      !
+      allocate(wmats(Umats%Npoints));wmats=0d0
+      wmats = BosonicFreqMesh(Umats%Beta,Umats%Npoints)
+      !
+      !setting the istantaneous values
+      do ib1=1,Nspin*Norb
+         do ib2=1,Nspin*Norb
+            !
+            iorb = (ib1+mod(ib1,2))/2
+            jorb = (ib2+mod(ib2,2))/2
+            ispin = abs(mod(ib1,2)-2)
+            jspin = abs(mod(ib2,2)-2)
+            !
+            Uaa_flag = (iorb.eq.jorb).and.(ispin.ne.jspin)
+            Ust_flag = (iorb.ne.jorb).and.(ispin.ne.jspin)
+            Usc_flag = (iorb.ne.jorb).and.(ispin.eq.jspin)
+            !
+            iu1 = iorb + Norb*(iorb-1)
+            iu2 = jorb + Norb*(jorb-1)
+            !
+            ix1 = iorb + Norb*(jorb-1)
+            ix2 = jorb + Norb*(iorb-1)
+            ip1 = jorb + Norb*(iorb-1)
+            ip2 = iorb + Norb*(jorb-1)
+            !
+            if(Uaa_flag) Uinst(ib1,ib2) = Umats%screened_local(iu1,iu2,0)
+            if(Ust_flag) Uinst(ib1,ib2) = Umats%screened_local(iu1,iu2,0)
+            if(Usc_flag) Uinst(ib1,ib2) = Umats%screened_local(iu1,iu2,0) - (Umats%screened_local(ix1,ix2,0)+Umats%screened_local(ip1,ip2,0))/2d0
+            !
+         enddo
+      enddo
+      !
+      !setting the reterdation function
+      if(present(Kfunct))then
+         call assert_shape(Kfunct,[Norb,Norb,Ntau],"calc_QMCinteractions","Kfunct")
+      endif
+
+
+      !
+   end subroutine calc_QMCinteractions
 
 
 end module interactions

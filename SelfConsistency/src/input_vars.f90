@@ -27,6 +27,7 @@ module input_vars
    !PURPOSE: Double counting types
    !---------------------------------------------------------------------------!
    character                                :: VH_type="Ubare"
+   logical                                  :: HandleGammaPoint
 
 
    !---------------------------------------------------------------------------!

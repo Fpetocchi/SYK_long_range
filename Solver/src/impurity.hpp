@@ -105,6 +105,13 @@ class ct_hyb
          }
 
          //
+         //read the istantaneous interaction ( Eigen::MatrixXd )
+         read_EigenMat(inputDir+"/Uloc.DAT", Uloc, Nflavor, Nflavor);
+         mu_correction=0.0;
+         for(int iorb=0; iorb < Norb; iorb+=2) mu_correction += Uloc(iorb,iorb+1)/2.0;
+         mpi.report(" Correction of the chemical potential is: "+str(mu_correction),testing_mpi);
+
+         //
          //set the local energies ( std::vector<double> )
          read_Vec(inputDir+"/Eloc.DAT", Eloc, Nflavor);
          set_levels();
@@ -114,14 +121,10 @@ class ct_hyb
          read_VecVec(inputDir+"/Delta.DAT", F, Nflavor, Ntau_p1, true, true);  // last flag is to reverse the tau index
 
          //
-         //read the istantaneous interaction ( Eigen::MatrixXd )
-         read_EigenMat(inputDir+"/Uloc.DAT", Uloc, Nflavor, Nflavor);
-
-         //
          //read the screening function ( std::vector<std::vector<std::vector<double>>> )
          if(retarded)
          {
-            read_VecVecVec(inputDir+"/K.DAT", K_table, Norb, false); // read_VecVecVec(inputDir+"/K.DAT", K_table, Norb, Ntau_p1, true);
+            read_VecVecVec(inputDir+"/K.DAT", K_table, Nflavor, false); // read_VecVecVec(inputDir+"/K.DAT", K_table, Norb, Ntau_p1, true);
 
             for(int ifl=0; ifl < Norb; ifl++)
             {
@@ -304,6 +307,7 @@ class ct_hyb
       // Input vars
       path                                SiteName;
       double                              mu;                                   // chemical potential
+      double                              mu_correction;                        // chemical potential correction due to the interaction shift
       double                              Beta;                                 // inverse temperature
       int                                 Nspin;
       int                                 Norb;
@@ -492,7 +496,7 @@ class ct_hyb
       void set_levels()
       {
          Levels.resize(Nflavor,0.0);
-         for (int ifl=0; ifl<Nflavor; ifl++) Levels[ifl] = mu - Eloc[ifl];
+         for (int ifl=0; ifl<Nflavor; ifl++) Levels[ifl] = mu - Eloc[ifl] + mu_correction;
       }
 
       //----------------------------------------------------------------------//
