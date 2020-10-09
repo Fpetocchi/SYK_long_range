@@ -30,8 +30,8 @@ module utils_fields
    end interface imp2loc
 
    interface MergeField
-      module procedure MergeFermionicField
-      module procedure MergeBosonicField
+      module procedure MergeSelfEnergy
+      !module procedure MergePolarization
    end interface MergeField
 
    !---------------------------------------------------------------------------!
@@ -774,18 +774,22 @@ contains
    !---------------------------------------------------------------------------!
    !PURPOSE:
    !---------------------------------------------------------------------------!
-   subroutine MergeSelfEnergy(SigmaGW,SigmaGW_DC,SigmaImp,coeff,AFM,U,orbs)
+   subroutine MergeSelfEnergy(SigmaGW,SigmaGW_DC,SigmaImp,coeff,AFM,orbs,U)
       use parameters
       use linalg, only : rotate
       implicit none
       type(FermionicField),intent(inout)    :: SigmaGW
       type(FermionicField),intent(in)       :: SigmaGW_DC
-      type(FermionicField),intent(in)       :: SigmaImp
+      type(FermionicField),intent(in),target :: SigmaImp
       real(8),intent(in)                    :: coeff
       logical,intent(in)                    :: AFM
       complex(8),allocatable,optional       :: U(:,:,:)
+      integer,allocatable,optional          :: orbs(:)
       !
-      type(FermionicField)                  :: SigmaImpFull
+      real(8)                               :: Beta
+      integer                               :: Nbp,Nkpt,Norb,Nmats
+      type(FermionicField),target           :: SigmaImpFull
+      type(FermionicField),pointer          :: SigmaImpUsed
       !
       !
       write(*,"(A)") "--- MergeSelfEnergy ---"
@@ -809,13 +813,28 @@ contains
       if(all([SigmaGW_DC%Npoints-Nmats,SigmaImp%Npoints-Nmats].ne.[0,0])) stop "Either Smats_C, Gmats or Wmats have different number of Matsubara points with respect to SigmaGW."
       if(present(orbs))then
          write(*,"(A)") "Warning: SigmaImp has different orbital dimension with respect to SigmaGW. Trying to expand it."
+         call AllocateFermionicField(SigmaImpFull,Norb,Nmats,0)
+         if(present(U))then
+            call Gimp2Gloc(SigmaImpFull,SigmaImp,orbs,U=U,expand=.true.)
+         else
+            call Gimp2Gloc(SigmaImpFull,SigmaImp,orbs,expand=.true.)
+         endif
+         SigmaImpUsed => SigmaImpFull
       else
          if(SigmaImp%Norb.ne.Norb) stop "SigmaImp has different orbital dimension with respect to SigmaGW."
+         SigmaImpUsed => SigmaImp
       endif
       !
 
 
-      USA POINTER QUI IN MODO CHE => SigmaImp O SigmaImpEXPANDED
+
+      !
+      if(present(orbs))call DeallocateFermionicField(SigmaImpFull)
+      if(associated(SigmaImpUsed))nullify(SigmaImpUsed)
+      !
+   end subroutine MergeSelfEnergy
+
+
 
 
 
