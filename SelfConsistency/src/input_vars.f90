@@ -40,7 +40,8 @@ module input_vars
    !PURPOSE: internal imaginary time mesh
    !---------------------------------------------------------------------------!
    logical                                  :: tau_uniform
-   integer                                  :: Ntau
+   integer                                  :: NtauF
+   integer                                  :: NtauB
    integer                                  :: Nreal
    real(8)                                  :: wrealMax,eta
    real(8)                                  :: wmatsMax

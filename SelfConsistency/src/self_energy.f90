@@ -43,7 +43,7 @@ contains
       use utils_fields
       use crystal
       use fourier_transforms
-      use input_vars, only : Ntau, tau_uniform
+      use input_vars, only : NtauB, tau_uniform
       implicit none
       !
       type(FermionicField),intent(inout)    :: Smats_C
@@ -87,16 +87,16 @@ contains
       if(all([Lttc%Nkpt-Nkpt,Gmats%Nkpt-Nkpt,Wmats%Nkpt-Nkpt].ne.[0,0,0])) stop "Either Lattice, Gmats or Wmats have different number of k-points with respect to Smats_C."
       if(all([Smats_X%Norb-Norb,Gmats%Norb-Norb,Wmats%Nbp-Nbp].ne.[0,0,0])) stop "Either Smats_X, Gmats or Wmats have different orbital dimension with respect to Smats_C."
       if(all([Smats_X%Beta-Beta,Gmats%Beta-Beta,Wmats%Beta-Beta].ne.[0d0,0d0,0d0])) stop "Either Smats_X, Gmats or Wmats have different Beta with respect to Smats_C."
-      if(all([Gmats%Npoints-Nmats,Wmats%Npoints-Nmats].ne.[0,0]))  write(*,"(A)") "Warning: Either Smats_C, Gmats or Wmats have different number of Matsubara points. Computing up to the smaller."
+      if(all([Gmats%Npoints-Nmats,Wmats%Npoints-Nmats].ne.[0,0])) write(*,"(A)") "Warning: Either Smats_C, Gmats or Wmats have different number of Matsubara points. Computing up to the smaller."
       Nmats = minval([Smats_C%Npoints,Wmats%Npoints,Wmats%Npoints])
       !
-      allocate(Gitau(Norb,Norb,Ntau,Nkpt,Nspin));Gitau=czero
+      allocate(Gitau(Norb,Norb,NtauB,Nkpt,Nspin));Gitau=czero
       do ispin=1,Nspin
          call Fmats2itau_mat(Beta,Gmats%wks(:,:,:,:,ispin),Gitau(:,:,:,:,ispin), &
          asympt_corr=.true.,tau_uniform=tau_uniform,Nkpt3=Lttc%Nkpt3,kpt=Lttc%kpt)
       enddo
       !
-      allocate(Witau(Nbp,Nbp,Ntau,Nkpt));Witau=czero
+      allocate(Witau(Nbp,Nbp,NtauB,Nkpt));Witau=czero
       allocate(WmatsC(Nbp,Nbp,Nmats,Nkpt));WmatsC=czero
       do iw=1,Nmats
          WmatsC(:,:,iw,:) = Wmats%screened(:,:,iw,:) - Wmats%bare
@@ -106,14 +106,14 @@ contains
       !
       write(*,"(A)") "Sigma_C(tau)"
       !Sigma_{m,n}(q,tau) = -Sum_{k,mp,np} W_{(m,mp);(n,np)}(q-k;tau)G_{mp,np}(k,tau)
-      allocate(Sitau(Norb,Norb,Ntau,Lttc%Nkpt_irred,Nspin));Sitau=czero
+      allocate(Sitau(Norb,Norb,NtauB,Lttc%Nkpt_irred,Nspin));Sitau=czero
       !$OMP PARALLEL DEFAULT(NONE),&
-      !$OMP SHARED(Norb,Ntau,Lttc,Nkpt,Sitau,Gitau,Witau),&
+      !$OMP SHARED(Norb,NtauB,Lttc,Nkpt,Sitau,Gitau,Witau),&
       !$OMP PRIVATE(m,n,itau,iq,ispin,ik1,ik2,mp,np,ib1,ib2)
       !$OMP DO
       do m=1,Norb
          do n=1,Norb
-            do itau=1,Ntau
+            do itau=1,NtauB
                do iq=1,Lttc%Nkpt_irred
                   do ispin=1,Nspin
                      !
@@ -154,7 +154,7 @@ contains
       !sigmax(r,r')=-g(r,r',tau=0-)*v(r-r')
       !Sigmax_nm(q) = Sum_kij V_{ni,jm}(q-k)G_ij(k,beta)
       !$OMP PARALLEL DEFAULT(NONE),&
-      !$OMP SHARED(Norb,Ntau,Lttc,Nkpt,Smats_X,Gitau,Wmats),&
+      !$OMP SHARED(Norb,NtauB,Lttc,Nkpt,Smats_X,Gitau,Wmats),&
       !$OMP PRIVATE(m,n,iq,ispin,ik1,ik2,mp,np,ib1,ib2)
       !$OMP DO
       do m=1,Norb
@@ -170,7 +170,7 @@ contains
                            ib1 = mp + Norb*(m-1)
                            ib2 = np + Norb*(n-1)
                            !
-                           Smats_X%N_ks(m,n,iq,ispin) = Smats_X%N_ks(m,n,iq,ispin) + Gitau(mp,np,Ntau,ik1,ispin)*Wmats%bare(ib1,ib2,ik2)/Nkpt
+                           Smats_X%N_ks(m,n,iq,ispin) = Smats_X%N_ks(m,n,iq,ispin) + Gitau(mp,np,NtauB,ik1,ispin)*Wmats%bare(ib1,ib2,ik2)/Nkpt
                            !
                         enddo
                      enddo
@@ -241,7 +241,7 @@ contains
       use utils_fields
       use crystal
       use fourier_transforms
-      use input_vars, only : Ntau, tau_uniform
+      use input_vars, only : NtauB, tau_uniform
       implicit none
       !
       type(FermionicField),intent(inout)    :: Smats_Cdc
@@ -282,13 +282,13 @@ contains
       if(all([Gmats%Npoints-Nmats,Wmats%Npoints-Nmats].ne.[0,0]))  write(*,"(A)") "Warning: Either Smats_Cdc, Gmats or Wmats have different number of Matsubara points. Computing up to the smaller."
       Nmats = minval([Smats_Cdc%Npoints,Wmats%Npoints,Wmats%Npoints])
       !
-      allocate(Gitau_loc(Norb,Norb,Ntau,Nspin));Gitau_loc=czero
+      allocate(Gitau_loc(Norb,Norb,NtauB,Nspin));Gitau_loc=czero
       do ispin=1,Nspin
          call Fmats2itau_mat(Beta,Gmats%ws(:,:,:,ispin),Gitau_loc(:,:,:,ispin), &
                              asympt_corr=.true.,tau_uniform=tau_uniform)
       enddo
       !
-      allocate(Witau_loc(Nbp,Nbp,Ntau));Witau_loc=czero
+      allocate(Witau_loc(Nbp,Nbp,NtauB));Witau_loc=czero
       allocate(WmatsC_loc(Nbp,Nbp,Nmats));WmatsC_loc=czero
       do iw=1,Nmats
          WmatsC_loc(:,:,iw) = Wmats%screened_local(:,:,iw) - Wmats%bare_local
@@ -298,14 +298,14 @@ contains
       !
       write(*,"(A)") "Sigma_Cdc(tau)"
       !Sigma_{m,n}(q,tau) = -Sum_{k,mp,np} W_{(m,mp);(n,np)}(q-k;tau)G_{mp,np}(k,tau)
-      allocate(Sitau_loc(Norb,Norb,Ntau,Nspin));Sitau_loc=czero
+      allocate(Sitau_loc(Norb,Norb,NtauB,Nspin));Sitau_loc=czero
       !$OMP PARALLEL DEFAULT(NONE),&
-      !$OMP SHARED(Norb,Ntau,Sitau_loc,Gitau_loc,Witau_loc),&
+      !$OMP SHARED(Norb,NtauB,Sitau_loc,Gitau_loc,Witau_loc),&
       !$OMP PRIVATE(m,n,itau,ispin,mp,np,ib1,ib2)
       !$OMP DO
       do m=1,Norb
          do n=1,Norb
-            do itau=1,Ntau
+            do itau=1,NtauB
                do ispin=1,Nspin
                   !
                   do mp=1,Norb
@@ -339,7 +339,7 @@ contains
       !sigmax(r,r')=-g(r,r',tau=0-)*v(r-r')
       !Sigmax_nm(q) = Sum_kij V_{ni,jm}(q-k)G_ij(k,beta)
       !$OMP PARALLEL DEFAULT(NONE),&
-      !$OMP SHARED(Norb,Ntau,Smats_Xdc,Gitau_loc,Wmats),&
+      !$OMP SHARED(Norb,NtauB,Smats_Xdc,Gitau_loc,Wmats),&
       !$OMP PRIVATE(m,n,ispin,mp,np,ib1,ib2)
       !$OMP DO
       do m=1,Norb
@@ -352,7 +352,7 @@ contains
                      ib1 = mp + Norb*(m-1)
                      ib2 = np + Norb*(n-1)
                      !
-                     Smats_Xdc%N_s(m,n,ispin) = Smats_Xdc%N_s(m,n,ispin) + Gitau_loc(mp,np,Ntau,ispin)*Wmats%bare_local(ib1,ib2)
+                     Smats_Xdc%N_s(m,n,ispin) = Smats_Xdc%N_s(m,n,ispin) + Gitau_loc(mp,np,NtauB,ispin)*Wmats%bare_local(ib1,ib2)
                      !
                   enddo
                enddo

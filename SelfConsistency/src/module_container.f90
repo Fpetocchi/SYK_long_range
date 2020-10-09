@@ -27,6 +27,8 @@ module module_container
    tick,tock                                ,&
    inquireFile,inquireDir,createDir         ,&
    check_Hermiticity                        ,&
+   check_Symmetry                           ,&
+   halfbeta_symm                            ,&
    assert_shape
 
 
@@ -64,15 +66,17 @@ module module_container
    use utils_fields, only:                   &
    FermionicKsum                            ,&
    BosonicKsum                              ,&
-   AllocateFermionicField                   ,&
-   DeallocateFermionicField                 ,&
    AllocateLattice                          ,&
    DeallocateLattice                        ,&
+   AllocateFermionicField                   ,&
+   DeallocateFermionicField                 ,&
    AllocateBosonicField                     ,&
    DeallocateBosonicField                   ,&
-   clear_attributes!                        ,&
-   !reshuffle_imp2loc                       ,&
-   !reshuffle_loc2imp
+   clear_attributes                         ,&
+   loc2imp,imp2loc                          ,&
+   MergeField
+
+
 
 
    !(h) Input/Output routines. Depends on (b),(e),(g)
@@ -90,9 +94,9 @@ module module_container
    calc_W_full                              ,&
    calc_W_edmft                             ,&
    calc_chi_full                            ,&
-   calc_chi_edmft !                         ,&
-   !build_Umatrix                           ,&
-   !rescale_interaction
+   calc_chi_edmft                           ,&
+   build_Uloc                               ,&
+   calc_QMCinteractions
 
 
    !(j) Bubble diagram container. Depends on (b),(c),(d),(e),(f),(g)

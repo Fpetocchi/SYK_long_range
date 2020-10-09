@@ -50,7 +50,7 @@ contains
       use parameters
       use utils_misc
       use fourier_transforms
-      use input_vars, only : Ntau, tau_uniform
+      use input_vars, only : NtauF, tau_uniform
       implicit none
       !
       type(FermionicField),intent(in)       :: Gmats
@@ -74,13 +74,13 @@ contains
       call assert_shape(n_loc,[Norb,Norb,Nspin],"calc_density_loc","n_loc")
       !
       n_loc=czero
-      allocate(Gitau(Norb,Norb,Ntau));Gitau=czero
+      allocate(Gitau(Norb,Norb,NtauF));Gitau=czero
       do ispin=1,Nspin
          !
          call Fmats2itau_mat(Beta,Gmats%ws(:,:,:,ispin),Gitau, &
          asympt_corr=.true.,tau_uniform=tau_uniform,atBeta=.true.)
          !
-         n_loc(:,:,ispin) = -Gitau(:,:,Ntau)
+         n_loc(:,:,ispin) = -Gitau(:,:,NtauF)
          !
       enddo
       deallocate(Gitau)
@@ -92,7 +92,7 @@ contains
       use parameters
       use utils_misc
       use fourier_transforms
-      use input_vars, only : Ntau, tau_uniform
+      use input_vars, only : NtauF, tau_uniform
       implicit none
       !
       type(FermionicField),intent(in)       :: Gmats
@@ -120,12 +120,12 @@ contains
       call assert_shape(n_k,[Norb,Norb,Nkpt,Nspin],"calc_density_Kdep","n_k")
       !
       n_k=czero
-      allocate(Gitau(Norb,Norb,Ntau,Nkpt));Gitau=czero
+      allocate(Gitau(Norb,Norb,NtauF,Nkpt));Gitau=czero
       do ispin=1,Nspin
          call Fmats2itau_mat(Beta,Gmats%wks(:,:,:,:,ispin),Gitau, &
          asympt_corr=.true.,tau_uniform=tau_uniform,Nkpt3=Lttc%Nkpt3,kpt=Lttc%kpt,atBeta=.true.)
          !
-         n_k(:,:,:,ispin) = -Gitau(:,:,:,Ntau)
+         n_k(:,:,:,ispin) = -Gitau(:,:,:,NtauF)
          !
       enddo
       deallocate(Gitau)
@@ -142,7 +142,7 @@ contains
       use parameters
       use utils_misc
       use fourier_transforms
-      use input_vars, only : Ntau, tau_uniform
+      use input_vars, only : NtauF, tau_uniform
       implicit none
       !
       complex(8),allocatable,intent(inout)  :: Gitau(:,:,:)
@@ -165,24 +165,24 @@ contains
       ! Check on the input Fields
       Norb = size(Ek,dim=1)
       Nkpt = size(Ek,dim=2)
-      call assert_shape(Gitau,[Norb,Ntau,Nkpt],"calc_G0_tau","Gitau")
+      call assert_shape(Gitau,[Norb,NtauF,Nkpt],"calc_G0_tau","Gitau")
       atBeta_ = .false.
       if(present(atBeta)) atBeta_ = atBeta
       !
-      allocate(tau(Ntau));tau=0d0
+      allocate(tau(NtauF));tau=0d0
       if(tau_uniform)then
-         tau = linspace(0d0,Beta,Ntau)
+         tau = linspace(0d0,Beta,NtauF)
       else
-         tau = denspace(Beta,Ntau)
+         tau = denspace(Beta,NtauF)
       endif
       !
       Gitau=czero
       !$OMP PARALLEL DEFAULT(NONE),&
-      !$OMP SHARED(Nkpt,Ntau,Norb,atBeta_,tau,Ek,mu,fermicut,Beta,Gitau),&      !VEDI SE PUOI TOGLIERE QUALCHE IF
+      !$OMP SHARED(Nkpt,NtauF,Norb,atBeta_,tau,Ek,mu,fermicut,Beta,Gitau),&      !VEDI SE PUOI TOGLIERE QUALCHE IF
       !$OMP PRIVATE(ik,itau,iwan,eu,upper,lower)
       !$OMP DO
-      do itau=1,Ntau
-         if(atBeta_.and.(itau.ne.Ntau))cycle
+      do itau=1,NtauF
+         if(atBeta_.and.(itau.ne.NtauF))cycle
          do ik=1,Nkpt
             do iwan=1,Norb
                !
@@ -427,7 +427,7 @@ contains
       use linalg
       use utils_misc
       use utils_fields
-      use input_vars, only : Ntau, densityPercErr
+      use input_vars, only : NtauF, densityPercErr
       implicit none
       !
       real(8),intent(out)                   :: mu
@@ -460,7 +460,7 @@ contains
       !Everything is paramagnetic
       allocate(n_loc(Norb,Norb));n_loc=czero
       allocate(n_k(Norb,Norb,Nkpt));n_k=czero
-      allocate(Gitau(Norb,Ntau,Nkpt));Gitau=czero
+      allocate(Gitau(Norb,NtauF,Nkpt));Gitau=czero
       call calc_G0_tau(Gitau,mu_start,Beta,Lttc%Ek,atBeta=.true.)
       n_iter = get_dens()
       write(*,"(A,F10.5)") "Starting density: ",n_iter
@@ -518,7 +518,7 @@ contains
          integer                  :: iwan,ik
          do ik=1,Nkpt
             !paramagnetic
-            n_k(:,:,ik) = 2.d0*diag(Gitau(:,Ntau,ik))
+            n_k(:,:,ik) = 2.d0*diag(Gitau(:,NtauF,ik))
             !if present, the restriction is on the orbitals in Wannier basis
             n_k(:,:,ik) = rotate(n_k(:,:,ik),transpose(conjg(Lttc%Zk(:,:,ik))))
          enddo
@@ -558,7 +558,7 @@ contains
       use input_vars, only : pathINPUT
       use input_vars, only : Nreal, wrealMax, eta
       use input_vars, only : wmatsMax
-      use input_vars, only : Ntau, tau_uniform
+      use input_vars, only : NtauF, tau_uniform
       implicit none
       !
       real(8),intent(in)                    :: mu
@@ -694,24 +694,24 @@ contains
          !verbose=3: print G(tau) in diagonal and Wannier basis
          case(3)
             !
-            allocate(axis(Ntau));axis=0d0
+            allocate(axis(NtauF));axis=0d0
             if(tau_uniform)then
-               axis = linspace(0d0,Beta,Ntau)
+               axis = linspace(0d0,Beta,NtauF)
             else
-               axis = denspace(Beta,Ntau)
+               axis = denspace(Beta,NtauF)
             endif
             !
-            allocate(Gitau(Norb,Ntau,Nkpt));Gitau=czero
+            allocate(Gitau(Norb,NtauF,Nkpt));Gitau=czero
             call calc_G0_tau(Gitau,mu,Beta,Lttc%Ek)
             !
-            allocate(Gprint_Ek(Norb,Ntau));Gprint_Ek=czero
-            allocate(Gprint_Hk(Norb,Norb,Ntau));Gprint_Hk=czero
+            allocate(Gprint_Ek(Norb,NtauF));Gprint_Ek=czero
+            allocate(Gprint_Hk(Norb,Norb,NtauF));Gprint_Hk=czero
             allocate(Gftmp(Norb,Norb));Gftmp=czero
             !$OMP PARALLEL DEFAULT(NONE),&
-            !$OMP SHARED(Norb,Ntau,Nkpt,Lttc,Gitau,Gprint_Ek,Gprint_Hk),&
+            !$OMP SHARED(Norb,NtauF,Nkpt,Lttc,Gitau,Gprint_Ek,Gprint_Hk),&
             !$OMP PRIVATE(iwan1,ik,iw,Gftmp)
             !$OMP DO
-            do itau=1,Ntau
+            do itau=1,NtauF
                do ik=1,Nkpt
                   !
                   do iwan1=1,Norb

@@ -162,7 +162,7 @@ contains
       use fourier_transforms
       use crystal
       use fourier_transforms
-      use input_vars, only : Ntau, tau_uniform
+      use input_vars, only : NtauB, tau_uniform
       implicit none
       !
       type(BosonicField),intent(inout)      :: Pout
@@ -201,12 +201,12 @@ contains
       !
       tau_output_=.false.
       if(present(tau_output)) tau_output_ = tau_output
-      Ntau_ = Ntau
+      Ntau_ = NtauB
       if(tau_output_) Ntau_ = NaxisB
       !
       allocate(tau(Ntau_));tau=0d0
       if(tau_uniform)then
-         tau = linspace(0d0,beta,Ntau_)
+         tau = linspace(0d0,Beta,Ntau_)
       else
          tau = denspace(beta,Ntau_)
       endif

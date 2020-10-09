@@ -60,9 +60,11 @@ module utils_misc
    public :: inquireDir
    public :: createDir
    public :: check_Hermiticity
+   public :: check_Symmetry
    public :: assert_shape
    public :: FermionicFilon
    public :: BosonicFilon
+   public :: halfbeta_symm
    !functions
    public :: FermionicFreqMesh
    public :: BosonicFreqMesh
@@ -438,6 +440,64 @@ contains
 
 
    !---------------------------------------------------------------------------!
+   !PURPOSE: Check if matrix is Symmetric
+   !---------------------------------------------------------------------------!
+   subroutine check_Symmetry(A,tol,hardstop)
+      implicit none
+      real(8),intent(in)                    :: A(:,:)
+      real(8),intent(in)                    :: tol
+      logical,intent(in),optional           :: hardstop
+      !
+      real(8)                               :: elem_ij,elem_ji
+      logical                               :: hardstop_
+      integer                               :: N,i,j
+      !
+      if(size(A,dim=1).ne.size(A,dim=2))stop "Symmetryzer. Matrix not square."
+      N=size(A,dim=1)
+      !
+      hardstop_=.true.
+      if(present(hardstop))hardstop_=hardstop
+      !
+      do i=1,N
+         do j=1+i,N
+            !
+            elem_ij = A(i,j)
+            elem_ji = A(j,i)
+            !
+            if(abs(elem_ij-elem_ji).gt.tol)then
+               write(*,"(2(A,1F10.5))") "Re(A_ij): ",real(elem_ij),"Re(A_ji): ",real(elem_ji)
+               write(*,"(A,1F10.5)") "Real parts difference above threshold ",tol
+               if(hardstop_)stop
+            endif
+            !
+         enddo
+      enddo
+      !
+   end subroutine check_Symmetry
+
+
+   !---------------------------------------------------------------------------!
+   !PURPOSE: Check if matrix is Hermitian
+   !---------------------------------------------------------------------------!
+   subroutine halfbeta_symm(funct,Ntau,sign)
+      implicit none
+      real(8),intent(inout)                 :: funct(:)
+      integer,intent(in)                    :: Ntau
+      real(8),intent(in)                    :: sign
+      !
+      integer                               :: itau
+      !
+      do itau=1,int(Ntau/2)
+         funct(itau) = 0.5 *  funct(itau) + sign*funct(ntau-itau+1)
+      enddo
+      do itau=1,int(Ntau/2)
+         funct(ntau-itau+1) = sign*funct(itau)
+      enddo
+      !
+   end subroutine halfbeta_symm
+
+
+   !---------------------------------------------------------------------------!
    !PURPOSE: General Filon integration
    ! I[x1,x2] dx f(x) cos(kx) and I[x1,x2] dx f(x) sin(kx)
    ! where f(x) is smooth but cos(kx) and sin(kx) can oscillate rapidly,
@@ -606,10 +666,10 @@ contains
          wsin = wsin + coskx*ssin + sinkx*scos
          !1111   continue
       enddo
-    end subroutine FermionicFilon
+   end subroutine FermionicFilon
 
 
-    !---------------------------------------------------------------------------!
+   !---------------------------------------------------------------------------!
    !PURPOSE: General Filon integration:
    ! I[x1,x2] dx f(x) cos(kx) and I[x1,x2] dx f(x) sin(kx)
    ! where f(x) is smooth but cos(kx) and sin(kx) can oscillate rapidly,

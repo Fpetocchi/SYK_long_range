@@ -17,15 +17,15 @@ module interactions
       module procedure read_U_spex_Uloc0                                        ![Matrix,pathOUTPUT(optional to change output path)]
    end interface read_U_spex
 
-   interface build_Uqmc
-      module procedure build_Uqmc_singlParam                  ! (Solver Format) ![Matrix,Uaa_screened,Uab_screened,J_screened]
-      module procedure build_Uqmc_multiParam                  ! (Solver Format) ![Matrix,Vector,Matrix,Matrix]
-   end interface build_Uqmc
+   interface build_Uloc
+      module procedure build_Uloc_singlParam                  ! (Solver Format) ![Matrix,Uaa_screened,Uab_screened,J_screened]
+      module procedure build_Uloc_multiParam                  ! (Solver Format) ![Matrix,Vector,Matrix,Matrix]
+   end interface build_Uloc
 
-   interface build_Ugw
-      module procedure build_Ugw_singlParam                   !   (GW Format)   ![Matrix,Uaa_screened,Uab_screened,J_screened,vector_g,vector_w0]
-      module procedure build_Ugw_multiParam                   !   (GW Format)   ![Matrix,Vector,Matrix,Matrix,vector_g,vector_w0]
-   end interface build_Ugw
+   interface build_Uret
+      module procedure build_Uret_singlParam                   !   (GW Format)  ![BosonicField,Uaa_bare,Uab_bare,J_bare,vector_g,vector_w0]
+      module procedure build_Uret_multiParam                   !   (GW Format)  ![BosonicField,Vector,Matrix,Matrix,vector_g,vector_w0]
+   end interface build_Uret
 
    !---------------------------------------------------------------------------!
    !PURPOSE: Rutines available for the user. Description only for interfaces.
@@ -36,10 +36,9 @@ module interactions
    public :: calc_chi_full
    public :: calc_chi_edmft
    public :: read_U_spex
-   public :: build_Uqmc
-   public :: build_Ugw
+   public :: build_Uloc
+   public :: build_Uret
    public :: calc_QMCinteractions
-   !public :: calc_Kfunct
    !public :: rescale_interaction
 
    !===========================================================================!
@@ -547,7 +546,7 @@ contains
          if((.not.LocalOnly).and.(Umats%Nkpt.ne.Nkpt)) stop "Number of k-points of given BosonicField and number of VW_real k-points do not coincide."
          !
          ! Allocate the Bosonic field on the real axis
-         call AllocateBosonicField(Ureal,Nbp_spex,Nfreq,Nkpt,"Uspex(w)")
+         call AllocateBosonicField(Ureal,Nbp_spex,Nfreq,Nkpt,name="Uspex(w)")
          !
          ! Read VW_real accumulating local attribute and optionally storing the k-dependent part
          path = pathINPUT//"VW_real/"
@@ -1127,7 +1126,7 @@ contains
    !---------------------------------------------------------------------------!
    !PURPOSE: Create the static interaction tensor from user-given parameters
    !---------------------------------------------------------------------------!
-   subroutine build_Uqmc_singlParam(Umat,Uaa,Uab,J)
+   subroutine build_Uloc_singlParam(Umat,Uaa,Uab,J)
       !
       use parameters
       use file_io
@@ -1144,14 +1143,14 @@ contains
       logical                               :: Uaa_flag,Ust_flag,Usc_flag
       !
       !
-      write(*,*) "--- build_Uqmc_singlParam ---"
+      write(*,*) "--- build_Uloc_singlParam ---"
       !
       !
       ! Check on the input matrices
       Nbp = size(Umat,dim=1)
       Norb = Nbp/2
       if(mod(Nbp,2).ne.0.0) stop "Wrong matrix dimension."
-      call assert_shape(Umat,[Nbp,Nbp],"build_Uqmc_singlParam","Umat")
+      call assert_shape(Umat,[Nbp,Nbp],"build_Uloc_singlParam","Umat")
       !
       do ib1=1,Nspin*Norb
          do ib2=1,Nspin*Norb
@@ -1172,10 +1171,10 @@ contains
          enddo
       enddo
       !
-   end subroutine build_Uqmc_singlParam
+   end subroutine build_Uloc_singlParam
    !
    !
-   subroutine build_Uqmc_multiParam(Umat,Uaa,Uab,J)
+   subroutine build_Uloc_multiParam(Umat,Uaa,Uab,J)
       !
       use parameters
       use file_io
@@ -1192,17 +1191,17 @@ contains
       logical                               :: Uaa_flag,Ust_flag,Usc_flag
       !
       !
-      write(*,*) "--- build_Uqmc_multiParam ---"
+      write(*,*) "--- build_Uloc_multiParam ---"
       !
       !
       ! Check on the input matrices
       Nbp = size(Umat,dim=1)
       Norb = Nbp/2
       if(mod(Nbp,2).ne.0.0) stop "Wrong matrix dimension."
-      call assert_shape(Umat,[Nbp,Nbp],"build_Uqmc_multiParam","Umat")
-      call assert_shape(Uaa,[Norb],"build_Uqmc_multiParam","Uaa")
-      call assert_shape(Uab,[Norb,Norb],"build_Uqmc_multiParam","Uab")
-      call assert_shape(J,[Norb,Norb],"build_Uqmc_multiParam","J")
+      call assert_shape(Umat,[Nbp,Nbp],"build_Uloc_multiParam","Umat")
+      call assert_shape(Uaa,[Norb],"build_Uloc_multiParam","Uaa")
+      call assert_shape(Uab,[Norb,Norb],"build_Uloc_multiParam","Uab")
+      call assert_shape(J,[Norb,Norb],"build_Uloc_multiParam","J")
       !
       do ib1=1,Nspin*Norb
          do ib2=1,Nspin*Norb
@@ -1223,13 +1222,13 @@ contains
          enddo
       enddo
       !
-   end subroutine build_Uqmc_multiParam
+   end subroutine build_Uloc_multiParam
 
 
    !---------------------------------------------------------------------------!
    !PURPOSE: Create the freq. dependent interaction tensor from user-given parameters
    !---------------------------------------------------------------------------!
-   subroutine build_Ugw_singlParam(Umats,Uaa,Uab,J,g_eph,wo_eph)
+   subroutine build_Uret_singlParam(Umats,Uaa,Uab,J,g_eph,wo_eph)
       !
       use parameters
       use file_io
@@ -1254,7 +1253,7 @@ contains
       real                                  :: start,finish
       !
       !
-      write(*,*) "--- build_Ugw_singlParam ---"
+      write(*,*) "--- build_Uret_singlParam ---"
       !
       !
       ! Check on the input field
@@ -1362,9 +1361,9 @@ contains
       call DeallocateBosonicField(Ureal)
       write(*,*) "Ue-ph(w) --> Ue-ph(iw) cpu timing:", finish-start
       !
-   end subroutine build_Ugw_singlParam
+   end subroutine build_Uret_singlParam
    !
-   subroutine build_Ugw_multiParam(Umats,Uaa,Uab,J,g_eph,wo_eph)
+   subroutine build_Uret_multiParam(Umats,Uaa,Uab,J,g_eph,wo_eph)
       !
       use parameters
       use file_io
@@ -1389,7 +1388,7 @@ contains
       real                                  :: start,finish
       !
       !
-      write(*,*) "--- build_Ugw_multiParam ---"
+      write(*,*) "--- build_Uret_multiParam ---"
       !
       !
       ! Check on the input field
@@ -1400,9 +1399,9 @@ contains
       Norb = int(sqrt(dble(Nbp)))
       Nph = size(g_eph)
       !
-      call assert_shape(Uaa,[Norb],"build_Ugw_multiParam","Uaa")
-      call assert_shape(Uab,[Norb,Norb],"build_Ugw_multiParam","Uab")
-      call assert_shape(J,[Norb,Norb],"build_Ugw_multiParam","J")
+      call assert_shape(Uaa,[Norb],"build_Uret_multiParam","Uaa")
+      call assert_shape(Uab,[Norb,Norb],"build_Uret_multiParam","Uab")
+      call assert_shape(J,[Norb,Norb],"build_Uret_multiParam","J")
       !
       allocate(wmats(Umats%Npoints));wmats=0d0
       wmats = BosonicFreqMesh(Umats%Beta,Umats%Npoints)
@@ -1501,19 +1500,20 @@ contains
       call DeallocateBosonicField(Ureal)
       write(*,*) "Ue-ph(w) --> Ue-ph(iw) cpu timing:", finish-start
       !
-   end subroutine build_Ugw_multiParam
+   end subroutine build_Uret_multiParam
 
 
    !---------------------------------------------------------------------------!
-   !PURPOSE:
+   !PURPOSE: Given the Bosonic Field it extracts the screened interaction and
+   ! retardation function.
    !---------------------------------------------------------------------------!
-   subroutine calc_QMCinteractions(Uinst,Kfunct,Umats)
+   subroutine calc_QMCinteractions(Umats,Uinst,Kfunct)
       !
       use parameters
       use file_io
       use utils_misc
       use utils_fields
-      use input_vars, only : Ntau
+      use input_vars, only : NtauB, tau_uniform
       implicit none
       !
       type(BosonicField),intent(in)         :: Umats
@@ -1523,8 +1523,10 @@ contains
       integer                               :: Nbp,Norb
       integer                               :: ib1,ib2,iorb,jorb,ispin,jspin
       integer                               :: iu1,iu2,ix1,ix2,ip1,ip2
+      integer                               :: iw,itau
       logical                               :: Uaa_flag,Ust_flag,Usc_flag
-      real(8),allocatable                   :: wmats(:)
+      real(8),allocatable                   :: wmats(:),tau(:)
+      complex(8),allocatable                :: Kaux(:,:,:)
       !
       !
       write(*,*) "--- calc_QMCinteractions ---"
@@ -1537,9 +1539,15 @@ contains
       Norb = int(sqrt(dble(Nbp)))
       !
       call assert_shape(Uinst,[Norb*Nspin,Norb*Nspin],"calc_QMCinteractions","Uinst")
-      !
-      allocate(wmats(Umats%Npoints));wmats=0d0
-      wmats = BosonicFreqMesh(Umats%Beta,Umats%Npoints)
+      if(present(Kfunct))then
+         Kfunct=czero
+         call assert_shape(Kfunct,[Norb*Nspin,Norb*Nspin,NtauB],"calc_QMCinteractions","Kfunct")
+         allocate(Kaux(Norb*Nspin,Norb*Nspin,Umats%Npoints));Kaux=czero
+         allocate(tau(NtauB));tau=0d0
+         tau = linspace(0d0,Umats%Beta,NtauB)
+         allocate(wmats(Umats%Npoints));wmats=0d0
+         wmats = BosonicFreqMesh(Umats%Beta,Umats%Npoints)
+      endif
       !
       !setting the istantaneous values
       do ib1=1,Nspin*Norb
@@ -1553,28 +1561,70 @@ contains
             Uaa_flag = (iorb.eq.jorb).and.(ispin.ne.jspin)
             Ust_flag = (iorb.ne.jorb).and.(ispin.ne.jspin)
             Usc_flag = (iorb.ne.jorb).and.(ispin.eq.jspin)
+            if(Uaa_flag.and.Ust_flag.and.Usc_flag) stop "Something is wrong with the flags."
             !
+            ! (aa)(bb) indexes
             iu1 = iorb + Norb*(iorb-1)
             iu2 = jorb + Norb*(jorb-1)
             !
+            ! (ab)(ba) indexes
             ix1 = iorb + Norb*(jorb-1)
             ix2 = jorb + Norb*(iorb-1)
+            if(ix1.eq.ix2) stop "Something is wrong with the spin-flip indexes."
+            !
+            ! (ab)(ab) indexes
             ip1 = jorb + Norb*(iorb-1)
             ip2 = iorb + Norb*(jorb-1)
+            if(ip1.ne.ip2) stop "Something is wrong with the pair-hopping indexes."
             !
             if(Uaa_flag) Uinst(ib1,ib2) = Umats%screened_local(iu1,iu2,0)
             if(Ust_flag) Uinst(ib1,ib2) = Umats%screened_local(iu1,iu2,0)
             if(Usc_flag) Uinst(ib1,ib2) = Umats%screened_local(iu1,iu2,0) - (Umats%screened_local(ix1,ix2,0)+Umats%screened_local(ip1,ip2,0))/2d0
+            !
+            if(present(Kfunct))then
+               do iw=1,Umats%Npoints
+                  if(Uaa_flag) Kaux(ib1,ib2,iw) = ( Umats%bare_local(iu1,iu2) - Umats%screened_local(iu1,iu2,iw) )
+                  if(Ust_flag) Kaux(ib1,ib2,iw) = ( Umats%bare_local(iu1,iu2) - Umats%screened_local(iu1,iu2,iw) )
+                  if(Usc_flag) Kaux(ib1,ib2,iw) = ( Umats%bare_local(iu1,iu2) - Umats%screened_local(iu1,iu2,iw) ) - &
+                                                  ((Umats%bare_local(ix1,ix2) - Umats%screened_local(ix1,ix2,iw))+(Umats%bare_local(ip1,ip2) - Umats%screened_local(ip1,ip2,iw)))/2d0
+               enddo
+            endif
             !
          enddo
       enddo
       !
       !setting the reterdation function
       if(present(Kfunct))then
-         call assert_shape(Kfunct,[Norb,Norb,Ntau],"calc_QMCinteractions","Kfunct")
+         !$OMP PARALLEL DEFAULT(NONE),&
+         !$OMP SHARED(Norb,NtauB,tau,Umats,wmats,Kfunct),&
+         !$OMP PRIVATE(Kaux,ib1,ib2,iw,itau)
+         !$OMP DO
+         do ib1=1,Nspin*Norb
+            do ib2=1,Nspin*Norb
+               !
+               do itau=1,NtauB
+                  do iw=1,Umats%Npoints
+                     Kfunct(ib1,ib2,itau) = Kfunct(ib1,ib2,itau) + 2d0*Kaux(ib1,ib2,iw) * ( cos(wmats(iw)*tau(itau)) - 1d0 ) / ( Umats%Beta*wmats(iw)**2 )
+                  enddo
+               enddo
+               !
+               ! symmetrize with respect to beta/2
+               call halfbeta_symm(Kfunct(ib1,ib2,:),NtauB,+1d0)
+               !
+               if(Kfunct(ib1,ib2,0).ne.0d0) stop "K(0) is not zero."
+               if(Kfunct(ib1,ib2,NtauB).ne.0d0) stop "K(beta) is not zero."
+               !
+            enddo
+         enddo
+         !$OMP END DO
+         !$OMP END PARALLEL
+         deallocate(Kaux,tau,wmats)
+         !
+         do itau=1,NtauB
+            call check_Symmetry(Kfunct(:,:,itau),eps,hardstop=.true.)
+         enddo
+         !
       endif
-
-
       !
    end subroutine calc_QMCinteractions
 
