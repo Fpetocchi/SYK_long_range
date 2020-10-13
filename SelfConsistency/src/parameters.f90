@@ -33,6 +33,7 @@ module parameters
       real(8),allocatable                   :: kpt(:,:)
       integer                               :: Nkpt3(3)
       complex(8),allocatable                :: Hk(:,:,:)                        ![Norb,Norb,Nkpt]
+      complex(8),allocatable                :: Hloc(:,:)                        ![Norb,Norb]
       complex(8),allocatable                :: Zk(:,:,:)                        ![Norb,Norb,Nkpt]
       real(8),allocatable                   :: Ek(:,:)                          ![Norb,Nkpt]
       integer,allocatable                   :: kptPos(:)                        ![Nkpt]
@@ -44,6 +45,7 @@ module parameters
       integer                               :: Nkpt_irred=0
       integer                               :: Norb=0
       real(8)                               :: mu=0d0
+      real(8)                               :: density=0d0
       logical                               :: UseDisentangledBS=.false.
       logical                               :: status=.false.
    end type Lattice

@@ -593,6 +593,7 @@ contains
    subroutine Fmats2itau_vec_Gwk(beta,Gmats,Gitau,asympt_corr,tau_uniform,nkpt3,kpt,atBeta)
       !
       use utils_misc
+      use crystal
       implicit none
       !
       real(8),intent(in)                    :: beta

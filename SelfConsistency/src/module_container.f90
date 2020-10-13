@@ -1,11 +1,5 @@
 module module_container
 
-
-   ! COMMENTS:
-   !
-   !
-
-
    !(a) Standalone module. Can be used as generic library.
    use linalg, only:                         &
    eig, eigh                                ,&
@@ -57,9 +51,8 @@ module module_container
    use parameters
 
 
-   !(f) Standalone module. Contains input variables.
-   use input_vars!                           &
-   !read_inputfile
+   !(f) Standalone module. Contains only variables.
+   use input_vars
 
 
    !(g) Container attributes manipulations. Depends on (e)
@@ -74,9 +67,7 @@ module module_container
    DeallocateBosonicField                   ,&
    clear_attributes                         ,&
    loc2imp,imp2loc                          ,&
-   MergeField
-
-
+   MergeFields
 
 
    !(h) Input/Output routines. Depends on (b),(e),(g)
@@ -120,5 +111,11 @@ module module_container
    calc_sigmaGW_DC                          ,&
    read_Sigma_spex
 
+
+   !(m) Calculation-Dependent utils container. Depends on (a),(b),(c),(d),(e),(f),(g),(h),(i),(j),(k),(l)
+   use utils_main, only:                     &
+   printHeader                              ,&
+   initialize_DataStructure                 ,&
+   initialize_Lattice
 
 end module module_container

@@ -373,6 +373,7 @@ contains
    subroutine calc_VH(density_GoWo,Gmats,Umats,VH)
       !
       use parameters
+      use linalg
       use file_io
       use utils_misc
       use utils_fields
@@ -532,6 +533,7 @@ contains
       use parameters
       use file_io
       use utils_misc
+      use crystal
       use utils_fields
       use input_vars, only : pathINPUT, UseXepsKorder, paramagneticSPEX
       implicit none
@@ -881,7 +883,7 @@ contains
          ! Just read all
          call clear_attributes(Smats_GoWo)
          path = pathINPUT//"Sigma_imag"
-         call read_FermionicField_Kdep(Smats_GoWo,reg(path),"Sigma_GoWo")
+         call read_FermionicField(Smats_GoWo,reg(path),"Sigma_GoWo")
          !
          if(present(Vxc))then
             Vxc=czero

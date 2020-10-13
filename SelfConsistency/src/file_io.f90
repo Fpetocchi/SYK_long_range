@@ -322,6 +322,7 @@ contains
       unit = free_unit()
       open(unit,file=reg(printpath),form="formatted",status="unknown",position="rewind",action="write")
       do iaxis=1,size(axis)
+         write(*,*)iaxis
          write(unit,"(3E20.12)") axis(iaxis), real(Fcomp(iaxis)), aimag(Fcomp(iaxis))
       enddo
       close(unit)

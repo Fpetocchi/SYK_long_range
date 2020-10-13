@@ -15,9 +15,10 @@ RELFFLAGS = -xHost -O3 -ftz -mcmodel=large
 #
 # Project files-----------------------------------------------------------------
 EXECDIR = bin
+TSTSDIR = tests
 SRCDIR = src
 SRCS = linalg.f90 parameters.f90 input_vars.f90 utils_misc.f90 utils_fields.f90 file_io.f90 interactions.f90 crystal.f90 \
-       fourier_transforms.f90 bubbles.f90 self_energy.f90 greens_function.f90
+       fourier_transforms.f90 bubbles.f90 self_energy.f90 greens_function.f90 utils_main.f90 module_container.f90 main.f90
 OBJS = $(SRCS:.f90=.o)
 EXE  = SelfConsistency
 
@@ -52,9 +53,6 @@ all: prepREL release
 # Debug rules-------------------------------------------------------------------
 debug: prepDBG $(DBGEXE)
 
-#$(DBGEXE): $(DBGOBJS)
-#	$(FC) $(FFLAGS) $(DBGFFLAGS) -o $(DBGEXE) $^
-#
 # Modules
 $(DBGDIR)/linalg.o: $(SRCDIR)/linalg.f90
 	$(FC) -c $(FFLAGS) $(DBGFFLAGS) -o $@ $<
@@ -92,15 +90,17 @@ $(DBGDIR)/greens_function.o: $(SRCDIR)/greens_function.f90 $(DBGDIR)/linalg.o $(
 $(DBGDIR)/self_energy.o: $(SRCDIR)/self_energy.f90 $(DBGDIR)/linalg.o $(DBGDIR)/utils_misc.o $(DBGDIR)/crystal.o $(DBGDIR)/parameters.o $(DBGDIR)/input_vars.o $(DBGDIR)/utils_fields.o $(DBGDIR)/file_io.o $(DBGDIR)/fourier_transforms.o $(DBGDIR)/greens_function.o
 	$(FC) -c $(FFLAGS) $(DBGFFLAGS) -o $@ $<
 
-#
+$(DBGDIR)/utils_main.o: $(SRCDIR)/utils_main.f90 $(DBGDIR)/linalg.o $(DBGDIR)/utils_misc.o $(DBGDIR)/crystal.o $(DBGDIR)/parameters.o $(DBGDIR)/input_vars.o $(DBGDIR)/utils_fields.o $(DBGDIR)/file_io.o $(DBGDIR)/interactions.o $(DBGDIR)/fourier_transforms.o $(DBGDIR)/bubbles.o $(DBGDIR)/greens_function.o $(DBGDIR)/self_energy.o
+	$(FC) -c $(FFLAGS) $(DBGFFLAGS) -o $@ $<
+
 # Module contaier and main
-$(DBGDIR)/module_container.o: $(SRCDIR)/module_container.f90 $(DBGOBJS)
+$(DBGDIR)/module_container.o: $(SRCDIR)/module_container.f90
 	$(FC) -c $(FFLAGS) $(DBGFFLAGS) -o $@ $<
 
-$(DBGDIR)/main.o: $(SRCDIR)/main.f90 $(DBGDIR)/module_container.o
+$(DBGDIR)/main.o: $(SRCDIR)/main.f90
 	$(FC) -c $(FFLAGS) $(DBGFFLAGS) -o $@ $<
 
-$(DBGEXE): $(DBGDIR)/main.o $(DBGDIR)/module_container.o
+$(DBGEXE): $(DBGOBJS)
 	$(FC) $(FFLAGS) $(DBGFFLAGS) -o $(DBGEXE) $^
 
 
@@ -108,9 +108,6 @@ $(DBGEXE): $(DBGDIR)/main.o $(DBGDIR)/module_container.o
 # Release rules-----------------------------------------------------------------
 release: prepREL $(RELEXE)
 
-#$(RELEXE): $(RELOBJS)
-#	$(FC) $(FFLAGS) $(RELFFLAGS) -o $(RELEXE) $^
-#
 # Modules
 $(RELDIR)/linalg.o: $(SRCDIR)/linalg.f90
 	$(FC) -c $(FFLAGS) $(RELFFLAGS) -o $@ $<
@@ -118,7 +115,7 @@ $(RELDIR)/linalg.o: $(SRCDIR)/linalg.f90
 $(RELDIR)/utils_misc.o: $(SRCDIR)/utils_misc.f90
 	$(FC) -c $(FFLAGS) $(RELFFLAGS) -o $@ $<
 
-$(RELDIR)/crystal.o: $(SRCDIR)/crystal.f90 $(RELDIR)/utils_misc.o $(RELDIR)/linalg.o
+$(RELDIR)/crystal.o: $(SRCDIR)/crystal.f90 $(RELDIR)/linalg.o $(RELDIR)/utils_misc.o
 	$(FC) -c $(FFLAGS) $(RELFFLAGS) -o $@ $<
 
 $(RELDIR)/fourier_transforms.o: $(SRCDIR)/fourier_transforms.f90 $(RELDIR)/utils_misc.o $(RELDIR)/crystal.o
@@ -148,16 +145,23 @@ $(RELDIR)/greens_function.o: $(SRCDIR)/greens_function.f90 $(RELDIR)/linalg.o $(
 $(RELDIR)/self_energy.o: $(SRCDIR)/self_energy.f90 $(RELDIR)/linalg.o $(RELDIR)/utils_misc.o $(RELDIR)/crystal.o $(RELDIR)/parameters.o $(RELDIR)/input_vars.o $(RELDIR)/utils_fields.o $(RELDIR)/file_io.o $(RELDIR)/fourier_transforms.o $(RELDIR)/greens_function.o
 	$(FC) -c $(FFLAGS) $(RELFFLAGS) -o $@ $<
 
-#
+$(RELDIR)/utils_main.o: $(SRCDIR)/utils_main.f90 $(RELDIR)/linalg.o $(RELDIR)/utils_misc.o $(RELDIR)/crystal.o $(RELDIR)/parameters.o $(RELDIR)/input_vars.o $(RELDIR)/utils_fields.o $(RELDIR)/file_io.o $(RELDIR)/interactions.o $(RELDIR)/fourier_transforms.o $(RELDIR)/bubbles.o $(RELDIR)/greens_function.o $(RELDIR)/self_energy.o
+	$(FC) -c $(FFLAGS) $(RELFFLAGS) -o $@ $<
+
 # Module contaier and main
-$(RELDIR)/module_container.o: $(SRCDIR)/module_container.f90 $(RELOBJS)
+$(RELDIR)/module_container.o: $(SRCDIR)/module_container.f90
 	$(FC) -c $(FFLAGS) $(RELFFLAGS) -o $@ $<
 
-$(RELDIR)/main.o: $(SRCDIR)/main.f90 $(RELDIR)/module_container.o
+$(RELDIR)/main.o: $(SRCDIR)/main.f90
 	$(FC) -c $(FFLAGS) $(RELFFLAGS) -o $@ $<
 
-$(RELEXE): $(RELDIR)/main.o $(RELDIR)/module_container.o
+$(RELEXE): $(RELOBJS)
 	$(FC) $(FFLAGS) $(RELFFLAGS) -o $(RELEXE) $^
+
+
+#
+# test rules-------------------------------------------------------------------
+test: prepDBG $(DBGEXE) prepTSTS
 
 
 #
@@ -170,6 +174,10 @@ prepREL:
 
 prepDBG:
 	@mkdir -p $(DBGDIR) $(EXECDIR)
+
+prepTSTS:
+	@mkdir -p $(TSTSDIR)
+	@cp $(EXECDIR)/* $(TSTSDIR)
 
 remake: clean all
 

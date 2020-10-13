@@ -1513,7 +1513,7 @@ contains
       use file_io
       use utils_misc
       use utils_fields
-      use input_vars, only : NtauB, tau_uniform
+      use input_vars, only : NtauB
       implicit none
       !
       type(BosonicField),intent(in)         :: Umats
@@ -1611,7 +1611,7 @@ contains
                ! symmetrize with respect to beta/2
                call halfbeta_symm(Kfunct(ib1,ib2,:),NtauB,+1d0)
                !
-               if(Kfunct(ib1,ib2,0).ne.0d0) stop "K(0) is not zero."
+               if(Kfunct(ib1,ib2,1).ne.0d0) stop "K(0) is not zero."
                if(Kfunct(ib1,ib2,NtauB).ne.0d0) stop "K(beta) is not zero."
                !
             enddo

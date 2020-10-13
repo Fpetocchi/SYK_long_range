@@ -102,7 +102,7 @@ contains
       !
       !
       ! Look for LATTC
-      path=pathINPUT//"LATTC"
+      path=reg(pathINPUT)//"LATTC.DAT"
       call inquireFile(reg(path),filexists)
       !
       unit = free_unit()
@@ -120,7 +120,7 @@ contains
       !
       vol = det(lat)
       rvol = 8*pi**3 / vol
-      write(*,"(A)")"Unit cell volume=",vol
+      write(*,"(A,1F10.6)")"Unit cell volume: ",vol
       !
       Lat_stored=.true.
       !
@@ -162,7 +162,7 @@ contains
       write(*,"(A)") "--- read_xeps ---"
       !
       !
-      path = pathINPUT//"XEPS.DAT"
+      path = reg(pathINPUT)//"XEPS.DAT"
       call inquireFile(reg(path),filexists)
       !
       unit = free_unit()
@@ -176,8 +176,7 @@ contains
       allocate(kptPos_xeps(Nkpt_xeps));kptPos_xeps=0
       allocate(Ene_xeps(Nband_xeps,Nkpt_xeps_irred,Nspin_xeps));Ene_xeps=0d0
       !
-      read(unit) kpt_xeps
-      read(unit) kptPos_xeps
+      read(unit) kpt_xeps,kptPos_xeps
       read(unit) Ene_xeps
       !
       close(unit)
@@ -205,7 +204,8 @@ contains
          endif
       enddo
       !
-      allocate(kptPos(Nkpt));kptPos=0
+      call assert_shape(kptPos,[Nkpt],"read_xeps","kptPos")
+      kptPos=0
       if(UseXepsKorder)then
          kptPos=kptPos_xeps
       else
@@ -228,11 +228,11 @@ contains
       implicit none
       !
       character(len=*),intent(in)           :: pathINPUT
-      complex(8),intent(inout)              :: Hk(:,:,:)
-      real(8),intent(inout)                 :: kpt(:,:)
-      real(8),intent(inout)                 :: Ek(:,:)
-      complex(8),intent(inout)              :: Zk(:,:,:)
-      complex(8),intent(inout)              :: Hloc(:,:)
+      complex(8),allocatable,intent(out)    :: Hk(:,:,:)
+      real(8),allocatable,intent(out)       :: kpt(:,:)
+      real(8),allocatable,intent(out)       :: Ek(:,:)
+      complex(8),allocatable,intent(out)    :: Zk(:,:,:)
+      complex(8),allocatable,intent(out)    :: Hloc(:,:)
       !
       character(len=256)                    :: path
       integer                               :: unit,Nkpt,Norb
@@ -245,21 +245,19 @@ contains
       write(*,"(A)") "--- read_Hk ---"
       !
       !
-      if(size(Hk,dim=1).ne.size(Hk,dim=2)) stop "Hamiltonian not square."
-      if(size(Hk,dim=1).ne.size(Ek,dim=2)) stop "Eigenvalues with wrong dimension."
-      !
       ! Look for Hk.DAT
-      path=pathINPUT//"Hk.DAT"
+      path=reg(pathINPUT)//"Hk.DAT"
       call inquireFile(reg(path),filexists)
       !
       unit = free_unit()
       open(unit,file=reg(path),form="formatted",status="old",position="rewind",action="read")
       read(unit,*) idum1,Nkpt,Norb
       !
-      call assert_shape(Hk,[Norb,Norb,Nkpt],"read_Hk","Hk")
-      call assert_shape(kpt,[3,Nkpt],"read_Hk","kpt")
-      call assert_shape(Ek,[Norb,Nkpt],"read_Hk","Ek")
-      call assert_shape(Zk,[Norb,Norb,Nkpt],"read_Hk","Zk")
+      allocate(Hk(Norb,Norb,Nkpt));Hk=czero
+      allocate(kpt(3,Nkpt));kpt=0d0
+      allocate(Ek(Norb,Nkpt));Ek=0d0
+      allocate(Zk(Norb,Norb,Nkpt));Zk=czero
+      allocate(Hloc(Norb,Norb));Hloc=czero
       !
       Hk=czero
       Zk=czero
@@ -287,7 +285,7 @@ contains
       enddo
       !
       Hk_stored=.true.
-      call read_lattice(pathINPUT)
+      call read_lattice(reg(pathINPUT))
       !
    end subroutine read_Hk
 

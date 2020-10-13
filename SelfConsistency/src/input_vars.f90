@@ -20,37 +20,35 @@ module input_vars
       logical                               :: status=.false.
    end type MpiEnv
    !
-   integer                                  :: Nthread
+   integer                                  :: Nthread=28
 
 
    !---------------------------------------------------------------------------!
    !PURPOSE: Double counting types
    !---------------------------------------------------------------------------!
-   character                                :: VH_type="Ubare"
+   character(len=10)                        :: VH_type="Ubare"
    logical                                  :: HandleGammaPoint
-
-
-   !---------------------------------------------------------------------------!
-   !PURPOSE: K-points
-   !---------------------------------------------------------------------------!
-   integer                                  :: Nkpt3(3)
 
 
    !---------------------------------------------------------------------------!
    !PURPOSE: internal imaginary time mesh
    !---------------------------------------------------------------------------!
-   logical                                  :: tau_uniform
-   integer                                  :: NtauF
-   integer                                  :: NtauB
-   integer                                  :: Nreal
-   real(8)                                  :: wrealMax,eta
-   real(8)                                  :: wmatsMax
+   logical                                  :: tau_uniform=.false.
+   integer                                  :: NtauF=200
+   integer                                  :: NtauB=1000
+   integer                                  :: Nmats
+   integer                                  :: Nreal=2000
+   real(8)                                  :: wrealMax=10
+   real(8)                                  :: eta=0.04
+   real(8)                                  :: wmatsMax=100
+   real(8)                                  :: Beta=15
 
 
    !---------------------------------------------------------------------------!
    !PURPOSE: paths. Directories must end with "/"
    !---------------------------------------------------------------------------!
-   character(len=256)                       :: pathINPUT="GWinput/"
+   character(len=256)                       :: pathINPUT="InputFiles/"
+   integer                                  :: LOGfile=6
 
 
    !---------------------------------------------------------------------------!
@@ -62,9 +60,30 @@ module input_vars
    !---------------------------------------------------------------------------!
    !PURPOSE: logical Flags
    !---------------------------------------------------------------------------!
-   logical                                  :: UseXepsKorder
-   logical                                  :: paramagneticSPEX
-   logical                                  :: UfullStructure
+   logical                                  :: UseXepsKorder=.true.
+   logical                                  :: paramagneticSPEX=.true.
+   logical                                  :: UfullStructure=.true.
+
+
+   !---------------------------------------------------------------------------!
+   !PURPOSE: Site and Orbital space
+   !---------------------------------------------------------------------------!
+   integer                                  :: Nsite=1
+   integer,allocatable                      :: SiteOrbs(:,:)
+   character(len=2),allocatable             :: SiteName(:)
+
+
+   !---------------------------------------------------------------------------!
+   !PURPOSE: K-points
+   !---------------------------------------------------------------------------!
+   integer                                  :: Nkpt3(3)=[8,8,8]
+
+
+   !---------------------------------------------------------------------------!
+   !PURPOSE: The most important variable
+   !---------------------------------------------------------------------------!
+   character(len=10)                        :: CalculationType="GW+EDMFT"
+
 
 
 
