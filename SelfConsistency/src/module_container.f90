@@ -112,10 +112,4 @@ module module_container
    read_Sigma_spex
 
 
-   !(m) Calculation-Dependent utils container. Depends on (a),(b),(c),(d),(e),(f),(g),(h),(i),(j),(k),(l)
-   use utils_main, only:                     &
-   printHeader                              ,&
-   initialize_DataStructure                 ,&
-   initialize_Lattice
-
 end module module_container

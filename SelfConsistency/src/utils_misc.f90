@@ -49,6 +49,12 @@ module utils_misc
    !PURPOSE: Module variables
    !---------------------------------------------------------------------------!
    real(8),parameter,private                :: pi=3.14159265358979323846d0
+   !
+#ifdef _verb
+   logical,private                          :: verbose=.true.
+#else
+   logical,private                          :: verbose=.false.
+#endif
 
    !---------------------------------------------------------------------------!
    !PURPOSE: Rutines available for the user. Description only for interfaces.
@@ -217,7 +223,6 @@ contains
       logical                               :: startpoint_,endpoint_
       !
       if(num<0)stop "linspace: N<0, abort."
-      if(mod(num,2).eq.0)write(*,*) "Warning: even Ntau not vompatible with fitting FT routines."
       !
       startpoint_=.true.;if(present(istart))startpoint_=istart
       endpoint_=.true.;if(present(iend))endpoint_=iend
@@ -342,41 +347,35 @@ contains
    !---------------------------------------------------------------------------!
    !PURPOSE: Returns true if a file/directory exists
    !---------------------------------------------------------------------------!
-   subroutine inquireFile(file,exists,hardstop,verbose)
+   subroutine inquireFile(file,exists,hardstop)
       implicit none
       character(len=*),intent(in)           :: file
       logical,intent(in),optional           :: hardstop
-      logical,intent(in),optional           :: verbose
       logical,intent(out)                   :: exists
-      logical                               :: hardstop_,verbose_
+      logical                               :: hardstop_
       !
       hardstop_=.true.
       if(present(hardstop))hardstop_=hardstop
-      verbose_=.true.
-      if(present(verbose))verbose_=verbose
       inquire(file=reg(file),exist=exists)
       if(.not.exists) then
-         if(verbose_)write(*,"(A)")"Unable to find file: "//reg(file)
+         if(verbose.or.hardstop_)write(*,"(A)")"Unable to find file: "//reg(file)
          if(hardstop_) stop "Stop."
       endif
       !
    end subroutine inquireFile
-   subroutine inquireDir(dir,exists,hardstop,verbose)
+   subroutine inquireDir(dir,exists,hardstop)
       implicit none
       character(len=*),intent(in)           :: dir
       logical,intent(in),optional           :: hardstop
-      logical,intent(in),optional           :: verbose
       logical,intent(out)                   :: exists
-      logical                               :: hardstop_,verbose_
+      logical                               :: hardstop_
       !
       hardstop_=.true.
       if(present(hardstop))hardstop_=hardstop
-      verbose_=.true.
-      if(present(verbose))verbose_=verbose
       inquire(directory=reg(dir),exist=exists)                                  !<===IFORT
       !inquire(file=reg(dir),exist=exists)                                      !<===GFORTRAN
       if(.not.exists) then
-         if(verbose_)write(*,"(A)")"Unable to find directory: "//reg(dir)
+         if(verbose.or.hardstop_)write(*,"(A)")"Unable to find directory: "//reg(dir)
          if(hardstop_) stop "Stop."
       endif
       !
@@ -386,20 +385,16 @@ contains
    !---------------------------------------------------------------------------!
    !PURPOSE: Creat directory in path
    !---------------------------------------------------------------------------!
-   subroutine createDir(dirpath,verbose)
+   subroutine createDir(dirpath)
        implicit none
        character(len=*),intent(in)          :: dirpath
-       logical,intent(in),optional          :: verbose
        character(len=256)                   :: mkdirCmd
        logical                              :: direxists
-       logical                              :: verbose_
        !
-       verbose_=.true.
-       if(present(verbose))verbose_=verbose
-       call inquireDir(reg(dirpath),direxists,hardstop=.false.,verbose=verbose_)
+       call inquireDir(reg(dirpath),direxists,hardstop=.false.)
        if(.not.direxists)then
-          mkdirCmd = "mkdir -p "//trim(dirpath)
-          if(verbose_)write(*,"(A)") "Creating new directory: ""//trim(mkdirCmd)//"""
+          mkdirCmd = "mkdir -p "//reg(dirpath)
+          if(verbose)write(*,"(A)") "Creating new directory: "//reg(dirpath)
           call system(mkdirCmd)
        endif
        !

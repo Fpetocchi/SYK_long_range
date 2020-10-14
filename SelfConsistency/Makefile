@@ -7,8 +7,8 @@
 #RELFFLAGS = -cpp -ffree-line-length-none -O3 -ffast-math -march=native -funroll-all-loops -fno-protect-parens -flto -mcmodel=medium
 #
 FC     = ifort
-FFLAGS = -assume byterecl -qopenmp -liomp5 -mkl=sequential
-DBGFFLAGS = -O0 -check bounds -traceback -fpe0 -check all -fp-model precise -fp-stack-check -p -g -warn -debug extended -warn interface
+FFLAGS = -assume byterecl -qopenmp -liomp5 -mkl=sequential -fpp
+DBGFFLAGS = -O0 -check bounds -traceback -fpe0 -check all -fp-model precise -fp-stack-check -p -g -warn -debug extended -warn interface -C -D_verb
 RELFFLAGS = -xHost -O3 -ftz -mcmodel=large
 
 
@@ -90,11 +90,11 @@ $(DBGDIR)/greens_function.o: $(SRCDIR)/greens_function.f90 $(DBGDIR)/linalg.o $(
 $(DBGDIR)/self_energy.o: $(SRCDIR)/self_energy.f90 $(DBGDIR)/linalg.o $(DBGDIR)/utils_misc.o $(DBGDIR)/crystal.o $(DBGDIR)/parameters.o $(DBGDIR)/input_vars.o $(DBGDIR)/utils_fields.o $(DBGDIR)/file_io.o $(DBGDIR)/fourier_transforms.o $(DBGDIR)/greens_function.o
 	$(FC) -c $(FFLAGS) $(DBGFFLAGS) -o $@ $<
 
-$(DBGDIR)/utils_main.o: $(SRCDIR)/utils_main.f90 $(DBGDIR)/linalg.o $(DBGDIR)/utils_misc.o $(DBGDIR)/crystal.o $(DBGDIR)/parameters.o $(DBGDIR)/input_vars.o $(DBGDIR)/utils_fields.o $(DBGDIR)/file_io.o $(DBGDIR)/interactions.o $(DBGDIR)/fourier_transforms.o $(DBGDIR)/bubbles.o $(DBGDIR)/greens_function.o $(DBGDIR)/self_energy.o
-	$(FC) -c $(FFLAGS) $(DBGFFLAGS) -o $@ $<
-
 # Module contaier and main
 $(DBGDIR)/module_container.o: $(SRCDIR)/module_container.f90
+	$(FC) -c $(FFLAGS) $(DBGFFLAGS) -o $@ $<
+
+$(DBGDIR)/utils_main.o: $(SRCDIR)/utils_main.f90 $(DBGDIR)/parameters.o $(DBGDIR)/module_container.o
 	$(FC) -c $(FFLAGS) $(DBGFFLAGS) -o $@ $<
 
 $(DBGDIR)/main.o: $(SRCDIR)/main.f90
@@ -145,11 +145,11 @@ $(RELDIR)/greens_function.o: $(SRCDIR)/greens_function.f90 $(RELDIR)/linalg.o $(
 $(RELDIR)/self_energy.o: $(SRCDIR)/self_energy.f90 $(RELDIR)/linalg.o $(RELDIR)/utils_misc.o $(RELDIR)/crystal.o $(RELDIR)/parameters.o $(RELDIR)/input_vars.o $(RELDIR)/utils_fields.o $(RELDIR)/file_io.o $(RELDIR)/fourier_transforms.o $(RELDIR)/greens_function.o
 	$(FC) -c $(FFLAGS) $(RELFFLAGS) -o $@ $<
 
-$(RELDIR)/utils_main.o: $(SRCDIR)/utils_main.f90 $(RELDIR)/linalg.o $(RELDIR)/utils_misc.o $(RELDIR)/crystal.o $(RELDIR)/parameters.o $(RELDIR)/input_vars.o $(RELDIR)/utils_fields.o $(RELDIR)/file_io.o $(RELDIR)/interactions.o $(RELDIR)/fourier_transforms.o $(RELDIR)/bubbles.o $(RELDIR)/greens_function.o $(RELDIR)/self_energy.o
-	$(FC) -c $(FFLAGS) $(RELFFLAGS) -o $@ $<
-
 # Module contaier and main
 $(RELDIR)/module_container.o: $(SRCDIR)/module_container.f90
+	$(FC) -c $(FFLAGS) $(RELFFLAGS) -o $@ $<
+
+$(RELDIR)/utils_main.o: $(SRCDIR)/utils_main.f90 $(RELDIR)/parameters.o $(RELDIR)/module_container.o
 	$(FC) -c $(FFLAGS) $(RELFFLAGS) -o $@ $<
 
 $(RELDIR)/main.o: $(SRCDIR)/main.f90

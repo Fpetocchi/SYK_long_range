@@ -1,8 +1,8 @@
 module utils_main
 
-   use parameters
+   use module_container
    implicit none
-   private
+   public
 
    !===========================================================================!
 
@@ -19,12 +19,22 @@ module utils_main
    !end interface name
 
    !---------------------------------------------------------------------------!
-   !PURPOSE: All the possible variables Internally needed
+   !PURPOSE: Module variables
    !---------------------------------------------------------------------------!
+   type(Lattice)                            :: Crystal
+   type(FermionicField)                     :: Glat
+   type(FermionicField)                     :: Gimp
+   type(FermionicField)                     :: SigmaFull
    type(FermionicField)                     :: SigmaG0W0
    type(FermionicField)                     :: SigmaGW_C,SigmaGW_X
    type(FermionicField)                     :: SigmaGW_Cdc,SigmaGW_Xdc
    type(FermionicField)                     :: SigmaDMFT
+   !
+   type(BosonicField)                       :: Wlat
+   type(BosonicField)                       :: Urpa
+   type(BosonicField)                       :: PiGG
+   type(BosonicField)                       :: PiEDMFT
+   type(BosonicField)                       :: curlyU
 
    !---------------------------------------------------------------------------!
    !PURPOSE: Rutines available for the user. Description only for interfaces.
@@ -33,6 +43,7 @@ module utils_main
    public :: printHeader
    public :: initialize_DataStructure
    public :: initialize_Lattice
+   public :: initialize_Interactions
 
    !===========================================================================!
 
@@ -41,10 +52,10 @@ contains
 
    !---------------------------------------------------------------------------!
    !PURPOSE: prints the header
+   !TEST ON: 14-10-2020
    !---------------------------------------------------------------------------!
    subroutine printHeader()
       !
-      use input_vars
       implicit none
       character(len=80)                     :: line
       character(:),allocatable              :: header
@@ -75,11 +86,10 @@ contains
 
    !---------------------------------------------------------------------------!
    !PURPOSE: looks for the current iteration number
+   !TEST ON: 14-10-2020
    !---------------------------------------------------------------------------!
    subroutine initialize_DataStructure(ItStart)
       !
-      use input_vars
-      use utils_misc
       implicit none
       integer,intent(out)                   :: ItStart
       character(len=256)                    :: Itpath
@@ -88,7 +98,7 @@ contains
       !
       do iter=0,1000
          Itpath = "Iteration/"//str(iter)
-         call inquireDir(reg(Itpath),Itexist,hardstop=.false.,verbose=.false.)
+         call inquireDir(reg(Itpath),Itexist,hardstop=.false.)
          if(.not.Itexist)then
             Itfirst = iter
             Exit
@@ -101,7 +111,7 @@ contains
       else
          write(LOGfile,"(A)") "Last iteration: "//str(Itfirst-1)//". Initializing "//reg(Itpath)
       endif
-      call createDir(reg(Itpath),verbose=.false.)
+      call createDir(reg(Itpath))
       !
       ItStart = Itfirst
       !
@@ -110,19 +120,17 @@ contains
 
    !---------------------------------------------------------------------------!
    !PURPOSE: Initialize Lattice. I could have used the AllocateLattice in
-   !         utils_fields but I would have allocate also the useless attributes
+   !         utils_fields but then als useless attributes would have been allocated
+   !TEST ON: 14-10-2020
    !---------------------------------------------------------------------------!
-   subroutine initialize_Lattice(Lttc)
+   subroutine initialize_Lattice(Lttc,ItStart)
       !
-      use input_vars
-      use utils_misc
-      use crystal
-      use greens_function
       implicit none
       type(Lattice),intent(out)             :: Lttc
+      integer,intent(in)                    :: ItStart
       !
       !
-      write(*,"(A)") "--- initialize_Lattice ---"
+      write(LOGfile,"(A)") "--- initialize_Lattice ---"
       !
       !
       select case(CalculationType)
@@ -181,24 +189,22 @@ contains
             !
       end select
       !
-      call calc_Glda(0d0,Beta,Lttc)
+      if(ItStart.eq.0)call calc_Glda(0d0,Beta,Lttc)
       !
    end subroutine initialize_Lattice
 
 
    !---------------------------------------------------------------------------!
-   !PURPOSE: Initialize Lattice
+   !PURPOSE: Initialize the Fields depending on the starting iteration
+   !TEST ON: 14-10-2020
    !---------------------------------------------------------------------------!
-   subroutine initialize_Fermions(Lttc)
+   subroutine initialize_Fields(ItStart)
       !
-      use input_vars
-      use utils_misc
-      use crystal
       implicit none
       type(Lattice),intent(out)             :: Lttc
       !
       !
-      write(*,"(A)") "--- initialize_Fermions ---"
+      write(LOGfile,"(A)") "--- initialize_Fields ---"
       !
       !
       select case(CalculationType)
@@ -208,40 +214,35 @@ contains
             !
          case("G0W0","scGW")
             !
+            call AllocateFermionicField(Glat,Crystal%Norb,Nmats,Crystal%Nkpt,Nsite)
+            !
+         case("DMFT+statU")
+            !
+            call AllocateFermionicField(SigmaDMFT,Crystal%Norb,Nmats,Crystal%Nkpt,Nsite)
 
+
+
+
+            allocate(Uloc(Nspin*Crystal%Norb,Nspin*Crystal%Norb));Uloc=0d0
             !
-         case("DMFT+statU","DMFT+dynU")
+         case("DMFT+dynU")
             !
-            call read_Hk(pathINPUT,Lttc%Hk,Lttc%kpt,Lttc%Ek,Lttc%Zk,Lttc%Hloc)
+            call AllocateBosonicField(Urpa,Crystal%Norb,Nmats,Crystal%Nkpt,Nsite)
             !
-            Lttc%Norb = size(Lttc%Hk,dim=1)
-            Lttc%Nkpt = size(Lttc%Hk,dim=3)
+         case("EDMFT")
             !
-            Lttc%status=.true.
+            call AllocateBosonicField(Urpa,Crystal%Norb,Nmats,Crystal%Nkpt,Nsite)
             !
-         case("EDMFT","GW+EDMFT")
+         case("GW+EDMFT")
             !
-            call read_Hk(pathINPUT,Lttc%Hk,Lttc%kpt,Lttc%Ek,Lttc%Zk,Lttc%Hloc)
-            !
-            Lttc%Norb = size(Lttc%Hk,dim=1)
-            Lttc%Nkpt = size(Lttc%Hk,dim=3)
-            !
-            allocate(Lttc%kptPos(Lttc%Nkpt));Lttc%kptPos=0
-            call read_xeps(pathINPUT,Lttc%kpt,Nkpt3,UseXepsKorder, &
-            Lttc%kptPos,Lttc%Nkpt_irred,Lttc%UseDisentangledBS,paramagneticSPEX)
-            !
-            allocate(Lttc%kptsum(Lttc%Nkpt,Lttc%Nkpt));Lttc%kptsum=0
-            allocate(Lttc%kptdif(Lttc%Nkpt,Lttc%Nkpt));Lttc%kptdif=0
-            call fill_ksumkdiff(Lttc%kpt,Lttc%kptsum,Lttc%kptdif,Nkpt3)
-            !
-            allocate(Lttc%small_ik(12,2));Lttc%small_ik=0
-            call fill_smallk(Lttc%kpt,Lttc%small_ik)
-            !
-            Lttc%status=.true.
+            call AllocateBosonicField(Wlat,Crystal%Norb,Nmats,Crystal%Nkpt,Nsite)
+            call AllocateBosonicField(Urpa,Crystal%Norb,Nmats,Crystal%Nkpt,Nsite)
+            call AllocateBosonicField(PiGG,Crystal%Norb,Nmats,Crystal%Nkpt,Nsite)
             !
       end select
       !
-   end subroutine initialize_Fermions
+   end subroutine initialize_Interactions
+
 
 
 

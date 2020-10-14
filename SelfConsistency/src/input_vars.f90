@@ -26,7 +26,7 @@ module input_vars
    !---------------------------------------------------------------------------!
    !PURPOSE: Double counting types
    !---------------------------------------------------------------------------!
-   character(len=10)                        :: VH_type="Ubare"
+   character(len=256)                       :: VH_type="Ubare"
    logical                                  :: HandleGammaPoint
 
 
@@ -34,7 +34,7 @@ module input_vars
    !PURPOSE: internal imaginary time mesh
    !---------------------------------------------------------------------------!
    logical                                  :: tau_uniform=.false.
-   integer                                  :: NtauF=200
+   integer                                  :: NtauF=201
    integer                                  :: NtauB=1000
    integer                                  :: Nmats
    integer                                  :: Nreal=2000
@@ -82,7 +82,7 @@ module input_vars
    !---------------------------------------------------------------------------!
    !PURPOSE: The most important variable
    !---------------------------------------------------------------------------!
-   character(len=10)                        :: CalculationType="GW+EDMFT"
+   character(len=256)                       :: CalculationType="GW+EDMFT"
 
 
 

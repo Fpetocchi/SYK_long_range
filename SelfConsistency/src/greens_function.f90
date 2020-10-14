@@ -22,11 +22,14 @@ module greens_function
       module procedure set_density_NonInt                                       !(mu,Beta,Lattice,n_target,orbs(optional))
    end interface set_density
 
-
    !---------------------------------------------------------------------------!
    !PURPOSE: Module variables
    !---------------------------------------------------------------------------!
-   !
+#ifdef _verb
+   logical,private                          :: verbose=.true.
+#else
+   logical,private                          :: verbose=.false.
+#endif
 
    !---------------------------------------------------------------------------!
    !PURPOSE: Rutines available for the user. Description only for interfaces.
@@ -61,7 +64,7 @@ contains
       integer                               :: ispin,Norb
       !
       !
-      write(*,"(A)") "--- calc_density_loc ---"
+      if(verbose)write(*,"(A)") "---- calc_density_loc ---"
       !
       !
       ! Check on the input Fields
@@ -104,7 +107,7 @@ contains
       integer                               :: ispin,Norb,Nkpt
       !
       !
-      write(*,"(A)") "--- calc_density_Kdep ---"
+      if(verbose)write(*,"(A)") "---- calc_density_Kdep ---"
       !
       !
       ! Check on the input Fields
@@ -158,7 +161,7 @@ contains
       logical                               :: upper,lower,atBeta_
       !
       !
-      write(*,"(A)") "--- calc_G0_tau ---"
+      if(verbose)write(*,"(A)") "---- calc_G0_tau ---"
       fermicut=log(huge(1.0d0)-1e2)/2.d0
       !
       !
@@ -229,7 +232,7 @@ contains
       integer                               :: iw,ik,iwan,ispin
       !
       !
-      write(*,"(A)") "--- calc_Gmats ---"
+      if(verbose)write(*,"(A)") "---- calc_Gmats ---"
       !
       !
       ! Check on the input Fields
@@ -323,7 +326,7 @@ contains
       integer                               :: iter
       !
       !
-      write(*,"(A)") "--- set_density_Int ---"
+      if(verbose)write(*,"(A)") "---- set_density_Int ---"
       write(*,"(A1,F10.5)") "Target density: ",n_target
       !
       !
@@ -445,7 +448,7 @@ contains
       integer                               :: iter
       !
       !
-      write(*,"(A)") "--- set_density_NonInt ---"
+      if(verbose)write(*,"(A)") "---- set_density_NonInt ---"
       write(*,"(A1,F10.5)") "Target density: ",n_target
       !
       !
@@ -547,7 +550,8 @@ contains
 
 
    !---------------------------------------------------------------------------!
-   !PURPOSE: Prints lda Gf on different axis. mu=0
+   !PURPOSE: Prints lda Gf on different axis.
+   !TEST ON: 14-10-2020
    !---------------------------------------------------------------------------!
    subroutine calc_Glda(mu,Beta,Lttc,pathOUTPUT)
       !
@@ -576,7 +580,7 @@ contains
       integer                               :: Norb,Nkpt,Nmats
       !
       !
-      write(*,"(A)") "--- calc_Glda ---"
+      if(verbose)write(*,"(A)") "---- calc_Glda ---"
       pathOUTPUT_ = reg(pathINPUT)//"LDA/"
       if(present(pathOUTPUT)) pathOUTPUT_ = reg(pathOUTPUT)//"LDA/"
       !
@@ -587,57 +591,6 @@ contains
       !
       Norb = Lttc%Norb
       Nkpt = Lttc%Nkpt
-      !
-      !
-      write(*,*)"here1"
-      !print G(w) in diagonal and Wannier basis
-      allocate(axis(Nreal));axis=0d0
-      axis = linspace(-wrealMax,+wrealMax,Nreal)
-      allocate(zeta(Norb,Norb,Nmats));zeta=czero
-      do iwan1=1,Norb
-         do iw=1,Nreal
-            zeta(iwan1,iwan1,iw) = dcmplx(  axis(iw) + mu , eta )
-         enddo
-      enddo
-      write(*,*)"here2"
-      !
-      allocate(Gprint_Ek(Norb,Nreal));Gprint_Ek=czero
-      allocate(Gprint_Hk(Norb,Norb,Nreal));Gprint_Hk=czero
-      write(*,*)"here3"
-      !
-      allocate(invGf(Norb,Norb));invGf=czero
-    !  !$OMP PARALLEL DEFAULT(NONE),&
-    !  !$OMP SHARED(Norb,Nreal,Nkpt,mu,zeta,eta,axis,Lttc,Gprint_Ek,Gprint_Hk),&
-    !  !$OMP PRIVATE(iwan1,ik,iw,invGf)
-    !  !$OMP DO
-      do ik=1,Nkpt
-         do iw=1,Nreal
-            !
-            do iwan1=1,Norb
-               Gprint_Ek(iwan1,iw) = Gprint_Ek(iwan1,iw) + 1d0/( dcmplx(  axis(iw) + mu , eta ) - Lttc%Ek(iwan1,ik) )/Nkpt
-            enddo
-            !
-            invGf = zeta(:,:,iw) - Lttc%Hk(:,:,ik)
-            !
-            !call inv(invGf)
-            Gprint_Hk(:,:,iw) = Gprint_Hk(:,:,iw) + invGf/Nkpt
-            !
-         enddo
-      enddo
-    !  !$OMP END DO
-    !  !$OMP END PARALLEL
-      write(*,*)"here4",size(axis),size(Gprint_Ek(1,:))
-      deallocate(zeta,invGf)
-      !
-      ! Print
-      do iwan1=1,Norb
-         call dump_FermionicField(Gprint_Ek(iwan1,:),reg(pathOUTPUT_),reg("Greal_Ek_"//str(iwan1)//".lda"),axis)
-         do iwan2=1,Norb
-            call dump_FermionicField(Gprint_Hk(iwan1,iwan2,:),reg(pathOUTPUT_),reg("Greal_Hk_"//str(iwan1)//str(iwan2)//".lda"),axis)
-         enddo
-      enddo
-      deallocate(axis,Gprint_Hk,Gprint_Ek)
-      write(*,*)"here5"
       !
       !
       !print G(iw) in diagonal and Wannier basis
@@ -679,9 +632,55 @@ contains
       !
       ! Print
       do iwan1=1,Norb
-         call dump_FermionicField(Gprint_Ek(iwan1,:),reg(pathOUTPUT_),reg("Gmats_Ek_"//str(iwan1)//".lda"),axis)
+         call dump_FermionicField(Gprint_Ek(iwan1,:),reg(pathOUTPUT_),"Gmats_Ek_"//str(iwan1)//".lda",axis)
          do iwan2=1,Norb
-            call dump_FermionicField(Gprint_Hk(iwan1,iwan2,:),reg(pathOUTPUT_),reg("Gmats_Hk_"//str(iwan1)//str(iwan2)//".lda"),axis)
+            call dump_FermionicField(Gprint_Hk(iwan1,iwan2,:),reg(pathOUTPUT_),"Gmats_Hk_"//str(iwan1)//str(iwan2)//".lda",axis)
+         enddo
+      enddo
+      deallocate(axis,Gprint_Hk,Gprint_Ek)
+      !
+      !
+      !print G(w) in diagonal and Wannier basis
+      allocate(axis(Nreal));axis=0d0
+      axis = linspace(-wrealMax,+wrealMax,Nreal)
+      allocate(zeta(Norb,Norb,Nreal));zeta=czero
+      do iwan1=1,Norb
+         do iw=1,Nreal
+            zeta(iwan1,iwan1,iw) = dcmplx(  axis(iw) + mu , eta )
+         enddo
+      enddo
+      !
+      allocate(Gprint_Ek(Norb,Nreal));Gprint_Ek=czero
+      allocate(Gprint_Hk(Norb,Norb,Nreal));Gprint_Hk=czero
+      !
+      allocate(invGf(Norb,Norb));invGf=czero
+      !$OMP PARALLEL DEFAULT(NONE),&
+      !$OMP SHARED(Norb,Nreal,Nkpt,mu,zeta,eta,axis,Lttc,Gprint_Ek,Gprint_Hk),&
+      !$OMP PRIVATE(iwan1,ik,iw,invGf)
+      !$OMP DO
+      do ik=1,Nkpt
+         do iw=1,Nreal
+            !
+            do iwan1=1,Norb
+               Gprint_Ek(iwan1,iw) = Gprint_Ek(iwan1,iw) + 1d0/( dcmplx(  axis(iw) + mu , eta ) - Lttc%Ek(iwan1,ik) )/Nkpt
+            enddo
+            !
+            invGf = zeta(:,:,iw) - Lttc%Hk(:,:,ik)
+            !
+            call inv(invGf)
+            Gprint_Hk(:,:,iw) = Gprint_Hk(:,:,iw) + invGf/Nkpt
+            !
+         enddo
+      enddo
+      !$OMP END DO
+      !$OMP END PARALLEL
+      deallocate(zeta,invGf)
+      !
+      ! Print
+      do iwan1=1,Norb
+         call dump_FermionicField(Gprint_Ek(iwan1,:),reg(pathOUTPUT_),"Greal_Ek_"//str(iwan1)//".lda",axis)
+         do iwan2=1,Norb
+            call dump_FermionicField(Gprint_Hk(iwan1,iwan2,:),reg(pathOUTPUT_),"Greal_Hk_"//str(iwan1)//str(iwan2)//".lda",axis)
          enddo
       enddo
       deallocate(axis,Gprint_Hk,Gprint_Ek)
@@ -712,9 +711,9 @@ contains
                Gprint_Ek(iwan1,itau) = Gprint_Ek(iwan1,itau) + Gitau(iwan1,itau,ik)/Nkpt
             enddo
             !
-            Gftmp = diag( Gitau(:,itau,ik) )
+            Gftmp = diag( Gitau(:,itau,ik) )/Nkpt
             !
-            Gprint_Hk(:,:,itau) = Gprint_Hk(:,:,itau) + Gftmp/Nkpt
+            Gprint_Hk(:,:,itau) = Gprint_Hk(:,:,itau) + rotate(Gftmp,conjg(transpose(Lttc%Zk(:,:,ik))))
             !
          enddo
       enddo
@@ -724,9 +723,9 @@ contains
       !
       ! Print
       do iwan1=1,Norb
-         call dump_FermionicField(Gprint_Ek(iwan1,:),reg(pathOUTPUT_),reg("Gitau_Ek_"//str(iwan1)//".lda"),axis)
+         call dump_FermionicField(Gprint_Ek(iwan1,:),reg(pathOUTPUT_),"Gitau_Ek_"//str(iwan1)//".lda",axis)
          do iwan2=1,Norb
-            call dump_FermionicField(Gprint_Hk(iwan1,iwan2,:),reg(pathOUTPUT_),reg("Gitau_Hk_"//str(iwan1)//str(iwan2)//".lda"),axis)
+            call dump_FermionicField(Gprint_Hk(iwan1,iwan2,:),reg(pathOUTPUT_),"Gitau_Hk_"//str(iwan1)//str(iwan2)//".lda",axis)
          enddo
       enddo
       deallocate(axis,Gprint_Hk,Gprint_Ek)

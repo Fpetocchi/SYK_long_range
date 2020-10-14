@@ -18,21 +18,30 @@ module utils_fields
    end interface clear_attributes
 
    interface loc2imp
-      module procedure Gloc2Gimp
-      module procedure Oloc2Oimp
-      module procedure Wloc2Wimp
+      module procedure loc2imp_Fermionic
+      module procedure loc2imp_Matrix
+      module procedure loc2imp_Bosonic
    end interface loc2imp
 
    interface imp2loc
-      module procedure Gimp2Gloc
-      module procedure Oimp2Oloc
-      module procedure Wimp2Wloc
+      module procedure imp2loc_Fermionic
+      module procedure imp2loc_Matrix
+      module procedure imp2loc_Bosonic
    end interface imp2loc
 
    interface MergeFields
       module procedure MergeSelfEnergy
       module procedure MergePolarization
    end interface MergeFields
+
+   !---------------------------------------------------------------------------!
+   !PURPOSE: Module variables
+   !---------------------------------------------------------------------------!
+#ifdef _verb
+   logical,private                          :: verbose=.true.
+#else
+   logical,private                          :: verbose=.false.
+#endif
 
    !---------------------------------------------------------------------------!
    !PURPOSE: Rutines available for the user. Description only for interfaces.
@@ -338,37 +347,40 @@ contains
    !PURPOSE: Extract from a lattice local projection the subset of orbital
    !         indexes of corresponging to a given site
    !---------------------------------------------------------------------------!
-   subroutine Gloc2Gimp(Gimp,Gloc,orbs,sitename,U)
+   subroutine loc2imp_Fermionic(Gimp,Gloc,orbs,sitename,U)
+      !
       use parameters
       use linalg, only : rotate
       implicit none
+      !
       type(FermionicField),intent(inout)    :: Gimp
       type(FermionicField),intent(in)       :: Gloc
       integer,allocatable,intent(in)        :: orbs(:)
       character(len=*),intent(in),optional  :: sitename
       complex(8),allocatable,optional       :: U(:,:)
+      !
       integer                               :: ip,ispin
       integer                               :: i_loc,j_loc
       integer                               :: i_imp,j_imp
       !
       !
-      write(*,"(A)") "--- Gloc2Gimp ---"
+      write(*,"(A)") "--- loc2imp(F) ---"
       !
       !
       if(present(sitename)) write(*,"(A)") "Extraction of Gloc for site: "//trim(sitename)
-      if(.not.Gloc%status) stop "Gloc2Gimp: Gloc not properly initialized."
-      if(.not.Gimp%status) stop "Gloc2Gimp: Gimp not properly initialized."
-      if(Gloc%Norb.eq.0) stop "Gloc2Gimp: Norb of Gloc not defined."
-      if(Gimp%Norb.eq.0) stop "Gloc2Gimp: Norb of Gimp not defined."
-      if(Gloc%Npoints.eq.0) stop "Gloc2Gimp: Npoints of Gloc not defined."
-      if(Gimp%Npoints.eq.0) stop "Gloc2Gimp: Npoints of Gimp not defined."
+      if(.not.Gloc%status) stop "loc2imp(F): Gloc not properly initialized."
+      if(.not.Gimp%status) stop "loc2imp(F): Gimp not properly initialized."
+      if(Gloc%Norb.eq.0) stop "loc2imp(F): Norb of Gloc not defined."
+      if(Gimp%Norb.eq.0) stop "loc2imp(F): Norb of Gimp not defined."
+      if(Gloc%Npoints.eq.0) stop "loc2imp(F): Npoints of Gloc not defined."
+      if(Gimp%Npoints.eq.0) stop "loc2imp(F): Npoints of Gimp not defined."
       if(Gimp%Beta.ne.Gloc%Beta) stop "Gimp2Gimp: Gimp and Gloc have different beta."
       if(Gimp%Npoints.ne.Gloc%Npoints) stop "Gimp2Gimp: Gimp and Gloc have different number of Matsubara points."
-      if(Gimp%Nkpt.ne.0) stop "Gloc2Gimp: Gimp k-dependent attributes attributes are supposed to be unallocated."
-      if(.not.allocated(Gloc%ws)) stop "Gloc2Gimp: Gloc local projection not allocated."
-      if(.not.allocated(Gimp%ws)) stop "Gloc2Gimp: Gimp local projection not allocated."
-      if(size(orbs).ne.Gimp%Norb) stop "Gloc2Gimp: can't fit the requested orbitals inside Gimp."
-      if(size(orbs).gt.Gloc%Norb) stop "Gloc2Gimp: number of requested orbitals greater than Gloc size."
+      if(Gimp%Nkpt.ne.0) stop "loc2imp(F): Gimp k-dependent attributes attributes are supposed to be unallocated."
+      if(.not.allocated(Gloc%ws)) stop "loc2imp(F): Gloc local projection not allocated."
+      if(.not.allocated(Gimp%ws)) stop "loc2imp(F): Gimp local projection not allocated."
+      if(size(orbs).ne.Gimp%Norb) stop "loc2imp(F): can't fit the requested orbitals inside Gimp."
+      if(size(orbs).gt.Gloc%Norb) stop "loc2imp(F): number of requested orbitals greater than Gloc size."
       if(present(U))then
          write(*,"(A)") "The local orbital space will be rotated during extraction."
          if(size(U,dim=1).ne.size(U,dim=2)) stop "Rotation matrix not square."
@@ -399,29 +411,32 @@ contains
          enddo
       endif
       !
-   end subroutine Gloc2Gimp
+   end subroutine loc2imp_Fermionic
    !
-   subroutine Oloc2Oimp(Oimp,Oloc,orbs,sitename,U)
+   subroutine loc2imp_Matrix(Oimp,Oloc,orbs,sitename,U)
+      !
       use parameters
       use linalg, only : rotate
       implicit none
+      !
       complex(8),allocatable,intent(inout)  :: Oimp(:,:)
       complex(8),allocatable,intent(in)     :: Oloc(:,:)
       integer,allocatable,intent(in)        :: orbs(:)
       character(len=*),intent(in),optional  :: sitename
       complex(8),allocatable,optional       :: U(:,:)
+      !
       integer                               :: i_loc,j_loc
       integer                               :: i_imp,j_imp
       !
       !
-      write(*,"(A)") "--- Oloc2Oimp ---"
+      write(*,"(A)") "--- loc2imp(O) ---"
       !
       !
       if(present(sitename)) write(*,"(A)") "Extraction of Operator for site: "//trim(sitename)
-      if(size(Oloc,dim=1).ne.size(Oloc,dim=2)) stop "Oloc2Oimp: Oloc not square."
-      if(size(Oimp,dim=1).ne.size(Oimp,dim=2)) stop "Oloc2Oimp: Oimp not square."
-      if(size(orbs).ne.size(Oimp,dim=1)) stop "Oloc2Oimp: can't fit the requested orbitals inside Oimp."
-      if(size(orbs).gt.size(Oloc,dim=1)) stop "Oloc2Oimp: number of requested orbitals greater than Oloc size."
+      if(size(Oloc,dim=1).ne.size(Oloc,dim=2)) stop "loc2imp(O): Oloc not square."
+      if(size(Oimp,dim=1).ne.size(Oimp,dim=2)) stop "loc2imp(O): Oimp not square."
+      if(size(orbs).ne.size(Oimp,dim=1)) stop "loc2imp(O): can't fit the requested orbitals inside Oimp."
+      if(size(orbs).gt.size(Oloc,dim=1)) stop "loc2imp(O): number of requested orbitals greater than Oloc size."
       if(present(U))then
          write(*,"(A)") "The local orbital space will be rotated during extraction."
          if(size(U,dim=1).ne.size(U,dim=2)) stop "Rotation matrix not square."
@@ -442,15 +457,18 @@ contains
       !
       if(present(U)) Oimp = rotate(Oimp,U)
       !
-   end subroutine Oloc2Oimp
+   end subroutine loc2imp_Matrix
    !
-   subroutine Wloc2Wimp(Wimp,Wloc,orbs,sitename)
+   subroutine loc2imp_Bosonic(Wimp,Wloc,orbs,sitename)
+      !
       use parameters
       implicit none
+      !
       type(BosonicField),intent(inout)      :: Wimp
       type(BosonicField),intent(in)         :: Wloc
       integer,allocatable,intent(in)        :: orbs(:)
       character(len=*),intent(in),optional  :: sitename
+      !
       integer                               :: ip
       integer                               :: Norb_imp,Norb_loc
       integer                               :: ib_imp,jb_imp,ib_loc,jb_loc
@@ -458,29 +476,29 @@ contains
       integer                               :: i_imp,j_imp,k_imp,l_imp
       !
       !
-      write(*,"(A)") "--- Wloc2Wimp ---"
+      write(*,"(A)") "--- loc2imp(B) ---"
       !
       !
       if(present(sitename)) write(*,"(A)") "Extraction of Wloc for site: "//trim(sitename)
-      if(.not.Wloc%status) stop "Wloc2Wimp: Wloc not properly initialized."
-      if(.not.Wimp%status) stop "Wloc2Wimp: Wimp not properly initialized."
-      if(Wloc%Nbp.eq.0) stop "Wloc2Wimp: Norb of Wloc not defined."
-      if(Wimp%Nbp.eq.0) stop "Wloc2Wimp: Norb of Wimp not defined."
-      if(Wloc%Npoints.eq.0) stop "Wloc2Wimp: Npoints of Wloc not defined."
-      if(Wimp%Npoints.eq.0) stop "Wloc2Wimp: Npoints of Wimp not defined."
+      if(.not.Wloc%status) stop "loc2imp(B): Wloc not properly initialized."
+      if(.not.Wimp%status) stop "loc2imp(B): Wimp not properly initialized."
+      if(Wloc%Nbp.eq.0) stop "loc2imp(B): Norb of Wloc not defined."
+      if(Wimp%Nbp.eq.0) stop "loc2imp(B): Norb of Wimp not defined."
+      if(Wloc%Npoints.eq.0) stop "loc2imp(B): Npoints of Wloc not defined."
+      if(Wimp%Npoints.eq.0) stop "loc2imp(B): Npoints of Wimp not defined."
       if(Wimp%Beta.ne.Wloc%Beta) stop "Wimp2Wimp: Wimp and Wloc have different beta."
       if(Wimp%Npoints.ne.Wloc%Npoints) stop "Wimp2Wimp: Wimp and Wloc have different number of Matsubara points."
-      if(Wimp%Nkpt.ne.0) stop "Wloc2Wimp: Wimp k-dependent attributes attributes are supposed to be unallocated."
-      if(.not.allocated(Wloc%screened_local)) stop "Wloc2Wimp: Wloc screened_local attribute not allocated."
-      if(.not.allocated(Wloc%bare_local)) stop "Wloc2Wimp: Wloc bare_local attribute not allocated."
-      if(.not.allocated(Wimp%screened_local)) stop "Wloc2Wimp: Wimp screened_local attribute not allocated."
-      if(.not.allocated(Wimp%bare_local)) stop "Wloc2Wimp: Wimp bare_local attribute not allocated."
+      if(Wimp%Nkpt.ne.0) stop "loc2imp(B): Wimp k-dependent attributes attributes are supposed to be unallocated."
+      if(.not.allocated(Wloc%screened_local)) stop "loc2imp(B): Wloc screened_local attribute not allocated."
+      if(.not.allocated(Wloc%bare_local)) stop "loc2imp(B): Wloc bare_local attribute not allocated."
+      if(.not.allocated(Wimp%screened_local)) stop "loc2imp(B): Wimp screened_local attribute not allocated."
+      if(.not.allocated(Wimp%bare_local)) stop "loc2imp(B): Wimp bare_local attribute not allocated."
       !
       Norb_imp = int(sqrt(dble(Wimp%Nbp)))
       Norb_loc = int(sqrt(dble(Wloc%Nbp)))
       !
-      if(size(orbs).ne.Norb_imp) stop "Wloc2Wimp: can't fit the requested orbitals inside Wimp."
-      if(size(orbs).gt.Norb_loc) stop "Wloc2Wimp: number of requested orbitals greater than Wloc size."
+      if(size(orbs).ne.Norb_imp) stop "loc2imp(B): can't fit the requested orbitals inside Wimp."
+      if(size(orbs).gt.Norb_loc) stop "loc2imp(B): number of requested orbitals greater than Wloc size."
       !
       do i_imp=1,Norb_imp
          do j_imp=1,Norb_imp
@@ -511,14 +529,14 @@ contains
          enddo
       enddo
       !
-   end subroutine Wloc2Wimp
+   end subroutine loc2imp_Bosonic
 
 
    !---------------------------------------------------------------------------!
    !PURPOSE: Expand the the subset of orbital indexes of corresponging to a
    !         given site to the full lattice quantity
    !---------------------------------------------------------------------------!
-   subroutine Gimp2Gloc(Gloc,Gimp,orbs,sitename,U,expand)
+   subroutine imp2loc_Fermionic(Gloc,Gimp,orbs,sitename,U,expand,AFM)
       use parameters
       use linalg, only : rotate
       implicit none
@@ -528,43 +546,64 @@ contains
       character(len=*),intent(in),optional  :: sitename
       complex(8),allocatable,optional       :: U(:,:,:)
       logical,intent(in),optional           :: expand
+      logical,intent(in),optional           :: AFM
+      !
       complex(8),allocatable                :: Gtmp(:,:,:,:,:)
-      integer                               :: ip,ispin,isite,Nsite,shift
+      integer                               :: ip,ispin,ispin_DMFT,isite,Nsite,shift
       integer                               :: i_loc,j_loc
       integer                               :: i_imp,j_imp
-      logical                               :: expand_
+      logical                               :: expand_,AFM_
       !
       !
-      write(*,"(A)") "--- Gimp2Gloc ---"
+      if(verbose)write(*,"(A)") "--- imp2loc(F) ---"
       !
       !
       if(present(sitename)) write(*,"(A)") "Insertion of Gimp of site: "//trim(sitename)
-      if(.not.Gloc%status) stop "Gimp2Gloc: Gloc not properly initialized."
-      if(.not.Gimp%status) stop "Gimp2Gloc: Gimp not properly initialized."
-      if(Gloc%Norb.eq.0) stop "Gimp2Gloc: Norb of Gloc not defined."
-      if(Gimp%Norb.eq.0) stop "Gimp2Gloc: Norb of Gimp not defined."
-      if(Gloc%Npoints.eq.0) stop "Gimp2Gloc: Npoints of Gloc not defined."
-      if(Gimp%Npoints.eq.0) stop "Gimp2Gloc: Npoints of Gimp not defined."
-      if(Gloc%Beta.ne.Gimp%Beta) stop "Gloc2Gimp: Gimp and Gloc have different beta."
-      if(Gloc%Npoints.ne.Gimp%Npoints) stop "Gloc2Gimp: Gimp and Gloc have different number of Matsubara points."
-      if(Gimp%Nkpt.ne.0) stop "Gimp2Gloc: Gimp k-dependent attributes attributes are supposed to be unallocated."
-      if(.not.allocated(Gloc%ws)) stop "Gimp2Gloc: Gloc local projection not allocated."
-      if(.not.allocated(Gimp%ws)) stop "Gimp2Gloc: Gimp local projection not allocated."
-      if(size(orbs).ne.Gimp%Norb) stop "Gimp2Gloc: can't fit the requested orbitals from Gimp."
-      if(size(orbs).gt.Gloc%Norb) stop "Gimp2Gloc: number of requested orbitals greater than Gloc size."
+      if(.not.Gloc%status) stop "imp2loc(F): Gloc not properly initialized."
+      if(.not.Gimp%status) stop "imp2loc(F): Gimp not properly initialized."
+      if(Gloc%Norb.eq.0) stop "imp2loc(F): Norb of Gloc not defined."
+      if(Gimp%Norb.eq.0) stop "imp2loc(F): Norb of Gimp not defined."
+      if(Gloc%Npoints.eq.0) stop "imp2loc(F): Npoints of Gloc not defined."
+      if(Gimp%Npoints.eq.0) stop "imp2loc(F): Npoints of Gimp not defined."
+      if(Gloc%Beta.ne.Gimp%Beta) stop "imp2loc(F): Gimp and Gloc have different beta."
+      if(Gloc%Npoints.ne.Gimp%Npoints) stop "imp2loc(F): Gimp and Gloc have different number of Matsubara points."
+      if(Gimp%Nkpt.ne.0) stop "imp2loc(F): Gimp k-dependent attributes attributes are supposed to be unallocated."
+      if(.not.allocated(Gloc%ws)) stop "imp2loc(F): Gloc local projection not allocated."
+      if(.not.allocated(Gimp%ws)) stop "imp2loc(F): Gimp local projection not allocated."
+      if(size(orbs).ne.Gimp%Norb) stop "imp2loc(F): can't fit the requested orbitals from Gimp."
+      if(size(orbs).gt.Gloc%Norb) stop "imp2loc(F): number of requested orbitals greater than Gloc size."
+      !
+      Norb_loc = Gloc%Norb
+      Norb_imp = Gimp%Norb
+      expand_=.false.
+      if(present(expand))expand_=expand
+      AFM_=.false.
+      if(present(AFM))AFM_=AFM
+      Nsite=1
+      !
       if(present(U))then
          write(*,"(A)") "The local orbital space will be rotated during extraction."
          if(size(U,dim=1).ne.size(U,dim=2)) stop "Rotation matrix not square."
          if(size(U,dim=1).ne.size(orbs)) stop "Rotation matrix has the wrong dimension."
+         if(size(U,dim=3).ne.Gloc%Nsite) stop "Number of rotation matrices and number of sites does not match."
          if(size(U,dim=1).ne.3) write(*,"(A)") "Warning: The local orbital space rotation is well defined only for a t2g sub-shell."
       endif
-      expand_=.false.
-      Nsite=1
-      if(present(expand))then
-         expand_ = expand
+      !
+      if(AFM)then
+         if(Gloc%Nsite.ne.2) stop "AFM is implemented only for a two site lattice."
+         if(Norb/Gimp%Norb.ne.2) stop "Lattice indexes are not twice the impurity ones."
+         if(expand) stop "AFM condition and expansion to real space not yet implemented."
+         Nsite = 2
+      endif
+      !
+      if(expand)then
+         if(mod(Norb_loc,size(orbs)).ne.0)stop "Number of requested orbitals is not a commensurate subset of the lattice field."
+         if(AFM) stop "Expansion to real space and AFM condition not yet implemented."
+         write(*,"(A)") "The impurity field will be expanded to match the lattice orbital space."
          Nsite = Gloc%Nsite
-         if(present(U).and.(size(U,dim=3).ne.Nsite))stop "Number of rotation matrices and number of sites does not match."
-         if(mod(Gloc%Norb,size(orbs)).ne.0)stop "Number of requested orbitals is not a commensurate subset of Gloc."
+      else
+         write(*,"(A,15I3)") "Impurity field will be inserted into the lattice orbital indexes: ",orbs
+         Nsite = 1
       endif
       !
       allocate(Gtmp(Gimp%Norb,Gimp%Norb,Gimp%Npoints,Nspin,Nsite));Gtmp=czero
@@ -600,6 +639,10 @@ contains
                j_loc = orbs(j_imp) + shift
                !
                do ispin=1,Nspin
+                  !
+                  ispin_DMFT=ispin
+                  if(isite.eq.2) ispin_DMFT=int(Nspin/ispin)
+                  !
                   do ip=1,Gimp%Npoints
                      Gloc%ws(i_loc,j_loc,ip,ispin) = Gtmp(i_imp,j_imp,ip,ispin,isite)
                   enddo
@@ -611,9 +654,9 @@ contains
       enddo
       deallocate(Gtmp)
       !
-   end subroutine Gimp2Gloc
+   end subroutine imp2loc_Fermionic
    !
-   subroutine Oimp2Oloc(Oloc,Oimp,orbs,sitename,U,expand)
+   subroutine imp2loc_Matrix(Oloc,Oimp,orbs,sitename,U,expand)
       use parameters
       use linalg, only : rotate
       implicit none
@@ -630,14 +673,14 @@ contains
       logical                               :: expand_
       !
       !
-      write(*,"(A)") "--- Oimp2Oloc ---"
+      write(*,"(A)") "--- imp2loc(O) ---"
       !
       !
       if(present(sitename)) write(*,"(A)") "Insertion of Operator for site: "//trim(sitename)
-      if(size(Oloc,dim=1).ne.size(Oloc,dim=2)) stop "Oimp2Oloc: Oloc not square."
-      if(size(Oimp,dim=1).ne.size(Oimp,dim=2)) stop "Oimp2Oloc: Oimp not square."
-      if(size(orbs).ne.size(Oimp,dim=1)) stop "Oimp2Oloc: can't fit the requested orbitals from Gimp."
-      if(size(orbs).gt.size(Oloc,dim=1)) stop "Oimp2Oloc: number of requested orbitals greater than Gloc size."
+      if(size(Oloc,dim=1).ne.size(Oloc,dim=2)) stop "imp2loc(O): Oloc not square."
+      if(size(Oimp,dim=1).ne.size(Oimp,dim=2)) stop "imp2loc(O): Oimp not square."
+      if(size(orbs).ne.size(Oimp,dim=1)) stop "imp2loc(O): can't fit the requested orbitals from Gimp."
+      if(size(orbs).gt.size(Oloc,dim=1)) stop "imp2loc(O): number of requested orbitals greater than Gloc size."
       if(present(U))then
          write(*,"(A)") "The local orbital space will be rotated during extraction."
          if(size(U,dim=1).ne.size(U,dim=2)) stop "Rotation matrix not square."
@@ -689,9 +732,9 @@ contains
       enddo
       deallocate(Otmp)
       !
-   end subroutine Oimp2Oloc
+   end subroutine imp2loc_Matrix
    !
-   subroutine Wimp2Wloc(Wloc,Wimp,orbs,sitename,expand)
+   subroutine imp2loc_Bosonic(Wloc,Wimp,orbs,sitename,expand)
       use parameters
       implicit none
       type(BosonicField),intent(inout)      :: Wloc
@@ -707,29 +750,29 @@ contains
       logical                               :: expand_
       !
       !
-      write(*,"(A)") "--- Wimp2Wloc ---"
+      write(*,"(A)") "--- imp2loc(B) ---"
       !
       !
       if(present(sitename)) write(*,"(A)") "Insertion of Wimp of site: "//trim(sitename)
-      if(.not.Wloc%status) stop "Wloc2Wimp: Wloc not properly initialized."
-      if(.not.Wimp%status) stop "Wloc2Wimp: Wimp not properly initialized."
-      if(Wloc%Nbp.eq.0) stop "Wloc2Wimp: Norb of Wloc not defined."
-      if(Wimp%Nbp.eq.0) stop "Wloc2Wimp: Norb of Wimp not defined."
-      if(Wloc%Npoints.eq.0) stop "Wloc2Wimp: Npoints of Wloc not defined."
-      if(Wimp%Npoints.eq.0) stop "Wloc2Wimp: Npoints of Wimp not defined."
-      if(Wloc%Beta.ne.Wimp%Beta) stop "Wloc2Wimp: Wimp and Wloc have different beta."
-      if(Wloc%Npoints.ne.Wimp%Npoints) stop "Wloc2Wimp: Wimp and Wloc have different number of Matsubara points."
-      if(Wimp%Nkpt.ne.0) stop "Wloc2Wimp: Wimp k-dependent attributes attributes are supposed to be unallocated."
-      if(.not.allocated(Wloc%screened_local)) stop "Wloc2Wimp: Wloc screened_local attribute not allocated."
-      if(.not.allocated(Wloc%bare_local)) stop "Wloc2Wimp: Wloc bare_local attribute not allocated."
-      if(.not.allocated(Wimp%screened_local)) stop "Wloc2Wimp: Wimp screened_local attribute not allocated."
-      if(.not.allocated(Wimp%bare_local)) stop "Wloc2Wimp: Wimp bare_local attribute not allocated."
+      if(.not.Wloc%status) stop "imp2loc(B): Wloc not properly initialized."
+      if(.not.Wimp%status) stop "imp2loc(B): Wimp not properly initialized."
+      if(Wloc%Nbp.eq.0) stop "imp2loc(B): Norb of Wloc not defined."
+      if(Wimp%Nbp.eq.0) stop "imp2loc(B): Norb of Wimp not defined."
+      if(Wloc%Npoints.eq.0) stop "imp2loc(B): Npoints of Wloc not defined."
+      if(Wimp%Npoints.eq.0) stop "imp2loc(B): Npoints of Wimp not defined."
+      if(Wloc%Beta.ne.Wimp%Beta) stop "imp2loc(B): Wimp and Wloc have different beta."
+      if(Wloc%Npoints.ne.Wimp%Npoints) stop "imp2loc(B): Wimp and Wloc have different number of Matsubara points."
+      if(Wimp%Nkpt.ne.0) stop "imp2loc(B): Wimp k-dependent attributes attributes are supposed to be unallocated."
+      if(.not.allocated(Wloc%screened_local)) stop "imp2loc(B): Wloc screened_local attribute not allocated."
+      if(.not.allocated(Wloc%bare_local)) stop "imp2loc(B): Wloc bare_local attribute not allocated."
+      if(.not.allocated(Wimp%screened_local)) stop "imp2loc(B): Wimp screened_local attribute not allocated."
+      if(.not.allocated(Wimp%bare_local)) stop "imp2loc(B): Wimp bare_local attribute not allocated."
       !
       Norb_imp = int(sqrt(dble(Wimp%Nbp)))
       Norb_loc = int(sqrt(dble(Wloc%Nbp)))
       !
-      if(size(orbs).ne.Norb_imp) stop "Wloc2Wimp: can't fit the requested orbitals from Wimp."
-      if(size(orbs).gt.Norb_loc) stop "Wloc2Wimp: number of requested orbitals greater than Wloc size."
+      if(size(orbs).ne.Norb_imp) stop "imp2loc(B): can't fit the requested orbitals from Wimp."
+      if(size(orbs).gt.Norb_loc) stop "imp2loc(B): number of requested orbitals greater than Wloc size."
       expand_=.false.
       Nsite=1
       if(present(expand))then
@@ -778,13 +821,13 @@ contains
          !
       enddo
       !
-   end subroutine Wimp2Wloc
+   end subroutine imp2loc_Bosonic
 
 
    !---------------------------------------------------------------------------!
    !PURPOSE:
    !---------------------------------------------------------------------------!
-   subroutine MergeSelfEnergy(SigmaGW,SigmaImp,coeff,orbs,expand,AFM,U,SigmaGW_DC)
+   subroutine MergeSelfEnergy(SigmaGW,SigmaImp,coeff,orbs,SigmaGW_DC)
       use parameters
       use linalg, only : rotate
       implicit none
@@ -792,10 +835,7 @@ contains
       type(FermionicField),intent(in),optional :: SigmaGW_DC
       type(FermionicField),intent(in),target :: SigmaImp
       real(8),intent(in)                    :: coeff
-      integer,allocatable,intent(in)        :: orbs(:)
-      logical,intent(in)                    :: expand
-      logical,intent(in)                    :: AFM
-      complex(8),allocatable,intent(in)     :: U(:,:,:)
+      integer,allocatable,intent(in)        :: orbs(:,:)
       !
       real(8)                               :: Beta
       integer                               :: iw,ik,isite,iorb,jorb
@@ -847,7 +887,7 @@ contains
          if(AFM) stop "Expansion to real space and AFM condition not yet implemented."
          write(*,"(A)") "SigmaImp will be expanded to match the SigmaGW orbital space."
          call AllocateFermionicField(SigmaImpFull,Norb,Nmats,0)
-         call Gimp2Gloc(SigmaImpFull,SigmaImp,orbs,U=U,expand=.true.)
+         call imp2loc_Fermionic(SigmaImpFull,SigmaImp,orbs,U=U,expand=.true.)
          SigmaImpUsed => SigmaImpFull
          Nsite = SigmaGW%Nsite
       else
@@ -977,7 +1017,7 @@ contains
          if(mod(Norb_loc,size(orbs)).ne.0)stop "Number of requested orbitals is not a commensurate subset of PiGW."
          write(*,"(A)") "PiImp will be expanded to match the PiGW orbital space."
          call AllocateBosonicField(PiImpFull,Norb_loc,Nmats,0)
-         call Wimp2Wloc(PiImpFull,PiImp,orbs,expand=.true.)
+         call imp2loc_Bosonic(PiImpFull,PiImp,orbs,expand=.true.)
          PiImpUsed => PiImpFull
          Nsite = PiGW%Nsite
       else

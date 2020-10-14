@@ -50,6 +50,12 @@ module file_io
    !---------------------------------------------------------------------------!
    integer,private                          :: Naxis
    real(8),allocatable,private              :: axis_(:)
+   !
+#ifdef _verb
+   logical,private                          :: verbose=.true.
+#else
+   logical,private                          :: verbose=.false.
+#endif
 
    !---------------------------------------------------------------------------!
    !PURPOSE: Rutines available for the user. Description only for interfaces.
@@ -82,8 +88,8 @@ contains
       integer                               :: i,j
       !
       !
-      write(*,"(A)") "--- dump_Matrix_local ---"
-      write(*,"(A)") "Open "//reg(printpath)
+      if(verbose)write(*,"(A)") "---- dump_Matrix_local ---"
+      if(verbose)write(*,"(A)") "Open "//reg(printpath)
       !
       !
       unit = free_unit()
@@ -118,8 +124,8 @@ contains
       integer                               :: i,j
       !
       !
-      write(*,"(A)") "--- read_Matrix_local ---"
-      write(*,"(A)") "Open "//reg(readpath)
+      if(verbose)write(*,"(A)") "---- read_Matrix_local ---"
+      if(verbose)write(*,"(A)") "Open "//reg(readpath)
       !
       call inquireFile(reg(readpath),filexists)
       allocate(RealM(size(Umat,dim=1),size(Umat,dim=2)));RealM=0d0
@@ -162,7 +168,7 @@ contains
       character(len=256)                    :: printpath
       !
       !
-      write(*,"(A)") "--- dump_Matrix_Kdep ---"
+      if(verbose)write(*,"(A)") "---- dump_Matrix_Kdep ---"
       !
       !
       ! Check on the input matrix
@@ -181,7 +187,7 @@ contains
          else
             printpath = reg(dirpath)//reg(filename)//"_k.DAT."
          endif
-         write(*,"(A)") "Open "//reg(printpath)
+         if(verbose)write(*,"(A)") "Open "//reg(printpath)
          !
          unit = free_unit()
          open(unit,file=reg(printpath),form="unformatted",status="unknown",position="rewind",action="write")
@@ -206,7 +212,7 @@ contains
             else
                printpath = reg(dirpath)//reg(filename)//"_ik"//str(ik)//".DAT."
             endif
-            write(*,"(A)") "Open "//reg(printpath)
+            if(verbose)write(*,"(A)") "Open "//reg(printpath)
             unit = free_unit()
             open(unit,file=reg(printpath),form="formatted",status="unknown",position="rewind",action="write")
             !
@@ -250,9 +256,9 @@ contains
       character(len=256)                    :: readpath
       !
       !
-      write(*,"(A)") "--- read_Matrix_Kdep ---"
-      readpath = dirpath//filename
-      write(*,"(A)") "Open "//reg(readpath)
+      if(verbose)write(*,"(A)") "---- read_Matrix_Kdep ---"
+      readpath = reg(dirpath)//filename
+      if(verbose)write(*,"(A)") "Open "//reg(readpath)
       !
       ! Check on the input Matrix
       Nkpt = size(Umat,dim=3)
@@ -295,6 +301,7 @@ contains
 
    !---------------------------------------------------------------------------!
    !PURPOSE: Write to file a single Fermionic/Bosonic component
+   !TEST ON: 14-10-2020
    !---------------------------------------------------------------------------!
    subroutine dump_Field_component(Fcomp,dirpath,filename,axis)
       !
@@ -310,8 +317,8 @@ contains
       character(len=256)                    :: printpath
       !
       !
-      write(*,"(A)") "--- dump_Field_component ---"
-      printpath = dirpath//filename
+      if(verbose)write(*,"(A)") "---- dump_Field_component ---"
+      printpath = reg(dirpath)//filename
       write(*,"(A)") "Open "//reg(printpath)
       !
       !
@@ -322,7 +329,6 @@ contains
       unit = free_unit()
       open(unit,file=reg(printpath),form="formatted",status="unknown",position="rewind",action="write")
       do iaxis=1,size(axis)
-         write(*,*)iaxis
          write(unit,"(3E20.12)") axis(iaxis), real(Fcomp(iaxis)), aimag(Fcomp(iaxis))
       enddo
       close(unit)
@@ -352,9 +358,9 @@ contains
       character(len=256)                    :: printpath
       !
       !
-      write(*,"(A)") "--- dump_FermionicField_local ---"
-      printpath = dirpath//filename
-      write(*,"(A)") "Open "//reg(printpath)
+      if(verbose)write(*,"(A)") "---- dump_FermionicField_local ---"
+      printpath = reg(dirpath)//filename
+      if(verbose)write(*,"(A)") "Open "//reg(printpath)
       !
       !
       ! Check on the input Field
@@ -415,7 +421,7 @@ contains
       character(len=256)                    :: printpath
       !
       !
-      write(*,"(A)") "--- dump_FermionicField_Kdep ---"
+      if(verbose)write(*,"(A)") "---- dump_FermionicField_Kdep ---"
       !
       !
       ! Check on the input Field
@@ -444,7 +450,7 @@ contains
          if(binfmt) then
             !
             printpath = reg(dirpath)//reg(filename)//"_k.DAT."//str(ispin)
-            write(*,"(A)") "Open "//reg(printpath)
+            if(verbose)write(*,"(A)") "Open "//reg(printpath)
             !
             unit = free_unit()
             open(unit,file=reg(printpath),form="unformatted",status="unknown",position="rewind",action="write")
@@ -468,7 +474,7 @@ contains
             do ik=1,G%Nkpt
                !
                printpath = reg(dirpath)//reg(filename)//"_ik"//str(ik)//".DAT."//str(ispin)
-               write(*,"(A)") "Open "//reg(printpath)
+               if(verbose)write(*,"(A)") "Open "//reg(printpath)
                unit = free_unit()
                open(unit,file=reg(printpath),form="formatted",status="unknown",position="rewind",action="write")
                !
@@ -519,9 +525,9 @@ contains
       character(len=256)                    :: readpath
       !
       !
-      write(*,"(A)") "--- read_FermionicField_local ---"
-      readpath = dirpath//filename
-      write(*,"(A)") "Open "//reg(readpath)
+      if(verbose)write(*,"(A)") "---- read_FermionicField_local ---"
+      readpath = reg(dirpath)//filename
+      if(verbose)write(*,"(A)") "Open "//reg(readpath)
       !
       ! Check on the input Field
       if(.not.G%status) stop "Field not properly initialized."
@@ -600,7 +606,7 @@ contains
       character(len=256)                    :: readpath
       !
       !
-      write(*,"(A)") "--- read_FermionicField_Kdep ---"
+      if(verbose)write(*,"(A)") "---- read_FermionicField_Kdep ---"
       !
       !
       ! Check on the input Field
@@ -612,7 +618,7 @@ contains
       do ispin=1,Nspin
          !
          readpath = reg(dirpath)//reg(filename)//"_k.DAT."//str(ispin)
-         write(*,"(A)") "Open "//reg(readpath)
+         if(verbose)write(*,"(A)") "Open "//reg(readpath)
          call inquireFile(reg(readpath),filexists)
          !
          unit = free_unit()
@@ -694,9 +700,9 @@ contains
       character(len=256)                    :: printpath
       !
       !
-      write(*,"(A)") "--- dump_BosonicField_local ---"
-      printpath = dirpath//filename
-      write(*,"(A)") "Open "//reg(printpath)
+      if(verbose)write(*,"(A)") "---- dump_BosonicField_local ---"
+      printpath = reg(dirpath)//filename
+      if(verbose)write(*,"(A)") "Open "//reg(printpath)
       !
       !
       ! Check on the input Field
@@ -778,7 +784,7 @@ contains
       character(len=256)                    :: printpath
       !
       !
-      write(*,"(A)") "--- dump_BosonicField_Kdep_SPEXlike ---"
+      if(verbose)write(*,"(A)") "---- dump_BosonicField_Kdep_SPEXlike ---"
       !
       !
       ! Check on the input Field
@@ -807,7 +813,7 @@ contains
          if(binfmt) then
             !
             printpath = reg(dirpath)//"VW.Q"//str(iq)//".DAT"
-            write(*,"(A)") "Open "//reg(printpath)
+            if(verbose)write(*,"(A)") "Open "//reg(printpath)
             !
             unit = free_unit()
             open(unit,file=reg(printpath),form="unformatted",status="unknown",position="rewind",action="write")
@@ -856,9 +862,9 @@ contains
       character(len=256)                    :: readpath
       !
       !
-      write(*,"(A)") "--- read_BosonicField_local ---"
-      readpath = dirpath//filename
-      write(*,"(A)") "Open "//reg(readpath)
+      if(verbose)write(*,"(A)") "---- read_BosonicField_local ---"
+      readpath = reg(dirpath)//filename
+      if(verbose)write(*,"(A)") "Open "//reg(readpath)
       !
       !
       ! Check on the input Field
