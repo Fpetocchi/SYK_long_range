@@ -211,6 +211,7 @@ contains
 
    !---------------------------------------------------------------------------!
    !PURPOSE: analogous of python numpy.linspace
+   !TEST ON: 14-10-2020
    !---------------------------------------------------------------------------!
    function linspace(start,stop,num,istart,iend,mesh) result(array)
       implicit none

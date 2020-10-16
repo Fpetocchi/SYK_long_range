@@ -515,7 +515,7 @@ contains
       !
       !
       ! Check if the data on the Matsubara axis are present
-      path = pathINPUT//"VW_imag"
+      path = reg(pathINPUT)//"VW_imag"
       call inquireDir(reg(path),ACdone,hardstop=.false.)
       doAC_ = .not.ACdone
       if(present(doAC)) doAC_ = doAC
@@ -527,7 +527,7 @@ contains
          !---------------------------------------------------------------------!
          !
          ! Allocations from dimensions written in W.Q0001.DAT file
-         path = pathINPUT//"VW_real/VW.Q0001.DAT"
+         path = reg(pathINPUT)//"VW_real/VW.Q0001.DAT"
          call inquireFile(reg(path),filexists)
          unit = free_unit()
          open(unit,file=reg(path),form="unformatted",action="read")
@@ -655,7 +655,7 @@ contains
          !$OMP END PARALLEL
          call cpu_time(finish)
          deallocate(D1,D2,D3)
-         write(*,*) "UcRPA(w) --> UcRPA(iw) cpu timing:", finish-start
+         write(*,"(A,1F10.6)") "UcRPA(w) --> UcRPA(iw) cpu timing:", finish-start
          !
          !
          if(.not.LocalOnly)then
@@ -725,7 +725,7 @@ contains
             !$OMP END PARALLEL
             call cpu_time(finish)
             deallocate(D1,D2,D3)
-            write(*,*) "UcRPA(q,w) --> UcRPA(q,iw) cpu timing:", finish-start
+            write(*,"(A,1F10.6)") "UcRPA(q,w) --> UcRPA(q,iw) cpu timing:", finish-start
             !
          endif !LocalOnly
          call checkAnalyticContinuation(Umats,Ureal)
@@ -738,8 +738,8 @@ contains
          ! Print out the transformed stuff - Kdep
          call dump_BosonicField(Umats,reg(pathOUTPUT_//"VW_imag/"),.true.)
          if(.not.save2bin)then
-            call dump_BosonicField(Umats,reg(pathOUTPUT_//"VW_imag_readable/"),save2bin)
-            call dump_BosonicField(Ureal,reg(pathOUTPUT_//"VW_real_readable/"),save2bin,axis=wread)
+            call dump_BosonicField(Umats,reg(pathOUTPUT_)//"VW_imag_readable/",save2bin)
+            call dump_BosonicField(Ureal,reg(pathOUTPUT_)//"VW_real_readable/",save2bin,axis=wread)
          endif
          !
          deallocate(wread)
@@ -752,7 +752,7 @@ contains
          !---------------------------------------------------------------------!
          !
          ! Allocations from dimensions written in W.Q0001.DAT file
-         path = pathINPUT//"VW_imag/VW.Q0001.DAT"
+         path = reg(pathINPUT)//"VW_imag/VW.Q0001.DAT"
          call inquireFile(reg(path),filexists)
          !
          unit = free_unit()
@@ -782,7 +782,7 @@ contains
          if((.not.LocalOnly).and.(Umats%Nkpt.ne.Nkpt)) stop "Number of k-points of given BosonicField and number of VW_imag k-points do not coincide."
          !
          ! Read VW_imag accumulating local attribute and optionally storing the k-dependent part
-         path = pathINPUT//"VW_imag/"
+         path = reg(pathINPUT)//"VW_imag/"
          do iq=1,Nkpt
             !
             file_spex = reg(path)//"VW_imag/VW.Q"//str(iq,4)//".DAT"        !write(fn,"(a,a,i4.4,a)") reg(path),"VW_imag/VW.Q",iq,".DAT"
@@ -870,11 +870,11 @@ contains
       !
       !
       ! Look for Uloc_mats.DAT and Uloc_real.DAT
-      path=pathINPUT//"Uloc_mats.DAT"
+      path=reg(pathINPUT)//"Uloc_mats.DAT"
       call inquireFile(reg(path),Umatsxists,hardstop=.false.)
-      path=pathINPUT//"Uloc_real.DAT"
+      path=reg(pathINPUT)//"Uloc_real.DAT"
       call inquireFile(reg(path),Urealxists,hardstop=.false.)
-      path=pathINPUT//"VW_real" !/VW.Q0001.DAT"
+      path=reg(pathINPUT)//"VW_real" !/VW.Q0001.DAT"
       call inquireDir(reg(path),SPEXxists,hardstop=.false.)      !
       !
       if(Umatsxists)then
@@ -900,7 +900,7 @@ contains
       else if(SPEXxists)then
          !
          Nkpt=0
-         path = pathINPUT//"VW_real/"
+         path = reg(pathINPUT)//"VW_real/"
          do iq=1,2000
             !
             file_spex = reg(path)//"VW_real/VW.Q"//str(iq,4)//".DAT"        !write(fn,"(a,a,i4.4,a)") reg(path),"VW_real/VW.Q",iq,".DAT"
@@ -955,11 +955,10 @@ contains
       !
       type(BosonicField),intent(in)         :: Umats
       type(BosonicField),intent(in)         :: Ureal
+      character(len=256)                    :: path
       integer                               :: iq,ib1,ib2
       integer                               :: unit,Nbp,Nfreq,Nkpt
       real(8)                               :: ReErr,ImErr,thresh=1e-4
-      !real(8)                               :: RUm_0,IUm_0,RUr_0,IUr_0
-      !real(8)                               :: RUm_inf,IUm_inf,RUr_inf,IUr_inf
       real(8),allocatable                   :: ReErrMat(:,:),ImErrMat(:,:)
       !
       !
@@ -974,7 +973,8 @@ contains
       !
       ! Check the difference betqween bare values induced by thecutoff in the matsubara frequency
       unit = free_unit()
-      open(unit=unit,file=reg(pathINPUT//"ACcutoffError.DAT"),form="formatted",status="unknown",position="rewind",action="write")
+      path = reg(pathINPUT)//"ACcutoffError.DAT"
+      open(unit=unit,file=reg(path),form="formatted",status="unknown",position="rewind",action="write")
       write(unit,"(A,1I5,A,1E14.7)")"Difference between Umats_bare value and last screened frequency: ",Nfreq," thresh:",thresh
       !
       ReErrMat=0d0;ImErrMat=0d0
@@ -1031,7 +1031,8 @@ contains
       !
       ! Check that the screened and bare values of Umats and Ureal are close enough
       unit = free_unit()
-      open(unit=unit,file=reg(pathINPUT//"ACcheck.DAT"),form="formatted",status="unknown",position="rewind",action="write")
+      path = reg(pathINPUT)//"ACcheck.DAT"
+      open(unit=unit,file=reg(path),form="formatted",status="unknown",position="rewind",action="write")
       write(unit,"(A,1E14.7)")"Difference between asymptotic behaviour of Ureal and Umats. Thresh:",thresh
       !
       ReErrMat=0d0;ImErrMat=0d0
@@ -1368,7 +1369,7 @@ contains
       call cpu_time(finish)
       deallocate(D1,D2,D3,Utmp,wmats,wreal)
       call DeallocateBosonicField(Ureal)
-      write(*,*) "Ue-ph(w) --> Ue-ph(iw) cpu timing:", finish-start
+      write(*,"(A,1F10.6)") "Ue-ph(w) --> Ue-ph(iw) cpu timing:", finish-start
       !
    end subroutine build_Uret_singlParam
    !
@@ -1507,7 +1508,7 @@ contains
       call cpu_time(finish)
       deallocate(D1,D2,D3,Utmp,wmats,wreal)
       call DeallocateBosonicField(Ureal)
-      write(*,*) "Ue-ph(w) --> Ue-ph(iw) cpu timing:", finish-start
+      write(*,"(A,1F10.6)") "Ue-ph(w) --> Ue-ph(iw) cpu timing:", finish-start
       !
    end subroutine build_Uret_multiParam
 

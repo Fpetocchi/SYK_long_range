@@ -17,7 +17,12 @@ module self_energy
    !---------------------------------------------------------------------------!
    !PURPOSE: Module variables
    !---------------------------------------------------------------------------!
-   !
+#ifdef _verb
+   logical,private                          :: verbose=.true.
+#else
+   logical,private                          :: verbose=.false.
+#endif
+
 
    !---------------------------------------------------------------------------!
    !PURPOSE: Rutines available for the user. Description only for interfaces.
@@ -62,7 +67,7 @@ contains
       integer                               :: m,n,mp,np,ib1,ib2
       !
       !
-      write(*,"(A)") "--- calc_sigmaGW ---"
+      if(verbose)write(*,"(A)") "---- calc_sigmaGW"
       !
       !
       ! Check on the input Fields
@@ -259,7 +264,7 @@ contains
       integer                               :: m,n,mp,np,ib1,ib2
       !
       !
-      write(*,"(A)") "--- calc_sigmaGW_DC ---"
+      if(verbose)write(*,"(A)") "---- calc_sigmaGW_DC"
       !
       !
       ! Check on the input Fields
@@ -396,7 +401,7 @@ contains
       character(len=256)                    :: path
       !
       !
-      write(*,"(A)") "--- calc_VH ---"
+      if(verbose)write(*,"(A)") "---- calc_VH"
       !
       !
       ! Check on the input Field
@@ -573,7 +578,7 @@ contains
       complex(8),allocatable                :: SigmaC_diag(:,:,:,:)
       !
       !
-      write(*,"(A)") "--- read_Sigma_spex ---"
+      if(verbose)write(*,"(A)") "---- read_Sigma_spex"
       pathOUTPUT_ = pathINPUT
       if(present(pathOUTPUT)) pathOUTPUT_ = pathOUTPUT
       !
@@ -591,18 +596,18 @@ contains
       wmats = FermionicFreqMesh(Smats_GoWo%Beta,Smats_GoWo%Npoints)
       !
       ! Read XEPS data
-      path = pathINPUT//"XEPS.DAT"
+      path = reg(pathINPUT)//"XEPS.DAT"
       call inquireFile(reg(path),filexists)
       call read_xeps(reg(path),Lttc%kpt,Lttc%Nkpt3,UseXepsKorder,Lttc%kptPos,Lttc%Nkpt_irred,UseDisentangledBS)
       !
       ! Check if the data on the Matsubara axis are present
-      path = pathINPUT//"Sigma_imag" !/SIGMA.Q0001.DAT"
+      path = reg(pathINPUT)//"Sigma_imag" !/SIGMA.Q0001.DAT"
       call inquireDir(reg(path),ACdone,hardstop=.false.)
       doAC_ = .not.ACdone
       if(present(doAC)) doAC_ = doAC
       !
       ! Check if the Vxc_wann is present
-      path = pathINPUT//"Vxc_wann_k.DAT.1"
+      path = reg(pathINPUT)//"Vxc_wann_k.DAT.1"
       call inquireFile(reg(path),Vxcdone,hardstop=.false.)
       doVxc = .not.Vxcdone .and. present(Vxc)
       if(doVxc.and.(.not.doAC_))then
@@ -619,9 +624,9 @@ contains
          !
          ! Read UWAN file
          if(UseDisentangledBS)then
-            path = pathINPUT//"UWAN_NEW.DAT"
+            path = reg(pathINPUT)//"UWAN_NEW.DAT"
          else
-            path = pathINPUT//"UWAN.DAT"
+            path = reg(pathINPUT)//"UWAN.DAT"
          endif
          call inquireFile(reg(path),filexists)
          write(*,"(A)") "Opening "//reg(path)
@@ -858,7 +863,7 @@ contains
          deallocate(Uwan,SigmaC_diag,SigmaX_seg)
          !
          call cpu_time(finish)
-         write(*,"(A,1F10.5)") "Sigma_GoWo(q,w) --> Sigma_GoWo(q,iw) cpu timing:", finish-start
+         write(*,"(A,1F10.6)") "Sigma_GoWo(q,w) --> Sigma_GoWo(q,iw) cpu timing:", finish-start
          !
          call FermionicKsum(Smats_GoWo)
          !
@@ -946,7 +951,7 @@ contains
       real(8),allocatable                   :: vxc_diag(:,:,:)
       !
       !
-      write(*,"(A)") "--- read_Vxc ---"
+      if(verbose)write(*,"(A)") "---- read_Vxc"
       !
       !
       ! Check on the input Vxc matrix
@@ -963,9 +968,9 @@ contains
       !
       ! Read UWAN file
       if(UseDisentangledBS)then
-         path = pathINPUT//"UWAN_NEW.DAT"
+         path = reg(pathINPUT)//"UWAN_NEW.DAT"
       else
-         path = pathINPUT//"UWAN.DAT"
+         path = reg(pathINPUT)//"UWAN.DAT"
       endif
       call inquireFile(reg(path),filexists)
       write(*,"(A)") "Opening "//reg(path)
@@ -985,7 +990,7 @@ contains
       close(unit)
       !
       ! Read gwa file
-      path = pathINPUT//"gwa.DAT"
+      path = reg(pathINPUT)//"gwa.DAT"
       call inquireFile(reg(path),filexists)
       write(*,"(A)") "Opening "//reg(path)
       unit = free_unit()
@@ -1001,7 +1006,7 @@ contains
       !
       ! Read DISENT_EVEC file
       if(UseDisentangledBS) then
-         path = pathINPUT//"DISENT_EVEC.DAT"
+         path = reg(pathINPUT)//"DISENT_EVEC.DAT"
          call inquireFile(reg(path),filexists)
          write(*,"(A)") "Opening "//reg(path)
          unit_dis = free_unit()
@@ -1019,11 +1024,11 @@ contains
       endif
       !
       ! Read eig and vxcfull files
-      path = pathINPUT//"eig.DAT"
+      path = reg(pathINPUT)//"eig.DAT"
       call inquireFile(reg(path),filexists)
       write(*,"(A)") "Opening "//reg(path)
       open(unit_eig,file=reg(path),form='unformatted',access='direct',action='read',recl=irecl)
-      path = pathINPUT//"vxcfull.DAT"
+      path = reg(pathINPUT)//"vxcfull.DAT"
       call inquireFile(reg(path),filexists)
       write(*,"(A)") "Opening "//reg(path)
       open(unit_vxc,file=reg(path),form='unformatted',action='read')

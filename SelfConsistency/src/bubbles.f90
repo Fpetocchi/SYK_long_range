@@ -20,7 +20,11 @@ module bubbles
    !---------------------------------------------------------------------------!
    !PURPOSE: Module variables
    !---------------------------------------------------------------------------!
-   !
+#ifdef _verb
+   logical,private                          :: verbose=.true.
+#else
+   logical,private                          :: verbose=.false.
+#endif
 
    !---------------------------------------------------------------------------!
    !PURPOSE: Rutines available for the user. Description only for interfaces.
@@ -58,7 +62,7 @@ contains
       integer                               :: iwan1,iwan2,iwan3,iwan4,ib1
       !
       !
-      write(*,*) "--- calc_Pi_GkGk ---"
+      if(verbose)write(*,*) "---- calc_Pi_GkGk"
       !
       !
       ! Check on the input Fields
@@ -180,7 +184,7 @@ contains
       logical                               :: tau_output_
       !
       !
-      write(*,*) "--- calc_Pi_selfcons ---"
+      if(verbose)write(*,*) "---- calc_Pi_selfcons"
       !
       !
       ! Check on the input Fields

@@ -20,7 +20,11 @@ module module_name
    !---------------------------------------------------------------------------!
    !PURPOSE: Module variables
    !---------------------------------------------------------------------------!
-   !
+#ifdef _verb
+   logical,private                          :: verbose=.true.
+#else
+   logical,private                          :: verbose=.false.
+#endif
 
    !---------------------------------------------------------------------------!
    !PURPOSE: Rutines available for the user. Description only for interfaces.
