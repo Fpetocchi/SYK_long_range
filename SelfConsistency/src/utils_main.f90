@@ -29,12 +29,16 @@ module utils_main
    type(FermionicField)                     :: SigmaGW_C,SigmaGW_X
    type(FermionicField)                     :: SigmaGW_Cdc,SigmaGW_Xdc
    type(FermionicField)                     :: SigmaDMFT
+   type(FermionicField)                     :: SigmaEDMFT
    !
    type(BosonicField)                       :: Wlat
    type(BosonicField)                       :: Urpa
    type(BosonicField)                       :: PiGG
    type(BosonicField)                       :: PiEDMFT
    type(BosonicField)                       :: curlyU
+   !
+   real(8),allocatable                      :: Uloc(:,:)
+   real(8),allocatable                      :: Kfunct(:,:)
 
    !---------------------------------------------------------------------------!
    !PURPOSE: Rutines available for the user. Description only for interfaces.
@@ -43,7 +47,7 @@ module utils_main
    public :: printHeader
    public :: initialize_DataStructure
    public :: initialize_Lattice
-   public :: initialize_Interactions
+   public :: initialize_Fields
 
    !===========================================================================!
 
@@ -97,15 +101,17 @@ contains
       logical                               :: Itexist
       !
       do iter=0,1000
-         Itpath = "Iteration/"//str(iter)
+         Itpath = reg(pathDATA)//str(iter)
          call inquireDir(reg(Itpath),Itexist,hardstop=.false.)
          if(.not.Itexist)then
             Itfirst = iter
             Exit
          endif
       enddo
-      Itpath = "Iteration/"//str(Itfirst)
       !
+      if(FirstIteration.le.Itfirst)Itfirst=FirstIteration
+      !
+      Itpath = reg(pathDATA)//str(Itfirst)
       if(Itfirst.eq.0)then
          write(LOGfile,"(A)") "Brand new calculation. Initializing "//reg(Itpath)
       else
@@ -130,7 +136,10 @@ contains
       integer,intent(in)                    :: ItStart
       !
       !
-      write(LOGfile,"(A)") "--- initialize_Lattice ---"
+      write(LOGfile,"(A)") "---- initialize Lattice"
+      !
+      !
+      Lttc%Nkpt3 = Nkpt3
       !
       !
       select case(CalculationType)
@@ -196,15 +205,15 @@ contains
 
    !---------------------------------------------------------------------------!
    !PURPOSE: Initialize the Fields depending on the starting iteration
-   !TEST ON: 14-10-2020
+   !TEST ON: 16-10-2020
    !---------------------------------------------------------------------------!
    subroutine initialize_Fields(ItStart)
       !
       implicit none
-      type(Lattice),intent(out)             :: Lttc
+      integer,intent(in)                    :: ItStart
       !
       !
-      write(LOGfile,"(A)") "--- initialize_Fields ---"
+      write(LOGfile,"(A)") "---- initialize Fields"
       !
       !
       select case(CalculationType)
@@ -214,34 +223,91 @@ contains
             !
          case("G0W0","scGW")
             !
-            call AllocateFermionicField(Glat,Crystal%Norb,Nmats,Crystal%Nkpt,Nsite)
+            call AllocateFermionicField(Glat,Crystal%Norb,Nmats,Nkpt=Crystal%Nkpt,Nsite=Nsite,Beta=Beta)
+            if(ItStart.ne.0)then
+               call read_FermionicField(Glat,reg(pathDATA)//str(ItStart),"Glat")
+            else
+               call calc_Gmats(Glat,Crystal)
+            endif
             !
          case("DMFT+statU")
             !
-            call AllocateFermionicField(SigmaDMFT,Crystal%Norb,Nmats,Crystal%Nkpt,Nsite)
-
-
-
-
-            allocate(Uloc(Nspin*Crystal%Norb,Nspin*Crystal%Norb));Uloc=0d0
+            if(ItStart.ne.0)then
+               !
+               call AllocateFermionicField(SigmaDMFT,Crystal%Norb,Nmats,Nsite=Nsite,Beta=Beta)
+               call read_FermionicField(SigmaDMFT,1,reg(pathDATA)//str(ItStart),"SigmaDMFT")
+               call read_FermionicField(SigmaDMFT,2,reg(pathDATA)//str(ItStart),"SigmaDMFT")
+               !
+            else
+               call AllocateFermionicField(Glat,Crystal%Norb,Nmats,Nkpt=Crystal%Nkpt,Nsite=Nsite,Beta=Beta)
+               call calc_Gmats(Glat,Crystal)
+            endif
             !
          case("DMFT+dynU")
             !
-            call AllocateBosonicField(Urpa,Crystal%Norb,Nmats,Crystal%Nkpt,Nsite)
+            if(ItStart.ne.0)then
+               !
+               call AllocateFermionicField(SigmaEDMFT,Crystal%Norb,Nmats,Nsite=Nsite,Beta=Beta)
+               call read_FermionicField(SigmaEDMFT,1,reg(pathDATA)//str(ItStart),"SigmaEDMFT")
+               call read_FermionicField(SigmaEDMFT,2,reg(pathDATA)//str(ItStart),"SigmaEDMFT")
+               !
+            else
+               call AllocateFermionicField(Glat,Crystal%Norb,Nmats,Nkpt=Crystal%Nkpt,Nsite=Nsite,Beta=Beta)
+               call calc_Gmats(Glat,Crystal)
+            endif
             !
          case("EDMFT")
             !
-            call AllocateBosonicField(Urpa,Crystal%Norb,Nmats,Crystal%Nkpt,Nsite)
+            if(ItStart.ne.0)then
+               !
+               call AllocateBosonicField(PiEDMFT,Crystal%Norb,Nmats,Nsite=Nsite,no_bare=.true.,Beta=Beta)
+               call read_BosonicField(PiEDMFT,reg(pathDATA)//str(ItStart),"PiEDMFT")
+               !
+               call AllocateFermionicField(SigmaEDMFT,Crystal%Norb,Nmats,Nsite=Nsite,Beta=Beta)
+               call read_FermionicField(SigmaEDMFT,1,reg(pathDATA)//str(ItStart),"SigmaEDMFT")
+               call read_FermionicField(SigmaEDMFT,2,reg(pathDATA)//str(ItStart),"SigmaEDMFT")
+               !
+            else
+               !
+               call AllocateFermionicField(Glat,Crystal%Norb,Nmats,Nkpt=Crystal%Nkpt,Nsite=Nsite,Beta=Beta)
+               call calc_Gmats(Glat,Crystal)
+               !
+            endif
             !
          case("GW+EDMFT")
             !
-            call AllocateBosonicField(Wlat,Crystal%Norb,Nmats,Crystal%Nkpt,Nsite)
-            call AllocateBosonicField(Urpa,Crystal%Norb,Nmats,Crystal%Nkpt,Nsite)
-            call AllocateBosonicField(PiGG,Crystal%Norb,Nmats,Crystal%Nkpt,Nsite)
+            if(ItStart.ne.0)then
+               !
+               call AllocateBosonicField(PiEDMFT,Crystal%Norb,Nmats,Nsite=Nsite,no_bare=.true.,Beta=Beta)
+               call read_BosonicField(PiEDMFT,reg(pathDATA)//str(ItStart),"PiEDMFT")
+               !
+               call AllocateFermionicField(SigmaEDMFT,Crystal%Norb,Nmats,Nsite=Nsite)
+               call read_FermionicField(SigmaEDMFT,1,reg(pathDATA)//str(ItStart),"SigmaEDMFT")
+               call read_FermionicField(SigmaEDMFT,2,reg(pathDATA)//str(ItStart),"SigmaEDMFT")
+               !
+               call AllocateFermionicField(Glat,Crystal%Norb,Nmats,Nkpt=Crystal%Nkpt,Nsite=Nsite,Beta=Beta)
+               call read_FermionicField(Glat,reg(pathDATA)//str(ItStart),"Glat")
+               !
+            else
+               !
+               call AllocateFermionicField(Glat,Crystal%Norb,Nmats,Nkpt=Crystal%Nkpt,Nsite=Nsite,Beta=Beta)
+               call calc_Gmats(Glat,Crystal)
+               !call dump_FermionicField(Glat,1,reg(pathDATA)//str(ItStart)//"/","Glat_loc_up.DAT")
+               !call dump_FermionicField(Glat,2,reg(pathDATA)//str(ItStart)//"/","Glat_loc_dn.DAT")
+               !call dump_FermionicField(Glat,reg(pathDATA)//str(ItStart)//"/","Glat",binfmt=.true.)
+               !call dump_FermionicField(Glat,reg(pathDATA)//str(ItStart)//"/","Glat",binfmt=.false.)
+               !call read_FermionicField(Glat,1,reg(pathDATA)//str(ItStart)//"/","Glat_loc_up.DAT")
+               !call read_FermionicField(Glat,2,reg(pathDATA)//str(ItStart)//"/","Glat_loc_dn.DAT")
+               !call dump_FermionicField(Glat,1,reg(pathDATA)//str(ItStart)//"/","Glat_loc_up_testread_LOC.DAT")
+               !call dump_FermionicField(Glat,2,reg(pathDATA)//str(ItStart)//"/","Glat_loc_dn_testread_LOC.DAT")
+               !call read_FermionicField(Glat,reg(pathDATA)//str(ItStart)//"/","Glat")
+               !call dump_FermionicField(Glat,reg(pathDATA)//str(ItStart)//"/","Glat_testread_Kdep",binfmt=.true.)
+               !
+            endif
             !
       end select
       !
-   end subroutine initialize_Interactions
+   end subroutine initialize_Fields
 
 
 

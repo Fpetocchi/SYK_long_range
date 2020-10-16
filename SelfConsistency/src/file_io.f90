@@ -11,6 +11,7 @@ module file_io
    ! the idea is that the main code as default writes in binary and only optionally
    ! stores data in readable format. That's why several routines to read data
    ! from standard format are missing.
+   ! read_BosonicField_Kdep is missing because implemnted ad hoc by now
 
    !---------------------------------------------------------------------------!
    !PURPOSE: Module interfaces
@@ -88,8 +89,8 @@ contains
       integer                               :: i,j
       !
       !
-      if(verbose)write(*,"(A)") "---- dump_Matrix_local ---"
-      if(verbose)write(*,"(A)") "Open "//reg(printpath)
+      if(verbose)write(*,"(A)") "---- dump_Matrix_local"
+      if(verbose)write(*,"(A)") "     Dump "//reg(printpath)
       !
       !
       unit = free_unit()
@@ -124,8 +125,8 @@ contains
       integer                               :: i,j
       !
       !
-      if(verbose)write(*,"(A)") "---- read_Matrix_local ---"
-      if(verbose)write(*,"(A)") "Open "//reg(readpath)
+      if(verbose)write(*,"(A)") "---- read_Matrix_local"
+      if(verbose)write(*,"(A)") "     Read "//reg(readpath)
       !
       call inquireFile(reg(readpath),filexists)
       allocate(RealM(size(Umat,dim=1),size(Umat,dim=2)));RealM=0d0
@@ -168,7 +169,7 @@ contains
       character(len=256)                    :: printpath
       !
       !
-      if(verbose)write(*,"(A)") "---- dump_Matrix_Kdep ---"
+      if(verbose)write(*,"(A)") "---- dump_Matrix_Kdep"
       !
       !
       ! Check on the input matrix
@@ -187,7 +188,7 @@ contains
          else
             printpath = reg(dirpath)//reg(filename)//"_k.DAT."
          endif
-         if(verbose)write(*,"(A)") "Open "//reg(printpath)
+         if(verbose)write(*,"(A)") "     Dump "//reg(printpath)
          !
          unit = free_unit()
          open(unit,file=reg(printpath),form="unformatted",status="unknown",position="rewind",action="write")
@@ -212,7 +213,7 @@ contains
             else
                printpath = reg(dirpath)//reg(filename)//"_ik"//str(ik)//".DAT."
             endif
-            if(verbose)write(*,"(A)") "Open "//reg(printpath)
+            if(verbose)write(*,"(A)") "     Dump "//reg(printpath)
             unit = free_unit()
             open(unit,file=reg(printpath),form="formatted",status="unknown",position="rewind",action="write")
             !
@@ -256,9 +257,9 @@ contains
       character(len=256)                    :: readpath
       !
       !
-      if(verbose)write(*,"(A)") "---- read_Matrix_Kdep ---"
+      if(verbose)write(*,"(A)") "---- read_Matrix_Kdep"
       readpath = reg(dirpath)//filename
-      if(verbose)write(*,"(A)") "Open "//reg(readpath)
+      if(verbose)write(*,"(A)") "     Read "//reg(readpath)
       !
       ! Check on the input Matrix
       Nkpt = size(Umat,dim=3)
@@ -317,9 +318,9 @@ contains
       character(len=256)                    :: printpath
       !
       !
-      if(verbose)write(*,"(A)") "---- dump_Field_component ---"
+      if(verbose)write(*,"(A)") "---- dump_Field_component"
       printpath = reg(dirpath)//filename
-      write(*,"(A)") "Open "//reg(printpath)
+      write(*,"(A)") "     Dump "//reg(printpath)
       !
       !
       ! Create directory
@@ -338,6 +339,7 @@ contains
 
    !---------------------------------------------------------------------------!
    !PURPOSE: Write to file the local attributes of a Fermionic field
+   !TEST ON: 16-10-2020
    !---------------------------------------------------------------------------!
    subroutine dump_FermionicField_local(G,ispin,dirpath,filename,axis)
       !
@@ -358,9 +360,9 @@ contains
       character(len=256)                    :: printpath
       !
       !
-      if(verbose)write(*,"(A)") "---- dump_FermionicField_local ---"
+      if(verbose)write(*,"(A)") "---- dump_FermionicField_local"
       printpath = reg(dirpath)//filename
-      if(verbose)write(*,"(A)") "Open "//reg(printpath)
+      if(verbose)write(*,"(A)") "     Dump "//reg(printpath)
       !
       !
       ! Check on the input Field
@@ -387,7 +389,8 @@ contains
       open(unit,file=reg(printpath),form="formatted",status="unknown",position="rewind",action="write")
       write(unit,"(I5,A)") Norb," Number of Wannier functions"
       write(unit,"(I5,A)") G%Npoints," Number of grid points"
-      write(unit,"(/A)") "Wannier-projected fermionic components:"
+      write(unit,"(1E20.12,A)") G%mu," chemical potential"
+      write(unit,"(A)") "Wannier-projected fermionic components:"
       do iaxis=1,G%Npoints
          do iwan1=1,Norb
             do iwan2=1,Norb
@@ -402,6 +405,7 @@ contains
 
    !---------------------------------------------------------------------------!
    !PURPOSE: Write to file the K-dependent Fermionic field
+   !TEST ON: 16-10-2020(both binfmt)
    !---------------------------------------------------------------------------!
    subroutine dump_FermionicField_Kdep(G,dirpath,filename,binfmt,axis)
       !
@@ -421,7 +425,7 @@ contains
       character(len=256)                    :: printpath
       !
       !
-      if(verbose)write(*,"(A)") "---- dump_FermionicField_Kdep ---"
+      if(verbose)write(*,"(A)") "---- dump_FermionicField_Kdep"
       !
       !
       ! Check on the input Field
@@ -450,7 +454,7 @@ contains
          if(binfmt) then
             !
             printpath = reg(dirpath)//reg(filename)//"_k.DAT."//str(ispin)
-            if(verbose)write(*,"(A)") "Open "//reg(printpath)
+            if(verbose)write(*,"(A)") "     Dump "//reg(printpath)
             !
             unit = free_unit()
             open(unit,file=reg(printpath),form="unformatted",status="unknown",position="rewind",action="write")
@@ -474,7 +478,7 @@ contains
             do ik=1,G%Nkpt
                !
                printpath = reg(dirpath)//reg(filename)//"_ik"//str(ik)//".DAT."//str(ispin)
-               if(verbose)write(*,"(A)") "Open "//reg(printpath)
+               if(verbose)write(*,"(A)") "     Dump "//reg(printpath)
                unit = free_unit()
                open(unit,file=reg(printpath),form="formatted",status="unknown",position="rewind",action="write")
                !
@@ -501,15 +505,16 @@ contains
 
    !---------------------------------------------------------------------------!
    !PURPOSE: Read from file the local attributes of a Fermionic field
+   !TEST ON: 16-10-2020
    !---------------------------------------------------------------------------!
-   subroutine read_FermionicField_local(G,dirpath,filename,ispin,axis)
+   subroutine read_FermionicField_local(G,ispin,dirpath,filename,axis)
       !
       use parameters
       use utils_misc
       use utils_fields
       implicit none
       !
-      type(FermionicField),intent(out)      :: G
+      type(FermionicField),intent(inout)    :: G
       character(len=*),intent(in)           :: dirpath
       character(len=*),intent(in)           :: filename
       integer,intent(in)                    :: ispin
@@ -520,14 +525,15 @@ contains
       integer                               :: iwan1,iwan2
       integer                               :: idum1,idum2
       integer                               :: Norb_read,Naxis_read
+      real(8)                               :: mu_read
       real(8)                               :: axispoint,RealG,ImagG
       logical                               :: filexists
       character(len=256)                    :: readpath
       !
       !
-      if(verbose)write(*,"(A)") "---- read_FermionicField_local ---"
+      if(verbose)write(*,"(A)") "---- read_FermionicField_local"
       readpath = reg(dirpath)//filename
-      if(verbose)write(*,"(A)") "Open "//reg(readpath)
+      if(verbose)write(*,"(A)") "     Read "//reg(readpath)
       !
       ! Check on the input Field
       if(.not.G%status) stop "Field not properly initialized."
@@ -541,6 +547,7 @@ contains
       open(unit,file=reg(readpath),form="formatted",status="old",position="rewind",action="read")
       read(unit,*) Norb_read !," Number of Wannier functions"
       read(unit,*) Naxis_read !," Number of grid points"
+      read(unit,*) mu_read !," chemical potential"
       !
       if(Norb_read.ne.Norb) stop "File with wrong number of Wannier functions."
       if(present(axis))then
@@ -564,17 +571,18 @@ contains
             do iwan2=1,Norb
                !
                read(unit,"(1F20.10,2I4,2E20.12)") axispoint,idum1,idum2,RealG,ImagG
-               if (idum1.ne.iwan1) stop "iwan1 (screened) does not match"
-               if (idum2.ne.iwan2) stop "iwan2 (screened) does not match"
+               if (idum1.ne.iwan1) stop "iwan1 does not match"
+               if (idum2.ne.iwan2) stop "iwan2 does not match"
                G%ws(iwan1,iwan2,iaxis,ispin) = dcmplx(RealG,ImagG)
                !
             enddo
          enddo
-         if((.not.present(axis)).and.(axispoint.ne.axis_(iaxis)))stop "axispoint does not match with expected grid."
+         if((.not.present(axis)).and.(abs(axispoint-axis_(iaxis)).gt.eps)) stop "axispoint does not match with expected grid."
          axis_(iaxis) = axispoint
       enddo
       close(unit)
       !
+      G%mu=mu_read
       if(present(axis)) axis(1:Naxis)=axis_
       !
    end subroutine read_FermionicField_local
@@ -582,6 +590,7 @@ contains
 
    !---------------------------------------------------------------------------!
    !PURPOSE: Read from file the k-dependent attributes of a Fermionic field
+   !TEST ON: 16-10-2020
    !---------------------------------------------------------------------------!
    subroutine read_FermionicField_Kdep(G,dirpath,filename,axis)
       !
@@ -590,7 +599,7 @@ contains
       use utils_fields
       implicit none
       !
-      type(FermionicField),intent(out)      :: G
+      type(FermionicField),intent(inout)    :: G
       character(len=*),intent(in)           :: dirpath
       character(len=*),intent(in)           :: filename
       real(8),intent(inout),optional        :: axis(:)
@@ -606,7 +615,7 @@ contains
       character(len=256)                    :: readpath
       !
       !
-      if(verbose)write(*,"(A)") "---- read_FermionicField_Kdep ---"
+      if(verbose)write(*,"(A)") "---- read_FermionicField_Kdep"
       !
       !
       ! Check on the input Field
@@ -618,7 +627,7 @@ contains
       do ispin=1,Nspin
          !
          readpath = reg(dirpath)//reg(filename)//"_k.DAT."//str(ispin)
-         if(verbose)write(*,"(A)") "Open "//reg(readpath)
+         if(verbose)write(*,"(A)") "     Read "//reg(readpath)
          call inquireFile(reg(readpath),filexists)
          !
          unit = free_unit()
@@ -654,7 +663,7 @@ contains
                !
                read(unit) idum1,axispoint
                if (idum1.ne.iaxis) stop "iaxis does not match"
-               if((.not.present(axis)).and.(axispoint.ne.axis_(iaxis)))stop "axispoint does not match with expected grid."
+               if((.not.present(axis)).and.(abs(axispoint-axis_(iaxis)).gt.eps)) stop "axispoint does not match with expected grid."
                axis_(iaxis) = axispoint
                !
                do iwan1=1,Norb
@@ -674,6 +683,8 @@ contains
          close(unit)
          !
       enddo !ispin
+      !
+      G%mu=mu_read
       !
    end subroutine read_FermionicField_Kdep
 
@@ -700,9 +711,9 @@ contains
       character(len=256)                    :: printpath
       !
       !
-      if(verbose)write(*,"(A)") "---- dump_BosonicField_local ---"
+      if(verbose)write(*,"(A)") "---- dump_BosonicField_local"
       printpath = reg(dirpath)//filename
-      if(verbose)write(*,"(A)") "Open "//reg(printpath)
+      if(verbose)write(*,"(A)") "     Dump "//reg(printpath)
       !
       !
       ! Check on the input Field
@@ -729,7 +740,7 @@ contains
       open(unit,file=reg(printpath),form="formatted",status="unknown",position="rewind",action="write")
       write(unit,"(I5,A)") Norb," Number of Wannier functions"
       write(unit,"(I5,A)") U%Npoints," Number of grid points"
-      write(unit,"(/A)") "Wannier-projected bare limit:"
+      write(unit,"(A)") "Wannier-projected bare limit:"
       do iwan1=1,Norb
          do iwan2=1,Norb
             do iwan3=1,Norb
@@ -784,7 +795,7 @@ contains
       character(len=256)                    :: printpath
       !
       !
-      if(verbose)write(*,"(A)") "---- dump_BosonicField_Kdep_SPEXlike ---"
+      if(verbose)write(*,"(A)") "---- dump_BosonicField_Kdep_SPEXlike"
       !
       !
       ! Check on the input Field
@@ -813,7 +824,7 @@ contains
          if(binfmt) then
             !
             printpath = reg(dirpath)//"VW.Q"//str(iq)//".DAT"
-            if(verbose)write(*,"(A)") "Open "//reg(printpath)
+            if(verbose)write(*,"(A)") "     Dump "//reg(printpath)
             !
             unit = free_unit()
             open(unit,file=reg(printpath),form="unformatted",status="unknown",position="rewind",action="write")
@@ -846,7 +857,7 @@ contains
       use utils_fields
       implicit none
       !
-      type(BosonicField),intent(out)        :: U
+      type(BosonicField),intent(inout)      :: U
       character(len=*),intent(in)           :: dirpath
       character(len=*),intent(in)           :: filename
       real(8),intent(inout),optional        :: axis(:)
@@ -862,9 +873,9 @@ contains
       character(len=256)                    :: readpath
       !
       !
-      if(verbose)write(*,"(A)") "---- read_BosonicField_local ---"
+      if(verbose)write(*,"(A)") "---- read_BosonicField_local"
       readpath = reg(dirpath)//filename
-      if(verbose)write(*,"(A)") "Open "//reg(readpath)
+      if(verbose)write(*,"(A)") "     Read "//reg(readpath)
       !
       !
       ! Check on the input Field
@@ -896,6 +907,7 @@ contains
          axis_ = BosonicFreqMesh(U%Beta,U%Npoints)
       endif
       !
+      read(unit,*)
       read(unit,*) !"Wannier-projected bare limit:"
       do iwan1=1,Norb
          do iwan2=1,Norb
@@ -937,7 +949,7 @@ contains
                enddo
             enddo
          enddo
-         if((.not.present(axis)).and.(axispoint.ne.axis_(iaxis)))stop "axispoint does not match with expected grid."
+         if((.not.present(axis)).and.(abs(axispoint-axis_(iaxis)).gt.eps)) stop "axispoint does not match with expected grid."
          axis_(iaxis) = axispoint
       enddo
       close(unit)

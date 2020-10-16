@@ -106,7 +106,7 @@ contains
       logical                               :: filexists
       !
       !
-      if(verbose)write(*,"(A)") "--- read_lattice ---"
+      if(verbose)write(*,"(A)") "---- read_lattice"
       !
       !
       ! Look for LATTC
@@ -128,7 +128,7 @@ contains
       !
       vol = det(lat)
       rvol = 8*pi**3 / vol
-      write(*,"(A,1F10.6)")"Unit cell volume: ",vol
+      if(verbose)write(*,"(A,1F10.6)")"     Unit cell volume: ",vol
       !
       Lat_stored=.true.
       !
@@ -168,7 +168,7 @@ contains
       logical                               :: dumlogical,filexists
       !
       !
-      if(verbose)write(*,"(A)") "--- read_xeps ---"
+      if(verbose)write(*,"(A)") "---- read_xeps"
       !
       !
       path = reg(pathINPUT)//"XEPS.DAT"
@@ -179,7 +179,7 @@ contains
       read(unit) Nspin_xeps,Nkpt3_xeps(:),Nkpt_xeps,Nkpt_xeps_irred, &
                  Nband_xeps,Efermi_xeps,dumlogical,UseDisentangledBS
       !
-      if(verbose)write(*,"(A,1F10.5)") "Fermi energy in XEPS: ",Efermi_xeps
+      if(verbose)write(*,"(A,1F10.5)") "     Fermi energy in XEPS: ",Efermi_xeps
       !
       allocate(kpt_xeps(3,Nkpt_xeps));kpt_xeps=0d0
       allocate(kptPos_xeps(Nkpt_xeps));kptPos_xeps=0
@@ -252,7 +252,7 @@ contains
       logical                               :: filexists
       !
       !
-      if(verbose)write(*,"(A)") "--- read_Hk ---"
+      if(verbose)write(*,"(A)") "---- read_Hk"
       !
       !
       ! Look for Hk.DAT
@@ -323,7 +323,7 @@ contains
       integer,allocatable                   :: pkpt_(:,:,:)
       !
       !
-      if(verbose)write(*,"(A)") "--- fill_ksumkdiff ---"
+      if(verbose)write(*,"(A)") "---- fill_ksumkdiff"
       !
       !
       Nkpt = size(kpt,dim=2)
@@ -413,7 +413,7 @@ contains
       real(8)                               :: kreal1(3),kreal(3,12)
       !
       !
-      if(verbose)write(*,"(A)") "--- fill_smallk ---"
+      if(verbose)write(*,"(A)") "---- fill_smallk"
       if(.not.Lat_stored)stop "Lattice positions not stored. Either call read_lattice(path) or read_Hk(path,Hk,kpt)"
       !
       !
@@ -450,7 +450,7 @@ contains
          endif
       enddo
       if(verbose)then
-         write(*,"(A)")"12 smallest k vectors are:"
+         write(*,"(A)")"     12 smallest k vectors are:"
          do i=1,12
             write(*,"(12(3F5.2,1X))")kpt(:,small_ik(i,1))
             write(*,"(3F5.2,1X)")kreal(:,i)
@@ -471,6 +471,7 @@ contains
    ! nwig : number of points inside wigner-seitz supercell
    ! rvec(3,2*nkpt) : (INTEGER) lattice vectors
    ! nrdeg(2*nkpt) : degeneracy
+   !TEST ON: 16-10-2020
    !---------------------------------------------------------------------------!
    subroutine calc_wignerseiz(nkpt,nkpt3)
       !
@@ -486,7 +487,7 @@ contains
       double precision             :: distmin
       !
       !
-      if(verbose)write(*,"(A)") "--- calc_wignerseiz ---"
+      if(verbose)write(*,"(A)") "---- calc_wignerseiz"
       if(.not.Lat_stored)stop "Lattice positions not stored. Either call read_lattice(path) or read_Hk(path,Hk,kpt)."
       !
       !
@@ -520,7 +521,7 @@ contains
                   if (nwig.gt.10*nkpt) stop "nwig>10*nkpt"
                   rvecwig(:,nwig)=(/ir1,ir2,ir3/)
                   nrdegwig(nwig)=count(abs(distmin-dist(:)).le.epsWig)
-                  !write(*,"(A)") nwig,rvecwig(:,nwig),nrdegwig(nwig)
+                  !if(verbose)write(*,*) nwig,rvecwig(:,nwig),nrdegwig(nwig)
                endif
                !
             enddo
@@ -529,7 +530,7 @@ contains
       deallocate(dist)
       !
       if (abs(sum(1d0/nrdegwig(1:nwig))-nkpt).gt.epsWig) then
-         write(*,"(A)") "Error: sum(1/nrdeg(:))=",sum(1d0/nrdegwig(1:nwig))
+         write(*,"(A,1F12.5)") "Error: sum(1/nrdeg(:))=",sum(1d0/nrdegwig(1:nwig))
          stop "nrdeg"
       endif
       !
@@ -546,7 +547,7 @@ contains
       implicit none
       real(8),intent(in)           :: Rsites(:,:)
       integer                      :: isite,Nsite
-      if(verbose)write(*,"(A)") "--- calc_wignerseiz ---"
+      if(verbose)write(*,"(A)") "---- calc_wignerseiz"
       Nsite = size(Rsites,dim=1)
       if(allocated(rsite))deallocate(rsite)
       allocate(rsite(Nsite,3));rsite=0d0
@@ -579,9 +580,9 @@ contains
       complex(8),allocatable                :: mat_R(:,:,:,:)
       !
       !
-      if(verbose)write(*,"(A)") "--- wannierinterpolation_mat ---"
-      if(.not.Wig_stored)then!stop "Wigner Seiz cell not initialized. Call calc_wignerseiz."
-         write(*,"(A)") "Calculating Wigner Seiz."
+      if(verbose)write(*,"(A)") "---- wannierinterpolation_mat"
+      if(.not.Wig_stored)then
+         if(verbose)write(*,"(A)") "     Calculating Wigner Seiz."
          call assert_shape(nkpt3_orig,[3],"wannierinterpolation_mat","nkpt3_orig")
          call calc_wignerseiz(size(kpt_orig,dim=2),nkpt3_orig)
       endif
@@ -677,9 +678,9 @@ contains
       complex(8),allocatable                :: mat_R(:,:,:)
       !
       !
-      if(verbose)write(*,"(A)") "--- wannierinterpolation_vec ---"
-      if(.not.Wig_stored)then!stop "Wigner Seiz cell not initialized. Call calc_wignerseiz."
-         write(*,"(A)") "Calculating Wigner Seiz."
+      if(verbose)write(*,"(A)") "---- wannierinterpolation_vec"
+      if(.not.Wig_stored)then
+         if(verbose)write(*,"(A)") "     Calculating Wigner Seiz."
          call assert_shape(nkpt3_orig,[3],"wannierinterpolation_vec","nkpt3_orig")
          call calc_wignerseiz(size(kpt_orig,dim=2),nkpt3_orig)
       endif
@@ -773,9 +774,9 @@ contains
       complex(8)                            :: cfac
       !
       !
-      if(verbose)write(*,"(A)") "--- wannier_K2R_NN ---"
-      if(.not.Wig_stored)then!stop "Wigner Seiz cell not initialized. Call calc_wignerseiz."
-         write(*,"(A)") "Calculating Wigner Seiz."
+      if(verbose)write(*,"(A)") "---- wannier_K2R_NN"
+      if(.not.Wig_stored)then
+         if(verbose)write(*,"(A)") "     Calculating Wigner Seiz."
          call assert_shape(nkpt3_orig,[3],"wannier_K2R_NN","nkpt3_orig")
          call calc_wignerseiz(size(kpt_orig,dim=2),nkpt3_orig)
       endif
@@ -841,6 +842,7 @@ contains
    !Nwig might not be already available in the main program
    !so I'm allocating here the mat_R which does not need to be allocated in
    !the calling routine.
+   !TEST ON: 16-10-2020(mat)
    !---------------------------------------------------------------------------!
    subroutine wannier_K2R_mat(nkpt3_orig,kpt_orig,mat_K,mat_R)
       !
@@ -859,9 +861,9 @@ contains
       complex(8)                            :: cfac
       !
       !
-      if(verbose)write(*,"(A)") "--- wannier_K2R_mat ---"
-      if(.not.Wig_stored)then!stop "Wigner Seiz cell not initialized. Call calc_wignerseiz."
-         write(*,"(A)") "Calculating Wigner Seiz."
+      if(verbose)write(*,"(A)") "---- wannier_K2R_mat"
+      if(.not.Wig_stored)then
+         if(verbose)write(*,"(A)") "     Calculating Wigner Seiz."
          call assert_shape(nkpt3_orig,[3],"wannierinterpolation","nkpt3_orig")
          call calc_wignerseiz(size(kpt_orig,dim=2),nkpt3_orig)
       endif
@@ -927,9 +929,9 @@ contains
       complex(8)                            :: cfac
       !
       !
-      if(verbose)write(*,"(A)") "--- wannier_K2R_vec ---"
-      if(.not.Wig_stored)then!stop "Wigner Seiz cell not initialized. Call calc_wignerseiz."
-         write(*,"(A)") "Calculating Wigner Seiz."
+      if(verbose)write(*,"(A)") "---- wannier_K2R_vec"
+      if(.not.Wig_stored)then
+         if(verbose)write(*,"(A)") "     Calculating Wigner Seiz."
          call assert_shape(nkpt3_orig,[3],"wannierinterpolation","nkpt3_orig")
          call calc_wignerseiz(size(kpt_orig,dim=2),nkpt3_orig)
       endif
@@ -978,6 +980,7 @@ contains
 
    !---------------------------------------------------------------------------!
    !PURPOSE: Transforms matrix in Wannier basis into K-space
+   !TEST ON: 16-10-2020(mat)
    !---------------------------------------------------------------------------!
    subroutine wannier_R2K_mat(nkpt3_orig,kpt_intp,mat_R,mat_intp)
       !
@@ -996,9 +999,9 @@ contains
       complex(8)                            :: cfac
       !
       !
-      if(verbose)write(*,"(A)") "--- wannier_R2K_mat ---"
-      if(.not.Wig_stored)then!stop "Wigner Seiz cell not initialized. Call calc_wignerseiz."
-         write(*,"(A)") "Calculating Wigner Seiz."
+      if(verbose)write(*,"(A)") "---- wannier_R2K_mat"
+      if(.not.Wig_stored)then
+         if(verbose)write(*,"(A)") "     Calculating Wigner Seiz."
          call assert_shape(nkpt3_orig,[3],"wannierinterpolation","nkpt3_orig")
          call calc_wignerseiz(size(kpt_intp,dim=2),nkpt3_orig)
       endif
@@ -1061,9 +1064,9 @@ contains
       complex(8)                            :: cfac
       !
       !
-      if(verbose)write(*,"(A)") "--- wannier_R2K_vec ---"
-      if(.not.Wig_stored)then!stop "Wigner Seiz cell not initialized. Call calc_wignerseiz."
-         write(*,"(A)") "Calculating Wigner Seiz."
+      if(verbose)write(*,"(A)") "---- wannier_R2K_vec"
+      if(.not.Wig_stored)then
+         if(verbose)write(*,"(A)") "     Calculating Wigner Seiz."
          call assert_shape(nkpt3_orig,[3],"wannierinterpolation","nkpt3_orig")
          call calc_wignerseiz(size(kpt_intp,dim=2),nkpt3_orig)
       endif

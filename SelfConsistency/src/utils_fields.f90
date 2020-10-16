@@ -67,6 +67,7 @@ contains
 
    !---------------------------------------------------------------------------!
    !PURPOSE: Fill the local attributes of a Fermionic Field
+   !TEST ON: 16-10-2020
    !---------------------------------------------------------------------------!
    subroutine FermionicKsum(G)
       use parameters
@@ -132,6 +133,7 @@ contains
 
    !---------------------------------------------------------------------------!
    !PURPOSE: Allocate/deallocate Lattice attributes in a consistent way
+   !TEST ON: 14-10-2020
    !---------------------------------------------------------------------------!
    subroutine AllocateLattice(lttc,Norb,Nkpt,name)
       use parameters
@@ -203,8 +205,9 @@ contains
 
    !---------------------------------------------------------------------------!
    !PURPOSE: Allocate/deallocate Fermionic attributes in a consistent way
+   !TEST ON: 16-10-2020
    !---------------------------------------------------------------------------!
-   subroutine AllocateFermionicField(G,Norb,Npoints,Nkpt,Nsite,name)
+   subroutine AllocateFermionicField(G,Norb,Npoints,Nkpt,Nsite,name,Beta,mu)
       use parameters
       implicit none
       type(FermionicField),intent(inout)    :: G
@@ -212,6 +215,8 @@ contains
       integer,intent(in),optional           :: Nkpt
       integer,intent(in),optional           :: Nsite
       character(len=*),intent(in),optional  :: name
+      real(8),intent(in),optional           :: Beta
+      real(8),intent(in),optional           :: mu
       integer                               :: Nkpt_
       !
       Nkpt_=0
@@ -239,6 +244,11 @@ contains
          allocate(G%wks(Norb,Norb,Npoints,Nkpt_,Nspin));G%wks=czero
       endif
       !
+      G%Norb=Norb
+      G%Npoints=Npoints
+      G%Nkpt=Nkpt_
+      if(present(mu))G%mu=mu
+      if(present(Beta))G%Beta=Beta
       if(present(Nsite))G%Nsite=Nsite
       G%status=.true.
       !
@@ -272,7 +282,7 @@ contains
    !---------------------------------------------------------------------------!
    !PURPOSE: Allocate/deallocate Bosonic attributes in a consistent way
    !---------------------------------------------------------------------------!
-   subroutine AllocateBosonicField(W,Norb,Npoints,Nkpt,Nsite,name,no_bare)
+   subroutine AllocateBosonicField(W,Norb,Npoints,Nkpt,Nsite,name,no_bare,Beta)
       use parameters
       implicit none
       type(BosonicField),intent(inout)      :: W
@@ -281,6 +291,7 @@ contains
       integer,intent(in),optional           :: Nsite
       character(len=*),intent(in),optional  :: name
       logical,intent(in),optional           :: no_bare
+      real(8),intent(in),optional           :: Beta
       integer                               :: Nbp,Nkpt_
       logical                               :: no_bare_
       !
@@ -313,6 +324,10 @@ contains
          endif
       endif
       !
+      W%Nbp=Nbp
+      W%Npoints=Npoints
+      W%Nkpt=Nkpt_
+      if(present(Beta))W%Beta=Beta
       if(present(Nsite))W%Nsite=Nsite
       W%status=.true.
       !
@@ -364,7 +379,7 @@ contains
       integer                               :: i_imp,j_imp
       !
       !
-      write(*,"(A)") "--- loc2imp(F) ---"
+      if(verbose)write(*,"(A)") "---- loc2imp(F)"
       !
       !
       if(present(sitename)) write(*,"(A)") "Extraction of Gloc for site: "//trim(sitename)
@@ -429,7 +444,7 @@ contains
       integer                               :: i_imp,j_imp
       !
       !
-      write(*,"(A)") "--- loc2imp(O) ---"
+      if(verbose)write(*,"(A)") "---- loc2imp(O)"
       !
       !
       if(present(sitename)) write(*,"(A)") "Extraction of Operator for site: "//trim(sitename)
@@ -476,7 +491,7 @@ contains
       integer                               :: i_imp,j_imp,k_imp,l_imp
       !
       !
-      write(*,"(A)") "--- loc2imp(B) ---"
+      if(verbose)write(*,"(A)") "---- loc2imp(B)"
       !
       !
       if(present(sitename)) write(*,"(A)") "Extraction of Wloc for site: "//trim(sitename)
@@ -538,6 +553,7 @@ contains
    !---------------------------------------------------------------------------!
    subroutine imp2loc_Fermionic(Gloc,Gimp,orbs,sitename,U,expand,AFM)
       use parameters
+      use utils_misc
       use linalg, only : rotate
       implicit none
       type(FermionicField),intent(inout)    :: Gloc
@@ -549,13 +565,14 @@ contains
       logical,intent(in),optional           :: AFM
       !
       complex(8),allocatable                :: Gtmp(:,:,:,:,:)
-      integer                               :: ip,ispin,ispin_DMFT,isite,Nsite,shift
+      integer                               :: ip,ispin,ispin_imp,isite,Nsite,shift
+      integer                               :: Norb_loc,Norb_imp
       integer                               :: i_loc,j_loc
       integer                               :: i_imp,j_imp
       logical                               :: expand_,AFM_
       !
       !
-      if(verbose)write(*,"(A)") "--- imp2loc(F) ---"
+      if(verbose)write(*,"(A)") "---- imp2loc(F)"
       !
       !
       if(present(sitename)) write(*,"(A)") "Insertion of Gimp of site: "//trim(sitename)
@@ -581,17 +598,9 @@ contains
       if(present(AFM))AFM_=AFM
       Nsite=1
       !
-      if(present(U))then
-         write(*,"(A)") "The local orbital space will be rotated during extraction."
-         if(size(U,dim=1).ne.size(U,dim=2)) stop "Rotation matrix not square."
-         if(size(U,dim=1).ne.size(orbs)) stop "Rotation matrix has the wrong dimension."
-         if(size(U,dim=3).ne.Gloc%Nsite) stop "Number of rotation matrices and number of sites does not match."
-         if(size(U,dim=1).ne.3) write(*,"(A)") "Warning: The local orbital space rotation is well defined only for a t2g sub-shell."
-      endif
-      !
       if(AFM)then
          if(Gloc%Nsite.ne.2) stop "AFM is implemented only for a two site lattice."
-         if(Norb/Gimp%Norb.ne.2) stop "Lattice indexes are not twice the impurity ones."
+         if(Norb_loc/Norb_imp.ne.2) stop "Lattice indexes are not twice the impurity ones."
          if(expand) stop "AFM condition and expansion to real space not yet implemented."
          Nsite = 2
       endif
@@ -604,6 +613,14 @@ contains
       else
          write(*,"(A,15I3)") "Impurity field will be inserted into the lattice orbital indexes: ",orbs
          Nsite = 1
+      endif
+      !
+      if(present(U))then
+         if(size(U,dim=1).ne.size(U,dim=2)) stop "Rotation matrix not square."
+         if(size(U,dim=1).ne.size(orbs)) stop "Rotation matrix has the wrong dimension."
+         if(size(U,dim=3).ne.Gloc%Nsite) stop "Number of rotation matrices and number of sites does not match."
+         if(size(U,dim=1).ne.3) write(*,"(A)") "Warning: The local orbital space rotation is well defined only for a t2g sub-shell."
+         write(*,"(A)") "The impurity orbital space will be rotated during insertion in "//str(Nsite)//" sites."
       endif
       !
       allocate(Gtmp(Gimp%Norb,Gimp%Norb,Gimp%Npoints,Nspin,Nsite));Gtmp=czero
@@ -640,11 +657,11 @@ contains
                !
                do ispin=1,Nspin
                   !
-                  ispin_DMFT=ispin
-                  if(isite.eq.2) ispin_DMFT=int(Nspin/ispin)
+                  ispin_imp=ispin
+                  if(isite.eq.2) ispin_imp=int(Nspin/ispin)
                   !
                   do ip=1,Gimp%Npoints
-                     Gloc%ws(i_loc,j_loc,ip,ispin) = Gtmp(i_imp,j_imp,ip,ispin,isite)
+                     Gloc%ws(i_loc,j_loc,ip,ispin) = Gtmp(i_imp,j_imp,ip,ispin_imp,isite)
                   enddo
                enddo
                !
@@ -673,7 +690,7 @@ contains
       logical                               :: expand_
       !
       !
-      write(*,"(A)") "--- imp2loc(O) ---"
+      if(verbose)write(*,"(A)") "---- imp2loc(O)"
       !
       !
       if(present(sitename)) write(*,"(A)") "Insertion of Operator for site: "//trim(sitename)
@@ -750,7 +767,7 @@ contains
       logical                               :: expand_
       !
       !
-      write(*,"(A)") "--- imp2loc(B) ---"
+      if(verbose)write(*,"(A)") "---- imp2loc(B)"
       !
       !
       if(present(sitename)) write(*,"(A)") "Insertion of Wimp of site: "//trim(sitename)
@@ -825,30 +842,28 @@ contains
 
 
    !---------------------------------------------------------------------------!
-   !PURPOSE:
+   !PURPOSE: Replace SigmaImp in SigmaGW at the indexes contained in orbs
    !---------------------------------------------------------------------------!
    subroutine MergeSelfEnergy(SigmaGW,SigmaImp,coeff,orbs,SigmaGW_DC)
       use parameters
+      use utils_misc
       use linalg, only : rotate
       implicit none
       type(FermionicField),intent(inout)    :: SigmaGW
-      type(FermionicField),intent(in),optional :: SigmaGW_DC
-      type(FermionicField),intent(in),target :: SigmaImp
+      type(FermionicField),intent(in)       :: SigmaImp
       real(8),intent(in)                    :: coeff
       integer,allocatable,intent(in)        :: orbs(:,:)
+      type(FermionicField),intent(in),optional :: SigmaGW_DC
       !
       real(8)                               :: Beta
       integer                               :: iw,ik,isite,iorb,jorb
-      integer                               :: ispin,ispin_DMFT,shift
+      integer                               :: ispin,Norb_imp
       integer                               :: i_loc,j_loc
-      integer                               :: i_imp,j_imp
       integer                               :: Nkpt,Norb,Nmats,Nsite
       logical                               :: localDC
-      type(FermionicField),target           :: SigmaImpFull
-      type(FermionicField),pointer          :: SigmaImpUsed
       !
       !
-      write(*,"(A)") "--- MergeSelfEnergy ---"
+      write(*,"(A)") "--- Merge SelfEnergy"
       !
       !
       ! Check on the input Fields
@@ -863,8 +878,10 @@ contains
       Nkpt = SigmaGW%Nkpt
       Beta = SigmaGW%Beta
       Nmats = SigmaGW%Npoints
+      Nsite = SigmaGW%Nsite
       localDC = .true.
       !
+      if(SigmaImp%Norb.ne.Norb) stop "SigmaImp has different orbital dimension with respect to SigmaGW."
       if(SigmaImp%Beta.ne.Beta) stop "SigmaImp has different Beta with respect to SigmaGW."
       if(SigmaImp%Npoints.ne.Nmats) stop "SigmaImp has different number of Matsubara points with respect to SigmaGW."
       if(present(SigmaGW_DC))then
@@ -873,129 +890,78 @@ contains
          if(SigmaGW_DC%Npoints.ne.Nmats) stop "SigmaGW_DC has different number of Matsubara points with respect to SigmaGW."
          localDC = .false.
       endif
-      !
-      if(AFM)then
-         if(SigmaGW%Nsite.ne.2) stop "AFM is implemented only for a two site lattice."
-         if(Norb/SigmaImp%Norb.ne.2) stop "SigmaGW and SigmaImp does not match the AFM condition."
-         if(expand) stop "AFM condition and expansion to real space not yet implemented."
-         Nsite = 2
-      endif
-      !
-      if(expand)then
-         if(size(U,dim=3).ne.SigmaGW%Nsite)stop "Number of rotation matrices and number of sites does not match."
-         if(mod(Norb,size(orbs)).ne.0)stop "Number of requested orbitals is not a commensurate subset of SigmaGW."
-         if(AFM) stop "Expansion to real space and AFM condition not yet implemented."
-         write(*,"(A)") "SigmaImp will be expanded to match the SigmaGW orbital space."
-         call AllocateFermionicField(SigmaImpFull,Norb,Nmats,0)
-         call imp2loc_Fermionic(SigmaImpFull,SigmaImp,orbs,U=U,expand=.true.)
-         SigmaImpUsed => SigmaImpFull
-         Nsite = SigmaGW%Nsite
-      else
-         if(size(orbs).ne.SigmaImp%Norb) stop "Can't fit the requested orbitals from SigmaImp."
-         write(*,"(A,15I3)") "SigmaImp will be inserted into the SigmaGW orbital indexes: ",orbs
-         SigmaImpUsed => SigmaImp
-         Nsite = 1
-      endif
+      if(size(orbs,dim=1).ne.Nsite) stop "Number of orbital lists does not match the number of sites."
+      Norb_imp=0
+      do isite=1,Nsite
+         do iorb=1,size(orbs(isite,:))
+            if(orbs(isite,iorb).ne.0) Norb_imp=Norb_imp+1
+         enddo
+      enddo
+      if(Norb_imp.gt.Norb) stop "Number of orbital to be inserted is bigger than the total lattice orbital space."
       !
       !all sites if(expand.or.AFM) otherwise only one site and the orbitals within orbs
       !$OMP PARALLEL DEFAULT(NONE),&
-      !$OMP SHARED(Nsite,Nmats,Nkpt,orbs,expand,AFM,coeff,SigmaGW,SigmaGW_DC,SigmaImpUsed,localDC),&
-      !$OMP PRIVATE(isite,shift,ispin_DMFT,ispin,iorb,jorb,i_loc,j_loc,i_imp,j_imp,iw,ik)
+      !$OMP SHARED(Nsite,Nmats,Nkpt,orbs,coeff,SigmaGW,SigmaGW_DC,SigmaImp,localDC),&
+      !$OMP PRIVATE(isite,ispin,iorb,jorb,i_loc,j_loc,iw,ik)
       !$OMP DO
       do isite=1,Nsite
-         !
-         ! only two possible arrangements
-         if(abs(orbs(2)-orbs(1)).eq.1)then
-            shift = size(orbs)*(isite-1)
-         elseif(abs(orbs(2)-orbs(1)).eq.Nsite)then
-            shift = isite-1
-         endif
-         !
-         do iorb=1,size(orbs)
-            do jorb=1,size(orbs)
+         do iorb=1,size(orbs(isite,:))
+            do jorb=1,size(orbs(isite,:))
+               !
+               !SigmaImp and SigmaGW have the same arrangements
+               i_loc = orbs(isite,iorb)
+               j_loc = orbs(isite,jorb)
                !
                do ispin=1,Nspin
-                  !
-                  ispin_DMFT=ispin
-                  !
-                  if(expand)then
-                     !SigmaImp has the same dimension of SigmaGW becasue it has been expanded
-                     i_loc = iorb + shift
-                     j_loc = jorb + shift
-                     i_imp = i_loc
-                     j_imp = j_loc
-                  elseif(AFM)then
-                     !SigmaImp has the dimension of orbs and I'm just flipping the spin
-                     i_loc = iorb + shift
-                     j_loc = jorb + shift
-                     i_imp = iorb
-                     j_imp = jorb
-                     if(isite.eq.2) ispin_DMFT=int(Nspin/ispin)
-                  else
-                     !SigmaImp has the dimension of orbs
-                     i_loc = orbs(iorb)
-                     j_loc = orbs(jorb)
-                     i_imp = iorb
-                     j_imp = jorb
-                  endif
-                  !
                   do iw=1,Nmats
                      do ik=1,Nkpt
                         !
                         if(localDC)then
                            SigmaGW%wks(i_loc,j_loc,iw,ik,ispin) = SigmaGW%wks(i_loc,j_loc,iw,ik,ispin)              &
                                                                 - coeff*SigmaGW%ws(i_loc,j_loc,iw,ispin)            &
-                                                                + coeff*SigmaImpUsed%ws(i_imp,j_imp,iw,ispin_DMFT)
+                                                                + coeff*SigmaImp%ws(i_loc,j_loc,iw,ispin)
                         else
                            SigmaGW%wks(i_loc,j_loc,iw,ik,ispin) = SigmaGW%wks(i_loc,j_loc,iw,ik,ispin)              &
                                                                 - coeff*SigmaGW_DC%ws(i_loc,j_loc,iw,ispin)         &
-                                                                + coeff*SigmaImpUsed%ws(i_imp,j_imp,iw,ispin_DMFT)
+                                                                + coeff*SigmaImp%ws(i_loc,j_loc,iw,ispin)
                         endif
                         !
                      enddo
                   enddo
-                  !
-               enddo !ispin
+               enddo
                !
-            enddo !jorb
-         enddo !iorb
-      enddo !isite
+            enddo
+         enddo
+      enddo
       !$OMP END DO
       !$OMP END PARALLEL
       !
       call FermionicKsum(SigmaGW)
       !
-      if(expand)call DeallocateFermionicField(SigmaImpFull)
-      if(associated(SigmaImpUsed))nullify(SigmaImpUsed)
-      !
    end subroutine MergeSelfEnergy
 
 
    !---------------------------------------------------------------------------!
-   !PURPOSE:
+   !PURPOSE: Replace PiImp in PiGW at the indexes contained in orbs
    !---------------------------------------------------------------------------!
-   subroutine MergePolarization(PiGW,PiImp,coeff,orbs,expand)
+   subroutine MergePolarization(PiGW,PiImp,coeff,orbs)
       use parameters
       use linalg, only : rotate
       implicit none
       type(BosonicField),intent(inout)      :: PiGW
-      type(BosonicField),intent(in),target  :: PiImp
+      type(BosonicField),intent(in)         :: PiImp
       real(8),intent(in)                    :: coeff
-      integer,allocatable,intent(in)        :: orbs(:)
-      logical,intent(in)                    :: expand
+      integer,allocatable,intent(in)        :: orbs(:,:)
       !
       real(8)                               :: Beta
-      integer                               :: iw,ik,isite,shift
+      integer                               :: iw,ik,isite
       integer                               :: iorb,jorb,korb,lorb
-      integer                               :: ib_imp,jb_imp,ib_loc,jb_loc
+      integer                               :: Norb_imp,ib_loc,jb_loc
       integer                               :: i_loc,j_loc,k_loc,l_loc
-      integer                               :: Nkpt,Nmats,Nsite
-      integer                               :: Norb_imp,Norb_loc
-      type(BosonicField),target             :: PiImpFull
-      type(BosonicField),pointer            :: PiImpUsed
+      integer                               :: Nkpt,Norb,Nmats,Nsite
       !
       !
-      write(*,"(A)") "--- MergePolarization ---"
+      write(*,"(A)") "--- Merge Polarization"
       !
       !
       ! Check on the input Fields
@@ -1004,74 +970,45 @@ contains
       if(PiGW%Nkpt.eq.0) stop "PiGW k dependent attributes not properly initialized."
       if(PiImp%Nkpt.ne.0) stop "PiImp k dependent attributes are supposed to be unallocated."
       !
-      Norb_loc = int(sqrt(dble(PiGW%Nbp)))
-      Norb_imp = int(sqrt(dble(PiImp%Nbp)))
+      Norb = int(sqrt(dble(PiGW%Nbp)))
       Nkpt = PiGW%Nkpt
       Beta = PiGW%Beta
       Nmats = PiGW%Npoints
+      Nsite = PiGW%Nsite
       !
       if(PiImp%Beta.ne.Beta) stop "PiImp has different Beta with respect to PiGW."
       if(PiImp%Npoints.ne.Nmats) stop "PiImp has different number of Matsubara points with respect to PiGW."
       !
-      if(expand)then
-         if(mod(Norb_loc,size(orbs)).ne.0)stop "Number of requested orbitals is not a commensurate subset of PiGW."
-         write(*,"(A)") "PiImp will be expanded to match the PiGW orbital space."
-         call AllocateBosonicField(PiImpFull,Norb_loc,Nmats,0)
-         call imp2loc_Bosonic(PiImpFull,PiImp,orbs,expand=.true.)
-         PiImpUsed => PiImpFull
-         Nsite = PiGW%Nsite
-      else
-         if(size(orbs).ne.Norb_imp) stop "Can't fit the requested orbitals from PiImp."
-         write(*,"(A,15I3)") "PiImp will be inserted into the PiGW orbital indexes: ",orbs
-         PiImpUsed => PiImp
-         Nsite = 1
-      endif
+      if(size(orbs,dim=1).ne.Nsite) stop "Number of orbital lists does not match the number of sites."
+      Norb_imp=0
+      do isite=1,Nsite
+         do iorb=1,size(orbs(isite,:))
+            if(orbs(isite,iorb).ne.0) Norb_imp=Norb_imp+1
+         enddo
+      enddo
+      if(Norb_imp.gt.Norb) stop "Number of orbital to be inserted is bigger than the total lattice orbital space."
       !
       !all sites if(expand) otherwise only one site and the orbitals within orbs
       !$OMP PARALLEL DEFAULT(NONE),&
-      !$OMP SHARED(Nsite,Nmats,Nkpt,Norb_loc,Norb_imp,orbs,expand,coeff,PiGW,PiImpUsed),&
-      !$OMP PRIVATE(isite,shift,iorb,jorb,korb,lorb,iw,ik),&
-      !$OMP PRIVATE(i_loc,j_loc,k_loc,l_loc,ib_imp,jb_imp,ib_loc,jb_loc)
+      !$OMP SHARED(Nsite,Nmats,Nkpt,Norb,orbs,coeff,PiGW,PiImp),&
+      !$OMP PRIVATE(isite,iorb,jorb,korb,lorb,iw,ik),&
+      !$OMP PRIVATE(i_loc,j_loc,k_loc,l_loc,ib_loc,jb_loc)
       !$OMP DO
       do isite=1,Nsite
          !
-         ! only two possible arrangements
-         if(abs(orbs(2)-orbs(1)).eq.1)then
-            shift = size(orbs)*(isite-1)
-         elseif(abs(orbs(2)-orbs(1)).eq.Nsite)then
-            shift = isite-1
-         endif
-         !
-         do iorb=1,size(orbs)
-            do jorb=1,size(orbs)
-               do korb=1,size(orbs)
-                  do lorb=1,size(orbs)
+         do iorb=1,size(orbs(isite,:))
+            do jorb=1,size(orbs(isite,:))
+               do korb=1,size(orbs(isite,:))
+                  do lorb=1,size(orbs(isite,:))
                      !
-                     if(expand)then
-                        !mapping
-                        i_loc = iorb + shift
-                        j_loc = jorb + shift
-                        k_loc = korb + shift
-                        l_loc = lorb + shift
-                        !bosonic indexes on the lattice
-                        ib_loc = k_loc + Norb_loc*(i_loc-1)
-                        jb_loc = l_loc + Norb_loc*(j_loc-1)
-                        !PiImp has the same dimension of PiGW becasue it has been expanded
-                        ib_imp = ib_loc
-                        jb_imp = jb_loc
-                     else
-                        !mapping
-                        i_loc = orbs(iorb)
-                        j_loc = orbs(jorb)
-                        k_loc = orbs(korb)
-                        l_loc = orbs(lorb)
-                        !bosonic indexes on the lattice
-                        ib_loc = k_loc + Norb_loc*(i_loc-1)
-                        jb_loc = l_loc + Norb_loc*(j_loc-1)
-                        !PiImp has the dimension of orbs
-                        ib_imp = korb + Norb_imp*(iorb-1)
-                        jb_imp = lorb + Norb_imp*(jorb-1)
-                     endif
+                     !PiImp and PiGW
+                     i_loc = orbs(isite,iorb)
+                     j_loc = orbs(isite,jorb)
+                     k_loc = orbs(isite,korb)
+                     l_loc = orbs(isite,lorb)
+                     !
+                     ib_loc = k_loc + Norb*(i_loc-1)
+                     jb_loc = l_loc + Norb*(j_loc-1)
                      !
                      if((i_loc.eq.k_loc).and.(l_loc.eq.j_loc))then
                         !
@@ -1080,7 +1017,7 @@ contains
                               !
                               PiGW%screened(ib_loc,jb_loc,iw,ik) = PiGW%screened(ib_loc,jb_loc,iw,ik)                &
                                                                  - coeff*PiGW%screened_local(ib_loc,jb_loc,iw)       &
-                                                                 + coeff*PiImpUsed%screened_local(ib_imp,jb_imp,iw)
+                                                                 + coeff*PiImp%screened_local(ib_loc,jb_loc,iw)
                               !
                            enddo
                         enddo
@@ -1098,14 +1035,12 @@ contains
       !
       call BosonicKsum(PiGW)
       !
-      if(expand)call DeallocateBosonicField(PiImpFull)
-      if(associated(PiImpUsed))nullify(PiImpUsed)
-      !
    end subroutine MergePolarization
 
 
    !---------------------------------------------------------------------------!
    !PURPOSE: Clear the internal attributes of a Fermionic/Bosonic field
+   !TEST ON: 16-10-2020
    !---------------------------------------------------------------------------!
    subroutine clear_attributes_Fermion(G)
       use parameters

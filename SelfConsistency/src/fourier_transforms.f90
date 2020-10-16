@@ -22,12 +22,12 @@ module fourier_transforms
    end interface Fmats2itau_vec
 
    interface Fitau2mats_mat
-      module procedure Fitau2mats_mat_Gw                                        !(beta,Gitau[Norb,Norb,Nmats],Gmats[Norb,Norb,Ntau],tau_uniform)
-      module procedure Fitau2mats_mat_Gwk                                       !(beta,Gitau[Norb,Norb,Nmats,Nkpt],Gmats[Norb,Norb,Ntau,Nkpt],tau_uniform)
+      module procedure Fitau2mats_mat_Gw                                        !(beta,Gitau[Norb,Norb,Ntau],Gmats[Norb,Norb,Nmats],tau_uniform)
+      module procedure Fitau2mats_mat_Gwk                                       !(beta,Gitau[Norb,Norb,Ntau,Nkpt],Gmats[Norb,Norb,Nmats,Nkpt],tau_uniform)
    end interface Fitau2mats_mat
    interface Fitau2mats_vec
-      module procedure Fitau2mats_vec_Gw                                        !(beta,Gitau[Norb,Nmats],Gmats[Norb,Ntau],tau_uniform)
-      module procedure Fitau2mats_vec_Gwk                                       !(beta,Gitau[Norb,Nmats,Nkpt],Gmats[Norb,Ntau,Nkpt],tau_uniform)
+      module procedure Fitau2mats_vec_Gw                                        !(beta,Gitau[Norb,Ntau],Gmats[Norb,Nmats],tau_uniform)
+      module procedure Fitau2mats_vec_Gwk                                       !(beta,Gitau[Norb,Ntau,Nkpt],Gmats[Norb,Nmats,Nkpt],tau_uniform)
    end interface Fitau2mats_vec
 
    interface Bmats2itau
@@ -35,8 +35,8 @@ module fourier_transforms
       module procedure Bmats2itau_Uwk                                           !(beta,Uitau[Nbp,Nbp,Nmats,Nkpt],Umats[Nbp,Nbp,Ntau,Nkpt],asympt_corr,tau_uniform)
    end interface Bmats2itau
    interface Bitau2mats
-      module procedure Bitau2mats_Uw                                            !(beta,Uitau[Nbp,Nbp,Nmats],Umats[Nbp,Nbp,Ntau],tau_uniform)
-      module procedure Bitau2mats_Uwk                                           !(beta,Uitau[Nbp,Nbp,Nmats,Nkpt],Umats[Nbp,Nbp,Ntau,Nkpt],tau_uniform)
+      module procedure Bitau2mats_Uw                                            !(beta,Uitau[Nbp,Nbp,Ntau],Umats[Nbp,Nbp,Nmats],tau_uniform)
+      module procedure Bitau2mats_Uwk                                           !(beta,Uitau[Nbp,Nbp,Ntau,Nkpt],Umats[Nbp,Nbp,Nmats,Nkpt],tau_uniform)
    end interface Bitau2mats
 
    !---------------------------------------------------------------------------!
@@ -44,6 +44,12 @@ module fourier_transforms
    !---------------------------------------------------------------------------!
    real(8),parameter,private                :: pi=3.14159265358979323846d0
    complex(8),parameter,private             :: czero=dcmplx(0.d0,0.d0)
+   !
+#ifdef _verb
+   logical,private                          :: verbose=.true.
+#else
+   logical,private                          :: verbose=.false.
+#endif
 
    !---------------------------------------------------------------------------!
    !PURPOSE: Rutines available for the user. Description only for interfaces.
@@ -114,6 +120,8 @@ contains
    ! How to use the weights:
    ! ReG(tau)= S[n=0,inf] [ coswt(n) * ReGe(ivn) + sinwt(n) * ImGo(ivn) ]
    ! ImG(tau)= S[n=0,inf] [ coswt(n) * ImGe(ivn) - sinwt(n) * ReGo(ivn) ]
+   !TEST ON: 16-10-2020
+   !---------------------------------------------------------------------------!
    subroutine mats2itau_FermionicCoeff(tau,coswt,sinwt,correct)
       !
       use utils_misc
@@ -132,7 +140,7 @@ contains
       integer                               :: Nmats,Ntau
       !
       !
-      write(*,"(A)") "--- mats2itau_FermionicCoeff ---"
+      if(verbose)write(*,"(A)") "---- mats2itau_FermionicCoeff"
       !
       !
       Ntau = size(tau)
@@ -261,6 +269,7 @@ contains
    ! iopt=30=> only b1
    ! Numerical test on Cu suggests that iopt=10 with b3=0 is the best
    ! (simple is best) which is used in this routine.
+   !---------------------------------------------------------------------------!
    subroutine mats2itau_BosonicCoeff(tau,coswt,correct)
       !
       use utils_misc
@@ -277,7 +286,7 @@ contains
       integer                               :: Nmats,Ntau
       !
       !
-      write(*,"(A)") "--- mats2itau_BosonicCoeff ---"
+      if(verbose)write(*,"(A)") "---- mats2itau_BosonicCoeff"
       !
       !
       Ntau = size(tau)
@@ -339,7 +348,7 @@ contains
       logical                               :: atBeta_
       !
       !
-      write(*,"(A)") "--- Fmats2itau_mat_Gw ---"
+      if(verbose)write(*,"(A)") "---- Fmats2itau_mat_Gw"
       !
       !
       Norb = size(Gmats,dim=1)
@@ -423,7 +432,7 @@ contains
       logical                               :: atBeta_
       !
       !
-      write(*,"(A)") "--- Fmats2itau_mat_Gwk ---"
+      if(verbose)write(*,"(A)") "---- Fmats2itau_mat_Gwk"
       !
       !
       Norb = size(Gmats,dim=1)
@@ -436,6 +445,7 @@ contains
       real_space=.false.
       if(present(nkpt3).and.present(kpt))then
          real_space=.true.
+         if(verbose)write(*,"(A)") "Performing FT iw->itau in real space."
       else
          stop "Either kpt or nkpt3 argument is missing."
       endif
@@ -515,6 +525,7 @@ contains
 
    !---------------------------------------------------------------------------!
    !PURPOSE: Perform the Fourier transform from mats to tau of a vector Gf
+   !TEST ON: 16-10-2020(mat)
    !---------------------------------------------------------------------------!
    subroutine Fmats2itau_vec_Gw(beta,Gmats,Gitau,asympt_corr,tau_uniform,atBeta)
       !
@@ -538,7 +549,7 @@ contains
       logical                               :: atBeta_
       !
       !
-      write(*,"(A)") "--- Fmats2itau_vec_Gw ---"
+      if(verbose)write(*,"(A)") "---- Fmats2itau_vec_Gw"
       !
       !
       Norb = size(Gmats,dim=1)
@@ -621,7 +632,7 @@ contains
       logical                               :: atBeta_
       !
       !
-      write(*,"(A)") "--- Fmats2itau_vec_Gwk ---"
+      if(verbose)write(*,"(A)") "---- Fmats2itau_vec_Gwk"
       !
       !
       Norb = size(Gmats,dim=1)
@@ -633,6 +644,7 @@ contains
       real_space=.false.
       if(present(nkpt3).and.present(kpt))then
          real_space=.true.
+         if(verbose)write(*,"(A)") "Performing FT iw->itau in real space."
       else
          stop "Either kpt or nkpt3 argument is missing."
       endif
@@ -731,7 +743,7 @@ contains
       logical                               :: tau_uniform_
       !
       !
-      write(*,"(A)") "--- Fitau2mats_mat_Gw ---"
+      if(verbose)write(*,"(A)") "---- Fitau2mats_mat_Gw"
       !
       !
       Norb = size(Gitau,dim=1)
@@ -799,7 +811,7 @@ contains
       logical                               :: tau_uniform_
       !
       !
-      write(*,"(A)") "--- Fitau2mats_mat_Gwk ---"
+      if(verbose)write(*,"(A)") "---- Fitau2mats_mat_Gwk"
       !
       !
       Norb = size(Gitau,dim=1)
@@ -855,6 +867,7 @@ contains
 
    !---------------------------------------------------------------------------!
    !PURPOSE: Perform the Fourier transform from tau to mats of a vector Gf
+   !TEST ON: 16-10-2020(mat&vec)
    !---------------------------------------------------------------------------!
    subroutine Fitau2mats_vec_Gw(beta,Gitau,Gmats,tau_uniform)
       !
@@ -874,7 +887,7 @@ contains
       logical                               :: tau_uniform_
       !
       !
-      write(*,"(A)") "--- Fitau2mats_vec_Gw ---"
+      if(verbose)write(*,"(A)") "---- Fitau2mats_vec_Gw"
       !
       !
       Norb = size(Gitau,dim=1)
@@ -939,7 +952,7 @@ contains
       logical                               :: tau_uniform_
       !
       !
-      write(*,"(A)") "--- Fitau2mats_vec_Gwk ---"
+      if(verbose)write(*,"(A)") "---- Fitau2mats_vec_Gwk"
       !
       !
       Norb = size(Gitau,dim=1)
@@ -1012,7 +1025,7 @@ contains
       logical                               :: tau_uniform_
       !
       !
-      write(*,"(A)") "--- Bmats2itau_Uw ---"
+      if(verbose)write(*,"(A)") "---- Bmats2itau_Uw"
       !
       !
       Nbp = size(Umats,dim=1)
@@ -1078,7 +1091,7 @@ contains
       logical                               :: tau_uniform_
       !
       !
-      write(*,"(A)") "--- Bmats2itau_Uwk ---"
+      if(verbose)write(*,"(A)") "---- Bmats2itau_Uwk"
       !
       !
       Nbp = size(Umats,dim=1)
@@ -1150,7 +1163,7 @@ contains
       logical                               :: tau_uniform_
       !
       !
-      write(*,"(A)") "--- Bitau2mats_Uw ---"
+      if(verbose)write(*,"(A)") "---- Bitau2mats_Uw"
       !
       !
       Nbp = size(Uitau,dim=1)
@@ -1223,7 +1236,7 @@ contains
       logical                               :: tau_uniform_
       !
       !
-      write(*,"(A)") "--- Bitau2mats_Uwk ---"
+      if(verbose)write(*,"(A)") "---- Bitau2mats_Uwk"
       !
       !
       Nbp = size(Uitau,dim=1)

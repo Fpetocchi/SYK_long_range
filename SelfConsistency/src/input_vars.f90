@@ -48,6 +48,7 @@ module input_vars
    !PURPOSE: paths. Directories must end with "/"
    !---------------------------------------------------------------------------!
    character(len=256)                       :: pathINPUT="InputFiles/"
+   character(len=256)                       :: pathDATA="Iterations/"
    integer                                  :: LOGfile=6
 
 
@@ -70,6 +71,7 @@ module input_vars
    !---------------------------------------------------------------------------!
    integer                                  :: Nsite=1
    integer,allocatable                      :: SiteOrbs(:,:)
+   integer,allocatable                      :: SiteNorb(:)
    character(len=2),allocatable             :: SiteName(:)
 
 
@@ -77,6 +79,8 @@ module input_vars
    !PURPOSE: K-points
    !---------------------------------------------------------------------------!
    integer                                  :: Nkpt3(3)=[8,8,8]
+
+   integer                                  :: FirstIteration=0
 
 
    !---------------------------------------------------------------------------!

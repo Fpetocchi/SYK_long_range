@@ -28,6 +28,15 @@ module interactions
    end interface build_Uret
 
    !---------------------------------------------------------------------------!
+   !PURPOSE: Module variables
+   !---------------------------------------------------------------------------!
+#ifdef _verb
+   logical,private                          :: verbose=.true.
+#else
+   logical,private                          :: verbose=.false.
+#endif
+
+   !---------------------------------------------------------------------------!
    !PURPOSE: Rutines available for the user. Description only for interfaces.
    !---------------------------------------------------------------------------!
    !subroutines
@@ -72,7 +81,7 @@ contains
       integer                               :: ismall,num_k
       !
       !
-      write(*,*) "--- calc_W_full ---"
+      if(verbose)write(*,*) "---- calc_W_full"
       !
       !
       ! Check on the input Fields
@@ -200,7 +209,7 @@ contains
       integer                               :: ismall,num_k
       !
       !
-      write(*,*) "--- calc_W_edmft ---"
+      if(verbose)write(*,*) "---- calc_W_edmft"
       !
       !
       ! Check on the input Fields
@@ -320,7 +329,7 @@ contains
       integer                               :: iq,iw
       !
       !
-      write(*,*) "--- calc_chi_full ---"
+      if(verbose)write(*,*) "---- calc_chi_full"
       !
       !
       ! Check on the input Fields
@@ -399,7 +408,7 @@ contains
       integer                               :: iq,iw
       !
       !
-      write(*,*) "--- calc_chi_edmft ---"
+      if(verbose)write(*,*) "---- calc_chi_edmft"
       !
       !
       ! Check on the input Fields
@@ -484,7 +493,7 @@ contains
       real                                  :: start,finish
       !
       !
-      write(*,*) "--- read_U_spex_full ---"
+      if(verbose)write(*,*) "---- read_U_spex_full"
       pathOUTPUT_ = pathINPUT
       if(present(pathOUTPUT)) pathOUTPUT_ = pathOUTPUT
       !
@@ -855,7 +864,7 @@ contains
       type(BosonicField)                    :: Uread
       !
       !
-      write(*,*) "--- read_U_spex_Uloc0 ---"
+      if(verbose)write(*,*) "---- read_U_spex_Uloc0"
       pathOUTPUT_ = pathINPUT
       if(present(pathOUTPUT)) pathOUTPUT_ = pathOUTPUT
       !
@@ -954,7 +963,7 @@ contains
       real(8),allocatable                   :: ReErrMat(:,:),ImErrMat(:,:)
       !
       !
-      write(*,*) "--- checkAnalyticContinuation ---"
+      if(verbose)write(*,*) "---- checkAnalyticContinuation"
       if(Umats%Nbp.ne.Ureal%Nbp) stop "Umats%Nbp.ne.Ureal%Nbp"
       if(Umats%Npoints.ne.Ureal%Npoints) stop "Umats%Npoints.ne.Ureal%Npoints"
       Nbp = Umats%Nbp
@@ -1143,7 +1152,7 @@ contains
       logical                               :: Uaa_flag,Ust_flag,Usc_flag
       !
       !
-      write(*,*) "--- build_Uloc_singlParam ---"
+      if(verbose)write(*,*) "---- build_Uloc_singlParam"
       !
       !
       ! Check on the input matrices
@@ -1191,7 +1200,7 @@ contains
       logical                               :: Uaa_flag,Ust_flag,Usc_flag
       !
       !
-      write(*,*) "--- build_Uloc_multiParam ---"
+      if(verbose)write(*,*) "---- build_Uloc_multiParam"
       !
       !
       ! Check on the input matrices
@@ -1253,7 +1262,7 @@ contains
       real                                  :: start,finish
       !
       !
-      write(*,*) "--- build_Uret_singlParam ---"
+      if(verbose)write(*,*) "---- build_Uret_singlParam"
       !
       !
       ! Check on the input field
@@ -1388,7 +1397,7 @@ contains
       real                                  :: start,finish
       !
       !
-      write(*,*) "--- build_Uret_multiParam ---"
+      if(verbose)write(*,*) "---- build_Uret_multiParam"
       !
       !
       ! Check on the input field
@@ -1529,7 +1538,7 @@ contains
       complex(8),allocatable                :: Kaux(:,:,:)
       !
       !
-      write(*,*) "--- calc_QMCinteractions ---"
+      if(verbose)write(*,*) "---- calc_QMCinteractions"
       !
       !
       ! Check on the input field

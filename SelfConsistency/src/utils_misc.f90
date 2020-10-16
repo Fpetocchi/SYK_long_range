@@ -120,6 +120,7 @@ contains
 
    !---------------------------------------------------------------------------!
    !PURPOSE: Calculates the fermi-dirac distribution f(e)
+   !TEST ON: 14-10-2020
    !---------------------------------------------------------------------------!
    double precision function fermidirac(e,efermi,beta)
       implicit none
@@ -144,6 +145,7 @@ contains
 
    !---------------------------------------------------------------------------!
    !PURPOSE: Energy derivative of fermi-dirac dist
+   !TEST ON: 14-10-2020
    !---------------------------------------------------------------------------!
    double precision function diff_fermidirac(e,efermi,beta)
       implicit none
@@ -262,6 +264,7 @@ contains
    ! beta and tau are in atomic unit.
    ! nseg = number of segments, must be even.
    ! nsimp fixed to 2
+   !TEST ON: 14-10-2020
    !---------------------------------------------------------------------------!
    function denspace(end,num) result(array)
       implicit none
@@ -301,6 +304,7 @@ contains
 
    !---------------------------------------------------------------------------!
    !PURPOSE: Regularize string
+   !TEST ON: 14-10-2020
    !---------------------------------------------------------------------------!
    function reg(string_in) result(string_out)
       implicit none
@@ -312,6 +316,7 @@ contains
 
    !---------------------------------------------------------------------------!
    !PURPOSE: Looks for a free unit
+   !TEST ON: 14-10-2020
    !---------------------------------------------------------------------------!
    function free_unit(n) result(unit_)
       implicit none
@@ -331,6 +336,7 @@ contains
 
    !---------------------------------------------------------------------------!
    !PURPOSE: Returns time in seconds from now to time described by t
+   !TEST ON: 14-10-2020
    !---------------------------------------------------------------------------!
    subroutine tick(t)
       integer, intent(out)                  :: t
@@ -346,6 +352,7 @@ contains
 
    !---------------------------------------------------------------------------!
    !PURPOSE: Returns true if a file/directory exists
+   !TEST ON: 14-10-2020
    !---------------------------------------------------------------------------!
    subroutine inquireFile(file,exists,hardstop)
       implicit none
@@ -384,6 +391,7 @@ contains
 
    !---------------------------------------------------------------------------!
    !PURPOSE: Creat directory in path
+   !TEST ON: 14-10-2020
    !---------------------------------------------------------------------------!
    subroutine createDir(dirpath)
        implicit none
@@ -586,6 +594,7 @@ contains
    !    q = k, x = mesh with x(i) = [x(i-1) + x(i+1)]/2
    ! 2) Make sure that each segment is divided into two EQUAL segments.
    ! 3) The weights for cos and sin integration are in wcos and wsin.
+   !TEST ON: 16-10-2020
    !---------------------------------------------------------------------------!
    subroutine FermionicFilon(q,x,fx,wcos,wsin)
       implicit none
@@ -879,6 +888,7 @@ contains
 
    !---------------------------------------------------------------------------!
    !PURPOSE: Routines for the str interface
+   !TEST ON: 14-10-2020
    !---------------------------------------------------------------------------!
    function str_i_to_ch(i4) result(string)
      integer                      :: i4
@@ -1149,6 +1159,7 @@ contains
 
    !---------------------------------------------------------------------------!
    !PURPOSE: Routines for the assert_shape interface
+   !TEST ON: 14-10-2020
    !---------------------------------------------------------------------------!
    subroutine i_assert_shape_N1(A,Ndim,routine,matname)
      integer,dimension(:),intent(in)          :: A

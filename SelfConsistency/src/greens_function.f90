@@ -47,6 +47,7 @@ contains
 
    !---------------------------------------------------------------------------!
    !PURPOSE: Compute the density given the Green's function
+   !TEST ON: 16-10-2020(Kdep)
    !---------------------------------------------------------------------------!
    subroutine calc_density_loc(Gmats,n_loc)
       !
@@ -64,7 +65,7 @@ contains
       integer                               :: ispin,Norb
       !
       !
-      if(verbose)write(*,"(A)") "---- calc_density_loc ---"
+      if(verbose)write(*,"(A)") "---- calc_density_loc"
       !
       !
       ! Check on the input Fields
@@ -107,7 +108,7 @@ contains
       integer                               :: ispin,Norb,Nkpt
       !
       !
-      if(verbose)write(*,"(A)") "---- calc_density_Kdep ---"
+      if(verbose)write(*,"(A)") "---- calc_density_Kdep"
       !
       !
       ! Check on the input Fields
@@ -128,7 +129,7 @@ contains
          call Fmats2itau_mat(Beta,Gmats%wks(:,:,:,:,ispin),Gitau, &
          asympt_corr=.true.,tau_uniform=tau_uniform,Nkpt3=Lttc%Nkpt3,kpt=Lttc%kpt,atBeta=.true.)
          !
-         n_k(:,:,:,ispin) = -Gitau(:,:,:,NtauF)
+         n_k(:,:,:,ispin) = -Gitau(:,:,NtauF,:)
          !
       enddo
       deallocate(Gitau)
@@ -139,6 +140,7 @@ contains
    !---------------------------------------------------------------------------!
    !PURPOSE: analytically compute the G0(\tau) in the diagonal basis.
    !by now only for paramagnetic G
+   !TEST ON: 14-10-2020
    !---------------------------------------------------------------------------!
    subroutine calc_G0_tau(Gitau,mu,Beta,Ek,atBeta)
       !
@@ -161,7 +163,7 @@ contains
       logical                               :: upper,lower,atBeta_
       !
       !
-      if(verbose)write(*,"(A)") "---- calc_G0_tau ---"
+      if(verbose)write(*,"(A)") "---- calc_G0_tau"
       fermicut=log(huge(1.0d0)-1e2)/2.d0
       !
       !
@@ -209,6 +211,7 @@ contains
 
    !---------------------------------------------------------------------------!
    !PURPOSE: Compute the Matsubara Green's Function
+   !TEST ON: 16-10-2020
    !---------------------------------------------------------------------------!
    subroutine calc_Gmats(Gmats,Lttc,Smats)
       !
@@ -232,7 +235,7 @@ contains
       integer                               :: iw,ik,iwan,ispin
       !
       !
-      if(verbose)write(*,"(A)") "---- calc_Gmats ---"
+      if(verbose)write(*,"(A)") "---- calc_Gmats"
       !
       !
       ! Check on the input Fields
@@ -326,7 +329,7 @@ contains
       integer                               :: iter
       !
       !
-      if(verbose)write(*,"(A)") "---- set_density_Int ---"
+      if(verbose)write(*,"(A)") "---- set_density_Int"
       write(*,"(A1,F10.5)") "Target density: ",n_target
       !
       !
@@ -448,7 +451,7 @@ contains
       integer                               :: iter
       !
       !
-      if(verbose)write(*,"(A)") "---- set_density_NonInt ---"
+      if(verbose)write(*,"(A)") "---- set_density_NonInt"
       write(*,"(A1,F10.5)") "Target density: ",n_target
       !
       !
@@ -559,6 +562,7 @@ contains
       use linalg
       use utils_misc
       use file_io
+      use fourier_transforms
       use input_vars, only : pathINPUT
       use input_vars, only : Nreal, wrealMax, eta
       use input_vars, only : wmatsMax
@@ -580,7 +584,7 @@ contains
       integer                               :: Norb,Nkpt,Nmats
       !
       !
-      if(verbose)write(*,"(A)") "---- calc_Glda ---"
+      if(verbose)write(*,"(A)") "---- calc_Glda"
       pathOUTPUT_ = reg(pathINPUT)//"LDA/"
       if(present(pathOUTPUT)) pathOUTPUT_ = reg(pathOUTPUT)//"LDA/"
       !
@@ -593,54 +597,7 @@ contains
       Nkpt = Lttc%Nkpt
       !
       !
-      !print G(iw) in diagonal and Wannier basis
-      Nmats = int(Beta*wmatsMax/(2d0*pi))
-      allocate(axis(Nmats));axis=0d0
-      axis = FermionicFreqMesh(Beta,Nmats)
-      allocate(zeta(Norb,Norb,Nmats));zeta=czero
-      do iwan1=1,Norb
-         do iw=1,Nmats
-            zeta(iwan1,iwan1,iw) = dcmplx( mu , axis(iw) )
-         enddo
-      enddo
-      !
-      allocate(Gprint_Ek(Norb,Nmats));Gprint_Ek=czero
-      allocate(Gprint_Hk(Norb,Norb,Nmats));Gprint_Hk=czero
-      !
-      allocate(invGf(Norb,Norb));invGf=czero
-      !$OMP PARALLEL DEFAULT(NONE),&
-      !$OMP SHARED(Norb,Nmats,Nkpt,mu,zeta,axis,Lttc,Gprint_Ek,Gprint_Hk),&
-      !$OMP PRIVATE(iwan1,ik,iw,invGf)
-      !$OMP DO
-      do ik=1,Nkpt
-         do iw=1,Nmats
-            !
-            do iwan1=1,Norb
-               Gprint_Ek(iwan1,iw) = Gprint_Ek(iwan1,iw) + 1d0/( dcmplx( mu , axis(iw) ) - Lttc%Ek(iwan1,ik) )/Nkpt
-            enddo
-            !
-            invGf = zeta(:,:,iw) - Lttc%Hk(:,:,ik)
-            !
-            call inv(invGf)
-            Gprint_Hk(:,:,iw) = Gprint_Hk(:,:,iw) + invGf/Nkpt
-            !
-         enddo
-      enddo
-      !$OMP END DO
-      !$OMP END PARALLEL
-      deallocate(zeta,invGf)
-      !
-      ! Print
-      do iwan1=1,Norb
-         call dump_FermionicField(Gprint_Ek(iwan1,:),reg(pathOUTPUT_),"Gmats_Ek_"//str(iwan1)//".lda",axis)
-         do iwan2=1,Norb
-            call dump_FermionicField(Gprint_Hk(iwan1,iwan2,:),reg(pathOUTPUT_),"Gmats_Hk_"//str(iwan1)//str(iwan2)//".lda",axis)
-         enddo
-      enddo
-      deallocate(axis,Gprint_Hk,Gprint_Ek)
-      !
-      !
-      !print G(w) in diagonal and Wannier basis
+      !print G(w) in diagonal and Wannier basis---------------------------------
       allocate(axis(Nreal));axis=0d0
       axis = linspace(-wrealMax,+wrealMax,Nreal)
       allocate(zeta(Norb,Norb,Nreal));zeta=czero
@@ -686,7 +643,7 @@ contains
       deallocate(axis,Gprint_Hk,Gprint_Ek)
       !
       !
-      !print G(tau) in diagonal and Wannier basis
+      !print G(tau) in diagonal and Wannier basis-------------------------------
       allocate(axis(NtauF));axis=0d0
       if(tau_uniform)then
          axis = linspace(0d0,Beta,NtauF)
@@ -728,7 +685,29 @@ contains
             call dump_FermionicField(Gprint_Hk(iwan1,iwan2,:),reg(pathOUTPUT_),"Gitau_Hk_"//str(iwan1)//str(iwan2)//".lda",axis)
          enddo
       enddo
-      deallocate(axis,Gprint_Hk,Gprint_Ek)
+      deallocate(axis)!,Gprint_Hk,Gprint_Ek)
+      !
+      !
+      !print G(iw) in diagonal and Wannier basis--------------------------------
+      Nmats = int(Beta*wmatsMax/(2d0*pi))
+      allocate(axis(Nmats));axis=0d0
+      axis = FermionicFreqMesh(Beta,Nmats)
+      allocate(zeta(Norb,Norb,Nmats)) !Temporaty for Gmats
+      !
+      zeta=czero
+      call Fitau2mats_mat(Beta,Gprint_Hk,zeta,tau_uniform=tau_uniform)
+      do iwan1=1,Norb
+         do iwan2=1,Norb
+            call dump_FermionicField(zeta(iwan1,iwan2,:),reg(pathOUTPUT_),"Gmats_Hk_"//str(iwan1)//str(iwan2)//".lda",axis)
+         enddo
+      enddo
+      !
+      zeta=czero
+      call Fitau2mats_vec(Beta,Gprint_Ek,zeta(1,:,:),tau_uniform=tau_uniform)
+      do iwan1=1,Norb
+         call dump_FermionicField(zeta(1,iwan1,:),reg(pathOUTPUT_),"Gmats_Ek_"//str(iwan1)//".lda",axis)
+      enddo
+      deallocate(axis,Gprint_Hk,Gprint_Ek,zeta)
       !
    end subroutine calc_Glda
 
