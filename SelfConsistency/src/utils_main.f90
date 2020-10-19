@@ -21,6 +21,12 @@ module utils_main
    !---------------------------------------------------------------------------!
    !PURPOSE: Module variables
    !---------------------------------------------------------------------------!
+#ifdef _verb
+   logical,private                          :: verbose=.true.
+#else
+   logical,private                          :: verbose=.false.
+#endif
+   !
    type(Lattice)                            :: Crystal
    type(FermionicField)                     :: Glat
    type(FermionicField)                     :: Gimp
@@ -32,13 +38,20 @@ module utils_main
    type(FermionicField)                     :: SigmaEDMFT
    !
    type(BosonicField)                       :: Wlat
-   type(BosonicField)                       :: Urpa
+   type(BosonicField)                       :: Ulat
    type(BosonicField)                       :: PiGG
    type(BosonicField)                       :: PiEDMFT
    type(BosonicField)                       :: curlyU
    !
-   real(8),allocatable                      :: Uloc(:,:)
+   real(8),allocatable                      :: Umat(:,:)
    real(8),allocatable                      :: Kfunct(:,:)
+   !
+   logical                                  :: calc_PiGG=.false.
+   logical                                  :: merge_Pi=.false.
+   logical                                  :: calc_W=.false.
+   logical                                  :: calc_Wfull=.false.
+   logical                                  :: calc_Wedmft=.false.
+   logical                                  :: merge_Sigma=.false.
 
    !---------------------------------------------------------------------------!
    !PURPOSE: Rutines available for the user. Description only for interfaces.
@@ -211,6 +224,7 @@ contains
       !
       implicit none
       integer,intent(in)                    :: ItStart
+      logical                               :: filexists
       !
       !
       write(LOGfile,"(A)") "---- initialize Fields"
@@ -223,89 +237,163 @@ contains
             !
          case("G0W0","scGW")
             !
+            !Unscreened interaction
+            call AllocateBosonicField(Ulat,Crystal%Norb,Nmats,Nkpt=Crystal%Nkpt,Nsite=Nsite,Beta=Beta)
+            if(Umodel)stop "U model is implemented only for non-GW (fully local) screened calculations."
+            if(Uspex) call read_U_spex(Ulat,save2bin=verbose,LocalOnly=.false.)
+            !
+            !Polarization
+            call AllocateBosonicField(PiGG,Crystal%Norb,Nmats,Nsite=Nsite,no_bare=.false.,Beta=Beta)
+            !
+            !Lattice Gf
             call AllocateFermionicField(Glat,Crystal%Norb,Nmats,Nkpt=Crystal%Nkpt,Nsite=Nsite,Beta=Beta)
-            if(ItStart.ne.0)then
-               call read_FermionicField(Glat,reg(pathDATA)//str(ItStart),"Glat")
-            else
-               call calc_Gmats(Glat,Crystal)
-            endif
+            if(ItStart.eq.0) call calc_Gmats(Glat,Crystal)
+            if(ItStart.ne.0) call read_FermionicField(Glat,reg(pathDATA)//str(ItStart-1),"Glat")
+            !
+            !Logical Flags
+            calc_PiGG = .true.
+            calc_W = .true.
+            calc_Wfull = .true.
             !
          case("DMFT+statU")
             !
+            !Hubbard interaction
+            allocate(Umat(Crystal%Norb**2,Crystal%Norb**2));Umat=0d0
+            if(Uspex) call read_U_spex(Umat)
+            if(Umodel)then
+               call inquireFile(reg(pathINPUT)//"Umat_model.DAT",filexists,hardstop=.false.)
+               if(filexists)then
+                  call read_Matrix(Umat,reg(pathINPUT)//"Umat_model.DAT")
+               else
+                  call build_Uscr(Umat,Uaa,Uab,J)
+                  call dump_Matrix(Umat,reg(pathINPUT)//"Umat_model.DAT")
+               endif
+            endif
+            !
             if(ItStart.ne.0)then
                !
+               !Impurity Self-energy
                call AllocateFermionicField(SigmaDMFT,Crystal%Norb,Nmats,Nsite=Nsite,Beta=Beta)
-               call read_FermionicField(SigmaDMFT,1,reg(pathDATA)//str(ItStart),"SigmaDMFT")
-               call read_FermionicField(SigmaDMFT,2,reg(pathDATA)//str(ItStart),"SigmaDMFT")
+               call read_FermionicField(SigmaDMFT,1,reg(pathDATA)//str(ItStart-1),"SigmaDMFT")
+               call read_FermionicField(SigmaDMFT,2,reg(pathDATA)//str(ItStart-1),"SigmaDMFT")
                !
             else
+               !
+               !Lattice Gf
                call AllocateFermionicField(Glat,Crystal%Norb,Nmats,Nkpt=Crystal%Nkpt,Nsite=Nsite,Beta=Beta)
                call calc_Gmats(Glat,Crystal)
+               !
             endif
             !
          case("DMFT+dynU")
             !
+            !Unscreened interaction
+            call AllocateBosonicField(Ulat,Crystal%Norb,Nmats,Nsite=Nsite,Beta=Beta)
+            if(Uspex) call read_U_spex(Ulat,save2bin=verbose,LocalOnly=.true.)
+            if(Umodel)then
+               call inquireFile(reg(pathINPUT)//"Uloc_mats_model.DAT",filexists,hardstop=.false.)
+               if(filexists)then
+                  call read_BosonicField(Ulat,reg(pathINPUT),"Uloc_mats_model.DAT")
+               else
+                  call build_Uret(Ulat,Uaa,Uab,J,g_eph,wo_eph)
+                  call dump_BosonicField(Ulat,reg(pathINPUT),"Uloc_mats_model.DAT")
+               endif
+            endif
+            !
             if(ItStart.ne.0)then
                !
+               !Impurity Self-energy
                call AllocateFermionicField(SigmaEDMFT,Crystal%Norb,Nmats,Nsite=Nsite,Beta=Beta)
-               call read_FermionicField(SigmaEDMFT,1,reg(pathDATA)//str(ItStart),"SigmaEDMFT")
-               call read_FermionicField(SigmaEDMFT,2,reg(pathDATA)//str(ItStart),"SigmaEDMFT")
+               call read_FermionicField(SigmaEDMFT,1,reg(pathDATA)//str(ItStart-1),"SigmaEDMFT")
+               call read_FermionicField(SigmaEDMFT,2,reg(pathDATA)//str(ItStart-1),"SigmaEDMFT")
                !
             else
+               !
+               !Lattice Gf
                call AllocateFermionicField(Glat,Crystal%Norb,Nmats,Nkpt=Crystal%Nkpt,Nsite=Nsite,Beta=Beta)
                call calc_Gmats(Glat,Crystal)
+               !
             endif
             !
          case("EDMFT")
             !
+            !Unscreened interaction
+            call AllocateBosonicField(Ulat,Crystal%Norb,Nmats,Nsite=Nsite,Beta=Beta)
+            if(Uspex) call read_U_spex(Ulat,save2bin=verbose,LocalOnly=.true.)
+            if(Umodel)then
+               call inquireFile(reg(pathINPUT)//"Uloc_mats_model.DAT",filexists,hardstop=.false.)
+               if(filexists)then
+                  call read_BosonicField(Ulat,reg(pathINPUT),"Uloc_mats_model.DAT")
+               else
+                  call build_Uret(Ulat,Uaa,Uab,J,g_eph,wo_eph)
+                  call dump_BosonicField(Ulat,reg(pathINPUT),"Uloc_mats_model.DAT")
+               endif
+            endif
+            !
             if(ItStart.ne.0)then
                !
+               !Polarization
                call AllocateBosonicField(PiEDMFT,Crystal%Norb,Nmats,Nsite=Nsite,no_bare=.true.,Beta=Beta)
-               call read_BosonicField(PiEDMFT,reg(pathDATA)//str(ItStart),"PiEDMFT")
+               call read_BosonicField(PiEDMFT,reg(pathDATA)//str(ItStart-1),"PiEDMFT")
                !
+               !Impurity Self-energy
                call AllocateFermionicField(SigmaEDMFT,Crystal%Norb,Nmats,Nsite=Nsite,Beta=Beta)
-               call read_FermionicField(SigmaEDMFT,1,reg(pathDATA)//str(ItStart),"SigmaEDMFT")
-               call read_FermionicField(SigmaEDMFT,2,reg(pathDATA)//str(ItStart),"SigmaEDMFT")
+               call read_FermionicField(SigmaEDMFT,1,reg(pathDATA)//str(ItStart-1),"SigmaEDMFT")
+               call read_FermionicField(SigmaEDMFT,2,reg(pathDATA)//str(ItStart-1),"SigmaEDMFT")
                !
             else
                !
+               !Lattice Gf
                call AllocateFermionicField(Glat,Crystal%Norb,Nmats,Nkpt=Crystal%Nkpt,Nsite=Nsite,Beta=Beta)
                call calc_Gmats(Glat,Crystal)
                !
             endif
+            !
+            !Logical Flags
+            calc_Wedmft = .true.
             !
          case("GW+EDMFT")
             !
+            !Unscreened interaction
+            call AllocateBosonicField(Ulat,Crystal%Norb,Nmats,Nkpt=Crystal%Nkpt,Nsite=Nsite,Beta=Beta)
+            if(Umodel)stop "U model is implemented only for non-GW (fully local) screened calculations."
+            if(Uspex) call read_U_spex(Ulat,save2bin=verbose,LocalOnly=.false.)
+            !
             if(ItStart.ne.0)then
                !
+               !Polarization
+               call AllocateBosonicField(PiGG,Crystal%Norb,Nmats,Nkpt=Crystal%Nkpt,Nsite=Nsite,no_bare=.true.,Beta=Beta)
                call AllocateBosonicField(PiEDMFT,Crystal%Norb,Nmats,Nsite=Nsite,no_bare=.true.,Beta=Beta)
-               call read_BosonicField(PiEDMFT,reg(pathDATA)//str(ItStart),"PiEDMFT")
+               call read_BosonicField(PiEDMFT,reg(pathDATA)//str(ItStart-1),"PiEDMFT")
                !
+               !Impurity Self-energy
                call AllocateFermionicField(SigmaEDMFT,Crystal%Norb,Nmats,Nsite=Nsite)
-               call read_FermionicField(SigmaEDMFT,1,reg(pathDATA)//str(ItStart),"SigmaEDMFT")
-               call read_FermionicField(SigmaEDMFT,2,reg(pathDATA)//str(ItStart),"SigmaEDMFT")
+               call read_FermionicField(SigmaEDMFT,1,reg(pathDATA)//str(ItStart-1),"SigmaEDMFT")
+               call read_FermionicField(SigmaEDMFT,2,reg(pathDATA)//str(ItStart-1),"SigmaEDMFT")
                !
+               !Lattice Gf
                call AllocateFermionicField(Glat,Crystal%Norb,Nmats,Nkpt=Crystal%Nkpt,Nsite=Nsite,Beta=Beta)
-               call read_FermionicField(Glat,reg(pathDATA)//str(ItStart),"Glat")
+               call read_FermionicField(Glat,reg(pathDATA)//str(ItStart-1),"Glat")
                !
             else
                !
+               !Polarization
+               call AllocateBosonicField(PiGG,Crystal%Norb,Nmats,Nsite=Nsite,no_bare=.true.,Beta=Beta)
+               !
+               !Lattice Gf
                call AllocateFermionicField(Glat,Crystal%Norb,Nmats,Nkpt=Crystal%Nkpt,Nsite=Nsite,Beta=Beta)
                call calc_Gmats(Glat,Crystal)
-               !call dump_FermionicField(Glat,1,reg(pathDATA)//str(ItStart)//"/","Glat_loc_up.DAT")
-               !call dump_FermionicField(Glat,2,reg(pathDATA)//str(ItStart)//"/","Glat_loc_dn.DAT")
-               !call dump_FermionicField(Glat,reg(pathDATA)//str(ItStart)//"/","Glat",binfmt=.true.)
-               !call dump_FermionicField(Glat,reg(pathDATA)//str(ItStart)//"/","Glat",binfmt=.false.)
-               !call read_FermionicField(Glat,1,reg(pathDATA)//str(ItStart)//"/","Glat_loc_up.DAT")
-               !call read_FermionicField(Glat,2,reg(pathDATA)//str(ItStart)//"/","Glat_loc_dn.DAT")
-               !call dump_FermionicField(Glat,1,reg(pathDATA)//str(ItStart)//"/","Glat_loc_up_testread_LOC.DAT")
-               !call dump_FermionicField(Glat,2,reg(pathDATA)//str(ItStart)//"/","Glat_loc_dn_testread_LOC.DAT")
-               !call read_FermionicField(Glat,reg(pathDATA)//str(ItStart)//"/","Glat")
-               !call dump_FermionicField(Glat,reg(pathDATA)//str(ItStart)//"/","Glat_testread_Kdep",binfmt=.true.)
                !
             endif
             !
+            !Logical Flags
+            calc_PiGG = .true.
+            if(ItStart.ne.0) merge_Pi = .true.
+            calc_Wfull = .true.
+            !
       end select
+      !
+      calc_W = calc_Wedmft .or. calc_Wfull
       !
    end subroutine initialize_Fields
 
@@ -313,3 +401,24 @@ contains
 
 
 end module utils_main
+
+
+
+
+
+
+
+
+
+
+
+!call dump_FermionicField(Glat,1,reg(pathDATA)//str(ItStart)//"/","Glat_loc_up.DAT")
+!call dump_FermionicField(Glat,2,reg(pathDATA)//str(ItStart)//"/","Glat_loc_dn.DAT")
+!call dump_FermionicField(Glat,reg(pathDATA)//str(ItStart)//"/","Glat",binfmt=.true.)
+!call dump_FermionicField(Glat,reg(pathDATA)//str(ItStart)//"/","Glat",binfmt=.false.)
+!call read_FermionicField(Glat,1,reg(pathDATA)//str(ItStart)//"/","Glat_loc_up.DAT")
+!call read_FermionicField(Glat,2,reg(pathDATA)//str(ItStart)//"/","Glat_loc_dn.DAT")
+!call dump_FermionicField(Glat,1,reg(pathDATA)//str(ItStart)//"/","Glat_loc_up_testread_LOC.DAT")
+!call dump_FermionicField(Glat,2,reg(pathDATA)//str(ItStart)//"/","Glat_loc_dn_testread_LOC.DAT")
+!call read_FermionicField(Glat,reg(pathDATA)//str(ItStart)//"/","Glat")
+!call dump_FermionicField(Glat,reg(pathDATA)//str(ItStart)//"/","Glat_testread_Kdep",binfmt=.true.)

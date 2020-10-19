@@ -1,3 +1,4 @@
+SHELL := /bin/bash
 #
 # Compiler flags
 #
@@ -41,7 +42,7 @@ RELFFLAGS += -module $(RELDIR)
 
 #
 # All rules---------------------------------------------------------------------
-.PHONY: all clean debug prep release remake
+.PHONY: all clean debug prepREL prepDBG release remake test
 
 
 #
@@ -69,7 +70,7 @@ $(DBGDIR)/fourier_transforms.o: $(SRCDIR)/fourier_transforms.f90 $(DBGDIR)/utils
 $(DBGDIR)/parameters.o: $(SRCDIR)/parameters.f90
 	$(FC) -c $(FFLAGS) $(DBGFFLAGS) -o $@ $<
 
-$(DBGDIR)/input_vars.o: $(SRCDIR)/input_vars.f90
+$(DBGDIR)/input_vars.o: $(SRCDIR)/input_vars.f90 $(DBGDIR)/utils_misc.o
 	$(FC) -c $(FFLAGS) $(DBGFFLAGS) -o $@ $<
 
 $(DBGDIR)/utils_fields.o: $(SRCDIR)/utils_fields.f90 $(DBGDIR)/parameters.o
@@ -124,7 +125,7 @@ $(RELDIR)/fourier_transforms.o: $(SRCDIR)/fourier_transforms.f90 $(RELDIR)/utils
 $(RELDIR)/parameters.o: $(SRCDIR)/parameters.f90
 	$(FC) -c $(FFLAGS) $(RELFFLAGS) -o $@ $<
 
-$(RELDIR)/input_vars.o: $(SRCDIR)/input_vars.f90
+$(RELDIR)/input_vars.o: $(SRCDIR)/input_vars.f90 $(RELDIR)/utils_misc.o
 	$(FC) -c $(FFLAGS) $(RELFFLAGS) -o $@ $<
 
 $(RELDIR)/utils_fields.o: $(SRCDIR)/utils_fields.f90 $(RELDIR)/parameters.o
@@ -161,7 +162,7 @@ $(RELEXE): $(RELOBJS)
 
 #
 # test rules-------------------------------------------------------------------
-test: prepDBG $(DBGEXE) prepTSTS
+test: prepDBG $(DBGEXE) moveTSTS
 
 
 #
@@ -170,16 +171,18 @@ prep:
 	@mkdir -p $(DBGDIR) $(RELDIR) $(EXECDIR)
 
 prepREL:
+	@paste <( echo "character(len=256),parameter :: revision = \"" ) <( git rev-parse HEAD  ) <( echo "\"") > $(SRCDIR)/revision_SelfCons.inc
 	@mkdir -p $(RELDIR) $(EXECDIR)
 
 prepDBG:
+	@paste <( echo "character(len=256),parameter :: revision = \"" ) <( git rev-parse HEAD  ) <( echo "\"") > $(SRCDIR)/revision_SelfCons.inc
 	@mkdir -p $(DBGDIR) $(EXECDIR)
 
-prepTSTS:
+moveTSTS:
 	@mkdir -p $(TSTSDIR)
 	@cp $(EXECDIR)/* $(TSTSDIR)
 
 remake: clean all
 
 clean:
-	rm -rf $(RELEXE) $(RELOBJS) $(DBGEXE) $(DBGOBJS) $(DBGDIR) $(RELDIR) $(EXECDIR)
+	rm -rf $(RELEXE) $(RELOBJS) $(DBGEXE) $(DBGOBJS) $(DBGDIR) $(RELDIR) $(EXECDIR) $(SRCDIR)/revisionSelfCons.inc

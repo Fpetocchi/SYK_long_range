@@ -17,11 +17,13 @@ module file_io
    !PURPOSE: Module interfaces
    !---------------------------------------------------------------------------!
    interface dump_Matrix
-      module procedure :: dump_Matrix_local                                     ![Umat,printpath]
+      module procedure :: dump_Matrix_local_d                                   ![Umat,printpath]
+      module procedure :: dump_Matrix_local_z                                   ![Umat,printpath]
       module procedure :: dump_Matrix_Kdep                                      ![Umat(:,:,:),dirpath,filename,binfmt,ispin(optional)]
    end interface dump_Matrix
    interface read_Matrix
-      module procedure :: read_Matrix_local                                     ![Umat,printpath]                (Reads only from formatted input.)
+      module procedure :: read_Matrix_local_d                                   ![Umat,printpath]                (Reads only from formatted input.)
+      module procedure :: read_Matrix_local_z                                   ![Umat,printpath]                (Reads only from formatted input.)
       module procedure :: read_Matrix_Kdep                                      ![Umat(:,:,:),dirpath,filename]  (Reads only from unformatted input.)
    end interface read_Matrix
 
@@ -77,7 +79,7 @@ contains
    !---------------------------------------------------------------------------!
    !PURPOSE: Write to file a generic matrix
    !---------------------------------------------------------------------------!
-   subroutine dump_Matrix_local(Umat,printpath)
+   subroutine dump_Matrix_local_z(Umat,printpath)
       !
       use utils_misc
       implicit none
@@ -89,7 +91,7 @@ contains
       integer                               :: i,j
       !
       !
-      if(verbose)write(*,"(A)") "---- dump_Matrix_local"
+      if(verbose)write(*,"(A)") "---- dump_Matrix_local_z"
       if(verbose)write(*,"(A)") "     Dump "//reg(printpath)
       !
       !
@@ -104,13 +106,38 @@ contains
       enddo
       close(unit)
       !
-   end subroutine dump_Matrix_local
+   end subroutine dump_Matrix_local_z
+   !
+   subroutine dump_Matrix_local_d(Umat,printpath)
+      !
+      use utils_misc
+      implicit none
+      !
+      real(8),intent(in)                    :: Umat(:,:)
+      character(len=*),intent(in)           :: printpath
+      !
+      integer                               :: unit
+      integer                               :: i,j
+      !
+      !
+      if(verbose)write(*,"(A)") "---- dump_Matrix_local_d"
+      if(verbose)write(*,"(A)") "     Dump "//reg(printpath)
+      !
+      !
+      unit = free_unit()
+      open(unit,file=reg(printpath),form="formatted",status="unknown",position="rewind",action="write")
+      do i=1,size(Umat,dim=1)
+         write(unit,"(999E20.12)") (real(Umat(i,j)),j=1,size(Umat,dim=2))
+      enddo
+      close(unit)
+      !
+   end subroutine dump_Matrix_local_d
 
 
    !---------------------------------------------------------------------------!
    !PURPOSE: Read from file a square matrix
    !---------------------------------------------------------------------------!
-   subroutine read_Matrix_local(Umat,readpath)
+   subroutine read_Matrix_local_z(Umat,readpath)
       !
       use utils_misc
       implicit none
@@ -125,7 +152,7 @@ contains
       integer                               :: i,j
       !
       !
-      if(verbose)write(*,"(A)") "---- read_Matrix_local"
+      if(verbose)write(*,"(A)") "---- read_Matrix_local_z"
       if(verbose)write(*,"(A)") "     Read "//reg(readpath)
       !
       call inquireFile(reg(readpath),filexists)
@@ -146,7 +173,39 @@ contains
       Umat = dcmplx(0d0,0d0)
       Umat = RealM + dcmplx(0d0,1d0)*ImagM
       !
-   end subroutine read_Matrix_local
+   end subroutine read_Matrix_local_z
+   !
+   subroutine read_Matrix_local_d(Umat,readpath)
+      !
+      use utils_misc
+      implicit none
+      !
+      real(8),intent(inout)                 :: Umat(:,:)
+      character(len=*),intent(in)           :: readpath
+      !
+      logical                               :: filexists
+      real(8),allocatable                   :: RealM(:,:)
+      integer                               :: unit
+      integer                               :: i,j
+      !
+      !
+      if(verbose)write(*,"(A)") "---- read_Matrix_local_d"
+      if(verbose)write(*,"(A)") "     Read "//reg(readpath)
+      !
+      call inquireFile(reg(readpath),filexists)
+      allocate(RealM(size(Umat,dim=1),size(Umat,dim=2)));RealM=0d0
+      !
+      unit = free_unit()
+      open(unit,file=reg(readpath),form="unformatted",status="old",position="rewind",action="read")
+      do i=1,size(Umat,dim=1)
+         read(unit,"(999E20.12)") (RealM(i,j),j=1,size(Umat,dim=2))
+      enddo
+      close(unit)
+      !
+      Umat = 0d0
+      Umat = RealM
+      !
+   end subroutine read_Matrix_local_d
 
 
    !---------------------------------------------------------------------------!

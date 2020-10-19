@@ -17,14 +17,14 @@ module interactions
       module procedure read_U_spex_Uloc0                                        ![Matrix,pathOUTPUT(optional to change output path)]
    end interface read_U_spex
 
-   interface build_Uloc
-      module procedure build_Uloc_singlParam                  ! (Solver Format) ![Matrix,Uaa_screened,Uab_screened,J_screened]
-      module procedure build_Uloc_multiParam                  ! (Solver Format) ![Matrix,Vector,Matrix,Matrix]
-   end interface build_Uloc
+   interface build_Uscr
+      module procedure build_Uscrloc_singlParam                  ! (Solver Format) ![Matrix,Uaa_screened,Uab_screened,J_screened]
+      module procedure build_Uscrloc_multiParam                  ! (Solver Format) ![Matrix,Vector,Matrix,Matrix]
+   end interface build_Uscr
 
    interface build_Uret
-      module procedure build_Uret_singlParam                   !   (GW Format)  ![BosonicField,Uaa_bare,Uab_bare,J_bare,vector_g,vector_w0]
-      module procedure build_Uret_multiParam                   !   (GW Format)  ![BosonicField,Vector,Matrix,Matrix,vector_g,vector_w0]
+      module procedure build_Uretloc_singlParam                   !   (GW Format)  ![BosonicField,Uaa_bare,Uab_bare,J_bare,vector_g,vector_w0]
+      module procedure build_Uretloc_multiParam                   !   (GW Format)  ![BosonicField,Vector,Matrix,Matrix,vector_g,vector_w0]
    end interface build_Uret
 
    !---------------------------------------------------------------------------!
@@ -45,7 +45,7 @@ module interactions
    public :: calc_chi_full
    public :: calc_chi_edmft
    public :: read_U_spex
-   public :: build_Uloc
+   public :: build_Uscr
    public :: build_Uret
    public :: calc_QMCinteractions
    !public :: rescale_interaction
@@ -852,7 +852,7 @@ contains
       use input_vars, only :  pathINPUT
       implicit none
       !
-      complex(8),allocatable,intent(inout)  :: Umat(:,:)
+      real(8),allocatable,intent(inout)     :: Umat(:,:)
       character(len=*),intent(in),optional  :: pathOUTPUT
       !
       logical                               :: Umatsxists,Urealxists,SPEXxists
@@ -1136,7 +1136,7 @@ contains
    !---------------------------------------------------------------------------!
    !PURPOSE: Create the static interaction tensor from user-given parameters
    !---------------------------------------------------------------------------!
-   subroutine build_Uloc_singlParam(Umat,Uaa,Uab,J)
+   subroutine build_Uscrloc_singlParam(Umat,Uaa,Uab,J)
       !
       use parameters
       use file_io
@@ -1144,7 +1144,7 @@ contains
       use utils_fields
       implicit none
       !
-      complex(8),allocatable,intent(inout)  :: Umat(:,:)
+      real(8),allocatable,intent(inout)     :: Umat(:,:)
       real(8),intent(in)                    :: Uaa,Uab,J
       !
       integer                               :: Nbp,Norb
@@ -1153,14 +1153,14 @@ contains
       logical                               :: Uaa_flag,Ust_flag,Usc_flag
       !
       !
-      if(verbose)write(*,*) "---- build_Uloc_singlParam"
+      if(verbose)write(*,*) "---- build_Uscrloc_singlParam"
       !
       !
       ! Check on the input matrices
       Nbp = size(Umat,dim=1)
       Norb = Nbp/2
       if(mod(Nbp,2).ne.0.0) stop "Wrong matrix dimension."
-      call assert_shape(Umat,[Nbp,Nbp],"build_Uloc_singlParam","Umat")
+      call assert_shape(Umat,[Nbp,Nbp],"build_Uscrloc_singlParam","Umat")
       !
       do ib1=1,Nspin*Norb
          do ib2=1,Nspin*Norb
@@ -1181,10 +1181,10 @@ contains
          enddo
       enddo
       !
-   end subroutine build_Uloc_singlParam
+   end subroutine build_Uscrloc_singlParam
    !
    !
-   subroutine build_Uloc_multiParam(Umat,Uaa,Uab,J)
+   subroutine build_Uscrloc_multiParam(Umat,Uaa,Uab,J)
       !
       use parameters
       use file_io
@@ -1192,7 +1192,7 @@ contains
       use utils_fields
       implicit none
       !
-      complex(8),allocatable,intent(inout)  :: Umat(:,:)
+      real(8),allocatable,intent(inout)     :: Umat(:,:)
       real(8),allocatable,intent(in)        :: Uaa(:),Uab(:,:),J(:,:)
       !
       integer                               :: Nbp,Norb
@@ -1201,17 +1201,17 @@ contains
       logical                               :: Uaa_flag,Ust_flag,Usc_flag
       !
       !
-      if(verbose)write(*,*) "---- build_Uloc_multiParam"
+      if(verbose)write(*,*) "---- build_Uscrloc_multiParam"
       !
       !
       ! Check on the input matrices
       Nbp = size(Umat,dim=1)
       Norb = Nbp/2
       if(mod(Nbp,2).ne.0.0) stop "Wrong matrix dimension."
-      call assert_shape(Umat,[Nbp,Nbp],"build_Uloc_multiParam","Umat")
-      call assert_shape(Uaa,[Norb],"build_Uloc_multiParam","Uaa")
-      call assert_shape(Uab,[Norb,Norb],"build_Uloc_multiParam","Uab")
-      call assert_shape(J,[Norb,Norb],"build_Uloc_multiParam","J")
+      call assert_shape(Umat,[Nbp,Nbp],"build_Uscrloc_multiParam","Umat")
+      call assert_shape(Uaa,[Norb],"build_Uscrloc_multiParam","Uaa")
+      call assert_shape(Uab,[Norb,Norb],"build_Uscrloc_multiParam","Uab")
+      call assert_shape(J,[Norb,Norb],"build_Uscrloc_multiParam","J")
       !
       do ib1=1,Nspin*Norb
          do ib2=1,Nspin*Norb
@@ -1232,13 +1232,13 @@ contains
          enddo
       enddo
       !
-   end subroutine build_Uloc_multiParam
+   end subroutine build_Uscrloc_multiParam
 
 
    !---------------------------------------------------------------------------!
    !PURPOSE: Create the freq. dependent interaction tensor from user-given parameters
    !---------------------------------------------------------------------------!
-   subroutine build_Uret_singlParam(Umats,Uaa,Uab,J,g_eph,wo_eph)
+   subroutine build_Uretloc_singlParam(Umats,Uaa,Uab,J,g_eph,wo_eph)
       !
       use parameters
       use file_io
@@ -1263,7 +1263,7 @@ contains
       real                                  :: start,finish
       !
       !
-      if(verbose)write(*,*) "---- build_Uret_singlParam"
+      if(verbose)write(*,*) "---- build_Uretloc_singlParam"
       !
       !
       ! Check on the input field
@@ -1371,9 +1371,9 @@ contains
       call DeallocateBosonicField(Ureal)
       write(*,"(A,1F10.6)") "Ue-ph(w) --> Ue-ph(iw) cpu timing:", finish-start
       !
-   end subroutine build_Uret_singlParam
+   end subroutine build_Uretloc_singlParam
    !
-   subroutine build_Uret_multiParam(Umats,Uaa,Uab,J,g_eph,wo_eph)
+   subroutine build_Uretloc_multiParam(Umats,Uaa,Uab,J,g_eph,wo_eph)
       !
       use parameters
       use file_io
@@ -1398,7 +1398,7 @@ contains
       real                                  :: start,finish
       !
       !
-      if(verbose)write(*,*) "---- build_Uret_multiParam"
+      if(verbose)write(*,*) "---- build_Uretloc_multiParam"
       !
       !
       ! Check on the input field
@@ -1409,9 +1409,9 @@ contains
       Norb = int(sqrt(dble(Nbp)))
       Nph = size(g_eph)
       !
-      call assert_shape(Uaa,[Norb],"build_Uret_multiParam","Uaa")
-      call assert_shape(Uab,[Norb,Norb],"build_Uret_multiParam","Uab")
-      call assert_shape(J,[Norb,Norb],"build_Uret_multiParam","J")
+      call assert_shape(Uaa,[Norb],"build_Uretloc_multiParam","Uaa")
+      call assert_shape(Uab,[Norb,Norb],"build_Uretloc_multiParam","Uab")
+      call assert_shape(J,[Norb,Norb],"build_Uretloc_multiParam","J")
       !
       allocate(wmats(Umats%Npoints));wmats=0d0
       wmats = BosonicFreqMesh(Umats%Beta,Umats%Npoints)
@@ -1510,7 +1510,7 @@ contains
       call DeallocateBosonicField(Ureal)
       write(*,"(A,1F10.6)") "Ue-ph(w) --> Ue-ph(iw) cpu timing:", finish-start
       !
-   end subroutine build_Uret_multiParam
+   end subroutine build_Uretloc_multiParam
 
 
    !---------------------------------------------------------------------------!

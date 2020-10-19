@@ -51,7 +51,7 @@ module module_container
    use parameters
 
 
-   !(f) Standalone module. Contains only variables.
+   !(f) Variables and read inputifile. Depends on (b)
    use input_vars
 
 
@@ -73,6 +73,7 @@ module module_container
    !(h) Input/Output routines. Depends on (b),(e),(g)
    use file_io, only:                        &
    dump_Matrix                              ,&
+   read_Matrix                              ,&
    dump_FermionicField                      ,&
    read_FermionicField                      ,&
    dump_BosonicField                        ,&
@@ -86,7 +87,8 @@ module module_container
    calc_W_edmft                             ,&
    calc_chi_full                            ,&
    calc_chi_edmft                           ,&
-   build_Uloc                               ,&
+   build_Uscr                               ,&
+   build_Uret                               ,&
    calc_QMCinteractions
 
 

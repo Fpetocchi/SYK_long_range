@@ -10,12 +10,9 @@ program test
    !
    call tick(TimeStart)
    !
+   call readInputFile(pathINPUT)
    !
-   write(LOGfile,"(A)") new_line("A")//"Reading InputFile"//new_line("A")
-   !call readInputFile(pathINPUT)
-   Nmats = int(Beta*wmatsMax/(2d0*pi))
-   !
-   write(LOGfile,"(A)") "Setting Nthread"//new_line("A")
+   write(LOGfile,"(A,1I4)") "Setting Nthread",Nthread
    call omp_set_num_threads(Nthread)
    !
    call printHeader()
@@ -26,6 +23,36 @@ program test
    !
    call initialize_Fields(ItStart)
    !
+   !Polarization
+   if(calc_PiGG)then
+      !
+      if(ItStart.eq.0) call calc_Pi(PiGG,Crystal)
+      if(ItStart.ne.0) call calc_Pi(PiGG,Glat,Crystal)
+      !
+      if(merge_Pi) then
+         call MergeFields(PiGG,PiEDMFT,alphaPi,SiteOrbs)
+         call DeallocateBosonicField(PiEDMFT)
+      endif
+      !
+   endif
+   !
+   !Fully screened interaction
+   if(calc_W)then
+      !
+      if(calc_Wfull)  call calc_W_full(Wlat,Ulat,PiGG,Crystal)
+      if(calc_Wedmft) call calc_W_edmft(Wlat,Ulat,PiEDMFT,Crystal)
+      !
+      call DeallocateBosonicField(Ulat)
+      !
+   endif
+
+
+
+   !
+
+
+
+
 
 
 
