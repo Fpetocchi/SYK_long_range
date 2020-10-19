@@ -51,7 +51,7 @@ module module_container
    use parameters
 
 
-   !(f) Variables and read inputifile. Depends on (b)
+   !(f) Variables and read inputifile. Depends on (b) and (e)
    use input_vars
 
 

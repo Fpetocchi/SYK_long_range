@@ -87,52 +87,71 @@ module input_vars
    integer,parameter,private                :: pos_comment=46
    logical,private                          :: IOinput=.true.
    !
+   character(len=256),public                :: CalculationType
+   !
    !OMP parallelization
    integer,public                           :: Nthread
-   !Imaginary time and frequency meshes
-   logical,public                           :: tau_uniform=.false.
-   integer,public                           :: NtauF=201
-   integer,public                           :: NtauB=1000
-   integer,public                           :: Nmats
-   integer,public                           :: Nreal=2000
-   real(8),public                           :: wrealMax=10
-   real(8),public                           :: eta=0.04
-   real(8),public                           :: wmatsMax=100
-   real(8),public                           :: Beta=15
+   !
    !K-points
-   integer,public                           :: Nkpt3(3)=[8,8,8]
-   logical,public                           :: UseXepsKorder=.true.
+   integer,public                           :: Nkpt3(3)
+   logical,public                           :: UseXepsKorder
+   !
    !Site and Orbital space
-   integer,public                           :: Nsite=1
-   integer,public,allocatable               :: SiteOrbs(:,:)
+   integer,public                           :: Nsite
    integer,public,allocatable               :: SiteNorb(:)
    character(len=2),allocatable             :: SiteName(:)
-   !Double counting types, divergencies, scaling coefficients
-   character(len=256),public                :: VH_type="Ubare"
-   logical,public                           :: HandleGammaPoint !=.not.Umodel
-   real(8),public                           :: alphaPi
-   real(8),public                           :: alphaSigma
-   !Paths (directories must end with "/") and loop variables
-   integer,public                           :: FirstIteration=0
-   character(len=256),public                :: pathINPUT="InputFiles/"
-   character(len=256),public                :: pathDATA="Iterations/"
-   integer,public                           :: LOGfile=6
-   real(8),public                           :: Mixing
+   integer,public,allocatable               :: SiteOrbs(:,:)
+   !
+   !Imaginary time and frequency meshes
+   real(8),public                           :: Beta
+   integer,public                           :: NtauF
+   integer,public                           :: NtauB
+   logical,public                           :: tau_uniform
+   real(8),public                           :: wmatsMax
+   integer,public                           :: Nmats
+   integer,public                           :: Nreal
+   real(8),public                           :: wrealMax
+   real(8),public                           :: eta
+   !
    !Density lookup
-   real(8),public                           :: densityPercErr=0.01
+   real(8),public                           :: TargetDensity
+   real(8),public                           :: densityPercErr
+   real(8),public                           :: muStep
+   integer,public                           :: muIter
+   real(8),public                           :: muTime
+   !
    !Interaction variables
-   logical,public                           :: paramagneticSPEX=.true.
-   logical,public                           :: UfullStructure=.true.
-   logical,public                           :: Umodel=.false.
-   logical,public                           :: Uspex=.false.
+   logical,public                           :: UfullStructure
+   logical,public                           :: Umodel
+   logical,public                           :: Uspex
    integer,public                           :: Nphonons
    real(8),public,allocatable               :: g_eph(:)
    real(8),public,allocatable               :: wo_eph(:)
    real(8),public                           :: Uaa
    real(8),public                           :: Uab
    real(8),public                           :: J
-   !The most important variable
-   character(len=256),public                :: CalculationType="GW+EDMFT"
+
+
+
+
+
+   !
+   !Double counting types, divergencies, scaling coefficients
+   character(len=256),public                :: VH_type="Ubare"
+   logical,public                           :: HandleGammaPoint !=.not.Umodel
+   real(8),public                           :: alphaPi
+   real(8),public                           :: alphaSigma
+   !
+   !Paths (directories must end with "/") and loop variables
+   integer,public                           :: FirstIteration=0
+   character(len=256),public                :: pathINPUT="InputFiles/"
+   character(len=256),public                :: pathDATA="Iterations/"
+   integer,public                           :: LOGfile=6
+   real(8),public                           :: Mixing
+
+   !
+   !Variables not to be changed
+   logical,public                           :: paramagneticSPEX=.true.
 
    !---------------------------------------------------------------------------!
    !PURPOSE: INternal Rutines available for the user. Description only for interfaces.
@@ -155,43 +174,88 @@ contains
    !---------------------------------------------------------------------------!
    subroutine read_InputFile(InputFile)
       use utils_misc
+      use parameters
       implicit none
-      character(len=*) :: InputFile
-      integer          :: unit
+      character(len=*)                      :: InputFile
+      integer                               :: unit
+      integer                               :: isite,iph
+      integer,allocatable                   :: tmpOrbs(:)
       !
       write(LOGfile,"(A)") new_line("A")//"Reading InputFile"//new_line("A")
       !
+      call parse_input_variable(CalculationType,"CALC_TYPE",InputFile,default="GW+EDMFT",comment="Calculation type. Avalibale: G0W0, scGW, DMFT+statU, DMFT+dynU, EDMFT, GW+EDMFT.")
+      !
+      !OMP parallelization
       call execute_command_line(" lscpu | grep 'CPU(s):       ' | awk '{print $2}' > Nthread.used ")
       unit=free_unit()
       open(unit,file=reg("Nthread.used"),form="formatted",action="read",status="old")
       read(unit,*)Nthread
       close(unit)
       !
-      !call parse_input_variable(Norb,"NORB",INPUTunit,default=1,comment="Number of impurity orbitals.")
-      !call parse_input_variable(Nbath,"NBATH",INPUTunit,default=6,comment="Number of bath sites:(normal=>Nbath per orb)(hybrid=>Nbath total)(replica=>Nbath=Nreplica)")
-      !call parse_input_variable(Nspin,"NSPIN",INPUTunit,default=1,comment="Number of spin degeneracy (max 2)")
-      !call parse_input_variable(uloc,"ULOC",INPUTunit,default=[2.d0,0.d0,0.d0],comment="Values of the local interaction per orbital (max 3)")
-      !call parse_input_variable(ust,"UST",INPUTunit,default=0.d0,comment="Value of the inter-orbital interaction term")
-      !call parse_input_variable(Jh,"JH",INPUTunit,default=0.d0,comment="Hunds coupling")
-      !call parse_input_variable(Jx,"JX",INPUTunit,default=0.d0,comment="S-E coupling")
-      !call parse_input_variable(Jp,"JP",INPUTunit,default=0.d0,comment="P-H coupling")
-      !call parse_input_variable(beta,"BETA",INPUTunit,default=1000.d0,comment="Inverse temperature, at T=0 is used as a IR cut-off.")
-      !call parse_input_variable(xmu,"XMU",INPUTunit,default=0.d0,comment="Chemical potential. If HFMODE=T, xmu=0 indicates half-filling condition.")
-      !call parse_input_variable(deltasc,"DELTASC",INPUTunit,default=0.02d0,comment="Value of the SC symmetry breaking term.")
-      !call parse_input_variable(nloop,"NLOOP",INPUTunit,default=100,comment="Max number of DMFT iterations.")
-      !call parse_input_variable(dmft_error,"DMFT_ERROR",INPUTunit,default=0.00001d0,comment="Error threshold for DMFT convergence")
-      !call parse_input_variable(sb_field,"SB_FIELD",INPUTunit,default=0.1d0,comment="Value of a symmetry breaking field for magnetic solutions.")
+      !K-points
+      call parse_input_variable(Nkpt3,"NKPT3",InputFile,default=[8,8,8],comment="Number of K-points per dimension.")
+      call parse_input_variable(UseXepsKorder,"XEPS_KORDER",InputFile,default=.true.,comment="Flag to use the K-point ordering of XEPS.DAT.")
       !
-      !call parse_input_variable(ed_twin,"ED_TWIN",INPUTunit,default=.false.,comment="flag to reduce (T) or not (F,default) the number of visited sector using twin symmetry.")
-      !call parse_input_variable(ed_sectors,"ED_SECTORS",INPUTunit,default=.false.,comment="flag to reduce sector scan for the spectrum to specific sectors +/- ed_sectors_shift.")
-      !call parse_input_variable(ed_sectors_shift,"ED_SECTORS_SHIFT",INPUTunit,1,comment="shift to ed_sectors")
-      !call parse_input_variable(ed_sparse_H,"ED_SPARSE_H",INPUTunit,default=.true.,comment="flag to select  storage of sparse matrix H (mem--, cpu++) if TRUE, or direct on-the-fly H*v product (mem++, cpu--) if FALSE ")
-      !call parse_input_variable(ed_solve_offdiag_gf,"ED_SOLVE_OFFDIAG_GF",INPUTunit,default=.false.,comment="flag to select the calculation of the off-diagonal impurity GF. this is T by default if bath_type/=normal")
-      !call parse_input_variable(ed_print_Sigma,"ED_PRINT_SIGMA",INPUTunit,default=.true.,comment="flag to print impurity Self-energies")
-      !call parse_input_variable(ed_print_G,"ED_PRINT_G",INPUTunit,default=.true.,comment="flag to print impurity Greens function")
-      !call parse_input_variable(ed_print_G0,"ED_PRINT_G0",INPUTunit,default=.true.,comment="flag to print non-interacting impurity Greens function")
+      !Site and Orbital space
+      call append_to_input_list(Nspin,"NSPIN","Number of spins (fixed to 2).")
+      call parse_input_variable(Nsite,"NSITE",InputFile,default=1,comment="Number of impurity sites.")
+      allocate(SiteNorb(Nsite));SiteNorb=0
+      allocate(SiteName(Nsite))
+      do isite=1,Nsite
+         call parse_input_variable(SiteNorb(isite),"NORB_"//str(isite),InputFile,default=1,comment="Number of orbitals in site number "//str(isite))
+         call parse_input_variable(SiteName(isite),"NAME_"//str(isite),InputFile,default="El",comment="Chemical species of the site number "//str(isite))
+      enddo
+      allocate(SiteOrbs(Nsite,maxval(SiteNorb)));SiteOrbs=0
+      do isite=1,Nsite
+         allocate(tmpOrbs(1:SiteNorb(isite)));tmpOrbs=0
+         call parse_input_variable(SiteOrbs(isite,1:SiteNorb(isite)),"ORBS_"//str(isite),InputFile,default=tmpOrbs,comment="Lattice orbital indexes of site number "//str(isite))
+         deallocate(tmpOrbs)
+      enddo
       !
+      !Imaginary time and frequency meshes
+      call parse_input_variable(Beta,"BETA",InputFile,default=10.d0,comment="Inverse temperature in 1/eV.")
+      call parse_input_variable(NtauF,"NTAU_F",InputFile,default=201,comment="Number of points on the imaginary time axis for Fermionic quantities. Its gonna be made odd.")
+      if(mod(NtauF,2).eq.0)NtauF=NtauF+1
+      call parse_input_variable(NtauB,"NTAU_B",InputFile,default=1001,comment="Number of points on the imaginary time axis for Bosonic quantities. Its gonna be made odd.")
+      if(mod(NtauB,2).eq.0)NtauB=NtauB+1
+      call parse_input_variable(tau_uniform,"TAU_UNIF",InputFile,default=.false.,comment="Flag to use a non-tau_uniform meah on the imaginary time axis.")
+      call parse_input_variable(wmatsMax,"MAX_WMATS",InputFile,default=100.d0,comment="Maximum value of the matsubara frequency mesh.")
       Nmats = int(Beta*wmatsMax/(2d0*pi))
+      call append_to_input_list(Nmats,"NMATS","Number of points on the imaginary frequency axis for both Fermionic and Bosonic quantities.")
+      call parse_input_variable(Nreal,"NREAL",InputFile,default=2000,comment="Number of points on the real frequency axis.")
+      call parse_input_variable(wrealMax,"MAX_WREAL",InputFile,default=10.d0,comment="Maximum absolute value of the real frequency mesh.")
+      call parse_input_variable(eta,"ETA",InputFile,default=0.04d0,comment="Real frequency broadening.")
+      !
+      !Density lookup
+      call parse_input_variable(TargetDensity,"N_READ",InputFile,default=0d0,comment="Target density lookup is switched on to this value if its >0d0.")
+      call parse_input_variable(densityPercErr,"N_ERR",InputFile,default=0.01d0,comment="Relative error on the target density.")
+      call parse_input_variable(muStep,"MU_STEP",InputFile,default=0.2d0,comment="Initial chemical potential step in the density lookup.")
+      call parse_input_variable(muIter,"MU_ITER",InputFile,default=50,comment="Maximum number of iterations in the density lookup.")
+      call parse_input_variable(muTime,"MU_TIME",InputFile,default=0.5d0,comment="Minutes of solver runtime in the density lookup.")
+      !
+      !Interaction variables
+      call parse_input_variable(UfullStructure,"U_FULL",InputFile,default=.true.,comment="Flag to check for inverted Re/Im parity in SPEX Ucrpa.")
+      call parse_input_variable(Umodel,"U_MODEL",InputFile,default=.false.,comment="Flag to build the screening from user chosen phononic modes.")
+      call parse_input_variable(Uspex,"U_SPEX",InputFile,default=.true.,comment="Flag to read SPEX Ucrpa.")
+      if(Umodel.and.Uspex) stop "Make up your mind, U_MODEL or U_SPEX ?"
+      if(Umodel)then
+         call parse_input_variable(Uaa,"UAA",InputFile,default=5d0,comment="Interaction between same orbital and opposite spin electrons.")
+         call parse_input_variable(Uab,"UAB",InputFile,default=4d0,comment="Interaction between different orbital and opposite spin electrons.")
+         call parse_input_variable(J,"JH",InputFile,default=0.5d0,comment="Hund's coupling.")
+         call parse_input_variable(Nphonons,"N_PH",InputFile,default=3,comment="Number of custom phononic modes.")
+         allocate(g_eph(Nphonons));g_eph=0d0
+         allocate(wo_eph(Nphonons));wo_eph=0d0
+         do iph=1,Nphonons
+            call parse_input_variable(g_eph,"G_PH",InputFile,comment="Custom phononic couplings.")
+            call parse_input_variable(wo_eph,"WO_PH",InputFile,comment="Custom phononic energies.")
+         enddo
+      endif
+
+
+
+
+
+
       !
       call save_InputFile(InputFile)
       call code_version()
