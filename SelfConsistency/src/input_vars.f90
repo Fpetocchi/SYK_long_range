@@ -101,6 +101,9 @@ module input_vars
    integer,public,allocatable               :: SiteNorb(:)
    character(len=2),allocatable             :: SiteName(:)
    integer,public,allocatable               :: SiteOrbs(:,:)
+   integer,public                           :: EquivalentSets
+   integer,public,allocatable               :: EquivalentNorb(:)
+   integer,public,allocatable               :: EquivalentOrbs(:,:)
    !
    !Imaginary time and frequency meshes
    real(8),public                           :: Beta
@@ -130,28 +133,26 @@ module input_vars
    real(8),public                           :: Uaa
    real(8),public                           :: Uab
    real(8),public                           :: J
-
-
-
-
-
    !
    !Double counting types, divergencies, scaling coefficients
-   character(len=256),public                :: VH_type="Ubare"
+   character(len=256),public                :: VH_type
    logical,public                           :: HandleGammaPoint !=.not.Umodel
    real(8),public                           :: alphaPi
    real(8),public                           :: alphaSigma
+   real(8),public                           :: alphaHk
    !
    !Paths (directories must end with "/") and loop variables
-   integer,public                           :: FirstIteration=0
-   character(len=256),public                :: pathINPUT="InputFiles/"
-   character(len=256),public                :: pathDATA="Iterations/"
-   integer,public                           :: LOGfile=6
-   real(8),public                           :: Mixing
-
+   integer,public                           :: FirstIteration
+   character(len=256),public                :: pathINPUT!="InputFiles/"
+   character(len=256),public                :: pathDATA!="Iterations/"
+   integer,public                           :: LOGfile
+   real(8),public                           :: Mixing_curlyG
+   real(8),public                           :: Mixing_curlyU
+   logical,public                           :: skipLattice
    !
-   !Variables not to be changed
+   !Variables not to be readed
    logical,public                           :: paramagneticSPEX=.true.
+   logical,allocatable,public               :: PhysicalUelement(:,:)
 
    !---------------------------------------------------------------------------!
    !PURPOSE: INternal Rutines available for the user. Description only for interfaces.
@@ -178,7 +179,7 @@ contains
       implicit none
       character(len=*)                      :: InputFile
       integer                               :: unit
-      integer                               :: isite,iph
+      integer                               :: isite,iset,iph
       integer,allocatable                   :: tmpOrbs(:)
       !
       write(LOGfile,"(A)") new_line("A")//"Reading InputFile"//new_line("A")
@@ -212,6 +213,18 @@ contains
          deallocate(tmpOrbs)
       enddo
       !
+      call parse_input_variable(EquivalentSets,"EQV_SETS",InputFile,default=1,comment="Number of sets of locally equivalent orbitals.")
+      allocate(EquivalentNorb(EquivalentSets));EquivalentNorb=0
+      do iset=1,EquivalentSets
+         call parse_input_variable(EquivalentNorb(iset),"EQV_NORB_"//str(iset),InputFile,default=1,comment="Number of equivalent orbitals in the set number "//str(iset))
+      enddo
+      allocate(EquivalentOrbs(EquivalentSets,maxval(EquivalentNorb)));EquivalentOrbs=0
+      do iset=1,EquivalentSets
+         allocate(tmpOrbs(1:EquivalentNorb(iset)));tmpOrbs=0
+         call parse_input_variable(EquivalentOrbs(iset,1:EquivalentNorb(iset)),"EQV_ORBS_"//str(iset),InputFile,default=tmpOrbs,comment="Lattice orbital indexes of equivalent set number "//str(iset))
+         deallocate(tmpOrbs)
+      enddo
+      !
       !Imaginary time and frequency meshes
       call parse_input_variable(Beta,"BETA",InputFile,default=10.d0,comment="Inverse temperature in 1/eV.")
       call parse_input_variable(NtauF,"NTAU_F",InputFile,default=201,comment="Number of points on the imaginary time axis for Fermionic quantities. Its gonna be made odd.")
@@ -221,7 +234,7 @@ contains
       call parse_input_variable(tau_uniform,"TAU_UNIF",InputFile,default=.false.,comment="Flag to use a non-tau_uniform meah on the imaginary time axis.")
       call parse_input_variable(wmatsMax,"MAX_WMATS",InputFile,default=100.d0,comment="Maximum value of the matsubara frequency mesh.")
       Nmats = int(Beta*wmatsMax/(2d0*pi))
-      call append_to_input_list(Nmats,"NMATS","Number of points on the imaginary frequency axis for both Fermionic and Bosonic quantities.")
+      call append_to_input_list(Nmats,"NMATS","Number of points on the imaginary frequency axis. User cannot set this as its computed from MAX_WMATS and BETA.")
       call parse_input_variable(Nreal,"NREAL",InputFile,default=2000,comment="Number of points on the real frequency axis.")
       call parse_input_variable(wrealMax,"MAX_WREAL",InputFile,default=10.d0,comment="Maximum absolute value of the real frequency mesh.")
       call parse_input_variable(eta,"ETA",InputFile,default=0.04d0,comment="Real frequency broadening.")
@@ -250,15 +263,29 @@ contains
             call parse_input_variable(wo_eph,"WO_PH",InputFile,comment="Custom phononic energies.")
          enddo
       endif
-
-
-
-
-
-
       !
-      call save_InputFile(InputFile)
+      !Double counting types, divergencies, scaling coefficients
+      call parse_input_variable(VH_type,"VH_TYPE",InputFile,default="Ubare",comment="check this because I dont remember.")
+      call parse_input_variable(HandleGammaPoint,"SMEAR_GAMMA",InputFile,default=.true.,comment="Remove the interaction divergence at the Gamma point.")
+      call parse_input_variable(alphaPi,"ALPHA_PI",InputFile,default=1d0,comment="Fraction of the EDMFT polarization substituted within the lattice one.")
+      call parse_input_variable(alphaSigma,"ALPHA_SIGMA",InputFile,default=1d0,comment="Fraction of the EDMFT self-energy substituted within the lattice one.")
+      call parse_input_variable(alphaHk,"ALPHA_HK",InputFile,default=1d0,comment="Rescaling of the non-interacting Hamiltonian.")
+      !
+      !Paths and loop variables
+      call parse_input_variable(pathINPUT,"PATH_INPUT",InputFile,default="InputFiles",comment="Folder within cwd where to look for input files.")
+      call parse_input_variable(pathDATA,"PATH_DATA",InputFile,default="Iterations",comment="Folder within cwd where to store data.")
+      call parse_input_variable(FirstIteration,"START_IT",InputFile,default=0,comment="First iteration.")
+      call parse_input_variable(LOGfile,"LOGFILE",InputFile,default=6,comment="Standard output redirection unit. Use 6 to print to terminal.")
+      call parse_input_variable(Mixing_curlyG,"MIX_G",InputFile,default=0.5d0,comment="Fraction of the old iteration curlyG.")
+      call parse_input_variable(Mixing_curlyU,"MIX_U",InputFile,default=0.5d0,comment="Fraction of the old iteration curlyU.")
+      call parse_input_variable(skipLattice,"SKIP_LATT",InputFile,default=.false.,comment="Skip the lattice summation and assuming good the existing Gloc and Wloc.")
+      !
       call code_version()
+      call save_InputFile(InputFile)
+      !
+      !The last slash is uneffective
+      pathINPUT=trim(pathINPUT)//"/"
+      pathDATA=trim(pathDATA)//"/"
       !
     end subroutine read_InputFile
 

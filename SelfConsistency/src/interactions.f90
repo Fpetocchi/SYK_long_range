@@ -81,7 +81,7 @@ contains
       integer                               :: ismall,num_k
       !
       !
-      if(verbose)write(*,*) "---- calc_W_full"
+      if(verbose)write(*,"(A)") "---- calc_W_full"
       !
       !
       ! Check on the input Fields
@@ -209,7 +209,7 @@ contains
       integer                               :: ismall,num_k
       !
       !
-      if(verbose)write(*,*) "---- calc_W_edmft"
+      if(verbose)write(*,"(A)") "---- calc_W_edmft"
       !
       !
       ! Check on the input Fields
@@ -329,7 +329,7 @@ contains
       integer                               :: iq,iw
       !
       !
-      if(verbose)write(*,*) "---- calc_chi_full"
+      if(verbose)write(*,"(A)") "---- calc_chi_full"
       !
       !
       ! Check on the input Fields
@@ -408,7 +408,7 @@ contains
       integer                               :: iq,iw
       !
       !
-      if(verbose)write(*,*) "---- calc_chi_edmft"
+      if(verbose)write(*,"(A)") "---- calc_chi_edmft"
       !
       !
       ! Check on the input Fields
@@ -464,6 +464,7 @@ contains
 
    !---------------------------------------------------------------------------!
    !PURPOSE: Read frequancy dependent interactions from SPEX files.
+   !TEST ON: 20-10-2020 (both doAC)
    !---------------------------------------------------------------------------!
    subroutine read_U_spex_full(Umats,save2bin,LocalOnly,pathOUTPUT,doAC)
       !
@@ -471,7 +472,7 @@ contains
       use file_io
       use utils_misc
       use utils_fields
-      use input_vars, only :  pathINPUT, UfullStructure
+      use input_vars, only :  pathINPUT, UfullStructure, PhysicalUelement
       implicit none
       !
       type(BosonicField),intent(inout)      :: Umats
@@ -493,7 +494,7 @@ contains
       real                                  :: start,finish
       !
       !
-      if(verbose)write(*,*) "---- read_U_spex_full"
+      if(verbose)write(*,"(A)") "---- read_U_spex_full"
       pathOUTPUT_ = pathINPUT
       if(present(pathOUTPUT)) pathOUTPUT_ = pathOUTPUT
       !
@@ -521,12 +522,22 @@ contains
       if(present(doAC)) doAC_ = doAC
       !
       !
+      ! This has to be done before allocation of large files otherwise the "system" command will not work
+      if(doAC_.and.(.not.LocalOnly))then
+         call createDir(reg(trim(pathINPUT)//"VW_imag"))
+         if(.not.save2bin)then
+            call createDir(reg(trim(pathINPUT)//"VW_imag_readable"),verb=verbose)
+            call createDir(reg(trim(pathINPUT)//"VW_real_readable"),verb=verbose)
+         endif
+      endif
+      !
+      !
       ! Perform cnalytical continuation on real interaction or load existing files
       if(doAC_) then
          !
          !---------------------------------------------------------------------!
          !
-         ! Allocations from dimensions written in W.Q0001.DAT file
+         ! Allocations from dimensions written in VW.Q0001.DAT file
          path = reg(pathINPUT)//"VW_real/VW.Q0001.DAT"
          call inquireFile(reg(path),filexists)
          unit = free_unit()
@@ -537,7 +548,7 @@ contains
          Nbp_spex = Norb_spex**2
          allocate(Utmp(Nbp_spex,Nbp_spex));Utmp=czero
          allocate(wread(Nfreq));wread=0d0
-         write(*,"(A,I5)")"Real frequencies: ",Nfreq
+         if(verbose)write(*,"(A,I5)")"Real frequencies: ",Nfreq
          !
          ! Few checks
          if(Nspin_spex.ne.1) stop "Nspin_spex.ne.1"
@@ -546,42 +557,42 @@ contains
          ! Look for the Number of SPEX files. Which are supposed to be ordered.
          Nkpt = 0
          do iq=1,2000
-            file_spex = reg(path)//"VW_real/VW.Q"//str(iq,4)//".DAT"
+            file_spex = reg(pathINPUT)//"VW_real/VW.Q"//str(iq,4)//".DAT"
             call inquireFile(reg(file_spex),filexists,hardstop=.false.)
             if(.not.filexists) exit
             Nkpt = Nkpt + 1
          enddo
-         write(*,"(A1,1I6)") "The number of SPEX files (Nkpt) in VW_real is: ",Nkpt
+         if(verbose)write(*,"(A,1I6)") "The number of SPEX files (Nkpt) in VW_real is: ",Nkpt
          if((.not.LocalOnly).and.(Umats%Nkpt.ne.Nkpt)) stop "Number of k-points of given BosonicField and number of VW_real k-points do not coincide."
          !
          ! Allocate the Bosonic field on the real axis
-         call AllocateBosonicField(Ureal,Nbp_spex,Nfreq,Nkpt,name="Uspex(w)")
+         if(LocalOnly)then
+            call AllocateBosonicField(Ureal,Norb_spex,Nfreq,Nkpt=0,name="Uspex(w)",Beta=Umats%Beta,no_bare=.true.)
+         else
+            call AllocateBosonicField(Ureal,Norb_spex,Nfreq,Nkpt=Nkpt,name="Uspex(k,w)",Beta=Umats%Beta,no_bare=.true.)
+         endif
          !
          ! Read VW_real accumulating local attribute and optionally storing the k-dependent part
-         path = pathINPUT//"VW_real/"
+         path = reg(pathINPUT)//"VW_real/"
          do iq=1,Nkpt
             !
-            file_spex = reg(path)//"VW_real/VW.Q"//str(iq,4)//".DAT"
+            file_spex = reg(path)//"VW.Q"//str(iq,4)//".DAT"
             call inquireFile(reg(file_spex),filexists) !redundant control
             !
             unit = free_unit()
             open(unit,file=reg(file_spex),form="unformatted",action="read")
             read(unit) iqread,Nspin_spex,Norb_spex,Nfreq
-            write(*,*)"read iq",iq   !!!!>>>>>TEST<<<<<!!!!
             if (iq.ne.iqread) stop "iqread.ne.iq"
             !
             read(unit) wread
             wread = H2eV*wread
-            write(*,*)"read wread",wread   !!!!>>>>>TEST<<<<<!!!!
             if (dabs(wread(1)).gt.eps) stop "wread(1) not zero"
             !
             do iw=0,Nfreq
                read(unit) Utmp
                if(iw.eq.0) then
                   !V(:,:,iq)=vwtmp(:,:)/Nkpt/Nkpt
-                  Ureal%bare_local = Ureal%bare_local + H2eV*Utmp/(Nkpt**3)
-                  if(.not.LocalOnly) Ureal%bare(:,:,iq) = H2eV*Utmp/(Nkpt**2)
-                  !bare values on Matsubara are the same
+                  !bare values on Matsubara are the same so no need to use bare attributes of Ureal
                   Umats%bare_local = Umats%bare_local + H2eV*Utmp/(Nkpt**3)
                   if(.not.LocalOnly) Umats%bare(:,:,iq) = H2eV*Utmp/(Nkpt**2)
                else
@@ -600,22 +611,20 @@ contains
          allocate(D2(Nbp_spex,Nbp_spex));D2=czero
          allocate(D3(Nbp_spex,Nbp_spex));D3=czero
          !
-         !
-         ! Analytical continuation of the local component to imag axis using spectral rep
-         call cpu_time(start)
-         !
          ! Check if any local Urpa component has inverted Im/Re symmetry
          do ib1=1,Nbp_spex
             do ib2=1,Nbp_spex
-               if( abs(real(Ureal%bare_local(ib1,ib2))).lt.abs(aimag(Ureal%bare_local(ib1,ib2))))then
+               if(PhysicalUelement(ib1,ib2).and.abs(real(Umats%bare_local(ib1,ib2))).lt.abs(aimag(Umats%bare_local(ib1,ib2))))then
                   write(*,"(A,2I5)")"Element: ",ib1,ib2
-                  write(*,"(A,E14.7)")"Re[Ubare(w=inf)]: ",real(Ureal%bare_local(ib1,ib2))
-                  write(*,"(A,E14.7)")"Im[Ubare(w=inf)]: ",aimag(Ureal%bare_local(ib1,ib2))
+                  write(*,"(A,E14.7)")"Re[Ubare(w=inf)]: ",real(Umats%bare_local(ib1,ib2))
+                  write(*,"(A,E14.7)")"Im[Ubare(w=inf)]: ",aimag(Umats%bare_local(ib1,ib2))
                   stop "Something wrong: Uloc cannot have inverted Re/Im parity."
                endif
             enddo
          enddo
          !
+         ! Analytical continuation of the local component to imag axis using spectral rep
+         call cpu_time(start)
          !$OMP PARALLEL DEFAULT(NONE),&
          !$OMP SHARED(Nbp_spex,wmats,wread,Nfreq,Ureal,Umats),&
          !$OMP PRIVATE(ib1,ib2,iw1,iw2,D1,D2,D3,Utmp)
@@ -650,12 +659,11 @@ contains
             enddo
             !
          enddo !iw1
-         !
          !$OMP END DO
          !$OMP END PARALLEL
          call cpu_time(finish)
          deallocate(D1,D2,D3)
-         write(*,"(A,1F10.6)") "UcRPA(w) --> UcRPA(iw) cpu timing:", finish-start
+         write(*,"(A,1F20.6)") "UcRPA(w) --> UcRPA(iw) cpu timing: ", finish-start
          !
          !
          if(.not.LocalOnly)then
@@ -665,22 +673,21 @@ contains
             allocate(D2(Nbp_spex,Nbp_spex));D2=czero
             allocate(D3(Nbp_spex,Nbp_spex));D3=czero
             !
-            !
             ! Analytical continuation of all the K-points to imag axis using spectral rep
             allocate(imgFact(Nbp_spex,Nbp_spex,2));imgFact=cone
             call cpu_time(start)
             !$OMP PARALLEL DEFAULT(NONE),&
-            !$OMP SHARED(Nbp_spex,wmats,wread,Nfreq,Ureal,Umats,UfullStructure),&
+            !$OMP SHARED(Nbp_spex,wmats,wread,Nfreq,Ureal,Umats,UfullStructure,verbose),&
             !$OMP PRIVATE(iq,ib1,ib2,iw1,iw2,D1,D2,D3,Utmp,imgFact)
             !$OMP DO
             do iq=1,Umats%Nkpt
                !
-               ! Some elelments of U, usually the k-dependent one, have inverted Im/Re symmetry
+               !Some elements of U, usually the k-dependent ones, might have inverted Im/Re symmetry
                imgFact=cone
                if(UfullStructure)then
                   do ib1=1,Nbp_spex
                      do ib2=1,Nbp_spex
-                        if( abs(real(Ureal%bare(ib1,ib2,iq))).lt.abs(aimag(Ureal%bare(ib1,ib2,iq))))then
+                        if( abs(real(Umats%bare(ib1,ib2,iq))).lt.abs(aimag(Umats%bare(ib1,ib2,iq))))then
                            imgFact(ib1,ib2,1) = -img !this correspond to dividing by I
                            imgFact(ib1,ib2,2) = +img !this correspond to multiplying by I
                         endif
@@ -718,17 +725,15 @@ contains
                   enddo
                   !
                enddo !iw1
-               !
+               if(verbose)print *, "UcRPA(q,iw) - done iq: ",iq
             enddo !iq
-            !
             !$OMP END DO
             !$OMP END PARALLEL
             call cpu_time(finish)
             deallocate(D1,D2,D3)
-            write(*,"(A,1F10.6)") "UcRPA(q,w) --> UcRPA(q,iw) cpu timing:", finish-start
+            write(*,"(A,1F20.6)") "UcRPA(q,w) --> UcRPA(q,iw) cpu timing: ", finish-start
             !
          endif !LocalOnly
-         call checkAnalyticContinuation(Umats,Ureal)
          deallocate(Utmp)
          !
          ! Print out the transformed stuff - local
@@ -736,13 +741,17 @@ contains
          call dump_BosonicField(Ureal,reg(pathOUTPUT_),"Uloc_real.DAT",wread)
          !
          ! Print out the transformed stuff - Kdep
-         call dump_BosonicField(Umats,reg(pathOUTPUT_//"VW_imag/"),.true.)
-         if(.not.save2bin)then
-            call dump_BosonicField(Umats,reg(pathOUTPUT_)//"VW_imag_readable/",save2bin)
-            call dump_BosonicField(Ureal,reg(pathOUTPUT_)//"VW_real_readable/",save2bin,axis=wread)
+         if(.not.LocalOnly)then
+            call dump_BosonicField(Umats,reg(pathOUTPUT_)//"VW_imag/",.true.)
+            if(.not.save2bin)then
+               call dump_BosonicField(Umats,reg(pathOUTPUT_)//"VW_imag_readable/",save2bin)
+               call dump_BosonicField(Ureal,reg(pathOUTPUT_)//"VW_real_readable/",save2bin,axis=wread)
+            endif
          endif
          !
          deallocate(wread)
+         !
+         call checkAnalyticContinuation(Umats,Ureal)
          call DeallocateBosonicField(Ureal)
          !
          !---------------------------------------------------------------------!
@@ -773,32 +782,33 @@ contains
          ! Look for the Number of SPEX files. Which are supposed to be ordered.
          Nkpt = 0
          do iq=1,2000
-            file_spex = reg(path)//"VW_imag/VW.Q"//str(iq,4)//".DAT"
+            file_spex = reg(pathINPUT)//"VW_imag/VW.Q"//str(iq,4)//".DAT"
             call inquireFile(reg(file_spex),filexists,hardstop=.false.)
             if(.not.filexists) exit
             Nkpt = Nkpt + 1
          enddo
-         write(*,"(A1,1I6)") "The number of SPEX files (Nkpt) in VW_imag is: ",Nkpt
+         if(verbose)write(*,"(A,1I6)") "The number of SPEX files (Nkpt) in VW_imag is: ",Nkpt
          if((.not.LocalOnly).and.(Umats%Nkpt.ne.Nkpt)) stop "Number of k-points of given BosonicField and number of VW_imag k-points do not coincide."
          !
          ! Read VW_imag accumulating local attribute and optionally storing the k-dependent part
          path = reg(pathINPUT)//"VW_imag/"
          do iq=1,Nkpt
             !
-            file_spex = reg(path)//"VW_imag/VW.Q"//str(iq,4)//".DAT"        !write(fn,"(a,a,i4.4,a)") reg(path),"VW_imag/VW.Q",iq,".DAT"
+            file_spex = reg(path)//"VW.Q"//str(iq,4)//".DAT"
             call inquireFile(reg(file_spex),filexists) !redundant control
             !
             unit = free_unit()
             open(unit,file=reg(file_spex),form="unformatted",action="read")
             read(unit) iqread,Nspin_spex,Norb_spex,Nfreq
-            write(*,*)"read iq",iq   !!!!>>>>>TEST<<<<<!!!!
             if (iq.ne.iqread) stop "iqread.ne.iq"
             !
             read(unit) wread
-            wread = H2eV*wread
-            write(*,*)"read wread",wread   !!!!>>>>>TEST<<<<<!!!!
+            !wread = H2eV*wread
             do iw=1,Nfreq
-               if (dabs(wread(iw)-wmats(iw)).gt.eps) stop "wread.ne.wmats"
+               if(dabs(wread(iw)-wmats(iw)).gt.eps) Then
+                  write(*,*)dabs(wread(iw)-wmats(iw)),iw,iq
+                  stop "wread.ne.wmats"
+               endif
             enddo
             !
             do iw=0,Nfreq
@@ -827,7 +837,7 @@ contains
          do iq=1,Nkpt
             do ib1=1,Nbp_spex
                do ib2=1,Nbp_spex
-                  if (dabs(dimag(Umats%bare(ib1,ib2,iq))).gt.1.d-6) then
+                  if(PhysicalUelement(ib1,ib2).and.dabs(dimag(Umats%bare(ib1,ib2,iq))).gt.1.d-6) then
                      write(*,"(A,2I5)") "Warning Umats%bare imaginary. Set matrix element to static value",ib1,ib2
                      Umats%bare(ib1,ib2,iq) = Umats%screened(ib1,ib2,1,iq)
                      Umats%screened(ib1,ib2,:,iq) = Umats%screened(ib1,ib2,1,iq)
@@ -864,7 +874,7 @@ contains
       type(BosonicField)                    :: Uread
       !
       !
-      if(verbose)write(*,*) "---- read_U_spex_Uloc0"
+      if(verbose)write(*,"(A)") "---- read_U_spex_Uloc0"
       pathOUTPUT_ = pathINPUT
       if(present(pathOUTPUT)) pathOUTPUT_ = pathOUTPUT
       !
@@ -962,9 +972,8 @@ contains
       real(8),allocatable                   :: ReErrMat(:,:),ImErrMat(:,:)
       !
       !
-      if(verbose)write(*,*) "---- checkAnalyticContinuation"
+      if(verbose)write(*,"(A)") "---- checkAnalyticContinuation"
       if(Umats%Nbp.ne.Ureal%Nbp) stop "Umats%Nbp.ne.Ureal%Nbp"
-      if(Umats%Npoints.ne.Ureal%Npoints) stop "Umats%Npoints.ne.Ureal%Npoints"
       Nbp = Umats%Nbp
       Nfreq = Umats%Npoints
       allocate(ReErrMat(Nbp,Nbp));ReErrMat=0d0
@@ -1153,7 +1162,7 @@ contains
       logical                               :: Uaa_flag,Ust_flag,Usc_flag
       !
       !
-      if(verbose)write(*,*) "---- build_Uscrloc_singlParam"
+      if(verbose)write(*,"(A)") "---- build_Uscrloc_singlParam"
       !
       !
       ! Check on the input matrices
@@ -1201,7 +1210,7 @@ contains
       logical                               :: Uaa_flag,Ust_flag,Usc_flag
       !
       !
-      if(verbose)write(*,*) "---- build_Uscrloc_multiParam"
+      if(verbose)write(*,"(A)") "---- build_Uscrloc_multiParam"
       !
       !
       ! Check on the input matrices
@@ -1263,7 +1272,7 @@ contains
       real                                  :: start,finish
       !
       !
-      if(verbose)write(*,*) "---- build_Uretloc_singlParam"
+      if(verbose)write(*,"(A)") "---- build_Uretloc_singlParam"
       !
       !
       ! Check on the input field
@@ -1398,7 +1407,7 @@ contains
       real                                  :: start,finish
       !
       !
-      if(verbose)write(*,*) "---- build_Uretloc_multiParam"
+      if(verbose)write(*,"(A)") "---- build_Uretloc_multiParam"
       !
       !
       ! Check on the input field
@@ -1539,7 +1548,7 @@ contains
       complex(8),allocatable                :: Kaux(:,:,:)
       !
       !
-      if(verbose)write(*,*) "---- calc_QMCinteractions"
+      if(verbose)write(*,"(A)") "---- calc_QMCinteractions"
       !
       !
       ! Check on the input field

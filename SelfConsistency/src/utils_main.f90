@@ -115,7 +115,7 @@ contains
       !
       do iter=0,1000
          Itpath = reg(pathDATA)//str(iter)
-         call inquireDir(reg(Itpath),Itexist,hardstop=.false.)
+         call inquireDir(reg(Itpath),Itexist,hardstop=.false.,verb=.false.)
          if(.not.Itexist)then
             Itfirst = iter
             Exit
@@ -147,6 +147,7 @@ contains
       implicit none
       type(Lattice),intent(out)             :: Lttc
       integer,intent(in)                    :: ItStart
+      integer                               :: m,n,mp,np,ib1,ib2
       !
       !
       write(LOGfile,"(A)") "---- initialize Lattice"
@@ -162,7 +163,7 @@ contains
             !
          case("G0W0","scGW")
             !
-            call read_Hk(pathINPUT,Lttc%Hk,Lttc%kpt,Lttc%Ek,Lttc%Zk,Lttc%Hloc)
+            call read_Hk(pathINPUT,alphaHk,Lttc%Hk,Lttc%kpt,Lttc%Ek,Lttc%Zk,Lttc%Hloc)
             !
             Lttc%Norb = size(Lttc%Hk,dim=1)
             Lttc%Nkpt = size(Lttc%Hk,dim=3)
@@ -182,7 +183,7 @@ contains
             !
          case("DMFT+statU","DMFT+dynU")
             !
-            call read_Hk(pathINPUT,Lttc%Hk,Lttc%kpt,Lttc%Ek,Lttc%Zk,Lttc%Hloc)
+            call read_Hk(pathINPUT,alphaHk,Lttc%Hk,Lttc%kpt,Lttc%Ek,Lttc%Zk,Lttc%Hloc)
             !
             Lttc%Norb = size(Lttc%Hk,dim=1)
             Lttc%Nkpt = size(Lttc%Hk,dim=3)
@@ -191,7 +192,7 @@ contains
             !
          case("EDMFT","GW+EDMFT")
             !
-            call read_Hk(pathINPUT,Lttc%Hk,Lttc%kpt,Lttc%Ek,Lttc%Zk,Lttc%Hloc)
+            call read_Hk(pathINPUT,alphaHk,Lttc%Hk,Lttc%kpt,Lttc%Ek,Lttc%Zk,Lttc%Hloc)
             !
             Lttc%Norb = size(Lttc%Hk,dim=1)
             Lttc%Nkpt = size(Lttc%Hk,dim=3)
@@ -211,7 +212,25 @@ contains
             !
       end select
       !
-      if(ItStart.eq.0)call calc_Glda(0d0,Beta,Lttc)
+      allocate(PhysicalUelement(Lttc%Norb**2,Lttc%Norb**2));PhysicalUelement=.false.
+      do m=1,Lttc%Norb
+         do n=1,Lttc%Norb
+            do mp=1,Lttc%Norb
+               do np=1,Lttc%Norb
+                  !
+                  ib1 = mp + Lttc%Norb*(m-1)
+                  ib2 = np + Lttc%Norb*(n-1)
+                  !
+                  if((mp.eq.m).and.(np.eq.n)) PhysicalUelement(ib1,ib2)=.true.
+                  if((mp.eq.np).and.(m.eq.n)) PhysicalUelement(ib1,ib2)=.true.
+                  if((mp.eq.n).and.(m.eq.np)) PhysicalUelement(ib1,ib2)=.true.
+                  !
+               enddo
+            enddo
+         enddo
+      enddo
+      !
+      !if(ItStart.eq.0)call calc_Glda(0d0,Beta,Lttc)
       !
    end subroutine initialize_Lattice
 
@@ -240,7 +259,7 @@ contains
             !Unscreened interaction
             call AllocateBosonicField(Ulat,Crystal%Norb,Nmats,Nkpt=Crystal%Nkpt,Nsite=Nsite,Beta=Beta)
             if(Umodel)stop "U model is implemented only for non-GW (fully local) screened calculations."
-            if(Uspex) call read_U_spex(Ulat,save2bin=verbose,LocalOnly=.false.)
+            if(Uspex) call read_U_spex(Ulat,save2bin=.not.verbose,LocalOnly=.false.)
             !
             !Polarization
             call AllocateBosonicField(PiGG,Crystal%Norb,Nmats,Nsite=Nsite,no_bare=.false.,Beta=Beta)
@@ -289,7 +308,7 @@ contains
             !
             !Unscreened interaction
             call AllocateBosonicField(Ulat,Crystal%Norb,Nmats,Nsite=Nsite,Beta=Beta)
-            if(Uspex) call read_U_spex(Ulat,save2bin=verbose,LocalOnly=.true.)
+            if(Uspex) call read_U_spex(Ulat,save2bin=.not.verbose,LocalOnly=.true.)
             if(Umodel)then
                call inquireFile(reg(pathINPUT)//"Uloc_mats_model.DAT",filexists,hardstop=.false.)
                if(filexists)then
@@ -319,7 +338,7 @@ contains
             !
             !Unscreened interaction
             call AllocateBosonicField(Ulat,Crystal%Norb,Nmats,Nsite=Nsite,Beta=Beta)
-            if(Uspex) call read_U_spex(Ulat,save2bin=verbose,LocalOnly=.true.)
+            if(Uspex) call read_U_spex(Ulat,save2bin=.not.verbose,LocalOnly=.true.)
             if(Umodel)then
                call inquireFile(reg(pathINPUT)//"Uloc_mats_model.DAT",filexists,hardstop=.false.)
                if(filexists)then
@@ -357,7 +376,7 @@ contains
             !Unscreened interaction
             call AllocateBosonicField(Ulat,Crystal%Norb,Nmats,Nkpt=Crystal%Nkpt,Nsite=Nsite,Beta=Beta)
             if(Umodel)stop "U model is implemented only for non-GW (fully local) screened calculations."
-            if(Uspex) call read_U_spex(Ulat,save2bin=verbose,LocalOnly=.false.)
+            if(Uspex) call read_U_spex(Ulat,save2bin=.not.verbose,LocalOnly=.false.)
             !
             if(ItStart.ne.0)then
                !
@@ -367,7 +386,7 @@ contains
                call read_BosonicField(PiEDMFT,reg(pathDATA)//str(ItStart-1),"PiEDMFT")
                !
                !Impurity Self-energy
-               call AllocateFermionicField(SigmaEDMFT,Crystal%Norb,Nmats,Nsite=Nsite)
+               call AllocateFermionicField(SigmaEDMFT,Crystal%Norb,Nmats,Nsite=Nsite,Beta=Beta)
                call read_FermionicField(SigmaEDMFT,1,reg(pathDATA)//str(ItStart-1),"SigmaEDMFT")
                call read_FermionicField(SigmaEDMFT,2,reg(pathDATA)//str(ItStart-1),"SigmaEDMFT")
                !

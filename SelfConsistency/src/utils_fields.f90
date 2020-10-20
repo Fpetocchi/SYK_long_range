@@ -221,11 +221,11 @@ contains
       !
       Nkpt_=0
       if(present(Nkpt))Nkpt_=Nkpt
-      if(present(name)) write(*,"(A)") "Allocation of "//trim(name)
+      if(present(name).and.verbose) write(*,"(A)") "Allocation of "//trim(name)
       if(G%status) stop "AllocateFermionicField: container already allocated."
       if(Norb.eq.0) stop "AllocateFermionicField: Norb not defined."
-      if(Npoints.eq.0) write(*,"(A)") "AllocateFermionicField: frequency dependent attributes are not going to be allocated."
-      if(Nkpt_.eq.0) write(*,"(A)") "AllocateFermionicField: K-dependent attributes are not going to be allocated."
+      if(Npoints.eq.0.and.verbose) write(*,"(A)") "AllocateFermionicField: frequency dependent attributes are not going to be allocated."
+      if(Nkpt_.eq.0.and.verbose) write(*,"(A)") "AllocateFermionicField: K-dependent attributes are not going to be allocated."
       !
       if(allocated(G%N_s))deallocate(G%N_s)
       if(allocated(G%N_ks))deallocate(G%N_ks)
@@ -260,7 +260,7 @@ contains
       type(FermionicField),intent(inout)    :: G
       character(len=*),intent(in),optional  :: name
       !
-      if(present(name)) write(*,"(A)") "Deallocation of "//trim(name)
+      if(present(name).and.verbose) write(*,"(A)") "Deallocation of "//trim(name)
       if(.not.G%status) stop "DeallocateFermionicField: container is unallocated."
       !
       if(allocated(G%N_s))deallocate(G%N_s)
@@ -298,14 +298,14 @@ contains
       Nbp=Norb**2
       Nkpt_=0
       if(present(Nkpt))Nkpt_=Nkpt
-      if(present(name)) write(*,"(A)") "Allocation of "//trim(name)
+      if(present(name).and.verbose) write(*,"(A)") "Allocation of "//trim(name)
       if(W%status) stop "AllocateBosonicField: container already allocated."
       if(Nbp.eq.0) stop "AllocateBosonicField: Nbp not defined."
       if(Npoints.eq.0) stop "AllocateBosonicField: Npoints not defined."
-      if(Nkpt_.eq.0) write(*,"(A)") "AllocateBosonicField: K-dependent attributes are not going to be allocated."
+      if(Nkpt_.eq.0.and.verbose) write(*,"(A)") "AllocateBosonicField: K-dependent attributes are not going to be allocated."
       no_bare_=.false.
       if(present(no_bare))no_bare_=no_bare
-      if(no_bare_) write(*,"(A)") "AllocateBosonicField: the bare attributes are not going to be allocated."
+      if(no_bare_.and.verbose) write(*,"(A)") "AllocateBosonicField: the bare attributes are not going to be allocated."
       !
       if(allocated(W%bare_local))deallocate(W%bare_local)
       if(allocated(W%screened_local))deallocate(W%screened_local)
@@ -339,7 +339,7 @@ contains
       type(BosonicField),intent(inout)      :: W
       character(len=*),intent(in),optional  :: name
       !
-      if(present(name)) write(*,"(A)") "Deallocation of "//trim(name)
+      if(present(name).and.verbose) write(*,"(A)") "Deallocation of "//trim(name)
       if(.not.W%status) stop "DeallocateBosonicField: container is unallocated."
       !
       if(allocated(W%bare_local))deallocate(W%bare_local)

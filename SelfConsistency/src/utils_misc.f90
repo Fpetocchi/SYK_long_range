@@ -355,35 +355,43 @@ contains
    !PURPOSE: Returns true if a file/directory exists
    !TEST ON: 14-10-2020
    !---------------------------------------------------------------------------!
-   subroutine inquireFile(file,exists,hardstop)
+   subroutine inquireFile(file,exists,hardstop,verb)
       implicit none
       character(len=*),intent(in)           :: file
       logical,intent(in),optional           :: hardstop
+      logical,intent(in),optional           :: verb
       logical,intent(out)                   :: exists
-      logical                               :: hardstop_
+      logical                               :: hardstop_,verbose_
       !
       hardstop_=.true.
       if(present(hardstop))hardstop_=hardstop
+      verbose_=.true.
+      if(present(verb))verbose_=verb
+      !
       inquire(file=reg(file),exist=exists)
       if(.not.exists) then
-         if(verbose.or.hardstop_)write(*,"(A)")"Unable to find file: "//reg(file)
+         if(verbose_.or.hardstop_)write(*,"(A)")"Unable to find file: "//reg(file)
          if(hardstop_) stop "Stop."
       endif
       !
    end subroutine inquireFile
-   subroutine inquireDir(dir,exists,hardstop)
+   subroutine inquireDir(dir,exists,hardstop,verb)
       implicit none
       character(len=*),intent(in)           :: dir
       logical,intent(in),optional           :: hardstop
+      logical,intent(in),optional           :: verb
       logical,intent(out)                   :: exists
-      logical                               :: hardstop_
+      logical                               :: hardstop_,verbose_
       !
       hardstop_=.true.
       if(present(hardstop))hardstop_=hardstop
+      verbose_=.true.
+      if(present(verb))verbose_=verb
+      !
       inquire(directory=reg(dir),exist=exists)                                  !<===IFORT
       !inquire(file=reg(dir),exist=exists)                                      !<===GFORTRAN
       if(.not.exists) then
-         if(verbose.or.hardstop_)write(*,"(A)")"Unable to find directory: "//reg(dir)
+         if(verbose_.or.hardstop_)write(*,"(A)")"Unable to find directory: "//reg(dir)
          if(hardstop_) stop "Stop."
       endif
       !
@@ -394,19 +402,26 @@ contains
    !PURPOSE: Creat directory in path
    !TEST ON: 14-10-2020
    !---------------------------------------------------------------------------!
-   subroutine createDir(dirpath)
-       implicit none
-       character(len=*),intent(in)          :: dirpath
-       character(len=256)                   :: mkdirCmd
-       logical                              :: direxists
-       !
-       call inquireDir(reg(dirpath),direxists,hardstop=.false.)
-       if(.not.direxists)then
-          mkdirCmd = "mkdir -p "//reg(dirpath)
-          if(verbose)write(*,"(A)") "Creating new directory: "//reg(dirpath)
-          call system(mkdirCmd)
-       endif
-       !
+   subroutine createDir(dirpath,verb)
+      implicit none
+      character(len=*),intent(in)           :: dirpath
+      logical,intent(in),optional           :: verb
+      character(len=256)                    :: mkdirCmd
+      logical                               :: direxists
+      logical                               :: verbose_
+      !
+      verbose_=.true.
+      if(present(verb))verbose_=verb
+      !
+      call inquireDir(reg(dirpath),direxists,hardstop=.false.,verb=verbose_)
+      if(.not.direxists)then
+         mkdirCmd = "mkdir -p "//reg(dirpath)
+         if(verbose_)write(*,"(A)") "Creating new directory: "//reg(dirpath)
+         if(verbose_)write(*,"(A)") reg(mkdirCmd)
+         call system(reg(mkdirCmd))
+         !call execute_command_line(reg(mkdirCmd))
+      endif
+      !
    end subroutine createDir
 
 

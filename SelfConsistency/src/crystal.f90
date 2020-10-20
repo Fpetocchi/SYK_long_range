@@ -231,13 +231,14 @@ contains
    !by now only for paramagnetic Hk
    !TEST ON: 14-10-2020
    !---------------------------------------------------------------------------!
-   subroutine read_Hk(pathINPUT,Hk,kpt,Ek,Zk,Hloc)
+   subroutine read_Hk(pathINPUT,alphaHk,Hk,kpt,Ek,Zk,Hloc)
       !
       use utils_misc
       use linalg, only :  eigh
       implicit none
       !
       character(len=*),intent(in)           :: pathINPUT
+      real(8),intent(in)                    :: alphaHk
       complex(8),allocatable,intent(out)    :: Hk(:,:,:)
       real(8),allocatable,intent(out)       :: kpt(:,:)
       real(8),allocatable,intent(out)       :: Ek(:,:)
@@ -281,7 +282,7 @@ contains
                read(unit,*) idum1,idum2,ReHk,ImHk
                if (idum1.ne.iwan1) stop "iwan1"
                if (idum2.ne.iwan2) stop "iwan2"
-               Hk(iwan1,iwan2,ik) = dcmplx(ReHk,ImHk)*H2eV
+               Hk(iwan1,iwan2,ik) = dcmplx(ReHk,ImHk)*H2eV*alphaHk
             enddo
          enddo
          Hloc = Hloc + Hk(:,:,ik)/nkpt

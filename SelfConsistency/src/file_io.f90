@@ -750,6 +750,7 @@ contains
 
    !---------------------------------------------------------------------------!
    !PURPOSE: Write to file the local attributes of a Bosonic field
+   !TEST ON: 20-10-2020(with and without axis)
    !---------------------------------------------------------------------------!
    subroutine dump_BosonicField_local(U,dirpath,filename,axis)
       !
@@ -808,14 +809,18 @@ contains
                   ib1 = iwan1+Norb*(iwan2-1)
                   ib2 = iwan3+Norb*(iwan4-1)
                   !
-                  write(unit,"(4I4,2E20.12)") iwan1,iwan2,iwan3,iwan4,real(U%bare_local(ib1,ib2)),aimag(U%bare_local(ib1,ib2))
+                  if(allocated(U%bare_local))then
+                     write(unit,"(4I4,2E20.12)") iwan1,iwan2,iwan3,iwan4,real(U%bare_local(ib1,ib2)),aimag(U%bare_local(ib1,ib2))
+                  else
+                     write(unit,"(4I4,2E20.12)") iwan1,iwan2,iwan3,iwan4,0d0,0d0
+                  endif
                   !
                enddo
             enddo
          enddo
       enddo
       write(unit,"(/A)") "Wannier-projected screening dependence:"
-      do iaxis=1,U%Npoints
+      do iaxis=1,Naxis
          do iwan1=1,Norb
             do iwan2=1,Norb
                do iwan3=1,Norb
@@ -837,6 +842,7 @@ contains
 
    !---------------------------------------------------------------------------!
    !PURPOSE: Write to file the K-dependent Bosonic field - SPEX format & units
+   !TEST ON: 20-10-2020(with and without axis both binfmt)
    !---------------------------------------------------------------------------!
    subroutine dump_BosonicField_Kdep_SPEXlike(U,dirpath,binfmt,axis)
       !
@@ -850,7 +856,11 @@ contains
       logical,intent(in)                    :: binfmt
       real(8),intent(in),optional           :: axis(:)
       !
-      integer                               :: unit,iq,iw,Norb
+      integer                               :: unit,iq
+      integer                               :: iaxis,Norb
+      integer                               :: iwan1,iwan2,iwan3,iwan4
+      integer                               :: ib1,ib2
+      complex(8),allocatable                :: Utmp(:,:)
       character(len=256)                    :: printpath
       !
       !
@@ -877,31 +887,84 @@ contains
       ! Create directory
       call createDir(reg(dirpath))
       !
+      !Just in case I'm printing a polarization
+      if(.not.allocated(U%bare))then
+         allocate(Utmp(U%Nbp,U%Nbp))
+         Utmp=czero
+      endif
+      !
       ! Write to file
       do iq=1,U%Nkpt
          !
          if(binfmt) then
             !
-            printpath = reg(dirpath)//"VW.Q"//str(iq)//".DAT"
-            if(verbose)write(*,"(A)") "     Dump "//reg(printpath)
+            printpath = reg(dirpath)//"VW.Q"//str(iq,4)//".DAT"
+            if(verbose)write(*,"(A)") "     Dump "//reg(printpath)//" (binary)"
             !
             unit = free_unit()
             open(unit,file=reg(printpath),form="unformatted",status="unknown",position="rewind",action="write")
             write(unit) iq,1,Norb,Naxis,.true.
             write(unit) axis_
-            write(unit) U%bare(:,:,iq)*U%Nkpt*U%Nkpt/H2eV
-            do iw=1,Naxis
-               write(unit) U%screened(:,:,iw,iq)*U%Nkpt*U%Nkpt/H2eV
+            if(allocated(U%bare))then
+               write(unit) U%bare(:,:,iq)*U%Nkpt*U%Nkpt/H2eV
+            else
+               write(unit) Utmp
+            endif
+            do iaxis=1,Naxis
+               write(unit) U%screened(:,:,iaxis,iq)*U%Nkpt*U%Nkpt/H2eV
             enddo
             close(unit)
             !
          else
             !
-            call dump_BosonicField_local(U,reg(dirpath),reg("VW.Q"//str(iq)//".DAT"),axis_)
+            printpath = reg(dirpath)//"VW.Q"//str(iq,4)//".DAT"
+            if(verbose)write(*,"(A)") "     Dump "//reg(printpath)//" (readable)"
+            !
+            unit = free_unit()
+            open(unit,file=reg(printpath),form="formatted",status="unknown",position="rewind",action="write")
+            write(unit,"(I5,A)") Norb," Number of Wannier functions"
+            write(unit,"(I5,A)") U%Npoints," Number of grid points"
+            write(unit,"(A)") "Wannier-projected bare limit:"
+            do iwan1=1,Norb
+               do iwan2=1,Norb
+                  do iwan3=1,Norb
+                     do iwan4=1,Norb
+                        !
+                        ib1 = iwan1+Norb*(iwan2-1)
+                        ib2 = iwan3+Norb*(iwan4-1)
+                        !
+                        if(allocated(U%bare_local))then
+                           write(unit,"(4I4,2E20.12)") iwan1,iwan2,iwan3,iwan4,real(U%bare(ib1,ib2,iq)),aimag(U%bare(ib1,ib2,iq))
+                        else
+                           write(unit,"(4I4,2E20.12)") iwan1,iwan2,iwan3,iwan4,0d0,0d0
+                        endif
+                        !
+                     enddo
+                  enddo
+               enddo
+            enddo
+            write(unit,"(/A)") "Wannier-projected screening dependence:"
+            do iaxis=1,Naxis
+               do iwan1=1,Norb
+                  do iwan2=1,Norb
+                     do iwan3=1,Norb
+                        do iwan4=1,Norb
+                           !
+                           ib1 = iwan1+Norb*(iwan2-1)
+                           ib2 = iwan3+Norb*(iwan4-1)
+                           !
+                           write(unit,"(1E20.12,4I4,2E20.12)") axis_(iaxis),iwan1,iwan2,iwan3,iwan4,real(U%screened(ib1,ib2,iaxis,iq)),aimag(U%screened(ib1,ib2,iaxis,iq))
+                        enddo
+                     enddo
+                  enddo
+               enddo
+            enddo
+            close(unit)
             !
          endif
          !
       enddo
+      if(allocated(Utmp))deallocate(Utmp)
       !
    end subroutine dump_BosonicField_Kdep_SPEXlike
 

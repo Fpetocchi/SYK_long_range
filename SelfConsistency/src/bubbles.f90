@@ -62,7 +62,7 @@ contains
       integer                               :: iwan1,iwan2,iwan3,iwan4,ib1
       !
       !
-      if(verbose)write(*,*) "---- calc_Pi_GkGk"
+      if(verbose)write(*,"(A)") "---- calc_Pi_GkGk"
       !
       !
       ! Check on the input Fields
@@ -184,7 +184,7 @@ contains
       logical                               :: tau_output_
       !
       !
-      if(verbose)write(*,*) "---- calc_Pi_selfcons"
+      if(verbose)write(*,"(A)") "---- calc_Pi_selfcons"
       !
       !
       ! Check on the input Fields

@@ -10,9 +10,9 @@ program test
    !
    call tick(TimeStart)
    !
-   call read_InputFile(pathINPUT)
+   call read_InputFile("input.in")
    !
-   write(LOGfile,"(A,1I4)") "Setting Nthread",Nthread
+   write(LOGfile,"(A,1I4)") "Setting Nthread:",Nthread
    call omp_set_num_threads(Nthread)
    !
    call printHeader()
