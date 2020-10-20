@@ -261,6 +261,9 @@ contains
             if(Umodel)stop "U model is implemented only for non-GW (fully local) screened calculations."
             if(Uspex) call read_U_spex(Ulat,save2bin=.not.verbose,LocalOnly=.false.)
             !
+            !Fully screened interaction
+            call AllocateBosonicField(Wlat,Crystal%Norb,Nmats,Nkpt=Crystal%Nkpt,Nsite=Nsite,Beta=Beta)
+            !
             !Polarization
             call AllocateBosonicField(PiGG,Crystal%Norb,Nmats,Nsite=Nsite,no_bare=.false.,Beta=Beta)
             !
@@ -349,6 +352,9 @@ contains
                endif
             endif
             !
+            !Fully screened interaction
+            call AllocateBosonicField(Wlat,Crystal%Norb,Nmats,Nkpt=Crystal%Nkpt,Nsite=Nsite,Beta=Beta)
+            !
             if(ItStart.ne.0)then
                !
                !Polarization
@@ -378,6 +384,9 @@ contains
             if(Umodel)stop "U model is implemented only for non-GW (fully local) screened calculations."
             if(Uspex) call read_U_spex(Ulat,save2bin=.not.verbose,LocalOnly=.false.)
             !
+            !Fully screened interaction
+            call AllocateBosonicField(Wlat,Crystal%Norb,Nmats,Nkpt=Crystal%Nkpt,Nsite=Nsite,Beta=Beta)
+            !
             if(ItStart.ne.0)then
                !
                !Polarization
@@ -397,7 +406,7 @@ contains
             else
                !
                !Polarization
-               call AllocateBosonicField(PiGG,Crystal%Norb,Nmats,Nsite=Nsite,no_bare=.true.,Beta=Beta)
+               call AllocateBosonicField(PiGG,Crystal%Norb,Nmats,Nkpt=Crystal%Nkpt,Nsite=Nsite,no_bare=.true.,Beta=Beta)
                !
                !Lattice Gf
                call AllocateFermionicField(Glat,Crystal%Norb,Nmats,Nkpt=Crystal%Nkpt,Nsite=Nsite,Beta=Beta)

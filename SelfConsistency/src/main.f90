@@ -28,10 +28,12 @@ program test
       !
       if(ItStart.eq.0) call calc_Pi(PiGG,Crystal)
       if(ItStart.ne.0) call calc_Pi(PiGG,Glat,Crystal)
+      call dump_BosonicField(PiGG,reg(pathDATA)//str(ItStart)//"/","PiGG.DAT")
       !
       if(merge_Pi) then
          call MergeFields(PiGG,PiEDMFT,alphaPi,SiteOrbs)
          call DeallocateBosonicField(PiEDMFT)
+         call dump_BosonicField(PiGG,reg(pathDATA)//str(ItStart)//"/","PiGG_merged.DAT")
       endif
       !
    endif
@@ -41,6 +43,7 @@ program test
       !
       if(calc_Wfull)  call calc_W_full(Wlat,Ulat,PiGG,Crystal)
       if(calc_Wedmft) call calc_W_edmft(Wlat,Ulat,PiEDMFT,Crystal)
+      call dump_BosonicField(PiGG,reg(pathDATA)//str(ItStart)//"/","Wloc.DAT")
       !
       call DeallocateBosonicField(Ulat)
       !

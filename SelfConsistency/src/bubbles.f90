@@ -60,9 +60,11 @@ contains
       integer                               :: Nbp,Nkpt,Nmats,Norb
       integer                               :: ik1,ik2,iq,iw
       integer                               :: iwan1,iwan2,iwan3,iwan4,ib1
+      real                                  :: start,finish
       !
       !
       if(verbose)write(*,"(A)") "---- calc_Pi_GkGk"
+      call cpu_time(start)
       !
       !
       ! Check on the input Fields
@@ -152,6 +154,9 @@ contains
       !
       call BosonicKsum(Pmats)
       !
+      call cpu_time(finish)
+      write(*,"(A,1F20.6)") "PiGG cpu timing: ", finish-start
+      !
    end subroutine calc_Pi_GkGk
 
 
@@ -182,9 +187,11 @@ contains
       integer                               :: ik1,ik2,iq,itau,ispin
       integer                               :: m,n,mp,np,ib1,ib2
       logical                               :: tau_output_
+      real                                  :: start,finish
       !
       !
       if(verbose)write(*,"(A)") "---- calc_Pi_selfcons"
+      call cpu_time(start)
       !
       !
       ! Check on the input Fields
@@ -271,6 +278,9 @@ contains
       deallocate(tau,Gitau,Pq_tau)
       !
       call BosonicKsum(Pout)
+      !
+      call cpu_time(finish)
+      write(*,"(A,1F20.6)") "PiGGsc cpu timing: ", finish-start
       !
    end subroutine calc_Pi_selfcons
 
