@@ -128,7 +128,7 @@ contains
       !
       vol = det(lat)
       rvol = 8*pi**3 / vol
-      if(verbose)write(*,"(A,1F10.6)")"     Unit cell volume: ",vol
+      if(verbose)write(*,"(A,F)")"     Unit cell volume: ",vol
       !
       Lat_stored=.true.
       !
@@ -139,7 +139,7 @@ contains
    !PURPOSE: Read XEPS.DAT file
    !TEST ON: 14-10-2020
    !---------------------------------------------------------------------------!
-   subroutine read_xeps(pathINPUT,kpt,Nkpt3,UseXepsKorder,kptPos,Nkpt_irred,UseDisentangledBS,spex_para)
+   subroutine read_xeps(pathINPUT,kpt,Nkpt3,UseXepsKorder,kptPos,Nkpt_irred,UseDisentangledBS,iq_gamma,spex_para)
       !
       use utils_misc
       implicit none
@@ -151,6 +151,7 @@ contains
       integer,allocatable,intent(inout)     :: kptPos(:)
       integer,intent(out)                   :: Nkpt_irred
       logical,intent(out)                   :: UseDisentangledBS
+      integer,intent(out)                   :: iq_gamma
       logical,intent(in),optional           :: spex_para
       !
       character(len=256)                    :: path
@@ -179,7 +180,7 @@ contains
       read(unit) Nspin_xeps,Nkpt3_xeps(:),Nkpt_xeps,Nkpt_xeps_irred, &
                  Nband_xeps,Efermi_xeps,dumlogical,UseDisentangledBS
       !
-      if(verbose)write(*,"(A,1F10.5)") "     Fermi energy in XEPS: ",Efermi_xeps
+      if(verbose)write(*,"(A,F)") "     Fermi energy in XEPS: ",Efermi_xeps
       !
       allocate(kpt_xeps(3,Nkpt_xeps));kpt_xeps=0d0
       allocate(kptPos_xeps(Nkpt_xeps));kptPos_xeps=0
@@ -193,6 +194,7 @@ contains
       Nkpt = size(kpt,dim=2)
       Nkpt_irred = Nkpt
       if(UseXepsKorder) Nkpt_irred = Nkpt_xeps_irred
+      iq_gamma = find_kpt([0d0,0d0,0d0],kpt_xeps,eps)
       !
       spex_para_=.true.
       if(present(spex_para))spex_para_=spex_para
@@ -231,7 +233,7 @@ contains
    !by now only for paramagnetic Hk
    !TEST ON: 14-10-2020
    !---------------------------------------------------------------------------!
-   subroutine read_Hk(pathINPUT,alphaHk,Hk,kpt,Ek,Zk,Hloc)
+   subroutine read_Hk(pathINPUT,alphaHk,Hk,kpt,Ek,Zk,Hloc,iq_gamma)
       !
       use utils_misc
       use linalg, only :  eigh
@@ -244,6 +246,7 @@ contains
       real(8),allocatable,intent(out)       :: Ek(:,:)
       complex(8),allocatable,intent(out)    :: Zk(:,:,:)
       complex(8),allocatable,intent(out)    :: Hloc(:,:)
+      integer,intent(out),optional          :: iq_gamma
       !
       character(len=256)                    :: path
       integer                               :: unit,Nkpt,Norb
@@ -295,6 +298,7 @@ contains
          !
       enddo
       !
+      if(present(iq_gamma))iq_gamma = find_kpt([0d0,0d0,0d0],kpt,eps)
       Hk_stored=.true.
       call read_lattice(reg(pathINPUT))
       !
@@ -531,7 +535,7 @@ contains
       deallocate(dist)
       !
       if (abs(sum(1d0/nrdegwig(1:nwig))-nkpt).gt.epsWig) then
-         write(*,"(A,1F12.5)") "Error: sum(1/nrdeg(:))=",sum(1d0/nrdegwig(1:nwig))
+         write(*,"(A,F)") "Error: sum(1/nrdeg(:))=",sum(1d0/nrdegwig(1:nwig))
          stop "nrdeg"
       endif
       !

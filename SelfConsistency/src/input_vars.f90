@@ -152,6 +152,7 @@ module input_vars
    !
    !Variables not to be readed
    logical,public                           :: paramagneticSPEX=.true.
+   logical,public                           :: XEPSisread=.false.
    logical,allocatable,public               :: PhysicalUelement(:,:)
 
    !---------------------------------------------------------------------------!

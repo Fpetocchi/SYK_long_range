@@ -57,13 +57,14 @@ contains
 
    !---------------------------------------------------------------------------!
    !PURPOSE: Lattice inversion to get fully screened interaction - GW+EDMFT
+   !TEST ON: 21-10-2020
    !---------------------------------------------------------------------------!
    subroutine calc_W_full(Wmats,Umats,Pmats,Lttc)
       !
       use parameters
       use utils_misc
       use utils_fields
-      use linalg, only : zeye, inv_her !or sym??
+      use linalg, only : zeye, inv  !_her !or sym??
       use input_vars, only : HandleGammaPoint
       implicit none
       !
@@ -92,7 +93,7 @@ contains
       if(Umats%Nkpt.eq.0) stop "Umats k dependent attributes not properly initialized."
       if(Pmats%Nkpt.eq.0) stop "Pmats k dependent attributes not properly initialized."
       if(Umats%iq_gamma.lt.0) stop "Umats iq_gamma not defined."
-      if(allocated(Lttc%small_ik)) stop "Kpoints near Gamma not stored. W divergence cannot be cured."
+      if(.not.allocated(Lttc%small_ik)) stop "Kpoints near Gamma not stored. W divergence cannot be cured."
       !
       Nbp = Wmats%Nbp
       Nkpt = Wmats%Nkpt
@@ -129,7 +130,7 @@ contains
             den = zeye(Nbp) - matmul(Umats%screened(:,:,iw,iq),Pmats%screened(:,:,iw,iq))
             !
             ! [ 1 - U*Pi ]^-1
-            call inv_her(den)
+            call inv(den)
             !
             ! [ 1 - U*Pi ]^-1 * U
             Wmats%screened(:,:,iw,iq) = matmul(den,Umats%screened(:,:,iw,iq))
@@ -143,7 +144,7 @@ contains
       !$OMP END DO
       !$OMP END PARALLEL
       deallocate(den)
-      write(*,"(A,1I7)") "Gamma point is at kpoint list index: ",Umats%iq_gamma
+      write(*,"(A,I)") "Gamma point is at kpoint list index: ",Umats%iq_gamma
       !
       !
       ! Gamma point handling
@@ -191,7 +192,7 @@ contains
       use parameters
       use utils_misc
       use utils_fields
-      use linalg, only : zeye, inv_her !or sym??
+      use linalg, only : zeye, inv
       use input_vars, only : HandleGammaPoint
       implicit none
       !
@@ -220,7 +221,7 @@ contains
       if(Umats%Nkpt.eq.0) stop "Umats k dependent attributes not properly initialized."
       if(Pmats%Nkpt.ne.0) stop "Pmats k dependent attributes are supposed to be unallocated."
       if(Umats%iq_gamma.lt.0) stop "Umats iq_gamma not defined."
-      if(allocated(Lttc%small_ik)) stop "Kpoints near Gamma not stored. W divergence cannot be cured."
+      if(.not.allocated(Lttc%small_ik)) stop "Kpoints near Gamma not stored. W divergence cannot be cured."
       !
       Nbp = Wmats%Nbp
       Nkpt = Umats%Nkpt
@@ -256,7 +257,7 @@ contains
             den = zeye(Nbp) - matmul(Umats%screened(:,:,iw,iq),Pmats%screened_local(:,:,iw))
             !
             ! [ 1 - U*Pi ]^-1
-            call inv_her(den)
+            call inv(den)
             !
             ! [ 1 - U*Pi ]^-1 * U
             Wmats%screened_local(:,:,iw) = Wmats%screened_local(:,:,iw) + matmul(den,Umats%screened(:,:,iw,iq))/Nkpt
@@ -270,7 +271,7 @@ contains
       !$OMP END DO
       !$OMP END PARALLEL
       deallocate(den)
-      write(*,"(A,1I7)") "Gamma point is at kpoint list index: ",Umats%iq_gamma
+      write(*,"(A,I)") "Gamma point is at kpoint list index: ",Umats%iq_gamma
       !
       !
       ! Gamma point handling
@@ -315,7 +316,7 @@ contains
       use parameters
       use utils_misc
       use utils_fields
-      use linalg, only : zeye, inv_her !or sym??
+      use linalg, only : zeye, inv
       implicit none
       !
       type(BosonicField),intent(inout)      :: Chi
@@ -371,7 +372,7 @@ contains
             den = zeye(Nbp) - matmul(Umats%screened(:,:,iw,iq),Pmats%screened(:,:,iw,iq))
             !
             ! [ 1 - U*Pi ]^-1
-            call inv_her(den)
+            call inv(den)
             !
             ! [ 1 - U*Pi ]^-1 * Pi
             Chi%screened(:,:,iw,iq) = matmul(den,Pmats%screened(:,:,iw,iq))
@@ -394,7 +395,7 @@ contains
       use parameters
       use utils_misc
       use utils_fields
-      use linalg, only : zeye, inv_her !or sym??
+      use linalg, only : zeye, inv
       implicit none
       !
       type(BosonicField),intent(inout)      :: Chi
@@ -449,7 +450,7 @@ contains
             den = zeye(Nbp) - matmul(Umats%screened(:,:,iw,iq),Pmats%screened_local(:,:,iw))
             !
             ! [ 1 - U*Pi ]^-1
-            call inv_her(den)
+            call inv(den)
             !
             ! [ 1 - U*Pi ]^-1 * Pi
             Chi%screened_local(:,:,iw) = Chi%screened_local(:,:,iw) + matmul(den,Pmats%screened_local(:,:,iw))/Nkpt
@@ -548,7 +549,7 @@ contains
          Nbp_spex = Norb_spex**2
          allocate(Utmp(Nbp_spex,Nbp_spex));Utmp=czero
          allocate(wread(Nfreq));wread=0d0
-         if(verbose)write(*,"(A,I5)")"Real frequencies: ",Nfreq
+         if(verbose)write(*,"(A,I)")"Real frequencies: ",Nfreq
          !
          ! Few checks
          if(Nspin_spex.ne.1) stop "Nspin_spex.ne.1"
@@ -562,14 +563,14 @@ contains
             if(.not.filexists) exit
             Nkpt = Nkpt + 1
          enddo
-         if(verbose)write(*,"(A,1I6)") "The number of SPEX files (Nkpt) in VW_real is: ",Nkpt
+         if(verbose)write(*,"(A,I)") "The number of SPEX files (Nkpt) in VW_real is: ",Nkpt
          if((.not.LocalOnly).and.(Umats%Nkpt.ne.Nkpt)) stop "Number of k-points of given BosonicField and number of VW_real k-points do not coincide."
          !
          ! Allocate the Bosonic field on the real axis
          if(LocalOnly)then
-            call AllocateBosonicField(Ureal,Norb_spex,Nfreq,Nkpt=0,name="Uspex(w)",Beta=Umats%Beta,no_bare=.true.)
+            call AllocateBosonicField(Ureal,Norb_spex,Nfreq,0,Nkpt=0,name="Uspex(w)",Beta=Umats%Beta,no_bare=.true.)
          else
-            call AllocateBosonicField(Ureal,Norb_spex,Nfreq,Nkpt=Nkpt,name="Uspex(k,w)",Beta=Umats%Beta,no_bare=.true.)
+            call AllocateBosonicField(Ureal,Norb_spex,Nfreq,0,Nkpt=Nkpt,name="Uspex(k,w)",Beta=Umats%Beta,no_bare=.true.)
          endif
          !
          ! Read VW_real accumulating local attribute and optionally storing the k-dependent part
@@ -615,9 +616,9 @@ contains
          do ib1=1,Nbp_spex
             do ib2=1,Nbp_spex
                if(PhysicalUelement(ib1,ib2).and.abs(real(Umats%bare_local(ib1,ib2))).lt.abs(aimag(Umats%bare_local(ib1,ib2))))then
-                  write(*,"(A,2I5)")"Element: ",ib1,ib2
-                  write(*,"(A,E14.7)")"Re[Ubare(w=inf)]: ",real(Umats%bare_local(ib1,ib2))
-                  write(*,"(A,E14.7)")"Im[Ubare(w=inf)]: ",aimag(Umats%bare_local(ib1,ib2))
+                  write(*,"(A,2I)")"Element: ",ib1,ib2
+                  write(*,"(A,F)")"Re[Ubare(w=inf)]: ",real(Umats%bare_local(ib1,ib2))
+                  write(*,"(A,F)")"Im[Ubare(w=inf)]: ",aimag(Umats%bare_local(ib1,ib2))
                   stop "Something wrong: Uloc cannot have inverted Re/Im parity."
                endif
             enddo
@@ -663,7 +664,7 @@ contains
          !$OMP END PARALLEL
          call cpu_time(finish)
          deallocate(D1,D2,D3)
-         write(*,"(A,1F20.6)") "UcRPA(w) --> UcRPA(iw) cpu timing: ", finish-start
+         write(*,"(A,F)") "UcRPA(w) --> UcRPA(iw) cpu timing: ", finish-start
          !
          !
          if(.not.LocalOnly)then
@@ -731,7 +732,7 @@ contains
             !$OMP END PARALLEL
             call cpu_time(finish)
             deallocate(D1,D2,D3)
-            write(*,"(A,1F20.6)") "UcRPA(q,w) --> UcRPA(q,iw) cpu timing: ", finish-start
+            write(*,"(A,F)") "UcRPA(q,w) --> UcRPA(q,iw) cpu timing: ", finish-start
             !
          endif !LocalOnly
          deallocate(Utmp)
@@ -751,7 +752,7 @@ contains
          !
          deallocate(wread)
          !
-         call checkAnalyticContinuation(Umats,Ureal)
+         if(verbose)call checkAnalyticContinuation(Umats,Ureal)
          call DeallocateBosonicField(Ureal)
          !
          !---------------------------------------------------------------------!
@@ -772,7 +773,7 @@ contains
          Nbp_spex = Norb_spex**2
          allocate(Utmp(Nbp_spex,Nbp_spex));Utmp=czero
          allocate(wread(Nfreq));wread=0d0
-         write(*,"(A,I5)")"Matsubara frequencies: ",Nfreq
+         write(*,"(A,I)")"Matsubara frequencies: ",Nfreq
          !
          ! Few checks
          if(Nspin_spex.ne.1) stop "Nspin_spex.ne.1"
@@ -787,7 +788,7 @@ contains
             if(.not.filexists) exit
             Nkpt = Nkpt + 1
          enddo
-         if(verbose)write(*,"(A,1I6)") "The number of SPEX files (Nkpt) in VW_imag is: ",Nkpt
+         if(verbose)write(*,"(A,I)") "The number of SPEX files (Nkpt) in VW_imag is: ",Nkpt
          if((.not.LocalOnly).and.(Umats%Nkpt.ne.Nkpt)) stop "Number of k-points of given BosonicField and number of VW_imag k-points do not coincide."
          !
          ! Read VW_imag accumulating local attribute and optionally storing the k-dependent part
@@ -837,8 +838,8 @@ contains
          do iq=1,Nkpt
             do ib1=1,Nbp_spex
                do ib2=1,Nbp_spex
-                  if(PhysicalUelement(ib1,ib2).and.dabs(dimag(Umats%bare(ib1,ib2,iq))).gt.1.d-6) then
-                     write(*,"(A,2I5)") "Warning Umats%bare imaginary. Set matrix element to static value",ib1,ib2
+                  if(dabs(dimag(Umats%bare(ib1,ib2,iq))).gt.1.d-6) then !PhysicalUelement(ib1,ib2).and.
+                     write(*,"(A,2I)") "Warning Umats%bare imaginary. Set matrix element to static value",ib1,ib2
                      Umats%bare(ib1,ib2,iq) = Umats%screened(ib1,ib2,1,iq)
                      Umats%screened(ib1,ib2,:,iq) = Umats%screened(ib1,ib2,1,iq)
                   endif
@@ -955,6 +956,7 @@ contains
 
    !---------------------------------------------------------------------------!
    !PURPOSE: Check if the AC alters the bare and screened values
+   !TEST ON: 21-10-2020
    !---------------------------------------------------------------------------!
    subroutine checkAnalyticContinuation(Umats,Ureal)
       !
@@ -967,7 +969,7 @@ contains
       type(BosonicField),intent(in)         :: Ureal
       character(len=256)                    :: path
       integer                               :: iq,ib1,ib2
-      integer                               :: unit,Nbp,Nfreq,Nkpt
+      integer                               :: unit,Nbp,Nmats,Nreal,Nkpt
       real(8)                               :: ReErr,ImErr,thresh=1e-4
       real(8),allocatable                   :: ReErrMat(:,:),ImErrMat(:,:)
       !
@@ -975,7 +977,8 @@ contains
       if(verbose)write(*,"(A)") "---- checkAnalyticContinuation"
       if(Umats%Nbp.ne.Ureal%Nbp) stop "Umats%Nbp.ne.Ureal%Nbp"
       Nbp = Umats%Nbp
-      Nfreq = Umats%Npoints
+      Nmats = Umats%Npoints
+      Nreal = Ureal%Npoints
       allocate(ReErrMat(Nbp,Nbp));ReErrMat=0d0
       allocate(ImErrMat(Nbp,Nbp));ImErrMat=0d0
       !
@@ -984,16 +987,16 @@ contains
       unit = free_unit()
       path = reg(pathINPUT)//"ACcutoffError.DAT"
       open(unit=unit,file=reg(path),form="formatted",status="unknown",position="rewind",action="write")
-      write(unit,"(A,1I5,A,1E14.7)")"Difference between Umats_bare value and last screened frequency: ",Nfreq," thresh:",thresh
+      write(unit,"(A,1I5,A,1E14.7)")"Difference between Umats_bare value and last screened frequency: ",Nmats," thresh:",thresh
       !
       ReErrMat=0d0;ImErrMat=0d0
       do ib1=1,Nbp
          do ib2=1,Nbp
             !
-            ReErr = abs(real(Umats%bare_local(ib1,ib2)) - real(Umats%screened_local(ib1,ib2,Nfreq)))
+            ReErr = abs(real(Umats%bare_local(ib1,ib2)) - real(Umats%screened_local(ib1,ib2,Nmats)))
             if(ReErr.gt.thresh) ReErrMat(ib1,ib2) = ReErr
             !
-            ImErr = abs(aimag(Umats%bare_local(ib1,ib2)) - aimag(Umats%screened_local(ib1,ib2,Nfreq)))
+            ImErr = abs(aimag(Umats%bare_local(ib1,ib2)) - aimag(Umats%screened_local(ib1,ib2,Nmats)))
             if(ImErr.gt.thresh) ImErrMat(ib1,ib2) = ImErr
             !
          enddo
@@ -1015,10 +1018,10 @@ contains
             do ib1=1,Nbp
                do ib2=1,Nbp
                   !
-                  ReErr = abs(real(Umats%bare(ib1,ib2,iq)) - real(Umats%screened(ib1,ib2,Nfreq,iq)))
+                  ReErr = abs(real(Umats%bare(ib1,ib2,iq)) - real(Umats%screened(ib1,ib2,Nmats,iq)))
                   if(ReErr.gt.thresh) ReErrMat(ib1,ib2) = ReErr
                   !
-                  ImErr = abs(aimag(Umats%bare(ib1,ib2,iq)) - aimag(Umats%screened(ib1,ib2,Nfreq,iq)))
+                  ImErr = abs(aimag(Umats%bare(ib1,ib2,iq)) - aimag(Umats%screened(ib1,ib2,Nmats,iq)))
                   if(ImErr.gt.thresh) ImErrMat(ib1,ib2) = ImErr
                   !
                enddo
@@ -1069,10 +1072,10 @@ contains
       do ib1=1,Nbp
          do ib2=1,Nbp
             !
-            ReErr = abs(real(Umats%screened_local(ib1,ib2,Nfreq)) - real(Ureal%screened_local(ib1,ib2,Nfreq)))
+            ReErr = abs(real(Umats%screened_local(ib1,ib2,Nmats)) - real(Ureal%screened_local(ib1,ib2,Nreal)))
             if(ReErr.gt.thresh) ReErrMat(ib1,ib2) = ReErr
             !
-            ImErr = abs(aimag(Umats%screened_local(ib1,ib2,Nfreq)) - aimag(Ureal%screened_local(ib1,ib2,Nfreq)))
+            ImErr = abs(aimag(Umats%screened_local(ib1,ib2,Nmats)) - aimag(Ureal%screened_local(ib1,ib2,Nreal)))
             if(ImErr.gt.thresh) ImErrMat(ib1,ib2) = ImErr
             !
          enddo
@@ -1117,10 +1120,10 @@ contains
             do ib1=1,Nbp
                do ib2=1,Nbp
                   !
-                  ReErr = abs(real(Umats%screened(ib1,ib2,Nfreq,iq)) - real(Ureal%screened(ib1,ib2,Nfreq,iq)))
+                  ReErr = abs(real(Umats%screened(ib1,ib2,Nmats,iq)) - real(Ureal%screened(ib1,ib2,Nreal,iq)))
                   if(ReErr.gt.thresh) ReErrMat(ib1,ib2) = ReErr
                   !
-                  ImErr = abs(aimag(Umats%screened(ib1,ib2,Nfreq,iq)) - aimag(Ureal%screened(ib1,ib2,Nfreq,iq)))
+                  ImErr = abs(aimag(Umats%screened(ib1,ib2,Nmats,iq)) - aimag(Ureal%screened(ib1,ib2,Nreal,iq)))
                   if(ImErr.gt.thresh) ImErrMat(ib1,ib2) = ImErr
                   !
                enddo
@@ -1378,7 +1381,7 @@ contains
       call cpu_time(finish)
       deallocate(D1,D2,D3,Utmp,wmats,wreal)
       call DeallocateBosonicField(Ureal)
-      write(*,"(A,1F10.6)") "Ue-ph(w) --> Ue-ph(iw) cpu timing:", finish-start
+      write(*,"(A,F)") "Ue-ph(w) --> Ue-ph(iw) cpu timing:", finish-start
       !
    end subroutine build_Uretloc_singlParam
    !
@@ -1517,7 +1520,7 @@ contains
       call cpu_time(finish)
       deallocate(D1,D2,D3,Utmp,wmats,wreal)
       call DeallocateBosonicField(Ureal)
-      write(*,"(A,1F10.6)") "Ue-ph(w) --> Ue-ph(iw) cpu timing:", finish-start
+      write(*,"(A,F)") "Ue-ph(w) --> Ue-ph(iw) cpu timing:", finish-start
       !
    end subroutine build_Uretloc_multiParam
 

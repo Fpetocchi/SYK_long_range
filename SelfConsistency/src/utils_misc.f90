@@ -427,6 +427,7 @@ contains
 
    !---------------------------------------------------------------------------!
    !PURPOSE: Check if matrix is Hermitian
+   !TEST ON: 21-10-2020
    !---------------------------------------------------------------------------!
    subroutine check_Hermiticity(A,tol,hardstop)
       implicit none
@@ -789,6 +790,7 @@ contains
    !    q = k, x = mesh with x(i) = [x(i-1) + x(i+1)]/2
    ! 2) Make sure that each segment is divided into two EQUAL segments.
    ! 3) The weights for cos and sin integration are in wcos and wsin.
+   !TEST ON: 21-10-2020
    !---------------------------------------------------------------------------!
    subroutine BosonicFilon(q,x,wcos,wsin)
       implicit none

@@ -282,11 +282,11 @@ contains
    !---------------------------------------------------------------------------!
    !PURPOSE: Allocate/deallocate Bosonic attributes in a consistent way
    !---------------------------------------------------------------------------!
-   subroutine AllocateBosonicField(W,Norb,Npoints,Nkpt,Nsite,name,no_bare,Beta)
+   subroutine AllocateBosonicField(W,Norb,Npoints,iq_gamma,Nkpt,Nsite,name,no_bare,Beta)
       use parameters
       implicit none
       type(BosonicField),intent(inout)      :: W
-      integer,intent(in)                    :: Norb,Npoints
+      integer,intent(in)                    :: Norb,Npoints,iq_gamma
       integer,intent(in),optional           :: Nkpt
       integer,intent(in),optional           :: Nsite
       character(len=*),intent(in),optional  :: name
@@ -324,6 +324,7 @@ contains
          endif
       endif
       !
+      W%iq_gamma=iq_gamma
       W%Nbp=Nbp
       W%Npoints=Npoints
       W%Nkpt=Nkpt_

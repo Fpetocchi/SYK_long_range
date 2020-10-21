@@ -8,7 +8,7 @@ SHELL := /bin/bash
 #RELFFLAGS = -cpp -ffree-line-length-none -O3 -ffast-math -march=native -funroll-all-loops -fno-protect-parens -flto -mcmodel=medium
 #
 FC     = ifort
-FFLAGS = -assume byterecl -qopenmp -liomp5 -mkl=sequential -fpp -mcmodel=large
+FFLAGS = -assume byterecl -qopenmp -liomp5 -mkl=sequential -fpp -mcmodel=large -llapack
 DBGFFLAGS = -O0 -check bounds -traceback -fpe0 -check all -fp-model precise -fp-stack-check -p -g -warn -debug extended -warn interface -C -D_verb
 RELFFLAGS = -xHost -O3 -ftz
 

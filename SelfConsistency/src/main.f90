@@ -26,8 +26,7 @@ program test
    !Polarization
    if(calc_PiGG)then
       !
-      if(ItStart.eq.0) call calc_Pi(PiGG,Crystal)
-      if(ItStart.ne.0) call calc_Pi(PiGG,Glat,Crystal)
+      call calc_Pi(PiGG,Glat,Crystal)
       call dump_BosonicField(PiGG,reg(pathDATA)//str(ItStart)//"/","PiGG.DAT")
       !
       if(merge_Pi) then
@@ -43,7 +42,7 @@ program test
       !
       if(calc_Wfull)  call calc_W_full(Wlat,Ulat,PiGG,Crystal)
       if(calc_Wedmft) call calc_W_edmft(Wlat,Ulat,PiEDMFT,Crystal)
-      call dump_BosonicField(PiGG,reg(pathDATA)//str(ItStart)//"/","Wloc.DAT")
+      call dump_BosonicField(Wlat,reg(pathDATA)//str(ItStart)//"/","Wloc.DAT")
       !
       call DeallocateBosonicField(Ulat)
       !

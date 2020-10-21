@@ -43,6 +43,7 @@ module parameters
       integer,allocatable                   :: small_ik(:,:)                    ![12,2]
       integer                               :: Nkpt=0
       integer                               :: Nkpt_irred=0
+      integer                               :: iq_gamma=-1
       integer                               :: Norb=0
       real(8)                               :: mu=0d0
       real(8)                               :: density=0d0

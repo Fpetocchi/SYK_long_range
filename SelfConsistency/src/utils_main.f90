@@ -148,6 +148,7 @@ contains
       type(Lattice),intent(out)             :: Lttc
       integer,intent(in)                    :: ItStart
       integer                               :: m,n,mp,np,ib1,ib2
+      integer                               :: iq_gamma_Hk,iq_gamma_XEPS
       !
       !
       write(LOGfile,"(A)") "---- initialize Lattice"
@@ -163,14 +164,20 @@ contains
             !
          case("G0W0","scGW")
             !
-            call read_Hk(pathINPUT,alphaHk,Lttc%Hk,Lttc%kpt,Lttc%Ek,Lttc%Zk,Lttc%Hloc)
+            call read_Hk(pathINPUT,alphaHk,Lttc%Hk,Lttc%kpt,Lttc%Ek,Lttc%Zk,Lttc%Hloc,iq_gamma_Hk)
             !
             Lttc%Norb = size(Lttc%Hk,dim=1)
             Lttc%Nkpt = size(Lttc%Hk,dim=3)
             !
             allocate(Lttc%kptPos(Lttc%Nkpt));Lttc%kptPos=0
             call read_xeps(pathINPUT,Lttc%kpt,Nkpt3,UseXepsKorder, &
-            Lttc%kptPos,Lttc%Nkpt_irred,Lttc%UseDisentangledBS,paramagneticSPEX)
+            Lttc%kptPos,Lttc%Nkpt_irred,Lttc%UseDisentangledBS,iq_gamma_XEPS,paramagneticSPEX)
+            XEPSisread=.true.
+            if(iq_gamma_Hk.eq.iq_gamma_XEPS)then
+               Lttc%iq_gamma = iq_gamma_Hk
+            else
+               stop "Index of the Gamma point is not the same in H(k) and XEPS."
+            endif
             !
             allocate(Lttc%kptsum(Lttc%Nkpt,Lttc%Nkpt));Lttc%kptsum=0
             allocate(Lttc%kptdif(Lttc%Nkpt,Lttc%Nkpt));Lttc%kptdif=0
@@ -192,14 +199,20 @@ contains
             !
          case("EDMFT","GW+EDMFT")
             !
-            call read_Hk(pathINPUT,alphaHk,Lttc%Hk,Lttc%kpt,Lttc%Ek,Lttc%Zk,Lttc%Hloc)
+            call read_Hk(pathINPUT,alphaHk,Lttc%Hk,Lttc%kpt,Lttc%Ek,Lttc%Zk,Lttc%Hloc,iq_gamma_Hk)
             !
             Lttc%Norb = size(Lttc%Hk,dim=1)
             Lttc%Nkpt = size(Lttc%Hk,dim=3)
             !
             allocate(Lttc%kptPos(Lttc%Nkpt));Lttc%kptPos=0
             call read_xeps(pathINPUT,Lttc%kpt,Nkpt3,UseXepsKorder, &
-            Lttc%kptPos,Lttc%Nkpt_irred,Lttc%UseDisentangledBS,paramagneticSPEX)
+            Lttc%kptPos,Lttc%Nkpt_irred,Lttc%UseDisentangledBS,iq_gamma_XEPS,paramagneticSPEX)
+            XEPSisread=.true.
+            if(iq_gamma_Hk.eq.iq_gamma_XEPS)then
+               Lttc%iq_gamma = iq_gamma_Hk
+            else
+               stop "Index of the Gamma point is not the same in H(k) and XEPS."
+            endif
             !
             allocate(Lttc%kptsum(Lttc%Nkpt,Lttc%Nkpt));Lttc%kptsum=0
             allocate(Lttc%kptdif(Lttc%Nkpt,Lttc%Nkpt));Lttc%kptdif=0
@@ -230,7 +243,7 @@ contains
          enddo
       enddo
       !
-      !if(ItStart.eq.0)call calc_Glda(0d0,Beta,Lttc)
+      if(ItStart.eq.0)call calc_Glda(0d0,Beta,Lttc)
       !
    end subroutine initialize_Lattice
 
@@ -257,15 +270,15 @@ contains
          case("G0W0","scGW")
             !
             !Unscreened interaction
-            call AllocateBosonicField(Ulat,Crystal%Norb,Nmats,Nkpt=Crystal%Nkpt,Nsite=Nsite,Beta=Beta)
+            call AllocateBosonicField(Ulat,Crystal%Norb,Nmats,Crystal%iq_gamma,Nkpt=Crystal%Nkpt,Nsite=Nsite,Beta=Beta)
             if(Umodel)stop "U model is implemented only for non-GW (fully local) screened calculations."
             if(Uspex) call read_U_spex(Ulat,save2bin=.not.verbose,LocalOnly=.false.)
             !
             !Fully screened interaction
-            call AllocateBosonicField(Wlat,Crystal%Norb,Nmats,Nkpt=Crystal%Nkpt,Nsite=Nsite,Beta=Beta)
+            call AllocateBosonicField(Wlat,Crystal%Norb,Nmats,Crystal%iq_gamma,Nkpt=Crystal%Nkpt,Nsite=Nsite,Beta=Beta)
             !
             !Polarization
-            call AllocateBosonicField(PiGG,Crystal%Norb,Nmats,Nsite=Nsite,no_bare=.false.,Beta=Beta)
+            call AllocateBosonicField(PiGG,Crystal%Norb,Nmats,Crystal%iq_gamma,Nsite=Nsite,no_bare=.false.,Beta=Beta)
             !
             !Lattice Gf
             call AllocateFermionicField(Glat,Crystal%Norb,Nmats,Nkpt=Crystal%Nkpt,Nsite=Nsite,Beta=Beta)
@@ -310,7 +323,7 @@ contains
          case("DMFT+dynU")
             !
             !Unscreened interaction
-            call AllocateBosonicField(Ulat,Crystal%Norb,Nmats,Nsite=Nsite,Beta=Beta)
+            call AllocateBosonicField(Ulat,Crystal%Norb,Nmats,Crystal%iq_gamma,Nsite=Nsite,Beta=Beta)
             if(Uspex) call read_U_spex(Ulat,save2bin=.not.verbose,LocalOnly=.true.)
             if(Umodel)then
                call inquireFile(reg(pathINPUT)//"Uloc_mats_model.DAT",filexists,hardstop=.false.)
@@ -340,7 +353,7 @@ contains
          case("EDMFT")
             !
             !Unscreened interaction
-            call AllocateBosonicField(Ulat,Crystal%Norb,Nmats,Nsite=Nsite,Beta=Beta)
+            call AllocateBosonicField(Ulat,Crystal%Norb,Nmats,Crystal%iq_gamma,Nsite=Nsite,Beta=Beta)
             if(Uspex) call read_U_spex(Ulat,save2bin=.not.verbose,LocalOnly=.true.)
             if(Umodel)then
                call inquireFile(reg(pathINPUT)//"Uloc_mats_model.DAT",filexists,hardstop=.false.)
@@ -353,12 +366,12 @@ contains
             endif
             !
             !Fully screened interaction
-            call AllocateBosonicField(Wlat,Crystal%Norb,Nmats,Nkpt=Crystal%Nkpt,Nsite=Nsite,Beta=Beta)
+            call AllocateBosonicField(Wlat,Crystal%Norb,Nmats,Crystal%iq_gamma,Nkpt=Crystal%Nkpt,Nsite=Nsite,Beta=Beta)
             !
             if(ItStart.ne.0)then
                !
                !Polarization
-               call AllocateBosonicField(PiEDMFT,Crystal%Norb,Nmats,Nsite=Nsite,no_bare=.true.,Beta=Beta)
+               call AllocateBosonicField(PiEDMFT,Crystal%Norb,Crystal%iq_gamma,Nmats,Nsite=Nsite,no_bare=.true.,Beta=Beta)
                call read_BosonicField(PiEDMFT,reg(pathDATA)//str(ItStart-1),"PiEDMFT")
                !
                !Impurity Self-energy
@@ -380,18 +393,18 @@ contains
          case("GW+EDMFT")
             !
             !Unscreened interaction
-            call AllocateBosonicField(Ulat,Crystal%Norb,Nmats,Nkpt=Crystal%Nkpt,Nsite=Nsite,Beta=Beta)
+            call AllocateBosonicField(Ulat,Crystal%Norb,Nmats,Crystal%iq_gamma,Nkpt=Crystal%Nkpt,Nsite=Nsite,Beta=Beta)
             if(Umodel)stop "U model is implemented only for non-GW (fully local) screened calculations."
             if(Uspex) call read_U_spex(Ulat,save2bin=.not.verbose,LocalOnly=.false.)
             !
             !Fully screened interaction
-            call AllocateBosonicField(Wlat,Crystal%Norb,Nmats,Nkpt=Crystal%Nkpt,Nsite=Nsite,Beta=Beta)
+            call AllocateBosonicField(Wlat,Crystal%Norb,Nmats,Crystal%iq_gamma,Nkpt=Crystal%Nkpt,Nsite=Nsite,Beta=Beta)
             !
             if(ItStart.ne.0)then
                !
                !Polarization
-               call AllocateBosonicField(PiGG,Crystal%Norb,Nmats,Nkpt=Crystal%Nkpt,Nsite=Nsite,no_bare=.true.,Beta=Beta)
-               call AllocateBosonicField(PiEDMFT,Crystal%Norb,Nmats,Nsite=Nsite,no_bare=.true.,Beta=Beta)
+               call AllocateBosonicField(PiGG,Crystal%Norb,Nmats,Crystal%iq_gamma,Nkpt=Crystal%Nkpt,Nsite=Nsite,no_bare=.true.,Beta=Beta)
+               call AllocateBosonicField(PiEDMFT,Crystal%Norb,Nmats,Crystal%iq_gamma,Nsite=Nsite,no_bare=.true.,Beta=Beta)
                call read_BosonicField(PiEDMFT,reg(pathDATA)//str(ItStart-1),"PiEDMFT")
                !
                !Impurity Self-energy
@@ -406,7 +419,7 @@ contains
             else
                !
                !Polarization
-               call AllocateBosonicField(PiGG,Crystal%Norb,Nmats,Nkpt=Crystal%Nkpt,Nsite=Nsite,no_bare=.true.,Beta=Beta)
+               call AllocateBosonicField(PiGG,Crystal%Norb,Nmats,Crystal%iq_gamma,Nkpt=Crystal%Nkpt,Nsite=Nsite,no_bare=.true.,Beta=Beta)
                !
                !Lattice Gf
                call AllocateFermionicField(Glat,Crystal%Norb,Nmats,Nkpt=Crystal%Nkpt,Nsite=Nsite,Beta=Beta)

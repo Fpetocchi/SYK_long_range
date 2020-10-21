@@ -540,7 +540,7 @@ contains
       use utils_misc
       use crystal
       use utils_fields
-      use input_vars, only : pathINPUT, UseXepsKorder, paramagneticSPEX
+      use input_vars, only : pathINPUT,UseXepsKorder,paramagneticSPEX,XEPSisread
       implicit none
       !
       type(FermionicField),intent(inout)    :: Smats_GoWo
@@ -551,7 +551,6 @@ contains
       logical,intent(in),optional           :: doAC
       !
       logical                               :: filexists,ACdone,doAC_,Vxcdone,doVxc
-      logical                               :: UseDisentangledBS
       character(len=256)                    :: file_spex,path,pathOUTPUT_
       integer                               :: iseg,SigmaSegments
       integer                               :: iq,ik,iw,iw2,ispin,iwan1,iwan2,unit
@@ -596,9 +595,12 @@ contains
       wmats = FermionicFreqMesh(Smats_GoWo%Beta,Smats_GoWo%Npoints)
       !
       ! Read XEPS data
-      path = reg(pathINPUT)//"XEPS.DAT"
-      call inquireFile(reg(path),filexists)
-      call read_xeps(reg(path),Lttc%kpt,Lttc%Nkpt3,UseXepsKorder,Lttc%kptPos,Lttc%Nkpt_irred,UseDisentangledBS)
+      if(.not.XEPSisread)then
+         path = pathINPUT//"XEPS.DAT"
+         call inquireFile(reg(path),filexists)
+         call read_xeps(reg(path),Lttc%kpt,Lttc%Nkpt3,UseXepsKorder, &
+         Lttc%kptPos,Lttc%Nkpt_irred,Lttc%UseDisentangledBS,Lttc%iq_gamma,paramagneticSPEX)
+      endif
       !
       ! Check if the data on the Matsubara axis are present
       path = reg(pathINPUT)//"Sigma_imag" !/SIGMA.Q0001.DAT"
@@ -623,7 +625,7 @@ contains
          !---------------------------------------------------------------------!
          !
          ! Read UWAN file
-         if(UseDisentangledBS)then
+         if(Lttc%UseDisentangledBS)then
             path = reg(pathINPUT)//"UWAN_NEW.DAT"
          else
             path = reg(pathINPUT)//"UWAN.DAT"
@@ -916,7 +918,7 @@ contains
       use file_io
       use utils_misc
       use crystal
-      use input_vars, only : pathINPUT,UseXepsKorder,paramagneticSPEX
+      use input_vars, only : pathINPUT,UseXepsKorder,paramagneticSPEX,XEPSisread
       implicit none
       !
       complex(8),intent(inout)              :: Vxc(:,:,:,:)
@@ -924,7 +926,7 @@ contains
       integer,intent(in)                    :: ib_sigma1,ib_sigma2
       logical,intent(in)                    :: save2bin
       !
-      logical                               :: filexists,UseDisentangledBS
+      logical                               :: filexists
       character(len=256)                    :: path
       integer                               :: ik,ispin,iwan1,iwan2,unit
       integer                               :: Nkpt,Norb,ispin_spex
@@ -962,12 +964,15 @@ contains
       if(Lttc%Nkpt.ne.Nkpt) stop "Lattice has different number of k-points with respect to Vxc."
       !
       ! Read XEPS data
-      path = pathINPUT//"XEPS.DAT"
-      call inquireFile(reg(path),filexists)
-      call read_xeps(reg(path),Lttc%kpt,Lttc%Nkpt3,UseXepsKorder,Lttc%kptPos,Lttc%Nkpt_irred,UseDisentangledBS)
+      if(.not.XEPSisread)then
+         path = pathINPUT//"XEPS.DAT"
+         call inquireFile(reg(path),filexists)
+         call read_xeps(reg(path),Lttc%kpt,Lttc%Nkpt3,UseXepsKorder, &
+         Lttc%kptPos,Lttc%Nkpt_irred,Lttc%UseDisentangledBS,Lttc%iq_gamma,paramagneticSPEX)
+      endif
       !
       ! Read UWAN file
-      if(UseDisentangledBS)then
+      if(Lttc%UseDisentangledBS)then
          path = reg(pathINPUT)//"UWAN_NEW.DAT"
       else
          path = reg(pathINPUT)//"UWAN.DAT"
@@ -1005,7 +1010,7 @@ contains
       allocate(vxcmat(neigd,neigd));vxcmat=czero
       !
       ! Read DISENT_EVEC file
-      if(UseDisentangledBS) then
+      if(Lttc%UseDisentangledBS) then
          path = reg(pathINPUT)//"DISENT_EVEC.DAT"
          call inquireFile(reg(path),filexists)
          write(*,"(A)") "Opening "//reg(path)
@@ -1037,7 +1042,7 @@ contains
       allocate(vxc_diag(ib_sigma1:ib_sigma2,Lttc%Nkpt_irred,Nspin_Uwan));vxc_diag=0d0
       do ispin=1,Nspin_Uwan
          do ik=1,Lttc%Nkpt_irred
-            nrec = Lttc%Nkpt_irred*(ispin-1)+(ik-1)*n_stride+n_start ! according to
+            nrec = Lttc%Nkpt_irred*(ispin-1)+(ik-1)*n_stride+n_start   ! according to
             nrec = n_size*(nrec-1) + n_rank + 1                        ! eigen.f (Fleur)
             read(unit_eig,rec=nrec) ((rdum,l=0,lcutd),i=1,ntypd),rdum,rdum, &
                                     ((rdum,l=1,nlod),i=1,ntypd),(rdum,i=1,3),rdum,nband
@@ -1056,7 +1061,7 @@ contains
             do i=ib_sigma1,ib_sigma2
                vxc_diag(i,ik,ispin)=dble(vxcmat(i,i))
             enddo
-            if(UseDisentangledBS) then
+            if(Lttc%UseDisentangledBS) then
                read(unit_dis) dis_evec(:,:)
                cmat(:,:)=matmul(vxcmat(ib_Uwan1:ib_Dwan2,ib_Uwan1:ib_Dwan2),dis_evec)
                do i=ib_Uwan1,ib_Uwan2
@@ -1072,7 +1077,7 @@ contains
       close(unit_eig)
       close(unit_vxc)
       !
-      if(UseDisentangledBS) then
+      if(Lttc%UseDisentangledBS) then
          close(unit_dis)
          deallocate(cmat,dis_evec)
       endif

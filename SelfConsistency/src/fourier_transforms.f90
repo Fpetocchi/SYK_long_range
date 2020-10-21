@@ -168,8 +168,8 @@ contains
          ! sinm(i) = (1/beta) S[n] sin(vn*tau) / vn^i
          do iw=1,Nmats
             !
-            coswt(iw,itau) = dcos(wmats(iw) * tau(itau)) /beta
-            sinwt(iw,itau) = dsin(wmats(iw) * tau(itau)) /beta
+            coswt(iw,itau) = dcos(wmats(iw) * tau(itau))/beta
+            sinwt(iw,itau) = dsin(wmats(iw) * tau(itau))/beta
             !
             sin1 = sin1 + sinwt(iw,itau) / wmats(iw)
             cos2 = cos2 + coswt(iw,itau) / (wmats(iw)**2)
@@ -183,23 +183,29 @@ contains
             !
             ! (1/beta) S[n=0,inf] cos(vn*tau) / vn^2  = beta/8 - tau/4
             ! (1/beta) S[n=0,inf] cos(vn*tau) / vn^4  = ( beta^3/96 - beta*tau^2/16 + tau^3/24 )
-            coswt(Nmats,itau) = coswt(Nmats,itau)                                                                                     &
-                              + (v1**4 / v12        ) * ( -cos2 + (beta/8.d0 - tau(itau)/ 4.d0)                                  )    &
-                              + (v1**4 * v2**2 / v12) * ( +cos4 - (beta**3/96.d0 -beta*tau(itau)**2/16.d0 + tau(itau)**3/24.d0 ) )
+            coswt(Nmats,itau)   = coswt(Nmats,itau)                                             &
+                                - cos2*v1**4/v12 + cos4*v1**4 *v2**2/v12                        &
+                                + (v1**4/v12) * (beta/2.d0 - tau(itau)) / 4.d0                  &
+                                - (v1**4*v2**2/v12) * (beta**3/96.d0 -beta*tau(itau)**2/16.d0   &
+                                + tau(itau)**3/24.d0 )
             !
-            coswt(Nmats-1,itau) = coswt(Nmats-1,itau)                                                                                 &
-                              + (v2**4 / v12        ) * ( +cos2 - (beta/8.d0 - tau(itau)/ 4.d0)                                  )    &
-                              + (v2**4 * v1**2 / v12) * ( -cos4 + (beta**3/96.d0 -beta*tau(itau)**2/16.d0 + tau(itau)**3/24.d0 ) )
+            coswt(Nmats-1,itau) = coswt(Nmats-1,itau)                                           &
+                                + cos2*v2**4/v12 - cos4*v2**4 *v1**2/v12                        &
+                                - (v2**4/v12) * (beta/2.d0 - tau(itau)) / 4.d0                  &
+                                + (v2**4*v1**2/v12) * (beta**3/96.d0 -beta*tau(itau)**2/16.d0   &
+                                + tau(itau)**3/24.d0 )
             !
             ! (1/beta) S[n=0,inf] sin(vn*tau) / vn    = 1/4
             ! (1/beta) S[n=0,inf] sin(vn*tau) / vn^3  = ( beta*tau - tau^2 ) / 8
-            sinwt(Nmats,itau) = sinwt(Nmats,itau)                                                              &
-                              + (v1**3 / v12)         * ( -sin1 + 1.d0/4.d0                               )    &
-                              + (v1**3 * v2**2 / v12) * ( +sin3 - (beta*tau(itau) - tau(itau)**2)/8.d0    )
+            sinwt(Nmats,itau)   = sinwt(Nmats,itau)                                             &
+                                - sin1*v1**3/v12 + sin3*v1**3 *v2**2/v12                        &
+                                + v1**3/(4.d0*v12)                                              &
+                                - (v1**3 * v2**2/v12) * (beta*tau(itau) - tau(itau)**2)/8.d0
             !
-            sinwt(Nmats-1,itau) = sinwt(Nmats-1,itau)                                                          &
-                              + (v1**3 / v12)         * ( +sin1 - 1.d0/4.d0                               )    &
-                              + (v1**3 * v2**2 / v12) * ( -sin3 + (beta*tau(itau) - tau(itau)**2)/8.d0    )
+            sinwt(Nmats-1,itau) = sinwt(Nmats-1,itau)                                           &
+                                + sin1*v2**3/v12 - sin3*v2**3 *v1**2/v12                        &
+                                - v2**3/(4.d0*v12)                                              &
+                                + (v2**3 * v1**2/v12) * (beta*tau(itau) - tau(itau)**2)/8.d0
             !
          endif
       enddo !itau
@@ -316,7 +322,11 @@ contains
          enddo
          !
          wb1 = wb1 + 2.d0 * beta * ( 1.d0/(2.d0*pi))**2 *(pi*pi/6.d0 - 0.5d0*pi*x + 0.25d0*x*x)
-         if(correct) coswt(Nmats,itau) = coswt(Nmats,itau) + wmats(Nmats)**2 * wb1
+         if(correct) then
+            !
+            coswt(Nmats,itau) = coswt(Nmats,itau) + wmats(Nmats)**2 * wb1
+            !
+         endif
          !
       enddo
       !
@@ -447,7 +457,7 @@ contains
          real_space=.true.
          if(verbose)write(*,"(A)") "Performing FT iw->itau in real space."
       else
-         stop "Either kpt or nkpt3 argument is missing."
+         if(verbose)write(*,"(A)") "Performing FT iw->itau in momentum space."
       endif
       !
       asympt_corr_ = .true.
@@ -646,7 +656,7 @@ contains
          real_space=.true.
          if(verbose)write(*,"(A)") "Performing FT iw->itau in real space."
       else
-         stop "Either kpt or nkpt3 argument is missing."
+         if(verbose)write(*,"(A)") "Performing FT iw->itau in momentum space."
       endif
       !
       asympt_corr_ = .true.
@@ -1144,6 +1154,7 @@ contains
 
    !---------------------------------------------------------------------------!
    !PURPOSE: Perform the Fourier transform from tau to mats of a bosonic tensor
+   !TEST ON: 21-10-2020
    !---------------------------------------------------------------------------!
    subroutine Bitau2mats_Uw(beta,Uitau,Umats,tau_uniform)
       !

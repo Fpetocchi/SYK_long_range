@@ -41,6 +41,9 @@ contains
 
    !---------------------------------------------------------------------------!
    !PURPOSE: Computes analytically the non-interacting polarization bubble
+   !TEST ON: 21-10-2020
+   !COMMENT: For some reason this gives a bit more wiggling W.
+   !         Using calc_Pi_selfcons from the Glda seems to work better. 
    !---------------------------------------------------------------------------!
    subroutine calc_Pi_GkGk(Pmats,Lttc)
       !
@@ -53,13 +56,13 @@ contains
       type(BosonicField),intent(inout)      :: Pmats
       type(Lattice),intent(in)              :: Lttc
       !
-      complex(8),allocatable                :: cprod(:,:,:,:)
+      complex(8),allocatable                :: cprod(:,:,:,:,:)
       complex(8),allocatable                :: alpha(:)
       real(8),allocatable                   :: wmats(:)
       real(8)                               :: Beta
       integer                               :: Nbp,Nkpt,Nmats,Norb
       integer                               :: ik1,ik2,iq,iw
-      integer                               :: iwan1,iwan2,iwan3,iwan4,ib1
+      integer                               :: iwan1,iwan2,iwan3,iwan4,ib1,ib2
       real                                  :: start,finish
       !
       !
@@ -84,7 +87,7 @@ contains
       wmats = BosonicFreqMesh(Beta,Nmats)
       !
       !cprod(alpha,i,n,ik)= < B_q,alpha Psi_kn |Psi_q+k,i>
-      allocate(cprod(Nbp,Norb,Norb,Nkpt));cprod=czero
+      allocate(cprod(Nbp,Norb,Norb,Nkpt,Nkpt));cprod=czero
       !$OMP PARALLEL DEFAULT(NONE),&
       !$OMP SHARED(Nkpt,Nmats,Norb,Lttc,cprod,beta),&
       !$OMP PRIVATE(iq,ik1,ik2,ib1,iwan1,iwan2,iwan3,iwan4)
@@ -100,7 +103,7 @@ contains
                      do iwan1=1,Norb
                         !
                         ib1=ib1+1
-                        cprod(ib1,iwan3,iwan4,ik1) = dconjg(Lttc%Zk(iwan1,iwan4,ik1))*Lttc%Zk(iwan2,iwan3,ik2)
+                        cprod(ib1,iwan3,iwan4,ik1,iq) = dconjg(Lttc%Zk(iwan1,iwan4,ik1))*Lttc%Zk(iwan2,iwan3,ik2)
                         !
                      enddo
                   enddo
@@ -116,18 +119,19 @@ contains
       allocate(alpha(Nmats));alpha=czero
       call clear_attributes(Pmats)
       !$OMP PARALLEL DEFAULT(NONE),&
-      !$OMP SHARED(Nbp,Nkpt,Nmats,Norb,wmats,cprod,alpha,Lttc,Pmats),&
+      !$OMP SHARED(Nbp,Nkpt,Nmats,Norb,wmats,cprod,alpha,Lttc,Pmats,verbose),&
       !$OMP PRIVATE(iq,ik1,ik2,iwan1,iwan2)
       !$OMP DO
-      do iw=1,Nmats
-         do iq=1,Nkpt
+      do iq=1,Nkpt
+         alpha=czero
+         do iw=1,Nmats
+            !
             do ik1=1,Nkpt
                ik2 = Lttc%kptsum(ik1,iq)
-               !
                do iwan1=1,Norb
                   do iwan2=1,Norb
                      !
-                     if (dabs(-Lttc%Ek(iwan1,ik1)+Lttc%Ek(iwan2,ik2)).lt.eps.and.iw.eq.1) then
+                     if (dabs(-Lttc%Ek(iwan1,ik1)+Lttc%Ek(iwan2,ik2)).lt.1d-6.and.iw.eq.1) then
                         !
                         !lim_{E'->E} (n(E)-n(E'))/(E'-E) = (n(E) - (n(E) + n'(E)*(E'-E)))/(E'-E) -> -n'(E)
                         alpha(iw) = +2.d0 * diff_fermidirac(Lttc%Ek(iwan1,ik1),Lttc%mu,Pmats%Beta) / Nkpt
@@ -140,14 +144,23 @@ contains
                      endif
                      !
                      !alpha(iw)=alpha(iw)!/nkpt/nkpt !to account for the fact that cprod basis = 1/nkpt * prod basis of U in spex
-                     call ZHER('U',Nbp,alpha(iw),cprod(:,iwan2,iwan1,ik1),1,Pmats%screened(:,:,iw,iq),Nbp)
+                     call ZHER('U',Nbp,alpha(iw),cprod(:,iwan2,iwan1,ik1,iq),1,Pmats%screened(:,:,iw,iq),Nbp)
                      !
-                  enddo
+                  enddo !iwan2
+               enddo !iwan1
+            enddo !ik1
+            !
+            do ib2=1,Nbp
+               do ib1=ib2+1,Nbp
+                  if(abs(Pmats%screened(ib2,ib1,iw,iq)).lt.eps)Pmats%screened(ib2,ib1,iw,iq)=czero
+                  Pmats%screened(ib1,ib2,iw,iq)=conjg(Pmats%screened(ib2,ib1,iw,iq))
                enddo
-               !
             enddo
-         enddo
-      enddo
+            if(verbose)call check_Hermiticity(Pmats%screened(:,:,iw,iq),eps,hardstop=.true.)
+            !
+         enddo !iw
+         if(verbose)print *, "PiGG(q,iw) - done iq: ",iq
+      enddo !iq
       !$OMP END DO
       !$OMP END PARALLEL
       deallocate(cprod,alpha,wmats)
@@ -155,13 +168,14 @@ contains
       call BosonicKsum(Pmats)
       !
       call cpu_time(finish)
-      write(*,"(A,1F20.6)") "PiGG cpu timing: ", finish-start
+      write(*,"(A,F)") "PiGG cpu timing: ", finish-start
       !
    end subroutine calc_Pi_GkGk
 
 
    !---------------------------------------------------------------------------!
    !PURPOSE: Computes polarization bubble from the interacting Gf
+   !TEST ON: 21-10-2020
    !---------------------------------------------------------------------------!
    subroutine calc_Pi_selfcons(Pout,Gmats,Lttc,tau_output)
       !
@@ -171,7 +185,8 @@ contains
       use fourier_transforms
       use crystal
       use fourier_transforms
-      use input_vars, only : NtauB, tau_uniform
+      use file_io
+      use input_vars, only : NtauB, tau_uniform,pathDATA
       implicit none
       !
       type(BosonicField),intent(inout)      :: Pout
@@ -180,6 +195,7 @@ contains
       logical,intent(in),optional           :: tau_output
       !
       complex(8),allocatable                :: Gitau(:,:,:,:,:)
+      complex(8),allocatable                :: GitauLOC(:,:,:,:)
       complex(8),allocatable                :: Pq_tau(:,:,:)
       real(8),allocatable                   :: tau(:)
       real(8)                               :: Beta,tau2
@@ -228,14 +244,27 @@ contains
          asympt_corr=.true.,tau_uniform=tau_uniform,nkpt3=Lttc%Nkpt3,kpt=Lttc%kpt)
       enddo
       !
+      !TEST>>>
+      allocate(GitauLOC(Norb,Norb,Ntau_,Nspin));GitauLOC=czero
+      GitauLOC=sum(Gitau,dim=4)
+      GitauLOC=GitauLOC/Nkpt
+      do m=1,Norb
+         do n=1,Norb
+            call dump_FermionicField(GitauLOC(m,n,:,1),reg(pathDATA)//"0/","Gitau_Hk_"//str(m)//str(n)//".1.bubble",tau)
+            call dump_FermionicField(GitauLOC(m,n,:,2),reg(pathDATA)//"0/","Gitau_Hk_"//str(m)//str(n)//".1.bubble",tau)
+         enddo
+      enddo
+      deallocate(GitauLOC)
+      !>>>TEST
+      !
       allocate(Pq_tau(Nbp,Nbp,Ntau_))
       call clear_attributes(Pout)
       do iq=1,Nkpt
          !
          Pq_tau=czero
          !$OMP PARALLEL DEFAULT(NONE),&
-         !$OMP SHARED(Ntau_,Nkpt,Norb,tau,Lttc,Gitau,Pq_tau),&
-         !$OMP PRIVATE(iq,itau,tau2,ispin,ik1,ik2,m,n,mp,np,ib1,ib2)
+         !$OMP SHARED(iq,Ntau_,Nkpt,Norb,tau,Lttc,Gitau,Pq_tau),&
+         !$OMP PRIVATE(itau,tau2,ispin,ik1,ik2,m,n,mp,np,ib1,ib2)
          !$OMP DO
          do itau=1,Ntau_
             !
@@ -274,13 +303,15 @@ contains
             call Bitau2mats(Beta,Pq_tau,Pout%screened(:,:,:,iq),tau_uniform=tau_uniform)
          endif
          !
-      enddo
+         if(verbose)print *, "PiGGsc(q,iw) - done iq: ",iq
+         !
+      enddo !iq
       deallocate(tau,Gitau,Pq_tau)
       !
       call BosonicKsum(Pout)
       !
       call cpu_time(finish)
-      write(*,"(A,1F20.6)") "PiGGsc cpu timing: ", finish-start
+      write(*,"(A,F)") "PiGGsc cpu timing: ", finish-start
       !
    end subroutine calc_Pi_selfcons
 
