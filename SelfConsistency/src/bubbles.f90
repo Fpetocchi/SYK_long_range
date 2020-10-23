@@ -43,7 +43,7 @@ contains
    !PURPOSE: Computes analytically the non-interacting polarization bubble
    !TEST ON: 21-10-2020
    !COMMENT: For some reason this gives a bit more wiggling W.
-   !         Using calc_Pi_selfcons from the Glda seems to work better. 
+   !         Using calc_Pi_selfcons from the Glda seems to work better.
    !---------------------------------------------------------------------------!
    subroutine calc_Pi_GkGk(Pmats,Lttc)
       !
@@ -186,7 +186,7 @@ contains
       use crystal
       use fourier_transforms
       use file_io
-      use input_vars, only : NtauB, tau_uniform,pathDATA
+      use input_vars, only : NtauB, tau_uniform !,pathDATA
       implicit none
       !
       type(BosonicField),intent(inout)      :: Pout
@@ -195,7 +195,6 @@ contains
       logical,intent(in),optional           :: tau_output
       !
       complex(8),allocatable                :: Gitau(:,:,:,:,:)
-      complex(8),allocatable                :: GitauLOC(:,:,:,:)
       complex(8),allocatable                :: Pq_tau(:,:,:)
       real(8),allocatable                   :: tau(:)
       real(8)                               :: Beta,tau2
@@ -243,19 +242,6 @@ contains
          call Fmats2itau_mat(Beta,Gmats%wks(:,:,:,:,ispin),Gitau(:,:,:,:,ispin), &
          asympt_corr=.true.,tau_uniform=tau_uniform,nkpt3=Lttc%Nkpt3,kpt=Lttc%kpt)
       enddo
-      !
-      !TEST>>>
-      allocate(GitauLOC(Norb,Norb,Ntau_,Nspin));GitauLOC=czero
-      GitauLOC=sum(Gitau,dim=4)
-      GitauLOC=GitauLOC/Nkpt
-      do m=1,Norb
-         do n=1,Norb
-            call dump_FermionicField(GitauLOC(m,n,:,1),reg(pathDATA)//"0/","Gitau_Hk_"//str(m)//str(n)//".1.bubble",tau)
-            call dump_FermionicField(GitauLOC(m,n,:,2),reg(pathDATA)//"0/","Gitau_Hk_"//str(m)//str(n)//".1.bubble",tau)
-         enddo
-      enddo
-      deallocate(GitauLOC)
-      !>>>TEST
       !
       allocate(Pq_tau(Nbp,Nbp,Ntau_))
       call clear_attributes(Pout)
@@ -316,5 +302,21 @@ contains
    end subroutine calc_Pi_selfcons
 
 
-
 end module bubbles
+
+
+
+! testing stuff
+!complex(8),allocatable                :: GitauLOC(:,:,:,:)
+!TEST>>>
+!allocate(GitauLOC(Norb,Norb,Ntau_,Nspin));GitauLOC=czero
+!GitauLOC=sum(Gitau,dim=4)
+!GitauLOC=GitauLOC/Nkpt
+!do m=1,Norb
+!   do n=1,Norb
+!      call dump_FermionicField(GitauLOC(m,n,:,1),reg(pathDATA)//"0/","Gitau_Hk_"//str(m)//str(n)//".1.bubble",tau)
+!      call dump_FermionicField(GitauLOC(m,n,:,2),reg(pathDATA)//"0/","Gitau_Hk_"//str(m)//str(n)//".1.bubble",tau)
+!   enddo
+!enddo
+!deallocate(GitauLOC)
+!>>>TEST

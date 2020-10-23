@@ -971,6 +971,7 @@ contains
 
    !---------------------------------------------------------------------------!
    !PURPOSE: Read from file the local attributes of a Bosonic field
+   !TEST ON: 23-10-2020
    !---------------------------------------------------------------------------!
    subroutine read_BosonicField_local(U,dirpath,filename,axis)
       !
@@ -1029,7 +1030,6 @@ contains
          axis_ = BosonicFreqMesh(U%Beta,U%Npoints)
       endif
       !
-      read(unit,*)
       read(unit,*) !"Wannier-projected bare limit:"
       do iwan1=1,Norb
          do iwan2=1,Norb
@@ -1044,7 +1044,7 @@ contains
                   if (idum2.ne.iwan2) stop "iwan2 (bare) does not match"
                   if (idum3.ne.iwan3) stop "iwan3 (bare) does not match"
                   if (idum4.ne.iwan4) stop "iwan4 (bare) does not match"
-                  U%bare_local(ib1,ib2) = dcmplx(RealU,ImagU)
+                  if(allocated(U%bare_local))U%bare_local(ib1,ib2) = dcmplx(RealU,ImagU)
                   !
                enddo
             enddo

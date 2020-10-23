@@ -405,16 +405,17 @@ contains
                !Polarization
                call AllocateBosonicField(PiGG,Crystal%Norb,Nmats,Crystal%iq_gamma,Nkpt=Crystal%Nkpt,Nsite=Nsite,no_bare=.true.,Beta=Beta)
                call AllocateBosonicField(PiEDMFT,Crystal%Norb,Nmats,Crystal%iq_gamma,Nsite=Nsite,no_bare=.true.,Beta=Beta)
-               call read_BosonicField(PiEDMFT,reg(pathDATA)//str(ItStart-1),"PiEDMFT")
+               call read_BosonicField(PiEDMFT,reg(pathDATA)//str(ItStart-1)//"/","PiEDMFT.DAT")
                !
                !Impurity Self-energy
-               call AllocateFermionicField(SigmaEDMFT,Crystal%Norb,Nmats,Nsite=Nsite,Beta=Beta)
-               call read_FermionicField(SigmaEDMFT,1,reg(pathDATA)//str(ItStart-1),"SigmaEDMFT")
-               call read_FermionicField(SigmaEDMFT,2,reg(pathDATA)//str(ItStart-1),"SigmaEDMFT")
-               !
-               !Lattice Gf
+!               call AllocateFermionicField(SigmaEDMFT,Crystal%Norb,Nmats,Nsite=Nsite,Beta=Beta)
+!               call read_FermionicField(SigmaEDMFT,1,reg(pathDATA)//str(ItStart-1),"SigmaEDMFT")
+!               call read_FermionicField(SigmaEDMFT,2,reg(pathDATA)//str(ItStart-1),"SigmaEDMFT")
+!               !
+!               !Lattice Gf
                call AllocateFermionicField(Glat,Crystal%Norb,Nmats,Nkpt=Crystal%Nkpt,Nsite=Nsite,Beta=Beta)
-               call read_FermionicField(Glat,reg(pathDATA)//str(ItStart-1),"Glat")
+!               call read_FermionicField(Glat,reg(pathDATA)//str(ItStart-1),"Glat")
+               call calc_Gmats(Glat,Crystal)
                !
             else
                !

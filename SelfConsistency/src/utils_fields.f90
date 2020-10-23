@@ -944,6 +944,7 @@ contains
 
    !---------------------------------------------------------------------------!
    !PURPOSE: Replace PiImp in PiGW at the indexes contained in orbs
+   !TEST ON: 23-10-2020
    !---------------------------------------------------------------------------!
    subroutine MergePolarization(PiGW,PiImp,coeff,orbs)
       use parameters
