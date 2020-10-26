@@ -110,8 +110,9 @@ module module_container
    !(l) Self-energy container. Depends on (a),(b),(c),(d),(e),(f),(g),(h),(k)
    use self_energy, only:                    &
    calc_sigmaGW                             ,&
-   calc_sigmaGW_DC                          ,&
-   read_Sigma_spex
+   calc_sigmaGWdc                           ,&
+   read_Sigma_spex                          ,&
+   calc_VH
 
 
 end module module_container

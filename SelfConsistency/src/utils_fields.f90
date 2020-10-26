@@ -845,16 +845,17 @@ contains
    !---------------------------------------------------------------------------!
    !PURPOSE: Replace SigmaImp in SigmaGW at the indexes contained in orbs
    !---------------------------------------------------------------------------!
-   subroutine MergeSelfEnergy(SigmaGW,SigmaImp,coeff,orbs,SigmaGW_DC)
+   subroutine MergeSelfEnergy(SigmaGW,SigmaGW_DC,SigmaImp,coeff,orbs,DC_type)
       use parameters
       use utils_misc
       use linalg, only : rotate
       implicit none
       type(FermionicField),intent(inout)    :: SigmaGW
+      type(FermionicField),intent(in)       :: SigmaGW_DC
       type(FermionicField),intent(in)       :: SigmaImp
       real(8),intent(in)                    :: coeff
       integer,allocatable,intent(in)        :: orbs(:,:)
-      type(FermionicField),intent(in),optional :: SigmaGW_DC
+      character(len=*),intent(in)           :: DC_type
       !
       real(8)                               :: Beta
       integer                               :: iw,ik,isite,iorb,jorb
@@ -872,7 +873,7 @@ contains
       if(.not.SigmaGW_DC%status) stop "SigmaGW_DC not properly initialized."
       if(.not.SigmaImp%status) stop "SigmaImp not properly initialized."
       if(SigmaGW%Nkpt.eq.0) stop "SigmaGW k dependent attributes not properly initialized."
-      if(present(SigmaGW_DC).and.(SigmaGW_DC%Nkpt.ne.0)) stop "SigmaGW_DC k dependent attributes are supposed to be unallocated."
+      if(SigmaGW_DC%Nkpt.ne.0) stop "SigmaGW_DC k dependent attributes are supposed to be unallocated."
       if(SigmaImp%Nkpt.ne.0) stop "SigmaImp k dependent attributes are supposed to be unallocated."
       !
       Norb = SigmaGW%Norb
@@ -880,17 +881,13 @@ contains
       Beta = SigmaGW%Beta
       Nmats = SigmaGW%Npoints
       Nsite = SigmaGW%Nsite
-      localDC = .true.
       !
       if(SigmaImp%Norb.ne.Norb) stop "SigmaImp has different orbital dimension with respect to SigmaGW."
       if(SigmaImp%Beta.ne.Beta) stop "SigmaImp has different Beta with respect to SigmaGW."
       if(SigmaImp%Npoints.ne.Nmats) stop "SigmaImp has different number of Matsubara points with respect to SigmaGW."
-      if(present(SigmaGW_DC))then
-         if(SigmaGW_DC%Norb.ne.Norb) stop "SigmaGW_DC has different orbital dimension with respect to SigmaGW."
-         if(SigmaGW_DC%Beta.ne.Beta) stop "SigmaGW_DC has different Beta with respect to SigmaGW."
-         if(SigmaGW_DC%Npoints.ne.Nmats) stop "SigmaGW_DC has different number of Matsubara points with respect to SigmaGW."
-         localDC = .false.
-      endif
+      if(SigmaGW_DC%Norb.ne.Norb) stop "SigmaGW_DC has different orbital dimension with respect to SigmaGW."
+      if(SigmaGW_DC%Beta.ne.Beta) stop "SigmaGW_DC has different Beta with respect to SigmaGW."
+      if(SigmaGW_DC%Npoints.ne.Nmats) stop "SigmaGW_DC has different number of Matsubara points with respect to SigmaGW."
       if(size(orbs,dim=1).ne.Nsite) stop "Number of orbital lists does not match the number of sites."
       Norb_imp=0
       do isite=1,Nsite
@@ -899,6 +896,15 @@ contains
          enddo
       enddo
       if(Norb_imp.gt.Norb) stop "Number of orbital to be inserted is bigger than the total lattice orbital space."
+      !
+      select case(DC_type)
+         case default
+            stop "Available DC types for the self-energy: Sloc or GlocWloc."
+         case("Sloc")
+            localDC = .true.
+         case("GlocWloc")
+            localDC = .false.
+      end select
       !
       !all sites if(expand.or.AFM) otherwise only one site and the orbitals within orbs
       !$OMP PARALLEL DEFAULT(NONE),&

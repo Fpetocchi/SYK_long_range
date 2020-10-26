@@ -13,7 +13,7 @@ module interactions
    !PURPOSE: Module interfaces
    !---------------------------------------------------------------------------!
    interface read_U_spex
-      module procedure read_U_spex_full                                         ![BosonicField,LocalOnly,save2bin,pathOUTPUT(optional to change output path),doAC(optional to override AC)]
+      module procedure read_U_spex_full                                         ![BosonicField,LocalOnly,save2readable,pathOUTPUT(optional to change output path),doAC(optional to override AC)]
       module procedure read_U_spex_Uloc0                                        ![Matrix,pathOUTPUT(optional to change output path)]
    end interface read_U_spex
 
@@ -467,7 +467,7 @@ contains
    !PURPOSE: Read frequancy dependent interactions from SPEX files.
    !TEST ON: 20-10-2020 (both doAC)
    !---------------------------------------------------------------------------!
-   subroutine read_U_spex_full(Umats,save2bin,LocalOnly,pathOUTPUT,doAC)
+   subroutine read_U_spex_full(Umats,save2readable,LocalOnly,pathOUTPUT,doAC)
       !
       use parameters
       use file_io
@@ -477,7 +477,7 @@ contains
       implicit none
       !
       type(BosonicField),intent(inout)      :: Umats
-      logical,intent(in)                    :: save2bin
+      logical,intent(in)                    :: save2readable
       logical,intent(in)                    :: LocalOnly
       character(len=*),intent(in),optional  :: pathOUTPUT
       logical,intent(in),optional           :: doAC
@@ -526,7 +526,7 @@ contains
       ! This has to be done before allocation of large files otherwise the "system" command will not work
       if(doAC_.and.(.not.LocalOnly))then
          call createDir(reg(trim(pathINPUT)//"VW_imag"))
-         if(.not.save2bin)then
+         if(save2readable)then
             call createDir(reg(trim(pathINPUT)//"VW_imag_readable"),verb=verbose)
             call createDir(reg(trim(pathINPUT)//"VW_real_readable"),verb=verbose)
          endif
@@ -744,9 +744,9 @@ contains
          ! Print out the transformed stuff - Kdep
          if(.not.LocalOnly)then
             call dump_BosonicField(Umats,reg(pathOUTPUT_)//"VW_imag/",.true.)
-            if(.not.save2bin)then
-               call dump_BosonicField(Umats,reg(pathOUTPUT_)//"VW_imag_readable/",save2bin)
-               call dump_BosonicField(Ureal,reg(pathOUTPUT_)//"VW_real_readable/",save2bin,axis=wread)
+            if(save2readable)then
+               call dump_BosonicField(Umats,reg(pathOUTPUT_)//"VW_imag_readable/",.not.save2readable)
+               call dump_BosonicField(Ureal,reg(pathOUTPUT_)//"VW_real_readable/",.not.save2readable,axis=wread)
             endif
          endif
          !

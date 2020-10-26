@@ -136,13 +136,15 @@ module input_vars
    !
    !Double counting types, divergencies, scaling coefficients
    character(len=256),public                :: VH_type
-   logical,public                           :: HandleGammaPoint !=.not.Umodel
+   character(len=256),public                :: DC_type
+   logical,public                           :: HandleGammaPoint
    real(8),public                           :: alphaPi
    real(8),public                           :: alphaSigma
    real(8),public                           :: alphaHk
    !
    !Paths (directories must end with "/") and loop variables
    integer,public                           :: FirstIteration
+   integer,public                           :: LastIteration
    character(len=256),public                :: pathINPUT!="InputFiles/"
    character(len=256),public                :: pathDATA!="Iterations/"
    integer,public                           :: LOGfile
@@ -267,6 +269,7 @@ contains
       !
       !Double counting types, divergencies, scaling coefficients
       call parse_input_variable(VH_type,"VH_TYPE",InputFile,default="Ubare",comment="check this because I dont remember.")
+      call parse_input_variable(DC_type,"DC_TYPE",InputFile,default="GlocWloc",comment="Local GW self-energy which is replaced by DMFT self-energy.")
       call parse_input_variable(HandleGammaPoint,"SMEAR_GAMMA",InputFile,default=.true.,comment="Remove the interaction divergence at the Gamma point.")
       call parse_input_variable(alphaPi,"ALPHA_PI",InputFile,default=1d0,comment="Fraction of the EDMFT polarization substituted within the lattice one.")
       call parse_input_variable(alphaSigma,"ALPHA_SIGMA",InputFile,default=1d0,comment="Fraction of the EDMFT self-energy substituted within the lattice one.")
@@ -276,6 +279,7 @@ contains
       call parse_input_variable(pathINPUT,"PATH_INPUT",InputFile,default="InputFiles",comment="Folder within cwd where to look for input files.")
       call parse_input_variable(pathDATA,"PATH_DATA",InputFile,default="Iterations",comment="Folder within cwd where to store data.")
       call parse_input_variable(FirstIteration,"START_IT",InputFile,default=0,comment="First iteration.")
+      call parse_input_variable(LastIteration,"LAST_IT",InputFile,default=100,comment="Last iteration (by now used only for scGW).")
       call parse_input_variable(LOGfile,"LOGFILE",InputFile,default=6,comment="Standard output redirection unit. Use 6 to print to terminal.")
       call parse_input_variable(Mixing_curlyG,"MIX_G",InputFile,default=0.5d0,comment="Fraction of the old iteration curlyG.")
       call parse_input_variable(Mixing_curlyU,"MIX_U",InputFile,default=0.5d0,comment="Fraction of the old iteration curlyU.")
@@ -284,7 +288,7 @@ contains
       call code_version()
       call save_InputFile(InputFile)
       !
-      !The last slash is uneffective
+      !The last slash is uneffective for some reason
       pathINPUT=trim(pathINPUT)//"/"
       pathDATA=trim(pathDATA)//"/"
       !

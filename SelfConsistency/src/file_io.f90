@@ -19,12 +19,14 @@ module file_io
    interface dump_Matrix
       module procedure :: dump_Matrix_local_d                                   ![Umat,printpath]
       module procedure :: dump_Matrix_local_z                                   ![Umat,printpath]
-      module procedure :: dump_Matrix_Kdep                                      ![Umat(:,:,:),dirpath,filename,binfmt,ispin(optional)]
+      module procedure :: dump_Matrix_Kdep_d                                    ![Umat(:,:,:),dirpath,filename,binfmt,ispin(optional)]
+      module procedure :: dump_Matrix_Kdep_z                                    ![Umat(:,:,:),dirpath,filename,binfmt,ispin(optional)]
    end interface dump_Matrix
    interface read_Matrix
       module procedure :: read_Matrix_local_d                                   ![Umat,printpath]                (Reads only from formatted input.)
       module procedure :: read_Matrix_local_z                                   ![Umat,printpath]                (Reads only from formatted input.)
-      module procedure :: read_Matrix_Kdep                                      ![Umat(:,:,:),dirpath,filename]  (Reads only from unformatted input.)
+      module procedure :: read_Matrix_Kdep_d                                    ![Umat(:,:,:),dirpath,filename]  (Reads only from unformatted input.)
+      module procedure :: read_Matrix_Kdep_z                                    ![Umat(:,:,:),dirpath,filename]  (Reads only from unformatted input.)
    end interface read_Matrix
 
    interface dump_FermionicField
@@ -211,7 +213,7 @@ contains
    !---------------------------------------------------------------------------!
    !PURPOSE: Write to file a K-dependent matrix
    !---------------------------------------------------------------------------!
-   subroutine dump_Matrix_Kdep(Umat,dirpath,filename,binfmt,ispin)
+   subroutine dump_Matrix_Kdep_z(Umat,dirpath,filename,binfmt,ispin)
       !
       use utils_misc
       use utils_fields
@@ -228,7 +230,7 @@ contains
       character(len=256)                    :: printpath
       !
       !
-      if(verbose)write(*,"(A)") "---- dump_Matrix_Kdep"
+      if(verbose)write(*,"(A)") "---- dump_Matrix_Kdep_z"
       !
       !
       ! Check on the input matrix
@@ -289,13 +291,93 @@ contains
          !
       endif
       !
-   end subroutine dump_Matrix_Kdep
+   end subroutine dump_Matrix_Kdep_z
+   !
+   subroutine dump_Matrix_Kdep_d(Umat,dirpath,filename,binfmt,ispin)
+      !
+      use utils_misc
+      use utils_fields
+      implicit none
+      !
+      real(8),intent(in)                    :: Umat(:,:,:)
+      character(len=*),intent(in)           :: dirpath
+      character(len=*),intent(in)           :: filename
+      logical,intent(in)                    :: binfmt
+      integer,optional                      :: ispin
+      !
+      integer                               :: unit,ik,Norb,Nkpt
+      integer                               :: iwan1,iwan2
+      character(len=256)                    :: printpath
+      !
+      !
+      if(verbose)write(*,"(A)") "---- dump_Matrix_Kdep_d"
+      !
+      !
+      ! Check on the input matrix
+      Nkpt = size(Umat,dim=3)
+      Norb = size(Umat,dim=1)
+      if(Norb.ne.size(Umat,dim=2)) stop "The provided matrix is not square."
+      !
+      ! Create directory
+      call createDir(reg(dirpath))
+      !
+      ! Write to file
+      if(binfmt) then
+         !
+         if(present(ispin))then
+            printpath = reg(dirpath)//reg(filename)//"_k.DAT."//str(ispin)
+         else
+            printpath = reg(dirpath)//reg(filename)//"_k.DAT."
+         endif
+         if(verbose)write(*,"(A)") "     Dump "//reg(printpath)
+         !
+         unit = free_unit()
+         open(unit,file=reg(printpath),form="unformatted",status="unknown",position="rewind",action="write")
+         !
+         write(unit) Nkpt,Norb
+         do ik=1,Nkpt
+            write(unit) ik
+            do iwan1=1,Norb
+               do iwan2=1,Norb
+                  write(unit) iwan1,iwan2,Umat(iwan1,iwan2,ik)
+               enddo
+            enddo
+         enddo !ik
+         close(unit)
+         !
+      else
+         !
+         do ik=1,Nkpt
+            !
+            if(present(ispin))then
+               printpath = reg(dirpath)//reg(filename)//"_ik"//str(ik)//".DAT."//str(ispin)
+            else
+               printpath = reg(dirpath)//reg(filename)//"_ik"//str(ik)//".DAT."
+            endif
+            if(verbose)write(*,"(A)") "     Dump "//reg(printpath)
+            unit = free_unit()
+            open(unit,file=reg(printpath),form="formatted",status="unknown",position="rewind",action="write")
+            !
+            write(unit,"(2(A,1I7))") "ik",ik,"Norb",Norb
+            do iwan1=1,Norb
+               do iwan2=1,Norb
+                  write(unit,"(2I4,2E20.12)") iwan1,iwan2,Umat(iwan1,iwan2,ik)
+               enddo
+            enddo
+            !
+            close(unit)
+            !
+         enddo !ik
+         !
+      endif
+      !
+   end subroutine dump_Matrix_Kdep_d
 
 
    !---------------------------------------------------------------------------!
    !PURPOSE: Read from file a K-dependent matrix
    !---------------------------------------------------------------------------!
-   subroutine read_Matrix_Kdep(Umat,dirpath,filename)
+   subroutine read_Matrix_Kdep_z(Umat,dirpath,filename)
       !
       use parameters
       use utils_misc
@@ -316,7 +398,7 @@ contains
       character(len=256)                    :: readpath
       !
       !
-      if(verbose)write(*,"(A)") "---- read_Matrix_Kdep"
+      if(verbose)write(*,"(A)") "---- read_Matrix_Kdep_z"
       readpath = reg(dirpath)//filename
       if(verbose)write(*,"(A)") "     Read "//reg(readpath)
       !
@@ -356,7 +438,70 @@ contains
       enddo !ik
       close(unit)
       !
-   end subroutine read_Matrix_Kdep
+   end subroutine read_Matrix_Kdep_z
+   !
+   subroutine read_Matrix_Kdep_d(Umat,dirpath,filename)
+      !
+      use parameters
+      use utils_misc
+      use utils_fields
+      implicit none
+      !
+      real(8),intent(inout)                 :: Umat(:,:,:)
+      character(len=*),intent(in)           :: dirpath
+      character(len=*),intent(in)           :: filename
+      !
+      integer                               :: unit
+      integer                               :: Norb,ik,Nkpt
+      integer                               :: iwan1,iwan2
+      integer                               :: idum1,idum2
+      integer                               :: Nkpt_read,Norb_read
+      real(8)                               :: RealM
+      logical                               :: filexists
+      character(len=256)                    :: readpath
+      !
+      !
+      if(verbose)write(*,"(A)") "---- read_Matrix_Kdep_d"
+      readpath = reg(dirpath)//filename
+      if(verbose)write(*,"(A)") "     Read "//reg(readpath)
+      !
+      ! Check on the input Matrix
+      Nkpt = size(Umat,dim=3)
+      Norb = size(Umat,dim=1)
+      if(Norb.ne.size(Umat,dim=2)) stop "The provided matrix is not square."
+      !
+      ! Check file existence
+      call inquireFile(reg(readpath),filexists)
+      !
+      !
+      unit = free_unit()
+      open(unit,file=reg(readpath),form="unformatted",status="old",position="rewind",action="read")
+      !
+      read(unit) Nkpt_read,Norb_read
+      !
+      if(Nkpt_read.ne.Nkpt) stop "File with wrong number of K-points."
+      if(Norb_read.ne.Norb) stop "File with wrong number of Wannier functions."
+      !
+      do ik=1,Nkpt
+         !
+         read(unit) idum1
+         if (idum2.ne.ik) stop "ik does not match"
+         !
+         do iwan1=1,Norb
+            do iwan2=1,Norb
+               !
+               read(unit) idum1,idum2,RealM
+               if (idum1.ne.iwan1) stop "iwan1 does not match"
+               if (idum2.ne.iwan2) stop "iwan2 does not match"
+               Umat(iwan1,iwan2,ik) = RealM
+               !
+            enddo
+         enddo
+         !
+      enddo !ik
+      close(unit)
+      !
+   end subroutine read_Matrix_Kdep_d
 
 
    !---------------------------------------------------------------------------!
@@ -466,7 +611,7 @@ contains
    !PURPOSE: Write to file the K-dependent Fermionic field
    !TEST ON: 16-10-2020(both binfmt)
    !---------------------------------------------------------------------------!
-   subroutine dump_FermionicField_Kdep(G,dirpath,filename,binfmt,axis)
+   subroutine dump_FermionicField_Kdep(G,dirpath,filename,binfmt,kpt,axis)
       !
       use parameters
       use utils_misc
@@ -477,6 +622,7 @@ contains
       character(len=*),intent(in)           :: dirpath
       character(len=*),intent(in)           :: filename
       logical,intent(in)                    :: binfmt
+      real(8),intent(in)                    :: kpt(:,:)
       real(8),intent(in),optional           :: axis(:)
       !
       integer                               :: unit,ik,iaxis,Norb
@@ -490,6 +636,7 @@ contains
       ! Check on the input Field
       if(.not.G%status) stop "Field not properly initialized."
       if(G%Nkpt.eq.0) stop "K-dependent part not allocated."
+      call assert_shape(kpt,[3,G%Nkpt],"dump_FermionicField_Kdep","kpt")
       if(present(axis))then
          if(size(axis).ne.G%Npoints)write(*,"(A)")"Warning: axis provided but its length: "//str(size(axis))//" does not match with field mesh: "//str(G%Npoints)//". Writing up to the smaller."
          Naxis = min(size(axis),G%Npoints)
@@ -520,7 +667,7 @@ contains
             !
             write(unit) ispin,G%Nkpt,Norb,Naxis,G%mu
             do ik=1,G%Nkpt
-               write(unit) ispin,ik!,kpt(1:3,ik)
+               write(unit) ispin,ik,kpt(:,ik)
                do iaxis=1,Naxis
                   write(unit) iaxis,axis_(iaxis)
                   do iwan1=1,Norb
@@ -541,7 +688,7 @@ contains
                unit = free_unit()
                open(unit,file=reg(printpath),form="formatted",status="unknown",position="rewind",action="write")
                !
-               write(unit,"(1I3,1I7)") ispin,ik!,kpt(1:3,ik)
+               write(unit,"(1I3,1I7,3E20.12)") ispin,ik,kpt(:,ik)
                do iaxis=1,Naxis
                   write(unit,"(1I7,1E20.12)") iaxis,axis_(iaxis)
                   do iwan1=1,Norb
@@ -651,7 +798,7 @@ contains
    !PURPOSE: Read from file the k-dependent attributes of a Fermionic field
    !TEST ON: 16-10-2020
    !---------------------------------------------------------------------------!
-   subroutine read_FermionicField_Kdep(G,dirpath,filename,axis)
+   subroutine read_FermionicField_Kdep(G,dirpath,filename,kpt,axis)
       !
       use parameters
       use utils_misc
@@ -661,6 +808,7 @@ contains
       type(FermionicField),intent(inout)    :: G
       character(len=*),intent(in)           :: dirpath
       character(len=*),intent(in)           :: filename
+      real(8),intent(in),optional           :: kpt(:,:)
       real(8),intent(inout),optional        :: axis(:)
       !
       integer                               :: unit
@@ -670,6 +818,7 @@ contains
       integer                               :: ispin_read,Nkpt_read,Norb_read
       integer                               :: Naxis_read,mu_read
       real(8)                               :: axispoint,RealG,ImagG
+      real(8)                               :: kvec(3)
       logical                               :: filexists
       character(len=256)                    :: readpath
       !
@@ -679,7 +828,9 @@ contains
       !
       ! Check on the input Field
       if(.not.G%status) stop "Field not properly initialized."
+      if(G%Nkpt.eq.0) stop "K-dependent part not allocated."
       Norb = G%Norb
+      if(present(kpt))call assert_shape(kpt,[3,G%Nkpt],"read_FermionicField_Kdep","kpt")
       !
       !
       ! Read file
@@ -714,9 +865,14 @@ contains
          !
          do ik=1,G%Nkpt
             !
-            read(unit) idum1,idum2!,kpt(1:3,ik)
+            read(unit) idum1,idum2,kvec
             if (idum1.ne.ispin) stop "ispin does not match"
             if (idum2.ne.ik) stop "ik does not match"
+            if(present(kpt))then
+               if(abs(kvec(1)-kpt(1,ik)).gt.eps)stop "kvec(1) does not match"
+               if(abs(kvec(2)-kpt(2,ik)).gt.eps)stop "kvec(1) does not match"
+               if(abs(kvec(3)-kpt(3,ik)).gt.eps)stop "kvec(1) does not match"
+            endif
             !
             do iaxis=1,Naxis
                !

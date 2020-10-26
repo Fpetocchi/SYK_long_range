@@ -29,8 +29,9 @@ module self_energy
    !---------------------------------------------------------------------------!
    !subroutines
    public :: calc_sigmaGW
-   public :: calc_sigmaGW_DC
+   public :: calc_sigmaGWdc
    public :: read_Sigma_spex
+   public :: calc_VH
 
    !===========================================================================!
 
@@ -238,7 +239,7 @@ contains
    !---------------------------------------------------------------------------!
    !PURPOSE: Compute the two GW self-energy components.
    !---------------------------------------------------------------------------!
-   subroutine calc_sigmaGW_DC(Smats_Cdc,Smats_Xdc,Gmats,Wmats)
+   subroutine calc_sigmaGWdc(Smats_Cdc,Smats_Xdc,Gmats,Wmats)
       !
       use parameters
       use linalg
@@ -264,7 +265,7 @@ contains
       integer                               :: m,n,mp,np,ib1,ib2
       !
       !
-      if(verbose)write(*,"(A)") "---- calc_sigmaGW_DC"
+      if(verbose)write(*,"(A)") "---- calc_sigmaGWdc"
       !
       !
       ! Check on the input Fields
@@ -369,13 +370,13 @@ contains
       !$OMP END PARALLEL
       deallocate(Gitau_loc)
       !
-   end subroutine calc_sigmaGW_DC
+   end subroutine calc_sigmaGWdc
 
 
    !---------------------------------------------------------------------------!
    !PURPOSE: Compute Hartree difference with G0W0
    !---------------------------------------------------------------------------!
-   subroutine calc_VH(density_GoWo,Gmats,Umats,VH)
+   subroutine calc_VH(density_LDA,Gmats,Umats,VH)
       !
       use parameters
       use linalg
@@ -386,7 +387,7 @@ contains
       use input_vars, only :  pathINPUT, VH_type
       implicit none
       !
-      complex(8),intent(in)                 :: density_GoWo(:,:)
+      complex(8),intent(in)                 :: density_LDA(:,:)
       type(FermionicField),intent(in)       :: Gmats
       type(BosonicField),intent(in)         :: Umats
       complex(8),intent(inout)              :: VH(:,:)
@@ -412,6 +413,10 @@ contains
       if(Umats%iq_gamma.lt.0) stop "Umats iq_gamma not defined."
       Norb = Gmats%Norb
       Nbp = Umats%Nbp
+      !
+      if((Norb**2).ne.Nbp) stop "Umats and Gmats have different orbital space."
+      call assert_shape(density_LDA,[Norb,Norb],"calc_VH","density_LDA")
+      call assert_shape(VH,[Norb,Norb],"calc_VH","VH")
       !
       allocate(density(Norb,Norb));density=0d0
       allocate(density_spin(Norb,Norb,Nspin));density_spin=0d0
@@ -459,14 +464,14 @@ contains
          case("Ubare_SPEX")
             !
             allocate(Vgamma(Nbp,Nbp));Vgamma=czero
-            path = pathINPUT//"V_nodiv.DAT"
+            path = reg(pathINPUT)//"V_nodiv.DAT"
             call inquireFile(reg(path),filexists)
             call read_Vgamma(-1)
             !
          case("Ustatic_SPEX")
             !
             allocate(Vgamma(Nbp,Nbp));Vgamma=czero
-            path = pathINPUT//"V_nodiv.DAT"
+            path = reg(pathINPUT)//"V_nodiv.DAT"
             call inquireFile(reg(path),filexists)
             call read_Vgamma(0)
             !
@@ -481,7 +486,7 @@ contains
                  ib1 = mp + Norb*(m-1)
                  ib2 = np + Norb*(n-1)
                  !
-                 VH(mp,m) = VH(mp,m) + real( (density(np,n)-density_GoWo(np,n))*Vgamma(ib1,ib2) )
+                 VH(mp,m) = VH(mp,m) + real( (density(np,n)-density_LDA(np,n))*Vgamma(ib1,ib2) )
                  !
                enddo
            enddo
@@ -532,7 +537,7 @@ contains
    !---------------------------------------------------------------------------!
    !PURPOSE: Read self-energy from SPEX files.
    !---------------------------------------------------------------------------!
-   subroutine read_Sigma_spex(Smats_GoWo,Lttc,save2bin,Vxc,pathOUTPUT,doAC)
+   subroutine read_Sigma_spex(Smats_GoWo,Lttc,save2readable,Vxc,pathOUTPUT,doAC)
       !
       use linalg
       use parameters
@@ -545,7 +550,7 @@ contains
       !
       type(FermionicField),intent(inout)    :: Smats_GoWo
       type(Lattice),intent(inout)           :: Lttc
-      logical,intent(in)                    :: save2bin
+      logical,intent(in)                    :: save2readable
       complex(8),intent(inout),optional     :: Vxc(:,:,:,:)
       character(len=*),intent(in),optional  :: pathOUTPUT
       logical,intent(in),optional           :: doAC
@@ -613,6 +618,7 @@ contains
       call inquireFile(reg(path),Vxcdone,hardstop=.false.)
       doVxc = .not.Vxcdone .and. present(Vxc)
       if(doVxc.and.(.not.doAC_))then
+         call assert_shape(Vxc,[Norb,Norb,Nkpt,Nspin],"read_Sigma_spex","Vxc")
          write(*,"(A)")"Sorry but I can't produce Vxc_wann without reading the self-energy."
          write(*,"(A)")"Analytic continuation will be perforemd anyway."
          doAC_ = .true.
@@ -875,11 +881,11 @@ contains
             call dump_FermionicField(Smats_GoWo,ispin,reg(pathOUTPUT_),"Sigma_GoWo_loc.DAT")
          enddo
          ! k-dependent
-         call dump_FermionicField(Smats_GoWo,reg(pathOUTPUT_)//"/Sigma_imag","Sigma_GoWo",.true.)
-         if(.not.save2bin)call dump_FermionicField(Smats_GoWo,reg(pathOUTPUT_)//"/Sigma_imag","Sigma_GoWo",.false.)
+         call dump_FermionicField(Smats_GoWo,reg(pathOUTPUT_)//"/Sigma_imag","Sigma_GoWo",.true.,Lttc%kpt)
+         if(save2readable)call dump_FermionicField(Smats_GoWo,reg(pathOUTPUT_)//"/Sigma_imag","Sigma_GoWo",.false.,Lttc%kpt)
          !
          !
-         if(doVxc)call read_Vxc(Vxc,Lttc,ib_sigma1,ib_sigma2,save2bin)
+         if(doVxc)call read_Vxc(Vxc,Lttc,ib_sigma1,ib_sigma2,.not.save2readable)
          !
          !---------------------------------------------------------------------!
          !
@@ -893,12 +899,13 @@ contains
          call read_FermionicField(Smats_GoWo,reg(path),"Sigma_GoWo")
          !
          if(present(Vxc))then
+            call assert_shape(Vxc,[Norb,Norb,Nkpt,Nspin],"read_Sigma_spex","Vxc")
             Vxc=czero
-            call read_matrix(Vxc(:,:,:,1),pathINPUT,"Vxc_wann_k.DAT.1")
+            call read_matrix(Vxc(:,:,:,1),reg(pathINPUT),"Vxc_wann_k.DAT.1")
             if(paramagneticSPEX)then
                Vxc(:,:,:,2) = Vxc(:,:,:,1)
             else
-               call read_matrix(Vxc(:,:,:,1),pathINPUT,"Vxc_wann_k.DAT.2")
+               call read_matrix(Vxc(:,:,:,1),reg(pathINPUT),"Vxc_wann_k.DAT.2")
             endif
          endif
          !
@@ -911,7 +918,7 @@ contains
    !---------------------------------------------------------------------------!
    !PURPOSE: Read the exchange potential from gwa file.
    !---------------------------------------------------------------------------!
-   subroutine read_Vxc(Vxc,Lttc,ib_sigma1,ib_sigma2,save2bin)
+   subroutine read_Vxc(Vxc,Lttc,ib_sigma1,ib_sigma2,save2readable)
       !
       use linalg
       use parameters
@@ -924,7 +931,7 @@ contains
       complex(8),intent(inout)              :: Vxc(:,:,:,:)
       type(Lattice),intent(inout)           :: Lttc
       integer,intent(in)                    :: ib_sigma1,ib_sigma2
-      logical,intent(in)                    :: save2bin
+      logical,intent(in)                    :: save2readable
       !
       logical                               :: filexists
       character(len=256)                    :: path
@@ -965,7 +972,7 @@ contains
       !
       ! Read XEPS data
       if(.not.XEPSisread)then
-         path = pathINPUT//"XEPS.DAT"
+         path = reg(pathINPUT)//"XEPS.DAT"
          call inquireFile(reg(path),filexists)
          call read_xeps(reg(path),Lttc%kpt,Lttc%Nkpt3,UseXepsKorder, &
          Lttc%kptPos,Lttc%Nkpt_irred,Lttc%UseDisentangledBS,Lttc%iq_gamma,paramagneticSPEX)
@@ -1113,7 +1120,7 @@ contains
       !
       do ispin=1,Nspin_Uwan
          call dump_matrix(Vxc(:,:,:,ispin),pathINPUT,"Vxc_wann",.true.,ispin=ispin)
-         if(.not.save2bin)call dump_matrix(Vxc(:,:,:,ispin),pathINPUT,"Vxc_wann",.false.,ispin=ispin)
+         if(save2readable)call dump_matrix(Vxc(:,:,:,ispin),pathINPUT,"Vxc_wann",.false.,ispin=ispin)
       enddo
       !
     end subroutine read_vxc
