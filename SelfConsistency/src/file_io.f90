@@ -94,7 +94,7 @@ contains
       !
       !
       if(verbose)write(*,"(A)") "---- dump_Matrix_local_z"
-      if(verbose)write(*,"(A)") "     Dump "//reg(printpath)
+      if(verbose)write(*,"(A)") "     Dump "//reg(printpath)//" (readable)"
       !
       !
       unit = free_unit()
@@ -123,7 +123,7 @@ contains
       !
       !
       if(verbose)write(*,"(A)") "---- dump_Matrix_local_d"
-      if(verbose)write(*,"(A)") "     Dump "//reg(printpath)
+      if(verbose)write(*,"(A)") "     Dump "//reg(printpath)//" (readable)"
       !
       !
       unit = free_unit()
@@ -245,11 +245,12 @@ contains
       if(binfmt) then
          !
          if(present(ispin))then
-            printpath = reg(dirpath)//reg(filename)//"_k.DAT."//str(ispin)
+            if(ispin.eq.1)printpath = reg(dirpath)//reg(filename)//"_k_up.DAT"
+            if(ispin.eq.2)printpath = reg(dirpath)//reg(filename)//"_k_dw.DAT"
          else
             printpath = reg(dirpath)//reg(filename)//"_k.DAT."
          endif
-         if(verbose)write(*,"(A)") "     Dump "//reg(printpath)
+         if(verbose)write(*,"(A)") "     Dump "//reg(printpath)//" (binary)"
          !
          unit = free_unit()
          open(unit,file=reg(printpath),form="unformatted",status="unknown",position="rewind",action="write")
@@ -270,11 +271,12 @@ contains
          do ik=1,Nkpt
             !
             if(present(ispin))then
-               printpath = reg(dirpath)//reg(filename)//"_ik"//str(ik)//".DAT."//str(ispin)
+               if(ispin.eq.1)printpath = reg(dirpath)//reg(filename)//"_ik"//str(ik)//"_up.DAT."
+               if(ispin.eq.2)printpath = reg(dirpath)//reg(filename)//"_ik"//str(ik)//"_dw.DAT."
             else
                printpath = reg(dirpath)//reg(filename)//"_ik"//str(ik)//".DAT."
             endif
-            if(verbose)write(*,"(A)") "     Dump "//reg(printpath)
+            if(verbose)write(*,"(A)") "     Dump "//reg(printpath)//" (readable)"
             unit = free_unit()
             open(unit,file=reg(printpath),form="formatted",status="unknown",position="rewind",action="write")
             !
@@ -325,11 +327,12 @@ contains
       if(binfmt) then
          !
          if(present(ispin))then
-            printpath = reg(dirpath)//reg(filename)//"_k.DAT."//str(ispin)
+            if(ispin.eq.1)printpath = reg(dirpath)//reg(filename)//"_k_up.DAT"
+            if(ispin.eq.2)printpath = reg(dirpath)//reg(filename)//"_k_dw.DAT"
          else
             printpath = reg(dirpath)//reg(filename)//"_k.DAT."
          endif
-         if(verbose)write(*,"(A)") "     Dump "//reg(printpath)
+         if(verbose)write(*,"(A)") "     Dump "//reg(printpath)//" (binary)"
          !
          unit = free_unit()
          open(unit,file=reg(printpath),form="unformatted",status="unknown",position="rewind",action="write")
@@ -350,11 +353,12 @@ contains
          do ik=1,Nkpt
             !
             if(present(ispin))then
-               printpath = reg(dirpath)//reg(filename)//"_ik"//str(ik)//".DAT."//str(ispin)
+               if(ispin.eq.1)printpath = reg(dirpath)//reg(filename)//"_ik"//str(ik)//"_up.DAT."
+               if(ispin.eq.2)printpath = reg(dirpath)//reg(filename)//"_ik"//str(ik)//"_dw.DAT."
             else
                printpath = reg(dirpath)//reg(filename)//"_ik"//str(ik)//".DAT."
             endif
-            if(verbose)write(*,"(A)") "     Dump "//reg(printpath)
+            if(verbose)write(*,"(A)") "     Dump "//reg(printpath)//" (readable)"
             unit = free_unit()
             open(unit,file=reg(printpath),form="formatted",status="unknown",position="rewind",action="write")
             !
@@ -376,6 +380,7 @@ contains
 
    !---------------------------------------------------------------------------!
    !PURPOSE: Read from file a K-dependent matrix
+   !TEST ON: 27-10-2020(z)
    !---------------------------------------------------------------------------!
    subroutine read_Matrix_Kdep_z(Umat,dirpath,filename)
       !
@@ -422,7 +427,7 @@ contains
       do ik=1,Nkpt
          !
          read(unit) idum1
-         if (idum2.ne.ik) stop "ik does not match"
+         if (idum1.ne.ik) stop "ik does not match"
          !
          do iwan1=1,Norb
             do iwan2=1,Norb
@@ -524,7 +529,7 @@ contains
       !
       if(verbose)write(*,"(A)") "---- dump_Field_component"
       printpath = reg(dirpath)//filename
-      write(*,"(A)") "     Dump "//reg(printpath)
+      write(*,"(A)") "     Dump "//reg(printpath)//" (readable)"
       !
       !
       ! Create directory
@@ -566,7 +571,7 @@ contains
       !
       if(verbose)write(*,"(A)") "---- dump_FermionicField_local"
       printpath = reg(dirpath)//filename
-      if(verbose)write(*,"(A)") "     Dump "//reg(printpath)
+      if(verbose)write(*,"(A)") "     Dump "//reg(printpath)//" (readable)"
       !
       !
       ! Check on the input Field
@@ -659,8 +664,10 @@ contains
          !
          if(binfmt) then
             !
-            printpath = reg(dirpath)//reg(filename)//"_k.DAT."//str(ispin)
-            if(verbose)write(*,"(A)") "     Dump "//reg(printpath)
+            if(ispin.eq.1)printpath = reg(dirpath)//reg(filename)//"_k_up.DAT"
+            if(ispin.eq.2)printpath = reg(dirpath)//reg(filename)//"_k_dw.DAT"
+            !
+            if(verbose)write(*,"(A)") "     Dump "//reg(printpath)//" (binary)"
             !
             unit = free_unit()
             open(unit,file=reg(printpath),form="unformatted",status="unknown",position="rewind",action="write")
@@ -683,8 +690,10 @@ contains
             !
             do ik=1,G%Nkpt
                !
-               printpath = reg(dirpath)//reg(filename)//"_ik"//str(ik)//".DAT."//str(ispin)
-               if(verbose)write(*,"(A)") "     Dump "//reg(printpath)
+               if(ispin.eq.1)printpath = reg(dirpath)//reg(filename)//"_k_up.DAT"
+               if(ispin.eq.2)printpath = reg(dirpath)//reg(filename)//"_k_dw.DAT"
+               !
+               if(verbose)write(*,"(A)") "     Dump "//reg(printpath)//" (readable)"
                unit = free_unit()
                open(unit,file=reg(printpath),form="formatted",status="unknown",position="rewind",action="write")
                !
@@ -836,7 +845,9 @@ contains
       ! Read file
       do ispin=1,Nspin
          !
-         readpath = reg(dirpath)//reg(filename)//"_k.DAT."//str(ispin)
+         if(ispin.eq.1)readpath = reg(dirpath)//reg(filename)//"_k_up.DAT"
+         if(ispin.eq.2)readpath = reg(dirpath)//reg(filename)//"_k_dw.DAT"
+         !
          if(verbose)write(*,"(A)") "     Read "//reg(readpath)
          call inquireFile(reg(readpath),filexists)
          !
@@ -899,6 +910,7 @@ contains
          !
       enddo !ispin
       !
+      call FermionicKsum(G)
       G%mu=mu_read
       !
    end subroutine read_FermionicField_Kdep

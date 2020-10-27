@@ -67,7 +67,8 @@ module module_container
    DeallocateBosonicField                   ,&
    clear_attributes                         ,&
    loc2imp,imp2loc                          ,&
-   MergeFields
+   MergeFields                              ,&
+   join_SigmaCX
 
 
    !(h) Input/Output routines. Depends on (b),(e),(g)

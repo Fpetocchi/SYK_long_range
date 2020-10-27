@@ -24,6 +24,7 @@ program test
    call initialize_Fields(ItStart)
    !
    !Polarization
+   calc_PiGG=.false.!TEST
    if(calc_PiGG)then
       !
       call calc_Pi(PiGG,Glat,Crystal)
@@ -38,6 +39,7 @@ program test
    endif
    !
    !Fully screened interaction
+   calc_W=.false.!TEST
    if(calc_W)then
       !
       if(calc_Wfull)  call calc_W_full(Wlat,Ulat,PiGG,Crystal)
@@ -62,10 +64,17 @@ program test
       !scGW
       call AllocateFermionicField(SigmaGW_C,Crystal%Norb,Nmats,Nkpt=Crystal%Nkpt,Nsite=Nsite,Beta=Beta)
       call AllocateFermionicField(SigmaGW_X,Crystal%Norb,0,Nkpt=Crystal%Nkpt,Nsite=Nsite,Beta=Beta)
-      call calc_sigmaGW(SigmaGW_C,SigmaGW_X,Glat,Wlat,Crystal)
+      call calc_sigmaGW(SigmaGW_C,SigmaGW_X,Glat,Wlat,Crystal)!call calc_sigmaGW(SigmaGW_C,SigmaGW_X,Glat,Ulat,Crystal)!TEST
       !
       !Dc between G0W0 and scGW
-      if(ItStart.gt.0)then
+      if(ItStart.eq.0)then
+         !
+         call AllocateFermionicField(SigmaG0W0dc,Crystal%Norb,Nmats,Nkpt=Crystal%Nkpt,Nsite=Nsite,Beta=Beta)
+         call join_SigmaCX(SigmaG0W0dc,SigmaGW_C,SigmaGW_X)
+         call dump_FermionicField(SigmaG0W0dc,reg(pathDATA)//"0/","SigmaG0W0",.true.,Crystal%kpt)
+         call DeallocateFermionicField(SigmaG0W0dc)
+         !
+      elseif(ItStart.gt.0)then
          !
          call AllocateFermionicField(SigmaG0W0dc,Crystal%Norb,Nmats,Nkpt=Crystal%Nkpt,Nsite=Nsite,Beta=Beta)
          call read_FermionicField(SigmaG0W0dc,reg(pathDATA)//"0/","SigmaG0W0",kpt=Crystal%kpt)
@@ -73,57 +82,34 @@ program test
          call AllocateFermionicField(SigmaGW,Crystal%Norb,Nmats,Nkpt=Crystal%Nkpt,Nsite=Nsite,Beta=Beta)
          call join_SigmaCX(SigmaGW,SigmaGW_C,SigmaGW_X)
          !
-      elseif(ItStart.eq.0)then
-         !
-         call AllocateFermionicField(SigmaG0W0dc,Crystal%Norb,Nmats,Nkpt=Crystal%Nkpt,Nsite=Nsite,Beta=Beta)
-         call join_SigmaCX(SigmaG0W0dc,SigmaGW_C,SigmaGW_X)
-         call dump_FermionicField(SigmaG0W0dc,reg(pathDATA)//"0/","SigmaG0W0",.true.,Crystal%kpt)
-         call DeallocateFermionicField(SigmaG0W0dc)
-         !
       endif
       call DeallocateFermionicField(SigmaGW_C)
       call DeallocateFermionicField(SigmaGW_X)
       !
-      !Dc between local projection of scGW and EDMFT
-      call AllocateFermionicField(SigmaGWdc,Crystal%Norb,Nmats,Nsite=Nsite,Beta=Beta)
-      call AllocateFermionicField(SigmaGW_Cdc,Crystal%Norb,Nmats,Nsite=Nsite,Beta=Beta)
-      call AllocateFermionicField(SigmaGW_Xdc,Crystal%Norb,0,Nsite=Nsite,Beta=Beta)
-      call calc_sigmaGWdc(SigmaGW_Cdc,SigmaGW_Xdc,Glat,Wlat)
-      call join_SigmaCXdc(SigmaGWdc,SigmaGW_Cdc,SigmaGW_Xdc)
-      call DeallocateFermionicField(SigmaGW_Cdc)
-      call DeallocateFermionicField(SigmaGW_Xdc)
+      !Merge GW and EDMFT
+      if(merge_Sigma.and.(ItStart.gt.0))then
+         !
+         !First compute the Dc
+         call AllocateFermionicField(SigmaGWdc,Crystal%Norb,Nmats,Nsite=Nsite,Beta=Beta)
+         call AllocateFermionicField(SigmaGW_Cdc,Crystal%Norb,Nmats,Nsite=Nsite,Beta=Beta)
+         call AllocateFermionicField(SigmaGW_Xdc,Crystal%Norb,0,Nsite=Nsite,Beta=Beta)
+         call calc_sigmaGWdc(SigmaGW_Cdc,SigmaGW_Xdc,Glat,Wlat)!call calc_sigmaGWdc(SigmaGW_Cdc,SigmaGW_Xdc,Glat,Ulat)!TEST
+         call join_SigmaCX(SigmaGWdc,SigmaGW_Cdc,SigmaGW_Xdc)
+         call DeallocateFermionicField(SigmaGW_Cdc)
+         call DeallocateFermionicField(SigmaGW_Xdc)
+         !
+         !Then replace local projection with scGW and EDMFT
+         call MergeFields(SigmaGW,SigmaGWdc,SigmaDMFT,alphaSigma,SiteOrbs,DC_type)
+         call DeallocateFermionicField(SigmaGWdc)
+         call DeallocateFermionicField(SigmaDMFT)
+         !
+      endif
       !
-      !Replace local projection with scGW and EDMFT
-      call MergeFields(SigmaGW,SigmaGWdc,SigmaDMFT,alphaSigma,SiteOrbs,DC_type)
-
-
-
    endif
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
    !
-
-
-
-
-
-
-   write(LOGfile,"(A,1F10.6)") "Self-Consistency finished. Total timing (s): ",tock(TimeStart)
+   !Put together all the contributions to the full self-energy
+   call calc_SigmaFull(ItStart)
+   !
+   write(LOGfile,"(A,F)") "Self-Consistency finished. Total timing (s): ",tock(TimeStart)
    !
 end program test

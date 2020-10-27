@@ -7,7 +7,7 @@ module utils_main
    !===========================================================================!
 
    ! COMMENTS:
-   !
+   ! this is not a library so Im putt much less controls on dimensions here
    !
 
    !---------------------------------------------------------------------------!
@@ -28,11 +28,11 @@ module utils_main
 #endif
    !
    type(Lattice)                            :: Crystal
+   !
    type(FermionicField)                     :: Glat
    type(FermionicField)                     :: Gimp
    type(FermionicField)                     :: SigmaFull
-   type(FermionicField)                     :: SigmaG0W0
-   type(FermionicField)                     :: SigmaG0W0dc
+   type(FermionicField)                     :: SigmaG0W0,SigmaG0W0dc
    type(FermionicField)                     :: SigmaGW,SigmaGW_C,SigmaGW_X
    type(FermionicField)                     :: SigmaGWdc,SigmaGW_Cdc,SigmaGW_Xdc
    type(FermionicField)                     :: SigmaDMFT
@@ -141,6 +141,8 @@ contains
       call createDir(reg(Itpath))
       !
       ItStart = Itfirst
+      !
+      if((reg(CalculationType).eq."G0W0").and.(ItStart.eq.0)) stop "CalculationType is G0W0 but the starting iteration is not 0."
       !
    end subroutine initialize_DataStructure
 
@@ -252,6 +254,7 @@ contains
       enddo
       !
       if(ItStart.eq.0)call calc_Glda(0d0,Beta,Lttc)
+      !
       allocate(densityLDA(Lttc%Norb,Lttc%Norb));densityLDA=czero
       allocate(densityGW(Lttc%Norb,Lttc%Norb,Nspin));densityGW=czero
       allocate(densityDMFT(Lttc%Norb,Lttc%Norb,Nspin));densityDMFT=0d0
@@ -321,8 +324,8 @@ contains
                !
                !Impurity Self-energy
                call AllocateFermionicField(SigmaDMFT,Crystal%Norb,Nmats,Nsite=Nsite,Beta=Beta)
-               call read_FermionicField(SigmaDMFT,1,reg(pathDATA)//str(ItStart-1)//"/","SigmaDMFT")
-               call read_FermionicField(SigmaDMFT,2,reg(pathDATA)//str(ItStart-1)//"/","SigmaDMFT")
+               call read_FermionicField(SigmaDMFT,1,reg(pathDATA)//str(ItStart-1)//"/","SigmaDMFT_up.DAT")
+               call read_FermionicField(SigmaDMFT,2,reg(pathDATA)//str(ItStart-1)//"/","SigmaDMFT_dw.DAT")
                !
             else
                !
@@ -351,8 +354,8 @@ contains
                !
                !Impurity Self-energy
                call AllocateFermionicField(SigmaDMFT,Crystal%Norb,Nmats,Nsite=Nsite,Beta=Beta)
-               call read_FermionicField(SigmaDMFT,1,reg(pathDATA)//str(ItStart-1)//"/","SigmaDMFT")
-               call read_FermionicField(SigmaDMFT,2,reg(pathDATA)//str(ItStart-1)//"/","SigmaDMFT")
+               call read_FermionicField(SigmaDMFT,1,reg(pathDATA)//str(ItStart-1)//"/","SigmaDMFT_up.DAT")
+               call read_FermionicField(SigmaDMFT,2,reg(pathDATA)//str(ItStart-1)//"/","SigmaDMFT_dw.DAT")
                !
             else
                !
@@ -388,8 +391,8 @@ contains
                !
                !Impurity Self-energy
                call AllocateFermionicField(SigmaDMFT,Crystal%Norb,Nmats,Nsite=Nsite,Beta=Beta)
-               call read_FermionicField(SigmaDMFT,1,reg(pathDATA)//str(ItStart-1)//"/","SigmaDMFT")
-               call read_FermionicField(SigmaDMFT,2,reg(pathDATA)//str(ItStart-1)//"/","SigmaDMFT")
+               call read_FermionicField(SigmaDMFT,1,reg(pathDATA)//str(ItStart-1)//"/","SigmaDMFT_up.DAT")
+               call read_FermionicField(SigmaDMFT,2,reg(pathDATA)//str(ItStart-1)//"/","SigmaDMFT_dw.DAT")
                !
             else
                !
@@ -421,8 +424,8 @@ contains
                !
                !Impurity Self-energy
                call AllocateFermionicField(SigmaDMFT,Crystal%Norb,Nmats,Nsite=Nsite,Beta=Beta)
-               call read_FermionicField(SigmaDMFT,1,reg(pathDATA)//str(ItStart-1)//"/","SigmaDMFT")
-               call read_FermionicField(SigmaDMFT,2,reg(pathDATA)//str(ItStart-1)//"/","SigmaDMFT")
+               call read_FermionicField(SigmaDMFT,1,reg(pathDATA)//str(ItStart-1)//"/","SigmaDMFT_up.DAT")
+               call read_FermionicField(SigmaDMFT,2,reg(pathDATA)//str(ItStart-1)//"/","SigmaDMFT_dw.DAT")
                !
                !Lattice Gf
                call AllocateFermionicField(Glat,Crystal%Norb,Nmats,Nkpt=Crystal%Nkpt,Nsite=Nsite,Beta=Beta)
@@ -464,108 +467,121 @@ contains
 
 
    !---------------------------------------------------------------------------!
-   !PURPOSE: Join the C and X component of the self-energy
-   !TEST ON:
+   !PURPOSE: Join the all the component of the self-energy
+   !TEST ON: 27-10-2020
    !---------------------------------------------------------------------------!
-   subroutine join_SigmaCX(SigmaFull,Sigma_C,Sigma_X)
+   subroutine calc_SigmaFull(Iteration)
       !
       implicit none
-      type(FermionicField),intent(inout)    :: SigmaFull
-      type(FermionicField),intent(in)       :: Sigma_C
-      type(FermionicField),intent(in)       :: Sigma_X
-      real(8)                               :: Beta
-      integer                               :: Nkpt,Norb,Nmats
-      integer                               :: iw,ik,ispin
+      integer,intent(in)                    :: Iteration
+      integer                               :: iorb,jorb,ik,iw,ispin
       !
-      !
-      if(verbose)write(LOGfile,"(A)") "---- join_SigmaCX"
-      !
-      !
-      !
-      ! Check on the input Fields
-      if(.not.SigmaFull%status) stop "SigmaFull not properly initialized."
-      if(.not.Sigma_C%status) stop "Sigma_C not properly initialized."
-      if(.not.Sigma_X%status) stop "Sigma_X not properly initialized."
-      if(SigmaFull%Nkpt.eq.0) stop "SigmaFull k dependent attributes not properly initialized."
-      if(Sigma_C%Nkpt.eq.0) stop "Sigma_C k dependent attributes not properly initialized."
-      if(Sigma_X%Nkpt.eq.0) stop "Sigma_X k dependent attributes not properly initialized."
-      if(Sigma_X%Npoints.ne.0) stop "Sigma_X frequency dependent attributes are supposed to be unallocated."
-      !
-      Norb = SigmaFull%Norb
-      Nkpt = SigmaFull%Nkpt
-      Beta = SigmaFull%Beta
-      Nmats = SigmaFull%Npoints
-      !
-      if(all([Sigma_C%Nkpt-Nkpt,Sigma_X%Nkpt-Nkpt].ne.[0,0])) stop "Either Sigma_C or Sigma_X have different number of k-points with respect to SigmaFull."
-      if(all([Sigma_C%Beta-Beta,Sigma_X%Beta-Beta].ne.[0d0,0d0])) stop "Either Sigma_C or Sigma_X have different Beta with respect to SigmaFull."
-      if(Nmats.ne.Sigma_C%Npoints) stop "Sigma_C has different number of Matsubara points with respect to SigmaFull."
-      !
-      !$OMP PARALLEL DEFAULT(NONE),&
-      !$OMP SHARED(Nmats,Nkpt,SigmaFull,Sigma_C,Sigma_X),&
-      !$OMP PRIVATE(iw,ik,ispin)
-      !$OMP DO
-      do iw=1,Nmats
-         do ik=1,Nkpt
-            do ispin=1,Nspin
-               !
-               SigmaFull%wks(:,:,iw,ik,ispin) = Sigma_C%wks(:,:,iw,ik,ispin) + Sigma_X%N_ks(:,:,ik,ispin)
-               !
-            enddo
-         enddo
-      enddo
-      !$OMP END DO
-      !$OMP END PARALLEL
-      !
-      call FermionicKsum(SigmaFull)
-      !
-   end subroutine join_SigmaCX
-   !
-   subroutine join_SigmaCXdc(SigmaFulldc,Sigma_Cdc,Sigma_Xdc)
-      !
-      implicit none
-      type(FermionicField),intent(inout)    :: SigmaFulldc
-      type(FermionicField),intent(in)       :: Sigma_Cdc
-      type(FermionicField),intent(in)       :: Sigma_Xdc
-      real(8)                               :: Beta
-      integer                               :: Norb,Nmats
-      integer                               :: iw,ispin
-      !
-      !
-      if(verbose)write(LOGfile,"(A)") "---- join_SigmaCXdc"
-      !
-      !
-      !
-      ! Check on the input Fields
-      if(.not.SigmaFulldc%status) stop "SigmaFulldc not properly initialized."
-      if(.not.Sigma_Cdc%status) stop "Sigma_Cdc not properly initialized."
-      if(.not.Sigma_Xdc%status) stop "Sigma_Xdc not properly initialized."
-      if(SigmaFulldc%Nkpt.eq.0) stop "SigmaFulldc k dependent attributes not properly initialized."
-      if(Sigma_Cdc%Nkpt.ne.0) stop "Sigma_Cdc k dependent attributes are supposed to be unallocated."
-      if(Sigma_Xdc%Nkpt.ne.0) stop "Sigma_Xdc k dependent attributes are supposed to be unallocated."
-      if(Sigma_Xdc%Npoints.ne.0) stop "Sigma_Xdc frequency dependent attributes are supposed to be unallocated."
-      !
-      Norb = SigmaFulldc%Norb
-      Beta = SigmaFulldc%Beta
-      Nmats = SigmaFulldc%Npoints
-      !
-      if(all([Sigma_Cdc%Beta-Beta,Sigma_Xdc%Beta-Beta].ne.[0d0,0d0])) stop "Either Sigma_Cdc or Sigma_Xdc have different Beta with respect to SigmaFulldc."
-      if(Nmats.ne.Sigma_Cdc%Npoints) stop "Sigma_Cdc has different number of Matsubara points with respect to SigmaFulldc."
-      !
-      !$OMP PARALLEL DEFAULT(NONE),&
-      !$OMP SHARED(Nmats,SigmaFulldc,Sigma_Cdc,Sigma_Xdc),&
-      !$OMP PRIVATE(iw,ispin)
-      !$OMP DO
-      do iw=1,Nmats
-         do ispin=1,Nspin
+      select case(CalculationType)
+         case default
+            stop "Available Calculation types are: G0W0, scGW, DMFT+statU, DMFT+dynU, EDMFT, GW+EDMFT."
+         case("G0W0","scGW","GW+EDMFT")
             !
-            SigmaFulldc%ws(:,:,iw,ispin) = Sigma_Cdc%ws(:,:,iw,ispin) + Sigma_Xdc%N_s(:,:,ispin)
+            call AllocateFermionicField(SigmaFull,Crystal%Norb,Nmats,Nkpt=Crystal%Nkpt,Nsite=Nsite,Beta=Beta)
             !
-         enddo
-      enddo
-      !$OMP END DO
-      !$OMP END PARALLEL
+            if(Iteration.eq.0)then
+               !
+               if(.not.SigmaG0W0%status) stop "calc_SigmaFull: SigmaG0W0 not properly initialized."
+               !
+               !$OMP PARALLEL DEFAULT(NONE),&
+               !$OMP SHARED(SigmaFull,SigmaG0W0,VH,Vxc),&
+               !$OMP PRIVATE(iorb,jorb,ik,iw,ispin)
+               !$OMP DO
+               do ispin=1,Nspin
+                  do ik=1,SigmaFull%Nkpt
+                     do iw=1,SigmaFull%Npoints
+                        do iorb=1,SigmaFull%Norb
+                           do jorb=1,SigmaFull%Norb
+                              SigmaFull%wks(iorb,jorb,iw,ik,ispin) =  + SigmaG0W0%wks(iorb,jorb,iw,ik,ispin)   &
+                                                                      - Vxc(iorb,jorb,ik,ispin)                &
+                                                                      + VH(iorb,jorb)
+                           enddo
+                        enddo
+                     enddo
+                  enddo
+               enddo
+               !$OMP END DO
+               !$OMP END PARALLEL
+               !
+            elseif(Iteration.gt.0)then
+               !
+               if(.not.SigmaGW%status) stop "calc_SigmaFull: SigmaGW not properly initialized."
+               if(.not.SigmaG0W0dc%status) stop "calc_SigmaFull: SigmaG0W0dc not properly initialized."
+               if(.not.SigmaG0W0%status) stop "calc_SigmaFull: SigmaG0W0 not properly initialized."
+               !
+               !$OMP PARALLEL DEFAULT(NONE),&
+               !$OMP SHARED(SigmaFull,SigmaGW,SigmaG0W0dc,SigmaG0W0,VH,Vxc),&
+               !$OMP PRIVATE(iorb,jorb,ik,iw,ispin)
+               !$OMP DO
+               do ispin=1,Nspin
+                  do ik=1,SigmaFull%Nkpt
+                     do iw=1,SigmaFull%Npoints
+                        do iorb=1,SigmaFull%Norb
+                           do jorb=1,SigmaFull%Norb
+                              SigmaFull%wks(iorb,jorb,iw,ik,ispin) =  + SigmaGW%wks(iorb,jorb,iw,ik,ispin)     &
+                                                                      - SigmaG0W0dc%wks(iorb,jorb,iw,ik,ispin) &
+                                                                      + SigmaG0W0%wks(iorb,jorb,iw,ik,ispin)   &
+                                                                      - Vxc(iorb,jorb,ik,ispin)                &
+                                                                      + VH(iorb,jorb)
+                           enddo
+                        enddo
+                     enddo
+                  enddo
+               enddo
+               !$OMP END DO
+               !$OMP END PARALLEL
+               !
+            endif
+            !
+            call FermionicKsum(SigmaFull)
+            !
+            !Dump the local projection of SigmaFull
+            call dump_FermionicField(SigmaFull,1,reg(pathDATA)//str(Iteration)//"/","SigmaLoc_up.DAT")
+            call dump_FermionicField(SigmaFull,2,reg(pathDATA)//str(Iteration)//"/","SigmaLoc_dw.DAT")
+            !
+            !Dump the whole SigmaFull
+            call dump_FermionicField(SigmaFull,reg(pathDATA)//str(Iteration)//"/","Sigma",.true.,Crystal%kpt)
+            !
+         case("DMFT+statU","DMFT+dynU","EDMFT")
+            !
+            call AllocateFermionicField(SigmaFull,Crystal%Norb,Nmats,Nsite=Nsite,Beta=Beta)
+            !
+            if(Iteration.eq.0)then
+               !
+               call clear_attributes(SigmaFull)
+               !
+            elseif(Iteration.gt.0)then
+               !
+               if(.not.SigmaDMFT%status) stop "calc_SigmaFull: SigmaDMFT not properly initialized."
+               !
+               !$OMP PARALLEL DEFAULT(NONE),&
+               !$OMP SHARED(SigmaFull,SigmaDMFT),&
+               !$OMP PRIVATE(iorb,jorb,iw,ispin)
+               !$OMP DO
+               do ispin=1,Nspin
+                  do iw=1,SigmaFull%Npoints
+                     do iorb=1,SigmaFull%Norb
+                        do jorb=1,SigmaFull%Norb
+                           SigmaFull%ws(iorb,jorb,iw,ispin) = SigmaDMFT%ws(iorb,jorb,iw,ispin)
+                        enddo
+                     enddo
+                  enddo
+               enddo
+               !$OMP END DO
+               !$OMP END PARALLEL
+               !
+            endif
+            call DeallocateFermionicField(SigmaDMFT)
+            !
+            !Not dumping anything since SigmaDMFT is already present
+            !
+      end select
       !
-   end subroutine join_SigmaCXdc
+   end subroutine calc_SigmaFull
 
 
 

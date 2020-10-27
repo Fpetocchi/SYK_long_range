@@ -40,6 +40,7 @@ contains
 
    !---------------------------------------------------------------------------!
    !PURPOSE: Compute the two GW self-energy components.
+   !TEST ON: 27-10-2020
    !---------------------------------------------------------------------------!
    subroutine calc_sigmaGW(Smats_C,Smats_X,Gmats,Wmats,Lttc)
       !
@@ -66,6 +67,7 @@ contains
       integer                               :: Nbp,Nkpt,Norb,Nmats
       integer                               :: ik1,ik2,iq,iw,itau,ispin
       integer                               :: m,n,mp,np,ib1,ib2
+      real                                  :: start,finish
       !
       !
       if(verbose)write(*,"(A)") "---- calc_sigmaGW"
@@ -96,6 +98,8 @@ contains
       if(all([Gmats%Npoints-Nmats,Wmats%Npoints-Nmats].ne.[0,0])) write(*,"(A)") "Warning: Either Smats_C, Gmats or Wmats have different number of Matsubara points. Computing up to the smaller."
       Nmats = minval([Smats_C%Npoints,Wmats%Npoints,Wmats%Npoints])
       !
+      call cpu_time(start)
+      !
       allocate(Gitau(Norb,Norb,NtauB,Nkpt,Nspin));Gitau=czero
       do ispin=1,Nspin
          call Fmats2itau_mat(Beta,Gmats%wks(:,:,:,:,ispin),Gitau(:,:,:,:,ispin), &
@@ -110,7 +114,10 @@ contains
       call Bmats2itau(Beta,WmatsC,Witau,asympt_corr=.true.,tau_uniform=tau_uniform)
       deallocate(WmatsC)
       !
-      write(*,"(A)") "Sigma_C(tau)"
+      call cpu_time(finish)
+      write(*,"(A,F)") "Glat(ik,iw),Wlat(iq,iw) --> Glat(ik,itau),Wlat(iq,itau) cpu timing:", finish-start
+      !
+      call cpu_time(start)
       !Sigma_{m,n}(q,tau) = -Sum_{k,mp,np} W_{(m,mp);(n,np)}(q-k;tau)G_{mp,np}(k,tau)
       allocate(Sitau(Norb,Norb,NtauB,Lttc%Nkpt_irred,Nspin));Sitau=czero
       !$OMP PARALLEL DEFAULT(NONE),&
@@ -146,7 +153,6 @@ contains
       !$OMP END PARALLEL
       deallocate(Witau)
       !
-      write(*,"(A)") "Sigma_C(tau)-->Sigma_C(iw)"
       call clear_attributes(Smats_C)
       do ispin=1,Nspin
          do iq=1,Lttc%Nkpt_irred
@@ -154,8 +160,10 @@ contains
          enddo
       enddo
       deallocate(Sitau)
+      call cpu_time(finish)
+      write(*,"(A,F)") "Sigma_C(ik,iw) cpu timing:", finish-start
       !
-      write(*,"(A)") "Sigma_X"
+      call cpu_time(start)
       call clear_attributes(Smats_X)
       !sigmax(r,r')=-g(r,r',tau=0-)*v(r-r')
       !Sigmax_nm(q) = Sum_kij V_{ni,jm}(q-k)G_ij(k,beta)
@@ -189,10 +197,12 @@ contains
       !$OMP END DO
       !$OMP END PARALLEL
       deallocate(Gitau)
+      call cpu_time(finish)
+      write(*,"(A,F)") "Sigma_X(ik) cpu timing:", finish-start
       !
       if(Lttc%Nkpt_irred.lt.Nkpt) then
          !sigma(ik)=sigma(kptp(ik))
-         write(*,"(A)") "transformation to lda eigenbasis and back"
+         write(*,"(A)") "Transformation to lda eigenbasis and back."
          !$OMP PARALLEL DEFAULT(NONE),&
          !$OMP SHARED(Nmats,Lttc,Nkpt,Smats_X,Smats_C),&
          !$OMP PRIVATE(ispin,iw,iq)
@@ -237,7 +247,8 @@ contains
 
 
    !---------------------------------------------------------------------------!
-   !PURPOSE: Compute the two GW self-energy components.
+   !PURPOSE: Compute the two local GW self-energy components as Gloc*Wloc.
+   !TEST ON: 27-10-2020
    !---------------------------------------------------------------------------!
    subroutine calc_sigmaGWdc(Smats_Cdc,Smats_Xdc,Gmats,Wmats)
       !
@@ -263,6 +274,7 @@ contains
       integer                               :: Nbp,Nkpt,Norb,Nmats
       integer                               :: iw,itau,ispin
       integer                               :: m,n,mp,np,ib1,ib2
+      real                                  :: start,finish
       !
       !
       if(verbose)write(*,"(A)") "---- calc_sigmaGWdc"
@@ -288,6 +300,8 @@ contains
       if(all([Gmats%Npoints-Nmats,Wmats%Npoints-Nmats].ne.[0,0]))  write(*,"(A)") "Warning: Either Smats_Cdc, Gmats or Wmats have different number of Matsubara points. Computing up to the smaller."
       Nmats = minval([Smats_Cdc%Npoints,Wmats%Npoints,Wmats%Npoints])
       !
+      call cpu_time(start)
+      !
       allocate(Gitau_loc(Norb,Norb,NtauB,Nspin));Gitau_loc=czero
       do ispin=1,Nspin
          call Fmats2itau_mat(Beta,Gmats%ws(:,:,:,ispin),Gitau_loc(:,:,:,ispin), &
@@ -302,7 +316,10 @@ contains
       call Bmats2itau(Beta,WmatsC_loc,Witau_loc,asympt_corr=.true.,tau_uniform=tau_uniform)
       deallocate(WmatsC_loc)
       !
-      write(*,"(A)") "Sigma_Cdc(tau)"
+      call cpu_time(finish)
+      write(*,"(A,F)") "Glat(iw),Wlat(iw) --> Glat(itau),Wlat(itau) cpu timing:", finish-start
+      !
+      call cpu_time(start)
       !Sigma_{m,n}(q,tau) = -Sum_{k,mp,np} W_{(m,mp);(n,np)}(q-k;tau)G_{mp,np}(k,tau)
       allocate(Sitau_loc(Norb,Norb,NtauB,Nspin));Sitau_loc=czero
       !$OMP PARALLEL DEFAULT(NONE),&
@@ -333,14 +350,15 @@ contains
       !$OMP END PARALLEL
       deallocate(Witau_loc)
       !
-      write(*,"(A)") "Sigma_Cdc(tau)-->Sigma_Cdc(iw)"
       call clear_attributes(Smats_Cdc)
       do ispin=1,Nspin
          call Fitau2mats_mat(Beta,Sitau_loc(:,:,:,ispin),Smats_Cdc%ws(:,:,:,ispin),tau_uniform=tau_uniform)
       enddo
       deallocate(Sitau_loc)
+      call cpu_time(finish)
+      write(*,"(A,F)") "Sigma_Cdc(iw) cpu timing:", finish-start
       !
-      write(*,"(A)") "Sigma_X"
+      call cpu_time(start)
       call clear_attributes(Smats_Xdc)
       !sigmax(r,r')=-g(r,r',tau=0-)*v(r-r')
       !Sigmax_nm(q) = Sum_kij V_{ni,jm}(q-k)G_ij(k,beta)
@@ -369,12 +387,15 @@ contains
       !$OMP END DO
       !$OMP END PARALLEL
       deallocate(Gitau_loc)
+      call cpu_time(finish)
+      write(*,"(A,F)") "Sigma_Xdc cpu timing:", finish-start
       !
    end subroutine calc_sigmaGWdc
 
 
    !---------------------------------------------------------------------------!
    !PURPOSE: Compute Hartree difference with G0W0
+   !TEST ON: 27-10-2020
    !---------------------------------------------------------------------------!
    subroutine calc_VH(density_LDA,Gmats,Umats,VH)
       !
@@ -536,6 +557,7 @@ contains
 
    !---------------------------------------------------------------------------!
    !PURPOSE: Read self-energy from SPEX files.
+   !TEST ON: 27-10-2020(both write and read)
    !---------------------------------------------------------------------------!
    subroutine read_Sigma_spex(Smats_GoWo,Lttc,save2readable,Vxc,pathOUTPUT,doAC)
       !
@@ -556,7 +578,7 @@ contains
       logical,intent(in),optional           :: doAC
       !
       logical                               :: filexists,ACdone,doAC_,Vxcdone,doVxc
-      character(len=256)                    :: file_spex,path,pathOUTPUT_
+      character(len=256)                    :: path,pathOUTPUT_
       integer                               :: iseg,SigmaSegments
       integer                               :: iq,ik,iw,iw2,ispin,iwan1,iwan2,unit
       integer                               :: Nkpt,Norb,Nmats,Nfreq
@@ -597,24 +619,24 @@ contains
       Nmats = Smats_GoWo%Npoints
       !
       allocate(wmats(Smats_GoWo%Npoints));wmats=0d0
-      wmats = FermionicFreqMesh(Smats_GoWo%Beta,Smats_GoWo%Npoints)
+      wmats = FermionicFreqMesh(Smats_GoWo%Beta*H2eV,Smats_GoWo%Npoints)
       !
       ! Read XEPS data
       if(.not.XEPSisread)then
-         path = pathINPUT//"XEPS.DAT"
+         path = reg(pathINPUT)//"XEPS.DAT"
          call inquireFile(reg(path),filexists)
          call read_xeps(reg(path),Lttc%kpt,Lttc%Nkpt3,UseXepsKorder, &
          Lttc%kptPos,Lttc%Nkpt_irred,Lttc%UseDisentangledBS,Lttc%iq_gamma,paramagneticSPEX)
       endif
       !
-      ! Check if the data on the Matsubara axis are present
-      path = reg(pathINPUT)//"Sigma_imag" !/SIGMA.Q0001.DAT"
-      call inquireDir(reg(path),ACdone,hardstop=.false.)
+      ! Check if the data on the Matsubara axis are present if(.not.paramagneticSPEX) look also for spin2
+      path = reg(pathINPUT)//"Sigma_GoWo_k_up.DAT"
+      call inquireFile(reg(path),ACdone,hardstop=.false.)
       doAC_ = .not.ACdone
       if(present(doAC)) doAC_ = doAC
       !
       ! Check if the Vxc_wann is present
-      path = reg(pathINPUT)//"Vxc_wann_k.DAT.1"
+      path = reg(pathINPUT)//"Vxc_wann_k_up.DAT"
       call inquireFile(reg(path),Vxcdone,hardstop=.false.)
       doVxc = .not.Vxcdone .and. present(Vxc)
       if(doVxc.and.(.not.doAC_))then
@@ -637,7 +659,7 @@ contains
             path = reg(pathINPUT)//"UWAN.DAT"
          endif
          call inquireFile(reg(path),filexists)
-         write(*,"(A)") "Opening "//reg(path)
+         if(verbose)write(*,"(A)") "Opening "//reg(path)
          unit = free_unit()
          open(unit,file=reg(path),form="unformatted",action="read",position="rewind")
          read(unit) Nspin_Uwan,Nkpt_Uwan,ib_Uwan1,ib_Uwan2,Norb_Uwan
@@ -656,8 +678,8 @@ contains
          ! Look for the Number of Sigma segments.
          SigmaSegments=0
          do iseg=1,99
-            file_spex = reg(path)//"Sigma_real_"//str(iq,1)
-            call inquireDir(reg(file_spex),filexists,hardstop=.false.)
+            path = reg(pathINPUT)//"Sigma_real_"//str(iseg,2)
+            call inquireDir(reg(path),filexists,hardstop=.false.)
             if(.not.filexists) exit
             SigmaSegments = SigmaSegments + 1
          enddo
@@ -668,8 +690,8 @@ contains
          do iseg=1,SigmaSegments
             Nkpt = 0
             do ik=1,2000
-               file_spex = reg(path)//"Sigma_real_"//str(iq,1)//"/SIGMA.Q"//str(iq,4)//".DAT"
-               call inquireFile(reg(file_spex),filexists,hardstop=.false.)
+               path = reg(pathINPUT)//"Sigma_real_"//str(iseg,2)//"/SIGMA.Q"//str(ik,4)//".DAT"
+               call inquireFile(reg(path),filexists,hardstop=.false.)
                if(.not.filexists) exit
                Nkpt = Nkpt + 1
             enddo
@@ -683,9 +705,9 @@ contains
          do iseg=1,SigmaSegments
             do ik=1,Lttc%Nkpt_irred
                !
-               file_spex = reg(path)//"Sigma_real_"//str(iseg,1)//"/SIGMA.Q"//str(ik,4)//".DAT"
-               write(*,"(A)") "Checking "//reg(file_spex)
-               call inquireFile(reg(file_spex),filexists) !redundant control
+               path = reg(pathINPUT)//"Sigma_real_"//str(iseg,2)//"/SIGMA.Q"//str(ik,4)//".DAT"
+               write(*,"(A)") "Checking "//reg(path)
+               call inquireFile(reg(path),filexists) !redundant control
                !
                unit = free_unit()
                open(unit,file=reg(path),form="unformatted",action="read",position="rewind")
@@ -704,7 +726,7 @@ contains
                wS_old = wread(1)
                wE_old = wread(Nfreq)
                !
-               ! Eack k-point controls
+               ! Each k-point controls
                if(ib_sigma1.gt.ib_Uwan1) stop "ib_sigma1>ib_Uwan1"
                if(ib_sigma2.lt.ib_Uwan2) stop "ib_sigma2<ib_Uwan2"
                if(paramagneticSPEX.and.(Nspin_spex.ne.1)) stop "Spex self-energy file is not paramagnetic."
@@ -752,9 +774,9 @@ contains
             !
             do iq=1,Lttc%Nkpt_irred
                !
-               file_spex = reg(path)//"Sigma_real_"//str(iq,1)//"/SIGMA.Q"//str(iq,4)//".DAT"
-               write(*,"(A)") "Opening "//reg(file_spex)
-               call inquireFile(reg(file_spex),filexists) !redundant control
+               path = reg(pathINPUT)//"Sigma_real_"//str(iseg,2)//"/SIGMA.Q"//str(iq,4)//".DAT"
+               if(verbose)write(*,"(A)") "Opening "//reg(path)
+               call inquireFile(reg(path),filexists) !redundant control
                !
                unit = free_unit()
                open(unit,file=reg(path),form="unformatted",action="read",position="rewind")
@@ -791,10 +813,10 @@ contains
                   !
                   ! Check that the GoWo self-energy is vanishing at w --> +/-inf
                   if (iseg.eq.1.and.dabs(dimag(SigmaC_seg(1,ib,ik,1))).gt.1.d-6) then
-                     write(*,"(A2,2F10.5)") "NOTE!!!! SigmaC_spex(1) > 1.d-6: ",SigmaC_seg(1,ib,ik,1)
+                     write(*,"(A,2F10.5)") "Warning: ImSigmaC_spex("//str(ik)//",1) orb "//str(ib)//" is > 1.d-6: ",SigmaC_seg(1,ib,ik,1)
                   endif
                   if (iseg.eq.SigmaSegments.and.dabs(dimag(SigmaC_seg(NfreqSeg(iseg),ib,ik,1))).gt.1.d-6) then
-                     write(*,"(A2,2F10.5)") "NOTE!!!! SigmaC_spex(NW) > 1.d-6: ",SigmaC_seg(NfreqSeg(iseg),ib,ik,1)
+                     write(*,"(A,2F10.5)") "Warning: ImSigmaC_spex("//str(ik)//",Nw) orb "//str(ib)//" is > 1.d-6: ",SigmaC_seg(NfreqSeg(iseg),ib,ik,1)
                   endif
                   !
                   !Calc Sigma along imag axis using
@@ -834,7 +856,7 @@ contains
             enddo !ik
             !
             deallocate(wread)
-            deallocate(SigmaX_tmp,SigmaC_tmp,SigmaC_seg)
+            deallocate(SigmaC_seg)
             if(iseg.lt.SigmaSegments) deallocate(SigmaX_seg)
             !
          enddo !iseg
@@ -859,7 +881,7 @@ contains
                         + sum(conjg(Uwan(ib_Uwan1:ib_Uwan2,iwan1,ik,ispin_spex)) * SigmaC_diag(ib_Uwan1:ib_Uwan2,iw,Lttc%kptPos(ik),ispin_spex) * Uwan(ib_Uwan1:ib_Uwan2,iwan2,ik,ispin_spex))  &
                         + sum(conjg(Uwan(ib_Uwan1:ib_Uwan2,iwan1,ik,ispin_spex)) * SigmaX_seg(ib_Uwan1:ib_Uwan2,Lttc%kptPos(ik),ispin_spex) * Uwan(ib_Uwan1:ib_Uwan2,iwan2,ik,ispin_spex))
                         !
-                        Smats_GoWo%wks(iwan1,iwan2,iw,ik,ispin) = Smats_GoWo%wks(iwan1,iwan2,iw,ik,ispin) * H2eV
+                        !Smats_GoWo%wks(iwan1,iwan2,iw,ik,ispin) = Smats_GoWo%wks(iwan1,iwan2,iw,ik,ispin) !* H2eV
                         !
                      enddo
                   enddo
@@ -869,23 +891,23 @@ contains
          !$OMP END DO
          !$OMP END PARALLEL
          deallocate(Uwan,SigmaC_diag,SigmaX_seg)
+         Smats_GoWo%wks = Smats_GoWo%wks * H2eV
          !
          call cpu_time(finish)
-         write(*,"(A,1F10.6)") "Sigma_GoWo(q,w) --> Sigma_GoWo(q,iw) cpu timing:", finish-start
+         write(*,"(A,F)") "Sigma_GoWo(k,w) --> Sigma_GoWo(k,iw) cpu timing:", finish-start
          !
          call FermionicKsum(Smats_GoWo)
          !
          ! Print out the transformed stuff
          ! local
-         do ispin=1,Nspin_spex
-            call dump_FermionicField(Smats_GoWo,ispin,reg(pathOUTPUT_),"Sigma_GoWo_loc.DAT")
-         enddo
+         call dump_FermionicField(Smats_GoWo,1,reg(pathOUTPUT_),"Sigma_GoWo_Loc_up.DAT")
+         if(Nspin_spex.eq.2)call dump_FermionicField(Smats_GoWo,2,reg(pathOUTPUT_),"Sigma_GoWo_Loc_dw.DAT")
          ! k-dependent
-         call dump_FermionicField(Smats_GoWo,reg(pathOUTPUT_)//"/Sigma_imag","Sigma_GoWo",.true.,Lttc%kpt)
-         if(save2readable)call dump_FermionicField(Smats_GoWo,reg(pathOUTPUT_)//"/Sigma_imag","Sigma_GoWo",.false.,Lttc%kpt)
+         call dump_FermionicField(Smats_GoWo,reg(pathOUTPUT_),"Sigma_GoWo",.true.,Lttc%kpt)
+         if(save2readable)call dump_FermionicField(Smats_GoWo,reg(pathOUTPUT_)//"Sigma_imag/","Sigma_GoWo",.false.,Lttc%kpt)
          !
          !
-         if(doVxc)call read_Vxc(Vxc,Lttc,ib_sigma1,ib_sigma2,.not.save2readable)
+         if(doVxc)call read_Vxc(Vxc,Lttc,ib_sigma1,ib_sigma2,save2readable)
          !
          !---------------------------------------------------------------------!
          !
@@ -895,17 +917,16 @@ contains
          !
          ! Just read all
          call clear_attributes(Smats_GoWo)
-         path = pathINPUT//"Sigma_imag"
-         call read_FermionicField(Smats_GoWo,reg(path),"Sigma_GoWo")
+         call read_FermionicField(Smats_GoWo,reg(pathINPUT),"Sigma_GoWo")
          !
          if(present(Vxc))then
             call assert_shape(Vxc,[Norb,Norb,Nkpt,Nspin],"read_Sigma_spex","Vxc")
             Vxc=czero
-            call read_matrix(Vxc(:,:,:,1),reg(pathINPUT),"Vxc_wann_k.DAT.1")
+            call read_matrix(Vxc(:,:,:,1),reg(pathINPUT),"Vxc_wann_k_up.DAT")
             if(paramagneticSPEX)then
                Vxc(:,:,:,2) = Vxc(:,:,:,1)
             else
-               call read_matrix(Vxc(:,:,:,1),reg(pathINPUT),"Vxc_wann_k.DAT.2")
+               call read_matrix(Vxc(:,:,:,2),reg(pathINPUT),"Vxc_wann_k_dw.DAT")
             endif
          endif
          !
@@ -917,6 +938,7 @@ contains
 
    !---------------------------------------------------------------------------!
    !PURPOSE: Read the exchange potential from gwa file.
+   !TEST ON: 27-10-2020
    !---------------------------------------------------------------------------!
    subroutine read_Vxc(Vxc,Lttc,ib_sigma1,ib_sigma2,save2readable)
       !
@@ -1039,10 +1061,13 @@ contains
       path = reg(pathINPUT)//"eig.DAT"
       call inquireFile(reg(path),filexists)
       write(*,"(A)") "Opening "//reg(path)
+      unit_eig = free_unit()
       open(unit_eig,file=reg(path),form='unformatted',access='direct',action='read',recl=irecl)
+      !
       path = reg(pathINPUT)//"vxcfull.DAT"
       call inquireFile(reg(path),filexists)
       write(*,"(A)") "Opening "//reg(path)
+      unit_vxc = free_unit()
       open(unit_vxc,file=reg(path),form='unformatted',action='read')
       !
       ! Read diagonal Vxc
@@ -1119,8 +1144,8 @@ contains
       deallocate(vxc_diag,Uwan)
       !
       do ispin=1,Nspin_Uwan
-         call dump_matrix(Vxc(:,:,:,ispin),pathINPUT,"Vxc_wann",.true.,ispin=ispin)
-         if(save2readable)call dump_matrix(Vxc(:,:,:,ispin),pathINPUT,"Vxc_wann",.false.,ispin=ispin)
+         call dump_matrix(Vxc(:,:,:,ispin),reg(pathINPUT),"Vxc_wann",.true.,ispin=ispin)
+         if(save2readable)call dump_matrix(Vxc(:,:,:,ispin),reg(pathINPUT)//"Vxc_wann/","Vxc_wann",.false.,ispin=ispin)
       enddo
       !
     end subroutine read_vxc

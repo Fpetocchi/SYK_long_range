@@ -275,6 +275,7 @@ contains
    ! iopt=30=> only b1
    ! Numerical test on Cu suggests that iopt=10 with b3=0 is the best
    ! (simple is best) which is used in this routine.
+   !TEST ON: 27-10-2020
    !---------------------------------------------------------------------------!
    subroutine mats2itau_BosonicCoeff(tau,coswt,correct)
       !
@@ -335,6 +336,7 @@ contains
 
    !---------------------------------------------------------------------------!
    !PURPOSE: Perform the Fourier transform from mats to tau of a matrix Gf
+   !TEST ON: 27-10-2020(both)
    !---------------------------------------------------------------------------!
    subroutine Fmats2itau_mat_Gw(beta,Gmats,Gitau,asympt_corr,tau_uniform,atBeta)
       !
@@ -455,9 +457,9 @@ contains
       real_space=.false.
       if(present(nkpt3).and.present(kpt))then
          real_space=.true.
-         if(verbose)write(*,"(A)") "Performing FT iw->itau in real space."
+         if(verbose)write(*,"(A)") "     Performing FT iw->itau in real space."
       else
-         if(verbose)write(*,"(A)") "Performing FT iw->itau in momentum space."
+         if(verbose)write(*,"(A)") "     Performing FT iw->itau in momentum space."
       endif
       !
       asympt_corr_ = .true.
@@ -535,7 +537,7 @@ contains
 
    !---------------------------------------------------------------------------!
    !PURPOSE: Perform the Fourier transform from mats to tau of a vector Gf
-   !TEST ON: 16-10-2020(mat)
+   !TEST ON: 16-10-2020(Gwk)
    !---------------------------------------------------------------------------!
    subroutine Fmats2itau_vec_Gw(beta,Gmats,Gitau,asympt_corr,tau_uniform,atBeta)
       !
@@ -654,9 +656,9 @@ contains
       real_space=.false.
       if(present(nkpt3).and.present(kpt))then
          real_space=.true.
-         if(verbose)write(*,"(A)") "Performing FT iw->itau in real space."
+         if(verbose)write(*,"(A)") "     Performing FT iw->itau in real space."
       else
-         if(verbose)write(*,"(A)") "Performing FT iw->itau in momentum space."
+         if(verbose)write(*,"(A)") "     Performing FT iw->itau in momentum space."
       endif
       !
       asympt_corr_ = .true.
@@ -734,6 +736,7 @@ contains
 
    !---------------------------------------------------------------------------!
    !PURPOSE: Perform the Fourier transform from tau to mats of a matrix Gf
+   !TEST ON: 27-10-2020(Gwk)
    !---------------------------------------------------------------------------!
    subroutine Fitau2mats_mat_Gw(beta,Gitau,Gmats,tau_uniform)
       !
@@ -1015,6 +1018,7 @@ contains
 
    !---------------------------------------------------------------------------!
    !PURPOSE: Perform the Fourier transform from mats to tau of a bosonic tensor
+   !TEST ON: 27-10-2020(both)
    !---------------------------------------------------------------------------!
    subroutine Bmats2itau_Uw(beta,Umats,Uitau,asympt_corr,tau_uniform)
       !
@@ -1070,7 +1074,7 @@ contains
             !
             do ib1=1,Nbp
                do ib2=1,Nbp
-                  Uitau(ib1,ib2,itau) = Uitau(ib1,ib2,itau) + coswt(iw,itau)*Umats(ib1,ib2,itau)
+                  Uitau(ib1,ib2,itau) = Uitau(ib1,ib2,itau) + coswt(iw,itau)*Umats(ib1,ib2,iw)
                enddo
             enddo
             !
@@ -1138,7 +1142,7 @@ contains
                !
                do ib1=1,Nbp
                   do ib2=1,Nbp
-                     Uitau(ib1,ib2,itau,ik) = Uitau(ib1,ib2,itau,ik) + coswt(iw,itau)*Umats(ib1,ib2,itau,ik)
+                     Uitau(ib1,ib2,itau,ik) = Uitau(ib1,ib2,itau,ik) + coswt(iw,itau)*Umats(ib1,ib2,iw,ik)
                   enddo
                enddo
                !

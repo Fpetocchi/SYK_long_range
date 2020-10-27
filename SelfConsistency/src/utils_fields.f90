@@ -55,10 +55,11 @@ module utils_fields
    public :: DeallocateFermionicField
    public :: AllocateBosonicField
    public :: DeallocateBosonicField
+   public :: clear_attributes
    public :: loc2imp
    public :: imp2loc
+   public :: join_SigmaCX
    public :: MergeFields
-   public :: clear_attributes
 
    !===========================================================================!
 
@@ -103,6 +104,7 @@ contains
 
    !---------------------------------------------------------------------------!
    !PURPOSE: Fill the local attributes of a Bosonic Field
+   !TEST ON: 21-10-2020
    !---------------------------------------------------------------------------!
    subroutine BosonicKsum(W)
       use parameters
@@ -133,7 +135,7 @@ contains
 
    !---------------------------------------------------------------------------!
    !PURPOSE: Allocate/deallocate Lattice attributes in a consistent way
-   !TEST ON: 14-10-2020
+   !TEST ON: 14-10-2020(both)
    !---------------------------------------------------------------------------!
    subroutine AllocateLattice(lttc,Norb,Nkpt,name)
       use parameters
@@ -205,7 +207,7 @@ contains
 
    !---------------------------------------------------------------------------!
    !PURPOSE: Allocate/deallocate Fermionic attributes in a consistent way
-   !TEST ON: 16-10-2020
+   !TEST ON: 16-10-2020(both)
    !---------------------------------------------------------------------------!
    subroutine AllocateFermionicField(G,Norb,Npoints,Nkpt,Nsite,name,Beta,mu)
       use parameters
@@ -281,6 +283,7 @@ contains
 
    !---------------------------------------------------------------------------!
    !PURPOSE: Allocate/deallocate Bosonic attributes in a consistent way
+   !TEST ON: 21-10-2020(both)
    !---------------------------------------------------------------------------!
    subroutine AllocateBosonicField(W,Norb,Npoints,iq_gamma,Nkpt,Nsite,name,no_bare,Beta)
       use parameters
@@ -357,6 +360,31 @@ contains
       W%status=.false.
       !
    end subroutine DeallocateBosonicField
+
+
+   !---------------------------------------------------------------------------!
+   !PURPOSE: Clear the internal attributes of a Fermionic/Bosonic field
+   !TEST ON: 16-10-2020(both)
+   !---------------------------------------------------------------------------!
+   subroutine clear_attributes_Fermion(G)
+      use parameters
+      implicit none
+      type(FermionicField),intent(inout)    :: G
+      if(allocated(G%N_s))G%N_s=czero
+      if(allocated(G%ws))G%ws=czero
+      if(allocated(G%N_ks))G%N_ks=czero
+      if(allocated(G%wks))G%wks=czero
+   end subroutine clear_attributes_Fermion
+   !
+   subroutine clear_attributes_Boson(W)
+      use parameters
+      implicit none
+      type(BosonicField),intent(inout)      :: W
+      if(allocated(W%bare_local))W%bare_local=czero
+      if(allocated(W%screened_local))W%screened_local=czero
+      if(allocated(W%bare))W%bare=czero
+      if(allocated(W%screened))W%screened=czero
+   end subroutine clear_attributes_Boson
 
 
    !---------------------------------------------------------------------------!
@@ -843,7 +871,103 @@ contains
 
 
    !---------------------------------------------------------------------------!
+   !PURPOSE: Join the C and X component of the self-energy
+   !TEST ON: 27-10-2020
+   !---------------------------------------------------------------------------!
+   subroutine join_SigmaCX(SigmaFull,Sigma_C,Sigma_X)
+      !
+      use parameters
+      implicit none
+      !
+      type(FermionicField),intent(inout)    :: SigmaFull
+      type(FermionicField),intent(in)       :: Sigma_C
+      type(FermionicField),intent(in)       :: Sigma_X
+      real(8)                               :: Beta
+      integer                               :: Nkpt,Norb,Nmats
+      integer                               :: iw,ik,ispin
+      logical                               :: local
+      !
+      !
+      if(verbose)write(*,"(A)") "---- join_SigmaCX"
+      !
+      !
+      ! Check on the input Fields
+      if(.not.SigmaFull%status) stop "SigmaFull not properly initialized."
+      if(.not.Sigma_C%status) stop "Sigma_C not properly initialized."
+      if(.not.Sigma_X%status) stop "Sigma_X not properly initialized."
+      !
+      if(SigmaFull%Nkpt.eq.0) local=.true.
+      if(SigmaFull%Nkpt.ne.0) local=.false.
+      !
+      if(local)then
+         if(Sigma_C%Nkpt.ne.0) stop "Sigma_C k dependent attributes are supposed to be unallocated."
+         if(Sigma_X%Nkpt.ne.0) stop "Sigma_X k dependent attributes are supposed to be unallocated."
+      else
+         if(Sigma_C%Nkpt.eq.0) stop "Sigma_C k dependent attributes not properly initialized."
+         if(Sigma_X%Nkpt.eq.0) stop "Sigma_X k dependent attributes not properly initialized."
+      endif
+      if(Sigma_X%Npoints.ne.0) stop "Sigma_X frequency dependent attributes are supposed to be unallocated."
+      !
+      Norb = SigmaFull%Norb
+      Beta = SigmaFull%Beta
+      Nmats = SigmaFull%Npoints
+      !
+      if(.not.local)then
+         Nkpt = SigmaFull%Nkpt
+         if(all([Sigma_C%Nkpt-Nkpt,Sigma_X%Nkpt-Nkpt].ne.[0,0])) stop "Either Sigma_C or Sigma_X have different number of k-points with respect to SigmaFull."
+      endif
+      !
+      if(all([Sigma_C%Beta-Beta,Sigma_X%Beta-Beta].ne.[0d0,0d0])) stop "Either Sigma_C or Sigma_X have different Beta with respect to SigmaFull."
+      if(Nmats.ne.Sigma_C%Npoints) stop "Sigma_C has different number of Matsubara points with respect to SigmaFull."
+      !
+      if(local)then
+         !
+         if(verbose)write(*,"(A)") "     Join of local attributes."
+         !
+         !$OMP PARALLEL DEFAULT(NONE),&
+         !$OMP SHARED(Nmats,SigmaFull,Sigma_C,Sigma_X),&
+         !$OMP PRIVATE(iw,ispin)
+         !$OMP DO
+         do iw=1,Nmats
+            do ispin=1,Nspin
+               !
+               SigmaFull%ws(:,:,iw,ispin) = Sigma_C%ws(:,:,iw,ispin) + Sigma_X%N_s(:,:,ispin)
+               !
+            enddo
+         enddo
+         !$OMP END DO
+         !$OMP END PARALLEL
+         !
+      else
+         !
+         if(verbose)write(*,"(A)") "     Join of non-local attributes."
+         !
+         !$OMP PARALLEL DEFAULT(NONE),&
+         !$OMP SHARED(Nmats,Nkpt,SigmaFull,Sigma_C,Sigma_X),&
+         !$OMP PRIVATE(iw,ik,ispin)
+         !$OMP DO
+         do iw=1,Nmats
+            do ik=1,Nkpt
+               do ispin=1,Nspin
+                  !
+                  SigmaFull%wks(:,:,iw,ik,ispin) = Sigma_C%wks(:,:,iw,ik,ispin) + Sigma_X%N_ks(:,:,ik,ispin)
+                  !
+               enddo
+            enddo
+         enddo
+         !$OMP END DO
+         !$OMP END PARALLEL
+         !
+         call FermionicKsum(SigmaFull)
+         !
+      endif
+      !
+   end subroutine join_SigmaCX
+
+
+   !---------------------------------------------------------------------------!
    !PURPOSE: Replace SigmaImp in SigmaGW at the indexes contained in orbs
+   !TEST ON: 27-10-2020
    !---------------------------------------------------------------------------!
    subroutine MergeSelfEnergy(SigmaGW,SigmaGW_DC,SigmaImp,coeff,orbs,DC_type)
       use parameters
@@ -865,7 +989,7 @@ contains
       logical                               :: localDC
       !
       !
-      write(*,"(A)") "--- Merge SelfEnergy"
+      write(*,"(A)") "---- Merge SelfEnergy"
       !
       !
       ! Check on the input Fields
@@ -969,7 +1093,7 @@ contains
       integer                               :: Nkpt,Norb,Nmats,Nsite
       !
       !
-      write(*,"(A)") "--- Merge Polarization"
+      write(*,"(A)") "---- Merge Polarization"
       !
       !
       ! Check on the input Fields
@@ -1046,29 +1170,7 @@ contains
    end subroutine MergePolarization
 
 
-   !---------------------------------------------------------------------------!
-   !PURPOSE: Clear the internal attributes of a Fermionic/Bosonic field
-   !TEST ON: 16-10-2020
-   !---------------------------------------------------------------------------!
-   subroutine clear_attributes_Fermion(G)
-      use parameters
-      implicit none
-      type(FermionicField),intent(inout)    :: G
-      if(allocated(G%N_s))G%N_s=czero
-      if(allocated(G%ws))G%ws=czero
-      if(allocated(G%N_ks))G%N_ks=czero
-      if(allocated(G%wks))G%wks=czero
-   end subroutine clear_attributes_Fermion
-   !
-   subroutine clear_attributes_Boson(W)
-      use parameters
-      implicit none
-      type(BosonicField),intent(inout)      :: W
-      if(allocated(W%bare_local))W%bare_local=czero
-      if(allocated(W%screened_local))W%screened_local=czero
-      if(allocated(W%bare))W%bare=czero
-      if(allocated(W%screened))W%screened=czero
-   end subroutine clear_attributes_Boson
+
 
 
 
