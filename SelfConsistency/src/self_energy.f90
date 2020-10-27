@@ -593,7 +593,7 @@ contains
       integer                               :: ib,ib_sigma1,ib_sigma2,ispin_spex
       integer                               :: Nspin_spex_old,Nkpt_irred_spex_old
       integer                               :: ib_sigma1_old,ib_sigma2_old
-      integer                               :: iseg_old,Nfreq_old,Nkpt_old
+      integer                               :: iseg_old,Nfreq_old,Nkpt_file,Nkpt_file_old
       logical                               :: ldum,lexonly
       real(8)                               :: wS_old,wE_old
       integer,allocatable                   :: NfreqSeg(:)
@@ -619,7 +619,7 @@ contains
       Nmats = Smats_GoWo%Npoints
       !
       allocate(wmats(Smats_GoWo%Npoints));wmats=0d0
-      wmats = FermionicFreqMesh(Smats_GoWo%Beta*H2eV,Smats_GoWo%Npoints)
+      wmats = FermionicFreqMesh(Smats_GoWo%Beta,Smats_GoWo%Npoints)
       !
       ! Read XEPS data
       if(.not.XEPSisread)then
@@ -675,6 +675,9 @@ contains
          enddo
          close(unit)
          !
+         !In disentangled case only UWAN_NEW(ib_wan1:ib_wan1+nbasis-1,ibwan1:ibwan1+nbasis-1) is non-zero
+         if(Lttc%UseDisentangledBS) ib_Uwan2 = ib_Uwan1 + Norb-1
+         !
          ! Look for the Number of Sigma segments.
          SigmaSegments=0
          do iseg=1,99
@@ -688,17 +691,17 @@ contains
          !
          ! Look for the Number of Kpoints in each segment (supposed to be the same of Lttc%Nkpt_irred)
          do iseg=1,SigmaSegments
-            Nkpt = 0
+            Nkpt_file = 0
             do ik=1,2000
                path = reg(pathINPUT)//"Sigma_real_"//str(iseg,2)//"/SIGMA.Q"//str(ik,4)//".DAT"
                call inquireFile(reg(path),filexists,hardstop=.false.)
                if(.not.filexists) exit
-               Nkpt = Nkpt + 1
+               Nkpt_file = Nkpt_file + 1
             enddo
-            write(*,"(A,1I4,A,1I6)") "The number k-points in the segment number: ",iseg," is: ",Nkpt
-            Nkpt_old = Nkpt
-            if((iseg.gt.1).and.(Nkpt.ne.Nkpt_old)) stop "Number of K-points does not match among segments."
-            if(Nkpt.ne.Lttc%Nkpt_irred) stop "Number of K-points does not match with Nkpt_irred readed from XEPS."
+            write(*,"(A,1I4,A,1I6)") "The number k-points in the segment number: ",iseg," is: ",Nkpt_file
+            Nkpt_file_old = Nkpt_file
+            if((iseg.gt.1).and.(Nkpt_file.ne.Nkpt_file_old)) stop "Number of K-points does not match among segments."
+            if(Nkpt_file.ne.Lttc%Nkpt_irred) stop "Number of K-points does not match with Nkpt_irred readed from XEPS."
          enddo
          !
          ! Check that all the Sigma parameters are cosistent and that the segments match
@@ -813,10 +816,10 @@ contains
                   !
                   ! Check that the GoWo self-energy is vanishing at w --> +/-inf
                   if (iseg.eq.1.and.dabs(dimag(SigmaC_seg(1,ib,ik,1))).gt.1.d-6) then
-                     write(*,"(A,2F10.5)") "Warning: ImSigmaC_spex("//str(ik)//",1) orb "//str(ib)//" is > 1.d-6: ",SigmaC_seg(1,ib,ik,1)
+                     write(*,"(A,2E20.12)") "Warning: ImSigmaC_spex("//str(ik)//",1) orb "//str(ib)//" is > 1.d-6: ",SigmaC_seg(1,ib,ik,1)
                   endif
                   if (iseg.eq.SigmaSegments.and.dabs(dimag(SigmaC_seg(NfreqSeg(iseg),ib,ik,1))).gt.1.d-6) then
-                     write(*,"(A,2F10.5)") "Warning: ImSigmaC_spex("//str(ik)//",Nw) orb "//str(ib)//" is > 1.d-6: ",SigmaC_seg(NfreqSeg(iseg),ib,ik,1)
+                     write(*,"(A,2E20.12)") "Warning: ImSigmaC_spex("//str(ik)//",Nw) orb "//str(ib)//" is > 1.d-6: ",SigmaC_seg(NfreqSeg(iseg),ib,ik,1)
                   endif
                   !
                   !Calc Sigma along imag axis using
@@ -842,8 +845,8 @@ contains
                               gamma2 = (-1.d0/pi) * dimag( SigmaC_seg(iw2+1,ib,ik,ispin) )
                            endif
                            !
-                           trap = ( dcmplx(gamma1,0.d0) / (dcmplx(0.d0,wmats(iw)) - dcmplx(wread(iw2),0.d0)  )  &
-                                  + dcmplx(gamma2,0.d0) / (dcmplx(0.d0,wmats(iw)) - dcmplx(wread(iw2+1),0.d0))  )/2.d0
+                           trap = ( dcmplx(gamma1,0.d0) / (dcmplx(0.d0,wmats(iw)/H2eV) - dcmplx(wread(iw2),0.d0)  )  &
+                                  + dcmplx(gamma2,0.d0) / (dcmplx(0.d0,wmats(iw)/H2eV) - dcmplx(wread(iw2+1),0.d0))  )/2.d0
                            !trap=(-dcmplx(gamma*w(iw2),gamma*w_F(iw))/(w_F(iw)**2 + w(iw2)**2) - dcmplx(gamma*w(iw2+1),gamma*w_F(iw))/(w_F(iw)**2 + w(iw2+1)**2))/2.d0
                            SigmaC_diag(ib,iw,ik,ispin) = SigmaC_diag(ib,iw,ik,ispin) + dcmplx(wread(iw2+1)-wread(iw2),0.d0)*trap
                            !
@@ -891,6 +894,7 @@ contains
          !$OMP END DO
          !$OMP END PARALLEL
          deallocate(Uwan,SigmaC_diag,SigmaX_seg)
+         !
          Smats_GoWo%wks = Smats_GoWo%wks * H2eV
          !
          call cpu_time(finish)
@@ -900,8 +904,8 @@ contains
          !
          ! Print out the transformed stuff
          ! local
-         call dump_FermionicField(Smats_GoWo,1,reg(pathOUTPUT_),"Sigma_GoWo_Loc_up.DAT")
-         if(Nspin_spex.eq.2)call dump_FermionicField(Smats_GoWo,2,reg(pathOUTPUT_),"Sigma_GoWo_Loc_dw.DAT")
+         call dump_FermionicField(Smats_GoWo,1,reg(pathOUTPUT_),"Sigma_GoWo_loc_up.DAT")
+         if(Nspin_spex.eq.2)call dump_FermionicField(Smats_GoWo,2,reg(pathOUTPUT_),"Sigma_GoWo_loc_dw.DAT")
          ! k-dependent
          call dump_FermionicField(Smats_GoWo,reg(pathOUTPUT_),"Sigma_GoWo",.true.,Lttc%kpt)
          if(save2readable)call dump_FermionicField(Smats_GoWo,reg(pathOUTPUT_)//"Sigma_imag/","Sigma_GoWo",.false.,Lttc%kpt)
@@ -980,6 +984,7 @@ contains
       integer                               :: unit_eig,unit_vxc
       integer                               :: nband,nrec
       real(8),allocatable                   :: vxc_diag(:,:,:)
+      complex(8),allocatable                :: Vxc_loc(:,:,:)
       !
       !
       if(verbose)write(*,"(A)") "---- read_Vxc"
@@ -1022,6 +1027,9 @@ contains
          enddo
       enddo
       close(unit)
+      !
+      !In disentangled case only UWAN_NEW(ib_wan1:ib_wan1+nbasis-1,ibwan1:ibwan1+nbasis-1) is non-zero
+      if(Lttc%UseDisentangledBS) ib_Uwan2 = ib_Uwan1 + Norb-1
       !
       ! Read gwa file
       path = reg(pathINPUT)//"gwa.DAT"
@@ -1147,6 +1155,14 @@ contains
          call dump_matrix(Vxc(:,:,:,ispin),reg(pathINPUT),"Vxc_wann",.true.,ispin=ispin)
          if(save2readable)call dump_matrix(Vxc(:,:,:,ispin),reg(pathINPUT)//"Vxc_wann/","Vxc_wann",.false.,ispin=ispin)
       enddo
+      !
+      allocate(Vxc_loc(Norb,Norb,Nspin));Vxc_loc=czero
+      do ik=1,Nkpt
+         Vxc_loc = Vxc_loc + Vxc(:,:,ik,:)/Nkpt
+      enddo
+      call dump_matrix(Vxc_loc(:,:,1),reg(pathINPUT)//"Vxc_wann_loc_up.DAT")
+      if(Nspin_Uwan.eq.2)call dump_matrix(Vxc_loc(:,:,2),reg(pathINPUT)//"Vxc_wann_loc_dw.DAT")
+      deallocate(Vxc_loc)
       !
     end subroutine read_vxc
 
