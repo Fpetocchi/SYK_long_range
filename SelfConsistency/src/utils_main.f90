@@ -43,6 +43,7 @@ module utils_main
    type(BosonicField)                       :: PiEDMFT
    type(BosonicField)                       :: curlyU
    !
+   real(8)                                  :: density2set
    complex(8),allocatable                   :: densityLDA(:,:)
    complex(8),allocatable                   :: densityGW(:,:,:)
    real(8),allocatable                      :: densityDMFT(:,:,:)
@@ -52,6 +53,8 @@ module utils_main
    !
    real(8),allocatable                      :: Umat(:,:)
    real(8),allocatable                      :: Kfunct(:,:)
+   !
+   logical                                  :: solve_DMFT=.false.
    !
    logical                                  :: calc_PiGG=.false.
    logical                                  :: merge_Pi=.false.
@@ -79,32 +82,52 @@ contains
    !PURPOSE: prints the header
    !TEST ON: 14-10-2020
    !---------------------------------------------------------------------------!
-   subroutine printHeader()
+   subroutine printHeader(Iteration)
       !
       implicit none
+      integer,intent(in),optional           :: Iteration
       character(len=80)                     :: line
       character(:),allocatable              :: header
       integer                               :: i,Lsx,Ldx,Lcalc
       !
-      header="*"
-      line="*"
-      do i=1,79
-         line = trim(line)//"*"
-      enddo
-      Lcalc=len("Calculation type: "//trim(CalculationType))
-      Lsx=int((78-Lcalc)/2)-1
-      Ldx=78-Lcalc-Lsx
-      do i=1,Lsx
-         header = header//" "
-      enddo
-      header = header//"Calculation type: "//trim(CalculationType)
-      do i=1,Ldx
-         header = header//" "
-      enddo
-      header = header//"*"
-      write(LOGfile,"(A)") line
-      write(LOGfile,"(A)") header
-      write(LOGfile,"(A)") line//new_line("A")//new_line("A")
+      if(present(Iteration))then
+         header="<"
+         Lcalc=len(" Iteration #: "//str(Iteration,3)//" ")
+         Lsx=int((78-Lcalc)/2)-1
+         Ldx=78-Lcalc-Lsx
+         do i=1,Lsx
+            header = header//"="
+         enddo
+         header = header//" Iteration #: "//str(Iteration,3)//" "
+         do i=1,Ldx
+            header = header//"="
+         enddo
+         header = header//">"
+         write(LOGfile,"(A)") new_line("A")//header//new_line("A")
+      else
+         header="*"
+         line="*"
+         do i=1,79
+            line = trim(line)//"*"
+         enddo
+         !
+         Lcalc=len("Calculation type: "//trim(CalculationType))
+         !
+         Lsx=int((78-Lcalc)/2)-1
+         Ldx=78-Lcalc-Lsx
+         !
+         do i=1,Lsx
+            header = header//" "
+         enddo
+         header = header//"Calculation type: "//trim(CalculationType)
+         do i=1,Ldx
+            header = header//" "
+         enddo
+         header = header//"*"
+         write(LOGfile,"(A)") line
+         write(LOGfile,"(A)") header
+         write(LOGfile,"(A)") line//new_line("A")//new_line("A")
+      endif
       !
    end subroutine printHeader
 
@@ -113,10 +136,11 @@ contains
    !PURPOSE: looks for the current iteration number
    !TEST ON: 14-10-2020
    !---------------------------------------------------------------------------!
-   subroutine initialize_DataStructure(ItStart)
+   subroutine initialize_DataStructure(ItStart,Itend)
       !
       implicit none
       integer,intent(out)                   :: ItStart
+      integer,intent(out)                   :: Itend
       character(len=256)                    :: Itpath
       integer                               :: iter,Itfirst
       logical                               :: Itexist
@@ -142,7 +166,25 @@ contains
       !
       ItStart = Itfirst
       !
-      if((reg(CalculationType).eq."G0W0").and.(ItStart.eq.0)) stop "CalculationType is G0W0 but the starting iteration is not 0."
+      select case(reg(CalculationType))
+         case default
+            !
+            stop "Available Calculation types are: G0W0, scGW, DMFT+statU, DMFT+dynU, EDMFT, GW+EDMFT."
+            !
+         case("G0W0")
+            !
+            if(ItStart.ne.0) stop "CalculationType is G0W0 but the starting iteration is not 0."
+            Itend = 1
+            !
+         case("scGW")
+            !
+            Itend = LastIteration
+            !
+         case("DMFT+statU","DMFT+dynU","EDMFT","GW+EDMFT")
+            !
+            Itend = ItStart + 1
+            !
+      end select
       !
    end subroutine initialize_DataStructure
 
@@ -167,7 +209,7 @@ contains
       Lttc%Nkpt3 = Nkpt3
       !
       !
-      select case(CalculationType)
+      select case(reg(CalculationType))
          case default
             !
             stop "Available Calculation types are: G0W0, scGW, DMFT+statU, DMFT+dynU, EDMFT, GW+EDMFT."
@@ -276,7 +318,7 @@ contains
       write(LOGfile,"(A)") "---- initialize Fields"
       !
       !
-      select case(CalculationType)
+      select case(reg(CalculationType))
          case default
             !
             stop "Available Calculation types are: G0W0, scGW, DMFT+statU, DMFT+dynU, EDMFT, GW+EDMFT."
@@ -335,6 +377,9 @@ contains
                !
             endif
             !
+            !Logical Flags
+            solve_DMFT = .true.
+            !
          case("DMFT+dynU")
             !
             !Unscreened interaction
@@ -364,6 +409,9 @@ contains
                call calc_Gmats(Glat,Crystal)
                !
             endif
+            !
+            !Logical Flags
+            solve_DMFT = .true.
             !
          case("EDMFT")
             !
@@ -404,6 +452,7 @@ contains
             !
             !Logical Flags
             calc_Wedmft = .true.
+            solve_DMFT = .true.
             !
          case("GW+EDMFT")
             !
@@ -444,13 +493,17 @@ contains
             !
             !Logical Flags
             calc_PiGG = .true.
-            if(ItStart.ne.0) merge_Pi = .true.
             calc_Wfull = .true.
             calc_Sigma = .true.
-            merge_Sigma = .true.
+            solve_DMFT = .true.
+            if(ItStart.gt.0)then
+               merge_Pi = .true.
+               merge_Sigma = .true.
+            endif
             !
       end select
       !
+      calc_W = calc_Wedmft .or. calc_Wfull
       !
       if(ItStart.eq.0)then
          densityLDA = Glat%N_s(:,:,1) + Glat%N_s(:,:,2)
@@ -461,7 +514,11 @@ contains
          densityGW=Glat%N_s
       endif
       !
-      calc_W = calc_Wedmft .or. calc_Wfull
+      if(look4dens%TargetDensity.eq.0d0)then
+         look4dens%TargetDensity = trace(densityLDA)
+      else
+         if(ItStart.eq.0)call set_density(Glat%mu,Beta,Crystal,look4dens)
+      endif
       !
    end subroutine initialize_Fields
 
@@ -476,7 +533,7 @@ contains
       integer,intent(in)                    :: Iteration
       integer                               :: iorb,jorb,ik,iw,ispin
       !
-      select case(CalculationType)
+      select case(reg(CalculationType))
          case default
             stop "Available Calculation types are: G0W0, scGW, DMFT+statU, DMFT+dynU, EDMFT, GW+EDMFT."
          case("G0W0","scGW","GW+EDMFT")

@@ -260,12 +260,12 @@ int main(int argc, char *argv[])
                mpi.report(" Site density: "+str(Ntmp[isite]));
             }
             trial_density = std::accumulate(Ntmp.begin(), Ntmp.end(), 0.0);
-            mpi.report(" Total density: "+str(trial_density)+" Error: "+str(fabs(trial_density-density)));
+            mpi.report(" Total density: "+str(trial_density)+" relative error: "+str(fabs(trial_density-density)/density));
             print_line_space(1,mpi.is_master());
             //
             if(trial_density > density) mu_above=mu_new;
             if(trial_density < density) mu_below=mu_new;
-            if(fabs(trial_density-density)<muErr)
+            if((fabs(trial_density-density)/density)<muErr)
             {
                mpi.report(" Found correct chemical potential after "+str(imu)+" iterations: "+str(mu_new));
                break;

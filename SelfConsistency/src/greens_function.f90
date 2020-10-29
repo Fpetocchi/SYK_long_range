@@ -18,9 +18,14 @@ module greens_function
    end interface calc_density
 
    interface set_density
-      module procedure set_density_Int                                          !(Gmats,Lattice,n_target,Smats,orbs(optional))
-      module procedure set_density_NonInt                                       !(mu,Beta,Lattice,n_target,orbs(optional))
+      module procedure set_density_Int                                          !(Gmats,Lattice,musearch,Smats(optional))
+      module procedure set_density_NonInt                                       !(mu,Beta,Lattice,musearch)
    end interface set_density
+
+   interface calc_Gmats
+      module procedure calc_Gmats_Full                                          !(Gmats,Lttc,Smats)
+      module procedure calc_Gmats_Shift                                         !(Gmats,Lttc)
+   end interface calc_Gmats
 
    !---------------------------------------------------------------------------!
    !PURPOSE: Module variables
@@ -213,7 +218,7 @@ contains
    !PURPOSE: Compute the Matsubara Green's Function
    !TEST ON: 16-10-2020
    !---------------------------------------------------------------------------!
-   subroutine calc_Gmats(Gmats,Lttc,Smats)
+   subroutine calc_Gmats_Full(Gmats,Lttc,Smats)
       !
       use parameters
       use linalg
@@ -235,7 +240,7 @@ contains
       integer                               :: iw,ik,iwan,ispin
       !
       !
-      if(verbose)write(*,"(A)") "---- calc_Gmats"
+      if(verbose)write(*,"(A)") "---- calc_Gmats_Full"
       !
       !
       ! Check on the input Fields
@@ -266,6 +271,9 @@ contains
          if(Smats%Npoints.eq.0) stop "Smats frequency dependent attributes not properly initialized."
          if(Smats%Nkpt.eq.0) stop "Smats k dependent attributes not properly initialized."
          Swks => Smats%wks
+         if(verbose)write(*,"(A)") "     Interacting Green's function."
+      else
+         if(verbose)write(*,"(A)") "     LDA Green's function."
       endif
       !
       call clear_attributes(Gmats)
@@ -302,35 +310,112 @@ contains
       ! In the N_s the local density
       call FermionicKsum(Gmats)
       !
-   end subroutine calc_Gmats
+   end subroutine calc_Gmats_Full
 
 
    !---------------------------------------------------------------------------!
-   !PURPOSE: Set the density of a Green's function and returns the adjusted mu
+   !PURPOSE: Recalculate the Matsubara Green's Function assuming that the
+   !         Gmats%mu attribute has changed
    !---------------------------------------------------------------------------!
-   subroutine set_density_Int(Gmats,Lttc,n_target,Smats,orbs)
+   subroutine calc_Gmats_Shift(Gmats,Lttc,mu_shift)
       !
       use parameters
       use linalg
       use utils_misc
       use utils_fields
-      use input_vars, only : densityPercErr
+      implicit none
+      !
+      type(FermionicField),intent(inout)    :: Gmats
+      real(8),intent(in)                    :: mu_shift
+      type(Lattice),intent(in)              :: Lttc
+      !
+      complex(8),allocatable                :: invGf(:,:)
+      real(8),allocatable                   :: zeta(:,:)
+      complex(8),allocatable                :: n_k(:,:,:,:)
+      integer                               :: Norb,Nmats,Nkpt
+      integer                               :: iw,ik,ispin
+      !
+      !
+      if(verbose)write(*,"(A)") "---- calc_Gmats_Shift"
+      !
+      !
+      ! Check on the input Fields
+      if(.not.Gmats%status) stop "Gmats not properly initialized."
+      if(.not.Lttc%status) stop "Lttc not properly initialized."
+      if(Gmats%Npoints.eq.0) stop "Gmats frequency dependent attributes not properly initialized."
+      if(Gmats%Nkpt.eq.0) stop "Gmats k dependent attributes not properly initialized."
+      if(Gmats%Nkpt.ne.Lttc%Nkpt) stop "Lttc has different number of k-points with respect to Gmats."
+      if(mu_shift.eq.0d0) stop "Chemical potential shift is zero."
+      !
+      Norb = Gmats%Norb
+      Nmats = Gmats%Npoints
+      Nkpt = Gmats%Nkpt
+      !
+      allocate(zeta(Norb,Norb));zeta=0d0
+      zeta = deye(Norb)*mu_shift
+      !
+      allocate(invGf(Norb,Norb));invGf=czero
+      !$OMP PARALLEL DEFAULT(NONE),&
+      !$OMP SHARED(zeta,Lttc,Gmats),&
+      !$OMP PRIVATE(ispin,ik,iw,invGf)
+      !$OMP DO
+      do ispin=1,Nspin
+         do ik=1,Gmats%Nkpt
+            do iw=1,Gmats%Npoints
+               !
+               invGf = Gmats%wks(:,:,iw,ik,ispin)
+               call inv(invGf)
+               !
+               invGf = invGf + zeta
+               !
+               call inv(invGf)
+               Gmats%wks(:,:,iw,ik,ispin) = invGf
+               !
+            enddo
+         enddo
+      enddo
+      !$OMP END DO
+      !$OMP END PARALLEL
+      deallocate(zeta,invGf)
+      !
+      ! In the N_ks attribute is stored the k-dep occupation
+      allocate(n_k(Norb,Norb,Nkpt,Nspin));n_k=czero
+      call calc_density(Gmats,Lttc,n_k)
+      Gmats%N_ks = n_k
+      deallocate(n_k)
+      !
+      ! In the N_s the local density
+      call FermionicKsum(Gmats)
+      !
+   end subroutine calc_Gmats_Shift
+
+
+   !---------------------------------------------------------------------------!
+   !PURPOSE: Set the density of an interacting Green's function. If the
+   !         self-energy is provided the Gf is fully recalculated (v1),
+   !         otherwise only a rigid shift will be applied to the inverse (v2)
+   !---------------------------------------------------------------------------!
+   subroutine set_density_Int(Gmats,Lttc,mu_param,Smats)
+      !
+      use parameters
+      use linalg
+      use utils_misc
+      use utils_fields
       implicit none
       !
       type(FermionicField),intent(inout)    :: Gmats
       type(Lattice),intent(in)              :: Lttc
-      type(FermionicField),intent(in)       :: Smats
-      real(8),intent(in)                    :: n_target
-      real(8),intent(in),optional           :: orbs(:)
+      type(musearch),intent(in)             :: mu_param
+      type(FermionicField),intent(in),optional :: Smats
       !
-      real(8)                               :: n_iter,mu_start
-      real(8)                               :: emin,emax,dmu
+      real(8)                               :: n_iter,n_err,dmu
+      real(8)                               :: mu_start,mu_last,mu_sign
+      real(8)                               :: mu_below,mu_above
       integer                               :: Norb,Nmats,Nkpt
       integer                               :: iter
       !
       !
       if(verbose)write(*,"(A)") "---- set_density_Int"
-      write(*,"(A1,F10.5)") "Target density: ",n_target
       !
       !
       ! Check on the input Fields
@@ -339,57 +424,77 @@ contains
       if(.not.Smats%status) stop "Smats not properly initialized."
       if(Gmats%Npoints.eq.0) stop "Gmats frequency dependent attributes not properly initialized."
       if(Gmats%Nkpt.eq.0) stop "Gmats k dependent attributes not properly initialized."
-      if(Smats%Npoints.eq.0) stop "Smats frequency dependent attributes not properly initialized."
-      if(Smats%Nkpt.eq.0) stop "Smats k dependent attributes not properly initialized."
       if(Gmats%Nkpt.ne.Lttc%Nkpt) stop "Lttc has different number of k-points with respect to Gmats."
+      if(mu_param%TargetDensity.eq.0d0) stop "TargetDensity is set to zero."
+      if(present(Smats))then
+         if(Smats%Npoints.eq.0) stop "Smats frequency dependent attributes not properly initialized."
+         if(Smats%Nkpt.eq.0) stop "Smats k dependent attributes not properly initialized."
+      endif
+      write(*,"(A,F6.3)") "Target density: ",mu_param%TargetDensity
       !
       Norb = Gmats%Norb
       Nmats = Gmats%Npoints
       Nkpt = Gmats%Nkpt
       mu_start = Gmats%mu
       !
-      call calc_Gmats(Gmats,Lttc,Smats)
+      if(present(Smats)) call calc_Gmats_Full(Gmats,Lttc,Smats)
       n_iter = get_dens()
       write(*,"(A,F10.5)") "Starting density: ",n_iter
-      write(*,"(A,F10.5)") "Starting mu: ",mu_start
+      write(*,"(A,F10.5)") "Starting chemical potential: ",mu_start
       !
-      dmu=0.d0
-      emin=-30d0
-      emax=+30d0
-      do iter=1,100
+      mu_sign = sign(1d0,mu_param%TargetDensity-n_iter)
+      !
+      do iter=1,mu_param%muIter
          !
-         write(*,"(A,I5)") "iteration #",iter
+         dmu = iter * mu_param%muStep * mu_sign
+         Gmats%mu = mu_start + dmu;
          !
-         ! Chemical potential variation
-         if (n_iter.gt.n_target) then
-            emax=dmu
-            dmu=(emax+emin)/2
+         if(present(Smats))then
+            call calc_Gmats_Full(Gmats,Lttc,Smats)
          else
-            emin=dmu
-            dmu=(emax+emin)/2
+            call calc_Gmats_Shift(Gmats,Lttc,dmu)
          endif
-         !
-         Gmats%mu = mu_start + dmu
-         call calc_Gmats(Gmats,Lttc,Smats)
          n_iter = get_dens()
          !
-         write(*,"(2(A,F10.5))") "density: ", n_iter," Dmu: ", dmu
+         write(*,"(A,I4)") "Rigid shift iteration # ",iter
+         write(*,"(2(A,F10.5))") "Density: ", n_iter," mu: ", Gmats%mu
          !
-         ! Exit condition 1: succesful search
-         if (dabs((n_iter-n_target)/n_target).lt.densityPercErr) then
-            write(*,"(A,I5,A)") "Density converged after ",iter," iterations."
-            write(*,"(A,F10.5)") "Absolute density error: ", dabs(n_iter-n_target)
-            write(*,"(A,2F10.5)") "New chemical potential: ",Gmats%mu
-            write(*,"(A,F10.5)") "Old chemical potential: ", mu_start
-            if(Gmats%mu.ne.(mu_start + dmu)) stop "Problem in the chemical potential."
+         if((mu_sign.gt.0.0).and.(n_iter > mu_param%TargetDensity)) exit
+         if((mu_sign.lt.0.0).and.(n_iter < mu_param%TargetDensity)) exit
+         !
+         mu_last = Gmats%mu
+         !
+      enddo
+      !
+      mu_below = min(Gmats%mu,mu_last)
+      mu_above = max(Gmats%mu,mu_last)
+      !
+      do iter=1,mu_param%muIter
+         !
+         Gmats%mu = (mu_below+mu_above)/2d0
+         if(present(Smats))then
+            call calc_Gmats_Full(Gmats,Lttc,Smats)
+         else
+            call calc_Gmats_Shift(Gmats,Lttc,(Gmats%mu-mu_last))
+         endif
+         n_iter = get_dens()
+         n_err = abs(n_iter-mu_param%TargetDensity)/mu_param%TargetDensity
+         !
+         write(*,"(A,I4)") "Secant method iteration # ",iter
+         write(*,"(2(A,F10.5))") "Chemical potential boundaries: ",mu_below," / ",mu_above
+         write(*,"(3(A,F10.5))") "Density: ", n_iter," mu: ", Gmats%mu," relative error: ", n_err
+         !
+         if(n_iter.gt.mu_param%TargetDensity) mu_above = Gmats%mu;
+         if(n_iter.lt.mu_param%TargetDensity) mu_below = Gmats%mu;
+         !
+         if(n_err.lt.mu_param%densityRelErr)then
+            write(*,"(A,F10.5)") "Found correct chemical potential after "//str(iter)//" iterations: ",Gmats%mu
             exit
+         elseif(iter.eq.mu_param%muIter)then
+             write(*,"(A,F10.5)") "Warning: NOT found correct chemical potential after "//str(iter)//" iterations. Last used value: ",Gmats%mu
          endif
          !
-         ! Exit condition 2: un-succesful search
-         if (iter.eq.100)then
-            write(*,"(A)") "Chemical potential search not converged after 100 iterations."
-            exit
-         endif
+         mu_last = Gmats%mu
          !
       enddo !iter
       !
@@ -404,9 +509,9 @@ contains
          integer                 :: iwan,ispin
          !
          dens_C = czero
-         if(present(orbs))then
+         if(allocated(mu_param%orbs))then
             do iwan=1,Norb
-               if(all(orbs.ne.iwan))cycle
+               if(all(mu_param%orbs.ne.iwan))cycle
                do ispin=1,Nspin
                   dens_C = dens_C + Gmats%N_s(iwan,iwan,ispin)
                enddo
@@ -416,7 +521,7 @@ contains
          endif
          !
          if(aimag(dens_C).gt.eps)then
-            write(*,"(A,2F10.5)")"Density is complex: ",real(dens_C),aimag(dens_C)
+            write(*,"(A,2F10.5)")"Density (Int) is complex: ",real(dens_C),aimag(dens_C)
             stop
          endif
          dens = real(dens_C)
@@ -426,38 +531,43 @@ contains
       !
       !
    end subroutine set_density_Int
-   !
-   subroutine set_density_NonInt(mu,Beta,Lttc,n_target,orbs)
+
+
+   !---------------------------------------------------------------------------!
+   !PURPOSE: Returns the chemical potential shift in order to have the wanted
+   !         LDA density
+   !---------------------------------------------------------------------------!
+   subroutine set_density_NonInt(mu,Beta,Lttc,mu_param)
       !
       use parameters
       use linalg
       use utils_misc
       use utils_fields
-      use input_vars, only : NtauF, densityPercErr
+      use input_vars, only : NtauF
       implicit none
       !
-      real(8),intent(out)                   :: mu
+      real(8),intent(inout)                 :: mu
       real(8),intent(in)                    :: Beta
       type(Lattice),intent(in)              :: Lttc
-      real(8),intent(in)                    :: n_target
-      real(8),intent(in),optional           :: orbs(:)
+      type(musearch),intent(in)             :: mu_param
       !
-      real(8)                               :: n_iter,mu_start
+      real(8)                               :: n_iter,mu_start,mu_last,mu_sign
+      real(8)                               :: mu_below,mu_above,n_err
       complex(8),allocatable                :: Gitau(:,:,:)
       complex(8),allocatable                :: n_loc(:,:)
       complex(8),allocatable                :: n_k(:,:,:)
-      real(8)                               :: emin,emax,dmu
       integer                               :: Norb,Nkpt
       integer                               :: iter
       !
       !
       if(verbose)write(*,"(A)") "---- set_density_NonInt"
-      write(*,"(A1,F10.5)") "Target density: ",n_target
       !
       !
       ! Check on the input Fields
       if(.not.Lttc%status) stop "Lttc not properly initialized."
       if(Lttc%Nkpt.eq.0) stop "Lttc k dependent attributes not properly initialized."
+      if(mu_param%TargetDensity.eq.0d0) stop "TargetDensity is set to zero."
+      write(*,"(A1,F10.5)") "Target density: ",mu_param%TargetDensity
       !
       Norb = Lttc%Norb
       Nkpt = Lttc%Nkpt
@@ -472,42 +582,47 @@ contains
       write(*,"(A,F10.5)") "Starting density: ",n_iter
       write(*,"(A,F10.5)") "Starting mu: ",mu_start
       !
-      dmu=0.d0
-      emin=-30d0
-      emax=+30d0
-      do iter=1,100
+      mu_sign = sign(1d0,mu_param%TargetDensity-n_iter)
+      !
+      do iter=1,mu_param%muIter
          !
-         write(*,"(A,I5)") "iteration #",iter
+         mu = mu_start + iter * mu_param%muStep * mu_sign;
          !
-         ! Chemical potential variation
-         if (n_iter.gt.n_target) then
-            emax=dmu
-            dmu=(emax+emin)/2
-         else
-            emin=dmu
-            dmu=(emax+emin)/2
-         endif
-         !
-         mu = mu_start + dmu
          call calc_G0_tau(Gitau,mu,Beta,Lttc%Ek,atBeta=.true.)
          n_iter = get_dens()
          !
-         write(*,"(2(A,F10.5))") "density: ", n_iter," Dmu: ", dmu
+         write(*,"(A,I4)") "Rigid shift iteration # ",iter
+         write(*,"(2(A,F10.5))") "Density: ", n_iter," mu: ", mu
          !
-         ! Exit condition 1: succesful search
-         if (dabs((n_iter-n_target)/n_target).lt.densityPercErr) then
-            write(*,"(A,I5,A)") "Density converged after ",iter," iterations."
-            write(*,"(A,F10.5)") "Absolute density error: ", dabs(n_iter-n_target)
-            write(*,"(A,2F10.5)") "New chemical potential: ",mu
-            write(*,"(A,F10.5)") "Old chemical potential: ", mu_start
-            if(mu.ne.(mu_start + dmu)) stop "Problem in the chemical potential."
-            exit
-         endif
+         if((mu_sign.gt.0.0).and.(n_iter > mu_param%TargetDensity)) exit
+         if((mu_sign.lt.0.0).and.(n_iter < mu_param%TargetDensity)) exit
          !
-         ! Exit condition 2: un-succesful search
-         if (iter.eq.100)then
-            write(*,"(A)") "Chemical potential search not converged after 100 iterations."
+         mu_last = mu;
+         !
+      enddo
+      !
+      mu_below = min(mu,mu_last)
+      mu_above = max(mu,mu_last)
+      !
+      do iter=1,mu_param%muIter
+         !
+         mu = (mu_below+mu_above)/2d0
+         call calc_G0_tau(Gitau,mu,Beta,Lttc%Ek,atBeta=.true.)
+         n_iter = get_dens()
+         n_err = abs(n_iter-mu_param%TargetDensity)/mu_param%TargetDensity
+         !
+         write(*,"(A,I4)") "Secant method iteration # ",iter
+         write(*,"(2(A,F10.5))") "Chemical potential boundaries: ",mu_below," / ",mu_above
+         write(*,"(3(A,F10.5))") "Density: ", n_iter," mu: ", mu," relative error: ", n_err
+         !
+         if(n_iter.gt.mu_param%TargetDensity) mu_above = mu;
+         if(n_iter.lt.mu_param%TargetDensity) mu_below = mu;
+         !
+         if(n_err.lt.mu_param%densityRelErr)then
+            write(*,"(A,F10.5)") "Found correct chemical potential after "//str(iter)//" iterations: ",mu
             exit
+         elseif(iter.eq.mu_param%muIter)then
+             write(*,"(A,F10.5)") "Warning: NOT found correct chemical potential after "//str(iter)//" iterations. Last used value: ",mu
          endif
          !
       enddo !iter
@@ -530,9 +645,9 @@ contains
          enddo
          n_loc = sum(n_k,dim=3)/Nkpt
          !
-         if(present(orbs))then
+         if(allocated(mu_param%orbs))then
             do iwan=1,Norb
-               if(all(orbs.ne.iwan))cycle
+               if(all(mu_param%orbs.ne.iwan))cycle
                dens_C = dens_C + n_loc(iwan,iwan)
             enddo
          else
@@ -540,7 +655,7 @@ contains
          endif
          !
          if(aimag(dens_C).gt.eps)then
-            write(*,"(A,2F10.5)")"Density is complex: ",real(dens_C),aimag(dens_C)
+            write(*,"(A,2F10.5)")"Density (NonInt) is complex: ",real(dens_C),aimag(dens_C)
             stop
          endif
          dens = real(dens_C)

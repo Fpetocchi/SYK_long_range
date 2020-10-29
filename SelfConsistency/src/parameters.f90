@@ -90,4 +90,18 @@ module parameters
    end type BosonicField
 
 
+   !---------------------------------------------------------------------------!
+   !PURPOSE: container for density lookup parameters
+   !---------------------------------------------------------------------------!
+   type musearch
+      real(8)                               :: TargetDensity=0d0
+      real(8)                               :: densityRelErr=0d0
+      real(8)                               :: muStep=0d0
+      integer                               :: muIter=0
+      real(8)                               :: muTime=0d0
+      integer,allocatable                   :: orbs(:)                          !orbital restriction (has to be added to the input)
+      logical                               :: quickloops=.false.
+   end type musearch
+
+
 end module parameters
