@@ -28,6 +28,9 @@ module utils_main
 #endif
    !
    type(Lattice)                            :: Crystal
+   complex(8),allocatable                   :: HlocSite(:,:,:)
+   complex(8),allocatable                   :: HlocRot(:,:,:)
+   real(8),allocatable                      :: HlocEig(:,:)
    !
    type(FermionicField)                     :: Glat
    type(FermionicField)                     :: Gimp
@@ -63,6 +66,8 @@ module utils_main
    logical                                  :: calc_Wedmft=.false.
    logical                                  :: calc_Sigma=.false.
    logical                                  :: merge_Sigma=.false.
+   !
+   character(len=255)                       :: ItFolder,PrevItFolder
 
    !---------------------------------------------------------------------------!
    !PURPOSE: Rutines available for the user. Description only for interfaces.
@@ -104,6 +109,10 @@ contains
          enddo
          header = header//">"
          write(LOGfile,"(A)") new_line("A")//header//new_line("A")
+         !
+         ItFolder = reg(pathDATA)//str(Iteration)//"/"
+         PrevItFolder = reg(pathDATA)//str(Iteration-1)//"/"
+         !
       else
          header="*"
          line="*"
@@ -199,11 +208,14 @@ contains
       implicit none
       type(Lattice),intent(out)             :: Lttc
       integer,intent(in)                    :: ItStart
-      integer                               :: m,n,mp,np,ib1,ib2
+      integer                               :: m,n,mp,np,ib1,ib2,isite,Norb
       integer                               :: iq_gamma_Hk,iq_gamma_XEPS
+      complex(8),allocatable                :: Hloc(:,:),Rot(:,:)
+      real(8),allocatable                   :: Eig(:)
+      integer,allocatable                   :: Orbs(:)
       !
       !
-      write(LOGfile,"(A)") "---- initialize Lattice"
+      write(LOGfile,"(A)") "---- initialize_Lattice"
       !
       !
       Lttc%Nkpt3 = Nkpt3
@@ -277,6 +289,99 @@ contains
             !
       end select
       !
+      !Store the local rotation of each site
+      if(RotateHloc)then
+         !
+         if(ExpandImpurity)then !Only one set of orbital provided - all matrices with same dimension
+            !
+            allocate(HlocEig(SiteNorb(1),Nsite));HlocEig=0d0
+            allocate(HlocSite(SiteNorb(1),SiteNorb(1),Nsite));HlocSite=czero
+            allocate(HlocRot(SiteNorb(1),SiteNorb(1),Nsite));HlocRot=czero
+            !
+            do isite=1,Nsite
+               !
+               Norb = SiteNorb(1)
+               !
+               allocate(Eig(Norb));Eig=0d0
+               allocate(Hloc(Norb,Norb));Hloc=czero
+               allocate(Rot(Norb,Norb));Rot=czero
+               allocate(Orbs(Norb));Orbs=0
+               !
+               ! only two possible arrangements
+               if(abs(SiteOrbs(1,2)-SiteOrbs(1,1)).eq.1)then
+                  Orbs = SiteOrbs(1,:) + Norb*(isite-1)
+               elseif(abs(SiteOrbs(1,2)-SiteOrbs(1,1)).eq.Nsite)then
+                  Orbs = SiteOrbs(1,:) + isite-1
+               endif
+               !
+               !Extract then local Hamiltonian for each site
+               call loc2imp(Hloc,Lttc%Hloc,Orbs)
+               Rot = Hloc
+               !
+               !Rotate
+               call eigh(Rot,Eig)
+               !
+               !Save
+               call dump_Matrix(Hloc,reg(pathINPUT)//"HlocSite_"//reg(SiteName(1))//"_"//str(isite)//".DAT")
+               call dump_Matrix(Rot,reg(pathINPUT)//"HlocRot_"//reg(SiteName(1))//"_"//str(isite)//".DAT")
+               call dump_Matrix(diag(Eig),reg(pathINPUT)//"HlocEig_"//reg(SiteName(1))//"_"//str(isite)//".DAT")
+               !
+               !SO(3)check
+               write(LOGfile,"(A,F)") "     det(Rot) of "//reg(SiteName(isite))//" :",det(HlocRot(:,:,isite))
+               !
+               HlocSite(1:Norb,1:Norb,isite) = Hloc
+               HlocRot(1:Norb,1:Norb,isite) = Rot
+               HlocEig(1:Norb,isite) = Eig
+               !
+               deallocate(Eig,Hloc,Rot,Orbs)
+               !
+            enddo
+            !
+         else !Potentially different set of orbitals provided - all matrices with different dimension (SiteNorb(isite))
+            !
+            allocate(HlocEig(maxval(SiteNorb),Nsite));HlocEig=0d0
+            allocate(HlocSite(maxval(SiteNorb),maxval(SiteNorb),Nsite));HlocSite=czero
+            allocate(HlocRot(maxval(SiteNorb),maxval(SiteNorb),Nsite));HlocRot=czero
+            !
+            do isite=1,Nsite
+               !
+               Norb = SiteNorb(isite)
+               !
+               allocate(Eig(Norb));Eig=0d0
+               allocate(Hloc(Norb,Norb));Hloc=czero
+               allocate(Rot(Norb,Norb));Rot=czero
+               allocate(Orbs(Norb));Orbs=0
+               !
+               Orbs=SiteOrbs(isite,:)
+               !
+               !Extract then local Hamiltonian for each site
+               call loc2imp(Hloc,Lttc%Hloc,Orbs)
+               Rot = Hloc
+               !
+               !Rotate
+               call eigh(Rot,Eig)
+               !
+               !Save
+               call dump_Matrix(Hloc,reg(pathINPUT)//"HlocSite_"//reg(SiteName(isite))//".DAT")
+               call dump_Matrix(Rot,reg(pathINPUT)//"HlocRot_"//reg(SiteName(isite))//".DAT")
+               call dump_Matrix(diag(Eig),reg(pathINPUT)//"HlocEig_"//reg(SiteName(isite))//".DAT")
+               !
+               !SO(3)check
+               write(LOGfile,"(A,F)") "     det(Rot) of "//reg(SiteName(isite))//" :",det(HlocRot(:,:,isite))
+               !
+               HlocSite(1:Norb,1:Norb,isite) = Hloc
+               HlocRot(1:Norb,1:Norb,isite) = Rot
+               HlocEig(1:Norb,isite) = Eig
+               !
+               deallocate(Eig,Hloc,Rot,Orbs)
+               !
+            enddo
+            !
+         endif
+         !
+      endif
+      !
+      !Store the Physical (number and spin conserving) elements of the interaction tensor
       allocate(PhysicalUelement(Lttc%Norb**2,Lttc%Norb**2));PhysicalUelement=.false.
       do m=1,Lttc%Norb
          do n=1,Lttc%Norb
@@ -295,8 +400,10 @@ contains
          enddo
       enddo
       !
+      !Dump some LDA results
       if(ItStart.eq.0)call calc_Glda(0d0,Beta,Lttc)
       !
+      !Allocate different density matrices
       allocate(densityLDA(Lttc%Norb,Lttc%Norb));densityLDA=czero
       allocate(densityGW(Lttc%Norb,Lttc%Norb,Nspin));densityGW=czero
       allocate(densityDMFT(Lttc%Norb,Lttc%Norb,Nspin));densityDMFT=0d0
@@ -315,7 +422,7 @@ contains
       logical                               :: filexists
       !
       !
-      write(LOGfile,"(A)") "---- initialize Fields"
+      write(LOGfile,"(A)") "---- initialize_Fields"
       !
       !
       select case(reg(CalculationType))
@@ -339,7 +446,7 @@ contains
             !Lattice Gf
             call AllocateFermionicField(Glat,Crystal%Norb,Nmats,Nkpt=Crystal%Nkpt,Nsite=Nsite,Beta=Beta)
             if(ItStart.eq.0) call calc_Gmats(Glat,Crystal)
-            if(ItStart.ne.0) call read_FermionicField(Glat,reg(pathDATA)//str(ItStart-1)//"/","Glat",kpt=Crystal%kpt)
+            if(ItStart.ne.0) call read_FermionicField(Glat,reg(PrevItFolder),"Glat",kpt=Crystal%kpt)
             !
             !Logical Flags
             calc_PiGG = .true.
@@ -366,8 +473,8 @@ contains
                !
                !Impurity Self-energy
                call AllocateFermionicField(SigmaDMFT,Crystal%Norb,Nmats,Nsite=Nsite,Beta=Beta)
-               call read_FermionicField(SigmaDMFT,1,reg(pathDATA)//str(ItStart-1)//"/","SigmaDMFT_up.DAT")
-               call read_FermionicField(SigmaDMFT,2,reg(pathDATA)//str(ItStart-1)//"/","SigmaDMFT_dw.DAT")
+               call read_FermionicField(SigmaDMFT,1,reg(PrevItFolder),"SigmaDMFT_up.DAT")
+               call read_FermionicField(SigmaDMFT,2,reg(PrevItFolder),"SigmaDMFT_dw.DAT")
                !
             else
                !
@@ -399,8 +506,8 @@ contains
                !
                !Impurity Self-energy
                call AllocateFermionicField(SigmaDMFT,Crystal%Norb,Nmats,Nsite=Nsite,Beta=Beta)
-               call read_FermionicField(SigmaDMFT,1,reg(pathDATA)//str(ItStart-1)//"/","SigmaDMFT_up.DAT")
-               call read_FermionicField(SigmaDMFT,2,reg(pathDATA)//str(ItStart-1)//"/","SigmaDMFT_dw.DAT")
+               call read_FermionicField(SigmaDMFT,1,reg(PrevItFolder),"SigmaDMFT_up.DAT")
+               call read_FermionicField(SigmaDMFT,2,reg(PrevItFolder),"SigmaDMFT_dw.DAT")
                !
             else
                !
@@ -435,12 +542,12 @@ contains
                !
                !Polarization
                call AllocateBosonicField(PiEDMFT,Crystal%Norb,Crystal%iq_gamma,Nmats,Nsite=Nsite,no_bare=.true.,Beta=Beta)
-               call read_BosonicField(PiEDMFT,reg(pathDATA)//str(ItStart-1)//"/","PiEDMFT")
+               call read_BosonicField(PiEDMFT,reg(PrevItFolder),"PiEDMFT")
                !
                !Impurity Self-energy
                call AllocateFermionicField(SigmaDMFT,Crystal%Norb,Nmats,Nsite=Nsite,Beta=Beta)
-               call read_FermionicField(SigmaDMFT,1,reg(pathDATA)//str(ItStart-1)//"/","SigmaDMFT_up.DAT")
-               call read_FermionicField(SigmaDMFT,2,reg(pathDATA)//str(ItStart-1)//"/","SigmaDMFT_dw.DAT")
+               call read_FermionicField(SigmaDMFT,1,reg(PrevItFolder),"SigmaDMFT_up.DAT")
+               call read_FermionicField(SigmaDMFT,2,reg(PrevItFolder),"SigmaDMFT_dw.DAT")
                !
             else
                !
@@ -469,16 +576,20 @@ contains
                !Polarization
                call AllocateBosonicField(PiGG,Crystal%Norb,Nmats,Crystal%iq_gamma,Nkpt=Crystal%Nkpt,Nsite=Nsite,no_bare=.true.,Beta=Beta)
                call AllocateBosonicField(PiEDMFT,Crystal%Norb,Nmats,Crystal%iq_gamma,Nsite=Nsite,no_bare=.true.,Beta=Beta)
-               call read_BosonicField(PiEDMFT,reg(pathDATA)//str(ItStart-1)//"/","PiEDMFT.DAT")
+               call read_BosonicField(PiEDMFT,reg(PrevItFolder),"PiEDMFT.DAT")
                !
                !Impurity Self-energy
                call AllocateFermionicField(SigmaDMFT,Crystal%Norb,Nmats,Nsite=Nsite,Beta=Beta)
-               call read_FermionicField(SigmaDMFT,1,reg(pathDATA)//str(ItStart-1)//"/","SigmaDMFT_up.DAT")
-               call read_FermionicField(SigmaDMFT,2,reg(pathDATA)//str(ItStart-1)//"/","SigmaDMFT_dw.DAT")
+               call read_FermionicField(SigmaDMFT,1,reg(PrevItFolder),"SigmaDMFT_up.DAT")
+               call read_FermionicField(SigmaDMFT,2,reg(PrevItFolder),"SigmaDMFT_dw.DAT")
+               !
+               !Hartree contribution to the Impurity self-energy
+               call read_Matrix(SigmaDMFT%N_s(:,:,1),reg(pathDATA)//str(ItStart-1)//"/HartreeU_up.DAT")
+               call read_Matrix(SigmaDMFT%N_s(:,:,2),reg(pathDATA)//str(ItStart-1)//"/HartreeU_dw.DAT")
                !
                !Lattice Gf
                call AllocateFermionicField(Glat,Crystal%Norb,Nmats,Nkpt=Crystal%Nkpt,Nsite=Nsite,Beta=Beta)
-               call read_FermionicField(Glat,reg(pathDATA)//str(ItStart-1)//"/","Glat",kpt=Crystal%kpt)
+               call read_FermionicField(Glat,reg(PrevItFolder),"Glat",kpt=Crystal%kpt)
                !
             else
                !
@@ -527,11 +638,15 @@ contains
    !PURPOSE: Join the all the component of the self-energy
    !TEST ON: 27-10-2020
    !---------------------------------------------------------------------------!
-   subroutine calc_SigmaFull(Iteration)
+   subroutine join_SigmaFull(Iteration)
       !
       implicit none
       integer,intent(in)                    :: Iteration
       integer                               :: iorb,jorb,ik,iw,ispin
+      !
+      !
+      write(LOGfile,"(A)") "---- join_SigmaFull"
+      !
       !
       select case(reg(CalculationType))
          case default
@@ -542,7 +657,7 @@ contains
             !
             if(Iteration.eq.0)then
                !
-               if(.not.SigmaG0W0%status) stop "calc_SigmaFull: SigmaG0W0 not properly initialized."
+               if(.not.SigmaG0W0%status) stop "join_SigmaFull: SigmaG0W0 not properly initialized."
                !
                !$OMP PARALLEL DEFAULT(NONE),&
                !$OMP SHARED(SigmaFull,SigmaG0W0,VH,Vxc),&
@@ -566,9 +681,9 @@ contains
                !
             elseif(Iteration.gt.0)then
                !
-               if(.not.SigmaGW%status) stop "calc_SigmaFull: SigmaGW not properly initialized."
-               if(.not.SigmaG0W0dc%status) stop "calc_SigmaFull: SigmaG0W0dc not properly initialized."
-               if(.not.SigmaG0W0%status) stop "calc_SigmaFull: SigmaG0W0 not properly initialized."
+               if(.not.SigmaGW%status) stop "join_SigmaFull: SigmaGW not properly initialized."
+               if(.not.SigmaG0W0dc%status) stop "join_SigmaFull: SigmaG0W0dc not properly initialized."
+               if(.not.SigmaG0W0%status) stop "join_SigmaFull: SigmaG0W0 not properly initialized."
                !
                !$OMP PARALLEL DEFAULT(NONE),&
                !$OMP SHARED(SigmaFull,SigmaGW,SigmaG0W0dc,SigmaG0W0,VH,Vxc),&
@@ -597,11 +712,11 @@ contains
             call FermionicKsum(SigmaFull)
             !
             !Dump the local projection of SigmaFull
-            call dump_FermionicField(SigmaFull,1,reg(pathDATA)//str(Iteration)//"/","SigmaLoc_up.DAT")
-            call dump_FermionicField(SigmaFull,2,reg(pathDATA)//str(Iteration)//"/","SigmaLoc_dw.DAT")
+            call dump_FermionicField(SigmaFull,1,reg(ItFolder),"SigmaLoc_up.DAT")
+            call dump_FermionicField(SigmaFull,2,reg(ItFolder),"SigmaLoc_dw.DAT")
             !
             !Dump the whole SigmaFull
-            call dump_FermionicField(SigmaFull,reg(pathDATA)//str(Iteration)//"/","Sigma",.true.,Crystal%kpt)
+            call dump_FermionicField(SigmaFull,reg(ItFolder),"Sigma",.true.,Crystal%kpt)
             !
          case("DMFT+statU","DMFT+dynU","EDMFT")
             !
@@ -613,7 +728,7 @@ contains
                !
             elseif(Iteration.gt.0)then
                !
-               if(.not.SigmaDMFT%status) stop "calc_SigmaFull: SigmaDMFT not properly initialized."
+               if(.not.SigmaDMFT%status) stop "join_SigmaFull: SigmaDMFT not properly initialized."
                !
                !$OMP PARALLEL DEFAULT(NONE),&
                !$OMP SHARED(SigmaFull,SigmaDMFT),&
@@ -638,16 +753,230 @@ contains
             !
       end select
       !
-   end subroutine calc_SigmaFull
+   end subroutine join_SigmaFull
+
+
+   !---------------------------------------------------------------------------!
+   !PURPOSE: Join the all the component of the self-energy
+   !TEST ON:
+   !---------------------------------------------------------------------------!
+   subroutine calc_Delta(isite)
+      !
+      implicit none
+      integer,intent(in)                    :: isite
+      !
+      type(FermionicField)                  :: Gimp
+      type(FermionicField)                  :: SigmaImp
+      integer                               :: Norb,unit
+      integer                               :: ispin,iw,iwan,itau,ndx
+      integer,allocatable                   :: Orbs(:)
+      real(8),allocatable                   :: wmats(:),tau(:)
+      real(8),allocatable                   :: Eloc(:,:),PrintLine(:)
+      complex(8),allocatable                :: zeta(:,:),invGf(:,:),Rot(:,:)
+      complex(8),allocatable                :: Dmats(:,:,:),Ditau(:,:,:)
+      complex(8),allocatable                :: invCurlyG(:,:,:)
+      character(len=255)                    :: printpath
+      !
+      !
+      write(LOGfile,"(A)") "---- calc_Delta of site "//str(isite)
+      !
+      !
+      Norb = SiteNorb(isite)
+      allocate(Orbs(Norb))
+      Orbs = SiteOrbs(isite,1:Norb)
+      !
+      allocate(Eloc(Norb,Nspin));Eloc=0d0
+      !
+      call AllocateFermionicField(SigmaImp,Norb,Nmats,Beta=Beta)
+      call AllocateFermionicField(Gimp,Norb,Nmats,Beta=Beta)
+      allocate(invCurlyG(Norb,Nmats,Nspin));invCurlyG=czero
+      allocate(Dmats(Norb,Nmats,Nspin));Dmats=czero
+      allocate(Ditau(Norb,NtauF,Nspin));Ditau=0d0
+      !
+      allocate(tau(NtauF));tau=0d0
+      tau = linspace(0d0,Beta,NtauF)
+      allocate(wmats(Nmats));wmats=0d0
+      wmats = FermionicFreqMesh(Beta,Nmats)
+      do iwan=1,Norb
+         do iw=1,Nmats
+            zeta(iwan,iw) = dcmplx( Glat%mu , wmats(iw) )
+         enddo
+      enddo
+      !
+      ! Extract from local to imp the given sites
+      if(RotateHloc)then
+         allocate(Rot(Norb,Norb)); Rot=HlocRot(1:Norb,1:Norb,isite)
+         call loc2imp(Gimp,Glat,Orbs,U=Rot)
+         call loc2imp(SigmaImp,SigmaFull,Orbs,U=Rot)
+         deallocate(Rot)
+      else
+         call loc2imp(Gimp,Glat,Orbs)
+         call loc2imp(SigmaImp,SigmaFull,Orbs)
+      endif
+      !
+      !Print if needed
+      if(Nsite.gt.1)then
+         if(RotateHloc)then
+            call dump_FermionicField(Gimp,1,reg(ItFolder),"Gloc_up_diag_Site"//str(isite)//".DAT")
+            call dump_FermionicField(Gimp,2,reg(ItFolder),"Gloc_dn_diag_Site"//str(isite)//".DAT")
+            call dump_FermionicField(SigmaImp,1,reg(ItFolder),"SigmaLoc_up_diag_Site"//str(isite)//".DAT")
+            call dump_FermionicField(SigmaImp,2,reg(ItFolder),"SigmaLoc_dw_diag_Site"//str(isite)//".DAT")
+         else
+            !THIS IS JUST A PEDANTIC TEST - IF IT WORKS IT CAN BE REMOVED
+            call dump_FermionicField(Gimp,1,reg(ItFolder),"Gloc_up_Site"//str(isite)//".DAT")
+            call dump_FermionicField(Gimp,2,reg(ItFolder),"Gloc_dn_Site"//str(isite)//".DAT")
+            call dump_FermionicField(SigmaImp,1,reg(ItFolder),"SigmaLoc_up_Site"//str(isite)//".DAT")
+            call dump_FermionicField(SigmaImp,2,reg(ItFolder),"SigmaLoc_dw_Site"//str(isite)//".DAT")
+         endif
+      elseif((Nsite.eq.1).and.RotateHloc)then
+         call dump_FermionicField(Gimp,1,reg(ItFolder),"Gloc_up_diag.DAT")
+         call dump_FermionicField(Gimp,2,reg(ItFolder),"Gloc_dn_diag.DAT")
+         call dump_FermionicField(SigmaImp,1,reg(ItFolder),"SigmaLoc_up_diag.DAT")
+         call dump_FermionicField(SigmaImp,2,reg(ItFolder),"SigmaLoc_dw_diag.DAT")
+      endif
+      !
+      !Compute the fermionic Weiss field aka the inverse of CurlyG
+      allocate(invGf(Norb,Norb));invGf=czero
+      do ispin=1,Nspin
+         do iw=1,Nmats
+            !
+            invGf = Gimp%ws(:,:,iw,ispin)
+            call inv(invGf)
+            !
+            do iwan=1,Norb
+               invCurlyG(iwan,iw,ispin) = invGf(iwan,iwan) + SigmaImp%ws(iwan,iwan,iw,ispin)
+            enddo
+            !
+         enddo
+      enddo
+      deallocate(invGf)
+      call DeallocateFermionicField(SigmaImp)
+      call DeallocateFermionicField(Gimp)
+      !
+      !Extract the local energy
+      select case(reg(CalculationType))
+         case default
+            !
+            stop "If you got so fare somethig is wrong."
+            !
+         case("GW+EDMFT")
+            !
+            !call fit_moment(Eloc(:,1),zeta-invCurlyG(:,:,1),0)
+            !call fit_moment(Eloc(:,2),zeta-invCurlyG(:,:,2),0)
+            write(*,*)"test"
+            !
+         case("DMFT+statU","DMFT+dynU","EDMFT")
+            !
+            if(RotateHloc)then
+               Eloc(:,1) = HlocEig(1:Norb,isite)
+               Eloc(:,2) = HlocEig(1:Norb,isite)
+            else
+               Eloc(:,1) = diagonal(HlocSite(1:Norb,1:Norb,isite))
+               Eloc(:,2) = diagonal(HlocSite(1:Norb,1:Norb,isite))
+            endif
+            !
+      end select
+      !
+      !Compute Delta on matsubara
+      do ispin=1,Nspin
+         do iw=1,Nmats
+            do iwan=1,Norb
+               !
+               Dmats(iwan,iw,ispin) = dcmplx( Glat%mu , wmats(iw) ) - Eloc(iwan,ispin) - invCurlyG(iwan,iw,ispin)
+               !
+            enddo
+         enddo
+      enddo
+      !
+      !Fourier transform to the tau axis
+      do ispin=1,Nspin
+         call Fmats2itau_vec(Beta,Dmats(:,:,ispin),Ditau(:,:,ispin),asympt_corr=.true.,tau_uniform=.true.)
+      enddo
+      !
+      !Dump Files in the proper directory - The output is printed here as it has to be customized for the solver
+      allocate(PrintLine(1+Norb*Nspin))
+      call createDir(reg(ItFolder)//"Solver_"//reg(SiteName(isite)))
+      !
+      !Eloc and chemical potential
+      printpath = reg(ItFolder)//"Solver_"//reg(SiteName(isite))//"/Eloc.DAT"
+      unit = free_unit()
+      open(unit,file=reg(printpath),form="formatted",status="unknown",position="rewind",action="write")
+      write(unit,"(1E20.12)") Glat%mu
+      do iwan=1,Norb
+         write(unit,"(2E20.12)") Eloc(iwan,1),Eloc(iwan,2)
+      enddo
+      close(unit)
+      !
+      !Delta(tau)
+      printpath = reg(ItFolder)//"Solver_"//reg(SiteName(isite))//"/Delta.DAT"
+      unit = free_unit()
+      open(unit,file=reg(printpath),form="formatted",status="unknown",position="rewind",action="write")
+      do itau=1,NtauF
+         ndx=1
+         PrintLine=0d0
+         PrintLine(ndx) = tau(itau)
+         do iwan=1,Norb
+            do ispin=1,Nspin
+               ndx=ndx+1
+               PrintLine(ndx) = real(Ditau(iwan,itau,ispin))
+            enddo
+         enddo
+         write(unit,"(2000E20.12)") PrintLine
+      enddo
+      close(unit)
+      !
+      !Delta(iw)
+      printpath = reg(ItFolder)//"Solver_"//reg(SiteName(isite))//"/Delta_iw.DAT"
+      unit = free_unit()
+      open(unit,file=reg(printpath),form="formatted",status="unknown",position="rewind",action="write")
+      do iw=1,Nmats
+         ndx=1
+         PrintLine=0d0
+         PrintLine(ndx) = wmats(iw)
+         do iwan=1,Norb
+            do ispin=1,Nspin
+               ndx=ndx+1
+               PrintLine(ndx) = real(Dmats(iwan,iw,ispin))
+            enddo
+         enddo
+         write(unit,"(2000E20.12)") PrintLine
+      enddo
+      close(unit)
+      !
+      !CurlyG(iw)
+      printpath = reg(ItFolder)//"Solver_"//reg(SiteName(isite))//"/CurlyG_iw.DAT"
+      unit = free_unit()
+      open(unit,file=reg(printpath),form="formatted",status="unknown",position="rewind",action="write")
+      do iw=1,Nmats
+         ndx=1
+         PrintLine=0d0
+         PrintLine(ndx) = wmats(iw)
+         do iwan=1,Norb
+            do ispin=1,Nspin
+               ndx=ndx+1
+               PrintLine(ndx) = 1d0/real(invCurlyG(iwan,iw,ispin))
+            enddo
+         enddo
+         write(unit,"(2000E20.12)") PrintLine
+      enddo
+      close(unit)
+      !
+      deallocate(Orbs,Eloc,invCurlyG,Dmats,Ditau,tau,wmats,PrintLine)
+      !
+   end subroutine calc_Delta
+
+
+
+
+
+
+
+
 
 
 
 
 end module utils_main
-
-
-
-
 
 
 

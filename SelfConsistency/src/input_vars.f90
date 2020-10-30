@@ -99,11 +99,13 @@ module input_vars
    !Site and Orbital space
    integer,public                           :: Nsite
    integer,public,allocatable               :: SiteNorb(:)
-   character(len=2),allocatable             :: SiteName(:)
+   character(len=2),public,allocatable      :: SiteName(:)
    integer,public,allocatable               :: SiteOrbs(:,:)
    integer,public                           :: EquivalentSets
    integer,public,allocatable               :: EquivalentNorb(:)
    integer,public,allocatable               :: EquivalentOrbs(:,:)
+   logical,public,allocatable               :: ExpandImpurity
+   logical,public,allocatable               :: RotateHloc
    !
    !Imaginary time and frequency meshes
    real(8),public                           :: Beta
@@ -118,12 +120,6 @@ module input_vars
    !
    !Density lookup
    type(musearch),public                    :: look4dens
-   !real(8),public                           :: TargetDensity
-   !real(8),public                           :: densityPercErr
-   !real(8),public                           :: muStep
-   !integer,public                           :: muIter
-   !real(8),public                           :: muTime
-   !logical,public                           :: quickloops
    !
    !Interaction variables
    logical,public                           :: UfullStructure
@@ -205,18 +201,31 @@ contains
       !Site and Orbital space
       call append_to_input_list(Nspin,"NSPIN","Number of spins (fixed to 2).")
       call parse_input_variable(Nsite,"NSITE",InputFile,default=1,comment="Number of impurity sites.")
-      allocate(SiteNorb(Nsite));SiteNorb=0
-      allocate(SiteName(Nsite))
-      do isite=1,Nsite
-         call parse_input_variable(SiteNorb(isite),"NORB_"//str(isite),InputFile,default=1,comment="Number of orbitals in site number "//str(isite))
-         call parse_input_variable(SiteName(isite),"NAME_"//str(isite),InputFile,default="El",comment="Chemical species of the site number "//str(isite))
-      enddo
-      allocate(SiteOrbs(Nsite,maxval(SiteNorb)));SiteOrbs=0
-      do isite=1,Nsite
-         allocate(tmpOrbs(1:SiteNorb(isite)));tmpOrbs=0
-         call parse_input_variable(SiteOrbs(isite,1:SiteNorb(isite)),"ORBS_"//str(isite),InputFile,default=tmpOrbs,comment="Lattice orbital indexes of site number "//str(isite))
+      call parse_input_variable(ExpandImpurity,"EXPAND",InputFile,default=.false.,comment="Flag to use a single impurity solution for all the sites of the lattice. Only indexes for site 1 readed.")
+      call parse_input_variable(RotateHloc,"ROTATE",InputFile,default=.false.,comment="Solve the impurity problem in the basis where H(R=0) is diagonal.")
+      if(ExpandImpurity)then
+         allocate(SiteNorb(1));SiteNorb=0
+         allocate(SiteName(1))
+         call parse_input_variable(SiteNorb(1),"NORB_1",InputFile,default=1,comment="Number of orbitals in site number 1")
+         call parse_input_variable(SiteName(1),"NAME_1",InputFile,default="El",comment="Chemical species of the site number 1")
+         allocate(SiteOrbs(1,SiteNorb(1)));SiteOrbs=0
+         allocate(tmpOrbs(1:SiteNorb(1)));tmpOrbs=0
+         call parse_input_variable(SiteOrbs(1,1:SiteNorb(1)),"ORBS_1",InputFile,default=tmpOrbs,comment="Lattice orbital indexes of site number 1")
          deallocate(tmpOrbs)
-      enddo
+      else
+         allocate(SiteNorb(Nsite));SiteNorb=0
+         allocate(SiteName(Nsite))
+         do isite=1,Nsite
+            call parse_input_variable(SiteNorb(isite),"NORB_"//str(isite),InputFile,default=1,comment="Number of orbitals in site number "//str(isite))
+            call parse_input_variable(SiteName(isite),"NAME_"//str(isite),InputFile,default="El",comment="Chemical species of the site number "//str(isite))
+         enddo
+         allocate(SiteOrbs(Nsite,maxval(SiteNorb)));SiteOrbs=0
+         do isite=1,Nsite
+            allocate(tmpOrbs(1:SiteNorb(isite)));tmpOrbs=0
+            call parse_input_variable(SiteOrbs(isite,1:SiteNorb(isite)),"ORBS_"//str(isite),InputFile,default=tmpOrbs,comment="Lattice orbital indexes of site number "//str(isite))
+            deallocate(tmpOrbs)
+         enddo
+      endif
       !
       call parse_input_variable(EquivalentSets,"EQV_SETS",InputFile,default=1,comment="Number of sets of locally equivalent orbitals.")
       allocate(EquivalentNorb(EquivalentSets));EquivalentNorb=0

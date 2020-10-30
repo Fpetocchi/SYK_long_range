@@ -5,6 +5,7 @@ program test
    implicit none
    !
    integer                                  :: TimeStart
+   integer                                  :: isite
    integer                                  :: Iteration,ItStart,Itend
    !
    !
@@ -28,12 +29,12 @@ program test
       if(calc_PiGG)then
          !
          call calc_Pi(PiGG,Glat,Crystal)
-         call dump_BosonicField(PiGG,reg(pathDATA)//str(Iteration)//"/","PiGG.DAT")
+         call dump_BosonicField(PiGG,reg(ItFolder),"PiGG.DAT")
          !
          if(merge_Pi.and.solve_DMFT) then !a bit redundant since there is no merge wihtout DMFT
             call MergeFields(PiGG,PiEDMFT,alphaPi,SiteOrbs)
             call DeallocateBosonicField(PiEDMFT)
-            call dump_BosonicField(PiGG,reg(pathDATA)//str(Iteration)//"/","PiGG_merged.DAT")
+            call dump_BosonicField(PiGG,reg(ItFolder),"PiGG_merged.DAT")
          endif
          !
       endif
@@ -43,7 +44,7 @@ program test
          !
          if(calc_Wfull)  call calc_W_full(Wlat,Ulat,PiGG,Crystal)
          if(calc_Wedmft) call calc_W_edmft(Wlat,Ulat,PiEDMFT,Crystal)
-         call dump_BosonicField(Wlat,reg(pathDATA)//str(Iteration)//"/","Wloc.DAT")
+         call dump_BosonicField(Wlat,reg(ItFolder),"Wloc.DAT")
          !
       endif
       !
@@ -107,19 +108,40 @@ program test
       endif
       !
       !Put together all the contributions to the full self-energy
-      call calc_SigmaFull(Iteration)
+      call join_SigmaFull(Iteration)
       !
-      !Compute the Full Green's function
+      !Compute the Full Green's function and set the density
       call calc_Gmats(Glat,Crystal,SigmaFull)
+      call set_density(Glat,Crystal,look4dens)
+      !
+      !Print Gf: local readable and k-dep binfmt
+      call dump_FermionicField(Glat,1,reg(ItFolder),"Gloc_up.DAT")
+      call dump_FermionicField(Glat,2,reg(ItFolder),"Gloc_dn.DAT")
+      call dump_FermionicField(Glat,reg(ItFolder),"Gloc",.true.,Crystal%kpt)
+      !
+      !Extract the hybridization function (always diagonal)
+      if(solve_DMFT)then
+         do isite=1,Nsite
+            call calc_Delta(isite)
+            if(ExpandImpurity)exit
+         enddo
+      endif
+
+
+
+
+
+
+
+
+
+
+
+
+
       !
    enddo
-
-
-
-
-
-
-
+   !
    write(LOGfile,"(A,F)") "Self-Consistency finished. Total timing (s): ",tock(TimeStart)
    !
 end program test

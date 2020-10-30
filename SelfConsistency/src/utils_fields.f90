@@ -990,6 +990,7 @@ contains
       !
       !
       write(*,"(A)") "---- Merge SelfEnergy"
+      !The Hartee contribution computed as N*curlyU is stored in the SigmaImp%N_s attribute
       !
       !
       ! Check on the input Fields
@@ -1050,11 +1051,11 @@ contains
                         if(localDC)then
                            SigmaGW%wks(i_loc,j_loc,iw,ik,ispin) = SigmaGW%wks(i_loc,j_loc,iw,ik,ispin)              &
                                                                 - coeff*SigmaGW%ws(i_loc,j_loc,iw,ispin)            &
-                                                                + coeff*SigmaImp%ws(i_loc,j_loc,iw,ispin)
+                                                                + coeff*(SigmaImp%ws(i_loc,j_loc,iw,ispin)-SigmaImp%N_s(i_loc,j_loc,ispin))
                         else
                            SigmaGW%wks(i_loc,j_loc,iw,ik,ispin) = SigmaGW%wks(i_loc,j_loc,iw,ik,ispin)              &
                                                                 - coeff*SigmaGW_DC%ws(i_loc,j_loc,iw,ispin)         &
-                                                                + coeff*SigmaImp%ws(i_loc,j_loc,iw,ispin)
+                                                                + coeff*(SigmaImp%ws(i_loc,j_loc,iw,ispin)-SigmaImp%N_s(i_loc,j_loc,ispin))
                         endif
                         !
                      enddo
