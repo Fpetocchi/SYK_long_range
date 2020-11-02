@@ -18,7 +18,7 @@ RELFFLAGS = -xHost -O3 -ftz
 EXECDIR = bin
 TSTSDIR = tests
 SRCDIR = src
-SRCS = linalg.f90 parameters.f90 input_vars.f90 utils_misc.f90 utils_fields.f90 file_io.f90 interactions.f90 crystal.f90 \
+SRCS = linalg.f90 parameters.f90 input_vars.f90 utils_misc.f90 fit.f90 utils_fields.f90 file_io.f90 interactions.f90 crystal.f90 \
        fourier_transforms.f90 bubbles.f90 self_energy.f90 greens_function.f90 utils_main.f90 module_container.f90 main.f90
 OBJS = $(SRCS:.f90=.o)
 EXE  = SelfConsistency
@@ -71,6 +71,9 @@ $(DBGDIR)/parameters.o: $(SRCDIR)/parameters.f90
 	$(FC) -c $(FFLAGS) $(DBGFFLAGS) -o $@ $<
 
 $(DBGDIR)/input_vars.o: $(SRCDIR)/input_vars.f90 $(DBGDIR)/utils_misc.o $(DBGDIR)/parameters.o
+	$(FC) -c $(FFLAGS) $(DBGFFLAGS) -o $@ $<
+
+$(DBGDIR)/fit.o: $(SRCDIR)/fit.f90 $(DBGDIR)/utils_misc.o $(DBGDIR)/parameters.o $(DBGDIR)/input_vars.o
 	$(FC) -c $(FFLAGS) $(DBGFFLAGS) -o $@ $<
 
 $(DBGDIR)/utils_fields.o: $(SRCDIR)/utils_fields.f90 $(DBGDIR)/parameters.o
@@ -126,6 +129,9 @@ $(RELDIR)/parameters.o: $(SRCDIR)/parameters.f90
 	$(FC) -c $(FFLAGS) $(RELFFLAGS) -o $@ $<
 
 $(RELDIR)/input_vars.o: $(SRCDIR)/input_vars.f90 $(RELDIR)/utils_misc.o $(RELDIR)/parameters.o
+	$(FC) -c $(FFLAGS) $(RELFFLAGS) -o $@ $<
+
+$(RELDIR)/fit.o: $(SRCDIR)/fit.f90 $(RELDIR)/utils_misc.o $(RELDIR)/parameters.o $(RELDIR)/input_vars.o
 	$(FC) -c $(FFLAGS) $(RELFFLAGS) -o $@ $<
 
 $(RELDIR)/utils_fields.o: $(SRCDIR)/utils_fields.f90 $(RELDIR)/parameters.o

@@ -81,7 +81,13 @@ module module_container
    read_BosonicField
 
 
-   !(i) Interactions container. Depends on (b),(c),(e),(f),(g),(h)
+   !(i) minimization routines. Depends on (b),(e),(f)
+   use fit, only:                            &
+   fit_moments                              ,&
+   fit_delta
+
+
+   !(l) Interactions container. Depends on (b),(c),(e),(f),(g),(h)
    use interactions, only:                   &
    read_U_spex                              ,&
    calc_W_full                              ,&
@@ -93,14 +99,14 @@ module module_container
    calc_QMCinteractions
 
 
-   !(j) Bubble diagram container. Depends on (b),(c),(d),(e),(f),(g),(h)
+   !(m) Bubble diagram container. Depends on (b),(c),(d),(e),(f),(g),(h)
    use bubbles, only:                        &
    calc_Pi!                                 ,&
    !calc_Optcond                            ,&
    !calc_Hall
 
 
-   !(k) greens_function container. Depends on (a),(b),(c),(d),(e),(f),(g),(h)
+   !(n) greens_function container. Depends on (a),(b),(c),(d),(e),(f),(g),(h)
    use greens_function, only:                &
    calc_density                             ,&
    set_density                              ,&
@@ -108,12 +114,15 @@ module module_container
    calc_Glda
 
 
-   !(l) Self-energy container. Depends on (a),(b),(c),(d),(e),(f),(g),(h),(k)
+   !(o) Self-energy container. Depends on (a),(b),(c),(d),(e),(f),(g),(h),(n)
    use self_energy, only:                    &
    calc_sigmaGW                             ,&
    calc_sigmaGWdc                           ,&
    read_Sigma_spex                          ,&
    calc_VH
+
+
+
 
 
 end module module_container

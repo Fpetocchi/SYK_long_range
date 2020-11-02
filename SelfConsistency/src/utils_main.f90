@@ -584,8 +584,8 @@ contains
                call read_FermionicField(SigmaDMFT,2,reg(PrevItFolder),"SigmaDMFT_dw.DAT")
                !
                !Hartree contribution to the Impurity self-energy
-               call read_Matrix(SigmaDMFT%N_s(:,:,1),reg(pathDATA)//str(ItStart-1)//"/HartreeU_up.DAT")
-               call read_Matrix(SigmaDMFT%N_s(:,:,2),reg(pathDATA)//str(ItStart-1)//"/HartreeU_dw.DAT")
+               call read_Matrix(SigmaDMFT%N_s(:,:,1),reg(PrevItFolder)//"HartreeU_up.DAT")
+               call read_Matrix(SigmaDMFT%N_s(:,:,2),reg(PrevItFolder)//"HartreeU_dw.DAT")
                !
                !Lattice Gf
                call AllocateFermionicField(Glat,Crystal%Norb,Nmats,Nkpt=Crystal%Nkpt,Nsite=Nsite,Beta=Beta)
@@ -772,10 +772,11 @@ contains
       integer,allocatable                   :: Orbs(:)
       real(8),allocatable                   :: wmats(:),tau(:)
       real(8),allocatable                   :: Eloc(:,:),PrintLine(:)
-      complex(8),allocatable                :: zeta(:,:),invGf(:,:),Rot(:,:)
+      complex(8),allocatable                :: zeta(:,:,:),invGf(:,:),Rot(:,:)
       complex(8),allocatable                :: Dmats(:,:,:),Ditau(:,:,:)
       complex(8),allocatable                :: invCurlyG(:,:,:)
-      character(len=255)                    :: printpath
+      character(len=255)                    :: printpath,oldparafile,newparafile
+      logical                               :: oldparexist
       !
       !
       write(LOGfile,"(A)") "---- calc_Delta of site "//str(isite)
@@ -797,9 +798,10 @@ contains
       tau = linspace(0d0,Beta,NtauF)
       allocate(wmats(Nmats));wmats=0d0
       wmats = FermionicFreqMesh(Beta,Nmats)
+      allocate(zeta(Norb,Nmats,Nspin))
       do iwan=1,Norb
          do iw=1,Nmats
-            zeta(iwan,iw) = dcmplx( Glat%mu , wmats(iw) )
+            zeta(iwan,iw,:) = dcmplx( Glat%mu , wmats(iw) )
          enddo
       enddo
       !
@@ -861,9 +863,11 @@ contains
             !
          case("GW+EDMFT")
             !
-            !call fit_moment(Eloc(:,1),zeta-invCurlyG(:,:,1),0)
-            !call fit_moment(Eloc(:,2),zeta-invCurlyG(:,:,2),0)
-            write(*,*)"test"
+            oldparafile = reg(PrevItFolder)//"Solver_"//reg(SiteName(isite))//"/AndPara.DAT"
+            newparafile = reg(ItFolder)//"Solver_"//reg(SiteName(isite))//"/AndPara.DAT"
+            call inquireFile(reg(oldparafile),oldparexist,hardstop=.false.)
+            if(oldparexist) call execute_command_line(" cp "//reg(oldparafile)//" "//reg(newparafile))
+            call fit_Delta(zeta-invCurlyG,reg(ItFolder)//"Solver_"//reg(SiteName(isite))//"/","AndPara.DAT","Shifted",Eloc)
             !
          case("DMFT+statU","DMFT+dynU","EDMFT")
             !
@@ -961,7 +965,27 @@ contains
       enddo
       close(unit)
       !
-      deallocate(Orbs,Eloc,invCurlyG,Dmats,Ditau,tau,wmats,PrintLine)
+      !Eloc _ Delta(iw)
+      if(verbose)then
+         printpath = reg(ItFolder)//"Solver_"//reg(SiteName(isite))//"/Eloc_Delta_iw.DAT"
+         unit = free_unit()
+         open(unit,file=reg(printpath),form="formatted",status="unknown",position="rewind",action="write")
+         do iw=1,Nmats
+            ndx=1
+            PrintLine=0d0
+            PrintLine(ndx) = wmats(iw)
+            do iwan=1,Norb
+               do ispin=1,Nspin
+                  ndx=ndx+1
+                  PrintLine(ndx) = dcmplx( Glat%mu , wmats(iw) ) - invCurlyG(iwan,iw,ispin)
+               enddo
+            enddo
+            write(unit,"(2000E20.12)") PrintLine
+         enddo
+         close(unit)
+      endif
+      !
+      deallocate(Orbs,Eloc,zeta,invCurlyG,Dmats,Ditau,tau,wmats,PrintLine)
       !
    end subroutine calc_Delta
 

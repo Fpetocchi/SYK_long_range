@@ -156,7 +156,7 @@ module input_vars
    logical,allocatable,public               :: PhysicalUelement(:,:)
 
    !---------------------------------------------------------------------------!
-   !PURPOSE: INternal Rutines available for the user. Description only for interfaces.
+   !PURPOSE: Internal Rutines available for the user. Description only for interfaces.
    !---------------------------------------------------------------------------!
    !subroutines
    public :: save_InputFile
@@ -254,12 +254,13 @@ contains
       call parse_input_variable(eta,"ETA",InputFile,default=0.04d0,comment="Real frequency broadening.")
       !
       !Density lookup
-      call parse_input_variable(look4dens%TargetDensity,"N_READ",InputFile,default=0d0,comment="Target density lookup is switched on to this value if its >0d0. Otherwise it will be kept equal to the H(k) one.")
+      call parse_input_variable(look4dens%TargetDensity,"N_READ",InputFile,default=0d0,comment="Target density per site lookup is switched on to this value if its >0d0. Otherwise it will be kept equal to the H(k) one.")
       call parse_input_variable(look4dens%quickloops,"N_QUICK",InputFile,default=.true.,comment="Flag to switch on the quick density lookup within the solver.")
       call parse_input_variable(look4dens%densityRelErr,"N_ERR",InputFile,default=0.01d0,comment="Relative error on the target density.")
       call parse_input_variable(look4dens%muStep,"MU_STEP",InputFile,default=0.2d0,comment="Initial chemical potential step in the density lookup.")
       call parse_input_variable(look4dens%muIter,"MU_ITER",InputFile,default=50,comment="Maximum number of iterations in the density lookup.")
       call parse_input_variable(look4dens%muTime,"MU_TIME",InputFile,default=0.5d0,comment="Minutes of solver runtime in the density lookup.")
+      if(ExpandImpurity)look4dens%TargetDensity = look4dens%TargetDensity*Nsite
       !
       !Interaction variables
       call parse_input_variable(UfullStructure,"U_FULL",InputFile,default=.true.,comment="Flag to check for inverted Re/Im parity in SPEX Ucrpa.")

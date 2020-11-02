@@ -119,12 +119,33 @@ program test
       call dump_FermionicField(Glat,2,reg(ItFolder),"Gloc_dn.DAT")
       call dump_FermionicField(Glat,reg(ItFolder),"Gloc",.true.,Crystal%kpt)
       !
-      !Extract the hybridization function (always diagonal)
+      !Matching the lattice and impurity problems
       if(solve_DMFT)then
+         !
+         !Extract the hybridization functions and local energies (always diagonal)
          do isite=1,Nsite
             call calc_Delta(isite)
             if(ExpandImpurity)exit
          enddo
+         !
+         !Compute local effective interaction
+!do isite=1,Nsite
+!   call calc_curlyU(isite)
+!   if(ExpandImpurity)exit
+!enddo
+!!
+!!Compute Hartree shift to be used in the next iteration
+!call calc_HartreeU(isite)
+         !
+         !
+
+
+
+
+
+
+
+
       endif
 
 

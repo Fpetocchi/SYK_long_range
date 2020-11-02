@@ -24,6 +24,12 @@ module parameters
    integer,parameter                        :: Nspin=2
    !
    real(8),parameter                        :: eps=1e-9
+   !
+   integer,parameter                        :: Nbath=10
+   integer,parameter                        :: cg_niter=200
+   real(8),parameter                        :: cg_Ftol=1e-6
+   real(8),parameter                        :: hwband=3d0
+   real(8),parameter                        :: noisefact=0.01
 
 
    !---------------------------------------------------------------------------!
