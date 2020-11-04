@@ -621,15 +621,15 @@ contains
       !
       if(ItStart.eq.0)then
          densityLDA = Glat%N_s(:,:,1) + Glat%N_s(:,:,2)
-         call dump_Matrix(densityLDA,reg(pathINPUT)//"n_LDA.DAT")
+         call dump_Matrix(densityLDA,reg(pathINPUT)//"nLDA.DAT")
          densityGW=czero
          densityDMFT=czero
          densityQMC=0d0
       else
-         call read_Matrix(densityLDA,reg(pathINPUT)//"n_LDA.DAT")
+         call read_Matrix(densityLDA,reg(pathINPUT)//"nLDA.DAT")
          densityGW=Glat%N_s
-         call read_Matrix(densityDMFT(:,:,1),reg(PrevItFolder)//"nup_DMFT.DAT")
-         call read_Matrix(densityDMFT(:,:,2),reg(PrevItFolder)//"ndw_DMFT.DAT")
+         call read_Matrix(densityDMFT(:,:,1),reg(PrevItFolder)//"nDMFT_up.DAT")
+         call read_Matrix(densityDMFT(:,:,2),reg(PrevItFolder)//"nDMFT_dw.DAT")
          !
          do isite=1,Nsite
             filepath = reg(PrevItFolder)//"Solver_"//reg(SiteName(isite))//"/Nloc.DAT"
@@ -893,7 +893,7 @@ contains
          do iw=1,Nmats
             do iwan=1,Norb
                !
-               Dmats(iwan,iw,ispin) = dcmplx( Glat%mu , wmats(iw) ) - Eloc(iwan,ispin) - invCurlyG(iwan,iw,ispin)
+               Dmats(iwan,iw,ispin) = dcmplx( Glat%mu , wmats(iw) ) - Eloc(iwan,ispin) - invCurlyG(iwan,iw,ispin) + EqvGWndx%hseed*(-1d0)**ispin
                !
             enddo
          enddo
@@ -1185,11 +1185,12 @@ contains
       enddo
       !
       !Symmetrize
-      !call symmetrize(densityDMFT,EqvGWndx)
+      if(verbose)call dump_Matrix(densityDMFT(:,:,1),reg(PrevItFolder)//"nDMFT_up_notsymm.DAT")
+      call symmetrize(densityDMFT,EqvGWndx)
       !
       !Save to the proper iteration folder
-      call dump_Matrix(densityDMFT(:,:,1),reg(PrevItFolder)//"nup_DMFT.DAT")
-      call dump_Matrix(densityDMFT(:,:,2),reg(PrevItFolder)//"ndw_DMFT.DAT")
+      call dump_Matrix(densityDMFT(:,:,1),reg(PrevItFolder)//"nDMFT_up.DAT")
+      call dump_Matrix(densityDMFT(:,:,2),reg(PrevItFolder)//"nDMFT_dw.DAT")
       deallocate(densityDMFT)
       !
       !
@@ -1285,7 +1286,8 @@ contains
       enddo
       !
       !Symmetrize
-      !call symmetrize(SigmaDMFT,EqvGWndx)
+      if(verbose)call dump_FermionicField(SigmaDMFT,1,reg(PrevItFolder),"SigmaDMFTw_up_notsymm.DAT")
+      call symmetrize(SigmaDMFT,EqvGWndx)
       !
       !Save to the proper iteration folder
       call dump_FermionicField(SigmaDMFT,1,reg(PrevItFolder),"SigmaDMFTw_up.DAT")
@@ -1427,7 +1429,8 @@ contains
          enddo
          !
          !Symmetrize
-         !call symmetrize(PiEDMFT,EqvGWndx)
+         if(verbose)call dump_BosonicField(PiEDMFT,reg(PrevItFolder),"PiEDMFTw_notsymm")
+         call symmetrize(PiEDMFT,EqvGWndx)
          !
          !Save to the proper iteration folder
          call dump_BosonicField(PiEDMFT,reg(PrevItFolder),"PiEDMFTw")

@@ -1595,9 +1595,8 @@ contains
             if(ix1.eq.ix2) stop "Something is wrong with the spin-flip indexes."
             !
             ! (ab)(ab) indexes
-            ip1 = jorb + Norb*(iorb-1)
+            ip1 = iorb + Norb*(jorb-1)
             ip2 = iorb + Norb*(jorb-1)
-            if(ip1.ne.ip2) stop "Something is wrong with the pair-hopping indexes."
             !
             if(Uaa_flag) Uinst(ib1,ib2) = Umats%screened_local(iu1,iu2,0)
             if(Ust_flag) Uinst(ib1,ib2) = Umats%screened_local(iu1,iu2,0)

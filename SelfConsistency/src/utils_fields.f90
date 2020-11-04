@@ -29,6 +29,12 @@ module utils_fields
       module procedure imp2loc_Bosonic
    end interface imp2loc
 
+   interface symmetrize
+      module procedure symmetrize_Matrix
+      module procedure symmetrize_Fermionic
+      module procedure symmetrize_Bosonic
+   end interface symmetrize
+
    interface MergeFields
       module procedure MergeSelfEnergy
       module procedure MergePolarization
@@ -58,6 +64,7 @@ module utils_fields
    public :: clear_attributes
    public :: loc2imp
    public :: imp2loc
+   public :: symmetrize
    public :: join_SigmaCX
    public :: MergeFields
 
@@ -589,10 +596,12 @@ contains
    !         given site to the full lattice quantity
    !---------------------------------------------------------------------------!
    subroutine imp2loc_Fermionic(Gloc,Gimp,orbs,sitename,U,expand,AFM)
+      !
       use parameters
       use utils_misc
       use linalg, only : rotate
       implicit none
+      !
       type(FermionicField),intent(inout)    :: Gloc
       type(FermionicField),intent(in)       :: Gimp
       integer,allocatable,intent(in)        :: orbs(:)
@@ -717,9 +726,11 @@ contains
    end subroutine imp2loc_Fermionic
    !
    subroutine imp2loc_Matrix(Oloc,Oimp,orbs,sitename,U,expand)
+      !
       use parameters
       use linalg, only : rotate
       implicit none
+      !
       complex(8),intent(inout)              :: Oloc(:,:)
       complex(8),intent(in)                 :: Oimp(:,:)
       integer,intent(in)                    :: orbs(:)
@@ -799,13 +810,16 @@ contains
    end subroutine imp2loc_Matrix
    !
    subroutine imp2loc_Bosonic(Wloc,Wimp,orbs,sitename,expand)
+      !
       use parameters
       implicit none
+      !
       type(BosonicField),intent(inout)      :: Wloc
       type(BosonicField),intent(in)         :: Wimp
       integer,allocatable,intent(in)        :: orbs(:)
       character(len=*),intent(in),optional  :: sitename
       logical,intent(in),optional           :: expand
+      !
       integer                               :: ip,isite,Nsite,shift
       integer                               :: Norb_imp,Norb_loc
       integer                               :: ib_imp,jb_imp,ib_loc,jb_loc
@@ -889,6 +903,583 @@ contains
 
 
    !---------------------------------------------------------------------------!
+   !PURPOSE: Symmetrize the Matrix/Field with respect to some lattice indexes.
+   !         The Fermionic simmetrization is done only on the local attributes
+   !         The Bosonic simmetrization is done only on the physical elements
+   !---------------------------------------------------------------------------!
+   subroutine symmetrize_Matrix(Mat,Eqv)
+      !
+      use parameters
+      implicit none
+      !
+      complex(8),intent(inout)              :: Mat(:,:,:)
+      type(Equivalent)                      :: Eqv
+      !
+      real(8)                               :: dimdiag,dimoffdiag
+      complex(8)                            :: Delem,Uelem,Lelem
+      integer                               :: iset,jset,iorb,jorb,ispin
+      integer                               :: i,j
+      !
+      !
+      if(verbose)write(*,"(A)") "---- symmetrize_Matrix"
+      !
+      !
+      ! Check on the input Fields
+      if(size(Mat,dim=1).ne.size(Mat,dim=2)) stop "symmetrize_Matrix: Matix not square."
+      !
+      if(Eqv%para)then
+         Mat(:,:,1) = (Mat(:,:,1) + Mat(:,:,2))/2d0
+         Mat(:,:,2) = Mat(:,:,1)
+      endif
+      !
+      if(Eqv%Nset.gt.0)then
+         !
+         do ispin=1,Nspin
+            !
+            !symmetrization of the diagonal sets
+            do iset=1,Eqv%Nset
+               !
+               dimdiag = Eqv%SetNorb(iset)
+               dimoffdiag = Eqv%SetNorb(iset)*(Eqv%SetNorb(iset)-1)/2
+               !
+               if(dimdiag.eq.1)cycle
+               if(verbose)write(*,"(3(A,I4))") "     Diagonal set: ",iset," dimD: ",int(dimdiag)," dimOD: ",int(dimoffdiag)
+               !
+               !Average elements
+               Delem=czero;Lelem=czero;Uelem=czero
+               do iorb=1,Eqv%SetNorb(iset)
+                  do jorb=1,Eqv%SetNorb(iset)
+                     !
+                     i = Eqv%SetOrbs(iset,iorb)
+                     j = Eqv%SetOrbs(iset,jorb)
+                     if(verbose)write(*,"(A,2I4)")    "     Component: ",i,j
+                     !
+                     if(i.eq.j) Delem = Delem + Mat(i,j,ispin)/dimdiag
+                     if(i.gt.j) Lelem = Lelem + Mat(i,j,ispin)/dimoffdiag
+                     if(i.lt.j) Uelem = Uelem + Mat(i,j,ispin)/dimoffdiag
+                  enddo
+               enddo
+               !Re-insert elements
+               do iorb=1,Eqv%SetNorb(iset)
+                  do jorb=1,Eqv%SetNorb(iset)
+                     !
+                     i = Eqv%SetOrbs(iset,iorb)
+                     j = Eqv%SetOrbs(iset,jorb)
+                     !
+                     if(i.eq.j) Mat(i,j,ispin) = Delem
+                     if((i.gt.j).and.Eqv%Gfoffdiag) Mat(i,j,ispin) = Lelem
+                     if((i.lt.j).and.Eqv%Gfoffdiag) Mat(i,j,ispin) = Uelem
+                  enddo
+               enddo
+               !
+            enddo !iset
+            !
+            !symmetrization of the off-diagonal sets
+            if(Eqv%Gfoffdiag)then
+               do iset=1,Eqv%Nset
+                  do jset=1,Eqv%Nset
+                     !
+                     if(iset.eq.jset)cycle
+                     dimoffdiag = Eqv%SetNorb(iset)*Eqv%SetNorb(jset)
+                     !
+                     if(verbose)write(*,"(A,2I4,A,I4)") "     Off-diagonal set: ",iset,jset," dimOD: ",int(dimoffdiag)
+                     !
+                     !Average elements
+                     Lelem=czero;Uelem=czero
+                     do iorb=1,Eqv%SetNorb(iset)
+                        do jorb=1,Eqv%SetNorb(jset)
+                           !
+                           i = Eqv%SetOrbs(iset,iorb)
+                           j = Eqv%SetOrbs(jset,jorb)
+                           if(verbose)write(*,"(A,2I4)")    "     Component: ",i,j
+                           !
+                           if(iset.gt.jset) Lelem = Lelem + Mat(i,j,ispin)/dimoffdiag
+                           if(iset.lt.jset) Uelem = Uelem + Mat(i,j,ispin)/dimoffdiag
+                        enddo
+                     enddo
+                     !Re-insert elements
+                     do iorb=1,Eqv%SetNorb(iset)
+                        do jorb=1,Eqv%SetNorb(jset)
+                           !
+                           i = Eqv%SetOrbs(iset,iorb)
+                           j = Eqv%SetOrbs(jset,jorb)
+                           !
+                           if(iset.gt.jset) Mat(i,j,ispin) = Lelem
+                           if(iset.lt.jset) Mat(i,j,ispin) = Uelem
+                        enddo
+                     enddo
+                     !
+                  enddo
+               enddo
+            endif
+            !
+         enddo !ispin
+         !
+      endif
+      !
+   end subroutine symmetrize_Matrix
+   !
+   subroutine symmetrize_Fermionic(G,Eqv)
+      !
+      use parameters
+      implicit none
+      !
+      type(FermionicField),intent(inout)    :: G
+      type(Equivalent)                      :: Eqv
+      !
+      real(8)                               :: dimdiag,dimoffdiag
+      complex(8)                            :: Delem,Uelem,Lelem
+      integer                               :: iset,jset,iorb,jorb,ispin
+      integer                               :: i,j,ip
+      !
+      !
+      if(verbose)write(*,"(A)") "---- symmetrize_Fermionic"
+      !
+      !
+      ! Check on the input Fields
+      if(.not.G%status) stop "symmetrize_Fermionic: field not properly initialized."
+      !
+      if(Eqv%para)then
+         !
+         G%N_s(:,:,1) = (G%N_s(:,:,1) + G%N_s(:,:,2))/2d0
+         G%N_s(:,:,2) = G%N_s(:,:,1)
+         !
+         do ip=1,G%Npoints
+            G%ws(:,:,ip,1) = (G%ws(:,:,ip,1) + G%ws(:,:,ip,2))/2d0
+            G%ws(:,:,ip,2) = G%ws(:,:,ip,1)
+         enddo
+         !
+      endif
+      !
+      if(Eqv%Nset.gt.0)then
+         !
+         do ispin=1,Nspin
+            !
+            !symmetrization of the diagonal sets
+            do iset=1,Eqv%Nset
+               !
+               dimdiag = Eqv%SetNorb(iset)
+               dimoffdiag = Eqv%SetNorb(iset)*(Eqv%SetNorb(iset)-1)/2
+               !
+               if(dimdiag.eq.1)cycle
+               if(verbose)write(*,"(3(A,I4))") "     Diagonal set: ",iset," dimD: ",int(dimdiag)," dimOD: ",int(dimoffdiag)
+               !
+               !Average elements
+               Delem=czero;Lelem=czero;Uelem=czero
+               do iorb=1,Eqv%SetNorb(iset)
+                  do jorb=1,Eqv%SetNorb(iset)
+                     !
+                     i = Eqv%SetOrbs(iset,iorb)
+                     j = Eqv%SetOrbs(iset,jorb)
+                     if(verbose)write(*,"(A,2I4)")    "     Component: ",i,j
+                     !
+                     if(i.eq.j) Delem = Delem + G%N_s(i,j,ispin)/dimdiag
+                     if(i.gt.j) Lelem = Lelem + G%N_s(i,j,ispin)/dimoffdiag
+                     if(i.lt.j) Uelem = Uelem + G%N_s(i,j,ispin)/dimoffdiag
+                  enddo
+               enddo
+               !Re-insert elements
+               do iorb=1,Eqv%SetNorb(iset)
+                  do jorb=1,Eqv%SetNorb(iset)
+                     !
+                     i = Eqv%SetOrbs(iset,iorb)
+                     j = Eqv%SetOrbs(iset,jorb)
+                     !
+                     if(i.eq.j) G%N_s(i,j,ispin) = Delem
+                     if((i.gt.j).and.Eqv%Gfoffdiag) G%N_s(i,j,ispin) = Lelem
+                     if((i.lt.j).and.Eqv%Gfoffdiag) G%N_s(i,j,ispin) = Uelem
+                  enddo
+               enddo
+               !
+               do ip=1,G%Npoints
+                  !Average elements
+                  Delem=czero;Lelem=czero;Uelem=czero
+                  do iorb=1,Eqv%SetNorb(iset)
+                     do jorb=1,Eqv%SetNorb(iset)
+                        !
+                        i = Eqv%SetOrbs(iset,iorb)
+                        j = Eqv%SetOrbs(iset,jorb)
+                        !
+                        if(i.eq.j) Delem = Delem + G%ws(i,j,ip,ispin)/dimdiag
+                        if(i.gt.j) Lelem = Lelem + G%ws(i,j,ip,ispin)/dimoffdiag
+                        if(i.lt.j) Uelem = Uelem + G%ws(i,j,ip,ispin)/dimoffdiag
+                     enddo
+                  enddo
+                  !Re-insert elements
+                  do iorb=1,Eqv%SetNorb(iset)
+                     do jorb=1,Eqv%SetNorb(iset)
+                        !
+                        i = Eqv%SetOrbs(iset,iorb)
+                        j = Eqv%SetOrbs(iset,jorb)
+                        !
+                        if(i.eq.j) G%ws(i,j,ip,ispin) = Delem
+                        if((i.gt.j).and.Eqv%Gfoffdiag) G%ws(i,j,ip,ispin) = Lelem
+                        if((i.lt.j).and.Eqv%Gfoffdiag) G%ws(i,j,ip,ispin) = Uelem
+                     enddo
+                  enddo
+               enddo! ip
+               !
+            enddo !iset
+            !
+            !symmetrization of the off-diagonal sets
+            if(Eqv%Gfoffdiag)then
+               do iset=1,Eqv%Nset
+                  do jset=1,Eqv%Nset
+                     !
+                     if(iset.eq.jset)cycle
+                     dimoffdiag = Eqv%SetNorb(iset)*Eqv%SetNorb(jset)
+                     !
+                     if(verbose)write(*,"(A,2I4,A,I4)") "     Off-diagonal set: ",iset,jset," dimOD: ",int(dimoffdiag)
+                     !
+                     !Average elements
+                     Lelem=czero;Uelem=czero
+                     do iorb=1,Eqv%SetNorb(iset)
+                        do jorb=1,Eqv%SetNorb(jset)
+                           !
+                           i = Eqv%SetOrbs(iset,iorb)
+                           j = Eqv%SetOrbs(jset,jorb)
+                           !
+                           if(iset.gt.jset) Lelem = Lelem + G%N_s(i,j,ispin)/dimoffdiag
+                           if(iset.lt.jset) Uelem = Uelem + G%N_s(i,j,ispin)/dimoffdiag
+                        enddo
+                     enddo
+                     !Re-insert elements
+                     do iorb=1,Eqv%SetNorb(iset)
+                        do jorb=1,Eqv%SetNorb(jset)
+                           !
+                           i = Eqv%SetOrbs(iset,iorb)
+                           j = Eqv%SetOrbs(jset,jorb)
+                           if(verbose)write(*,"(A,2I4)")    "     Component: ",i,j
+                           !
+                           if(iset.gt.jset) G%N_s(i,j,ispin) = Lelem
+                           if(iset.lt.jset) G%N_s(i,j,ispin) = Uelem
+                        enddo
+                     enddo
+                     !
+                     do ip=1,G%Npoints
+                        !Average elements
+                        Lelem=czero;Uelem=czero
+                        do iorb=1,Eqv%SetNorb(iset)
+                           do jorb=1,Eqv%SetNorb(jset)
+                              !
+                              i = Eqv%SetOrbs(iset,iorb)
+                              j = Eqv%SetOrbs(jset,jorb)
+                              !
+                              if(iset.gt.jset) Lelem = Lelem + G%ws(i,j,ip,ispin)/dimoffdiag
+                              if(iset.lt.jset) Uelem = Uelem + G%ws(i,j,ip,ispin)/dimoffdiag
+                           enddo
+                        enddo
+                        !Re-insert elements
+                        do iorb=1,Eqv%SetNorb(iset)
+                           do jorb=1,Eqv%SetNorb(jset)
+                              !
+                              i = Eqv%SetOrbs(iset,iorb)
+                              j = Eqv%SetOrbs(jset,jorb)
+                              !
+                              if(iset.gt.jset) G%ws(i,j,ip,ispin) = Lelem
+                              if(iset.lt.jset) G%ws(i,j,ip,ispin) = Uelem
+                           enddo
+                        enddo
+                     enddo !ip
+                     !
+                  enddo
+               enddo
+            endif
+            !
+         enddo !ispin
+         !
+      endif
+      !
+   end subroutine symmetrize_Fermionic
+   !
+   !
+   subroutine symmetrize_Bosonic(W,Eqv)
+      !
+      use parameters
+      implicit none
+      !
+      type(BosonicField),intent(inout)      :: W
+      type(Equivalent)                      :: Eqv
+      !
+      real(8)                               :: dimdiag,dimoffdiag
+      complex(8)                            :: Waaaa,Waabb
+      complex(8)                            :: Wabab,Wabba
+      integer                               :: iset,jset,ip,Norb
+      integer                               :: iorb,jorb,i,j,ib1_aa
+      integer                               :: ib1_ab,ib2_ab,ib1_sf,ib2_sf
+      integer                               :: ib1_pa,ib2_pa,ib1_pb,ib2_pb
+      !
+      !
+      if(verbose)write(*,"(A)") "---- symmetrize_Bosonic"
+      !
+      !
+      ! Check on the input Fields
+      if(.not.W%status) stop "symmetrize_Bosonic: field not properly initialized."
+      Norb = sqrt(dble(W%Nbp))
+      !
+      if(Eqv%Nset.gt.0)then
+         !
+         !symmetrization of the diagonal sets
+         do iset=1,Eqv%Nset
+            !
+            dimdiag  = Eqv%SetNorb(iset)
+            dimoffdiag = Eqv%SetNorb(iset)*(Eqv%SetNorb(iset)-1)
+            !
+            if(verbose)write(*,"(3(A,I4))") "     Diagonal set: ",iset," dimD: ",int(dimdiag)," dimOD: ",int(dimoffdiag)
+            !
+            !Average elements
+            Waaaa=czero;Waabb=czero;Wabba=czero;Wabab=czero
+            do iorb=1,Eqv%SetNorb(iset)
+               i = Eqv%SetOrbs(iset,iorb)
+               !
+               ib1_aa = i + Norb*(i-1)
+               if(verbose)write(*,"(2(A,2I3),2(A,I4),A)")    "     Component: (",i,i,"),(",i,i,") = [",ib1_aa,",",ib1_aa,"]"
+               Waaaa = Waaaa + W%bare_local(ib1_aa,ib1_aa) / dimdiag
+               !
+               do jorb=1+iorb,Eqv%SetNorb(iset)
+                  j = Eqv%SetOrbs(iset,jorb)
+                  !
+                  ib1_ab = i + Norb*(i-1)
+                  ib2_ab = j + Norb*(j-1)
+                  if(verbose)write(*,"(2(A,2I3),2(A,I4),A)")    "     Component: (",i,i,"),(",j,j,") = [",ib1_ab,",",ib2_ab,"]"
+                  !
+                  ib1_sf = i + Norb*(j-1)
+                  ib2_sf = j + Norb*(i-1)
+                  if(verbose)write(*,"(2(A,2I3),2(A,I4),A)")    "     Component: (",i,j,"),(",j,i,") = [",ib1_sf,",",ib2_sf,"]"
+                  !
+                  ib1_pa = i + Norb*(j-1)
+                  ib2_pa = i + Norb*(j-1)
+                  if(verbose)write(*,"(2(A,2I3),2(A,I4),A)")    "     Component: (",i,j,"),(",i,j,") = [",ib1_pa,",",ib2_pa,"]"
+                  ib1_pb = j + Norb*(i-1)
+                  ib2_pb = j + Norb*(i-1)
+                  if(verbose)write(*,"(2(A,2I3),2(A,I4),A)")    "     Component: (",j,i,"),(",j,i,") = [",ib1_pb,",",ib2_pb,"]"
+                  !
+                  if(allocated(W%bare_local))then
+                     Waabb = Waabb + (W%bare_local(ib1_ab,ib2_ab)+W%bare_local(ib2_ab,ib1_ab)) / dimoffdiag
+                     Wabba = Wabba + (W%bare_local(ib1_sf,ib2_sf)+W%bare_local(ib2_sf,ib1_sf)) / dimoffdiag
+                     Wabab = Wabab + (W%bare_local(ib1_pa,ib2_pa)+W%bare_local(ib1_pb,ib2_pb)) / dimoffdiag
+                  endif
+                  !
+               enddo
+            enddo
+            !Re-insert elements
+            do iorb=1,Eqv%SetNorb(iset)
+               i = Eqv%SetOrbs(iset,iorb)
+               !
+               ib1_aa = i + Norb*(i-1)
+               Waaaa = Waaaa + W%bare_local(ib1_aa,ib1_aa) / dimdiag
+               !
+               do jorb=1+iorb,Eqv%SetNorb(iset)
+                  j = Eqv%SetOrbs(iset,jorb)
+                  !
+                  ib1_ab = i + Norb*(i-1)
+                  ib2_ab = j + Norb*(j-1)
+                  !
+                  ib1_sf = i + Norb*(j-1)
+                  ib2_sf = j + Norb*(i-1)
+                  !
+                  ib1_pa = i + Norb*(j-1)
+                  ib2_pa = i + Norb*(j-1)
+                  ib1_pb = j + Norb*(i-1)
+                  ib2_pb = j + Norb*(i-1)
+                  !
+                  if(allocated(W%bare_local))then
+                     W%bare_local(ib1_ab,ib2_ab) = Waabb
+                     W%bare_local(ib2_ab,ib1_ab) = Waabb
+                     W%bare_local(ib1_sf,ib2_sf) = Wabba
+                     W%bare_local(ib2_sf,ib1_sf) = Wabba
+                     W%bare_local(ib1_pa,ib2_pa) = Wabab
+                     W%bare_local(ib1_pb,ib2_pb) = Wabab
+                  endif
+                  !
+               enddo
+            enddo
+            !
+            do ip=1,W%Npoints
+               !Average elements
+               Waaaa=czero;Waabb=czero;Wabba=czero;Wabab=czero
+               do iorb=1,Eqv%SetNorb(iset)
+                  i = Eqv%SetOrbs(iset,iorb)
+                  !
+                  ib1_aa = i + Norb*(i-1)
+                  Waaaa = Waaaa + W%screened_local(ib1_aa,ib1_aa,ip) / dimdiag
+                  !
+                  do jorb=1+iorb,Eqv%SetNorb(iset)
+                     j = Eqv%SetOrbs(iset,jorb)
+                     !
+                     ib1_ab = i + Norb*(i-1)
+                     ib2_ab = j + Norb*(j-1)
+                     !
+                     ib1_sf = i + Norb*(j-1)
+                     ib2_sf = j + Norb*(i-1)
+                     !
+                     ib1_pa = i + Norb*(j-1)
+                     ib2_pa = i + Norb*(j-1)
+                     ib1_pb = j + Norb*(i-1)
+                     ib2_pb = j + Norb*(i-1)
+                     !
+                     Waabb = Waabb + (W%screened_local(ib1_ab,ib2_ab,ip)+W%screened_local(ib2_ab,ib1_ab,ip)) / dimoffdiag
+                     Wabba = Wabba + (W%screened_local(ib1_sf,ib2_sf,ip)+W%screened_local(ib2_sf,ib1_sf,ip)) / dimoffdiag
+                     Wabab = Wabab + (W%screened_local(ib1_pa,ib2_pa,ip)+W%screened_local(ib1_pb,ib2_pb,ip)) / dimoffdiag
+                     !
+                  enddo
+               enddo
+               !Re-insert elements
+               do iorb=1,Eqv%SetNorb(iset)
+                  i = Eqv%SetOrbs(iset,iorb)
+                  !
+                  ib1_aa = i + Norb*(i-1)
+                  Waaaa = Waaaa + W%screened_local(ib1_aa,ib1_aa,ip) / dimdiag
+                  !
+                  do jorb=1+iorb,Eqv%SetNorb(iset)
+                     j = Eqv%SetOrbs(iset,jorb)
+                     !
+                     ib1_ab = i + Norb*(i-1)
+                     ib2_ab = j + Norb*(j-1)
+                     !
+                     ib1_sf = i + Norb*(j-1)
+                     ib2_sf = j + Norb*(i-1)
+                     !
+                     ib1_pa = i + Norb*(j-1)
+                     ib2_pa = i + Norb*(j-1)
+                     ib1_pb = j + Norb*(i-1)
+                     ib2_pb = j + Norb*(i-1)
+                     !
+                     W%screened_local(ib1_ab,ib2_ab,ip) = Waabb
+                     W%screened_local(ib2_ab,ib1_ab,ip) = Waabb
+                     W%screened_local(ib1_sf,ib2_sf,ip) = Wabba
+                     W%screened_local(ib2_sf,ib1_sf,ip) = Wabba
+                     W%screened_local(ib1_pa,ib2_pa,ip) = Wabab
+                     W%screened_local(ib1_pb,ib2_pb,ip) = Wabab
+                     !
+                  enddo
+               enddo
+            enddo !ip
+            !
+         enddo
+         !
+         !symmetrization of the off-diagonal sets
+         do iset=1,Eqv%Nset
+            do jset=1,Eqv%Nset
+               !
+               if(iset.eq.jset)cycle
+               dimoffdiag = Eqv%SetNorb(iset)*Eqv%SetNorb(jset)*2
+               !
+               if(verbose)write(*,"(A,2I4,A,I4)") "     Off-diagonal set: ",iset,jset," dimOD: ",int(dimoffdiag)
+               !
+               !Average elements
+               Waabb=czero;Wabba=czero;Wabab=czero
+               do iorb=1,Eqv%SetNorb(iset)
+                  do jorb=1,Eqv%SetNorb(jset)
+                     !
+                     i = Eqv%SetOrbs(iset,iorb) ![1,2,3],[4,5]
+                     j = Eqv%SetOrbs(jset,jorb) ![4,5]  ,[1,2,3]
+                     !
+                     ib1_ab = i + Norb*(i-1)
+                     ib2_ab = j + Norb*(j-1)
+                     if(verbose)write(*,"(2(A,2I3),2(A,I4),A)")    "     Component: (",i,i,"),(",j,j,") = [",ib1_ab,",",ib2_ab,"]"
+                     !
+                     ib1_sf = i + Norb*(j-1)
+                     ib2_sf = j + Norb*(i-1)
+                     if(verbose)write(*,"(2(A,2I3),2(A,I4),A)")    "     Component: (",i,j,"),(",j,i,") = [",ib1_sf,",",ib2_sf,"]"
+                     !
+                     ib1_pa = i + Norb*(j-1)
+                     ib2_pa = i + Norb*(j-1)
+                     if(verbose)write(*,"(2(A,2I3),2(A,I4),A)")    "     Component: (",i,j,"),(",i,j,") = [",ib1_pa,",",ib2_pa,"]"
+                     !
+                     if(allocated(W%bare_local))then
+                        Waabb = Waabb + W%bare_local(ib1_ab,ib2_ab) / dimoffdiag
+                        Wabba = Wabba + W%bare_local(ib1_sf,ib2_sf) / dimoffdiag
+                        Wabab = Wabab + W%bare_local(ib1_pa,ib2_pa) / dimoffdiag
+                     endif
+                     !
+                  enddo
+               enddo
+               !Re-insert elements
+               do iorb=1,Eqv%SetNorb(iset)
+                  do jorb=1,Eqv%SetNorb(jset)
+                     !
+                     i = Eqv%SetOrbs(iset,iorb) ![1,2,3],[4,5]
+                     j = Eqv%SetOrbs(jset,jorb) ![4,5]  ,[1,2,3]
+                     !
+                     ib1_ab = i + Norb*(i-1)
+                     ib2_ab = j + Norb*(j-1)
+                     !
+                     ib1_sf = i + Norb*(j-1)
+                     ib2_sf = j + Norb*(i-1)
+                     !
+                     ib1_pa = i + Norb*(j-1)
+                     ib2_pa = i + Norb*(j-1)
+                     !
+                     if(allocated(W%bare_local))then
+                        W%bare_local(ib1_ab,ib2_ab) = Waabb
+                        W%bare_local(ib1_sf,ib2_sf) = Wabba
+                        W%bare_local(ib1_pa,ib2_pa) = Wabba
+                     endif
+                     !
+                  enddo
+               enddo
+               !
+               !
+               do ip=1,W%Npoints
+                  !Average elements
+                  Waabb=czero;Wabba=czero;Wabab=czero
+                  do iorb=1,Eqv%SetNorb(iset)
+                     do jorb=1,Eqv%SetNorb(jset)
+                        !
+                        i = Eqv%SetOrbs(iset,iorb)
+                        j = Eqv%SetOrbs(jset,jorb)
+                        !
+                        ib1_ab = i + Norb*(i-1)
+                        ib2_ab = j + Norb*(j-1)
+                        !
+                        ib1_sf = i + Norb*(j-1)
+                        ib2_sf = j + Norb*(i-1)
+                        !
+                        ib1_pa = i + Norb*(j-1)
+                        ib2_pa = i + Norb*(j-1)
+                        !
+                        Waabb = Waabb + W%screened_local(ib1_ab,ib2_ab,ip) / dimoffdiag
+                        Wabba = Wabba + W%screened_local(ib1_sf,ib2_sf,ip) / dimoffdiag
+                        Wabab = Wabab + W%screened_local(ib1_pa,ib2_pa,ip) / dimoffdiag
+                        !
+                     enddo
+                  enddo
+                  !Re-insert elements
+                  do iorb=1,Eqv%SetNorb(iset)
+                     do jorb=1,Eqv%SetNorb(jset)
+                        !
+                        i = Eqv%SetOrbs(iset,iorb)
+                        j = Eqv%SetOrbs(jset,jorb)
+                        !
+                        ib1_ab = i + Norb*(i-1)
+                        ib2_ab = j + Norb*(j-1)
+                        !
+                        ib1_sf = i + Norb*(j-1)
+                        ib2_sf = j + Norb*(i-1)
+                        !
+                        ib1_pa = i + Norb*(j-1)
+                        ib2_pa = i + Norb*(j-1)
+                        !
+                        W%screened_local(ib1_ab,ib2_ab,ip) = Waabb
+                        W%screened_local(ib1_sf,ib2_sf,ip) = Wabba
+                        W%screened_local(ib1_pa,ib2_pa,ip) = Wabab
+                        !
+                     enddo
+                  enddo
+               enddo !ip
+               !
+            enddo
+         enddo
+         !
+      endif
+      !
+   end subroutine symmetrize_Bosonic
+
+
+
+
+   !---------------------------------------------------------------------------!
    !PURPOSE: Join the C and X component of the self-energy
    !TEST ON: 27-10-2020
    !---------------------------------------------------------------------------!
@@ -900,6 +1491,7 @@ contains
       type(FermionicField),intent(inout)    :: SigmaFull
       type(FermionicField),intent(in)       :: Sigma_C
       type(FermionicField),intent(in)       :: Sigma_X
+      !
       real(8)                               :: Beta
       integer                               :: Nkpt,Norb,Nmats
       integer                               :: iw,ik,ispin
@@ -990,10 +1582,12 @@ contains
    !TEST ON: 27-10-2020
    !---------------------------------------------------------------------------!
    subroutine MergeSelfEnergy(SigmaGW,SigmaGW_DC,SigmaImp,coeff,orbs,DC_type)
+      !
       use parameters
       use utils_misc
       use linalg, only : rotate
       implicit none
+      !
       type(FermionicField),intent(inout)    :: SigmaGW
       type(FermionicField),intent(in)       :: SigmaGW_DC
       type(FermionicField),intent(in)       :: SigmaImp
@@ -1098,9 +1692,11 @@ contains
    !TEST ON: 23-10-2020
    !---------------------------------------------------------------------------!
    subroutine MergePolarization(PiGW,PiImp,coeff,orbs)
+      !
       use parameters
       use linalg, only : rotate
       implicit none
+      !
       type(BosonicField),intent(inout)      :: PiGW
       type(BosonicField),intent(in)         :: PiImp
       real(8),intent(in)                    :: coeff
@@ -1189,10 +1785,6 @@ contains
       call BosonicKsum(PiGW)
       !
    end subroutine MergePolarization
-
-
-
-
 
 
 end module utils_fields

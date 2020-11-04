@@ -247,6 +247,7 @@ contains
          call parse_input_variable(EqvGWndx%SetOrbs(iset,1:EqvGWndx%SetNorb(iset)),"EQV_ORBS_"//str(iset),InputFile,default=tmpOrbs,comment="Lattice orbital indexes of equivalent set number "//str(iset))
          deallocate(tmpOrbs)
       enddo
+      EqvGWndx%Gfoffdiag=.not.ExpandImpurity
       !
       !Imaginary time and frequency meshes
       call parse_input_variable(Beta,"BETA",InputFile,default=10.d0,comment="Inverse temperature in 1/eV.")

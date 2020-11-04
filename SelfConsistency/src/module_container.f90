@@ -67,6 +67,7 @@ module module_container
    DeallocateBosonicField                   ,&
    clear_attributes                         ,&
    loc2imp,imp2loc                          ,&
+   symmetrize                               ,&
    MergeFields                              ,&
    join_SigmaCX
 

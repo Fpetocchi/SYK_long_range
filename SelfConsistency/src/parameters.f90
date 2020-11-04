@@ -119,6 +119,7 @@ module parameters
       integer                               :: Nset=0
       integer,allocatable                   :: SetNorb(:)
       integer,allocatable                   :: SetOrbs(:,:)
+      logical                               :: Gfoffdiag=.true.
    end type Equivalent
 
 
