@@ -110,4 +110,16 @@ module parameters
    end type musearch
 
 
+   !---------------------------------------------------------------------------!
+   !PURPOSE: container for symmetrization variables
+   !---------------------------------------------------------------------------!
+   type Equivalent
+      logical                               :: para=.true.
+      real(8)                               :: hseed=0d0
+      integer                               :: Nset=0
+      integer,allocatable                   :: SetNorb(:)
+      integer,allocatable                   :: SetOrbs(:,:)
+   end type Equivalent
+
+
 end module parameters

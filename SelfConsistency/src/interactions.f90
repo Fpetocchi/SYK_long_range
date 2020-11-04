@@ -48,6 +48,7 @@ module interactions
    public :: build_Uscr
    public :: build_Uret
    public :: calc_QMCinteractions
+   public :: calc_curlyU
    !public :: rescale_interaction
 
    !===========================================================================!
@@ -73,7 +74,7 @@ contains
       type(BosonicField),intent(in)         :: Pmats
       type(Lattice),intent(in)              :: Lttc
       !
-      complex(8),allocatable                :: den(:,:)
+      complex(8),allocatable                :: invW(:,:)
       complex(8),allocatable                :: den_smallk(:,:,:,:)
       complex(8),allocatable                :: den_smallk_avrg(:,:,:)
       real(8)                               :: Beta
@@ -108,7 +109,7 @@ contains
       !
       allocate(den_smallk(Nbp,Nbp,Nmats,12))
       allocate(den_smallk_avrg(Nbp,Nbp,Nmats))
-      allocate(den(Nbp,Nbp))
+      allocate(invW(Nbp,Nbp));invW=czero
       call clear_attributes(Wmats)
       !
       ! Assuming that the Polarization vanishes at iw__>inf
@@ -116,7 +117,7 @@ contains
       !
       !$OMP PARALLEL DEFAULT(NONE),&
       !$OMP SHARED(Nbp,Nkpt,Nmats,Pmats,Umats,Wmats,den_smallk,Lttc),&
-      !$OMP PRIVATE(iq,iw,den,ismall)
+      !$OMP PRIVATE(iq,iw,invW,ismall)
       !$OMP DO
       do iq=1,Nkpt
          !
@@ -126,24 +127,23 @@ contains
          do iw=1,Nmats
             !
             ! [ 1 - U*Pi ]
-            den=dcmplx(0d0,0d0)
-            den = zeye(Nbp) - matmul(Umats%screened(:,:,iw,iq),Pmats%screened(:,:,iw,iq))
+            invW = zeye(Nbp) - matmul(Umats%screened(:,:,iw,iq),Pmats%screened(:,:,iw,iq))
             !
             ! [ 1 - U*Pi ]^-1
-            call inv(den)
+            call inv(invW)
             !
             ! [ 1 - U*Pi ]^-1 * U
-            Wmats%screened(:,:,iw,iq) = matmul(den,Umats%screened(:,:,iw,iq))
+            Wmats%screened(:,:,iw,iq) = matmul(invW,Umats%screened(:,:,iw,iq))
             !
             do ismall=1,12
-               if (Lttc%small_ik(ismall,1).eq.iq) den_smallk(:,:,iw,ismall) = den
+               if (Lttc%small_ik(ismall,1).eq.iq) den_smallk(:,:,iw,ismall) = invW
             enddo
             !
          enddo
       enddo
       !$OMP END DO
       !$OMP END PARALLEL
-      deallocate(den)
+      deallocate(invW)
       write(*,"(A,I)") "Gamma point is at kpoint list index: ",Umats%iq_gamma
       !
       !
@@ -201,7 +201,7 @@ contains
       type(BosonicField),intent(in)         :: Pmats
       type(Lattice),intent(in)              :: Lttc
       !
-      complex(8),allocatable                :: den(:,:)
+      complex(8),allocatable                :: invW(:,:)
       complex(8),allocatable                :: den_smallk(:,:,:,:)
       complex(8),allocatable                :: den_smallk_avrg(:,:,:)
       real(8)                               :: Beta
@@ -235,7 +235,7 @@ contains
       !
       allocate(den_smallk(Nbp,Nbp,Nmats,12))
       allocate(den_smallk_avrg(Nbp,Nbp,Nmats))
-      allocate(den(Nbp,Nbp))
+      allocate(invW(Nbp,Nbp));invW=czero
       call clear_attributes(Wmats)
       !
       ! Assuming that the Polarization vanishes at iw__>inf
@@ -243,7 +243,7 @@ contains
       !
       !$OMP PARALLEL DEFAULT(NONE),&
       !$OMP SHARED(Nbp,Nkpt,Nmats,Pmats,Umats,Wmats,den_smallk,Lttc),&
-      !$OMP PRIVATE(iq,iw,den,ismall)
+      !$OMP PRIVATE(iq,iw,invW,ismall)
       !$OMP DO
       do iq=1,Nkpt
          !
@@ -253,24 +253,23 @@ contains
          do iw=1,Nmats
             !
             ! [ 1 - U*Pi ]
-            den=dcmplx(0d0,0d0)
-            den = zeye(Nbp) - matmul(Umats%screened(:,:,iw,iq),Pmats%screened_local(:,:,iw))
+            invW = zeye(Nbp) - matmul(Umats%screened(:,:,iw,iq),Pmats%screened_local(:,:,iw))
             !
             ! [ 1 - U*Pi ]^-1
-            call inv(den)
+            call inv(invW)
             !
             ! [ 1 - U*Pi ]^-1 * U
-            Wmats%screened_local(:,:,iw) = Wmats%screened_local(:,:,iw) + matmul(den,Umats%screened(:,:,iw,iq))/Nkpt
+            Wmats%screened_local(:,:,iw) = Wmats%screened_local(:,:,iw) + matmul(invW,Umats%screened(:,:,iw,iq))/Nkpt
             !
             do ismall=1,12
-               if (Lttc%small_ik(ismall,1).eq.iq) den_smallk(:,:,iw,ismall) = den
+               if (Lttc%small_ik(ismall,1).eq.iq) den_smallk(:,:,iw,ismall) = invW
             enddo
             !
          enddo
       enddo
       !$OMP END DO
       !$OMP END PARALLEL
-      deallocate(den)
+      deallocate(invW)
       write(*,"(A,I)") "Gamma point is at kpoint list index: ",Umats%iq_gamma
       !
       !
@@ -324,7 +323,7 @@ contains
       type(BosonicField),intent(in)         :: Pmats
       type(Lattice),intent(in)              :: Lttc
       !
-      complex(8),allocatable                :: den(:,:)
+      complex(8),allocatable                :: invW(:,:)
       real(8)                               :: Beta
       integer                               :: Nbp,Nkpt,Nmats
       integer                               :: iq,iw
@@ -353,12 +352,12 @@ contains
       if(all([Umats%Npoints-Nmats,Pmats%Npoints-Nmats].ne.[0,0]))  write(*,"(A)") "Warning: Either Umats and/or Pmats have different number of Matsubara points. Computing up to the smaller."
       Nmats = minval([Chi%Npoints,Umats%Npoints,Pmats%Npoints])
       !
-      allocate(den(Nbp,Nbp))
+      allocate(invW(Nbp,Nbp));invW=czero
       call clear_attributes(Chi)
       Chi%bare = Umats%bare
       !$OMP PARALLEL DEFAULT(NONE),&
       !$OMP SHARED(Nbp,Nkpt,Nmats,Pmats,Umats,Chi,Lttc),&
-      !$OMP PRIVATE(iq,iw,den)
+      !$OMP PRIVATE(iq,iw,invW)
       !$OMP DO
       do iq=1,Nkpt
          !
@@ -368,19 +367,19 @@ contains
          do iw=1,Nmats
             !
             ! [ 1 - U*Pi ]
-            den=dcmplx(0d0,0d0)
-            den = zeye(Nbp) - matmul(Umats%screened(:,:,iw,iq),Pmats%screened(:,:,iw,iq))
+            invW = zeye(Nbp) - matmul(Umats%screened(:,:,iw,iq),Pmats%screened(:,:,iw,iq))
             !
             ! [ 1 - U*Pi ]^-1
-            call inv(den)
+            call inv(invW)
             !
             ! [ 1 - U*Pi ]^-1 * Pi
-            Chi%screened(:,:,iw,iq) = matmul(den,Pmats%screened(:,:,iw,iq))
+            Chi%screened(:,:,iw,iq) = matmul(invW,Pmats%screened(:,:,iw,iq))
             !
          enddo
       enddo
       !$OMP END DO
       !$OMP END PARALLEL
+      deallocate(invW)
       !
       call BosonicKsum(Chi)
       !
@@ -403,7 +402,7 @@ contains
       type(BosonicField),intent(in)         :: Pmats
       type(Lattice),intent(in)              :: Lttc
       !
-      complex(8),allocatable                :: den(:,:)
+      complex(8),allocatable                :: invW(:,:)
       real(8)                               :: Beta
       integer                               :: Nbp,Nkpt,Nmats
       integer                               :: iq,iw
@@ -431,12 +430,12 @@ contains
       if(all([Umats%Npoints-Nmats,Pmats%Npoints-Nmats].ne.[0,0]))  write(*,"(A)") "Warning: Either Umats and/or Pmats have different number of Matsubara points. Computing up to the smaller."
       Nmats = minval([Chi%Npoints,Umats%Npoints,Pmats%Npoints])
       !
-      allocate(den(Nbp,Nbp))
+      allocate(invW(Nbp,Nbp));invW=czero
       call clear_attributes(Chi)
       Chi%bare_local = Umats%bare_local
       !$OMP PARALLEL DEFAULT(NONE),&
       !$OMP SHARED(Nbp,Nkpt,Nmats,Pmats,Umats,Chi,Lttc),&
-      !$OMP PRIVATE(iq,iw,den)
+      !$OMP PRIVATE(iq,iw,invW)
       !$OMP DO
       do iq=1,Nkpt
          !
@@ -446,19 +445,19 @@ contains
          do iw=1,Nmats
             !
             ! [ 1 - U*Pi ]
-            den=dcmplx(0d0,0d0)
-            den = zeye(Nbp) - matmul(Umats%screened(:,:,iw,iq),Pmats%screened_local(:,:,iw))
+            invW = zeye(Nbp) - matmul(Umats%screened(:,:,iw,iq),Pmats%screened_local(:,:,iw))
             !
             ! [ 1 - U*Pi ]^-1
-            call inv(den)
+            call inv(invW)
             !
             ! [ 1 - U*Pi ]^-1 * Pi
-            Chi%screened_local(:,:,iw) = Chi%screened_local(:,:,iw) + matmul(den,Pmats%screened_local(:,:,iw))/Nkpt
+            Chi%screened_local(:,:,iw) = Chi%screened_local(:,:,iw) + matmul(invW,Pmats%screened_local(:,:,iw))/Nkpt
             !
          enddo
       enddo
       !$OMP END DO
       !$OMP END PARALLEL
+      deallocate(invW)
       !
    end subroutine calc_chi_edmft
 
@@ -1561,8 +1560,9 @@ contains
       Norb = int(sqrt(dble(Nbp)))
       !
       call assert_shape(Uinst,[Norb*Nspin,Norb*Nspin],"calc_QMCinteractions","Uinst")
+      Uinst=0d0
       if(present(Kfunct))then
-         Kfunct=czero
+         Kfunct=0d0
          call assert_shape(Kfunct,[Norb*Nspin,Norb*Nspin,NtauB],"calc_QMCinteractions","Kfunct")
          allocate(Kaux(Norb*Nspin,Norb*Nspin,Umats%Npoints));Kaux=czero
          allocate(tau(NtauB));tau=0d0
@@ -1643,12 +1643,77 @@ contains
          deallocate(Kaux,tau,wmats)
          !
          do itau=1,NtauB
-            call check_Symmetry(Kfunct(:,:,itau),eps,hardstop=.true.)
+            call check_Symmetry(Kfunct(:,:,itau),eps,hardstop=.true.,name="Kfunc")
          enddo
          !
       endif
       !
    end subroutine calc_QMCinteractions
+
+
+   !---------------------------------------------------------------------------!
+   !PURPOSE: Computes the local effective interaction
+   !TEST ON:
+   !---------------------------------------------------------------------------!
+   subroutine calc_curlyU(curlyU,Wimp,Pimp)
+      !
+      use parameters
+      use utils_fields
+      use linalg, only : zeye, inv
+      implicit none
+      !
+      type(BosonicField),intent(inout)      :: curlyU
+      type(BosonicField),intent(in)         :: Wimp
+      type(BosonicField),intent(in)         :: Pimp
+      !
+      complex(8),allocatable                :: invW(:,:)
+      real(8)                               :: Beta
+      integer                               :: Nbp,Nmats
+      integer                               :: iw
+      !
+      !
+      if(verbose)write(*,"(A)") "---- calc_curlyU"
+      !
+      !
+      ! Check on the input Fields
+      if(.not.curlyU%status) stop "curlyU not properly initialized."
+      if(.not.Wimp%status) stop "Wimp not properly initialized."
+      if(.not.Pimp%status) stop "Pimp not properly initialized."
+      if(curlyU%Nkpt.ne.0) stop "curlyU k dependent attributes are supposed to be unallocated."
+      if(Wimp%Nkpt.ne.0) stop "Wimp k dependent attributes are supposed to be unallocated."
+      if(Pimp%Nkpt.ne.0) stop "Pimp k dependent attributes are supposed to be unallocated."
+      !
+      Nbp = curlyU%Nbp
+      Beta = curlyU%Beta
+      Nmats = curlyU%Npoints
+      !
+      if(all([Wimp%Nbp-Nbp,Pimp%Nbp-Nbp].ne.[0,0])) stop "Either Wimp and/or Pimp have different orbital dimension with respect to curlyU."
+      if(all([Wimp%Beta-Beta,Pimp%Beta-Beta].ne.[0d0,0d0])) stop "Either Wimp and/or Pimp have different Beta with respect to curlyU."
+      if(all([Wimp%Npoints-Nmats,Pimp%Npoints-Nmats].ne.[0,0]))   stop "Either Wimp and/or Pimp have different number of Matsubara points with respect to curlyU."
+      !
+      call clear_attributes(curlyU)
+      !
+      curlyU%bare_local = Wimp%bare_local
+      !
+      allocate(invW(Nbp,Nbp));invW=czero
+      !$OMP PARALLEL DEFAULT(NONE),&
+      !$OMP SHARED(Nbp,Nmats,Wimp,Pimp,curlyU),&
+      !$OMP PRIVATE(iw,invW)
+      !$OMP DO
+      do iw=1,Nmats
+         !
+         invW = zeye(Nbp) + matmul(Pimp%screened_local(:,:,iw),Wimp%screened_local(:,:,iw))
+         !
+         call inv(invW)
+         !
+         curlyU%screened_local(:,:,iw) = matmul(Wimp%screened_local(:,:,iw),invW)
+         !
+      enddo
+      !$OMP END DO
+      !$OMP END PARALLEL
+      deallocate(invW)
+      !
+   end subroutine calc_curlyU
 
 
 end module interactions

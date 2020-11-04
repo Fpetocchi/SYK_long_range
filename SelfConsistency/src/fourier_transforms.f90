@@ -31,10 +31,12 @@ module fourier_transforms
    end interface Fitau2mats_vec
 
    interface Bmats2itau
-      module procedure Bmats2itau_Uw                                            !(beta,Uitau[Nbp,Nbp,Nmats],Umats[Nbp,Nbp,Ntau],asympt_corr,tau_uniform)
-      module procedure Bmats2itau_Uwk                                           !(beta,Uitau[Nbp,Nbp,Nmats,Nkpt],Umats[Nbp,Nbp,Ntau,Nkpt],asympt_corr,tau_uniform)
+      module procedure Bmats2itau_Uw_component                                  !(beta,Umats[Nmats],Uitau[Ntau],asympt_corr,tau_uniform)
+      module procedure Bmats2itau_Uw                                            !(beta,Umats[Nbp,Nbp,Nmats],Uitau[Nbp,Nbp,Ntau],asympt_corr,tau_uniform)
+      module procedure Bmats2itau_Uwk                                           !(beta,Umats[Nbp,Nbp,Nmats,Nkpt],Uitau[Nbp,Nbp,Ntau,Nkpt],asympt_corr,tau_uniform)
    end interface Bmats2itau
    interface Bitau2mats
+      module procedure Bitau2mats_Uw_component                                  !(beta,Uitau[Ntau],Umats[Nmats],asympt_corr,tau_uniform)
       module procedure Bitau2mats_Uw                                            !(beta,Uitau[Nbp,Nbp,Ntau],Umats[Nbp,Nbp,Nmats],tau_uniform)
       module procedure Bitau2mats_Uwk                                           !(beta,Uitau[Nbp,Nbp,Ntau,Nkpt],Umats[Nbp,Nbp,Nmats,Nkpt],tau_uniform)
    end interface Bitau2mats
@@ -1020,6 +1022,65 @@ contains
    !PURPOSE: Perform the Fourier transform from mats to tau of a bosonic tensor
    !TEST ON: 27-10-2020(both)
    !---------------------------------------------------------------------------!
+   subroutine Bmats2itau_Uw_component(beta,Umats,Uitau,asympt_corr,tau_uniform)
+      !
+      use utils_misc
+      implicit none
+      !
+      real(8),intent(in)                    :: beta
+      complex(8),intent(in)                 :: Umats(:)
+      complex(8),intent(inout)              :: Uitau(:)
+      logical,intent(in),optional           :: asympt_corr
+      logical,intent(in),optional           :: tau_uniform
+      !
+      real(8),allocatable                   :: coswt(:,:)
+      real(8),allocatable                   :: tau(:)
+      integer                               :: iw,itau
+      integer                               :: Nmats,Ntau
+      logical                               :: asympt_corr_
+      logical                               :: tau_uniform_
+      !
+      !
+      if(verbose)write(*,"(A)") "---- Bmats2itau_Uw_component"
+      !
+      !
+      Nmats = size(Umats)
+      Ntau = size(Uitau)
+      !
+      asympt_corr_ = .true.
+      if(present(asympt_corr)) asympt_corr_ = asympt_corr
+      tau_uniform_ = .false.
+      if(present(tau_uniform)) tau_uniform_ = tau_uniform
+      !
+      allocate(tau(Ntau));tau=0d0
+      if(tau_uniform_)then
+         tau = linspace(0d0,beta,Ntau)
+      else
+         tau = denspace(beta,Ntau)
+      endif
+      !
+      allocate(coswt(Nmats,Ntau));coswt=0d0
+      call mats2itau_BosonicCoeff(tau,coswt,asympt_corr_)
+      deallocate(tau)
+      !
+      Uitau=czero
+      !$OMP PARALLEL DEFAULT(NONE),&
+      !$OMP SHARED(Ntau,Nmats,Umats,coswt,Uitau),&
+      !$OMP PRIVATE(itau,iw)
+      !$OMP DO
+      do itau=1,Ntau
+         do iw=1,Nmats
+            !
+            Uitau(itau) = Uitau(itau) + coswt(iw,itau)*Umats(iw)
+            !
+         enddo
+      enddo
+      !$OMP END DO
+      !$OMP END PARALLEL
+      deallocate(coswt)
+      !
+   end subroutine Bmats2itau_Uw_component
+   !
    subroutine Bmats2itau_Uw(beta,Umats,Uitau,asympt_corr,tau_uniform)
       !
       use utils_misc
@@ -1160,6 +1221,72 @@ contains
    !PURPOSE: Perform the Fourier transform from tau to mats of a bosonic tensor
    !TEST ON: 21-10-2020
    !---------------------------------------------------------------------------!
+   subroutine Bitau2mats_Uw_component(beta,Uitau,Umats,tau_uniform)
+      !
+      use utils_misc
+      implicit none
+      !
+      real(8),intent(in)                    :: beta
+      complex(8),intent(in)                 :: Uitau(:)
+      complex(8),intent(inout)              :: Umats(:)
+      logical,intent(in),optional           :: tau_uniform
+      !
+      real(8),allocatable                   :: wmats(:),tau(:)
+      real(8),allocatable                   :: wcos(:),wsin(:)
+      real(8)                               :: RealU,ImagU
+      integer                               :: iw,itau
+      integer                               :: Nmats,Ntau
+      logical                               :: tau_uniform_
+      !
+      !
+      if(verbose)write(*,"(A)") "---- Bitau2mats_Uw_component"
+      !
+      !
+      Ntau = size(Uitau)
+      Nmats = size(Umats)
+      if(mod(Ntau,2).eq.0) stop "Required Filon routines are not working with odd segments."
+      !
+      tau_uniform_ = .false.
+      if(present(tau_uniform)) tau_uniform_ = tau_uniform
+      !
+      allocate(wmats(Nmats));wmats=0d0
+      wmats = BosonicFreqMesh(beta,Nmats)
+      allocate(tau(Ntau));tau=0d0
+      if(tau_uniform_)then
+         tau = linspace(0d0,beta,Ntau)
+      else
+         tau = denspace(beta,Ntau)
+      endif
+      !
+      Umats=czero
+      allocate(wcos(Ntau));wcos=0d0
+      allocate(wsin(Ntau));wsin=0d0
+      !$OMP PARALLEL DEFAULT(NONE),&
+      !$OMP SHARED(Nmats,Ntau,wmats,tau,Uitau,Umats),&
+      !$OMP PRIVATE(iw,itau,RealU,ImagU,wcos,wsin)
+      !$OMP DO
+      do iw=1,Nmats
+         !
+         call BosonicFilon(wmats(iw),tau,wcos,wsin)
+         !
+         do itau=1,Ntau
+            !
+            RealU = dreal( Uitau(itau) )
+            ImagU = dimag( Uitau(itau) )
+            !
+            Umats(iw) =   Umats(iw)                                    &
+                      + ( RealU * wcos(itau) - ImagU * wsin(itau) )    &
+                      + ( ImagU * wcos(itau) + RealU * wsin(itau) )*dcmplx(0d0,1d0)
+            !
+         enddo
+         !
+      enddo
+      !$OMP END DO
+      !$OMP END PARALLEL
+      deallocate(wcos,wsin,tau,wmats)
+      !
+   end subroutine Bitau2mats_Uw_component
+   !
    subroutine Bitau2mats_Uw(beta,Uitau,Umats,tau_uniform)
       !
       use utils_misc

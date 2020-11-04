@@ -432,6 +432,8 @@ contains
          if(size(U,dim=1).ne.3) write(*,"(A)") "Warning: The local orbital space rotation is well defined only for a t2g sub-shell."
       endif
       !
+      call clear_attributes(Gimp)
+      !
       do i_imp=1,size(orbs)
          do j_imp=1,size(orbs)
             !
@@ -439,6 +441,7 @@ contains
             j_loc = orbs(j_imp)
             !
             do ispin=1,Nspin
+               Gimp%N_s(i_imp,j_imp,ispin) = Gloc%N_s(i_loc,j_loc,ispin)
                do ip=1,Gimp%Npoints
                   Gimp%ws(i_imp,j_imp,ip,ispin) = Gloc%ws(i_loc,j_loc,ip,ispin)
                enddo
@@ -449,6 +452,7 @@ contains
       !
       if(present(U))then
          do ispin=1,Nspin
+            Gimp%N_s(:,:,ispin) = rotate(Gimp%N_s(:,:,ispin),U)
             do ip=1,Gimp%Npoints
                Gimp%ws(:,:,ip,ispin) = rotate(Gimp%ws(:,:,ip,ispin),U)
             enddo
@@ -463,11 +467,11 @@ contains
       use linalg, only : rotate
       implicit none
       !
-      complex(8),allocatable,intent(inout)  :: Oimp(:,:)
-      complex(8),allocatable,intent(in)     :: Oloc(:,:)
-      integer,allocatable,intent(in)        :: orbs(:)
+      complex(8),intent(inout)              :: Oimp(:,:)
+      complex(8),intent(in)                 :: Oloc(:,:)
+      integer,intent(in)                    :: orbs(:)
       character(len=*),intent(in),optional  :: sitename
-      complex(8),allocatable,optional       :: U(:,:)
+      complex(8),intent(in),optional        :: U(:,:)
       !
       integer                               :: i_loc,j_loc
       integer                               :: i_imp,j_imp
@@ -487,6 +491,8 @@ contains
          if(size(U,dim=1).ne.size(orbs)) stop "Rotation matrix has the wrong dimension."
          if(size(U,dim=1).ne.3) write(*,"(A)") "Warning: The local orbital space rotation is well defined only for a t2g sub-shell."
       endif
+      !
+      Oimp=czero
       !
       do i_imp=1,size(orbs)
          do j_imp=1,size(orbs)
@@ -544,6 +550,8 @@ contains
       if(size(orbs).ne.Norb_imp) stop "loc2imp(B): can't fit the requested orbitals inside Wimp."
       if(size(orbs).gt.Norb_loc) stop "loc2imp(B): number of requested orbitals greater than Wloc size."
       !
+      call clear_attributes(Wimp)
+      !
       do i_imp=1,Norb_imp
          do j_imp=1,Norb_imp
             do k_imp=1,Norb_imp
@@ -593,7 +601,8 @@ contains
       logical,intent(in),optional           :: expand
       logical,intent(in),optional           :: AFM
       !
-      complex(8),allocatable                :: Gtmp(:,:,:,:,:)
+      complex(8),allocatable                :: Rot(:,:)
+      complex(8),allocatable                :: Gtmp(:,:,:,:,:),Ntmp(:,:,:,:)
       integer                               :: ip,ispin,ispin_imp,isite,Nsite,shift
       integer                               :: Norb_loc,Norb_imp
       integer                               :: i_loc,j_loc
@@ -646,23 +655,27 @@ contains
       !
       if(present(U))then
          if(size(U,dim=1).ne.size(U,dim=2)) stop "Rotation matrix not square."
-         if(size(U,dim=1).ne.size(orbs)) stop "Rotation matrix has the wrong dimension."
+         !if(size(U,dim=1).ne.size(orbs)) stop "Rotation matrix has the wrong dimension."
          if(size(U,dim=3).ne.Gloc%Nsite) stop "Number of rotation matrices and number of sites does not match."
          if(size(U,dim=1).ne.3) write(*,"(A)") "Warning: The local orbital space rotation is well defined only for a t2g sub-shell."
          write(*,"(A)") "The impurity orbital space will be rotated during insertion in "//str(Nsite)//" sites."
       endif
       !
+      allocate(Ntmp(Gimp%Norb,Gimp%Norb,Nspin,Nsite));Ntmp=czero
       allocate(Gtmp(Gimp%Norb,Gimp%Norb,Gimp%Npoints,Nspin,Nsite));Gtmp=czero
       !
       ! Rotating either one site or all of them depending on expand_
       do isite=1,Nsite
          !
          if(present(U))then
+            allocate(Rot(Norb_imp,Norb_imp)); Rot=U(1:Norb_imp,1:Norb_imp,isite)
             do ispin=1,Nspin
+               Ntmp(:,:,ispin,isite) = rotate(Gimp%N_s(:,:,ispin),Rot)
                do ip=1,Gimp%Npoints
-                  Gtmp(:,:,ip,ispin,isite) = rotate(Gimp%ws(:,:,ip,ispin),U(:,:,isite))
+                  Gtmp(:,:,ip,ispin,isite) = rotate(Gimp%ws(:,:,ip,ispin),Rot)
                enddo
             enddo
+            deallocate(Rot)
          else
             Gtmp(:,:,:,:,isite) = Gimp%ws
          endif
@@ -689,6 +702,7 @@ contains
                   ispin_imp=ispin
                   if(isite.eq.2) ispin_imp=int(Nspin/ispin)
                   !
+                  Gloc%N_s(i_loc,j_loc,ispin) = Ntmp(i_imp,j_imp,ispin_imp,isite)
                   do ip=1,Gimp%Npoints
                      Gloc%ws(i_loc,j_loc,ip,ispin) = Gtmp(i_imp,j_imp,ip,ispin_imp,isite)
                   enddo
@@ -698,7 +712,7 @@ contains
          enddo
          !
       enddo
-      deallocate(Gtmp)
+      deallocate(Gtmp,Ntmp)
       !
    end subroutine imp2loc_Fermionic
    !
@@ -706,12 +720,14 @@ contains
       use parameters
       use linalg, only : rotate
       implicit none
-      complex(8),allocatable,intent(inout)  :: Oloc(:,:)
-      complex(8),allocatable,intent(in)     :: Oimp(:,:)
-      integer,allocatable,intent(in)        :: orbs(:)
+      complex(8),intent(inout)              :: Oloc(:,:)
+      complex(8),intent(in)                 :: Oimp(:,:)
+      integer,intent(in)                    :: orbs(:)
       character(len=*),intent(in),optional  :: sitename
-      complex(8),allocatable,optional       :: U(:,:,:)
+      complex(8),intent(in),optional        :: U(:,:,:)
       logical,intent(in),optional           :: expand
+      !
+      complex(8),allocatable                :: Rot(:,:)
       complex(8),allocatable                :: Otmp(:,:,:)
       integer                               :: isite,Nsite,shift
       integer                               :: i_loc,j_loc
@@ -730,7 +746,7 @@ contains
       if(present(U))then
          write(*,"(A)") "The local orbital space will be rotated during extraction."
          if(size(U,dim=1).ne.size(U,dim=2)) stop "Rotation matrix not square."
-         if(size(U,dim=1).ne.size(orbs)) stop "Rotation matrix has the wrong dimension."
+         !if(size(U,dim=1).ne.size(orbs)) stop "Rotation matrix has the wrong dimension."
          if(size(U,dim=1).ne.3) write(*,"(A)") "Warning: The local orbital space rotation is well defined only for a t2g sub-shell."
       endif
       expand_=.false.
@@ -748,7 +764,9 @@ contains
       do isite=1,Nsite
          !
          if(present(U))then
-            Otmp(:,:,isite) = rotate(Oimp(:,:),U(:,:,isite))
+            allocate(Rot(size(orbs),size(orbs))); Rot=U(1:size(orbs),1:size(orbs),isite)
+            Otmp(:,:,isite) = rotate(Oimp(:,:),Rot)
+            deallocate(Rot)
          else
             Otmp(:,:,isite) = Oimp
          endif
@@ -966,7 +984,9 @@ contains
 
 
    !---------------------------------------------------------------------------!
-   !PURPOSE: Replace SigmaImp in SigmaGW at the indexes contained in orbs
+   !PURPOSE: Replace SigmaImp in SigmaGW at the indexes contained in orbs.
+   !         The Hartee contribution computed as N*curlyU is stored in the
+   !         SigmaImp%N_s attribute and it is removed during the merge.
    !TEST ON: 27-10-2020
    !---------------------------------------------------------------------------!
    subroutine MergeSelfEnergy(SigmaGW,SigmaGW_DC,SigmaImp,coeff,orbs,DC_type)
@@ -990,7 +1010,7 @@ contains
       !
       !
       write(*,"(A)") "---- Merge SelfEnergy"
-      !The Hartee contribution computed as N*curlyU is stored in the SigmaImp%N_s attribute
+
       !
       !
       ! Check on the input Fields

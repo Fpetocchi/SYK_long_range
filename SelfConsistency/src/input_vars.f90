@@ -98,14 +98,15 @@ module input_vars
    !
    !Site and Orbital space
    integer,public                           :: Nsite
+   logical,public                           :: ExpandImpurity
+   logical,public                           :: RotateHloc
+   logical,public                           :: AFMselfcons
    integer,public,allocatable               :: SiteNorb(:)
    character(len=2),public,allocatable      :: SiteName(:)
    integer,public,allocatable               :: SiteOrbs(:,:)
-   integer,public                           :: EquivalentSets
-   integer,public,allocatable               :: EquivalentNorb(:)
-   integer,public,allocatable               :: EquivalentOrbs(:,:)
-   logical,public,allocatable               :: ExpandImpurity
-   logical,public,allocatable               :: RotateHloc
+   !
+   !Equivalent lattice indexes
+   type(Equivalent),public                  :: EqvGWndx
    !
    !Imaginary time and frequency meshes
    real(8),public                           :: Beta
@@ -154,6 +155,8 @@ module input_vars
    logical,public                           :: paramagneticSPEX=.true.
    logical,public                           :: XEPSisread=.false.
    logical,allocatable,public               :: PhysicalUelement(:,:)
+   logical,public                           :: solve_DMFT=.true.
+   logical,public                           :: bosonicSC=.false.
 
    !---------------------------------------------------------------------------!
    !PURPOSE: Internal Rutines available for the user. Description only for interfaces.
@@ -186,6 +189,8 @@ contains
       write(LOGfile,"(A)") new_line("A")//"Reading InputFile"//new_line("A")
       !
       call parse_input_variable(CalculationType,"CALC_TYPE",InputFile,default="GW+EDMFT",comment="Calculation type. Avalibale: G0W0, scGW, DMFT+statU, DMFT+dynU, EDMFT, GW+EDMFT.")
+      if((reg(CalculationType).eq."G0W0").or.(reg(CalculationType).eq."scGW")) solve_DMFT=.false.
+      if((reg(CalculationType).eq."EDMFT").or.(reg(CalculationType).eq."GW+EDMFT")) bosonicSC=.true.
       !
       !OMP parallelization
       call execute_command_line(" lscpu | grep 'CPU(s):       ' | awk '{print $2}' > Nthread.used ")
@@ -203,6 +208,7 @@ contains
       call parse_input_variable(Nsite,"NSITE",InputFile,default=1,comment="Number of impurity sites.")
       call parse_input_variable(ExpandImpurity,"EXPAND",InputFile,default=.false.,comment="Flag to use a single impurity solution for all the sites of the lattice. Only indexes for site 1 readed.")
       call parse_input_variable(RotateHloc,"ROTATE",InputFile,default=.false.,comment="Solve the impurity problem in the basis where H(R=0) is diagonal.")
+      call parse_input_variable(AFMselfcons,"AFM",InputFile,default=.false.,comment="Flag to use  the AFM self-consistency by flipping the spin. Requires input with doubled unit cell.")
       if(ExpandImpurity)then
          allocate(SiteNorb(1));SiteNorb=0
          allocate(SiteName(1))
@@ -227,15 +233,18 @@ contains
          enddo
       endif
       !
-      call parse_input_variable(EquivalentSets,"EQV_SETS",InputFile,default=1,comment="Number of sets of locally equivalent orbitals.")
-      allocate(EquivalentNorb(EquivalentSets));EquivalentNorb=0
-      do iset=1,EquivalentSets
-         call parse_input_variable(EquivalentNorb(iset),"EQV_NORB_"//str(iset),InputFile,default=1,comment="Number of equivalent orbitals in the set number "//str(iset))
+      !Equivalent lattice indexes
+      call parse_input_variable(EqvGWndx%para,"PARAMAGNET",InputFile,default=.true.,comment="Flag to impose spin symmetry.")
+      call parse_input_variable(EqvGWndx%hseed,"H_SEED",InputFile,default=0d0,comment="Seed to break spin symmetry (only in the first iteration).")
+      call parse_input_variable(EqvGWndx%Nset,"EQV_SETS",InputFile,default=1,comment="Number of sets of locally equivalent lattice orbitals.")
+      allocate(EqvGWndx%SetNorb(EqvGWndx%Nset));EqvGWndx%SetNorb=0
+      do iset=1,EqvGWndx%Nset
+         call parse_input_variable(EqvGWndx%SetNorb(iset),"EQV_NORB_"//str(iset),InputFile,default=1,comment="Number of equivalent lattice orbitals in the set number "//str(iset))
       enddo
-      allocate(EquivalentOrbs(EquivalentSets,maxval(EquivalentNorb)));EquivalentOrbs=0
-      do iset=1,EquivalentSets
-         allocate(tmpOrbs(1:EquivalentNorb(iset)));tmpOrbs=0
-         call parse_input_variable(EquivalentOrbs(iset,1:EquivalentNorb(iset)),"EQV_ORBS_"//str(iset),InputFile,default=tmpOrbs,comment="Lattice orbital indexes of equivalent set number "//str(iset))
+      allocate(EqvGWndx%SetOrbs(EqvGWndx%Nset,maxval(EqvGWndx%SetNorb)));EqvGWndx%SetOrbs=0
+      do iset=1,EqvGWndx%Nset
+         allocate(tmpOrbs(1:EqvGWndx%SetNorb(iset)));tmpOrbs=0
+         call parse_input_variable(EqvGWndx%SetOrbs(iset,1:EqvGWndx%SetNorb(iset)),"EQV_ORBS_"//str(iset),InputFile,default=tmpOrbs,comment="Lattice orbital indexes of equivalent set number "//str(iset))
          deallocate(tmpOrbs)
       enddo
       !

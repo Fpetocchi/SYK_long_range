@@ -81,7 +81,7 @@ module module_container
    read_BosonicField
 
 
-   !(i) minimization routines. Depends on (b),(e),(f)
+   !(i) minimization routines. Depends on (b),(e),(f),(h)
    use fit, only:                            &
    fit_moments                              ,&
    fit_delta
@@ -96,6 +96,7 @@ module module_container
    calc_chi_edmft                           ,&
    build_Uscr                               ,&
    build_Uret                               ,&
+   calc_curlyU                              ,&
    calc_QMCinteractions
 
 

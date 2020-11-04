@@ -1,5 +1,14 @@
 program test
    !
+   ! COMMENTS:
+   ! tengo collect_QMC_results(ItStart) separato perche forse in un futuro riscrivero il solver
+   ! e quindi potro semplicemnte sponstare collect_QMC_results(ItStart) in fondo e tenere
+   ! initialize_Fields(ItStart) invariato, Se metto dyson dentro initialize_Fields
+   ! dopo se cambio solver mi tocca riscriverlo.
+   ! quindi tengo separato collect_QMC_results che crea e scrive le self-energie e Pimp
+   ! oi dealloco e rileggo
+
+
    use module_container
    use utils_main
    implicit none
@@ -9,6 +18,10 @@ program test
    integer                                  :: Iteration,ItStart,Itend
    !
    !
+   !
+   !---------------------------------------------------------------------------!
+   !      READING INPUT FILE, INITIALIZING OMP, AND CHECK DATA STRUCTURE       !
+   !---------------------------------------------------------------------------!
    call tick(TimeStart)
    call read_InputFile("input.in")
    write(LOGfile,"(A,1I4)") "Setting Nthread:",Nthread
@@ -16,25 +29,35 @@ program test
    call printHeader()
    call initialize_DataStructure(ItStart,Itend)
    call initialize_Lattice(Crystal,ItStart)
+   !
+   !
+   !
+   !---------------------------------------------------------------------------!
+   !       COLLECTING RESULTS FROM THE SOLVER AND SOLVING DYSON EQUATION       !
+   !---------------------------------------------------------------------------!
+   if(solve_DMFT)call collect_QMC_results()
+   !
+   !
+   !
+   !---------------------------------------------------------------------------!
+   !SOLVING THE LATTICE PROBLEM AND PRODUCING INPUTS FOR NEXT IMPURITY SOLUTION!
+   !---------------------------------------------------------------------------!
    call initialize_Fields(ItStart)
    !
-
-
-
    do Iteration=ItStart,Itend,1
       !
       call printHeader(Iteration)
       !
-      !Polarization
-      if(calc_PiGG)then
+      !K-dependent Polarization
+      if(calc_Plat)then
          !
-         call calc_Pi(PiGG,Glat,Crystal)
-         call dump_BosonicField(PiGG,reg(ItFolder),"PiGG.DAT")
+         call calc_Pi(Plat,Glat,Crystal)
+         call dump_BosonicField(Plat,reg(ItFolder),"Plat.DAT")
          !
          if(merge_Pi.and.solve_DMFT) then !a bit redundant since there is no merge wihtout DMFT
-            call MergeFields(PiGG,PiEDMFT,alphaPi,SiteOrbs)
+            call MergeFields(Plat,PiEDMFT,alphaPi,SiteOrbs)
             call DeallocateBosonicField(PiEDMFT)
-            call dump_BosonicField(PiGG,reg(ItFolder),"PiGG_merged.DAT")
+            call dump_BosonicField(Plat,reg(ItFolder),"PiGG_merged.DAT")
          endif
          !
       endif
@@ -42,19 +65,19 @@ program test
       !Fully screened interaction
       if(calc_W)then
          !
-         if(calc_Wfull)  call calc_W_full(Wlat,Ulat,PiGG,Crystal)
+         if(calc_Wfull)  call calc_W_full(Wlat,Ulat,Plat,Crystal)
          if(calc_Wedmft) call calc_W_edmft(Wlat,Ulat,PiEDMFT,Crystal)
          call dump_BosonicField(Wlat,reg(ItFolder),"Wloc.DAT")
          !
       endif
       !
       !K-dependent self-energy
-      if(calc_Sigma)then
+      if(calc_Sigmak)then
          !
          !Hartree shift between G0W0 and LDA
          allocate(VH(Crystal%Norb,Crystal%Norb));VH=czero
          call calc_VH(densityLDA,Glat,Ulat,VH)
-         if(solve_DMFT)call DeallocateBosonicField(Ulat)
+         if(solve_DMFT.and.bosonicSC)call DeallocateBosonicField(Ulat)
          !
          !G0W0 contribution and Vexchange readed from SPEX
          allocate(Vxc(Crystal%Norb,Crystal%Norb,Crystal%Nkpt,Nspin));Vxc=czero
@@ -122,44 +145,19 @@ program test
       !Matching the lattice and impurity problems
       if(solve_DMFT)then
          !
-         !Extract the hybridization functions and local energies (always diagonal)
          do isite=1,Nsite
+            !
+            !Extract the hybridization functions and local energies (always diagonal)
             call calc_Delta(isite)
+            !
+            !Compute local effective interaction (loop on the sites is internal)
+            call calc_Interaction(isite,ExpandImpurity)
+            !
             if(ExpandImpurity)exit
+            !
          enddo
          !
-         !Compute local effective interaction
-!do isite=1,Nsite
-!   call calc_curlyU(isite)
-!   if(ExpandImpurity)exit
-!enddo
-!!
-!!Compute Hartree shift to be used in the next iteration
-!call calc_HartreeU(isite)
-         !
-         !
-
-
-
-
-
-
-
-
       endif
-
-
-
-
-
-
-
-
-
-
-
-
-
       !
    enddo
    !

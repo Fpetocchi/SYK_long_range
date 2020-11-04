@@ -472,16 +472,18 @@ contains
    !---------------------------------------------------------------------------!
    !PURPOSE: Check if matrix is Symmetric
    !---------------------------------------------------------------------------!
-   subroutine check_Symmetry(A,tol,hardstop)
+   subroutine check_Symmetry(A,tol,hardstop,name)
       implicit none
       real(8),intent(in)                    :: A(:,:)
       real(8),intent(in)                    :: tol
       logical,intent(in),optional           :: hardstop
+      character(len=*),intent(in),optional  :: name
       !
       real(8)                               :: elem_ij,elem_ji
       logical                               :: hardstop_
       integer                               :: N,i,j
       !
+      if(present(name)) write(*,"(A)") "Matrix: "//reg(name)
       if(size(A,dim=1).ne.size(A,dim=2))stop "Symmetryzer. Matrix not square."
       N=size(A,dim=1)
       !
