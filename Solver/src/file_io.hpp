@@ -294,6 +294,16 @@ void read_Vec( std::string path, std::vector<double> &Vec, int &idim)
    for (int i=0; i<(int)Vec.size(); i++) file >> Vec[i];
    file.close();
 }
+void read_Vec( std::string path, std::vector<double> &Vec, int &idim, double &mu)
+{
+   //
+   Vec = std::vector<double>(idim,0.0); //.resize(Nflavor,0.0);
+   ifstream file( path );
+   //
+   file >> mu;
+   for (int i=0; i<(int)Vec.size(); i++) file >> Vec[i];
+   file.close();
+}
 void read_EigenVec( std::string path, Eigen::VectorXd &Vec, int &idim)
 {
    //
@@ -425,13 +435,15 @@ void read_VecVecVec( std::string path, std::vector<std::vector<std::vector<doubl
 //------------------------------------------------------------------------------
 
 
-void print_Vec( std::string path, std::vector<double> &Vec, double Beta=0.0, double Norm=1.0)
+template <typename T> void print_Vec( std::string path, std::vector<double> &Vec, T mu, double Beta=0.0, double Norm=1.0)
 {
    //
    FILE * printFile;
    const char * file=path.c_str();
    printFile = fopen(file ,"w");
    int Nrows = Vec.size();
+   //
+   if(std::is_same<T, double>::value) fprintf (printFile , "%.20e\n",mu);
    //
    if(Beta==0.0)
    {

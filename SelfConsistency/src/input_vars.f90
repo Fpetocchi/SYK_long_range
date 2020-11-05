@@ -152,6 +152,9 @@ module input_vars
    real(8),public                           :: Mixing_curlyU
    logical,public                           :: skipLattice
    !
+   !Variables related to the impurity solver
+   type(QMC),public                         :: Solver
+   !
    !Variables not to be readed
    logical,public                           :: paramagneticSPEX=.true.
    logical,public                           :: XEPSisread=.false.
@@ -191,7 +194,12 @@ contains
       !
       call parse_input_variable(CalculationType,"CALC_TYPE",InputFile,default="GW+EDMFT",comment="Calculation type. Avalibale: G0W0, scGW, DMFT+statU, DMFT+dynU, EDMFT, GW+EDMFT.")
       if((reg(CalculationType).eq."G0W0").or.(reg(CalculationType).eq."scGW")) solve_DMFT=.false.
-      if((reg(CalculationType).eq."EDMFT").or.(reg(CalculationType).eq."GW+EDMFT")) bosonicSC=.true.
+      if((reg(CalculationType).eq."EDMFT").or.(reg(CalculationType).eq."GW+EDMFT")) then
+         bosonicSC=.true.
+         Solver%retarded=1!.true.
+         Solver%nnt_meas=1!.true.
+      endif
+      if(reg(CalculationType).eq."DMFT+dynU")Solver%retarded=1!.true.
       !
       !OMP parallelization
       call execute_command_line(" lscpu | grep 'CPU(s):       ' | awk '{print $2}' > Nthread.used ")
@@ -270,7 +278,8 @@ contains
       !
       !Density lookup
       call add_separator()
-      call parse_input_variable(look4dens%TargetDensity,"N_READ",InputFile,default=0d0,comment="Target density per site lookup is switched on to this value if its >0d0. Otherwise it will be kept equal to the H(k) one.")
+      call parse_input_variable(look4dens%mu,"MU",InputFile,default=0d0,comment="Chemical potential.")
+      call parse_input_variable(look4dens%TargetDensity,"N_READ",InputFile,default=0d0,comment="Target density per site lookup is switched on to this value if its >0d0. Otherwise mu will be kept fixed.")
       call parse_input_variable(look4dens%quickloops,"N_QUICK",InputFile,default=.true.,comment="Flag to switch on the quick density lookup within the solver.")
       call parse_input_variable(look4dens%densityRelErr,"N_ERR",InputFile,default=0.01d0,comment="Relative error on the target density.")
       call parse_input_variable(look4dens%muStep,"MU_STEP",InputFile,default=0.2d0,comment="Initial chemical potential step in the density lookup.")
@@ -316,6 +325,27 @@ contains
       call parse_input_variable(Mixing_curlyG,"MIX_G",InputFile,default=0.5d0,comment="Fraction of the old iteration curlyG.")
       call parse_input_variable(Mixing_curlyU,"MIX_U",InputFile,default=0.5d0,comment="Fraction of the old iteration curlyU.")
       call parse_input_variable(skipLattice,"SKIP_LATT",InputFile,default=.false.,comment="Skip the lattice summation and assuming good the existing Gloc and Wloc.")
+      !
+      !Variables related to the impurity solver
+      call add_separator()
+      call parse_input_variable(Solver%Norder,"NORDER",InputFile,default=10,comment="Maximum perturbation order measured.")
+      call parse_input_variable(Solver%Nmeas,"NMEAS",InputFile,default=1000,comment="Sweeps where expensive measurments are not performed.")
+      call parse_input_variable(Solver%Ntherm,"NTHERM",InputFile,default=1000,comment="Thermalization cycles. Each cycle performs NMEAS sweeps.")
+      call parse_input_variable(Solver%Nshift,"NSHIFT",InputFile,default=2,comment="Attempted shift moves at each sweep.")
+      call parse_input_variable(Solver%PrintTime,"PRINT_TIME",InputFile,default=10,comment="Minutes that have to pass before observables are updated and stored.")
+      call parse_input_variable(Solver%binlength,"BINLENGTH",InputFile,default=4,comment="If >0 the Green's function at itau will be the average within =/-binlength.")
+      call parse_input_variable(Solver%binstart,"BINSTART",InputFile,default=100,comment="Tau points skipped at the beginning and end of the Green's function.")
+      call append_to_input_list(Solver%retarded,"RETARDED","Flag to include the frequency dependent part of the interaction. User cannot set this as its deduced from CALC_TYPE.")
+      call append_to_input_list(Solver%nnt_meas,"NNT_MEAS","Flag to switch on the measurement of the susceptibility. User cannot set this as its deduced from CALC_TYPE.")
+      if(ExpandImpurity)then
+         allocate(Solver%Time(1));Solver%Time=0
+         call parse_input_variable(Solver%Time(1),"TIME_1",InputFile,default=15,comment="Minutes of solver runtime for site number 1")
+      else
+         allocate(Solver%Time(Nsite));Solver%Time=0
+         do isite=1,Nsite
+            call parse_input_variable(Solver%Time(isite),"TIME_"//str(isite),InputFile,default=15,comment="Minutes of solver runtime for site number "//str(isite))
+         enddo
+      endif
       !
       call code_version()
       call save_InputFile(InputFile)

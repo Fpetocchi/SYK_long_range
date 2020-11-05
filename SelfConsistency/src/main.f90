@@ -135,7 +135,7 @@ program test
       !
       !Compute the Full Green's function and set the density
       call calc_Gmats(Glat,Crystal,SigmaFull)
-      call set_density(Glat,Crystal,look4dens)
+      if(look4dens%TargetDensity.ne.0d0)call set_density(Glat,Crystal,look4dens)
       !
       !Print Gf: local readable and k-dep binfmt
       call dump_FermionicField(Glat,1,reg(ItFolder),"Gloc_up.DAT")

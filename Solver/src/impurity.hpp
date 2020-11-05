@@ -36,12 +36,12 @@ class ct_hyb
 
       //----------------------------------------------------------------------//
 
-      ct_hyb( path SiteName, double mu, double beta, int Nspin, int Norb, int Ntau,
+      ct_hyb( path SiteName, double beta, int Nspin, int Norb, int Ntau,
               int Norder, int Nmeas, int Ntherm, int Nshift,
               bool paramagnet, bool retarded, bool nnt_meas,
               int printTime, std::vector<int> bins,
               CustomMPI &mpi, bool testing_mpi=false):
-      SiteName(SiteName), mu(mu), Beta(beta), Nspin(Nspin), Norb(Norb), Ntau(Ntau),
+      SiteName(SiteName), Beta(beta), Nspin(Nspin), Norb(Norb), Ntau(Ntau),
       Norder(Norder), Nmeas(Nmeas), Ntherm(Ntherm), Nshift(Nshift),
       paramagnet(paramagnet), retarded(retarded), nnt_meas(nnt_meas),
       printTime(printTime), bins(bins), mpi(mpi), testing_mpi(testing_mpi)
@@ -50,6 +50,7 @@ class ct_hyb
       //----------------------------------------------------------------------//
 
       void reset_mu(double mu_new) {mu = mu_new; mu_is_reset=true;}
+      double get_mu(void) {return mu;}
 
       Vec get_Nloc(bool EachRank=false)
       {
@@ -84,11 +85,11 @@ class ct_hyb
       {
          //
          // This can be made optional or changed
-         resultsDir = inputDir+"/results/";
+         resultsDir = inputDir+"/resultsQMC/";
          if(!PathExist(strcpy(new char[resultsDir.length() + 1], resultsDir.c_str())) && mpi.is_master())
          {
             int check = mkdir(resultsDir.c_str(),0777);
-            mpi.report(resultsDir+" Created.");
+            mpi.report(resultsDir+" Created. "+str(check));
          }
 
          //
@@ -111,29 +112,30 @@ class ct_hyb
          for(int iorb=0; iorb < Norb; iorb+=2)
          {
             mu_correction[iorb] += Uloc(iorb,iorb+1)/2.0;
-            mpi.report(" Orbital "+str(iorb)+" correction of the local level is: "+str(mu_correction[iorb],4),testing_mpi);
+            mpi.report(" Orbital "+str(iorb)+" correction of the local level: "+str(mu_correction[iorb],4),testing_mpi);
          }
 
          //
          //set the local energies ( std::vector<double> )
-         read_Vec(inputDir+"/Eloc.DAT", Eloc, Nflavor);
+         read_Vec(inputDir+"/Eloc.DAT", Eloc, Nflavor, mu);
          set_levels();
+         mpi.report(" Chemical potential: "+str(mu,4),testing_mpi);
 
          //
          //read the hybridization function ( std::vector<std::vector<double>> )
-         read_VecVec(inputDir+"/Delta.DAT", F, Nflavor, Ntau_p1, true, true);  // last flag is to reverse the tau index
+         read_VecVec(inputDir+"/Dt.DAT", F, Nflavor, Ntau, true, true);  // last flag is to reverse the tau index
 
          //
          //read the screening function ( std::vector<std::vector<std::vector<double>>> )
          if(retarded)
          {
-            read_VecVecVec(inputDir+"/K.DAT", K_table, Nflavor, false); // read_VecVecVec(inputDir+"/K.DAT", K_table, Norb, Ntau_p1, true);
+            read_VecVecVec(inputDir+"/Kt.DAT", K_table, Nflavor, false); // read_VecVecVec(inputDir+"/K.DAT", K_table, Norb, Ntau, true);
 
             for(int ifl=0; ifl < Norb; ifl++)
             {
-               int Ntau_p1_K = K_table[ifl][ifl].size();
+               int Ntau_K = K_table[ifl][ifl].size();
                path Kcomp = "K["+str(ifl)+"]["+str(ifl)+"]";
-               if(Ntau_p1_K!=Ntau_p1) mpi.report(" The Number of tau points in "+Kcomp+" is: "+str(Ntau_p1_K),testing_mpi);
+               if(Ntau_K!=Ntau) mpi.report(" The Number of tau points in "+Kcomp+" is: "+str(Ntau_K),testing_mpi);
                //
                double K_zero =  K_table[ifl][ifl].front();
                double K_beta =  K_table[ifl][ifl].back();
@@ -145,8 +147,8 @@ class ct_hyb
          //
          if(testing_mpi && mpi.is_master())
          {
-            print_Vec(inputDir+"/Eloc.DAT.used", Eloc);
-            print_Vec(inputDir+"/Levels.DAT.used", Levels);
+            print_Vec(inputDir+"/Eloc.DAT.used", Eloc, mu);
+            print_Vec(inputDir+"/Levels.DAT.used", Levels, NULL);
             print_VecVec(inputDir+"/Delta.DAT.used", F);
             if(retarded)print_VecVecVec(inputDir+"/K.DAT.used", K_table);
          }
@@ -172,10 +174,10 @@ class ct_hyb
          Nhist.resize(Nflavor+1,0.0);                                           // ( std::vector<double> )
          Szhist.resize(Nflavor/2+1,0.0);                                        // ( std::vector<double> )
          Pert.resize(Norder*Nflavor,0.0);                                       // ( std::vector<double> )
-         G.resize(Nflavor,std::vector<double>(Ntau_p1,0.0));                    // ( std::vector<std::vector<double>> )
-         Gerr.resize(Nflavor,std::vector<double>(Ntau_p1,0.0));                 // ( std::vector<std::vector<double>> )
-         nt.resize(Nflavor,std::vector<double>(Ntau_p1,0.0));                   // ( std::vector<std::vector<double>> )
-         nnt.resize(Nflavor*(Nflavor+1)/2,std::vector<double>(Ntau_p1,0.0));    // ( std::vector<std::vector<double>> )
+         G.resize(Nflavor,std::vector<double>(Ntau,0.0));                    // ( std::vector<std::vector<double>> )
+         Gerr.resize(Nflavor,std::vector<double>(Ntau,0.0));                 // ( std::vector<std::vector<double>> )
+         nt.resize(Nflavor,std::vector<double>(Ntau,0.0));                   // ( std::vector<std::vector<double>> )
+         nnt.resize(Nflavor*(Nflavor+1)/2,std::vector<double>(Ntau,0.0));    // ( std::vector<std::vector<double>> )
          //
          RankSign=0.0;
          WorldSign=0.0;
@@ -309,11 +311,10 @@ class ct_hyb
       //----------------------------------------------------------------------//
       // Input vars
       path                                SiteName;
-      double                              mu;                                   // chemical potential
       double                              Beta;                                 // inverse temperature
       int                                 Nspin;
       int                                 Norb;
-      int                                 Ntau;
+      int                                 Ntau;                                 // Number of POINTS in Fermionic tau grid
       int                                 Norder;                               // Max perturbation order
       int                                 Nmeas;                                // Number of sweeps between expensive measurments
       int                                 Ntherm;
@@ -328,12 +329,13 @@ class ct_hyb
       // Internal vars
       void(ct_hyb::*dostep)(int,bool) = NULL;                                   // Pointer to the internal function defining the solution mode
       path                                resultsDir;
+      double                              mu;                                   // chemical potential
       bool                                mu_is_reset=false;
       bool                                initialized=false;
       duration                            Tstart;
       int                                 TimeStamp;
       int                                 Nflavor=Nspin*Norb;                   // Spin-orbital flavours
-      int                                 Ntau_p1=Ntau+1;                       //
+      int                                 Ntau_m1=Ntau-1;                       // Number of SEGMENTS in Fermionic tau grid
       unsigned long long int              RankSweeps,WorldSweeps;               // Sweeps done
       // Input data
       Vec                                 Levels;                               // mu-<\epsilon>
@@ -402,7 +404,7 @@ class ct_hyb
          //
          times full_segment(0,Beta);
          double s=1;
-         VecVec G_tmp(Nflavor,Vec(Ntau_p1,0.0));
+         VecVec G_tmp(Nflavor,Vec(Ntau,0.0));
 
          // The measurments I'm going to do regardless from the time
          for (int imeas=0; imeas<Nmeas_; imeas++)
@@ -421,7 +423,7 @@ class ct_hyb
                   // shift segments
                   for (int k=0; k<Nshift; k++) shift_segment( segments[ifl], Beta, Levels[ifl], Uloc, F[ifl], M[ifl], sign[ifl], segments, full_line, ifl, K_table );
                   // flip segment
-                  //for (int i=0; i<N_flip; i++)flip_segment( segments_up, Ntau, Beta, M_up, sign_up, sign_down, F_down, M_down, segments_down, full_line_down);
+                  //for (int i=0; i<N_flip; i++)flip_segment( segments_up, Ntau_m1, Beta, M_up, sign_up, sign_down, F_down, M_down, segments_down, full_line_down);
                }
 
                //
@@ -429,11 +431,11 @@ class ct_hyb
                // perturbation order
                if (segments[ifl].size()<Norder) Pert[ifl*Norder+segments[ifl].size()] += (1./Nmeas_);
                // Green's functions
-               if (segments[ifl].size()>0) measure_G( G_tmp[ifl], segments[ifl], M[ifl], Ntau_p1, Beta ); //accumulate_G( G[ifl], segments[ifl], M[ifl], Ntau_p1, Beta, (double)(Ntau/Nmeas_));
+               if (segments[ifl].size()>0) measure_G( G_tmp[ifl], segments[ifl], M[ifl], Ntau, Beta ); //accumulate_G( G[ifl], segments[ifl], M[ifl], Ntau, Beta, (double)(Ntau_m1/Nmeas_));
                // sign among the segments
                s *= sign[ifl];
                // flavour occupation
-               for (int i=0; i<G_tmp[ifl].size(); i++)G_tmp[ifl][i]*=(1.*Ntau)/Nmeas_;
+               for (int i=0; i<G_tmp[ifl].size(); i++)G_tmp[ifl][i]*=(1.*Ntau_m1)/Nmeas_;
                Nloc[ifl] += compute_overlap(full_segment, segments[ifl], full_line[ifl], Beta)/(Beta*Nmeas_);
                //...............................................................
             }
@@ -446,7 +448,7 @@ class ct_hyb
          //
          if(paramagnet) spin_symm(Nloc);
          // n_a(\tau)
-         nt = measure_nt( segments, full_line, Ntau_p1, Beta );
+         nt = measure_nt( segments, full_line, Ntau, Beta );
          if(paramagnet) spin_symm(nt);
          // G(\tau)
          if(paramagnet) spin_symm(G_tmp);
@@ -484,7 +486,7 @@ class ct_hyb
                   // shift segments
                   for (int k=0; k<Nshift; k++) shift_segment( segments[ifl], Beta, Levels[ifl], Uloc, F[ifl], M[ifl], sign[ifl], segments, full_line, ifl, K_table );
                   // flip segment
-                  //for (int i=0; i<N_flip; i++)flip_segment( segments_up, Ntau, Beta, M_up, sign_up, sign_down, F_down, M_down, segments_down, full_line_down);
+                  //for (int i=0; i<N_flip; i++)flip_segment( segments_up, Ntau_m1, Beta, M_up, sign_up, sign_down, F_down, M_down, segments_down, full_line_down);
                }
 
                //.........................Cheap measurments.....................
@@ -513,17 +515,17 @@ class ct_hyb
             //
             // density
             Vec PrintNloc = get_Nloc(testing_mpi); // provides spin-orbital occupation already normalized
-            print_Vec(resultsDir+"/Nloc_rank"+str(mpi.rank())+pad, PrintNloc);
+            print_Vec(resultsDir+"/Nloc_rank"+str(mpi.rank())+pad, PrintNloc, mu);
             mpi.report(" Nloc_rank"+str(mpi.rank())+pad+" is printed.",testing_mpi);
             //
             // perturbation order
-            print_Vec(resultsDir+"/PertOrder_rank"+str(mpi.rank())+pad, Pert, (double)RankSweeps);
+            print_Vec(resultsDir+"/PertOrder_rank"+str(mpi.rank())+pad, Pert, NULL, 0.0, (double)RankSweeps);
             mpi.report(" PertOrder_rank"+str(mpi.rank())+pad+" is printed.",testing_mpi);
             //
             // error estimate and binning
             if(bins[0]>0)
             {
-               VecVec Gerr(Nflavor,Vec(Ntau_p1,0.0));
+               VecVec Gerr(Nflavor,Vec(Ntau,0.0));
                binAverageVec( bins, G, Gerr );
                print_VecVec(resultsDir+"/Gerr_rank"+str(mpi.rank())+pad, Gerr, Beta, (double)RankSweeps);
                mpi.report(" Gerr_rank"+str(mpi.rank())+pad+" is printed.",testing_mpi);
@@ -554,23 +556,23 @@ class ct_hyb
          //
          // density
          Vec PrintNloc = get_Nloc(); // provides spin-orbital occupation already normalized
-         if(mpi.is_master()) print_Vec(resultsDir+"/Nloc"+pad, PrintNloc);
+         if(mpi.is_master()) print_Vec(resultsDir+"/Nloc"+pad, PrintNloc, mu);
          mpi.report(" Nloc"+pad+" is printed.");
          //
          // perturbation order
          Vec NormPert = normalize_Vec(Pert, RankSweeps);
          Vec PrintPert(Norder*Nflavor,0.0);
          mpi.allreduce(NormPert, PrintPert, true);
-         if(mpi.is_master()) print_Vec(resultsDir+"/PertOrder"+pad, PrintPert);
+         if(mpi.is_master()) print_Vec(resultsDir+"/PertOrder"+pad, PrintPert, NULL);
          mpi.report(" PertOrder"+pad+" is printed.");
          //
          // error estimate and binning
          if(bins[0]>0)
          {
-            VecVec Gerr(Nflavor,Vec(Ntau_p1,0.0));
+            VecVec Gerr(Nflavor,Vec(Ntau,0.0));
             binAverageVec( bins, G, Gerr );
             Gerr = normalize_VecVec(Gerr, RankSweeps);
-            VecVec PrintGerr(Nflavor,std::vector<double>(Ntau_p1,0.0));
+            VecVec PrintGerr(Nflavor,std::vector<double>(Ntau,0.0));
             mpi.allreduce(Gerr, PrintGerr, true);
             if(mpi.is_master()) print_VecVec(resultsDir+"/Gerr"+pad, PrintGerr, Beta);
             mpi.report(" Gerr"+pad+" is printed.");
@@ -583,7 +585,7 @@ class ct_hyb
             G[ifl].back()  = -Nloc[ifl];
          }
          VecVec NormG = normalize_VecVec(G, RankSweeps);
-         VecVec PrintG(Nflavor,std::vector<double>(Ntau_p1,0.0));
+         VecVec PrintG(Nflavor,std::vector<double>(Ntau,0.0));
          mpi.allreduce(NormG, PrintG, true);
          if(mpi.is_master()) print_VecVec(resultsDir+"/Gimp"+pad, PrintG, Beta);
          mpi.report(" Gimp"+pad+" is printed.");
@@ -592,7 +594,7 @@ class ct_hyb
          if(nnt_meas)
          {
             VecVec Normnnt = normalize_VecVec(nnt, RankSweeps);
-            VecVec Printnnt(Nflavor*(Nflavor+1)/2,std::vector<double>(Ntau_p1,0.0));
+            VecVec Printnnt(Nflavor*(Nflavor+1)/2,std::vector<double>(Ntau,0.0));
             mpi.allreduce(Normnnt, Printnnt, true);
             if(mpi.is_master()) print_VecVec(resultsDir+"/nnt"+pad, Printnnt, Beta);
             mpi.report(" nnt"+pad+" is printed.");

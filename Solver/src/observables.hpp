@@ -56,7 +56,7 @@ template<typename T> VecVec normalize_VecVec( VecVec &VecVec_in, std::vector<T> 
 //------------------------------------------------------------------------------
 
 
-void measure_G( Vec &G, segment_container_t &segment, Mat &M, int &Ntau_p1, double &Beta, double Norm=1.0)
+void measure_G( Vec &G, segment_container_t &segment, Mat &M, int &Ntau, double &Beta, double Norm=1.0)
 {
    //
    std::set<times>::iterator it1, it2;
@@ -87,8 +87,7 @@ void measure_G( Vec &G, segment_container_t &segment, Mat &M, int &Ntau_p1, doub
                argument += Beta;
             }
             //
-            int index = argument/Beta*(Ntau_p1-1)+0.5;
-            //G_meas[ifl*(Ntau+1)+index] += M(k,i)*bubble_sign/(Beta*Beta);
+            int index = argument/Beta*(Ntau-1)+0.5;
             G[index] -= Norm*M(k,i)*bubble_sign/(Beta*Beta);
          }
       }
@@ -100,12 +99,12 @@ void accumulate_G( VecVec &G, VecVec &Gtmp)
 {
    //
    int Nflavor = Gtmp.size();
-   int Ntau_p1 = Gtmp[0].size();
+   int Ntau = Gtmp[0].size();
 
    //
    for (int ifl=0; ifl<Nflavor; ifl++)
    {
-      for (int itau=0; itau<Ntau_p1; itau++)
+      for (int itau=0; itau<Ntau; itau++)
       {
          G[ifl][itau] += Gtmp[ifl][itau];
       }
@@ -117,7 +116,7 @@ void binAverageVec( std::vector<int> &bins, VecVec &G, VecVec &Gerr)
 {
    //
    int Nflavor = G.size();
-   int Ntau_p1 = G[0].size();
+   int Ntau = G[0].size();
    int binlength = bins[0];
    int binstart = bins[1];
 
@@ -128,8 +127,8 @@ void binAverageVec( std::vector<int> &bins, VecVec &G, VecVec &Gerr)
       for (int ifl=0; ifl<Nflavor; ifl++)
       {
          //
-         Vec Gsym(Ntau_p1,0.0);
-         for (int itau=binlength+binstart; itau<Ntau_p1-binlength-binstart; itau++)
+         Vec Gsym(Ntau,0.0);
+         for (int itau=binlength+binstart; itau<Ntau-binlength-binstart; itau++)
          {
             //
             double avrg=0.0;
@@ -142,7 +141,7 @@ void binAverageVec( std::vector<int> &bins, VecVec &G, VecVec &Gerr)
             Gerr[ifl][itau] = sqrt(stderr);
          }
          //
-         for (int itau=binlength+binstart; itau<Ntau_p1-binlength-binstart; itau++) G[ifl][itau] = Gsym[itau];
+         for (int itau=binlength+binstart; itau<Ntau-binlength-binstart; itau++) G[ifl][itau] = Gsym[itau];
       }
    }
 
@@ -154,7 +153,7 @@ void binAverageVec( std::vector<int> &bins, VecVec &G, VecVec &Gerr)
       for (int ifl=0; ifl<Nflavor; ifl++)
       {
          Vec Gsym(binlength+1,0.0);
-         for (int itau=binlength; itau<Ntau_p1-binlength; itau++)
+         for (int itau=binlength; itau<Ntau-binlength; itau++)
          {
             //
             double avrg=0.0;
@@ -165,7 +164,7 @@ void binAverageVec( std::vector<int> &bins, VecVec &G, VecVec &Gerr)
                Gsym.erase(Gsym.begin());
                Gsym.push_back(avrg);
                // put the reamaining
-               if(itau==Ntau_p1-binlength-1)
+               if(itau==Ntau-binlength-1)
                {
                   for (int ibin=binlength; ibin<binlength+1; ibin++) G[ifl][itau-(binlength+1)+ibin] = Gsym[ibin];
                }
@@ -202,8 +201,8 @@ void spin_symm( Vec &Vec )
 void spin_symm( VecVec &VecVec )
 {
    int Nflavor = VecVec.size();
-   int Ntau_p1 = VecVec[0].size();
-   for (int i=0; i<Ntau_p1; ++i)
+   int Ntau = VecVec[0].size();
+   for (int i=0; i<Ntau; ++i)
    {
       for (int ifl=0; ifl<(Nflavor/2); ++ifl)
       {
@@ -218,11 +217,11 @@ void spin_symm( VecVec &VecVec )
 //------------------------------------------------------------------------------
 
 
-VecVec measure_nt( std::vector<segment_container_t> &segments, std::vector<int> &full_line, int &Ntau_p1, double &Beta)
+VecVec measure_nt( std::vector<segment_container_t> &segments, std::vector<int> &full_line, int &Ntau, double &Beta)
 {
    //
    int Nflavor = segments.size();
-   VecVec n_tau(Nflavor,Vec(Ntau_p1,1));
+   VecVec n_tau(Nflavor,Vec(Ntau,1));
    std::set<times>::iterator it;
 
    //
@@ -247,9 +246,9 @@ VecVec measure_nt( std::vector<segment_container_t> &segments, std::vector<int> 
          int index;
          for (it=segments[ifl].begin(); it!=segments[ifl].end(); it++)
          {
-             index = it->t_start()/Beta*Ntau_p1;
+             index = it->t_start()/Beta*Ntau;
              n_tau[ifl][index] *= -1;
-             index = it->t_end()/Beta*Ntau_p1;
+             index = it->t_end()/Beta*Ntau;
              n_tau[ifl][index] *= -1;
          }
          //
@@ -275,8 +274,8 @@ VecVec measure_nnt( VecVec &n_tau)
 {
    //
    int Nflavor = n_tau.size();
-   int Ntau_p1 = n_tau[0].size();
-   VecVec nn_corr_meas(Nflavor*(Nflavor+1)/2,Vec(Ntau_p1,0.0));
+   int Ntau = n_tau[0].size();
+   VecVec nn_corr_meas(Nflavor*(Nflavor+1)/2,Vec(Ntau,0.0));
 
    //
    int position=0;
@@ -284,17 +283,17 @@ VecVec measure_nnt( VecVec &n_tau)
    {
       for (int jfl=0; jfl<=ifl; ++jfl)
       {
-         for (int i=0; i<Ntau_p1; ++i)
+         for (int i=0; i<Ntau; ++i)
          {
-            for (int index=0; index<Ntau_p1; ++index)
+            for (int index=0; index<Ntau; ++index)
             {
                int j=i+index;
-               if (j>Ntau_p1) j -= Ntau_p1;
-               nn_corr_meas[position][index] += n_tau[ifl][i]*n_tau[jfl][j] / (double)Ntau_p1;
+               if (j>Ntau) j -= Ntau;
+               nn_corr_meas[position][index] += n_tau[ifl][i]*n_tau[jfl][j] / (double)Ntau;
             }
          }
          position++;
-         //for (int i=0; i<Ntau_p1; ++i)nn_corr_meas[position][i]/=(Ntau_p1);
+         //for (int i=0; i<Ntau; ++i)nn_corr_meas[position][i]/=(Ntau);
       }
    }
    //
@@ -306,7 +305,7 @@ void accumulate_nnt( VecVec &nn_corr_meas, VecVec &n_tau)
 {
    //
    int Nflavor = n_tau.size();
-   int Ntau_p1 = n_tau[0].size();
+   int Ntau = n_tau[0].size();
 
    //
    int position=0;
@@ -314,17 +313,17 @@ void accumulate_nnt( VecVec &nn_corr_meas, VecVec &n_tau)
    {
       for (int jfl=0; jfl<=ifl; ++jfl)
       {
-         for (int i=0; i<Ntau_p1; ++i)
+         for (int i=0; i<Ntau; ++i)
          {
-            for (int index=0; index<Ntau_p1; ++index)
+            for (int index=0; index<Ntau; ++index)
             {
                int j=i+index;
-               if (j>Ntau_p1) j -= Ntau_p1;
-               nn_corr_meas[position][index] += n_tau[ifl][i]*n_tau[jfl][j] / (double)Ntau_p1;
+               if (j>Ntau) j -= Ntau;
+               nn_corr_meas[position][index] += n_tau[ifl][i]*n_tau[jfl][j] / (double)Ntau;
             }
          }
          position++;
-         //for (int i=0; i<Ntau_p1; ++i)nn_corr_meas[position][i]/=(Ntau_p1);
+         //for (int i=0; i<Ntau; ++i)nn_corr_meas[position][i]/=(Ntau);
       }
    }
 }
@@ -333,11 +332,11 @@ void accumulate_nnt( VecVec &nn_corr_meas, VecVec &n_tau)
 //------------------------------------------------------------------------------
 
 
-VecVec measure_nnt_standalone( std::vector<segment_container_t> &segments, std::vector<int> &full_line, int &Ntau_p1, double &Beta)
+VecVec measure_nnt_standalone( std::vector<segment_container_t> &segments, std::vector<int> &full_line, int &Ntau, double &Beta)
 {
    //
    int Nflavor = segments.size();
-   VecVec n_vectors(Nflavor,Vec(Ntau_p1,1));
+   VecVec n_vectors(Nflavor,Vec(Ntau,1));
    std::set<times>::iterator it;
    for (int ifl=0; ifl<Nflavor; ++ifl)
    {
@@ -360,9 +359,9 @@ VecVec measure_nnt_standalone( std::vector<segment_container_t> &segments, std::
          int index;
          for (it=segments[ifl].begin(); it!=segments[ifl].end(); it++)
          {
-             index = it->t_start()/Beta*Ntau_p1;
+             index = it->t_start()/Beta*Ntau;
              n_vectors[ifl][index] *= -1;
-             index = it->t_end()/Beta*Ntau_p1;
+             index = it->t_end()/Beta*Ntau;
              n_vectors[ifl][index] *= -1;
          }
          //
@@ -378,24 +377,24 @@ VecVec measure_nnt_standalone( std::vector<segment_container_t> &segments, std::
    }
 
    //
-   //std::valarray<double> nn_corr_meas(Nflavor*(Nflavor+1)/2*(Ntau_p1));
-   VecVec nn_corr_meas(Nflavor*(Nflavor+1)/2,Vec(Ntau_p1,0.0));
+   //std::valarray<double> nn_corr_meas(Nflavor*(Nflavor+1)/2*(Ntau));
+   VecVec nn_corr_meas(Nflavor*(Nflavor+1)/2,Vec(Ntau,0.0));
    int position=0;
    for (int ifl=0; ifl<Nflavor; ++ifl)
    {
       for (int jfl=0; jfl<=ifl; ++jfl)
       {
          position++;
-         for (int i=0; i<Ntau_p1; ++i)
+         for (int i=0; i<Ntau; ++i)
          {
-            for (int index=0; index<Ntau_p1; ++index)
+            for (int index=0; index<Ntau; ++index)
             {
                int j=i+index;
-               if (j>Ntau_p1) j -= Ntau_p1;
+               if (j>Ntau) j -= Ntau;
                nn_corr_meas[position][index] += n_vectors[ifl][i]*n_vectors[jfl][j];
             }
          }
-         for (int i=0; i<Ntau_p1; ++i)nn_corr_meas[position][i]/=(Ntau_p1);
+         for (int i=0; i<Ntau; ++i)nn_corr_meas[position][i]/=(Ntau);
       }
    }
 
@@ -411,15 +410,15 @@ Vec measure_Nhist( VecVec &n_tau)
 {
    //
    int Nflavor = n_tau.size();
-   int Ntau_p1 = n_tau[0].size();
+   int Ntau = n_tau[0].size();
    Vec nhist(Nflavor+1,0.0);
 
    //
-   for (int itau=1; itau<Ntau_p1; itau++)
+   for (int itau=1; itau<Ntau; itau++)
    {
       int ntmp=0;
       for (int ifl=0; ifl<Nflavor; ifl++) ntmp+=n_tau[ifl][itau];
-      nhist[ntmp]+=1./Ntau_p1;
+      nhist[ntmp]+=1./Ntau;
    }
    return nhist;
 }
@@ -429,16 +428,16 @@ Vec measure_Szhist( VecVec &n_tau)
 {
    //
    int Nflavor = n_tau.size();
-   int Ntau_p1 = n_tau[0].size();
+   int Ntau = n_tau[0].size();
    Vec szhist(Nflavor/2+1,0.0);
 
    //
-   for (int itau=1; itau<Ntau_p1; itau++)
+   for (int itau=1; itau<Ntau; itau++)
    {
       int ntmp=0;
       for (int ifl=0; ifl<Nflavor; ifl+=2) ntmp+=n_tau[ifl][itau]-n_tau[ifl+1][itau];
       if (ntmp<0) ntmp*=-1;
-      szhist[ntmp]+=1./Ntau_p1;
+      szhist[ntmp]+=1./Ntau;
    }
    return szhist;
 }
@@ -448,14 +447,14 @@ void accumulate_Nhist( Vec &nhist, VecVec &n_tau)
 {
    //
    int Nflavor = n_tau.size();
-   int Ntau_p1 = n_tau[0].size();
+   int Ntau = n_tau[0].size();
 
    //
-   for (int itau=1; itau<Ntau_p1; itau++)
+   for (int itau=1; itau<Ntau; itau++)
    {
       int ntmp=0;
       for (int ifl=0; ifl<Nflavor; ifl++) ntmp+=n_tau[ifl][itau];
-      nhist[ntmp]+=1./Ntau_p1;
+      nhist[ntmp]+=1./Ntau;
    }
 }
 
@@ -464,15 +463,15 @@ void accumulate_Szhist( Vec &szhist, VecVec &n_tau)
 {
    //
    int Nflavor = n_tau.size();
-   int Ntau_p1 = n_tau[0].size();
+   int Ntau = n_tau[0].size();
 
    //
-   for (int itau=1; itau<Ntau_p1; itau++)
+   for (int itau=1; itau<Ntau; itau++)
    {
       int ntmp=0;
       for (int ifl=0; ifl<Nflavor; ifl+=2) ntmp+=n_tau[ifl][itau]-n_tau[ifl+1][itau];
       if (ntmp<0) ntmp*=-1;
-      szhist[ntmp]+=1./Ntau_p1;
+      szhist[ntmp]+=1./Ntau;
    }
 }
 

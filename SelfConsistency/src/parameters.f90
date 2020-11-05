@@ -100,6 +100,7 @@ module parameters
    !PURPOSE: container for density lookup parameters
    !---------------------------------------------------------------------------!
    type musearch
+      real(8)                               :: mu=0d0
       real(8)                               :: TargetDensity=0d0
       real(8)                               :: densityRelErr=0d0
       real(8)                               :: muStep=0d0
@@ -121,6 +122,26 @@ module parameters
       integer,allocatable                   :: SetOrbs(:,:)
       logical                               :: Gfoffdiag=.true.
    end type Equivalent
+
+
+   !---------------------------------------------------------------------------!
+   !PURPOSE: container for QMC Solver variables
+   !---------------------------------------------------------------------------!
+   type QMC
+      integer,allocatable                   :: Time(:)
+      integer                               :: Norder=0
+      integer                               :: Nmeas=1000
+      integer                               :: Ntherm=1000
+      integer                               :: Nshift=2
+      integer                               :: PrintTime=10
+      integer                               :: binlength=4
+      integer                               :: binstart=100
+      !I'm writing these as integers due to some mismatch on how to write boolean between fortrann and c++
+      integer                               :: retarded=0
+      integer                               :: nnt_meas=0
+      !logical                               :: retarded=.false.
+      !logical                               :: nnt_meas=.false.
+   end type QMC
 
 
 end module parameters

@@ -1,6 +1,5 @@
 
 # Global Vars - (Solver & SelfConsistency)
-mu=         1.0            // Chemical potential.
 beta=       10             // Inverse temperature.
 Nspin=      2              // Number of spins.
 Ntau=       1000           // Number of tau segments (tau points are Ntau+1).
@@ -12,6 +11,9 @@ printTime=  2              // Each PrintTime minutes observables will be printed
 paramagnet= true           // Flag to enforce spin up/dn symmetry.
 retarded=   false          // Flag to include retardation in the interaction. Requires "K.DAT" file (with independent tau mesh).
 nnt_meas=   false          // Flag to switch on the measurement of the susceptibility.
+
+
+
 verbosity=  1              // Verbosity flag.
 test_mpi=   false          // Test the MPI implementatation.
 
@@ -39,7 +41,3 @@ Name1=      Ru             // Chemical species of the 1st site (*only* 2 char).
 Norb1=      3              // Orbitals within the 1st site defined by Name1.
 Orbs1=      1 2 3          // Orbital indexes in the lattice that correspond to the site impurity.
 Time1=      10             // Minutes of solver runtime for the 1st impurity. Independent from Ntherm.
-
-
-# Lattice Vars - (SelfConsistency)
-Nkpt3=      8 8 8

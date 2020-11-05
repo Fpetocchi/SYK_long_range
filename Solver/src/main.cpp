@@ -34,9 +34,9 @@ int main(int argc, char *argv[])
    //                           input variables                               //
    //.........................................................................//
    // Global Vars
-   double mu,Beta;
-   int Nspin,Ntau,Norder,Nmeas,Ntherm,Nshift,printTime,verbosity;
-   bool paramagnet,retarded,nnt_meas,test_mpi;
+   double Beta;
+   int Nspin,Ntau,Norder,Nmeas,Ntherm,Nshift,printTime;
+   bool paramagnet,retarded,nnt_meas,testing;
    // Post-processing of the Green's function
    int binlength,binstart;
    // Density lookup algorithm (dichotomy)
@@ -50,6 +50,11 @@ int main(int argc, char *argv[])
    std::vector<std::string> SiteDir;
    char* IterationDir;
 
+#ifdef _verb
+   testing=true;
+#else
+   testing=false;
+#endif
 
    //.........................................................................//
    //                         start global timer                              //
@@ -68,35 +73,31 @@ int main(int argc, char *argv[])
       // Iteration folder
       IterationDir = argv[2];
       // Global Vars
-      find_param(argv[1], "mu"         , mu        );
-      find_param(argv[1], "beta"       , Beta      );
-      find_param(argv[1], "Nspin"      , Nspin     );
-      find_param(argv[1], "Ntau"       , Ntau      );
-      find_param(argv[1], "Norder"     , Norder    );
-      find_param(argv[1], "Nmeas"      , Nmeas     );
-      find_param(argv[1], "Ntherm"     , Ntherm    );
-      find_param(argv[1], "Nshift"     , Nshift    );
-      find_param(argv[1], "printTime"  , printTime );
-      find_param(argv[1], "paramagnet" , paramagnet  );
-      find_param(argv[1], "retarded"   , retarded  );
-      find_param(argv[1], "nnt_meas"   , nnt_meas  );
-      find_param(argv[1], "verbosity"  , verbosity );
-      find_param(argv[1], "test_mpi"   , test_mpi  );
+      find_param(argv[1], "BETA"       , Beta      );
+      find_param(argv[1], "NSPIN"      , Nspin     );
+      find_param(argv[1], "NTAU_F"     , Ntau      );
+      find_param(argv[1], "NORDER"     , Norder    );
+      find_param(argv[1], "NMEAS"      , Nmeas     );
+      find_param(argv[1], "NTHERM"     , Ntherm    );
+      find_param(argv[1], "NSHIFT"     , Nshift    );
+      find_param(argv[1], "PRINT_TIME" , printTime );
+      find_param(argv[1], "PARAMAGNET" , paramagnet  );
+      find_param(argv[1], "RETARDED"   , retarded  );
+      find_param(argv[1], "NNT_MEAS"   , nnt_meas  );
       // Post-processing of the Green's function
-      find_param(argv[1], "binlength"  , binlength );
-      find_param(argv[1], "binstart"   , binstart  );
+      find_param(argv[1], "BINLENGTH"  , binlength );
+      find_param(argv[1], "BINSTART"   , binstart  );
       // Density lookup algorithm (dichotomy)
-      find_param(argv[1], "density"    , density   );
-      find_param(argv[1], "muStep"     , muStep    );
-      find_param(argv[1], "muIter"     , muIter    );
-      find_param(argv[1], "muTime"     , muTime    );
-      find_param(argv[1], "muErr"      , muErr     );
+      find_param(argv[1], "N_READ"     , density   );
+      find_param(argv[1], "MU_STEP"    , muStep    );
+      find_param(argv[1], "MU_ITER"    , muIter    );
+      find_param(argv[1], "MU_TIME"    , muTime    );
+      find_param(argv[1], "N_ERR"      , muErr     );
       // Site Dependent Vars
-      find_param(argv[1], "Nsite"      , Nsite     );
+      find_param(argv[1], "NSITE"      , Nsite     );
       //
-      if(verbosity>=1 && mpi.is_master())
+      if(testing && mpi.is_master())
       {
-         mpi.report(" mu= "+str(mu));
          mpi.report(" beta= "+str(Beta));
          mpi.report(" Nspin= "+str(Nspin));
          mpi.report(" Ntau= "+str(Ntau));
@@ -108,7 +109,7 @@ int main(int argc, char *argv[])
          mpi.report(" retarded= "+str(retarded));
          mpi.report(" paramagnet= "+str(paramagnet));
          mpi.report(" nnt_meas= "+str(nnt_meas));
-         mpi.report(" test_mpi= "+str(test_mpi));
+         mpi.report(" testing= "+str(testing));
          if(binlength>0)
          {
             mpi.report(" binlength= "+str(binlength));
@@ -137,17 +138,17 @@ int main(int argc, char *argv[])
          char element[2];
          int minutes,Norb;
          //
-         strcpy(lineT,"Time");
+         strcpy(lineT,"TIME_");
          strcat(lineT,s);
          find_param(argv[1], lineT, minutes );
          SiteTime.push_back(minutes);
          //
-         strcpy(lineO,"Norb");
+         strcpy(lineO,"NORB_");
          strcat(lineO,s);
          find_param(argv[1], lineO, Norb );
          SiteNorb.push_back(Norb);
          //
-         strcpy(lineN,"Name");
+         strcpy(lineN,"NAME_");
          strcat(lineN,s);
          find_param(argv[1], lineN, element );
          SiteName.push_back(element);
@@ -176,11 +177,11 @@ int main(int argc, char *argv[])
          if(PathExist(strcpy(new char[SiteDir[isite].length() + 1], SiteDir[isite].c_str())))
          {
             mpi.report(" Folder = "+SiteDir[isite]+" (Found).");
-            ImpurityList.push_back(ct_hyb( SiteName[isite], mu, Beta, Nspin, SiteNorb[isite],
+            ImpurityList.push_back(ct_hyb( SiteName[isite], Beta, Nspin, SiteNorb[isite],
                                            Ntau, Norder, Nmeas, Ntherm, Nshift,
                                            paramagnet, retarded, nnt_meas,
-                                           printTime, std::vector<int> { binlength,binstart }, mpi, test_mpi ));
-            ImpurityList[isite].init( SiteDir[isite] );
+                                           printTime, std::vector<int> { binlength,binstart }, mpi, testing ));
+            ImpurityList[isite].init( SiteDir[isite]);
          }
          else
          {
@@ -197,8 +198,8 @@ int main(int argc, char *argv[])
       {
          print_line_space(1,mpi.is_master());
          double trial_density;
-         double mu_start=mu;
-         double mu_new,mu_last=mu;
+         double mu_start=ImpurityList[0].get_mu();
+         double mu_new,mu_last=ImpurityList[0].get_mu();
          std::vector<double>Ntmp(Nsite,0.0);
 
          //

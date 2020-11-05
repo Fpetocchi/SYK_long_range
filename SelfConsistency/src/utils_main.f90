@@ -424,6 +424,7 @@ contains
       logical                               :: filexists
       integer                               :: unit,isite,iorb
       character(len=255)                    :: filepath
+      real(8)                               :: muQMC
       !
       !
       write(LOGfile,"(A)") "---- initialize_Fields"
@@ -636,6 +637,7 @@ contains
             call inquireFile(reg(filepath),filexists,verb=verbose)
             unit = free_unit()
             open(unit,file=reg(filepath),form="formatted",status="old",position="rewind",action="read")
+            read(unit,*) muQMC
             do iorb=1,SiteNorb(isite)
                read(unit,*) densityQMC(iorb,iorb,1,isite),densityQMC(iorb,iorb,2,isite)
             enddo
@@ -646,10 +648,13 @@ contains
       endif
       !
       if(look4dens%TargetDensity.eq.0d0)then
-         look4dens%TargetDensity = trace(densityLDA)
+         Glat%mu = look4dens%mu
       else
          if(ItStart.eq.0)call set_density(Glat%mu,Beta,Crystal,look4dens)
       endif
+      !
+      write(LOGfile,"(A,F)") "Lattice chemical potential: ",Glat%mu
+      write(LOGfile,"(A,F)") "Impurity chemical potential: ",muQMC
       !
    end subroutine initialize_Fields
 
@@ -789,6 +794,7 @@ contains
       type(FermionicField)                  :: Gloc
       type(FermionicField)                  :: SigmaImp
       type(FermionicField)                  :: FermiPrint
+      type(FermionicField)                  :: curlyGold
       integer                               :: Norb,unit
       integer                               :: ispin,iw,iwan,itau,ndx
       integer,allocatable                   :: Orbs(:)
@@ -861,6 +867,21 @@ contains
       deallocate(invGf)
       call DeallocateFermionicField(SigmaImp)
       call DeallocateFermionicField(Gloc)
+      !
+      !Mixing curlyG
+      if(Mixing_curlyG.gt.0d0)then
+         call AllocateFermionicField(curlyGold,Norb,Nmats,Beta=Beta)
+         call dump_FermionicField(curlyGold,1,reg(PrevItFolder)//"Solver_"//reg(SiteName(isite))//"/","G0w_up.DAT")
+         call dump_FermionicField(curlyGold,2,reg(PrevItFolder)//"Solver_"//reg(SiteName(isite))//"/","G0w_dw.DAT")
+         do ispin=1,Nspin
+            do iw=1,Nmats
+               do iwan=1,Norb
+                  invCurlyG(iwan,iw,ispin) = 1d0/((1d0-Mixing_curlyG)*(1d0/invCurlyG(iwan,iw,ispin)) + Mixing_curlyG*curlyGold%ws(iwan,iwan,iw,ispin))
+               enddo
+            enddo
+         enddo
+         call DeallocateFermionicField(curlyGold)
+      endif
       !
       !Extract the local energy
       select case(reg(CalculationType))
@@ -984,9 +1005,9 @@ contains
       !
       type(BosonicField)                    :: Wimp
       type(BosonicField)                    :: Pimp
-      type(BosonicField)                    :: curlyU
+      type(BosonicField)                    :: curlyU,curlyUold
       integer                               :: Norb,Nbp
-      integer                               :: ib1,ib2,itau
+      integer                               :: ib1,ib2,itau,iw
       integer                               :: unit,ndx,isitecheck
       integer,allocatable                   :: Orbs(:)
       real(8),allocatable                   :: Uinst(:,:),Ucheck(:,:)
@@ -1034,6 +1055,17 @@ contains
             call loc2imp(Pimp,Plat,Orbs)
             !
             call calc_curlyU(curlyU,Wimp,Pimp)
+            !
+            !Mixing curlyU
+            if(Mixing_curlyU.gt.0d0)then
+               call AllocateBosonicField(curlyUold,Norb,Nmats,Crystal%iq_gamma,Beta=Beta)
+               call read_BosonicField(curlyUold,reg(PrevItFolder)//"Solver_"//reg(SiteName(isite))//"/","curlyUw.DAT")
+               curlyU%bare_local = (1d0-Mixing_curlyU)*curlyU%bare_local + Mixing_curlyU*curlyUold%bare_local
+               do iw=1,Nmats
+                  curlyU%screened_local(:,:,iw) = (1d0-Mixing_curlyU)*curlyU%screened_local(:,:,iw) + Mixing_curlyU*curlyUold%screened_local(:,:,iw)
+               enddo
+               call DeallocateBosonicField(curlyU)
+            endif
             !
             call calc_QMCinteractions(curlyU,Uinst,Kfunct)
             !
@@ -1134,7 +1166,7 @@ contains
       integer                               :: iorb,jorb,ispin,jspin
       integer                               :: ib1,ib2,isite
       integer                               :: unit,ndx,itau,iw
-      real(8)                               :: taup
+      real(8)                               :: taup,muQMC
       integer,allocatable                   :: Orbs(:)
       real(8),allocatable                   :: ReadLine(:)
       real(8),allocatable                   :: tauF(:),tauB(:),wmats(:)
@@ -1166,6 +1198,7 @@ contains
          call inquireFile(reg(filepath),filexists,verb=verbose)
          unit = free_unit()
          open(unit,file=reg(filepath),form="formatted",status="old",position="rewind",action="read")
+         read(unit,*) muQMC
          do iorb=1,Norb
             read(unit,*) densityQMC(iorb,iorb,1,isite),densityQMC(iorb,iorb,2,isite)
          enddo
