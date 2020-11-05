@@ -86,6 +86,7 @@ module input_vars
    character(len=7),private                 :: file_status
    integer,parameter,private                :: pos_comment=46
    logical,private                          :: IOinput=.true.
+   integer,allocatable,private              :: commentPos(:)
    !
    character(len=256),public                :: CalculationType
    !
@@ -200,10 +201,12 @@ contains
       close(unit)
       !
       !K-points
+      call add_separator()
       call parse_input_variable(Nkpt3,"NKPT3",InputFile,default=[8,8,8],comment="Number of K-points per dimension.")
-      call parse_input_variable(UseXepsKorder,"XEPS_KORDER",InputFile,default=.true.,comment="Flag to use the K-point ordering of XEPS.DAT.")
+      call parse_input_variable(UseXepsKorder,"XEPS_KORDER",InputFile,default=.true.,comment="Flag to use the K-point ordering of XEPS.DAT if present.")
       !
       !Site and Orbital space
+      call add_separator()
       call append_to_input_list(Nspin,"NSPIN","Number of spins (fixed to 2).")
       call parse_input_variable(Nsite,"NSITE",InputFile,default=1,comment="Number of impurity sites.")
       call parse_input_variable(ExpandImpurity,"EXPAND",InputFile,default=.false.,comment="Flag to use a single impurity solution for all the sites of the lattice. Only indexes for site 1 readed.")
@@ -234,8 +237,9 @@ contains
       endif
       !
       !Equivalent lattice indexes
+      call add_separator()
       call parse_input_variable(EqvGWndx%para,"PARAMAGNET",InputFile,default=.true.,comment="Flag to impose spin symmetry.")
-      call parse_input_variable(EqvGWndx%hseed,"H_SEED",InputFile,default=0d0,comment="Seed to break spin symmetry (only in the first iteration).")
+      call parse_input_variable(EqvGWndx%hseed,"H_SEED",InputFile,default=0d0,comment="Seed to break spin symmetry (persistent if non zero).")
       call parse_input_variable(EqvGWndx%Nset,"EQV_SETS",InputFile,default=1,comment="Number of sets of locally equivalent lattice orbitals.")
       allocate(EqvGWndx%SetNorb(EqvGWndx%Nset));EqvGWndx%SetNorb=0
       do iset=1,EqvGWndx%Nset
@@ -250,6 +254,7 @@ contains
       EqvGWndx%Gfoffdiag=.not.ExpandImpurity
       !
       !Imaginary time and frequency meshes
+      call add_separator()
       call parse_input_variable(Beta,"BETA",InputFile,default=10.d0,comment="Inverse temperature in 1/eV.")
       call parse_input_variable(NtauF,"NTAU_F",InputFile,default=201,comment="Number of points on the imaginary time axis for Fermionic quantities. Its gonna be made odd.")
       if(mod(NtauF,2).eq.0)NtauF=NtauF+1
@@ -264,6 +269,7 @@ contains
       call parse_input_variable(eta,"ETA",InputFile,default=0.04d0,comment="Real frequency broadening.")
       !
       !Density lookup
+      call add_separator()
       call parse_input_variable(look4dens%TargetDensity,"N_READ",InputFile,default=0d0,comment="Target density per site lookup is switched on to this value if its >0d0. Otherwise it will be kept equal to the H(k) one.")
       call parse_input_variable(look4dens%quickloops,"N_QUICK",InputFile,default=.true.,comment="Flag to switch on the quick density lookup within the solver.")
       call parse_input_variable(look4dens%densityRelErr,"N_ERR",InputFile,default=0.01d0,comment="Relative error on the target density.")
@@ -273,6 +279,7 @@ contains
       if(ExpandImpurity)look4dens%TargetDensity = look4dens%TargetDensity*Nsite
       !
       !Interaction variables
+      call add_separator()
       call parse_input_variable(UfullStructure,"U_FULL",InputFile,default=.true.,comment="Flag to check for inverted Re/Im parity in SPEX Ucrpa.")
       call parse_input_variable(Umodel,"U_MODEL",InputFile,default=.false.,comment="Flag to build the screening from user chosen phononic modes.")
       call parse_input_variable(Uspex,"U_SPEX",InputFile,default=.true.,comment="Flag to read SPEX Ucrpa.")
@@ -291,6 +298,7 @@ contains
       endif
       !
       !Double counting types, divergencies, scaling coefficients
+      call add_separator()
       call parse_input_variable(VH_type,"VH_TYPE",InputFile,default="Ubare",comment="check this because I dont remember.")
       call parse_input_variable(DC_type,"DC_TYPE",InputFile,default="GlocWloc",comment="Local GW self-energy which is replaced by DMFT self-energy. Avalibale: GlocWloc, Sloc.")
       call parse_input_variable(HandleGammaPoint,"SMEAR_GAMMA",InputFile,default=.true.,comment="Remove the interaction divergence at the Gamma point.")
@@ -299,6 +307,7 @@ contains
       call parse_input_variable(alphaHk,"ALPHA_HK",InputFile,default=1d0,comment="Rescaling of the non-interacting Hamiltonian.")
       !
       !Paths and loop variables
+      call add_separator()
       call parse_input_variable(pathINPUT,"PATH_INPUT",InputFile,default="InputFiles",comment="Folder within cwd where to look for input files.")
       call parse_input_variable(pathDATA,"PATH_DATA",InputFile,default="Iterations",comment="Folder within cwd where to store data.")
       call parse_input_variable(FirstIteration,"START_IT",InputFile,default=0,comment="First iteration.")
@@ -315,7 +324,7 @@ contains
       pathINPUT=trim(pathINPUT)//"/"
       pathDATA=trim(pathDATA)//"/"
       !
-    end subroutine read_InputFile
+   end subroutine read_InputFile
 
 
    !---------------------------------------------------------------------------!
@@ -359,6 +368,30 @@ contains
 
 
    !---------------------------------------------------------------------------!
+   !PURPOSE: Field Separator
+   !---------------------------------------------------------------------------!
+   subroutine add_separator()
+      implicit none
+      integer             :: sizeOld,sizeNew
+      integer,allocatable :: prvPos(:)
+      !
+      if(allocated(commentPos))then
+         sizeOld=size(commentPos)
+         sizeNew=sizeOld+1
+         allocate(prvPos(sizeOld))
+         prvPos=commentPos
+         deallocate(commentPos)
+         allocate(commentPos(sizeNew))
+         commentPos(1:sizeOld) = prvPos
+         commentPos(sizeNew) = default_list%size
+      else
+         allocate(commentPos(1))
+         commentPos(1) = default_list%size
+      endif
+   end subroutine add_separator
+
+
+   !---------------------------------------------------------------------------!
    !PURPOSE: Save to file the used inputfile
    !---------------------------------------------------------------------------!
    subroutine save_InputFile(file)
@@ -398,8 +431,10 @@ contains
             counter=counter+1
             if(present(file))then
                call print_input_node(c,file)
+               if(any(commentPos.eq.counter))call print_separator(file)
             else
                call print_input_node(c)
+               if(any(commentPos.eq.counter))call print_separator()
             endif
             c => c%next
          enddo
@@ -1370,6 +1405,31 @@ contains
      endif
      p_buffer=""
    end subroutine print_input_node
+   !
+   subroutine print_separator(file)
+     use utils_misc
+     implicit none
+     character(len=*),optional              :: file
+     integer                                :: unit,i
+     character(len=pos_comment+1)           :: line
+     line="#"
+     do i=1,pos_comment-1
+        line = trim(line)//"-"
+     enddo
+     line = trim(line)//"#"
+     if(present(file))then
+        unit=free_unit()
+        open(unit,file="used."//file,position='append',status=trim(file_status));file_status='old'
+        write(unit,"(1x,A)")
+        write(unit,"(1x,A)")trim(line)
+        write(unit,"(1x,A)")
+        close(unit)
+     else
+        write(unit,"(1x,A)")
+        write(unit,"(1x,A)")trim(line)
+        write(unit,"(1x,A)")
+     endif
+  end subroutine print_separator
 
 
    !---------------------------------------------------------------------------!
