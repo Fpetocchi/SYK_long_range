@@ -36,7 +36,7 @@ int main(int argc, char *argv[])
    // Global Vars
    double Beta;
    int Nspin,Ntau,Norder,Nmeas,Ntherm,Nshift,printTime;
-   bool paramagnet,retarded,nnt_meas,testing;
+   bool paramagnet,retarded,nnt_meas,quickloops,testing;
    // Post-processing of the Green's function
    int binlength,binstart;
    // Density lookup algorithm (dichotomy)
@@ -93,6 +93,7 @@ int main(int argc, char *argv[])
       find_param(argv[1], "MU_ITER"    , muIter    );
       find_param(argv[1], "MU_TIME"    , muTime    );
       find_param(argv[1], "N_ERR"      , muErr     );
+      find_param(argv[1], "N_QUICK"    , quickloops);
       // Site Dependent Vars
       find_param(argv[1], "NSITE"      , Nsite     );
       //
@@ -194,7 +195,7 @@ int main(int argc, char *argv[])
       //......................................................................//
       //                     Chemical potential Lookup                        //
       //......................................................................//
-      if(density>0.0)
+      if((density>0.0)&&(quickloops==true))
       {
          print_line_space(1,mpi.is_master());
          double trial_density;

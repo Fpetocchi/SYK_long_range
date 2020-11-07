@@ -107,7 +107,8 @@ module parameters
       integer                               :: muIter=0
       real(8)                               :: muTime=0d0
       integer,allocatable                   :: orbs(:)                          !orbital restriction (has to be added to the input)
-      logical                               :: quickloops=.false.
+      !I'm writing this as integers due to some mismatch on how to write boolean between fortrann and c++
+      integer                               :: quickloops=0
    end type musearch
 
 
@@ -118,10 +119,35 @@ module parameters
       logical                               :: para=.true.
       real(8)                               :: hseed=0d0
       integer                               :: Nset=0
+      integer                               :: Ntotset=0
       integer,allocatable                   :: SetNorb(:)
       integer,allocatable                   :: SetOrbs(:,:)
       logical                               :: Gfoffdiag=.true.
    end type Equivalent
+
+
+   !---------------------------------------------------------------------------!
+   !PURPOSE: container to store the physical interaction elements
+   !---------------------------------------------------------------------------!
+   type physicalU
+      !Interaction with size Nspin*Norb
+      logical,allocatable                   :: Flav_Uloc(:,:)
+      logical,allocatable                   :: Flav_U1st(:,:)
+      logical,allocatable                   :: Flav_U2nd(:,:)
+      logical,allocatable                   :: Flav_All(:,:)
+      integer,allocatable                   :: Flav_Map(:,:,:)
+      integer                               :: Flav_Size
+      !Interaction with size Norb^2
+      logical,allocatable                   :: Full_Uaa(:,:)
+      logical,allocatable                   :: Full_Uab(:,:)
+      logical,allocatable                   :: Full_Jsf(:,:)
+      logical,allocatable                   :: Full_Jph(:,:)
+      logical,allocatable                   :: Full_All(:,:)
+      integer,allocatable                   :: Full_Map(:,:,:)
+      integer                               :: Full_Size
+      !
+      logical                               :: status=.false.
+   end type physicalU
 
 
    !---------------------------------------------------------------------------!

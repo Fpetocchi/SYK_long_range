@@ -158,7 +158,6 @@ module input_vars
    !Variables not to be readed
    logical,public                           :: paramagneticSPEX=.true.
    logical,public                           :: XEPSisread=.false.
-   logical,allocatable,public               :: PhysicalUelement(:,:)
    logical,public                           :: solve_DMFT=.true.
    logical,public                           :: bosonicSC=.false.
 
@@ -268,8 +267,8 @@ contains
       if(mod(NtauF,2).eq.0)NtauF=NtauF+1
       call parse_input_variable(NtauB,"NTAU_B",InputFile,default=1001,comment="Number of points on the imaginary time axis for Bosonic quantities. Its gonna be made odd.")
       if(mod(NtauB,2).eq.0)NtauB=NtauB+1
-      call parse_input_variable(tau_uniform,"TAU_UNIF",InputFile,default=.false.,comment="Flag to use a non-tau_uniform meah on the imaginary time axis.")
-      call parse_input_variable(wmatsMax,"MAX_WMATS",InputFile,default=100.d0,comment="Maximum value of the matsubara frequency mesh.")
+      call parse_input_variable(tau_uniform,"TAU_UNIF",InputFile,default=.false.,comment="Flag to use a non-tau_uniform mesh on the imaginary time axis.")
+      call parse_input_variable(wmatsMax,"MAX_WMATS",InputFile,default=100.d0,comment="Maximum value of the Matsubara frequency mesh.")
       Nmats = int(Beta*wmatsMax/(2d0*pi))
       call append_to_input_list(Nmats,"NMATS","Number of points on the imaginary frequency axis. User cannot set this as its computed from MAX_WMATS and BETA.")
       call parse_input_variable(Nreal,"NREAL",InputFile,default=2000,comment="Number of points on the real frequency axis.")
@@ -280,7 +279,7 @@ contains
       call add_separator()
       call parse_input_variable(look4dens%mu,"MU",InputFile,default=0d0,comment="Chemical potential.")
       call parse_input_variable(look4dens%TargetDensity,"N_READ",InputFile,default=0d0,comment="Target density per site lookup is switched on to this value if its >0d0. Otherwise mu will be kept fixed.")
-      call parse_input_variable(look4dens%quickloops,"N_QUICK",InputFile,default=.true.,comment="Flag to switch on the quick density lookup within the solver.")
+      call parse_input_variable(look4dens%quickloops,"N_QUICK",InputFile,default=1,comment="Integer flag to switch on the quick density lookup within the solver.")
       call parse_input_variable(look4dens%densityRelErr,"N_ERR",InputFile,default=0.01d0,comment="Relative error on the target density.")
       call parse_input_variable(look4dens%muStep,"MU_STEP",InputFile,default=0.2d0,comment="Initial chemical potential step in the density lookup.")
       call parse_input_variable(look4dens%muIter,"MU_ITER",InputFile,default=50,comment="Maximum number of iterations in the density lookup.")
@@ -308,7 +307,7 @@ contains
       !
       !Double counting types, divergencies, scaling coefficients
       call add_separator()
-      call parse_input_variable(VH_type,"VH_TYPE",InputFile,default="Ubare",comment="check this because I dont remember.")
+      call parse_input_variable(VH_type,"VH_TYPE",InputFile,default="Ubare",comment="Hartree term mismatch between GoWo and scGW. Available: Ubare, Ustatic, Ubare_SPEX, Ustatic_SPEX.")
       call parse_input_variable(DC_type,"DC_TYPE",InputFile,default="GlocWloc",comment="Local GW self-energy which is replaced by DMFT self-energy. Avalibale: GlocWloc, Sloc.")
       call parse_input_variable(HandleGammaPoint,"SMEAR_GAMMA",InputFile,default=.true.,comment="Remove the interaction divergence at the Gamma point.")
       call parse_input_variable(alphaPi,"ALPHA_PI",InputFile,default=1d0,comment="Fraction of the EDMFT polarization substituted within the lattice one.")
@@ -320,7 +319,7 @@ contains
       call parse_input_variable(pathINPUT,"PATH_INPUT",InputFile,default="InputFiles",comment="Folder within cwd where to look for input files.")
       call parse_input_variable(pathDATA,"PATH_DATA",InputFile,default="Iterations",comment="Folder within cwd where to store data.")
       call parse_input_variable(FirstIteration,"START_IT",InputFile,default=0,comment="First iteration.")
-      call parse_input_variable(LastIteration,"LAST_IT",InputFile,default=100,comment="Last iteration (by now used only for scGW).")
+      call parse_input_variable(LastIteration,"LAST_IT",InputFile,default=100,comment="Last iteration.")
       call parse_input_variable(LOGfile,"LOGFILE",InputFile,default=6,comment="Standard output redirection unit. Use 6 to print to terminal.")
       call parse_input_variable(Mixing_curlyG,"MIX_G",InputFile,default=0.5d0,comment="Fraction of the old iteration curlyG.")
       call parse_input_variable(Mixing_curlyU,"MIX_U",InputFile,default=0.5d0,comment="Fraction of the old iteration curlyU.")
@@ -1504,10 +1503,12 @@ contains
      var%name = buffer(1:pos-1)
      call upper_case(var%name)
      len=len_trim(buffer)
-     if(buffer(len:len)==',')then
-        var%value= buffer(pos+1:len-1)
-     else
-        var%value= buffer(pos+1:)
+     if(len.gt.0)then
+        if(buffer(len:len)==',')then
+          var%value= buffer(pos+1:len-1)
+       else
+          var%value= buffer(pos+1:)
+       endif
      endif
    end function scan_input_variable
 

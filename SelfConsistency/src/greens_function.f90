@@ -421,7 +421,7 @@ contains
       ! Check on the input Fields
       if(.not.Gmats%status) stop "Gmats not properly initialized."
       if(.not.Lttc%status) stop "Lttc not properly initialized."
-      if(.not.Smats%status) stop "Smats not properly initialized."
+      if(present(Smats).and.(.not.Smats%status)) stop "Smats not properly initialized."
       if(Gmats%Npoints.eq.0) stop "Gmats frequency dependent attributes not properly initialized."
       if(Gmats%Nkpt.eq.0) stop "Gmats k dependent attributes not properly initialized."
       if(Gmats%Nkpt.ne.Lttc%Nkpt) stop "Lttc has different number of k-points with respect to Gmats."
@@ -443,11 +443,12 @@ contains
       write(*,"(A,F10.5)") "Starting chemical potential: ",mu_start
       !
       mu_sign = sign(1d0,mu_param%TargetDensity-n_iter)
+      mu_last = mu_start
       !
       do iter=1,mu_param%muIter
          !
-         dmu = iter * mu_param%muStep * mu_sign
-         Gmats%mu = mu_start + dmu;
+         Gmats%mu = mu_start + iter * mu_param%muStep * mu_sign;
+         dmu = Gmats%mu - mu_last;
          !
          if(present(Smats))then
             call calc_Gmats_Full(Gmats,Lttc,Smats)
@@ -457,7 +458,7 @@ contains
          n_iter = get_dens()
          !
          write(*,"(A,I4)") "Rigid shift iteration # ",iter
-         write(*,"(2(A,F10.5))") "Density: ", n_iter," mu: ", Gmats%mu
+         write(*,"(3(A,F10.5))") "Density: ", n_iter,", mu: ", Gmats%mu,", Dmu: ", dmu
          !
          if((mu_sign.gt.0.0).and.(n_iter > mu_param%TargetDensity)) exit
          if((mu_sign.lt.0.0).and.(n_iter < mu_param%TargetDensity)) exit
@@ -471,18 +472,21 @@ contains
       !
       do iter=1,mu_param%muIter
          !
+         mu_last = Gmats%mu
          Gmats%mu = (mu_below+mu_above)/2d0
+         dmu = Gmats%mu - mu_last
+         !
          if(present(Smats))then
             call calc_Gmats_Full(Gmats,Lttc,Smats)
          else
-            call calc_Gmats_Shift(Gmats,Lttc,(Gmats%mu-mu_last))
+            call calc_Gmats_Shift(Gmats,Lttc,dmu)
          endif
          n_iter = get_dens()
          n_err = abs(n_iter-mu_param%TargetDensity)/mu_param%TargetDensity
          !
          write(*,"(A,I4)") "Secant method iteration # ",iter
-         write(*,"(2(A,F10.5))") "Chemical potential boundaries: ",mu_below," / ",mu_above
-         write(*,"(3(A,F10.5))") "Density: ", n_iter," mu: ", Gmats%mu," relative error: ", n_err
+         write(*,"(3(A,F10.5))") "Chemical potential boundaries: ",mu_below," / ",mu_above,", Dmu: ", dmu
+         write(*,"(3(A,F10.5))") "Density: ", n_iter,", mu: ", Gmats%mu,", relative error: ", n_err
          !
          if(n_iter.gt.mu_param%TargetDensity) mu_above = Gmats%mu;
          if(n_iter.lt.mu_param%TargetDensity) mu_below = Gmats%mu;
@@ -493,8 +497,6 @@ contains
          elseif(iter.eq.mu_param%muIter)then
              write(*,"(A,F10.5)") "Warning: NOT found correct chemical potential after "//str(iter)//" iterations. Last used value: ",Gmats%mu
          endif
-         !
-         mu_last = Gmats%mu
          !
       enddo !iter
       !
@@ -536,6 +538,7 @@ contains
    !---------------------------------------------------------------------------!
    !PURPOSE: Returns the chemical potential shift in order to have the wanted
    !         LDA density
+   !TEST ON: 06-11-2020
    !---------------------------------------------------------------------------!
    subroutine set_density_NonInt(mu,Beta,Lttc,mu_param)
       !
@@ -567,7 +570,7 @@ contains
       if(.not.Lttc%status) stop "Lttc not properly initialized."
       if(Lttc%Nkpt.eq.0) stop "Lttc k dependent attributes not properly initialized."
       if(mu_param%TargetDensity.eq.0d0) stop "TargetDensity is set to zero."
-      write(*,"(A1,F10.5)") "Target density: ",mu_param%TargetDensity
+      write(*,"(A,F10.5)") "Target density: ",mu_param%TargetDensity
       !
       Norb = Lttc%Norb
       Nkpt = Lttc%Nkpt
@@ -583,16 +586,17 @@ contains
       write(*,"(A,F10.5)") "Starting mu: ",mu_start
       !
       mu_sign = sign(1d0,mu_param%TargetDensity-n_iter)
+      mu_last = mu_start;
       !
       do iter=1,mu_param%muIter
          !
-         mu = mu_start + iter * mu_param%muStep * mu_sign;
+         mu = mu_start + iter * 0.05 * mu_sign;
          !
          call calc_G0_tau(Gitau,mu,Beta,Lttc%Ek,atBeta=.true.)
          n_iter = get_dens()
          !
          write(*,"(A,I4)") "Rigid shift iteration # ",iter
-         write(*,"(2(A,F10.5))") "Density: ", n_iter," mu: ", mu
+         write(*,"(2(A,F10.5))") "Density: ", n_iter,", mu: ", mu
          !
          if((mu_sign.gt.0.0).and.(n_iter > mu_param%TargetDensity)) exit
          if((mu_sign.lt.0.0).and.(n_iter < mu_param%TargetDensity)) exit
@@ -613,7 +617,7 @@ contains
          !
          write(*,"(A,I4)") "Secant method iteration # ",iter
          write(*,"(2(A,F10.5))") "Chemical potential boundaries: ",mu_below," / ",mu_above
-         write(*,"(3(A,F10.5))") "Density: ", n_iter," mu: ", mu," relative error: ", n_err
+         write(*,"(3(A,F10.5))") "Density: ", n_iter,", mu: ", mu,", relative error: ", n_err
          !
          if(n_iter.gt.mu_param%TargetDensity) mu_above = mu;
          if(n_iter.lt.mu_param%TargetDensity) mu_below = mu;
@@ -639,7 +643,7 @@ contains
          integer                  :: iwan,ik
          do ik=1,Nkpt
             !paramagnetic
-            n_k(:,:,ik) = 2.d0*diag(Gitau(:,NtauF,ik))
+            n_k(:,:,ik) = -2.d0*diag(Gitau(:,NtauF,ik))
             !if present, the restriction is on the orbitals in Wannier basis
             n_k(:,:,ik) = rotate(n_k(:,:,ik),transpose(conjg(Lttc%Zk(:,:,ik))))
          enddo

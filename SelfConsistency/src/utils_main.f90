@@ -34,7 +34,6 @@ module utils_main
    real(8),allocatable                      :: HlocEig(:,:)
    !
    type(FermionicField)                     :: Glat
-   type(FermionicField)                     :: Gimp
    type(FermionicField)                     :: SigmaFull
    type(FermionicField)                     :: SigmaG0W0,SigmaG0W0dc
    type(FermionicField)                     :: SigmaGW,SigmaGW_C,SigmaGW_X
@@ -45,7 +44,6 @@ module utils_main
    type(BosonicField)                       :: Ulat
    type(BosonicField)                       :: Plat
    type(BosonicField)                       :: PiEDMFT
-   type(BosonicField)                       :: curlyU
    !
    real(8)                                  :: density2set
    complex(8),allocatable                   :: densityLDA(:,:)
@@ -211,11 +209,12 @@ contains
       implicit none
       type(Lattice),intent(out)             :: Lttc
       integer,intent(in)                    :: ItStart
-      integer                               :: m,n,mp,np,ib1,ib2,isite,Norb
+      integer                               :: isite,iorb,Norb,iadd,iset
       integer                               :: iq_gamma_Hk,iq_gamma_XEPS
       complex(8),allocatable                :: Hloc(:,:),Rot(:,:)
       real(8),allocatable                   :: Eig(:)
       integer,allocatable                   :: Orbs(:)
+      integer,allocatable                   :: oldSetNorb(:),oldSetOrbs(:,:)
       !
       !
       write(LOGfile,"(A)") "---- initialize_Lattice"
@@ -388,27 +387,44 @@ contains
          !
       endif
       !
-      !Store the Physical (number and spin conserving) elements of the interaction tensor
-      allocate(PhysicalUelement(Lttc%Norb**2,Lttc%Norb**2));PhysicalUelement=.false.
-      do m=1,Lttc%Norb
-         do n=1,Lttc%Norb
-            do mp=1,Lttc%Norb
-               do np=1,Lttc%Norb
-                  !
-                  ib1 = mp + Lttc%Norb*(m-1)
-                  ib2 = np + Lttc%Norb*(n-1)
-                  !
-                  if((mp.eq.m).and.(np.eq.n)) PhysicalUelement(ib1,ib2)=.true.
-                  if((mp.eq.np).and.(m.eq.n)) PhysicalUelement(ib1,ib2)=.true.
-                  if((mp.eq.n).and.(m.eq.np)) PhysicalUelement(ib1,ib2)=.true.
-                  !
-               enddo
-            enddo
-         enddo
-      enddo
-      !
       !Dump some LDA results
       if(ItStart.eq.0)call calc_Glda(0d0,Beta,Lttc)
+      !
+      !Add the reamining orbitals in the symmetrization list
+      if(sum(EqvGWndx%SetNorb).lt.Lttc%Norb)then
+         !
+         EqvGWndx%Ntotset = EqvGWndx%Nset + (Lttc%Norb-sum(EqvGWndx%SetNorb))
+         !
+         !reshape of SetNorb
+         allocate(oldSetNorb(size(EqvGWndx%SetNorb)))
+         oldSetNorb=EqvGWndx%SetNorb
+         deallocate(EqvGWndx%SetNorb)
+         allocate(EqvGWndx%SetNorb(EqvGWndx%Ntotset))
+         EqvGWndx%SetNorb(1:EqvGWndx%Nset) = oldSetNorb
+         EqvGWndx%SetNorb(1+EqvGWndx%Nset:EqvGWndx%Ntotset) = 1
+         deallocate(oldSetNorb)
+         !
+         !reshape of SetOrbs
+         allocate(oldSetOrbs(EqvGWndx%Nset,size(EqvGWndx%SetOrbs,dim=2)))
+         oldSetOrbs=EqvGWndx%SetOrbs
+         deallocate(EqvGWndx%SetOrbs)
+         allocate(EqvGWndx%SetOrbs(EqvGWndx%Ntotset,1))
+         iadd=0
+         do iorb=1,Lttc%Norb
+            do iset=1,EqvGWndx%Nset
+               if(any(oldSetOrbs(iset,:).eq.iorb))then
+                  cycle
+               else
+                  iadd=iadd+1
+                  EqvGWndx%SetOrbs(EqvGWndx%Nset+iadd,1)=iorb
+               endif
+            enddo
+         enddo
+         deallocate(oldSetOrbs)
+         !
+      else
+         EqvGWndx%Ntotset = EqvGWndx%Nset
+      endif
       !
    end subroutine initialize_Lattice
 
@@ -469,7 +485,7 @@ contains
                if(filexists)then
                   call read_Matrix(Umat,reg(pathINPUT)//"Umat_model.DAT")
                else
-                  call build_Uscr(Umat,Uaa,Uab,J)
+                  call build_Umat(Umat,Uaa,Uab,J)
                   call dump_Matrix(Umat,reg(pathINPUT)//"Umat_model.DAT")
                endif
             endif
@@ -654,7 +670,7 @@ contains
       endif
       !
       write(LOGfile,"(A,F)") "Lattice chemical potential: ",Glat%mu
-      write(LOGfile,"(A,F)") "Impurity chemical potential: ",muQMC
+      if(ItStart.gt.0)write(LOGfile,"(A,F)") "Impurity chemical potential: ",muQMC
       !
    end subroutine initialize_Fields
 
@@ -786,10 +802,11 @@ contains
    !         spin-orbital flavor
    !TEST ON:
    !---------------------------------------------------------------------------!
-   subroutine calc_Delta(isite)
+   subroutine calc_Delta(isite,Iteration)
       !
       implicit none
       integer,intent(in)                    :: isite
+      integer,intent(in)                    :: Iteration
       !
       type(FermionicField)                  :: Gloc
       type(FermionicField)                  :: SigmaImp
@@ -869,10 +886,10 @@ contains
       call DeallocateFermionicField(Gloc)
       !
       !Mixing curlyG
-      if(Mixing_curlyG.gt.0d0)then
+      if((Mixing_curlyG.gt.0d0).and.(Iteration.gt.0))then
          call AllocateFermionicField(curlyGold,Norb,Nmats,Beta=Beta)
-         call dump_FermionicField(curlyGold,1,reg(PrevItFolder)//"Solver_"//reg(SiteName(isite))//"/","G0w_up.DAT")
-         call dump_FermionicField(curlyGold,2,reg(PrevItFolder)//"Solver_"//reg(SiteName(isite))//"/","G0w_dw.DAT")
+         call read_FermionicField(curlyGold,1,reg(PrevItFolder)//"Solver_"//reg(SiteName(isite))//"/","G0w_up.DAT")
+         call read_FermionicField(curlyGold,2,reg(PrevItFolder)//"Solver_"//reg(SiteName(isite))//"/","G0w_dw.DAT")
          do ispin=1,Nspin
             do iw=1,Nmats
                do iwan=1,Norb
@@ -940,7 +957,7 @@ contains
       close(unit)
       !
       !Delta(tau)
-      printpath = reg(ItFolder)//"Solver_"//reg(SiteName(isite))//"/Deltat.DAT"
+      printpath = reg(ItFolder)//"Solver_"//reg(SiteName(isite))//"/Dt.DAT"
       unit = free_unit()
       open(unit,file=reg(printpath),form="formatted",status="unknown",position="rewind",action="write")
       do itau=1,NtauF
@@ -963,8 +980,8 @@ contains
       do iwan=1,Norb
          FermiPrint%ws(iwan,iwan,:,:) = Dmats(iwan,:,:)
       enddo
-      call dump_FermionicField(FermiPrint,1,reg(ItFolder)//"Solver_"//reg(SiteName(isite))//"/","Deltaw_up.DAT")
-      call dump_FermionicField(FermiPrint,2,reg(ItFolder)//"Solver_"//reg(SiteName(isite))//"/","Deltaw_dw.DAT")
+      call dump_FermionicField(FermiPrint,1,reg(ItFolder)//"Solver_"//reg(SiteName(isite))//"/","Dw_up.DAT")
+      call dump_FermionicField(FermiPrint,2,reg(ItFolder)//"Solver_"//reg(SiteName(isite))//"/","Dw_dw.DAT")
       call clear_attributes(FermiPrint)
       !
       !CurlyG(iw)
@@ -976,15 +993,17 @@ contains
       call clear_attributes(FermiPrint)
       !
       !Eo+Delta(iw)
-      do ispin=1,Nspin
-         do iwan=1,Norb
-            FermiPrint%ws(iwan,iwan,:,ispin) = img*wmats(:) - invCurlyG(iwan,:,ispin)
+      if((reg(CalculationType).eq."GW+EDMFT").and.verbose)then
+         do ispin=1,Nspin
+            do iwan=1,Norb
+               FermiPrint%ws(iwan,iwan,:,ispin) = img*wmats(:) - invCurlyG(iwan,:,ispin)
+            enddo
          enddo
-      enddo
-      call dump_FermionicField(FermiPrint,1,reg(ItFolder)//"Solver_"//reg(SiteName(isite))//"/","Eo+Deltaw_up.DAT")
-      call dump_FermionicField(FermiPrint,2,reg(ItFolder)//"Solver_"//reg(SiteName(isite))//"/","Eo+Deltaw_dw.DAT")
-      call DeallocateFermionicField(FermiPrint)
+         call dump_FermionicField(FermiPrint,1,reg(ItFolder)//"Solver_"//reg(SiteName(isite))//"/","Eo+Dw_up.DAT")
+         call dump_FermionicField(FermiPrint,2,reg(ItFolder)//"Solver_"//reg(SiteName(isite))//"/","Eo+Dw_dw.DAT")
+      endif
       !
+      call DeallocateFermionicField(FermiPrint)
       deallocate(Orbs,Eloc,zeta,invCurlyG,Dmats,Ditau,tau,wmats,PrintLine)
       !
    end subroutine calc_Delta
@@ -997,10 +1016,11 @@ contains
    !         using the isite input just to print out the wanted one.
    !TEST ON:
    !---------------------------------------------------------------------------!
-   subroutine calc_Interaction(isite,checkInvariance)
+   subroutine calc_Interaction(isite,Iteration,checkInvariance)
       !
       implicit none
       integer,intent(in)                    :: isite
+      integer,intent(in)                    :: Iteration
       logical,intent(in)                    :: checkInvariance
       !
       type(BosonicField)                    :: Wimp
@@ -1057,7 +1077,7 @@ contains
             call calc_curlyU(curlyU,Wimp,Pimp)
             !
             !Mixing curlyU
-            if(Mixing_curlyU.gt.0d0)then
+            if((Mixing_curlyU.gt.0d0).and.(Iteration.gt.0))then
                call AllocateBosonicField(curlyUold,Norb,Nmats,Crystal%iq_gamma,Beta=Beta)
                call read_BosonicField(curlyUold,reg(PrevItFolder)//"Solver_"//reg(SiteName(isite))//"/","curlyUw.DAT")
                curlyU%bare_local = (1d0-Mixing_curlyU)*curlyU%bare_local + Mixing_curlyU*curlyUold%bare_local
@@ -1474,8 +1494,31 @@ contains
    end subroutine collect_QMC_results
 
 
-end module utils_main
+   !---------------------------------------------------------------------------!
+   !PURPOSE: Deallocate all fields
+   !TEST ON:
+   !---------------------------------------------------------------------------!
+   subroutine DeallocateAllFields()
+      implicit none
+      if(Glat%status) call DeallocateFermionicField(Glat)
+      if(SigmaFull%status) call DeallocateFermionicField(SigmaFull)
+      if(SigmaG0W0%status) call DeallocateFermionicField(SigmaG0W0)
+      if(SigmaG0W0dc%status) call DeallocateFermionicField(SigmaG0W0dc)
+      if(SigmaGW%status) call DeallocateFermionicField(SigmaGW)
+      if(SigmaGW_C%status) call DeallocateFermionicField(SigmaGW_C)
+      if(SigmaGW_X%status) call DeallocateFermionicField(SigmaGW_X)
+      if(SigmaGWdc%status) call DeallocateFermionicField(SigmaGWdc)
+      if(SigmaGW_Cdc%status) call DeallocateFermionicField(SigmaGW_Cdc)
+      if(SigmaGW_Xdc%status) call DeallocateFermionicField(SigmaGW_Xdc)
+      if(SigmaDMFT%status) call DeallocateFermionicField(SigmaDMFT)
+      if(Wlat%status) call DeallocateBosonicField(Wlat)
+      if(Ulat%status) call DeallocateBosonicField(Ulat)
+      if(Plat%status) call DeallocateBosonicField(Plat)
+      if(PiEDMFT%status) call DeallocateBosonicField(PiEDMFT)
+   end subroutine DeallocateAllFields
 
+
+end module utils_main
 
 
 

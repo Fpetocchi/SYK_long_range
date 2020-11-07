@@ -35,7 +35,7 @@ program test
    !---------------------------------------------------------------------------!
    !       COLLECTING RESULTS FROM THE SOLVER AND SOLVING DYSON EQUATION       !
    !---------------------------------------------------------------------------!
-   if(solve_DMFT)call collect_QMC_results()
+   if(solve_DMFT.and.(ItStart.gt.0))call collect_QMC_results()
    !
    !
    !
@@ -148,10 +148,10 @@ program test
          do isite=1,Nsite
             !
             !Extract the hybridization functions and local energies (always diagonal)
-            call calc_Delta(isite)
+            call calc_Delta(isite,Iteration)
             !
-            !Compute local effective interaction (loop on the sites is internal)
-            call calc_Interaction(isite,ExpandImpurity)
+            !Compute local effective interaction
+            call calc_Interaction(isite,Iteration,ExpandImpurity)
             !
             if(ExpandImpurity)exit
             !
@@ -161,6 +161,7 @@ program test
       !
    enddo
    !
+   call DeallocateAllFields()
    write(LOGfile,"(A,F)") "Self-Consistency finished. Total timing (s): ",tock(TimeStart)
    !
 end program test

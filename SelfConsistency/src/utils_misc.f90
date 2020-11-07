@@ -497,8 +497,9 @@ contains
             elem_ji = A(j,i)
             !
             if(abs(elem_ij-elem_ji).gt.tol)then
-               write(*,"(2(A,1F10.5))") "Re(A_ij): ",real(elem_ij),"Re(A_ji): ",real(elem_ji)
-               write(*,"(A,1F10.5)") "Real parts difference above threshold ",tol
+               write(*,"(A,2I4)") "Components: ",i,j
+               write(*,"(2(A,E20.12))") "Re(A_ij): ",real(elem_ij),"  Re(A_ji): ",real(elem_ji)
+               write(*,"(A,E20.12)") "Real parts difference above threshold ",tol
                if(hardstop_)stop
             endif
             !

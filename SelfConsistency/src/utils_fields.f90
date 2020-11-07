@@ -466,6 +466,8 @@ contains
          enddo
       endif
       !
+      Gimp%mu = Gloc%mu
+      !
    end subroutine loc2imp_Fermionic
    !
    subroutine loc2imp_Matrix(Oimp,Oloc,orbs,sitename,U)
@@ -531,6 +533,7 @@ contains
       integer                               :: ib_imp,jb_imp,ib_loc,jb_loc
       integer                               :: i_loc,j_loc,k_loc,l_loc
       integer                               :: i_imp,j_imp,k_imp,l_imp
+      logical                               :: doBare
       !
       !
       if(verbose)write(*,"(A)") "---- loc2imp(B)"
@@ -547,12 +550,11 @@ contains
       if(Wimp%Npoints.ne.Wloc%Npoints) stop "Wimp2Wimp: Wimp and Wloc have different number of Matsubara points."
       if(Wimp%Nkpt.ne.0) stop "loc2imp(B): Wimp k-dependent attributes attributes are supposed to be unallocated."
       if(.not.allocated(Wloc%screened_local)) stop "loc2imp(B): Wloc screened_local attribute not allocated."
-      if(.not.allocated(Wloc%bare_local)) stop "loc2imp(B): Wloc bare_local attribute not allocated."
       if(.not.allocated(Wimp%screened_local)) stop "loc2imp(B): Wimp screened_local attribute not allocated."
-      if(.not.allocated(Wimp%bare_local)) stop "loc2imp(B): Wimp bare_local attribute not allocated."
       !
       Norb_imp = int(sqrt(dble(Wimp%Nbp)))
       Norb_loc = int(sqrt(dble(Wloc%Nbp)))
+      doBare = allocated(Wimp%bare_local)
       !
       if(size(orbs).ne.Norb_imp) stop "loc2imp(B): can't fit the requested orbitals inside Wimp."
       if(size(orbs).gt.Norb_loc) stop "loc2imp(B): number of requested orbitals greater than Wloc size."
@@ -578,7 +580,7 @@ contains
                   ib_loc = k_loc + Norb_loc*(i_loc-1)
                   jb_loc = l_loc + Norb_loc*(j_loc-1)
                   !
-                  Wimp%bare_local(ib_imp,jb_imp) =  Wloc%bare_local(ib_loc,jb_loc)
+                  if(doBare)Wimp%bare_local(ib_imp,jb_imp) =  Wloc%bare_local(ib_loc,jb_loc)
                   do ip=1,Wimp%Npoints
                      Wimp%screened_local(ib_imp,jb_imp,ip) = Wloc%screened_local(ib_loc,jb_loc,ip)
                   enddo
@@ -825,7 +827,7 @@ contains
       integer                               :: ib_imp,jb_imp,ib_loc,jb_loc
       integer                               :: i_loc,j_loc,k_loc,l_loc
       integer                               :: i_imp,j_imp,k_imp,l_imp
-      logical                               :: expand_
+      logical                               :: expand_,doBare
       !
       !
       if(verbose)write(*,"(A)") "---- imp2loc(B)"
@@ -842,12 +844,11 @@ contains
       if(Wloc%Npoints.ne.Wimp%Npoints) stop "imp2loc(B): Wimp and Wloc have different number of Matsubara points."
       if(Wimp%Nkpt.ne.0) stop "imp2loc(B): Wimp k-dependent attributes attributes are supposed to be unallocated."
       if(.not.allocated(Wloc%screened_local)) stop "imp2loc(B): Wloc screened_local attribute not allocated."
-      if(.not.allocated(Wloc%bare_local)) stop "imp2loc(B): Wloc bare_local attribute not allocated."
       if(.not.allocated(Wimp%screened_local)) stop "imp2loc(B): Wimp screened_local attribute not allocated."
-      if(.not.allocated(Wimp%bare_local)) stop "imp2loc(B): Wimp bare_local attribute not allocated."
       !
       Norb_imp = int(sqrt(dble(Wimp%Nbp)))
       Norb_loc = int(sqrt(dble(Wloc%Nbp)))
+      doBare = allocated(Wimp%bare_local)
       !
       if(size(orbs).ne.Norb_imp) stop "imp2loc(B): can't fit the requested orbitals from Wimp."
       if(size(orbs).gt.Norb_loc) stop "imp2loc(B): number of requested orbitals greater than Wloc size."
@@ -887,7 +888,7 @@ contains
                      ib_loc = k_loc + Norb_loc*(i_loc-1)
                      jb_loc = l_loc + Norb_loc*(j_loc-1)
                      !
-                     Wloc%bare_local(ib_loc,jb_loc) = Wimp%bare_local(ib_imp,jb_imp)
+                     if(doBare)Wloc%bare_local(ib_loc,jb_loc) = Wimp%bare_local(ib_imp,jb_imp)
                      do ip=1,Wimp%Npoints
                         Wloc%screened_local(ib_loc,jb_loc,ip) = Wimp%screened_local(ib_imp,jb_imp,ip)
                      enddo
@@ -932,12 +933,12 @@ contains
          Mat(:,:,2) = Mat(:,:,1)
       endif
       !
-      if(Eqv%Nset.gt.0)then
+      if(Eqv%Ntotset.gt.0)then
          !
          do ispin=1,Nspin
             !
             !symmetrization of the diagonal sets
-            do iset=1,Eqv%Nset
+            do iset=1,Eqv%Ntotset
                !
                dimdiag = Eqv%SetNorb(iset)
                dimoffdiag = Eqv%SetNorb(iset)*(Eqv%SetNorb(iset)-1)/2
@@ -976,8 +977,8 @@ contains
             !
             !symmetrization of the off-diagonal sets
             if(Eqv%Gfoffdiag)then
-               do iset=1,Eqv%Nset
-                  do jset=1,Eqv%Nset
+               do iset=1,Eqv%Ntotset
+                  do jset=1,Eqv%Ntotset
                      !
                      if(iset.eq.jset)cycle
                      dimoffdiag = Eqv%SetNorb(iset)*Eqv%SetNorb(jset)
@@ -1051,12 +1052,12 @@ contains
          !
       endif
       !
-      if(Eqv%Nset.gt.0)then
+      if(Eqv%Ntotset.gt.0)then
          !
          do ispin=1,Nspin
             !
             !symmetrization of the diagonal sets
-            do iset=1,Eqv%Nset
+            do iset=1,Eqv%Ntotset
                !
                dimdiag = Eqv%SetNorb(iset)
                dimoffdiag = Eqv%SetNorb(iset)*(Eqv%SetNorb(iset)-1)/2
@@ -1123,8 +1124,8 @@ contains
             !
             !symmetrization of the off-diagonal sets
             if(Eqv%Gfoffdiag)then
-               do iset=1,Eqv%Nset
-                  do jset=1,Eqv%Nset
+               do iset=1,Eqv%Ntotset
+                  do jset=1,Eqv%Ntotset
                      !
                      if(iset.eq.jset)cycle
                      dimoffdiag = Eqv%SetNorb(iset)*Eqv%SetNorb(jset)
@@ -1217,10 +1218,10 @@ contains
       if(.not.W%status) stop "symmetrize_Bosonic: field not properly initialized."
       Norb = sqrt(dble(W%Nbp))
       !
-      if(Eqv%Nset.gt.0)then
+      if(Eqv%Ntotset.gt.0)then
          !
          !symmetrization of the diagonal sets
-         do iset=1,Eqv%Nset
+         do iset=1,Eqv%Ntotset
             !
             dimdiag  = Eqv%SetNorb(iset)
             dimoffdiag = Eqv%SetNorb(iset)*(Eqv%SetNorb(iset)-1)
@@ -1233,7 +1234,7 @@ contains
                i = Eqv%SetOrbs(iset,iorb)
                !
                ib1_aa = i + Norb*(i-1)
-               if(verbose)write(*,"(2(A,2I3),2(A,I4),A)")    "     Component: (",i,i,"),(",i,i,") = [",ib1_aa,",",ib1_aa,"]"
+               if(verbose)write(*,"(2(A,2I3),2(A,I4),A)")    "     W(aa)(aa): (",i,i,"),(",i,i,") = [",ib1_aa,",",ib1_aa,"]"
                Waaaa = Waaaa + W%bare_local(ib1_aa,ib1_aa) / dimdiag
                !
                do jorb=1+iorb,Eqv%SetNorb(iset)
@@ -1241,18 +1242,18 @@ contains
                   !
                   ib1_ab = i + Norb*(i-1)
                   ib2_ab = j + Norb*(j-1)
-                  if(verbose)write(*,"(2(A,2I3),2(A,I4),A)")    "     Component: (",i,i,"),(",j,j,") = [",ib1_ab,",",ib2_ab,"]"
+                  if(verbose)write(*,"(2(A,2I3),2(A,I4),A)")    "     W(aa)(bb): (",i,i,"),(",j,j,") = [",ib1_ab,",",ib2_ab,"]"
                   !
                   ib1_sf = i + Norb*(j-1)
                   ib2_sf = j + Norb*(i-1)
-                  if(verbose)write(*,"(2(A,2I3),2(A,I4),A)")    "     Component: (",i,j,"),(",j,i,") = [",ib1_sf,",",ib2_sf,"]"
+                  if(verbose)write(*,"(2(A,2I3),2(A,I4),A)")    "     W(ab)(ba): (",i,j,"),(",j,i,") = [",ib1_sf,",",ib2_sf,"]"
                   !
                   ib1_pa = i + Norb*(j-1)
                   ib2_pa = i + Norb*(j-1)
-                  if(verbose)write(*,"(2(A,2I3),2(A,I4),A)")    "     Component: (",i,j,"),(",i,j,") = [",ib1_pa,",",ib2_pa,"]"
+                  if(verbose)write(*,"(2(A,2I3),2(A,I4),A)")    "     W(ab)(ab): (",i,j,"),(",i,j,") = [",ib1_pa,",",ib2_pa,"]"
                   ib1_pb = j + Norb*(i-1)
                   ib2_pb = j + Norb*(i-1)
-                  if(verbose)write(*,"(2(A,2I3),2(A,I4),A)")    "     Component: (",j,i,"),(",j,i,") = [",ib1_pb,",",ib2_pb,"]"
+                  if(verbose)write(*,"(2(A,2I3),2(A,I4),A)")    "     W(ba)(ba): (",j,i,"),(",j,i,") = [",ib1_pb,",",ib2_pb,"]"
                   !
                   if(allocated(W%bare_local))then
                      Waabb = Waabb + (W%bare_local(ib1_ab,ib2_ab)+W%bare_local(ib2_ab,ib1_ab)) / dimoffdiag
@@ -1359,8 +1360,8 @@ contains
          enddo
          !
          !symmetrization of the off-diagonal sets
-         do iset=1,Eqv%Nset
-            do jset=1,Eqv%Nset
+         do iset=1,Eqv%Ntotset
+            do jset=1,Eqv%Ntotset
                !
                if(iset.eq.jset)cycle
                dimoffdiag = Eqv%SetNorb(iset)*Eqv%SetNorb(jset)*2

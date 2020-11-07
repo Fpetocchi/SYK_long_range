@@ -50,6 +50,13 @@ module file_io
       module procedure :: read_BosonicField_local                               ![BosonicField,dirpath,filename,axis(optional for real freq. or tau))]            (Only local projection. Reads only from formatted input.)
    end interface read_BosonicField
 
+!interface dump_MaxEnt
+!!module procedure :: dump_MaxEnt_Fermionic_Lattice
+!!module procedure :: dump_MaxEnt_Fermionic_Impurity
+!!module procedure :: dump_MaxEnt_Bosonic_Lattice
+!!module procedure :: dump_MaxEnt_Bosonic_Impurity
+!end interface dump_MaxEnt
+
    !---------------------------------------------------------------------------!
    !PURPOSE: Module variables
    !---------------------------------------------------------------------------!
@@ -72,6 +79,7 @@ module file_io
    public :: read_FermionicField
    public :: dump_BosonicField
    public :: read_BosonicField
+   !public :: dump_MaxEnt
 
    !===========================================================================!
 

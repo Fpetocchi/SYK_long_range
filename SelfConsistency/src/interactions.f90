@@ -17,10 +17,10 @@ module interactions
       module procedure read_U_spex_Uloc0                                        ![Matrix,pathOUTPUT(optional to change output path)]
    end interface read_U_spex
 
-   interface build_Uscr
-      module procedure build_Uscrloc_singlParam                  ! (Solver Format) ![Matrix,Uaa_screened,Uab_screened,J_screened]
-      module procedure build_Uscrloc_multiParam                  ! (Solver Format) ![Matrix,Vector,Matrix,Matrix]
-   end interface build_Uscr
+   interface build_Umat
+      module procedure build_Umat_singlParam                  ! (Solver Format) ![Matrix,Uaa_screened,Uab_screened,J_screened]
+      module procedure build_Umat_multiParam                  ! (Solver Format) ![Matrix,Vector,Matrix,Matrix]
+   end interface build_Umat
 
    interface build_Uret
       module procedure build_Uretloc_singlParam                   !   (GW Format)  ![BosonicField,Uaa_bare,Uab_bare,J_bare,vector_g,vector_w0]
@@ -40,12 +40,13 @@ module interactions
    !PURPOSE: Rutines available for the user. Description only for interfaces.
    !---------------------------------------------------------------------------!
    !subroutines
+   public :: init_Uelements
    public :: calc_W_full
    public :: calc_W_edmft
    public :: calc_chi_full
    public :: calc_chi_edmft
    public :: read_U_spex
-   public :: build_Uscr
+   public :: build_Umat
    public :: build_Uret
    public :: calc_QMCinteractions
    public :: calc_curlyU
@@ -54,6 +55,112 @@ module interactions
    !===========================================================================!
 
 contains
+
+
+   !---------------------------------------------------------------------------!
+   !PURPOSE: Indentify the Tensor indexes which correspond to physical (number
+   !         and spin conserving) interaction elements
+   !TEST ON:
+   !---------------------------------------------------------------------------!
+   subroutine init_Uelements(Norb,Uelements)
+      !
+      use parameters
+      implicit none
+      !
+      integer,intent(in)                    :: Norb
+      type(physicalU),intent(inout)         :: Uelements
+      !
+      integer                               :: ib1,ib2
+      integer                               :: iorb,jorb,korb,lorb
+      integer                               :: ispin,jspin
+      !
+      !
+      if(verbose)write(*,"(A)") "---- init_Uelements"
+      !
+      !
+      if(Uelements%status) write(*,"(A)") "Warning: the Physical interaction elements container is being reinitialized."
+      !
+      ! Elements when the interaction is in the Norb*Nspin form
+      Uelements%Flav_Size = Norb
+      if(allocated(Uelements%Flav_Uloc))deallocate(Uelements%Flav_Uloc)
+      if(allocated(Uelements%Flav_U1st))deallocate(Uelements%Flav_U1st)
+      if(allocated(Uelements%Flav_U2nd))deallocate(Uelements%Flav_U2nd)
+      if(allocated(Uelements%Flav_All)) deallocate(Uelements%Flav_All)
+      if(allocated(Uelements%Flav_Map)) deallocate(Uelements%Flav_Map)
+      allocate(Uelements%Flav_Uloc(Nspin*Norb,Nspin*Norb)) ;Uelements%Flav_Uloc=.false.
+      allocate(Uelements%Flav_U1st(Nspin*Norb,Nspin*Norb)) ;Uelements%Flav_U1st=.false.
+      allocate(Uelements%Flav_U2nd(Nspin*Norb,Nspin*Norb)) ;Uelements%Flav_U2nd=.false.
+      allocate(Uelements%Flav_All(Nspin*Norb,Nspin*Norb))  ;Uelements%Flav_All =.false.
+      allocate(Uelements%Flav_Map(Nspin*Norb,Nspin*Norb,4));Uelements%Flav_Map=0
+      !
+      do ib1=1,Nspin*Norb
+         do ib2=1,Nspin*Norb
+            !
+            iorb = (ib1+mod(ib1,2))/2
+            jorb = (ib2+mod(ib2,2))/2
+            ispin = abs(mod(ib1,2)-2)
+            jspin = abs(mod(ib2,2)-2)
+            !
+            Uelements%Flav_Uloc(ib1,ib2) = (iorb.eq.jorb).and.(ispin.ne.jspin)
+            Uelements%Flav_U1st(ib1,ib2) = (iorb.ne.jorb).and.(ispin.ne.jspin)
+            Uelements%Flav_U2nd(ib1,ib2) = (iorb.ne.jorb).and.(ispin.eq.jspin)
+            !
+            Uelements%Flav_All(ib1,ib2) = Uelements%Flav_Uloc(ib1,ib2) .or.  &
+                                          Uelements%Flav_U1st(ib1,ib2) .or.  &
+                                          Uelements%Flav_U2nd(ib1,ib2)
+            !
+            Uelements%Flav_Map(ib1,ib2,1) = iorb
+            Uelements%Flav_Map(ib1,ib2,2) = jorb
+            Uelements%Flav_Map(ib1,ib2,3) = ispin
+            Uelements%Flav_Map(ib1,ib2,4) = jspin
+            !
+         enddo
+      enddo
+      !
+      ! Elements when the interaction is in the Norb^2 form
+      Uelements%Flav_Size = Norb*Norb
+      if(allocated(Uelements%Full_Uaa))deallocate(Uelements%Full_Uaa)
+      if(allocated(Uelements%Full_Uab))deallocate(Uelements%Full_Uab)
+      if(allocated(Uelements%Full_Jsf))deallocate(Uelements%Full_Jsf)
+      if(allocated(Uelements%Full_Jph))deallocate(Uelements%Full_Jph)
+      if(allocated(Uelements%Full_All))deallocate(Uelements%Full_All)
+      if(allocated(Uelements%Full_Map))deallocate(Uelements%Full_Map)
+      allocate(Uelements%Full_Uaa(Norb*Norb,Norb*Norb))  ;Uelements%Full_Uaa=.false.
+      allocate(Uelements%Full_Uab(Norb*Norb,Norb*Norb))  ;Uelements%Full_Uab=.false.
+      allocate(Uelements%Full_Jsf(Norb*Norb,Norb*Norb))  ;Uelements%Full_Jsf=.false.
+      allocate(Uelements%Full_Jph(Norb*Norb,Norb*Norb))  ;Uelements%Full_Jph=.false.
+      allocate(Uelements%Full_All(Norb*Norb,Norb*Norb))  ;Uelements%Full_All=.false.
+      allocate(Uelements%Full_Map(Norb*Norb,Norb*Norb,4));Uelements%Full_Map=0
+      !
+      do iorb=1,Norb
+         do jorb=1,Norb
+            do korb=1,Norb
+               do lorb=1,Norb
+                  !
+                  ib1 = iorb + Norb*(jorb-1)
+                  ib2 = korb + Norb*(lorb-1)
+                  !
+                  Uelements%Full_Uaa(ib1,ib2) = (ib1.eq.ib2)
+                  Uelements%Full_Uab(ib1,ib2) = (iorb.eq.jorb).and.(korb.eq.lorb)
+                  Uelements%Full_Jsf(ib1,ib2) = (iorb.eq.lorb).and.(jorb.eq.korb)
+                  Uelements%Full_Jph(ib1,ib2) = (iorb.eq.korb).and.(jorb.eq.lorb)
+                  !
+                  Uelements%Full_All(ib1,ib2) = Uelements%Full_Uaa(ib1,ib2) .or.  &
+                                                Uelements%Full_Uab(ib1,ib2) .or.  &
+                                                Uelements%Full_Jsf(ib1,ib2) .or.  &
+                                                Uelements%Full_Jph(ib1,ib2)
+                  !
+                  Uelements%Full_Map(ib1,ib2,1) = iorb
+                  Uelements%Full_Map(ib1,ib2,2) = jorb
+                  Uelements%Full_Map(ib1,ib2,3) = korb
+                  Uelements%Full_Map(ib1,ib2,4) = lorb
+                  !
+               enddo
+            enddo
+         enddo
+      enddo
+      !
+   end subroutine init_Uelements
 
 
    !---------------------------------------------------------------------------!
@@ -472,7 +579,7 @@ contains
       use file_io
       use utils_misc
       use utils_fields
-      use input_vars, only :  pathINPUT, UfullStructure, PhysicalUelement
+      use input_vars, only :  pathINPUT, UfullStructure
       implicit none
       !
       type(BosonicField),intent(inout)      :: Umats
@@ -491,6 +598,7 @@ contains
       complex(8),allocatable                :: D1(:,:),D2(:,:),D3(:,:),imgFact(:,:,:)
       complex(8),allocatable                :: Utmp(:,:)
       type(BosonicField)                    :: Ureal
+      type(physicalU)                       :: PhysicalUelements
       real                                  :: start,finish
       !
       !
@@ -612,16 +720,19 @@ contains
          allocate(D3(Nbp_spex,Nbp_spex));D3=czero
          !
          ! Check if any local Urpa component has inverted Im/Re symmetry
-         do ib1=1,Nbp_spex
-            do ib2=1,Nbp_spex
-               if(PhysicalUelement(ib1,ib2).and.abs(real(Umats%bare_local(ib1,ib2))).lt.abs(aimag(Umats%bare_local(ib1,ib2))))then
-                  write(*,"(A,2I)")"Element: ",ib1,ib2
-                  write(*,"(A,F)")"Re[Ubare(w=inf)]: ",real(Umats%bare_local(ib1,ib2))
-                  write(*,"(A,F)")"Im[Ubare(w=inf)]: ",aimag(Umats%bare_local(ib1,ib2))
-                  stop "Something wrong: Uloc cannot have inverted Re/Im parity."
-               endif
+         call init_Uelements(int(sqrt(dble(Nbp_spex))),PhysicalUelements)
+         if(PhysicalUelements%status)then
+            do ib1=1,Nbp_spex
+               do ib2=1,Nbp_spex
+                  if(PhysicalUelements%Full_All(ib1,ib2).and.abs(real(Umats%bare_local(ib1,ib2))).lt.abs(aimag(Umats%bare_local(ib1,ib2))))then
+                     write(*,"(A,2I)")"Element: ",ib1,ib2
+                     write(*,"(A,F)")"Re[Ubare(w=inf)]: ",real(Umats%bare_local(ib1,ib2))
+                     write(*,"(A,F)")"Im[Ubare(w=inf)]: ",aimag(Umats%bare_local(ib1,ib2))
+                     stop "Something wrong: Uloc cannot have inverted Re/Im parity."
+                  endif
+               enddo
             enddo
-         enddo
+         endif
          !
          ! Analytical continuation of the local component to imag axis using spectral rep
          call cpu_time(start)
@@ -837,7 +948,7 @@ contains
          do iq=1,Nkpt
             do ib1=1,Nbp_spex
                do ib2=1,Nbp_spex
-                  if(dabs(dimag(Umats%bare(ib1,ib2,iq))).gt.1.d-6) then !PhysicalUelement(ib1,ib2).and.
+                  if(dabs(dimag(Umats%bare(ib1,ib2,iq))).gt.1.d-6) then
                      write(*,"(A,2I)") "Warning Umats%bare imaginary. Set matrix element to static value",ib1,ib2
                      Umats%bare(ib1,ib2,iq) = Umats%screened(ib1,ib2,1,iq)
                      Umats%screened(ib1,ib2,:,iq) = Umats%screened(ib1,ib2,1,iq)
@@ -1147,7 +1258,7 @@ contains
    !---------------------------------------------------------------------------!
    !PURPOSE: Create the static interaction tensor from user-given parameters
    !---------------------------------------------------------------------------!
-   subroutine build_Uscrloc_singlParam(Umat,Uaa,Uab,J)
+   subroutine build_Umat_singlParam(Umat,Uaa,Uab,J)
       !
       use parameters
       use file_io
@@ -1160,42 +1271,33 @@ contains
       !
       integer                               :: Nbp,Norb
       integer                               :: ib1,ib2
-      integer                               :: iorb,jorb,ispin,jspin
-      logical                               :: Uaa_flag,Ust_flag,Usc_flag
+      type(physicalU)                       :: PhysicalUelements
       !
       !
-      if(verbose)write(*,"(A)") "---- build_Uscrloc_singlParam"
+      if(verbose)write(*,"(A)") "---- build_Umat_singlParam"
       !
       !
       ! Check on the input matrices
       Nbp = size(Umat,dim=1)
-      Norb = Nbp/2
-      if(mod(Nbp,2).ne.0.0) stop "Wrong matrix dimension."
-      call assert_shape(Umat,[Nbp,Nbp],"build_Uscrloc_singlParam","Umat")
+      Norb = Nbp/Nspin
+      if((Nspin.eq.2).and.(mod(Nbp,2).ne.0.0)) stop "Wrong matrix dimension."
+      call init_Uelements(Norb,PhysicalUelements)
+      call assert_shape(Umat,[Nbp,Nbp],"build_Umat_singlParam","Umat")
       !
       do ib1=1,Nspin*Norb
          do ib2=1,Nspin*Norb
             !
-            iorb = (ib1+mod(ib1,2))/2
-            jorb = (ib2+mod(ib2,2))/2
-            ispin = abs(mod(ib1,2)-2)
-            jspin = abs(mod(ib2,2)-2)
-            !
-            Uaa_flag = (iorb.eq.jorb).and.(ispin.ne.jspin)
-            Ust_flag = (iorb.ne.jorb).and.(ispin.ne.jspin)
-            Usc_flag = (iorb.ne.jorb).and.(ispin.eq.jspin)
-            !
-            if(Uaa_flag) Umat(ib1,ib2) = dcmplx(Uaa,0d0)
-            if(Ust_flag) Umat(ib1,ib2) = dcmplx(Uab,0d0)
-            if(Usc_flag) Umat(ib1,ib2) = dcmplx(Uab-J,0d0)
+            if(PhysicalUelements%Flav_Uloc(ib1,ib2)) Umat(ib1,ib2) = dcmplx(Uaa,0d0)
+            if(PhysicalUelements%Flav_U1st(ib1,ib2)) Umat(ib1,ib2) = dcmplx(Uab,0d0)
+            if(PhysicalUelements%Flav_U2nd(ib1,ib2)) Umat(ib1,ib2) = dcmplx(Uab-J,0d0)
             !
          enddo
       enddo
       !
-   end subroutine build_Uscrloc_singlParam
+   end subroutine build_Umat_singlParam
    !
    !
-   subroutine build_Uscrloc_multiParam(Umat,Uaa,Uab,J)
+   subroutine build_Umat_multiParam(Umat,Uaa,Uab,J)
       !
       use parameters
       use file_io
@@ -1207,43 +1309,37 @@ contains
       real(8),allocatable,intent(in)        :: Uaa(:),Uab(:,:),J(:,:)
       !
       integer                               :: Nbp,Norb
-      integer                               :: ib1,ib2
-      integer                               :: iorb,jorb,ispin,jspin
-      logical                               :: Uaa_flag,Ust_flag,Usc_flag
+      integer                               :: ib1,ib2,iorb,jorb
+      type(physicalU)                       :: PhysicalUelements
       !
       !
-      if(verbose)write(*,"(A)") "---- build_Uscrloc_multiParam"
+      if(verbose)write(*,"(A)") "---- build_Umat_multiParam"
       !
       !
       ! Check on the input matrices
       Nbp = size(Umat,dim=1)
-      Norb = Nbp/2
-      if(mod(Nbp,2).ne.0.0) stop "Wrong matrix dimension."
-      call assert_shape(Umat,[Nbp,Nbp],"build_Uscrloc_multiParam","Umat")
-      call assert_shape(Uaa,[Norb],"build_Uscrloc_multiParam","Uaa")
-      call assert_shape(Uab,[Norb,Norb],"build_Uscrloc_multiParam","Uab")
-      call assert_shape(J,[Norb,Norb],"build_Uscrloc_multiParam","J")
+      Norb = Nbp/Nspin
+      if((Nspin.eq.2).and.(mod(Nbp,2).ne.0.0)) stop "Wrong matrix dimension."
+      call init_Uelements(Norb,PhysicalUelements)
+      call assert_shape(Umat,[Nbp,Nbp],"build_Umat_multiParam","Umat")
+      call assert_shape(Uaa,[Norb],"build_Umat_multiParam","Uaa")
+      call assert_shape(Uab,[Norb,Norb],"build_Umat_multiParam","Uab")
+      call assert_shape(J,[Norb,Norb],"build_Umat_multiParam","J")
       !
       do ib1=1,Nspin*Norb
          do ib2=1,Nspin*Norb
             !
-            iorb = (ib1+mod(ib1,2))/2
-            jorb = (ib2+mod(ib2,2))/2
-            ispin = abs(mod(ib1,2)-2)
-            jspin = abs(mod(ib2,2)-2)
+            iorb = PhysicalUelements%Flav_Map(ib1,ib2,1)
+            jorb = PhysicalUelements%Flav_Map(ib1,ib2,2)
             !
-            Uaa_flag = (iorb.eq.jorb).and.(ispin.ne.jspin)
-            Ust_flag = (iorb.ne.jorb).and.(ispin.ne.jspin)
-            Usc_flag = (iorb.ne.jorb).and.(ispin.eq.jspin)
-            !
-            if(Uaa_flag) Umat(ib1,ib2) = dcmplx(Uaa(iorb),0d0)
-            if(Ust_flag) Umat(ib1,ib2) = dcmplx(Uab(iorb,jorb),0d0)
-            if(Usc_flag) Umat(ib1,ib2) = dcmplx(Uab(iorb,jorb)-J(iorb,jorb),0d0)
+            if(PhysicalUelements%Flav_Uloc(ib1,ib2)) Umat(ib1,ib2) = dcmplx(Uaa(iorb),0d0)
+            if(PhysicalUelements%Flav_U1st(ib1,ib2)) Umat(ib1,ib2) = dcmplx(Uab(iorb,jorb),0d0)
+            if(PhysicalUelements%Flav_U2nd(ib1,ib2)) Umat(ib1,ib2) = dcmplx(Uab(iorb,jorb)-J(iorb,jorb),0d0)
             !
          enddo
       enddo
       !
-   end subroutine build_Uscrloc_multiParam
+   end subroutine build_Umat_multiParam
 
 
    !---------------------------------------------------------------------------!
@@ -1263,14 +1359,14 @@ contains
       real(8),allocatable,intent(in)        :: g_eph(:),wo_eph(:)
       !
       integer                               :: Nbp,Norb,Nph
-      integer                               :: m,n,mp,np,ib1,ib2
+      integer                               :: ib1,ib2
       integer                               :: iw,iw1,iw2,iph,iwp
-      logical                               :: Uaa_flag,Ust_flag,Jh_flag
       real(8)                               :: RealU,ImagU
       real(8),allocatable                   :: wreal(:),wmats(:)
       complex(8),allocatable                :: D1(:,:),D2(:,:),D3(:,:)
       complex(8),allocatable                :: Utmp(:,:)
       type(BosonicField)                    :: Ureal
+      type(physicalU)                       :: PhysicalUelements
       real                                  :: start,finish
       !
       !
@@ -1279,11 +1375,13 @@ contains
       !
       ! Check on the input field
       if(.not.Umats%status) stop "BosonicField not properly initialized."
-      if(size(g_eph).ne.size(wo_eph)) stop "Phonon sizes does not match."
       !
       Nbp = Umats%Nbp
       Norb = int(sqrt(dble(Nbp)))
       Nph = size(g_eph)
+      !
+      call init_Uelements(Norb,PhysicalUelements)
+      if(size(g_eph).ne.size(wo_eph)) stop "Phonon sizes does not match."
       !
       allocate(wmats(Umats%Npoints));wmats=0d0
       wmats = BosonicFreqMesh(Umats%Beta,Umats%Npoints)
@@ -1293,24 +1391,14 @@ contains
       call AllocateBosonicField(Ureal,Nbp,Nreal,0)
       !
       !setting the bare values
-      do m=1,Norb
-         do n=1,Norb
-            do mp=1,Norb
-               do np=1,Norb
-                  !
-                  ib1 = mp + Norb*(m-1)
-                  ib2 = np + Norb*(n-1)
-                  !
-                  Uaa_flag = (ib1.eq.ib2)
-                  Ust_flag = (m.eq.mp).and.(n.eq.np).and.(.not.Uaa_flag)
-                  Jh_flag  = (mp.ne.m).and.(((mp.eq.np).and.(m.eq.n)).or.((mp.eq.n).and.(m.eq.np)))
-                  !
-                  if(Uaa_flag) Umats%bare_local(ib1,ib2) = dcmplx(Uaa,0d0)
-                  if(Ust_flag) Umats%bare_local(ib1,ib2) = dcmplx(Uab,0d0)
-                  if(Jh_flag)  Umats%bare_local(ib1,ib2) = dcmplx(J,0d0)
-                  !
-               enddo
-            enddo
+      do ib1=1,Nbp
+         do ib2=1,Nbp
+            !
+            if(PhysicalUelements%Full_Uaa(ib1,ib2)) Umats%bare_local(ib1,ib2) = dcmplx(Uaa,0d0)
+            if(PhysicalUelements%Full_Uab(ib1,ib2)) Umats%bare_local(ib1,ib2) = dcmplx(Uab,0d0)
+            if(PhysicalUelements%Full_Jsf(ib1,ib2)) Umats%bare_local(ib1,ib2) = dcmplx(J,0d0)
+            if(PhysicalUelements%Full_Jph(ib1,ib2)) Umats%bare_local(ib1,ib2) = dcmplx(J,0d0)
+            !
          enddo
       enddo
       !
@@ -1398,14 +1486,14 @@ contains
       real(8),allocatable,intent(in)        :: g_eph(:),wo_eph(:)
       !
       integer                               :: Nbp,Norb,Nph
-      integer                               :: m,n,mp,np,ib1,ib2
+      integer                               :: iorb,jorb,ib1,ib2
       integer                               :: iw,iw1,iw2,iph,iwp
-      logical                               :: Uaa_flag,Ust_flag,Jh_flag
       real(8)                               :: RealU,ImagU
       real(8),allocatable                   :: wreal(:),wmats(:)
       complex(8),allocatable                :: D1(:,:),D2(:,:),D3(:,:)
       complex(8),allocatable                :: Utmp(:,:)
       type(BosonicField)                    :: Ureal
+      type(physicalU)                       :: PhysicalUelements
       real                                  :: start,finish
       !
       !
@@ -1414,11 +1502,13 @@ contains
       !
       ! Check on the input field
       if(.not.Umats%status) stop "BosonicField not properly initialized."
-      if(size(g_eph).ne.size(wo_eph)) stop "Phonon sizes does not match."
       !
       Nbp = Umats%Nbp
       Norb = int(sqrt(dble(Nbp)))
       Nph = size(g_eph)
+      !
+      call init_Uelements(Norb,PhysicalUelements)
+      if(size(g_eph).ne.size(wo_eph)) stop "Phonon sizes does not match."
       !
       call assert_shape(Uaa,[Norb],"build_Uretloc_multiParam","Uaa")
       call assert_shape(Uab,[Norb,Norb],"build_Uretloc_multiParam","Uab")
@@ -1432,24 +1522,17 @@ contains
       call AllocateBosonicField(Ureal,Nbp,Nreal,0)
       !
       !setting the bare values
-      do m=1,Norb
-         do n=1,Norb
-            do mp=1,Norb
-               do np=1,Norb
-                  !
-                  ib1 = mp + Norb*(m-1)
-                  ib2 = np + Norb*(n-1)
-                  !
-                  Uaa_flag = (ib1.eq.ib2)
-                  Ust_flag = (m.eq.mp).and.(n.eq.np).and.(.not.Uaa_flag)
-                  Jh_flag  = (mp.ne.m).and.(((mp.eq.np).and.(m.eq.n)).or.((mp.eq.n).and.(m.eq.np)))
-                  !
-                  if(Uaa_flag) Umats%bare_local(ib1,ib2) = dcmplx(Uaa(m),0d0)
-                  if(Ust_flag) Umats%bare_local(ib1,ib2) = dcmplx(Uab(m,n),0d0)
-                  if(Jh_flag)  Umats%bare_local(ib1,ib2) = dcmplx(J(mp,np),0d0)
-                  !
-               enddo
-            enddo
+      do ib1=1,Nbp
+         do ib2=1,Nbp
+            !
+            iorb = PhysicalUelements%Full_Map(ib1,ib2,1)
+            jorb = PhysicalUelements%Full_Map(ib1,ib2,2)
+            !
+            if(PhysicalUelements%Full_Uaa(ib1,ib2)) Umats%bare_local(ib1,ib2) = dcmplx(Uaa(iorb),0d0)
+            if(PhysicalUelements%Full_Uab(ib1,ib2)) Umats%bare_local(ib1,ib2) = dcmplx(Uab(iorb,jorb),0d0)
+            if(PhysicalUelements%Full_Jsf(ib1,ib2)) Umats%bare_local(ib1,ib2) = dcmplx(J(iorb,jorb),0d0)
+            if(PhysicalUelements%Full_Jph(ib1,ib2)) Umats%bare_local(ib1,ib2) = dcmplx(J(iorb,jorb),0d0)
+            !
          enddo
       enddo
       !
@@ -1542,12 +1625,12 @@ contains
       real(8),intent(inout),optional        :: Kfunct(:,:,:)
       !
       integer                               :: Nbp,Norb
-      integer                               :: ib1,ib2,iorb,jorb,ispin,jspin
+      integer                               :: ib1,ib2,iorb,jorb
       integer                               :: iu1,iu2,ix1,ix2,ip1,ip2
       integer                               :: iw,itau
-      logical                               :: Uaa_flag,Ust_flag,Usc_flag
       real(8),allocatable                   :: wmats(:),tau(:)
       complex(8),allocatable                :: Kaux(:,:,:)
+      type(physicalU)                       :: PhysicalUelements
       !
       !
       if(verbose)write(*,"(A)") "---- calc_QMCinteractions"
@@ -1559,6 +1642,7 @@ contains
       Nbp = Umats%Nbp
       Norb = int(sqrt(dble(Nbp)))
       !
+      call init_Uelements(Norb,PhysicalUelements)
       call assert_shape(Uinst,[Norb*Nspin,Norb*Nspin],"calc_QMCinteractions","Uinst")
       Uinst=0d0
       if(present(Kfunct))then
@@ -1575,39 +1659,35 @@ contains
       do ib1=1,Nspin*Norb
          do ib2=1,Nspin*Norb
             !
-            iorb = (ib1+mod(ib1,2))/2
-            jorb = (ib2+mod(ib2,2))/2
-            ispin = abs(mod(ib1,2)-2)
-            jspin = abs(mod(ib2,2)-2)
+            iorb = PhysicalUelements%Flav_Map(ib1,ib2,1)
+            jorb = PhysicalUelements%Flav_Map(ib1,ib2,2)
             !
-            Uaa_flag = (iorb.eq.jorb).and.(ispin.ne.jspin)
-            Ust_flag = (iorb.ne.jorb).and.(ispin.ne.jspin)
-            Usc_flag = (iorb.ne.jorb).and.(ispin.eq.jspin)
-            if(Uaa_flag.and.Ust_flag.and.Usc_flag) stop "Something is wrong with the flags."
+            !The maps inside PhysicalUelements contain separately the orbital
+            !indexes specifially for that representation. The matching between
+            !the two is not done, so I have to do it here.
             !
-            ! (aa)(bb) indexes
+            ! (aa)(bb) indexes in the Norb^2 representaion
             iu1 = iorb + Norb*(iorb-1)
             iu2 = jorb + Norb*(jorb-1)
             !
             ! (ab)(ba) indexes
             ix1 = iorb + Norb*(jorb-1)
             ix2 = jorb + Norb*(iorb-1)
-            if(ix1.eq.ix2) stop "Something is wrong with the spin-flip indexes."
             !
             ! (ab)(ab) indexes
             ip1 = iorb + Norb*(jorb-1)
             ip2 = iorb + Norb*(jorb-1)
             !
-            if(Uaa_flag) Uinst(ib1,ib2) = Umats%screened_local(iu1,iu2,0)
-            if(Ust_flag) Uinst(ib1,ib2) = Umats%screened_local(iu1,iu2,0)
-            if(Usc_flag) Uinst(ib1,ib2) = Umats%screened_local(iu1,iu2,0) - (Umats%screened_local(ix1,ix2,0)+Umats%screened_local(ip1,ip2,0))/2d0
+            if(PhysicalUelements%Flav_Uloc(ib1,ib2)) Uinst(ib1,ib2) = Umats%screened_local(iu1,iu2,1)
+            if(PhysicalUelements%Flav_U1st(ib1,ib2)) Uinst(ib1,ib2) = Umats%screened_local(iu1,iu2,1)
+            if(PhysicalUelements%Flav_U2nd(ib1,ib2)) Uinst(ib1,ib2) = Umats%screened_local(iu1,iu2,1) - (Umats%screened_local(ix1,ix2,1)+Umats%screened_local(ip1,ip2,1))/2d0
             !
             if(present(Kfunct))then
                do iw=1,Umats%Npoints
-                  if(Uaa_flag) Kaux(ib1,ib2,iw) = ( Umats%bare_local(iu1,iu2) - Umats%screened_local(iu1,iu2,iw) )
-                  if(Ust_flag) Kaux(ib1,ib2,iw) = ( Umats%bare_local(iu1,iu2) - Umats%screened_local(iu1,iu2,iw) )
-                  if(Usc_flag) Kaux(ib1,ib2,iw) = ( Umats%bare_local(iu1,iu2) - Umats%screened_local(iu1,iu2,iw) ) - &
-                                                  ((Umats%bare_local(ix1,ix2) - Umats%screened_local(ix1,ix2,iw))+(Umats%bare_local(ip1,ip2) - Umats%screened_local(ip1,ip2,iw)))/2d0
+                  if(PhysicalUelements%Flav_Uloc(ib1,ib2)) Kaux(ib1,ib2,iw) = ( Umats%bare_local(iu1,iu2) - Umats%screened_local(iu1,iu2,iw) )
+                  if(PhysicalUelements%Flav_U1st(ib1,ib2)) Kaux(ib1,ib2,iw) = ( Umats%bare_local(iu1,iu2) - Umats%screened_local(iu1,iu2,iw) )
+                  if(PhysicalUelements%Flav_U2nd(ib1,ib2)) Kaux(ib1,ib2,iw) = ( Umats%bare_local(iu1,iu2) - Umats%screened_local(iu1,iu2,iw) ) - &
+                  ((Umats%bare_local(ix1,ix2) - Umats%screened_local(ix1,ix2,iw))+(Umats%bare_local(ip1,ip2) - Umats%screened_local(ip1,ip2,iw)))/2d0
                enddo
             endif
             !
@@ -1616,6 +1696,7 @@ contains
       !
       !setting the reterdation function
       if(present(Kfunct))then
+         Kfunct=0d0
          !$OMP PARALLEL DEFAULT(NONE),&
          !$OMP SHARED(Norb,NtauB,tau,Umats,wmats,Kfunct),&
          !$OMP PRIVATE(Kaux,ib1,ib2,iw,itau)
@@ -1624,7 +1705,7 @@ contains
             do ib2=1,Nspin*Norb
                !
                do itau=1,NtauB
-                  do iw=1,Umats%Npoints
+                  do iw=2,Umats%Npoints
                      Kfunct(ib1,ib2,itau) = Kfunct(ib1,ib2,itau) + 2d0*Kaux(ib1,ib2,iw) * ( cos(wmats(iw)*tau(itau)) - 1d0 ) / ( Umats%Beta*wmats(iw)**2 )
                   enddo
                enddo
@@ -1632,8 +1713,11 @@ contains
                ! symmetrize with respect to beta/2
                call halfbeta_symm(Kfunct(ib1,ib2,:),NtauB,+1d0)
                !
-               if(Kfunct(ib1,ib2,1).ne.0d0) stop "K(0) is not zero."
-               if(Kfunct(ib1,ib2,NtauB).ne.0d0) stop "K(beta) is not zero."
+               print *, "a,b",ib1,ib2
+               print *, "K(0)",Kfunct(ib1,ib2,1)
+               print *, "K(beta)",Kfunct(ib1,ib2,NtauB)
+               !if(Kfunct(ib1,ib2,1).ne.0d0) stop "K(0) is not zero."
+               !if(Kfunct(ib1,ib2,NtauB).ne.0d0) stop "K(beta) is not zero."
                !
             enddo
          enddo
@@ -1642,7 +1726,7 @@ contains
          deallocate(Kaux,tau,wmats)
          !
          do itau=1,NtauB
-            call check_Symmetry(Kfunct(:,:,itau),eps,hardstop=.true.,name="Kfunc")
+            call check_Symmetry(Kfunct(:,:,itau),eps,hardstop=.false.,name="Kfunc")
          enddo
          !
       endif

@@ -12,6 +12,7 @@ module fit
    !PURPOSE: container for density lookup parameters
    !---------------------------------------------------------------------------!
    type AndersonParam
+      integer                               :: Norb
       real(8),allocatable                   :: Epsk(:,:,:)
       real(8),allocatable                   :: Vk(:,:,:)
       real(8),allocatable                   :: Eloc(:,:)
@@ -72,6 +73,7 @@ contains
       !
       if(verbose)write(*,"(A)") "---- setupAndPrams"
       if(AndPram%status) write(*,"(A)") "Warning: Anderson parameters already initilized."
+      AndPram%Norb=Norb
       !
       !
       if(.not.allocated(AndPram%Eloc))allocate(AndPram%Eloc(Norb,Nspin))
@@ -106,7 +108,8 @@ contains
          !
          if(verbose)write(*,"(A)") "     Initializing Anderson Parameters."
          !local energy
-         AndPram%Eloc=0d0
+         call random_number(rnd)
+         AndPram%Eloc=(rnd-0.5)*noisefact
          !bath energies
          Nh=Nbath/2
          if(mod(Nbath,2)==0)then
@@ -164,7 +167,7 @@ contains
       !
       character(len=255)                    :: path
       integer                               :: unit
-      integer                               :: ibath,iorb,Norb
+      integer                               :: ibath,iorb
       logical                               :: filexists
       !
       !
@@ -177,7 +180,7 @@ contains
       if(verbose)write(*,"(A)") "     Dump "//reg(path)//" (readable)"
       unit = free_unit()
       open(unit,file=reg(path),form="formatted",status="unknown",action="write",position="rewind")
-      do iorb=1,Norb
+      do iorb=1,AndPram%Norb
          write(unit,"(2E20.12)") AndPram%Eloc(iorb,:)
          do ibath=1,Nbath
             write(unit,"(4E20.12)") AndPram%Epsk(iorb,ibath,1),AndPram%Vk(iorb,ibath,1),AndPram%Epsk(iorb,ibath,2),AndPram%Vk(iorb,ibath,2)
@@ -583,10 +586,10 @@ contains
             select case(reg(FitMode))
                case("Green")
                   funct_print = GfMoments(Moments(iorb,:,ispin))
-                  call dump_FermionicField(funct_print,reg(dirpath)//"/fits/","GreenMom_"//str(iorb)//"_s"//str(ispin)//".DAT",wmats)
+                  call dump_FermionicField(funct_print,reg(dirpath)//"fits/","GfMom_"//str(iorb)//"_s"//str(ispin)//".DAT",wmats)
                case("Generic")
                   funct_print = SigmaMoments(Moments(iorb,:,ispin))
-                  call dump_FermionicField(funct_print,reg(dirpath)//"/fits/","GenerMom_"//str(iorb)//"_s"//str(ispin)//".DAT",wmats)
+                  call dump_FermionicField(funct_print,reg(dirpath)//"fits/","GenMom_"//str(iorb)//"_s"//str(ispin)//".DAT",wmats)
             end select
             !
          enddo
@@ -640,6 +643,7 @@ contains
       allocate(Component(Nmats));Component=czero
       !
       call setupAndPrams(Norb,dirpath,paramFile)
+      call dump_AndPrams(dirpath,"used."//paramFile)
       !
       select case(reg(FitMode))
          case default
@@ -715,7 +719,7 @@ contains
                !
                funct_print=czero
                funct_print = DeltaAnderson(ParamVec(1:2*Nbath))
-               call dump_FermionicField(funct_print,reg(dirpath)//"/fits/","DmatsAnd_"//str(iorb)//"_s"//str(ispin)//".DAT",wmats)
+               call dump_FermionicField(funct_print,reg(dirpath)//"fits/","DwAnd_"//str(iorb)//"_s"//str(ispin)//".DAT",wmats)
                !
             enddo
          enddo

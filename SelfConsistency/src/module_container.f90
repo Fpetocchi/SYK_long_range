@@ -90,12 +90,13 @@ module module_container
 
    !(l) Interactions container. Depends on (b),(c),(e),(f),(g),(h)
    use interactions, only:                   &
+   init_Uelements                           ,&
    read_U_spex                              ,&
    calc_W_full                              ,&
    calc_W_edmft                             ,&
    calc_chi_full                            ,&
    calc_chi_edmft                           ,&
-   build_Uscr                               ,&
+   build_Umat                               ,&
    build_Uret                               ,&
    calc_curlyU                              ,&
    calc_QMCinteractions
