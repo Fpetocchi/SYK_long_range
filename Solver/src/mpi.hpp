@@ -84,7 +84,7 @@ class CustomMPI
 
       void StopError(std::string message)
       {
-         printf(" [Rank %d]: %s\n",MPIrank, message.c_str());
+         report(message);
          finalize();
       }
 

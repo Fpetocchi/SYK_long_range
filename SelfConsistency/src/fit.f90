@@ -89,7 +89,7 @@ contains
       if(.not.allocated(AndPram%Vk))allocate(AndPram%Vk(Norb,Nbath,Nspin))
       !
       path = reg(dirpath)//reg(paramFile)
-      call inquireFile(reg(path),filexists,hardstop=.false.)
+      call inquireFile(reg(path),filexists,hardstop=.false.,verb=verbose)
       !
       if(filexists)then
          if(verbose)write(*,"(A)") "     Checking the number of Anderson Parameters in "//reg(path)
@@ -201,7 +201,7 @@ contains
       if(.not.AndPram%status) stop "Anderson parameters not initilized."
       !
       !
-      call inquireDir(reg(dirpath),filexists)
+      call inquireDir(reg(dirpath),filexists,verb=verbose)
       path = reg(dirpath)//reg(paramFile)
       if(verbose)write(*,"(A)") "     Dump "//reg(path)//" (readable)"
       unit = free_unit()
@@ -250,7 +250,7 @@ contains
       allocate(Moments(Norb,Nbath,Nspin))
       !
       path = reg(dirpath)//reg(paramFile)
-      call inquireFile(reg(path),filexists,hardstop=.false.)
+      call inquireFile(reg(path),filexists,hardstop=.false.,verb=verbose)
       !
       if(filexists)then
          if(verbose)write(*,"(A)") "     Checking the number of coefficients in "//reg(path)
@@ -331,7 +331,7 @@ contains
       Norb=size(Moments,dim=1)
       !
       !
-      call inquireDir(reg(dirpath),filexists)
+      call inquireDir(reg(dirpath),filexists,verb=verbose)
       path = reg(dirpath)//reg(paramFile)
       if(verbose)write(*,"(A)") "     Dump "//reg(path)//" (readable)"
       unit = free_unit()
@@ -547,7 +547,7 @@ contains
       real(8),allocatable,dimension(:)      :: g,hess,w,xprmt
       !
       !
-      if(verbose)write(*,"(A)") "---- fit_moments"
+      write(*,"(A)") new_line("A")//new_line("A")//"---- fit_moments"
       !
       !
       Nbath=Nb
@@ -572,7 +572,7 @@ contains
             !
          case("Green")
             !
-            write(*,"(A)")new_line("A")//"Fitting moments of the Green's function."
+            write(*,"(A)")"     Fitting moments of the Green's function."
             allocate(ParamVec(Nbath-1));ParamVec=0d0
             do ispin=1,Nspin
                do iorb=1,Norb
@@ -588,10 +588,10 @@ contains
                   call minimize(chi2_GfMoments,Npara,ParamVec,chi,g,hess,w,dfn,xprmt,hh,cg_Ftol,mode,cg_niter,iprint,iexit,Niter)
                   deallocate(g,hess,w,xprmt)
                   !
-                  write(*,"(3(A,I3))")"Results for orb: ",iorb," spin: ",ispin," Npara: ",Npara
-                  write(*,"(A,I,A,F)")"Iterations: ",Niter," Chi^2: ",chi
-                  write(*,"(A,100F12.6)")"Moments before fit: ",Moments(iorb,:,ispin)
-                  write(*,"(A,100F12.6)")"Moments after fit:  ",1d0,ParamVec
+                  write(*,"(3(A,I3))")"     Results for orb: ",iorb," spin: ",ispin," Npara: ",Npara
+                  write(*,"(A,I,A,F)")"     Iterations: ",Niter," Chi^2: ",chi
+                  write(*,"(A,100F12.6)")"     First 4 moments before fit: ",Moments(iorb,1:4,ispin)
+                  write(*,"(A,100F12.6)")"     First 4 moments after fit:  ",1d0,ParamVec(1:3)
                   !
                   Moments(iorb,1,ispin) = 1d0
                   Moments(iorb,2:Nbath,ispin) = ParamVec
@@ -601,7 +601,7 @@ contains
             !
          case("Generic")
             !
-            write(*,"(A)")new_line("A")//"Fitting Generic moments."
+            write(*,"(A)")"     Fitting Generic moments."
             allocate(ParamVec(Nbath));ParamVec=0d0
             do ispin=1,Nspin
                do iorb=1,Norb
@@ -616,10 +616,10 @@ contains
                   call minimize(chi2_SigmaMoments,Npara,ParamVec,chi,g,hess,w,dfn,xprmt,hh,cg_Ftol,mode,cg_niter,iprint,iexit,Niter)
                   deallocate(g,hess,w,xprmt)
                   !
-                  write(*,"(3(A,I3))")"Results for orb: ",iorb," spin: ",ispin," Npara: ",Npara
-                  write(*,"(A,I,A,F)")"Iterations: ",Niter," Chi^2: ",chi
-                  write(*,"(A,100F12.6)")"Moments before fit: ",Moments(iorb,:,ispin)
-                  write(*,"(A,100F12.6)")"Moments after fit:  ",ParamVec
+                  write(*,"(3(A,I3))")"     Results for orb: ",iorb," spin: ",ispin," Npara: ",Npara
+                  write(*,"(A,I,A,F)")"     Iterations: ",Niter," Chi^2: ",chi
+                  write(*,"(A,100F12.6)")"     First 4 moments before fit: ",Moments(iorb,1:4,ispin)
+                  write(*,"(A,100F12.6)")"     First 4 moments after fit:  ",ParamVec(1:4)
                   !
                   Moments(iorb,:,ispin) = ParamVec
                   !
@@ -684,7 +684,7 @@ contains
       real(8),allocatable,dimension(:)      :: g,hess,w,xprmt
       !
       !
-      if(verbose)write(*,"(A)") "---- fit_Delta"
+      write(*,"(A)") new_line("A")//new_line("A")//"---- fit_Delta"
       !
       !
       Nbath=Nb
@@ -710,7 +710,7 @@ contains
             !
          case("Standard")
             !
-            write(*,"(A)")new_line("A")//"Fitting Delta(iw)."
+            write(*,"(A)")"     Fitting Delta(iw)."
             allocate(ParamVec(2*Nbath));ParamVec=0d0
             do ispin=1,Nspin
                do iorb=1,Norb
@@ -738,7 +738,7 @@ contains
             !
          case("Shifted")
             !
-            write(*,"(A)")new_line("A")//"Fitting Eloc+Delta(iw)."
+            write(*,"(A)")"     Fitting Eloc+Delta(iw)."
             allocate(ParamVec(2*Nbath+1));ParamVec=0d0
             do ispin=1,Nspin
                do iorb=1,Norb
@@ -756,8 +756,8 @@ contains
                   deallocate(g,hess,w,xprmt)
                   !
                   !
-                  write(*,"(3(A,I3))")"Results for orb: ",iorb," spin: ",ispin," Npara: ",Npara
-                  write(*,"(A,I,A,F)")"Iterations: ",Niter," Chi^2: ",chi
+                  write(*,"(3(A,I3))")"     Results for orb: ",iorb," spin: ",ispin," Npara: ",Npara
+                  write(*,"(A,I,A,F)")"     Iterations: ",Niter," Chi^2: ",chi
                   !
                   AndPram%Eloc(iorb,ispin) = ParamVec(2*Nbath+1)
                   AndPram%Epsk(iorb,:,ispin) = ParamVec(1:Nbath)
@@ -879,7 +879,7 @@ contains
       !***
       !***
       1003  format (1x,'x = ',4f15.7 / (5x, 4f15.7))
-            write (6,1004) (g(i), i = 1, n)
+            if(verbose)write (6,1004) (g(i), i = 1, n)
       1004  format (1x,'g = ',4f15.7 / (5x, 4f15.7))
       !**
       !***

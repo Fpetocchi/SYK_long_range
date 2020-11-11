@@ -656,7 +656,7 @@ contains
       real                                  :: start,finish
       !
       !
-      if(verbose)write(*,"(A)") "---- read_U_spex_full"
+      write(*,"(A)") new_line("A")//new_line("A")//"---- read_U_spex_full"
       pathOUTPUT_ = pathINPUT
       if(present(pathOUTPUT)) pathOUTPUT_ = pathOUTPUT
       !
@@ -892,7 +892,7 @@ contains
                   enddo
                   !
                enddo !iw1
-               if(verbose)print *, "UcRPA(q,iw) - done iq: ",iq
+               if(verbose)print *, "     UcRPA(q,iw) - done iq: ",iq
             enddo !iq
             !$OMP END DO
             !$OMP END PARALLEL
@@ -927,7 +927,7 @@ contains
          !
          !---------------------------------------------------------------------!
          !
-         write(*,"(A)")"     Reading from file UcRPA(iq,iw)."
+         write(*,"(A)")"     Reading UcRPA(iq,iw) from "//reg(pathINPUT)//"VW_imag/"
          !
          ! Allocations from dimensions written in W.Q0001.DAT file
          path = reg(pathINPUT)//"VW_imag/VW.Q0001.DAT"
@@ -1043,7 +1043,7 @@ contains
       type(BosonicField)                    :: Uread
       !
       !
-      if(verbose)write(*,"(A)") "---- read_U_spex_Uloc0"
+      write(*,"(A)") new_line("A")//new_line("A")//"---- read_U_spex_Uloc0"
       pathOUTPUT_ = pathINPUT
       if(present(pathOUTPUT)) pathOUTPUT_ = pathOUTPUT
       !

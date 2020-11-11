@@ -13,8 +13,8 @@ module bubbles
    !PURPOSE: Module interfaces
    !---------------------------------------------------------------------------!
    interface calc_Pi
-      module procedure calc_Pi_GkGk                                             ![BosonicField,Lattice]
-      module procedure calc_Pi_selfcons                                         ![BosonicField,FermionicField,Lattice,tau_output(optional)]
+      module procedure calc_Pi_GoGo                                             ![BosonicField,Lattice]
+      module procedure calc_Pi_scGG                                         ![BosonicField,FermionicField,Lattice,tau_output(optional)]
    end interface calc_Pi
 
    !---------------------------------------------------------------------------!
@@ -43,9 +43,9 @@ contains
    !PURPOSE: Computes analytically the non-interacting polarization bubble
    !TEST ON: 21-10-2020
    !COMMENT: For some reason this gives a bit more wiggling W.
-   !         Using calc_Pi_selfcons from the Glda seems to work better.
+   !         Using calc_Pi_scGG from the Glda seems to work better.
    !---------------------------------------------------------------------------!
-   subroutine calc_Pi_GkGk(Pmats,Lttc)
+   subroutine calc_Pi_GoGo(Pmats,Lttc)
       !
       use parameters
       use utils_misc
@@ -66,7 +66,7 @@ contains
       real                                  :: start,finish
       !
       !
-      if(verbose)write(*,"(A)") "---- calc_Pi_GkGk"
+      write(*,"(A)") new_line("A")//new_line("A")//"---- calc_Pi_GoGo"
       call cpu_time(start)
       !
       !
@@ -159,7 +159,7 @@ contains
             if(verbose)call check_Hermiticity(Pmats%screened(:,:,iw,iq),eps,hardstop=.true.)
             !
          enddo !iw
-         if(verbose)print *, "PiGG(q,iw) - done iq: ",iq
+         if(verbose)print *, "     PiGG(q,iw) - done iq: ",iq
       enddo !iq
       !$OMP END DO
       !$OMP END PARALLEL
@@ -168,16 +168,16 @@ contains
       call BosonicKsum(Pmats)
       !
       call cpu_time(finish)
-      write(*,"(A,F)") "PiGG cpu timing: ", finish-start
+      write(*,"(A,F)") "     PiGG cpu timing: ", finish-start
       !
-   end subroutine calc_Pi_GkGk
+   end subroutine calc_Pi_GoGo
 
 
    !---------------------------------------------------------------------------!
    !PURPOSE: Computes polarization bubble from the interacting Gf
    !TEST ON: 21-10-2020
    !---------------------------------------------------------------------------!
-   subroutine calc_Pi_selfcons(Pout,Gmats,Lttc,tau_output)
+   subroutine calc_Pi_scGG(Pout,Gmats,Lttc,tau_output)
       !
       use parameters
       use utils_misc
@@ -205,7 +205,7 @@ contains
       real                                  :: start,finish
       !
       !
-      if(verbose)write(*,"(A)") "---- calc_Pi_selfcons"
+      write(*,"(A)") new_line("A")//new_line("A")//"---- calc_Pi_scGG"
       call cpu_time(start)
       !
       !
@@ -289,7 +289,7 @@ contains
             call Bitau2mats(Beta,Pq_tau,Pout%screened(:,:,:,iq),tau_uniform=tau_uniform)
          endif
          !
-         if(verbose)print *, "PiGGsc(q,iw) - done iq: ",iq
+         if(verbose)print *, "     PiGGsc(q,iw) - done iq: ",iq
          !
       enddo !iq
       deallocate(tau,Gitau,Pq_tau)
@@ -297,9 +297,9 @@ contains
       call BosonicKsum(Pout)
       !
       call cpu_time(finish)
-      write(*,"(A,F)") "PiGGsc cpu timing: ", finish-start
+      write(*,"(A,F)") "     PiGGsc cpu timing: ", finish-start
       !
-   end subroutine calc_Pi_selfcons
+   end subroutine calc_Pi_scGG
 
 
 end module bubbles

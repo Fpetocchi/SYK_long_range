@@ -247,7 +247,7 @@ contains
       if(Norb.ne.size(Umat,dim=2)) stop "The provided matrix is not square."
       !
       ! Create directory
-      call createDir(reg(dirpath))
+      call createDir(reg(dirpath),verb=verbose)
       !
       ! Write to file
       if(binfmt) then
@@ -329,7 +329,7 @@ contains
       if(Norb.ne.size(Umat,dim=2)) stop "The provided matrix is not square."
       !
       ! Create directory
-      call createDir(reg(dirpath))
+      call createDir(reg(dirpath),verb=verbose)
       !
       ! Write to file
       if(binfmt) then
@@ -541,7 +541,7 @@ contains
       !
       !
       ! Create directory
-      call createDir(reg(dirpath))
+      call createDir(reg(dirpath),verb=verbose)
       !
       ! Write to file
       unit = free_unit()
@@ -599,7 +599,7 @@ contains
       Norb = G%Norb
       !
       ! Create directory
-      call createDir(reg(dirpath))
+      call createDir(reg(dirpath),verb=verbose)
       !
       ! Write to file
       unit = free_unit()
@@ -665,7 +665,7 @@ contains
       Norb = G%Norb
       !
       ! Create directory
-      call createDir(reg(dirpath))
+      call createDir(reg(dirpath),verb=verbose)
       !
       ! Write to file
       do ispin=1,Nspin
@@ -969,7 +969,7 @@ contains
       Norb = int(sqrt(dble(U%Nbp)))
       !
       ! Create directory
-      call createDir(reg(dirpath))
+      call createDir(reg(dirpath),verb=verbose)
       !
       ! Write to file
       unit = free_unit()
@@ -1061,7 +1061,7 @@ contains
       Norb = int(sqrt(dble(U%Nbp)))
       !
       ! Create directory
-      call createDir(reg(dirpath))
+      call createDir(reg(dirpath),verb=verbose)
       !
       !Just in case I'm printing a polarization
       if(.not.allocated(U%bare))then

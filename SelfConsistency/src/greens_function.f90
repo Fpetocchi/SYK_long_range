@@ -415,7 +415,7 @@ contains
       integer                               :: iter
       !
       !
-      if(verbose)write(*,"(A)") "---- set_density_Int"
+      write(*,"(A)") new_line("A")//new_line("A")//"---- set_density_Int"
       !
       !
       ! Check on the input Fields
@@ -430,7 +430,7 @@ contains
          if(Smats%Npoints.eq.0) stop "Smats frequency dependent attributes not properly initialized."
          if(Smats%Nkpt.eq.0) stop "Smats k dependent attributes not properly initialized."
       endif
-      write(*,"(A,F6.3)") "Target density: ",mu_param%TargetDensity
+      write(*,"(A,F6.3)") "     Target density: ",mu_param%TargetDensity
       !
       Norb = Gmats%Norb
       Nmats = Gmats%Npoints
@@ -439,8 +439,7 @@ contains
       !
       if(present(Smats)) call calc_Gmats_Full(Gmats,Lttc,Smats)
       n_iter = get_dens()
-      write(*,"(A,F10.5)") "Starting density: ",n_iter
-      write(*,"(A,F10.5)") "Starting chemical potential: ",mu_start
+      write(*,"(2(A,F8.5))") "     Starting density: ",n_iter,", starting mu: ",mu_start
       !
       mu_sign = sign(1d0,mu_param%TargetDensity-n_iter)
       mu_last = mu_start
@@ -457,8 +456,8 @@ contains
          endif
          n_iter = get_dens()
          !
-         write(*,"(A,I4)") "Rigid shift iteration # ",iter
-         write(*,"(3(A,F10.5))") "Density: ", n_iter,", mu: ", Gmats%mu,", Dmu: ", dmu
+         write(*,"(A,I4,3(A,F8.5))") "     Rigid shift it# ",iter,", density: ", n_iter,", mu: ", &
+         Gmats%mu,", Dmu: ",dmu
          !
          if((mu_sign.gt.0.0).and.(n_iter > mu_param%TargetDensity)) exit
          if((mu_sign.lt.0.0).and.(n_iter < mu_param%TargetDensity)) exit
@@ -484,18 +483,17 @@ contains
          n_iter = get_dens()
          n_err = abs(n_iter-mu_param%TargetDensity)/mu_param%TargetDensity
          !
-         write(*,"(A,I4)") "Secant method iteration # ",iter
-         write(*,"(3(A,F10.5))") "Chemical potential boundaries: ",mu_below," / ",mu_above,", Dmu: ", dmu
-         write(*,"(3(A,F10.5))") "Density: ", n_iter,", mu: ", Gmats%mu,", relative error: ", n_err
+         write(*,"(A,I4,6(A,F8.5))") "     Netwon it# ",iter,", mu boundaries: ",mu_below," / ",mu_above, &
+         ", dmu: ",dmu,", density: ", n_iter,", mu: ",Gmats%mu,", relative error: ",n_err
          !
          if(n_iter.gt.mu_param%TargetDensity) mu_above = Gmats%mu;
          if(n_iter.lt.mu_param%TargetDensity) mu_below = Gmats%mu;
          !
          if(n_err.lt.mu_param%densityRelErr)then
-            write(*,"(A,F10.5)") "Found correct chemical potential after "//str(iter)//" iterations: ",Gmats%mu
+            write(*,"(A,F8.5)") "     Found correct chemical potential after "//str(iter)//" iterations: ",Gmats%mu
             exit
          elseif(iter.eq.mu_param%muIter)then
-             write(*,"(A,F10.5)") "Warning: NOT found correct chemical potential after "//str(iter)//" iterations. Last used value: ",Gmats%mu
+            write(*,"(A,F8.5)") "     Warning: NOT found correct chemical potential after "//str(iter)//" iterations. Last used value: ",Gmats%mu
          endif
          !
       enddo !iter
@@ -563,14 +561,14 @@ contains
       integer                               :: iter
       !
       !
-      if(verbose)write(*,"(A)") "---- set_density_NonInt"
+      write(*,"(A)") new_line("A")//new_line("A")//"---- set_density_NonInt"
       !
       !
       ! Check on the input Fields
       if(.not.Lttc%status) stop "Lttc not properly initialized."
       if(Lttc%Nkpt.eq.0) stop "Lttc k dependent attributes not properly initialized."
       if(mu_param%TargetDensity.eq.0d0) stop "TargetDensity is set to zero."
-      write(*,"(A,F10.5)") "Target density: ",mu_param%TargetDensity
+      write(*,"(A,F10.5)") "     Target density: ",mu_param%TargetDensity
       !
       Norb = Lttc%Norb
       Nkpt = Lttc%Nkpt
@@ -582,8 +580,7 @@ contains
       allocate(Gitau(Norb,NtauF,Nkpt));Gitau=czero
       call calc_G0_tau(Gitau,mu_start,Beta,Lttc%Ek,atBeta=.true.)
       n_iter = get_dens()
-      write(*,"(A,F10.5)") "Starting density: ",n_iter
-      write(*,"(A,F10.5)") "Starting mu: ",mu_start
+      write(*,"(2(A,F8.5))") "     Starting density: ",n_iter,", starting mu: ",mu_start
       !
       mu_sign = sign(1d0,mu_param%TargetDensity-n_iter)
       mu_last = mu_start;
@@ -595,8 +592,7 @@ contains
          call calc_G0_tau(Gitau,mu,Beta,Lttc%Ek,atBeta=.true.)
          n_iter = get_dens()
          !
-         write(*,"(A,I4)") "Rigid shift iteration # ",iter
-         write(*,"(2(A,F10.5))") "Density: ", n_iter,", mu: ", mu
+         write(*,"(A,I4,2(A,F8.5))") "     Rigid shift it# ",iter,", density: ", n_iter,", mu: ",mu
          !
          if((mu_sign.gt.0.0).and.(n_iter > mu_param%TargetDensity)) exit
          if((mu_sign.lt.0.0).and.(n_iter < mu_param%TargetDensity)) exit
@@ -615,18 +611,17 @@ contains
          n_iter = get_dens()
          n_err = abs(n_iter-mu_param%TargetDensity)/mu_param%TargetDensity
          !
-         write(*,"(A,I4)") "Secant method iteration # ",iter
-         write(*,"(2(A,F10.5))") "Chemical potential boundaries: ",mu_below," / ",mu_above
-         write(*,"(3(A,F10.5))") "Density: ", n_iter,", mu: ", mu,", relative error: ", n_err
+         write(*,"(A,I4,5(A,F8.5))") "     Netwon it# ",iter,", mu boundaries: ",mu_below," / ",mu_above, &
+         ", density: ", n_iter,", mu: ",mu,", relative error: ",n_err
          !
          if(n_iter.gt.mu_param%TargetDensity) mu_above = mu;
          if(n_iter.lt.mu_param%TargetDensity) mu_below = mu;
          !
          if(n_err.lt.mu_param%densityRelErr)then
-            write(*,"(A,F10.5)") "Found correct chemical potential after "//str(iter)//" iterations: ",mu
+            write(*,"(A,F8.5)") "     Found correct chemical potential after "//str(iter)//" iterations: ",mu
             exit
          elseif(iter.eq.mu_param%muIter)then
-             write(*,"(A,F10.5)") "Warning: NOT found correct chemical potential after "//str(iter)//" iterations. Last used value: ",mu
+            write(*,"(A,F8.5)") "     Warning: NOT found correct chemical potential after "//str(iter)//" iterations. Last used value: ",mu
          endif
          !
       enddo !iter

@@ -24,7 +24,7 @@ program test
    !---------------------------------------------------------------------------!
    call tick(TimeStart)
    call read_InputFile("input.in")
-   write(LOGfile,"(A,1I4)") "Setting Nthread:",Nthread
+   write(*,"(A,1I4)") "Setting Nthread:",Nthread
    call omp_set_num_threads(Nthread)
    call printHeader()
    call initialize_DataStructure(ItStart,Itend)
@@ -43,6 +43,7 @@ program test
    !SOLVING THE LATTICE PROBLEM AND PRODUCING INPUTS FOR NEXT IMPURITY SOLUTION!
    !---------------------------------------------------------------------------!
    call initialize_Fields(ItStart)
+   if(solve_DMFT)call show_Densities(Iteration-1)
    !
    do Iteration=ItStart,Itend,1
       !
@@ -154,6 +155,7 @@ program test
       !!Print lattice density
       call dump_Matrix(Glat%N_s(:,:,1),reg(ItFolder)//"Nlat_up.DAT")
       call dump_Matrix(Glat%N_s(:,:,2),reg(ItFolder)//"Nlat_dw.DAT")
+      densityGW=Glat%N_s
       !
       !Matching the lattice and impurity problems
       if(solve_DMFT)then
@@ -166,18 +168,20 @@ program test
             !Compute local effective interaction
             call calc_Interaction(isite,Iteration,ExpandImpurity)
             !
-            if(ExpandImpurity)exit
+            if(ExpandImpurity.or.AFMselfcons)exit
             !
          enddo
          !
       endif
       !
-   enddo
+      if(.not.solve_DMFT)call show_Densities(Iteration)
+      !
+   enddo !Iteration
    !
    call DeallocateAllFields()
    call execute_command_line(" cp used.input.in "//reg(ItFolder))
    call execute_command_line(" cp report "//reg(ItFolder))
    call execute_command_line(" cp err "//reg(ItFolder))
-   write(LOGfile,"(A,F)") "Self-Consistency finished. Total timing (s): ",tock(TimeStart)
+   write(*,"(A,F)") new_line("A")//new_line("A")//"Self-Consistency finished. Total timing (s): ",tock(TimeStart)
    !
 end program test

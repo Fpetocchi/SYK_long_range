@@ -107,7 +107,7 @@ contains
             header = header//"="
          enddo
          header = header//">"
-         write(LOGfile,"(A)") new_line("A")//new_line("A")//header//new_line("A")
+         write(*,"(A)") new_line("A")//new_line("A")//new_line("A")//header//new_line("A")
          !
       else
          !
@@ -130,9 +130,9 @@ contains
             header = header//" "
          enddo
          header = header//"*"
-         write(LOGfile,"(A)") line
-         write(LOGfile,"(A)") header
-         write(LOGfile,"(A)") line//new_line("A")//new_line("A")
+         write(*,"(A)") line
+         write(*,"(A)") header
+         write(*,"(A)") line//new_line("A")//new_line("A")
          !
       endif
       !
@@ -152,6 +152,12 @@ contains
       integer                               :: iter,Itfirst,isite
       logical                               :: Itexist
       !
+      !Few general checks
+      if(ExpandImpurity.and.AFMselfcons) stop "AFM self-consistency and expansion to real space not yet implemented."
+      if(ExpandImpurity.and.(Nsite.eq.1)) stop "Cannot expand a single site."
+      if(AFMselfcons.and.(Nsite.ne.2)) stop "AFM self-consistency is implemented only for lattices with 2 sites."
+      !
+      !
       do iter=0,1000
          Itpath = reg(pathDATA)//str(iter)
          call inquireDir(reg(Itpath),Itexist,hardstop=.false.,verb=.false.)
@@ -165,9 +171,9 @@ contains
       !
       Itpath = reg(pathDATA)//str(Itfirst)
       if(Itfirst.eq.0)then
-         write(LOGfile,"(A)") "Brand new calculation. Initializing "//reg(Itpath)
+         write(*,"(A)") "Brand new calculation. Initializing "//reg(Itpath)
       else
-         write(LOGfile,"(A)") "Last iteration: "//str(Itfirst-1)//". Initializing "//reg(Itpath)
+         write(*,"(A)") "Last iteration: "//str(Itfirst-1)//". Initializing "//reg(Itpath)
       endif
       call createDir(reg(Itpath),verb=verbose)
       !
@@ -199,7 +205,7 @@ contains
       !
       do isite=1,Nsite
          call createDir(reg(ItFolder)//"Solver_"//reg(SiteName(isite))//"/fits",verb=verbose)
-         if(ExpandImpurity)exit
+         if(ExpandImpurity.or.AFMselfcons)exit
       enddo
       !
    end subroutine initialize_DataStructure
@@ -223,7 +229,7 @@ contains
       integer,allocatable                   :: oldSetNorb(:),oldSetOrbs(:,:)
       !
       !
-      write(LOGfile,"(A)") new_line("A")//new_line("A")//"---- initialize_Lattice"
+      write(*,"(A)") new_line("A")//new_line("A")//"---- initialize_Lattice"
       !
       !
       Lttc%Nkpt3 = Nkpt3
@@ -336,7 +342,7 @@ contains
                call dump_Matrix(diag(Eig),reg(pathINPUT)//"HlocEig_"//reg(SiteName(1))//"_"//str(isite)//".DAT")
                !
                !SO(3)check
-               write(LOGfile,"(A,F)") "     det(Rot) of "//reg(SiteName(isite))//" :",det(HlocRot(:,:,isite))
+               write(*,"(A,F)") "     det(Rot) of "//reg(SiteName(isite))//" :",det(HlocRot(:,:,isite))
                !
                HlocSite(1:Norb,1:Norb,isite) = Hloc
                HlocRot(1:Norb,1:Norb,isite) = Rot
@@ -378,7 +384,7 @@ contains
                call dump_Matrix(diag(Eig),reg(pathINPUT)//"HlocEig_"//reg(SiteName(isite))//".DAT")
                !
                !SO(3)check
-               write(LOGfile,"(A,F)") "     det(Rot) of "//reg(SiteName(isite))//" :",det(HlocRot(:,:,isite))
+               write(*,"(A,F)") "     det(Rot) of "//reg(SiteName(isite))//" :",det(HlocRot(:,:,isite))
                !
                HlocSite(1:Norb,1:Norb,isite) = Hloc
                HlocRot(1:Norb,1:Norb,isite) = Rot
@@ -452,7 +458,7 @@ contains
       real(8)                               :: muQMC
       !
       !
-      write(LOGfile,"(A)") new_line("A")//new_line("A")//"---- initialize_Fields"
+      write(*,"(A)") new_line("A")//new_line("A")//"---- initialize_Fields"
       !
       !
       select case(reg(CalculationType))
@@ -643,7 +649,7 @@ contains
       allocate(densityLDA(Crystal%Norb,Crystal%Norb));densityLDA=czero
       allocate(densityGW(Crystal%Norb,Crystal%Norb,Nspin));densityGW=czero
       allocate(densityDMFT(Crystal%Norb,Crystal%Norb,Nspin));densityDMFT=czero
-      allocate(densityQMC(maxval(SiteOrbs),maxval(SiteOrbs),Nspin,Nsite));densityQMC=0d0
+      allocate(densityQMC(maxval(SiteNorb),maxval(SiteNorb),Nspin,Nsite));densityQMC=0d0
       !
       if(ItStart.eq.0)then
          densityLDA = Glat%N_s(:,:,1) + Glat%N_s(:,:,2)
@@ -667,7 +673,7 @@ contains
                read(unit,*) densityQMC(iorb,iorb,1,isite),densityQMC(iorb,iorb,2,isite)
             enddo
             close(unit)
-            if(ExpandImpurity)exit
+            if(ExpandImpurity.or.AFMselfcons)exit
          enddo
          !
       endif
@@ -678,8 +684,8 @@ contains
          if(ItStart.eq.0)call set_density(Glat%mu,Beta,Crystal,look4dens)
       endif
       !
-      write(LOGfile,"(A,F)") new_line("A")//"Lattice chemical potential: ",Glat%mu
-      if(ItStart.gt.0)write(LOGfile,"(A,F)") new_line("A")//"Impurity chemical potential: ",muQMC
+      write(*,"(A,F)") new_line("A")//"     Lattice chemical potential: ",Glat%mu
+      if(ItStart.gt.0)write(*,"(A,F)") new_line("A")//"     Impurity chemical potential: ",muQMC
       !
    end subroutine initialize_Fields
 
@@ -695,7 +701,7 @@ contains
       integer                               :: iorb,jorb,ik,iw,ispin
       !
       !
-      write(LOGfile,"(A)") new_line("A")//new_line("A")//"---- join_SigmaFull"
+      write(*,"(A)") new_line("A")//new_line("A")//"---- join_SigmaFull"
       !
       !
       select case(reg(CalculationType))
@@ -829,7 +835,7 @@ contains
       logical                               :: oldparexist
       !
       !
-      write(LOGfile,"(A)") new_line("A")//new_line("A")//"---- calc_Delta of "//reg(SiteName(isite))
+      write(*,"(A)") new_line("A")//new_line("A")//"---- calc_Delta of "//reg(SiteName(isite))
       !
       !
       Norb = SiteNorb(isite)
@@ -868,8 +874,8 @@ contains
       endif
       !
       !Print what's used to compute delta
-      call dump_FermionicField(Gloc,1,reg(ItFolder)//"Solver_"//reg(SiteName(isite))//"/","G_"//reg(SiteName(isite))//"_w_up.DAT")
-      call dump_FermionicField(Gloc,2,reg(ItFolder)//"Solver_"//reg(SiteName(isite))//"/","G_"//reg(SiteName(isite))//"_w_dw.DAT")
+      call dump_FermionicField(Gloc,1,reg(ItFolder)//"Solver_"//reg(SiteName(isite))//"/","Gloc_"//reg(SiteName(isite))//"_w_up.DAT")
+      call dump_FermionicField(Gloc,2,reg(ItFolder)//"Solver_"//reg(SiteName(isite))//"/","Gloc_"//reg(SiteName(isite))//"_w_dw.DAT")
       call dump_FermionicField(SigmaImp,1,reg(ItFolder)//"Solver_"//reg(SiteName(isite))//"/","S_"//reg(SiteName(isite))//"_w_up.DAT")
       call dump_FermionicField(SigmaImp,2,reg(ItFolder)//"Solver_"//reg(SiteName(isite))//"/","S_"//reg(SiteName(isite))//"_w_dw.DAT")
       !
@@ -1111,7 +1117,7 @@ contains
       character(len=255)                    :: printpath
       !
       !
-      write(LOGfile,"(A)") new_line("A")//new_line("A")//"---- calc_Interaction of "//reg(SiteName(isite))
+      write(*,"(A)") new_line("A")//new_line("A")//"---- calc_Interaction of "//reg(SiteName(isite))
       !
       !
       Norb = SiteNorb(isite)
@@ -1147,13 +1153,13 @@ contains
             !
             if(Ustart)then
                !
-               write(LOGfile,"(A)") "     Using local Ucrpa as effective interaction."
+               write(*,"(A)") "     Using local Ucrpa as effective interaction."
                call loc2imp(curlyU,Ulat,Orbs)
                call DeallocateBosonicField(Ulat)
                !
             else
                !
-               write(LOGfile,"(A)") "     Computing the local effective interaction."
+               write(*,"(A)") "     Computing the local effective interaction."
                call AllocateBosonicField(Pimp,Norb,Nmats,Crystal%iq_gamma,no_bare=.true.,Beta=Beta)
                call AllocateBosonicField(Wloc,Norb,Nmats,Crystal%iq_gamma,Beta=Beta)
                call loc2imp(Pimp,Plat,Orbs)
@@ -1237,11 +1243,11 @@ contains
             call loc2imp(Wloc,Wlat,Orbs)
             call calc_QMCinteractions(Wloc,Ucheck)
             !
-            write(LOGfile,"(A)")"Checking site "//reg(SiteName(1))//"_"//str(isitecheck)
+            write(*,"(A)")"Checking site "//reg(SiteName(1))//"_"//str(isitecheck)
             do ib1=1,Nflavor
                do ib2=1,Nflavor
                   if(abs(Ucheck(ib1,ib2)-Uinst(ib1,ib2)).gt.1e-6)then
-                     write(LOGfile,"(A,F,A,F)")"Warning: Element["//str(ib1)//"]["//str(ib2)//"] is different:",Ucheck(ib1,ib2)," instead of: ",Uinst(ib1,ib2)
+                     write(*,"(A,F,A,F)")"Warning: Element["//str(ib1)//"]["//str(ib2)//"] is different:",Ucheck(ib1,ib2)," instead of: ",Uinst(ib1,ib2)
                   endif
                enddo
             enddo
@@ -1274,6 +1280,7 @@ contains
       !
       type(FermionicField)                  :: SigmaDMFT
       type(FermionicField)                  :: SigmaImp
+      type(FermionicField)                  :: Gimp
       type(FermionicField)                  :: G0imp
       type(BosonicField)                    :: curlyU
       type(BosonicField)                    :: PiEDMFT
@@ -1282,7 +1289,7 @@ contains
       type(BosonicField)                    :: ChiCitau,ChiCmats
       integer                               :: Norb,Nflavor,Nbp
       integer                               :: iorb,jorb,ispin,jspin
-      integer                               :: ib1,ib2,isite
+      integer                               :: ib1,ib2,isite,idum
       integer                               :: unit,ndx,itau,iw
       real(8)                               :: taup,muQMC
       integer,allocatable                   :: Orbs(:)
@@ -1296,17 +1303,17 @@ contains
       character(len=255)                    :: filepath
       !
       !
-      write(LOGfile,"(A)") "---- collect_QMC_results"
+      write(*,"(A)") "---- collect_QMC_results"
       !
       !
       !
       ! COLLECT IMPURITY OCCUPATION
       allocate(densityDMFT(Crystal%Norb,Crystal%Norb,Nspin));densityDMFT=czero
-      allocate(densityQMC(maxval(SiteOrbs),maxval(SiteOrbs),Nspin,Nsite));densityQMC=0d0
+      allocate(densityQMC(maxval(SiteNorb),maxval(SiteNorb),Nspin,Nsite));densityQMC=0d0
       !
       do isite=1,Nsite
          !
-         write(LOGfile,"(A)") "     Collecting occupation of site: "//reg(SiteName(isite))
+         write(*,"(A)") "     Collecting occupation of site: "//reg(SiteName(isite))
          !
          Norb = SiteNorb(isite)
          allocate(Orbs(Norb))
@@ -1319,32 +1326,33 @@ contains
          unit = free_unit()
          open(unit,file=reg(filepath),form="formatted",status="old",position="rewind",action="read")
          read(unit,*) muQMC
-         do iorb=1,Norb
-            read(unit,*) densityQMC(iorb,iorb,1,isite),densityQMC(iorb,iorb,2,isite)
+         do ib1=1,Nflavor
+            iorb = (ib1+mod(ib1,2))/2
+            ispin = abs(mod(ib1,2)-2)
+            read(unit,*) idum,densityQMC(iorb,iorb,ispin,isite)
          enddo
          close(unit)
          !
          !Insert or Expand to the Lattice basis
-         do ispin=1,Nspin
-            if(RotateHloc)then
-               call imp2loc(densityDMFT(:,:,ispin),dcmplx(densityQMC(:,:,ispin,isite),0d0),Orbs,U=HlocRotDag,expand=ExpandImpurity)
-            else
-               call imp2loc(densityDMFT(:,:,ispin),dcmplx(densityQMC(:,:,ispin,isite),0d0),Orbs,expand=ExpandImpurity)
-            endif
-         enddo
+         if(RotateHloc)then
+            call imp2loc(densityDMFT,dcmplx(densityQMC(:,:,:,isite),0d0),Orbs,ExpandImpurity,AFMselfcons,U=HlocRotDag)
+         else
+            call imp2loc(densityDMFT,dcmplx(densityQMC(:,:,:,isite),0d0),Orbs,ExpandImpurity,AFMselfcons)
+         endif
          !
-         if(ExpandImpurity)exit
+         if(ExpandImpurity.or.AFMselfcons)exit
          !
       enddo
       !
       !Symmetrize
       if(verbose)call dump_Matrix(densityDMFT(:,:,1),reg(PrevItFolder)//"Nimp_up_notsymm.DAT")
+      if(verbose)call dump_Matrix(densityDMFT(:,:,2),reg(PrevItFolder)//"Nimp_dw_notsymm.DAT")
       call symmetrize(densityDMFT,EqvGWndx)
       !
       !Save to the proper iteration folder
       call dump_Matrix(densityDMFT(:,:,1),reg(PrevItFolder)//"Nimp_up.DAT")
       call dump_Matrix(densityDMFT(:,:,2),reg(PrevItFolder)//"Nimp_dw.DAT")
-      deallocate(densityDMFT)
+      deallocate(densityDMFT,Orbs)
       !
       !
       !
@@ -1353,7 +1361,7 @@ contains
       call AllocateFermionicField(SigmaDMFT,Crystal%Norb,Nmats,Nsite=Nsite,Beta=Beta)
       do isite=1,Nsite
          !
-         write(LOGfile,"(A)") "     Solving fermionic Dyson of site: "//reg(SiteName(isite))
+         write(*,"(A)") "     Solving fermionic Dyson of site: "//reg(SiteName(isite))
          !
          Norb = SiteNorb(isite)
          allocate(Orbs(Norb))
@@ -1390,6 +1398,13 @@ contains
             call Fitau2mats_vec(Beta,Gitau(:,:,ispin),Gmats(:,:,ispin),tau_uniform=.true.)
          enddo
          deallocate(Gitau)
+         call AllocateFermionicField(Gimp,Norb,Nmats,Beta=Beta)
+         do iorb=1,Norb
+            Gimp%ws(iorb,iorb,:,:) = Gmats(iorb,:,:)
+         enddo
+         deallocate(Gmats)
+         call dump_FermionicField(Gimp,1,reg(PrevItFolder)//"Solver_"//reg(SiteName(isite))//"/","Gimp_"//reg(SiteName(isite))//"_w_up.DAT")
+         call dump_FermionicField(Gimp,2,reg(PrevItFolder)//"Solver_"//reg(SiteName(isite))//"/","Gimp_"//reg(SiteName(isite))//"_w_dw.DAT")
          !
          !Read curlyG
          call AllocateFermionicField(G0imp,Norb,Nmats,Beta=Beta)
@@ -1398,7 +1413,7 @@ contains
          !
          !Adjust with the chemical potential used by the solver
          if(G0imp%mu.ne.muQMC)then
-            write(LOGfile,"(A)") "     Updating the chemical potential of curlyG."
+            write(*,"(A)") "     Updating the chemical potential of curlyG."
             do ispin=1,Nspin
                do iw=1,Nmats
                   do iorb=1,Norb
@@ -1414,10 +1429,10 @@ contains
          call AllocateFermionicField(SigmaImp,Norb,Nmats,Beta=Beta)
          do ispin=1,Nspin
             do iorb=1,Norb
-               SigmaImp%ws(iorb,iorb,:,ispin) = 1d0/G0imp%ws(iorb,iorb,:,ispin) - 1d0/Gmats(iorb,:,ispin)
+               SigmaImp%ws(iorb,iorb,:,ispin) = 1d0/G0imp%ws(iorb,iorb,:,ispin) - 1d0/Gimp%ws(iorb,iorb,:,ispin)
             enddo
          enddo
-         deallocate(Gmats)
+         call DeallocateFermionicField(Gimp)
          call DeallocateFermionicField(G0imp)
          !
          !Fill up the N_s attribute that correspond to the Hartree term
@@ -1426,6 +1441,7 @@ contains
          !like Hartree_{ab} = Sum_c curlyU_{ab}{cc} * n_{cc}
          call AllocateBosonicField(curlyU,Norb,Nmats,Crystal%iq_gamma,Beta=Beta)
          call read_BosonicField(curlyU,reg(PrevItFolder)//"Solver_"//reg(SiteName(isite))//"/","curlyU_"//reg(SiteName(isite))//"_w.DAT")
+         SigmaImp%N_s=czero
          do ispin=1,Nspin
             do iorb=1,Norb
                do jorb=1,Norb
@@ -1433,7 +1449,11 @@ contains
                   ib1 = iorb + Norb*(iorb-1)
                   ib2 = jorb + Norb*(jorb-1)
                   !
-                  SigmaImp%N_s(iorb,iorb,ispin) = SigmaImp%N_s(iorb,iorb,ispin) + curlyU%screened_local(ib1,ib2,1)*densityQMC(jorb,jorb,ispin,isite)
+                  SigmaImp%N_s(iorb,iorb,ispin) = SigmaImp%N_s(iorb,iorb,ispin) + real(curlyU%screened_local(ib1,ib2,1))*densityQMC(jorb,jorb,ispin,isite)
+                  write(*,*)iorb,jorb,ispin
+                  write(*,*)curlyU%screened_local(ib1,ib2,1)
+                  write(*,*)densityQMC(jorb,jorb,ispin,isite)
+                  write(*,*)SigmaImp%N_s(iorb,iorb,ispin)
                   !
                enddo
             enddo
@@ -1442,9 +1462,9 @@ contains
          !
          !Expand to the Lattice basis
          if(RotateHloc)then
-            call imp2loc(SigmaDMFT,SigmaImp,Orbs,U=HlocRotDag,expand=ExpandImpurity,AFM=AFMselfcons)
+            call imp2loc(SigmaDMFT,SigmaImp,Orbs,ExpandImpurity,AFMselfcons,U=HlocRotDag)
          else
-            call imp2loc(SigmaDMFT,SigmaImp,Orbs,expand=ExpandImpurity,AFM=AFMselfcons)
+            call imp2loc(SigmaDMFT,SigmaImp,Orbs,ExpandImpurity,AFMselfcons)
          endif
          call DeallocateFermionicField(SigmaImp)
          deallocate(Orbs)
@@ -1455,6 +1475,7 @@ contains
       !
       !Symmetrize
       if(verbose)call dump_FermionicField(SigmaDMFT,1,reg(PrevItFolder),"Simp_w_up_notsymm.DAT")
+      if(verbose)call dump_FermionicField(SigmaDMFT,2,reg(PrevItFolder),"Simp_w_dw_notsymm.DAT")
       call symmetrize(SigmaDMFT,EqvGWndx)
       !
       !Save to the proper iteration folder
@@ -1474,12 +1495,13 @@ contains
          !
          do isite=1,Nsite
             !
-            write(LOGfile,"(A)") "     Solving bosonic Dyson of site: "//reg(SiteName(isite))
+            write(*,"(A)") "     Solving bosonic Dyson of site: "//reg(SiteName(isite))
             !
             Norb = SiteNorb(isite)
             allocate(Orbs(Norb))
             Orbs = SiteOrbs(isite,1:Norb)
             Nbp = Norb**2
+            Nflavor = Norb*Nspin
             !
             !Read the impurity N(tau)N(0)
             allocate(tauB(NtauB));tauB=0d0
@@ -1509,8 +1531,8 @@ contains
             !
             !Reshape N(tau)N(0)for easier handling
             allocate(NNitau(Norb,Norb,Nspin,Nspin,NtauB));NNitau=czero
-            do ib1=1,Nspin*Norb
-               do ib2=1,Nspin*Norb
+            do ib1=1,Nflavor
+               do ib2=1,Nflavor
                   !
                   iorb = (ib1+mod(ib1,2))/2
                   jorb = (ib2+mod(ib2,2))/2
@@ -1596,7 +1618,7 @@ contains
             call DeallocateBosonicField(ChiCmats)
             !
             !Expand to the Lattice basis
-            call imp2loc(PiEDMFT,Pimp,Orbs,expand=ExpandImpurity)
+            call imp2loc(PiEDMFT,Pimp,Orbs,ExpandImpurity,AFMselfcons)
             call DeallocateBosonicField(Pimp)
             deallocate(Orbs)
             !
@@ -1639,6 +1661,116 @@ contains
       if(Plat%status) call DeallocateBosonicField(Plat)
       if(PiEDMFT%status) call DeallocateBosonicField(PiEDMFT)
    end subroutine DeallocateAllFields
+
+
+   !---------------------------------------------------------------------------!
+   !PURPOSE: Print the different density matrices
+   !TEST ON:
+   !---------------------------------------------------------------------------!
+   subroutine show_Densities(Iteration,enlrg)
+      use utils_misc
+      implicit none
+      integer,intent(in)                    :: Iteration
+      integer,intent(in),optional           :: enlrg
+      integer                               :: Norb,Norb_imp
+      integer                               :: iorb,jorb,isite
+      integer                               :: wn,ws,wsi,wnmin
+      integer                               :: l1,l2,l3
+      integer                               :: enlrg_
+      character(len=255)                    :: header1="Lattice density"
+      character(len=255)                    :: header2="Impurity density"
+      character(len=255)                    :: header3="Solver density"
+      !
+      l1=len(trim(header1)//" up")
+      l2=len(trim(header2)//" up")
+      l3=len(trim(header3)//" up")
+      wnmin=maxval([l1,l2,l3])
+      enlrg_=3
+      if(present(enlrg))enlrg_=enlrg
+      !
+      !
+      Norb = Crystal%Norb
+      wn=int(wnmin/Norb)+enlrg_
+      ws=2
+      !
+      select case(reg(CalculationType))
+         case default
+            !
+            stop "Available Calculation types are: G0W0, scGW, DMFT+statU, DMFT+dynU, EDMFT, GW+EDMFT."
+            !
+         case("G0W0","scGW")
+            !
+            call printHeader(Iteration)
+            !
+            write(*,*)
+            write(*,"(2(A"//str(wn*Norb)//","//str(ws)//"X))")banner(trim(header1)//" up",wn*Norb),banner(trim(header1)//" dw",wn*Norb)
+            do iorb=1,Norb
+               write(*,"(2("//str(Norb)//"F"//str(wn)//".4,"//str(ws)//"X))") (real(densityGW(iorb,jorb,1)),jorb=1,Norb),(real(densityGW(iorb,jorb,2)),jorb=1,Norb)
+            enddo
+            !
+         case("DMFT+statU","DMFT+dynU","EDMFT")
+            !
+            call printHeader(Iteration)
+            !
+            write(*,*)
+            write(*,"(2(A"//str(wn*Norb)//","//str(ws)//"X))")banner(trim(header1)//" up",wn*Norb),banner(trim(header1)//" dw",wn*Norb)
+            do iorb=1,Norb
+               write(*,"(2("//str(Norb)//"F"//str(wn)//".4,"//str(ws)//"X))") (real(densityGW(iorb,jorb,1)),jorb=1,Norb),(real(densityGW(iorb,jorb,2)),jorb=1,Norb)
+            enddo
+            !
+            write(*,*)
+            write(*,"(2(A"//str(wn*Norb)//","//str(ws)//"X))")banner(trim(header2)//" up",wn*Norb),banner(trim(header2)//" dw",wn*Norb)
+            do iorb=1,Norb
+               write(*,"(2("//str(Norb)//"F"//str(wn)//".4,"//str(ws)//"X))") (real(densityDMFT(iorb,jorb,1)),jorb=1,Norb),(real(densityDMFT(iorb,jorb,2)),jorb=1,Norb)
+            enddo
+            !
+         case("GW+EDMFT")
+            !
+            call printHeader(Iteration)
+            !
+            write(*,*)
+            write(*,"(2(A"//str(wn*Norb)//","//str(ws)//"X))")banner(trim(header1)//" up",wn*Norb),banner(trim(header1)//" dw",wn*Norb)
+            do iorb=1,Norb
+               write(*,"(2("//str(Norb)//"F"//str(wn)//".4,"//str(ws)//"X))") (real(densityGW(iorb,jorb,1)),jorb=1,Norb),(real(densityGW(iorb,jorb,2)),jorb=1,Norb)
+            enddo
+            !
+            write(*,*)
+            write(*,"(2(A"//str(wn*Norb)//","//str(ws)//"X))")banner(trim(header2)//" up",wn*Norb),banner(trim(header2)//" dw",wn*Norb)
+            do iorb=1,Norb
+               write(*,"(2("//str(Norb)//"F"//str(wn)//".4,"//str(ws)//"X))") (real(densityDMFT(iorb,jorb,1)),jorb=1,Norb),(real(densityDMFT(iorb,jorb,2)),jorb=1,Norb)
+            enddo
+            !
+            if(Nsite.gt.1)then
+               do isite=1,Nsite
+                  !
+                  Norb_imp = SiteNorb(isite)
+                  wsi = wn*Norb - wn*Norb_imp
+                  !
+                  write(*,*)
+                  write(*,"(2(A"//str(wn*Norb)//","//str(ws)//"X))")banner(trim(header3)//" up",wn*Norb),banner(trim(header3)//" dw",wn*Norb)
+                  do iorb=1,Norb_imp
+                     write(*,"(2("//str(wsi)//"X,"//str(wn*Norb_imp)//"F"//str(wn)//".4,"//str(ws)//"X))") (real(densityQMC(iorb,jorb,1,isite)),jorb=1,Norb_imp),(real(densityQMC(iorb,jorb,2,isite)),jorb=1,Norb_imp)
+                  enddo
+                  !
+                  if(ExpandImpurity.or.AFMselfcons)exit
+                  !
+               enddo
+            endif
+            !
+      end select
+      !
+      contains
+         !
+         function banner(txt,width) result(string)
+           character(len=*)             :: txt
+           integer                      :: width
+           character(len=width)         :: string
+           if(width.lt.len(txt))stop "banner will be truncated"
+           string = txt
+           string = adjustr(string)
+         end function banner
+         !
+   end subroutine show_Densities
 
 
 end module utils_main

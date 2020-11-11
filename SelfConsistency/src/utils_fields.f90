@@ -597,7 +597,7 @@ contains
    !PURPOSE: Expand the the subset of orbital indexes of corresponging to a
    !         given site to the full lattice quantity
    !---------------------------------------------------------------------------!
-   subroutine imp2loc_Fermionic(Gloc,Gimp,orbs,sitename,U,expand,AFM)
+   subroutine imp2loc_Fermionic(Gloc,Gimp,orbs,expand,AFM,U)
       !
       use parameters
       use utils_misc
@@ -607,10 +607,9 @@ contains
       type(FermionicField),intent(inout)    :: Gloc
       type(FermionicField),intent(in)       :: Gimp
       integer,allocatable,intent(in)        :: orbs(:)
-      character(len=*),intent(in),optional  :: sitename
+      logical,intent(in)                    :: expand
+      logical,intent(in)                    :: AFM
       complex(8),allocatable,optional       :: U(:,:,:)
-      logical,intent(in),optional           :: expand
-      logical,intent(in),optional           :: AFM
       !
       complex(8),allocatable                :: Rot(:,:)
       complex(8),allocatable                :: Gtmp(:,:,:,:,:),Ntmp(:,:,:,:)
@@ -618,13 +617,11 @@ contains
       integer                               :: Norb_loc,Norb_imp
       integer                               :: i_loc,j_loc
       integer                               :: i_imp,j_imp
-      logical                               :: expand_,AFM_
       !
       !
       if(verbose)write(*,"(A)") "---- imp2loc(F)"
       !
       !
-      if(present(sitename)) write(*,"(A)") "Insertion of Gimp of site: "//trim(sitename)
       if(.not.Gloc%status) stop "imp2loc(F): Gloc not properly initialized."
       if(.not.Gimp%status) stop "imp2loc(F): Gimp not properly initialized."
       if(Gloc%Norb.eq.0) stop "imp2loc(F): Norb of Gloc not defined."
@@ -641,10 +638,6 @@ contains
       !
       Norb_loc = Gloc%Norb
       Norb_imp = Gimp%Norb
-      expand_=.false.
-      if(present(expand))expand_=expand
-      AFM_=.false.
-      if(present(AFM))AFM_=AFM
       Nsite=1
       !
       if(AFM)then
@@ -655,27 +648,26 @@ contains
       endif
       !
       if(expand)then
+         Nsite = Gloc%Nsite
          if(mod(Norb_loc,size(orbs)).ne.0)stop "Number of requested orbitals is not a commensurate subset of the lattice field."
          if(AFM) stop "Expansion to real space and AFM condition not yet implemented."
          write(*,"(A)") "The impurity field will be expanded to match the lattice orbital space."
-         Nsite = Gloc%Nsite
       else
-         write(*,"(A,15I3)") "Impurity field will be inserted into the lattice orbital indexes: ",orbs
+         write(*,"(A,15I3)") "     Impurity field will be inserted into the lattice orbital indexes: ",orbs
          Nsite = 1
       endif
       !
       if(present(U))then
          if(size(U,dim=1).ne.size(U,dim=2)) stop "Rotation matrix not square."
-         !if(size(U,dim=1).ne.size(orbs)) stop "Rotation matrix has the wrong dimension."
          if(size(U,dim=3).ne.Gloc%Nsite) stop "Number of rotation matrices and number of sites does not match."
          if(size(U,dim=1).ne.3) write(*,"(A)") "Warning: The local orbital space rotation is well defined only for a t2g sub-shell."
-         write(*,"(A)") "The impurity orbital space will be rotated during insertion in "//str(Nsite)//" sites."
+         write(*,"(A)") "     The impurity orbital space will be rotated during insertion in "//str(Nsite)//" sites."
       endif
       !
       allocate(Ntmp(Gimp%Norb,Gimp%Norb,Nspin,Nsite));Ntmp=czero
       allocate(Gtmp(Gimp%Norb,Gimp%Norb,Gimp%Npoints,Nspin,Nsite));Gtmp=czero
       !
-      ! Rotating either one site or all of them depending on expand_
+      ! Rotating either one site or all of them depending on expand
       do isite=1,Nsite
          !
          if(present(U))then
@@ -688,6 +680,7 @@ contains
             enddo
             deallocate(Rot)
          else
+            Ntmp(:,:,:,isite) = Gimp%N_s
             Gtmp(:,:,:,:,isite) = Gimp%ws
          endif
          !
@@ -711,7 +704,7 @@ contains
                do ispin=1,Nspin
                   !
                   ispin_imp=ispin
-                  if(isite.eq.2) ispin_imp=int(Nspin/ispin)
+                  if(AFM.and.(isite.eq.2)) ispin_imp=int(Nspin/ispin)
                   !
                   Gloc%N_s(i_loc,j_loc,ispin) = Ntmp(i_imp,j_imp,ispin_imp,isite)
                   do ip=1,Gimp%Npoints
@@ -727,61 +720,78 @@ contains
       !
    end subroutine imp2loc_Fermionic
    !
-   subroutine imp2loc_Matrix(Oloc,Oimp,orbs,sitename,U,expand)
+   subroutine imp2loc_Matrix(Oloc,Oimp,orbs,expand,AFM,U)
       !
       use parameters
+      use utils_misc
       use linalg, only : rotate
       implicit none
       !
-      complex(8),intent(inout)              :: Oloc(:,:)
-      complex(8),intent(in)                 :: Oimp(:,:)
+      complex(8),intent(inout)              :: Oloc(:,:,:)
+      complex(8),intent(in)                 :: Oimp(:,:,:)
       integer,intent(in)                    :: orbs(:)
-      character(len=*),intent(in),optional  :: sitename
+      logical,intent(in)                    :: expand
+      logical,intent(in)                    :: AFM
       complex(8),intent(in),optional        :: U(:,:,:)
-      logical,intent(in),optional           :: expand
       !
       complex(8),allocatable                :: Rot(:,:)
-      complex(8),allocatable                :: Otmp(:,:,:)
-      integer                               :: isite,Nsite,shift
+      complex(8),allocatable                :: Otmp(:,:,:,:)
+      integer                               :: ispin,ispin_imp,isite,Nsite,shift
+      integer                               :: Norb_loc,Norb_imp
       integer                               :: i_loc,j_loc
       integer                               :: i_imp,j_imp
-      logical                               :: expand_
       !
       !
       if(verbose)write(*,"(A)") "---- imp2loc(O)"
       !
       !
-      if(present(sitename)) write(*,"(A)") "Insertion of Operator for site: "//trim(sitename)
       if(size(Oloc,dim=1).ne.size(Oloc,dim=2)) stop "imp2loc(O): Oloc not square."
       if(size(Oimp,dim=1).ne.size(Oimp,dim=2)) stop "imp2loc(O): Oimp not square."
+      if(size(Oimp,dim=3).ne.Nspin) stop "imp2loc(O): Oimp third dimension is not Nspin."
+      if(size(Oloc,dim=3).ne.Nspin) stop "imp2loc(O): Oloc third dimension is not Nspin."
       if(size(orbs).ne.size(Oimp,dim=1)) stop "imp2loc(O): can't fit the requested orbitals from Gimp."
       if(size(orbs).gt.size(Oloc,dim=1)) stop "imp2loc(O): number of requested orbitals greater than Gloc size."
-      if(present(U))then
-         write(*,"(A)") "The local orbital space will be rotated during extraction."
-         if(size(U,dim=1).ne.size(U,dim=2)) stop "Rotation matrix not square."
-         !if(size(U,dim=1).ne.size(orbs)) stop "Rotation matrix has the wrong dimension."
-         if(size(U,dim=1).ne.3) write(*,"(A)") "Warning: The local orbital space rotation is well defined only for a t2g sub-shell."
-      endif
-      expand_=.false.
+      !
+      Norb_loc = size(Oloc,dim=1)
+      Norb_imp = size(orbs)
       Nsite=1
-      if(present(expand))then
-         expand_ = expand
-         Nsite = size(Oloc,dim=1)/size(orbs)
-         if(present(U).and.(size(U,dim=3).ne.Nsite))stop "Number of rotation matrices and number of sites does not match."
-         if(mod(size(Oloc,dim=1),size(orbs)).ne.0)stop "Number of requested orbitals is not a commensurate subset of Gloc."
+      !
+      if(AFM)then
+         if(Norb_loc/Norb_imp.ne.2) stop "Lattice indexes are not twice the impurity ones."
+         if(expand) stop "AFM condition and expansion to real space not yet implemented."
+         Nsite = 2
       endif
       !
-      allocate(Otmp(size(Oloc,dim=1),size(Oloc,dim=1),Nsite));Otmp=czero
+      if(expand)then
+         Nsite = size(Oloc,dim=1)/size(orbs)
+         if(mod(size(Oloc,dim=1),size(orbs)).ne.0)stop "Number of requested orbitals is not a commensurate subset of the lattice observable."
+         if(AFM) stop "Expansion to real space and AFM condition not yet implemented."
+         write(*,"(A)") "     The impurity field will be expanded to match the lattice orbital space."
+      else
+         write(*,"(A,15I3)") "     Impurity field will be inserted into the lattice orbital indexes: ",orbs
+         Nsite = 1
+      endif
       !
-      ! Rotating either one site or all of them depending on expand_
+      if(present(U))then
+         if(size(U,dim=1).ne.size(U,dim=2)) stop "Rotation matrix not square."
+         if((size(U,dim=3).ne.Nsite))stop "Number of rotation matrices and number of sites does not match."
+         if(size(U,dim=1).ne.3) write(*,"(A)") "Warning: The local orbital space rotation is well defined only for a t2g sub-shell."
+         write(*,"(A)") "The impurity orbital space will be rotated during insertion in "//str(Nsite)//" sites."
+      endif
+      !
+      allocate(Otmp(size(Oloc,dim=1),size(Oloc,dim=1),Nspin,Nsite));Otmp=czero
+      !
+      ! Rotating either one site or all of them depending on expand
       do isite=1,Nsite
          !
          if(present(U))then
-            allocate(Rot(size(orbs),size(orbs))); Rot=U(1:size(orbs),1:size(orbs),isite)
-            Otmp(:,:,isite) = rotate(Oimp(:,:),Rot)
+            allocate(Rot(Norb_imp,Norb_imp)); Rot=U(1:Norb_imp,1:Norb_imp,isite)
+            do ispin=1,Nspin
+               Otmp(:,:,ispin,isite) = rotate(Oimp(:,:,ispin),Rot)
+            enddo
             deallocate(Rot)
          else
-            Otmp(:,:,isite) = Oimp
+            Otmp(:,:,:,isite) = Oimp
          endif
          !
       enddo
@@ -790,18 +800,25 @@ contains
          !
          ! only two possible arrangements
          if(abs(orbs(2)-orbs(1)).eq.1)then
-            shift = size(orbs)*(isite-1)
+            shift = Norb_imp*(isite-1)
          elseif(abs(orbs(2)-orbs(1)).eq.Nsite)then
             shift = isite-1
          endif
          !
-         do i_imp=1,size(orbs)
-            do j_imp=1,size(orbs)
+         do i_imp=1,Norb_imp
+            do j_imp=1,Norb_imp
                !
                i_loc = orbs(i_imp) + shift
                j_loc = orbs(j_imp) + shift
                !
-               Oloc(i_loc,j_loc) = Otmp(i_imp,j_imp,isite)
+               do ispin=1,Nspin
+                  !
+                  ispin_imp=ispin
+                  if(AFM.and.(isite.eq.2)) ispin_imp=int(Nspin/ispin)
+                  !
+                  Oloc(i_loc,j_loc,ispin) = Otmp(i_imp,j_imp,ispin_imp,isite)
+                  !
+               enddo
                !
             enddo
          enddo
@@ -811,7 +828,7 @@ contains
       !
    end subroutine imp2loc_Matrix
    !
-   subroutine imp2loc_Bosonic(Wloc,Wimp,orbs,sitename,expand)
+   subroutine imp2loc_Bosonic(Wloc,Wimp,orbs,expand,AFM)
       !
       use parameters
       implicit none
@@ -819,21 +836,21 @@ contains
       type(BosonicField),intent(inout)      :: Wloc
       type(BosonicField),intent(in)         :: Wimp
       integer,allocatable,intent(in)        :: orbs(:)
-      character(len=*),intent(in),optional  :: sitename
-      logical,intent(in),optional           :: expand
+      logical,intent(in)                    :: expand
+      logical,intent(in)                    :: AFM
       !
       integer                               :: ip,isite,Nsite,shift
       integer                               :: Norb_imp,Norb_loc
       integer                               :: ib_imp,jb_imp,ib_loc,jb_loc
       integer                               :: i_loc,j_loc,k_loc,l_loc
       integer                               :: i_imp,j_imp,k_imp,l_imp
-      logical                               :: expand_,doBare
+      logical                               :: doBare
       !
       !
       if(verbose)write(*,"(A)") "---- imp2loc(B)"
       !
       !
-      if(present(sitename)) write(*,"(A)") "Insertion of Wimp of site: "//trim(sitename)
+      write(*,"(A,10I3)") "     Expanding orbital indexes: ",orbs
       if(.not.Wloc%status) stop "imp2loc(B): Wloc not properly initialized."
       if(.not.Wimp%status) stop "imp2loc(B): Wimp not properly initialized."
       if(Wloc%Nbp.eq.0) stop "imp2loc(B): Norb of Wloc not defined."
@@ -849,15 +866,26 @@ contains
       Norb_imp = int(sqrt(dble(Wimp%Nbp)))
       Norb_loc = int(sqrt(dble(Wloc%Nbp)))
       doBare = allocated(Wimp%bare_local)
+      Nsite=1
       !
       if(size(orbs).ne.Norb_imp) stop "imp2loc(B): can't fit the requested orbitals from Wimp."
       if(size(orbs).gt.Norb_loc) stop "imp2loc(B): number of requested orbitals greater than Wloc size."
-      expand_=.false.
-      Nsite=1
-      if(present(expand))then
-         expand_ = expand
+      !
+      if(AFM)then
+         if(Wloc%Nsite.ne.2) stop "AFM is implemented only for a two site lattice."
+         if(Norb_loc/Norb_imp.ne.2) stop "Lattice indexes are not twice the impurity ones."
+         if(expand) stop "AFM condition and expansion to real space not yet implemented."
+         Nsite = 2
+      endif
+      !
+      if(expand)then
          Nsite = Wloc%Nsite
          if(mod(Norb_loc,size(orbs)).ne.0)stop "Number of requested orbitals is not a commensurate subset of Wloc."
+         if(AFM) stop "Expansion to real space and AFM condition not yet implemented."
+         write(*,"(A)") "     The impurity field will be expanded to match the lattice orbital space."
+      else
+         write(*,"(A,15I3)") "     Impurity field will be inserted into the lattice orbital indexes: ",orbs
+         Nsite = 1
       endif
       !
       do isite=1,Nsite
@@ -1604,7 +1632,7 @@ contains
       logical                               :: localDC
       !
       !
-      write(*,"(A)") "---- Merge SelfEnergy"
+      write(*,"(A)") new_line("A")//new_line("A")//"---- Merge SelfEnergy"
 
       !
       !
@@ -1711,7 +1739,7 @@ contains
       integer                               :: Nkpt,Norb,Nmats,Nsite
       !
       !
-      write(*,"(A)") "---- Merge Polarization"
+      write(*,"(A)") new_line("A")//new_line("A")//"---- Merge Polarization"
       !
       !
       ! Check on the input Fields

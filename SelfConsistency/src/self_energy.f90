@@ -70,7 +70,7 @@ contains
       real                                  :: start,finish
       !
       !
-      if(verbose)write(*,"(A)") "---- calc_sigmaGW"
+      write(*,"(A)") new_line("A")//new_line("A")//"---- calc_sigmaGW"
       !
       !
       ! Check on the input Fields
@@ -604,7 +604,7 @@ contains
       complex(8),allocatable                :: SigmaC_diag(:,:,:,:)
       !
       !
-      if(verbose)write(*,"(A)") "---- read_Sigma_spex"
+      write(*,"(A)") new_line("A")//new_line("A")//"---- read_Sigma_spex"
       pathOUTPUT_ = pathINPUT
       if(present(pathOUTPUT)) pathOUTPUT_ = pathOUTPUT
       !
@@ -921,7 +921,7 @@ contains
          !
          !---------------------------------------------------------------------!
          !
-         write(*,"(A)")"     Reading from file SigmaGoWo(ik,iw)."
+         write(*,"(A)")"     Reading SigmaGoWo(ik,iw) from "//reg(pathINPUT)//"SGoWo_k_[up,dw].DAT"
          !
          ! Just read all
          call clear_attributes(Smats_GoWo)
