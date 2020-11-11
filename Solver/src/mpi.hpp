@@ -46,6 +46,7 @@ class CustomMPI
          sleep(1);
          printf(" Rank %d out of %d available processors is alive.\n",MPIrank, MPIsize);
          if(is_master())printf(" Master is %d. \n",MPImaster);
+         if((is_master())&&(MPIverbose))printf(" Verbosity ON.\n");
          sleep(1);
          print_line_star(80,is_master());
          print_line_space(1,is_master());
@@ -55,15 +56,20 @@ class CustomMPI
 
       //----------------------------------------------------------------------//
 
-      void report(std::string message, bool allranks=false)
+      void report(std::string message)
       {
+         unsigned int microseconds=10000*MPIrank;
          if(!MPI_is_init) StopError(" MPI environment is not initialized. Exiting.");
-         if(!allranks)
+         if(!MPIverbose)
          {
             if(MPIrank==MPImaster) printf("%s\n", message.c_str());
          }
          else
-         printf(" [Rank %d]: %s\n",MPIrank, message.c_str());
+         {
+            printf(" [Rank %d]: %s\n",MPIrank, message.c_str());
+            usleep(microseconds);
+         }
+
       }
 
       //----------------------------------------------------------------------//
@@ -97,6 +103,7 @@ class CustomMPI
          {
             MPI_Allreduce(&RankInt, &WorldInt, 1, MPI_UNSIGNED_LONG_LONG, MPI_SUM, MPI_COMM_WORLD);
             if(average)WorldInt/=MPIsize;
+            MPI_Barrier(MPI_COMM_WORLD);
          }
       }
 
@@ -113,6 +120,7 @@ class CustomMPI
          {
             MPI_Allreduce(&RankFloat, &WorldFloat, 1, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
             if(average) WorldFloat/=MPIsize;
+            MPI_Barrier(MPI_COMM_WORLD);
          }
       }
 
@@ -132,6 +140,7 @@ class CustomMPI
             {
                MPI_Allreduce(&RankVec[i], &WorldVec[i], 1, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
                if(average) WorldVec[i]/=MPIsize;
+               MPI_Barrier(MPI_COMM_WORLD);
             }
          }
       }
@@ -155,7 +164,78 @@ class CustomMPI
                {
                   MPI_Allreduce(&RankVecVec[i][j], &WorldVecVec[i][j], 1, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
                   if(average) WorldVecVec[i][j]/=MPIsize;
+                  MPI_Barrier(MPI_COMM_WORLD);
                }
+            }
+         }
+      }
+
+      //----------------------------------------------------------------------//
+
+      void broadcast(bool &RankBool, int SendingRank, path location="none")
+      {
+         if(location!="none")report("broadcast(bool) called in: "+location);
+         if(!MPI_is_init) StopError(" MPI environment is not initialized. Exiting.");
+         //
+         if(MPIsize>=2)
+         {
+            MPI_Bcast( &RankBool, 1, MPI_C_BOOL, SendingRank, MPI_COMM_WORLD);
+            MPI_Barrier(MPI_COMM_WORLD);
+         }
+      }
+
+      void broadcast(int &RankInt, int SendingRank, path location="none")
+      {
+         if(location!="none")report("broadcast(int) called in: "+location);
+         if(!MPI_is_init) StopError(" MPI environment is not initialized. Exiting.");
+         //
+         if(MPIsize>=2)
+         {
+            MPI_Bcast( &RankInt, 1, MPI_INT, SendingRank, MPI_COMM_WORLD);
+            MPI_Barrier(MPI_COMM_WORLD);
+         }
+      }
+
+      void broadcast(double &RankFloat, int SendingRank, path location="none")
+      {
+         if(location!="none")report("broadcast(double) called in: "+location);
+         if(!MPI_is_init) StopError(" MPI environment is not initialized. Exiting.");
+         //
+         if(MPIsize>=2)
+         {
+            MPI_Bcast( &RankFloat, 1, MPI_DOUBLE, SendingRank, MPI_COMM_WORLD);
+            MPI_Barrier(MPI_COMM_WORLD);
+         }
+      }
+
+      void broadcast(std::vector<int> &Vec, int SendingRank, path location="none")
+      {
+         if(location!="none")report("broadcast(Vec<int>) called in: "+location);
+         if(!MPI_is_init) StopError(" MPI environment is not initialized. Exiting.");
+         //
+         if(MPIsize>=2)
+         {
+            int iDim = Vec.size();
+            for(int i=0; i < iDim; i++)
+            {
+               MPI_Bcast( &Vec[i], 1, MPI_INT, SendingRank, MPI_COMM_WORLD);
+               MPI_Barrier(MPI_COMM_WORLD);
+            }
+         }
+      }
+
+      void broadcast(std::vector<double> &Vec, int SendingRank, path location="none")
+      {
+         if(location!="none")report("broadcast(Vec<double>) called in: "+location);
+         if(!MPI_is_init) StopError(" MPI environment is not initialized. Exiting.");
+         //
+         if(MPIsize>=2)
+         {
+            int iDim = Vec.size();
+            for(int i=0; i < iDim; i++)
+            {
+               MPI_Bcast( &Vec[i], 1, MPI_DOUBLE, SendingRank, MPI_COMM_WORLD);
+               MPI_Barrier(MPI_COMM_WORLD);
             }
          }
       }
@@ -170,6 +250,11 @@ class CustomMPI
       int                                 MPIrank;
       int                                 MPImaster=0;
       bool                                MPI_is_init=false;
+      #ifdef _verb
+         bool MPIverbose=true;
+      #else
+         bool MPIverbose=false;
+      #endif
 
       //----------------------------------------------------------------------//
 

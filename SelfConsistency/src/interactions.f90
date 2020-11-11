@@ -35,6 +35,7 @@ module interactions
 #else
    logical,private                          :: verbose=.false.
 #endif
+   complex(8),allocatable,private           :: Ugamma(:,:,:)
 
    !---------------------------------------------------------------------------!
    !PURPOSE: Rutines available for the user. Description only for interfaces.
@@ -50,6 +51,7 @@ module interactions
    public :: build_Uret
    public :: calc_QMCinteractions
    public :: calc_curlyU
+   public :: calc_Wimp
    !public :: rescale_interaction
 
    !===========================================================================!
@@ -70,6 +72,7 @@ contains
       integer,intent(in)                    :: Norb
       type(physicalU),intent(inout)         :: Uelements
       !
+      integer                               :: Nflavor
       integer                               :: ib1,ib2
       integer                               :: iorb,jorb,korb,lorb
       integer                               :: ispin,jspin
@@ -79,6 +82,7 @@ contains
       !
       !
       if(Uelements%status) write(*,"(A)") "Warning: the Physical interaction elements container is being reinitialized."
+      Nflavor = Norb*Nspin
       !
       ! Elements when the interaction is in the Norb*Nspin form
       Uelements%Flav_Size = Norb
@@ -87,14 +91,14 @@ contains
       if(allocated(Uelements%Flav_U2nd))deallocate(Uelements%Flav_U2nd)
       if(allocated(Uelements%Flav_All)) deallocate(Uelements%Flav_All)
       if(allocated(Uelements%Flav_Map)) deallocate(Uelements%Flav_Map)
-      allocate(Uelements%Flav_Uloc(Nspin*Norb,Nspin*Norb)) ;Uelements%Flav_Uloc=.false.
-      allocate(Uelements%Flav_U1st(Nspin*Norb,Nspin*Norb)) ;Uelements%Flav_U1st=.false.
-      allocate(Uelements%Flav_U2nd(Nspin*Norb,Nspin*Norb)) ;Uelements%Flav_U2nd=.false.
-      allocate(Uelements%Flav_All(Nspin*Norb,Nspin*Norb))  ;Uelements%Flav_All =.false.
-      allocate(Uelements%Flav_Map(Nspin*Norb,Nspin*Norb,4));Uelements%Flav_Map=0
+      allocate(Uelements%Flav_Uloc(Nflavor,Nflavor)) ;Uelements%Flav_Uloc=.false.
+      allocate(Uelements%Flav_U1st(Nflavor,Nflavor)) ;Uelements%Flav_U1st=.false.
+      allocate(Uelements%Flav_U2nd(Nflavor,Nflavor)) ;Uelements%Flav_U2nd=.false.
+      allocate(Uelements%Flav_All(Nflavor,Nflavor))  ;Uelements%Flav_All =.false.
+      allocate(Uelements%Flav_Map(Nflavor,Nflavor,4));Uelements%Flav_Map=0
       !
-      do ib1=1,Nspin*Norb
-         do ib2=1,Nspin*Norb
+      do ib1=1,Nflavor
+         do ib2=1,Nflavor
             !
             iorb = (ib1+mod(ib1,2))/2
             jorb = (ib2+mod(ib2,2))/2
@@ -214,22 +218,25 @@ contains
       if(all([Umats%Npoints-Nmats,Pmats%Npoints-Nmats].ne.[0,0]))  write(*,"(A)") "Warning: Either Umats and/or Pmats have different number of Matsubara points. Computing up to the smaller."
       Nmats = minval([Wmats%Npoints,Umats%Npoints,Pmats%Npoints])
       !
-      allocate(den_smallk(Nbp,Nbp,Nmats,12))
-      allocate(den_smallk_avrg(Nbp,Nbp,Nmats))
       allocate(invW(Nbp,Nbp));invW=czero
       call clear_attributes(Wmats)
+      !
+      if(HandleGammaPoint)then
+         allocate(den_smallk(Nbp,Nbp,Nmats,12));den_smallk=czero
+         allocate(den_smallk_avrg(Nbp,Nbp,Nmats));den_smallk_avrg=czero
+      endif
       !
       ! Assuming that the Polarization vanishes at iw__>inf
       Wmats%bare = Umats%bare
       !
       !$OMP PARALLEL DEFAULT(NONE),&
-      !$OMP SHARED(Nbp,Nkpt,Nmats,Pmats,Umats,Wmats,den_smallk,Lttc),&
+      !$OMP SHARED(Nbp,Nkpt,Nmats,Pmats,Umats,Wmats,den_smallk,Lttc,HandleGammaPoint),&
       !$OMP PRIVATE(iq,iw,invW,ismall)
       !$OMP DO
       do iq=1,Nkpt
          !
          !avoid the gamma point
-         if(iq.eq.Umats%iq_gamma)cycle
+         if((iq.eq.Umats%iq_gamma).and.HandleGammaPoint)cycle
          !
          do iw=1,Nmats
             !
@@ -242,48 +249,70 @@ contains
             ! [ 1 - U*Pi ]^-1 * U
             Wmats%screened(:,:,iw,iq) = matmul(invW,Umats%screened(:,:,iw,iq))
             !
-            do ismall=1,12
-               if (Lttc%small_ik(ismall,1).eq.iq) den_smallk(:,:,iw,ismall) = invW
-            enddo
+            !store the dielectric function around the Gamma point
+            if(HandleGammaPoint)then
+               do ismall=1,12
+                  if (Lttc%small_ik(ismall,1).eq.iq) den_smallk(:,:,iw,ismall) = invW
+               enddo
+            endif
             !
          enddo
       enddo
       !$OMP END DO
       !$OMP END PARALLEL
-      deallocate(invW)
-      write(*,"(A,I)") "Gamma point is at kpoint list index: ",Umats%iq_gamma
-      !
       !
       ! Gamma point handling
-      num_k=1
-      do ismall=2,12
-         if (Lttc%small_ik(ismall,2).eq.1) num_k=num_k+1
-      enddo
-      !
-      !if num_k only is one include also next nearset points
-      if(num_k.eq.1)then
+      if(HandleGammaPoint)then
+         !
          num_k=1
          do ismall=2,12
-            if (Lttc%small_ik(ismall,2).le.2) num_k=num_k+1
+            if (Lttc%small_ik(ismall,2).eq.1) num_k=num_k+1
          enddo
-      endif
-      !
-      !calc average epsinv for small k
-      do ismall=1,num_k
-         den_smallk_avrg = den_smallk_avrg + den_smallk(:,:,:,ismall)/num_k
-      enddo
-      !
-      !W at gamma point should be real
-      den_smallk_avrg = real(den_smallk_avrg)
-      !
-      !Replace the Gamma point value
-      if(HandleGammaPoint)then
+         !
+         !if num_k only is one include also next nearset points
+         if(num_k.eq.1)then
+            num_k=1
+            do ismall=2,12
+               if (Lttc%small_ik(ismall,2).le.2) num_k=num_k+1
+            enddo
+         endif
+         !
+         !calc average epsinv for small k
+         do ismall=1,num_k
+            den_smallk_avrg = den_smallk_avrg + den_smallk(:,:,:,ismall)/num_k
+         enddo
+         !
+         !W at gamma point should be real
+         den_smallk_avrg = real(den_smallk_avrg)
+         !
+         !Save the modified polarization at Gamma
+         if(allocated(Ugamma))then
+            write(*,"(A)")"Warning: The polarization at gamma is going to be reinitialized."
+            deallocate(Ugamma)
+         endif
+         allocate(Ugamma(Nbp,Nbp,Nmats));Ugamma=czero
+         !
+         invW=czero
+         do iw=1,Nmats
+            !
+            !U^-1
+            invW = Pmats%screened(:,:,iw,Umats%iq_gamma)
+            call inv(invW)
+            !
+            !Ugamma = [1 -avrg]*U^-1s
+            Ugamma(:,:,iw) = matmul(invW,zeye(Nbp)-den_smallk_avrg(:,:,iw))
+            !
+         enddo
+         !
+         !Replace the Gamma point value
          do iw=1,Nmats
             Wmats%screened(:,:,iw,Umats%iq_gamma) = matmul(den_smallk_avrg(:,:,iw),Umats%screened(:,:,iw,Umats%iq_gamma))
          enddo
+         !
+         deallocate(den_smallk,den_smallk_avrg)
+         !
       endif
-      !
-      deallocate(den_smallk,den_smallk_avrg)
+      deallocate(invW)
       !
       ! Fill the local attributes
       call BosonicKsum(Wmats)
@@ -340,22 +369,25 @@ contains
       if(all([Umats%Npoints-Nmats,Pmats%Npoints-Nmats].ne.[0,0]))  write(*,"(A)") "Warning: Either Umats and/or Pmats have different number of Matsubara points. Computing up to the smaller."
       Nmats = minval([Wmats%Npoints,Umats%Npoints,Pmats%Npoints])
       !
-      allocate(den_smallk(Nbp,Nbp,Nmats,12))
-      allocate(den_smallk_avrg(Nbp,Nbp,Nmats))
       allocate(invW(Nbp,Nbp));invW=czero
       call clear_attributes(Wmats)
+      !
+      if(HandleGammaPoint)then
+         allocate(den_smallk(Nbp,Nbp,Nmats,12));den_smallk=czero
+         allocate(den_smallk_avrg(Nbp,Nbp,Nmats));den_smallk_avrg=czero
+      endif
       !
       ! Assuming that the Polarization vanishes at iw__>inf
       Wmats%bare_local = Umats%bare_local
       !
       !$OMP PARALLEL DEFAULT(NONE),&
-      !$OMP SHARED(Nbp,Nkpt,Nmats,Pmats,Umats,Wmats,den_smallk,Lttc),&
+      !$OMP SHARED(Nbp,Nkpt,Nmats,Pmats,Umats,Wmats,den_smallk,Lttc,HandleGammaPoint),&
       !$OMP PRIVATE(iq,iw,invW,ismall)
       !$OMP DO
       do iq=1,Nkpt
          !
          !avoid the gamma point
-         if(iq.eq.Umats%iq_gamma)cycle
+         if((iq.eq.Umats%iq_gamma).and.HandleGammaPoint)cycle
          !
          do iw=1,Nmats
             !
@@ -368,48 +400,70 @@ contains
             ! [ 1 - U*Pi ]^-1 * U
             Wmats%screened_local(:,:,iw) = Wmats%screened_local(:,:,iw) + matmul(invW,Umats%screened(:,:,iw,iq))/Nkpt
             !
-            do ismall=1,12
-               if (Lttc%small_ik(ismall,1).eq.iq) den_smallk(:,:,iw,ismall) = invW
-            enddo
+            !store the dielectric function around the Gamma point
+            if(HandleGammaPoint)then
+               do ismall=1,12
+                  if (Lttc%small_ik(ismall,1).eq.iq) den_smallk(:,:,iw,ismall) = invW
+               enddo
+            endif
             !
          enddo
       enddo
       !$OMP END DO
       !$OMP END PARALLEL
-      deallocate(invW)
-      write(*,"(A,I)") "Gamma point is at kpoint list index: ",Umats%iq_gamma
-      !
       !
       ! Gamma point handling
-      num_k=1
-      do ismall=2,12
-         if (Lttc%small_ik(ismall,2).eq.1) num_k=num_k+1
-      enddo
-      !
-      !if num_k only is one include also next nearset points
-      if(num_k.eq.1)then
+      if(HandleGammaPoint)then
+         !
          num_k=1
          do ismall=2,12
-            if (Lttc%small_ik(ismall,2).le.2) num_k=num_k+1
+            if (Lttc%small_ik(ismall,2).eq.1) num_k=num_k+1
          enddo
-      endif
-      !
-      !calc average epsinv for small k
-      do ismall=1,num_k
-         den_smallk_avrg = den_smallk_avrg + den_smallk(:,:,:,ismall)/num_k
-      enddo
-      !
-      !W at gamma point should be real
-      den_smallk_avrg = real(den_smallk_avrg)
-      !
-      !Add the Gamma point value
-      if(HandleGammaPoint)then
+         !
+         !if num_k only is one include also next nearset points
+         if(num_k.eq.1)then
+            num_k=1
+            do ismall=2,12
+               if (Lttc%small_ik(ismall,2).le.2) num_k=num_k+1
+            enddo
+         endif
+         !
+         !calc average epsinv for small k
+         do ismall=1,num_k
+            den_smallk_avrg = den_smallk_avrg + den_smallk(:,:,:,ismall)/num_k
+         enddo
+         !
+         !W at gamma point should be real
+         den_smallk_avrg = real(den_smallk_avrg)
+         !
+         !Save the modified polarization at Gamma
+         if(allocated(Ugamma))then
+            write(*,"(A)")"Warning: The polarization at gamma is going to be reinitialized."
+            deallocate(Ugamma)
+         endif
+         allocate(Ugamma(Nbp,Nbp,Nmats));Ugamma=czero
+         !
+         invW=czero
+         do iw=1,Nmats
+            !
+            !U^-1
+            invW = Pmats%screened_local(:,:,iw)
+            call inv(invW)
+            !
+            !Ugamma = [1 -avrg]*U^-1s
+            Ugamma(:,:,iw) = matmul(invW,zeye(Nbp)-den_smallk_avrg(:,:,iw))
+            !
+         enddo
+         !
+         !Replace the Gamma point value - to test!!!!
          do iw=1,Nmats
             Wmats%screened_local(:,:,iw) = Wmats%screened_local(:,:,iw) + matmul(den_smallk_avrg(:,:,iw),Umats%screened(:,:,iw,Umats%iq_gamma))/Nkpt
          enddo
+         !
+         deallocate(den_smallk,den_smallk_avrg)
+         !
       endif
-      !
-      deallocate(den_smallk,den_smallk_avrg)
+      deallocate(invW)
       !
    end subroutine calc_W_edmft
 
@@ -625,14 +679,14 @@ contains
       !
       ! Check if the data on the Matsubara axis are present
       path = reg(pathINPUT)//"VW_imag"
-      call inquireDir(reg(path),ACdone,hardstop=.false.)
+      call inquireDir(reg(path),ACdone,hardstop=.false.,verb=verbose)
       doAC_ = .not.ACdone
       if(present(doAC)) doAC_ = doAC
       !
       !
       ! This has to be done before allocation of large files otherwise the "system" command will not work
       if(doAC_.and.(.not.LocalOnly))then
-         call createDir(reg(trim(pathINPUT)//"VW_imag"))
+         call createDir(reg(trim(pathINPUT)//"VW_imag"),verb=verbose)
          if(save2readable)then
             call createDir(reg(trim(pathINPUT)//"VW_imag_readable"),verb=verbose)
             call createDir(reg(trim(pathINPUT)//"VW_real_readable"),verb=verbose)
@@ -645,9 +699,11 @@ contains
          !
          !---------------------------------------------------------------------!
          !
+         write(*,"(A)")"     Performing Analytic continuation to get UcRPA(iq,iw)."
+         !
          ! Allocations from dimensions written in VW.Q0001.DAT file
          path = reg(pathINPUT)//"VW_real/VW.Q0001.DAT"
-         call inquireFile(reg(path),filexists)
+         call inquireFile(reg(path),filexists,verb=verbose)
          unit = free_unit()
          open(unit,file=reg(path),form="unformatted",action="read")
          read(unit) iqread,Nspin_spex,Norb_spex,Nfreq
@@ -656,7 +712,7 @@ contains
          Nbp_spex = Norb_spex**2
          allocate(Utmp(Nbp_spex,Nbp_spex));Utmp=czero
          allocate(wread(Nfreq));wread=0d0
-         if(verbose)write(*,"(A,I)")"Real frequencies: ",Nfreq
+         write(*,"(A,I)")"     Real frequencies: ",Nfreq
          !
          ! Few checks
          if(Nspin_spex.ne.1) stop "Nspin_spex.ne.1"
@@ -666,11 +722,11 @@ contains
          Nkpt = 0
          do iq=1,2000
             file_spex = reg(pathINPUT)//"VW_real/VW.Q"//str(iq,4)//".DAT"
-            call inquireFile(reg(file_spex),filexists,hardstop=.false.)
+            call inquireFile(reg(file_spex),filexists,hardstop=.false.,verb=verbose)
             if(.not.filexists) exit
             Nkpt = Nkpt + 1
          enddo
-         if(verbose)write(*,"(A,I)") "The number of SPEX files (Nkpt) in VW_real is: ",Nkpt
+         write(*,"(A,I)") "     The number of SPEX files (Nkpt) in VW_real is: ",Nkpt
          if((.not.LocalOnly).and.(Umats%Nkpt.ne.Nkpt)) stop "Number of k-points of given BosonicField and number of VW_real k-points do not coincide."
          !
          ! Allocate the Bosonic field on the real axis
@@ -685,7 +741,7 @@ contains
          do iq=1,Nkpt
             !
             file_spex = reg(path)//"VW.Q"//str(iq,4)//".DAT"
-            call inquireFile(reg(file_spex),filexists) !redundant control
+            call inquireFile(reg(file_spex),filexists,verb=verbose) !redundant control
             !
             unit = free_unit()
             open(unit,file=reg(file_spex),form="unformatted",action="read")
@@ -774,7 +830,7 @@ contains
          !$OMP END PARALLEL
          call cpu_time(finish)
          deallocate(D1,D2,D3)
-         write(*,"(A,F)") "UcRPA(w) --> UcRPA(iw) cpu timing: ", finish-start
+         write(*,"(A,F)") "     UcRPA(w) --> UcRPA(iw) cpu timing: ", finish-start
          !
          !
          if(.not.LocalOnly)then
@@ -842,7 +898,7 @@ contains
             !$OMP END PARALLEL
             call cpu_time(finish)
             deallocate(D1,D2,D3)
-            write(*,"(A,F)") "UcRPA(q,w) --> UcRPA(q,iw) cpu timing: ", finish-start
+            write(*,"(A,F)") "     UcRPA(q,w) --> UcRPA(q,iw) cpu timing: ", finish-start
             !
          endif !LocalOnly
          deallocate(Utmp)
@@ -871,9 +927,11 @@ contains
          !
          !---------------------------------------------------------------------!
          !
+         write(*,"(A)")"     Reading from file UcRPA(iq,iw)."
+         !
          ! Allocations from dimensions written in W.Q0001.DAT file
          path = reg(pathINPUT)//"VW_imag/VW.Q0001.DAT"
-         call inquireFile(reg(path),filexists)
+         call inquireFile(reg(path),filexists,verb=verbose)
          !
          unit = free_unit()
          open(unit,file=reg(path),form="unformatted",action="read")
@@ -883,7 +941,7 @@ contains
          Nbp_spex = Norb_spex**2
          allocate(Utmp(Nbp_spex,Nbp_spex));Utmp=czero
          allocate(wread(Nfreq));wread=0d0
-         write(*,"(A,I)")"Matsubara frequencies: ",Nfreq
+         write(*,"(A,I)")"     Matsubara frequencies: ",Nfreq
          !
          ! Few checks
          if(Nspin_spex.ne.1) stop "Nspin_spex.ne.1"
@@ -894,11 +952,11 @@ contains
          Nkpt = 0
          do iq=1,2000
             file_spex = reg(pathINPUT)//"VW_imag/VW.Q"//str(iq,4)//".DAT"
-            call inquireFile(reg(file_spex),filexists,hardstop=.false.)
+            call inquireFile(reg(file_spex),filexists,hardstop=.false.,verb=verbose)
             if(.not.filexists) exit
             Nkpt = Nkpt + 1
          enddo
-         if(verbose)write(*,"(A,I)") "The number of SPEX files (Nkpt) in VW_imag is: ",Nkpt
+         write(*,"(A,I)") "The number of SPEX files (Nkpt) in VW_imag is: ",Nkpt
          if((.not.LocalOnly).and.(Umats%Nkpt.ne.Nkpt)) stop "Number of k-points of given BosonicField and number of VW_imag k-points do not coincide."
          !
          ! Read VW_imag accumulating local attribute and optionally storing the k-dependent part
@@ -906,7 +964,7 @@ contains
          do iq=1,Nkpt
             !
             file_spex = reg(path)//"VW.Q"//str(iq,4)//".DAT"
-            call inquireFile(reg(file_spex),filexists) !redundant control
+            call inquireFile(reg(file_spex),filexists,verb=verbose) !redundant control
             !
             unit = free_unit()
             open(unit,file=reg(file_spex),form="unformatted",action="read")
@@ -917,7 +975,7 @@ contains
             !wread = H2eV*wread
             do iw=1,Nfreq
                if(dabs(wread(iw)-wmats(iw)).gt.eps) Then
-                  write(*,*)dabs(wread(iw)-wmats(iw)),iw,iq
+                  write(*,"(F)")dabs(wread(iw)-wmats(iw)),iw,iq
                   stop "wread.ne.wmats"
                endif
             enddo
@@ -992,11 +1050,11 @@ contains
       !
       ! Look for Uloc_mats.DAT and Uloc_real.DAT
       path=reg(pathINPUT)//"Uloc_mats.DAT"
-      call inquireFile(reg(path),Umatsxists,hardstop=.false.)
+      call inquireFile(reg(path),Umatsxists,hardstop=.false.,verb=verbose)
       path=reg(pathINPUT)//"Uloc_real.DAT"
-      call inquireFile(reg(path),Urealxists,hardstop=.false.)
+      call inquireFile(reg(path),Urealxists,hardstop=.false.,verb=verbose)
       path=reg(pathINPUT)//"VW_real" !/VW.Q0001.DAT"
-      call inquireDir(reg(path),SPEXxists,hardstop=.false.)      !
+      call inquireDir(reg(path),SPEXxists,hardstop=.false.,verb=verbose)
       !
       if(Umatsxists)then
          !
@@ -1025,7 +1083,7 @@ contains
          do iq=1,2000
             !
             file_spex = reg(path)//"VW_real/VW.Q"//str(iq,4)//".DAT"        !write(fn,"(a,a,i4.4,a)") reg(path),"VW_real/VW.Q",iq,".DAT"
-            call inquireFile(reg(file_spex),SPEXxists,hardstop=.false.)
+            call inquireFile(reg(file_spex),SPEXxists,hardstop=.false.,verb=verbose)
             !
             ! This mathod looks uglier than the previous but here I don't
             ! have to store K-dep, just sum up what's present.
@@ -1269,7 +1327,7 @@ contains
       real(8),allocatable,intent(inout)     :: Umat(:,:)
       real(8),intent(in)                    :: Uaa,Uab,J
       !
-      integer                               :: Nbp,Norb
+      integer                               :: Nbp,Norb,Nflavor
       integer                               :: ib1,ib2
       type(physicalU)                       :: PhysicalUelements
       !
@@ -1280,12 +1338,13 @@ contains
       ! Check on the input matrices
       Nbp = size(Umat,dim=1)
       Norb = Nbp/Nspin
+      Nflavor = Norb*Nspin
       if((Nspin.eq.2).and.(mod(Nbp,2).ne.0.0)) stop "Wrong matrix dimension."
       call init_Uelements(Norb,PhysicalUelements)
       call assert_shape(Umat,[Nbp,Nbp],"build_Umat_singlParam","Umat")
       !
-      do ib1=1,Nspin*Norb
-         do ib2=1,Nspin*Norb
+      do ib1=1,Nflavor
+         do ib2=1,Nflavor
             !
             if(PhysicalUelements%Flav_Uloc(ib1,ib2)) Umat(ib1,ib2) = dcmplx(Uaa,0d0)
             if(PhysicalUelements%Flav_U1st(ib1,ib2)) Umat(ib1,ib2) = dcmplx(Uab,0d0)
@@ -1308,7 +1367,7 @@ contains
       real(8),allocatable,intent(inout)     :: Umat(:,:)
       real(8),allocatable,intent(in)        :: Uaa(:),Uab(:,:),J(:,:)
       !
-      integer                               :: Nbp,Norb
+      integer                               :: Nbp,Norb,Nflavor
       integer                               :: ib1,ib2,iorb,jorb
       type(physicalU)                       :: PhysicalUelements
       !
@@ -1319,6 +1378,7 @@ contains
       ! Check on the input matrices
       Nbp = size(Umat,dim=1)
       Norb = Nbp/Nspin
+      Nflavor = Norb*Nspin
       if((Nspin.eq.2).and.(mod(Nbp,2).ne.0.0)) stop "Wrong matrix dimension."
       call init_Uelements(Norb,PhysicalUelements)
       call assert_shape(Umat,[Nbp,Nbp],"build_Umat_multiParam","Umat")
@@ -1326,8 +1386,8 @@ contains
       call assert_shape(Uab,[Norb,Norb],"build_Umat_multiParam","Uab")
       call assert_shape(J,[Norb,Norb],"build_Umat_multiParam","J")
       !
-      do ib1=1,Nspin*Norb
-         do ib2=1,Nspin*Norb
+      do ib1=1,Nflavor
+         do ib2=1,Nflavor
             !
             iorb = PhysicalUelements%Flav_Map(ib1,ib2,1)
             jorb = PhysicalUelements%Flav_Map(ib1,ib2,2)
@@ -1624,12 +1684,13 @@ contains
       real(8),intent(inout)                 :: Uinst(:,:)
       real(8),intent(inout),optional        :: Kfunct(:,:,:)
       !
-      integer                               :: Nbp,Norb
+      integer                               :: Nbp,Norb,Nflavor
       integer                               :: ib1,ib2,iorb,jorb
       integer                               :: iu1,iu2,ix1,ix2,ip1,ip2
       integer                               :: iw,itau
       real(8),allocatable                   :: wmats(:),tau(:)
       complex(8),allocatable                :: Kaux(:,:,:)
+      logical                               :: Uloc,U1st,U2nd,retarded
       type(physicalU)                       :: PhysicalUelements
       !
       !
@@ -1638,17 +1699,19 @@ contains
       !
       ! Check on the input field
       if(.not.Umats%status) stop "BosonicField not properly initialized."
+      retarded=.false.
+      if(present(Kfunct))retarded=.true.
       !
       Nbp = Umats%Nbp
       Norb = int(sqrt(dble(Nbp)))
+      Nflavor = Norb*Nspin
       !
       call init_Uelements(Norb,PhysicalUelements)
-      call assert_shape(Uinst,[Norb*Nspin,Norb*Nspin],"calc_QMCinteractions","Uinst")
+      call assert_shape(Uinst,[Nflavor,Nflavor],"calc_QMCinteractions","Uinst")
       Uinst=0d0
-      if(present(Kfunct))then
-         Kfunct=0d0
-         call assert_shape(Kfunct,[Norb*Nspin,Norb*Nspin,NtauB],"calc_QMCinteractions","Kfunct")
-         allocate(Kaux(Norb*Nspin,Norb*Nspin,Umats%Npoints));Kaux=czero
+      if(retarded)then
+         call assert_shape(Kfunct,[Nflavor,Nflavor,NtauB],"calc_QMCinteractions","Kfunct")
+         allocate(Kaux(Nflavor,Nflavor,Umats%Npoints));Kaux=czero
          allocate(tau(NtauB));tau=0d0
          tau = linspace(0d0,Umats%Beta,NtauB)
          allocate(wmats(Umats%Npoints));wmats=0d0
@@ -1656,9 +1719,15 @@ contains
       endif
       !
       !setting the istantaneous values
-      do ib1=1,Nspin*Norb
-         do ib2=1,Nspin*Norb
+      do ib1=1,Nflavor
+         do ib2=1,Nflavor
             !
+            !This is just for a more compact code
+            Uloc = PhysicalUelements%Flav_Uloc(ib1,ib2)
+            U1st = PhysicalUelements%Flav_U1st(ib1,ib2)
+            U2nd = PhysicalUelements%Flav_U2nd(ib1,ib2)
+            !
+            !Orbital indexes
             iorb = PhysicalUelements%Flav_Map(ib1,ib2,1)
             jorb = PhysicalUelements%Flav_Map(ib1,ib2,2)
             !
@@ -1678,58 +1747,39 @@ contains
             ip1 = iorb + Norb*(jorb-1)
             ip2 = iorb + Norb*(jorb-1)
             !
-            if(PhysicalUelements%Flav_Uloc(ib1,ib2)) Uinst(ib1,ib2) = Umats%screened_local(iu1,iu2,1)
-            if(PhysicalUelements%Flav_U1st(ib1,ib2)) Uinst(ib1,ib2) = Umats%screened_local(iu1,iu2,1)
-            if(PhysicalUelements%Flav_U2nd(ib1,ib2)) Uinst(ib1,ib2) = Umats%screened_local(iu1,iu2,1) - (Umats%screened_local(ix1,ix2,1)+Umats%screened_local(ip1,ip2,1))/2d0
+            if(Uloc) Uinst(ib1,ib2) = Umats%screened_local(iu1,iu2,1)
+            if(U1st) Uinst(ib1,ib2) = Umats%screened_local(iu1,iu2,1)
+            if(U2nd) Uinst(ib1,ib2) = Umats%screened_local(iu1,iu2,1) - (Umats%screened_local(ix1,ix2,1)+Umats%screened_local(ip1,ip2,1))/2d0
             !
-            if(present(Kfunct))then
-               do iw=1,Umats%Npoints
-                  if(PhysicalUelements%Flav_Uloc(ib1,ib2)) Kaux(ib1,ib2,iw) = ( Umats%bare_local(iu1,iu2) - Umats%screened_local(iu1,iu2,iw) )
-                  if(PhysicalUelements%Flav_U1st(ib1,ib2)) Kaux(ib1,ib2,iw) = ( Umats%bare_local(iu1,iu2) - Umats%screened_local(iu1,iu2,iw) )
-                  if(PhysicalUelements%Flav_U2nd(ib1,ib2)) Kaux(ib1,ib2,iw) = ( Umats%bare_local(iu1,iu2) - Umats%screened_local(iu1,iu2,iw) ) - &
-                  ((Umats%bare_local(ix1,ix2) - Umats%screened_local(ix1,ix2,iw))+(Umats%bare_local(ip1,ip2) - Umats%screened_local(ip1,ip2,iw)))/2d0
-               enddo
+            if(retarded)then
+               !
+               if(Uloc) Kaux(ib1,ib2,:) = Umats%bare_local(iu1,iu2) - Umats%screened_local(iu1,iu2,:)
+               if(U1st) Kaux(ib1,ib2,:) = Umats%bare_local(iu1,iu2) - Umats%screened_local(iu1,iu2,:)
+               if(U2nd) Kaux(ib1,ib2,:) = Umats%bare_local(iu1,iu2) - (Umats%bare_local(ix1,ix2)+Umats%bare_local(ip1,ip2))/2d0 - &
+                                          (Umats%screened_local(iu1,iu2,:) - (Umats%screened_local(ix1,ix2,:)+Umats%screened_local(ip1,ip2,:))/2d0)
+               !same orbital - same spin screening
+               if(Uloc.and.(ib2.gt.ib1)) then
+                  Kaux(ib1,ib1,:) = Kaux(ib1,ib2,:)
+                  Kaux(ib2,ib2,:) = Kaux(ib1,ib2,:)
+               endif
+               !
             endif
             !
          enddo
       enddo
+      call check_Symmetry(Uinst,eps,hardstop=.false.,name="Uinst")
       !
       !setting the reterdation function
-      if(present(Kfunct))then
+      if(retarded)then
          Kfunct=0d0
-         !$OMP PARALLEL DEFAULT(NONE),&
-         !$OMP SHARED(Norb,NtauB,tau,Umats,wmats,Kfunct),&
-         !$OMP PRIVATE(Kaux,ib1,ib2,iw,itau)
-         !$OMP DO
-         do ib1=1,Nspin*Norb
-            do ib2=1,Nspin*Norb
-               !
-               do itau=1,NtauB
-                  do iw=2,Umats%Npoints
-                     Kfunct(ib1,ib2,itau) = Kfunct(ib1,ib2,itau) + 2d0*Kaux(ib1,ib2,iw) * ( cos(wmats(iw)*tau(itau)) - 1d0 ) / ( Umats%Beta*wmats(iw)**2 )
-                  enddo
-               enddo
-               !
-               ! symmetrize with respect to beta/2
-               call halfbeta_symm(Kfunct(ib1,ib2,:),NtauB,+1d0)
-               !
-               print *, "a,b",ib1,ib2
-               print *, "K(0)",Kfunct(ib1,ib2,1)
-               print *, "K(beta)",Kfunct(ib1,ib2,NtauB)
-               !if(Kfunct(ib1,ib2,1).ne.0d0) stop "K(0) is not zero."
-               !if(Kfunct(ib1,ib2,NtauB).ne.0d0) stop "K(beta) is not zero."
-               !
+         do itau=2,NtauB-1
+            do iw=2,Umats%Npoints
+               Kfunct(:,:,itau) = Kfunct(:,:,itau) - 2d0*Kaux(:,:,iw) * ( cos(wmats(iw)*tau(itau)) - 1d0 ) / ( Umats%Beta*wmats(iw)**2 )
             enddo
          enddo
-         !$OMP END DO
-         !$OMP END PARALLEL
-         deallocate(Kaux,tau,wmats)
-         !
-         do itau=1,NtauB
-            call check_Symmetry(Kfunct(:,:,itau),eps,hardstop=.false.,name="Kfunc")
-         enddo
-         !
+         call check_Symmetry(Kfunct(:,:,itau),eps,hardstop=.false.,name="Kfunct")
       endif
+      deallocate(Kaux,tau,wmats)
       !
    end subroutine calc_QMCinteractions
 
@@ -1797,6 +1847,99 @@ contains
       deallocate(invW)
       !
    end subroutine calc_curlyU
+
+
+   !---------------------------------------------------------------------------!
+   !PURPOSE: Computes the fully screened local interaction
+   !TEST ON:
+   !---------------------------------------------------------------------------!
+   subroutine calc_Wimp(Wimp,curlyU,ChiC)
+      !
+      use parameters
+      use utils_fields
+      use linalg, only : zeye, inv
+      implicit none
+      !
+      type(BosonicField),intent(inout)      :: Wimp
+      type(BosonicField),intent(in)         :: curlyU
+      type(BosonicField),intent(in)         :: ChiC
+      !
+      complex(8),allocatable                :: Wtmp(:,:)
+      real(8)                               :: Beta
+      integer                               :: Nbp,Nmats
+      integer                               :: iw
+      !
+      !
+      if(verbose)write(*,"(A)") "---- calc_Wimp"
+      !
+      !
+      ! Check on the input Fields
+      if(.not.Wimp%status) stop "Wimp not properly initialized."
+      if(.not.curlyU%status) stop "curlyU not properly initialized."
+      if(.not.ChiC%status) stop "ChiC not properly initialized."
+      if(Wimp%Nkpt.ne.0) stop "Wimp k dependent attributes are supposed to be unallocated."
+      if(curlyU%Nkpt.ne.0) stop "curlyU k dependent attributes are supposed to be unallocated."
+      if(ChiC%Nkpt.ne.0) stop "ChiC k dependent attributes are supposed to be unallocated."
+      !
+      Nbp = Wimp%Nbp
+      Beta = Wimp%Beta
+      Nmats = Wimp%Npoints
+      !
+      if(all([curlyU%Nbp-Nbp,ChiC%Nbp-Nbp].ne.[0,0])) stop "Either curlyU and/or ChiC have different orbital dimension with respect to Wimp."
+      if(all([curlyU%Beta-Beta,ChiC%Beta-Beta].ne.[0d0,0d0])) stop "Either curlyU and/or ChiC have different Beta with respect to Wimp."
+      if(all([curlyU%Npoints-Nmats,ChiC%Npoints-Nmats].ne.[0,0]))   stop "Either curlyU and/or ChiC have different number of Matsubara points with respect to Wimp."
+      !
+      call clear_attributes(Wimp)
+      !
+      Wimp%bare_local = curlyU%bare_local
+      !
+      allocate(Wtmp(Nbp,Nbp));Wtmp=czero
+      !$OMP PARALLEL DEFAULT(NONE),&
+      !$OMP SHARED(Nbp,Nmats,Wimp,ChiC,curlyU),&
+      !$OMP PRIVATE(iw,Wtmp)
+      !$OMP DO
+      do iw=1,Nmats
+         !
+         Wtmp = matmul(ChiC%screened_local(:,:,iw),curlyU%screened_local(:,:,iw))
+         Wimp%screened_local(:,:,iw) = curlyU%screened_local(:,:,iw) - matmul(curlyU%screened_local(:,:,iw),Wtmp)
+         !
+      enddo
+      !$OMP END DO
+      !$OMP END PARALLEL
+      deallocate(Wtmp)
+      !
+   end subroutine calc_Wimp
+
+
+   !---------------------------------------------------------------------------!
+   !PURPOSE: Correct the polarization at gamma
+   !TEST ON:
+   !---------------------------------------------------------------------------!
+   subroutine correct_Ugamma(Ulat)
+      !
+      use parameters
+      use utils_misc
+      use utils_fields
+      implicit none
+      !
+      type(BosonicField),intent(inout)      :: Ulat
+      !
+      !
+      if(verbose)write(*,"(A)") "---- correct_Ugamma"
+      !
+      !
+      ! Check on the input Fields
+      if(.not.Ulat%status) stop "Plat not properly initialized."
+      if(Ulat%Nkpt.eq.0) stop "Plat k dependent attributes are supposed to be allocated."
+      if(.not.allocated(Ugamma)) stop "Ugamma is not allocated."
+      !
+      call assert_shape(Ugamma,[Ulat%Nbp,Ulat%Nbp,Ulat%Npoints],"correct_Ugamma","Ugamma")
+      !
+      Ulat%screened(:,:,:,Ulat%iq_gamma) = Ugamma
+      !
+      call BosonicKsum(Ulat)
+      !
+   end subroutine correct_Ugamma
 
 
 end module interactions

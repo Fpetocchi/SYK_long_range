@@ -115,7 +115,7 @@ contains
       deallocate(WmatsC)
       !
       call cpu_time(finish)
-      write(*,"(A,F)") "Glat(ik,iw),Wlat(iq,iw) --> Glat(ik,itau),Wlat(iq,itau) cpu timing:", finish-start
+      write(*,"(A,F)") "     Glat(ik,iw),Wlat(iq,iw) --> Glat(ik,itau),Wlat(iq,itau) cpu timing:", finish-start
       !
       call cpu_time(start)
       !Sigma_{m,n}(q,tau) = -Sum_{k,mp,np} W_{(m,mp);(n,np)}(q-k;tau)G_{mp,np}(k,tau)
@@ -161,7 +161,7 @@ contains
       enddo
       deallocate(Sitau)
       call cpu_time(finish)
-      write(*,"(A,F)") "Sigma_C(ik,iw) cpu timing:", finish-start
+      write(*,"(A,F)") "     Sigma_C(ik,iw) cpu timing:", finish-start
       !
       call cpu_time(start)
       call clear_attributes(Smats_X)
@@ -198,11 +198,11 @@ contains
       !$OMP END PARALLEL
       deallocate(Gitau)
       call cpu_time(finish)
-      write(*,"(A,F)") "Sigma_X(ik) cpu timing:", finish-start
+      write(*,"(A,F)") "     Sigma_X(ik) cpu timing:", finish-start
       !
       if(Lttc%Nkpt_irred.lt.Nkpt) then
          !sigma(ik)=sigma(kptp(ik))
-         write(*,"(A)") "Transformation to lda eigenbasis and back."
+         write(*,"(A)") "     Transformation to lda eigenbasis and back."
          !$OMP PARALLEL DEFAULT(NONE),&
          !$OMP SHARED(Nmats,Lttc,Nkpt,Smats_X,Smats_C),&
          !$OMP PRIVATE(ispin,iw,iq)
@@ -317,7 +317,7 @@ contains
       deallocate(WmatsC_loc)
       !
       call cpu_time(finish)
-      write(*,"(A,F)") "Glat(iw),Wlat(iw) --> Glat(itau),Wlat(itau) cpu timing:", finish-start
+      write(*,"(A,F)") "     Glat(iw),Wlat(iw) --> Glat(itau),Wlat(itau) cpu timing:", finish-start
       !
       call cpu_time(start)
       !Sigma_{m,n}(q,tau) = -Sum_{k,mp,np} W_{(m,mp);(n,np)}(q-k;tau)G_{mp,np}(k,tau)
@@ -356,7 +356,7 @@ contains
       enddo
       deallocate(Sitau_loc)
       call cpu_time(finish)
-      write(*,"(A,F)") "Sigma_Cdc(iw) cpu timing:", finish-start
+      write(*,"(A,F)") "     Sigma_Cdc(iw) cpu timing:", finish-start
       !
       call cpu_time(start)
       call clear_attributes(Smats_Xdc)
@@ -388,7 +388,7 @@ contains
       !$OMP END PARALLEL
       deallocate(Gitau_loc)
       call cpu_time(finish)
-      write(*,"(A,F)") "Sigma_Xdc cpu timing:", finish-start
+      write(*,"(A,F)") "     Sigma_Xdc cpu timing:", finish-start
       !
    end subroutine calc_sigmaGWdc
 
@@ -486,14 +486,14 @@ contains
             !
             allocate(Vgamma(Nbp,Nbp));Vgamma=czero
             path = reg(pathINPUT)//"V_nodiv.DAT"
-            call inquireFile(reg(path),filexists)
+            call inquireFile(reg(path),filexists,verb=verbose)
             call read_Vgamma(-1)
             !
          case("Ustatic_SPEX")
             !
             allocate(Vgamma(Nbp,Nbp));Vgamma=czero
             path = reg(pathINPUT)//"V_nodiv.DAT"
-            call inquireFile(reg(path),filexists)
+            call inquireFile(reg(path),filexists,verb=verbose)
             call read_Vgamma(0)
             !
       end select
@@ -624,25 +624,25 @@ contains
       ! Read XEPS data
       if(.not.XEPSisread)then
          path = reg(pathINPUT)//"XEPS.DAT"
-         call inquireFile(reg(path),filexists)
+         call inquireFile(reg(path),filexists,verb=verbose)
          call read_xeps(reg(path),Lttc%kpt,Lttc%Nkpt3,UseXepsKorder, &
          Lttc%kptPos,Lttc%Nkpt_irred,Lttc%UseDisentangledBS,Lttc%iq_gamma,paramagneticSPEX)
       endif
       !
       ! Check if the data on the Matsubara axis are present if(.not.paramagneticSPEX) look also for spin2
-      path = reg(pathINPUT)//"Sigma_GoWo_k_up.DAT"
-      call inquireFile(reg(path),ACdone,hardstop=.false.)
+      path = reg(pathINPUT)//"SGoWo_k_up.DAT"
+      call inquireFile(reg(path),ACdone,hardstop=.false.,verb=verbose)
       doAC_ = .not.ACdone
       if(present(doAC)) doAC_ = doAC
       !
       ! Check if the Vxc_wann is present
-      path = reg(pathINPUT)//"Vxc_wann_k_up.DAT"
-      call inquireFile(reg(path),Vxcdone,hardstop=.false.)
+      path = reg(pathINPUT)//"Vxc_k_up.DAT"
+      call inquireFile(reg(path),Vxcdone,hardstop=.false.,verb=verbose)
       doVxc = .not.Vxcdone .and. present(Vxc)
       if(doVxc.and.(.not.doAC_))then
          call assert_shape(Vxc,[Norb,Norb,Nkpt,Nspin],"read_Sigma_spex","Vxc")
-         write(*,"(A)")"Sorry but I can't produce Vxc_wann without reading the self-energy."
-         write(*,"(A)")"Analytic continuation will be perforemd anyway."
+         write(*,"(A)")"     Sorry but I can't produce Vxc_wann without reading the self-energy."
+         write(*,"(A)")"     Analytic continuation will be perforemd anyway."
          doAC_ = .true.
       endif
       !
@@ -652,13 +652,15 @@ contains
          !
          !---------------------------------------------------------------------!
          !
+         write(*,"(A)")"     Performing Analytic continuation to get SigmaGoWo(ik,iw)."
+         !
          ! Read UWAN file
          if(Lttc%UseDisentangledBS)then
             path = reg(pathINPUT)//"UWAN_NEW.DAT"
          else
             path = reg(pathINPUT)//"UWAN.DAT"
          endif
-         call inquireFile(reg(path),filexists)
+         call inquireFile(reg(path),filexists,verb=verbose)
          if(verbose)write(*,"(A)") "Opening "//reg(path)
          unit = free_unit()
          open(unit,file=reg(path),form="unformatted",action="read",position="rewind")
@@ -666,7 +668,7 @@ contains
          if(paramagneticSPEX.and.(Nspin_Uwan.ne.1)) stop "UWAN file is not paramagnetic."
          if(Nkpt_Uwan.ne.Nkpt) stop "UWAN file has wrong number of k-points (not irreducible)."
          if(Norb_Uwan.ne.Norb) stop "UWAN file has wrong orbital dimension."
-         write(*,"(A,2I4)") "The band indexes in the UWAN rotation are: ",ib_Uwan1,ib_Uwan2
+         write(*,"(A,2I4)") "     The band indexes in the UWAN rotation are: ",ib_Uwan1,ib_Uwan2
          allocate(Uwan(ib_Uwan1:ib_Uwan2,Norb,Nkpt,Nspin_Uwan))
          do ispin=1,Nspin_Uwan
             do ik=1,Nkpt
@@ -682,11 +684,11 @@ contains
          SigmaSegments=0
          do iseg=1,99
             path = reg(pathINPUT)//"Sigma_real_"//str(iseg,2)
-            call inquireDir(reg(path),filexists,hardstop=.false.)
+            call inquireDir(reg(path),filexists,hardstop=.false.,verb=verbose)
             if(.not.filexists) exit
             SigmaSegments = SigmaSegments + 1
          enddo
-         write(*,"(A,1I6)") "The number of segment of the SPEX self-energy is: ",SigmaSegments
+         write(*,"(A,1I6)") "     The number of segment of the SPEX self-energy is: ",SigmaSegments
          allocate(NfreqSeg(SigmaSegments));NfreqSeg=0
          !
          ! Look for the Number of Kpoints in each segment (supposed to be the same of Lttc%Nkpt_irred)
@@ -694,11 +696,11 @@ contains
             Nkpt_file = 0
             do ik=1,2000
                path = reg(pathINPUT)//"Sigma_real_"//str(iseg,2)//"/SIGMA.Q"//str(ik,4)//".DAT"
-               call inquireFile(reg(path),filexists,hardstop=.false.)
+               call inquireFile(reg(path),filexists,hardstop=.false.,verb=verbose)
                if(.not.filexists) exit
                Nkpt_file = Nkpt_file + 1
             enddo
-            write(*,"(A,1I4,A,1I6)") "The number k-points in the segment number: ",iseg," is: ",Nkpt_file
+            write(*,"(A,1I4,A,1I6)") "     The number k-points in the segment number: ",iseg," is: ",Nkpt_file
             Nkpt_file_old = Nkpt_file
             if((iseg.gt.1).and.(Nkpt_file.ne.Nkpt_file_old)) stop "Number of K-points does not match among segments."
             if(Nkpt_file.ne.Lttc%Nkpt_irred) stop "Number of K-points does not match with Nkpt_irred readed from XEPS."
@@ -709,8 +711,8 @@ contains
             do ik=1,Lttc%Nkpt_irred
                !
                path = reg(pathINPUT)//"Sigma_real_"//str(iseg,2)//"/SIGMA.Q"//str(ik,4)//".DAT"
-               write(*,"(A)") "Checking "//reg(path)
-               call inquireFile(reg(path),filexists) !redundant control
+               if(verbose)write(*,"(A)") "Checking "//reg(path)
+               call inquireFile(reg(path),filexists,verb=verbose)!redundant control
                !
                unit = free_unit()
                open(unit,file=reg(path),form="unformatted",action="read",position="rewind")
@@ -759,7 +761,7 @@ contains
             NfreqSeg(iseg) = Nfreq
             !
          enddo !iseg
-         write(*,"(A,2I4)") "The band indexes in the SPEX self-energy are: ",ib_sigma1,ib_sigma2
+         write(*,"(A,2I4)") "     The band indexes in the SPEX self-energy are: ",ib_sigma1,ib_sigma2
          !
          allocate(SigmaC_diag(ib_sigma1:ib_sigma2,Nmats,Lttc%Nkpt_irred,Nspin_spex));SigmaC_diag=czero
          !
@@ -779,7 +781,7 @@ contains
                !
                path = reg(pathINPUT)//"Sigma_real_"//str(iseg,2)//"/SIGMA.Q"//str(iq,4)//".DAT"
                if(verbose)write(*,"(A)") "Opening "//reg(path)
-               call inquireFile(reg(path),filexists) !redundant control
+               call inquireFile(reg(path),filexists,verb=verbose) !redundant control
                !
                unit = free_unit()
                open(unit,file=reg(path),form="unformatted",action="read",position="rewind")
@@ -815,11 +817,11 @@ contains
                do ib=ib_sigma1,ib_sigma2
                   !
                   ! Check that the GoWo self-energy is vanishing at w --> +/-inf
-                  if (iseg.eq.1.and.dabs(dimag(SigmaC_seg(1,ib,ik,1))).gt.1.d-6) then
-                     write(*,"(A,2E20.12)") "Warning: ImSigmaC_spex("//str(ik)//",1) orb "//str(ib)//" is > 1.d-6: ",SigmaC_seg(1,ib,ik,1)
+                  if (iseg.eq.1.and.dabs(dimag(SigmaC_seg(1,ib,ik,1))).gt.1.d-4) then
+                     write(*,"(A,2E20.12)") "     Warning: ImSigmaC_spex("//str(ik)//",1) orb "//str(ib)//" is > 1.d-4: ",SigmaC_seg(1,ib,ik,1)
                   endif
                   if (iseg.eq.SigmaSegments.and.dabs(dimag(SigmaC_seg(NfreqSeg(iseg),ib,ik,1))).gt.1.d-6) then
-                     write(*,"(A,2E20.12)") "Warning: ImSigmaC_spex("//str(ik)//",Nw) orb "//str(ib)//" is > 1.d-6: ",SigmaC_seg(NfreqSeg(iseg),ib,ik,1)
+                     write(*,"(A,2E20.12)") "     Warning: ImSigmaC_spex("//str(ik)//",Nw) orb "//str(ib)//" is > 1.d-4: ",SigmaC_seg(NfreqSeg(iseg),ib,ik,1)
                   endif
                   !
                   !Calc Sigma along imag axis using
@@ -898,17 +900,17 @@ contains
          Smats_GoWo%wks = Smats_GoWo%wks * H2eV
          !
          call cpu_time(finish)
-         write(*,"(A,F)") "Sigma_GoWo(k,w) --> Sigma_GoWo(k,iw) cpu timing:", finish-start
+         write(*,"(A,F)") "     Sigma_GoWo(k,w) --> Sigma_GoWo(k,iw) cpu timing:", finish-start
          !
          call FermionicKsum(Smats_GoWo)
          !
          ! Print out the transformed stuff
          ! local
-         call dump_FermionicField(Smats_GoWo,1,reg(pathOUTPUT_),"Sigma_GoWo_loc_up.DAT")
-         if(Nspin_spex.eq.2)call dump_FermionicField(Smats_GoWo,2,reg(pathOUTPUT_),"Sigma_GoWo_loc_dw.DAT")
+         !call dump_FermionicField(Smats_GoWo,1,reg(pathOUTPUT_),"Sigma_GoWo_up.DAT")
+         !if(Nspin_spex.eq.2)call dump_FermionicField(Smats_GoWo,2,reg(pathOUTPUT_),"Sigma_GoWo_dw.DAT")
          ! k-dependent
-         call dump_FermionicField(Smats_GoWo,reg(pathOUTPUT_),"Sigma_GoWo",.true.,Lttc%kpt)
-         if(save2readable)call dump_FermionicField(Smats_GoWo,reg(pathOUTPUT_)//"Sigma_imag/","Sigma_GoWo",.false.,Lttc%kpt)
+         call dump_FermionicField(Smats_GoWo,reg(pathOUTPUT_),"SGoWo",.true.,Lttc%kpt)
+         if(save2readable)call dump_FermionicField(Smats_GoWo,reg(pathOUTPUT_)//"Sigma_imag/","SGoWo",.false.,Lttc%kpt)
          !
          !
          if(doVxc)call read_Vxc(Vxc,Lttc,ib_sigma1,ib_sigma2,save2readable)
@@ -919,18 +921,20 @@ contains
          !
          !---------------------------------------------------------------------!
          !
+         write(*,"(A)")"     Reading from file SigmaGoWo(ik,iw)."
+         !
          ! Just read all
          call clear_attributes(Smats_GoWo)
-         call read_FermionicField(Smats_GoWo,reg(pathINPUT),"Sigma_GoWo")
+         call read_FermionicField(Smats_GoWo,reg(pathINPUT),"SGoWo")
          !
          if(present(Vxc))then
             call assert_shape(Vxc,[Norb,Norb,Nkpt,Nspin],"read_Sigma_spex","Vxc")
             Vxc=czero
-            call read_matrix(Vxc(:,:,:,1),reg(pathINPUT),"Vxc_wann_k_up.DAT")
+            call read_matrix(Vxc(:,:,:,1),reg(pathINPUT),"Vxc_k_up.DAT")
             if(paramagneticSPEX)then
                Vxc(:,:,:,2) = Vxc(:,:,:,1)
             else
-               call read_matrix(Vxc(:,:,:,2),reg(pathINPUT),"Vxc_wann_k_dw.DAT")
+               call read_matrix(Vxc(:,:,:,2),reg(pathINPUT),"Vxc_k_dw.DAT")
             endif
          endif
          !
@@ -1000,7 +1004,7 @@ contains
       ! Read XEPS data
       if(.not.XEPSisread)then
          path = reg(pathINPUT)//"XEPS.DAT"
-         call inquireFile(reg(path),filexists)
+         call inquireFile(reg(path),filexists,verb=verbose)
          call read_xeps(reg(path),Lttc%kpt,Lttc%Nkpt3,UseXepsKorder, &
          Lttc%kptPos,Lttc%Nkpt_irred,Lttc%UseDisentangledBS,Lttc%iq_gamma,paramagneticSPEX)
       endif
@@ -1011,15 +1015,15 @@ contains
       else
          path = reg(pathINPUT)//"UWAN.DAT"
       endif
-      call inquireFile(reg(path),filexists)
-      write(*,"(A)") "Opening "//reg(path)
+      call inquireFile(reg(path),filexists,verb=verbose)
+      write(*,"(A)") "     Opening "//reg(path)
       unit = free_unit()
       open(unit,file=reg(path),form="unformatted",action="read",position="rewind")
       read(unit) Nspin_Uwan,Nkpt_Uwan,ib_Uwan1,ib_Uwan2,Norb_Uwan
       if(paramagneticSPEX.and.(Nspin_Uwan.ne.1)) stop "UWAN file is not paramagnetic."
       if(Nkpt_Uwan.ne.Nkpt) stop "UWAN file has wrong number of k-points (not irreducible)."
       if(Norb_Uwan.ne.Norb) stop "UWAN file has wrong orbital dimension."
-      write(*,"(A,2I4)") "The band indexes in the UWAN rotation are: ",ib_Uwan1,ib_Uwan2
+      if(verbose)write(*,"(A,2I4)") "     The band indexes in the UWAN rotation are: ",ib_Uwan1,ib_Uwan2
       allocate(Uwan(ib_Uwan1:ib_Uwan2,Norb,Nkpt,Nspin_Uwan))
       do ispin=1,Nspin_Uwan
          do ik=1,Nkpt
@@ -1033,8 +1037,8 @@ contains
       !
       ! Read gwa file
       path = reg(pathINPUT)//"gwa.DAT"
-      call inquireFile(reg(path),filexists)
-      write(*,"(A)") "Opening "//reg(path)
+      call inquireFile(reg(path),filexists,verb=verbose)
+      write(*,"(A)") "     Opening "//reg(path)
       unit = free_unit()
       open(unit,file=reg(path),form="unformatted",action="read",position="rewind")
       read(unit) idum,ncent,ntypd,l,nlod
@@ -1049,8 +1053,8 @@ contains
       ! Read DISENT_EVEC file
       if(Lttc%UseDisentangledBS) then
          path = reg(pathINPUT)//"DISENT_EVEC.DAT"
-         call inquireFile(reg(path),filexists)
-         write(*,"(A)") "Opening "//reg(path)
+         call inquireFile(reg(path),filexists,verb=verbose)
+         write(*,"(A)") "     Opening "//reg(path)
          unit_dis = free_unit()
          open(unit_dis,file=reg(path),form="unformatted",action="read",position="rewind")
          read(unit_dis) Nspin_disent,Nkpt_irred_disent,Norb_disent,ib_Dwan1,ib_Dwan2
@@ -1059,7 +1063,7 @@ contains
          if (Norb_disent.ne.Norb) stop 'DISENT_EVEC.DAT: nwan'
          if (ib_Dwan1.ne.ib_Uwan1) stop 'DISENT_EVEC.DAT: ib_wan1'
          if (ib_Dwan2.ne.ib_Uwan2) then
-            write(*,"(A2I4)") 'ib_Uwan2,ib_Dwan2',ib_Uwan2, ib_Dwan2
+            write(*,"(A2I4)") "     ib_Uwan2,ib_Dwan2: ",ib_Uwan2, ib_Dwan2
          endif
          allocate(dis_evec(ib_Uwan1:ib_Dwan2,ib_Uwan1:ib_Dwan2));dis_evec=czero
          allocate(cmat(ib_Uwan1:ib_Dwan2,ib_Uwan2:ib_Dwan2));cmat=czero
@@ -1067,14 +1071,14 @@ contains
       !
       ! Read eig and vxcfull files
       path = reg(pathINPUT)//"eig.DAT"
-      call inquireFile(reg(path),filexists)
-      write(*,"(A)") "Opening "//reg(path)
+      call inquireFile(reg(path),filexists,verb=verbose)
+      write(*,"(A)") "     Opening "//reg(path)
       unit_eig = free_unit()
       open(unit_eig,file=reg(path),form='unformatted',access='direct',action='read',recl=irecl)
       !
       path = reg(pathINPUT)//"vxcfull.DAT"
-      call inquireFile(reg(path),filexists)
-      write(*,"(A)") "Opening "//reg(path)
+      call inquireFile(reg(path),filexists,verb=verbose)
+      write(*,"(A)") "     Opening "//reg(path)
       unit_vxc = free_unit()
       open(unit_vxc,file=reg(path),form='unformatted',action='read')
       !
@@ -1088,7 +1092,7 @@ contains
                                     ((rdum,l=1,nlod),i=1,ntypd),(rdum,i=1,3),rdum,nband
             !write(*,*) 'ispin,ik,neigd,nband=',ispin,ik,neigd,nband
             if (nband.lt.1.or.nband.gt.neigd) then
-               write(*,*) 'ispin,ik,neigd,nband=',ispin,ik,neigd,nband
+               write(*,*) "ispin,ik,neigd,nband: ",ispin,ik,neigd,nband
                stop 'read_vxc:nband'
             endif
             read(unit_vxc) ((vxcmat(i,j),i=1,j),j=1,nband)
@@ -1152,16 +1156,16 @@ contains
       deallocate(vxc_diag,Uwan)
       !
       do ispin=1,Nspin_Uwan
-         call dump_matrix(Vxc(:,:,:,ispin),reg(pathINPUT),"Vxc_wann",.true.,ispin=ispin)
-         if(save2readable)call dump_matrix(Vxc(:,:,:,ispin),reg(pathINPUT)//"Vxc_wann/","Vxc_wann",.false.,ispin=ispin)
+         call dump_matrix(Vxc(:,:,:,ispin),reg(pathINPUT),"Vxc",.true.,ispin=ispin)
+         if(save2readable)call dump_matrix(Vxc(:,:,:,ispin),reg(pathINPUT)//"Vxc/","Vxc",.false.,ispin=ispin)
       enddo
       !
       allocate(Vxc_loc(Norb,Norb,Nspin));Vxc_loc=czero
       do ik=1,Nkpt
          Vxc_loc = Vxc_loc + Vxc(:,:,ik,:)/Nkpt
       enddo
-      call dump_matrix(Vxc_loc(:,:,1),reg(pathINPUT)//"Vxc_wann_loc_up.DAT")
-      if(Nspin_Uwan.eq.2)call dump_matrix(Vxc_loc(:,:,2),reg(pathINPUT)//"Vxc_wann_loc_dw.DAT")
+      call dump_matrix(Vxc_loc(:,:,1),reg(pathINPUT)//"Vxc_up.DAT")
+      if(Nspin_Uwan.eq.2)call dump_matrix(Vxc_loc(:,:,2),reg(pathINPUT)//"Vxc_dw.DAT")
       deallocate(Vxc_loc)
       !
     end subroutine read_vxc

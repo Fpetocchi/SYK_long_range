@@ -24,12 +24,6 @@ module parameters
    integer,parameter                        :: Nspin=2
    !
    real(8),parameter                        :: eps=1e-9
-   !
-   integer,parameter                        :: Nbath=10
-   integer,parameter                        :: cg_niter=200
-   real(8),parameter                        :: cg_Ftol=1e-6
-   real(8),parameter                        :: hwband=3d0
-   real(8),parameter                        :: noisefact=0.01
 
 
    !---------------------------------------------------------------------------!
@@ -116,13 +110,14 @@ module parameters
    !PURPOSE: container for symmetrization variables
    !---------------------------------------------------------------------------!
    type Equivalent
-      logical                               :: para=.true.
       real(8)                               :: hseed=0d0
       integer                               :: Nset=0
       integer                               :: Ntotset=0
       integer,allocatable                   :: SetNorb(:)
       integer,allocatable                   :: SetOrbs(:,:)
       logical                               :: Gfoffdiag=.true.
+      !I'm writing this as integers due to some mismatch on how to write boolean between fortrann and c++
+      integer                               :: para=1
    end type Equivalent
 
 
@@ -165,8 +160,6 @@ module parameters
       !I'm writing these as integers due to some mismatch on how to write boolean between fortrann and c++
       integer                               :: retarded=0
       integer                               :: nnt_meas=0
-      !logical                               :: retarded=.false.
-      !logical                               :: nnt_meas=.false.
    end type QMC
 
 

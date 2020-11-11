@@ -99,6 +99,7 @@ module module_container
    build_Umat                               ,&
    build_Uret                               ,&
    calc_curlyU                              ,&
+   calc_Wimp                                ,&
    calc_QMCinteractions
 
 

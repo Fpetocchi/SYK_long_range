@@ -36,7 +36,9 @@ int main(int argc, char *argv[])
    // Global Vars
    double Beta;
    int Nspin,Ntau,Norder,Nmeas,Ntherm,Nshift,printTime;
+   //logical flags and compatibility typo fix
    bool paramagnet,retarded,nnt_meas,quickloops,testing;
+   int para_read,ret_read,nnt_read,quick_read;
    // Post-processing of the Green's function
    int binlength,binstart;
    // Density lookup algorithm (dichotomy)
@@ -50,11 +52,11 @@ int main(int argc, char *argv[])
    std::vector<std::string> SiteDir;
    char* IterationDir;
 
-#ifdef _verb
-   testing=true;
-#else
-   testing=false;
-#endif
+   #ifdef _verb
+      testing=true;
+   #else
+      testing=false;
+   #endif
 
    //.........................................................................//
    //                         start global timer                              //
@@ -81,9 +83,9 @@ int main(int argc, char *argv[])
       find_param(argv[1], "NTHERM"     , Ntherm    );
       find_param(argv[1], "NSHIFT"     , Nshift    );
       find_param(argv[1], "PRINT_TIME" , printTime );
-      find_param(argv[1], "PARAMAGNET" , paramagnet  );
-      find_param(argv[1], "RETARDED"   , retarded  );
-      find_param(argv[1], "NNT_MEAS"   , nnt_meas  );
+      find_param(argv[1], "PARAMAGNET" , para_read ); paramagnet = (para_read == 1) ? true : false;
+      find_param(argv[1], "RETARDED"   , ret_read  ); retarded = (ret_read == 1) ? true : false;
+      find_param(argv[1], "NNT_MEAS"   , nnt_read  ); nnt_meas = (nnt_read == 1) ? true : false;
       // Post-processing of the Green's function
       find_param(argv[1], "BINLENGTH"  , binlength );
       find_param(argv[1], "BINSTART"   , binstart  );
@@ -93,7 +95,7 @@ int main(int argc, char *argv[])
       find_param(argv[1], "MU_ITER"    , muIter    );
       find_param(argv[1], "MU_TIME"    , muTime    );
       find_param(argv[1], "N_ERR"      , muErr     );
-      find_param(argv[1], "N_QUICK"    , quickloops);
+      find_param(argv[1], "N_QUICK"    , quick_read); quickloops = (quick_read == 1) ? true : false;
       // Site Dependent Vars
       find_param(argv[1], "NSITE"      , Nsite     );
       //

@@ -27,6 +27,13 @@ module fit
 #else
    logical,private                          :: verbose=.false.
 #endif
+   !Global parameters
+   !Fit variables
+   integer,private                          :: Nbath
+   integer,parameter,private                :: cg_niter=400
+   real(8),parameter,private                :: cg_Ftol=1e-8
+   real(8),parameter,private                :: hwband=3d0
+   real(8),parameter,private                :: noisefact=0.01
    !Anderson Parameters variables
    type(AndersonParam),private              :: AndPram
    !Moments
@@ -63,7 +70,8 @@ contains
       character(len=*),intent(in)           :: paramFile
       !
       character(len=255)                    :: path
-      integer                               :: unit,Nh
+      integer                               :: unit,ierr
+      integer                               :: Nh,Nbath_read
       integer                               :: ibath,iorb
       real(8)                               :: de
       real(8),allocatable                   :: ReadLine(:)
@@ -84,11 +92,29 @@ contains
       call inquireFile(reg(path),filexists,hardstop=.false.)
       !
       if(filexists)then
+         if(verbose)write(*,"(A)") "     Checking the number of Anderson Parameters in "//reg(path)
+         unit = free_unit()
+         open(unit,file=reg(path),form="formatted",status="old",action="read",position="rewind",iostat=ierr)
+         read(unit,*) Nbath_read
+         close(unit)
+         !
+         if(Nbath_read.ne.Nbath)then
+            if(verbose)write(*,"(A)") "     Number of Parameters is different. Reinitializing."
+            filexists = .false.
+         elseif(ierr.ne.0)then
+            if(verbose)write(*,"(A)") "     Error in opening file. Reinitializing."
+            filexists = .false.
+         endif
+         !
+      endif
+      !
+      if(filexists)then
          !
          if(verbose)write(*,"(A)") "     Reading Anderson Parameters from "//reg(paramFile)
          allocate(ReadLine(4))
          unit = free_unit()
          open(unit,file=reg(path),form="formatted",status="old",action="read",position="rewind")
+         read(unit,*) Nbath_read
          do iorb=1,Norb
             read(unit,*) AndPram%Eloc(iorb,:)
             do ibath=1,Nbath
@@ -127,7 +153,7 @@ contains
          elseif(mod(Nbath,2)/=0)then
             de=hwband/Nh
             call random_number(rnd)
-            AndPram%Epsk(:,:,Nh+1)= 0.0d0 + (rnd-0.5)*noisefact
+            AndPram%Epsk(:,Nh+1,:)= 0.0d0 + (rnd-0.5)*noisefact
             do ibath=2,Nh
                call random_number(rnd)
                AndPram%Epsk(:,ibath,:)         = -hwband + (ibath-1)*de + (rnd-0.5)*noisefact
@@ -180,8 +206,9 @@ contains
       if(verbose)write(*,"(A)") "     Dump "//reg(path)//" (readable)"
       unit = free_unit()
       open(unit,file=reg(path),form="formatted",status="unknown",action="write",position="rewind")
+      write(unit,"(I5,A)") Nbath," Number of bath levels."
       do iorb=1,AndPram%Norb
-         write(unit,"(2E20.12)") AndPram%Eloc(iorb,:)
+         write(unit,"(2E20.12)") AndPram%Eloc(iorb,1),AndPram%Eloc(iorb,2)
          do ibath=1,Nbath
             write(unit,"(4E20.12)") AndPram%Epsk(iorb,ibath,1),AndPram%Vk(iorb,ibath,1),AndPram%Epsk(iorb,ibath,2),AndPram%Vk(iorb,ibath,2)
          enddo
@@ -208,8 +235,9 @@ contains
       character(len=*),intent(in)           :: paramFile
       !
       character(len=255)                    :: path
-      integer                               :: unit,imoment
-      integer                               :: ibath,ispin,iorb
+      integer                               :: unit,ierr
+      integer                               :: Nbath_read
+      integer                               :: imoment,ispin,iorb
       real(8),allocatable                   :: ReadLine(:)
       logical                               :: filexists
       real(8)                               :: rnd
@@ -225,16 +253,34 @@ contains
       call inquireFile(reg(path),filexists,hardstop=.false.)
       !
       if(filexists)then
+         if(verbose)write(*,"(A)") "     Checking the number of coefficients in "//reg(path)
+         unit = free_unit()
+         open(unit,file=reg(path),form="formatted",status="old",action="read",position="rewind",iostat=ierr)
+         read(unit,*) Nbath_read
+         close(unit)
+         !
+         if(Nbath_read.ne.Nbath)then
+            if(verbose)write(*,"(A)") "     Number of coefficients is different. Reinitializing."
+            filexists = .false.
+         elseif(ierr.ne.0)then
+            if(verbose)write(*,"(A)") "     Error in opening file. Reinitializing."
+            filexists = .false.
+         endif
+         !
+      endif
+      !
+      if(filexists)then
          !
          if(verbose)write(*,"(A)") "     Reading Moments from "//reg(paramFile)
          allocate(ReadLine(Nspin*Norb))
          unit = free_unit()
          open(unit,file=reg(path),form="formatted",status="old",action="read",position="rewind")
-         do ibath=1,Nbath
+         read(unit,*) Nbath_read
+         do imoment=1,Nbath
             ReadLine=0d0
             read(unit,*) ReadLine
-            Moments(:,ibath,1) = ReadLine(1:Norb)
-            Moments(:,ibath,2) = ReadLine(1+Norb:2*Norb)
+            Moments(:,imoment,1) = ReadLine(1:Norb)
+            Moments(:,imoment,2) = ReadLine(1+Norb:2*Norb)
          enddo
          deallocate(ReadLine)
          close(unit)
@@ -247,7 +293,7 @@ contains
             do iorb=1,Norb
                do ispin=1,Nspin
                   call random_number(rnd)
-                  Moments(iorb,ibath,ispin) = 1d0 - (rnd-0.5)*noisefact
+                  Moments(iorb,imoment,ispin) = 1d0 - (rnd-0.5)*noisefact
                enddo
             enddo
          enddo
@@ -276,12 +322,13 @@ contains
       !
       character(len=255)                    :: path
       integer                               :: unit
-      integer                               :: ibath,iorb,Norb
+      integer                               :: imoment,iorb,Norb
       logical                               :: filexists
       !
       !
       if(verbose)write(*,"(A)") "---- dump_Moments"
       if(.not.allocated(Moments)) stop "Moments not allocated."
+      Norb=size(Moments,dim=1)
       !
       !
       call inquireDir(reg(dirpath),filexists)
@@ -289,8 +336,9 @@ contains
       if(verbose)write(*,"(A)") "     Dump "//reg(path)//" (readable)"
       unit = free_unit()
       open(unit,file=reg(path),form="formatted",status="unknown",action="write",position="rewind")
-      do ibath=1,Nbath
-         write(unit,"(999E20.12)") (Moments(iorb,ibath,1),iorb=1,Norb),(Moments(iorb,ibath,2),iorb=1,Norb)
+      write(unit,"(I5,A)") Nbath," Number of coefficients."
+      do imoment=1,Nbath
+         write(unit,"(999E20.12)") (Moments(iorb,imoment,1),iorb=1,Norb),(Moments(iorb,imoment,2),iorb=1,Norb)
       enddo
       close(unit)
       !
@@ -395,7 +443,7 @@ contains
       !
       do iw=1,Nmats
          do imoment=1,size(MomentVec)
-            Sigma(iw) = Sigma(iw) + MomentVec(imoment)/(dcmplx(0d0,wmats(iw))**(imoment))
+            Sigma(iw) = Sigma(iw) + MomentVec(imoment)/(dcmplx(0d0,wmats(iw))**(imoment-1))
          enddo
       enddo
       !
@@ -472,7 +520,7 @@ contains
    !         functional moment formulation.
    !TEST ON:
    !---------------------------------------------------------------------------!
-   subroutine fit_moments(funct,dirpath,paramFile,FitMode,MomentsOut)
+   subroutine fit_moments(funct,Nb,dirpath,paramFile,FitMode,MomentsOut)
       !
       use parameters
       use utils_misc
@@ -481,6 +529,7 @@ contains
       implicit none
       !
       complex(8),intent(in)                 :: funct(:,:,:)
+      integer,intent(in)                    :: Nb
       character(len=*),intent(in)           :: dirpath
       character(len=*),intent(in)           :: paramFile
       character(len=*),intent(in)           :: FitMode
@@ -501,13 +550,17 @@ contains
       if(verbose)write(*,"(A)") "---- fit_moments"
       !
       !
+      Nbath=Nb
       hh=1d-5
       iexit=0
       mode=1  !unity Hessian
       dfn=-.5 !frist iteration reduction of energy
+      iprint=0
+      if(verbose)iprint=1
       !
       if(size(funct,dim=2).ne.Nmats) stop "Wrong Nmats in function to fit."
       Norb = size(funct,dim=1)
+      call assert_shape(MomentsOut,[Norb,Nbath,Nspin],"fit_moments","MomentsOut")
       allocate(Component(Nmats));Component=czero
       !
       call setupMoments(Norb,dirpath,paramFile)
@@ -586,10 +639,10 @@ contains
             select case(reg(FitMode))
                case("Green")
                   funct_print = GfMoments(Moments(iorb,:,ispin))
-                  call dump_FermionicField(funct_print,reg(dirpath)//"fits/","GfMom_"//str(iorb)//"_s"//str(ispin)//".DAT",wmats)
+                  call dump_FermionicField(funct_print,reg(dirpath)//"fits/","G_Mom_w_o"//str(iorb)//"_s"//str(ispin)//".DAT",wmats)
                case("Generic")
                   funct_print = SigmaMoments(Moments(iorb,:,ispin))
-                  call dump_FermionicField(funct_print,reg(dirpath)//"fits/","GenMom_"//str(iorb)//"_s"//str(ispin)//".DAT",wmats)
+                  call dump_FermionicField(funct_print,reg(dirpath)//"fits/","G_Mom_w_o"//str(iorb)//"_s"//str(ispin)//".DAT",wmats)
             end select
             !
          enddo
@@ -604,7 +657,7 @@ contains
    !         like functional form with an addtional shift.
    !TEST ON:
    !---------------------------------------------------------------------------!
-   subroutine fit_Delta(funct,dirpath,paramFile,FitMode,Eloc)
+   subroutine fit_Delta(funct,Nb,dirpath,paramFile,FitMode,Eloc)
       !
       use parameters
       use utils_misc
@@ -613,6 +666,7 @@ contains
       implicit none
       !
       complex(8),intent(in)                 :: funct(:,:,:)
+      integer,intent(in)                    :: Nb
       character(len=*),intent(in)           :: dirpath
       character(len=*),intent(in)           :: paramFile
       character(len=*),intent(in)           :: FitMode
@@ -633,13 +687,17 @@ contains
       if(verbose)write(*,"(A)") "---- fit_Delta"
       !
       !
+      Nbath=Nb
       hh=1d-5
       iexit=0
       mode=1  !unity Hessian
       dfn=-.5 !frist iteration reduction of energy
+      iprint=0
+      if(verbose)iprint=1
       !
       if(size(funct,dim=2).ne.Nmats) stop "Wrong Nmats in function to fit."
       Norb = size(funct,dim=1)
+      call assert_shape(Eloc,[Norb,Nspin],"fit_Delta","Eloc")
       allocate(Component(Nmats));Component=czero
       !
       call setupAndPrams(Norb,dirpath,paramFile)
@@ -719,7 +777,7 @@ contains
                !
                funct_print=czero
                funct_print = DeltaAnderson(ParamVec(1:2*Nbath))
-               call dump_FermionicField(funct_print,reg(dirpath)//"fits/","DwAnd_"//str(iorb)//"_s"//str(ispin)//".DAT",wmats)
+               call dump_FermionicField(funct_print,reg(dirpath)//"fits/","D_And_w_o"//str(iorb)//"_s"//str(ispin)//".DAT",wmats)
                !
             enddo
          enddo

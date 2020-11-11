@@ -928,7 +928,7 @@ contains
       ! Check on the input Fields
       if(size(Mat,dim=1).ne.size(Mat,dim=2)) stop "symmetrize_Matrix: Matix not square."
       !
-      if(Eqv%para)then
+      if(Eqv%para.eq.1)then
          Mat(:,:,1) = (Mat(:,:,1) + Mat(:,:,2))/2d0
          Mat(:,:,2) = Mat(:,:,1)
       endif
@@ -1040,7 +1040,7 @@ contains
       ! Check on the input Fields
       if(.not.G%status) stop "symmetrize_Fermionic: field not properly initialized."
       !
-      if(Eqv%para)then
+      if(Eqv%para.eq.1)then
          !
          G%N_s(:,:,1) = (G%N_s(:,:,1) + G%N_s(:,:,2))/2d0
          G%N_s(:,:,2) = G%N_s(:,:,1)

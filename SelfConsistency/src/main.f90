@@ -20,7 +20,7 @@ program test
    !
    !
    !---------------------------------------------------------------------------!
-   !      READING INPUT FILE, INITIALIZING OMP, AND CHECK DATA STRUCTURE       !
+   !     READING INPUT FILE, INITIALIZING OMP, AND CHECK FOLDER STRUCTURE      !
    !---------------------------------------------------------------------------!
    call tick(TimeStart)
    call read_InputFile("input.in")
@@ -52,12 +52,12 @@ program test
       if(calc_Plat)then
          !
          call calc_Pi(Plat,Glat,Crystal)
-         call dump_BosonicField(Plat,reg(ItFolder),"Plat.DAT")
+         call dump_BosonicField(Plat,reg(ItFolder),"Plat_w.DAT")
          !
          if(merge_Pi.and.solve_DMFT) then !a bit redundant since there is no merge wihtout DMFT
             call MergeFields(Plat,PiEDMFT,alphaPi,SiteOrbs)
             call DeallocateBosonicField(PiEDMFT)
-            call dump_BosonicField(Plat,reg(ItFolder),"PiGG_merged.DAT")
+            if(verbose)call dump_BosonicField(Plat,reg(ItFolder),"Plat_w_merged.DAT")
          endif
          !
       endif
@@ -67,7 +67,7 @@ program test
          !
          if(calc_Wfull)  call calc_W_full(Wlat,Ulat,Plat,Crystal)
          if(calc_Wedmft) call calc_W_edmft(Wlat,Ulat,PiEDMFT,Crystal)
-         call dump_BosonicField(Wlat,reg(ItFolder),"Wloc.DAT")
+         call dump_BosonicField(Wlat,reg(ItFolder),"Wlat_w.DAT")
          !
       endif
       !
@@ -77,7 +77,7 @@ program test
          !Hartree shift between G0W0 and LDA
          allocate(VH(Crystal%Norb,Crystal%Norb));VH=czero
          call calc_VH(densityLDA,Glat,Ulat,VH)
-         if(solve_DMFT.and.bosonicSC)call DeallocateBosonicField(Ulat)
+         if(solve_DMFT.and.bosonicSC.and.(.not.Ustart))call DeallocateBosonicField(Ulat)
          !
          !G0W0 contribution and Vexchange readed from SPEX
          allocate(Vxc(Crystal%Norb,Crystal%Norb,Crystal%Nkpt,Nspin));Vxc=czero
@@ -94,13 +94,13 @@ program test
             !
             call AllocateFermionicField(SigmaG0W0dc,Crystal%Norb,Nmats,Nkpt=Crystal%Nkpt,Nsite=Nsite,Beta=Beta)
             call join_SigmaCX(SigmaG0W0dc,SigmaGW_C,SigmaGW_X)
-            call dump_FermionicField(SigmaG0W0dc,reg(pathDATA)//"0/","SigmaG0W0",.true.,Crystal%kpt)
+            call dump_FermionicField(SigmaG0W0dc,reg(pathDATA)//"0/","SGoWo",.true.,Crystal%kpt)
             call DeallocateFermionicField(SigmaG0W0dc)
             !
          elseif(Iteration.gt.0)then
             !
             call AllocateFermionicField(SigmaG0W0dc,Crystal%Norb,Nmats,Nkpt=Crystal%Nkpt,Nsite=Nsite,Beta=Beta)
-            call read_FermionicField(SigmaG0W0dc,reg(pathDATA)//"0/","SigmaG0W0",kpt=Crystal%kpt)
+            call read_FermionicField(SigmaG0W0dc,reg(pathDATA)//"0/","SGoWo",kpt=Crystal%kpt)
             !
             call AllocateFermionicField(SigmaGW,Crystal%Norb,Nmats,Nkpt=Crystal%Nkpt,Nsite=Nsite,Beta=Beta)
             call join_SigmaCX(SigmaGW,SigmaGW_C,SigmaGW_X)
@@ -109,10 +109,14 @@ program test
          call DeallocateFermionicField(SigmaGW_C)
          call DeallocateFermionicField(SigmaGW_X)
          !
+         !Dump scGW local self-energy
+         call dump_FermionicField(Glat,1,reg(ItFolder),"Slat_w_up.DAT")
+         call dump_FermionicField(Glat,2,reg(ItFolder),"Slat_w_dw.DAT")
+         !
          !Merge GW and EDMFT
          if((Iteration.gt.0).and.merge_Sigma.and.solve_DMFT)then !a bit redundant since there is no merge wihtout DMFT
             !
-            !First compute the Dc
+            !First compute the local Dc
             call AllocateFermionicField(SigmaGWdc,Crystal%Norb,Nmats,Nsite=Nsite,Beta=Beta)
             call AllocateFermionicField(SigmaGW_Cdc,Crystal%Norb,Nmats,Nsite=Nsite,Beta=Beta)
             call AllocateFermionicField(SigmaGW_Xdc,Crystal%Norb,0,Nsite=Nsite,Beta=Beta)
@@ -126,6 +130,11 @@ program test
             call DeallocateFermionicField(SigmaGWdc)
             call DeallocateFermionicField(SigmaDMFT)
             !
+            if(verbose)then
+               call dump_FermionicField(SigmaGW,1,reg(ItFolder),"Slat_w_up_merged.DAT")
+               call dump_FermionicField(SigmaGW,2,reg(ItFolder),"Slat_w_dw_merged.DAT")
+            endif
+            !
          endif
          !
       endif
@@ -138,9 +147,13 @@ program test
       if(look4dens%TargetDensity.ne.0d0)call set_density(Glat,Crystal,look4dens)
       !
       !Print Gf: local readable and k-dep binfmt
-      call dump_FermionicField(Glat,1,reg(ItFolder),"Gloc_up.DAT")
-      call dump_FermionicField(Glat,2,reg(ItFolder),"Gloc_dn.DAT")
-      call dump_FermionicField(Glat,reg(ItFolder),"Gloc",.true.,Crystal%kpt)
+      call dump_FermionicField(Glat,1,reg(ItFolder),"Glat_w_up.DAT")
+      call dump_FermionicField(Glat,2,reg(ItFolder),"Glat_w_dn.DAT")
+      call dump_FermionicField(Glat,reg(ItFolder),"Glat_w",.true.,Crystal%kpt)
+      !
+      !!Print lattice density
+      call dump_Matrix(Glat%N_s(:,:,1),reg(ItFolder)//"Nlat_up.DAT")
+      call dump_Matrix(Glat%N_s(:,:,2),reg(ItFolder)//"Nlat_dw.DAT")
       !
       !Matching the lattice and impurity problems
       if(solve_DMFT)then
@@ -162,6 +175,9 @@ program test
    enddo
    !
    call DeallocateAllFields()
+   call execute_command_line(" cp used.input.in "//reg(ItFolder))
+   call execute_command_line(" cp report "//reg(ItFolder))
+   call execute_command_line(" cp err "//reg(ItFolder))
    write(LOGfile,"(A,F)") "Self-Consistency finished. Total timing (s): ",tock(TimeStart)
    !
 end program test

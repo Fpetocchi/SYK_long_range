@@ -94,8 +94,8 @@ class ct_hyb
 
          //
          // Check if mandatory files are present
-         std::vector<path> mandatoryFiles{"/Eloc.DAT", "/Delta.DAT", "/Uloc.DAT"};
-         if(retarded) mandatoryFiles.push_back("/K.DAT");
+         std::vector<path> mandatoryFiles{"/Eloc.DAT", "/Delta_t.DAT", "/Umat.DAT"};
+         if(retarded) mandatoryFiles.push_back("/K_t.DAT");
          for(int ifile=0; ifile < (int)mandatoryFiles.size(); ifile++)
          {
             path filepath=inputDir+mandatoryFiles[ifile];
@@ -107,50 +107,53 @@ class ct_hyb
 
          //
          //read the istantaneous interaction ( Eigen::MatrixXd )
-         read_EigenMat(inputDir+"/Uloc.DAT", Uloc, Nflavor, Nflavor);
+         read_EigenMat(inputDir+"/Umat.DAT", Uloc, Nflavor, Nflavor);
          mu_correction.resize(Norb);
-         for(int iorb=0; iorb < Norb; iorb+=2)
+         for(int iorb=0; iorb < Norb; iorb++)
          {
-            mu_correction[iorb] += Uloc(iorb,iorb+1)/2.0;
-            mpi.report(" Orbital "+str(iorb)+" correction of the local level: "+str(mu_correction[iorb],4),testing_mpi);
+            mu_correction[iorb] += Uloc(2*iorb,2*iorb+1)/2.0;
+            mpi.report(" Orbital "+str(iorb)+" correction of the local level: "+str(mu_correction[iorb],4));
          }
 
          //
          //set the local energies ( std::vector<double> )
          read_Vec(inputDir+"/Eloc.DAT", Eloc, Nflavor, mu);
          set_levels();
-         mpi.report(" Chemical potential: "+str(mu,4),testing_mpi);
+         mpi.report(" Chemical potential: "+str(mu,4));
 
          //
          //read the hybridization function ( std::vector<std::vector<double>> )
-         read_VecVec(inputDir+"/Dt.DAT", F, Nflavor, Ntau, true, true);  // last flag is to reverse the tau index
+         read_VecVec(inputDir+"/Delta_t.DAT", F, Nflavor, Ntau, true, true);  // last flag is to reverse the tau index
 
          //
          //read the screening function ( std::vector<std::vector<std::vector<double>>> )
          if(retarded)
          {
-            read_VecVecVec(inputDir+"/Kt.DAT", K_table, Nflavor, false); // read_VecVecVec(inputDir+"/K.DAT", K_table, Norb, Ntau, true);
-
+            read_VecVecVec(inputDir+"/K_t.DAT", K_table, Nflavor, true); // read_VecVecVec(inputDir+"/K.DAT", K_table, Norb, Ntau, true);
+            //
             for(int ifl=0; ifl < Norb; ifl++)
             {
-               int Ntau_K = K_table[ifl][ifl].size();
-               path Kcomp = "K["+str(ifl)+"]["+str(ifl)+"]";
-               if(Ntau_K!=Ntau) mpi.report(" The Number of tau points in "+Kcomp+" is: "+str(Ntau_K),testing_mpi);
-               //
-               double K_zero =  K_table[ifl][ifl].front();
-               double K_beta =  K_table[ifl][ifl].back();
-               if(K_zero!=0.0) mpi.StopError(" Diagonal "+Kcomp+" at tau=0 is not vanishing - Exiting.");
-               if(K_beta!=0.0) mpi.StopError(" Diagonal "+Kcomp+" at tau=beta is not vanishing - Exiting.");
+               for(int jfl=0; jfl <= ifl; jfl++)
+               {
+                  int Ntau_K = K_table[ifl][jfl].size();
+                  path Kcomp = "K["+str(ifl)+"]["+str(jfl)+"]";
+                  if(Ntau_K!=Ntau) mpi.report(" The Number of tau points in "+Kcomp+" is: "+str(Ntau_K));
+                  //
+                  double K_zero =  K_table[ifl][jfl].front();
+                  double K_beta =  K_table[ifl][jfl].back();
+                  if(K_zero!=0.0) mpi.StopError(" Diagonal "+Kcomp+" at tau=0 is not vanishing - Exiting.");
+                  if(K_beta!=0.0) mpi.StopError(" Diagonal "+Kcomp+" at tau=beta is not vanishing - Exiting.");
+               }
             }
          }
 
          //
          if(testing_mpi && mpi.is_master())
          {
-            print_Vec(inputDir+"/Eloc.DAT.used", Eloc, mu);
-            print_Vec(inputDir+"/Levels.DAT.used", Levels, NULL);
-            print_VecVec(inputDir+"/Delta.DAT.used", F);
-            if(retarded)print_VecVecVec(inputDir+"/K.DAT.used", K_table);
+            print_Vec(inputDir+"/used.Eloc.DAT", Eloc, mu);
+            print_Vec(inputDir+"/used.Levels.DAT", Levels, NULL);
+            print_VecVec(inputDir+"/used.Delta_t.DAT", F);
+            if(retarded)print_VecVecVec(inputDir+"/used.K_t.DAT", K_table);
          }
 
          //
@@ -192,11 +195,11 @@ class ct_hyb
 
          //
          generator.seed(fabs(seed));
-         if(testing_mpi) mpi.report(" Seed: "+str(seed),testing_mpi);
+         if(testing_mpi) mpi.report(" Seed: "+str(seed));
          //
          initialized=true;
-         mpi.report(" Solver is initialized.",testing_mpi);
-         mpi.barrier();
+         mpi.report(" Solver is initialized.");
+
       }
 
       //----------------------------------------------------------------------//
@@ -213,15 +216,6 @@ class ct_hyb
             // Execution mode
             if(!atBeta ) dostep = &ct_hyb::dostep_full;
             if( atBeta ) dostep = &ct_hyb::dostep_atBeta;
-
-            //
-            start_timer();
-            if(!atBeta)
-            {
-               print_line_space(1,mpi.is_master());
-               print_line_equal(80,mpi.is_master());
-               mpi.report(" Solver for impurity "+SiteName+" has started.",testing_mpi);
-            }
 
             //
             if(mu_is_reset)
@@ -243,8 +237,18 @@ class ct_hyb
                mpi.barrier();
             }
 
-            //thermalization pre-steps
-            dostep_atBeta(Ntherm*Nmeas,true);
+            //thermalization pre-steps - I'm using always dostep_atBeta either or not for quick
+            dostep_atBeta(((atBeta == true) ? 10 : Ntherm)*Nmeas,true);
+            mpi.report(" Thermalization is done.");
+
+            //
+            start_timer();
+            if(!atBeta)
+            {
+               print_line_space(1,mpi.is_master());
+               print_line_equal(80,mpi.is_master());
+               mpi.report(" Solver for impurity "+SiteName+" has started.");
+            }
 
             //full solution
             while( !check_timer_global(MaxTime) )
@@ -254,6 +258,7 @@ class ct_hyb
                //
                RankSweeps++;
                mpi.allreduce(RankSweeps,WorldSweeps);
+               //printf(" [Rank %d] - RankSweeps: %d - WorldSweeps: %d \n",mpi.rank(), RankSweeps,WorldSweeps);
                //
                RankSign = sign_meas / RankSweeps;
                mpi.allreduce(RankSign,WorldSign,true);
@@ -262,13 +267,12 @@ class ct_hyb
                {
                   print_line_space(1,mpi.is_master());
                   print_timestamp("min");
-                  mpi.report(" Partial sweeps: "+str( (testing_mpi == true) ? RankSweeps : WorldSweeps ),testing_mpi);
-                  mpi.report(" Average sign: "+str( (testing_mpi == true) ? RankSign : WorldSign ),testing_mpi);
-                  mpi.report(" Density: "+str(get_Density(testing_mpi)),testing_mpi);
+                  mpi.report(" Partial sweeps: "+str( (testing_mpi == true) ? RankSweeps : WorldSweeps ));
+                  mpi.report(" Average sign: "+str( (testing_mpi == true) ? RankSign : WorldSign ));
+                  mpi.report(" Density: "+str(get_Density(testing_mpi)));
                   //
                   path pad = "_T"+str(printTime*(TimeStamp-1))+".DAT";
                   print_observables(pad,bins);
-                  mpi.barrier();
                }
             }
             mu_is_reset=false;
@@ -285,9 +289,9 @@ class ct_hyb
                print_line_minus(80,mpi.is_master());
                print_timestamp("min");
                mpi.report(" Solver for impurity "+SiteName+" is done. Results written to: "+resultsDir);
-               mpi.report(" Total sweeps: "+str( (testing_mpi == true) ? RankSweeps : WorldSweeps ),testing_mpi);
-               mpi.report(" Average sign: "+str( (testing_mpi == true) ? RankSign : WorldSign ),testing_mpi);
-               mpi.report(" Density: "+str(get_Density(testing_mpi)),testing_mpi);
+               mpi.report(" Total sweeps: "+str( (testing_mpi == true) ? RankSweeps : WorldSweeps ));
+               mpi.report(" Average sign: "+str( (testing_mpi == true) ? RankSign : WorldSign ));
+               mpi.report(" Density: "+str(get_Density(testing_mpi)));
                //
                path pad = ".DAT";
                print_observables(pad,bins);
@@ -296,8 +300,8 @@ class ct_hyb
             else
             {
                print_timestamp("sec");
-               mpi.report(" Total sweeps: "+str( (testing_mpi == true) ? RankSweeps : WorldSweeps ),testing_mpi);
-               mpi.report(" Solver for impurity "+SiteName+" is done.",testing_mpi);
+               mpi.report(" Total sweeps: "+str( (testing_mpi == true) ? RankSweeps : WorldSweeps ));
+               mpi.report(" Solver for impurity "+SiteName+" is done.");
             }
             //
             mpi.barrier();
@@ -375,6 +379,7 @@ class ct_hyb
          duration Tnow = std::chrono::system_clock::now();
          std::chrono::duration<double> runtime_seconds = Tnow-Tstart;
          if(runtime_seconds.count() > 60*DeltaMin) stop=true;
+         mpi.broadcast(stop,mpi.master());
          return stop;
       }
 
@@ -384,6 +389,7 @@ class ct_hyb
          duration Tnow = std::chrono::system_clock::now();
          std::chrono::duration<double> runtime_seconds = Tnow-Tstart;
          if(runtime_seconds.count() > 60*(DeltaMin*TimeStamp)) stop=true;
+         mpi.broadcast(stop,mpi.master());
          if(stop) TimeStamp++;
          return stop;
       }
@@ -392,9 +398,9 @@ class ct_hyb
       {
          duration Tnow = std::chrono::system_clock::now();
          std::chrono::duration<double> runtime_seconds = Tnow-Tstart;
-         if(kind=="sec")mpi.report(" Timestamp(sec): "+str(runtime_seconds.count()),3);
-         if(kind=="min")mpi.report(" Timestamp(min): "+str(runtime_seconds.count()/60),3);
-         if(kind=="hrs")mpi.report(" Timestamp(hrs): "+str(runtime_seconds.count()/3600),3);
+         if(kind=="sec")mpi.report(" Timestamp(sec): "+str(runtime_seconds.count(),3));
+         if(kind=="min")mpi.report(" Timestamp(min): "+str(runtime_seconds.count()/60,3));
+         if(kind=="hrs")mpi.report(" Timestamp(hrs): "+str(runtime_seconds.count()/3600,3));
       }
 
       //----------------------------------------------------------------------//
@@ -515,12 +521,12 @@ class ct_hyb
             //
             // density
             Vec PrintNloc = get_Nloc(testing_mpi); // provides spin-orbital occupation already normalized
-            print_Vec(resultsDir+"/Nloc_rank"+str(mpi.rank())+pad, PrintNloc, mu);
-            mpi.report(" Nloc_rank"+str(mpi.rank())+pad+" is printed.",testing_mpi);
+            print_Vec(resultsDir+"/Nqmc_rank"+str(mpi.rank())+pad, PrintNloc, mu);
+            mpi.report(" Nqmc_rank"+str(mpi.rank())+pad+" is printed.");
             //
             // perturbation order
             print_Vec(resultsDir+"/PertOrder_rank"+str(mpi.rank())+pad, Pert, NULL, 0.0, (double)RankSweeps);
-            mpi.report(" PertOrder_rank"+str(mpi.rank())+pad+" is printed.",testing_mpi);
+            mpi.report(" PertOrder_rank"+str(mpi.rank())+pad+" is printed.");
             //
             // error estimate and binning
             if(bins[0]>0)
@@ -528,7 +534,7 @@ class ct_hyb
                VecVec Gerr(Nflavor,Vec(Ntau,0.0));
                binAverageVec( bins, G, Gerr );
                print_VecVec(resultsDir+"/Gerr_rank"+str(mpi.rank())+pad, Gerr, Beta, (double)RankSweeps);
-               mpi.report(" Gerr_rank"+str(mpi.rank())+pad+" is printed.",testing_mpi);
+               mpi.report(" Gerr_rank"+str(mpi.rank())+pad+" is printed.");
             }
             //
             // Green's function
@@ -537,27 +543,27 @@ class ct_hyb
                G[ifl].front() = +Nloc[ifl]-(long double)RankSweeps ;
                G[ifl].back()  = -Nloc[ifl];
             }
-            print_VecVec(resultsDir+"/Gimp_rank"+str(mpi.rank())+pad, G, Beta, (double)RankSweeps);
-            mpi.report(" Gimp_rank"+str(mpi.rank())+pad+" is printed.",testing_mpi);
+            print_VecVec(resultsDir+"/Gimp_t_rank"+str(mpi.rank())+pad, G, Beta, (double)RankSweeps);
+            mpi.report(" Gimp_t_rank"+str(mpi.rank())+pad+" is printed.");
             //
             // chi charge
             if(nnt_meas)
             {
-               print_VecVec(resultsDir+"/nnt_rank"+str(mpi.rank())+pad, nnt, Beta, (double)RankSweeps);
-               mpi.report(" nnt_rank"+str(mpi.rank())+pad+" is printed.",testing_mpi);
+               print_VecVec(resultsDir+"/nn_t_rank"+str(mpi.rank())+pad, nnt, Beta, (double)RankSweeps);
+               mpi.report(" nn_t_rank"+str(mpi.rank())+pad+" is printed.");
             }
          }
 
          //
          // In any case at the ened Master prints after the collapse of the observables
-         mpi.barrier();
+         //mpi.barrier();
          //
          mpi.report(" Master (Rank #"+str(mpi.master())+") is printing observables.");
          //
          // density
          Vec PrintNloc = get_Nloc(); // provides spin-orbital occupation already normalized
-         if(mpi.is_master()) print_Vec(resultsDir+"/Nloc"+pad, PrintNloc, mu);
-         mpi.report(" Nloc"+pad+" is printed.");
+         if(mpi.is_master()) print_Vec(resultsDir+"/Nqmc"+pad, PrintNloc, mu);
+         mpi.report(" Nqmc"+pad+" is printed.");
          //
          // perturbation order
          Vec NormPert = normalize_Vec(Pert, RankSweeps);
@@ -587,8 +593,8 @@ class ct_hyb
          VecVec NormG = normalize_VecVec(G, RankSweeps);
          VecVec PrintG(Nflavor,std::vector<double>(Ntau,0.0));
          mpi.allreduce(NormG, PrintG, true);
-         if(mpi.is_master()) print_VecVec(resultsDir+"/Gimp"+pad, PrintG, Beta);
-         mpi.report(" Gimp"+pad+" is printed.");
+         if(mpi.is_master()) print_VecVec(resultsDir+"/Gimp_t"+pad, PrintG, Beta);
+         mpi.report(" Gimp_t"+pad+" is printed.");
          //
          // chi charge
          if(nnt_meas)
@@ -596,8 +602,8 @@ class ct_hyb
             VecVec Normnnt = normalize_VecVec(nnt, RankSweeps);
             VecVec Printnnt(Nflavor*(Nflavor+1)/2,std::vector<double>(Ntau,0.0));
             mpi.allreduce(Normnnt, Printnnt, true);
-            if(mpi.is_master()) print_VecVec(resultsDir+"/nnt"+pad, Printnnt, Beta);
-            mpi.report(" nnt"+pad+" is printed.");
+            if(mpi.is_master()) print_VecVec(resultsDir+"/nn_t"+pad, Printnnt, Beta);
+            mpi.report(" nn_t"+pad+" is printed.");
          }
       }
 

@@ -370,7 +370,6 @@ void read_VecVec( std::string path, std::vector<std::vector<double>> &VecVec, in
       }
    }
    file.close();
-
    //
    if(Delta_like)
    {
@@ -412,19 +411,25 @@ void read_VecVecVec( std::string path, std::vector<std::vector<std::vector<doubl
 {
    //
    VecVecVec.resize(idim);
-   for (int i=0; i<idim; i++)VecVecVec[i].resize(idim-i);
+   for (int i=0; i<idim; i++)VecVecVec[i].resize(i+1);
    ifstream file( path );
    double dum;
+   int ndx;
    //
    while(!file.fail())
    {
       if(axis) file >> dum;
+      ndx=0;
       for (int i=0; i<idim; i++)
       {
          for (int j=0; j<=i; j++)
          {
             file >> dum;
-            if ( !file.fail() ) VecVecVec[i][j].push_back(dum);
+            if ( !file.fail() )
+            {
+               VecVecVec[i][j].push_back(dum);
+               ndx++;
+            }
          }
       }
    }
@@ -493,7 +498,6 @@ void print_VecVecVec( std::string path, std::vector<std::vector<std::vector<doub
    const char * file=path.c_str();
    printFile = fopen(file ,"w");
    int Ncols1 = VecVecVec.size();
-   int Ncols2 = VecVecVec[0].size();
    int Nrows = VecVecVec[0][0].size();
    //
    for(int irow=0; irow<Nrows; irow++)
@@ -509,7 +513,7 @@ void print_VecVecVec( std::string path, std::vector<std::vector<std::vector<doub
       }
       for (int icol1=0; icol1<Ncols1; icol1++)
       {
-         for (int icol2=0; icol2<Ncols2; icol2++) fprintf (printFile , "%.20e\t",VecVecVec[icol1][icol2][irow]/Norm);
+         for (int icol2=0; icol2<=icol1; icol2++) fprintf (printFile , "%.20e\t",VecVecVec[icol1][icol2][irow]/Norm);
       }
       fprintf (printFile , "\n");
    }

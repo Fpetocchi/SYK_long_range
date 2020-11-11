@@ -133,6 +133,7 @@ module input_vars
    real(8),public                           :: Uaa
    real(8),public                           :: Uab
    real(8),public                           :: J
+   logical,public                           :: Kdiag
    !
    !Double counting types, divergencies, scaling coefficients
    character(len=256),public                :: VH_type
@@ -141,6 +142,10 @@ module input_vars
    real(8),public                           :: alphaPi
    real(8),public                           :: alphaSigma
    real(8),public                           :: alphaHk
+   !
+   !Variables for the fit on Delta
+   character(len=256),public                :: DeltaFit
+   integer,public                           :: Nbath
    !
    !Paths (directories must end with "/") and loop variables
    integer,public                           :: FirstIteration
@@ -151,6 +156,7 @@ module input_vars
    real(8),public                           :: Mixing_curlyG
    real(8),public                           :: Mixing_curlyU
    logical,public                           :: skipLattice
+   logical,public                           :: printSfull
    !
    !Variables related to the impurity solver
    type(QMC),public                         :: Solver
@@ -160,6 +166,8 @@ module input_vars
    logical,public                           :: XEPSisread=.false.
    logical,public                           :: solve_DMFT=.true.
    logical,public                           :: bosonicSC=.false.
+   !Once the it=0 problem is solved this can be chosen by the user
+   logical,public                           :: Ustart=.true.
 
    !---------------------------------------------------------------------------!
    !PURPOSE: Internal Rutines available for the user. Description only for interfaces.
@@ -245,10 +253,10 @@ contains
       !
       !Equivalent lattice indexes
       call add_separator()
-      call parse_input_variable(EqvGWndx%para,"PARAMAGNET",InputFile,default=.true.,comment="Flag to impose spin symmetry.")
+      call parse_input_variable(EqvGWndx%para,"PARAMAGNET",InputFile,default=1,comment="Integer flag to impose spin symmetry.")
       call parse_input_variable(EqvGWndx%hseed,"H_SEED",InputFile,default=0d0,comment="Seed to break spin symmetry (persistent if non zero).")
       call parse_input_variable(EqvGWndx%Nset,"EQV_SETS",InputFile,default=1,comment="Number of sets of locally equivalent lattice orbitals.")
-      allocate(EqvGWndx%SetNorb(EqvGWndx%Nset));EqvGWndx%SetNorb=0
+      allocate(EqvGWndx%SetNorb(EqvGWndx%Nset))
       do iset=1,EqvGWndx%Nset
          call parse_input_variable(EqvGWndx%SetNorb(iset),"EQV_NORB_"//str(iset),InputFile,default=1,comment="Number of equivalent lattice orbitals in the set number "//str(iset))
       enddo
@@ -263,14 +271,14 @@ contains
       !Imaginary time and frequency meshes
       call add_separator()
       call parse_input_variable(Beta,"BETA",InputFile,default=10.d0,comment="Inverse temperature in 1/eV.")
-      call parse_input_variable(NtauF,"NTAU_F",InputFile,default=201,comment="Number of points on the imaginary time axis for Fermionic quantities. Its gonna be made odd.")
-      if(mod(NtauF,2).eq.0)NtauF=NtauF+1
-      call parse_input_variable(NtauB,"NTAU_B",InputFile,default=1001,comment="Number of points on the imaginary time axis for Bosonic quantities. Its gonna be made odd.")
-      if(mod(NtauB,2).eq.0)NtauB=NtauB+1
-      call parse_input_variable(tau_uniform,"TAU_UNIF",InputFile,default=.false.,comment="Flag to use a non-tau_uniform mesh on the imaginary time axis.")
       call parse_input_variable(wmatsMax,"MAX_WMATS",InputFile,default=100.d0,comment="Maximum value of the Matsubara frequency mesh.")
       Nmats = int(Beta*wmatsMax/(2d0*pi))
       call append_to_input_list(Nmats,"NMATS","Number of points on the imaginary frequency axis. User cannot set this as its computed from MAX_WMATS and BETA.")
+      call parse_input_variable(NtauF,"NTAU_F",InputFile,default=Nmats,comment="Number of points on the imaginary time axis for Fermionic quantities. Its gonna be made odd. Optimal if close to NMATS.")
+      if(mod(NtauF,2).eq.0)NtauF=NtauF+1
+      call parse_input_variable(NtauB,"NTAU_B",InputFile,default=Nmats,comment="Number of points on the imaginary time axis for Bosonic quantities. Its gonna be made odd.")
+      if(mod(NtauB,2).eq.0)NtauB=NtauB+1
+      call parse_input_variable(tau_uniform,"TAU_UNIF",InputFile,default=.false.,comment="Flag to use a non-tau_uniform mesh on the imaginary time axis.")
       call parse_input_variable(Nreal,"NREAL",InputFile,default=2000,comment="Number of points on the real frequency axis.")
       call parse_input_variable(wrealMax,"MAX_WREAL",InputFile,default=10.d0,comment="Maximum absolute value of the real frequency mesh.")
       call parse_input_variable(eta,"ETA",InputFile,default=0.04d0,comment="Real frequency broadening.")
@@ -280,7 +288,7 @@ contains
       call parse_input_variable(look4dens%mu,"MU",InputFile,default=0d0,comment="Chemical potential.")
       call parse_input_variable(look4dens%TargetDensity,"N_READ",InputFile,default=0d0,comment="Target density per site lookup is switched on to this value if its >0d0. Otherwise mu will be kept fixed.")
       call parse_input_variable(look4dens%quickloops,"N_QUICK",InputFile,default=1,comment="Integer flag to switch on the quick density lookup within the solver.")
-      call parse_input_variable(look4dens%densityRelErr,"N_ERR",InputFile,default=0.01d0,comment="Relative error on the target density.")
+      call parse_input_variable(look4dens%densityRelErr,"N_ERR",InputFile,default=0.01d0,comment="Relative error on the target density. Better if not lower than 1e-3.")
       call parse_input_variable(look4dens%muStep,"MU_STEP",InputFile,default=0.2d0,comment="Initial chemical potential step in the density lookup.")
       call parse_input_variable(look4dens%muIter,"MU_ITER",InputFile,default=50,comment="Maximum number of iterations in the density lookup.")
       call parse_input_variable(look4dens%muTime,"MU_TIME",InputFile,default=0.5d0,comment="Minutes of solver runtime in the density lookup.")
@@ -288,9 +296,11 @@ contains
       !
       !Interaction variables
       call add_separator()
+      !call parse_input_variable(Ustart,"USTART",InputFile,default=.false.,comment="Flag to use the local Ucrpa interaction as effective interaction in the 0th iteration.")
       call parse_input_variable(UfullStructure,"U_FULL",InputFile,default=.true.,comment="Flag to check for inverted Re/Im parity in SPEX Ucrpa.")
       call parse_input_variable(Umodel,"U_MODEL",InputFile,default=.false.,comment="Flag to build the screening from user chosen phononic modes.")
       call parse_input_variable(Uspex,"U_SPEX",InputFile,default=.true.,comment="Flag to read SPEX Ucrpa.")
+      call parse_input_variable(Kdiag,"K_DIAG",InputFile,default=.false.,comment="Flag to screen only orbital-diagonal channels.")
       if(Umodel.and.Uspex) stop "Make up your mind, U_MODEL or U_SPEX ?"
       if(Umodel)then
          call parse_input_variable(Uaa,"UAA",InputFile,default=5d0,comment="Interaction between same orbital and opposite spin electrons.")
@@ -314,6 +324,10 @@ contains
       call parse_input_variable(alphaSigma,"ALPHA_SIGMA",InputFile,default=1d0,comment="Fraction of the EDMFT self-energy substituted within the lattice one.")
       call parse_input_variable(alphaHk,"ALPHA_HK",InputFile,default=1d0,comment="Rescaling of the non-interacting Hamiltonian.")
       !
+      !Variables for the fit on Delta
+      call parse_input_variable(DeltaFit,"DELTA_FIT",InputFile,default="Analytic",comment="Fit to extract the local energy in GW+EDMFT calculations. Available: Analytic, Moments.")
+      call parse_input_variable(Nbath,"NBATH",InputFile,default=15,comment="Number of bath levels (Analytic) or number of coefficients (Moments).")
+      !
       !Paths and loop variables
       call add_separator()
       call parse_input_variable(pathINPUT,"PATH_INPUT",InputFile,default="InputFiles",comment="Folder within cwd where to look for input files.")
@@ -324,6 +338,7 @@ contains
       call parse_input_variable(Mixing_curlyG,"MIX_G",InputFile,default=0.5d0,comment="Fraction of the old iteration curlyG.")
       call parse_input_variable(Mixing_curlyU,"MIX_U",InputFile,default=0.5d0,comment="Fraction of the old iteration curlyU.")
       call parse_input_variable(skipLattice,"SKIP_LATT",InputFile,default=.false.,comment="Skip the lattice summation and assuming good the existing Gloc and Wloc.")
+      call parse_input_variable(printSfull,"PRINT_SFULL",InputFile,default=.false.,comment="Print the full k-dependent self-energy (binfmt) at each iteration.")
       !
       !Variables related to the impurity solver
       call add_separator()
@@ -334,8 +349,8 @@ contains
       call parse_input_variable(Solver%PrintTime,"PRINT_TIME",InputFile,default=10,comment="Minutes that have to pass before observables are updated and stored.")
       call parse_input_variable(Solver%binlength,"BINLENGTH",InputFile,default=4,comment="If >0 the Green's function at itau will be the average within =/-binlength.")
       call parse_input_variable(Solver%binstart,"BINSTART",InputFile,default=100,comment="Tau points skipped at the beginning and end of the Green's function.")
-      call append_to_input_list(Solver%retarded,"RETARDED","Flag to include the frequency dependent part of the interaction. User cannot set this as its deduced from CALC_TYPE.")
-      call append_to_input_list(Solver%nnt_meas,"NNT_MEAS","Flag to switch on the measurement of the susceptibility. User cannot set this as its deduced from CALC_TYPE.")
+      call append_to_input_list(Solver%retarded,"RETARDED","Integer flag to include the frequency dependent part of the interaction. User cannot set this as its deduced from CALC_TYPE.")
+      call append_to_input_list(Solver%nnt_meas,"NNT_MEAS","Integer flag to switch on the measurement of the susceptibility. User cannot set this as its deduced from CALC_TYPE.")
       if(ExpandImpurity)then
          allocate(Solver%Time(1));Solver%Time=0
          call parse_input_variable(Solver%Time(1),"TIME_1",InputFile,default=15,comment="Minutes of solver runtime for site number 1")

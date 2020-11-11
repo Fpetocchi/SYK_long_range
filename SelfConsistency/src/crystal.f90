@@ -457,7 +457,7 @@ contains
       if(verbose)then
          write(*,"(A)")"     12 smallest k vectors are:"
          do i=1,12
-            write(*,"(12(3F5.2,1X))")kpt(:,small_ik(i,1))
+            write(*,"(12(3F6.3,1X))")kpt(:,small_ik(i,1))
             write(*,"(3F5.2,1X)")kreal(:,i)
             write(*,"(1I5)")small_ik(i,2)
          enddo

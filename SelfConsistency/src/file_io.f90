@@ -165,7 +165,7 @@ contains
       if(verbose)write(*,"(A)") "---- read_Matrix_local_z"
       if(verbose)write(*,"(A)") "     Read "//reg(readpath)
       !
-      call inquireFile(reg(readpath),filexists)
+      call inquireFile(reg(readpath),filexists,verb=verbose)
       allocate(RealM(size(Umat,dim=1),size(Umat,dim=2)));RealM=0d0
       allocate(ImagM(size(Umat,dim=1),size(Umat,dim=2)));ImagM=0d0
       !
@@ -202,7 +202,7 @@ contains
       if(verbose)write(*,"(A)") "---- read_Matrix_local_d"
       if(verbose)write(*,"(A)") "     Read "//reg(readpath)
       !
-      call inquireFile(reg(readpath),filexists)
+      call inquireFile(reg(readpath),filexists,verb=verbose)
       allocate(RealM(size(Umat,dim=1),size(Umat,dim=2)));RealM=0d0
       !
       unit = free_unit()
@@ -421,7 +421,7 @@ contains
       if(Norb.ne.size(Umat,dim=2)) stop "The provided matrix is not square."
       !
       ! Check file existence
-      call inquireFile(reg(readpath),filexists)
+      call inquireFile(reg(readpath),filexists,verb=verbose)
       !
       !
       unit = free_unit()
@@ -484,7 +484,7 @@ contains
       if(Norb.ne.size(Umat,dim=2)) stop "The provided matrix is not square."
       !
       ! Check file existence
-      call inquireFile(reg(readpath),filexists)
+      call inquireFile(reg(readpath),filexists,verb=verbose)
       !
       !
       unit = free_unit()
@@ -763,7 +763,7 @@ contains
       Norb = G%Norb
       !
       ! Check file existence
-      call inquireFile(reg(readpath),filexists)
+      call inquireFile(reg(readpath),filexists,verb=verbose)
       !
       ! Read file
       unit = free_unit()
@@ -857,7 +857,7 @@ contains
          if(ispin.eq.2)readpath = reg(dirpath)//reg(filename)//"_k_dw.DAT"
          !
          if(verbose)write(*,"(A)") "     Read "//reg(readpath)
-         call inquireFile(reg(readpath),filexists)
+         call inquireFile(reg(readpath),filexists,verb=verbose)
          !
          unit = free_unit()
          open(unit,file=reg(readpath),form="unformatted",status="old",position="rewind",action="read")
@@ -1182,7 +1182,7 @@ contains
       Norb = int(sqrt(dble(U%Nbp)))
       !
       ! Check file existence
-      call inquireFile(reg(readpath),filexists)
+      call inquireFile(reg(readpath),filexists,verb=verbose)
       !
       ! Read file
       unit = free_unit()
