@@ -1091,7 +1091,7 @@ contains
                dimoffdiag = Eqv%SetNorb(iset)*(Eqv%SetNorb(iset)-1)/2
                !
                if(dimdiag.eq.1)cycle
-               if(verbose)write(*,"(3(A,I4))") "     Diagonal set: ",iset," dimD: ",int(dimdiag)," dimOD: ",int(dimoffdiag)
+               if(verbose.and.(ispin.eq.1))write(*,"(3(A,I4))") "     Diagonal set: ",iset," dimD: ",int(dimdiag)," dimOD: ",int(dimoffdiag)
                !
                !Average elements
                Delem=czero;Lelem=czero;Uelem=czero
@@ -1100,11 +1100,12 @@ contains
                      !
                      i = Eqv%SetOrbs(iset,iorb)
                      j = Eqv%SetOrbs(iset,jorb)
-                     if(verbose)write(*,"(A,2I4)")    "     Component: ",i,j
+                     if(verbose.and.(ispin.eq.1))write(*,"(A,2I4)")    "     Component: ",i,j
                      !
                      if(i.eq.j) Delem = Delem + G%N_s(i,j,ispin)/dimdiag
                      if(i.gt.j) Lelem = Lelem + G%N_s(i,j,ispin)/dimoffdiag
                      if(i.lt.j) Uelem = Uelem + G%N_s(i,j,ispin)/dimoffdiag
+                     !
                   enddo
                enddo
                !Re-insert elements
@@ -1117,6 +1118,7 @@ contains
                      if(i.eq.j) G%N_s(i,j,ispin) = Delem
                      if((i.gt.j).and.Eqv%Gfoffdiag) G%N_s(i,j,ispin) = Lelem
                      if((i.lt.j).and.Eqv%Gfoffdiag) G%N_s(i,j,ispin) = Uelem
+                     !
                   enddo
                enddo
                !
@@ -1132,6 +1134,7 @@ contains
                         if(i.eq.j) Delem = Delem + G%ws(i,j,ip,ispin)/dimdiag
                         if(i.gt.j) Lelem = Lelem + G%ws(i,j,ip,ispin)/dimoffdiag
                         if(i.lt.j) Uelem = Uelem + G%ws(i,j,ip,ispin)/dimoffdiag
+                        !
                      enddo
                   enddo
                   !Re-insert elements
@@ -1144,6 +1147,7 @@ contains
                         if(i.eq.j) G%ws(i,j,ip,ispin) = Delem
                         if((i.gt.j).and.Eqv%Gfoffdiag) G%ws(i,j,ip,ispin) = Lelem
                         if((i.lt.j).and.Eqv%Gfoffdiag) G%ws(i,j,ip,ispin) = Uelem
+                        !
                      enddo
                   enddo
                enddo! ip
@@ -1158,7 +1162,7 @@ contains
                      if(iset.eq.jset)cycle
                      dimoffdiag = Eqv%SetNorb(iset)*Eqv%SetNorb(jset)
                      !
-                     if(verbose)write(*,"(A,2I4,A,I4)") "     Off-diagonal set: ",iset,jset," dimOD: ",int(dimoffdiag)
+                     if(verbose.and.(ispin.eq.1))write(*,"(A,2I4,A,I4)") "     Off-diagonal set: ",iset,jset," dimOD: ",int(dimoffdiag)
                      !
                      !Average elements
                      Lelem=czero;Uelem=czero
@@ -1170,6 +1174,7 @@ contains
                            !
                            if(iset.gt.jset) Lelem = Lelem + G%N_s(i,j,ispin)/dimoffdiag
                            if(iset.lt.jset) Uelem = Uelem + G%N_s(i,j,ispin)/dimoffdiag
+                           !
                         enddo
                      enddo
                      !Re-insert elements
@@ -1178,10 +1183,11 @@ contains
                            !
                            i = Eqv%SetOrbs(iset,iorb)
                            j = Eqv%SetOrbs(jset,jorb)
-                           if(verbose)write(*,"(A,2I4)")    "     Component: ",i,j
+                           if(verbose.and.(ispin.eq.1))write(*,"(A,2I4)")    "     Component: ",i,j
                            !
                            if(iset.gt.jset) G%N_s(i,j,ispin) = Lelem
                            if(iset.lt.jset) G%N_s(i,j,ispin) = Uelem
+                           !
                         enddo
                      enddo
                      !
@@ -1196,6 +1202,7 @@ contains
                               !
                               if(iset.gt.jset) Lelem = Lelem + G%ws(i,j,ip,ispin)/dimoffdiag
                               if(iset.lt.jset) Uelem = Uelem + G%ws(i,j,ip,ispin)/dimoffdiag
+                              !
                            enddo
                         enddo
                         !Re-insert elements
@@ -1207,6 +1214,7 @@ contains
                               !
                               if(iset.gt.jset) G%ws(i,j,ip,ispin) = Lelem
                               if(iset.lt.jset) G%ws(i,j,ip,ispin) = Uelem
+                              !
                            enddo
                         enddo
                      enddo !ip
@@ -1406,15 +1414,15 @@ contains
                      !
                      ib1_ab = i + Norb*(i-1)
                      ib2_ab = j + Norb*(j-1)
-                     if(verbose)write(*,"(2(A,2I3),2(A,I4),A)")    "     Component: (",i,i,"),(",j,j,") = [",ib1_ab,",",ib2_ab,"]"
+                     if(verbose)write(*,"(2(A,2I3),2(A,I4),A)")    "     W(aa)(bb): (",i,i,"),(",j,j,") = [",ib1_ab,",",ib2_ab,"]"
                      !
                      ib1_sf = i + Norb*(j-1)
                      ib2_sf = j + Norb*(i-1)
-                     if(verbose)write(*,"(2(A,2I3),2(A,I4),A)")    "     Component: (",i,j,"),(",j,i,") = [",ib1_sf,",",ib2_sf,"]"
+                     if(verbose)write(*,"(2(A,2I3),2(A,I4),A)")    "     W(ab)(ba): (",i,j,"),(",j,i,") = [",ib1_sf,",",ib2_sf,"]"
                      !
                      ib1_pa = i + Norb*(j-1)
                      ib2_pa = i + Norb*(j-1)
-                     if(verbose)write(*,"(2(A,2I3),2(A,I4),A)")    "     Component: (",i,j,"),(",i,j,") = [",ib1_pa,",",ib2_pa,"]"
+                     if(verbose)write(*,"(2(A,2I3),2(A,I4),A)")    "     W(ab)(ab): (",i,j,"),(",i,j,") = [",ib1_pa,",",ib2_pa,"]"
                      !
                      if(allocated(W%bare_local))then
                         Waabb = Waabb + W%bare_local(ib1_ab,ib2_ab) / dimoffdiag

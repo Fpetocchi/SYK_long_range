@@ -43,7 +43,7 @@ program test
    !SOLVING THE LATTICE PROBLEM AND PRODUCING INPUTS FOR NEXT IMPURITY SOLUTION!
    !---------------------------------------------------------------------------!
    call initialize_Fields(ItStart)
-   if(solve_DMFT)call show_Densities(Iteration-1)
+   if(solve_DMFT.and.(ItStart.gt.0))call show_Densities(ItStart-1)
    !
    do Iteration=ItStart,Itend,1
       !

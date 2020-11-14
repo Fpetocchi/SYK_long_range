@@ -454,7 +454,7 @@ contains
       integer,intent(in)                    :: ItStart
       logical                               :: filexists
       integer                               :: unit,isite,iorb
-      character(len=255)                    :: filepath
+      character(len=255)                    :: file
       real(8)                               :: muQMC
       !
       !
@@ -664,10 +664,10 @@ contains
          call read_Matrix(densityDMFT(:,:,2),reg(PrevItFolder)//"Nimp_dw.DAT")
          !
          do isite=1,Nsite
-            filepath = reg(PrevItFolder)//"Solver_"//reg(SiteName(isite))//"/resultsQMC/Nqmc.DAT"
-            call inquireFile(reg(filepath),filexists,verb=verbose)
+            file = reg(PrevItFolder)//"Solver_"//reg(SiteName(isite))//"/resultsQMC/Nqmc.DAT"
+            call inquireFile(reg(file),filexists,verb=verbose)
             unit = free_unit()
-            open(unit,file=reg(filepath),form="formatted",status="old",position="rewind",action="read")
+            open(unit,file=reg(file),form="formatted",status="old",position="rewind",action="read")
             read(unit,*) muQMC
             do iorb=1,SiteNorb(isite)
                read(unit,*) densityQMC(iorb,iorb,1,isite),densityQMC(iorb,iorb,2,isite)
@@ -831,8 +831,8 @@ contains
       complex(8),allocatable                :: zeta(:,:,:),invGf(:,:),Rot(:,:)
       complex(8),allocatable                :: Dmats(:,:,:),Ditau(:,:,:)
       complex(8),allocatable                :: invCurlyG(:,:,:)
-      character(len=255)                    :: printpath,oldparafile,newparafile
-      logical                               :: oldparexist
+      logical                               :: filexists
+      character(len=255)                    :: file,oldMomDir,newMomDir
       !
       !
       write(*,"(A)") new_line("A")//new_line("A")//"---- calc_Delta of "//reg(SiteName(isite))
@@ -927,22 +927,24 @@ contains
                   !
                case("Analytic")
                   !
-                  oldparafile = reg(PrevItFolder)//"Solver_"//reg(SiteName(isite))//"/AndPara_"//reg(SiteName(isite))//".DAT"
-                  newparafile = reg(ItFolder)//"Solver_"//reg(SiteName(isite))//"/AndPara_"//reg(SiteName(isite))//".DAT"
-                  call inquireFile(reg(oldparafile),oldparexist,hardstop=.false.,verb=verbose)
-                  if(oldparexist) call execute_command_line(" cp "//reg(oldparafile)//" "//reg(newparafile))
+                  file = "DeltaAndPara_"//reg(SiteName(isite))//".DAT"
+                  oldMomDir = reg(PrevItFolder)//"Solver_"//reg(SiteName(isite))//"/"
+                  newMomDir = reg(ItFolder)//"Solver_"//reg(SiteName(isite))//"/"
+                  call inquireFile(reg(oldMomDir)//reg(file),filexists,hardstop=.false.,verb=verbose)
+                  if(filexists) call execute_command_line(" cp "//reg(oldMomDir)//reg(file)//" "//reg(newMomDir))
                   !
-                  call fit_Delta(zeta-invCurlyG,Nbath,reg(ItFolder)//"Solver_"//reg(SiteName(isite))//"/","AndPara_"//reg(SiteName(isite))//".DAT","Shifted",Eloc)
+                  call fit_Delta(zeta-invCurlyG,Beta,Nfit,reg(newMomDir),reg(file),"Shifted",Eloc)
                   !
                case("Moments")
                   !
-                  oldparafile = reg(PrevItFolder)//"Solver_"//reg(SiteName(isite))//"/Moments_"//reg(SiteName(isite))//".DAT"
-                  newparafile = reg(ItFolder)//"Solver_"//reg(SiteName(isite))//"/Moments_"//reg(SiteName(isite))//".DAT"
-                  call inquireFile(reg(oldparafile),oldparexist,hardstop=.false.,verb=verbose)
-                  if(oldparexist) call execute_command_line(" cp "//reg(oldparafile)//" "//reg(newparafile))
+                  file = "DeltaMom_"//reg(SiteName(isite))//".DAT"
+                  oldMomDir = reg(PrevItFolder)//"Solver_"//reg(SiteName(isite))//"/"
+                  newMomDir = reg(ItFolder)//"Solver_"//reg(SiteName(isite))//"/"
+                  call inquireFile(reg(oldMomDir)//reg(file),filexists,hardstop=.false.,verb=verbose)
+                  if(filexists) call execute_command_line(" cp "//reg(oldMomDir)//reg(file)//" "//reg(newMomDir))
                   !
-                  allocate(Moments(Norb,Nbath,Nspin));Moments=0d0
-                  call fit_moments(zeta-invCurlyG,Nbath,reg(ItFolder)//"Solver_"//reg(SiteName(isite))//"/","Moments_"//reg(SiteName(isite))//".DAT","Generic",Moments)
+                  allocate(Moments(Norb,Nfit,Nspin));Moments=0d0
+                  call fit_moments(zeta-invCurlyG,Beta,Nfit,reg(newMomDir),reg(file),"Sigma",Moments)
                   Eloc=Moments(:,1,:)
                   deallocate(Moments)
                   !
@@ -980,9 +982,9 @@ contains
       call createDir(reg(ItFolder)//"Solver_"//reg(SiteName(isite)),verb=verbose)
       !
       !Eloc and chemical potential
-      printpath = reg(ItFolder)//"Solver_"//reg(SiteName(isite))//"/Eloc.DAT"
+      file = reg(ItFolder)//"Solver_"//reg(SiteName(isite))//"/Eloc.DAT"
       unit = free_unit()
-      open(unit,file=reg(printpath),form="formatted",status="unknown",position="rewind",action="write")
+      open(unit,file=reg(file),form="formatted",status="unknown",position="rewind",action="write")
       write(unit,"(1E20.12)") Glat%mu
       do iwan=1,Norb
          write(unit,"(2E20.12)") Eloc(iwan,1),Eloc(iwan,2)
@@ -991,9 +993,9 @@ contains
       !
       !Delta(tau)
       allocate(PrintLine(Nflavor))
-      printpath = reg(ItFolder)//"Solver_"//reg(SiteName(isite))//"/Delta_t.DAT"
+      file = reg(ItFolder)//"Solver_"//reg(SiteName(isite))//"/Delta_t.DAT"
       unit = free_unit()
-      open(unit,file=reg(printpath),form="formatted",status="unknown",position="rewind",action="write")
+      open(unit,file=reg(file),form="formatted",status="unknown",position="rewind",action="write")
       do itau=1,NtauF
          ndx=1
          PrintLine=0d0
@@ -1048,9 +1050,9 @@ contains
          enddo
          !
          allocate(PrintLine(Nflavor))
-         printpath = reg(ItFolder)//"Solver_"//reg(SiteName(isite))//"/ReDelta_w_test.DAT"
+         file = reg(ItFolder)//"Solver_"//reg(SiteName(isite))//"/ReDelta_w_test.DAT"
          unit = free_unit()
-         open(unit,file=reg(printpath),form="formatted",status="unknown",position="rewind",action="write")
+         open(unit,file=reg(file),form="formatted",status="unknown",position="rewind",action="write")
          do iw=1,Nmats
             ndx=1
             PrintLine=0d0
@@ -1066,9 +1068,9 @@ contains
          deallocate(PrintLine)
          !
          allocate(PrintLine(Nflavor))
-         printpath = reg(ItFolder)//"Solver_"//reg(SiteName(isite))//"/ImDelta_w_test.DAT"
+         file = reg(ItFolder)//"Solver_"//reg(SiteName(isite))//"/ImDelta_w_test.DAT"
          unit = free_unit()
-         open(unit,file=reg(printpath),form="formatted",status="unknown",position="rewind",action="write")
+         open(unit,file=reg(file),form="formatted",status="unknown",position="rewind",action="write")
          do iw=1,Nmats
             ndx=1
             PrintLine=0d0
@@ -1114,7 +1116,7 @@ contains
       real(8),allocatable                   :: Uinst(:,:),Ucheck(:,:)
       real(8),allocatable                   :: Kfunct(:,:,:)
       real(8),allocatable                   :: tau(:),PrintLine(:)
-      character(len=255)                    :: printpath
+      character(len=255)                    :: file
       !
       !
       write(*,"(A)") new_line("A")//new_line("A")//"---- calc_Interaction of "//reg(SiteName(isite))
@@ -1193,15 +1195,15 @@ contains
       call createDir(reg(ItFolder)//"Solver_"//reg(SiteName(isite)),verb=verbose)
       !
       !Istantaneous interaction
-      printpath = reg(ItFolder)//"Solver_"//reg(SiteName(isite))//"/Umat.DAT"
-      call dump_Matrix(Uinst,reg(printpath))
+      file = reg(ItFolder)//"Solver_"//reg(SiteName(isite))//"/Umat.DAT"
+      call dump_Matrix(Uinst,reg(file))
       !
       !Screening function and effective local interaction
       if(allocated(Kfunct))then
          !
-         printpath = reg(ItFolder)//"Solver_"//reg(SiteName(isite))//"/K_t.DAT"
+         file = reg(ItFolder)//"Solver_"//reg(SiteName(isite))//"/K_t.DAT"
          unit = free_unit()
-         open(unit,file=reg(printpath),form="formatted",status="unknown",position="rewind",action="write")
+         open(unit,file=reg(file),form="formatted",status="unknown",position="rewind",action="write")
          !
          allocate(PrintLine(Nflavor*(Nflavor+1)/2));PrintLine=0d0
          do itau=1,NtauB
@@ -1290,24 +1292,26 @@ contains
       integer                               :: Norb,Nflavor,Nbp
       integer                               :: iorb,jorb,ispin,jspin
       integer                               :: ib1,ib2,isite,idum
-      integer                               :: unit,ndx,itau,iw
+      integer                               :: unit,ndx,itau,iw,wndx
       real(8)                               :: taup,muQMC
       integer,allocatable                   :: Orbs(:)
       real(8),allocatable                   :: ReadLine(:)
       real(8),allocatable                   :: tauF(:),tauB(:),wmats(:)
-      complex(8),allocatable                :: Gitau(:,:,:),Gmats(:,:,:)
+      real(8),allocatable                   :: Moments(:,:,:)
+      complex(8),allocatable                :: Gitau(:,:,:),Gmats(:,:,:),GmatsTail(:)
+      complex(8),allocatable                :: Smats(:,:,:),SmatsTail(:)
       real(8),allocatable                   :: nnt(:,:,:)
       complex(8),allocatable                :: NNitau(:,:,:,:,:),invP(:,:)
       complex(8),allocatable                :: ChiMitau(:),ChiMmats(:)
       logical                               :: filexists
-      character(len=255)                    :: filepath
+      character(len=255)                    :: file,oldMomDir,newMomDir
       !
       !
       write(*,"(A)") "---- collect_QMC_results"
       !
       !
       !
-      ! COLLECT IMPURITY OCCUPATION
+      ! COLLECT IMPURITY OCCUPATION --------------------------------------------
       allocate(densityDMFT(Crystal%Norb,Crystal%Norb,Nspin));densityDMFT=czero
       allocate(densityQMC(maxval(SiteNorb),maxval(SiteNorb),Nspin,Nsite));densityQMC=0d0
       !
@@ -1320,11 +1324,12 @@ contains
          Orbs = SiteOrbs(isite,1:Norb)
          Nflavor = Norb*Nspin
          !
+         !
          !Read the impurity occupation
-         filepath = reg(PrevItFolder)//"Solver_"//reg(SiteName(isite))//"/resultsQMC/Nqmc.DAT"
-         call inquireFile(reg(filepath),filexists,verb=verbose)
+         file = reg(PrevItFolder)//"Solver_"//reg(SiteName(isite))//"/resultsQMC/Nqmc.DAT"
+         call inquireFile(reg(file),filexists,verb=verbose)
          unit = free_unit()
-         open(unit,file=reg(filepath),form="formatted",status="old",position="rewind",action="read")
+         open(unit,file=reg(file),form="formatted",status="old",position="rewind",action="read")
          read(unit,*) muQMC
          do ib1=1,Nflavor
             iorb = (ib1+mod(ib1,2))/2
@@ -1332,6 +1337,7 @@ contains
             read(unit,*) idum,densityQMC(iorb,iorb,ispin,isite)
          enddo
          close(unit)
+         !
          !
          !Insert or Expand to the Lattice basis
          if(RotateHloc)then
@@ -1344,10 +1350,12 @@ contains
          !
       enddo
       !
+      !
       !Symmetrize
       if(verbose)call dump_Matrix(densityDMFT(:,:,1),reg(PrevItFolder)//"Nimp_up_notsymm.DAT")
       if(verbose)call dump_Matrix(densityDMFT(:,:,2),reg(PrevItFolder)//"Nimp_dw_notsymm.DAT")
       call symmetrize(densityDMFT,EqvGWndx)
+      !
       !
       !Save to the proper iteration folder
       call dump_Matrix(densityDMFT(:,:,1),reg(PrevItFolder)//"Nimp_up.DAT")
@@ -1357,7 +1365,7 @@ contains
       !
       !
       !
-      ! COLLECT IMPURITY GF AND FERMIONIC DYSON
+      ! COLLECT IMPURITY GF AND FERMIONIC DYSON --------------------------------
       call AllocateFermionicField(SigmaDMFT,Crystal%Norb,Nmats,Nsite=Nsite,Beta=Beta)
       do isite=1,Nsite
          !
@@ -1367,15 +1375,15 @@ contains
          allocate(Orbs(Norb))
          Orbs = SiteOrbs(isite,1:Norb)
          !
+         !
          !Read the impurity Green's function
-         allocate(tauF(NtauF));tauF=0d0
-         tauF = linspace(0d0,Beta,NtauF)
+         allocate(tauF(NtauF));tauF = linspace(0d0,Beta,NtauF)
          allocate(Gitau(Norb,NtauF,Nspin));Gitau=czero
          allocate(ReadLine(Nspin*Norb))
-         filepath = reg(PrevItFolder)//"Solver_"//reg(SiteName(isite))//"/resultsQMC/Gimp_t.DAT"
-         call inquireFile(reg(filepath),filexists,verb=verbose)
+         file = reg(PrevItFolder)//"Solver_"//reg(SiteName(isite))//"/resultsQMC/Gimp_t.DAT"
+         call inquireFile(reg(file),filexists,verb=verbose)
          unit = free_unit()
-         open(unit,file=reg(filepath),form="formatted",status="old",position="rewind",action="read")
+         open(unit,file=reg(file),form="formatted",status="old",position="rewind",action="read")
          do itau=1,NtauF
             ReadLine=0d0
             read(unit,*) taup,ReadLine
@@ -1392,12 +1400,48 @@ contains
          enddo
          deallocate(ReadLine,tauF)
          !
+         !
          !FT to the matsubara axis
          allocate(Gmats(Norb,Nmats,Nspin));Gmats=czero
          do ispin=1,Nspin
             call Fitau2mats_vec(Beta,Gitau(:,:,ispin),Gmats(:,:,ispin),tau_uniform=.true.)
          enddo
          deallocate(Gitau)
+         !
+         !
+         !Fit the impurity Green's function     QUI CE DEL CASINO SU CHE CARTELLA CERCARE CHE E' DIVERSA DALLA STRUTTURA DI calc_Delta
+         if(ReplaceTail_Gimp.gt.0d0)then
+            !
+            file = "GimpMom_"//reg(SiteName(isite))//".DAT"
+            oldMomDir = reg(PrevItFolder)//"Solver_"//reg(SiteName(isite))//"/"
+            newMomDir = reg(ItFolder)//"Solver_"//reg(SiteName(isite))//"/"
+            call inquireFile(reg(oldMomDir)//reg(file),filexists,hardstop=.false.,verb=verbose)
+            if(filexists) call execute_command_line(" cp "//reg(oldMomDir)//reg(file)//" "//reg(newMomDir))
+            !
+            allocate(wmats(Nmats));wmats=FermionicFreqMesh(Beta,Nmats)
+            allocate(Moments(Norb,Nfit,Nspin));Moments=0d0
+            call fit_moments(Gmats,Beta,Nfit,reg(newMomDir),reg(file),"Green",Moments)
+            !
+            allocate(GmatsTail(Nmats));GmatsTail=czero
+            wndx = minloc(abs(wmats-ReplaceTail_Gimp),dim=1)
+            write(*,"(A,I5)")"     Replacing Gimp_"//reg(SiteName(isite))//" tail starting from matsubara index: ",wndx
+            do ispin=1,Nspin
+               do iorb=1,Norb
+                  GmatsTail = G_Moments(Moments(iorb,3:Nfit,ispin),wmats)
+                  Gmats(iorb,wndx:Nmats,ispin) = GmatsTail(wndx:Nmats)
+               enddo
+            enddo
+            deallocate(Moments,GmatsTail,wmats)
+            !
+         endif
+
+
+         stop
+
+
+         !
+         !
+         !Save to file in standard format
          call AllocateFermionicField(Gimp,Norb,Nmats,Beta=Beta)
          do iorb=1,Norb
             Gimp%ws(iorb,iorb,:,:) = Gmats(iorb,:,:)
@@ -1406,14 +1450,16 @@ contains
          call dump_FermionicField(Gimp,1,reg(PrevItFolder)//"Solver_"//reg(SiteName(isite))//"/","Gimp_"//reg(SiteName(isite))//"_w_up.DAT")
          call dump_FermionicField(Gimp,2,reg(PrevItFolder)//"Solver_"//reg(SiteName(isite))//"/","Gimp_"//reg(SiteName(isite))//"_w_dw.DAT")
          !
+         !
          !Read curlyG
          call AllocateFermionicField(G0imp,Norb,Nmats,Beta=Beta)
          call read_FermionicField(G0imp,1,reg(PrevItFolder)//"Solver_"//reg(SiteName(isite))//"/","G0_"//reg(SiteName(isite))//"_w_up.DAT")
          call read_FermionicField(G0imp,2,reg(PrevItFolder)//"Solver_"//reg(SiteName(isite))//"/","G0_"//reg(SiteName(isite))//"_w_dw.DAT")
          !
-         !Adjust with the chemical potential used by the solver
+         !
+         !Adjust with the chemical potential if the solver has changed it
          if(G0imp%mu.ne.muQMC)then
-            write(*,"(A)") "     Updating the chemical potential of curlyG."
+            write(*,"(A)") "     Updating the chemical potential of curlyG from "//str(G0imp%mu,4)//" to "//str(muQMC,4)
             do ispin=1,Nspin
                do iw=1,Nmats
                   do iorb=1,Norb
@@ -1425,15 +1471,51 @@ contains
          call dump_FermionicField(G0imp,1,reg(PrevItFolder)//"Solver_"//reg(SiteName(isite))//"/","G0_"//reg(SiteName(isite))//"_w_up.DAT")
          call dump_FermionicField(G0imp,2,reg(PrevItFolder)//"Solver_"//reg(SiteName(isite))//"/","G0_"//reg(SiteName(isite))//"_w_dw.DAT")
          !
+         !
          !Fermionic Dyson equation in the solver basis (always diagonal)
-         call AllocateFermionicField(SigmaImp,Norb,Nmats,Beta=Beta)
+         allocate(Smats(Norb,Nmats,Nspin));Smats=czero
          do ispin=1,Nspin
             do iorb=1,Norb
-               SigmaImp%ws(iorb,iorb,:,ispin) = 1d0/G0imp%ws(iorb,iorb,:,ispin) - 1d0/Gimp%ws(iorb,iorb,:,ispin)
+               Smats(iorb,:,ispin) = 1d0/G0imp%ws(iorb,iorb,:,ispin) - 1d0/Gimp%ws(iorb,iorb,:,ispin)
             enddo
          enddo
          call DeallocateFermionicField(Gimp)
          call DeallocateFermionicField(G0imp)
+         !
+         !
+         !Fit the impurity Self-energy
+     !    if(ReplaceTail_Simp.gt.0d0)then
+     !       !
+     !       oldMomDir = reg(PrevItFolder)//"Solver_"//reg(SiteName(isite))//"/"
+     !       newMomDir = reg(ItFolder)//"Solver_"//reg(SiteName(isite))//"/"
+     !       call inquireFile(reg(oldMomfile)//reg(file),filexists,hardstop=.false.,verb=verbose)
+     !       if(filexists) call execute_command_line(" cp "//reg(oldMomfile)//reg(file)//" "//reg(newMomDir))
+     !       !
+     !       allocate(wmats(Nmats));wmats=FermionicFreqMesh(Beta,Nmats)
+     !       allocate(Moments(Norb,Nfit,Nspin));Moments=0d0
+     !       call fit_moments(Smats,Nfit,reg(ItFolder)//"Solver_"//reg(SiteName(isite))//"/","Moments_"//reg(SiteName(isite))//".DAT","Sigma",Moments)
+     !       !
+     !       allocate(SmatsTail(Nmats));SmatsTail=czero
+     !       wndx = minloc(wmats-ReplaceTail_Simp,dim=1)
+     !       write(*,"(A,I5)")"     Replacing Simp_"//reg(SiteName(isite))//" tail starting from matsubara index: ",wndx
+     !       do ispin=1,Nspin
+     !          do iorb=1,Norb
+     !             SmatsTail = S_Moments(Moments(iorb,:,ispin),wmats)
+     !             Smats(iorb,wndx:Nmats,ispin) = SmatsTail(wndx:Nmats)
+     !          enddo
+     !       enddo
+     !       deallocate(Moments,SmatsTail,wmats)
+     !       !
+     !    endif
+         !
+         !
+         !Back to standard format
+         call AllocateFermionicField(SigmaImp,Norb,Nmats,Beta=Beta)
+         do iorb=1,Norb
+            SigmaImp%ws(iorb,iorb,:,:) = Smats(iorb,:,:)
+         enddo
+         deallocate(Smats)
+         !
          !
          !Fill up the N_s attribute that correspond to the Hartree term
          !since the impurity interaction contains only the physical interaction elements
@@ -1450,15 +1532,12 @@ contains
                   ib2 = jorb + Norb*(jorb-1)
                   !
                   SigmaImp%N_s(iorb,iorb,ispin) = SigmaImp%N_s(iorb,iorb,ispin) + real(curlyU%screened_local(ib1,ib2,1))*densityQMC(jorb,jorb,ispin,isite)
-                  write(*,*)iorb,jorb,ispin
-                  write(*,*)curlyU%screened_local(ib1,ib2,1)
-                  write(*,*)densityQMC(jorb,jorb,ispin,isite)
-                  write(*,*)SigmaImp%N_s(iorb,iorb,ispin)
                   !
                enddo
             enddo
          enddo
          call DeallocateBosonicField(curlyU)
+         !
          !
          !Expand to the Lattice basis
          if(RotateHloc)then
@@ -1473,10 +1552,12 @@ contains
          !
       enddo
       !
+      !
       !Symmetrize
       if(verbose)call dump_FermionicField(SigmaDMFT,1,reg(PrevItFolder),"Simp_w_up_notsymm.DAT")
       if(verbose)call dump_FermionicField(SigmaDMFT,2,reg(PrevItFolder),"Simp_w_dw_notsymm.DAT")
       call symmetrize(SigmaDMFT,EqvGWndx)
+      !
       !
       !Save to the proper iteration folder
       call dump_FermionicField(SigmaDMFT,1,reg(PrevItFolder),"Simp_w_up.DAT")
@@ -1484,6 +1565,9 @@ contains
       call dump_Matrix(SigmaDMFT%N_s(:,:,1),reg(PrevItFolder)//"HartreeU_up.DAT")
       call dump_Matrix(SigmaDMFT%N_s(:,:,2),reg(PrevItFolder)//"HartreeU_dw.DAT")
       call DeallocateFermionicField(SigmaDMFT)
+
+
+      stop
       !
       !
       !
@@ -1508,10 +1592,10 @@ contains
             tauB = linspace(0d0,Beta,NtauB)
             allocate(nnt(Nflavor,Nflavor,NtauB));nnt=0d0
             allocate(ReadLine(Nflavor*(Nflavor+1)/2))
-            filepath = reg(PrevItFolder)//"Solver_"//reg(SiteName(isite))//"/resultsQMC/nn_t.DAT"
-            call inquireFile(reg(filepath),filexists,verb=verbose)
+            file = reg(PrevItFolder)//"Solver_"//reg(SiteName(isite))//"/resultsQMC/nn_t.DAT"
+            call inquireFile(reg(file),filexists,verb=verbose)
             unit = free_unit()
-            open(unit,file=reg(filepath),form="formatted",status="old",position="rewind",action="read")
+            open(unit,file=reg(file),form="formatted",status="old",position="rewind",action="read")
             do itau=1,NtauB
                ReadLine=0d0
                read(unit,*) taup,ReadLine

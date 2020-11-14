@@ -143,9 +143,11 @@ module input_vars
    real(8),public                           :: alphaSigma
    real(8),public                           :: alphaHk
    !
-   !Variables for the fit on Delta
+   !Variables for the fit on Delta, Gimp, Simp
    character(len=256),public                :: DeltaFit
-   integer,public                           :: Nbath
+   integer,public                           :: Nfit
+   real(8),public                           :: ReplaceTail_Gimp
+   real(8),public                           :: ReplaceTail_Simp
    !
    !Paths (directories must end with "/") and loop variables
    integer,public                           :: FirstIteration
@@ -326,7 +328,9 @@ contains
       !
       !Variables for the fit on Delta
       call parse_input_variable(DeltaFit,"DELTA_FIT",InputFile,default="Analytic",comment="Fit to extract the local energy in GW+EDMFT calculations. Available: Analytic, Moments.")
-      call parse_input_variable(Nbath,"NBATH",InputFile,default=15,comment="Number of bath levels (Analytic) or number of coefficients (Moments).")
+      call parse_input_variable(Nfit,"NFIT",InputFile,default=15,comment="Number of bath levels (Analytic) or highest of coefficient (Moments).")
+      call parse_input_variable(ReplaceTail_Gimp,"WTAIL_GIMP",InputFile,default=15.d0,comment="Frequency value above which the tail of Gimp is replaced. If =0d0 the tail is not replaced.")
+      call parse_input_variable(ReplaceTail_Simp,"WTAIL_SIMP",InputFile,default=15.d0,comment="Frequency value above which the tail of Simp is replaced. If =0d0 the tail is not replaced.")
       !
       !Paths and loop variables
       call add_separator()

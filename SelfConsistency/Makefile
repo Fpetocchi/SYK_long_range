@@ -9,9 +9,8 @@ SHELL := /bin/bash
 #
 FC     = ifort
 FFLAGS = -assume byterecl -qopenmp -liomp5 -mkl=sequential -fpp -mcmodel=large -llapack
-DBGFFLAGS = -O0 -check bounds -traceback -fpe0 -check all -fp-model precise -fp-stack-check -p -g -warn -debug extended -warn interface -C -D_verb
+DBGFFLAGS = -O0 -check bounds -traceback -fpe0 -check all -fp-model precise -fp-stack-check -p -g -warn -debug extended -warn interface --heap-arrays -check all -check noarg_temp_created -C -D_verb
 RELFFLAGS = -xHost -O3 -ftz
-
 
 #
 # Project files-----------------------------------------------------------------
@@ -20,7 +19,7 @@ TSTSDIR = tests
 SRCDIR = src
 SRCS = linalg.f90 parameters.f90 input_vars.f90 utils_misc.f90 fit.f90 utils_fields.f90 file_io.f90 interactions.f90 crystal.f90 \
        fourier_transforms.f90 bubbles.f90 self_energy.f90 greens_function.f90 utils_main.f90 module_container.f90 main.f90
-OBJS = $(SRCS:.f90=.o)
+OBJS = $(SRCS:.f90=.o) minimize.o
 EXE  = SelfConsistency
 
 
@@ -79,7 +78,10 @@ $(DBGDIR)/utils_fields.o: $(SRCDIR)/utils_fields.f90 $(DBGDIR)/parameters.o
 $(DBGDIR)/file_io.o: $(SRCDIR)/file_io.f90 $(DBGDIR)/utils_misc.o $(DBGDIR)/parameters.o $(DBGDIR)/utils_fields.o
 	$(FC) -c $(FFLAGS) $(DBGFFLAGS) -o $@ $<
 
-$(DBGDIR)/fit.o: $(SRCDIR)/fit.f90 $(DBGDIR)/utils_misc.o $(DBGDIR)/parameters.o $(DBGDIR)/input_vars.o $(DBGDIR)/file_io.o
+$(DBGDIR)/minimize.o: $(SRCDIR)/minimize.f
+	$(FC) -c $(FFLAGS) $(DBGFFLAGS) -o $@ $<
+
+$(DBGDIR)/fit.o: $(SRCDIR)/fit.f90 $(DBGDIR)/minimize.o $(DBGDIR)/utils_misc.o $(DBGDIR)/parameters.o $(DBGDIR)/file_io.o
 	$(FC) -c $(FFLAGS) $(DBGFFLAGS) -o $@ $<
 
 $(DBGDIR)/interactions.o: $(SRCDIR)/interactions.f90 $(DBGDIR)/utils_misc.o $(DBGDIR)/parameters.o $(DBGDIR)/input_vars.o $(DBGDIR)/utils_fields.o $(DBGDIR)/file_io.o
@@ -137,7 +139,10 @@ $(RELDIR)/utils_fields.o: $(SRCDIR)/utils_fields.f90 $(RELDIR)/parameters.o
 $(RELDIR)/file_io.o: $(SRCDIR)/file_io.f90 $(RELDIR)/utils_misc.o $(RELDIR)/parameters.o $(RELDIR)/utils_fields.o
 	$(FC) -c $(FFLAGS) $(RELFFLAGS) -o $@ $<
 
-$(RELDIR)/fit.o: $(SRCDIR)/fit.f90 $(RELDIR)/utils_misc.o $(RELDIR)/parameters.o $(RELDIR)/input_vars.o $(RELDIR)/file_io.o
+$(RELDIR)/minimize.o: $(SRCDIR)/minimize.f
+	$(FC) -c $(FFLAGS) $(RELFFLAGS) -o $@ $<
+
+$(RELDIR)/fit.o: $(SRCDIR)/fit.f90 $(RELDIR)/minimize.o $(RELDIR)/utils_misc.o $(RELDIR)/parameters.o $(RELDIR)/file_io.o
 	$(FC) -c $(FFLAGS) $(RELFFLAGS) -o $@ $<
 
 $(RELDIR)/interactions.o: $(SRCDIR)/interactions.f90 $(RELDIR)/utils_misc.o $(RELDIR)/parameters.o $(RELDIR)/input_vars.o $(RELDIR)/utils_fields.o $(RELDIR)/file_io.o
@@ -175,6 +180,8 @@ test: prepDBG $(DBGEXE) moveTSTS
 # Other rules-------------------------------------------------------------------
 prep:
 	@mkdir -p $(DBGDIR) $(RELDIR) $(EXECDIR)
+	#@echo $(OBJS)
+	#@echo $(DBGOBJS)
 
 prepREL:
 	@paste <( echo "character(len=256),parameter :: revision = \"" ) <( git rev-parse HEAD  ) <( echo "\"") > $(SRCDIR)/revision_SelfCons.inc

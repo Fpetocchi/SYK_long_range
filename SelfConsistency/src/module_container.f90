@@ -82,10 +82,13 @@ module module_container
    read_BosonicField
 
 
-   !(i) minimization routines. Depends on (b),(e),(f),(h)
+   !(i) minimization routines. Depends on (b),(e),(h)
    use fit, only:                            &
    fit_moments                              ,&
-   fit_delta
+   fit_delta                                ,&
+   G_Moments                                ,&
+   S_Moments                                ,&
+   W_Moments
 
 
    !(l) Interactions container. Depends on (b),(c),(e),(f),(g),(h)
