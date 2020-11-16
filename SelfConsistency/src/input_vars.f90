@@ -225,7 +225,7 @@ contains
       !Site and Orbital space
       call add_separator()
       call append_to_input_list(Nspin,"NSPIN","Number of spins (fixed to 2).")
-      call parse_input_variable(Nsite,"NSITE",InputFile,default=1,comment="Number of impurity sites.")
+      call parse_input_variable(Nsite,"NSITE",InputFile,default=1,comment="Number of impurities in the lattice.")
       call parse_input_variable(ExpandImpurity,"EXPAND",InputFile,default=.false.,comment="Flag to use a single impurity solution for all the sites of the lattice. Only indexes for site 1 readed.")
       call parse_input_variable(RotateHloc,"ROTATE",InputFile,default=.false.,comment="Solve the impurity problem in the basis where H(R=0) is diagonal.")
       call parse_input_variable(AFMselfcons,"AFM",InputFile,default=.false.,comment="Flag to use  the AFM self-consistency by flipping the spin. Requires input with doubled unit cell.")
@@ -326,11 +326,11 @@ contains
       call parse_input_variable(alphaSigma,"ALPHA_SIGMA",InputFile,default=1d0,comment="Fraction of the EDMFT self-energy substituted within the lattice one.")
       call parse_input_variable(alphaHk,"ALPHA_HK",InputFile,default=1d0,comment="Rescaling of the non-interacting Hamiltonian.")
       !
-      !Variables for the fit on Delta
+      !Variables for the fit
       call parse_input_variable(DeltaFit,"DELTA_FIT",InputFile,default="Analytic",comment="Fit to extract the local energy in GW+EDMFT calculations. Available: Analytic, Moments.")
       call parse_input_variable(Nfit,"NFIT",InputFile,default=15,comment="Number of bath levels (Analytic) or highest of coefficient (Moments).")
-      call parse_input_variable(ReplaceTail_Gimp,"WTAIL_GIMP",InputFile,default=15.d0,comment="Frequency value above which the tail of Gimp is replaced. If =0d0 the tail is not replaced.")
-      call parse_input_variable(ReplaceTail_Simp,"WTAIL_SIMP",InputFile,default=15.d0,comment="Frequency value above which the tail of Simp is replaced. If =0d0 the tail is not replaced.")
+      call parse_input_variable(ReplaceTail_Gimp,"WTAIL_GIMP",InputFile,default=100d0,comment="Frequency value above which the tail of Gimp is replaced. If =0d0 the tail is not replaced. A good number is around 100.")
+      call parse_input_variable(ReplaceTail_Simp,"WTAIL_SIMP",InputFile,default=20d0,comment="Frequency value above which the tail of Simp is replaced. If =0d0 the tail is not replaced. A good number is around 10.")
       !
       !Paths and loop variables
       call add_separator()
