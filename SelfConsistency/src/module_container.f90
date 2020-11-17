@@ -23,6 +23,7 @@ module module_container
    check_Hermiticity                        ,&
    check_Symmetry                           ,&
    halfbeta_symm                            ,&
+   halfbeta_antisymm                        ,&
    assert_shape
 
 
@@ -108,9 +109,8 @@ module module_container
 
    !(m) Bubble diagram container. Depends on (b),(c),(d),(e),(f),(g),(h)
    use bubbles, only:                        &
-   calc_Pi!                                 ,&
-   !calc_Optcond                            ,&
-   !calc_Hall
+   calc_Pi                                  ,&
+   calc_Pimp
 
 
    !(n) greens_function container. Depends on (a),(b),(c),(d),(e),(f),(g),(h)

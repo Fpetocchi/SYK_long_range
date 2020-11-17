@@ -961,7 +961,7 @@ contains
          Mat(:,:,2) = Mat(:,:,1)
       endif
       !
-      if(Eqv%Ntotset.gt.0)then
+      if(Eqv%O)then
          !
          do ispin=1,Nspin
             !
@@ -1080,7 +1080,7 @@ contains
          !
       endif
       !
-      if(Eqv%Ntotset.gt.0)then
+      if(Eqv%O)then
          !
          do ispin=1,Nspin
             !
@@ -1245,6 +1245,7 @@ contains
       integer                               :: iorb,jorb,i,j,ib1_aa
       integer                               :: ib1_ab,ib2_ab,ib1_sf,ib2_sf
       integer                               :: ib1_pa,ib2_pa,ib1_pb,ib2_pb
+      logical                               :: doBare
       !
       !
       if(verbose)write(*,"(A)") "---- symmetrize_Bosonic"
@@ -1253,8 +1254,9 @@ contains
       ! Check on the input Fields
       if(.not.W%status) stop "symmetrize_Bosonic: field not properly initialized."
       Norb = sqrt(dble(W%Nbp))
+      doBare = allocated(W%bare_local)
       !
-      if(Eqv%Ntotset.gt.0)then
+      if(Eqv%O)then
          !
          !symmetrization of the diagonal sets
          do iset=1,Eqv%Ntotset
@@ -1262,77 +1264,80 @@ contains
             dimdiag  = Eqv%SetNorb(iset)
             dimoffdiag = Eqv%SetNorb(iset)*(Eqv%SetNorb(iset)-1)
             !
-            if(verbose)write(*,"(3(A,I4))") "     Diagonal set: ",iset," dimD: ",int(dimdiag)," dimOD: ",int(dimoffdiag)
+            if(verbose)write(*,"(3(A,I3))") "     Diagonal set: ",iset," dimD: ",int(dimdiag)," dimOD: ",int(dimoffdiag)
             !
-            !Average elements
-            Waaaa=czero;Waabb=czero;Wabba=czero;Wabab=czero
-            do iorb=1,Eqv%SetNorb(iset)
-               i = Eqv%SetOrbs(iset,iorb)
+            !Bare attribute
+            if(doBare)then
                !
-               ib1_aa = i + Norb*(i-1)
-               if(verbose)write(*,"(2(A,2I3),2(A,I4),A)")    "     W(aa)(aa): (",i,i,"),(",i,i,") = [",ib1_aa,",",ib1_aa,"]"
-               Waaaa = Waaaa + W%bare_local(ib1_aa,ib1_aa) / dimdiag
-               !
-               do jorb=1+iorb,Eqv%SetNorb(iset)
-                  j = Eqv%SetOrbs(iset,jorb)
+               !Average elements
+               Waaaa=czero;Waabb=czero;Wabba=czero;Wabab=czero
+               do iorb=1,Eqv%SetNorb(iset)
+                  i = Eqv%SetOrbs(iset,iorb)
                   !
-                  ib1_ab = i + Norb*(i-1)
-                  ib2_ab = j + Norb*(j-1)
-                  if(verbose)write(*,"(2(A,2I3),2(A,I4),A)")    "     W(aa)(bb): (",i,i,"),(",j,j,") = [",ib1_ab,",",ib2_ab,"]"
+                  ib1_aa = i + Norb*(i-1)
+                  if(verbose)write(*,"(2(A,2I3),2(A,I4),A)")    "     W(aa)(aa): (",i,i,"),(",i,i,") = [",ib1_aa,",",ib1_aa,"]"
+                  Waaaa = Waaaa + W%bare_local(ib1_aa,ib1_aa) / dimdiag
                   !
-                  ib1_sf = i + Norb*(j-1)
-                  ib2_sf = j + Norb*(i-1)
-                  if(verbose)write(*,"(2(A,2I3),2(A,I4),A)")    "     W(ab)(ba): (",i,j,"),(",j,i,") = [",ib1_sf,",",ib2_sf,"]"
-                  !
-                  ib1_pa = i + Norb*(j-1)
-                  ib2_pa = i + Norb*(j-1)
-                  if(verbose)write(*,"(2(A,2I3),2(A,I4),A)")    "     W(ab)(ab): (",i,j,"),(",i,j,") = [",ib1_pa,",",ib2_pa,"]"
-                  ib1_pb = j + Norb*(i-1)
-                  ib2_pb = j + Norb*(i-1)
-                  if(verbose)write(*,"(2(A,2I3),2(A,I4),A)")    "     W(ba)(ba): (",j,i,"),(",j,i,") = [",ib1_pb,",",ib2_pb,"]"
-                  !
-                  if(allocated(W%bare_local))then
+                  do jorb=1+iorb,Eqv%SetNorb(iset)
+                     j = Eqv%SetOrbs(iset,jorb)
+                     !
+                     ib1_ab = i + Norb*(i-1)
+                     ib2_ab = j + Norb*(j-1)
+                     if(verbose)write(*,"(2(A,2I3),2(A,I4),A)")    "     W(aa)(bb): (",i,i,"),(",j,j,") = [",ib1_ab,",",ib2_ab,"]"
+                     !
+                     ib1_sf = i + Norb*(j-1)
+                     ib2_sf = j + Norb*(i-1)
+                     if(verbose)write(*,"(2(A,2I3),2(A,I4),A)")    "     W(ab)(ba): (",i,j,"),(",j,i,") = [",ib1_sf,",",ib2_sf,"]"
+                     !
+                     ib1_pa = i + Norb*(j-1)
+                     ib2_pa = i + Norb*(j-1)
+                     if(verbose)write(*,"(2(A,2I3),2(A,I4),A)")    "     W(ab)(ab): (",i,j,"),(",i,j,") = [",ib1_pa,",",ib2_pa,"]"
+                     ib1_pb = j + Norb*(i-1)
+                     ib2_pb = j + Norb*(i-1)
+                     if(verbose)write(*,"(2(A,2I3),2(A,I4),A)")    "     W(ba)(ba): (",j,i,"),(",j,i,") = [",ib1_pb,",",ib2_pb,"]"
+                     !
                      Waabb = Waabb + (W%bare_local(ib1_ab,ib2_ab)+W%bare_local(ib2_ab,ib1_ab)) / dimoffdiag
                      Wabba = Wabba + (W%bare_local(ib1_sf,ib2_sf)+W%bare_local(ib2_sf,ib1_sf)) / dimoffdiag
                      Wabab = Wabab + (W%bare_local(ib1_pa,ib2_pa)+W%bare_local(ib1_pb,ib2_pb)) / dimoffdiag
-                  endif
-                  !
+                     !
+                  enddo
                enddo
-            enddo
-            !Re-insert elements
-            do iorb=1,Eqv%SetNorb(iset)
-               i = Eqv%SetOrbs(iset,iorb)
-               !
-               ib1_aa = i + Norb*(i-1)
-               Waaaa = Waaaa + W%bare_local(ib1_aa,ib1_aa) / dimdiag
-               !
-               do jorb=1+iorb,Eqv%SetNorb(iset)
-                  j = Eqv%SetOrbs(iset,jorb)
+               !Re-insert elements
+               do iorb=1,Eqv%SetNorb(iset)
+                  i = Eqv%SetOrbs(iset,iorb)
                   !
-                  ib1_ab = i + Norb*(i-1)
-                  ib2_ab = j + Norb*(j-1)
+                  ib1_aa = i + Norb*(i-1)
+                  Waaaa = Waaaa + W%bare_local(ib1_aa,ib1_aa) / dimdiag
                   !
-                  ib1_sf = i + Norb*(j-1)
-                  ib2_sf = j + Norb*(i-1)
-                  !
-                  ib1_pa = i + Norb*(j-1)
-                  ib2_pa = i + Norb*(j-1)
-                  ib1_pb = j + Norb*(i-1)
-                  ib2_pb = j + Norb*(i-1)
-                  !
-                  if(allocated(W%bare_local))then
+                  do jorb=1+iorb,Eqv%SetNorb(iset)
+                     j = Eqv%SetOrbs(iset,jorb)
+                     !
+                     ib1_ab = i + Norb*(i-1)
+                     ib2_ab = j + Norb*(j-1)
+                     !
+                     ib1_sf = i + Norb*(j-1)
+                     ib2_sf = j + Norb*(i-1)
+                     !
+                     ib1_pa = i + Norb*(j-1)
+                     ib2_pa = i + Norb*(j-1)
+                     ib1_pb = j + Norb*(i-1)
+                     ib2_pb = j + Norb*(i-1)
+                     !
                      W%bare_local(ib1_ab,ib2_ab) = Waabb
                      W%bare_local(ib2_ab,ib1_ab) = Waabb
                      W%bare_local(ib1_sf,ib2_sf) = Wabba
                      W%bare_local(ib2_sf,ib1_sf) = Wabba
                      W%bare_local(ib1_pa,ib2_pa) = Wabab
                      W%bare_local(ib1_pb,ib2_pb) = Wabab
-                  endif
-                  !
+                     !
+                  enddo
                enddo
-            enddo
+               !
+            endif
             !
+            !Screened attribute
             do ip=1,W%Npoints
+               !
                !Average elements
                Waaaa=czero;Waabb=czero;Wabba=czero;Wabab=czero
                do iorb=1,Eqv%SetNorb(iset)
@@ -1393,7 +1398,7 @@ contains
                enddo
             enddo !ip
             !
-         enddo
+         enddo !iset - diagonal
          !
          !symmetrization of the off-diagonal sets
          do iset=1,Eqv%Ntotset
@@ -1402,62 +1407,63 @@ contains
                if(iset.eq.jset)cycle
                dimoffdiag = Eqv%SetNorb(iset)*Eqv%SetNorb(jset)*2
                !
-               if(verbose)write(*,"(A,2I4,A,I4)") "     Off-diagonal set: ",iset,jset," dimOD: ",int(dimoffdiag)
+               if(verbose)write(*,"(A,2I3,A,I4)") "     Off-diagonal set: ",iset,jset," dimOD: ",int(dimoffdiag)
                !
-               !Average elements
-               Waabb=czero;Wabba=czero;Wabab=czero
-               do iorb=1,Eqv%SetNorb(iset)
-                  do jorb=1,Eqv%SetNorb(jset)
-                     !
-                     i = Eqv%SetOrbs(iset,iorb) ![1,2,3],[4,5]
-                     j = Eqv%SetOrbs(jset,jorb) ![4,5]  ,[1,2,3]
-                     !
-                     ib1_ab = i + Norb*(i-1)
-                     ib2_ab = j + Norb*(j-1)
-                     if(verbose)write(*,"(2(A,2I3),2(A,I4),A)")    "     W(aa)(bb): (",i,i,"),(",j,j,") = [",ib1_ab,",",ib2_ab,"]"
-                     !
-                     ib1_sf = i + Norb*(j-1)
-                     ib2_sf = j + Norb*(i-1)
-                     if(verbose)write(*,"(2(A,2I3),2(A,I4),A)")    "     W(ab)(ba): (",i,j,"),(",j,i,") = [",ib1_sf,",",ib2_sf,"]"
-                     !
-                     ib1_pa = i + Norb*(j-1)
-                     ib2_pa = i + Norb*(j-1)
-                     if(verbose)write(*,"(2(A,2I3),2(A,I4),A)")    "     W(ab)(ab): (",i,j,"),(",i,j,") = [",ib1_pa,",",ib2_pa,"]"
-                     !
-                     if(allocated(W%bare_local))then
+               !Bare attribute
+               if(doBare)then
+                  !
+                  !Average elements
+                  Waabb=czero;Wabba=czero;Wabab=czero
+                  do iorb=1,Eqv%SetNorb(iset)
+                     do jorb=1,Eqv%SetNorb(jset)
+                        !
+                        i = Eqv%SetOrbs(iset,iorb) ![1,2,3],[4,5]
+                        j = Eqv%SetOrbs(jset,jorb) ![4,5]  ,[1,2,3]
+                        !
+                        ib1_ab = i + Norb*(i-1)
+                        ib2_ab = j + Norb*(j-1)
+                        if(verbose)write(*,"(2(A,2I3),2(A,I4),A)")    "     W(aa)(bb): (",i,i,"),(",j,j,") = [",ib1_ab,",",ib2_ab,"]"
+                        !
+                        ib1_sf = i + Norb*(j-1)
+                        ib2_sf = j + Norb*(i-1)
+                        if(verbose)write(*,"(2(A,2I3),2(A,I4),A)")    "     W(ab)(ba): (",i,j,"),(",j,i,") = [",ib1_sf,",",ib2_sf,"]"
+                        !
+                        ib1_pa = i + Norb*(j-1)
+                        ib2_pa = i + Norb*(j-1)
+                        if(verbose)write(*,"(2(A,2I3),2(A,I4),A)")    "     W(ab)(ab): (",i,j,"),(",i,j,") = [",ib1_pa,",",ib2_pa,"]"
+                        !
                         Waabb = Waabb + W%bare_local(ib1_ab,ib2_ab) / dimoffdiag
                         Wabba = Wabba + W%bare_local(ib1_sf,ib2_sf) / dimoffdiag
                         Wabab = Wabab + W%bare_local(ib1_pa,ib2_pa) / dimoffdiag
-                     endif
-                     !
+                        !
+                     enddo
                   enddo
-               enddo
-               !Re-insert elements
-               do iorb=1,Eqv%SetNorb(iset)
-                  do jorb=1,Eqv%SetNorb(jset)
-                     !
-                     i = Eqv%SetOrbs(iset,iorb) ![1,2,3],[4,5]
-                     j = Eqv%SetOrbs(jset,jorb) ![4,5]  ,[1,2,3]
-                     !
-                     ib1_ab = i + Norb*(i-1)
-                     ib2_ab = j + Norb*(j-1)
-                     !
-                     ib1_sf = i + Norb*(j-1)
-                     ib2_sf = j + Norb*(i-1)
-                     !
-                     ib1_pa = i + Norb*(j-1)
-                     ib2_pa = i + Norb*(j-1)
-                     !
-                     if(allocated(W%bare_local))then
+                  !Re-insert elements
+                  do iorb=1,Eqv%SetNorb(iset)
+                     do jorb=1,Eqv%SetNorb(jset)
+                        !
+                        i = Eqv%SetOrbs(iset,iorb) ![1,2,3],[4,5]
+                        j = Eqv%SetOrbs(jset,jorb) ![4,5]  ,[1,2,3]
+                        !
+                        ib1_ab = i + Norb*(i-1)
+                        ib2_ab = j + Norb*(j-1)
+                        !
+                        ib1_sf = i + Norb*(j-1)
+                        ib2_sf = j + Norb*(i-1)
+                        !
+                        ib1_pa = i + Norb*(j-1)
+                        ib2_pa = i + Norb*(j-1)
+                        !
                         W%bare_local(ib1_ab,ib2_ab) = Waabb
                         W%bare_local(ib1_sf,ib2_sf) = Wabba
                         W%bare_local(ib1_pa,ib2_pa) = Wabba
-                     endif
-                     !
+                        !
+                     enddo
                   enddo
-               enddo
+                  !
+               endif
                !
-               !
+               !Screened attribute
                do ip=1,W%Npoints
                   !Average elements
                   Waabb=czero;Wabba=czero;Wabab=czero
@@ -1506,8 +1512,8 @@ contains
                   enddo
                enddo !ip
                !
-            enddo
-         enddo
+            enddo !jset
+         enddo !iset
          !
       endif
       !
@@ -1618,7 +1624,7 @@ contains
    !         SigmaImp%N_s attribute and it is removed during the merge.
    !TEST ON: 27-10-2020
    !---------------------------------------------------------------------------!
-   subroutine MergeSelfEnergy(SigmaGW,SigmaGW_DC,SigmaImp,coeff,orbs,DC_type)
+   subroutine MergeSelfEnergy(SigmaGW,SigmaGW_DC,SigmaImp,coeff,orbs,DC_type,Rot)
       !
       use parameters
       use utils_misc
@@ -1631,6 +1637,7 @@ contains
       real(8),intent(in)                    :: coeff
       integer,allocatable,intent(in)        :: orbs(:,:)
       character(len=*),intent(in)           :: DC_type
+      logical,intent(in)                    :: Rot
       !
       real(8)                               :: Beta
       integer                               :: iw,ik,isite,iorb,jorb
@@ -1684,12 +1691,14 @@ contains
       !
       !all sites if(expand.or.AFM) otherwise only one site and the orbitals within orbs
       !$OMP PARALLEL DEFAULT(NONE),&
-      !$OMP SHARED(Nsite,Nmats,Nkpt,orbs,coeff,SigmaGW,SigmaGW_DC,SigmaImp,localDC),&
+      !$OMP SHARED(Nsite,Nmats,Nkpt,orbs,coeff,SigmaGW,SigmaGW_DC,SigmaImp,localDC,Rot),&
       !$OMP PRIVATE(isite,ispin,iorb,jorb,i_loc,j_loc,iw,ik)
       !$OMP DO
       do isite=1,Nsite
          do iorb=1,size(orbs(isite,:))
             do jorb=1,size(orbs(isite,:))
+               !
+               if((.not.Rot).and.(iorb.ne.iorb))cycle
                !
                !SigmaImp and SigmaGW have the same arrangements
                i_loc = orbs(isite,iorb)

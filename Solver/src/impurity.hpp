@@ -453,19 +453,18 @@ class ct_hyb
          //.........................Expensive measurments.......................
          //
          if(paramagnet) spin_symm(Nloc);
-         // n_a(\tau)
-         nt = measure_nt( segments, full_line, Ntau, Beta );
-         if(paramagnet) spin_symm(nt);
-         // G(\tau)
          if(paramagnet) spin_symm(G_tmp);
          accumulate_G( G, G_tmp );
-         // n_a(\tau)n_b(0)
-         if(nnt_meas)accumulate_nnt( nnt, nt );
-         // density histogram
-         accumulate_Nhist( Nhist, nt );
-         // spin histogram
-         accumulate_Szhist( Szhist, nt );
+         //
+         if(nnt_meas)
+         {
+            nt = measure_nt( segments, full_line, Ntau, Beta );
+            accumulate_nnt( nnt, nt );
+            //accumulate_Nhist( Nhist, nt );
+            //accumulate_Szhist( Szhist, nt );
+         }
          //.....................................................................
+
       }
 
       //----------------------------------------------------------------------//

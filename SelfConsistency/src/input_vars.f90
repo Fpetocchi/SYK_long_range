@@ -258,16 +258,19 @@ contains
       call parse_input_variable(EqvGWndx%para,"PARAMAGNET",InputFile,default=1,comment="Integer flag to impose spin symmetry.")
       call parse_input_variable(EqvGWndx%hseed,"H_SEED",InputFile,default=0d0,comment="Seed to break spin symmetry (persistent if non zero).")
       call parse_input_variable(EqvGWndx%Nset,"EQV_SETS",InputFile,default=1,comment="Number of sets of locally equivalent lattice orbitals.")
-      allocate(EqvGWndx%SetNorb(EqvGWndx%Nset))
-      do iset=1,EqvGWndx%Nset
-         call parse_input_variable(EqvGWndx%SetNorb(iset),"EQV_NORB_"//str(iset),InputFile,default=1,comment="Number of equivalent lattice orbitals in the set number "//str(iset))
-      enddo
-      allocate(EqvGWndx%SetOrbs(EqvGWndx%Nset,maxval(EqvGWndx%SetNorb)));EqvGWndx%SetOrbs=0
-      do iset=1,EqvGWndx%Nset
-         allocate(tmpOrbs(1:EqvGWndx%SetNorb(iset)));tmpOrbs=0
-         call parse_input_variable(EqvGWndx%SetOrbs(iset,1:EqvGWndx%SetNorb(iset)),"EQV_ORBS_"//str(iset),InputFile,default=tmpOrbs,comment="Lattice orbital indexes of equivalent set number "//str(iset))
-         deallocate(tmpOrbs)
-      enddo
+      if(EqvGWndx%Nset.gt.0)then
+         allocate(EqvGWndx%SetNorb(EqvGWndx%Nset))
+         do iset=1,EqvGWndx%Nset
+            call parse_input_variable(EqvGWndx%SetNorb(iset),"EQV_NORB_"//str(iset),InputFile,default=1,comment="Number of equivalent lattice orbitals in the set number "//str(iset))
+         enddo
+         allocate(EqvGWndx%SetOrbs(EqvGWndx%Nset,maxval(EqvGWndx%SetNorb)));EqvGWndx%SetOrbs=0
+         do iset=1,EqvGWndx%Nset
+            allocate(tmpOrbs(1:EqvGWndx%SetNorb(iset)));tmpOrbs=0
+            call parse_input_variable(EqvGWndx%SetOrbs(iset,1:EqvGWndx%SetNorb(iset)),"EQV_ORBS_"//str(iset),InputFile,default=tmpOrbs,comment="Lattice orbital indexes of equivalent set number "//str(iset))
+            deallocate(tmpOrbs)
+         enddo
+      endif
+      if(EqvGWndx%para.eq.1)EqvGWndx%S=.true.
       EqvGWndx%Gfoffdiag=.not.ExpandImpurity
       !
       !Imaginary time and frequency meshes
@@ -328,7 +331,7 @@ contains
       !
       !Variables for the fit
       call parse_input_variable(DeltaFit,"DELTA_FIT",InputFile,default="Analytic",comment="Fit to extract the local energy in GW+EDMFT calculations. Available: Analytic, Moments.")
-      call parse_input_variable(Nfit,"NFIT",InputFile,default=15,comment="Number of bath levels (Analytic) or highest of coefficient (Moments).")
+      call parse_input_variable(Nfit,"NFIT",InputFile,default=15,comment="Number of bath levels (Analytic) or coefficient (Moments).")
       call parse_input_variable(ReplaceTail_Gimp,"WTAIL_GIMP",InputFile,default=100d0,comment="Frequency value above which the tail of Gimp is replaced. If =0d0 the tail is not replaced. A good number is around 100.")
       call parse_input_variable(ReplaceTail_Simp,"WTAIL_SIMP",InputFile,default=20d0,comment="Frequency value above which the tail of Simp is replaced. If =0d0 the tail is not replaced. A good number is around 10.")
       !

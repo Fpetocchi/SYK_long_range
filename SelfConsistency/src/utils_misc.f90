@@ -45,6 +45,11 @@ module utils_misc
       module procedure z_assert_shape_N7
    end interface assert_shape
 
+   interface check_Symmetry
+      module procedure check_Symmetry_d
+      module procedure check_Symmetry_z
+   end interface check_Symmetry
+
    !---------------------------------------------------------------------------!
    !PURPOSE: Module variables
    !---------------------------------------------------------------------------!
@@ -71,6 +76,7 @@ module utils_misc
    public :: FermionicFilon
    public :: BosonicFilon
    public :: halfbeta_symm
+   public :: halfbeta_antisymm
    !functions
    public :: FermionicFreqMesh
    public :: BosonicFreqMesh
@@ -429,38 +435,53 @@ contains
    !PURPOSE: Check if matrix is Hermitian
    !TEST ON: 21-10-2020
    !---------------------------------------------------------------------------!
-   subroutine check_Hermiticity(A,tol,hardstop)
+   subroutine check_Hermiticity(A,tol,enforce,hardstop,name)
       implicit none
-      complex(8),intent(in)                 :: A(:,:)
+      complex(8),intent(inout)              :: A(:,:)
       real(8),intent(in)                    :: tol
+      logical,intent(in),optional           :: enforce
       logical,intent(in),optional           :: hardstop
+      character(len=*),intent(in),optional  :: name
       !
-      complex(8)                            :: elem_ij,elem_ji
-      logical                               :: hardstop_
+      real(8)                               :: ReErr,ImErr
+      logical                               :: hardstop_,enforce_
       integer                               :: N,i,j
       !
-      if(size(A,dim=1).ne.size(A,dim=2))stop "Hermitizer. Matrix not square."
+      if(size(A,dim=1).ne.size(A,dim=2))stop "check_Hermiticity. Matrix not square."
       N=size(A,dim=1)
       !
       hardstop_=.true.
       if(present(hardstop))hardstop_=hardstop
+      enforce_=.false.
+      if(present(enforce))enforce_=enforce
+      !
+      if(enforce_)hardstop_=.false.
       !
       do i=1,N
          do j=1+i,N
             !
-            elem_ij = A(i,j)
-            elem_ji = A(j,i)
+            ReErr = abs(real(A(i,j))-real(A(j,i)))
+            ImErr = abs(aimag(A(i,j))+aimag(A(j,i)))
             !
-            if(abs(real(elem_ij)-real(elem_ji)).gt.tol)then
-               write(*,"(2(A,1F10.5))") "Re(A_ij): ",real(elem_ij),"Re(A_ji): ",real(elem_ji)
-               write(*,"(A,1F10.5)") "Real parts difference above threshold ",tol
+            if((ReErr.gt.tol).or.(ImErr.gt.tol))then
+               !
+               if(verbose)then
+                  if(present(name)) write(*,"(A)") "Matrix: "//reg(name)
+                  write(*,"(A,2I4)") "Non hermitian components: ",i,j
+                  write(*,"(3(A,1F10.5))") "Re(A_ij): ",real(A(i,j)),"Re(A_ji): ",real(A(j,i))," err:",ReErr
+                  write(*,"(3(A,1F10.5))") "Im(A_ij): ",aimag(A(i,j)),"Im(A_ji): ",aimag(A(j,i))," err:",ImErr
+                  write(*,"(A,1F10.5)") "Threshold ",tol
+               endif
+               !
                if(hardstop_)stop
-            endif
-            !
-            if(abs(aimag(elem_ij)+aimag(elem_ji)).gt.tol)then
-               write(*,"(2(A,1F10.5))") "Im(A_ij): ",aimag(elem_ij),"Im(A_ji): ",aimag(elem_ji)
-               write(*,"(A,1F10.5)") "Imaginary parts difference above threshold ",tol
-               if(hardstop_)stop
+               !
+               if(enforce_)then
+                  !
+                  A(i,j) = (A(i,j)+conjg(A(j,i)))/2d0
+                  A(j,i) = conjg(A(i,j))
+                  !
+               endif
+               !
             endif
             !
          enddo
@@ -472,62 +493,149 @@ contains
    !---------------------------------------------------------------------------!
    !PURPOSE: Check if matrix is Symmetric
    !---------------------------------------------------------------------------!
-   subroutine check_Symmetry(A,tol,hardstop,name)
+   subroutine check_Symmetry_d(A,tol,enforce,hardstop,name)
       implicit none
-      real(8),intent(in)                    :: A(:,:)
+      real(8),intent(inout)                 :: A(:,:)
       real(8),intent(in)                    :: tol
+      logical,intent(in),optional           :: enforce
       logical,intent(in),optional           :: hardstop
       character(len=*),intent(in),optional  :: name
       !
-      real(8)                               :: elem_ij,elem_ji
-      logical                               :: hardstop_
+      real(8)                               :: ReErr
+      logical                               :: hardstop_,enforce_
       integer                               :: N,i,j
       !
-      if(size(A,dim=1).ne.size(A,dim=2))stop "Symmetryzer. Matrix not square."
+      if(size(A,dim=1).ne.size(A,dim=2))stop "check_Symmetry_d. Matrix not square."
       N=size(A,dim=1)
       !
       hardstop_=.true.
       if(present(hardstop))hardstop_=hardstop
+      enforce_=.false.
+      if(present(enforce))enforce_=enforce
+      !
+      if(enforce_)hardstop_=.false.
       !
       do i=1,N
          do j=1+i,N
             !
-            elem_ij = A(i,j)
-            elem_ji = A(j,i)
+            ReErr = A(i,j)-A(j,i)
             !
-            if(abs(elem_ij-elem_ji).gt.tol)then
-               if(present(name)) write(*,"(A)") "Matrix: "//reg(name)
-               write(*,"(A,2I4)") "Components: ",i,j
-               write(*,"(2(A,E20.12))") "Re(A_ij): ",real(elem_ij),"  Re(A_ji): ",real(elem_ji)
-               write(*,"(A,E20.12)") "Real parts difference above threshold ",tol
+            if(ReErr.gt.tol)then
+               !
+               if(verbose)then
+                  if(present(name)) write(*,"(A)") "Matrix: "//reg(name)
+                  write(*,"(A,2I4)") "Non hermitian components: ",i,j
+                  write(*,"(3(A,1F10.5))") "Re(A_ij): ",A(i,j),"Re(A_ji): ",A(j,i)," err:",ReErr
+                  write(*,"(A,1F10.5)") "Threshold ",tol
+               endif
+               !
                if(hardstop_)stop
+               !
+               if(enforce_)then
+                  !
+                  A(i,j) = (A(i,j)+A(j,i))/2d0
+                  A(j,i) = A(i,j)
+                  !
+               endif
+               !
             endif
             !
          enddo
       enddo
       !
-   end subroutine check_Symmetry
+   end subroutine check_Symmetry_d
+   !
+   subroutine check_Symmetry_z(A,tol,enforce,hardstop,name)
+      implicit none
+      complex(8),intent(inout)              :: A(:,:)
+      real(8),intent(in)                    :: tol
+      logical,intent(in),optional           :: enforce
+      logical,intent(in),optional           :: hardstop
+      character(len=*),intent(in),optional  :: name
+      !
+      real(8)                               :: ReErr,ImErr
+      logical                               :: hardstop_,enforce_
+      integer                               :: N,i,j
+      !
+      if(size(A,dim=1).ne.size(A,dim=2))stop "check_Symmetry_z. Matrix not square."
+      N=size(A,dim=1)
+      !
+      hardstop_=.true.
+      if(present(hardstop))hardstop_=hardstop
+      enforce_=.false.
+      if(present(enforce))enforce_=enforce
+      !
+      if(enforce_)hardstop_=.false.
+      !
+      do i=1,N
+         do j=1+i,N
+            !
+            ReErr = abs(real(A(i,j))-real(A(j,i)))
+            ImErr = abs(aimag(A(i,j))-aimag(A(j,i)))
+            !
+            if((ReErr.gt.tol).or.(ImErr.gt.tol))then
+               !
+               if(verbose)then
+                  if(present(name)) write(*,"(A)") "Matrix: "//reg(name)
+                  write(*,"(A,2I4)") "Non hermitian components: ",i,j
+                  write(*,"(3(A,1F10.5))") "Re(A_ij): ",real(A(i,j)),"Re(A_ji): ",real(A(j,i))," err:",ReErr
+                  write(*,"(3(A,1F10.5))") "Im(A_ij): ",aimag(A(i,j)),"Im(A_ji): ",aimag(A(j,i))," err:",ImErr
+                  write(*,"(A,1F10.5)") "Threshold ",tol
+               endif
+               !
+               if(hardstop_)stop
+               !
+               if(enforce_)then
+                  !
+                  A(i,j) = (A(i,j)+A(j,i))/2d0
+                  A(j,i) = A(i,j)
+                  !
+               endif
+               !
+            endif
+            !
+         enddo
+      enddo
+      !
+   end subroutine check_Symmetry_z
 
 
    !---------------------------------------------------------------------------!
-   !PURPOSE: Check if matrix is Hermitian
+   !PURPOSE: Enforce symmetry/antisymmetry with respect to beta/2
    !---------------------------------------------------------------------------!
-   subroutine halfbeta_symm(funct,Ntau,sign)
+   subroutine halfbeta_symm(funct)
       implicit none
       real(8),intent(inout)                 :: funct(:)
-      integer,intent(in)                    :: Ntau
-      real(8),intent(in)                    :: sign
+      integer                               :: itau,Ntau
+      real(8)                               :: sign=+1d0
       !
-      integer                               :: itau
+      Ntau=size(funct)
       !
       do itau=1,int(Ntau/2)
-         funct(itau) = 0.5 *  funct(itau) + sign*funct(ntau-itau+1)
+         funct(itau) = 0.5 * (funct(itau) + sign*funct(ntau-itau+1))
       enddo
       do itau=1,int(Ntau/2)
          funct(ntau-itau+1) = sign*funct(itau)
       enddo
       !
    end subroutine halfbeta_symm
+   !
+   subroutine halfbeta_antisymm(funct)
+      implicit none
+      real(8),intent(inout)                 :: funct(:)
+      integer                               :: itau,Ntau
+      real(8)                               :: sign=-1d0
+      !
+      Ntau=size(funct)
+      !
+      do itau=1,int(Ntau/2)
+         funct(itau) = 0.5 * (funct(itau) + sign*funct(ntau-itau+1))
+      enddo
+      do itau=1,int(Ntau/2)
+         funct(ntau-itau+1) = sign*funct(itau)
+      enddo
+      !
+   end subroutine halfbeta_antisymm
 
 
    !---------------------------------------------------------------------------!

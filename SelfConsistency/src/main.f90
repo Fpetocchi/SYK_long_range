@@ -56,8 +56,8 @@ program test
          call dump_BosonicField(Plat,reg(ItFolder),"Plat_w.DAT")
          !
          if(merge_Pi.and.solve_DMFT) then !a bit redundant since there is no merge wihtout DMFT
-            call MergeFields(Plat,PiEDMFT,alphaPi,SiteOrbs)
-            call DeallocateBosonicField(PiEDMFT)
+            call MergeFields(Plat,P_EDMFT,alphaPi,SiteOrbs)
+            call DeallocateBosonicField(P_EDMFT)
             if(verbose)call dump_BosonicField(Plat,reg(ItFolder),"Plat_w_merged.DAT")
          endif
          !
@@ -67,7 +67,7 @@ program test
       if(calc_W)then
          !
          if(calc_Wfull)  call calc_W_full(Wlat,Ulat,Plat,Crystal)
-         if(calc_Wedmft) call calc_W_edmft(Wlat,Ulat,PiEDMFT,Crystal)
+         if(calc_Wedmft) call calc_W_edmft(Wlat,Ulat,P_EDMFT,Crystal)
          call dump_BosonicField(Wlat,reg(ItFolder),"Wlat_w.DAT")
          !
       endif
@@ -82,33 +82,33 @@ program test
          !
          !G0W0 contribution and Vexchange readed from SPEX
          allocate(Vxc(Crystal%Norb,Crystal%Norb,Crystal%Nkpt,Nspin));Vxc=czero
-         call AllocateFermionicField(SigmaG0W0,Crystal%Norb,Nmats,Nkpt=Crystal%Nkpt,Nsite=Nsite,Beta=Beta)
-         call read_Sigma_spex(SigmaG0W0,Crystal,verbose,Vxc=Vxc)
+         call AllocateFermionicField(S_G0W0,Crystal%Norb,Nmats,Nkpt=Crystal%Nkpt,Nsite=Nsite,Beta=Beta)
+         call read_Sigma_spex(S_G0W0,Crystal,verbose,Vxc=Vxc)
          !
          !scGW
-         call AllocateFermionicField(SigmaGW_C,Crystal%Norb,Nmats,Nkpt=Crystal%Nkpt,Nsite=Nsite,Beta=Beta)
-         call AllocateFermionicField(SigmaGW_X,Crystal%Norb,0,Nkpt=Crystal%Nkpt,Nsite=Nsite,Beta=Beta)
-         call calc_sigmaGW(SigmaGW_C,SigmaGW_X,Glat,Wlat,Crystal)
+         call AllocateFermionicField(S_GW_C,Crystal%Norb,Nmats,Nkpt=Crystal%Nkpt,Nsite=Nsite,Beta=Beta)
+         call AllocateFermionicField(S_GW_X,Crystal%Norb,0,Nkpt=Crystal%Nkpt,Nsite=Nsite,Beta=Beta)
+         call calc_sigmaGW(S_GW_C,S_GW_X,Glat,Wlat,Crystal)
          !
          !Dc between G0W0 and scGW
          if(Iteration.eq.0)then
             !
-            call AllocateFermionicField(SigmaG0W0dc,Crystal%Norb,Nmats,Nkpt=Crystal%Nkpt,Nsite=Nsite,Beta=Beta)
-            call join_SigmaCX(SigmaG0W0dc,SigmaGW_C,SigmaGW_X)
-            call dump_FermionicField(SigmaG0W0dc,reg(pathDATA)//"0/","SGoWo",.true.,Crystal%kpt)
-            call DeallocateFermionicField(SigmaG0W0dc)
+            call AllocateFermionicField(S_G0W0dc,Crystal%Norb,Nmats,Nkpt=Crystal%Nkpt,Nsite=Nsite,Beta=Beta)
+            call join_SigmaCX(S_G0W0dc,S_GW_C,S_GW_X)
+            call dump_FermionicField(S_G0W0dc,reg(pathDATA)//"0/","SGoWo",.true.,Crystal%kpt)
+            call DeallocateFermionicField(S_G0W0dc)
             !
          elseif(Iteration.gt.0)then
             !
-            call AllocateFermionicField(SigmaG0W0dc,Crystal%Norb,Nmats,Nkpt=Crystal%Nkpt,Nsite=Nsite,Beta=Beta)
-            call read_FermionicField(SigmaG0W0dc,reg(pathDATA)//"0/","SGoWo",kpt=Crystal%kpt)
+            call AllocateFermionicField(S_G0W0dc,Crystal%Norb,Nmats,Nkpt=Crystal%Nkpt,Nsite=Nsite,Beta=Beta)
+            call read_FermionicField(S_G0W0dc,reg(pathDATA)//"0/","SGoWo",kpt=Crystal%kpt)
             !
-            call AllocateFermionicField(SigmaGW,Crystal%Norb,Nmats,Nkpt=Crystal%Nkpt,Nsite=Nsite,Beta=Beta)
-            call join_SigmaCX(SigmaGW,SigmaGW_C,SigmaGW_X)
+            call AllocateFermionicField(S_GW,Crystal%Norb,Nmats,Nkpt=Crystal%Nkpt,Nsite=Nsite,Beta=Beta)
+            call join_SigmaCX(S_GW,S_GW_C,S_GW_X)
             !
          endif
-         call DeallocateFermionicField(SigmaGW_C)
-         call DeallocateFermionicField(SigmaGW_X)
+         call DeallocateFermionicField(S_GW_C)
+         call DeallocateFermionicField(S_GW_X)
          !
          !Dump scGW local self-energy
          call dump_FermionicField(Glat,1,reg(ItFolder),"Slat_w_up.DAT")
@@ -118,22 +118,22 @@ program test
          if((Iteration.gt.0).and.merge_Sigma.and.solve_DMFT)then !a bit redundant since there is no merge wihtout DMFT
             !
             !First compute the local Dc
-            call AllocateFermionicField(SigmaGWdc,Crystal%Norb,Nmats,Nsite=Nsite,Beta=Beta)
-            call AllocateFermionicField(SigmaGW_Cdc,Crystal%Norb,Nmats,Nsite=Nsite,Beta=Beta)
-            call AllocateFermionicField(SigmaGW_Xdc,Crystal%Norb,0,Nsite=Nsite,Beta=Beta)
-            call calc_sigmaGWdc(SigmaGW_Cdc,SigmaGW_Xdc,Glat,Wlat)
-            call join_SigmaCX(SigmaGWdc,SigmaGW_Cdc,SigmaGW_Xdc)
-            call DeallocateFermionicField(SigmaGW_Cdc)
-            call DeallocateFermionicField(SigmaGW_Xdc)
+            call AllocateFermionicField(S_GWdc,Crystal%Norb,Nmats,Nsite=Nsite,Beta=Beta)
+            call AllocateFermionicField(S_GW_Cdc,Crystal%Norb,Nmats,Nsite=Nsite,Beta=Beta)
+            call AllocateFermionicField(S_GW_Xdc,Crystal%Norb,0,Nsite=Nsite,Beta=Beta)
+            call calc_sigmaGWdc(S_GW_Cdc,S_GW_Xdc,Glat,Wlat)
+            call join_SigmaCX(S_GWdc,S_GW_Cdc,S_GW_Xdc)
+            call DeallocateFermionicField(S_GW_Cdc)
+            call DeallocateFermionicField(S_GW_Xdc)
             !
             !Then replace local projection with scGW and EDMFT
-            call MergeFields(SigmaGW,SigmaGWdc,SigmaDMFT,alphaSigma,SiteOrbs,DC_type)
-            call DeallocateFermionicField(SigmaGWdc)
-            call DeallocateFermionicField(SigmaDMFT)
+            call MergeFields(S_GW,S_GWdc,S_DMFT,alphaSigma,SiteOrbs,DC_type,RotateHloc)
+            call DeallocateFermionicField(S_GWdc)
+            call DeallocateFermionicField(S_DMFT)
             !
             if(verbose)then
-               call dump_FermionicField(SigmaGW,1,reg(ItFolder),"Slat_w_up_merged.DAT")
-               call dump_FermionicField(SigmaGW,2,reg(ItFolder),"Slat_w_dw_merged.DAT")
+               call dump_FermionicField(S_GW,1,reg(ItFolder),"Slat_w_up_merged.DAT")
+               call dump_FermionicField(S_GW,2,reg(ItFolder),"Slat_w_dw_merged.DAT")
             endif
             !
          endif
@@ -144,7 +144,7 @@ program test
       call join_SigmaFull(Iteration)
       !
       !Compute the Full Green's function and set the density
-      call calc_Gmats(Glat,Crystal,SigmaFull)
+      call calc_Gmats(Glat,Crystal,S_Full)
       if(look4dens%TargetDensity.ne.0d0)call set_density(Glat,Crystal,look4dens)
       !
       !Print Gf: local readable and k-dep binfmt

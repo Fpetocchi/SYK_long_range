@@ -956,7 +956,7 @@ contains
             if(.not.filexists) exit
             Nkpt = Nkpt + 1
          enddo
-         write(*,"(A,I)") "The number of SPEX files (Nkpt) in VW_imag is: ",Nkpt
+         write(*,"(A,I)") "     The number of SPEX files (Nkpt) in VW_imag is: ",Nkpt
          if((.not.LocalOnly).and.(Umats%Nkpt.ne.Nkpt)) stop "Number of k-points of given BosonicField and number of VW_imag k-points do not coincide."
          !
          ! Read VW_imag accumulating local attribute and optionally storing the k-dependent part
@@ -1698,7 +1698,7 @@ contains
       !
       !
       ! Check on the input field
-      if(.not.Umats%status) stop "BosonicField not properly initialized."
+      if(.not.Umats%status) stop "Umats not properly initialized."
       retarded=.false.
       if(present(Kfunct))retarded=.true.
       !
@@ -1767,17 +1767,20 @@ contains
             !
          enddo
       enddo
-      call check_Symmetry(Uinst,eps,hardstop=.false.,name="Uinst")
+      call check_Symmetry(Uinst,eps,enforce=.true.,hardstop=.false.,name="Uinst")
       !
       !setting the reterdation function
       if(retarded)then
          Kfunct=0d0
          do itau=2,NtauB-1
+            !
             do iw=2,Umats%Npoints
                Kfunct(:,:,itau) = Kfunct(:,:,itau) - 2d0*Kaux(:,:,iw) * ( cos(wmats(iw)*tau(itau)) - 1d0 ) / ( Umats%Beta*wmats(iw)**2 )
             enddo
+            !
+            call check_Symmetry(Kfunct(:,:,itau),eps,enforce=.true.,hardstop=.false.,name="Kfunct_t"//str(itau))
+            !
          enddo
-         call check_Symmetry(Kfunct(:,:,itau),eps,hardstop=.false.,name="Kfunct")
       endif
       deallocate(Kaux,tau,wmats)
       !
@@ -1792,14 +1795,15 @@ contains
       !
       use parameters
       use utils_fields
-      use linalg, only : zeye, inv
+      use utils_misc
+      use linalg, only : zeye, inv, inv_sym
       implicit none
       !
       type(BosonicField),intent(inout)      :: curlyU
       type(BosonicField),intent(in)         :: Wimp
       type(BosonicField),intent(in)         :: Pimp
       !
-      complex(8),allocatable                :: invW(:,:)
+      real(8),allocatable                   :: invW(:,:)
       real(8)                               :: Beta
       integer                               :: Nbp,Nmats
       integer                               :: iw
@@ -1828,18 +1832,21 @@ contains
       !
       curlyU%bare_local = Wimp%bare_local
       !
-      allocate(invW(Nbp,Nbp));invW=czero
+      allocate(invW(Nbp,Nbp));invW=0d0
       !$OMP PARALLEL DEFAULT(NONE),&
       !$OMP SHARED(Nbp,Nmats,Wimp,Pimp,curlyU),&
       !$OMP PRIVATE(iw,invW)
       !$OMP DO
       do iw=1,Nmats
          !
-         invW = zeye(Nbp) + matmul(Pimp%screened_local(:,:,iw),Wimp%screened_local(:,:,iw))
+         invW = real(zeye(Nbp) + matmul(Pimp%screened_local(:,:,iw),Wimp%screened_local(:,:,iw)))
          !
-         call inv(invW)
+         !call inv(invW)
+         call inv_sym(invW)
          !
-         curlyU%screened_local(:,:,iw) = matmul(Wimp%screened_local(:,:,iw),invW)
+         curlyU%screened_local(:,:,iw) = dcmplx(real(matmul(Wimp%screened_local(:,:,iw),invW)),0d0)
+         !
+         call check_Symmetry(curlyU%screened_local(:,:,iw),eps,enforce=.true.,hardstop=.false.,name="curlyU_"//str(iw))
          !
       enddo
       !$OMP END DO
@@ -1857,7 +1864,7 @@ contains
       !
       use parameters
       use utils_fields
-      use linalg, only : zeye, inv
+      use linalg, only : zeye
       implicit none
       !
       type(BosonicField),intent(inout)      :: Wimp
@@ -1880,6 +1887,8 @@ contains
       if(Wimp%Nkpt.ne.0) stop "Wimp k dependent attributes are supposed to be unallocated."
       if(curlyU%Nkpt.ne.0) stop "curlyU k dependent attributes are supposed to be unallocated."
       if(ChiC%Nkpt.ne.0) stop "ChiC k dependent attributes are supposed to be unallocated."
+      if(allocated(ChiC%bare_local))  stop "ChiC bare_local attribute is supposed to be unallocated."
+      if(allocated(ChiC%bare))  stop "ChiC bare attribute is supposed to be unallocated."
       !
       Nbp = Wimp%Nbp
       Beta = Wimp%Beta

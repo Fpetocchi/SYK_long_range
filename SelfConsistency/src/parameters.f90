@@ -116,6 +116,8 @@ module parameters
       integer,allocatable                   :: SetNorb(:)
       integer,allocatable                   :: SetOrbs(:,:)
       logical                               :: Gfoffdiag=.true.
+      logical                               :: O=.false.
+      logical                               :: S=.false.
       !I'm writing this as integers due to some mismatch on how to write boolean between fortrann and c++
       integer                               :: para=1
    end type Equivalent

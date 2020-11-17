@@ -50,13 +50,6 @@ module file_io
       module procedure :: read_BosonicField_local                               ![BosonicField,dirpath,filename,axis(optional for real freq. or tau))]            (Only local projection. Reads only from formatted input.)
    end interface read_BosonicField
 
-!interface dump_MaxEnt
-!!module procedure :: dump_MaxEnt_Fermionic_Lattice
-!!module procedure :: dump_MaxEnt_Fermionic_Impurity
-!!module procedure :: dump_MaxEnt_Bosonic_Lattice
-!!module procedure :: dump_MaxEnt_Bosonic_Impurity
-!end interface dump_MaxEnt
-
    !---------------------------------------------------------------------------!
    !PURPOSE: Module variables
    !---------------------------------------------------------------------------!
@@ -79,7 +72,6 @@ module file_io
    public :: read_FermionicField
    public :: dump_BosonicField
    public :: read_BosonicField
-   !public :: dump_MaxEnt
 
    !===========================================================================!
 
@@ -88,6 +80,7 @@ contains
 
    !---------------------------------------------------------------------------!
    !PURPOSE: Write to file a generic matrix
+   !TEST ON: 17-11-2020
    !---------------------------------------------------------------------------!
    subroutine dump_Matrix_local_z(Umat,printpath)
       !
@@ -146,6 +139,7 @@ contains
 
    !---------------------------------------------------------------------------!
    !PURPOSE: Read from file a square matrix
+   !TEST ON: 17-11-2020
    !---------------------------------------------------------------------------!
    subroutine read_Matrix_local_z(Umat,readpath)
       !
@@ -170,7 +164,7 @@ contains
       allocate(ImagM(size(Umat,dim=1),size(Umat,dim=2)));ImagM=0d0
       !
       unit = free_unit()
-      open(unit,file=reg(readpath),form="unformatted",status="old",position="rewind",action="read")
+      open(unit,file=reg(readpath),form="formatted",status="old",position="rewind",action="read")
       do i=1,size(Umat,dim=1)
          read(unit,"(999E20.12)") (RealM(i,j),j=1,size(Umat,dim=2))
       enddo
@@ -206,7 +200,7 @@ contains
       allocate(RealM(size(Umat,dim=1),size(Umat,dim=2)));RealM=0d0
       !
       unit = free_unit()
-      open(unit,file=reg(readpath),form="unformatted",status="old",position="rewind",action="read")
+      open(unit,file=reg(readpath),form="formatted",status="old",position="rewind",action="read")
       do i=1,size(Umat,dim=1)
          read(unit,"(999E20.12)") (RealM(i,j),j=1,size(Umat,dim=2))
       enddo
@@ -832,8 +826,8 @@ contains
       integer                               :: iaxis,Norb,ispin,ik
       integer                               :: iwan1,iwan2
       integer                               :: idum1,idum2
-      integer                               :: ispin_read,Nkpt_read,Norb_read
-      integer                               :: Naxis_read,mu_read
+      integer                               :: ispin_read,Nkpt_read,Norb_read,Naxis_read
+      real(8)                               :: mu_read
       real(8)                               :: axispoint,RealG,ImagG
       real(8)                               :: kvec(3)
       logical                               :: filexists
