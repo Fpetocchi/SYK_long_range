@@ -309,6 +309,7 @@ contains
       !
       use parameters
       use utils_fields
+      use utils_misc
       use linalg, only : zeye, inv, inv_sym
       implicit none
       !
@@ -316,12 +317,12 @@ contains
       type(BosonicField),intent(in)         :: curlyU
       type(BosonicField),intent(in)         :: ChiC
       !
-      real(8),allocatable                   :: invP(:,:)
+      complex(8),allocatable                :: invP(:,:)
       real(8)                               :: Beta
       integer                               :: Nbp,Nmats
       integer                               :: iw
 
-      integer :: Norb,m,n,ib1,ib2
+      integer :: Norb,m,n,k,ib1,ib2,ib3
       !
       !
       if(verbose)write(*,"(A)") "---- calc_Pimp"
@@ -349,60 +350,29 @@ contains
       if(all([curlyU%Npoints-Nmats,ChiC%Npoints-Nmats].ne.[0,0]))   stop "Either curlyU and/or ChiC have different number of Matsubara points with respect to Pimp."
       !
       call clear_attributes(Pimp)
+      !call isReal(curlyU) put intent(inout)?
+      !call isReal(ChiC) put intent(inout)?
       !
-      allocate(invP(Nbp,Nbp));invP=0d0
-   !!!   !$OMP PARALLEL DEFAULT(NONE),&
-   !!!   !$OMP SHARED(Nbp,Nmats,Pimp,ChiC,curlyU),&
-   !!!   !$OMP PRIVATE(iw,invP)
-   !!!   !$OMP DO
+      allocate(invP(Nbp,Nbp));invP=czero
+      !$OMP PARALLEL DEFAULT(NONE),&
+      !$OMP SHARED(Nbp,Nmats,Pimp,ChiC,curlyU),&
+      !$OMP PRIVATE(iw,invP)
+      !$OMP DO
       do iw=1,Nmats
          !
-
-
-         invP=0d0
-
-         do m=1,Norb
-            do n=1,Norb
-               ib1 = m + Norb*(m-1)
-               ib2 = n + Norb*(n-1)
-               invP(ib1,ib2) = invP(ib1,ib2) + curlyU%screened_local(ib1,ib2,iw)*ChiC%screened_local(ib1,ib2,iw)
-               if(ib1.eq.ib2) invP(ib1,ib2) = invP(ib1,ib2) -1d0
-            enddo
-         enddo
-
-
-
-
-         !invP = real(matmul(curlyU%screened_local(:,:,iw),ChiC%screened_local(:,:,iw)) - zeye(Nbp))
+         invP = matmul(curlyU%screened_local(:,:,iw),ChiC%screened_local(:,:,iw)) - zeye(Nbp)
+         !
          !call inv(invP)
-         call inv(invP)
-
-
-
-         do m=1,Norb
-            do n=1,Norb
-               ib1 = m + Norb*(m-1)
-               ib2 = n + Norb*(n-1)
-               Pimp%screened_local(ib1,ib2,iw) = Pimp%screened_local(ib1,ib2,iw) + ChiC%screened_local(ib1,ib2,iw)*invP(ib1,ib2)
-            enddo
-         enddo
-
-
-
-
-
-
-        ! Pimp%screened_local(:,:,iw) = dcmplx(invP,0d0) !dcmplx(real(matmul(ChiC%screened_local(:,:,iw),invP)),0d0)
+         call inv_sym(invP)
+         !
+         Pimp%screened_local(:,:,iw) = matmul(ChiC%screened_local(:,:,iw),invP)
+         !
+         call check_Symmetry(Pimp%screened_local(:,:,iw),eps,enforce=.true.,hardstop=.false.,name="Pimp_"//str(iw))
          !
       enddo
-   !!!   !$OMP END DO
-   !!!   !$OMP END PARALLEL
-
-
-
-
-
-
+      !$OMP END DO
+      !$OMP END PARALLEL
+      call isReal(Pimp)
       deallocate(invP)
       !
    end subroutine calc_Pimp

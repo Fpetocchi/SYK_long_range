@@ -287,7 +287,7 @@ contains
       !
       nseg=(num-1)/nsimp
       if (nseg .lt. 1) stop "denspace: nseg < 1"
-      if (nsimp*(nseg/nsimp) .ne. nseg) stop "denspace: nseg is not a multiple of 2 or 4"
+      if (nsimp*(nseg/nsimp) .ne. nseg) stop "denspace: nseg is not a multiple of 2 and 4"
       nseg2 = nseg/2
       mesh = end/nseg
       a = mesh * de!/27.2d0
@@ -465,7 +465,7 @@ contains
             !
             if((ReErr.gt.tol).or.(ImErr.gt.tol))then
                !
-               if(verbose)then
+               if(verbose.or.enforce_)then
                   if(present(name)) write(*,"(A)") "Matrix: "//reg(name)
                   write(*,"(A,2I4)") "Non hermitian components: ",i,j
                   write(*,"(3(A,1F10.5))") "Re(A_ij): ",real(A(i,j)),"Re(A_ji): ",real(A(j,i))," err:",ReErr
@@ -522,7 +522,7 @@ contains
             !
             if(ReErr.gt.tol)then
                !
-               if(verbose)then
+               if(verbose.or.enforce_)then
                   if(present(name)) write(*,"(A)") "Matrix: "//reg(name)
                   write(*,"(A,2I4)") "Non hermitian components: ",i,j
                   write(*,"(3(A,1F10.5))") "Re(A_ij): ",A(i,j),"Re(A_ji): ",A(j,i)," err:",ReErr
@@ -575,7 +575,7 @@ contains
             !
             if((ReErr.gt.tol).or.(ImErr.gt.tol))then
                !
-               if(verbose)then
+               if(verbose.or.enforce_)then
                   if(present(name)) write(*,"(A)") "Matrix: "//reg(name)
                   write(*,"(A,2I4)") "Non hermitian components: ",i,j
                   write(*,"(3(A,1F10.5))") "Re(A_ij): ",real(A(i,j)),"Re(A_ji): ",real(A(j,i))," err:",ReErr

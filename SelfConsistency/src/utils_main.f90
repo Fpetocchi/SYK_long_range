@@ -1069,6 +1069,7 @@ contains
          !
          Dmats=czero
          do ispin=1,Nspin
+            !call isReal(Ditau(:,:,ispin))
             call Fitau2mats_vec(Beta,Ditau(:,:,ispin),Dmats(:,:,ispin),tau_uniform=.true.)
          enddo
          !
@@ -1138,12 +1139,13 @@ contains
          case("DMFT+statU")
             !
             call loc2imp(curlyU,Ulat,Orbs)
+            call isReal(curlyU)
             call calc_QMCinteractions(curlyU,Uinst)
             !
          case("DMFT+dynU")
             !
             call loc2imp(curlyU,Ulat,Orbs)
-            !
+            call isReal(curlyU)
             allocate(Kfunct(Nflavor,Nflavor,NtauB));Kfunct=0d0
             call calc_QMCinteractions(curlyU,Uinst,Kfunct)
             !
@@ -1153,6 +1155,7 @@ contains
                !
                write(*,"(A)") "     Using local Ucrpa as effective interaction."
                call loc2imp(curlyU,Ulat,Orbs)
+               call isReal(curlyU)
                call DeallocateBosonicField(Ulat)
                !
             else
@@ -1621,7 +1624,7 @@ contains
          !Fill up the N_s attribute that correspond to the Hartree term
          !since the impurity interaction contains only the physical interaction elements
          !(particle and spin conserving) I'm neglecting here elements in principle present
-         !like Hartree_{ab} = Sum_c curlyU_{ab}{cc} * n_{cc}
+         !like Hartree_{ab} = Sum_c curlyU_{ab}{cc} * n_{cc}.
          call AllocateBosonicField(curlyU,Norb,Nmats,Crystal%iq_gamma,Beta=Beta)
          call read_BosonicField(curlyU,reg(PrevItFolder)//"Solver_"//reg(SiteName(isite))//"/","curlyU_"//reg(SiteName(isite))//"_w.DAT")
          Simp%N_s=czero
@@ -1741,7 +1744,7 @@ contains
             do itau=1,NtauB
                ReadLine=0d0
                read(unit,*) taup,ReadLine
-               if(abs(taup-tauB(itau)).gt.eps) stop "Impurity bosonic tau mesh does not coincide."
+               !if(abs(taup-tauB(itau)).gt.eps) stop "Impurity bosonic tau mesh does not coincide."
                !
                !this is cumbersome but better be safe
                ndx=1
@@ -1796,7 +1799,7 @@ contains
             call dump_BosonicField(ChiMmats,reg(PrevItFolder)//"Solver_"//reg(SiteName(isite))//"/","ChiM_"//reg(SiteName(isite))//"_w.DAT",wmats)
             deallocate(ChiMitau,ChiMmats,wmats)
             !
-            !Compute the charge susceptibility Sum_s1s2 <Na(tau)Nb(0)> - <Na><Nb>
+            !Compute the charge susceptibility Sum_s1s2 <Na(tau)Nb(0)> - <Na><Nb> ! here I have to use the non-symmetrized Nqmc
             call AllocateBosonicField(ChiCitau,Norb,NtauB,Crystal%iq_gamma,no_bare=.true.,Beta=Beta)
             do iorb=1,Norb
                do jorb=1,Norb
@@ -1815,12 +1818,16 @@ contains
                   !
                enddo
             enddo
+            call isReal(ChiCitau)
+            call dump_BosonicField(ChiCitau,reg(PrevItFolder)//"Solver_"//reg(SiteName(isite))//"/","ChiC_"//reg(SiteName(isite))//"_t.DAT",axis=tauB)
+            deallocate(tauB,densityQMC)
+            !
+            !FT to get ChiC(iw)
             call AllocateBosonicField(ChiCmats,Norb,Nmats,Crystal%iq_gamma,no_bare=.true.,Beta=Beta)
             call Bitau2mats(Beta,ChiCitau%screened_local,ChiCmats%screened_local,tau_uniform=.true.)
-            call dump_BosonicField(ChiCitau,reg(PrevItFolder)//"Solver_"//reg(SiteName(isite))//"/","ChiC_"//reg(SiteName(isite))//"_t.DAT",axis=tauB)
-            call dump_BosonicField(ChiCmats,reg(PrevItFolder)//"Solver_"//reg(SiteName(isite))//"/","ChiC_"//reg(SiteName(isite))//"_w.DAT")
             call DeallocateBosonicField(ChiCitau)
-            deallocate(tauB,densityQMC)
+            call isReal(ChiCmats)
+            if(verbose)call dump_BosonicField(ChiCmats,reg(PrevItFolder)//"Solver_"//reg(SiteName(isite))//"/","ChiC_"//reg(SiteName(isite))//"_w.DAT")
             !
             !Bosonic Dyson equations
             call AllocateBosonicField(curlyU,Norb,Nmats,Crystal%iq_gamma,Beta=Beta)
@@ -2007,19 +2014,3 @@ contains
 
 
 end module utils_main
-
-
-
-
-
-
-!call dump_FermionicField(Glat,1,reg(pathDATA)//str(ItStart)//"/","Glat_loc_up.DAT")
-!call dump_FermionicField(Glat,2,reg(pathDATA)//str(ItStart)//"/","Glat_loc_dn.DAT")
-!call dump_FermionicField(Glat,reg(pathDATA)//str(ItStart)//"/","Glat",binfmt=.true.)
-!call dump_FermionicField(Glat,reg(pathDATA)//str(ItStart)//"/","Glat",binfmt=.false.)
-!call read_FermionicField(Glat,1,reg(pathDATA)//str(ItStart)//"/","Glat_loc_up.DAT")
-!call read_FermionicField(Glat,2,reg(pathDATA)//str(ItStart)//"/","Glat_loc_dn.DAT")
-!call dump_FermionicField(Glat,1,reg(pathDATA)//str(ItStart)//"/","Glat_loc_up_testread_LOC.DAT")
-!call dump_FermionicField(Glat,2,reg(pathDATA)//str(ItStart)//"/","Glat_loc_dn_testread_LOC.DAT")
-!call read_FermionicField(Glat,reg(pathDATA)//str(ItStart)//"/","Glat")
-!call dump_FermionicField(Glat,reg(pathDATA)//str(ItStart)//"/","Glat_testread_Kdep",binfmt=.true.)

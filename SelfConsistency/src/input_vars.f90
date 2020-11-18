@@ -279,10 +279,12 @@ contains
       call parse_input_variable(wmatsMax,"MAX_WMATS",InputFile,default=100.d0,comment="Maximum value of the Matsubara frequency mesh.")
       Nmats = int(Beta*wmatsMax/(2d0*pi))
       call append_to_input_list(Nmats,"NMATS","Number of points on the imaginary frequency axis. User cannot set this as its computed from MAX_WMATS and BETA.")
-      call parse_input_variable(NtauF,"NTAU_F",InputFile,default=Nmats,comment="Number of points on the imaginary time axis for Fermionic quantities. Its gonna be made odd. Optimal if close to NMATS.")
+      call parse_input_variable(NtauF,"NTAU_F",InputFile,default=int(2d0*pi*Nmats),comment="Number of points on the imaginary time axis for Fermionic quantities. Its gonna be made odd. Optimal if close to 2*PI*NMATS.")
       if(mod(NtauF,2).eq.0)NtauF=NtauF+1
-      call parse_input_variable(NtauB,"NTAU_B",InputFile,default=Nmats,comment="Number of points on the imaginary time axis for Bosonic quantities. Its gonna be made odd.")
+      if(mod(NtauF-1,4).ne.0)NtauF=NtauF+mod(NtauF-1,4)
+      call parse_input_variable(NtauB,"NTAU_B",InputFile,default=int(2d0*pi*Nmats),comment="Number of points on the imaginary time axis for Bosonic quantities. Its gonna be made odd. Optimal if close to 2*PI*NMATS.")
       if(mod(NtauB,2).eq.0)NtauB=NtauB+1
+      if(mod(NtauB-1,4).ne.0)NtauB=NtauB+mod(NtauB-1,4)
       call parse_input_variable(tau_uniform,"TAU_UNIF",InputFile,default=.false.,comment="Flag to use a non-tau_uniform mesh on the imaginary time axis.")
       call parse_input_variable(Nreal,"NREAL",InputFile,default=2000,comment="Number of points on the real frequency axis.")
       call parse_input_variable(wrealMax,"MAX_WREAL",InputFile,default=10.d0,comment="Maximum absolute value of the real frequency mesh.")

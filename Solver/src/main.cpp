@@ -35,7 +35,7 @@ int main(int argc, char *argv[])
    //.........................................................................//
    // Global Vars
    double Beta;
-   int Nspin,Ntau,Norder,Nmeas,Ntherm,Nshift,printTime;
+   int Nspin,NtauF,NtauB,Norder,Nmeas,Ntherm,Nshift,printTime;
    //logical flags and compatibility typo fix
    bool paramagnet,retarded,nnt_meas,quickloops,testing;
    int para_read,ret_read,nnt_read,quick_read;
@@ -77,7 +77,8 @@ int main(int argc, char *argv[])
       // Global Vars
       find_param(argv[1], "BETA"       , Beta      );
       find_param(argv[1], "NSPIN"      , Nspin     );
-      find_param(argv[1], "NTAU_F"     , Ntau      );
+      find_param(argv[1], "NTAU_F"     , NtauF     );
+      find_param(argv[1], "NTAU_B"     , NtauB     );
       find_param(argv[1], "NORDER"     , Norder    );
       find_param(argv[1], "NMEAS"      , Nmeas     );
       find_param(argv[1], "NTHERM"     , Ntherm    );
@@ -99,11 +100,12 @@ int main(int argc, char *argv[])
       // Site Dependent Vars
       find_param(argv[1], "NSITE"      , Nsite     );
       //
-      if(testing && mpi.is_master())
+      if(testing &&mpi.is_master())
       {
          mpi.report(" beta= "+str(Beta));
          mpi.report(" Nspin= "+str(Nspin));
-         mpi.report(" Ntau= "+str(Ntau));
+         mpi.report(" NtauF= "+str(NtauF));
+         mpi.report(" NtauB= "+str(NtauB));
          mpi.report(" Norder= "+str(Norder));
          mpi.report(" Nmeas= "+str(Nmeas));
          mpi.report(" Ntherm= "+str(Ntherm));
@@ -181,7 +183,7 @@ int main(int argc, char *argv[])
          {
             mpi.report(" Folder = "+SiteDir[isite]+" (Found).");
             ImpurityList.push_back(ct_hyb( SiteName[isite], Beta, Nspin, SiteNorb[isite],
-                                           Ntau, Norder, Nmeas, Ntherm, Nshift,
+                                           NtauF, NtauB, Norder, Nmeas, Ntherm, Nshift,
                                            paramagnet, retarded, nnt_meas,
                                            printTime, std::vector<int> { binlength,binstart }, mpi, testing ));
             ImpurityList[isite].init( SiteDir[isite]);

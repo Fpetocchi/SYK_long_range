@@ -283,17 +283,21 @@ VecVec measure_nnt( VecVec &n_tau)
    {
       for (int jfl=0; jfl<=ifl; ++jfl)
       {
+         //
          for (int i=0; i<Ntau; ++i)
          {
             for (int index=0; index<Ntau; ++index)
             {
                int j=i+index;
-               if (j>Ntau) j -= Ntau;
-               nn_corr_meas[position][index] += n_tau[ifl][i]*n_tau[jfl][j] / (double)Ntau;
+               if ( j>(Ntau-1) ) j -= (Ntau-1);
+               nn_corr_meas[position][index] += n_tau[ifl][i]*n_tau[jfl][j];
             }
          }
+         for (int i=0; i<Ntau; ++i)nn_corr_meas[position][i]/=(double)Ntau;
+
+         //
          position++;
-         //for (int i=0; i<Ntau; ++i)nn_corr_meas[position][i]/=(Ntau);
+         //
       }
    }
    //

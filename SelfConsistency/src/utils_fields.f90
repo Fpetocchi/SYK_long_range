@@ -40,6 +40,12 @@ module utils_fields
       module procedure MergePolarization
    end interface MergeFields
 
+   interface isReal
+      module procedure isReal_Matrix
+      module procedure isReal_Fermionic
+      module procedure isReal_Bosonic
+   end interface isReal
+
    !---------------------------------------------------------------------------!
    !PURPOSE: Module variables
    !---------------------------------------------------------------------------!
@@ -62,6 +68,7 @@ module utils_fields
    public :: AllocateBosonicField
    public :: DeallocateBosonicField
    public :: clear_attributes
+   public :: isReal
    public :: loc2imp
    public :: imp2loc
    public :: symmetrize
@@ -392,6 +399,38 @@ contains
       if(allocated(W%bare))W%bare=czero
       if(allocated(W%screened))W%screened=czero
    end subroutine clear_attributes_Boson
+
+
+   !---------------------------------------------------------------------------!
+   !PURPOSE: Remove the complex part of the allocated attributes
+   !TEST ON:
+   !---------------------------------------------------------------------------!
+   subroutine isReal_Matrix(A)
+      use parameters
+      implicit none
+      complex(8),allocatable,intent(inout)  :: A(:,:)
+      if(allocated(A))A=dcmplx(real(A),0d0)
+   end subroutine isReal_Matrix
+   !
+   subroutine isReal_Fermionic(G)
+      use parameters
+      implicit none
+      type(FermionicField),intent(inout)    :: G
+      if(allocated(G%N_s))   G%N_s  = dcmplx(real(G%N_s),0d0)
+      if(allocated(G%ws))    G%ws   = dcmplx(real(G%ws),0d0)
+      if(allocated(G%N_ks))  G%N_ks = dcmplx(real(G%N_ks),0d0)
+      if(allocated(G%wks))   G%wks  = dcmplx(real(G%wks),0d0)
+   end subroutine isReal_Fermionic
+   !
+   subroutine isReal_Bosonic(W)
+      use parameters
+      implicit none
+      type(BosonicField),intent(inout)      :: W
+      if(allocated(W%bare_local))     W%bare_local     = dcmplx(real(W%bare_local),0d0)
+      if(allocated(W%screened_local)) W%screened_local = dcmplx(real(W%screened_local),0d0)
+      if(allocated(W%bare))           W%bare           = dcmplx(real(W%bare),0d0)
+      if(allocated(W%screened))       W%screened       = dcmplx(real(W%screened),0d0)
+   end subroutine isReal_Bosonic
 
 
    !---------------------------------------------------------------------------!

@@ -36,12 +36,12 @@ class ct_hyb
 
       //----------------------------------------------------------------------//
 
-      ct_hyb( path SiteName, double beta, int Nspin, int Norb, int Ntau,
+      ct_hyb( path SiteName, double beta, int Nspin, int Norb, int NtauF, int NtauB,
               int Norder, int Nmeas, int Ntherm, int Nshift,
               bool paramagnet, bool retarded, bool nnt_meas,
               int printTime, std::vector<int> bins,
               CustomMPI &mpi, bool testing_mpi=false):
-      SiteName(SiteName), Beta(beta), Nspin(Nspin), Norb(Norb), Ntau(Ntau),
+      SiteName(SiteName), Beta(beta), Nspin(Nspin), Norb(Norb), NtauF(NtauF), NtauB(NtauB),
       Norder(Norder), Nmeas(Nmeas), Ntherm(Ntherm), Nshift(Nshift),
       paramagnet(paramagnet), retarded(retarded), nnt_meas(nnt_meas),
       printTime(printTime), bins(bins), mpi(mpi), testing_mpi(testing_mpi)
@@ -89,7 +89,7 @@ class ct_hyb
          if(!PathExist(strcpy(new char[resultsDir.length() + 1], resultsDir.c_str())) && mpi.is_master())
          {
             int check = mkdir(resultsDir.c_str(),0777);
-            mpi.report(resultsDir+" Created. "+str(check));
+            mpi.report(" Folder = "+resultsDir+" Created. "+str(check));
          }
 
          //
@@ -123,7 +123,7 @@ class ct_hyb
 
          //
          //read the hybridization function ( std::vector<std::vector<double>> )
-         read_VecVec(inputDir+"/Delta_t.DAT", F, Nflavor, Ntau, true, true);  // last flag is to reverse the tau index
+         read_VecVec(inputDir+"/Delta_t.DAT", F, Nflavor, NtauF, true, true);  // last flag is to reverse the tau index
 
          //
          //read the screening function ( std::vector<std::vector<std::vector<double>>> )
@@ -137,12 +137,12 @@ class ct_hyb
                {
                   int Ntau_K = K_table[ifl][jfl].size();
                   path Kcomp = "K["+str(ifl)+"]["+str(jfl)+"]";
-                  if(Ntau_K!=Ntau) mpi.report(" The Number of tau points in "+Kcomp+" is: "+str(Ntau_K));
+                  if(Ntau_K!=NtauB) mpi.report(" The Number of tau points in "+Kcomp+" is: "+str(Ntau_K)+" different from NtauB: "+str(NtauB));
                   //
                   double K_zero =  K_table[ifl][jfl].front();
                   double K_beta =  K_table[ifl][jfl].back();
-                  if(K_zero!=0.0) mpi.StopError(" Diagonal "+Kcomp+" at tau=0 is not vanishing - Exiting.");
-                  if(K_beta!=0.0) mpi.StopError(" Diagonal "+Kcomp+" at tau=beta is not vanishing - Exiting.");
+                  if(K_zero!=0.0) mpi.StopError( "->"+Kcomp+" at tau=0 is not vanishing - Exiting.");
+                  if(K_beta!=0.0) mpi.StopError( "->"+Kcomp+" at tau=beta is not vanishing - Exiting.");
                }
             }
          }
@@ -177,10 +177,10 @@ class ct_hyb
          Nhist.resize(Nflavor+1,0.0);                                           // ( std::vector<double> )
          Szhist.resize(Nflavor/2+1,0.0);                                        // ( std::vector<double> )
          Pert.resize(Norder*Nflavor,0.0);                                       // ( std::vector<double> )
-         G.resize(Nflavor,std::vector<double>(Ntau,0.0));                    // ( std::vector<std::vector<double>> )
-         Gerr.resize(Nflavor,std::vector<double>(Ntau,0.0));                 // ( std::vector<std::vector<double>> )
-         nt.resize(Nflavor,std::vector<double>(Ntau,0.0));                   // ( std::vector<std::vector<double>> )
-         nnt.resize(Nflavor*(Nflavor+1)/2,std::vector<double>(Ntau,0.0));    // ( std::vector<std::vector<double>> )
+         G.resize(Nflavor,std::vector<double>(NtauF,0.0));                    // ( std::vector<std::vector<double>> )
+         Gerr.resize(Nflavor,std::vector<double>(NtauF,0.0));                 // ( std::vector<std::vector<double>> )
+         nt.resize(Nflavor,std::vector<double>(NtauB,0.0));                   // ( std::vector<std::vector<double>> )
+         nnt.resize(Nflavor*(Nflavor+1)/2,std::vector<double>(NtauB,0.0));    // ( std::vector<std::vector<double>> )
          //
          RankSign=0.0;
          WorldSign=0.0;
@@ -318,7 +318,8 @@ class ct_hyb
       double                              Beta;                                 // inverse temperature
       int                                 Nspin;
       int                                 Norb;
-      int                                 Ntau;                                 // Number of POINTS in Fermionic tau grid
+      int                                 NtauF;                                // Number of POINTS in Fermionic tau grid
+      int                                 NtauB;                                // Number of POINTS in Bosonic tau grid
       int                                 Norder;                               // Max perturbation order
       int                                 Nmeas;                                // Number of sweeps between expensive measurments
       int                                 Ntherm;
@@ -339,7 +340,8 @@ class ct_hyb
       duration                            Tstart;
       int                                 TimeStamp;
       int                                 Nflavor=Nspin*Norb;                   // Spin-orbital flavours
-      int                                 Ntau_m1=Ntau-1;                       // Number of SEGMENTS in Fermionic tau grid
+      int                                 NtauF_m1=NtauF-1;                     // Number of SEGMENTS in Fermionic tau grid
+      int                                 NtauB_m1=NtauB-1;                     // Number of SEGMENTS in Bosonic tau grid
       unsigned long long int              RankSweeps,WorldSweeps;               // Sweeps done
       // Input data
       Vec                                 Levels;                               // mu-<\epsilon>
@@ -410,7 +412,7 @@ class ct_hyb
          //
          times full_segment(0,Beta);
          double s=1;
-         VecVec G_tmp(Nflavor,Vec(Ntau,0.0));
+         VecVec G_tmp(Nflavor,Vec(NtauF,0.0));
 
          // The measurments I'm going to do regardless from the time
          for (int imeas=0; imeas<Nmeas_; imeas++)
@@ -429,7 +431,7 @@ class ct_hyb
                   // shift segments
                   for (int k=0; k<Nshift; k++) shift_segment( segments[ifl], Beta, Levels[ifl], Uloc, F[ifl], M[ifl], sign[ifl], segments, full_line, ifl, K_table );
                   // flip segment
-                  //for (int i=0; i<N_flip; i++)flip_segment( segments_up, Ntau_m1, Beta, M_up, sign_up, sign_down, F_down, M_down, segments_down, full_line_down);
+                  //for (int i=0; i<N_flip; i++)flip_segment( segments_up, NtauF_m1, Beta, M_up, sign_up, sign_down, F_down, M_down, segments_down, full_line_down);
                }
 
                //
@@ -437,11 +439,11 @@ class ct_hyb
                // perturbation order
                if (segments[ifl].size()<Norder) Pert[ifl*Norder+segments[ifl].size()] += (1./Nmeas_);
                // Green's functions
-               if (segments[ifl].size()>0) measure_G( G_tmp[ifl], segments[ifl], M[ifl], Ntau, Beta ); //accumulate_G( G[ifl], segments[ifl], M[ifl], Ntau, Beta, (double)(Ntau_m1/Nmeas_));
+               if (segments[ifl].size()>0) measure_G( G_tmp[ifl], segments[ifl], M[ifl], NtauF, Beta );
                // sign among the segments
                s *= sign[ifl];
                // flavour occupation
-               for (int i=0; i<G_tmp[ifl].size(); i++)G_tmp[ifl][i]*=(1.*Ntau_m1)/Nmeas_;
+               for (int i=0; i<G_tmp[ifl].size(); i++)G_tmp[ifl][i]*=(1.*NtauF_m1)/Nmeas_;
                Nloc[ifl] += compute_overlap(full_segment, segments[ifl], full_line[ifl], Beta)/(Beta*Nmeas_);
                //...............................................................
             }
@@ -452,13 +454,12 @@ class ct_hyb
          //
          //.........................Expensive measurments.......................
          //
-         if(paramagnet) spin_symm(Nloc);
          if(paramagnet) spin_symm(G_tmp);
          accumulate_G( G, G_tmp );
          //
          if(nnt_meas)
          {
-            nt = measure_nt( segments, full_line, Ntau, Beta );
+            nt = measure_nt( segments, full_line, NtauB, Beta );
             accumulate_nnt( nnt, nt );
             //accumulate_Nhist( Nhist, nt );
             //accumulate_Szhist( Szhist, nt );
@@ -491,7 +492,7 @@ class ct_hyb
                   // shift segments
                   for (int k=0; k<Nshift; k++) shift_segment( segments[ifl], Beta, Levels[ifl], Uloc, F[ifl], M[ifl], sign[ifl], segments, full_line, ifl, K_table );
                   // flip segment
-                  //for (int i=0; i<N_flip; i++)flip_segment( segments_up, Ntau_m1, Beta, M_up, sign_up, sign_down, F_down, M_down, segments_down, full_line_down);
+                  //for (int i=0; i<N_flip; i++)flip_segment( segments_up, NtauF_m1, Beta, M_up, sign_up, sign_down, F_down, M_down, segments_down, full_line_down);
                }
 
                //.........................Cheap measurments.....................
@@ -530,17 +531,19 @@ class ct_hyb
             // error estimate and binning
             if(bins[0]>0)
             {
-               VecVec Gerr(Nflavor,Vec(Ntau,0.0));
+               VecVec Gerr(Nflavor,Vec(NtauF,0.0));
                binAverageVec( bins, G, Gerr );
                print_VecVec(resultsDir+"/Gerr_rank"+str(mpi.rank())+pad, Gerr, Beta, (double)RankSweeps);
                mpi.report(" Gerr_rank"+str(mpi.rank())+pad+" is printed.");
             }
             //
             // Green's function
+            Vec Ntmp = Nloc;
+            if(paramagnet) spin_symm(Ntmp);
             for (int ifl=0; ifl<Nflavor; ifl++)
             {
-               G[ifl].front() = +Nloc[ifl]-(long double)RankSweeps ;
-               G[ifl].back()  = -Nloc[ifl];
+               G[ifl].front() = +Ntmp[ifl]-(long double)RankSweeps ;
+               G[ifl].back()  = -Ntmp[ifl];
             }
             print_VecVec(resultsDir+"/Gimp_t_rank"+str(mpi.rank())+pad, G, Beta, (double)RankSweeps);
             mpi.report(" Gimp_t_rank"+str(mpi.rank())+pad+" is printed.");
@@ -574,23 +577,25 @@ class ct_hyb
          // error estimate and binning
          if(bins[0]>0)
          {
-            VecVec Gerr(Nflavor,Vec(Ntau,0.0));
+            VecVec Gerr(Nflavor,Vec(NtauF,0.0));
             binAverageVec( bins, G, Gerr );
             Gerr = normalize_VecVec(Gerr, RankSweeps);
-            VecVec PrintGerr(Nflavor,std::vector<double>(Ntau,0.0));
+            VecVec PrintGerr(Nflavor,std::vector<double>(NtauF,0.0));
             mpi.allreduce(Gerr, PrintGerr, true);
             if(mpi.is_master()) print_VecVec(resultsDir+"/Gerr"+pad, PrintGerr, Beta);
             mpi.report(" Gerr"+pad+" is printed.");
          }
          //
          // Green's function
+         Vec Ntmp = Nloc;
+         if(paramagnet) spin_symm(Ntmp);
          for (int ifl=0; ifl<Nflavor; ifl++)
          {
-            G[ifl].front() = +Nloc[ifl]-(long double)RankSweeps ;
-            G[ifl].back()  = -Nloc[ifl];
+            G[ifl].front() = +Ntmp[ifl]-(long double)RankSweeps ;
+            G[ifl].back()  = -Ntmp[ifl];
          }
          VecVec NormG = normalize_VecVec(G, RankSweeps);
-         VecVec PrintG(Nflavor,std::vector<double>(Ntau,0.0));
+         VecVec PrintG(Nflavor,std::vector<double>(NtauF,0.0));
          mpi.allreduce(NormG, PrintG, true);
          if(mpi.is_master()) print_VecVec(resultsDir+"/Gimp_t"+pad, PrintG, Beta);
          mpi.report(" Gimp_t"+pad+" is printed.");
@@ -599,7 +604,7 @@ class ct_hyb
          if(nnt_meas)
          {
             VecVec Normnnt = normalize_VecVec(nnt, RankSweeps);
-            VecVec Printnnt(Nflavor*(Nflavor+1)/2,std::vector<double>(Ntau,0.0));
+            VecVec Printnnt(Nflavor*(Nflavor+1)/2,std::vector<double>(NtauB,0.0));
             mpi.allreduce(Normnnt, Printnnt, true);
             if(mpi.is_master()) print_VecVec(resultsDir+"/nn_t"+pad, Printnnt, Beta);
             mpi.report(" nn_t"+pad+" is printed.");

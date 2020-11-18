@@ -1803,7 +1803,7 @@ contains
       type(BosonicField),intent(in)         :: Wimp
       type(BosonicField),intent(in)         :: Pimp
       !
-      real(8),allocatable                   :: invW(:,:)
+      complex(8),allocatable                :: invW(:,:)
       real(8)                               :: Beta
       integer                               :: Nbp,Nmats
       integer                               :: iw
@@ -1829,22 +1829,24 @@ contains
       if(all([Wimp%Npoints-Nmats,Pimp%Npoints-Nmats].ne.[0,0]))   stop "Either Wimp and/or Pimp have different number of Matsubara points with respect to curlyU."
       !
       call clear_attributes(curlyU)
+      !call isReal(Pimp) put intent(inout)?
+      !call isReal(Wimp) put intent(inout)?
       !
       curlyU%bare_local = Wimp%bare_local
       !
-      allocate(invW(Nbp,Nbp));invW=0d0
+      allocate(invW(Nbp,Nbp));invW=czero
       !$OMP PARALLEL DEFAULT(NONE),&
       !$OMP SHARED(Nbp,Nmats,Wimp,Pimp,curlyU),&
       !$OMP PRIVATE(iw,invW)
       !$OMP DO
       do iw=1,Nmats
          !
-         invW = real(zeye(Nbp) + matmul(Pimp%screened_local(:,:,iw),Wimp%screened_local(:,:,iw)))
+         invW = zeye(Nbp) + matmul(Pimp%screened_local(:,:,iw),Wimp%screened_local(:,:,iw))
          !
          !call inv(invW)
          call inv_sym(invW)
          !
-         curlyU%screened_local(:,:,iw) = dcmplx(real(matmul(Wimp%screened_local(:,:,iw),invW)),0d0)
+         curlyU%screened_local(:,:,iw) = matmul(Wimp%screened_local(:,:,iw),invW)
          !
          call check_Symmetry(curlyU%screened_local(:,:,iw),eps,enforce=.true.,hardstop=.false.,name="curlyU_"//str(iw))
          !
@@ -1852,6 +1854,7 @@ contains
       !$OMP END DO
       !$OMP END PARALLEL
       deallocate(invW)
+      call isReal(curlyU)
       !
    end subroutine calc_curlyU
 
@@ -1899,6 +1902,8 @@ contains
       if(all([curlyU%Npoints-Nmats,ChiC%Npoints-Nmats].ne.[0,0]))   stop "Either curlyU and/or ChiC have different number of Matsubara points with respect to Wimp."
       !
       call clear_attributes(Wimp)
+      !call isReal(ChiC) put intent(inout)?
+      !call isReal(curlyU) put intent(inout)?
       !
       Wimp%bare_local = curlyU%bare_local
       !
@@ -1916,6 +1921,7 @@ contains
       !$OMP END DO
       !$OMP END PARALLEL
       deallocate(Wtmp)
+      call isReal(Wtmp)
       !
    end subroutine calc_Wimp
 

@@ -67,6 +67,7 @@ module module_container
    AllocateBosonicField                     ,&
    DeallocateBosonicField                   ,&
    clear_attributes                         ,&
+   isReal                                   ,&
    loc2imp,imp2loc                          ,&
    symmetrize                               ,&
    MergeFields                              ,&
