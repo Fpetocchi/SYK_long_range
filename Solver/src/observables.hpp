@@ -26,7 +26,7 @@ template<typename T> Vec normalize_Vec( Vec &Vec_in, T &Norm)
 {
    int Nrows=Vec_in.size();
    Vec Vec_out(Nrows,0.0);
-   for (int irow=0; irow<Nrows; irow++) Vec_out[irow]=Vec_in[irow]=(double) Norm;
+   for (int irow=0; irow<Nrows; irow++) Vec_out[irow]=Vec_in[irow]/(double) Norm;
    return Vec_out;
 }
 template<typename T> VecVec normalize_VecVec( VecVec &VecVec_in, T &Norm)
@@ -333,9 +333,6 @@ void accumulate_nnt( VecVec &nn_corr_meas, VecVec &n_tau)
 }
 
 
-//------------------------------------------------------------------------------
-
-
 VecVec measure_nnt_standalone( std::vector<segment_container_t> &segments, std::vector<int> &full_line, int &Ntau, double &Beta)
 {
    //
@@ -416,7 +413,6 @@ Vec measure_Nhist( VecVec &n_tau)
    int Nflavor = n_tau.size();
    int Ntau = n_tau[0].size();
    Vec nhist(Nflavor+1,0.0);
-
    //
    for (int itau=1; itau<Ntau; itau++)
    {
@@ -434,12 +430,11 @@ Vec measure_Szhist( VecVec &n_tau)
    int Nflavor = n_tau.size();
    int Ntau = n_tau[0].size();
    Vec szhist(Nflavor/2+1,0.0);
-
    //
    for (int itau=1; itau<Ntau; itau++)
    {
       int ntmp=0;
-      for (int ifl=0; ifl<Nflavor; ifl+=2) ntmp+=n_tau[ifl][itau]-n_tau[ifl+1][itau];
+      for (int ifl=0; ifl<(Nflavor-1); ifl+=2) ntmp+=n_tau[ifl][itau]-n_tau[ifl+1][itau];
       if (ntmp<0) ntmp*=-1;
       szhist[ntmp]+=1./Ntau;
    }
@@ -458,8 +453,14 @@ void accumulate_Nhist( Vec &nhist, VecVec &n_tau)
    {
       int ntmp=0;
       for (int ifl=0; ifl<Nflavor; ifl++) ntmp+=n_tau[ifl][itau];
-      nhist[ntmp]+=1./Ntau;
+      nhist[(int)ntmp]+=1./Ntau;
    }
+   //
+   /*
+   printf("nhist\n");
+   for (int ifl=0; ifl<nhist.size(); ifl++)printf(" %d - %f\n",ifl,nhist[ifl]);
+   printf("\n");
+   */
 }
 
 
@@ -475,8 +476,14 @@ void accumulate_Szhist( Vec &szhist, VecVec &n_tau)
       int ntmp=0;
       for (int ifl=0; ifl<Nflavor; ifl+=2) ntmp+=n_tau[ifl][itau]-n_tau[ifl+1][itau];
       if (ntmp<0) ntmp*=-1;
-      szhist[ntmp]+=1./Ntau;
+      szhist[(int)ntmp]+=1./Ntau;
    }
+   //
+   /*
+   printf("Shist\n");
+   for (int ifl=0; ifl<szhist.size(); ifl++)printf(" %d - %f\n",ifl,szhist[ifl]);
+   printf("\n");
+   */
 }
 
 

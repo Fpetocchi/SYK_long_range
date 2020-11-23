@@ -151,7 +151,7 @@ class ct_hyb
          if(testing_mpi && mpi.is_master())
          {
             print_Vec(inputDir+"/used.Eloc.DAT", Eloc, mu);
-            print_Vec(inputDir+"/used.Levels.DAT", Levels, NULL);
+            print_Vec(inputDir+"/used.Levels.DAT", Levels);
             print_VecVec(inputDir+"/used.Delta_t.DAT", F);
             if(retarded)print_VecVecVec(inputDir+"/used.K_t.DAT", K_table);
          }
@@ -176,11 +176,11 @@ class ct_hyb
          Nloc.resize(Nflavor,0.0);                                              // ( std::vector<double> )
          Nhist.resize(Nflavor+1,0.0);                                           // ( std::vector<double> )
          Szhist.resize(Nflavor/2+1,0.0);                                        // ( std::vector<double> )
-         Pert.resize(Norder*Nflavor,0.0);                                       // ( std::vector<double> )
-         G.resize(Nflavor,std::vector<double>(NtauF,0.0));                    // ( std::vector<std::vector<double>> )
-         Gerr.resize(Nflavor,std::vector<double>(NtauF,0.0));                 // ( std::vector<std::vector<double>> )
-         nt.resize(Nflavor,std::vector<double>(NtauB,0.0));                   // ( std::vector<std::vector<double>> )
-         nnt.resize(Nflavor*(Nflavor+1)/2,std::vector<double>(NtauB,0.0));    // ( std::vector<std::vector<double>> )
+         Pert.resize(Nflavor,std::vector<double>(Norder,0.0));                  // ( std::vector<std::vector<double>> )
+         G.resize(Nflavor,std::vector<double>(NtauF,0.0));                      // ( std::vector<std::vector<double>> )
+         Gerr.resize(Nflavor,std::vector<double>(NtauF,0.0));                   // ( std::vector<std::vector<double>> )
+         nt.resize(Nflavor,std::vector<double>(NtauB,0.0));                     // ( std::vector<std::vector<double>> )
+         nnt.resize(Nflavor*(Nflavor+1)/2,std::vector<double>(NtauB,0.0));      // ( std::vector<std::vector<double>> )
          //
          RankSign=0.0;
          WorldSign=0.0;
@@ -273,6 +273,7 @@ class ct_hyb
                   //
                   path pad = "_T"+str(printTime*(TimeStamp-1))+".DAT";
                   print_observables(pad,bins);
+                  //
                }
             }
             mu_is_reset=false;
@@ -359,7 +360,7 @@ class ct_hyb
       double                              RankSign,WorldSign;                   // Total Sign
       Vec                                 sign;                                 // Sign per flavor
       Vec                                 Nloc;                                 // Density per flavor
-      Vec                                 Pert;                                 // Perturbation order
+      VecVec                              Pert;                                 // Perturbation order
       Vec                                 Nhist;                                //
       Vec                                 Szhist;                               //
       VecVec                              G;                                    // Impurity Green's function
@@ -436,8 +437,8 @@ class ct_hyb
 
                //
                //.........................Cheap measurments.....................
-               // perturbation order
-               if (segments[ifl].size()<Norder) Pert[ifl*Norder+segments[ifl].size()] += (1./Nmeas_);
+               // perturbation order (check)
+               //if (segments[ifl].size()<Norder) Pert[ifl][(int)segments[ifl].size()] += (1./Nmeas_);
                // Green's functions
                if (segments[ifl].size()>0) measure_G( G_tmp[ifl], segments[ifl], M[ifl], NtauF, Beta );
                // sign among the segments
@@ -461,8 +462,8 @@ class ct_hyb
          {
             nt = measure_nt( segments, full_line, NtauB, Beta );
             accumulate_nnt( nnt, nt );
-            //accumulate_Nhist( Nhist, nt );
-            //accumulate_Szhist( Szhist, nt );
+            accumulate_Szhist( Szhist, nt );
+            accumulate_Nhist( Nhist, nt );
          }
          //.....................................................................
 
@@ -525,7 +526,7 @@ class ct_hyb
             mpi.report(" Nqmc_rank"+str(mpi.rank())+pad+" is printed.");
             //
             // perturbation order
-            print_Vec(resultsDir+"/PertOrder_rank"+str(mpi.rank())+pad, Pert, NULL, 0.0, (double)RankSweeps);
+            print_VecVec(resultsDir+"/PertOrder_rank"+str(mpi.rank())+pad, Pert, 0.0, (double)RankSweeps);
             mpi.report(" PertOrder_rank"+str(mpi.rank())+pad+" is printed.");
             //
             // error estimate and binning
@@ -548,9 +549,19 @@ class ct_hyb
             print_VecVec(resultsDir+"/Gimp_t_rank"+str(mpi.rank())+pad, G, Beta, (double)RankSweeps);
             mpi.report(" Gimp_t_rank"+str(mpi.rank())+pad+" is printed.");
             //
-            // chi charge
+            // observables derived from n(tau)n(0)
             if(nnt_meas)
             {
+               //
+               print_Vec(resultsDir+"/Nhist_rank"+str(mpi.rank())+pad, Nhist );
+               mpi.report(" Nhist_rank"+str(mpi.rank())+pad+" is printed.");
+               //
+               print_Vec(resultsDir+"/Szhist_rank"+str(mpi.rank())+pad, Szhist );
+               mpi.report(" Szhist_rank"+str(mpi.rank())+pad+" is printed.");
+               //
+               print_VecVec(resultsDir+"/n_t_rank"+str(mpi.rank())+pad, nt, Beta, (double)RankSweeps);
+               mpi.report(" n_t_rank"+str(mpi.rank())+pad+" is printed.");
+               //
                print_VecVec(resultsDir+"/nn_t_rank"+str(mpi.rank())+pad, nnt, Beta, (double)RankSweeps);
                mpi.report(" nn_t_rank"+str(mpi.rank())+pad+" is printed.");
             }
@@ -558,7 +569,6 @@ class ct_hyb
 
          //
          // In any case at the ened Master prints after the collapse of the observables
-         //mpi.barrier();
          //
          mpi.report(" Master (Rank #"+str(mpi.master())+") is printing observables.");
          //
@@ -568,10 +578,10 @@ class ct_hyb
          mpi.report(" Nqmc"+pad+" is printed.");
          //
          // perturbation order
-         Vec NormPert = normalize_Vec(Pert, RankSweeps);
-         Vec PrintPert(Norder*Nflavor,0.0);
+         VecVec NormPert = normalize_VecVec(Pert, RankSweeps);
+         VecVec PrintPert(Nflavor,std::vector<double>(Norder,0.0));
          mpi.allreduce(NormPert, PrintPert, true);
-         if(mpi.is_master()) print_Vec(resultsDir+"/PertOrder"+pad, PrintPert, NULL);
+         if(mpi.is_master()) print_VecVec(resultsDir+"/PertOrder"+pad, PrintPert);
          mpi.report(" PertOrder"+pad+" is printed.");
          //
          // error estimate and binning
@@ -600,9 +610,28 @@ class ct_hyb
          if(mpi.is_master()) print_VecVec(resultsDir+"/Gimp_t"+pad, PrintG, Beta);
          mpi.report(" Gimp_t"+pad+" is printed.");
          //
-         // chi charge
+         // observables derived from n(tau)n(0)
          if(nnt_meas)
          {
+            //
+            Vec NormNhist = normalize_Vec(Nhist, RankSweeps);
+            Vec PrintNhist(Nflavor+1,0.0);
+            mpi.allreduce(NormNhist, PrintNhist, true);
+            if(mpi.is_master()) print_Vec(resultsDir+"/Nhist"+pad, PrintNhist);
+            mpi.report(" Nhist"+pad+" is printed.");
+            //
+            Vec NormSzhist = normalize_Vec(Szhist, RankSweeps);
+            Vec PrintSzhist(Nflavor/2+1,0.0);
+            mpi.allreduce(NormSzhist, PrintSzhist, true);
+            if(mpi.is_master()) print_Vec(resultsDir+"/Szhist"+pad, PrintSzhist);
+            mpi.report(" Szhist"+pad+" is printed.");
+            //
+            VecVec Normnt = normalize_VecVec(nt, RankSweeps);
+            VecVec Printnt(Nflavor,std::vector<double>(NtauB,0.0));
+            mpi.allreduce(Normnt, Printnt, true);
+            if(mpi.is_master()) print_VecVec(resultsDir+"/n_t"+pad, Printnt, Beta);
+            mpi.report(" n_t"+pad+" is printed.");
+            //
             VecVec Normnnt = normalize_VecVec(nnt, RankSweeps);
             VecVec Printnnt(Nflavor*(Nflavor+1)/2,std::vector<double>(NtauB,0.0));
             mpi.allreduce(Normnnt, Printnnt, true);

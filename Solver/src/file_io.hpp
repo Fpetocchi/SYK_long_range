@@ -440,7 +440,8 @@ void read_VecVecVec( std::string path, std::vector<std::vector<std::vector<doubl
 //------------------------------------------------------------------------------
 
 
-template <typename T> void print_Vec( std::string path, std::vector<double> &Vec, T mu, double Beta=0.0, double Norm=1.0)
+//template <typename T> void print_Vec( std::string path, std::vector<double> &Vec, T mu, double Beta=0.0, double Norm=1.0)
+void print_Vec( std::string path, std::vector<double> &Vec, double mu=0.0, double Beta=0.0, double Norm=1.0)
 {
    //
    FILE * printFile;
@@ -448,11 +449,12 @@ template <typename T> void print_Vec( std::string path, std::vector<double> &Vec
    printFile = fopen(file ,"w");
    int Nrows = Vec.size();
    //
-   if(std::is_same<T, double>::value) fprintf (printFile , "%.20e\n",mu);
+   //if(std::is_same<T, double>::value) fprintf (printFile , "%.20e\n",mu);
+   if(mu!=0.0) fprintf (printFile , "%.20e\n",mu);
    //
    if(Beta==0.0)
    {
-      for(int irow=0; irow<Nrows; irow++) fprintf (printFile , "%i\t%.20e\n",irow,Vec[irow]);
+      for(int irow=0; irow<Nrows; irow++) fprintf (printFile , "%i\t%.20e\n",irow,Vec[irow]/Norm);
    }
    else
    {

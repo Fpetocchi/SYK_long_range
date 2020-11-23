@@ -630,13 +630,13 @@ contains
       endif
       !
       ! Check if the data on the Matsubara axis are present if(.not.paramagneticSPEX) look also for spin2
-      path = reg(pathINPUT)//"SGoWo_k_up.DAT"
+      path = reg(pathINPUT)//"SGoWo_k_s1.DAT"
       call inquireFile(reg(path),ACdone,hardstop=.false.,verb=verbose)
       doAC_ = .not.ACdone
       if(present(doAC)) doAC_ = doAC
       !
       ! Check if the Vxc_wann is present
-      path = reg(pathINPUT)//"Vxc_k_up.DAT"
+      path = reg(pathINPUT)//"Vxc_k_s1.DAT"
       call inquireFile(reg(path),Vxcdone,hardstop=.false.,verb=verbose)
       doVxc = .not.Vxcdone .and. present(Vxc)
       if(doVxc.and.(.not.doAC_))then
@@ -905,10 +905,6 @@ contains
          call FermionicKsum(Smats_GoWo)
          !
          ! Print out the transformed stuff
-         ! local
-         !call dump_FermionicField(Smats_GoWo,1,reg(pathOUTPUT_),"Sigma_GoWo_up.DAT")
-         !if(Nspin_spex.eq.2)call dump_FermionicField(Smats_GoWo,2,reg(pathOUTPUT_),"Sigma_GoWo_dw.DAT")
-         ! k-dependent
          call dump_FermionicField(Smats_GoWo,reg(pathOUTPUT_),"SGoWo",.true.,Lttc%kpt)
          if(save2readable)call dump_FermionicField(Smats_GoWo,reg(pathOUTPUT_)//"Sigma_imag/","SGoWo",.false.,Lttc%kpt)
          !
@@ -921,20 +917,20 @@ contains
          !
          !---------------------------------------------------------------------!
          !
-         write(*,"(A)")"     Reading SigmaGoWo(ik,iw) from "//reg(pathINPUT)//"SGoWo_k_[up,dw].DAT"
+         write(*,"(A)")"     Reading SigmaGoWo(ik,iw) from "//reg(pathINPUT)//"SGoWo_k_s[1,2].DAT"
          !
          ! Just read all
          call clear_attributes(Smats_GoWo)
-         call read_FermionicField(Smats_GoWo,reg(pathINPUT),"SGoWo")
+         call read_FermionicField(Smats_GoWo,reg(pathINPUT),"SGoWo",Lttc%kpt)
          !
          if(present(Vxc))then
             call assert_shape(Vxc,[Norb,Norb,Nkpt,Nspin],"read_Sigma_spex","Vxc")
             Vxc=czero
-            call read_matrix(Vxc(:,:,:,1),reg(pathINPUT),"Vxc_k_up.DAT")
+            call read_matrix(Vxc(:,:,:,1),reg(pathINPUT),"Vxc_k_s1.DAT")
             if(paramagneticSPEX)then
                Vxc(:,:,:,2) = Vxc(:,:,:,1)
             else
-               call read_matrix(Vxc(:,:,:,2),reg(pathINPUT),"Vxc_k_dw.DAT")
+               call read_matrix(Vxc(:,:,:,2),reg(pathINPUT),"Vxc_k_s2.DAT")
             endif
          endif
          !
@@ -1164,8 +1160,8 @@ contains
       do ik=1,Nkpt
          Vxc_loc = Vxc_loc + Vxc(:,:,ik,:)/Nkpt
       enddo
-      call dump_matrix(Vxc_loc(:,:,1),reg(pathINPUT)//"Vxc_up.DAT")
-      if(Nspin_Uwan.eq.2)call dump_matrix(Vxc_loc(:,:,2),reg(pathINPUT)//"Vxc_dw.DAT")
+      call dump_matrix(Vxc_loc(:,:,1),reg(pathINPUT)//"Vxc_s1.DAT")
+      if(Nspin_Uwan.eq.2)call dump_matrix(Vxc_loc(:,:,2),reg(pathINPUT)//"Vxc_s2.DAT")
       deallocate(Vxc_loc)
       !
     end subroutine read_vxc

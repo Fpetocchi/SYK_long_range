@@ -17,37 +17,37 @@ module file_io
    !PURPOSE: Module interfaces
    !---------------------------------------------------------------------------!
    interface dump_Matrix
-      module procedure :: dump_Matrix_local_d                                   ![Umat,printpath]
-      module procedure :: dump_Matrix_local_z                                   ![Umat,printpath]
-      module procedure :: dump_Matrix_Kdep_d                                    ![Umat(:,:,:),dirpath,filename,binfmt,ispin(optional)]
-      module procedure :: dump_Matrix_Kdep_z                                    ![Umat(:,:,:),dirpath,filename,binfmt,ispin(optional)]
+      module procedure :: dump_Matrix_local_d                                   ![Umat(Norb,Norb),printpath]............................................( Writes only to formatted output )
+      module procedure :: dump_Matrix_local_z                                   ![Umat(Norb,Norb),printpath]............................................( Writes only to formatted output )
+      module procedure :: dump_Matrix_Kdep_d                                    ![Umat(Norb,Norb,Nkpt),dirpath,filename,binfmt].........................( Writes output depending on binfmt )
+      module procedure :: dump_Matrix_Kdep_z                                    ![Umat(Norb,Norb,Nkpt),dirpath,filename,binfmt].........................( Writes output depending on binfmt )
    end interface dump_Matrix
    interface read_Matrix
-      module procedure :: read_Matrix_local_d                                   ![Umat,printpath]                (Reads only from formatted input.)
-      module procedure :: read_Matrix_local_z                                   ![Umat,printpath]                (Reads only from formatted input.)
-      module procedure :: read_Matrix_Kdep_d                                    ![Umat(:,:,:),dirpath,filename]  (Reads only from unformatted input.)
-      module procedure :: read_Matrix_Kdep_z                                    ![Umat(:,:,:),dirpath,filename]  (Reads only from unformatted input.)
+      module procedure :: read_Matrix_local_d                                   ![Umat(Norb,Norb),printpath]............................................( Reads only from formatted input )
+      module procedure :: read_Matrix_local_z                                   ![Umat(Norb,Norb),printpath]............................................( Reads only from formatted input )
+      module procedure :: read_Matrix_Kdep_d                                    ![Umat(Norb,Norb,Nkpt),dirpath,filename]................................( Reads only from unformatted input )
+      module procedure :: read_Matrix_Kdep_z                                    ![Umat(Norb,Norb,Nkpt),dirpath,filename]................................( Reads only from unformatted input )
    end interface read_Matrix
 
    interface dump_FermionicField
-      module procedure :: dump_FermionicField_local                             ![FermionicField,dirpath,filename,ispin,axis(optional for real freq. or tau)]     (Only local projection. Writes only to formatted output.)
-      module procedure :: dump_FermionicField_Kdep                              ![FermionicField,dirpath,filename,binfmt,axis(optional for real freq. or tau))]   (Fixed format: [filename]k.DAT.[1,2]. Writes to format chosen by binfmt.)
-      module procedure :: dump_Field_component                                  ![Array,dirpath,filename,axis]
+      module procedure :: dump_Field_component                                  ![Array(Nfreq),dirpath,filename,axis]...................................( Writes only to formatted output )
+      module procedure :: dump_FermionicField_local                             ![FermionicField,dirpath,filename,axis(optional)].......................( Writes only to formatted output )
+      module procedure :: dump_FermionicField_Kdep                              ![FermionicField,dirpath,filename,binfmt,kpt(3,Nkpt),axis(optional)]....( Writes output depending on binfmt )
    end interface dump_FermionicField
 
    interface read_FermionicField
-      module procedure :: read_FermionicField_local                             ![FermionicField,dirpath,filename,ispin,axis(optional for real freq. or tau)]     (Only local projection. Reads only from formatted input.)
-      module procedure :: read_FermionicField_Kdep                              ![FermionicField,dirpath,filename,axis(optional for real freq. or tau))]          (Fixed format: [filename]k.DAT.[1,2]. Reads only from unformatted input.)
+      module procedure :: read_FermionicField_local                             ![FermionicField,dirpath,filename,axis(optional)].......................( Reads only from formatted input )
+      module procedure :: read_FermionicField_Kdep                              ![FermionicField,dirpath,filename,kpt(3,Nkpt),axis(optional)]...........( Reads only from unformatted input )
    end interface read_FermionicField
 
    interface dump_BosonicField
-      module procedure :: dump_BosonicField_local                               ![BosonicField,dirpath,filename,axis(optional for real freq. or tau)]             (Only local projection)
-      module procedure :: dump_BosonicField_Kdep_SPEXlike                       ![BosonicField,dirpath,binfmt,axis(optional for real freq. or tau))]              (Fixed format: VW_{real,imag}/VW.Q****.DAT )
-      module procedure :: dump_Field_component                                  ![Array,dirpath,filename,axis]
+      module procedure :: dump_Field_component                                  ![Array(Nfreq),dirpath,filename,axis]...................................( Writes only to formatted output )
+      module procedure :: dump_BosonicField_local                               ![BosonicField,dirpath,filename,axis(optional)].........................( Writes only to formatted output )
+      module procedure :: dump_BosonicField_Kdep_SPEXlike                       ![BosonicField,dirpath,binfmt,axis(optional)]...........................( Writes output depending on binfmt )
    end interface dump_BosonicField
 
    interface read_BosonicField
-      module procedure :: read_BosonicField_local                               ![BosonicField,dirpath,filename,axis(optional for real freq. or tau))]            (Only local projection. Reads only from formatted input.)
+      module procedure :: read_BosonicField_local                               ![BosonicField,dirpath,filename,axis(optional)].........................( Reads only from unformatted input )
    end interface read_BosonicField
 
    !---------------------------------------------------------------------------!
@@ -79,7 +79,7 @@ contains
 
 
    !---------------------------------------------------------------------------!
-   !PURPOSE: Write to file a generic matrix
+   !PURPOSE: Write square matrices to file
    !TEST ON: 17-11-2020
    !---------------------------------------------------------------------------!
    subroutine dump_Matrix_local_z(Umat,printpath)
@@ -95,7 +95,7 @@ contains
       !
       !
       if(verbose)write(*,"(A)") "---- dump_Matrix_local_z"
-      if(verbose)write(*,"(A)") "     Dump "//reg(printpath)//" (readable)"
+      write(*,"(A)") "     Dump "//reg(printpath)//" (readable)"
       !
       !
       unit = free_unit()
@@ -124,7 +124,7 @@ contains
       !
       !
       if(verbose)write(*,"(A)") "---- dump_Matrix_local_d"
-      if(verbose)write(*,"(A)") "     Dump "//reg(printpath)//" (readable)"
+      write(*,"(A)") "     Dump "//reg(printpath)//" (readable)"
       !
       !
       unit = free_unit()
@@ -135,10 +135,170 @@ contains
       close(unit)
       !
    end subroutine dump_Matrix_local_d
+   !
+   subroutine dump_Matrix_Kdep_z(Umat,dirpath,filename,binfmt,ispin)
+      !
+      use utils_misc
+      use utils_fields
+      implicit none
+      !
+      complex(8),intent(in)                 :: Umat(:,:,:)
+      character(len=*),intent(in)           :: dirpath
+      character(len=*),intent(in)           :: filename
+      logical,intent(in)                    :: binfmt
+      integer,intent(in),optional           :: ispin
+      !
+      integer                               :: unit,ik,Norb,Nkpt
+      integer                               :: iwan1,iwan2
+      character(len=256)                    :: printpath
+      !
+      !
+      if(verbose)write(*,"(A)") "---- dump_Matrix_Kdep_z"
+      !
+      !
+      ! Check on the input matrix
+      Nkpt = size(Umat,dim=3)
+      Norb = size(Umat,dim=1)
+      if(Norb.ne.size(Umat,dim=2)) stop "The provided matrix is not square."
+      !
+      ! Create directory
+      call createDir(reg(dirpath),verb=verbose)
+      !
+      ! Write to file
+      if(binfmt) then
+         !
+         if(present(ispin))then
+            printpath = reg(dirpath)//reg(filename)//"_k_s"//str(ispin)//".DAT"
+         else
+            printpath = reg(dirpath)//reg(filename)//"_k.DAT."
+         endif
+         write(*,"(A)") "     Dump "//reg(printpath)//" (binary)"
+         !
+         unit = free_unit()
+         open(unit,file=reg(printpath),form="unformatted",status="unknown",position="rewind",action="write")
+         !
+         write(unit) Nkpt,Norb
+         do ik=1,Nkpt
+            write(unit) ik
+            do iwan1=1,Norb
+               do iwan2=1,Norb
+                  write(unit) iwan1,iwan2,real(Umat(iwan1,iwan2,ik)),aimag(Umat(iwan1,iwan2,ik))
+               enddo
+            enddo
+         enddo !ik
+         close(unit)
+         !
+      else
+         !
+         do ik=1,Nkpt
+            !
+            if(present(ispin))then
+               printpath = reg(dirpath)//reg(filename)//"_ik"//str(ik)//"_s"//str(ispin)//".DAT"
+            else
+               printpath = reg(dirpath)//reg(filename)//"_ik"//str(ik)//".DAT"
+            endif
+            write(*,"(A)") "     Dump "//reg(printpath)//" (readable)"
+            unit = free_unit()
+            open(unit,file=reg(printpath),form="formatted",status="unknown",position="rewind",action="write")
+            !
+            write(unit,"(2(A,1I7))") "ik",ik,"Norb",Norb
+            do iwan1=1,Norb
+               do iwan2=1,Norb
+                  write(unit,"(2I4,2E20.12)") iwan1,iwan2,real(Umat(iwan1,iwan2,ik)),aimag(Umat(iwan1,iwan2,ik))
+               enddo
+            enddo
+            !
+            close(unit)
+            !
+         enddo !ik
+         !
+      endif
+      !
+   end subroutine dump_Matrix_Kdep_z
+   !
+   subroutine dump_Matrix_Kdep_d(Umat,dirpath,filename,binfmt,ispin)
+      !
+      use utils_misc
+      use utils_fields
+      implicit none
+      !
+      real(8),intent(in)                    :: Umat(:,:,:)
+      character(len=*),intent(in)           :: dirpath
+      character(len=*),intent(in)           :: filename
+      logical,intent(in)                    :: binfmt
+      integer,intent(in),optional           :: ispin
+      !
+      integer                               :: unit,ik,Norb,Nkpt
+      integer                               :: iwan1,iwan2
+      character(len=256)                    :: printpath
+      !
+      !
+      if(verbose)write(*,"(A)") "---- dump_Matrix_Kdep_d"
+      !
+      !
+      ! Check on the input matrix
+      Nkpt = size(Umat,dim=3)
+      Norb = size(Umat,dim=1)
+      if(Norb.ne.size(Umat,dim=2)) stop "The provided matrix is not square."
+      !
+      ! Create directory
+      call createDir(reg(dirpath),verb=verbose)
+      !
+      ! Write to file
+      if(binfmt) then
+         !
+         if(present(ispin))then
+            printpath = reg(dirpath)//reg(filename)//"_k_s"//str(ispin)//".DAT"
+         else
+            printpath = reg(dirpath)//reg(filename)//"_k.DAT."
+         endif
+         write(*,"(A)") "     Dump "//reg(printpath)//" (binary)"
+         !
+         unit = free_unit()
+         open(unit,file=reg(printpath),form="unformatted",status="unknown",position="rewind",action="write")
+         !
+         write(unit) Nkpt,Norb
+         do ik=1,Nkpt
+            write(unit) ik
+            do iwan1=1,Norb
+               do iwan2=1,Norb
+                  write(unit) iwan1,iwan2,Umat(iwan1,iwan2,ik)
+               enddo
+            enddo
+         enddo !ik
+         close(unit)
+         !
+      else
+         !
+         do ik=1,Nkpt
+            !
+            if(present(ispin))then
+               printpath = reg(dirpath)//reg(filename)//"_ik"//str(ik)//"_s"//str(ispin)//".DAT"
+            else
+               printpath = reg(dirpath)//reg(filename)//"_ik"//str(ik)//".DAT"
+            endif
+            write(*,"(A)") "     Dump "//reg(printpath)//" (readable)"
+            unit = free_unit()
+            open(unit,file=reg(printpath),form="formatted",status="unknown",position="rewind",action="write")
+            !
+            write(unit,"(2(A,1I7))") "ik",ik,"Norb",Norb
+            do iwan1=1,Norb
+               do iwan2=1,Norb
+                  write(unit,"(2I4,2E20.12)") iwan1,iwan2,Umat(iwan1,iwan2,ik)
+               enddo
+            enddo
+            !
+            close(unit)
+            !
+         enddo !ik
+         !
+      endif
+      !
+   end subroutine dump_Matrix_Kdep_d
 
 
    !---------------------------------------------------------------------------!
-   !PURPOSE: Read from file a square matrix
+   !PURPOSE: Read square matrices from file
    !TEST ON: 17-11-2020
    !---------------------------------------------------------------------------!
    subroutine read_Matrix_local_z(Umat,readpath)
@@ -157,7 +317,7 @@ contains
       !
       !
       if(verbose)write(*,"(A)") "---- read_Matrix_local_z"
-      if(verbose)write(*,"(A)") "     Read "//reg(readpath)
+      write(*,"(A)") "     Read "//reg(readpath)
       !
       call inquireFile(reg(readpath),filexists,verb=verbose)
       allocate(RealM(size(Umat,dim=1),size(Umat,dim=2)));RealM=0d0
@@ -194,7 +354,7 @@ contains
       !
       !
       if(verbose)write(*,"(A)") "---- read_Matrix_local_d"
-      if(verbose)write(*,"(A)") "     Read "//reg(readpath)
+      write(*,"(A)") "     Read "//reg(readpath)
       !
       call inquireFile(reg(readpath),filexists,verb=verbose)
       allocate(RealM(size(Umat,dim=1),size(Umat,dim=2)));RealM=0d0
@@ -210,180 +370,7 @@ contains
       Umat = RealM
       !
    end subroutine read_Matrix_local_d
-
-
-   !---------------------------------------------------------------------------!
-   !PURPOSE: Write to file a K-dependent matrix
-   !---------------------------------------------------------------------------!
-   subroutine dump_Matrix_Kdep_z(Umat,dirpath,filename,binfmt,ispin)
-      !
-      use utils_misc
-      use utils_fields
-      implicit none
-      !
-      complex(8),intent(in)                 :: Umat(:,:,:)
-      character(len=*),intent(in)           :: dirpath
-      character(len=*),intent(in)           :: filename
-      logical,intent(in)                    :: binfmt
-      integer,optional                      :: ispin
-      !
-      integer                               :: unit,ik,Norb,Nkpt
-      integer                               :: iwan1,iwan2
-      character(len=256)                    :: printpath
-      !
-      !
-      if(verbose)write(*,"(A)") "---- dump_Matrix_Kdep_z"
-      !
-      !
-      ! Check on the input matrix
-      Nkpt = size(Umat,dim=3)
-      Norb = size(Umat,dim=1)
-      if(Norb.ne.size(Umat,dim=2)) stop "The provided matrix is not square."
-      !
-      ! Create directory
-      call createDir(reg(dirpath),verb=verbose)
-      !
-      ! Write to file
-      if(binfmt) then
-         !
-         if(present(ispin))then
-            if(ispin.eq.1)printpath = reg(dirpath)//reg(filename)//"_k_up.DAT"
-            if(ispin.eq.2)printpath = reg(dirpath)//reg(filename)//"_k_dw.DAT"
-         else
-            printpath = reg(dirpath)//reg(filename)//"_k.DAT."
-         endif
-         if(verbose)write(*,"(A)") "     Dump "//reg(printpath)//" (binary)"
-         !
-         unit = free_unit()
-         open(unit,file=reg(printpath),form="unformatted",status="unknown",position="rewind",action="write")
-         !
-         write(unit) Nkpt,Norb
-         do ik=1,Nkpt
-            write(unit) ik
-            do iwan1=1,Norb
-               do iwan2=1,Norb
-                  write(unit) iwan1,iwan2,real(Umat(iwan1,iwan2,ik)),aimag(Umat(iwan1,iwan2,ik))
-               enddo
-            enddo
-         enddo !ik
-         close(unit)
-         !
-      else
-         !
-         do ik=1,Nkpt
-            !
-            if(present(ispin))then
-               if(ispin.eq.1)printpath = reg(dirpath)//reg(filename)//"_ik"//str(ik)//"_up.DAT."
-               if(ispin.eq.2)printpath = reg(dirpath)//reg(filename)//"_ik"//str(ik)//"_dw.DAT."
-            else
-               printpath = reg(dirpath)//reg(filename)//"_ik"//str(ik)//".DAT."
-            endif
-            if(verbose)write(*,"(A)") "     Dump "//reg(printpath)//" (readable)"
-            unit = free_unit()
-            open(unit,file=reg(printpath),form="formatted",status="unknown",position="rewind",action="write")
-            !
-            write(unit,"(2(A,1I7))") "ik",ik,"Norb",Norb
-            do iwan1=1,Norb
-               do iwan2=1,Norb
-                  write(unit,"(2I4,2E20.12)") iwan1,iwan2,real(Umat(iwan1,iwan2,ik)),aimag(Umat(iwan1,iwan2,ik))
-               enddo
-            enddo
-            !
-            close(unit)
-            !
-         enddo !ik
-         !
-      endif
-      !
-   end subroutine dump_Matrix_Kdep_z
    !
-   subroutine dump_Matrix_Kdep_d(Umat,dirpath,filename,binfmt,ispin)
-      !
-      use utils_misc
-      use utils_fields
-      implicit none
-      !
-      real(8),intent(in)                    :: Umat(:,:,:)
-      character(len=*),intent(in)           :: dirpath
-      character(len=*),intent(in)           :: filename
-      logical,intent(in)                    :: binfmt
-      integer,optional                      :: ispin
-      !
-      integer                               :: unit,ik,Norb,Nkpt
-      integer                               :: iwan1,iwan2
-      character(len=256)                    :: printpath
-      !
-      !
-      if(verbose)write(*,"(A)") "---- dump_Matrix_Kdep_d"
-      !
-      !
-      ! Check on the input matrix
-      Nkpt = size(Umat,dim=3)
-      Norb = size(Umat,dim=1)
-      if(Norb.ne.size(Umat,dim=2)) stop "The provided matrix is not square."
-      !
-      ! Create directory
-      call createDir(reg(dirpath),verb=verbose)
-      !
-      ! Write to file
-      if(binfmt) then
-         !
-         if(present(ispin))then
-            if(ispin.eq.1)printpath = reg(dirpath)//reg(filename)//"_k_up.DAT"
-            if(ispin.eq.2)printpath = reg(dirpath)//reg(filename)//"_k_dw.DAT"
-         else
-            printpath = reg(dirpath)//reg(filename)//"_k.DAT."
-         endif
-         if(verbose)write(*,"(A)") "     Dump "//reg(printpath)//" (binary)"
-         !
-         unit = free_unit()
-         open(unit,file=reg(printpath),form="unformatted",status="unknown",position="rewind",action="write")
-         !
-         write(unit) Nkpt,Norb
-         do ik=1,Nkpt
-            write(unit) ik
-            do iwan1=1,Norb
-               do iwan2=1,Norb
-                  write(unit) iwan1,iwan2,Umat(iwan1,iwan2,ik)
-               enddo
-            enddo
-         enddo !ik
-         close(unit)
-         !
-      else
-         !
-         do ik=1,Nkpt
-            !
-            if(present(ispin))then
-               if(ispin.eq.1)printpath = reg(dirpath)//reg(filename)//"_ik"//str(ik)//"_up.DAT."
-               if(ispin.eq.2)printpath = reg(dirpath)//reg(filename)//"_ik"//str(ik)//"_dw.DAT."
-            else
-               printpath = reg(dirpath)//reg(filename)//"_ik"//str(ik)//".DAT."
-            endif
-            if(verbose)write(*,"(A)") "     Dump "//reg(printpath)//" (readable)"
-            unit = free_unit()
-            open(unit,file=reg(printpath),form="formatted",status="unknown",position="rewind",action="write")
-            !
-            write(unit,"(2(A,1I7))") "ik",ik,"Norb",Norb
-            do iwan1=1,Norb
-               do iwan2=1,Norb
-                  write(unit,"(2I4,2E20.12)") iwan1,iwan2,Umat(iwan1,iwan2,ik)
-               enddo
-            enddo
-            !
-            close(unit)
-            !
-         enddo !ik
-         !
-      endif
-      !
-   end subroutine dump_Matrix_Kdep_d
-
-
-   !---------------------------------------------------------------------------!
-   !PURPOSE: Read from file a K-dependent matrix
-   !TEST ON: 27-10-2020(z)
-   !---------------------------------------------------------------------------!
    subroutine read_Matrix_Kdep_z(Umat,dirpath,filename)
       !
       use parameters
@@ -407,7 +394,7 @@ contains
       !
       if(verbose)write(*,"(A)") "---- read_Matrix_Kdep_z"
       readpath = reg(dirpath)//filename
-      if(verbose)write(*,"(A)") "     Read "//reg(readpath)
+      write(*,"(A)") "     Read "//reg(readpath)
       !
       ! Check on the input Matrix
       Nkpt = size(Umat,dim=3)
@@ -470,7 +457,7 @@ contains
       !
       if(verbose)write(*,"(A)") "---- read_Matrix_Kdep_d"
       readpath = reg(dirpath)//filename
-      if(verbose)write(*,"(A)") "     Read "//reg(readpath)
+      write(*,"(A)") "     Read "//reg(readpath)
       !
       ! Check on the input Matrix
       Nkpt = size(Umat,dim=3)
@@ -549,10 +536,10 @@ contains
 
 
    !---------------------------------------------------------------------------!
-   !PURPOSE: Write to file the local attributes of a Fermionic field
+   !PURPOSE: Write to file Fermionic fields
    !TEST ON: 16-10-2020
    !---------------------------------------------------------------------------!
-   subroutine dump_FermionicField_local(G,ispin,dirpath,filename,axis)
+   subroutine dump_FermionicField_local(G,dirpath,filename,axis)
       !
       use parameters
       use utils_misc
@@ -560,20 +547,17 @@ contains
       implicit none
       !
       type(FermionicField),intent(in)       :: G
-      integer,intent(in)                    :: ispin
       character(len=*),intent(in)           :: dirpath
       character(len=*),intent(in)           :: filename
       real(8),intent(in),optional           :: axis(:)
       !
       integer                               :: unit
       integer                               :: iaxis,Norb
-      integer                               :: iwan1,iwan2
+      integer                               :: iwan1,iwan2,ispin
       character(len=256)                    :: printpath
       !
       !
       if(verbose)write(*,"(A)") "---- dump_FermionicField_local"
-      printpath = reg(dirpath)//filename
-      if(verbose)write(*,"(A)") "     Dump "//reg(printpath)//" (readable)"
       !
       !
       ! Check on the input Field
@@ -596,28 +580,30 @@ contains
       call createDir(reg(dirpath),verb=verbose)
       !
       ! Write to file
-      unit = free_unit()
-      open(unit,file=reg(printpath),form="formatted",status="unknown",position="rewind",action="write")
-      write(unit,"(I5,A)") Norb," Number of Wannier functions"
-      write(unit,"(I5,A)") G%Npoints," Number of grid points"
-      write(unit,"(1E20.12,A)") G%mu," chemical potential"
-      write(unit,"(A)") "Wannier-projected fermionic components:"
-      do iaxis=1,G%Npoints
-         do iwan1=1,Norb
-            do iwan2=1,Norb
-               write(unit,"(1E20.12,2I4,2E20.12)") axis_(iaxis),iwan1,iwan2,real(G%ws(iwan1,iwan2,iaxis,ispin)),aimag(G%ws(iwan1,iwan2,iaxis,ispin))
+      do ispin=1,Nspin
+         !
+         printpath = reg(dirpath)//filename//"_s"//str(ispin)//".DAT"
+         write(*,"(A)") "     Dump "//reg(printpath)//" (readable)"
+         !
+         unit = free_unit()
+         open(unit,file=reg(printpath),form="formatted",status="unknown",position="rewind",action="write")
+         write(unit,"(I5,A)") Norb," Number of Wannier functions"
+         write(unit,"(I5,A)") G%Npoints," Number of grid points"
+         write(unit,"(1E20.12,A)") G%mu," chemical potential"
+         write(unit,"(A)") "Wannier-projected fermionic components:"
+         do iaxis=1,G%Npoints
+            do iwan1=1,Norb
+               do iwan2=1,Norb
+                  write(unit,"(1E20.12,2I4,2E20.12)") axis_(iaxis),iwan1,iwan2,real(G%ws(iwan1,iwan2,iaxis,ispin)),aimag(G%ws(iwan1,iwan2,iaxis,ispin))
+               enddo
             enddo
          enddo
+         close(unit)
+         !
       enddo
-      close(unit)
       !
    end subroutine dump_FermionicField_local
-
-
-   !---------------------------------------------------------------------------!
-   !PURPOSE: Write to file the K-dependent Fermionic field
-   !TEST ON: 16-10-2020(both binfmt)
-   !---------------------------------------------------------------------------!
+   !
    subroutine dump_FermionicField_Kdep(G,dirpath,filename,binfmt,kpt,axis)
       !
       use parameters
@@ -666,10 +652,8 @@ contains
          !
          if(binfmt) then
             !
-            if(ispin.eq.1)printpath = reg(dirpath)//reg(filename)//"_k_up.DAT"
-            if(ispin.eq.2)printpath = reg(dirpath)//reg(filename)//"_k_dw.DAT"
-            !
-            if(verbose)write(*,"(A)") "     Dump "//reg(printpath)//" (binary)"
+            printpath = reg(dirpath)//reg(filename)//"_k_s"//str(ispin)//".DAT"
+            write(*,"(A)") "     Dump "//reg(printpath)//" (binary)"
             !
             unit = free_unit()
             open(unit,file=reg(printpath),form="unformatted",status="unknown",position="rewind",action="write")
@@ -692,10 +676,9 @@ contains
             !
             do ik=1,G%Nkpt
                !
-               if(ispin.eq.1)printpath = reg(dirpath)//reg(filename)//"_k_up.DAT"
-               if(ispin.eq.2)printpath = reg(dirpath)//reg(filename)//"_k_dw.DAT"
+               printpath = reg(dirpath)//reg(filename)//"_ik"//str(ik)//"_s"//str(ispin)//".DAT"
+               write(*,"(A)") "     Dump "//reg(printpath)//" (readable)"
                !
-               if(verbose)write(*,"(A)") "     Dump "//reg(printpath)//" (readable)"
                unit = free_unit()
                open(unit,file=reg(printpath),form="formatted",status="unknown",position="rewind",action="write")
                !
@@ -721,10 +704,10 @@ contains
 
 
    !---------------------------------------------------------------------------!
-   !PURPOSE: Read from file the local attributes of a Fermionic field
+   !PURPOSE: Read from file Fermionic fields
    !TEST ON: 16-10-2020
    !---------------------------------------------------------------------------!
-   subroutine read_FermionicField_local(G,ispin,dirpath,filename,axis)
+   subroutine read_FermionicField_local(G,dirpath,filename,axis)
       !
       use parameters
       use utils_misc
@@ -734,81 +717,81 @@ contains
       type(FermionicField),intent(inout)    :: G
       character(len=*),intent(in)           :: dirpath
       character(len=*),intent(in)           :: filename
-      integer,intent(in)                    :: ispin
       real(8),intent(inout),optional        :: axis(:)
       !
       integer                               :: unit
-      integer                               :: iaxis,Norb
+      integer                               :: iaxis,Norb,ispin
       integer                               :: iwan1,iwan2
       integer                               :: idum1,idum2
       integer                               :: Norb_read,Naxis_read
-      real(8)                               :: mu_read
+      real(8)                               :: mu_read(2)
       real(8)                               :: axispoint,RealG,ImagG
       logical                               :: filexists
       character(len=256)                    :: readpath
       !
       !
       if(verbose)write(*,"(A)") "---- read_FermionicField_local"
-      readpath = reg(dirpath)//filename
-      if(verbose)write(*,"(A)") "     Read "//reg(readpath)
+      !
       !
       ! Check on the input Field
       if(.not.G%status) stop "Field not properly initialized."
       Norb = G%Norb
       !
-      ! Check file existence
-      call inquireFile(reg(readpath),filexists,verb=verbose)
-      !
-      ! Read file
-      unit = free_unit()
-      open(unit,file=reg(readpath),form="formatted",status="old",position="rewind",action="read")
-      read(unit,*) Norb_read !," Number of Wannier functions"
-      read(unit,*) Naxis_read !," Number of grid points"
-      read(unit,*) mu_read !," chemical potential"
-      !
-      if(Norb_read.ne.Norb) stop "File with wrong number of Wannier functions."
-      if(present(axis))then
-         if(size(axis).ne.G%Npoints)write(*,"(A)")"Warning: Axis provided but its length: "//str(size(axis))//" does not match with field mesh: "//str(G%Npoints)//". Reading up to the smaller."
-         Naxis = min(size(axis),G%Npoints)
-         if(Naxis.ne.Naxis_read)write(*,"(A)")"Warning: Expected grid: "//str(Naxis)//" does not match with files grid: "//str(Naxis_read)//". Reading up to the smaller."
-         Naxis = min(Naxis,Naxis_read)
-         if(allocated(axis_))deallocate(axis_)
-         allocate(axis_(Naxis));axis_=0d0
-      else
-         if(Naxis_read.ne.G%Npoints)write(*,"(A)")"Warning: Files grid: "//str(Naxis_read)//" does not match with field mesh: "//str(G%Npoints)//". Reading up to the smaller."
-         Naxis = min(Naxis_read,G%Npoints)
-         if(allocated(axis_))deallocate(axis_)
-         allocate(axis_(Naxis));axis_=0d0
-         axis_ = FermionicFreqMesh(G%Beta,G%Npoints)
-      endif
-      !
-      read(unit,*) !"Wannier-projected fermionic components:"
-      do iaxis=1,Naxis
-         do iwan1=1,Norb
-            do iwan2=1,Norb
-               !
-               read(unit,"(1F20.10,2I4,2E20.12)") axispoint,idum1,idum2,RealG,ImagG
-               if (idum1.ne.iwan1) stop "iwan1 does not match"
-               if (idum2.ne.iwan2) stop "iwan2 does not match"
-               G%ws(iwan1,iwan2,iaxis,ispin) = dcmplx(RealG,ImagG)
-               !
+      do ispin=1,Nspin
+         !
+         readpath = reg(dirpath)//filename//"_s"//str(ispin)//".DAT"
+         write(*,"(A)") "     Read "//reg(readpath)
+         call inquireFile(reg(readpath),filexists,verb=verbose)
+         !
+         ! Read file
+         unit = free_unit()
+         open(unit,file=reg(readpath),form="formatted",status="old",position="rewind",action="read")
+         !
+         read(unit,*) Norb_read !," Number of Wannier functions"
+         read(unit,*) Naxis_read !," Number of grid points"
+         read(unit,*) mu_read(ispin) !," chemical potential"
+         !
+         if(Norb_read.ne.Norb) stop "File with wrong number of Wannier functions."
+         if(present(axis))then
+            if(size(axis).ne.G%Npoints)write(*,"(A)")"Warning: Axis provided but its length: "//str(size(axis))//" does not match with field mesh: "//str(G%Npoints)//". Reading up to the smaller."
+            Naxis = min(size(axis),G%Npoints)
+            if(Naxis.ne.Naxis_read)write(*,"(A)")"Warning: Expected grid: "//str(Naxis)//" does not match with files grid: "//str(Naxis_read)//". Reading up to the smaller."
+            Naxis = min(Naxis,Naxis_read)
+            if(allocated(axis_))deallocate(axis_)
+            allocate(axis_(Naxis));axis_=0d0
+         else
+            if(Naxis_read.ne.G%Npoints)write(*,"(A)")"Warning: Files grid: "//str(Naxis_read)//" does not match with field mesh: "//str(G%Npoints)//". Reading up to the smaller."
+            Naxis = min(Naxis_read,G%Npoints)
+            if(allocated(axis_))deallocate(axis_)
+            allocate(axis_(Naxis));axis_=0d0
+            axis_ = FermionicFreqMesh(G%Beta,G%Npoints)
+         endif
+         !
+         read(unit,*) !"Wannier-projected fermionic components:"
+         do iaxis=1,Naxis
+            do iwan1=1,Norb
+               do iwan2=1,Norb
+                  !
+                  read(unit,"(1F20.10,2I4,2E20.12)") axispoint,idum1,idum2,RealG,ImagG
+                  if (idum1.ne.iwan1) stop "iwan1 does not match"
+                  if (idum2.ne.iwan2) stop "iwan2 does not match"
+                  G%ws(iwan1,iwan2,iaxis,ispin) = dcmplx(RealG,ImagG)
+                  !
+               enddo
             enddo
+            if((.not.present(axis)).and.(abs(axispoint-axis_(iaxis)).gt.eps)) stop "axispoint does not match with expected grid."
+            axis_(iaxis) = axispoint
          enddo
-         if((.not.present(axis)).and.(abs(axispoint-axis_(iaxis)).gt.eps)) stop "axispoint does not match with expected grid."
-         axis_(iaxis) = axispoint
+         close(unit)
+         !
       enddo
-      close(unit)
       !
-      G%mu=mu_read
+      if((Nspin.eq.2).and.(mu_read(1).ne.mu_read(2))) stop "Chemical potential is different between up and down."
+      G%mu=mu_read(1)
       if(present(axis)) axis(1:Naxis)=axis_
       !
    end subroutine read_FermionicField_local
-
-
-   !---------------------------------------------------------------------------!
-   !PURPOSE: Read from file the k-dependent attributes of a Fermionic field
-   !TEST ON: 16-10-2020
-   !---------------------------------------------------------------------------!
+   !
    subroutine read_FermionicField_Kdep(G,dirpath,filename,kpt,axis)
       !
       use parameters
@@ -819,7 +802,7 @@ contains
       type(FermionicField),intent(inout)    :: G
       character(len=*),intent(in)           :: dirpath
       character(len=*),intent(in)           :: filename
-      real(8),intent(in),optional           :: kpt(:,:)
+      real(8),intent(in)                    :: kpt(:,:)
       real(8),intent(inout),optional        :: axis(:)
       !
       integer                               :: unit
@@ -827,7 +810,7 @@ contains
       integer                               :: iwan1,iwan2
       integer                               :: idum1,idum2
       integer                               :: ispin_read,Nkpt_read,Norb_read,Naxis_read
-      real(8)                               :: mu_read
+      real(8)                               :: mu_read(2)
       real(8)                               :: axispoint,RealG,ImagG
       real(8)                               :: kvec(3)
       logical                               :: filexists
@@ -841,22 +824,20 @@ contains
       if(.not.G%status) stop "Field not properly initialized."
       if(G%Nkpt.eq.0) stop "K-dependent part not allocated."
       Norb = G%Norb
-      if(present(kpt))call assert_shape(kpt,[3,G%Nkpt],"read_FermionicField_Kdep","kpt")
+      call assert_shape(kpt,[3,G%Nkpt],"read_FermionicField_Kdep","kpt")
       !
       !
       ! Read file
       do ispin=1,Nspin
          !
-         if(ispin.eq.1)readpath = reg(dirpath)//reg(filename)//"_k_up.DAT"
-         if(ispin.eq.2)readpath = reg(dirpath)//reg(filename)//"_k_dw.DAT"
-         !
-         if(verbose)write(*,"(A)") "     Read "//reg(readpath)
+         readpath = reg(dirpath)//reg(filename)//"_k_s"//str(ispin)//".DAT"
+         write(*,"(A)") "     Read "//reg(readpath)
          call inquireFile(reg(readpath),filexists,verb=verbose)
          !
          unit = free_unit()
          open(unit,file=reg(readpath),form="unformatted",status="old",position="rewind",action="read")
          !
-         read(unit) ispin_read,Nkpt_read,Norb_read,Naxis_read,mu_read
+         read(unit) ispin_read,Nkpt_read,Norb_read,Naxis_read,mu_read(ispin)
          !
          if(ispin_read.ne.ispin) stop "File with wrong spin index."
          if(Nkpt_read.ne.G%Nkpt) stop "File with wrong number of K-points."
@@ -881,11 +862,9 @@ contains
             read(unit) idum1,idum2,kvec
             if (idum1.ne.ispin) stop "ispin does not match"
             if (idum2.ne.ik) stop "ik does not match"
-            if(present(kpt))then
-               if(abs(kvec(1)-kpt(1,ik)).gt.eps)stop "kvec(1) does not match"
-               if(abs(kvec(2)-kpt(2,ik)).gt.eps)stop "kvec(1) does not match"
-               if(abs(kvec(3)-kpt(3,ik)).gt.eps)stop "kvec(1) does not match"
-            endif
+            if(abs(kvec(1)-kpt(1,ik)).gt.eps)stop "kvec(1) does not match"
+            if(abs(kvec(2)-kpt(2,ik)).gt.eps)stop "kvec(1) does not match"
+            if(abs(kvec(3)-kpt(3,ik)).gt.eps)stop "kvec(1) does not match"
             !
             do iaxis=1,Naxis
                !
@@ -913,13 +892,14 @@ contains
       enddo !ispin
       !
       call FermionicKsum(G)
-      G%mu=mu_read
+      if((Nspin.eq.2).and.(mu_read(1).ne.mu_read(2))) stop "Chemical potential is different between up and down."
+      G%mu=mu_read(1)
       !
    end subroutine read_FermionicField_Kdep
 
 
    !---------------------------------------------------------------------------!
-   !PURPOSE: Write to file the local attributes of a Bosonic field
+   !PURPOSE: Write to file Bosonic fields
    !TEST ON: 20-10-2020(with and without axis)
    !---------------------------------------------------------------------------!
    subroutine dump_BosonicField_local(U,dirpath,filename,axis)
@@ -943,7 +923,7 @@ contains
       !
       if(verbose)write(*,"(A)") "---- dump_BosonicField_local"
       printpath = reg(dirpath)//filename
-      if(verbose)write(*,"(A)") "     Dump "//reg(printpath)
+      write(*,"(A)") "     Dump "//reg(printpath)//" (readable)"
       !
       !
       ! Check on the input Field
@@ -1008,12 +988,7 @@ contains
       close(unit)
       !
    end subroutine dump_BosonicField_local
-
-
-   !---------------------------------------------------------------------------!
-   !PURPOSE: Write to file the K-dependent Bosonic field - SPEX format & units
-   !TEST ON: 20-10-2020(with and without axis both binfmt)
-   !---------------------------------------------------------------------------!
+   !
    subroutine dump_BosonicField_Kdep_SPEXlike(U,dirpath,binfmt,axis)
       !
       use parameters
@@ -1069,7 +1044,7 @@ contains
          if(binfmt) then
             !
             printpath = reg(dirpath)//"VW.Q"//str(iq,4)//".DAT"
-            if(verbose)write(*,"(A)") "     Dump "//reg(printpath)//" (binary)"
+            write(*,"(A)") "     Dump "//reg(printpath)//" (binary)"
             !
             unit = free_unit()
             open(unit,file=reg(printpath),form="unformatted",status="unknown",position="rewind",action="write")
@@ -1088,7 +1063,7 @@ contains
          else
             !
             printpath = reg(dirpath)//"VW.Q"//str(iq,4)//".DAT"
-            if(verbose)write(*,"(A)") "     Dump "//reg(printpath)//" (readable)"
+            write(*,"(A)") "     Dump "//reg(printpath)//" (readable)"
             !
             unit = free_unit()
             open(unit,file=reg(printpath),form="formatted",status="unknown",position="rewind",action="write")
@@ -1168,7 +1143,7 @@ contains
       !
       if(verbose)write(*,"(A)") "---- read_BosonicField_local"
       readpath = reg(dirpath)//filename
-      if(verbose)write(*,"(A)") "     Read "//reg(readpath)
+      write(*,"(A)") "     Read "//reg(readpath)
       !
       !
       ! Check on the input Field

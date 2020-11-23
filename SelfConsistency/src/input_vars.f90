@@ -279,10 +279,10 @@ contains
       call parse_input_variable(wmatsMax,"MAX_WMATS",InputFile,default=100.d0,comment="Maximum value of the Matsubara frequency mesh.")
       Nmats = int(Beta*wmatsMax/(2d0*pi))
       call append_to_input_list(Nmats,"NMATS","Number of points on the imaginary frequency axis. User cannot set this as its computed from MAX_WMATS and BETA.")
-      call parse_input_variable(NtauF,"NTAU_F",InputFile,default=int(2d0*pi*Nmats),comment="Number of points on the imaginary time axis for Fermionic quantities. Its gonna be made odd. Optimal if close to 2*PI*NMATS.")
+      call parse_input_variable(NtauF,"NTAU_F",InputFile,default=int(100+Nmats),comment="Number of points on the imaginary time axis for Fermionic quantities. Its gonna be made odd. Optimal if >~ NMATS.")
       if(mod(NtauF,2).eq.0)NtauF=NtauF+1
       if(mod(NtauF-1,4).ne.0)NtauF=NtauF+mod(NtauF-1,4)
-      call parse_input_variable(NtauB,"NTAU_B",InputFile,default=int(2d0*pi*Nmats),comment="Number of points on the imaginary time axis for Bosonic quantities. Its gonna be made odd. Optimal if close to 2*PI*NMATS.")
+      call parse_input_variable(NtauB,"NTAU_B",InputFile,default=int(2d0*pi*Nmats),comment="Number of points on the imaginary time axis for Bosonic quantities. Its gonna be made odd. Optimal if >= to 2*PI*NMATS.")
       if(mod(NtauB,2).eq.0)NtauB=NtauB+1
       if(mod(NtauB-1,4).ne.0)NtauB=NtauB+mod(NtauB-1,4)
       call parse_input_variable(tau_uniform,"TAU_UNIF",InputFile,default=.false.,comment="Flag to use a non-tau_uniform mesh on the imaginary time axis.")
@@ -346,7 +346,7 @@ contains
       call parse_input_variable(LOGfile,"LOGFILE",InputFile,default=6,comment="Standard output redirection unit. Use 6 to print to terminal. Not used yet.")
       call parse_input_variable(Mixing_curlyG,"MIX_G",InputFile,default=0.5d0,comment="Fraction of the old iteration curlyG.")
       call parse_input_variable(Mixing_curlyU,"MIX_U",InputFile,default=0.5d0,comment="Fraction of the old iteration curlyU.")
-      call parse_input_variable(skipLattice,"SKIP_LATT",InputFile,default=.false.,comment="Skip the lattice summation and assuming good the existing Gloc and Wloc.")
+      call parse_input_variable(skipLattice,"SKIP_LATT",InputFile,default=.false.,comment="Skip the lattice summation and assuming good the existing Gloc and Wloc. Not used yet.")
       call parse_input_variable(printSfull,"PRINT_SFULL",InputFile,default=.false.,comment="Print the full k-dependent self-energy (binfmt) at each iteration.")
       !
       !Variables related to the impurity solver

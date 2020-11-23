@@ -1753,10 +1753,16 @@ contains
             !
             if(retarded)then
                !
-               if(Uloc) Kaux(ib1,ib2,:) = Umats%bare_local(iu1,iu2) - Umats%screened_local(iu1,iu2,:)
-               if(U1st) Kaux(ib1,ib2,:) = Umats%bare_local(iu1,iu2) - Umats%screened_local(iu1,iu2,:)
-               if(U2nd) Kaux(ib1,ib2,:) = Umats%bare_local(iu1,iu2) - (Umats%bare_local(ix1,ix2)+Umats%bare_local(ip1,ip2))/2d0 - &
-                                          (Umats%screened_local(iu1,iu2,:) - (Umats%screened_local(ix1,ix2,:)+Umats%screened_local(ip1,ip2,:))/2d0)
+               ! V1 ! Wrong !
+               !if(Uloc) Kaux(ib1,ib2,:) = Umats%bare_local(iu1,iu2) - Umats%screened_local(iu1,iu2,:)
+               !if(U1st) Kaux(ib1,ib2,:) = Umats%bare_local(iu1,iu2) - Umats%screened_local(iu1,iu2,:)
+               !if(U2nd) Kaux(ib1,ib2,:) = Umats%bare_local(iu1,iu2) - (Umats%bare_local(ix1,ix2)+Umats%bare_local(ip1,ip2))/2d0 - &
+               !                           (Umats%screened_local(iu1,iu2,:) - (Umats%screened_local(ix1,ix2,:)+Umats%screened_local(ip1,ip2,:))/2d0)
+               !
+               if(Uloc) Kaux(ib1,ib2,:) =  Umats%screened_local(iu1,iu2,:) - Umats%screened_local(iu1,iu2,1)
+               if(U1st) Kaux(ib1,ib2,:) =  Umats%screened_local(iu1,iu2,:) - Umats%screened_local(iu1,iu2,1)
+               if(U2nd) Kaux(ib1,ib2,:) =  Umats%screened_local(iu1,iu2,:) - (Umats%screened_local(ix1,ix2,:)+Umats%screened_local(ip1,ip2,:))/2d0 - &
+                                          (Umats%screened_local(iu1,iu2,1) - (Umats%screened_local(ix1,ix2,1)+Umats%screened_local(ip1,ip2,1))/2d0)
                !same orbital - same spin screening
                if(Uloc.and.(ib2.gt.ib1)) then
                   Kaux(ib1,ib1,:) = Kaux(ib1,ib2,:)

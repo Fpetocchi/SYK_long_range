@@ -321,8 +321,6 @@ contains
       real(8)                               :: Beta
       integer                               :: Nbp,Nmats
       integer                               :: iw
-
-      integer :: Norb,m,n,k,ib1,ib2,ib3
       !
       !
       if(verbose)write(*,"(A)") "---- calc_Pimp"
@@ -343,7 +341,6 @@ contains
       Nbp = Pimp%Nbp
       Beta = Pimp%Beta
       Nmats = Pimp%Npoints
-      Norb=int(sqrt(dble(Nbp)))
       !
       if(all([curlyU%Nbp-Nbp,ChiC%Nbp-Nbp].ne.[0,0])) stop "Either curlyU and/or ChiC have different orbital dimension with respect to Pimp."
       if(all([curlyU%Beta-Beta,ChiC%Beta-Beta].ne.[0d0,0d0])) stop "Either curlyU and/or ChiC have different Beta with respect to Pimp."
