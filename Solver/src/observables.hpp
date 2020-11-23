@@ -447,20 +447,13 @@ void accumulate_Nhist( Vec &nhist, VecVec &n_tau)
    //
    int Nflavor = n_tau.size();
    int Ntau = n_tau[0].size();
-
    //
    for (int itau=1; itau<Ntau; itau++)
    {
       int ntmp=0;
-      for (int ifl=0; ifl<Nflavor; ifl++) ntmp+=n_tau[ifl][itau];
-      nhist[(int)ntmp]+=1./Ntau;
+      for (int ifl=0; ifl<Nflavor; ifl++) ntmp+=abs(n_tau[ifl][itau]);
+      if(ntmp<nhist.size())nhist[(int)ntmp]+=1./Ntau;
    }
-   //
-   /*
-   printf("nhist\n");
-   for (int ifl=0; ifl<nhist.size(); ifl++)printf(" %d - %f\n",ifl,nhist[ifl]);
-   printf("\n");
-   */
 }
 
 
@@ -469,21 +462,14 @@ void accumulate_Szhist( Vec &szhist, VecVec &n_tau)
    //
    int Nflavor = n_tau.size();
    int Ntau = n_tau[0].size();
-
    //
    for (int itau=1; itau<Ntau; itau++)
    {
       int ntmp=0;
       for (int ifl=0; ifl<Nflavor; ifl+=2) ntmp+=n_tau[ifl][itau]-n_tau[ifl+1][itau];
       if (ntmp<0) ntmp*=-1;
-      szhist[(int)ntmp]+=1./Ntau;
+      if(ntmp<szhist.size())szhist[(int)ntmp]+=1./Ntau;
    }
-   //
-   /*
-   printf("Shist\n");
-   for (int ifl=0; ifl<szhist.size(); ifl++)printf(" %d - %f\n",ifl,szhist[ifl]);
-   printf("\n");
-   */
 }
 
 

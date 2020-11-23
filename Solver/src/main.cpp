@@ -100,7 +100,7 @@ int main(int argc, char *argv[])
       // Site Dependent Vars
       find_param(argv[1], "NSITE"      , Nsite     );
       //
-      if(testing &&mpi.is_master())
+      if(mpi.is_master()) //testing &&
       {
          mpi.report(" beta= "+str(Beta));
          mpi.report(" Nspin= "+str(Nspin));

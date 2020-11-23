@@ -258,7 +258,7 @@ class ct_hyb
                //
                RankSweeps++;
                mpi.allreduce(RankSweeps,WorldSweeps);
-               //printf(" [Rank %d] - RankSweeps: %d - WorldSweeps: %d \n",mpi.rank(), RankSweeps,WorldSweeps);
+               ////printf(" [Rank %d] - RankSweeps: %d - WorldSweeps: %d \n",mpi.rank(), RankSweeps,WorldSweeps);
                //
                RankSign = sign_meas / RankSweeps;
                mpi.allreduce(RankSign,WorldSign,true);
@@ -436,9 +436,7 @@ class ct_hyb
                }
 
                //
-               //.........................Cheap measurments.....................
-               // perturbation order (check)
-               //if (segments[ifl].size()<Norder) Pert[ifl][(int)segments[ifl].size()] += (1./Nmeas_);
+               //.........................Cheap measurments..................... add perturbation order
                // Green's functions
                if (segments[ifl].size()>0) measure_G( G_tmp[ifl], segments[ifl], M[ifl], NtauF, Beta );
                // sign among the segments
@@ -525,10 +523,6 @@ class ct_hyb
             print_Vec(resultsDir+"/Nqmc_rank"+str(mpi.rank())+pad, PrintNloc, mu);
             mpi.report(" Nqmc_rank"+str(mpi.rank())+pad+" is printed.");
             //
-            // perturbation order
-            print_VecVec(resultsDir+"/PertOrder_rank"+str(mpi.rank())+pad, Pert, 0.0, (double)RankSweeps);
-            mpi.report(" PertOrder_rank"+str(mpi.rank())+pad+" is printed.");
-            //
             // error estimate and binning
             if(bins[0]>0)
             {
@@ -558,7 +552,7 @@ class ct_hyb
                //
                print_Vec(resultsDir+"/Szhist_rank"+str(mpi.rank())+pad, Szhist );
                mpi.report(" Szhist_rank"+str(mpi.rank())+pad+" is printed.");
-               //
+
                print_VecVec(resultsDir+"/n_t_rank"+str(mpi.rank())+pad, nt, Beta, (double)RankSweeps);
                mpi.report(" n_t_rank"+str(mpi.rank())+pad+" is printed.");
                //
@@ -576,13 +570,6 @@ class ct_hyb
          Vec PrintNloc = get_Nloc(); // provides spin-orbital occupation already normalized
          if(mpi.is_master()) print_Vec(resultsDir+"/Nqmc"+pad, PrintNloc, mu);
          mpi.report(" Nqmc"+pad+" is printed.");
-         //
-         // perturbation order
-         VecVec NormPert = normalize_VecVec(Pert, RankSweeps);
-         VecVec PrintPert(Nflavor,std::vector<double>(Norder,0.0));
-         mpi.allreduce(NormPert, PrintPert, true);
-         if(mpi.is_master()) print_VecVec(resultsDir+"/PertOrder"+pad, PrintPert);
-         mpi.report(" PertOrder"+pad+" is printed.");
          //
          // error estimate and binning
          if(bins[0]>0)
