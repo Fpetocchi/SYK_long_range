@@ -50,6 +50,12 @@ module file_io
       module procedure :: read_BosonicField_local                               ![BosonicField,dirpath,filename,axis(optional)].........................( Reads only from unformatted input )
    end interface read_BosonicField
 
+   interface dump_convergence
+      module procedure :: dump_convergence_Gqmc                                 ![Array(Norb,Np,Nspin),dirpath,filename]................................( Writes only to formatted output )
+      module procedure :: dump_convergence_FermionicField                       ![FermionicField,dirpath,filename,orbset]...............................( Writes only to formatted output )
+      module procedure :: dump_convergence_BosonicField                         ![BosonicField,dirpath,filename,orbset].................................( Writes only to formatted output )
+   end interface dump_convergence
+
    !---------------------------------------------------------------------------!
    !PURPOSE: Module variables
    !---------------------------------------------------------------------------!
@@ -72,6 +78,7 @@ module file_io
    public :: read_FermionicField
    public :: dump_BosonicField
    public :: read_BosonicField
+   public :: dump_convergence
 
    !===========================================================================!
 
@@ -1226,6 +1233,129 @@ contains
    end subroutine read_BosonicField_local
 
 
-
+   !---------------------------------------------------------------------------!
+   !PURPOSE: Writes to file the irreducible components
+   !TEST ON: 24-11-2020
+   !---------------------------------------------------------------------------!
+   subroutine dump_convergence_Gqmc(Gtau,Beta,dirpath,filename)
+      !
+      use utils_misc
+      implicit none
+      !
+      complex(8),intent(in)                 :: Gtau(:,:,:)
+      real(8),intent(in)                    :: Beta
+      character(len=*),intent(in)           :: dirpath
+      character(len=*),intent(in)           :: filename
+      !
+      integer                               :: iwan,ispin
+      integer                               :: Norb,Nspin,Ntau
+      real(8),allocatable                   :: tau(:)
+      !
+      !
+      if(verbose)write(*,"(A)") "---- dump_convergence_Gqmc"
+      !
+      !
+      Norb = size(Gtau,dim=1)
+      Ntau = size(Gtau,dim=2)
+      Nspin = size(Gtau,dim=3)
+      !
+      allocate(tau(Ntau));tau=0d0
+      tau = linspace(0d0,Beta,Ntau)
+      !
+      do iwan=1,Norb
+         do ispin=1,Nspin
+            call dump_Field_component(Gtau(iwan,:,ispin),reg(dirpath),reg(filename)//"_o"//str(iwan)//"_s"//str(ispin)//".DAT",tau)
+         enddo
+      enddo
+      !
+   end subroutine dump_convergence_Gqmc
+   !
+   subroutine dump_convergence_FermionicField(G,dirpath,filename,Orbs)
+      !
+      use parameters
+      use utils_misc
+      use utils_fields
+      implicit none
+      !
+      type(FermionicField),intent(in)       :: G
+      character(len=*),intent(in)           :: dirpath
+      character(len=*),intent(in)           :: filename
+      integer,allocatable,intent(in)        :: Orbs(:,:)
+      !
+      integer                               :: iwan,ispin,iset
+      real(8),allocatable                   :: wmats(:)
+      !
+      !
+      if(verbose)write(*,"(A)") "---- dump_convergence_FermionicField"
+      !
+      !
+      allocate(wmats(G%Npoints));wmats=0d0
+      wmats = FermionicFreqMesh(G%Beta,G%Npoints)
+      !
+      if(allocated(Orbs))then
+         do iset=1,size(Orbs,dim=1)
+            do ispin=1,Nspin
+               iwan = Orbs(iset,1)
+               call dump_Field_component(G%ws(iwan,iwan,:,ispin),reg(dirpath),reg(filename)//"_o"//str(iwan)//"_s"//str(ispin)//".DAT",wmats)
+            enddo
+         enddo
+      else
+         do iwan=1,G%Norb
+            do ispin=1,Nspin
+               call dump_Field_component(G%ws(iwan,iwan,:,ispin),reg(dirpath),reg(filename)//"_o"//str(iwan)//"_s"//str(ispin)//".DAT",wmats)
+            enddo
+         enddo
+      endif
+      !
+   end subroutine dump_convergence_FermionicField
+   !
+   subroutine dump_convergence_BosonicField(W,dirpath,filename,Orbs)
+      !
+      use parameters
+      use utils_misc
+      use utils_fields
+      implicit none
+      !
+      type(BosonicField),intent(in)         :: W
+      character(len=*),intent(in)           :: dirpath
+      character(len=*),intent(in)           :: filename
+      integer,allocatable,intent(in)        :: Orbs(:,:)
+      !
+      integer                               :: iwan1,iwan2,iJ1,iJ2,iU1
+      integer                               :: Norb,iset
+      real(8),allocatable                   :: wmats(:)
+      !
+      !
+      if(verbose)write(*,"(A)") "---- dump_convergence_BosonicField"
+      !
+      !
+      Norb = int(sqrt(dble(W%Nbp)))
+      !
+      allocate(wmats(W%Npoints));wmats=0d0
+      wmats = BosonicFreqMesh(W%Beta,W%Npoints)
+      !
+      if(allocated(Orbs))then
+         do iset=1,size(Orbs,dim=1)
+            iwan1 = Orbs(iset,1)
+            iwan2 = Orbs(iset,2)
+            iU1 = iwan1+Norb*(iwan1-1)
+            call dump_Field_component(W%screened_local(iU1,iU1,:),reg(dirpath),reg(filename)//"_"//str(iwan1)//str(iwan1)//str(iwan1)//str(iwan1)//".DAT",wmats)
+            iJ1 = iwan1+Norb*(iwan2-1)
+            iJ2 = iwan2+Norb*(iwan1-1)
+            if(iwan2.ne.0)call dump_Field_component(W%screened_local(iJ1,iJ2,:),reg(dirpath),reg(filename)//"_"//str(iwan1)//str(iwan2)//str(iwan2)//str(iwan1)//".DAT",wmats)
+         enddo
+      else
+         do iwan1=1,Norb
+            iU1 = iwan1+Norb*(iwan1-1)
+            call dump_Field_component(W%screened_local(iU1,iU1,:),reg(dirpath),reg(filename)//"_"//str(iwan1)//str(iwan1)//str(iwan1)//str(iwan1)//".DAT",wmats)
+            do iwan2=1+iwan1,Norb
+               iJ1 = iwan1+Norb*(iwan2-1)
+               iJ2 = iwan2+Norb*(iwan1-1)
+               call dump_Field_component(W%screened_local(iJ1,iJ2,:),reg(dirpath),reg(filename)//"_"//str(iwan1)//str(iwan2)//str(iwan2)//str(iwan1)//".DAT",wmats)
+            enddo
+         enddo
+      endif
+      !
+   end subroutine dump_convergence_BosonicField
 
 end module file_io

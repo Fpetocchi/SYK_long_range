@@ -41,7 +41,7 @@
  MU=0.000000                                   !Chemical potential.
  N_READ=2.000000                               !Target density per site lookup is switched on to this value if its >0d0. Otherwise mu will be kept fixed.
  N_QUICK=1                                     !Integer flag to switch on the quick density lookup within the solver.
- N_ERR=5.000000E-03                            !Relative error on the target density. Better if not lower than 1e-3.
+ N_ERR=1.000000E-03                            !Relative error on the target density. Better if not lower than 1e-3.
  MU_STEP=0.500000                              !Initial chemical potential step in the density lookup.
  MU_ITER=100                                   !Maximum number of iterations in the density lookup.
  MU_TIME=0.500000                              !Minutes of solver runtime in the density lookup.
@@ -63,19 +63,20 @@
  ALPHA_HK=1.000000                             !Rescaling of the non-interacting Hamiltonian.
  DELTA_FIT=Moments                             !Fit to extract the local energy in GW+EDMFT calculations. Available: Analytic, Moments.
  NFIT=8                                        !Number of bath levels (Analytic) or coefficient (Moments).
- WTAIL_GIMP=0.000000                           !Frequency value above which the tail of Gimp is replaced. If =0d0 the tail is not replaced. A good number is around 100.
- WTAIL_SIMP=10.000000                          !Frequency value above which the tail of Simp is replaced. If =0d0 the tail is not replaced. A good number is around 10.
+ WTAIL_GIMP=100.000000                           !Frequency value above which the tail of Gimp is replaced. If =0d0 the tail is not replaced. A good number is around 100.
+ WTAIL_SIMP=0.000000                          !Frequency value above which the tail of Simp is replaced. If =0d0 the tail is not replaced. A good number is around 10.
 
  #---------------------------------------------#
 
- PATH_INPUT=GWinput  !GWinput  !GWinput  !GWinput  !                                   !Folder within cwd where to look for input files.
- PATH_DATA=Results_SrMoO3  !Results_SrMoO3  !Results_SrMoO3  !Results_SrMoO3  !                                    !Folder within cwd where to store data.
- START_IT=0  !0  !0  !0  !                                     !First iteration. If its non zero the code will look for the last item in PATH_DATA/item and start there.
- LAST_IT=3  !3  !3  !3  !                                      !Last iteration.
+ PATH_INPUT=GWinput_SrMoO3  !GWinput_SrMoO3  !                                   !Folder within cwd where to look for input files.
+ PATH_DATA=Results_SrMoO3  !Results_SrMoO3  !                                    !Folder within cwd where to store data.
+ START_IT=0  !3  !2  !1  !0  !                                     !First iteration. If its non zero the code will look for the last item in PATH_DATA/item and start there.
+ LAST_IT=15  !5  !                                      !Last iteration.
  LOGFILE=6                                     !Standard output redirection unit. Use 6 to print to terminal. Not used yet.
- MIX_G=0.500000                                !Fraction of the old iteration curlyG.
- MIX_U=0.500000                                !Fraction of the old iteration curlyU.
- SKIP_LATT=F                                   !Skip the lattice summation and assuming good the existing Gloc and Wloc.
+ MIX_G=0.000000                                !Fraction of the old iteration curlyG.
+ MIX_D=0.5d0 
+ MIX_U=0.000000                                !Fraction of the old iteration curlyU.
+ SKIP_LATT=F                                   !Skip the lattice summation and assuming good the existing Gloc and Wloc. Not used yet.
  PRINT_SFULL=F                                 !Print the full k-dependent self-energy (binfmt) at each iteration.
 
  #---------------------------------------------#

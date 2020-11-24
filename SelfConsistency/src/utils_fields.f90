@@ -52,7 +52,7 @@ module utils_fields
 #ifdef _verb
    logical,private                          :: verbose=.true.
 #else
-   logical,private                          :: verbose=.true.
+   logical,private                          :: verbose=.false.
 #endif
 
    !---------------------------------------------------------------------------!

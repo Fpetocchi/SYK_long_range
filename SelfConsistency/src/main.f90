@@ -69,6 +69,7 @@ program test
          if(calc_Wfull)  call calc_W_full(Wlat,Ulat,Plat,Crystal)
          if(calc_Wedmft) call calc_W_edmft(Wlat,Ulat,P_EDMFT,Crystal)
          call dump_BosonicField(Wlat,reg(ItFolder),"Wlat_w.DAT")
+         call dump_convergence(Wlat,reg(ItFolder)//"Convergence/","Wlat",EqvGWndx%SetOrbs)
          !
       endif
       !
@@ -149,6 +150,7 @@ program test
       !Print Gf: local readable and k-dep binfmt
       call dump_FermionicField(Glat,reg(ItFolder),"Glat_w")
       call dump_FermionicField(Glat,reg(ItFolder),"Glat_w",.true.,Crystal%kpt)
+      call dump_convergence(Glat,reg(ItFolder)//"Convergence/","Glat",EqvGWndx%SetOrbs)
       !
       !!Print lattice density
       call dump_Matrix(Glat%N_s(:,:,1),reg(ItFolder)//"Nlat_s1.DAT")
@@ -178,8 +180,6 @@ program test
    !
    call DeallocateAllFields()
    call execute_command_line(" cp used.input.in "//reg(ItFolder))
-   call execute_command_line(" cp report "//reg(ItFolder))
-   call execute_command_line(" cp err "//reg(ItFolder))
    write(*,"(A,F)") new_line("A")//new_line("A")//"Self-Consistency finished. Total timing (s): ",tock(TimeStart)
    !
 end program test

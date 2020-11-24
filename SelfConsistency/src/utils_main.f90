@@ -208,6 +208,7 @@ contains
       PrevItFolder = reg(pathDATA)//str(ItStart-1)//"/"
       Ustart = Ustart .and. (ItStart.eq.0)
       !
+      call createDir(reg(ItFolder)//"Convergence",verb=verbose)
       do isite=1,Nsite
          call createDir(reg(ItFolder)//"Solver_"//reg(SiteName(isite))//"/fits",verb=verbose)
          if(ExpandImpurity.or.AFMselfcons)exit
@@ -875,7 +876,7 @@ contains
       type(FermionicField)                  :: Gloc
       type(FermionicField)                  :: SigmaImp
       type(FermionicField)                  :: FermiPrint
-      type(FermionicField)                  :: curlyGold
+      type(FermionicField)                  :: curlyGold,DeltaOld
       integer                               :: Norb,Nflavor,unit
       integer                               :: ispin,iw,iwan,itau,ndx
       integer,allocatable                   :: Orbs(:)
@@ -952,6 +953,7 @@ contains
       !
       !Mixing curlyG
       if((Mixing_curlyG.gt.0d0).and.(Iteration.gt.0))then
+         write(*,"(A)")"     Mixing curlyG with "//str(Mixing_curlyG)//" of old solution."
          call AllocateFermionicField(curlyGold,Norb,Nmats,Beta=Beta)
          call read_FermionicField(curlyGold,reg(PrevItFolder)//"Solver_"//reg(SiteName(isite))//"/","G0_"//reg(SiteName(isite))//"_w")
          do ispin=1,Nspin
@@ -1019,11 +1021,26 @@ contains
          do iw=1,Nmats
             do iwan=1,Norb
                !
-               Dmats(iwan,iw,ispin) = dcmplx( Glat%mu , wmats(iw) ) - Eloc(iwan,ispin) - invCurlyG(iwan,iw,ispin) + EqvGWndx%hseed*(-1d0)**ispin
+               Dmats(iwan,iw,ispin) = dcmplx( Glat%mu , wmats(iw) ) - Eloc(iwan,ispin) - invCurlyG(iwan,iw,ispin)
                !
             enddo
          enddo
       enddo
+      !
+      !Mixing Delta
+      if((Mixing_Delta.gt.0d0).and.(Iteration.gt.0))then
+         write(*,"(A)")"     Mixing Delta with "//str(Mixing_Delta)//" of old solution."
+         call AllocateFermionicField(DeltaOld,Norb,Nmats,Beta=Beta)
+         call read_FermionicField(DeltaOld,reg(PrevItFolder)//"Solver_"//reg(SiteName(isite))//"/","D_"//reg(SiteName(isite))//"_w")
+         do ispin=1,Nspin
+            do iw=1,Nmats
+               do iwan=1,Norb
+                  Dmats(iwan,iw,ispin) = (1d0-Mixing_Delta)*Dmats(iwan,iw,ispin) + Mixing_Delta*DeltaOld%ws(iwan,iwan,iw,ispin)
+               enddo
+            enddo
+         enddo
+         call DeallocateFermionicField(DeltaOld)
+      endif
       !
       !Fourier transform to the tau axis
       do ispin=1,Nspin
@@ -1039,7 +1056,7 @@ contains
       open(unit,file=reg(file),form="formatted",status="unknown",position="rewind",action="write")
       write(unit,"(1E20.12)") Glat%mu
       do iwan=1,Norb
-         write(unit,"(2E20.12)") Eloc(iwan,1),Eloc(iwan,2)
+         write(unit,"(2E20.12)") Eloc(iwan,1)+EqvGWndx%hseed,Eloc(iwan,2)-EqvGWndx%hseed
       enddo
       close(unit)
       !
@@ -1069,6 +1086,7 @@ contains
       do iwan=1,Norb
          FermiPrint%ws(iwan,iwan,:,:) = Dmats(iwan,:,:)
       enddo
+      FermiPrint%mu=Glat%mu
       call dump_FermionicField(FermiPrint,reg(ItFolder)//"Solver_"//reg(SiteName(isite))//"/","D_"//reg(SiteName(isite))//"_w")
       call clear_attributes(FermiPrint)
       !
@@ -1076,6 +1094,7 @@ contains
       do iwan=1,Norb
          FermiPrint%ws(iwan,iwan,:,:) = 1d0/invCurlyG(iwan,:,:)
       enddo
+      FermiPrint%mu=Glat%mu
       call dump_FermionicField(FermiPrint,reg(ItFolder)//"Solver_"//reg(SiteName(isite))//"/","G0_"//reg(SiteName(isite))//"_w")
       call clear_attributes(FermiPrint)
       !
@@ -1199,6 +1218,7 @@ contains
             !
             !Mixing curlyU
             if((Mixing_curlyU.gt.0d0).and.(Iteration.gt.0))then
+               write(*,"(A)")"     Mixing curlyU with "//str(Mixing_curlyU)//" of old solution."
                call AllocateBosonicField(curlyUold,Norb,Nmats,Crystal%iq_gamma,Beta=Beta)
                call read_BosonicField(curlyUold,reg(PrevItFolder)//"Solver_"//reg(SiteName(isite))//"/","curlyU_"//reg(SiteName(isite))//"_w.DAT")
                curlyU%bare_local = (1d0-Mixing_curlyU)*curlyU%bare_local + Mixing_curlyU*curlyUold%bare_local
@@ -1436,6 +1456,8 @@ contains
          do ispin=1,Nspin
             call Fitau2mats_vec(Beta,Gitau(:,:,ispin),Gmats(:,:,ispin,isite),tau_uniform=.true.)
          enddo
+         !
+         call dump_convergence(Gitau,Beta,reg(PrevItFolder)//"Convergence/","Gqmc_"//reg(SiteName(isite)))
          deallocate(Gitau,Orbs)
          !
          if(ExpandImpurity.or.AFMselfcons)exit
@@ -1509,10 +1531,11 @@ contains
       call DeallocateFermionicField(Gimp)
       !
       call dump_FermionicField(G_DMFT,reg(PrevItFolder),"Gimp_w")
+      call dump_convergence(G_DMFT,reg(PrevItFolder)//"Convergence/","Gimp",EqvGWndx%SetOrbs)
       call DeallocateFermionicField(G_DMFT)
       !
       !Save the non-Fitted non-symmetrized Gf if present
-      if(verbose.and.(ReplaceTail_Gimp.gt.0d0))then
+      if(ReplaceTail_Gimp.gt.0d0)then
          !
          if(.not.allocated(GmatsNoFit)) stop "GmatsNoFit is not allocated."
          call AllocateFermionicField(G_DMFT,Crystal%Norb,Nmats,Nsite=Nsite,Beta=Beta)
@@ -1693,7 +1716,7 @@ contains
       call DeallocateFermionicField(S_DMFT)
       !
       !Save the non-Fitted non-symmetrized self-energy if present
-      if(verbose.and.(ReplaceTail_Simp.ne.0d0))then
+      if(ReplaceTail_Simp.ne.0d0)then
          !
          if(.not.allocated(SmatsNoFit)) stop "SmatsNoFit is not allocated."
          call AllocateFermionicField(S_DMFT,Crystal%Norb,Nmats,Nsite=Nsite,Beta=Beta)
@@ -1873,9 +1896,9 @@ contains
          if(EqvGWndx%O)then
             !
             if(verbose)then
-               call dump_BosonicField(P_EDMFT,reg(PrevItFolder),"Pimp_w_notsymm.DAT")
-               call dump_BosonicField(W_EDMFT,reg(PrevItFolder),"Wimp_w_notsymm.DAT")
-               call dump_BosonicField(C_EDMFT,reg(PrevItFolder),"Cimp_w_notsymm.DAT")
+               call dump_BosonicField(P_EDMFT,reg(PrevItFolder),"Pimp_noSym_w.DAT")
+               call dump_BosonicField(W_EDMFT,reg(PrevItFolder),"Wimp_noSym_w.DAT")
+               call dump_BosonicField(C_EDMFT,reg(PrevItFolder),"Cimp_noSym_w.DAT")
             endif
             !
             call symmetrize(P_EDMFT,EqvGWndx)
@@ -1886,6 +1909,9 @@ contains
          call dump_BosonicField(P_EDMFT,reg(PrevItFolder),"Pimp_w.DAT")
          call dump_BosonicField(W_EDMFT,reg(PrevItFolder),"Wimp_w.DAT")
          call dump_BosonicField(C_EDMFT,reg(PrevItFolder),"Cimp_w.DAT")
+         !
+         call dump_convergence(W_EDMFT,reg(PrevItFolder)//"Convergence/","Wimp",EqvGWndx%SetOrbs)
+         call dump_convergence(C_EDMFT,reg(PrevItFolder)//"Convergence/","Cimp",EqvGWndx%SetOrbs)
          !
          call DeallocateBosonicField(P_EDMFT)
          call DeallocateBosonicField(W_EDMFT)
@@ -2028,6 +2054,12 @@ contains
          end function banner
          !
    end subroutine show_Densities
+
+
+   !---------------------------------------------------------------------------!
+   !PURPOSE: Print only the Field components useful to check convergence
+   !TEST ON:
+   !---------------------------------------------------------------------------!
 
 
 end module utils_main

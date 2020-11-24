@@ -81,7 +81,8 @@ module module_container
    dump_FermionicField                      ,&
    read_FermionicField                      ,&
    dump_BosonicField                        ,&
-   read_BosonicField
+   read_BosonicField                        ,&
+   dump_convergence
 
 
    !(i) minimization routines. Depends on (b),(e),(h)

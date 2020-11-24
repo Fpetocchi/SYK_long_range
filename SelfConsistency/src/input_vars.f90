@@ -156,6 +156,7 @@ module input_vars
    character(len=256),public                :: pathDATA!="Iterations/"
    integer,public                           :: LOGfile
    real(8),public                           :: Mixing_curlyG
+   real(8),public                           :: Mixing_Delta
    real(8),public                           :: Mixing_curlyU
    logical,public                           :: skipLattice
    logical,public                           :: printSfull
@@ -344,7 +345,8 @@ contains
       call parse_input_variable(FirstIteration,"START_IT",InputFile,default=0,comment="First iteration. If its non zero the code will look for the last item in PATH_DATA/item and start there.")
       call parse_input_variable(LastIteration,"LAST_IT",InputFile,default=100,comment="Last iteration.")
       call parse_input_variable(LOGfile,"LOGFILE",InputFile,default=6,comment="Standard output redirection unit. Use 6 to print to terminal. Not used yet.")
-      call parse_input_variable(Mixing_curlyG,"MIX_G",InputFile,default=0.5d0,comment="Fraction of the old iteration curlyG.")
+      call parse_input_variable(Mixing_curlyG,"MIX_G",InputFile,default=0d0,comment="Fraction of the old iteration curlyG.")
+      call parse_input_variable(Mixing_Delta,"MIX_D",InputFile,default=0.5d0,comment="Fraction of the old iteration Delta.")
       call parse_input_variable(Mixing_curlyU,"MIX_U",InputFile,default=0.5d0,comment="Fraction of the old iteration curlyU.")
       call parse_input_variable(skipLattice,"SKIP_LATT",InputFile,default=.false.,comment="Skip the lattice summation and assuming good the existing Gloc and Wloc. Not used yet.")
       call parse_input_variable(printSfull,"PRINT_SFULL",InputFile,default=.false.,comment="Print the full k-dependent self-energy (binfmt) at each iteration.")
