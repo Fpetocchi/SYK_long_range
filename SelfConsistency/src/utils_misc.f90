@@ -424,8 +424,7 @@ contains
          mkdirCmd = "mkdir -p "//reg(dirpath)
          if(verbose_)write(*,"(A)") "Creating new directory: "//reg(dirpath)
          if(verbose_)write(*,"(A)") reg(mkdirCmd)
-         call system(reg(mkdirCmd))
-         !call execute_command_line(reg(mkdirCmd))
+         call system(reg(mkdirCmd)) !call execute_command_line(reg(mkdirCmd))
       endif
       !
    end subroutine createDir
@@ -468,9 +467,8 @@ contains
                if(verbose.or.enforce_)then
                   if(present(name)) write(*,"(A)") "Matrix: "//reg(name)
                   write(*,"(A,2I4)") "Non hermitian components: ",i,j
-                  write(*,"(3(A,1F10.5))") "Re(A_ij): ",real(A(i,j)),"Re(A_ji): ",real(A(j,i))," err:",ReErr
-                  write(*,"(3(A,1F10.5))") "Im(A_ij): ",aimag(A(i,j)),"Im(A_ji): ",aimag(A(j,i))," err:",ImErr
-                  write(*,"(A,1F10.5)") "Threshold ",tol
+                  if(ReErr.gt.tol)write(*,"(4(A,1E12.5))") "Re(A_ij): ",real(A(i,j)) ," Re(A_ji): ",real(A(j,i)) ," err: ",ReErr," > ",tol
+                  if(ImErr.gt.tol)write(*,"(4(A,1E12.5))") "Im(A_ij): ",aimag(A(i,j))," Im(A_ji): ",aimag(A(j,i))," err: ",ImErr," > ",tol
                endif
                !
                if(hardstop_)stop
@@ -524,9 +522,8 @@ contains
                !
                if(verbose.or.enforce_)then
                   if(present(name)) write(*,"(A)") "Matrix: "//reg(name)
-                  write(*,"(A,2I4)") "Non hermitian components: ",i,j
-                  write(*,"(3(A,1F10.5))") "Re(A_ij): ",A(i,j),"Re(A_ji): ",A(j,i)," err:",ReErr
-                  write(*,"(A,1F10.5)") "Threshold ",tol
+                  write(*,"(A,2I4)") "Non symmetric components: ",i,j
+                  write(*,"(4(A,1E12.5))") "Re(A_ij): ",A(i,j)," Re(A_ji): ",A(j,i)," err: ",ReErr," > ",tol
                endif
                !
                if(hardstop_)stop
@@ -577,10 +574,9 @@ contains
                !
                if(verbose.or.enforce_)then
                   if(present(name)) write(*,"(A)") "Matrix: "//reg(name)
-                  write(*,"(A,2I4)") "Non hermitian components: ",i,j
-                  write(*,"(3(A,1F10.5))") "Re(A_ij): ",real(A(i,j)),"Re(A_ji): ",real(A(j,i))," err:",ReErr
-                  write(*,"(3(A,1F10.5))") "Im(A_ij): ",aimag(A(i,j)),"Im(A_ji): ",aimag(A(j,i))," err:",ImErr
-                  write(*,"(A,1F10.5)") "Threshold ",tol
+                  write(*,"(A,2I4)") "Non symmetric components: ",i,j
+                  if(ReErr.gt.tol)write(*,"(4(A,1E12.5))") "Re(A_ij): ",real(A(i,j)) ," Re(A_ji): ",real(A(j,i)) ," err: ",ReErr," > ",tol
+                  if(ImErr.gt.tol)write(*,"(4(A,1E12.5))") "Im(A_ij): ",aimag(A(i,j))," Im(A_ji): ",aimag(A(j,i))," err: ",ImErr," > ",tol
                endif
                !
                if(hardstop_)stop

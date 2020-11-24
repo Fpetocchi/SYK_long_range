@@ -230,6 +230,7 @@ contains
       integer                               :: iq_gamma_Hk,iq_gamma_XEPS
       complex(8),allocatable                :: Hloc(:,:),Rot(:,:)
       real(8),allocatable                   :: Eig(:)
+      integer                               :: shift
       integer,allocatable                   :: Orbs(:)
       integer,allocatable                   :: oldSetNorb(:),oldSetOrbs(:,:)
       !
@@ -407,36 +408,43 @@ contains
       !Dump some LDA results
       if(ItStart.eq.0)call calc_Glda(0d0,Beta,Lttc)
       !
-      !Add the reamining orbitals in the symmetrization list if at least one set is defined
-      if(EqvGWndx%Nset.gt.0)then
+      !Symmetrization list:
+      !if(EqvGWndx%Nset.eq.0) --> Nothing to symmetrize
+      !if((EqvGWndx%Nset.ne.0).and.(.not.ExpandImpurity)) --> Singularly include in the list all the orbitals not included in the user provided list (if any)
+      !if((EqvGWndx%Nset.ne.0).and.ExpandImpurity) --> Expand the list like the orbitals are expanded
+      if(EqvGWndx%Nset.eq.0)then
+         !
+         EqvGWndx%O=.false.
+         EqvGWndx%Ntotset=EqvGWndx%Nset
+         !
+      elseif((EqvGWndx%Nset.ne.0).and.(.not.ExpandImpurity))then
          !
          EqvGWndx%O=.true.
+         EqvGWndx%Ntotset=EqvGWndx%Nset
          !
          if(sum(EqvGWndx%SetNorb).lt.Lttc%Norb)then
             !
             EqvGWndx%Ntotset = EqvGWndx%Nset + (Lttc%Norb-sum(EqvGWndx%SetNorb))
             !
-            if(EqvGWndx%Nset.gt.0)then
-               !reshape of SetNorb
-               allocate(oldSetNorb(size(EqvGWndx%SetNorb)))
-               oldSetNorb=EqvGWndx%SetNorb
-               deallocate(EqvGWndx%SetNorb)
-               allocate(EqvGWndx%SetNorb(EqvGWndx%Ntotset))
-               EqvGWndx%SetNorb(1:EqvGWndx%Nset) = oldSetNorb
-               EqvGWndx%SetNorb(1+EqvGWndx%Nset:EqvGWndx%Ntotset) = 1
-               deallocate(oldSetNorb)
-               !
-               !reshape of SetOrbs
-               allocate(oldSetOrbs(EqvGWndx%Nset,size(EqvGWndx%SetOrbs,dim=2)))
-               oldSetOrbs=EqvGWndx%SetOrbs
-               deallocate(EqvGWndx%SetOrbs)
-               allocate(EqvGWndx%SetOrbs(EqvGWndx%Ntotset,1))
-            endif
-            !
+            !reshape of SetNorb
+            allocate(oldSetNorb(size(EqvGWndx%SetNorb)))
+            oldSetNorb=EqvGWndx%SetNorb
+            deallocate(EqvGWndx%SetNorb)
+            allocate(EqvGWndx%SetNorb(EqvGWndx%Ntotset));EqvGWndx%SetNorb=0
+            EqvGWndx%SetNorb(1:EqvGWndx%Nset) = oldSetNorb
+            EqvGWndx%SetNorb(1+EqvGWndx%Nset:EqvGWndx%Ntotset) = 1
+            deallocate(oldSetNorb)
+            !reshape of SetOrbs
+            allocate(oldSetOrbs(EqvGWndx%Nset,size(EqvGWndx%SetOrbs,dim=2)))
+            oldSetOrbs=EqvGWndx%SetOrbs
+            deallocate(EqvGWndx%SetOrbs)
+            allocate(EqvGWndx%SetOrbs(EqvGWndx%Ntotset,size(EqvGWndx%SetOrbs,dim=2)));EqvGWndx%SetOrbs=0
+            EqvGWndx%SetOrbs(1:EqvGWndx%Nset,:)=oldSetOrbs
+            !refilling of SetOrbs
             iadd=0
             do iorb=1,Lttc%Norb
                do iset=1,EqvGWndx%Nset
-                  if(allocated(oldSetOrbs).and.any(oldSetOrbs(iset,:).eq.iorb))then
+                  if(any(oldSetOrbs(iset,:).eq.iorb))then
                      cycle
                   else
                      iadd=iadd+1
@@ -444,15 +452,42 @@ contains
                   endif
                enddo
             enddo
-            if(allocated(oldSetOrbs))deallocate(oldSetOrbs)
+            deallocate(oldSetOrbs)
             !
-         else
-            EqvGWndx%Ntotset = EqvGWndx%Nset
          endif
          !
-      else
+      elseif((EqvGWndx%Nset.ne.0).and.ExpandImpurity)then
          !
-         EqvGWndx%O=.false.
+         if(EqvGWndx%Nset.ne.1) stop "Orbital symmetrization is not implemented for more than one set if the impurity has to be expanded."
+         !
+         EqvGWndx%O=.true.
+         EqvGWndx%Ntotset = EqvGWndx%Nset + (Nsite-1)
+         !
+         !reshape of SetNorb
+         allocate(oldSetNorb(size(EqvGWndx%SetNorb)))
+         oldSetNorb=EqvGWndx%SetNorb
+         deallocate(EqvGWndx%SetNorb)
+         allocate(EqvGWndx%SetNorb(EqvGWndx%Ntotset));EqvGWndx%SetNorb=0
+         EqvGWndx%SetNorb(1:EqvGWndx%Nset) = oldSetNorb
+         EqvGWndx%SetNorb(1+EqvGWndx%Nset:EqvGWndx%Ntotset) = oldSetNorb(1)
+         deallocate(oldSetNorb)
+         !reshape of SetOrbs
+         allocate(oldSetOrbs(1,size(EqvGWndx%SetOrbs,dim=2)))
+         oldSetOrbs(1,:)=EqvGWndx%SetOrbs(1,:)
+         deallocate(EqvGWndx%SetOrbs)
+         allocate(EqvGWndx%SetOrbs(EqvGWndx%Ntotset,size(EqvGWndx%SetOrbs,dim=2)));EqvGWndx%SetOrbs=0
+         EqvGWndx%SetOrbs(1,:)=oldSetOrbs(1,:)
+         !refilling of SetOrbs
+         do isite=2,Nsite
+            ! only two possible arrangements
+            if(abs(oldSetOrbs(1,2)-oldSetOrbs(1,1)).eq.1)then
+               shift = size(oldSetOrbs(1,:))*(isite-1)
+            elseif(abs(oldSetOrbs(1,2)-oldSetOrbs(1,1)).eq.Nsite)then
+               shift = isite-1
+            endif
+            EqvGWndx%SetOrbs(isite,:) = oldSetOrbs(1,:) + shift
+         enddo
+         deallocate(oldSetOrbs)
          !
       endif
       !
@@ -1430,7 +1465,7 @@ contains
             call fit_moments(Gmats(:,:,:,isite),Beta,Nfit,.false.,reg(MomDir),reg(file),"Green",Moments,filename="Gimp")
             !
             allocate(GmatsTail(Nmats));GmatsTail=czero
-            write(*,"(A,F)")"     Replacing tail starting from iw_["//str(wndx)//"]=",wmats(wndx)
+            write(*,"(A,F)")"     Replacing Gimp tail starting from iw_["//str(wndx)//"]=",wmats(wndx)
             do ispin=1,Nspin
                do iorb=1,Norb
                   GmatsTail = G_Moments(Moments(iorb,3:Nfit,ispin),wmats)
@@ -1576,7 +1611,7 @@ contains
             call fit_moments(Smats(:,:,:,isite),Beta,Nfit,.false.,reg(MomDir),reg(file),"Sigma",Moments,filename="Simp",Wlimit=wndx)
             !
             allocate(SmatsTail(Nmats));SmatsTail=czero
-            write(*,"(A,F)")"     Replacing tail starting from iw_["//str(wndx)//"]=",wmats(wndx)
+            write(*,"(A,F)")"     Replacing Sigma tail starting from iw_["//str(wndx)//"]=",wmats(wndx)
             do ispin=1,Nspin
                do iorb=1,Norb
                   SmatsTail = S_Moments(Moments(iorb,:,ispin),wmats)

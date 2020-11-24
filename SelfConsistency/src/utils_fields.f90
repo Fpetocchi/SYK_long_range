@@ -52,7 +52,7 @@ module utils_fields
 #ifdef _verb
    logical,private                          :: verbose=.true.
 #else
-   logical,private                          :: verbose=.false.
+   logical,private                          :: verbose=.true.
 #endif
 
    !---------------------------------------------------------------------------!
@@ -1346,7 +1346,7 @@ contains
                   i = Eqv%SetOrbs(iset,iorb)
                   !
                   ib1_aa = i + Norb*(i-1)
-                  Waaaa = Waaaa + W%bare_local(ib1_aa,ib1_aa) / dimdiag
+                  W%bare_local(ib1_aa,ib1_aa) = Waaaa
                   !
                   do jorb=1+iorb,Eqv%SetNorb(iset)
                      j = Eqv%SetOrbs(iset,jorb)
@@ -1410,7 +1410,7 @@ contains
                   i = Eqv%SetOrbs(iset,iorb)
                   !
                   ib1_aa = i + Norb*(i-1)
-                  Waaaa = Waaaa + W%screened_local(ib1_aa,ib1_aa,ip) / dimdiag
+                  W%screened_local(ib1_aa,ib1_aa,ip) = Waaaa
                   !
                   do jorb=1+iorb,Eqv%SetNorb(iset)
                      j = Eqv%SetOrbs(iset,jorb)
@@ -1435,6 +1435,7 @@ contains
                      !
                   enddo
                enddo
+               !
             enddo !ip
             !
          enddo !iset - diagonal
@@ -1504,6 +1505,7 @@ contains
                !
                !Screened attribute
                do ip=1,W%Npoints
+                  !
                   !Average elements
                   Waabb=czero;Wabba=czero;Wabab=czero
                   do iorb=1,Eqv%SetNorb(iset)
@@ -1549,6 +1551,7 @@ contains
                         !
                      enddo
                   enddo
+                  !
                enddo !ip
                !
             enddo !jset

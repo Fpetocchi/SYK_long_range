@@ -414,6 +414,7 @@ class ct_hyb
          times full_segment(0,Beta);
          double s=1;
          VecVec G_tmp(Nflavor,Vec(NtauF,0.0));
+         VecVec n_tau(Nflavor,Vec(NtauB,0.0));
 
          // The measurments I'm going to do regardless from the time
          for (int imeas=0; imeas<Nmeas_; imeas++)
@@ -458,10 +459,11 @@ class ct_hyb
          //
          if(nnt_meas)
          {
-            nt = measure_nt( segments, full_line, NtauB, Beta );
-            accumulate_nnt( nnt, nt );
-            accumulate_Szhist( Szhist, nt );
-            accumulate_Nhist( Nhist, nt );
+            n_tau = measure_nt( segments, full_line, NtauB, Beta );
+            accumulate_nt( nt, n_tau );
+            accumulate_nnt( nnt, n_tau );
+            accumulate_Szhist( Szhist, n_tau );
+            accumulate_Nhist( Nhist, n_tau );
          }
          //.....................................................................
 

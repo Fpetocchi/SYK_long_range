@@ -267,7 +267,91 @@ VecVec measure_nt( std::vector<segment_container_t> &segments, std::vector<int> 
 }
 
 
+void accumulate_nt( VecVec &n_meas, VecVec &n_tau)
+{
+   //
+   int Nflavor = n_tau.size();
+   int Ntau = n_tau[0].size();
+   //
+   for (int ifl=0; ifl<Nflavor; ++ifl)
+   {
+      for (int i=0; i<Ntau; ++i)
+      {
+         n_meas[ifl][i]+=n_tau[ifl][i];
+      }
+   }
+}
+
 //------------------------------------------------------------------------------
+
+
+VecVec measure_nnt_standalone( std::vector<segment_container_t> &segments, std::vector<int> &full_line, int &Ntau, double &Beta)
+{
+   //
+   int Nflavor = segments.size();
+   VecVec n_vectors(Nflavor,Vec(Ntau,1));
+   std::set<times>::iterator it;
+   for (int ifl=0; ifl<Nflavor; ++ifl)
+   {
+      if (segments[ifl].size()==0)
+      {
+         if (full_line[ifl]==0)
+            for (int i=0; i<(int)n_vectors[ifl].size(); ++i) n_vectors[ifl][i]=0;
+      }
+      else
+      {
+         it=segments[ifl].end();
+         it--;
+         //
+         if (it->t_end()<it->t_start())
+            n_vectors[ifl][0]=1;
+         else
+            n_vectors[ifl][0]=0;
+         //
+         // mark segment start and end points
+         int index;
+         for (it=segments[ifl].begin(); it!=segments[ifl].end(); it++)
+         {
+             index = it->t_start()/Beta*Ntau;
+             n_vectors[ifl][index] *= -1;
+             index = it->t_end()/Beta*Ntau;
+             n_vectors[ifl][index] *= -1;
+         }
+         //
+         // fill vector with occupation number
+         for (int i=1; i<(int)n_vectors[ifl].size(); i++)
+         {
+            if (n_vectors[ifl][i]==-1)
+               n_vectors[ifl][i]=1-n_vectors[ifl][i-1];
+            else
+               n_vectors[ifl][i]=n_vectors[ifl][i-1];
+         }
+      }
+   }
+   //
+   //std::valarray<double> nn_corr_meas(Nflavor*(Nflavor+1)/2*(Ntau));
+   VecVec nn_corr_meas(Nflavor*(Nflavor+1)/2,Vec(Ntau,0.0));
+   int position=0;
+   for (int ifl=0; ifl<Nflavor; ++ifl)
+   {
+      for (int jfl=0; jfl<=ifl; ++jfl)
+      {
+         position++;
+         for (int i=0; i<Ntau; ++i)
+         {
+            for (int index=0; index<Ntau; ++index)
+            {
+               int j=i+index;
+               if (j>Ntau) j -= Ntau;
+               nn_corr_meas[position][index] += n_vectors[ifl][i]*n_vectors[jfl][j];
+            }
+         }
+         for (int i=0; i<Ntau; ++i)nn_corr_meas[position][i]/=(Ntau);
+      }
+   }
+   //
+   return nn_corr_meas;
+}
 
 
 VecVec measure_nnt( VecVec &n_tau)
@@ -327,80 +411,8 @@ void accumulate_nnt( VecVec &nn_corr_meas, VecVec &n_tau)
             }
          }
          position++;
-         //for (int i=0; i<Ntau; ++i)nn_corr_meas[position][i]/=(Ntau);
       }
    }
-}
-
-
-VecVec measure_nnt_standalone( std::vector<segment_container_t> &segments, std::vector<int> &full_line, int &Ntau, double &Beta)
-{
-   //
-   int Nflavor = segments.size();
-   VecVec n_vectors(Nflavor,Vec(Ntau,1));
-   std::set<times>::iterator it;
-   for (int ifl=0; ifl<Nflavor; ++ifl)
-   {
-      if (segments[ifl].size()==0)
-      {
-         if (full_line[ifl]==0)
-            for (int i=0; i<(int)n_vectors[ifl].size(); ++i) n_vectors[ifl][i]=0;
-      }
-      else
-      {
-         it=segments[ifl].end();
-         it--;
-         //
-         if (it->t_end()<it->t_start())
-            n_vectors[ifl][0]=1;
-         else
-            n_vectors[ifl][0]=0;
-         //
-         // mark segment start and end points
-         int index;
-         for (it=segments[ifl].begin(); it!=segments[ifl].end(); it++)
-         {
-             index = it->t_start()/Beta*Ntau;
-             n_vectors[ifl][index] *= -1;
-             index = it->t_end()/Beta*Ntau;
-             n_vectors[ifl][index] *= -1;
-         }
-         //
-         // fill vector with occupation number
-         for (int i=1; i<(int)n_vectors[ifl].size(); i++)
-         {
-            if (n_vectors[ifl][i]==-1)
-               n_vectors[ifl][i]=1-n_vectors[ifl][i-1];
-            else
-               n_vectors[ifl][i]=n_vectors[ifl][i-1];
-         }
-      }
-   }
-
-   //
-   //std::valarray<double> nn_corr_meas(Nflavor*(Nflavor+1)/2*(Ntau));
-   VecVec nn_corr_meas(Nflavor*(Nflavor+1)/2,Vec(Ntau,0.0));
-   int position=0;
-   for (int ifl=0; ifl<Nflavor; ++ifl)
-   {
-      for (int jfl=0; jfl<=ifl; ++jfl)
-      {
-         position++;
-         for (int i=0; i<Ntau; ++i)
-         {
-            for (int index=0; index<Ntau; ++index)
-            {
-               int j=i+index;
-               if (j>Ntau) j -= Ntau;
-               nn_corr_meas[position][index] += n_vectors[ifl][i]*n_vectors[jfl][j];
-            }
-         }
-         for (int i=0; i<Ntau; ++i)nn_corr_meas[position][i]/=(Ntau);
-      }
-   }
-
-   //
-   return nn_corr_meas;
 }
 
 

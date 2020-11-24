@@ -1849,18 +1849,20 @@ contains
          !
          invW = zeye(Nbp) + matmul(Pimp%screened_local(:,:,iw),Wimp%screened_local(:,:,iw))
          !
-         !call inv(invW)
-         call inv_sym(invW)
+         call inv(invW)
+         !call inv_sym(invW)
          !
          curlyU%screened_local(:,:,iw) = matmul(Wimp%screened_local(:,:,iw),invW)
-         !
-         call check_Symmetry(curlyU%screened_local(:,:,iw),eps,enforce=.true.,hardstop=.false.,name="curlyU_"//str(iw))
          !
       enddo
       !$OMP END DO
       !$OMP END PARALLEL
       deallocate(invW)
       call isReal(curlyU)
+      !
+      do iw=1,Nmats
+         call check_Symmetry(curlyU%screened_local(:,:,iw),eps,enforce=.true.,hardstop=.false.,name="curlyU_"//str(iw))
+      enddo
       !
    end subroutine calc_curlyU
 

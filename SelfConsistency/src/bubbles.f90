@@ -359,18 +359,20 @@ contains
          !
          invP = matmul(curlyU%screened_local(:,:,iw),ChiC%screened_local(:,:,iw)) - zeye(Nbp)
          !
-         !call inv(invP)
-         call inv_sym(invP)
+         call inv(invP)
+         !call inv_sym(invP)
          !
          Pimp%screened_local(:,:,iw) = matmul(ChiC%screened_local(:,:,iw),invP)
-         !
-         call check_Symmetry(Pimp%screened_local(:,:,iw),eps,enforce=.true.,hardstop=.false.,name="Pimp_"//str(iw))
          !
       enddo
       !$OMP END DO
       !$OMP END PARALLEL
-      call isReal(Pimp)
       deallocate(invP)
+      call isReal(Pimp)
+      !
+      do iw=1,Nmats
+         call check_Symmetry(Pimp%screened_local(:,:,iw),eps,enforce=.true.,hardstop=.false.,name="Pimp_"//str(iw))
+      enddo
       !
    end subroutine calc_Pimp
 
