@@ -71,8 +71,8 @@
 
  PATH_INPUT=GWinput_SrMoO3                     !Folder within cwd where to look for input files.
  PATH_DATA=Results_SrMoO3                      !Folder within cwd where to store data.
- START_IT=9                                    !First iteration. If its non zero the code will look for the last item in PATH_DATA/item and start there.
- LAST_IT=10                                    !Last iteration.
+ START_IT=10                                   !First iteration. If its non zero the code will look for the last item in PATH_DATA/item and start there.
+ LAST_IT=12                                    !Last iteration.
  LOGFILE=6                                     !Standard output redirection unit. Use 6 to print to terminal. Not used yet.
  MIX_D=0.500000                                !Fraction of the old iteration Delta.
  MIX_U=0.500000                                !Fraction of the old iteration curlyU.

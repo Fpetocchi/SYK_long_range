@@ -179,6 +179,12 @@ contains
             !
             if(ItStart.ne.0) stop "CalculationType is G0W0 but the starting iteration is not 0."
             call createDir(reg(Itpath),verb=verbose)
+            call createDir(reg(Itpath)//"Convergence",verb=verbose)
+            do isite=1,Nsite
+               call createDir(reg(Itpath)//"Solver_"//reg(SiteName(isite))//"/fits",verb=verbose)
+               if(ExpandImpurity.or.AFMselfcons)exit
+            enddo
+            !
             Itend = 0
             !
          case("scGW")
@@ -192,6 +198,12 @@ contains
             endif
             !
             call createDir(reg(Itpath),verb=verbose)
+            call createDir(reg(Itpath)//"Convergence",verb=verbose)
+            do isite=1,Nsite
+               call createDir(reg(Itpath)//"Solver_"//reg(SiteName(isite))//"/fits",verb=verbose)
+               if(ExpandImpurity.or.AFMselfcons)exit
+            enddo
+            !
             Itend = LastIteration
             !
          case("DMFT+statU","DMFT+dynU","EDMFT","GW+EDMFT")
@@ -205,10 +217,19 @@ contains
             endif
             !
             if(ItStart.eq.LastIteration) then
+               !
                Itend = ItStart-1 !avoid the lattice in the last it
+               !
             else
+               !
                call createDir(reg(Itpath),verb=verbose)
+               call createDir(reg(Itpath)//"/Convergence",verb=verbose)
+               do isite=1,Nsite
+                  call createDir(reg(Itpath)//"/Solver_"//reg(SiteName(isite))//"/fits",verb=verbose)
+                  if(ExpandImpurity.or.AFMselfcons)exit
+               enddo
                Itend = ItStart
+               !
             endif
             !
       end select
@@ -225,12 +246,6 @@ contains
       PrevItFolder = reg(pathDATA)//str(ItStart-1)//"/"
       !
       Ustart = Ustart .and. (ItStart.eq.0)
-      !
-      call createDir(reg(ItFolder)//"Convergence",verb=verbose)
-      do isite=1,Nsite
-         call createDir(reg(ItFolder)//"Solver_"//reg(SiteName(isite))//"/fits",verb=verbose)
-         if(ExpandImpurity.or.AFMselfcons)exit
-      enddo
       !
    end subroutine initialize_DataStructure
 
@@ -896,7 +911,7 @@ contains
       type(FermionicField)                  :: FermiPrint
       type(FermionicField)                  :: DeltaOld
       integer                               :: Norb,Nflavor,unit
-      integer                               :: ispin,iw,iwan,itau,ndx
+      integer                               :: ispin,iw,iwan,itau,ndx,wndx
       integer,allocatable                   :: Orbs(:)
       real(8),allocatable                   :: wmats(:),tau(:),Moments(:,:,:)
       real(8),allocatable                   :: Eloc(:,:),PrintLine(:)
@@ -1007,7 +1022,8 @@ contains
                   if(filexists) call execute_command_line(" cp "//reg(oldMomDir)//reg(file)//" "//reg(newMomDir))
                   !
                   allocate(Moments(Norb,Nfit,Nspin));Moments=0d0
-                  call fit_moments(Dfit,Beta,Nfit,.false.,reg(newMomDir),reg(file),"Sigma",Moments,filename="DeltaMom")
+                  wndx = minloc(abs(wmats-0.85*wmatsMax),dim=1)
+                  call fit_moments(Dfit,Beta,Nfit,.false.,reg(newMomDir),reg(file),"Sigma",Moments,filename="DeltaMom",Wlimit=wndx)
                   Eloc=Moments(:,1,:)
                   deallocate(Moments)
                   !
@@ -1355,12 +1371,14 @@ contains
       complex(8),allocatable                :: Gitau(:,:,:)
       complex(8),allocatable                :: Gmats(:,:,:,:),GmatsNoFit(:,:,:,:)
       complex(8),allocatable                :: GmatsTail(:)
+      integer                               :: NfitG
       !Impurity self-energy and fermionic Dyson equation
       type(FermionicField)                  :: Simp
       type(FermionicField)                  :: G0imp
       type(BosonicField)                    :: curlyU
       complex(8),allocatable                :: Smats(:,:,:,:),SmatsNoFit(:,:,:,:)
       complex(8),allocatable                :: SmatsTail(:)
+      integer                               :: NfitS
       !Impurity susceptibilities
       real(8),allocatable                   :: nnt(:,:,:)
       complex(8),allocatable                :: NNitau(:,:,:,:,:)
@@ -1481,7 +1499,7 @@ contains
       enddo
       !
       !Replace the tail with the fitted Gf - I'm doing another loop over sites because I want to store all the GmatsNoFit
-      if(ReplaceTail_Gimp.gt.0d0)then
+      if((ReplaceTail_Gimp.gt.0d0).and.(ReplaceTail_Gimp.lt.wmatsMax))then
          !
          allocate(GmatsNoFit(Norb,Nmats,Nspin,Nsite))
          GmatsNoFit=Gmats
@@ -1498,16 +1516,17 @@ contains
             file = "GimpMom_"//reg(SiteName(isite))//".DAT"
             MomDir = reg(PrevItFolder)//"Solver_"//reg(SiteName(isite))//"/"
             allocate(wmats(Nmats));wmats=FermionicFreqMesh(Beta,Nmats)
-            allocate(Moments(Norb,Nfit,Nspin));Moments=0d0
-            wndx = Nmats
-            if(ReplaceTail_Gimp.lt.wmatsMax) wndx = minloc(abs(wmats-ReplaceTail_Gimp),dim=1)
-            call fit_moments(Gmats(:,:,:,isite),Beta,Nfit,.false.,reg(MomDir),reg(file),"Green",Moments,filename="Gimp")
+            wndx = minloc(abs(wmats-ReplaceTail_Gimp),dim=1)
+            NfitG = Nfit
+            if(Nfit.gt.8)NfitG=8
+            allocate(Moments(Norb,NfitG,Nspin));Moments=0d0
+            call fit_moments(Gmats(:,:,:,isite),Beta,NfitG,.false.,reg(MomDir),reg(file),"Green",Moments,filename="Gimp")
             !
             allocate(GmatsTail(Nmats));GmatsTail=czero
             write(*,"(A,F)")"     Replacing Gimp tail starting from iw_["//str(wndx)//"]=",wmats(wndx)
             do ispin=1,Nspin
                do iorb=1,Norb
-                  GmatsTail = G_Moments(Moments(iorb,3:Nfit,ispin),wmats)
+                  GmatsTail = G_Moments(Moments(iorb,3:NfitG,ispin),wmats)
                   Gmats(iorb,wndx:Nmats,ispin,isite) = GmatsTail(wndx:Nmats)
                enddo
             enddo
@@ -1631,7 +1650,7 @@ contains
       enddo
       !
       !Replace the tail with the fitted self-energy - I'm doing another loop over sites because I want to store all the SmatsNoFit
-      if(ReplaceTail_Simp.ne.0d0)then
+      if((ReplaceTail_Simp.ne.0d0).and.(ReplaceTail_Simp.lt.wmatsMax))then
          !
          allocate(SmatsNoFit(Norb,Nmats,Nspin,Nsite))
          SmatsNoFit=Smats
@@ -1648,10 +1667,12 @@ contains
             file = "SimpMom_"//reg(SiteName(isite))//".DAT"
             MomDir = reg(PrevItFolder)//"Solver_"//reg(SiteName(isite))//"/"
             allocate(wmats(Nmats));wmats=FermionicFreqMesh(Beta,Nmats)
-            allocate(Moments(Norb,Nfit,Nspin));Moments=0d0
-            wndx = Nmats
-            if(ReplaceTail_Simp.lt.wmatsMax) wndx = minloc(abs(wmats-ReplaceTail_Simp),dim=1)
-            call fit_moments(Smats(:,:,:,isite),Beta,Nfit,.false.,reg(MomDir),reg(file),"Sigma",Moments,filename="Simp",Wlimit=wndx)
+
+            wndx = minloc(abs(wmats-ReplaceTail_Simp),dim=1)
+            NfitS = Nfit
+            if(Nfit.gt.8)NfitS=8
+            allocate(Moments(Norb,NfitS,Nspin));Moments=0d0
+            call fit_moments(Smats(:,:,:,isite),Beta,NfitS,.false.,reg(MomDir),reg(file),"Sigma",Moments,filename="Simp",Wlimit=wndx)
             !
             allocate(SmatsTail(Nmats));SmatsTail=czero
             write(*,"(A,F)")"     Replacing Sigma tail starting from iw_["//str(wndx)//"]=",wmats(wndx)

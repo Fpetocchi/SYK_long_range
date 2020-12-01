@@ -351,7 +351,7 @@ contains
       character(len=*),intent(in),optional  :: filename
       integer,intent(in),optional           :: Wlimit
       !
-      integer                               :: Norb,Niter
+      integer                               :: Norb,Niter,Wstart
       integer                               :: iorb,ispin
       real(8)                               :: chi
       real(8),allocatable                   :: ParamVec(:)
@@ -363,8 +363,9 @@ contains
       !
       Nfit = Nb
       Norb = size(funct,dim=1)
-      Nfreq = size(funct,dim=2)
-      if(present(Wlimit))Nfreq = Wlimit
+      Wstart = 1
+      if(present(Wlimit))Wstart = Wlimit
+      Nfreq = size(funct,dim=2) - Wstart + 1
       !
       call assert_shape(Eloc,[Norb,Nspin],"fit_Delta","Eloc")
       allocate(Component(Nfreq));Component=czero
@@ -382,21 +383,20 @@ contains
             write(*,"(A)")"     Fitting Delta(iw)."
             !
             allocate(wmats(Nfreq));wmats=0d0
-            wmats = FermionicFreqMesh(Beta,Nfreq)
+            wmats = FermionicFreqMesh(Beta,Nfreq) + (Wstart-1)*2d0*pi/Beta
             allocate(ParamVec(2*Nfit));ParamVec=0d0
             !
             do ispin=1,Nspin
                do iorb=1,Norb
                   !
-                  !Setting component to fit and parameter first guess
-                  Component = funct(iorb,1:Nfreq,ispin)
+                  Component = funct(iorb,Wstart:Wstart+Nfreq,ispin)
                   ParamVec(1:Nfit) = AndPram%Epsk(iorb,:,ispin)
                   ParamVec(1+Nfit:2*Nfit) = AndPram%Vk(iorb,:,ispin)
                   !
                   call fit_wrapper(chi2_Delta,ParamVec,chi,Niter)
                   !
-                  write(*,"(3(A,I3))")"Results for orb: ",iorb," spin: ",ispin," Npara: ",size(ParamVec)
-                  write(*,"(A,I,A,F)")"Iterations: ",Niter," Chi^2: ",chi
+                  write(*,"(3(A,I3))")"     Results for orb: ",iorb," spin: ",ispin," Npara: ",size(ParamVec)
+                  write(*,"(A,I,2(A,F))")"     Iterations: ",Niter," Chi^2: ",chi,", Wstart: ",wmats(1)
                   !
                   AndPram%Epsk(iorb,:,ispin) = ParamVec(1:Nfit)
                   AndPram%Vk(iorb,:,ispin) = ParamVec(1+Nfit:2*Nfit)
@@ -409,13 +409,13 @@ contains
             write(*,"(A)")"     Fitting Eloc+Delta(iw)."
             !
             allocate(wmats(Nfreq));wmats=0d0
-            wmats = FermionicFreqMesh(Beta,Nfreq)
+            wmats = FermionicFreqMesh(Beta,Nfreq) + (Wstart-1)*2d0*pi/Beta
             allocate(ParamVec(2*Nfit+1));ParamVec=0d0
             !
             do ispin=1,Nspin
                do iorb=1,Norb
                   !
-                  Component = funct(iorb,1:Nfreq,ispin)
+                  Component = funct(iorb,Wstart:Wstart+Nfreq,ispin)
                   ParamVec(1:Nfit) = AndPram%Epsk(iorb,:,ispin)
                   ParamVec(1+Nfit:2*Nfit) = AndPram%Vk(iorb,:,ispin)
                   ParamVec(2*Nfit+1) = AndPram%Eloc(iorb,ispin)
@@ -434,13 +434,16 @@ contains
             !
          end select
          !
-         deallocate(Component)
+         deallocate(Component,wmats)
          Eloc = AndPram%Eloc
          call dump_AndPrams(dirpath,paramFile)
          !
          if(present(filename))then
             !
-            allocate(funct_print(Nfreq))
+            allocate(wmats(size(funct,dim=2)));wmats=0d0
+            wmats=FermionicFreqMesh(Beta,size(funct,dim=2))
+            !
+            allocate(funct_print(size(funct,dim=2)))
             do ispin=1,Nspin
                do iorb=1,Norb
                   !
@@ -451,11 +454,11 @@ contains
                enddo
             enddo
             !
-            deallocate(funct_print)
+            deallocate(funct_print,wmats)
             !
          endif
          !
-         deallocate(ParamVec,wmats)
+         deallocate(ParamVec)
          !
       end subroutine fit_Delta
 
@@ -605,6 +608,7 @@ contains
       real(8),dimension(:)                  :: wm
       logical,optional                      :: buildReG
       complex(8),dimension(size(wm))        :: Gf
+      real(8)                               :: coeff
       integer                               :: imoment,iw,exp
       logical                               :: buildReG_
       !
@@ -623,8 +627,11 @@ contains
             exp = imoment + 1
             !Moments 3,5,7,9..
             if(buildReG_) exp = 2*imoment + 1
+            !Odd moments coefficient are positive for the Gf
+            coeff =  MomentVec(imoment)
+            if(mod(exp,2).ne.0)coeff=abs(coeff)
             !
-            Gf(iw) = Gf(iw) + MomentVec(imoment)/(dcmplx(0d0,wm(iw))**exp)
+            Gf(iw) = Gf(iw) + coeff/(dcmplx(0d0,wm(iw))**exp)
             !
          enddo
          !
@@ -641,6 +648,7 @@ contains
       real(8),dimension(:)                  :: wm
       logical,optional                      :: buildReS
       complex(8),dimension(size(wm))        :: Sigma
+      real(8)                               :: coeff
       integer                               :: imoment,iw,exp
       logical                               :: buildReS_
       !
@@ -659,8 +667,11 @@ contains
             exp = imoment
             !Moments 3,5,7,9..
             if(buildReS_) exp = 2*imoment - 3
+            !Odd moments coefficient are not necessarily positive for the self-energy
+            coeff =  MomentVec(imoment)
+            !if(mod(exp,2).ne.0)coeff=abs(coeff)
             !
-            Sigma(iw) = Sigma(iw) + MomentVec(imoment)/(dcmplx(0d0,wm(iw))**exp)
+            Sigma(iw) = Sigma(iw) + coeff/(dcmplx(0d0,wm(iw))**exp)
             !
          enddo
          !
@@ -765,7 +776,7 @@ contains
       character(len=*),intent(in),optional  :: filename
       integer,intent(in),optional           :: Wlimit
       !
-      integer                               :: Norb,Niter
+      integer                               :: Norb,Niter,Wstart
       integer                               :: iorb,ispin
       real(8)                               :: chi
       real(8),allocatable                   :: ParamVec(:)
@@ -778,8 +789,9 @@ contains
       Nfit = Nb
       KramersKronig = KK
       Norb = size(funct,dim=1)
-      Nfreq = size(funct,dim=2)
-      if(present(Wlimit))Nfreq = Wlimit
+      Wstart = 1
+      if(present(Wlimit))Wstart = Wlimit
+      Nfreq = size(funct,dim=2) - Wstart + 1
       !
       call assert_shape(MomentsOut,[Norb,Nfit,Nspin],"fit_moments","MomentsOut")
       allocate(Component(Nfreq));Component=czero
@@ -796,7 +808,7 @@ contains
             write(*,"(A)")"     Fitting moments [2:N]."
             !
             allocate(wmats(Nfreq));wmats=0d0
-            wmats = FermionicFreqMesh(Beta,Nfreq)
+            wmats = FermionicFreqMesh(Beta,Nfreq) + (Wstart-1)*2d0*pi/Beta
             allocate(ParamVec(Nfit-2));ParamVec=0d0
             !
             do ispin=1,Nspin
@@ -804,13 +816,13 @@ contains
                   !
                   Moments(iorb,1,ispin) = 0d0
                   Moments(iorb,2,ispin) = 1d0
-                  Component = funct(iorb,1:Nfreq,ispin)
+                  Component = funct(iorb,Wstart:Wstart+Nfreq,ispin)
                   ParamVec = Moments(iorb,3:Nfit,ispin)
                   !
                   call fit_wrapper(chi2_G_Moments,ParamVec,chi,Niter)
                   !
                   write(*,"(3(A,I3))")"     Results for orb: ",iorb," spin: ",ispin," Npara: ",size(ParamVec)
-                  write(*,"(A,I,2(A,F))")"     Iterations: ",Niter," Chi^2: ",chi,", Wmax: ",wmats(Nfreq)
+                  write(*,"(A,I,2(A,F))")"     Iterations: ",Niter," Chi^2: ",chi,", Wstart: ",wmats(1)
                   write(*,"(A,100F12.6)")"     Moments before fit: ",Moments(iorb,:,ispin)
                   write(*,"(A,100F12.6)")"     Moments after fit:  ",0d0,1d0,ParamVec
                   !
@@ -824,19 +836,19 @@ contains
             write(*,"(A)")"     Fitting moments [0:N]."
             !
             allocate(wmats(Nfreq));wmats=0d0
-            wmats = FermionicFreqMesh(Beta,Nfreq)
+            wmats = FermionicFreqMesh(Beta,Nfreq) + (Wstart-1)*2*pi/Beta
             allocate(ParamVec(Nfit));ParamVec=0d0
             !
             do ispin=1,Nspin
                do iorb=1,Norb
                   !
-                  Component = funct(iorb,1:Nfreq,ispin)
+                  Component = funct(iorb,Wstart:Wstart+Nfreq,ispin)
                   ParamVec = Moments(iorb,:,ispin)
                   !
                   call fit_wrapper(chi2_S_Moments,ParamVec,chi,Niter)
                   !
                   write(*,"(3(A,I3))")"     Results for orb: ",iorb," spin: ",ispin," Npara: ",size(ParamVec)
-                  write(*,"(A,I,2(A,F))")"     Iterations: ",Niter," Chi^2: ",chi,", Wmax: ",wmats(Nfreq)
+                  write(*,"(A,I,2(A,F))")"     Iterations: ",Niter," Chi^2: ",chi,", Wstart: ",wmats(1)
                   write(*,"(A,100F12.6)")"     Moments before fit: ",Moments(iorb,:,ispin)
                   write(*,"(A,100F12.6)")"     Moments after fit:  ",ParamVec
                   !
@@ -850,19 +862,19 @@ contains
             write(*,"(A)")"     Fitting even moments [0:N]."
             !
             allocate(wmats(Nfreq));wmats=0d0
-            wmats = BosonicFreqMesh(Beta,Nfreq)
+            wmats = BosonicFreqMesh(Beta,Nfreq) + (Wstart-1)*2d0*pi/Beta
             allocate(ParamVec(Nfit));ParamVec=0d0
             !
             do ispin=1,Nspin
                do iorb=1,Norb
                   !
-                  Component = funct(iorb,1:Nfreq,ispin)
+                  Component = funct(iorb,Wstart:Wstart+Nfreq,ispin)
                   ParamVec = Moments(iorb,:,ispin)
                   !
                   call fit_wrapper(chi2_W_Moments,ParamVec,chi,Niter)
                   !
                   write(*,"(3(A,I3))")"     Results for orb: ",iorb," spin: ",ispin," Npara: ",size(ParamVec)
-                  write(*,"(A,I,2(A,F))")"     Iterations: ",Niter," Chi^2: ",chi,", Wmax: ",wmats(Nfreq)
+                  write(*,"(A,I,2(A,F))")"     Iterations: ",Niter," Chi^2: ",chi,", Wstart: ",wmats(1)
                   write(*,"(A,100F12.6)")"     First 5 moments before fit: ",Moments(iorb,0:4,ispin)
                   write(*,"(A,100F12.6)")"     First 5 moments after fit:  ",ParamVec(1:5)
                   !
@@ -873,13 +885,21 @@ contains
             !
       end select
       !
-      deallocate(Component)
+      deallocate(Component,ParamVec,wmats)
       MomentsOut = Moments
       call dump_Moments(dirpath,paramFile)
       !
       if(present(filename))then
          !
-         allocate(funct_print(Nfreq))
+         allocate(wmats(size(funct,dim=2)));wmats=0d0
+         select case(reg(FitMode))
+            case("Green","Sigma")
+               wmats = FermionicFreqMesh(Beta,size(funct,dim=2))
+            case("Boson")
+               wmats = BosonicFreqMesh(Beta,size(funct,dim=2))
+         end select
+         !
+         allocate(funct_print(size(funct,dim=2)))
          do ispin=1,Nspin
             do iorb=1,Norb
                funct_print=czero
@@ -897,11 +917,9 @@ contains
             enddo
          enddo
          !
-         deallocate(funct_print)
+         deallocate(funct_print,wmats)
          !
       endif
-      !
-      deallocate(ParamVec,wmats)
       !
    end subroutine fit_moments
 

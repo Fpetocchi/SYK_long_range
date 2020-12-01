@@ -8,27 +8,33 @@
 export OMP_NUM_THREADS=1
 ulimit -c 0
 
-LOCAL=$(pwd)
-BINqmc=/home/petocchif/1_GW_EDMFT/1_gw_fp_NEW/GenericMaterial/Solver/bin
-BINsc=/home/petocchif/1_GW_EDMFT/1_gw_fp_NEW/GenericMaterial/SelfConsistency/bin
-
-export l1=`grep -n "PATH_INPUT=" input.in | awk -F  ":" '{print $1}'`
-export l2=`grep -n "PATH_DATA=" input.in | awk -F  ":" '{print $1}'`
-export l3=`grep -n "START_IT=" input.in | awk -F  ":" '{print $1}'`
-export l4=`grep -n "LAST_IT=" input.in | awk -F  ":" '{print $1}'`
-
-
 
 
 ################################################################################
 #                                USER SETTINGS                                 #
 ################################################################################
+GENMAT=/home/petocchif/1_GW_EDMFT/1_gw_fp_NEW/GenericMaterial
 
 PATH_INPUT=GWinput_SrMoO3
 PATH_DATA=Results_SrMoO3
 
-START_IT=0
-END_IT=10
+START_IT=10
+END_IT=12
+
+
+
+
+################################################################################
+#                             AUTO-SETUP SETTINGS                              #
+################################################################################
+LOCAL=$(pwd)
+BINqmc=${GENMAT}/Solver/bin
+BINsc=${GENMAT}/SelfConsistency/bin
+
+export l1=`grep -n "PATH_INPUT=" input.in | awk -F  ":" '{print $1}'`
+export l2=`grep -n "PATH_DATA=" input.in | awk -F  ":" '{print $1}'`
+export l3=`grep -n "START_IT=" input.in | awk -F  ":" '{print $1}'`
+export l4=`grep -n "LAST_IT=" input.in | awk -F  ":" '{print $1}'`
 
 `sed -i ${l1}'s/'"PATH_INPUT="'/'"PATH_INPUT=${PATH_INPUT}  !"'/' input.in`
 `sed -i ${l2}'s/'"PATH_DATA="'/'"PATH_DATA=${PATH_DATA}  !"'/' input.in`
@@ -43,13 +49,18 @@ END_IT=10
 
 for IT in `seq ${START_IT} 1 ${END_IT}`
 do
+
    #
    IT_DATA=${LOCAL}/${PATH_DATA}/${IT}/
+
+
    #
    # Lattice problem
    `sed -i ${l3}'s/'"START_IT="'/'"START_IT=${IT}  !"'/' input.in`
 	${BINsc}/SelfConsistency  > report_sc_it${IT} 2> err_sc_it${IT}
    mv {report_sc_it${IT},err_sc_it${IT}} ${IT_DATA}
+
+
    #
    # Impurity problem
    if [ -f "doSolver" ]; then
@@ -57,5 +68,6 @@ do
       mpiexec -np 112 ${BINqmc}/ct_hyb input.in ${IT_DATA} > report_qmc_it${IT} 2> err_qmc_it${IT}
       mv {report_qmc_it${IT},err_qmc_it${IT}} ${IT_DATA}
    fi
-   #
+
+
 done

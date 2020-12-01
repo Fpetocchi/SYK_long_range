@@ -106,7 +106,7 @@ contains
       integer                               :: iw
       !
       do iw=1,Nfreq
-         wmats(iw)=(2.d0*dble(iw-1)+1.d0)*pi/Beta
+         wmats(iw)=(2d0*dble(iw-1)+1d0)*pi/Beta
       enddo
       !
    end function FermionicFreqMesh
@@ -118,7 +118,7 @@ contains
       integer                               :: iw
       !
       do iw=1,Nfreq
-         wmats(iw)=2.d0*dble(iw-1)*pi/Beta
+         wmats(iw)=2d0*dble(iw-1)*pi/Beta
       enddo
       !
    end function BosonicFreqMesh

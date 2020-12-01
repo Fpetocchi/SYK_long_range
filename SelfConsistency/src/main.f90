@@ -51,7 +51,7 @@ program test
       call printHeader(Iteration)
       !
       !K-dependent Polarization - only G0W0,scGW,GW+EDMFT
-      !calc_Plat=.false.
+      !calc_Plat=.false. !TEST
       if(calc_Plat)then
          !
          call calc_Pi(Plat,Glat,Crystal)
@@ -66,7 +66,7 @@ program test
       endif
       !
       !Fully screened interaction - only G0W0,scGW,GW+EDMFT,EDMFT
-      !calc_W=.false.
+      !calc_W=.false. !TEST
       if(calc_W)then
          !
          if(calc_Wfull)  call calc_W_full(Wlat,Ulat,Plat,Crystal)
@@ -77,7 +77,7 @@ program test
       endif
       !
       !K-dependent self-energy - only G0W0,scGW,GW+EDMFT
-      !calc_Sigmak=.false.
+      !calc_Sigmak=.false. !TEST
       if(calc_Sigmak)then
          !
          !Hartree shift between G0W0 and LDA
@@ -185,8 +185,12 @@ program test
    enddo !Iteration
    !
    call DeallocateAllFields()
-   call execute_command_line(" cp used.input.in "//reg(ItFolder))
+   !
    write(*,"(A,F)") new_line("A")//new_line("A")//"Self-Consistency finished. Total timing (s): ",tock(TimeStart)
-   if(solve_DMFT.and.(ItStart.ne.LastIteration))call execute_command_line(" touch doSolver ")
+   !
+   if(ItStart.ne.LastIteration)then
+      call execute_command_line(" cp used.input.in "//reg(ItFolder))
+      if(solve_DMFT)call execute_command_line(" touch doSolver ")
+   endif
    !
 end program test
