@@ -78,11 +78,11 @@ module module_container
    use file_io, only:                        &
    dump_Matrix                              ,&
    read_Matrix                              ,&
+   dump_Field_component                     ,&
    dump_FermionicField                      ,&
    read_FermionicField                      ,&
    dump_BosonicField                        ,&
-   read_BosonicField                        ,&
-   dump_convergence
+   read_BosonicField
 
 
    !(i) minimization routines. Depends on (b),(e),(h)
@@ -131,7 +131,12 @@ module module_container
    calc_VH
 
 
-
+   !(p) post-processing container. Depends on (a),(b),(c),(d),(e),(f),(g),(h)
+   use post_processing, only:                &
+   dump_MaxEnt                              ,&
+   pade!                                    ,&
+   !calc_OptCond                            ,&
+   !calc_HallCond
 
 
 end module module_container

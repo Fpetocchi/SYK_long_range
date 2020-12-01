@@ -651,6 +651,7 @@ contains
       real(8),allocatable                   :: wread(:),wmats(:)
       complex(8),allocatable                :: D1(:,:),D2(:,:),D3(:,:),imgFact(:,:,:)
       complex(8),allocatable                :: Utmp(:,:)
+      logical,allocatable                   :: RevSym(:,:,:)
       type(BosonicField)                    :: Ureal
       type(physicalU)                       :: PhysicalUelements
       real                                  :: start,finish
@@ -842,9 +843,10 @@ contains
             !
             ! Analytical continuation of all the K-points to imag axis using spectral rep
             allocate(imgFact(Nbp_spex,Nbp_spex,2));imgFact=cone
+            allocate(RevSym(Nbp_spex,Nbp_spex,Umats%Nkpt));RevSym=.false.
             call cpu_time(start)
             !$OMP PARALLEL DEFAULT(NONE),&
-            !$OMP SHARED(Nbp_spex,wmats,wread,Nfreq,Ureal,Umats,UfullStructure,verbose),&
+            !$OMP SHARED(Nbp_spex,wmats,wread,Nfreq,Ureal,Umats,UfullStructure,verbose,RevSym),&
             !$OMP PRIVATE(iq,ib1,ib2,iw1,iw2,D1,D2,D3,Utmp,imgFact)
             !$OMP DO
             do iq=1,Umats%Nkpt
@@ -857,6 +859,9 @@ contains
                         if( abs(real(Umats%bare(ib1,ib2,iq))).lt.abs(aimag(Umats%bare(ib1,ib2,iq))))then
                            imgFact(ib1,ib2,1) = -img !this correspond to dividing by I
                            imgFact(ib1,ib2,2) = +img !this correspond to multiplying by I
+                           !
+                           RevSym(ib1,ib2,iq) = .true.
+                           !
                         endif
                      enddo
                   enddo
@@ -897,7 +902,28 @@ contains
             !$OMP END DO
             !$OMP END PARALLEL
             call cpu_time(finish)
-            deallocate(D1,D2,D3)
+            !
+            !Print out the elements with inverted Im/Re symmetry
+            if(UfullStructure)then
+               unit = free_unit()
+               path = reg(pathINPUT)//"RevSym.DAT"
+               open(unit=unit,file=reg(path),form="formatted",status="unknown",position="rewind",action="write")
+               write(unit,"(3A5)")"iq","ib1","ib2"
+               do iq=1,Umats%Nkpt
+                  do ib1=1,Nbp_spex
+                     do ib2=ib1,Nbp_spex
+                        if(RevSym(ib1,ib2,iq).and.(.not.RevSym(ib2,ib1,iq)))then
+                           write(unit,"(3I5,A)")iq,ib1,ib2,"   WARNING - non symmetrical with orbital index exchange."
+                        else
+                           write(unit,"(3I5)")iq,ib1,ib2
+                        endif
+                     enddo
+                  enddo
+               enddo
+               close(unit)
+            endif
+            !
+            deallocate(D1,D2,D3,imgFact,RevSym)
             write(*,"(A,F)") "     UcRPA(q,w) --> UcRPA(q,iw) cpu timing: ", finish-start
             !
          endif !LocalOnly
@@ -927,7 +953,7 @@ contains
          !
          !---------------------------------------------------------------------!
          !
-         write(*,"(A)")"     Reading UcRPA(iq,iw) from "//reg(pathINPUT)//"VW_imag/"
+         write(*,"(A)")"     Reading UcRPA(q,iw) from "//reg(pathINPUT)//"VW_imag/"
          !
          ! Allocations from dimensions written in W.Q0001.DAT file
          path = reg(pathINPUT)//"VW_imag/VW.Q0001.DAT"

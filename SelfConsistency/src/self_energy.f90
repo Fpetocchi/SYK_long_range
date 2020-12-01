@@ -115,7 +115,7 @@ contains
       deallocate(WmatsC)
       !
       call cpu_time(finish)
-      write(*,"(A,F)") "     Glat(ik,iw),Wlat(iq,iw) --> Glat(ik,itau),Wlat(iq,itau) cpu timing:", finish-start
+      write(*,"(A,F)") "     Glat(k,iw),Wlat(q,iw) --> Glat(k,tau),Wlat(q,tau) cpu timing:", finish-start
       !
       call cpu_time(start)
       !Sigma_{m,n}(q,tau) = -Sum_{k,mp,np} W_{(m,mp);(n,np)}(q-k;tau)G_{mp,np}(k,tau)
@@ -161,7 +161,7 @@ contains
       enddo
       deallocate(Sitau)
       call cpu_time(finish)
-      write(*,"(A,F)") "     Sigma_C(ik,iw) cpu timing:", finish-start
+      write(*,"(A,F)") "     Sigma_C(k,iw) cpu timing:", finish-start
       !
       call cpu_time(start)
       call clear_attributes(Smats_X)
@@ -198,7 +198,7 @@ contains
       !$OMP END PARALLEL
       deallocate(Gitau)
       call cpu_time(finish)
-      write(*,"(A,F)") "     Sigma_X(ik) cpu timing:", finish-start
+      write(*,"(A,F)") "     Sigma_X(k) cpu timing:", finish-start
       !
       if(Lttc%Nkpt_irred.lt.Nkpt) then
          !sigma(ik)=sigma(kptp(ik))
@@ -317,7 +317,7 @@ contains
       deallocate(WmatsC_loc)
       !
       call cpu_time(finish)
-      write(*,"(A,F)") "     Glat(iw),Wlat(iw) --> Glat(itau),Wlat(itau) cpu timing:", finish-start
+      write(*,"(A,F)") "     Glat(iw),Wlat(iw) --> Glat(tau),Wlat(tau) cpu timing:", finish-start
       !
       call cpu_time(start)
       !Sigma_{m,n}(q,tau) = -Sum_{k,mp,np} W_{(m,mp);(n,np)}(q-k;tau)G_{mp,np}(k,tau)
@@ -917,7 +917,7 @@ contains
          !
          !---------------------------------------------------------------------!
          !
-         write(*,"(A)")"     Reading SigmaGoWo(ik,iw) from "//reg(pathINPUT)//"SGoWo_k_s[1,2].DAT"
+         write(*,"(A)")"     Reading SigmaGoWo(k,iw) from "//reg(pathINPUT)//"SGoWo_k_s[1,2].DAT"
          !
          ! Just read all
          call clear_attributes(Smats_GoWo)

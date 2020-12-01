@@ -119,6 +119,7 @@ module input_vars
    integer,public                           :: Nreal
    real(8),public                           :: wrealMax
    real(8),public                           :: eta
+   integer,public                           :: PadeWlimit
    !
    !Density lookup
    type(musearch),public                    :: look4dens
@@ -155,7 +156,6 @@ module input_vars
    character(len=256),public                :: pathINPUT!="InputFiles/"
    character(len=256),public                :: pathDATA!="Iterations/"
    integer,public                           :: LOGfile
-   real(8),public                           :: Mixing_curlyG
    real(8),public                           :: Mixing_Delta
    real(8),public                           :: Mixing_curlyU
    logical,public                           :: skipLattice
@@ -290,6 +290,7 @@ contains
       call parse_input_variable(Nreal,"NREAL",InputFile,default=2000,comment="Number of points on the real frequency axis.")
       call parse_input_variable(wrealMax,"MAX_WREAL",InputFile,default=10.d0,comment="Maximum absolute value of the real frequency mesh.")
       call parse_input_variable(eta,"ETA",InputFile,default=0.04d0,comment="Real frequency broadening.")
+      call parse_input_variable(PadeWlimit,"WPADE",InputFile,default=10,comment="Number of Matsubara frequencies used in pade' analytic continuation.")
       !
       !Density lookup
       call add_separator()
@@ -308,7 +309,7 @@ contains
       call parse_input_variable(UfullStructure,"U_FULL",InputFile,default=.true.,comment="Flag to check for inverted Re/Im parity in SPEX Ucrpa.")
       call parse_input_variable(Umodel,"U_MODEL",InputFile,default=.false.,comment="Flag to build the screening from user chosen phononic modes.")
       call parse_input_variable(Uspex,"U_SPEX",InputFile,default=.true.,comment="Flag to read SPEX Ucrpa.")
-      call parse_input_variable(Kdiag,"K_DIAG",InputFile,default=.false.,comment="Flag to screen only orbital-diagonal channels.")
+      call parse_input_variable(Kdiag,"K_DIAG",InputFile,default=.false.,comment="Flag to use only one screening function.")
       if(Umodel.and.Uspex) stop "Make up your mind, U_MODEL or U_SPEX ?"
       if(Umodel)then
          call parse_input_variable(Uaa,"UAA",InputFile,default=5d0,comment="Interaction between same orbital and opposite spin electrons.")
@@ -333,10 +334,11 @@ contains
       call parse_input_variable(alphaHk,"ALPHA_HK",InputFile,default=1d0,comment="Rescaling of the non-interacting Hamiltonian.")
       !
       !Variables for the fit
-      call parse_input_variable(DeltaFit,"DELTA_FIT",InputFile,default="Analytic",comment="Fit to extract the local energy in GW+EDMFT calculations. Available: Analytic, Moments.")
-      call parse_input_variable(Nfit,"NFIT",InputFile,default=15,comment="Number of bath levels (Analytic) or coefficient (Moments).")
-      call parse_input_variable(ReplaceTail_Gimp,"WTAIL_GIMP",InputFile,default=100d0,comment="Frequency value above which the tail of Gimp is replaced. If =0d0 the tail is not replaced. A good number is around 100.")
-      call parse_input_variable(ReplaceTail_Simp,"WTAIL_SIMP",InputFile,default=20d0,comment="Frequency value above which the tail of Simp is replaced. If =0d0 the tail is not replaced. A good number is around 10.")
+      call parse_input_variable(DeltaFit,"DELTA_FIT",InputFile,default="Analytic",comment="Fit to extract the local energy in GW+EDMFT calculations. Available: Inf, Analytic, Moments.")
+      call parse_input_variable(Nfit,"NFIT",InputFile,default=8,comment="Number of bath levels (Analytic) or coefficient (Moments).")
+      call parse_input_variable(ReplaceTail_Gimp,"WTAIL_GIMP",InputFile,default=80d0,comment="Frequency value above which the tail of Gimp is replaced. If =0d0 the tail is not replaced.")
+      call parse_input_variable(ReplaceTail_Simp,"WTAIL_SIMP",InputFile,default=80d0,comment="Frequency value above which the tail of Simp is replaced. If =0d0 the tail is not replaced.")
+      if((reg(DeltaFit).eq."Moments").and.(Nfit.gt.8)) Nfit=8
       !
       !Paths and loop variables
       call add_separator()
@@ -345,7 +347,6 @@ contains
       call parse_input_variable(FirstIteration,"START_IT",InputFile,default=0,comment="First iteration. If its non zero the code will look for the last item in PATH_DATA/item and start there.")
       call parse_input_variable(LastIteration,"LAST_IT",InputFile,default=100,comment="Last iteration.")
       call parse_input_variable(LOGfile,"LOGFILE",InputFile,default=6,comment="Standard output redirection unit. Use 6 to print to terminal. Not used yet.")
-      call parse_input_variable(Mixing_curlyG,"MIX_G",InputFile,default=0d0,comment="Fraction of the old iteration curlyG.")
       call parse_input_variable(Mixing_Delta,"MIX_D",InputFile,default=0.5d0,comment="Fraction of the old iteration Delta.")
       call parse_input_variable(Mixing_curlyU,"MIX_U",InputFile,default=0.5d0,comment="Fraction of the old iteration curlyU.")
       call parse_input_variable(skipLattice,"SKIP_LATT",InputFile,default=.false.,comment="Skip the lattice summation and assuming good the existing Gloc and Wloc. Not used yet.")
@@ -362,6 +363,7 @@ contains
       call parse_input_variable(Solver%binstart,"BINSTART",InputFile,default=100,comment="Tau points skipped at the beginning and end of the Green's function.")
       call append_to_input_list(Solver%retarded,"RETARDED","Integer flag to include the frequency dependent part of the interaction. User cannot set this as its deduced from CALC_TYPE.")
       call append_to_input_list(Solver%nnt_meas,"NNT_MEAS","Integer flag to switch on the measurement of the susceptibility. User cannot set this as its deduced from CALC_TYPE.")
+      Solver%quickloops=look4dens%quickloops
       if(ExpandImpurity)then
          allocate(Solver%Time(1));Solver%Time=0
          call parse_input_variable(Solver%Time(1),"TIME_1",InputFile,default=15,comment="Minutes of solver runtime for site number 1")

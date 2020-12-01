@@ -465,10 +465,14 @@ contains
             if((ReErr.gt.tol).or.(ImErr.gt.tol))then
                !
                if(verbose.or.enforce_)then
-                  if(present(name)) write(*,"(A)") "Matrix: "//reg(name)
-                  write(*,"(A,2I4)") "Non hermitian components: ",i,j
-                  if(ReErr.gt.tol)write(*,"(4(A,1E12.5))") "Re(A_ij): ",real(A(i,j)) ," Re(A_ji): ",real(A(j,i)) ," err: ",ReErr," > ",tol
-                  if(ImErr.gt.tol)write(*,"(4(A,1E12.5))") "Im(A_ij): ",aimag(A(i,j))," Im(A_ji): ",aimag(A(j,i))," err: ",ImErr," > ",tol
+                  if(ReErr.gt.(10d0*tol))then
+                     if(present(name)) write(*,"(A)") "     Non-hermitian matrix: "//reg(name)
+                     write(*,"(A,2I4,4(A,1E12.5))")   "     [i,j]:",i,j," Re(A_ij): ",real(A(i,j)) ," Re(A_ji): ",real(A(j,i)) ," err: ",ReErr," > ",tol
+                  endif
+                  if(ImErr.gt.(10d0*tol))then
+                     if(present(name)) write(*,"(A)") "     Non-hermitian matrix: "//reg(name)
+                     write(*,"(A,2I4,4(A,1E12.5))")   "     [i,j]:",i,j," Im(A_ij): ",aimag(A(i,j))," Im(A_ji): ",aimag(A(j,i))," err: ",ImErr," > ",tol
+                  endif
                endif
                !
                if(hardstop_)stop
@@ -521,9 +525,10 @@ contains
             if(ReErr.gt.tol)then
                !
                if(verbose.or.enforce_)then
-                  if(present(name)) write(*,"(A)") "Matrix: "//reg(name)
-                  write(*,"(A,2I4)") "Non symmetric components: ",i,j
-                  write(*,"(4(A,1E12.5))") "Re(A_ij): ",A(i,j)," Re(A_ji): ",A(j,i)," err: ",ReErr," > ",tol
+                  if(ReErr.gt.(10d0*tol))then
+                     if(present(name)) write(*,"(A)") "     Non-symmetric matrix: "//reg(name)
+                     write(*,"(A,2I4,4(A,1E12.5))")   "     [i,j]:",i,j," Re(A_ij): ",A(i,j)," Re(A_ji): ",A(j,i)," err: ",ReErr," > ",tol
+                  endif
                endif
                !
                if(hardstop_)stop
@@ -573,10 +578,14 @@ contains
             if((ReErr.gt.tol).or.(ImErr.gt.tol))then
                !
                if(verbose.or.enforce_)then
-                  if(present(name)) write(*,"(A)") "Matrix: "//reg(name)
-                  write(*,"(A,2I4)") "Non symmetric components: ",i,j
-                  if(ReErr.gt.tol)write(*,"(4(A,1E12.5))") "Re(A_ij): ",real(A(i,j)) ," Re(A_ji): ",real(A(j,i)) ," err: ",ReErr," > ",tol
-                  if(ImErr.gt.tol)write(*,"(4(A,1E12.5))") "Im(A_ij): ",aimag(A(i,j))," Im(A_ji): ",aimag(A(j,i))," err: ",ImErr," > ",tol
+                  if(ReErr.gt.(10d0*tol))then
+                     if(present(name)) write(*,"(A)") "     Non-symmetric matrix: "//reg(name)
+                     write(*,"(A,2I4,4(A,1E12.5))")   "     [i,j]:",i,j," Re(A_ij): ",real(A(i,j)) ," Re(A_ji): ",real(A(j,i)) ," err: ",ReErr," > ",tol
+                  endif
+                  if(ImErr.gt.(10d0*tol))then
+                     if(present(name)) write(*,"(A)") "     Non-symmetric matrix: "//reg(name)
+                     write(*,"(A,2I4,4(A,1E12.5))")   "     [i,j]:",i,j," Im(A_ij): ",aimag(A(i,j))," Im(A_ji): ",aimag(A(j,i))," err: ",ImErr," > ",tol
+                  endif
                endif
                !
                if(hardstop_)stop

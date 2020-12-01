@@ -250,11 +250,11 @@ class CustomMPI
       int                                 MPIrank;
       int                                 MPImaster=0;
       bool                                MPI_is_init=false;
-      #ifdef _verb
-         bool MPIverbose=true;
-      #else
-         bool MPIverbose=false;
-      #endif
+   #ifdef _verb
+      bool MPIverbose=true;
+   #else
+      bool MPIverbose=false;
+   #endif
 
       //----------------------------------------------------------------------//
 

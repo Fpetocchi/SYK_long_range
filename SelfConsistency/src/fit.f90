@@ -34,7 +34,7 @@ module fit
    integer,private                          :: Nfreq
    integer,parameter,private                :: cg_niter=400
    real(8),parameter,private                :: cg_Ftol=1e-8
-   real(8),parameter,private                :: hwband=3d0
+   real(8),parameter,private                :: hwband=10d0
    real(8),parameter,private                :: noisefact=0.01
    !Anderson Parameters variables
    type(AndersonParam),private              :: AndPram
@@ -152,19 +152,19 @@ contains
             AndPram%Epsk(:,Nh,:)  = -1.d-3 + (rnd-0.5)*noisefact
             call random_number(rnd)
             AndPram%Epsk(:,Nh+1,:)=  1.d-3 + (rnd-0.5)*noisefact
-            do ibath=2,Nh-1
+            do ibath=1,Nh-1
                call random_number(rnd)
-               AndPram%Epsk(:,ibath,:)         = -hwband + (ibath-1)*de + (rnd-0.5)*noisefact
+               AndPram%Epsk(:,ibath,:)        = -hwband + (ibath-1)*de + (rnd-0.5)*noisefact
                call random_number(rnd)
                AndPram%Epsk(:,Nfit-ibath+1,:) = +hwband - (ibath-1)*de + (rnd-0.5)*noisefact
             enddo
          elseif(mod(Nfit,2)/=0)then
             de=hwband/Nh
             call random_number(rnd)
-            AndPram%Epsk(:,Nh+1,:)= 0.0d0 + (rnd-0.5)*noisefact
-            do ibath=2,Nh
+            AndPram%Epsk(:,Nh+1,:)= 1.d-3 + (rnd-0.5)*noisefact
+            do ibath=1,Nh
                call random_number(rnd)
-               AndPram%Epsk(:,ibath,:)         = -hwband + (ibath-1)*de + (rnd-0.5)*noisefact
+               AndPram%Epsk(:,ibath,:)        = -hwband + (ibath-1)*de + (rnd-0.5)*noisefact
                call random_number(rnd)
                AndPram%Epsk(:,Nfit-ibath+1,:) = +hwband - (ibath-1)*de + (rnd-0.5)*noisefact
             enddo
@@ -289,7 +289,7 @@ contains
       enddo
       !
       do iw=1,size(wm)
-         Delta(iw) = AndParaVec(2*Nfit+1) + sum( Vk(:)*Vk(:)/( dcmplx(0d0,wm(iw)) - Ek(:)) )
+         Delta(iw) = AndParaVec(size(AndParaVec)) + sum( Vk(:)*Vk(:)/( dcmplx(0d0,wm(iw)) - Ek(:)) )
       enddo
       !
    end function EoDeltaAnderson
@@ -382,7 +382,7 @@ contains
             write(*,"(A)")"     Fitting Delta(iw)."
             !
             allocate(wmats(Nfreq));wmats=0d0
-            wmats = BosonicFreqMesh(Beta,Nfreq)
+            wmats = FermionicFreqMesh(Beta,Nfreq)
             allocate(ParamVec(2*Nfit));ParamVec=0d0
             !
             do ispin=1,Nspin
@@ -409,7 +409,7 @@ contains
             write(*,"(A)")"     Fitting Eloc+Delta(iw)."
             !
             allocate(wmats(Nfreq));wmats=0d0
-            wmats = BosonicFreqMesh(Beta,Nfreq)
+            wmats = FermionicFreqMesh(Beta,Nfreq)
             allocate(ParamVec(2*Nfit+1));ParamVec=0d0
             !
             do ispin=1,Nspin

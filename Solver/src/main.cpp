@@ -37,7 +37,7 @@ int main(int argc, char *argv[])
    double Beta;
    int Nspin,NtauF,NtauB,Norder,Nmeas,Ntherm,Nshift,printTime;
    //logical flags and compatibility typo fix
-   bool paramagnet,retarded,nnt_meas,quickloops,testing;
+   bool paramagnet,retarded,nnt_meas,quickloops;
    int para_read,ret_read,nnt_read,quick_read;
    // Post-processing of the Green's function
    int binlength,binstart;
@@ -52,11 +52,11 @@ int main(int argc, char *argv[])
    std::vector<std::string> SiteDir;
    char* IterationDir;
 
-   #ifdef _verb
-      testing=true;
-   #else
-      testing=false;
-   #endif
+#ifdef _verb
+   bool debug=true;
+#else
+   bool debug=false;
+#endif
 
    //.........................................................................//
    //                         start global timer                              //
@@ -100,7 +100,7 @@ int main(int argc, char *argv[])
       // Site Dependent Vars
       find_param(argv[1], "NSITE"      , Nsite     );
       //
-      if(mpi.is_master()) //testing &&
+      if(mpi.is_master()) //debug &&
       {
          mpi.report(" beta= "+str(Beta));
          mpi.report(" Nspin= "+str(Nspin));
@@ -112,16 +112,17 @@ int main(int argc, char *argv[])
          mpi.report(" Nshift= "+str(Nshift));
          mpi.report(" printTime= "+str(printTime)+"min");
          mpi.report(" retarded= "+str(retarded));
+         mpi.report(" quickloops= "+str(quickloops));
          mpi.report(" paramagnet= "+str(paramagnet));
          mpi.report(" nnt_meas= "+str(nnt_meas));
-         mpi.report(" testing= "+str(testing));
+         mpi.report(" debug= "+str(debug));
          if(binlength>0)
          {
             mpi.report(" binlength= "+str(binlength));
             mpi.report(" binstart= "+str(binstart));
          }
          mpi.report(" Nsite= "+str(Nsite));
-         if(density>0.0)
+         if((density>0.0)&&(quickloops==true))
          {
             mpi.report(" density= "+str(density));
             mpi.report(" muStep= "+str(muStep));
@@ -185,7 +186,7 @@ int main(int argc, char *argv[])
             ImpurityList.push_back(ct_hyb( SiteName[isite], Beta, Nspin, SiteNorb[isite],
                                            NtauF, NtauB, Norder, Nmeas, Ntherm, Nshift,
                                            paramagnet, retarded, nnt_meas,
-                                           printTime, std::vector<int> { binlength,binstart }, mpi, testing ));
+                                           printTime, std::vector<int> { binlength,binstart }, mpi ));
             ImpurityList[isite].init( SiteDir[isite]);
          }
          else

@@ -7,6 +7,7 @@ program test
    ! dopo se cambio solver mi tocca riscriverlo.
    ! quindi tengo separato collect_QMC_results che crea e scrive le self-energie e Pimp
    ! oi dealloco e rileggo
+   ! tutta la roba che alloco qui e' solo temporaea e principalemtne dovuta la fatto che thengo seprate C e X componenti di sigmaGW
 
 
    use module_container
@@ -49,7 +50,8 @@ program test
       !
       call printHeader(Iteration)
       !
-      !K-dependent Polarization
+      !K-dependent Polarization - only G0W0,scGW,GW+EDMFT
+      !calc_Plat=.false.
       if(calc_Plat)then
          !
          call calc_Pi(Plat,Glat,Crystal)
@@ -58,22 +60,24 @@ program test
          if(merge_Pi.and.solve_DMFT) then !a bit redundant since there is no merge wihtout DMFT
             call MergeFields(Plat,P_EDMFT,alphaPi,SiteOrbs)
             call DeallocateBosonicField(P_EDMFT)
-            if(verbose)call dump_BosonicField(Plat,reg(ItFolder),"Plat_merged_w.DAT")
+            call dump_BosonicField(Plat,reg(ItFolder),"Plat_merged_w.DAT")
          endif
          !
       endif
       !
-      !Fully screened interaction
+      !Fully screened interaction - only G0W0,scGW,GW+EDMFT,EDMFT
+      !calc_W=.false.
       if(calc_W)then
          !
          if(calc_Wfull)  call calc_W_full(Wlat,Ulat,Plat,Crystal)
          if(calc_Wedmft) call calc_W_edmft(Wlat,Ulat,P_EDMFT,Crystal)
          call dump_BosonicField(Wlat,reg(ItFolder),"Wlat_w.DAT")
-         call dump_convergence(Wlat,reg(ItFolder)//"Convergence/","Wlat",EqvGWndx%SetOrbs)
+         call dump_MaxEnt(Wlat,"mats",reg(ItFolder)//"Convergence/","Wlat",EqvGWndx%SetOrbs)
          !
       endif
       !
-      !K-dependent self-energy
+      !K-dependent self-energy - only G0W0,scGW,GW+EDMFT
+      !calc_Sigmak=.false.
       if(calc_Sigmak)then
          !
          !Hartree shift between G0W0 and LDA
@@ -132,25 +136,27 @@ program test
             !Then replace local projection of scGW with EDMFT
             call MergeFields(S_GW,S_GWdc,S_DMFT,alphaSigma,SiteOrbs,DC_type,RotateHloc)
             call DeallocateFermionicField(S_GWdc)
-            call DeallocateFermionicField(S_DMFT)
             !
-            if(verbose)call dump_FermionicField(S_GW,reg(ItFolder),"Slat_merged_w")
+            call dump_FermionicField(S_GW,reg(ItFolder),"Slat_merged_w")
             !
          endif
          !
       endif
       !
       !Put together all the contributions to the full self-energy
+      !call AllocateFermionicField(S_Full,Crystal%Norb,Nmats,Nkpt=Crystal%Nkpt,Nsite=Nsite,Beta=Beta) !TEST
       call join_SigmaFull(Iteration)
       !
       !Compute the Full Green's function and set the density
       call calc_Gmats(Glat,Crystal,S_Full)
+      call DeallocateFermionicField(S_Full)
       if(look4dens%TargetDensity.ne.0d0)call set_density(Glat,Crystal,look4dens)
       !
       !Print Gf: local readable and k-dep binfmt
       call dump_FermionicField(Glat,reg(ItFolder),"Glat_w")
       call dump_FermionicField(Glat,reg(ItFolder),"Glat_w",.true.,Crystal%kpt)
-      call dump_convergence(Glat,reg(ItFolder)//"Convergence/","Glat",EqvGWndx%SetOrbs)
+      call dump_MaxEnt(Glat,"mats",reg(ItFolder)//"Convergence/","Glat",EqvGWndx%SetOrbs,WmaxPade=PadeWlimit)
+      call dump_MaxEnt(Glat,"mats2itau",reg(ItFolder)//"Convergence/","Glat",EqvGWndx%SetOrbs)
       !
       !!Print lattice density
       call dump_Matrix(Glat%N_s(:,:,1),reg(ItFolder)//"Nlat_s1.DAT")
@@ -181,5 +187,6 @@ program test
    call DeallocateAllFields()
    call execute_command_line(" cp used.input.in "//reg(ItFolder))
    write(*,"(A,F)") new_line("A")//new_line("A")//"Self-Consistency finished. Total timing (s): ",tock(TimeStart)
+   if(solve_DMFT.and.(ItStart.ne.LastIteration))call execute_command_line(" touch doSolver ")
    !
 end program test

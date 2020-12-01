@@ -162,6 +162,7 @@ module parameters
       !I'm writing these as integers due to some mismatch on how to write boolean between fortrann and c++
       integer                               :: retarded=0
       integer                               :: nnt_meas=0
+      integer                               :: quickloops=0
    end type QMC
 
 

@@ -45,6 +45,8 @@ module utils_main
    type(BosonicField)                       :: Wlat
    type(BosonicField)                       :: W_EDMFT
    !
+   type(BosonicField)                       :: curlyU_EDMFT
+   !
    type(BosonicField)                       :: Ulat
    type(BosonicField)                       :: Plat
    type(BosonicField)                       :: P_EDMFT
@@ -154,35 +156,19 @@ contains
       integer,intent(out)                   :: ItStart
       integer,intent(out)                   :: Itend
       character(len=256)                    :: Itpath
-      integer                               :: iter,Itfirst,isite
-      logical                               :: Itexist
+      integer                               :: isite
+      logical                               :: PrvItexist,ZeroItexist
       !
       !Few general checks
       if(ExpandImpurity.and.AFMselfcons) stop "AFM self-consistency and expansion to real space not yet implemented."
       if(ExpandImpurity.and.(Nsite.eq.1)) stop "Cannot expand a single site."
       if(AFMselfcons.and.(Nsite.ne.2)) stop "AFM self-consistency is implemented only for lattices with 2 sites."
       !
+      call inquireDir(reg(pathDATA)//str(FirstIteration-1),PrvItexist,hardstop=.false.,verb=.false.)
+      call inquireDir(reg(pathDATA)//str(0),ZeroItexist,hardstop=.false.,verb=.false.)
       !
-      do iter=0,1000
-         Itpath = reg(pathDATA)//str(iter)
-         call inquireDir(reg(Itpath),Itexist,hardstop=.false.,verb=.false.)
-         if(.not.Itexist)then
-            Itfirst = iter
-            Exit
-         endif
-      enddo
-      !
-      if(FirstIteration.le.Itfirst)Itfirst=FirstIteration
-      !
-      Itpath = reg(pathDATA)//str(Itfirst)
-      if(Itfirst.eq.0)then
-         write(*,"(A)") "Brand new calculation. Initializing "//reg(Itpath)
-      else
-         write(*,"(A)") "Last iteration: "//str(Itfirst-1)//". Initializing "//reg(Itpath)
-      endif
-      call createDir(reg(Itpath),verb=verbose)
-      !
-      ItStart = Itfirst
+      Itpath = reg(pathDATA)//str(FirstIteration)
+      ItStart = FirstIteration
       !
       select case(reg(CalculationType))
          case default
@@ -192,20 +178,52 @@ contains
          case("G0W0")
             !
             if(ItStart.ne.0) stop "CalculationType is G0W0 but the starting iteration is not 0."
-            Itend = 1
+            call createDir(reg(Itpath),verb=verbose)
+            Itend = 0
             !
          case("scGW")
             !
+            if(ItStart.ne.0)then
+               if(.not.PrvItexist)then
+                  write(*,"(A)") "Previous iteration: "//str(FirstIteration-1)//". Not found, exiting."
+                  stop
+               endif
+               if(.not.ZeroItexist)stop "G0W0 0th iteration not found, exiting."
+            endif
+            !
+            call createDir(reg(Itpath),verb=verbose)
             Itend = LastIteration
             !
          case("DMFT+statU","DMFT+dynU","EDMFT","GW+EDMFT")
             !
-            Itend = ItStart
+            if(ItStart.ne.0)then
+               if(.not.PrvItexist)then
+                  write(*,"(A)") "Previous iteration: "//str(FirstIteration-1)//". Not found, exiting."
+                  stop
+               endif
+               if((reg(CalculationType).eq."GW+EDMFT").and.(.not.ZeroItexist)) stop "G0W0 0th iteration not found, exiting."
+            endif
+            !
+            if(ItStart.eq.LastIteration) then
+               Itend = ItStart-1 !avoid the lattice in the last it
+            else
+               call createDir(reg(Itpath),verb=verbose)
+               Itend = ItStart
+            endif
             !
       end select
       !
+      !Print info to user
+      if(FirstIteration.eq.0)then
+         write(*,"(A)") "Brand new calculation. Initializing "//reg(Itpath)
+      else
+          write(*,"(A)") "Initializing "//reg(Itpath)
+       endif
+      !
+      !These are used throughout the whole calculation
       ItFolder = reg(pathDATA)//str(ItStart)//"/"
       PrevItFolder = reg(pathDATA)//str(ItStart-1)//"/"
+      !
       Ustart = Ustart .and. (ItStart.eq.0)
       !
       call createDir(reg(ItFolder)//"Convergence",verb=verbose)
@@ -536,9 +554,10 @@ contains
                call calc_Gmats(Glat,Crystal)
             else
                call read_FermionicField(Glat,reg(PrevItFolder),"Glat_w",Crystal%kpt)
-               call calc_density(Glat,Crystal,Glat%N_ks)
-               call calc_density(Glat,Glat%N_s)
             endif
+            !
+            call calc_density(Glat,Crystal,Glat%N_ks)
+            call calc_density(Glat,Glat%N_s)
             !
             !Logical Flags
             calc_Plat = .true.
@@ -561,18 +580,16 @@ contains
                endif
             endif
             !
-            if(ItStart.ne.0)then
-               !
-               !Impurity Self-energy
-               call AllocateFermionicField(S_DMFT,Crystal%Norb,Nmats,Nsite=Nsite,Beta=Beta)
-               call read_FermionicField(S_DMFT,reg(PrevItFolder),"Simp_w")
-               !
-            else
-               !
-               !Lattice Gf
-               call AllocateFermionicField(Glat,Crystal%Norb,Nmats,Nkpt=Crystal%Nkpt,Nsite=Nsite,Beta=Beta)
+            !Impurity Self-energy
+            call AllocateFermionicField(S_DMFT,Crystal%Norb,Nmats,Nsite=Nsite,Beta=Beta)
+            if(ItStart.ne.0) call read_FermionicField(S_DMFT,reg(PrevItFolder),"Simp_w")
+            !
+            !Lattice Gf
+            call AllocateFermionicField(Glat,Crystal%Norb,Nmats,Nkpt=Crystal%Nkpt,Nsite=Nsite,Beta=Beta)
+            if(ItStart.eq.0)then
                call calc_Gmats(Glat,Crystal)
-               !
+               call calc_density(Glat,Crystal,Glat%N_ks)
+               call calc_density(Glat,Glat%N_s)
             endif
             !
          case("DMFT+dynU")
@@ -590,18 +607,16 @@ contains
                endif
             endif
             !
-            if(ItStart.ne.0)then
-               !
-               !Impurity Self-energy
-               call AllocateFermionicField(S_DMFT,Crystal%Norb,Nmats,Nsite=Nsite,Beta=Beta)
-               call read_FermionicField(S_DMFT,reg(PrevItFolder),"Simp_w")
-               !
-            else
-               !
-               !Lattice Gf
-               call AllocateFermionicField(Glat,Crystal%Norb,Nmats,Nkpt=Crystal%Nkpt,Nsite=Nsite,Beta=Beta)
+            !Impurity Self-energy
+            call AllocateFermionicField(S_DMFT,Crystal%Norb,Nmats,Nsite=Nsite,Beta=Beta)
+            if(ItStart.ne.0) call read_FermionicField(S_DMFT,reg(PrevItFolder),"Simp_w")
+            !
+            !Lattice Gf
+            call AllocateFermionicField(Glat,Crystal%Norb,Nmats,Nkpt=Crystal%Nkpt,Nsite=Nsite,Beta=Beta)
+            if(ItStart.eq.0)then
                call calc_Gmats(Glat,Crystal)
-               !
+               call calc_density(Glat,Crystal,Glat%N_ks)
+               call calc_density(Glat,Glat%N_s)
             endif
             !
          case("EDMFT")
@@ -622,22 +637,22 @@ contains
             !Fully screened interaction
             call AllocateBosonicField(Wlat,Crystal%Norb,Nmats,Crystal%iq_gamma,Nkpt=Crystal%Nkpt,Nsite=Nsite,Beta=Beta)
             !
+            !Impurity Self-energy
+            call AllocateFermionicField(S_DMFT,Crystal%Norb,Nmats,Nsite=Nsite,Beta=Beta)
+            if(ItStart.ne.0) call read_FermionicField(S_DMFT,reg(PrevItFolder),"Simp_w")
+            !
+            !Lattice Gf
+            call AllocateFermionicField(Glat,Crystal%Norb,Nmats,Nkpt=Crystal%Nkpt,Nsite=Nsite,Beta=Beta)
+            if(ItStart.eq.0)then
+               call calc_Gmats(Glat,Crystal)
+               call calc_density(Glat,Crystal,Glat%N_ks)
+               call calc_density(Glat,Glat%N_s)
+            endif
+            !
+            !Polarization
             if(ItStart.ne.0)then
-               !
-               !Polarization
                call AllocateBosonicField(P_EDMFT,Crystal%Norb,Crystal%iq_gamma,Nmats,Nsite=Nsite,no_bare=.true.,Beta=Beta)
                call read_BosonicField(P_EDMFT,reg(PrevItFolder),"Pimp_w")
-               !
-               !Impurity Self-energy
-               call AllocateFermionicField(S_DMFT,Crystal%Norb,Nmats,Nsite=Nsite,Beta=Beta)
-               call read_FermionicField(S_DMFT,reg(PrevItFolder),"Simp_w")
-               !
-            else
-               !
-               !Lattice Gf
-               call AllocateFermionicField(Glat,Crystal%Norb,Nmats,Nkpt=Crystal%Nkpt,Nsite=Nsite,Beta=Beta)
-               call calc_Gmats(Glat,Crystal)
-               !
             endif
             !
             !Logical Flags
@@ -671,19 +686,23 @@ contains
                !Lattice Gf
                call AllocateFermionicField(Glat,Crystal%Norb,Nmats,Nkpt=Crystal%Nkpt,Nsite=Nsite,Beta=Beta)
                call read_FermionicField(Glat,reg(PrevItFolder),"Glat_w",Crystal%kpt)
-               call calc_density(Glat,Crystal,Glat%N_ks)
-               call calc_density(Glat,Glat%N_s)
                !
             else
                !
                !Polarization
                call AllocateBosonicField(Plat,Crystal%Norb,Nmats,Crystal%iq_gamma,Nkpt=Crystal%Nkpt,Nsite=Nsite,no_bare=.true.,Beta=Beta)
                !
+               !Impurity Self-energy
+               call AllocateFermionicField(S_DMFT,Crystal%Norb,Nmats,Nsite=Nsite,Beta=Beta)
+               !
                !Lattice Gf
                call AllocateFermionicField(Glat,Crystal%Norb,Nmats,Nkpt=Crystal%Nkpt,Nsite=Nsite,Beta=Beta)
                call calc_Gmats(Glat,Crystal)
                !
             endif
+            !
+            call calc_density(Glat,Crystal,Glat%N_ks)
+            call calc_density(Glat,Glat%N_s)
             !
             !Logical Flags
             calc_Plat = .true.
@@ -853,7 +872,6 @@ contains
                !$OMP END PARALLEL
                !
             endif
-            call DeallocateFermionicField(S_DMFT)
             !
             !Not dumping anything since S_DMFT is already present
             !
@@ -876,14 +894,14 @@ contains
       type(FermionicField)                  :: Gloc
       type(FermionicField)                  :: SigmaImp
       type(FermionicField)                  :: FermiPrint
-      type(FermionicField)                  :: curlyGold,DeltaOld
+      type(FermionicField)                  :: DeltaOld
       integer                               :: Norb,Nflavor,unit
       integer                               :: ispin,iw,iwan,itau,ndx
       integer,allocatable                   :: Orbs(:)
       real(8),allocatable                   :: wmats(:),tau(:),Moments(:,:,:)
       real(8),allocatable                   :: Eloc(:,:),PrintLine(:)
       complex(8),allocatable                :: zeta(:,:,:),invGf(:,:),Rot(:,:)
-      complex(8),allocatable                :: Dmats(:,:,:),Ditau(:,:,:)
+      complex(8),allocatable                :: Dfit(:,:,:),Dmats(:,:,:),Ditau(:,:,:)
       complex(8),allocatable                :: invCurlyG(:,:,:)
       logical                               :: filexists
       character(len=255)                    :: file,oldMomDir,newMomDir
@@ -916,15 +934,15 @@ contains
          enddo
       enddo
       !
-      ! Extract from local to imp the given sites
+      ! Extract and rotate from local (non-diagonal) to imp (diagonal) the given sites
       if(RotateHloc)then
          allocate(Rot(Norb,Norb)); Rot=HlocRot(1:Norb,1:Norb,isite)
          call loc2imp(Gloc,Glat,Orbs,U=Rot)
-         call loc2imp(SigmaImp,S_Full,Orbs,U=Rot)
+         call loc2imp(SigmaImp,S_DMFT,Orbs,U=Rot)
          deallocate(Rot)
       else
          call loc2imp(Gloc,Glat,Orbs)
-         call loc2imp(SigmaImp,S_Full,Orbs)
+         call loc2imp(SigmaImp,S_DMFT,Orbs)
       endif
       !
       !Print what's used to compute delta
@@ -951,22 +969,9 @@ contains
       call DeallocateFermionicField(SigmaImp)
       call DeallocateFermionicField(Gloc)
       !
-      !Mixing curlyG
-      if((Mixing_curlyG.gt.0d0).and.(Iteration.gt.0))then
-         write(*,"(A)")"     Mixing curlyG with "//str(Mixing_curlyG)//" of old solution."
-         call AllocateFermionicField(curlyGold,Norb,Nmats,Beta=Beta)
-         call read_FermionicField(curlyGold,reg(PrevItFolder)//"Solver_"//reg(SiteName(isite))//"/","G0_"//reg(SiteName(isite))//"_w")
-         do ispin=1,Nspin
-            do iw=1,Nmats
-               do iwan=1,Norb
-                  invCurlyG(iwan,iw,ispin) = 1d0/((1d0-Mixing_curlyG)*(1d0/invCurlyG(iwan,iw,ispin)) + Mixing_curlyG*curlyGold%ws(iwan,iwan,iw,ispin))
-               enddo
-            enddo
-         enddo
-         call DeallocateFermionicField(curlyGold)
-      endif
-      !
       !Extract the local energy
+      allocate(Dfit(Norb,Nmats,Nspin));Dfit=czero
+      Dfit = zeta - invCurlyG
       select case(reg(CalculationType))
          case default
             !
@@ -977,7 +982,11 @@ contains
             select case(reg(DeltaFit))
                case default
                   !
-                  stop "Available modes for Delta fitting: Analytic, Moments."
+                  stop "Available modes for Delta fitting: Inf, Analytic, Moments."
+                  !
+               case("Inf")
+                  !
+                  Eloc = real(Dfit(:,Nmats,:))
                   !
                case("Analytic")
                   !
@@ -987,18 +996,18 @@ contains
                   call inquireFile(reg(oldMomDir)//reg(file),filexists,hardstop=.false.,verb=verbose)
                   if(filexists) call execute_command_line(" cp "//reg(oldMomDir)//reg(file)//" "//reg(newMomDir))
                   !
-                  call fit_Delta(zeta-invCurlyG,Beta,Nfit,reg(newMomDir),reg(file),"Shifted",Eloc)
+                  call fit_Delta(Dfit,Beta,Nfit,reg(newMomDir),reg(file),"Shifted",Eloc,filename="DeltaAnd")
                   !
                case("Moments")
                   !
-                  file = "DeltaMom_"//reg(SiteName(isite))//".DAT"
+                  file = "DeltaMomCoef_"//reg(SiteName(isite))//".DAT"
                   oldMomDir = reg(PrevItFolder)//"Solver_"//reg(SiteName(isite))//"/"
                   newMomDir = reg(ItFolder)//"Solver_"//reg(SiteName(isite))//"/"
                   call inquireFile(reg(oldMomDir)//reg(file),filexists,hardstop=.false.,verb=verbose)
                   if(filexists) call execute_command_line(" cp "//reg(oldMomDir)//reg(file)//" "//reg(newMomDir))
                   !
                   allocate(Moments(Norb,Nfit,Nspin));Moments=0d0
-                  call fit_moments(zeta-invCurlyG,Beta,Nfit,.false.,reg(newMomDir),reg(file),"Sigma",Moments)
+                  call fit_moments(Dfit,Beta,Nfit,.false.,reg(newMomDir),reg(file),"Sigma",Moments,filename="DeltaMom")
                   Eloc=Moments(:,1,:)
                   deallocate(Moments)
                   !
@@ -1015,6 +1024,7 @@ contains
             endif
             !
       end select
+      deallocate(Dfit)
       !
       !Compute Delta on matsubara
       do ispin=1,Nspin
@@ -1026,10 +1036,11 @@ contains
             enddo
          enddo
       enddo
+      deallocate(invCurlyG)
       !
       !Mixing Delta
       if((Mixing_Delta.gt.0d0).and.(Iteration.gt.0))then
-         write(*,"(A)")"     Mixing Delta with "//str(Mixing_Delta)//" of old solution."
+         write(*,"(A)")"     Mixing Delta with "//str(Mixing_Delta,3)//" of old solution."
          call AllocateFermionicField(DeltaOld,Norb,Nmats,Beta=Beta)
          call read_FermionicField(DeltaOld,reg(PrevItFolder)//"Solver_"//reg(SiteName(isite))//"/","D_"//reg(SiteName(isite))//"_w")
          do ispin=1,Nspin
@@ -1079,44 +1090,49 @@ contains
       close(unit)
       deallocate(PrintLine)
       !
-      !fields that is better to save
+      !fields that are going to be needed in the following iterations
       call AllocateFermionicField(FermiPrint,Norb,Nmats,Beta=Beta)
       !
+      !CurlyG(iw) - recomputed from the eventually mixed Delta
+      call clear_attributes(FermiPrint)
+      do ispin=1,Nspin
+         do iw=1,Nmats
+            do iwan=1,Norb
+               FermiPrint%ws(iwan,iwan,iw,ispin) = 1d0/(dcmplx( Glat%mu , wmats(iw) ) - Eloc(iwan,ispin) - Dmats(iwan,iw,ispin))
+            enddo
+         enddo
+      enddo
+      FermiPrint%mu=Glat%mu
+      call dump_FermionicField(FermiPrint,reg(ItFolder)//"Solver_"//reg(SiteName(isite))//"/","G0_"//reg(SiteName(isite))//"_w")
+      !
       !Delta(iw)
+      call clear_attributes(FermiPrint)
       do iwan=1,Norb
          FermiPrint%ws(iwan,iwan,:,:) = Dmats(iwan,:,:)
       enddo
       FermiPrint%mu=Glat%mu
       call dump_FermionicField(FermiPrint,reg(ItFolder)//"Solver_"//reg(SiteName(isite))//"/","D_"//reg(SiteName(isite))//"_w")
-      call clear_attributes(FermiPrint)
       !
-      !CurlyG(iw)
-      do iwan=1,Norb
-         FermiPrint%ws(iwan,iwan,:,:) = 1d0/invCurlyG(iwan,:,:)
-      enddo
-      FermiPrint%mu=Glat%mu
-      call dump_FermionicField(FermiPrint,reg(ItFolder)//"Solver_"//reg(SiteName(isite))//"/","G0_"//reg(SiteName(isite))//"_w")
+      !Eo+Delta(iw)
       call clear_attributes(FermiPrint)
+      if(reg(CalculationType).eq."GW+EDMFT")then
+         do ispin=1,Nspin
+            do iwan=1,Norb
+               FermiPrint%ws(iwan,iwan,:,ispin) = Eloc(iwan,ispin) + Dmats(iwan,:,ispin)
+            enddo
+         enddo
+         call dump_FermionicField(FermiPrint,reg(ItFolder)//"Solver_"//reg(SiteName(isite))//"/fits/","test_Eo+D_"//reg(SiteName(isite))//"_w")
+      endif
       !
       !test of the fit and FT procedures
       if(verbose)then
          !
-         if(reg(CalculationType).eq."GW+EDMFT")then
-            do ispin=1,Nspin
-               do iwan=1,Norb
-                  FermiPrint%ws(iwan,iwan,:,ispin) = zeta(iwan,:,ispin) - invCurlyG(iwan,:,ispin)
-               enddo
-            enddo
-            call dump_FermionicField(FermiPrint,reg(ItFolder)//"Solver_"//reg(SiteName(isite))//"/","testFit_Eo+D_"//reg(SiteName(isite))//"_w")
-         endif
-         call clear_attributes(FermiPrint)
-         !
          Dmats=czero
          do ispin=1,Nspin
-            !call isReal(Ditau(:,:,ispin))
             call Fitau2mats_vec(Beta,Ditau(:,:,ispin),Dmats(:,:,ispin),tau_uniform=.true.)
          enddo
          !
+         call clear_attributes(FermiPrint)
          do ispin=1,Nspin
             do iwan=1,Norb
                FermiPrint%ws(iwan,iwan,:,ispin) = Dmats(iwan,:,ispin)
@@ -1127,7 +1143,7 @@ contains
       endif
       call DeallocateFermionicField(FermiPrint)
       !
-      deallocate(Orbs,Eloc,zeta,invCurlyG,Dmats,Ditau,tau,wmats)
+      deallocate(Orbs,Eloc,zeta,Dmats,Ditau,tau,wmats)
       !
    end subroutine calc_Delta
 
@@ -1218,7 +1234,7 @@ contains
             !
             !Mixing curlyU
             if((Mixing_curlyU.gt.0d0).and.(Iteration.gt.0))then
-               write(*,"(A)")"     Mixing curlyU with "//str(Mixing_curlyU)//" of old solution."
+               write(*,"(A)")"     Mixing curlyU with "//str(Mixing_curlyU,3)//" of old solution."
                call AllocateBosonicField(curlyUold,Norb,Nmats,Crystal%iq_gamma,Beta=Beta)
                call read_BosonicField(curlyUold,reg(PrevItFolder)//"Solver_"//reg(SiteName(isite))//"/","curlyU_"//reg(SiteName(isite))//"_w.DAT")
                curlyU%bare_local = (1d0-Mixing_curlyU)*curlyU%bare_local + Mixing_curlyU*curlyUold%bare_local
@@ -1241,13 +1257,13 @@ contains
       file = reg(ItFolder)//"Solver_"//reg(SiteName(isite))//"/Umat.DAT"
       call dump_Matrix(Uinst,reg(file))
       !
-      !Screening function and effective local interaction
+      !Print data for retarded interactions
       if(allocated(Kfunct))then
          !
+         !Screening function
          file = reg(ItFolder)//"Solver_"//reg(SiteName(isite))//"/K_t.DAT"
          unit = free_unit()
          open(unit,file=reg(file),form="formatted",status="unknown",position="rewind",action="write")
-         !
          allocate(PrintLine(Nflavor*(Nflavor+1)/2));PrintLine=0d0
          do itau=1,NtauB
             ndx=1
@@ -1256,10 +1272,9 @@ contains
                do ib2=1,ib1
                   !
                   PrintLine(ndx) = Kfunct(ib1,ib2,itau)
-                  if(Kdiag)then
-                     if((mod(ib1,2).eq.0).and.(abs(ib1-ib2).gt.1))PrintLine(ndx) = 0d0
-                     if((mod(ib1,2).eq.1).and.(abs(ib1-ib2).ne.0))PrintLine(ndx) = 0d0
-                  endif
+                  if(Kdiag) PrintLine(ndx) = Kfunct(ib1,ib1,itau)
+                  !if(Kdiag.and.((mod(ib1,2).eq.0)).and.(abs(ib1-ib2).gt.1))PrintLine(ndx) = 0d0
+                  !if(Kdiag.and.((mod(ib1,2).eq.1)).and.(abs(ib1-ib2).ne.0))PrintLine(ndx) = 0d0
                   ndx=ndx+1
                   !
                enddo
@@ -1269,6 +1284,7 @@ contains
          deallocate(PrintLine)
          close(unit)
          !
+         !curlyU
          call dump_BosonicField(curlyU,reg(ItFolder)//"Solver_"//reg(SiteName(isite))//"/","curlyU_"//reg(SiteName(isite))//"_w.DAT")
          !
       endif
@@ -1457,7 +1473,7 @@ contains
             call Fitau2mats_vec(Beta,Gitau(:,:,ispin),Gmats(:,:,ispin,isite),tau_uniform=.true.)
          enddo
          !
-         call dump_convergence(Gitau,Beta,reg(PrevItFolder)//"Convergence/","Gqmc_"//reg(SiteName(isite)))
+         call dump_MaxEnt(Gitau,"itau",reg(PrevItFolder)//"Convergence/","Gqmc_"//reg(SiteName(isite)))
          deallocate(Gitau,Orbs)
          !
          if(ExpandImpurity.or.AFMselfcons)exit
@@ -1483,7 +1499,8 @@ contains
             MomDir = reg(PrevItFolder)//"Solver_"//reg(SiteName(isite))//"/"
             allocate(wmats(Nmats));wmats=FermionicFreqMesh(Beta,Nmats)
             allocate(Moments(Norb,Nfit,Nspin));Moments=0d0
-            wndx = minloc(abs(wmats-ReplaceTail_Gimp),dim=1)
+            wndx = Nmats
+            if(ReplaceTail_Gimp.lt.wmatsMax) wndx = minloc(abs(wmats-ReplaceTail_Gimp),dim=1)
             call fit_moments(Gmats(:,:,:,isite),Beta,Nfit,.false.,reg(MomDir),reg(file),"Green",Moments,filename="Gimp")
             !
             allocate(GmatsTail(Nmats));GmatsTail=czero
@@ -1531,7 +1548,8 @@ contains
       call DeallocateFermionicField(Gimp)
       !
       call dump_FermionicField(G_DMFT,reg(PrevItFolder),"Gimp_w")
-      call dump_convergence(G_DMFT,reg(PrevItFolder)//"Convergence/","Gimp",EqvGWndx%SetOrbs)
+      call dump_MaxEnt(G_DMFT,"mats",reg(PrevItFolder)//"Convergence/","Gimp",EqvGWndx%SetOrbs,WmaxPade=PadeWlimit)
+      call dump_MaxEnt(G_DMFT,"mats2itau",reg(PrevItFolder)//"Convergence/","Gimp",EqvGWndx%SetOrbs)
       call DeallocateFermionicField(G_DMFT)
       !
       !Save the non-Fitted non-symmetrized Gf if present
@@ -1593,8 +1611,9 @@ contains
                   enddo
                enddo
             enddo
+            G0imp%mu=muQMC
+            call dump_FermionicField(G0imp,reg(PrevItFolder)//"Solver_"//reg(SiteName(isite))//"/","G0_"//reg(SiteName(isite))//"_w")
          endif
-         call dump_FermionicField(G0imp,reg(PrevItFolder)//"Solver_"//reg(SiteName(isite))//"/","G0_"//reg(SiteName(isite))//"_w")
          !
          !Fermionic Dyson equation in the solver basis (always diagonal)
          write(*,"(A)") "     Solving fermionic Dyson of site: "//reg(SiteName(isite))
@@ -1630,7 +1649,8 @@ contains
             MomDir = reg(PrevItFolder)//"Solver_"//reg(SiteName(isite))//"/"
             allocate(wmats(Nmats));wmats=FermionicFreqMesh(Beta,Nmats)
             allocate(Moments(Norb,Nfit,Nspin));Moments=0d0
-            wndx = minloc(abs(wmats-ReplaceTail_Simp),dim=1)
+            wndx = Nmats
+            if(ReplaceTail_Simp.lt.wmatsMax) wndx = minloc(abs(wmats-ReplaceTail_Simp),dim=1)
             call fit_moments(Smats(:,:,:,isite),Beta,Nfit,.false.,reg(MomDir),reg(file),"Sigma",Moments,filename="Simp",Wlimit=wndx)
             !
             allocate(SmatsTail(Nmats));SmatsTail=czero
@@ -1760,6 +1780,7 @@ contains
          call AllocateBosonicField(P_EDMFT,Crystal%Norb,Nmats,Crystal%iq_gamma,Nsite=Nsite,no_bare=.true.,Beta=Beta)
          call AllocateBosonicField(C_EDMFT,Crystal%Norb,Nmats,Crystal%iq_gamma,Nsite=Nsite,no_bare=.true.,Beta=Beta)
          call AllocateBosonicField(W_EDMFT,Crystal%Norb,Nmats,Crystal%iq_gamma,Nsite=Nsite,Beta=Beta)
+         call AllocateBosonicField(curlyU_EDMFT,Crystal%Norb,Nmats,Crystal%iq_gamma,Nsite=Nsite,Beta=Beta)
          !
          do isite=1,Nsite
             !
@@ -1872,6 +1893,7 @@ contains
             !Bosonic Dyson equations
             call AllocateBosonicField(curlyU,Norb,Nmats,Crystal%iq_gamma,Beta=Beta)
             call read_BosonicField(curlyU,reg(PrevItFolder)//"Solver_"//reg(SiteName(isite))//"/","curlyU_"//reg(SiteName(isite))//"_w.DAT")
+            call imp2loc(curlyU_EDMFT,curlyU,Orbs,ExpandImpurity,AFMselfcons)
             !
             call AllocateBosonicField(Pimp,Norb,Nmats,Crystal%iq_gamma,no_bare=.true.,Beta=Beta)
             call calc_Pimp(Pimp,curlyU,ChiCmats)
@@ -1898,23 +1920,29 @@ contains
             if(verbose)then
                call dump_BosonicField(P_EDMFT,reg(PrevItFolder),"Pimp_noSym_w.DAT")
                call dump_BosonicField(W_EDMFT,reg(PrevItFolder),"Wimp_noSym_w.DAT")
+               call dump_BosonicField(curlyU_EDMFT,reg(PrevItFolder),"curlyUimp_noSym_w.DAT")
                call dump_BosonicField(C_EDMFT,reg(PrevItFolder),"Cimp_noSym_w.DAT")
             endif
             !
             call symmetrize(P_EDMFT,EqvGWndx)
             call symmetrize(W_EDMFT,EqvGWndx)
+            call symmetrize(curlyU_EDMFT,EqvGWndx)
             call symmetrize(C_EDMFT,EqvGWndx)
             !
          endif
          call dump_BosonicField(P_EDMFT,reg(PrevItFolder),"Pimp_w.DAT")
          call dump_BosonicField(W_EDMFT,reg(PrevItFolder),"Wimp_w.DAT")
+         call dump_BosonicField(curlyU_EDMFT,reg(PrevItFolder),"curlyUimp_w.DAT")
          call dump_BosonicField(C_EDMFT,reg(PrevItFolder),"Cimp_w.DAT")
          !
-         call dump_convergence(W_EDMFT,reg(PrevItFolder)//"Convergence/","Wimp",EqvGWndx%SetOrbs)
-         call dump_convergence(C_EDMFT,reg(PrevItFolder)//"Convergence/","Cimp",EqvGWndx%SetOrbs)
+         call dump_MaxEnt(P_EDMFT,"mats",reg(PrevItFolder)//"Convergence/","Pimp",EqvGWndx%SetOrbs)
+         call dump_MaxEnt(W_EDMFT,"mats",reg(PrevItFolder)//"Convergence/","Wimp",EqvGWndx%SetOrbs)
+         call dump_MaxEnt(curlyU_EDMFT,"mats",reg(PrevItFolder)//"Convergence/","curlyUimp",EqvGWndx%SetOrbs)
+         call dump_MaxEnt(C_EDMFT,"mats",reg(PrevItFolder)//"Convergence/","Cimp",EqvGWndx%SetOrbs)
          !
          call DeallocateBosonicField(P_EDMFT)
          call DeallocateBosonicField(W_EDMFT)
+         call DeallocateBosonicField(curlyU_EDMFT)
          call DeallocateBosonicField(C_EDMFT)
          !
       endif
@@ -2056,10 +2084,15 @@ contains
    end subroutine show_Densities
 
 
-   !---------------------------------------------------------------------------!
-   !PURPOSE: Print only the Field components useful to check convergence
-   !TEST ON:
-   !---------------------------------------------------------------------------!
-
-
 end module utils_main
+
+
+!do iter=0,1000
+!   Itpath = reg(pathDATA)//str(iter)
+!   call inquireDir(reg(Itpath),Itexist,hardstop=.false.,verb=.false.)
+!   if(.not.Itexist)then
+!      Itfound = iter
+!      Exit
+!   endif
+!enddo
+!

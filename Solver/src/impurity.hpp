@@ -39,12 +39,11 @@ class ct_hyb
       ct_hyb( path SiteName, double beta, int Nspin, int Norb, int NtauF, int NtauB,
               int Norder, int Nmeas, int Ntherm, int Nshift,
               bool paramagnet, bool retarded, bool nnt_meas,
-              int printTime, std::vector<int> bins,
-              CustomMPI &mpi, bool testing_mpi=false):
+              int printTime, std::vector<int> bins, CustomMPI &mpi):
       SiteName(SiteName), Beta(beta), Nspin(Nspin), Norb(Norb), NtauF(NtauF), NtauB(NtauB),
       Norder(Norder), Nmeas(Nmeas), Ntherm(Ntherm), Nshift(Nshift),
       paramagnet(paramagnet), retarded(retarded), nnt_meas(nnt_meas),
-      printTime(printTime), bins(bins), mpi(mpi), testing_mpi(testing_mpi)
+      printTime(printTime), bins(bins), mpi(mpi)
       {}
 
       //----------------------------------------------------------------------//
@@ -106,20 +105,26 @@ class ct_hyb
          }
 
          //
+         //read the local energies ( std::vector<double> )
+         read_Vec(inputDir+"/Eloc.DAT", Eloc, Nflavor, mu);
+         mpi.report(" Chemical potential: "+str(mu,4));
+
+         //
          //read the istantaneous interaction ( Eigen::MatrixXd )
          read_EigenMat(inputDir+"/Umat.DAT", Uloc, Nflavor, Nflavor);
-         mu_correction.resize(Norb);
+
+         //
+         //adjust the internal chemical potential
+         mu_correction.resize(Norb,0.0);
          for(int iorb=0; iorb < Norb; iorb++)
          {
             mu_correction[iorb] += Uloc(2*iorb,2*iorb+1)/2.0;
-            mpi.report(" Orbital "+str(iorb)+" correction of the local level: "+str(mu_correction[iorb],4));
+            mpi.report(" Orbital "+str(iorb)+": correction of the local level: "+str(mu_correction[iorb],4));
          }
 
          //
-         //set the local energies ( std::vector<double> )
-         read_Vec(inputDir+"/Eloc.DAT", Eloc, Nflavor, mu);
+         //set the levels for the impurity solver
          set_levels();
-         mpi.report(" Chemical potential: "+str(mu,4));
 
          //
          //read the hybridization function ( std::vector<std::vector<double>> )
@@ -131,7 +136,7 @@ class ct_hyb
          {
             read_VecVecVec(inputDir+"/K_t.DAT", K_table, Nflavor, true); // read_VecVecVec(inputDir+"/K.DAT", K_table, Norb, Ntau, true);
             //
-            for(int ifl=0; ifl < Norb; ifl++)
+            for(int ifl=0; ifl < Nflavor; ifl++)
             {
                for(int jfl=0; jfl <= ifl; jfl++)
                {
@@ -148,7 +153,7 @@ class ct_hyb
          }
 
          //
-         if(testing_mpi && mpi.is_master())
+         if(mpi.is_master()) //debug &&
          {
             print_Vec(inputDir+"/used.Eloc.DAT", Eloc, mu);
             print_Vec(inputDir+"/used.Levels.DAT", Levels);
@@ -195,7 +200,7 @@ class ct_hyb
 
          //
          generator.seed(fabs(seed));
-         if(testing_mpi) mpi.report(" Seed: "+str(seed));
+         if(debug) mpi.report(" Seed: "+str(seed));
          //
          initialized=true;
          mpi.report(" Solver is initialized.");
@@ -267,9 +272,9 @@ class ct_hyb
                {
                   print_line_space(1,mpi.is_master());
                   print_timestamp("min");
-                  mpi.report(" Partial sweeps: "+str( (testing_mpi == true) ? RankSweeps : WorldSweeps ));
-                  mpi.report(" Average sign: "+str( (testing_mpi == true) ? RankSign : WorldSign ));
-                  mpi.report(" Density: "+str(get_Density(testing_mpi)));
+                  mpi.report(" Partial sweeps: "+str( (debug == true) ? RankSweeps : WorldSweeps ));
+                  mpi.report(" Average sign: "+str( (debug == true) ? RankSign : WorldSign ));
+                  mpi.report(" Density: "+str(get_Density(debug)));
                   //
                   path pad = "_T"+str(printTime*(TimeStamp-1))+".DAT";
                   print_observables(pad,bins);
@@ -278,11 +283,6 @@ class ct_hyb
             }
             mu_is_reset=false;
 
-            // testing_mpi>>>
-            //mpi.report(" RankSweeps: "+str(RankSweeps),true);
-            //mpi.report(" Dens: "+str(std::accumulate(Nloc.begin(), Nloc.end(), 0.0)/RankSweeps),true);
-            // >>>testing_mpi
-
             //
             if(!atBeta)
             {
@@ -290,9 +290,9 @@ class ct_hyb
                print_line_minus(80,mpi.is_master());
                print_timestamp("min");
                mpi.report(" Solver for impurity "+SiteName+" is done. Results written to: "+resultsDir);
-               mpi.report(" Total sweeps: "+str( (testing_mpi == true) ? RankSweeps : WorldSweeps ));
-               mpi.report(" Average sign: "+str( (testing_mpi == true) ? RankSign : WorldSign ));
-               mpi.report(" Density: "+str(get_Density(testing_mpi)));
+               mpi.report(" Total sweeps: "+str( (debug == true) ? RankSweeps : WorldSweeps ));
+               mpi.report(" Average sign: "+str( (debug == true) ? RankSign : WorldSign ));
+               mpi.report(" Density: "+str(get_Density(debug)));
                //
                path pad = ".DAT";
                print_observables(pad,bins);
@@ -301,7 +301,7 @@ class ct_hyb
             else
             {
                print_timestamp("sec");
-               mpi.report(" Total sweeps: "+str( (testing_mpi == true) ? RankSweeps : WorldSweeps ));
+               mpi.report(" Total sweeps: "+str( (debug == true) ? RankSweeps : WorldSweeps ));
                mpi.report(" Solver for impurity "+SiteName+" is done.");
             }
             //
@@ -331,7 +331,6 @@ class ct_hyb
       int                                 printTime;
       std::vector<int>                    bins;                                 // 2D vec Contains binlength and binstart in [0] and [1] respectively
       CustomMPI                           mpi;
-      bool                                testing_mpi;
       // Internal vars
       void(ct_hyb::*dostep)(int,bool) = NULL;                                   // Pointer to the internal function defining the solution mode
       path                                resultsDir;
@@ -344,8 +343,13 @@ class ct_hyb
       int                                 NtauF_m1=NtauF-1;                     // Number of SEGMENTS in Fermionic tau grid
       int                                 NtauB_m1=NtauB-1;                     // Number of SEGMENTS in Bosonic tau grid
       unsigned long long int              RankSweeps,WorldSweeps;               // Sweeps done
+   #ifdef _verb
+      bool debug=true;
+   #else
+      bool debug=false;
+   #endif
       // Input data
-      Vec                                 Levels;                               // mu-<\epsilon>
+      Vec                                 Levels;                               // mu - <\epsilon> + mu_correction
       Vec                                 mu_correction;                        // chemical potential correction due to the interaction shift
       Vec                                 Eloc;                                 // <\epsilon>
       Mat                                 Uloc;                                 // Istantaneous U matrix
@@ -515,13 +519,13 @@ class ct_hyb
 
       void print_observables(path pad, std::vector<int> bins)
       {
-         if(testing_mpi) // All ranks print their own observables
+         if(debug) // All ranks print their own observables
          {
             //
             mpi.report(" Rank #"+str(mpi.rank())+" is printing observables.");
             //
             // density
-            Vec PrintNloc = get_Nloc(testing_mpi); // provides spin-orbital occupation already normalized
+            Vec PrintNloc = get_Nloc(debug); // provides spin-orbital occupation already normalized
             print_Vec(resultsDir+"/Nqmc_rank"+str(mpi.rank())+pad, PrintNloc, mu);
             mpi.report(" Nqmc_rank"+str(mpi.rank())+pad+" is printed.");
             //

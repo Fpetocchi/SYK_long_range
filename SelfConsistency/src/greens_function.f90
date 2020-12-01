@@ -356,7 +356,7 @@ contains
       !
       allocate(invGf(Norb,Norb));invGf=czero
       !$OMP PARALLEL DEFAULT(NONE),&
-      !$OMP SHARED(zeta,Lttc,Gmats),&
+      !$OMP SHARED(zeta,Gmats),&
       !$OMP PRIVATE(ispin,ik,iw,invGf)
       !$OMP DO
       do ispin=1,Nspin

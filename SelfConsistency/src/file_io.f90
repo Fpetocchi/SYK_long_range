@@ -29,8 +29,14 @@ module file_io
       module procedure :: read_Matrix_Kdep_z                                    ![Umat(Norb,Norb,Nkpt),dirpath,filename]................................( Reads only from unformatted input )
    end interface read_Matrix
 
+   interface dump_Field_component
+      module procedure :: dump_Field_component_d                                ![Array(Nfreq),dirpath,filename,axis]...................................( Writes only to formatted output )
+      module procedure :: dump_Field_component_z                                ![Array(Nfreq),dirpath,filename,axis]...................................( Writes only to formatted output )
+   end interface dump_Field_component
+
    interface dump_FermionicField
-      module procedure :: dump_Field_component                                  ![Array(Nfreq),dirpath,filename,axis]...................................( Writes only to formatted output )
+      module procedure :: dump_Field_component_d                                ![Array(Nfreq),dirpath,filename,axis]...................................( Writes only to formatted output )
+      module procedure :: dump_Field_component_z                                ![Array(Nfreq),dirpath,filename,axis]...................................( Writes only to formatted output )
       module procedure :: dump_FermionicField_local                             ![FermionicField,dirpath,filename,axis(optional)].......................( Writes only to formatted output )
       module procedure :: dump_FermionicField_Kdep                              ![FermionicField,dirpath,filename,binfmt,kpt(3,Nkpt),axis(optional)]....( Writes output depending on binfmt )
    end interface dump_FermionicField
@@ -41,7 +47,8 @@ module file_io
    end interface read_FermionicField
 
    interface dump_BosonicField
-      module procedure :: dump_Field_component                                  ![Array(Nfreq),dirpath,filename,axis]...................................( Writes only to formatted output )
+      module procedure :: dump_Field_component_d                                ![Array(Nfreq),dirpath,filename,axis]...................................( Writes only to formatted output )
+      module procedure :: dump_Field_component_z                                ![Array(Nfreq),dirpath,filename,axis]...................................( Writes only to formatted output )v
       module procedure :: dump_BosonicField_local                               ![BosonicField,dirpath,filename,axis(optional)].........................( Writes only to formatted output )
       module procedure :: dump_BosonicField_Kdep_SPEXlike                       ![BosonicField,dirpath,binfmt,axis(optional)]...........................( Writes output depending on binfmt )
    end interface dump_BosonicField
@@ -50,11 +57,6 @@ module file_io
       module procedure :: read_BosonicField_local                               ![BosonicField,dirpath,filename,axis(optional)].........................( Reads only from unformatted input )
    end interface read_BosonicField
 
-   interface dump_convergence
-      module procedure :: dump_convergence_Gqmc                                 ![Array(Norb,Np,Nspin),dirpath,filename]................................( Writes only to formatted output )
-      module procedure :: dump_convergence_FermionicField                       ![FermionicField,dirpath,filename,orbset]...............................( Writes only to formatted output )
-      module procedure :: dump_convergence_BosonicField                         ![BosonicField,dirpath,filename,orbset].................................( Writes only to formatted output )
-   end interface dump_convergence
 
    !---------------------------------------------------------------------------!
    !PURPOSE: Module variables
@@ -74,11 +76,12 @@ module file_io
    !subroutines
    public :: dump_Matrix
    public :: read_Matrix
+   public :: dump_Field_component
    public :: dump_FermionicField
    public :: read_FermionicField
    public :: dump_BosonicField
    public :: read_BosonicField
-   public :: dump_convergence
+
 
    !===========================================================================!
 
@@ -509,7 +512,39 @@ contains
    !PURPOSE: Write to file a single Fermionic/Bosonic component
    !TEST ON: 14-10-2020
    !---------------------------------------------------------------------------!
-   subroutine dump_Field_component(Fcomp,dirpath,filename,axis)
+   subroutine dump_Field_component_d(Fcomp,dirpath,filename,axis)
+      !
+      use utils_misc
+      implicit none
+      !
+      real(8),intent(in)                    :: Fcomp(:)
+      character(len=*),intent(in)           :: dirpath
+      character(len=*),intent(in)           :: filename
+      real(8),allocatable,intent(in)        :: axis(:)
+      !
+      integer                               :: unit,iaxis
+      character(len=256)                    :: printpath
+      !
+      !
+      if(verbose)write(*,"(A)") "---- dump_Field_component_d"
+      printpath = reg(dirpath)//filename
+      write(*,"(A)") "     Dump "//reg(printpath)//" (readable)"
+      !
+      !
+      ! Create directory
+      call createDir(reg(dirpath),verb=verbose)
+      !
+      ! Write to file
+      unit = free_unit()
+      open(unit,file=reg(printpath),form="formatted",status="unknown",position="rewind",action="write")
+      do iaxis=1,size(axis)
+         write(unit,"(2E20.12)") axis(iaxis), Fcomp(iaxis)
+      enddo
+      close(unit)
+      !
+   end subroutine dump_Field_component_d
+   !
+   subroutine dump_Field_component_z(Fcomp,dirpath,filename,axis)
       !
       use utils_misc
       implicit none
@@ -523,7 +558,7 @@ contains
       character(len=256)                    :: printpath
       !
       !
-      if(verbose)write(*,"(A)") "---- dump_Field_component"
+      if(verbose)write(*,"(A)") "---- dump_Field_component_z"
       printpath = reg(dirpath)//filename
       write(*,"(A)") "     Dump "//reg(printpath)//" (readable)"
       !
@@ -539,7 +574,7 @@ contains
       enddo
       close(unit)
       !
-   end subroutine dump_Field_component
+   end subroutine dump_Field_component_z
 
 
    !---------------------------------------------------------------------------!
@@ -1232,130 +1267,5 @@ contains
       !
    end subroutine read_BosonicField_local
 
-
-   !---------------------------------------------------------------------------!
-   !PURPOSE: Writes to file the irreducible components
-   !TEST ON: 24-11-2020
-   !---------------------------------------------------------------------------!
-   subroutine dump_convergence_Gqmc(Gtau,Beta,dirpath,filename)
-      !
-      use utils_misc
-      implicit none
-      !
-      complex(8),intent(in)                 :: Gtau(:,:,:)
-      real(8),intent(in)                    :: Beta
-      character(len=*),intent(in)           :: dirpath
-      character(len=*),intent(in)           :: filename
-      !
-      integer                               :: iwan,ispin
-      integer                               :: Norb,Nspin,Ntau
-      real(8),allocatable                   :: tau(:)
-      !
-      !
-      if(verbose)write(*,"(A)") "---- dump_convergence_Gqmc"
-      !
-      !
-      Norb = size(Gtau,dim=1)
-      Ntau = size(Gtau,dim=2)
-      Nspin = size(Gtau,dim=3)
-      !
-      allocate(tau(Ntau));tau=0d0
-      tau = linspace(0d0,Beta,Ntau)
-      !
-      do iwan=1,Norb
-         do ispin=1,Nspin
-            call dump_Field_component(Gtau(iwan,:,ispin),reg(dirpath),reg(filename)//"_o"//str(iwan)//"_s"//str(ispin)//".DAT",tau)
-         enddo
-      enddo
-      !
-   end subroutine dump_convergence_Gqmc
-   !
-   subroutine dump_convergence_FermionicField(G,dirpath,filename,Orbs)
-      !
-      use parameters
-      use utils_misc
-      use utils_fields
-      implicit none
-      !
-      type(FermionicField),intent(in)       :: G
-      character(len=*),intent(in)           :: dirpath
-      character(len=*),intent(in)           :: filename
-      integer,allocatable,intent(in)        :: Orbs(:,:)
-      !
-      integer                               :: iwan,ispin,iset
-      real(8),allocatable                   :: wmats(:)
-      !
-      !
-      if(verbose)write(*,"(A)") "---- dump_convergence_FermionicField"
-      !
-      !
-      allocate(wmats(G%Npoints));wmats=0d0
-      wmats = FermionicFreqMesh(G%Beta,G%Npoints)
-      !
-      if(allocated(Orbs))then
-         do iset=1,size(Orbs,dim=1)
-            do ispin=1,Nspin
-               iwan = Orbs(iset,1)
-               call dump_Field_component(G%ws(iwan,iwan,:,ispin),reg(dirpath),reg(filename)//"_o"//str(iwan)//"_s"//str(ispin)//".DAT",wmats)
-            enddo
-         enddo
-      else
-         do iwan=1,G%Norb
-            do ispin=1,Nspin
-               call dump_Field_component(G%ws(iwan,iwan,:,ispin),reg(dirpath),reg(filename)//"_o"//str(iwan)//"_s"//str(ispin)//".DAT",wmats)
-            enddo
-         enddo
-      endif
-      !
-   end subroutine dump_convergence_FermionicField
-   !
-   subroutine dump_convergence_BosonicField(W,dirpath,filename,Orbs)
-      !
-      use parameters
-      use utils_misc
-      use utils_fields
-      implicit none
-      !
-      type(BosonicField),intent(in)         :: W
-      character(len=*),intent(in)           :: dirpath
-      character(len=*),intent(in)           :: filename
-      integer,allocatable,intent(in)        :: Orbs(:,:)
-      !
-      integer                               :: iwan1,iwan2,iJ1,iJ2,iU1
-      integer                               :: Norb,iset
-      real(8),allocatable                   :: wmats(:)
-      !
-      !
-      if(verbose)write(*,"(A)") "---- dump_convergence_BosonicField"
-      !
-      !
-      Norb = int(sqrt(dble(W%Nbp)))
-      !
-      allocate(wmats(W%Npoints));wmats=0d0
-      wmats = BosonicFreqMesh(W%Beta,W%Npoints)
-      !
-      if(allocated(Orbs))then
-         do iset=1,size(Orbs,dim=1)
-            iwan1 = Orbs(iset,1)
-            iwan2 = Orbs(iset,2)
-            iU1 = iwan1+Norb*(iwan1-1)
-            call dump_Field_component(W%screened_local(iU1,iU1,:),reg(dirpath),reg(filename)//"_"//str(iwan1)//str(iwan1)//str(iwan1)//str(iwan1)//".DAT",wmats)
-            iJ1 = iwan1+Norb*(iwan2-1)
-            iJ2 = iwan2+Norb*(iwan1-1)
-            if(iwan2.ne.0)call dump_Field_component(W%screened_local(iJ1,iJ2,:),reg(dirpath),reg(filename)//"_"//str(iwan1)//str(iwan2)//str(iwan2)//str(iwan1)//".DAT",wmats)
-         enddo
-      else
-         do iwan1=1,Norb
-            iU1 = iwan1+Norb*(iwan1-1)
-            call dump_Field_component(W%screened_local(iU1,iU1,:),reg(dirpath),reg(filename)//"_"//str(iwan1)//str(iwan1)//str(iwan1)//str(iwan1)//".DAT",wmats)
-            do iwan2=1+iwan1,Norb
-               iJ1 = iwan1+Norb*(iwan2-1)
-               iJ2 = iwan2+Norb*(iwan1-1)
-               call dump_Field_component(W%screened_local(iJ1,iJ2,:),reg(dirpath),reg(filename)//"_"//str(iwan1)//str(iwan2)//str(iwan2)//str(iwan1)//".DAT",wmats)
-            enddo
-         enddo
-      endif
-      !
-   end subroutine dump_convergence_BosonicField
 
 end module file_io

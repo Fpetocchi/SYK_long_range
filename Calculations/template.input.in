@@ -35,6 +35,7 @@
  NREAL=2000                                    !Number of points on the real frequency axis.
  MAX_WREAL=10.000000                           !Maximum absolute value of the real frequency mesh.
  ETA=4.000000E-02                              !Real frequency broadening.
+ WPADE=10                                      !Number of Matsubara frequencies used in pade' analytic continuation.
 
  #---------------------------------------------#
 
@@ -48,10 +49,10 @@
 
  #---------------------------------------------#
 
- U_FULL=T                                      !Flag to check for inverted Re/Im parity in SPEX Ucrpa.
+ U_FULL=F                                      !Flag to check for inverted Re/Im parity in SPEX Ucrpa.
  U_MODEL=F                                     !Flag to build the screening from user chosen phononic modes.
  U_SPEX=T                                      !Flag to read SPEX Ucrpa.
- K_DIAG=F                                      !Flag to screen only orbital-diagonal channels.
+ K_DIAG=T                                      !Flag to use only one screening function.
 
  #---------------------------------------------#
 
@@ -61,17 +62,17 @@
  ALPHA_PI=1.000000                             !Fraction of the EDMFT polarization substituted within the lattice one.
  ALPHA_SIGMA=1.000000                          !Fraction of the EDMFT self-energy substituted within the lattice one.
  ALPHA_HK=1.000000                             !Rescaling of the non-interacting Hamiltonian.
- DELTA_FIT=Moments                             !Fit to extract the local energy in GW+EDMFT calculations. Available: Analytic, Moments.
- NFIT=9                                        !Number of bath levels (Analytic) or coefficient (Moments).
- WTAIL_GIMP=0.000000                           !Frequency value above which the tail of Gimp is replaced. If =0d0 the tail is not replaced. A good number is around 100.
- WTAIL_SIMP=100.000000                         !Frequency value above which the tail of Simp is replaced. If =0d0 the tail is not replaced. A good number is around 10.
+ DELTA_FIT=Moments                             !Fit to extract the local energy in GW+EDMFT calculations. Available: Inf, Analytic, Moments.
+ NFIT=6                                        !Number of bath levels (Analytic) or coefficient (Moments).
+ WTAIL_GIMP=0.000000                           !Frequency value above which the tail of Gimp is replaced. If =0d0 the tail is not replaced.
+ WTAIL_SIMP=70.000000                          !Frequency value above which the tail of Simp is replaced. If =0d0 the tail is not replaced.
 
  #---------------------------------------------#
 
- PATH_INPUT=                                   !Folder within cwd where to look for input files.
- PATH_DATA=                                    !Folder within cwd where to store data.
- START_IT=                                     !First iteration. If its non zero the code will look for the last item in PATH_DATA/item and start there.
- LAST_IT=                                      !Last iteration.
+ PATH_INPUT=GWinput_SrMoO3                     !Folder within cwd where to look for input files.
+ PATH_DATA=Results_SrMoO3                      !Folder within cwd where to store data.
+ START_IT=9                                    !First iteration. If its non zero the code will look for the last item in PATH_DATA/item and start there.
+ LAST_IT=10                                    !Last iteration.
  LOGFILE=6                                     !Standard output redirection unit. Use 6 to print to terminal. Not used yet.
  MIX_D=0.500000                                !Fraction of the old iteration Delta.
  MIX_U=0.500000                                !Fraction of the old iteration curlyU.
@@ -89,4 +90,4 @@
  BINSTART=40                                   !Tau points skipped at the beginning and end of the Green's function.
  RETARDED=1                                    !Integer flag to include the frequency dependent part of the interaction. User cannot set this as its deduced from CALC_TYPE.
  NNT_MEAS=1                                    !Integer flag to switch on the measurement of the susceptibility. User cannot set this as its deduced from CALC_TYPE.
- TIME_1=20                                     !Minutes of solver runtime for site number 1
+ TIME_1=15                                     !Minutes of solver runtime for site number 1

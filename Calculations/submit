@@ -1,6 +1,6 @@
 #!/bin/bash
 #$ -S /bin/bash
-#$ -N NAME                      # job name
+#$ -N TestOld                   # job name
 #$ -cwd                         # run script in current directory
 #$ -pe orte2  112               # MPI cores
 #$ -q new.q                     # queue
@@ -9,8 +9,8 @@ export OMP_NUM_THREADS=1
 ulimit -c 0
 
 LOCAL=$(pwd)
-BINqmc=${LOCAL}/../Solver/bin
-BINsc=${LOCAL}/../SelfConsistency/bin
+BINqmc=/home/petocchif/1_GW_EDMFT/1_gw_fp_NEW/GenericMaterial/Solver/bin
+BINsc=/home/petocchif/1_GW_EDMFT/1_gw_fp_NEW/GenericMaterial/SelfConsistency/bin
 
 export l1=`grep -n "PATH_INPUT=" input.in | awk -F  ":" '{print $1}'`
 export l2=`grep -n "PATH_DATA=" input.in | awk -F  ":" '{print $1}'`
@@ -28,7 +28,7 @@ PATH_INPUT=GWinput_SrMoO3
 PATH_DATA=Results_SrMoO3
 
 START_IT=0
-END_IT=15
+END_IT=10
 
 `sed -i ${l1}'s/'"PATH_INPUT="'/'"PATH_INPUT=${PATH_INPUT}  !"'/' input.in`
 `sed -i ${l2}'s/'"PATH_DATA="'/'"PATH_DATA=${PATH_DATA}  !"'/' input.in`
@@ -52,7 +52,10 @@ do
    mv {report_sc_it${IT},err_sc_it${IT}} ${IT_DATA}
    #
    # Impurity problem
-   mpiexec -np 112 ${BINqmc}/ct_hyb input.in ${IT_DATA} > report_qmc_it${IT} 2> err_qmc_it${IT}
-   mv {report_qmc_it${IT},err_qmc_it${IT}} ${IT_DATA}
+   if [ -f "doSolver" ]; then
+      rm doSolver
+      mpiexec -np 112 ${BINqmc}/ct_hyb input.in ${IT_DATA} > report_qmc_it${IT} 2> err_qmc_it${IT}
+      mv {report_qmc_it${IT},err_qmc_it${IT}} ${IT_DATA}
+   fi
    #
 done
