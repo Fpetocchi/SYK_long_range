@@ -185,6 +185,14 @@ contains
                if(ExpandImpurity.or.AFMselfcons)exit
             enddo
             !
+            if(Uspex)then
+               call createDir(reg(pathINPUT)//"VW_imag",verb=verbose)
+               if(verbose)then
+                  call createDir(reg(pathINPUT)//"VW_imag_readable",verb=verbose)
+                  call createDir(reg(pathINPUT)//"VW_real_readable",verb=verbose)
+               endif
+            endif
+            !
             Itend = 0
             !
          case("scGW")
@@ -197,12 +205,16 @@ contains
                if(.not.ZeroItexist)stop "G0W0 0th iteration not found, exiting."
             endif
             !
+            if(Uspex)then
+               call createDir(reg(pathINPUT)//"VW_imag",verb=verbose)
+               if(verbose)then
+                  call createDir(reg(pathINPUT)//"VW_imag_readable",verb=verbose)
+                  call createDir(reg(pathINPUT)//"VW_real_readable",verb=verbose)
+               endif
+            endif
+            !
             call createDir(reg(Itpath),verb=verbose)
             call createDir(reg(Itpath)//"Convergence",verb=verbose)
-            do isite=1,Nsite
-               call createDir(reg(Itpath)//"Solver_"//reg(SiteName(isite))//"/fits",verb=verbose)
-               if(ExpandImpurity.or.AFMselfcons)exit
-            enddo
             !
             Itend = LastIteration
             !
@@ -214,6 +226,14 @@ contains
                   stop
                endif
                if((reg(CalculationType).eq."GW+EDMFT").and.(.not.ZeroItexist)) stop "G0W0 0th iteration not found, exiting."
+            endif
+            !
+            if(Uspex)then
+               call createDir(reg(pathINPUT)//"VW_imag",verb=verbose)
+               if(verbose)then
+                  call createDir(reg(pathINPUT)//"VW_imag_readable",verb=verbose)
+                  call createDir(reg(pathINPUT)//"VW_real_readable",verb=verbose)
+               endif
             endif
             !
             if(ItStart.eq.LastIteration) then
@@ -343,6 +363,9 @@ contains
             !
       end select
       !
+      !Store the local Hamiltonian
+      call dump_Matrix(Lttc%Hloc,reg(pathINPUT)//"Hloc.DAT")
+      !
       !Store the local rotation of each site
       if(RotateHloc)then
          !
@@ -382,7 +405,8 @@ contains
                call dump_Matrix(diag(Eig),reg(pathINPUT)//"HlocEig_"//reg(SiteName(1))//"_"//str(isite)//".DAT")
                !
                !SO(3)check
-               write(*,"(A,F)") "     det(Rot) of "//reg(SiteName(isite))//" :",det(HlocRot(:,:,isite))
+               write(*,"(A,"//str(Norb)//"I3)") "     Orbs: ",Orbs
+               write(*,"(A,2F)") "     det(Rot) of "//reg(SiteName(1))//"_"//str(isite)//" :",det(Rot)
                !
                HlocSite(1:Norb,1:Norb,isite) = Hloc
                HlocRot(1:Norb,1:Norb,isite) = Rot
@@ -555,7 +579,7 @@ contains
             !Unscreened interaction
             call AllocateBosonicField(Ulat,Crystal%Norb,Nmats,Crystal%iq_gamma,Nkpt=Crystal%Nkpt,Nsite=Nsite,Beta=Beta)
             if(Umodel)stop "U model is implemented only for non-GW (fully local) screened calculations."
-            if(Uspex) call read_U_spex(Ulat,save2readable=verbose,LocalOnly=.false.)
+            if(Uspex)call read_U_spex(Ulat,save2readable=verbose,LocalOnly=.false.)
             !
             !Fully screened interaction
             call AllocateBosonicField(Wlat,Crystal%Norb,Nmats,Crystal%iq_gamma,Nkpt=Crystal%Nkpt,Nsite=Nsite,Beta=Beta)
@@ -611,7 +635,7 @@ contains
             !
             !Unscreened interaction
             call AllocateBosonicField(Ulat,Crystal%Norb,Nmats,Crystal%iq_gamma,Nsite=Nsite,Beta=Beta)
-            if(Uspex) call read_U_spex(Ulat,save2readable=verbose,LocalOnly=.true.)
+            if(Uspex)call read_U_spex(Ulat,save2readable=verbose,LocalOnly=.true.)
             if(Umodel)then
                call inquireFile(reg(pathINPUT)//"Uw_model.DAT",filexists,hardstop=.false.,verb=verbose)
                if(filexists)then
@@ -638,7 +662,7 @@ contains
             !
             !Unscreened interaction
             call AllocateBosonicField(Ulat,Crystal%Norb,Nmats,Crystal%iq_gamma,Nsite=Nsite,Beta=Beta)
-            if(Uspex) call read_U_spex(Ulat,save2readable=verbose,LocalOnly=.true.)
+            if(Uspex)call read_U_spex(Ulat,save2readable=verbose,LocalOnly=.false.)
             if(Umodel)then
                call inquireFile(reg(pathINPUT)//"Uw_model.DAT",filexists,hardstop=.false.,verb=verbose)
                if(filexists)then
@@ -678,7 +702,7 @@ contains
             !Unscreened interaction
             call AllocateBosonicField(Ulat,Crystal%Norb,Nmats,Crystal%iq_gamma,Nkpt=Crystal%Nkpt,Nsite=Nsite,Beta=Beta)
             if(Umodel)stop "U model is implemented only for non-GW (fully local) screened calculations."
-            if(Uspex) call read_U_spex(Ulat,save2readable=verbose,LocalOnly=.false.)
+            if(Uspex)call read_U_spex(Ulat,save2readable=verbose,LocalOnly=.false.)
             !
             !Fully screened interaction
             call AllocateBosonicField(Wlat,Crystal%Norb,Nmats,Crystal%iq_gamma,Nkpt=Crystal%Nkpt,Nsite=Nsite,Beta=Beta)

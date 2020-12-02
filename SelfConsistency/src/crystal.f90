@@ -339,6 +339,8 @@ contains
       kptsum=0
       do iq=1,Nkpt
          do ik1=1,iq
+            !
+            !first attempt
             do ik2=1,Nkpt
                dk(:)=kpt(:,ik1)+kpt(:,iq)-kpt(:,ik2)
                dk(:)=dk(:)-nint(dk(:))
@@ -348,7 +350,23 @@ contains
                   exit
                endif
             enddo ! ik2
+            !
+            !second attempt with larger tolerance
+            if (kptsum(ik1,iq).eq.0)then
+               do ik2=1,Nkpt
+                  dk(:)=kpt(:,ik1)+kpt(:,iq)-kpt(:,ik2)
+                  dk(:)=dk(:)-nint(dk(:))
+                  if (all(abs(dk(:)).lt.1e-6)) then
+                     kptsum(ik1,iq)=ik2
+                     if (ik1.ne.iq) kptsum(iq,ik1)=kptsum(ik1,iq)
+                     exit
+                  endif
+               enddo ! ik2
+            endif
+            !
+            !missing sum
             if (kptsum(ik1,iq).eq.0) stop "kptsum"
+            !
          enddo ! ik1
       enddo ! iq
       !
@@ -356,6 +374,8 @@ contains
       kptdif=0
       do iq=1,nkpt
          do ik1=1,nkpt
+            !
+            !first attempt
             do ik2=1,nkpt
                dk(:)=kpt(:,ik1)-kpt(:,iq)-kpt(:,ik2)
                dk(:)=dk(:)-nint(dk(:))
@@ -364,8 +384,23 @@ contains
                   exit
                endif
             enddo ! ik2
+            !
+            !second attempt with larger tolerance
+            if (kptdif(ik1,iq).eq.0)then
+               do ik2=1,nkpt
+                  dk(:)=kpt(:,ik1)-kpt(:,iq)-kpt(:,ik2)
+                  dk(:)=dk(:)-nint(dk(:))
+                  if (all(abs(dk(:)).lt.1e-6)) then
+                     kptdif(ik1,iq)=ik2
+                     exit
+                  endif
+               enddo ! ik2
+            endif
+            !
+            !missing difference
             if (kptdif(ik1,iq).eq.0) stop "kptdif"
             if (kptdif(ik1,iq).gt.nkpt) stop "kptdif2"
+            !
          enddo ! ik1
       enddo ! iq
       !
@@ -380,6 +415,8 @@ contains
                   k(2)=mod(i2-1,nkpt3(2))
                   k(3)=mod(i3-1,nkpt3(3))
                   k(:)=k(:)/nkpt3(:)
+                  !
+                  !first attempt
                   do ik1=1,nkpt
                      dk(:)=kpt(:,ik1)-k(:)
                      dk(:)=dk(:)-nint(dk(:))
@@ -388,7 +425,22 @@ contains
                         exit
                      endif
                   enddo
+                  !
+                  !second attempt with larger tolerance
+                  if (pkpt_(i1,i2,i3).eq.0)then
+                     do ik1=1,nkpt
+                        dk(:)=kpt(:,ik1)-k(:)
+                        dk(:)=dk(:)-nint(dk(:))
+                        if (all(abs(dk(:)).lt.1e-6)) then
+                           pkpt_(i1,i2,i3)=ik1
+                           exit
+                        endif
+                     enddo
+                  endif
+                  !
+                  !missing positon
                   if (pkpt_(i1,i2,i3).eq.0) stop "pkpt"
+                  !
                enddo
             enddo
          enddo

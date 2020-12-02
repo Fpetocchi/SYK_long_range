@@ -152,6 +152,7 @@ module parameters
    !---------------------------------------------------------------------------!
    type QMC
       integer,allocatable                   :: Time(:)
+      real(8)                               :: TargetDensity=0d0
       integer                               :: Norder=0
       integer                               :: Nmeas=1000
       integer                               :: Ntherm=1000

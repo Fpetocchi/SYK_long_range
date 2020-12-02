@@ -751,7 +751,7 @@ contains
       do iwan1=1,Norb
          call dump_FermionicField(Gprint_Ek(iwan1,:),reg(pathOUTPUT_),"Greal_Ek_"//str(iwan1)//".lda",axis)
          do iwan2=1,Norb
-            call dump_FermionicField(Gprint_Hk(iwan1,iwan2,:),reg(pathOUTPUT_),"Greal_Hk_"//str(iwan1)//str(iwan2)//".lda",axis)
+            call dump_FermionicField(Gprint_Hk(iwan1,iwan2,:),reg(pathOUTPUT_),"Greal_Hk_"//str(iwan1)//"_"//str(iwan2)//".lda",axis)
          enddo
       enddo
       deallocate(axis,Gprint_Hk,Gprint_Ek)
@@ -796,7 +796,7 @@ contains
       do iwan1=1,Norb
          call dump_FermionicField(Gprint_Ek(iwan1,:),reg(pathOUTPUT_),"Gitau_Ek_"//str(iwan1)//".lda",axis)
          do iwan2=1,Norb
-            call dump_FermionicField(Gprint_Hk(iwan1,iwan2,:),reg(pathOUTPUT_),"Gitau_Hk_"//str(iwan1)//str(iwan2)//".lda",axis)
+            call dump_FermionicField(Gprint_Hk(iwan1,iwan2,:),reg(pathOUTPUT_),"Gitau_Hk_"//str(iwan1)//"_"//str(iwan2)//".lda",axis)
          enddo
       enddo
       deallocate(axis)!,Gprint_Hk,Gprint_Ek)
@@ -812,7 +812,7 @@ contains
       call Fitau2mats_mat(Beta,Gprint_Hk,zeta,tau_uniform=tau_uniform)
       do iwan1=1,Norb
          do iwan2=1,Norb
-            call dump_FermionicField(zeta(iwan1,iwan2,:),reg(pathOUTPUT_),"Gmats_Hk_"//str(iwan1)//str(iwan2)//".lda",axis)
+            call dump_FermionicField(zeta(iwan1,iwan2,:),reg(pathOUTPUT_),"Gmats_Hk_"//str(iwan1)//"_"//str(iwan2)//".lda",axis)
          enddo
       enddo
       !

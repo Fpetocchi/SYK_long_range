@@ -295,13 +295,12 @@ contains
       !Density lookup
       call add_separator()
       call parse_input_variable(look4dens%mu,"MU",InputFile,default=0d0,comment="Chemical potential.")
-      call parse_input_variable(look4dens%TargetDensity,"N_READ",InputFile,default=0d0,comment="Target density per site. Lookup is switched on to this value if its >0d0. Otherwise mu will be kept fixed.")
+      call parse_input_variable(look4dens%TargetDensity,"N_READ_LAT",InputFile,default=0d0,comment="Target density on the lattice. Lookup is switched on to this value if its >0d0. Otherwise mu will be kept fixed.")
       call parse_input_variable(look4dens%quickloops,"N_QUICK",InputFile,default=1,comment="Integer flag to switch on the quick density lookup within the solver.")
       call parse_input_variable(look4dens%densityRelErr,"N_ERR",InputFile,default=0.01d0,comment="Relative error on the target density. Better if not lower than 1e-3.")
       call parse_input_variable(look4dens%muStep,"MU_STEP",InputFile,default=0.2d0,comment="Initial chemical potential step in the density lookup.")
       call parse_input_variable(look4dens%muIter,"MU_ITER",InputFile,default=50,comment="Maximum number of iterations in the density lookup.")
       call parse_input_variable(look4dens%muTime,"MU_TIME",InputFile,default=0.5d0,comment="Minutes of solver runtime in the density lookup.")
-      if(ExpandImpurity)look4dens%TargetDensity = look4dens%TargetDensity*Nsite
       !
       !Interaction variables
       call add_separator()
@@ -352,6 +351,9 @@ contains
       !
       !Variables related to the impurity solver
       call add_separator()
+      Solver%TargetDensity = look4dens%TargetDensity
+      if(ExpandImpurity)Solver%TargetDensity = look4dens%TargetDensity/Nsite
+      call append_to_input_list(Solver%TargetDensity,"N_READ_IMP","Target density in the impurity list. User cannot set this as its the same of N_READ_LAT if EXPAND=F otherwise its N_READ_LAT/NSITE.")
       call parse_input_variable(Solver%Norder,"NORDER",InputFile,default=10,comment="Maximum perturbation order measured. Not used yet.")
       call parse_input_variable(Solver%Nmeas,"NMEAS",InputFile,default=1000,comment="Sweeps where expensive measurments are not performed.")
       call parse_input_variable(Solver%Ntherm,"NTHERM",InputFile,default=100,comment="Thermalization cycles. Each cycle performs NMEAS sweeps.")

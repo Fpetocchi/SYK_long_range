@@ -91,7 +91,7 @@ int main(int argc, char *argv[])
       find_param(argv[1], "BINLENGTH"  , binlength );
       find_param(argv[1], "BINSTART"   , binstart  );
       // Density lookup algorithm (dichotomy)
-      find_param(argv[1], "N_READ"     , density   );
+      find_param(argv[1], "N_READ_IMP" , density   );
       find_param(argv[1], "MU_STEP"    , muStep    );
       find_param(argv[1], "MU_ITER"    , muIter    );
       find_param(argv[1], "MU_TIME"    , muTime    );

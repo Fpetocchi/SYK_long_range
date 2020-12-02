@@ -672,15 +672,16 @@ contains
       wmats = BosonicFreqMesh(Umats%Beta,Umats%Npoints)
       !
       !
-      ! Read XEPS data
-      !path = pathINPUT//"XEPS.DAT"
-      !call inquireFile(reg(path),filexists)
-      !call read_XEPS(reg(path))
+      ! for memory demanding calculations the execute_command_line does not work
+      ! so I have to create the VW_imag directory before (but I'm keeping it here).
+      ! In the end instead of checking for the existence of the VW_imag folder
+      ! I will check for the first Q point file within the folder.
       !
       !
-      ! Check if the data on the Matsubara axis are present
+      ! Check if the data on the Matsubara axis are present!
       path = reg(pathINPUT)//"VW_imag"
-      call inquireDir(reg(path),ACdone,hardstop=.false.,verb=verbose)
+      !call inquireDir(reg(path),ACdone,hardstop=.false.,verb=verbose)
+      call inquireFile(reg(path)//"/VW.Q0001.DAT",ACdone,hardstop=.false.,verb=verbose)
       doAC_ = .not.ACdone
       if(present(doAC)) doAC_ = doAC
       !
@@ -693,6 +694,8 @@ contains
             call createDir(reg(trim(pathINPUT)//"VW_real_readable"),verb=verbose)
          endif
       endif
+      !
+      call init_Uelements(int(sqrt(dble(Umats%Nbp))),PhysicalUelements)
       !
       !
       ! Perform cnalytical continuation on real interaction or load existing files
@@ -777,7 +780,6 @@ contains
          allocate(D3(Nbp_spex,Nbp_spex));D3=czero
          !
          ! Check if any local Urpa component has inverted Im/Re symmetry
-         call init_Uelements(int(sqrt(dble(Nbp_spex))),PhysicalUelements)
          if(PhysicalUelements%status)then
             do ib1=1,Nbp_spex
                do ib2=1,Nbp_spex
@@ -913,9 +915,9 @@ contains
                   do ib1=1,Nbp_spex
                      do ib2=ib1,Nbp_spex
                         if(RevSym(ib1,ib2,iq).and.(.not.RevSym(ib2,ib1,iq)))then
-                           write(unit,"(3I5,A)")iq,ib1,ib2,"   WARNING - non symmetrical with orbital index exchange."
+                           write(unit,"(5I5,A)")iq,PhysicalUelements%Full_Map(ib1,ib2,:),"   WARNING - non symmetrical with orbital index exchange."
                         else
-                           write(unit,"(3I5)")iq,ib1,ib2
+                           write(unit,"(5I5)")iq,PhysicalUelements%Full_Map(ib1,ib2,:)
                         endif
                      enddo
                   enddo
@@ -1033,7 +1035,7 @@ contains
             do ib1=1,Nbp_spex
                do ib2=1,Nbp_spex
                   if(dabs(dimag(Umats%bare(ib1,ib2,iq))).gt.1.d-6) then
-                     write(*,"(A,2I)") "Warning Umats%bare imaginary. Set matrix element to static value",ib1,ib2
+                     write(*,"(A,4I4)") "     Warning Umats%bare imaginary. Set matrix element to static value",PhysicalUelements%Full_Map(ib1,ib2,:)
                      Umats%bare(ib1,ib2,iq) = Umats%screened(ib1,ib2,1,iq)
                      Umats%screened(ib1,ib2,:,iq) = Umats%screened(ib1,ib2,1,iq)
                   endif
