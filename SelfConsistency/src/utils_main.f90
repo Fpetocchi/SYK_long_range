@@ -913,7 +913,7 @@ contains
       type(FermionicField)                  :: SigmaImp
       type(FermionicField)                  :: FermiPrint
       type(FermionicField)                  :: DeltaOld
-      integer                               :: Norb,Nflavor,unit
+      integer                               :: Norb,Nflavor,unit,NfitD
       integer                               :: ispin,iw,iwan,itau,ndx,wndx
       integer,allocatable                   :: Orbs(:)
       real(8),allocatable                   :: wmats(:),tau(:),Moments(:,:,:)
@@ -1024,9 +1024,11 @@ contains
                   call inquireFile(reg(oldMomDir)//reg(file),filexists,hardstop=.false.,verb=verbose)
                   if(filexists) call execute_command_line(" cp "//reg(oldMomDir)//reg(file)//" "//reg(newMomDir))
                   !
-                  allocate(Moments(Norb,Nfit,Nspin));Moments=0d0
+                  NfitD = Nfit
+                  if(Nfit.gt.8)NfitD=8
+                  allocate(Moments(Norb,NfitD,Nspin));Moments=0d0
                   wndx = minloc(abs(wmats-0.85*wmatsMax),dim=1)
-                  call fit_moments(Dfit,Beta,Nfit,.false.,reg(newMomDir),reg(file),"Sigma",Moments,filename="DeltaMom",Wlimit=wndx)
+                  call fit_moments(Dfit,Beta,NfitD,.false.,reg(newMomDir),reg(file),"Sigma",Moments,filename="DeltaMom",Wlimit=wndx)
                   Eloc=Moments(:,1,:)
                   deallocate(Moments)
                   !
