@@ -14,7 +14,7 @@ import itertools
 import os
 import sys
 import time
-from scipy import interpolate
+#from scipy import interpolate
 
 class Bryan:
     def __init__(self, tauMesh, omegaMesh, Beta, model, kernel='fermionic',norm=1.0):
@@ -72,7 +72,7 @@ class Bryan:
             A=self.model*np.exp(np.dot(self.TU,u)) # (9)
         lam=np.linalg.eigvalsh(MK)
         tmp=np.log(np.where(A>1e-6,A*(self.oneovermodel+1e-8),1e-6*self.oneovermodel))
-        S=np.sum(A-model-(A*tmp)[tmp>-np.inf]) 
+        S=np.sum(A-model-(A*tmp)[tmp>-np.inf])
         L=0.5*np.sum((G_+self.G)**2*self.deltaTau*self.sigmapm2) # page 166 left column upper half
         print "Q=%s"%(alpha*S-L)
         return (A,S,L,lam,-G_)
@@ -95,7 +95,7 @@ class Bryan:
             (A,S,L,lam,G)=self.maxent(a,A)
             if not (functor(a,A,self.model,S,L,lam,G)):
                 break
-    
+
 class MeasureFunctor:
     if gnuplot:
         plot=Gnuplot.Gnuplot()
@@ -138,7 +138,7 @@ if __name__=="__main__":
     __doc__ = ''.join(open(filename, 'r').readlines()[:16]) # get __doc__ string
     from docopt import docopt
     arguments=docopt(__doc__)
-    
+
     if not(arguments['--gnuplot']):
         gnuplot=False
 
@@ -149,7 +149,7 @@ if __name__=="__main__":
         Ww=np.loadtxt(arguments['<datafile>'])[:,:2]
         Ww[:,1]*=-1
         Beta=2*np.pi/Ww[1,0]
-        p,c,d=leastsq(lambda p,m,d: [np.sum([(pi/((1j*mi)**(2*i))).real for i,pi in enumerate(p)])-di for mi,di in itertools.izip(m,d)],[1,-2,-4],args=(Ww[-5:,0],Ww[-15:,1]))[0]
+        p,c,d=leastsq(lambda p,m,d: [ np.sum( [(pi/((1j*mi)**(2*i))).real for i,pi in enumerate(p)] )-di for mi,di in itertools.izip(m,d) ], [1,-2,-4] , args=(Ww[-5:,0],Ww[-15:,1]) )[0]
         Ww[:,1]-=p
         tauMesh=np.linspace(0,Beta,Ww.shape[0]/2-1)
         with warnings.catch_warnings():
@@ -167,22 +167,22 @@ if __name__=="__main__":
             print >> sys.stderr, "--moments not implemented for -S X"
             sys.exit(1)
         omegaMesh=np.linspace(0,float(arguments['--frequencyrange']),int(arguments['--frequencies']))
-        if arguments['--modelfile']:
-            origomegaMesh=np.loadtxt(arguments['--modelfile'])[:,0]
-            with warnings.catch_warnings():
-                warnings.simplefilter("ignore")
-            origmodel=-np.loadtxt(arguments['--modelfile'])[0:,-1]
-            f=interpolate.interp1d(origomegaMesh,origmodel,kind='linear',fill_value=1e-15,bounds_error=False)
-            with warnings.catch_warnings():
-                warnings.simplefilter("ignore")
-                oneoveromegaMesh=np.where(omegaMesh==0.0,0.0,1/omegaMesh)
-            model=-f(omegaMesh)*oneoveromegaMesh*2.0/np.pi/Ww[0,1]+1e-8
-        else:
-            model=omegaMesh*0.0+1.0
-            
+        #if arguments['--modelfile']:
+        #    origomegaMesh=np.loadtxt(arguments['--modelfile'])[:,0]
+        #    with warnings.catch_warnings():
+        #        warnings.simplefilter("ignore")
+        #    origmodel=-np.loadtxt(arguments['--modelfile'])[0:,-1]
+        #    f=interpolate.interp1d(origomegaMesh,origmodel,kind='linear',fill_value=1e-15,bounds_error=False)
+        #    with warnings.catch_warnings():
+        #        warnings.simplefilter("ignore")
+        #        oneoveromegaMesh=np.where(omegaMesh==0.0,0.0,1/omegaMesh)
+        #    model=-f(omegaMesh)*oneoveromegaMesh*2.0/np.pi/Ww[0,1]+1e-8
+        #else:
+        model=omegaMesh*0.0+1.0
+
         model*=float(arguments["--modelnorm"])/np.trapz(model,omegaMesh)
         B=Bryan(tauMesh,omegaMesh,Beta,model,kernel='realbosonic',norm=-Ww[0,1])
-        
+
     elif arguments['--statistics']=='Xt':
         from scipy.optimize import leastsq
         Ns=1
@@ -194,25 +194,25 @@ if __name__=="__main__":
             sigmapm2=G*0.0+1.0/float(arguments['--sigma'])**2
         else:
             sigmapm2=(1/np.loadtxt(arguments['<datafile>'])[:,2]**2).reshape(tauMesh.shape[0],1)
-            
+
         if arguments['--moments']:
             print >> sys.stderr, "--moments not implemented for -S Xt"
             sys.exit(1)
-            
+
         omegaMesh=np.linspace(0,float(arguments['--frequencyrange']),int(arguments['--frequencies']))
-        if arguments['--modelfile']:
-            origomegaMesh=np.loadtxt(arguments['--modelfile'])[:,0]
-            with warnings.catch_warnings():
-                warnings.simplefilter("ignore")
-            origmodel=-np.loadtxt(arguments['--modelfile'])[0:,-1]
-            f=interpolate.interp1d(origomegaMesh,origmodel,kind='linear',fill_value=1e-15,bounds_error=False)
-            with warnings.catch_warnings():
-                warnings.simplefilter("ignore")
-                oneoveromegaMesh=np.where(omegaMesh==0.0,0.0,1/omegaMesh)
-            model=-f(omegaMesh)*oneoveromegaMesh*2.0+1e-8
-        else:
-            model=omegaMesh*0.0+1.0
-            
+        #if arguments['--modelfile']:
+        #    origomegaMesh=np.loadtxt(arguments['--modelfile'])[:,0]
+        #    with warnings.catch_warnings():
+        #        warnings.simplefilter("ignore")
+        #    origmodel=-np.loadtxt(arguments['--modelfile'])[0:,-1]
+        #    f=interpolate.interp1d(origomegaMesh,origmodel,kind='linear',fill_value=1e-15,bounds_error=False)
+        #    with warnings.catch_warnings():
+        #        warnings.simplefilter("ignore")
+        #        oneoveromegaMesh=np.where(omegaMesh==0.0,0.0,1/omegaMesh)
+        #    model=-f(omegaMesh)*oneoveromegaMesh*2.0+1e-8
+        #else:
+        model=omegaMesh*0.0+1.0
+
         model*=float(arguments["--modelnorm"])/np.trapz(model,omegaMesh)
         B=Bryan(tauMesh,omegaMesh,Beta,model,kernel='realbosonic',norm=-np.trapz(G[:,0],tauMesh)/Beta)
 
@@ -221,7 +221,7 @@ if __name__=="__main__":
         Gtau=np.loadtxt(arguments["<datafile>"],np.float128)
         tauMesh=Gtau[:,0]
         Beta=tauMesh[0]+tauMesh[-1]
-        
+
         if arguments["--sigma"]:
             Ns=Gtau.shape[1]-1
             sigmaFromFile=False
@@ -235,17 +235,18 @@ if __name__=="__main__":
         else:
             sigmapm2=G*0.0+1.0/float(arguments['--sigma'])**2
 
-        if arguments['--modelfile']:
-            origomegaMesh=np.loadtxt(arguments['--modelfile'])[:,0]
-            with warnings.catch_warnings():
-                warnings.simplefilter("ignore")
-            origmodel=-np.loadtxt(arguments['--modelfile'])[0:,-1]
-            f=interpolate.interp1d(origomegaMesh,origmodel,kind='linear',fill_value=1e-15,bounds_error=False)
-            with warnings.catch_warnings():
-                warnings.simplefilter("ignore")
-                oneoveromegaMesh=np.where(omegaMesh==0.0,0.0,1/omegaMesh)
-            model=f(omegaMesh)+1e-6
-        elif arguments['--moments']:
+        #if arguments['--modelfile']:
+        #    origomegaMesh=np.loadtxt(arguments['--modelfile'])[:,0]
+        #    with warnings.catch_warnings():
+        #        warnings.simplefilter("ignore")
+        #    origmodel=-np.loadtxt(arguments['--modelfile'])[0:,-1]
+        #    f=interpolate.interp1d(origomegaMesh,origmodel,kind='linear',fill_value=1e-15,bounds_error=False)
+        #    with warnings.catch_warnings():
+        #        warnings.simplefilter("ignore")
+        #        oneoveromegaMesh=np.where(omegaMesh==0.0,0.0,1/omegaMesh)
+        #    model=f(omegaMesh)+1e-6
+        #el
+        if arguments['--moments']:
             model=0.0*omegaMesh
             for momentset in arguments['--moments']:
                 m=np.array(momentset.split(','),np.float)
@@ -259,12 +260,12 @@ if __name__=="__main__":
         print "Done"
 
         ######### MAXENTING #############
-        
+
         B=Bryan(tauMesh, omegaMesh, Beta, model)
     else:
         print >> sys.stderr, "only real bosonic (X) and fermionic (F) continuation for now"
         sys.exit(1)
-        
+
     outputA=[]
     print "shape(G)=%s, shape(sigmapm2=%s)"%(G.shape,sigmapm2.shape)
     for i in range(G.shape[1]):
@@ -298,7 +299,7 @@ if __name__=="__main__":
     f=open(outfile,'a')
     f.write("#"+" ".join(sys.argv)+"\n")
     f.close()
-    
+
     GtauRepFile=open(outfile+"_reproduced.dat", 'w')
     for i in range(len(tauMesh)):
         s="%s  "%tauMesh[i]

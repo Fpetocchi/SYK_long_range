@@ -465,11 +465,11 @@ contains
             if((ReErr.gt.tol).or.(ImErr.gt.tol))then
                !
                if(verbose.or.enforce_)then
-                  if(ReErr.gt.(10d0*tol))then
+                  if(ReErr.gt.1e-4)then
                      if(present(name)) write(*,"(A)") "     Non-hermitian matrix: "//reg(name)
                      write(*,"(A,2I4,4(A,1E12.5))")   "     [i,j]:",i,j," Re(A_ij): ",real(A(i,j)) ," Re(A_ji): ",real(A(j,i)) ," err: ",ReErr," > ",tol
                   endif
-                  if(ImErr.gt.(10d0*tol))then
+                  if(ImErr.gt.1e-4)then
                      if(present(name)) write(*,"(A)") "     Non-hermitian matrix: "//reg(name)
                      write(*,"(A,2I4,4(A,1E12.5))")   "     [i,j]:",i,j," Im(A_ij): ",aimag(A(i,j))," Im(A_ji): ",aimag(A(j,i))," err: ",ImErr," > ",tol
                   endif
@@ -525,7 +525,7 @@ contains
             if(ReErr.gt.tol)then
                !
                if(verbose.or.enforce_)then
-                  if(ReErr.gt.(10d0*tol))then
+                  if(ReErr.gt.1e-4)then
                      if(present(name)) write(*,"(A)") "     Non-symmetric matrix: "//reg(name)
                      write(*,"(A,2I4,4(A,1E12.5))")   "     [i,j]:",i,j," Re(A_ij): ",A(i,j)," Re(A_ji): ",A(j,i)," err: ",ReErr," > ",tol
                   endif
@@ -578,11 +578,11 @@ contains
             if((ReErr.gt.tol).or.(ImErr.gt.tol))then
                !
                if(verbose.or.enforce_)then
-                  if(ReErr.gt.(10d0*tol))then
+                  if(ReErr.gt.1e-4)then
                      if(present(name)) write(*,"(A)") "     Non-symmetric matrix: "//reg(name)
                      write(*,"(A,2I4,4(A,1E12.5))")   "     [i,j]:",i,j," Re(A_ij): ",real(A(i,j)) ," Re(A_ji): ",real(A(j,i)) ," err: ",ReErr," > ",tol
                   endif
-                  if(ImErr.gt.(10d0*tol))then
+                  if(ImErr.gt.1e-4)then
                      if(present(name)) write(*,"(A)") "     Non-symmetric matrix: "//reg(name)
                      write(*,"(A,2I4,4(A,1E12.5))")   "     [i,j]:",i,j," Im(A_ij): ",aimag(A(i,j))," Im(A_ji): ",aimag(A(j,i))," err: ",ImErr," > ",tol
                   endif

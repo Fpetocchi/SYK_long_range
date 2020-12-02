@@ -34,19 +34,19 @@ SPIN="1"                       # -s Available: "1" "2"
 while getopts ":e:w:W:f:o:s:i:m:p:" o; do
    case ${o} in
       e)
-         echo ${OPTARG}
+         #echo ${OPTARG}
          err="${OPTARG}"
          ;;
       w)
-         echo ${OPTARG}
+         #echo ${OPTARG}
          mesh="${OPTARG}"
          ;;
       W)
-         echo ${OPTARG}
+         #echo ${OPTARG}
          width="${OPTARG}"
          ;;
       f)
-         echo ${OPTARG}
+         #echo ${OPTARG}
          FIELD="${OPTARG}"
          if [ "$FIELD"  == "G" ];      then RUNOPTIONS=" -s      "$err" -w "$mesh" -W "$width$G_model ; fi
          if [ "$FIELD"  == "W" ];      then RUNOPTIONS=" -S X -s "$err" -w "$mesh" -W "$width$W_model ; fi
@@ -57,24 +57,24 @@ while getopts ":e:w:W:f:o:s:i:m:p:" o; do
          if [[ "$FIELD"  = *PiJ* ]];   then RUNOPTIONS=" -S X -s "$err" -w "$mesh" -W "$width$U_model ; fi
          ;;
       o)
-         echo ${OPTARG}
+         #echo ${OPTARG}
          ORB="${OPTARG}"
          JOR="${OPTARG}"
          #if [ "$ORB"  != "t2g" ] && [ "$ORB"  != "eg" ]; then echo "Option Error - o" ; exit 1 ; fi
          ;;
       j)
-         echo ${OPTARG}
+         #echo ${OPTARG}
          JOR="${OPTARG}"
          ;;
       s)
-         echo ${OPTARG}
+         #echo ${OPTARG}
          SPIN="${OPTARG}"
          if [ "$SPIN"  != "1" ] && [ "$SPIN"  != "2" ]; then echo "Option Error - s" ; exit 1 ; fi
          ;;
       i)
-         echo ${OPTARG}
+         #echo ${OPTARG}
          SOURCE="${OPTARG}"
-         if [ "$SOURCE"  != "imp" ] && [ "$SOURCE"  != "lat" ]; then echo "Option Error - i" ; exit 1 ; fi
+         #if [ "$SOURCE"  != "imp" ] && [ "$SOURCE"  != "lat" ]; then echo "Option Error - i" ; exit 1 ; fi
          ;;
       \? )
          echo "Invalid option: $OPTARG" 1>&2
@@ -131,11 +131,13 @@ fi
 ################################################################################
 #                                  PRINT INFOS                                 #
 ################################################################################
-BIN=${GENMAT}/MaxEnt
+BIN=${GENMAT}/Calculations/MaxEnt
+echo
 echo "Binary from: " ${BIN}
 echo "Run options: "${RUNOPTIONS}
 echo "File: "${DATA}
 echo "Jobname: "${JOBNAME}
+echo
 
 
 
@@ -156,7 +158,7 @@ cat << EOF > submit_MaxEnt
 echo \$RUNOPTIONS
 export PYTHONPATH=${BIN}/docopt/
 
-python2.7  bryan.py  $BIN/bryan.py $RUNOPTIONS $DATA > job.out
+python2.7  $BIN/bryan.py $RUNOPTIONS $DATA > job.out
 
 EOF
 

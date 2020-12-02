@@ -772,8 +772,11 @@ contains
          if(ItStart.eq.0)call set_density(Glat%mu,Beta,Crystal,look4dens)
       endif
       !
-      write(*,"(A,F)") new_line("A")//"     Lattice chemical potential: ",Glat%mu
-      if(ItStart.gt.0)write(*,"(A,F)") new_line("A")//"     Impurity chemical potential: ",muQMC
+      write(*,"(A,F)") new_line("A")//"     Lattice chemical potential:  ",Glat%mu
+      if(ItStart.gt.0)then
+         write(*,"(A,F)") "     Impurity chemical potential: ",muQMC
+         write(*,"(A,F)") "     Difference Glat%mu-muQMC:    ",Glat%mu-muQMC
+      endif
       !
    end subroutine initialize_Fields
 
