@@ -549,6 +549,15 @@ contains
          !
       endif
       !
+      if(verbose)then
+         write(*,"(A,I)")"     EqvGWndx%Nset",EqvGWndx%Nset
+         write(*,"(A,I)")"     EqvGWndx%Ntotset",EqvGWndx%Ntotset
+         write(*,"(A,I)")"     EqvGWndx%SetNorb",EqvGWndx%SetNorb
+         do iset=1,size(EqvGWndx%SetOrbs,dim=1)
+            write(*,"(A,I)")"     EqvGWndx%SetOrbs",iset,EqvGWndx%SetOrbs(iset,:)
+         enddo
+      endif
+      !
    end subroutine initialize_Lattice
 
 

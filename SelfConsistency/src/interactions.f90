@@ -633,7 +633,7 @@ contains
       use file_io
       use utils_misc
       use utils_fields
-      use input_vars, only :  pathINPUT, UfullStructure
+      use input_vars, only :  pathINPUT, UfullStructure, Uthresh
       implicit none
       !
       type(BosonicField),intent(inout)      :: Umats
@@ -780,18 +780,23 @@ contains
          allocate(D3(Nbp_spex,Nbp_spex));D3=czero
          !
          ! Check if any local Urpa component has inverted Im/Re symmetry
-         if(PhysicalUelements%status)then
-            do ib1=1,Nbp_spex
-               do ib2=1,Nbp_spex
-                  if(PhysicalUelements%Full_All(ib1,ib2).and.abs(real(Umats%bare_local(ib1,ib2))).lt.abs(aimag(Umats%bare_local(ib1,ib2))))then
-                     write(*,"(A,2I)")"Element: ",ib1,ib2
-                     write(*,"(A,F)")"Re[Ubare(w=inf)]: ",real(Umats%bare_local(ib1,ib2))
-                     write(*,"(A,F)")"Im[Ubare(w=inf)]: ",aimag(Umats%bare_local(ib1,ib2))
-                     stop "Something wrong: Uloc cannot have inverted Re/Im parity."
-                  endif
-               enddo
+         do ib1=1,Nbp_spex
+            do ib2=1,Nbp_spex
+               !
+               if(abs(Umats%bare_local(ib1,ib2)).lt.Uthresh)then
+                  Umats%bare_local(ib1,ib2)=czero ; Ureal%screened_local(ib1,ib2,:)=czero
+                  Umats%bare_local(ib2,ib1)=czero ; Ureal%screened_local(ib2,ib1,:)=czero
+               endif
+               !
+               if(PhysicalUelements%Full_All(ib1,ib2).and.abs(real(Umats%bare_local(ib1,ib2))).lt.abs(aimag(Umats%bare_local(ib1,ib2))))then
+                  write(*,"(A,2I)")"Element: ",ib1,ib2
+                  write(*,"(A,F)")"Re[Ubare(w=inf)]: ",real(Umats%bare_local(ib1,ib2))
+                  write(*,"(A,F)")"Im[Ubare(w=inf)]: ",aimag(Umats%bare_local(ib1,ib2))
+                  stop "Something wrong: Uloc cannot have inverted Re/Im parity."
+               endif
+               !
             enddo
-         endif
+         enddo
          !
          ! Analytical continuation of the local component to imag axis using spectral rep
          call cpu_time(start)
@@ -848,26 +853,31 @@ contains
             allocate(RevSym(Nbp_spex,Nbp_spex,Umats%Nkpt));RevSym=.false.
             call cpu_time(start)
             !$OMP PARALLEL DEFAULT(NONE),&
-            !$OMP SHARED(Nbp_spex,wmats,wread,Nfreq,Ureal,Umats,UfullStructure,verbose,RevSym),&
+            !$OMP SHARED(Nbp_spex,wmats,wread,Nfreq,Ureal,Umats,UfullStructure,verbose,RevSym,Uthresh),&
             !$OMP PRIVATE(iq,ib1,ib2,iw1,iw2,D1,D2,D3,Utmp,imgFact)
             !$OMP DO
             do iq=1,Umats%Nkpt
                !
                !Some elements of U, usually the k-dependent ones, might have inverted Im/Re symmetry
                imgFact=cone
-               if(UfullStructure)then
-                  do ib1=1,Nbp_spex
-                     do ib2=1,Nbp_spex
-                        if( abs(real(Umats%bare(ib1,ib2,iq))).lt.abs(aimag(Umats%bare(ib1,ib2,iq))))then
-                           imgFact(ib1,ib2,1) = -img !this correspond to dividing by I
-                           imgFact(ib1,ib2,2) = +img !this correspond to multiplying by I
-                           !
-                           RevSym(ib1,ib2,iq) = .true.
-                           !
-                        endif
-                     enddo
+               do ib1=1,Nbp_spex
+                  do ib2=1,Nbp_spex
+                     !
+                     if(abs(Umats%bare(ib1,ib2,iq)).lt.Uthresh)then
+                        Umats%bare(ib1,ib2,iq)=czero ; Ureal%screened(ib1,ib2,:,iq)=czero
+                        Umats%bare(ib2,ib1,iq)=czero ; Ureal%screened(ib2,ib1,:,iq)=czero
+                     endif
+                     !
+                     if(UfullStructure.and.(abs(real(Umats%bare(ib1,ib2,iq))).lt.abs(aimag(Umats%bare(ib1,ib2,iq)))) )then
+                        imgFact(ib1,ib2,1) = -img !this correspond to dividing by I
+                        imgFact(ib1,ib2,2) = +img !this correspond to multiplying by I
+                        !
+                        RevSym(ib1,ib2,iq) = .true.
+                        !
+                     endif
+                     !
                   enddo
-               endif
+               enddo
                !
                do iw1=1,Umats%Npoints
                   Utmp=czero
@@ -908,16 +918,16 @@ contains
             !Print out the elements with inverted Im/Re symmetry
             if(UfullStructure)then
                unit = free_unit()
-               path = reg(pathINPUT)//"RevSym.DAT"
+               path = reg(pathINPUT)//"ReversedSymmetry.DAT"
                open(unit=unit,file=reg(path),form="formatted",status="unknown",position="rewind",action="write")
                write(unit,"(3A5)")"iq","ib1","ib2"
                do iq=1,Umats%Nkpt
                   do ib1=1,Nbp_spex
                      do ib2=ib1,Nbp_spex
-                        if(RevSym(ib1,ib2,iq).and.(.not.RevSym(ib2,ib1,iq)))then
-                           write(unit,"(5I5,A)")iq,PhysicalUelements%Full_Map(ib1,ib2,:),"   WARNING - non symmetrical with orbital index exchange."
-                        else
+                        if(RevSym(ib1,ib2,iq).and.RevSym(ib2,ib1,iq))then
                            write(unit,"(5I5)")iq,PhysicalUelements%Full_Map(ib1,ib2,:)
+                        elseif(RevSym(ib1,ib2,iq).and.(.not.RevSym(ib2,ib1,iq)))then
+                           write(unit,"(5I5,A)")iq,PhysicalUelements%Full_Map(ib1,ib2,:),"   WARNING - non symmetrical with orbital index exchange."
                         endif
                      enddo
                   enddo
