@@ -389,7 +389,7 @@ contains
             do ispin=1,Nspin
                do iorb=1,Norb
                   !
-                  Component = funct(iorb,Wstart:Wstart+Nfreq,ispin)
+                  Component = funct(iorb,Wstart:Wstart+Nfreq-1,ispin)
                   ParamVec(1:Nfit) = AndPram%Epsk(iorb,:,ispin)
                   ParamVec(1+Nfit:2*Nfit) = AndPram%Vk(iorb,:,ispin)
                   !
@@ -415,7 +415,7 @@ contains
             do ispin=1,Nspin
                do iorb=1,Norb
                   !
-                  Component = funct(iorb,Wstart:Wstart+Nfreq,ispin)
+                  Component = funct(iorb,Wstart:Wstart+Nfreq-1,ispin)
                   ParamVec(1:Nfit) = AndPram%Epsk(iorb,:,ispin)
                   ParamVec(1+Nfit:2*Nfit) = AndPram%Vk(iorb,:,ispin)
                   ParamVec(2*Nfit+1) = AndPram%Eloc(iorb,ispin)
@@ -816,7 +816,7 @@ contains
                   !
                   Moments(iorb,1,ispin) = 0d0
                   Moments(iorb,2,ispin) = 1d0
-                  Component = funct(iorb,Wstart:Wstart+Nfreq,ispin)
+                  Component = funct(iorb,Wstart:Wstart+Nfreq-1,ispin)
                   ParamVec = Moments(iorb,3:Nfit,ispin)
                   !
                   call fit_wrapper(chi2_G_Moments,ParamVec,chi,Niter)
@@ -842,7 +842,7 @@ contains
             do ispin=1,Nspin
                do iorb=1,Norb
                   !
-                  Component = funct(iorb,Wstart:Wstart+Nfreq,ispin)
+                  Component = funct(iorb,Wstart:Wstart+Nfreq-1,ispin)
                   ParamVec = Moments(iorb,:,ispin)
                   !
                   call fit_wrapper(chi2_S_Moments,ParamVec,chi,Niter)
@@ -868,7 +868,7 @@ contains
             do ispin=1,Nspin
                do iorb=1,Norb
                   !
-                  Component = funct(iorb,Wstart:Wstart+Nfreq,ispin)
+                  Component = funct(iorb,Wstart:Wstart+Nfreq-1,ispin)
                   ParamVec = Moments(iorb,:,ispin)
                   !
                   call fit_wrapper(chi2_W_Moments,ParamVec,chi,Niter)

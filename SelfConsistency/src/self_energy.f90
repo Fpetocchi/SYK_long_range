@@ -59,10 +59,9 @@ contains
       type(BosonicField),intent(in)         :: Wmats
       type(Lattice),intent(in)              :: Lttc
       !
-      complex(8),allocatable                :: Sitau(:,:,:,:,:)
+      complex(8),allocatable                :: Sitau(:,:,:)
       complex(8),allocatable                :: Gitau(:,:,:,:,:)
       complex(8),allocatable                :: Witau(:,:,:,:)
-      complex(8),allocatable                :: WmatsC(:,:,:,:)
       real(8)                               :: Beta
       integer                               :: Nbp,Nkpt,Norb,Nmats
       integer                               :: ik1,ik2,iq,iw,itau,ispin
@@ -107,28 +106,34 @@ contains
       enddo
       !
       allocate(Witau(Nbp,Nbp,NtauB,Nkpt));Witau=czero
-      allocate(WmatsC(Nbp,Nbp,Nmats,Nkpt));WmatsC=czero
-      do iw=1,Nmats
-         WmatsC(:,:,iw,:) = Wmats%screened(:,:,iw,:) - Wmats%bare
+      do iq=1,Nkpt
+         do ib1=1,Nbp
+            do ib2=1,Nbp
+               call Bmats2itau(Beta,(Wmats%screened(ib1,ib2,:,iq)-Wmats%bare(ib1,ib2,iq)),Witau(ib1,ib2,:,iq),asympt_corr=.true.,tau_uniform=tau_uniform)
+            enddo
+         enddo
       enddo
-      call Bmats2itau(Beta,WmatsC,Witau,asympt_corr=.true.,tau_uniform=tau_uniform)
-      deallocate(WmatsC)
+      !deallocate(WmatsC)
       !
       call cpu_time(finish)
       write(*,"(A,F)") "     Glat(k,iw),Wlat(q,iw) --> Glat(k,tau),Wlat(q,tau) cpu timing:", finish-start
       !
       call cpu_time(start)
       !Sigma_{m,n}(q,tau) = -Sum_{k,mp,np} W_{(m,mp);(n,np)}(q-k;tau)G_{mp,np}(k,tau)
-      allocate(Sitau(Norb,Norb,NtauB,Lttc%Nkpt_irred,Nspin));Sitau=czero
-      !$OMP PARALLEL DEFAULT(NONE),&
-      !$OMP SHARED(Norb,NtauB,Lttc,Nkpt,Sitau,Gitau,Witau),&
-      !$OMP PRIVATE(m,n,itau,iq,ispin,ik1,ik2,mp,np,ib1,ib2)
-      !$OMP DO
-      do m=1,Norb
-         do n=1,Norb
-            do itau=1,NtauB
-               do iq=1,Lttc%Nkpt_irred
-                  do ispin=1,Nspin
+      call clear_attributes(Smats_C)
+      allocate(Sitau(Norb,Norb,NtauB))
+      do iq=1,Lttc%Nkpt_irred
+         do ispin=1,Nspin
+            !
+            Sitau=czero
+            !
+            !$OMP PARALLEL DEFAULT(NONE),&
+            !$OMP SHARED(Norb,iq,ispin,NtauB,Lttc,Nkpt,Sitau,Gitau,Witau),&
+            !$OMP PRIVATE(m,n,itau,ik1,ik2,mp,np,ib1,ib2)
+            !$OMP DO
+            do m=1,Norb
+               do n=1,Norb
+                  do itau=1,NtauB
                      !
                      do ik1=1,Nkpt
                         ik2=Lttc%kptdif(iq,ik1)
@@ -138,7 +143,7 @@ contains
                               ib1 = mp + Norb*(m-1)
                               ib2 = np + Norb*(n-1)
                               !
-                              Sitau(m,n,itau,iq,ispin) = Sitau(m,n,itau,iq,ispin) - Gitau(mp,np,itau,ik1,ispin)*Witau(ib1,ib2,itau,ik2)/Nkpt
+                              Sitau(m,n,itau) = Sitau(m,n,itau) - Gitau(mp,np,itau,ik1,ispin)*Witau(ib1,ib2,itau,ik2)/Nkpt
                               !
                            enddo
                         enddo
@@ -147,19 +152,15 @@ contains
                   enddo
                enddo
             enddo
+            !$OMP END DO
+            !$OMP END PARALLEL
+            !
+            call Fitau2mats_mat(Beta,Sitau,Smats_C%wks(:,:,:,iq,ispin),tau_uniform=tau_uniform)
+            !
          enddo
       enddo
-      !$OMP END DO
-      !$OMP END PARALLEL
-      deallocate(Witau)
+      deallocate(Witau,Sitau)
       !
-      call clear_attributes(Smats_C)
-      do ispin=1,Nspin
-         do iq=1,Lttc%Nkpt_irred
-            call Fitau2mats_mat(Beta,Sitau(:,:,:,iq,ispin),Smats_C%wks(:,:,:,iq,ispin),tau_uniform=tau_uniform)
-         enddo
-      enddo
-      deallocate(Sitau)
       call cpu_time(finish)
       write(*,"(A,F)") "     Sigma_C(k,iw) cpu timing:", finish-start
       !
@@ -633,7 +634,7 @@ contains
       path = reg(pathINPUT)//"SGoWo_k_s1.DAT"
       call inquireFile(reg(path),ACdone,hardstop=.false.,verb=verbose)
       doAC_ = .not.ACdone
-      if(present(doAC)) doAC_ = doAC
+      if(present(doAC)) doAC_ = doAC .or. doAC_
       !
       ! Check if the Vxc_wann is present
       path = reg(pathINPUT)//"Vxc_k_s1.DAT"

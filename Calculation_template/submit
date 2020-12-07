@@ -1,8 +1,8 @@
 #!/bin/bash
 #$ -S /bin/bash
-#$ -N TestOld                   # job name
+#$ -N Ti_10                     # job name
 #$ -cwd                         # run script in current directory
-#$ -pe orte2  112               # MPI cores
+#$ -pe orte2 112                # MPI cores
 #$ -q new.q                     # queue
 
 export OMP_NUM_THREADS=1
@@ -13,13 +13,13 @@ ulimit -c 0
 ################################################################################
 #                                USER SETTINGS                                 #
 ################################################################################
-GENMAT=/home/petocchif/1_GW_EDMFT/1_gw_fp_NEW/GenericMaterial
+GENMAT=/home/petocchif/1_GW_EDMFT/nobackup/1_LiTi2O4
 
-PATH_INPUT=GWinput_SrMoO3
-PATH_DATA=Results_SrMoO3
+PATH_INPUT=GWinput_LiTi2O4
+PATH_DATA=Results_LiTi2O4
 
-START_IT=10
-END_IT=12
+START_IT=0
+END_IT=10
 
 
 
@@ -57,7 +57,7 @@ do
    #
    # Lattice problem
    `sed -i ${l3}'s/'"START_IT="'/'"START_IT=${IT}  !"'/' input.in`
-	${BINsc}/SelfConsistency  > report_sc_it${IT} 2> err_sc_it${IT}
+   ${BINsc}/SelfConsistency  > report_sc_it${IT} 2> err_sc_it${IT}
    mv {report_sc_it${IT},err_sc_it${IT}} ${IT_DATA}
 
 
@@ -65,7 +65,7 @@ do
    # Impurity problem
    if [ -f "doSolver" ]; then
       rm doSolver
-      mpiexec -np 112 ${BINqmc}/ct_hyb input.in ${IT_DATA} > report_qmc_it${IT} 2> err_qmc_it${IT}
+      mpiexec -np ${NSLOTS} ${BINqmc}/ct_hyb input.in ${IT_DATA} > report_qmc_it${IT} 2> err_qmc_it${IT}
       mv {report_qmc_it${IT},err_qmc_it${IT}} ${IT_DATA}
    fi
 

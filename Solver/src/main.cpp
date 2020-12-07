@@ -45,7 +45,7 @@ int main(int argc, char *argv[])
    int muIter;
    double density,muStep,muTime,muErr;
    // Site Dependent Vars
-   int Nsite;
+   int Nimp;
    std::vector<int> SiteTime;
    std::vector<int> SiteNorb;
    std::vector<std::string> SiteName;
@@ -77,8 +77,8 @@ int main(int argc, char *argv[])
       // Global Vars
       find_param(argv[1], "BETA"       , Beta      );
       find_param(argv[1], "NSPIN"      , Nspin     );
-      find_param(argv[1], "NTAU_F"     , NtauF     );
-      find_param(argv[1], "NTAU_B"     , NtauB     );
+      find_param(argv[1], "NTAU_F_IMP" , NtauF     );
+      find_param(argv[1], "NTAU_B_IMP" , NtauB     );
       find_param(argv[1], "NORDER"     , Norder    );
       find_param(argv[1], "NMEAS"      , Nmeas     );
       find_param(argv[1], "NTHERM"     , Ntherm    );
@@ -98,7 +98,7 @@ int main(int argc, char *argv[])
       find_param(argv[1], "N_ERR"      , muErr     );
       find_param(argv[1], "N_QUICK"    , quick_read); quickloops = (quick_read == 1) ? true : false;
       // Site Dependent Vars
-      find_param(argv[1], "NSITE"      , Nsite     );
+      find_param(argv[1], "NIMP"       , Nimp     );
       //
       if(mpi.is_master()) //debug &&
       {
@@ -121,7 +121,7 @@ int main(int argc, char *argv[])
             mpi.report(" binlength= "+str(binlength));
             mpi.report(" binstart= "+str(binstart));
          }
-         mpi.report(" Nsite= "+str(Nsite));
+         mpi.report(" Nimp= "+str(Nimp));
          if((density>0.0)&&(quickloops==true))
          {
             mpi.report(" density= "+str(density));
@@ -133,7 +133,7 @@ int main(int argc, char *argv[])
       }
 
       //
-      for(int isite=0; isite < Nsite; isite++)
+      for(int isite=0; isite < Nimp; isite++)
       {
          std::string ss=str(isite+1);
          const char * s  = ss.c_str();
@@ -172,7 +172,7 @@ int main(int argc, char *argv[])
       //......................................................................//
       print_line_space(1,mpi.is_master());
       std::vector<ct_hyb> ImpurityList;
-      for(int isite=0; isite < Nsite; isite++)
+      for(int isite=0; isite < Nimp; isite++)
       {
          mpi.report(" isite = "+str(isite));
          mpi.report(" Name = "+SiteName[isite]);
@@ -206,12 +206,12 @@ int main(int argc, char *argv[])
          double trial_density;
          double mu_start=ImpurityList[0].get_mu();
          double mu_new,mu_last=ImpurityList[0].get_mu();
-         std::vector<double>Ntmp(Nsite,0.0);
+         std::vector<double>Ntmp(Nimp,0.0);
 
          //
          print_line_minus(80,mpi.is_master());
          mpi.report(" Starting chemical potential: "+str(mu_start));
-         for(int isite=0; isite < Nsite; isite++)
+         for(int isite=0; isite < Nimp; isite++)
          {
             mpi.report(" Quick solution ("+str((int)(muTime*60))+"sec) of site "+SiteName[isite]);
             ImpurityList[isite].solve( muTime, true );
@@ -230,7 +230,7 @@ int main(int argc, char *argv[])
             mu_new = mu_start + imu*muStep*muSign;
             mpi.report(" Setting chemical potential: "+str(mu_new));
             //
-            for(int isite=0; isite < Nsite; isite++)
+            for(int isite=0; isite < Nimp; isite++)
             {
                mpi.report(" Quick solution ("+str((int)(muTime*60))+"sec) of site "+SiteName[isite]);
                ImpurityList[isite].reset_mu( mu_new );
@@ -258,7 +258,7 @@ int main(int argc, char *argv[])
             mu_new = (mu_below+mu_above)/2.0;
             mpi.report(" Setting chemical potential: "+str(mu_new));
             //
-            for(int isite=0; isite < Nsite; isite++)
+            for(int isite=0; isite < Nimp; isite++)
             {
                mpi.report(" Quick solution ("+str((int)(muTime*60))+"sec) of site "+SiteName[isite]);
                ImpurityList[isite].reset_mu( mu_new );
@@ -285,7 +285,7 @@ int main(int argc, char *argv[])
          }
 
          //
-         for(int isite=0; isite < Nsite; isite++) ImpurityList[isite].reset_mu( mu_new );
+         for(int isite=0; isite < Nimp; isite++) ImpurityList[isite].reset_mu( mu_new );
 
       }
 
@@ -293,7 +293,7 @@ int main(int argc, char *argv[])
       //..................................................
       //               Solve the impurities
       //..................................................
-      for(int isite=0; isite < Nsite; isite++) ImpurityList[isite].solve( SiteTime[isite] );
+      for(int isite=0; isite < Nimp; isite++) ImpurityList[isite].solve( SiteTime[isite] );
 
 
 

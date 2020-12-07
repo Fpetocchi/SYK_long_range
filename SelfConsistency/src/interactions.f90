@@ -678,12 +678,12 @@ contains
       ! I will check for the first Q point file within the folder.
       !
       !
-      ! Check if the data on the Matsubara axis are present!
+      ! Check if the data on the Matsubara axis are present
       path = reg(pathINPUT)//"VW_imag"
       !call inquireDir(reg(path),ACdone,hardstop=.false.,verb=verbose)
       call inquireFile(reg(path)//"/VW.Q0001.DAT",ACdone,hardstop=.false.,verb=verbose)
       doAC_ = .not.ACdone
-      if(present(doAC)) doAC_ = doAC
+      if(present(doAC)) doAC_ = doAC .or. doAC_
       !
       !
       ! This has to be done before allocation of large files otherwise the "system" command will not work
@@ -1715,7 +1715,7 @@ contains
       use file_io
       use utils_misc
       use utils_fields
-      use input_vars, only : NtauB
+      use input_vars, only : NtauBimp
       implicit none
       !
       type(BosonicField),intent(in)         :: Umats
@@ -1748,10 +1748,10 @@ contains
       call assert_shape(Uinst,[Nflavor,Nflavor],"calc_QMCinteractions","Uinst")
       Uinst=0d0
       if(retarded)then
-         call assert_shape(Kfunct,[Nflavor,Nflavor,NtauB],"calc_QMCinteractions","Kfunct")
+         call assert_shape(Kfunct,[Nflavor,Nflavor,NtauBimp],"calc_QMCinteractions","Kfunct")
          allocate(Kaux(Nflavor,Nflavor,Umats%Npoints));Kaux=czero
-         allocate(tau(NtauB));tau=0d0
-         tau = linspace(0d0,Umats%Beta,NtauB)
+         allocate(tau(NtauBimp));tau=0d0
+         tau = linspace(0d0,Umats%Beta,NtauBimp)
          allocate(wmats(Umats%Npoints));wmats=0d0
          wmats = BosonicFreqMesh(Umats%Beta,Umats%Npoints)
       endif
@@ -1816,7 +1816,7 @@ contains
       !setting the reterdation function
       if(retarded)then
          Kfunct=0d0
-         do itau=2,NtauB-1
+         do itau=2,NtauBimp-1
             !
             do iw=2,Umats%Npoints
                Kfunct(:,:,itau) = Kfunct(:,:,itau) - 2d0*Kaux(:,:,iw) * ( cos(wmats(iw)*tau(itau)) - 1d0 ) / ( Umats%Beta*wmats(iw)**2 )
@@ -1825,8 +1825,8 @@ contains
             call check_Symmetry(Kfunct(:,:,itau),eps,enforce=.true.,hardstop=.false.,name="Kfunct_t"//str(itau))
             !
          enddo
+         deallocate(Kaux,tau,wmats)
       endif
-      deallocate(Kaux,tau,wmats)
       !
    end subroutine calc_QMCinteractions
 

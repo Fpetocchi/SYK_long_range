@@ -158,7 +158,7 @@ contains
       integer,intent(in)                    :: Norb,Nkpt
       character(len=*),intent(in),optional  :: name
       !
-      if(present(name)) write(*,"(A)") "Allocation of "//trim(name)
+      if(present(name)) write(*,"(A)") "     Allocation of "//trim(name)
       if(lttc%status) stop "AllocateLattice: container already allocated."
       !
       if(allocated(lttc%kpt))deallocate(lttc%kpt)
@@ -195,7 +195,7 @@ contains
       type(Lattice),intent(inout)           :: lttc
       character(len=*),intent(in),optional  :: name
       !
-      if(present(name)) write(*,"(A)") "Deallocation of "//trim(name)
+      if(present(name)) write(*,"(A)") "     Deallocation of "//trim(name)
       if(.not.lttc%status) stop "AllocateLattice: container is unallocated."
       !
       if(allocated(lttc%kpt))deallocate(lttc%kpt)
@@ -237,11 +237,11 @@ contains
       !
       Nkpt_=0
       if(present(Nkpt))Nkpt_=Nkpt
-      if(present(name).and.verbose) write(*,"(A)") "Allocation of "//trim(name)
+      if(present(name).and.verbose) write(*,"(A)") "     Allocation of "//trim(name)
       if(G%status) stop "AllocateFermionicField: container already allocated."
       if(Norb.eq.0) stop "AllocateFermionicField: Norb not defined."
-      if(Npoints.eq.0.and.verbose) write(*,"(A)") "AllocateFermionicField: frequency dependent attributes are not going to be allocated."
-      if(Nkpt_.eq.0.and.verbose) write(*,"(A)") "AllocateFermionicField: K-dependent attributes are not going to be allocated."
+      if(Npoints.eq.0.and.verbose) write(*,"(A)") "     AllocateFermionicField: frequency dependent attributes are not going to be allocated."
+      if(Nkpt_.eq.0.and.verbose) write(*,"(A)") "     AllocateFermionicField: K-dependent attributes are not going to be allocated."
       !
       if(allocated(G%N_s))deallocate(G%N_s)
       if(allocated(G%N_ks))deallocate(G%N_ks)
@@ -276,7 +276,7 @@ contains
       type(FermionicField),intent(inout)    :: G
       character(len=*),intent(in),optional  :: name
       !
-      if(present(name).and.verbose) write(*,"(A)") "Deallocation of "//trim(name)
+      if(present(name).and.verbose) write(*,"(A)") "     Deallocation of "//trim(name)
       if(.not.G%status) stop "DeallocateFermionicField: container is unallocated."
       !
       if(allocated(G%N_s))deallocate(G%N_s)
@@ -315,14 +315,14 @@ contains
       Nbp=Norb**2
       Nkpt_=0
       if(present(Nkpt))Nkpt_=Nkpt
-      if(present(name).and.verbose) write(*,"(A)") "Allocation of "//trim(name)
+      if(present(name).and.verbose) write(*,"(A)") "     Allocation of "//trim(name)
       if(W%status) stop "AllocateBosonicField: container already allocated."
       if(Nbp.eq.0) stop "AllocateBosonicField: Nbp not defined."
       if(Npoints.eq.0) stop "AllocateBosonicField: Npoints not defined."
-      if(Nkpt_.eq.0.and.verbose) write(*,"(A)") "AllocateBosonicField: K-dependent attributes are not going to be allocated."
+      if(Nkpt_.eq.0.and.verbose) write(*,"(A)") "     AllocateBosonicField: K-dependent attributes are not going to be allocated."
       no_bare_=.false.
       if(present(no_bare))no_bare_=no_bare
-      if(no_bare_.and.verbose) write(*,"(A)") "AllocateBosonicField: the bare attributes are not going to be allocated."
+      if(no_bare_.and.verbose) write(*,"(A)") "     AllocateBosonicField: the bare attributes are not going to be allocated."
       !
       if(allocated(W%bare_local))deallocate(W%bare_local)
       if(allocated(W%screened_local))deallocate(W%screened_local)
@@ -357,7 +357,7 @@ contains
       type(BosonicField),intent(inout)      :: W
       character(len=*),intent(in),optional  :: name
       !
-      if(present(name).and.verbose) write(*,"(A)") "Deallocation of "//trim(name)
+      if(present(name).and.verbose) write(*,"(A)") "     Deallocation of "//trim(name)
       if(.not.W%status) stop "DeallocateBosonicField: container is unallocated."
       !
       if(allocated(W%bare_local))deallocate(W%bare_local)
@@ -457,7 +457,7 @@ contains
       if(verbose)write(*,"(A)") "---- loc2imp(F)"
       !
       !
-      if(present(sitename)) write(*,"(A)") "Extraction of Gloc for site: "//trim(sitename)
+      if(present(sitename)) write(*,"(A)") "     Extraction of Gloc for site: "//trim(sitename)
       if(.not.Gloc%status) stop "loc2imp(F): Gloc not properly initialized."
       if(.not.Gimp%status) stop "loc2imp(F): Gimp not properly initialized."
       if(Gloc%Norb.eq.0) stop "loc2imp(F): Norb of Gloc not defined."
@@ -472,10 +472,10 @@ contains
       if(size(orbs).ne.Gimp%Norb) stop "loc2imp(F): can't fit the requested orbitals inside Gimp."
       if(size(orbs).gt.Gloc%Norb) stop "loc2imp(F): number of requested orbitals greater than Gloc size."
       if(present(U))then
-         write(*,"(A)") "The local orbital space will be rotated during extraction."
+         write(*,"(A)") "     The local orbital space will be rotated during extraction."
          if(size(U,dim=1).ne.size(U,dim=2)) stop "Rotation matrix not square."
          if(size(U,dim=1).ne.size(orbs)) stop "Rotation matrix has the wrong dimension."
-         if(size(U,dim=1).ne.3) write(*,"(A)") "Warning: The local orbital space rotation is well defined only for a t2g sub-shell."
+         if(size(U,dim=1).ne.3) write(*,"(A)") "     Warning: The local orbital space rotation is well defined only for a t2g sub-shell."
       endif
       !
       call clear_attributes(Gimp)
@@ -528,16 +528,16 @@ contains
       if(verbose)write(*,"(A)") "---- loc2imp(O)"
       !
       !
-      if(present(sitename)) write(*,"(A)") "Extraction of Operator for site: "//trim(sitename)
+      if(present(sitename)) write(*,"(A)") "     Extraction of Operator for site: "//trim(sitename)
       if(size(Oloc,dim=1).ne.size(Oloc,dim=2)) stop "loc2imp(O): Oloc not square."
       if(size(Oimp,dim=1).ne.size(Oimp,dim=2)) stop "loc2imp(O): Oimp not square."
       if(size(orbs).ne.size(Oimp,dim=1)) stop "loc2imp(O): can't fit the requested orbitals inside Oimp."
       if(size(orbs).gt.size(Oloc,dim=1)) stop "loc2imp(O): number of requested orbitals greater than Oloc size."
       if(present(U))then
-         write(*,"(A)") "The local orbital space will be rotated during extraction."
+         write(*,"(A)") "     The local orbital space will be rotated during extraction."
          if(size(U,dim=1).ne.size(U,dim=2)) stop "Rotation matrix not square."
          if(size(U,dim=1).ne.size(orbs)) stop "Rotation matrix has the wrong dimension."
-         if(size(U,dim=1).ne.3) write(*,"(A)") "Warning: The local orbital space rotation is well defined only for a t2g sub-shell."
+         if(size(U,dim=1).ne.3) write(*,"(A)") "     Warning: The local orbital space rotation is well defined only for a t2g sub-shell."
       endif
       !
       Oimp=czero
@@ -578,7 +578,7 @@ contains
       if(verbose)write(*,"(A)") "---- loc2imp(B)"
       !
       !
-      if(present(sitename)) write(*,"(A)") "Extraction of Wloc for site: "//trim(sitename)
+      if(present(sitename)) write(*,"(A)") "     Extraction of Wloc for site: "//trim(sitename)
       if(.not.Wloc%status) stop "loc2imp(B): Wloc not properly initialized."
       if(.not.Wimp%status) stop "loc2imp(B): Wimp not properly initialized."
       if(Wloc%Nbp.eq.0) stop "loc2imp(B): Norb of Wloc not defined."
@@ -690,7 +690,7 @@ contains
          Nsite = Gloc%Nsite
          if(mod(Norb_loc,size(orbs)).ne.0)stop "Number of requested orbitals is not a commensurate subset of the lattice field."
          if(AFM) stop "Expansion to real space and AFM condition not yet implemented."
-         write(*,"(A)") "The impurity field will be expanded to match the lattice orbital space."
+         write(*,"(A)") "     The impurity field will be expanded to match the lattice orbital space."
       else
          write(*,"(A,15I3)") "     Impurity field will be inserted into the lattice orbital indexes: ",orbs
          Nsite = 1
@@ -699,7 +699,7 @@ contains
       if(present(U))then
          if(size(U,dim=1).ne.size(U,dim=2)) stop "Rotation matrix not square."
          if(size(U,dim=3).ne.Gloc%Nsite) stop "Number of rotation matrices and number of sites does not match."
-         if(size(U,dim=1).ne.3) write(*,"(A)") "Warning: The local orbital space rotation is well defined only for a t2g sub-shell."
+         if(size(U,dim=1).ne.3) write(*,"(A)") "     Warning: The local orbital space rotation is well defined only for a t2g sub-shell."
          write(*,"(A)") "     The impurity orbital space will be rotated during insertion in "//str(Nsite)//" sites."
       endif
       !
@@ -814,8 +814,8 @@ contains
       if(present(U))then
          if(size(U,dim=1).ne.size(U,dim=2)) stop "Rotation matrix not square."
          if((size(U,dim=3).ne.Nsite))stop "Number of rotation matrices and number of sites does not match."
-         if(size(U,dim=1).ne.3) write(*,"(A)") "Warning: The local orbital space rotation is well defined only for a t2g sub-shell."
-         write(*,"(A)") "The impurity orbital space will be rotated during insertion in "//str(Nsite)//" sites."
+         if(size(U,dim=1).ne.3) write(*,"(A)") "     Warning: The local orbital space rotation is well defined only for a t2g sub-shell."
+         write(*,"(A)") "     The impurity orbital space will be rotated during insertion in "//str(Nsite)//" sites."
       endif
       !
       allocate(Otmp(size(Oloc,dim=1),size(Oloc,dim=1),Nspin,Nsite));Otmp=czero

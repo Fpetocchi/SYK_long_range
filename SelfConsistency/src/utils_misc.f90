@@ -376,7 +376,7 @@ contains
       !
       inquire(file=reg(file),exist=exists)
       if(.not.exists) then
-         if(verbose_.or.hardstop_)write(*,"(A)")"Unable to find file: "//reg(file)
+         if(verbose_.or.hardstop_)write(*,"(A)")"     Unable to find file: "//reg(file)
          if(hardstop_) stop "Stop."
       endif
       !
@@ -397,7 +397,7 @@ contains
       inquire(directory=reg(dir),exist=exists)                                  !<===IFORT
       !inquire(file=reg(dir),exist=exists)                                      !<===GFORTRAN
       if(.not.exists) then
-         if(verbose_.or.hardstop_)write(*,"(A)")"Unable to find directory: "//reg(dir)
+         if(verbose_.or.hardstop_)write(*,"(A)")"     Unable to find directory: "//reg(dir)
          if(hardstop_) stop "Stop."
       endif
       !

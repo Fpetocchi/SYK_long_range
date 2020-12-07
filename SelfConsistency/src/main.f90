@@ -1,4 +1,4 @@
-program test
+program SelfConsistency
    !
    ! COMMENTS:
    ! tengo collect_QMC_results(ItStart) separato perche forse in un futuro riscrivero il solver
@@ -38,6 +38,7 @@ program test
    !---------------------------------------------------------------------------!
    if(solve_DMFT.and.(ItStart.gt.0))call collect_QMC_results()
    !
+   stop
    !
    !
    !---------------------------------------------------------------------------!
@@ -75,6 +76,7 @@ program test
          call dump_MaxEnt(Wlat,"mats",reg(ItFolder)//"Convergence/","Wlat",EqvGWndx%SetOrbs)
          !
       endif
+      call DeallocateBosonicField(Plat)
       !
       !K-dependent self-energy - only G0W0,scGW,GW+EDMFT
       !calc_Sigmak=.false. !TEST
@@ -88,7 +90,7 @@ program test
          !G0W0 contribution and Vexchange readed from SPEX
          allocate(Vxc(Crystal%Norb,Crystal%Norb,Crystal%Nkpt,Nspin));Vxc=czero
          call AllocateFermionicField(S_G0W0,Crystal%Norb,Nmats,Nkpt=Crystal%Nkpt,Nsite=Nsite,Beta=Beta)
-         call read_Sigma_spex(S_G0W0,Crystal,verbose,Vxc=Vxc)
+         call read_Sigma_spex(S_G0W0,Crystal,verbose,Vxc=Vxc,doAC=Sigma_AC)
          !
          !scGW
          call AllocateFermionicField(S_GW_C,Crystal%Norb,Nmats,Nkpt=Crystal%Nkpt,Nsite=Nsite,Beta=Beta)
@@ -193,4 +195,4 @@ program test
       if(solve_DMFT)call execute_command_line(" touch doSolver ")
    endif
    !
-end program test
+end program SelfConsistency

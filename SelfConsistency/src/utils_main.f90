@@ -549,14 +549,13 @@ contains
          !
       endif
       !
-      if(verbose)then
-         write(*,"(A,I)")"     EqvGWndx%Nset",EqvGWndx%Nset
-         write(*,"(A,I)")"     EqvGWndx%Ntotset",EqvGWndx%Ntotset
-         write(*,"(A,I)")"     EqvGWndx%SetNorb",EqvGWndx%SetNorb
-         do iset=1,size(EqvGWndx%SetOrbs,dim=1)
-            write(*,"(A,I)")"     EqvGWndx%SetOrbs",iset,EqvGWndx%SetOrbs(iset,:)
-         enddo
-      endif
+      write(*,"(A)") new_line("A")//new_line("A")//"---- symmetrized orbital sets"
+      write(*,"(A,1I3)") "     EqvGWndx%Nset",EqvGWndx%Nset
+      write(*,"(A,1I3)") "     EqvGWndx%Ntotset",EqvGWndx%Ntotset
+      write(*,"(A,10I3)")"     EqvGWndx%SetNorb",EqvGWndx%SetNorb
+      do iset=1,size(EqvGWndx%SetOrbs,dim=1)
+         write(*,"(A,I3,A,10I3)")"     iset: ",iset," EqvGWndx%SetOrbs: ",EqvGWndx%SetOrbs(iset,:)
+      enddo
       !
    end subroutine initialize_Lattice
 
@@ -644,7 +643,7 @@ contains
             !
             !Unscreened interaction
             call AllocateBosonicField(Ulat,Crystal%Norb,Nmats,Crystal%iq_gamma,Nsite=Nsite,Beta=Beta)
-            if(Uspex)call read_U_spex(Ulat,save2readable=verbose,LocalOnly=.true.)
+            if(Uspex)call read_U_spex(Ulat,save2readable=verbose,LocalOnly=.true.,doAC=U_AC)
             if(Umodel)then
                call inquireFile(reg(pathINPUT)//"Uw_model.DAT",filexists,hardstop=.false.,verb=verbose)
                if(filexists)then
@@ -671,7 +670,7 @@ contains
             !
             !Unscreened interaction
             call AllocateBosonicField(Ulat,Crystal%Norb,Nmats,Crystal%iq_gamma,Nsite=Nsite,Beta=Beta)
-            if(Uspex)call read_U_spex(Ulat,save2readable=verbose,LocalOnly=.false.)
+            if(Uspex)call read_U_spex(Ulat,save2readable=verbose,LocalOnly=.false.,doAC=U_AC)
             if(Umodel)then
                call inquireFile(reg(pathINPUT)//"Uw_model.DAT",filexists,hardstop=.false.,verb=verbose)
                if(filexists)then
@@ -711,7 +710,7 @@ contains
             !Unscreened interaction
             call AllocateBosonicField(Ulat,Crystal%Norb,Nmats,Crystal%iq_gamma,Nkpt=Crystal%Nkpt,Nsite=Nsite,Beta=Beta)
             if(Umodel)stop "U model is implemented only for non-GW (fully local) screened calculations."
-            if(Uspex)call read_U_spex(Ulat,save2readable=verbose,LocalOnly=.false.)
+            if(Uspex)call read_U_spex(Ulat,save2readable=verbose,LocalOnly=.false.,doAC=U_AC)
             !
             !Fully screened interaction
             call AllocateBosonicField(Wlat,Crystal%Norb,Nmats,Crystal%iq_gamma,Nkpt=Crystal%Nkpt,Nsite=Nsite,Beta=Beta)
@@ -972,10 +971,8 @@ contains
       call AllocateFermionicField(Gloc,Norb,Nmats,Beta=Beta)
       allocate(invCurlyG(Norb,Nmats,Nspin));invCurlyG=czero
       allocate(Dmats(Norb,Nmats,Nspin));Dmats=czero
-      allocate(Ditau(Norb,NtauF,Nspin));Ditau=0d0
+      allocate(Ditau(Norb,NtauFimp,Nspin));Ditau=0d0
       !
-      allocate(tau(NtauF));tau=0d0
-      tau = linspace(0d0,Beta,NtauF)
       allocate(wmats(Nmats));wmats=0d0
       wmats = FermionicFreqMesh(Beta,Nmats)
       allocate(zeta(Norb,Nmats,Nspin))
@@ -1126,11 +1123,13 @@ contains
       close(unit)
       !
       !Delta(tau)
+      allocate(tau(NtauFimp));tau=0d0
+      tau = linspace(0d0,Beta,NtauFimp)
       allocate(PrintLine(Nflavor))
       file = reg(ItFolder)//"Solver_"//reg(SiteName(isite))//"/Delta_t.DAT"
       unit = free_unit()
       open(unit,file=reg(file),form="formatted",status="unknown",position="rewind",action="write")
-      do itau=1,NtauF
+      do itau=1,NtauFimp
          ndx=1
          PrintLine=0d0
          do iwan=1,Norb
@@ -1238,8 +1237,8 @@ contains
       Nbp = Norb**2
       Nflavor = Norb*Nspin
       !
-      allocate(tau(NtauB));tau=0d0
-      tau = linspace(0d0,Beta,NtauB)
+      allocate(tau(NtauBimp));tau=0d0
+      tau = linspace(0d0,Beta,NtauBimp)
       !
       allocate(Uinst(Nflavor,Nflavor));Uinst=0d0
       call AllocateBosonicField(curlyU,Norb,Nmats,Crystal%iq_gamma,Beta=Beta)
@@ -1259,7 +1258,7 @@ contains
             !
             call loc2imp(curlyU,Ulat,Orbs)
             call isReal(curlyU)
-            allocate(Kfunct(Nflavor,Nflavor,NtauB));Kfunct=0d0
+            allocate(Kfunct(Nflavor,Nflavor,NtauBimp));Kfunct=0d0
             call calc_QMCinteractions(curlyU,Uinst,Kfunct)
             !
          case("EDMFT","GW+EDMFT")
@@ -1269,7 +1268,6 @@ contains
                write(*,"(A)") "     Using local Ucrpa as effective interaction."
                call loc2imp(curlyU,Ulat,Orbs)
                call isReal(curlyU)
-               call DeallocateBosonicField(Ulat)
                !
             else
                !
@@ -1282,7 +1280,7 @@ contains
                call calc_curlyU(curlyU,Wloc,Pimp)
                !
                call DeallocateBosonicField(Pimp)
-               if(.not.checkInvariance)call DeallocateBosonicField(Wloc)
+               call DeallocateBosonicField(Wloc)
                !
             endif
             !
@@ -1298,7 +1296,7 @@ contains
                call DeallocateBosonicField(curlyUold)
             endif
             !
-            allocate(Kfunct(Nflavor,Nflavor,NtauB));Kfunct=0d0
+            allocate(Kfunct(Nflavor,Nflavor,NtauBimp));Kfunct=0d0
             call calc_QMCinteractions(curlyU,Uinst,Kfunct)
             !
       end select
@@ -1319,7 +1317,7 @@ contains
          unit = free_unit()
          open(unit,file=reg(file),form="formatted",status="unknown",position="rewind",action="write")
          allocate(PrintLine(Nflavor*(Nflavor+1)/2));PrintLine=0d0
-         do itau=1,NtauB
+         do itau=1,NtauBimp
             ndx=1
             !print diagonal and LT
             do ib1=1,Nflavor
@@ -1341,41 +1339,60 @@ contains
          !curlyU
          call dump_BosonicField(curlyU,reg(ItFolder)//"Solver_"//reg(SiteName(isite))//"/","curlyU_"//reg(SiteName(isite))//"_w.DAT")
          !
+         deallocate(Kfunct)
+         !
       endif
-      !
       deallocate(tau)
+      call DeallocateBosonicField(curlyU)
       !
-      !Check if the fully screened local interaction at iw=0 is the same for all the sites
+      !Check if the fully screened local interaction at iw=0 is the same for all the sites. Same Orbital dimension assumed.
       if(checkInvariance)then
          !
          do isitecheck=2,Nsite
             !
-            Norb = SiteNorb(isitecheck)
+            Norb = SiteNorb(1)
+            Nflavor = Nspin*Norb
             allocate(Orbs(Norb))
-            Orbs = SiteOrbs(isitecheck,1:Norb)
-            allocate(Ucheck(Nflavor,Nflavor));Ucheck=0d0
             !
-            call loc2imp(Wloc,Wlat,Orbs)
+            ! only two possible arrangements
+            if(abs(SiteOrbs(1,2)-SiteOrbs(1,1)).eq.1)then
+               Orbs = SiteOrbs(1,:) + Norb*(isitecheck-1)
+            elseif(abs(SiteOrbs(1,2)-SiteOrbs(1,1)).eq.Nsite)then
+               Orbs = SiteOrbs(1,:) + isitecheck-1
+            endif
+            !
+            write(*,"(A)")"     Checking site "//reg(SiteName(1))//"_"//str(isitecheck)
+            write(*,"(A,10I3)")"     Norb: "//str(Norb)//" Orbitals: ",Orbs
+            !
+            allocate(Ucheck(Nflavor,Nflavor));Ucheck=0d0
+            call AllocateBosonicField(Wloc,Norb,Nmats,Crystal%iq_gamma,Beta=Beta)
+            if(Ustart)then
+               call loc2imp(Wloc,Ulat,Orbs)
+            else
+               call loc2imp(Wloc,Wlat,Orbs)
+            endif
             call calc_QMCinteractions(Wloc,Ucheck)
             !
-            write(*,"(A)")"Checking site "//reg(SiteName(1))//"_"//str(isitecheck)
+            file = reg(ItFolder)//"Solver_"//reg(SiteName(isite))//"/Umat_"//str(isitecheck)//".DAT"
+            call dump_Matrix(Ucheck,reg(file))
+            !
             do ib1=1,Nflavor
                do ib2=1,Nflavor
                   if(abs(Ucheck(ib1,ib2)-Uinst(ib1,ib2)).gt.1e-6)then
-                     write(*,"(A,F,A,F)")"Warning: Element["//str(ib1)//"]["//str(ib2)//"] is different:",Ucheck(ib1,ib2)," instead of: ",Uinst(ib1,ib2)
+                     write(*,"(A,F,A,F)")"     Warning: Element["//str(ib1)//"]["//str(ib2)//"] is different:",Ucheck(ib1,ib2)," instead of: ",Uinst(ib1,ib2)
                   endif
                enddo
             enddo
             !
             deallocate(Orbs,Ucheck)
+            call DeallocateBosonicField(Wloc)
             !
          enddo
-         call DeallocateBosonicField(Wloc)
          !
       endif
       !
-      deallocate(Uinst,Kfunct)
-      call DeallocateBosonicField(curlyU)
+      deallocate(Uinst)
+      if(Ustart)call DeallocateBosonicField(Ulat)
       !
    end subroutine calc_Interaction
 
@@ -1428,7 +1445,7 @@ contains
 
       !
       !
-      write(*,"(A)") "---- collect_QMC_results"
+      write(*,"(A)") new_line("A")//new_line("A")//"---- collect_QMC_results"
       !
       !
       !
@@ -1500,14 +1517,14 @@ contains
          Orbs = SiteOrbs(isite,1:Norb)
          !
          !Read the impurity Green's function
-         allocate(tauF(NtauF));tauF = linspace(0d0,Beta,NtauF)
-         allocate(Gitau(Norb,NtauF,Nspin));Gitau=czero
+         allocate(tauF(NtauFimp));tauF = linspace(0d0,Beta,NtauFimp)
+         allocate(Gitau(Norb,NtauFimp,Nspin));Gitau=czero
          allocate(ReadLine(Nspin*Norb))
          file = reg(PrevItFolder)//"Solver_"//reg(SiteName(isite))//"/resultsQMC/Gimp_t.DAT"
          call inquireFile(reg(file),filexists,verb=verbose)
          unit = free_unit()
          open(unit,file=reg(file),form="formatted",status="old",position="rewind",action="read")
-         do itau=1,NtauF
+         do itau=1,NtauFimp
             ReadLine=0d0
             read(unit,*) taup,ReadLine
             if(abs(taup-tauF(itau)).gt.eps) stop "Impurity fermionic tau mesh does not coincide."
@@ -1853,15 +1870,15 @@ contains
             allocate(wmats(Nmats));wmats=BosonicFreqMesh(Beta,Nmats)
             !
             !Read the impurity N(tau)N(0)
-            allocate(tauB(NtauB));tauB=0d0
-            tauB = linspace(0d0,Beta,NtauB)
-            allocate(nnt(Nflavor,Nflavor,NtauB));nnt=0d0
+            allocate(tauB(NtauBimp));tauB=0d0
+            tauB = linspace(0d0,Beta,NtauBimp)
+            allocate(nnt(Nflavor,Nflavor,NtauBimp));nnt=0d0
             allocate(ReadLine(Nflavor*(Nflavor+1)/2))
             file = reg(PrevItFolder)//"Solver_"//reg(SiteName(isite))//"/resultsQMC/nn_t.DAT"
             call inquireFile(reg(file),filexists,verb=verbose)
             unit = free_unit()
             open(unit,file=reg(file),form="formatted",status="old",position="rewind",action="read")
-            do itau=1,NtauB
+            do itau=1,NtauBimp
                ReadLine=0d0
                read(unit,*) taup,ReadLine
                !if(abs(taup-tauB(itau)).gt.eps) stop "Impurity bosonic tau mesh does not coincide."
@@ -1879,7 +1896,7 @@ contains
             deallocate(ReadLine)
             !
             !Reshape N(tau)N(0)for easier handling
-            allocate(NNitau(Norb,Norb,Nspin,Nspin,NtauB));NNitau=czero
+            allocate(NNitau(Norb,Norb,Nspin,Nspin,NtauBimp));NNitau=czero
             do ib1=1,Nflavor
                do ib2=1,Nflavor
                   !
@@ -1896,7 +1913,7 @@ contains
             deallocate(nnt)
             !
             !Compute the spin susceptibility ChiM(tau) = Sum_ab <S(tau)S(0)>
-            allocate(ChiMitau(NtauB));ChiMitau=czero
+            allocate(ChiMitau(NtauBimp));ChiMitau=czero
             do ispin=1,Nspin
                do jspin=1,Nspin
                   do iorb=1,Norb
@@ -1920,7 +1937,7 @@ contains
             deallocate(ChiMitau,ChiMmats,wmats)
             !
             !Compute the charge susceptibility Sum_s1s2 <Na(tau)Nb(0)> - <Na><Nb> ! here I have to use the non-symmetrized Nqmc
-            call AllocateBosonicField(ChiCitau,Norb,NtauB,Crystal%iq_gamma,no_bare=.true.,Beta=Beta)
+            call AllocateBosonicField(ChiCitau,Norb,NtauBimp,Crystal%iq_gamma,no_bare=.true.,Beta=Beta)
             do iorb=1,Norb
                do jorb=1,Norb
                   !

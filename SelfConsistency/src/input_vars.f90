@@ -111,8 +111,8 @@ module input_vars
    !
    !Imaginary time and frequency meshes
    real(8),public                           :: Beta
-   integer,public                           :: NtauF
-   integer,public                           :: NtauB
+   integer,public                           :: NtauF,NtauFimp
+   integer,public                           :: NtauB,NtauBimp
    logical,public                           :: tau_uniform
    real(8),public                           :: wmatsMax
    integer,public                           :: Nmats
@@ -128,6 +128,7 @@ module input_vars
    logical,public                           :: UfullStructure
    logical,public                           :: Umodel
    logical,public                           :: Uspex
+   logical,public                           :: U_AC
    real(8),public                           :: Uthresh
    integer,public                           :: Nphonons
    real(8),public,allocatable               :: g_eph(:)
@@ -140,6 +141,7 @@ module input_vars
    !Double counting types, divergencies, scaling coefficients
    character(len=256),public                :: VH_type
    character(len=256),public                :: DC_type
+   logical,public                           :: Sigma_AC
    logical,public                           :: HandleGammaPoint
    real(8),public                           :: alphaPi
    real(8),public                           :: alphaSigma
@@ -227,7 +229,7 @@ contains
       !Site and Orbital space
       call add_separator()
       call append_to_input_list(Nspin,"NSPIN","Number of spins (fixed to 2).")
-      call parse_input_variable(Nsite,"NSITE",InputFile,default=1,comment="Number of impurities in the lattice.")
+      call parse_input_variable(Nsite,"NSITE",InputFile,default=1,comment="Number of inequivalent sites in the lattice.")
       call parse_input_variable(ExpandImpurity,"EXPAND",InputFile,default=.false.,comment="Flag to use a single impurity solution for all the sites of the lattice. Only indexes for site 1 readed.")
       call parse_input_variable(RotateHloc,"ROTATE",InputFile,default=.false.,comment="Solve the impurity problem in the basis where H(R=0) is diagonal.")
       call parse_input_variable(AFMselfcons,"AFM",InputFile,default=.false.,comment="Flag to use  the AFM self-consistency by flipping the spin. Requires input with doubled unit cell.")
@@ -281,17 +283,20 @@ contains
       call parse_input_variable(wmatsMax,"MAX_WMATS",InputFile,default=100.d0,comment="Maximum value of the Matsubara frequency mesh.")
       Nmats = int(Beta*wmatsMax/(2d0*pi))
       call append_to_input_list(Nmats,"NMATS","Number of points on the imaginary frequency axis. User cannot set this as its computed from MAX_WMATS and BETA.")
-      call parse_input_variable(NtauF,"NTAU_F",InputFile,default=int(100+Nmats),comment="Number of points on the imaginary time axis for Fermionic quantities. Its gonna be made odd. Optimal if >~ NMATS.")
+      call parse_input_variable(NtauF,"NTAU_F_LAT",InputFile,default=int(100+Nmats),comment="Number of points on the imaginary time axis for Fermionic lattice fields. Its gonna be made odd.")
       if(mod(NtauF,2).eq.0)NtauF=NtauF+1
       if(mod(NtauF-1,4).ne.0)NtauF=NtauF+mod(NtauF-1,4)
-      call parse_input_variable(NtauB,"NTAU_B",InputFile,default=int(2d0*pi*Nmats),comment="Number of points on the imaginary time axis for Bosonic quantities. Its gonna be made odd. Optimal if >= to 2*PI*NMATS.")
-      if(mod(NtauB,2).eq.0)NtauB=NtauB+1
-      if(mod(NtauB-1,4).ne.0)NtauB=NtauB+mod(NtauB-1,4)
+      NtauB = NtauF
+      call append_to_input_list(NtauB,"NTAU_B_LAT","Number of points on the imaginary time axis for Bosonic lattice fields. User cannot set this as its equal to NTAU_F.")
+      call parse_input_variable(NtauFimp,"NTAU_F_IMP",InputFile,default=int(2d0*pi*Nmats),comment="Number of points on the imaginary time axis for Fermionic impurity fields. Its gonna be made odd.")
+      if(mod(NtauFimp,2).eq.0)NtauFimp=NtauFimp+1
+      call parse_input_variable(NtauBimp,"NTAU_B_IMP",InputFile,default=int(2d0*pi*Nmats),comment="Number of points on the imaginary time axis for Bosonic impurity fields. Its gonna be made odd.")
+      if(mod(NtauBimp,2).eq.0)NtauBimp=NtauBimp+1
       call parse_input_variable(tau_uniform,"TAU_UNIF",InputFile,default=.false.,comment="Flag to use a non-tau_uniform mesh on the imaginary time axis.")
       call parse_input_variable(Nreal,"NREAL",InputFile,default=2000,comment="Number of points on the real frequency axis.")
       call parse_input_variable(wrealMax,"MAX_WREAL",InputFile,default=10.d0,comment="Maximum absolute value of the real frequency mesh.")
       call parse_input_variable(eta,"ETA",InputFile,default=0.04d0,comment="Real frequency broadening.")
-      call parse_input_variable(PadeWlimit,"WPADE",InputFile,default=10,comment="Number of Matsubara frequencies used in pade' analytic continuation.")
+      call parse_input_variable(PadeWlimit,"WPADE",InputFile,default=10,comment="Number of Matsubara frequencies used in pade' analytic continuation. If its =0 Pade will not be performed.")
       !
       !Density lookup
       call add_separator()
@@ -308,6 +313,7 @@ contains
       call parse_input_variable(UfullStructure,"U_FULL",InputFile,default=.true.,comment="Flag to check for inverted Re/Im parity in SPEX Ucrpa.")
       call parse_input_variable(Umodel,"U_MODEL",InputFile,default=.false.,comment="Flag to build the screening from user chosen phononic modes.")
       call parse_input_variable(Uspex,"U_SPEX",InputFile,default=.true.,comment="Flag to read SPEX Ucrpa.")
+      call parse_input_variable(U_AC,"U_AC",InputFile,default=.false.,comment="Flag to force the analytic continuation on the SPEX interaction.")
       call parse_input_variable(Uthresh,"U_THRES",InputFile,default=0.001d0,comment="Lowest magnitude considered in SPEX Ucrpa bare interaction.")
       call parse_input_variable(Kdiag,"K_DIAG",InputFile,default=.false.,comment="Flag to use only one J-independent screening function.")
       if(Umodel.and.Uspex) stop "Make up your mind, U_MODEL or U_SPEX ?"
@@ -328,6 +334,7 @@ contains
       call add_separator()
       call parse_input_variable(VH_type,"VH_TYPE",InputFile,default="Ustatic",comment="Hartree term mismatch between GoWo and scGW. Available: Ubare, Ustatic, Ubare_SPEX, Ustatic_SPEX.")
       call parse_input_variable(DC_type,"DC_TYPE",InputFile,default="GlocWloc",comment="Local GW self-energy which is replaced by DMFT self-energy. Avalibale: GlocWloc, Sloc.")
+      call parse_input_variable(Sigma_AC,"SIGMA_AC",InputFile,default=.false.,comment="Flag to force the analytic continuation on the G0W0 self-energy.")
       call parse_input_variable(HandleGammaPoint,"SMEAR_GAMMA",InputFile,default=.true.,comment="Remove the interaction divergence at the Gamma point.")
       call parse_input_variable(alphaPi,"ALPHA_PI",InputFile,default=1d0,comment="Fraction of the EDMFT polarization substituted within the lattice one.")
       call parse_input_variable(alphaSigma,"ALPHA_SIGMA",InputFile,default=1d0,comment="Fraction of the EDMFT self-energy substituted within the lattice one.")
@@ -353,6 +360,9 @@ contains
       !
       !Variables related to the impurity solver
       call add_separator()
+      Solver%Nimp = Nsite
+      if(ExpandImpurity) Solver%Nimp = 1
+      call append_to_input_list(Solver%Nimp,"NIMP","Number of impurities solved. User cannot set this as its deduced from NSITE and EXPAND.")
       Solver%TargetDensity = look4dens%TargetDensity
       if(ExpandImpurity)Solver%TargetDensity = look4dens%TargetDensity/Nsite
       call append_to_input_list(Solver%TargetDensity,"N_READ_IMP","Target density in the impurity list. User cannot set this as its the same of N_READ_LAT if EXPAND=F otherwise its N_READ_LAT/NSITE.")
