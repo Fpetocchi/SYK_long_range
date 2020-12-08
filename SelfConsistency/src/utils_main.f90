@@ -96,7 +96,8 @@ contains
       !
       implicit none
       integer,intent(in),optional           :: Iteration
-      character(len=80)                     :: line
+      integer,parameter                     :: bannerLen=100
+      character(len=bannerLen)              :: line
       character(:),allocatable              :: header
       integer                               :: i,Lsx,Ldx,Lcalc
       !
@@ -104,8 +105,8 @@ contains
          !
          header="<"
          Lcalc=len(" Iteration #: "//str(Iteration,3)//" ")
-         Lsx=int((78-Lcalc)/2)-1
-         Ldx=78-Lcalc-Lsx
+         Lsx=int(((bannerLen-2)-Lcalc)/2)-1
+         Ldx=(bannerLen-2)-Lcalc-Lsx
          do i=1,Lsx
             header = header//"="
          enddo
@@ -120,14 +121,14 @@ contains
          !
          header="*"
          line="*"
-         do i=1,79
+         do i=1,(bannerLen-1)
             line = trim(line)//"*"
          enddo
          !
          Lcalc=len("Calculation type: "//trim(CalculationType))
          !
-         Lsx=int((78-Lcalc)/2)-1
-         Ldx=78-Lcalc-Lsx
+         Lsx=int(((bannerLen-2)-Lcalc)/2)-1
+         Ldx=(bannerLen-2)-Lcalc-Lsx
          !
          do i=1,Lsx
             header = header//" "
@@ -363,13 +364,26 @@ contains
             !
       end select
       !
+      !
       !Store the local Hamiltonian
       call dump_Matrix(Lttc%Hloc,reg(pathINPUT)//"Hloc.DAT")
+      !
+      !
+      !print some info
+      write(*,"(A)") new_line("A")//new_line("A")//"---- site and orbital structure"
+      write(*,"(A,1I3)") "     Number of inequivalent sites: ",Nsite
+      write(*,"(A,1I3)") "     Number of solved impurities : ",Solver%Nimp
+      do isite=1,Nsite
+         write(*,"(2(A,I3),A,10I3)")"     site: ",isite,", orbital space: ",SiteNorb(isite),", orbital indexes: ",SiteOrbs(isite,1:SiteNorb(isite))
+      enddo
+      !
       !
       !Store the local rotation of each site
       if(RotateHloc)then
          !
-         if(ExpandImpurity)then !Only one set of orbital provided - all matrices with same dimension
+         write(*,"(A)") new_line("A")//new_line("A")//"---- Rotations"
+         !
+         if(ExpandImpurity)then !Only one set of orbital provided - all matrices with same "Norb" dimension
             !
             allocate(HlocEig(SiteNorb(1),Nsite));HlocEig=0d0
             allocate(HlocSite(SiteNorb(1),SiteNorb(1),Nsite));HlocSite=czero
@@ -379,18 +393,14 @@ contains
             do isite=1,Nsite
                !
                Norb = SiteNorb(1)
+               if(Norb.ne.SiteNorb(isite)) stop "The orbital space is not the same among the different impurities."
                !
                allocate(Eig(Norb));Eig=0d0
                allocate(Hloc(Norb,Norb));Hloc=czero
                allocate(Rot(Norb,Norb));Rot=czero
                allocate(Orbs(Norb));Orbs=0
                !
-               ! only two possible arrangements
-               if(abs(SiteOrbs(1,2)-SiteOrbs(1,1)).eq.1)then
-                  Orbs = SiteOrbs(1,:) + Norb*(isite-1)
-               elseif(abs(SiteOrbs(1,2)-SiteOrbs(1,1)).eq.Nsite)then
-                  Orbs = SiteOrbs(1,:) + isite-1
-               endif
+               Orbs=SiteOrbs(isite,:)
                !
                !Extract then local Hamiltonian for each site
                call loc2imp(Hloc,Lttc%Hloc,Orbs)
@@ -463,8 +473,10 @@ contains
          !
       endif
       !
+      !
       !Dump some LDA results
       if(ItStart.eq.0)call calc_Glda(0d0,Beta,Lttc)
+      !
       !
       !Symmetrization list:
       !if(EqvGWndx%Nset.eq.0) --> Nothing to symmetrize
@@ -550,11 +562,10 @@ contains
       endif
       !
       write(*,"(A)") new_line("A")//new_line("A")//"---- symmetrized orbital sets"
-      write(*,"(A,1I3)") "     EqvGWndx%Nset",EqvGWndx%Nset
-      write(*,"(A,1I3)") "     EqvGWndx%Ntotset",EqvGWndx%Ntotset
-      write(*,"(A,10I3)")"     EqvGWndx%SetNorb",EqvGWndx%SetNorb
+      write(*,"(A,1I3)") "     Provided sets: ",EqvGWndx%Nset
+      write(*,"(A,1I3)") "     Expanded sets: ",EqvGWndx%Ntotset
       do iset=1,size(EqvGWndx%SetOrbs,dim=1)
-         write(*,"(A,I3,A,10I3)")"     iset: ",iset," EqvGWndx%SetOrbs: ",EqvGWndx%SetOrbs(iset,:)
+         write(*,"(2(A,I3),A,10I3)")"     set: ",iset,", number of orbitals: ",EqvGWndx%SetNorb(iset),", indexes: ",EqvGWndx%SetOrbs(iset,:)
       enddo
       !
    end subroutine initialize_Lattice
@@ -569,7 +580,8 @@ contains
       implicit none
       integer,intent(in)                    :: ItStart
       logical                               :: filexists
-      integer                               :: unit,isite,iorb
+      integer                               :: unit,idum,ib1
+      integer                               :: isite,iorb,ispin
       character(len=255)                    :: file
       real(8)                               :: muQMC
       !
@@ -772,12 +784,15 @@ contains
       allocate(densityQMC(maxval(SiteNorb),maxval(SiteNorb),Nspin,Nsite));densityQMC=0d0
       !
       if(ItStart.eq.0)then
+         !
          densityLDA = Glat%N_s(:,:,1) + Glat%N_s(:,:,2)
          call dump_Matrix(densityLDA,reg(pathINPUT)//"Nlda.DAT")
          densityGW=czero
          densityDMFT=czero
          densityQMC=0d0
+         !
       else
+         !
          call read_Matrix(densityLDA,reg(pathINPUT)//"Nlda.DAT")
          densityGW=Glat%N_s
          call read_Matrix(densityDMFT(:,:,1),reg(PrevItFolder)//"Nimp_s1.DAT")
@@ -789,8 +804,10 @@ contains
             unit = free_unit()
             open(unit,file=reg(file),form="formatted",status="old",position="rewind",action="read")
             read(unit,*) muQMC
-            do iorb=1,SiteNorb(isite)
-               read(unit,*) densityQMC(iorb,iorb,1,isite),densityQMC(iorb,iorb,2,isite)
+            do ib1=1,Nspin*SiteNorb(isite)
+               iorb = (ib1+mod(ib1,2))/2
+               ispin = abs(mod(ib1,2)-2)
+               read(unit,*) idum,densityQMC(iorb,iorb,ispin,isite)
             enddo
             close(unit)
             if(ExpandImpurity.or.AFMselfcons)exit
@@ -971,7 +988,7 @@ contains
       call AllocateFermionicField(Gloc,Norb,Nmats,Beta=Beta)
       allocate(invCurlyG(Norb,Nmats,Nspin));invCurlyG=czero
       allocate(Dmats(Norb,Nmats,Nspin));Dmats=czero
-      allocate(Ditau(Norb,NtauFimp,Nspin));Ditau=0d0
+      allocate(Ditau(Norb,Solver%NtauF,Nspin));Ditau=0d0
       !
       allocate(wmats(Nmats));wmats=0d0
       wmats = FermionicFreqMesh(Beta,Nmats)
@@ -1123,13 +1140,13 @@ contains
       close(unit)
       !
       !Delta(tau)
-      allocate(tau(NtauFimp));tau=0d0
-      tau = linspace(0d0,Beta,NtauFimp)
+      allocate(tau(Solver%NtauF));tau=0d0
+      tau = linspace(0d0,Beta,Solver%NtauF)
       allocate(PrintLine(Nflavor))
       file = reg(ItFolder)//"Solver_"//reg(SiteName(isite))//"/Delta_t.DAT"
       unit = free_unit()
       open(unit,file=reg(file),form="formatted",status="unknown",position="rewind",action="write")
-      do itau=1,NtauFimp
+      do itau=1,Solver%NtauF
          ndx=1
          PrintLine=0d0
          do iwan=1,Norb
@@ -1237,8 +1254,8 @@ contains
       Nbp = Norb**2
       Nflavor = Norb*Nspin
       !
-      allocate(tau(NtauBimp));tau=0d0
-      tau = linspace(0d0,Beta,NtauBimp)
+      allocate(tau(Solver%NtauB));tau=0d0
+      tau = linspace(0d0,Beta,Solver%NtauB)
       !
       allocate(Uinst(Nflavor,Nflavor));Uinst=0d0
       call AllocateBosonicField(curlyU,Norb,Nmats,Crystal%iq_gamma,Beta=Beta)
@@ -1258,7 +1275,7 @@ contains
             !
             call loc2imp(curlyU,Ulat,Orbs)
             call isReal(curlyU)
-            allocate(Kfunct(Nflavor,Nflavor,NtauBimp));Kfunct=0d0
+            allocate(Kfunct(Nflavor,Nflavor,Solver%NtauB));Kfunct=0d0
             call calc_QMCinteractions(curlyU,Uinst,Kfunct)
             !
          case("EDMFT","GW+EDMFT")
@@ -1296,7 +1313,7 @@ contains
                call DeallocateBosonicField(curlyUold)
             endif
             !
-            allocate(Kfunct(Nflavor,Nflavor,NtauBimp));Kfunct=0d0
+            allocate(Kfunct(Nflavor,Nflavor,Solver%NtauB));Kfunct=0d0
             call calc_QMCinteractions(curlyU,Uinst,Kfunct)
             !
       end select
@@ -1317,7 +1334,7 @@ contains
          unit = free_unit()
          open(unit,file=reg(file),form="formatted",status="unknown",position="rewind",action="write")
          allocate(PrintLine(Nflavor*(Nflavor+1)/2));PrintLine=0d0
-         do itau=1,NtauBimp
+         do itau=1,Solver%NtauB
             ndx=1
             !print diagonal and LT
             do ib1=1,Nflavor
@@ -1350,16 +1367,10 @@ contains
          !
          do isitecheck=2,Nsite
             !
-            Norb = SiteNorb(1)
+            Norb = SiteNorb(isitecheck)
             Nflavor = Nspin*Norb
             allocate(Orbs(Norb))
-            !
-            ! only two possible arrangements
-            if(abs(SiteOrbs(1,2)-SiteOrbs(1,1)).eq.1)then
-               Orbs = SiteOrbs(1,:) + Norb*(isitecheck-1)
-            elseif(abs(SiteOrbs(1,2)-SiteOrbs(1,1)).eq.Nsite)then
-               Orbs = SiteOrbs(1,:) + isitecheck-1
-            endif
+            Orbs = SiteOrbs(isite,1:Norb)
             !
             write(*,"(A)")"     Checking site "//reg(SiteName(1))//"_"//str(isitecheck)
             write(*,"(A,10I3)")"     Norb: "//str(Norb)//" Orbitals: ",Orbs
@@ -1517,14 +1528,14 @@ contains
          Orbs = SiteOrbs(isite,1:Norb)
          !
          !Read the impurity Green's function
-         allocate(tauF(NtauFimp));tauF = linspace(0d0,Beta,NtauFimp)
-         allocate(Gitau(Norb,NtauFimp,Nspin));Gitau=czero
+         allocate(tauF(Solver%NtauF));tauF = linspace(0d0,Beta,Solver%NtauF)
+         allocate(Gitau(Norb,Solver%NtauF,Nspin));Gitau=czero
          allocate(ReadLine(Nspin*Norb))
          file = reg(PrevItFolder)//"Solver_"//reg(SiteName(isite))//"/resultsQMC/Gimp_t.DAT"
          call inquireFile(reg(file),filexists,verb=verbose)
          unit = free_unit()
          open(unit,file=reg(file),form="formatted",status="old",position="rewind",action="read")
-         do itau=1,NtauFimp
+         do itau=1,Solver%NtauF
             ReadLine=0d0
             read(unit,*) taup,ReadLine
             if(abs(taup-tauF(itau)).gt.eps) stop "Impurity fermionic tau mesh does not coincide."
@@ -1870,15 +1881,15 @@ contains
             allocate(wmats(Nmats));wmats=BosonicFreqMesh(Beta,Nmats)
             !
             !Read the impurity N(tau)N(0)
-            allocate(tauB(NtauBimp));tauB=0d0
-            tauB = linspace(0d0,Beta,NtauBimp)
-            allocate(nnt(Nflavor,Nflavor,NtauBimp));nnt=0d0
+            allocate(tauB(Solver%NtauB));tauB=0d0
+            tauB = linspace(0d0,Beta,Solver%NtauB)
+            allocate(nnt(Nflavor,Nflavor,Solver%NtauB));nnt=0d0
             allocate(ReadLine(Nflavor*(Nflavor+1)/2))
             file = reg(PrevItFolder)//"Solver_"//reg(SiteName(isite))//"/resultsQMC/nn_t.DAT"
             call inquireFile(reg(file),filexists,verb=verbose)
             unit = free_unit()
             open(unit,file=reg(file),form="formatted",status="old",position="rewind",action="read")
-            do itau=1,NtauBimp
+            do itau=1,Solver%NtauB
                ReadLine=0d0
                read(unit,*) taup,ReadLine
                !if(abs(taup-tauB(itau)).gt.eps) stop "Impurity bosonic tau mesh does not coincide."
@@ -1896,7 +1907,7 @@ contains
             deallocate(ReadLine)
             !
             !Reshape N(tau)N(0)for easier handling
-            allocate(NNitau(Norb,Norb,Nspin,Nspin,NtauBimp));NNitau=czero
+            allocate(NNitau(Norb,Norb,Nspin,Nspin,Solver%NtauB));NNitau=czero
             do ib1=1,Nflavor
                do ib2=1,Nflavor
                   !
@@ -1913,7 +1924,7 @@ contains
             deallocate(nnt)
             !
             !Compute the spin susceptibility ChiM(tau) = Sum_ab <S(tau)S(0)>
-            allocate(ChiMitau(NtauBimp));ChiMitau=czero
+            allocate(ChiMitau(Solver%NtauB));ChiMitau=czero
             do ispin=1,Nspin
                do jspin=1,Nspin
                   do iorb=1,Norb
@@ -1937,7 +1948,7 @@ contains
             deallocate(ChiMitau,ChiMmats,wmats)
             !
             !Compute the charge susceptibility Sum_s1s2 <Na(tau)Nb(0)> - <Na><Nb> ! here I have to use the non-symmetrized Nqmc
-            call AllocateBosonicField(ChiCitau,Norb,NtauBimp,Crystal%iq_gamma,no_bare=.true.,Beta=Beta)
+            call AllocateBosonicField(ChiCitau,Norb,Solver%NtauB,Crystal%iq_gamma,no_bare=.true.,Beta=Beta)
             do iorb=1,Norb
                do jorb=1,Norb
                   !
@@ -2068,15 +2079,16 @@ contains
       character(len=255)                    :: header2="Impurity density"
       character(len=255)                    :: header3="Solver density"
       !
+      Norb = Crystal%Norb
+      !
       l1=len(trim(header1)//" up")
       l2=len(trim(header2)//" up")
       l3=len(trim(header3)//" up")
-      wnmin=maxval([l1,l2,l3])
+      !
+      wnmin=max(maxval([l1,l2,l3]),Norb*6) !6 because I have 4 precision
       enlrg_=3
       if(present(enlrg))enlrg_=enlrg
       !
-      !
-      Norb = Crystal%Norb
       wn=int(wnmin/Norb)+enlrg_
       ws=2
       !
@@ -2136,7 +2148,8 @@ contains
                   write(*,*)
                   write(*,"(2(A"//str(wn*Norb)//","//str(ws)//"X))")banner(trim(header3)//" up",wn*Norb),banner(trim(header3)//" dw",wn*Norb)
                   do iorb=1,Norb_imp
-                     write(*,"(2("//str(wsi)//"X,"//str(wn*Norb_imp)//"F"//str(wn)//".4,"//str(ws)//"X))") (real(densityQMC(iorb,jorb,1,isite)),jorb=1,Norb_imp),(real(densityQMC(iorb,jorb,2,isite)),jorb=1,Norb_imp)
+                     write(*,"(2("//str(wsi)//"X,"//str(Norb_imp)//"F"//str(wn)//".4,"//str(ws)//"X))") &
+                                       (real(densityQMC(iorb,jorb,1,isite)),jorb=1,Norb_imp),(real(densityQMC(iorb,jorb,2,isite)),jorb=1,Norb_imp)
                   enddo
                   !
                   if(ExpandImpurity.or.AFMselfcons)exit

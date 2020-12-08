@@ -12,8 +12,8 @@
  EXPAND=T                                      !Flag to use a single impurity solution for all the sites of the lattice. Only indexes for site 1 readed.
  ROTATE=T                                      !Solve the impurity problem in the basis where H(R=0) is diagonal.
  AFM=F                                         !Flag to use  the AFM self-consistency by flipping the spin. Requires input with doubled unit cell.
- NORB_1=3                                      !Number of orbitals in site number 1
  NAME_1=Ti                                     !Chemical species of the site number 1
+ NORB_1=3                                      !Number of orbitals in site number 1
  ORBS_1=1,2,3                                  !Lattice orbital indexes of site number 1
 
  #---------------------------------------------#
@@ -31,8 +31,6 @@
  NMATS=238                                     !Number of points on the imaginary frequency axis. User cannot set this as its computed from MAX_WMATS and BETA.
  NTAU_F_LAT=237                                !Number of points on the imaginary time axis for Fermionic lattice fields. Its gonna be made odd.
  NTAU_B_LAT=237                                !Number of points on the imaginary time axis for Bosonic lattice fields. User cannot set this as its equal to NTAU_F.
- NTAU_F_IMP=1001                               !Number of points on the imaginary time axis for Fermionic impurity fields. Its gonna be made odd.
- NTAU_B_IMP=2001                               !Number of points on the imaginary time axis for Bosonic impurity fields. Its gonna be made odd.
  TAU_UNIF=F                                    !Flag to use a non-tau_uniform mesh on the imaginary time axis.
  NREAL=2000                                    !Number of points on the real frequency axis.
  MAX_WREAL=10.000000                           !Maximum absolute value of the real frequency mesh.
@@ -87,6 +85,8 @@
  #---------------------------------------------#
 
  NIMP=1                                        !Number of impurities solved. User cannot set this as its deduced from NSITE and EXPAND.
+ NTAU_F_IMP=1101                               !Number of points on the imaginary time axis for Fermionic impurity fields. Its gonna be made odd.
+ NTAU_B_IMP=2001                               !Number of points on the imaginary time axis for Bosonic impurity fields. Its gonna be made odd.
  N_READ_IMP=0.500000                           !Target density in the impurity list. User cannot set this as its the same of N_READ_LAT if EXPAND=F otherwise its N_READ_LAT/NSITE.
  NORDER=10                                     !Maximum perturbation order measured. Not used yet.
  NMEAS=1000                                    !Sweeps where expensive measurments are not performed.

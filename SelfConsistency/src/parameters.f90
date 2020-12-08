@@ -154,6 +154,8 @@ module parameters
       integer,allocatable                   :: Time(:)
       real(8)                               :: TargetDensity=0d0
       integer                               :: Nimp
+      integer                               :: NtauF
+      integer                               :: NtauB
       integer                               :: Norder=0
       integer                               :: Nmeas=1000
       integer                               :: Ntherm=1000

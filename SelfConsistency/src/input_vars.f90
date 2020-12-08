@@ -111,8 +111,8 @@ module input_vars
    !
    !Imaginary time and frequency meshes
    real(8),public                           :: Beta
-   integer,public                           :: NtauF,NtauFimp
-   integer,public                           :: NtauB,NtauBimp
+   integer,public                           :: NtauF
+   integer,public                           :: NtauB
    logical,public                           :: tau_uniform
    real(8),public                           :: wmatsMax
    integer,public                           :: Nmats
@@ -233,29 +233,40 @@ contains
       call parse_input_variable(ExpandImpurity,"EXPAND",InputFile,default=.false.,comment="Flag to use a single impurity solution for all the sites of the lattice. Only indexes for site 1 readed.")
       call parse_input_variable(RotateHloc,"ROTATE",InputFile,default=.false.,comment="Solve the impurity problem in the basis where H(R=0) is diagonal.")
       call parse_input_variable(AFMselfcons,"AFM",InputFile,default=.false.,comment="Flag to use  the AFM self-consistency by flipping the spin. Requires input with doubled unit cell.")
-      if(ExpandImpurity)then
-         allocate(SiteNorb(1));SiteNorb=0
-         allocate(SiteName(1))
-         call parse_input_variable(SiteNorb(1),"NORB_1",InputFile,default=1,comment="Number of orbitals in site number 1")
-         call parse_input_variable(SiteName(1),"NAME_1",InputFile,default="El",comment="Chemical species of the site number 1")
-         allocate(SiteOrbs(1,SiteNorb(1)));SiteOrbs=0
-         allocate(tmpOrbs(1:SiteNorb(1)));tmpOrbs=0
-         call parse_input_variable(SiteOrbs(1,1:SiteNorb(1)),"ORBS_1",InputFile,default=tmpOrbs,comment="Lattice orbital indexes of site number 1")
-         deallocate(tmpOrbs)
-      else
-         allocate(SiteNorb(Nsite));SiteNorb=0
-         allocate(SiteName(Nsite))
-         do isite=1,Nsite
-            call parse_input_variable(SiteNorb(isite),"NORB_"//str(isite),InputFile,default=1,comment="Number of orbitals in site number "//str(isite))
+      allocate(SiteNorb(Nsite));SiteNorb=0
+      allocate(SiteName(Nsite))
+      do isite=1,Nsite
+         if(ExpandImpurity)then
+            if(isite.eq.1)then
+               call parse_input_variable(SiteName(isite),"NAME_1",InputFile,default="El",comment="Chemical species of the site number 1")
+               call parse_input_variable(SiteNorb(isite),"NORB_1",InputFile,default=1,comment="Number of orbitals in site number 1")
+            else
+               SiteNorb(isite) = SiteNorb(1)
+               SiteName(isite) = SiteName(1)
+            endif
+         else
             call parse_input_variable(SiteName(isite),"NAME_"//str(isite),InputFile,default="El",comment="Chemical species of the site number "//str(isite))
-         enddo
-         allocate(SiteOrbs(Nsite,maxval(SiteNorb)));SiteOrbs=0
-         do isite=1,Nsite
-            allocate(tmpOrbs(1:SiteNorb(isite)));tmpOrbs=0
+            call parse_input_variable(SiteNorb(isite),"NORB_"//str(isite),InputFile,default=1,comment="Number of orbitals in site number "//str(isite))
+         endif
+      enddo
+      allocate(SiteOrbs(Nsite,maxval(SiteNorb)));SiteOrbs=0
+      do isite=1,Nsite
+         allocate(tmpOrbs(1:SiteNorb(isite)));tmpOrbs=0
+         if(ExpandImpurity)then
+            if(isite.eq.1)then
+               call parse_input_variable(SiteOrbs(1,1:SiteNorb(1)),"ORBS_1",InputFile,default=tmpOrbs,comment="Lattice orbital indexes of site number 1")
+            else
+               if(abs(SiteOrbs(1,2)-SiteOrbs(1,1)).eq.1)then
+                  SiteOrbs(isite,:) = SiteOrbs(1,:) + SiteNorb(1)*(isite-1)
+               elseif(abs(SiteOrbs(1,2)-SiteOrbs(1,1)).eq.Nsite)then
+                  SiteOrbs(isite,:) = SiteOrbs(1,:) + isite-1
+               endif
+            endif
+         else
             call parse_input_variable(SiteOrbs(isite,1:SiteNorb(isite)),"ORBS_"//str(isite),InputFile,default=tmpOrbs,comment="Lattice orbital indexes of site number "//str(isite))
-            deallocate(tmpOrbs)
-         enddo
-      endif
+         endif
+         deallocate(tmpOrbs)
+      enddo
       !
       !Equivalent lattice indexes
       call add_separator()
@@ -288,10 +299,6 @@ contains
       if(mod(NtauF-1,4).ne.0)NtauF=NtauF+mod(NtauF-1,4)
       NtauB = NtauF
       call append_to_input_list(NtauB,"NTAU_B_LAT","Number of points on the imaginary time axis for Bosonic lattice fields. User cannot set this as its equal to NTAU_F.")
-      call parse_input_variable(NtauFimp,"NTAU_F_IMP",InputFile,default=int(2d0*pi*Nmats),comment="Number of points on the imaginary time axis for Fermionic impurity fields. Its gonna be made odd.")
-      if(mod(NtauFimp,2).eq.0)NtauFimp=NtauFimp+1
-      call parse_input_variable(NtauBimp,"NTAU_B_IMP",InputFile,default=int(2d0*pi*Nmats),comment="Number of points on the imaginary time axis for Bosonic impurity fields. Its gonna be made odd.")
-      if(mod(NtauBimp,2).eq.0)NtauBimp=NtauBimp+1
       call parse_input_variable(tau_uniform,"TAU_UNIF",InputFile,default=.false.,comment="Flag to use a non-tau_uniform mesh on the imaginary time axis.")
       call parse_input_variable(Nreal,"NREAL",InputFile,default=2000,comment="Number of points on the real frequency axis.")
       call parse_input_variable(wrealMax,"MAX_WREAL",InputFile,default=10.d0,comment="Maximum absolute value of the real frequency mesh.")
@@ -363,6 +370,10 @@ contains
       Solver%Nimp = Nsite
       if(ExpandImpurity) Solver%Nimp = 1
       call append_to_input_list(Solver%Nimp,"NIMP","Number of impurities solved. User cannot set this as its deduced from NSITE and EXPAND.")
+      call parse_input_variable(Solver%NtauF,"NTAU_F_IMP",InputFile,default=int(2d0*pi*Nmats),comment="Number of points on the imaginary time axis for Fermionic impurity fields. Its gonna be made odd.")
+      if(mod(Solver%NtauF,2).eq.0)Solver%NtauF=Solver%NtauF+1
+      call parse_input_variable(Solver%NtauB,"NTAU_B_IMP",InputFile,default=int(2d0*pi*Nmats),comment="Number of points on the imaginary time axis for Bosonic impurity fields. Its gonna be made odd.")
+      if(mod(Solver%NtauB,2).eq.0)Solver%NtauB=Solver%NtauB+1
       Solver%TargetDensity = look4dens%TargetDensity
       if(ExpandImpurity)Solver%TargetDensity = look4dens%TargetDensity/Nsite
       call append_to_input_list(Solver%TargetDensity,"N_READ_IMP","Target density in the impurity list. User cannot set this as its the same of N_READ_LAT if EXPAND=F otherwise its N_READ_LAT/NSITE.")
