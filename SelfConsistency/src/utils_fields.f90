@@ -889,7 +889,6 @@ contains
       if(verbose)write(*,"(A)") "---- imp2loc(B)"
       !
       !
-      write(*,"(A,10I3)") "     Expanding orbital indexes: ",orbs
       if(.not.Wloc%status) stop "imp2loc(B): Wloc not properly initialized."
       if(.not.Wimp%status) stop "imp2loc(B): Wimp not properly initialized."
       if(Wloc%Nbp.eq.0) stop "imp2loc(B): Norb of Wloc not defined."
@@ -1730,6 +1729,9 @@ contains
             localDC = .false.
       end select
       !
+      !Fill the local attributes so as to fully replace the local GW contibution
+      call FermionicKsum(SigmaGW)
+      !
       !all sites if(expand.or.AFM) otherwise only one site and the orbitals within orbs
       !$OMP PARALLEL DEFAULT(NONE),&
       !$OMP SHARED(Nsite,Nmats,Nkpt,orbs,coeff,SigmaGW,SigmaGW_DC,SigmaImp,localDC,Rot),&
@@ -1768,8 +1770,6 @@ contains
       enddo
       !$OMP END DO
       !$OMP END PARALLEL
-      !
-      call FermionicKsum(SigmaGW)
       !
    end subroutine MergeSelfEnergy
 
@@ -1824,6 +1824,9 @@ contains
       enddo
       if(Norb_imp.gt.Norb) stop "Number of orbital to be inserted is bigger than the total lattice orbital space."
       !
+      !Fill the local attributes so as to fully replace the local GW contibution
+      call BosonicKsum(PiGW)
+      !
       !all sites if(expand) otherwise only one site and the orbitals within orbs
       !$OMP PARALLEL DEFAULT(NONE),&
       !$OMP SHARED(Nsite,Nmats,Nkpt,Norb,orbs,coeff,PiGW,PiImp),&
@@ -1868,8 +1871,6 @@ contains
       enddo !isite
       !$OMP END DO
       !$OMP END PARALLEL
-      !
-      call BosonicKsum(PiGW)
       !
    end subroutine MergePolarization
 

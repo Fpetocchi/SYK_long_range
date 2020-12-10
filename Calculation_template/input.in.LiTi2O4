@@ -68,7 +68,7 @@
  DELTA_FIT=Analytic                            !Fit to extract the local energy in GW+EDMFT calculations. Available: Inf, Analytic, Moments.
  NFIT=16                                       !Number of bath levels (Analytic) or coefficient (Moments-automatic limit to NFIT=8).
  WTAIL_GIMP=0.000000                           !Frequency value above which the tail of Gimp is replaced. If =0d0 the tail is not replaced. Only via moments (automatic limit to NFIT=8).
- WTAIL_SIMP=0.000000                           !Frequency value above which the tail of Simp is replaced. If =0d0 the tail is not replaced. Only via moments (automatic limit to NFIT=8).
+ WTAIL_SIMP=30.00000                           !Frequency value above which the tail of Simp is replaced. If =0d0 the tail is not replaced. Only via moments (automatic limit to NFIT=8).
 
  #---------------------------------------------#
 
@@ -78,14 +78,14 @@
  LAST_IT=                                      !Last iteration.
  LOGFILE=6                                     !Standard output redirection unit. Use 6 to print to terminal. Not used yet.
  MIX_D=0.800000                                !Fraction of the old iteration Delta.
- MIX_U=0.950000                                !Fraction of the old iteration curlyU.
+ MIX_U=0.800000                                !Fraction of the old iteration curlyU.
  SKIP_LATT=F                                   !Skip the lattice summation and assuming good the existing Gloc and Wloc. Not used yet.
  PRINT_SFULL=F                                 !Print the full k-dependent self-energy (binfmt) at each iteration.
 
  #---------------------------------------------#
 
  NIMP=1                                        !Number of impurities solved. User cannot set this as its deduced from NSITE and EXPAND.
- NTAU_F_IMP=1101                               !Number of points on the imaginary time axis for Fermionic impurity fields. Its gonna be made odd.
+ NTAU_F_IMP=1001                               !Number of points on the imaginary time axis for Fermionic impurity fields. Its gonna be made odd.
  NTAU_B_IMP=2001                               !Number of points on the imaginary time axis for Bosonic impurity fields. Its gonna be made odd.
  N_READ_IMP=0.500000                           !Target density in the impurity list. User cannot set this as its the same of N_READ_LAT if EXPAND=F otherwise its N_READ_LAT/NSITE.
  NORDER=10                                     !Maximum perturbation order measured. Not used yet.
@@ -97,4 +97,4 @@
  BINSTART=50                                   !Tau points skipped at the beginning and end of the Green's function average.
  RETARDED=1                                    !Integer flag to include the frequency dependent part of the interaction. User cannot set this as its deduced from CALC_TYPE.
  NNT_MEAS=1                                    !Integer flag to switch on the measurement of the susceptibility. User cannot set this as its deduced from CALC_TYPE.
- TIME_1=30                                     !Minutes of solver runtime for site number 1
+ TIME_1=60                                     !Minutes of solver runtime for site number 1

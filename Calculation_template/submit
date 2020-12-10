@@ -2,8 +2,10 @@
 #$ -S /bin/bash
 #$ -N Ti_10                     # job name
 #$ -cwd                         # run script in current directory
-#$ -pe orte2 112                # MPI cores
+#$ -pe orte2 56                 # MPI cores
 #$ -q new.q                     # queue
+#$ -l h=!node67
+
 
 export OMP_NUM_THREADS=1
 ulimit -c 0
@@ -18,7 +20,7 @@ GENMAT=/home/petocchif/1_GW_EDMFT/nobackup/1_LiTi2O4
 PATH_INPUT=GWinput_LiTi2O4
 PATH_DATA=Results_LiTi2O4
 
-START_IT=0
+START_IT=3
 END_IT=10
 
 

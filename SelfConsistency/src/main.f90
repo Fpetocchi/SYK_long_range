@@ -59,7 +59,7 @@ program SelfConsistency
          !
          if(merge_Pi.and.solve_DMFT) then !a bit redundant since there is no merge wihtout DMFT
             call MergeFields(Plat,P_EDMFT,alphaPi,SiteOrbs)
-            call DeallocateBosonicField(P_EDMFT)
+            !call DeallocateBosonicField(P_EDMFT)
             call dump_BosonicField(Plat,reg(ItFolder),"Plat_merged_w.DAT")
          endif
          !

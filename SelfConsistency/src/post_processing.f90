@@ -49,7 +49,7 @@ contains
       !
       use parameters
       use utils_misc
-      use input_vars, only: Nmats, NtauF, Beta, Nreal, wrealMax
+      use input_vars, only: Nmats, Solver, Beta, Nreal, wrealMax
       use fourier_transforms
       use file_io
       implicit none
@@ -82,7 +82,7 @@ contains
             !
          case("itau")
             !
-            if(Npoints.ne.NtauF) write(*,"(A)")"     Warning: dump_MaxEnt_Gfunct number fo imaginary time points differ from input."
+            if(Npoints.ne.Solver%NtauF) write(*,"(A)")"     Warning: dump_MaxEnt_Gfunct number fo imaginary time points differ from input."
             if(present(WmaxPade).and.(WmaxPade.gt.0)) write(*,"(A)")"     Warning: dump_MaxEnt_Gfunct pade from itau not done."
             allocate(tau(Npoints));tau=0d0
             tau = linspace(0d0,Beta,Npoints)
@@ -119,7 +119,7 @@ contains
             !
          case("itau2mats")
             !
-            if(Npoints.ne.NtauF) write(*,"(A)")"     Warning: dump_MaxEnt_Gfunct number fo imaginary time points differ from input."
+            if(Npoints.ne.Solver%NtauF) write(*,"(A)")"     Warning: dump_MaxEnt_Gfunct number fo imaginary time points differ from input."
             allocate(wmats(Nmats));wmats=0d0
             wmats = FermionicFreqMesh(Beta,Nmats)
             !
@@ -150,10 +150,10 @@ contains
             !
             if(Npoints.ne.Nmats) write(*,"(A)")"     Warning: dump_MaxEnt_Gfunct number fo Matsubara points differ from input."
             if(present(WmaxPade).and.(WmaxPade.gt.0)) write(*,"(A)")"     Warning: dump_MaxEnt_Gfunct pade from mats2itau not done."
-            allocate(tau(NtauF));tau=0d0
-            tau = linspace(0d0,Beta,NtauF)
+            allocate(tau(Solver%NtauF));tau=0d0
+            tau = linspace(0d0,Beta,Solver%NtauF)
             !
-            allocate(Gft(Norb,NtauF,Nspin));Gft=czero
+            allocate(Gft(Norb,Solver%NtauF,Nspin));Gft=czero
             do ispin=1,Nspin
                call Fmats2itau_vec(Beta,G(:,:,ispin),Gft(:,:,ispin),asympt_corr=.true.,tau_uniform=.true.)
             enddo
@@ -215,7 +215,7 @@ contains
       !
       use parameters
       use utils_misc
-      use input_vars, only: Nmats, NtauB, Beta, Nreal, wrealMax
+      use input_vars, only: Nmats, Solver, Beta, Nreal, wrealMax
       use fourier_transforms
       use file_io
       implicit none
@@ -244,7 +244,7 @@ contains
             !
          case("itau")
             !
-            if(Npoints.ne.NtauB) write(*,"(A)")"     Warning: dump_MaxEnt_Wfunct number fo imaginary time points differ from input."
+            if(Npoints.ne.Solver%NtauB) write(*,"(A)")"     Warning: dump_MaxEnt_Wfunct number fo imaginary time points differ from input."
             if(present(WmaxPade).and.(WmaxPade.gt.0)) write(*,"(A)")"     Warning: dump_MaxEnt_Wfunct pade from itau not done."
             allocate(tau(Npoints));tau=0d0
             tau = linspace(0d0,Beta,Npoints)
@@ -269,7 +269,7 @@ contains
             !
          case("itau2mats")
             !
-            if(Npoints.ne.NtauB) write(*,"(A)")"     Warning: dump_MaxEnt_Wfunct number fo imaginary time points differ from input."
+            if(Npoints.ne.Solver%NtauB) write(*,"(A)")"     Warning: dump_MaxEnt_Wfunct number fo imaginary time points differ from input."
             allocate(wmats(Nmats));wmats=0d0
             wmats = BosonicFreqMesh(Beta,Nmats)
             !
@@ -292,10 +292,10 @@ contains
             !
             if(Npoints.ne.Nmats) write(*,"(A)")"     Warning: dump_MaxEnt_Wfunct number fo Matsubara points differ from input."
             if(present(WmaxPade).and.(WmaxPade.gt.0)) write(*,"(A)")"     Warning: dump_MaxEnt_Wfunct pade from mats2itau not done."
-            allocate(tau(NtauB));tau=0d0
-            tau = linspace(0d0,Beta,NtauB)
+            allocate(tau(Solver%NtauB));tau=0d0
+            tau = linspace(0d0,Beta,Solver%NtauB)
             !
-            allocate(Wft(NtauB));Wft=czero
+            allocate(Wft(Solver%NtauB));Wft=czero
             call Bmats2itau(Beta,W,Wft,asympt_corr=.true.,tau_uniform=.true.)
             !
             call dump_Field_component(real(Wft),reg(dirpath),reg(filename)//"_t_("//str(iorb(1))//","//str(iorb(2))//")("//str(iorb(2))//","//str(iorb(1))//").DAT",tau)

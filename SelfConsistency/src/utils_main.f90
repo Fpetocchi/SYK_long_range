@@ -1291,7 +1291,7 @@ contains
                write(*,"(A)") "     Computing the local effective interaction."
                call AllocateBosonicField(Pimp,Norb,Nmats,Crystal%iq_gamma,no_bare=.true.,Beta=Beta)
                call AllocateBosonicField(Wloc,Norb,Nmats,Crystal%iq_gamma,Beta=Beta)
-               call loc2imp(Pimp,Plat,Orbs)
+               call loc2imp(Pimp,P_EDMFT,Orbs)
                call loc2imp(Wloc,Wlat,Orbs)
                !
                call calc_curlyU(curlyU,Wloc,Pimp)
@@ -1359,50 +1359,68 @@ contains
          deallocate(Kfunct)
          !
       endif
-      deallocate(tau)
-      call DeallocateBosonicField(curlyU)
+      deallocate(tau,Uinst)
       !
-      !Check if the fully screened local interaction at iw=0 is the same for all the sites. Same Orbital dimension assumed.
+      !Check if the screened effective local interaction at iw=0 is the same for all the sites. Same Orbital dimension assumed.
       if(checkInvariance)then
          !
-         do isitecheck=2,Nsite
+         do isitecheck=1,Nsite
             !
             Norb = SiteNorb(isitecheck)
             Nflavor = Nspin*Norb
             allocate(Orbs(Norb))
-            Orbs = SiteOrbs(isite,1:Norb)
+            Orbs = SiteOrbs(isitecheck,1:Norb)
             !
             write(*,"(A)")"     Checking site "//reg(SiteName(1))//"_"//str(isitecheck)
             write(*,"(A,10I3)")"     Norb: "//str(Norb)//" Orbitals: ",Orbs
             !
-            allocate(Ucheck(Nflavor,Nflavor));Ucheck=0d0
-            call AllocateBosonicField(Wloc,Norb,Nmats,Crystal%iq_gamma,Beta=Beta)
+            if(isitecheck.eq.1)allocate(Uinst(Nflavor,Nflavor))
+            if(isitecheck.ne.1)allocate(Ucheck(Nflavor,Nflavor))
+            !
+            call clear_attributes(curlyU)
+            !
             if(Ustart)then
-               call loc2imp(Wloc,Ulat,Orbs)
+               call loc2imp(curlyU,Ulat,Orbs)
+               call isReal(curlyU)
             else
+               call AllocateBosonicField(Pimp,Norb,Nmats,Crystal%iq_gamma,no_bare=.true.,Beta=Beta)
+               call AllocateBosonicField(Wloc,Norb,Nmats,Crystal%iq_gamma,Beta=Beta)
+               call loc2imp(Pimp,P_EDMFT,Orbs)
                call loc2imp(Wloc,Wlat,Orbs)
+               !
+               call calc_curlyU(curlyU,Wloc,Pimp,sym=.false.)
+               !
+               call DeallocateBosonicField(Pimp)
+               call DeallocateBosonicField(Wloc)
+               !
             endif
-            call calc_QMCinteractions(Wloc,Ucheck)
             !
-            file = reg(ItFolder)//"Solver_"//reg(SiteName(isite))//"/Umat_"//str(isitecheck)//".DAT"
-            call dump_Matrix(Ucheck,reg(file))
-            !
-            do ib1=1,Nflavor
-               do ib2=1,Nflavor
-                  if(abs(Ucheck(ib1,ib2)-Uinst(ib1,ib2)).gt.1e-6)then
-                     write(*,"(A,F,A,F)")"     Warning: Element["//str(ib1)//"]["//str(ib2)//"] is different:",Ucheck(ib1,ib2)," instead of: ",Uinst(ib1,ib2)
-                  endif
+            if(isitecheck.eq.1)then
+               call calc_QMCinteractions(curlyU,Uinst,sym=.false.)
+               call dump_Matrix(Uinst,reg(ItFolder)//"Solver_"//reg(SiteName(isitecheck))//"/Umat_notSym_"//str(isitecheck)//".DAT")
+            else
+               call calc_QMCinteractions(curlyU,Ucheck,sym=.false.)
+               call dump_Matrix(Ucheck,reg(ItFolder)//"Solver_"//reg(SiteName(isitecheck))//"/Umat_notSym_"//str(isitecheck)//".DAT")
+               !
+               do ib1=1,Nflavor
+                  do ib2=1,Nflavor
+                     if(abs(Ucheck(ib1,ib2)-Uinst(ib1,ib2)).gt.1e-6)then
+                        write(*,"(A,F,A,F)")"     Warning: Element["//str(ib1)//"]["//str(ib2)//"] is different:",Ucheck(ib1,ib2)," instead of: ",Uinst(ib1,ib2)
+                     endif
+                  enddo
                enddo
-            enddo
+               deallocate(Ucheck)
+               !
+            endif
             !
-            deallocate(Orbs,Ucheck)
-            call DeallocateBosonicField(Wloc)
+            deallocate(Orbs)
             !
-         enddo
+         enddo !isitecheck
+         deallocate(Uinst)
          !
       endif
       !
-      deallocate(Uinst)
+      call DeallocateBosonicField(curlyU)
       if(Ustart)call DeallocateBosonicField(Ulat)
       !
    end subroutine calc_Interaction
@@ -2026,6 +2044,10 @@ contains
          call dump_MaxEnt(W_EDMFT,"mats",reg(PrevItFolder)//"Convergence/","Wimp",EqvGWndx%SetOrbs)
          call dump_MaxEnt(curlyU_EDMFT,"mats",reg(PrevItFolder)//"Convergence/","curlyUimp",EqvGWndx%SetOrbs)
          call dump_MaxEnt(C_EDMFT,"mats",reg(PrevItFolder)//"Convergence/","Cimp",EqvGWndx%SetOrbs)
+         !
+         do iw=1,Nmats
+            call check_Symmetry(curlyU_EDMFT%screened_local(:,:,iw),eps,enforce=.true.,hardstop=.false.,name="curlyU_"//str(iw))
+         enddo
          !
          call DeallocateBosonicField(P_EDMFT)
          call DeallocateBosonicField(W_EDMFT)

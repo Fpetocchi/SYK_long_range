@@ -1709,7 +1709,7 @@ contains
    !PURPOSE: Given the Bosonic Field it extracts the screened interaction and
    ! retardation function.
    !---------------------------------------------------------------------------!
-   subroutine calc_QMCinteractions(Umats,Uinst,Kfunct)
+   subroutine calc_QMCinteractions(Umats,Uinst,Kfunct,sym)
       !
       use parameters
       use file_io
@@ -1721,6 +1721,7 @@ contains
       type(BosonicField),intent(in)         :: Umats
       real(8),intent(inout)                 :: Uinst(:,:)
       real(8),intent(inout),optional        :: Kfunct(:,:,:)
+      logical,intent(in),optional           :: sym
       !
       integer                               :: Nbp,Norb,Nflavor
       integer                               :: ib1,ib2,iorb,jorb
@@ -1730,6 +1731,7 @@ contains
       complex(8),allocatable                :: Kaux(:,:,:)
       logical                               :: Uloc,U1st,U2nd,retarded
       type(physicalU)                       :: PhysicalUelements
+      logical                               :: sym_
       !
       !
       if(verbose)write(*,"(A)") "---- calc_QMCinteractions"
@@ -1739,6 +1741,9 @@ contains
       if(.not.Umats%status) stop "Umats not properly initialized."
       retarded=.false.
       if(present(Kfunct))retarded=.true.
+      !
+      sym_=.true.
+      if(present(sym))sym_=sym
       !
       Nbp = Umats%Nbp
       Norb = int(sqrt(dble(Nbp)))
@@ -1811,7 +1816,7 @@ contains
             !
          enddo
       enddo
-      call check_Symmetry(Uinst,eps,enforce=.true.,hardstop=.false.,name="Uinst")
+      if(sym_)call check_Symmetry(Uinst,eps,enforce=.true.,hardstop=.false.,name="Uinst")
       !
       !setting the reterdation function
       if(retarded)then
@@ -1822,7 +1827,7 @@ contains
                Kfunct(:,:,itau) = Kfunct(:,:,itau) - 2d0*Kaux(:,:,iw) * ( cos(wmats(iw)*tau(itau)) - 1d0 ) / ( Umats%Beta*wmats(iw)**2 )
             enddo
             !
-            call check_Symmetry(Kfunct(:,:,itau),eps,enforce=.true.,hardstop=.false.,name="Kfunct_t"//str(itau))
+            if(sym_)call check_Symmetry(Kfunct(:,:,itau),eps,enforce=.true.,hardstop=.false.,name="Kfunct_t"//str(itau))
             !
          enddo
          deallocate(Kaux,tau,wmats)
@@ -1835,7 +1840,7 @@ contains
    !PURPOSE: Computes the local effective interaction
    !TEST ON:
    !---------------------------------------------------------------------------!
-   subroutine calc_curlyU(curlyU,Wimp,Pimp)
+   subroutine calc_curlyU(curlyU,Wimp,Pimp,sym)
       !
       use parameters
       use utils_fields
@@ -1846,11 +1851,13 @@ contains
       type(BosonicField),intent(inout)      :: curlyU
       type(BosonicField),intent(in)         :: Wimp
       type(BosonicField),intent(in)         :: Pimp
+      logical,intent(in),optional           :: sym
       !
       complex(8),allocatable                :: invW(:,:)
       real(8)                               :: Beta
       integer                               :: Nbp,Nmats
       integer                               :: iw
+      logical                               :: sym_
       !
       !
       if(verbose)write(*,"(A)") "---- calc_curlyU"
@@ -1864,6 +1871,9 @@ contains
       if(Wimp%Nkpt.ne.0) stop "Wimp k dependent attributes are supposed to be unallocated."
       if(Pimp%Nkpt.ne.0) stop "Pimp k dependent attributes are supposed to be unallocated."
       !
+      sym_=.true.
+      if(present(sym))sym_=sym
+      !
       Nbp = curlyU%Nbp
       Beta = curlyU%Beta
       Nmats = curlyU%Npoints
@@ -1873,8 +1883,6 @@ contains
       if(all([Wimp%Npoints-Nmats,Pimp%Npoints-Nmats].ne.[0,0]))   stop "Either Wimp and/or Pimp have different number of Matsubara points with respect to curlyU."
       !
       call clear_attributes(curlyU)
-      !call isReal(Pimp) put intent(inout)?
-      !call isReal(Wimp) put intent(inout)?
       !
       curlyU%bare_local = Wimp%bare_local
       !
@@ -1898,9 +1906,11 @@ contains
       deallocate(invW)
       call isReal(curlyU)
       !
-      do iw=1,Nmats
-         call check_Symmetry(curlyU%screened_local(:,:,iw),eps,enforce=.true.,hardstop=.false.,name="curlyU_"//str(iw))
-      enddo
+      if(sym_)then
+         do iw=1,Nmats
+            call check_Symmetry(curlyU%screened_local(:,:,iw),eps,enforce=.true.,hardstop=.false.,name="curlyU_"//str(iw))
+         enddo
+      endif
       !
    end subroutine calc_curlyU
 
@@ -1948,8 +1958,6 @@ contains
       if(all([curlyU%Npoints-Nmats,ChiC%Npoints-Nmats].ne.[0,0]))   stop "Either curlyU and/or ChiC have different number of Matsubara points with respect to Wimp."
       !
       call clear_attributes(Wimp)
-      !call isReal(ChiC) put intent(inout)?
-      !call isReal(curlyU) put intent(inout)?
       !
       Wimp%bare_local = curlyU%bare_local
       !
