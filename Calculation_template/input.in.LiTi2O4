@@ -92,7 +92,7 @@
  NMEAS=1000                                    !Sweeps where expensive measurments are not performed.
  NTHERM=100                                    !Thermalization cycles. Each cycle performs NMEAS sweeps.
  NSHIFT=1                                      !Attempted shift moves at each sweep.
- PRINT_TIME=25                                 !Minutes that have to pass before observables are updated and stored.
+ PRINT_TIME=40                                 !Minutes that have to pass before observables are updated and stored.
  BINLENGTH=4                                   !If >0 the Green's function at itau will be the average within +/-binlength.
  BINSTART=50                                   !Tau points skipped at the beginning and end of the Green's function average.
  RETARDED=1                                    !Integer flag to include the frequency dependent part of the interaction. User cannot set this as its deduced from CALC_TYPE.

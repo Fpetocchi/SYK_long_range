@@ -1,6 +1,6 @@
 #!/bin/bash
 #$ -S /bin/bash
-#$ -N Ti_10                     # job name
+#$ -N _____                     # job name
 #$ -cwd                         # run script in current directory
 #$ -pe orte2 56                 # MPI cores
 #$ -q new.q                     # queue
@@ -15,12 +15,12 @@ ulimit -c 0
 ################################################################################
 #                                USER SETTINGS                                 #
 ################################################################################
-GENMAT=/home/petocchif/1_GW_EDMFT/nobackup/1_LiTi2O4
+GENMAT=/home/petocchif/1_GW_EDMFT/nobackup/1_production
 
-PATH_INPUT=GWinput_LiTi2O4
-PATH_DATA=Results_LiTi2O4
+PATH_INPUT=GWinput_
+PATH_DATA=Results_
 
-START_IT=3
+START_IT=0
 END_IT=10
 
 

@@ -1060,7 +1060,7 @@ contains
          if (Norb_disent.ne.Norb) stop 'DISENT_EVEC.DAT: nwan'
          if (ib_Dwan1.ne.ib_Uwan1) stop 'DISENT_EVEC.DAT: ib_wan1'
          if (ib_Dwan2.ne.ib_Uwan2) then
-            write(*,"(A2I4)") "     ib_Uwan2,ib_Dwan2: ",ib_Uwan2, ib_Dwan2
+            write(*,"(A,2I4)") "     ib_Uwan2,ib_Dwan2: ",ib_Uwan2, ib_Dwan2
          endif
          allocate(dis_evec(ib_Uwan1:ib_Dwan2,ib_Uwan1:ib_Dwan2));dis_evec=czero
          allocate(cmat(ib_Uwan1:ib_Dwan2,ib_Uwan2:ib_Dwan2));cmat=czero

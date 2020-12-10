@@ -565,7 +565,7 @@ contains
       write(*,"(A,1I3)") "     Provided sets: ",EqvGWndx%Nset
       write(*,"(A,1I3)") "     Expanded sets: ",EqvGWndx%Ntotset
       do iset=1,size(EqvGWndx%SetOrbs,dim=1)
-         write(*,"(2(A,I3),A,10I3)")"     set: ",iset,", number of orbitals: ",EqvGWndx%SetNorb(iset),", indexes: ",EqvGWndx%SetOrbs(iset,:)
+         write(*,"(2(A,I3),A,10I3)")"     set: ",iset,", number of orbitals: ",EqvGWndx%SetNorb(iset),", indexes: ",EqvGWndx%SetOrbs(iset,1:EqvGWndx%SetNorb(iset))
       enddo
       !
    end subroutine initialize_Lattice
