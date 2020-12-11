@@ -121,6 +121,7 @@ contains
       if(Gmats%Npoints.eq.0) stop "Gmats frequency dependent attributes not properly initialized."
       if(Gmats%Nkpt.eq.0) stop "Gmats k dependent attributes not properly initialized."
       if(Gmats%Nkpt.ne.Lttc%Nkpt) stop "Lttc has different number of k-points with respect to Gmats."
+      if(Gmats%Norb.ne.Lttc%Norb) stop "Lttc has different number of orbitals with respect to Gmats."
       !
       Norb = Gmats%Norb
       Nkpt = Gmats%Nkpt
@@ -249,6 +250,7 @@ contains
       if(Gmats%Npoints.eq.0) stop "Gmats frequency dependent attributes not properly initialized."
       if(Gmats%Nkpt.eq.0) stop "Gmats k dependent attributes not properly initialized."
       if(Gmats%Nkpt.ne.Lttc%Nkpt) stop "Lttc has different number of k-points with respect to Gmats."
+      if(Gmats%Norb.ne.Lttc%Norb) stop "Lttc has different number of orbitals with respect to Gmats."
       !
       Norb = Gmats%Norb
       Nmats = Gmats%Npoints
@@ -345,6 +347,7 @@ contains
       if(Gmats%Npoints.eq.0) stop "Gmats frequency dependent attributes not properly initialized."
       if(Gmats%Nkpt.eq.0) stop "Gmats k dependent attributes not properly initialized."
       if(Gmats%Nkpt.ne.Lttc%Nkpt) stop "Lttc has different number of k-points with respect to Gmats."
+      if(Gmats%Norb.ne.Lttc%Norb) stop "Lttc has different number of orbitals with respect to Gmats."
       if(mu_shift.eq.0d0) stop "Chemical potential shift is zero."
       !
       Norb = Gmats%Norb
@@ -425,6 +428,7 @@ contains
       if(Gmats%Npoints.eq.0) stop "Gmats frequency dependent attributes not properly initialized."
       if(Gmats%Nkpt.eq.0) stop "Gmats k dependent attributes not properly initialized."
       if(Gmats%Nkpt.ne.Lttc%Nkpt) stop "Lttc has different number of k-points with respect to Gmats."
+      if(Gmats%Norb.ne.Lttc%Norb) stop "Lttc has different number of orbitals with respect to Gmats."
       if(mu_param%TargetDensity.eq.0d0) stop "TargetDensity is set to zero."
       if(present(Smats))then
          if(Smats%Npoints.eq.0) stop "Smats frequency dependent attributes not properly initialized."

@@ -59,7 +59,6 @@ program SelfConsistency
          !
          if(merge_Pi.and.solve_DMFT) then !a bit redundant since there is no merge wihtout DMFT
             call MergeFields(Plat,P_EDMFT,alphaPi,SiteOrbs)
-            !call DeallocateBosonicField(P_EDMFT)
             call dump_BosonicField(Plat,reg(ItFolder),"Plat_merged_w.DAT")
          endif
          !
@@ -84,6 +83,7 @@ program SelfConsistency
          !Hartree shift between G0W0 and LDA
          allocate(VH(Crystal%Norb,Crystal%Norb));VH=czero
          call calc_VH(densityLDA,Glat,Ulat,VH)
+         call dump_Matrix(VH,reg(ItFolder)//"VH.DAT")
          if(solve_DMFT.and.bosonicSC.and.(.not.Ustart))call DeallocateBosonicField(Ulat)
          !
          !G0W0 contribution and Vexchange readed from SPEX

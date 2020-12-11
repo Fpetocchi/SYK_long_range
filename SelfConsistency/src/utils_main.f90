@@ -1000,14 +1000,15 @@ contains
       enddo
       !
       ! Extract and rotate from local (non-diagonal) to imp (diagonal) the given sites
+      call clear_attributes(SigmaImp)
       if(RotateHloc)then
          allocate(Rot(Norb,Norb)); Rot=HlocRot(1:Norb,1:Norb,isite)
          call loc2imp(Gloc,Glat,Orbs,U=Rot)
-         call loc2imp(SigmaImp,S_DMFT,Orbs,U=Rot)
+         if(Iteration.gt.0)call loc2imp(SigmaImp,S_DMFT,Orbs,U=Rot)
          deallocate(Rot)
       else
          call loc2imp(Gloc,Glat,Orbs)
-         call loc2imp(SigmaImp,S_DMFT,Orbs)
+         if(Iteration.gt.0)call loc2imp(SigmaImp,S_DMFT,Orbs)
       endif
       !
       !Print what's used to compute delta

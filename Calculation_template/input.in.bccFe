@@ -22,25 +22,25 @@
  H_SEED=0.000000                               !Seed to break spin symmetry (persistent if non zero).
  EQV_SETS=4                                    !Number of sets of locally equivalent lattice orbitals.
  EQV_NORB_1=1                                  !Number of equivalent lattice orbitals in the set number 1
- EQV_ORBS_1=1                                  !Lattice orbital indexes of equivalent set number 1
  EQV_NORB_2=3                                  !Number of equivalent lattice orbitals in the set number 2
- EQV_ORBS_2=2,3,4                              !Lattice orbital indexes of equivalent set number 2
  EQV_NORB_3=3                                  !Number of equivalent lattice orbitals in the set number 3
- EQV_ORBS_3=5,6,7                              !Lattice orbital indexes of equivalent set number 3
  EQV_NORB_4=2                                  !Number of equivalent lattice orbitals in the set number 4
+ EQV_ORBS_1=1                                  !Lattice orbital indexes of equivalent set number 1
+ EQV_ORBS_2=2,3,4                              !Lattice orbital indexes of equivalent set number 2
+ EQV_ORBS_3=5,6,7                              !Lattice orbital indexes of equivalent set number 3
  EQV_ORBS_4=8,9                                !Lattice orbital indexes of equivalent set number 4
 
  #---------------------------------------------#
 
  BETA=15.000000                                !Inverse temperature in 1/eV.
  MAX_WMATS=300.000000                          !Maximum value of the Matsubara frequency mesh.
- NMATS=                                        !Number of points on the imaginary frequency axis. User cannot set this as its computed from MAX_WMATS and BETA.
- NTAU_F_LAT=                                   !Number of points on the imaginary time axis for Fermionic lattice fields. Its gonna be made odd.
- NTAU_B_LAT=                                   !Number of points on the imaginary time axis for Bosonic lattice fields. User cannot set this as its equal to NTAU_F.
+ NMATS=716                                     !Number of points on the imaginary frequency axis. User cannot set this as its computed from MAX_WMATS and BETA.
+ NTAU_F_LAT=717                                !Number of points on the imaginary time axis for Fermionic lattice fields. Its gonna be made odd.
+ NTAU_B_LAT=717                                !Number of points on the imaginary time axis for Bosonic lattice fields. User cannot set this as its equal to NTAU_F.
  TAU_UNIF=F                                    !Flag to use a non-tau_uniform mesh on the imaginary time axis.
- NREAL=2000                                    !Number of points on the real frequency axis.
- MAX_WREAL=10.000000                           !Maximum absolute value of the real frequency mesh.
- ETA=4.000000E-02                              !Real frequency broadening.
+ NREAL=8000                                    !Number of points on the real frequency axis.
+ MAX_WREAL=50.000000                           !Maximum absolute value of the real frequency mesh.
+ ETA=6.000000E-02                              !Real frequency broadening.
  WPADE=0                                       !Number of Matsubara frequencies used in pade' analytic continuation. If its =0 Pade will not be performed.
 
  #---------------------------------------------#
@@ -74,7 +74,7 @@
  DELTA_FIT=Analytic                            !Fit to extract the local energy in GW+EDMFT calculations. Available: Inf, Analytic, Moments.
  NFIT=16                                       !Number of bath levels (Analytic) or coefficient (Moments-automatic limit to NFIT=8).
  WTAIL_GIMP=0.000000                           !Frequency value above which the tail of Gimp is replaced. If =0d0 the tail is not replaced. Only via moments (automatic limit to NFIT=8).
- WTAIL_SIMP=40.00000                           !Frequency value above which the tail of Simp is replaced. If =0d0 the tail is not replaced. Only via moments (automatic limit to NFIT=8).
+ WTAIL_SIMP=40.000000                          !Frequency value above which the tail of Simp is replaced. If =0d0 the tail is not replaced. Only via moments (automatic limit to NFIT=8).
 
  #---------------------------------------------#
 
@@ -93,7 +93,7 @@
  NIMP=1                                        !Number of impurities solved. User cannot set this as its deduced from NSITE and EXPAND.
  NTAU_F_IMP=1001                               !Number of points on the imaginary time axis for Fermionic impurity fields. Its gonna be made odd.
  NTAU_B_IMP=4001                               !Number of points on the imaginary time axis for Bosonic impurity fields. Its gonna be made odd.
- N_READ_IMP=0.500000                           !Target density in the impurity list. User cannot set this as its the same of N_READ_LAT if EXPAND=F otherwise its N_READ_LAT/NSITE.
+ N_READ_IMP=8.000000                           !Target density in the impurity list. User cannot set this as its the same of N_READ_LAT if EXPAND=F otherwise its N_READ_LAT/NSITE.
  NORDER=10                                     !Maximum perturbation order measured. Not used yet.
  NMEAS=1000                                    !Sweeps where expensive measurments are not performed.
  NTHERM=100                                    !Thermalization cycles. Each cycle performs NMEAS sweeps.

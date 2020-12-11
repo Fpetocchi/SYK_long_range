@@ -2,9 +2,8 @@
 #$ -S /bin/bash
 #$ -N _____                     # job name
 #$ -cwd                         # run script in current directory
-#$ -pe orte2 56                 # MPI cores
-#$ -q new.q                     # queue
-#$ -l h=!node67
+#$ -pe smp 28                   # MPI cores
+#$ -q new.q@node84 
 
 
 export OMP_NUM_THREADS=1
@@ -20,8 +19,8 @@ GENMAT=/home/petocchif/1_GW_EDMFT/nobackup/1_production
 PATH_INPUT=GWinput_
 PATH_DATA=Results_
 
-START_IT=0
-END_IT=10
+START_IT=
+END_IT=
 
 
 
@@ -38,9 +37,9 @@ export l2=`grep -n "PATH_DATA=" input.in | awk -F  ":" '{print $1}'`
 export l3=`grep -n "START_IT=" input.in | awk -F  ":" '{print $1}'`
 export l4=`grep -n "LAST_IT=" input.in | awk -F  ":" '{print $1}'`
 
-`sed -i ${l1}'s/'"PATH_INPUT="'/'"PATH_INPUT=${PATH_INPUT}  !"'/' input.in`
-`sed -i ${l2}'s/'"PATH_DATA="'/'"PATH_DATA=${PATH_DATA}  !"'/' input.in`
-`sed -i ${l4}'s/'"LAST_IT="'/'"LAST_IT=${END_IT}  !"'/' input.in`
+`sed -i ${l1}'s/'"PATH_INPUT=.*!"'/'"PATH_INPUT=${PATH_INPUT}         !"'/' input.in`
+`sed -i ${l2}'s/'"PATH_DATA=.*!"'/'"PATH_DATA=${PATH_DATA}         !"'/' input.in`
+`sed -i ${l4}'s/'"LAST_IT=.*!"'/'"LAST_IT=${END_IT}         !"'/' input.in`
 
 
 
@@ -54,12 +53,12 @@ do
 
    #
    IT_DATA=${LOCAL}/${PATH_DATA}/${IT}/
+   `sed -i ${l3}'s/'"START_IT=.*!"'/'"START_IT=${IT}         !"'/' input.in`
 
 
    #
    # Lattice problem
-   `sed -i ${l3}'s/'"START_IT="'/'"START_IT=${IT}  !"'/' input.in`
-   ${BINsc}/SelfConsistency  > report_sc_it${IT} 2> err_sc_it${IT}
+   ${BINsc}/SelfConsistency > report_sc_it${IT} 2> err_sc_it${IT}
    mv {report_sc_it${IT},err_sc_it${IT}} ${IT_DATA}
 
 

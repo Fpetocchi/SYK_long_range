@@ -542,7 +542,7 @@ contains
                            if (idum2.ne.iwan2) stop "read_Vgamma: iwan2"
                            if (idum3.ne.iwan3) stop "read_Vgamma: iwan3"
                            if (idum4.ne.iwan4) stop "read_Vgamma: iwan4"
-                           if(dble(Vtype).eq.rdum1) Vgamma(indx1,indx2)=dcmplx(rdum3,rdum4)
+                           if(dble(Vtype).eq.rdum1) Vgamma(indx1,indx2) = dcmplx(rdum3,rdum4) * H2eV
                        enddo
                      enddo
                   enddo
@@ -662,14 +662,14 @@ contains
             path = reg(pathINPUT)//"UWAN.DAT"
          endif
          call inquireFile(reg(path),filexists,verb=verbose)
-         if(verbose)write(*,"(A)") "Opening "//reg(path)
+         write(*,"(A)") "Opening "//reg(path)
          unit = free_unit()
          open(unit,file=reg(path),form="unformatted",action="read",position="rewind")
          read(unit) Nspin_Uwan,Nkpt_Uwan,ib_Uwan1,ib_Uwan2,Norb_Uwan
          if(paramagneticSPEX.and.(Nspin_Uwan.ne.1)) stop "UWAN file is not paramagnetic."
          if(Nkpt_Uwan.ne.Nkpt) stop "UWAN file has wrong number of k-points (not irreducible)."
          if(Norb_Uwan.ne.Norb) stop "UWAN file has wrong orbital dimension."
-         write(*,"(A,2I4)") "     The band indexes in the UWAN rotation are: ",ib_Uwan1,ib_Uwan2
+         write(*,"(A,2I4)") "     The band indexes in the "//reg(path)//" rotation are: ",ib_Uwan1,ib_Uwan2
          allocate(Uwan(ib_Uwan1:ib_Uwan2,Norb,Nkpt,Nspin_Uwan))
          do ispin=1,Nspin_Uwan
             do ik=1,Nkpt
@@ -1020,7 +1020,7 @@ contains
       if(paramagneticSPEX.and.(Nspin_Uwan.ne.1)) stop "UWAN file is not paramagnetic."
       if(Nkpt_Uwan.ne.Nkpt) stop "UWAN file has wrong number of k-points (not irreducible)."
       if(Norb_Uwan.ne.Norb) stop "UWAN file has wrong orbital dimension."
-      if(verbose)write(*,"(A,2I4)") "     The band indexes in the UWAN rotation are: ",ib_Uwan1,ib_Uwan2
+      write(*,"(A,2I4)") "     The band indexes in the "//reg(path)//" rotation are: ",ib_Uwan1,ib_Uwan2
       allocate(Uwan(ib_Uwan1:ib_Uwan2,Norb,Nkpt,Nspin_Uwan))
       do ispin=1,Nspin_Uwan
          do ik=1,Nkpt
@@ -1098,7 +1098,7 @@ contains
                   vxcmat(j,i)=conjg(vxcmat(i,j))
                enddo
             enddo
-            !do i=1,nbandmax
+            !
             do i=ib_sigma1,ib_sigma2
                vxc_diag(i,ik,ispin)=dble(vxcmat(i,i))
             enddo
@@ -1112,7 +1112,7 @@ contains
                   !write(*,*) vxc(i,ik,ispin)
                enddo
             endif
-
+            !
          enddo ! ik
       enddo ! ispin
       close(unit_eig)
