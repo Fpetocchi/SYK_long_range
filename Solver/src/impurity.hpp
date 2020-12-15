@@ -138,6 +138,13 @@ class ct_hyb
             //
             for(int ifl=0; ifl < Nflavor; ifl++)
             {
+               //
+               for(int itau=0; itau < F[ifl].size(); itau++)
+               {
+                  path Dcomp = "Delta["+str(ifl)+"]";
+                  if(F[ifl][itau]>0.0) mpi.StopError( " ->"+Dcomp+" at tau "+str(itau)+" is positive - Exiting.");
+               }
+               //
                for(int jfl=0; jfl <= ifl; jfl++)
                {
                   int Ntau_K = K_table[ifl][jfl].size();
@@ -146,8 +153,8 @@ class ct_hyb
                   //
                   double K_zero =  K_table[ifl][jfl].front();
                   double K_beta =  K_table[ifl][jfl].back();
-                  if(K_zero!=0.0) mpi.StopError( "->"+Kcomp+" at tau=0 is not vanishing - Exiting.");
-                  if(K_beta!=0.0) mpi.StopError( "->"+Kcomp+" at tau=beta is not vanishing - Exiting.");
+                  if(K_zero!=0.0) mpi.StopError( " ->"+Kcomp+" at tau=0 is not vanishing - Exiting.");
+                  if(K_beta!=0.0) mpi.StopError( " ->"+Kcomp+" at tau=beta is not vanishing - Exiting.");
                }
             }
          }

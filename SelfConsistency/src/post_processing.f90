@@ -211,7 +211,7 @@ contains
       !
    end subroutine dump_MaxEnt_Gfield
    !
-   subroutine dump_MaxEnt_Wfunct(W,mode,dirpath,filename,iorb,WmaxPade)
+   subroutine dump_MaxEnt_Wfunct(W,mode,dirpath,filename,iorb,type,WmaxPade)
       !
       use parameters
       use utils_misc
@@ -225,8 +225,10 @@ contains
       character(len=*),intent(in)           :: dirpath
       character(len=*),intent(in)           :: filename
       integer,intent(in)                    :: iorb(2)
+      character(len=*),intent(in)           :: type
       integer,intent(in),optional           :: WmaxPade
       !
+      integer                               :: ndx(4)
       complex(8),allocatable                :: Wft(:),Wpade(:)
       integer                               :: Npoints
       real(8),allocatable                   :: tau(:),wmats(:),wreal(:)
@@ -236,6 +238,29 @@ contains
       !
       !
       Npoints = size(W)
+      !
+      select case(reg(type))
+         case default
+            stop "Available types are: Uaa, Uab, J."
+         case("Uaa")
+            if(iorb(1).ne.iorb(2)) stop "dump_MaxEnt_Wfunct: wrong indexes provided for type Uaa."
+            ndx(1)=iorb(1)
+            ndx(2)=iorb(2)
+            ndx(3)=iorb(2)
+            ndx(4)=iorb(1)
+         case("J")
+            if(iorb(1).eq.iorb(2)) stop "dump_MaxEnt_Wfunct: wrong indexes provided for type J."
+            ndx(1)=iorb(1)
+            ndx(2)=iorb(2)
+            ndx(3)=iorb(2)
+            ndx(4)=iorb(1)
+         case("Uab")
+            if(iorb(1).eq.iorb(2)) stop "dump_MaxEnt_Wfunct: wrong indexes provided for type Uab."
+            ndx(1)=iorb(1)
+            ndx(2)=iorb(1)
+            ndx(3)=iorb(2)
+            ndx(4)=iorb(2)
+      end select
       !
       select case(reg(mode))
          case default
@@ -249,7 +274,7 @@ contains
             allocate(tau(Npoints));tau=0d0
             tau = linspace(0d0,Beta,Npoints)
             !
-            call dump_Field_component(real(W),reg(dirpath),reg(filename)//"_t_("//str(iorb(1))//","//str(iorb(2))//")("//str(iorb(2))//","//str(iorb(1))//").DAT",tau)
+            call dump_Field_component(real(W),reg(dirpath),reg(filename)//"_t_("//str(ndx(1))//","//str(ndx(2))//")("//str(ndx(3))//","//str(ndx(4))//").DAT",tau)
             !
          case("mats")
             !
@@ -257,13 +282,13 @@ contains
             allocate(wmats(Npoints));wmats=0d0
             wmats = BosonicFreqMesh(Beta,Npoints)
             !
-            call dump_Field_component(real(W),reg(dirpath),reg(filename)//"_w_("//str(iorb(1))//","//str(iorb(2))//")("//str(iorb(2))//","//str(iorb(1))//").DAT",wmats)
+            call dump_Field_component(real(W),reg(dirpath),reg(filename)//"_w_("//str(ndx(1))//","//str(ndx(2))//")("//str(ndx(3))//","//str(ndx(4))//").DAT",wmats)
             !
             if(present(WmaxPade).and.(WmaxPade.gt.0))then
                allocate(wreal(Nreal));wreal=linspace(-wrealMax,+wrealMax,Nreal)
                allocate(Wpade(Nreal));Wpade=czero
                Wpade = pade(W,"Bosonic",wlimit=WmaxPade)
-               call dump_Field_component(real(Wpade),reg(dirpath),reg(filename)//"_w_("//str(iorb(1))//","//str(iorb(2))//")("//str(iorb(2))//","//str(iorb(1))//")_pade.DAT",wreal)
+               call dump_Field_component(real(Wpade),reg(dirpath),reg(filename)//"_w_("//str(ndx(1))//","//str(ndx(2))//")("//str(ndx(3))//","//str(ndx(4))//")_pade.DAT",wreal)
                deallocate(Wpade,wreal)
             endif
             !
@@ -276,13 +301,13 @@ contains
             allocate(Wft(Nmats));Wft=czero
             call Bitau2mats(Beta,W,Wft,tau_uniform=.true.)
             !
-            call dump_Field_component(real(Wft),reg(dirpath),reg(filename)//"_w_("//str(iorb(1))//","//str(iorb(2))//")("//str(iorb(2))//","//str(iorb(1))//").DAT",wmats)
+            call dump_Field_component(real(Wft),reg(dirpath),reg(filename)//"_w_("//str(ndx(1))//","//str(ndx(2))//")("//str(ndx(3))//","//str(ndx(4))//").DAT",wmats)
             !
             if(present(WmaxPade).and.(WmaxPade.gt.0))then
                allocate(wreal(Nreal));wreal=linspace(-wrealMax,+wrealMax,Nreal)
                allocate(Wpade(Nreal));Wpade=czero
                Wpade = pade(Wft,"Bosonic",wlimit=WmaxPade)
-               call dump_Field_component(real(Wpade),reg(dirpath),reg(filename)//"_w_("//str(iorb(1))//","//str(iorb(2))//")("//str(iorb(2))//","//str(iorb(1))//")_pade.DAT",wreal)
+               call dump_Field_component(real(Wpade),reg(dirpath),reg(filename)//"_w_("//str(ndx(1))//","//str(ndx(2))//")("//str(ndx(3))//","//str(ndx(4))//")_pade.DAT",wreal)
                deallocate(Wpade,wreal)
             endif
             !
@@ -298,7 +323,7 @@ contains
             allocate(Wft(Solver%NtauB));Wft=czero
             call Bmats2itau(Beta,W,Wft,asympt_corr=.true.,tau_uniform=.true.)
             !
-            call dump_Field_component(real(Wft),reg(dirpath),reg(filename)//"_t_("//str(iorb(1))//","//str(iorb(2))//")("//str(iorb(2))//","//str(iorb(1))//").DAT",tau)
+            call dump_Field_component(real(Wft),reg(dirpath),reg(filename)//"_t_("//str(ndx(1))//","//str(ndx(2))//")("//str(ndx(3))//","//str(ndx(4))//").DAT",tau)
             deallocate(Wft)
             !
       end select
@@ -321,7 +346,7 @@ contains
       integer,allocatable,intent(in)        :: Orbs(:,:)
       integer,intent(in),optional           :: WmaxPade
       !
-      integer                               :: iwan1,iwan2,iJ1,iJ2,iU1
+      integer                               :: iwan1,iwan2,iJ1,iJ2,iU1,iU2
       integer                               :: Norb,iset
       !
       !
@@ -336,26 +361,32 @@ contains
             iwan1 = Orbs(iset,1)
             iwan2 = Orbs(iset,2)
             iU1 = iwan1+Norb*(iwan1-1)
-            call dump_MaxEnt_Wfunct(W%screened_local(iU1,iU1,:),reg(mode),reg(dirpath),reg(filename),[iwan1,iwan1])
-            if(present(WmaxPade).and.(WmaxPade.gt.0))call dump_MaxEnt_Wfunct(W%screened_local(iU1,iU1,:),reg(mode),reg(dirpath),reg(filename),[iwan1,iwan1],WmaxPade=WmaxPade)
+            call dump_MaxEnt_Wfunct(W%screened_local(iU1,iU1,:),reg(mode),reg(dirpath),reg(filename),[iwan1,iwan1],"Uaa")
+            if(present(WmaxPade).and.(WmaxPade.gt.0))call dump_MaxEnt_Wfunct(W%screened_local(iU1,iU1,:),reg(mode),reg(dirpath),reg(filename),[iwan1,iwan1],"Uaa",WmaxPade=WmaxPade)
             !
+            iU2 = iwan2+Norb*(iwan2-1)
             iJ1 = iwan1+Norb*(iwan2-1)
             iJ2 = iwan2+Norb*(iwan1-1)
             if(iwan2.ne.0)then
-               call dump_MaxEnt_Wfunct(W%screened_local(iJ1,iJ2,:),reg(mode),reg(dirpath),reg(filename),[iwan1,iwan2])
-               if(present(WmaxPade).and.(WmaxPade.gt.0))call dump_MaxEnt_Wfunct(W%screened_local(iJ1,iJ2,:),reg(mode),reg(dirpath),reg(filename),[iwan1,iwan2],WmaxPade=WmaxPade)
+               call dump_MaxEnt_Wfunct(W%screened_local(iU1,iU2,:),reg(mode),reg(dirpath),reg(filename),[iwan1,iwan2],"Uab")
+               if(present(WmaxPade).and.(WmaxPade.gt.0))call dump_MaxEnt_Wfunct(W%screened_local(iU1,iU2,:),reg(mode),reg(dirpath),reg(filename),[iwan1,iwan2],"Uab",WmaxPade=WmaxPade)
+               call dump_MaxEnt_Wfunct(W%screened_local(iJ1,iJ2,:),reg(mode),reg(dirpath),reg(filename),[iwan1,iwan2],"J")
+               if(present(WmaxPade).and.(WmaxPade.gt.0))call dump_MaxEnt_Wfunct(W%screened_local(iJ1,iJ2,:),reg(mode),reg(dirpath),reg(filename),[iwan1,iwan2],"J",WmaxPade=WmaxPade)
             endif
          enddo
       else
          do iwan1=1,Norb
             iU1 = iwan1+Norb*(iwan1-1)
-            call dump_MaxEnt_Wfunct(W%screened_local(iU1,iU1,:),reg(mode),reg(dirpath),reg(filename),[iwan1,iwan1])
-            if(present(WmaxPade).and.(WmaxPade.gt.0))call dump_MaxEnt_Wfunct(W%screened_local(iU1,iU1,:),reg(mode),reg(dirpath),reg(filename),[iwan1,iwan1],WmaxPade=WmaxPade)
+            call dump_MaxEnt_Wfunct(W%screened_local(iU1,iU1,:),reg(mode),reg(dirpath),reg(filename),[iwan1,iwan1],"Uaa")
+            if(present(WmaxPade).and.(WmaxPade.gt.0))call dump_MaxEnt_Wfunct(W%screened_local(iU1,iU1,:),reg(mode),reg(dirpath),reg(filename),[iwan1,iwan1],"Uaa",WmaxPade=WmaxPade)
             do iwan2=1+iwan1,Norb
+               iU2 = iwan2+Norb*(iwan2-1)
                iJ1 = iwan1+Norb*(iwan2-1)
                iJ2 = iwan2+Norb*(iwan1-1)
-               call dump_MaxEnt_Wfunct(W%screened_local(iJ1,iJ2,:),reg(mode),reg(dirpath),reg(filename),[iwan1,iwan2])
-               if(present(WmaxPade).and.(WmaxPade.gt.0))call dump_MaxEnt_Wfunct(W%screened_local(iJ1,iJ2,:),reg(mode),reg(dirpath),reg(filename),[iwan1,iwan2],WmaxPade=WmaxPade)
+               call dump_MaxEnt_Wfunct(W%screened_local(iU1,iU2,:),reg(mode),reg(dirpath),reg(filename),[iwan1,iwan2],"Uab")
+               if(present(WmaxPade).and.(WmaxPade.gt.0))call dump_MaxEnt_Wfunct(W%screened_local(iU1,iU2,:),reg(mode),reg(dirpath),reg(filename),[iwan1,iwan2],"Uab",WmaxPade=WmaxPade)
+               call dump_MaxEnt_Wfunct(W%screened_local(iJ1,iJ2,:),reg(mode),reg(dirpath),reg(filename),[iwan1,iwan2],"J")
+               if(present(WmaxPade).and.(WmaxPade.gt.0))call dump_MaxEnt_Wfunct(W%screened_local(iJ1,iJ2,:),reg(mode),reg(dirpath),reg(filename),[iwan1,iwan2],"J",WmaxPade=WmaxPade)
             enddo
          enddo
       endif

@@ -37,7 +37,7 @@ int main(int argc, char *argv[])
    double Beta;
    int Nspin,NtauF,NtauB,Norder,Nmeas,Ntherm,Nshift,printTime;
    //logical flags and compatibility typo fix
-   bool paramagnet,retarded,nnt_meas,quickloops;
+   bool paramagnet,retarded,nnt_meas,quickloops,dichotomy;
    int para_read,ret_read,nnt_read,quick_read;
    // Post-processing of the Green's function
    int binlength,binstart;
@@ -122,7 +122,7 @@ int main(int argc, char *argv[])
             mpi.report(" binstart= "+str(binstart));
          }
          mpi.report(" Nimp= "+str(Nimp));
-         if((density>0.0)&&(quickloops==true))
+         if((density>0.0)&&quickloops)
          {
             mpi.report(" density= "+str(density));
             mpi.report(" muStep= "+str(muStep));
@@ -200,13 +200,16 @@ int main(int argc, char *argv[])
       //......................................................................//
       //                     Chemical potential Lookup                        //
       //......................................................................//
-      if((density>0.0)&&(quickloops==true))
+      if((density>0.0)&&quickloops)
       {
          print_line_space(1,mpi.is_master());
          double trial_density;
          double mu_start=ImpurityList[0].get_mu();
          double mu_new,mu_last=ImpurityList[0].get_mu();
          std::vector<double>Ntmp(Nimp,0.0);
+
+         //
+         dichotomy=true;
 
          //
          print_line_minus(80,mpi.is_master());
@@ -244,43 +247,54 @@ int main(int argc, char *argv[])
             //
             if((muSign>0.0)&&(trial_density > density)) break;
             if((muSign<0.0)&&(trial_density < density)) break;
+            if(imu == muIter-1)
+            {
+               mpi.report(" *NOT* found chemical potential after "+str(muIter)+" rigid shifts. Last value: "+str(mu_new));
+               mpi.report(" (User should try to increase either MU_ITER or MU_STEP.)");
+               dichotomy=false;
+               break;
+            }
+            //
             mu_last=mu_new;
          }
 
          //
-         print_line_space(1,mpi.is_master());
-         double mu_below=std::min(mu_new,mu_last);
-         double mu_above=std::max(mu_new,mu_last);
-         for (int imu=0; imu < muIter; imu++)
+         if(dichotomy)
          {
-            //
-            mpi.report(" Chemical potential boundaries: "+str(mu_below)+" / "+str(mu_above));
-            mu_new = (mu_below+mu_above)/2.0;
-            mpi.report(" Setting chemical potential: "+str(mu_new));
-            //
-            for(int isite=0; isite < Nimp; isite++)
+            print_line_space(3,mpi.is_master());
+            double mu_below=std::min(mu_new,mu_last);
+            double mu_above=std::max(mu_new,mu_last);
+            for (int imu=0; imu < muIter; imu++)
             {
-               mpi.report(" Quick solution ("+str((int)(muTime*60))+"sec) of site "+SiteName[isite]);
-               ImpurityList[isite].reset_mu( mu_new );
-               ImpurityList[isite].solve( muTime, true );
-               Ntmp[isite]=ImpurityList[isite].get_Density();
-               mpi.report(" Site density: "+str(Ntmp[isite]));
-            }
-            trial_density = std::accumulate(Ntmp.begin(), Ntmp.end(), 0.0);
-            mpi.report(" Total density: "+str(trial_density)+" relative error: "+str(fabs(trial_density-density)/density));
-            print_line_space(1,mpi.is_master());
-            //
-            if(trial_density > density) mu_above=mu_new;
-            if(trial_density < density) mu_below=mu_new;
-            if((fabs(trial_density-density)/density)<muErr)
-            {
-               mpi.report(" Found correct chemical potential after "+str(imu)+" iterations: "+str(mu_new));
-               break;
-            }
-            else if(imu == muIter-1)
-            {
-               mpi.report(" *NOT* found chemical potential after "+str(muIter)+" iterations. Last value: "+str(mu_new));
-               break;
+               //
+               mpi.report(" Chemical potential boundaries: "+str(mu_below)+" / "+str(mu_above));
+               mu_new = (mu_below+mu_above)/2.0;
+               mpi.report(" Setting chemical potential: "+str(mu_new));
+               //
+               for(int isite=0; isite < Nimp; isite++)
+               {
+                  mpi.report(" Quick solution ("+str((int)(muTime*60))+"sec) of site "+SiteName[isite]);
+                  ImpurityList[isite].reset_mu( mu_new );
+                  ImpurityList[isite].solve( muTime, true );
+                  Ntmp[isite]=ImpurityList[isite].get_Density();
+                  mpi.report(" Site density: "+str(Ntmp[isite]));
+               }
+               trial_density = std::accumulate(Ntmp.begin(), Ntmp.end(), 0.0);
+               mpi.report(" Total density: "+str(trial_density)+" relative error: "+str(fabs(trial_density-density)/density));
+               print_line_space(1,mpi.is_master());
+               //
+               if(trial_density > density) mu_above=mu_new;
+               if(trial_density < density) mu_below=mu_new;
+               if((fabs(trial_density-density)/density)<muErr)
+               {
+                  mpi.report(" Found correct chemical potential after "+str(imu)+" iterations: "+str(mu_new));
+                  break;
+               }
+               else if(imu == muIter-1)
+               {
+                  mpi.report(" *NOT* found chemical potential after "+str(muIter)+" iterations. Last value: "+str(mu_new));
+                  break;
+               }
             }
          }
 

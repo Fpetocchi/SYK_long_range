@@ -50,14 +50,30 @@ program SelfConsistency
       !
       call printHeader(Iteration)
       !
+      !Check if needed fields are already present
+      call inquireFile(reg(ItFolder)//"Wlat_w.DAT",Wlat_exists,hardstop=.false.,verb=verbose)
+      call inquireFile(reg(ItFolder)//"Sfull_w_k_s1.DAT",S_Full_exists,hardstop=.false.,verb=verbose) !add spin2 ?
+      !
+      if(Wlat_exists.and.S_Full_exists)then ! because I need the full K dependent Wlat, which is never stored, in ordeer to compute S_Full
+         write(*,"(A)") new_line("A")//new_line("A")//"---- skipping Plat and Wlat calculations."
+         calc_P=.false.
+         calc_W=.false.
+         call read_BosonicField(Wlat,reg(ItFolder),"Wlat_w.DAT")
+      endif
+      if(S_Full_exists)then
+         write(*,"(A)") new_line("A")//new_line("A")//"---- skipping S_Full calculation."
+         calc_Sigmak=.false.
+         call AllocateFermionicField(S_Full,Crystal%Norb,Nmats,Nkpt=Crystal%Nkpt,Nsite=Nsite,Beta=Beta)
+         call read_FermionicField(S_Full,reg(ItFolder),"Sfull_w",Crystal%kpt)
+      endif
+      !
       !K-dependent Polarization - only G0W0,scGW,GW+EDMFT
-      !calc_Plat=.false. !TEST
-      if(calc_Plat)then
+      if(calc_P)then
          !
          call calc_Pi(Plat,Glat,Crystal)
          call dump_BosonicField(Plat,reg(ItFolder),"Plat_w.DAT")
          !
-         if(merge_Pi.and.solve_DMFT) then !a bit redundant since there is no merge wihtout DMFT
+         if(merge_P.and.solve_DMFT) then !a bit redundant since there is no merge wihtout DMFT
             call MergeFields(Plat,P_EDMFT,alphaPi,SiteOrbs)
             call dump_BosonicField(Plat,reg(ItFolder),"Plat_merged_w.DAT")
          endif
@@ -65,7 +81,6 @@ program SelfConsistency
       endif
       !
       !Fully screened interaction - only G0W0,scGW,GW+EDMFT,EDMFT
-      !calc_W=.false. !TEST
       if(calc_W)then
          !
          if(calc_Wfull)  call calc_W_full(Wlat,Ulat,Plat,Crystal)
@@ -77,7 +92,6 @@ program SelfConsistency
       call DeallocateBosonicField(Plat)
       !
       !K-dependent self-energy - only G0W0,scGW,GW+EDMFT
-      !calc_Sigmak=.false. !TEST
       if(calc_Sigmak)then
          !
          !Hartree shift between G0W0 and LDA
@@ -89,7 +103,10 @@ program SelfConsistency
          !G0W0 contribution and Vexchange readed from SPEX
          allocate(Vxc(Crystal%Norb,Crystal%Norb,Crystal%Nkpt,Nspin));Vxc=czero
          call AllocateFermionicField(S_G0W0,Crystal%Norb,Nmats,Nkpt=Crystal%Nkpt,Nsite=Nsite,Beta=Beta)
-         call read_Sigma_spex(S_G0W0,Crystal,verbose,Vxc=Vxc,doAC=Sigma_AC)
+         call read_Sigma_spex(S_G0W0,Crystal,verbose,Vxc=Vxc,doAC=Sigma_AC,pathOUTPUT=reg(pathINPUTtr))
+         !
+         !This is to give a slightly better approximation for the 0th solver solution
+         if((Iteration.eq.0).and.S_DMFT%status) S_DMFT%ws = S_G0W0%ws
          !
          !scGW
          call AllocateFermionicField(S_GW_C,Crystal%Norb,Nmats,Nkpt=Crystal%Nkpt,Nsite=Nsite,Beta=Beta)
@@ -101,7 +118,7 @@ program SelfConsistency
             !
             call AllocateFermionicField(S_G0W0dc,Crystal%Norb,Nmats,Nkpt=Crystal%Nkpt,Nsite=Nsite,Beta=Beta)
             call join_SigmaCX(S_G0W0dc,S_GW_C,S_GW_X)
-            call dump_FermionicField(S_G0W0dc,reg(pathDATA)//"0/","SGoWo",.true.,Crystal%kpt)
+            call dump_FermionicField(S_G0W0dc,reg(pathDATA)//"0/","SGoWo_w",.true.,Crystal%kpt)
             call DeallocateFermionicField(S_G0W0dc)
             !
             !Dump G0W0 local self-energy
@@ -110,7 +127,7 @@ program SelfConsistency
          elseif(Iteration.gt.0)then
             !
             call AllocateFermionicField(S_G0W0dc,Crystal%Norb,Nmats,Nkpt=Crystal%Nkpt,Nsite=Nsite,Beta=Beta)
-            call read_FermionicField(S_G0W0dc,reg(pathDATA)//"0/","SGoWo",kpt=Crystal%kpt)
+            call read_FermionicField(S_G0W0dc,reg(pathDATA)//"0/","SGoWo_w",kpt=Crystal%kpt)
             !
             call AllocateFermionicField(S_GW,Crystal%Norb,Nmats,Nkpt=Crystal%Nkpt,Nsite=Nsite,Beta=Beta)
             call join_SigmaCX(S_GW,S_GW_C,S_GW_X)
@@ -145,8 +162,7 @@ program SelfConsistency
       endif
       !
       !Put together all the contributions to the full self-energy
-      !call AllocateFermionicField(S_Full,Crystal%Norb,Nmats,Nkpt=Crystal%Nkpt,Nsite=Nsite,Beta=Beta) !TEST
-      call join_SigmaFull(Iteration)
+      if(.not.S_Full_exists)call join_SigmaFull(Iteration)
       !
       !Compute the Full Green's function and set the density
       call calc_Gmats(Glat,Crystal,S_Full)

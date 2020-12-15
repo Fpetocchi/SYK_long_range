@@ -156,8 +156,9 @@ module input_vars
    !Paths (directories must end with "/") and loop variables
    integer,public                           :: FirstIteration
    integer,public                           :: LastIteration
-   character(len=256),public                :: pathINPUT!="InputFiles/"
-   character(len=256),public                :: pathDATA!="Iterations/"
+   character(len=256),public                :: pathINPUT
+   character(len=256),public                :: pathINPUTtr
+   character(len=256),public                :: pathDATA
    integer,public                           :: LOGfile
    real(8),public                           :: Mixing_Delta
    real(8),public                           :: Mixing_curlyU
@@ -356,7 +357,8 @@ contains
       !Paths and loop variables
       call add_separator()
       call parse_input_variable(pathINPUT,"PATH_INPUT",InputFile,default="InputFiles",comment="Folder within cwd where to look for input files.")
-      call parse_input_variable(pathDATA,"PATH_DATA",InputFile,default="Iterations",comment="Folder within cwd where to store data.")
+      call parse_input_variable(pathINPUTtr,"PATH_INPUT_TR",InputFile,default="Iterations",comment="Folder within cwd where to save input files after analytic continuation to the Matsubara axis.")
+      call parse_input_variable(pathDATA,"PATH_DATA",InputFile,default="Iterations",comment="Folder within cwd where to store calculation data.")
       call parse_input_variable(FirstIteration,"START_IT",InputFile,default=0,comment="First iteration. If its non zero the code will look for the last item in PATH_DATA/item and start there.")
       call parse_input_variable(LastIteration,"LAST_IT",InputFile,default=100,comment="Last iteration.")
       call parse_input_variable(LOGfile,"LOGFILE",InputFile,default=6,comment="Standard output redirection unit. Use 6 to print to terminal. Not used yet.")
@@ -398,11 +400,17 @@ contains
       endif
       !
       call code_version()
-      call save_InputFile(InputFile)
+      call save_InputFile(reg(InputFile))
       !
       !The last slash is uneffective for some reason
-      pathINPUT=trim(pathINPUT)//"/"
       pathDATA=trim(pathDATA)//"/"
+      if(reg(pathINPUT).eq.reg(pathINPUTtr))then
+         pathINPUT="../"//trim(pathINPUT)//"/"
+         pathINPUTtr="../"//trim(pathINPUT)//"/"
+      else
+         pathINPUT="../"//trim(pathINPUT)//"/"
+         pathINPUTtr=trim(pathINPUTtr)//"/"
+      endif
       !
    end subroutine read_InputFile
 

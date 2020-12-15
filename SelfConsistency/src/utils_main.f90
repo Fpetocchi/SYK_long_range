@@ -64,8 +64,11 @@ module utils_main
    real(8),allocatable                      :: Umat(:,:)
    real(8),allocatable                      :: Kfunct(:,:)
    !
-   logical                                  :: calc_Plat=.false.
-   logical                                  :: merge_Pi=.false.
+   logical                                  :: Wlat_exists=.false.
+   logical                                  :: S_Full_exists=.false.
+   !
+   logical                                  :: calc_P=.false.
+   logical                                  :: merge_P=.false.
    logical                                  :: calc_W=.false.
    logical                                  :: calc_Wfull=.false.
    logical                                  :: calc_Wedmft=.false.
@@ -187,10 +190,10 @@ contains
             enddo
             !
             if(Uspex)then
-               call createDir(reg(pathINPUT)//"VW_imag",verb=verbose)
+               call createDir(reg(pathINPUTtr)//"VW_imag",verb=verbose)
                if(verbose)then
-                  call createDir(reg(pathINPUT)//"VW_imag_readable",verb=verbose)
-                  call createDir(reg(pathINPUT)//"VW_real_readable",verb=verbose)
+                  call createDir(reg(pathINPUTtr)//"VW_imag_readable",verb=verbose)
+                  call createDir(reg(pathINPUTtr)//"VW_real_readable",verb=verbose)
                endif
             endif
             !
@@ -207,10 +210,10 @@ contains
             endif
             !
             if(Uspex)then
-               call createDir(reg(pathINPUT)//"VW_imag",verb=verbose)
+               call createDir(reg(pathINPUTtr)//"VW_imag",verb=verbose)
                if(verbose)then
-                  call createDir(reg(pathINPUT)//"VW_imag_readable",verb=verbose)
-                  call createDir(reg(pathINPUT)//"VW_real_readable",verb=verbose)
+                  call createDir(reg(pathINPUTtr)//"VW_imag_readable",verb=verbose)
+                  call createDir(reg(pathINPUTtr)//"VW_real_readable",verb=verbose)
                endif
             endif
             !
@@ -230,10 +233,10 @@ contains
             endif
             !
             if(Uspex)then
-               call createDir(reg(pathINPUT)//"VW_imag",verb=verbose)
+               call createDir(reg(pathINPUTtr)//"VW_imag",verb=verbose)
                if(verbose)then
-                  call createDir(reg(pathINPUT)//"VW_imag_readable",verb=verbose)
-                  call createDir(reg(pathINPUT)//"VW_real_readable",verb=verbose)
+                  call createDir(reg(pathINPUTtr)//"VW_imag_readable",verb=verbose)
+                  call createDir(reg(pathINPUTtr)//"VW_real_readable",verb=verbose)
                endif
             endif
             !
@@ -492,7 +495,7 @@ contains
          EqvGWndx%O=.true.
          EqvGWndx%Ntotset=EqvGWndx%Nset
          !
-         if(sum(EqvGWndx%SetNorb).lt.Lttc%Norb)then
+         if(sum(EqvGWndx%SetNorb).lt.sum(SiteNorb))then
             !
             EqvGWndx%Ntotset = EqvGWndx%Nset + (Lttc%Norb-sum(EqvGWndx%SetNorb))
             !
@@ -599,7 +602,7 @@ contains
             !Unscreened interaction
             call AllocateBosonicField(Ulat,Crystal%Norb,Nmats,Crystal%iq_gamma,Nkpt=Crystal%Nkpt,Nsite=Nsite,Beta=Beta)
             if(Umodel)stop "U model is implemented only for non-GW (fully local) screened calculations."
-            if(Uspex)call read_U_spex(Ulat,save2readable=verbose,LocalOnly=.false.)
+            if(Uspex)call read_U_spex(Ulat,save2readable=verbose,LocalOnly=.false.,doAC=U_AC,pathOUTPUT=reg(pathINPUTtr))
             !
             !Fully screened interaction
             call AllocateBosonicField(Wlat,Crystal%Norb,Nmats,Crystal%iq_gamma,Nkpt=Crystal%Nkpt,Nsite=Nsite,Beta=Beta)
@@ -619,7 +622,7 @@ contains
             call calc_density(Glat,Glat%N_s)
             !
             !Logical Flags
-            calc_Plat = .true.
+            calc_P = .true.
             calc_W = .true.
             calc_Wfull = .true.
             calc_Sigmak = .true.
@@ -655,7 +658,7 @@ contains
             !
             !Unscreened interaction
             call AllocateBosonicField(Ulat,Crystal%Norb,Nmats,Crystal%iq_gamma,Nsite=Nsite,Beta=Beta)
-            if(Uspex)call read_U_spex(Ulat,save2readable=verbose,LocalOnly=.true.,doAC=U_AC)
+            if(Uspex)call read_U_spex(Ulat,save2readable=verbose,LocalOnly=.true.,doAC=U_AC,pathOUTPUT=reg(pathINPUTtr))
             if(Umodel)then
                call inquireFile(reg(pathINPUT)//"Uw_model.DAT",filexists,hardstop=.false.,verb=verbose)
                if(filexists)then
@@ -682,7 +685,7 @@ contains
             !
             !Unscreened interaction
             call AllocateBosonicField(Ulat,Crystal%Norb,Nmats,Crystal%iq_gamma,Nsite=Nsite,Beta=Beta)
-            if(Uspex)call read_U_spex(Ulat,save2readable=verbose,LocalOnly=.false.,doAC=U_AC)
+            if(Uspex)call read_U_spex(Ulat,save2readable=verbose,LocalOnly=.false.,doAC=U_AC,pathOUTPUT=reg(pathINPUTtr))
             if(Umodel)then
                call inquireFile(reg(pathINPUT)//"Uw_model.DAT",filexists,hardstop=.false.,verb=verbose)
                if(filexists)then
@@ -722,7 +725,7 @@ contains
             !Unscreened interaction
             call AllocateBosonicField(Ulat,Crystal%Norb,Nmats,Crystal%iq_gamma,Nkpt=Crystal%Nkpt,Nsite=Nsite,Beta=Beta)
             if(Umodel)stop "U model is implemented only for non-GW (fully local) screened calculations."
-            if(Uspex)call read_U_spex(Ulat,save2readable=verbose,LocalOnly=.false.,doAC=U_AC)
+            if(Uspex)call read_U_spex(Ulat,save2readable=verbose,LocalOnly=.false.,doAC=U_AC,pathOUTPUT=reg(pathINPUTtr))
             !
             !Fully screened interaction
             call AllocateBosonicField(Wlat,Crystal%Norb,Nmats,Crystal%iq_gamma,Nkpt=Crystal%Nkpt,Nsite=Nsite,Beta=Beta)
@@ -764,11 +767,11 @@ contains
             call calc_density(Glat,Glat%N_s)
             !
             !Logical Flags
-            calc_Plat = .true.
+            calc_P = .true.
             calc_Wfull = .true.
             calc_Sigmak = .true.
             if(ItStart.gt.0)then
-               merge_Pi = .true.
+               merge_P = .true.
                merge_Sigma = .true.
             endif
             !
@@ -844,12 +847,17 @@ contains
       write(*,"(A)") new_line("A")//new_line("A")//"---- join_SigmaFull"
       !
       !
+      call AllocateFermionicField(S_Full,Crystal%Norb,Nmats,Nkpt=Crystal%Nkpt,Nsite=Nsite,Beta=Beta)
+      !
       select case(reg(CalculationType))
          case default
+            !
+            !
             stop "Available Calculation types are: G0W0, scGW, DMFT+statU, DMFT+dynU, EDMFT, GW+EDMFT."
+            !
+            !
          case("G0W0","scGW","GW+EDMFT")
             !
-            call AllocateFermionicField(S_Full,Crystal%Norb,Nmats,Nkpt=Crystal%Nkpt,Nsite=Nsite,Beta=Beta)
             !
             if(Iteration.eq.0)then
                !
@@ -910,9 +918,9 @@ contains
             !Print full k-dep self-energy: binfmt
             if(printSfull)call dump_FermionicField(S_Full,reg(ItFolder),"Sfull_w",.true.,Crystal%kpt)
             !
+            !
          case("DMFT+statU","DMFT+dynU","EDMFT")
             !
-            call AllocateFermionicField(S_Full,Crystal%Norb,Nmats,Nsite=Nsite,Beta=Beta)
             !
             if(Iteration.eq.0)then
                !
@@ -924,13 +932,15 @@ contains
                !
                !$OMP PARALLEL DEFAULT(NONE),&
                !$OMP SHARED(S_Full,S_DMFT),&
-               !$OMP PRIVATE(iorb,jorb,iw,ispin)
+               !$OMP PRIVATE(iorb,jorb,ik,iw,ispin)
                !$OMP DO
                do ispin=1,Nspin
-                  do iw=1,S_Full%Npoints
-                     do iorb=1,S_Full%Norb
-                        do jorb=1,S_Full%Norb
-                           S_Full%ws(iorb,jorb,iw,ispin) = S_DMFT%ws(iorb,jorb,iw,ispin)
+                  do ik=1,S_Full%Nkpt
+                     do iw=1,S_Full%Npoints
+                        do iorb=1,S_Full%Norb
+                           do jorb=1,S_Full%Norb
+                              S_Full%wks(iorb,jorb,iw,ik,ispin) = S_DMFT%ws(iorb,jorb,iw,ispin)
+                           enddo
                         enddo
                      enddo
                   enddo
@@ -940,7 +950,11 @@ contains
                !
             endif
             !
+            call FermionicKsum(S_Full)
+            !
+            !Print full k-dep self-energy: binfmt
             !Not dumping anything since S_DMFT is already present
+            !
             !
       end select
       !
@@ -1004,18 +1018,16 @@ contains
       if(RotateHloc)then
          allocate(Rot(Norb,Norb)); Rot=HlocRot(1:Norb,1:Norb,isite)
          call loc2imp(Gloc,Glat,Orbs,U=Rot)
-         if(Iteration.gt.0)call loc2imp(SigmaImp,S_DMFT,Orbs,U=Rot)
+         call loc2imp(SigmaImp,S_DMFT,Orbs,U=Rot)!if(Iteration.gt.0)
          deallocate(Rot)
       else
          call loc2imp(Gloc,Glat,Orbs)
-         if(Iteration.gt.0)call loc2imp(SigmaImp,S_DMFT,Orbs)
+         call loc2imp(SigmaImp,S_DMFT,Orbs)!if(Iteration.gt.0)
       endif
       !
       !Print what's used to compute delta
-      if(verbose)then
-         call dump_FermionicField(Gloc,reg(ItFolder)//"Solver_"//reg(SiteName(isite))//"/","G_"//reg(SiteName(isite))//"_w")
-         call dump_FermionicField(SigmaImp,reg(ItFolder)//"Solver_"//reg(SiteName(isite))//"/","S_"//reg(SiteName(isite))//"_w")
-      endif
+      call dump_FermionicField(Gloc,reg(ItFolder)//"Solver_"//reg(SiteName(isite))//"/","G_"//reg(SiteName(isite))//"_w")
+      call dump_FermionicField(SigmaImp,reg(ItFolder)//"Solver_"//reg(SiteName(isite))//"/","S_"//reg(SiteName(isite))//"_w")
       !
       !Compute the fermionic Weiss field aka the inverse of CurlyG
       allocate(invGf(Norb,Norb));invGf=czero
@@ -1061,8 +1073,8 @@ contains
                   newMomDir = reg(ItFolder)//"Solver_"//reg(SiteName(isite))//"/"
                   call inquireFile(reg(oldMomDir)//reg(file),filexists,hardstop=.false.,verb=verbose)
                   if(filexists) call execute_command_line(" cp "//reg(oldMomDir)//reg(file)//" "//reg(newMomDir))
-                  !
-                  call fit_Delta(Dfit,Beta,Nfit,reg(newMomDir),reg(file),"Shifted",Eloc,filename="DeltaAnd")
+                  wndx = minloc(abs(wmats-0.85*wmatsMax),dim=1)
+                  call fit_Delta(Dfit,Beta,Nfit,reg(newMomDir),reg(file),"Shifted",Eloc,filename="DeltaAnd",Wlimit=wndx)
                   !
                case("Moments")
                   !
@@ -1120,6 +1132,17 @@ contains
             enddo
          enddo
          call DeallocateFermionicField(DeltaOld)
+      endif
+      !
+      !Spin symmetrization for paramagnetic calculations
+      if(EqvGWndx%S)then
+         !
+         Dmats(:,:,1) = (Dmats(:,:,1) + Dmats(:,:,2))/2d0
+         Dmats(:,:,2) = Dmats(:,:,1)
+         !
+         Eloc(:,1) = (Eloc(:,1) + Eloc(:,2))/2d0
+         Eloc(:,2) = Eloc(:,1)
+         !
       endif
       !
       !Fourier transform to the tau axis
@@ -2096,19 +2119,23 @@ contains
       integer                               :: Norb,Norb_imp
       integer                               :: iorb,jorb,isite
       integer                               :: wn,ws,wsi,wnmin
-      integer                               :: l1,l2,l3
+      integer                               :: l1,l2,l3,l4,l5
       integer                               :: enlrg_
       character(len=255)                    :: header1="Lattice density"
       character(len=255)                    :: header2="Impurity density"
       character(len=255)                    :: header3="Solver density"
+      character(len=255)                    :: header4="Impurity magnetization"
+      character(len=255)                    :: header5="Solver magnetization"
       !
       Norb = Crystal%Norb
       !
       l1=len(trim(header1)//" up")
       l2=len(trim(header2)//" up")
       l3=len(trim(header3)//" up")
+      l4=len(trim(header3))
+      l5=len(trim(header3))
       !
-      wnmin=max(maxval([l1,l2,l3]),Norb*6) !6 because I have 4 precision
+      wnmin=max(maxval([l1,l2,l3,l4,l5]),Norb*6) !6 because I have 4 precision
       enlrg_=3
       if(present(enlrg))enlrg_=enlrg
       !
@@ -2162,6 +2189,14 @@ contains
                write(*,"(2("//str(Norb)//"F"//str(wn)//".4,"//str(ws)//"X))") (real(densityDMFT(iorb,jorb,1)),jorb=1,Norb),(real(densityDMFT(iorb,jorb,2)),jorb=1,Norb)
             enddo
             !
+            if(.not.EqvGWndx%S)then
+               write(*,*)
+               write(*,"(A"//str(wn*Norb)//","//str(ws)//"X)")banner(trim(header4),wn*Norb)
+               do iorb=1,Norb
+                  write(*,"("//str(Norb)//"F"//str(wn)//".4,"//str(ws)//"X)") (real(densityDMFT(iorb,jorb,1)-densityDMFT(iorb,jorb,2)),jorb=1,Norb)
+               enddo
+            endif
+            !
             if(Nsite.gt.1)then
                do isite=1,Nsite
                   !
@@ -2175,6 +2210,13 @@ contains
                                        (real(densityQMC(iorb,jorb,1,isite)),jorb=1,Norb_imp),(real(densityQMC(iorb,jorb,2,isite)),jorb=1,Norb_imp)
                   enddo
                   !
+                  if(.not.EqvGWndx%S)then
+                     write(*,*)
+                     write(*,"(A"//str(wn*Norb)//","//str(ws)//"X)")banner(trim(header5),wn*Norb)
+                     do iorb=1,Norb_imp
+                        write(*,"("//str(wsi)//"X,"//str(Norb_imp)//"F"//str(wn)//".4,"//str(ws)//"X)")(real(densityQMC(iorb,jorb,1,isite)-densityQMC(iorb,jorb,2,isite)),jorb=1,Norb_imp)
+                     enddo
+                  endif
                   if(ExpandImpurity.or.AFMselfcons)exit
                   !
                enddo

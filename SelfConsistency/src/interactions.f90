@@ -679,7 +679,7 @@ contains
       !
       !
       ! Check if the data on the Matsubara axis are present
-      path = reg(pathINPUT)//"VW_imag"
+      path = reg(pathOUTPUT_)//"VW_imag"
       !call inquireDir(reg(path),ACdone,hardstop=.false.,verb=verbose)
       call inquireFile(reg(path)//"/VW.Q0001.DAT",ACdone,hardstop=.false.,verb=verbose)
       doAC_ = .not.ACdone
@@ -688,10 +688,10 @@ contains
       !
       ! This has to be done before allocation of large files otherwise the "system" command will not work
       if(doAC_.and.(.not.LocalOnly))then
-         call createDir(reg(trim(pathINPUT)//"VW_imag"),verb=verbose)
+         call createDir(reg(trim(pathOUTPUT_)//"VW_imag"),verb=verbose)
          if(save2readable)then
-            call createDir(reg(trim(pathINPUT)//"VW_imag_readable"),verb=verbose)
-            call createDir(reg(trim(pathINPUT)//"VW_real_readable"),verb=verbose)
+            call createDir(reg(trim(pathOUTPUT_)//"VW_imag_readable"),verb=verbose)
+            call createDir(reg(trim(pathOUTPUT_)//"VW_real_readable"),verb=verbose)
          endif
       endif
       !
@@ -918,7 +918,7 @@ contains
             !Print out the elements with inverted Im/Re symmetry
             if(UfullStructure)then
                unit = free_unit()
-               path = reg(pathINPUT)//"ReversedSymmetry.DAT"
+               path = reg(pathOUTPUT_)//"ReversedSymmetry.DAT"
                open(unit=unit,file=reg(path),form="formatted",status="unknown",position="rewind",action="write")
                write(unit,"(3A5)")"iq","ib1","ib2"
                do iq=1,Umats%Nkpt
@@ -965,10 +965,10 @@ contains
          !
          !---------------------------------------------------------------------!
          !
-         write(*,"(A)")"     Reading UcRPA(q,iw) from "//reg(pathINPUT)//"VW_imag/"
+         write(*,"(A)")"     Reading UcRPA(q,iw) from "//reg(pathOUTPUT_)//"VW_imag/"
          !
          ! Allocations from dimensions written in W.Q0001.DAT file
-         path = reg(pathINPUT)//"VW_imag/VW.Q0001.DAT"
+         path = reg(pathOUTPUT_)//"VW_imag/VW.Q0001.DAT"
          call inquireFile(reg(path),filexists,verb=verbose)
          !
          unit = free_unit()
@@ -989,7 +989,7 @@ contains
          ! Look for the Number of SPEX files. Which are supposed to be ordered.
          Nkpt = 0
          do iq=1,2000
-            file_spex = reg(pathINPUT)//"VW_imag/VW.Q"//str(iq,4)//".DAT"
+            file_spex = reg(pathOUTPUT_)//"VW_imag/VW.Q"//str(iq,4)//".DAT"
             call inquireFile(reg(file_spex),filexists,hardstop=.false.,verb=verbose)
             if(.not.filexists) exit
             Nkpt = Nkpt + 1
@@ -998,7 +998,7 @@ contains
          if((.not.LocalOnly).and.(Umats%Nkpt.ne.Nkpt)) stop "Number of k-points of given BosonicField and number of VW_imag k-points do not coincide."
          !
          ! Read VW_imag accumulating local attribute and optionally storing the k-dependent part
-         path = reg(pathINPUT)//"VW_imag/"
+         path = reg(pathOUTPUT_)//"VW_imag/"
          do iq=1,Nkpt
             !
             file_spex = reg(path)//"VW.Q"//str(iq,4)//".DAT"
@@ -1168,7 +1168,7 @@ contains
       !
       use parameters
       use utils_misc
-      use input_vars, only :  pathINPUT
+      use input_vars, only :  pathINPUTtr
       implicit none
       !
       type(BosonicField),intent(in)         :: Umats
@@ -1191,7 +1191,7 @@ contains
       !
       ! Check the difference betqween bare values induced by thecutoff in the matsubara frequency
       unit = free_unit()
-      path = reg(pathINPUT)//"ACcutoffError.DAT"
+      path = reg(pathINPUTtr)//"ACcutoffError.DAT"
       open(unit=unit,file=reg(path),form="formatted",status="unknown",position="rewind",action="write")
       write(unit,"(A,1I5,A,1E14.7)")"Difference between Umats_bare value and last screened frequency: ",Nmats," thresh:",thresh
       !
@@ -1249,7 +1249,7 @@ contains
       !
       ! Check that the screened and bare values of Umats and Ureal are close enough
       unit = free_unit()
-      path = reg(pathINPUT)//"ACcheck.DAT"
+      path = reg(pathINPUTtr)//"ACcheck.DAT"
       open(unit=unit,file=reg(path),form="formatted",status="unknown",position="rewind",action="write")
       write(unit,"(A,1E14.7)")"Difference between asymptotic behaviour of Ureal and Umats. Thresh:",thresh
       !

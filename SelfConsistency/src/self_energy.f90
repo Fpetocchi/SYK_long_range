@@ -631,7 +631,7 @@ contains
       endif
       !
       ! Check if the data on the Matsubara axis are present if(.not.paramagneticSPEX) look also for spin2
-      path = reg(pathINPUT)//"SGoWo_k_s1.DAT"
+      path = reg(pathOUTPUT_)//"SGoWo_k_s1.DAT"
       call inquireFile(reg(path),ACdone,hardstop=.false.,verb=verbose)
       doAC_ = .not.ACdone
       if(present(doAC)) doAC_ = doAC .or. doAC_
@@ -818,10 +818,10 @@ contains
                do ib=ib_sigma1,ib_sigma2
                   !
                   ! Check that the GoWo self-energy is vanishing at w --> +/-inf
-                  if (iseg.eq.1.and.dabs(dimag(SigmaC_seg(1,ib,ik,1))).gt.1.d-4) then
+                  if (iseg.eq.1.and.dabs(dimag(SigmaC_seg(1,ib,ik,1))).gt.1.d-3) then
                      write(*,"(A,2E20.12)") "     Warning: ImSigmaC_spex("//str(ik)//",1) orb "//str(ib)//" is > 1.d-4: ",SigmaC_seg(1,ib,ik,1)
                   endif
-                  if (iseg.eq.SigmaSegments.and.dabs(dimag(SigmaC_seg(NfreqSeg(iseg),ib,ik,1))).gt.1.d-6) then
+                  if (iseg.eq.SigmaSegments.and.dabs(dimag(SigmaC_seg(NfreqSeg(iseg),ib,ik,1))).gt.1.d-3) then
                      write(*,"(A,2E20.12)") "     Warning: ImSigmaC_spex("//str(ik)//",Nw) orb "//str(ib)//" is > 1.d-4: ",SigmaC_seg(NfreqSeg(iseg),ib,ik,1)
                   endif
                   !
@@ -918,13 +918,13 @@ contains
          !
          !---------------------------------------------------------------------!
          !
-         write(*,"(A)")"     Reading SigmaGoWo(k,iw) from "//reg(pathINPUT)//"SGoWo_k_s[1,2].DAT"
-         !
          ! Just read all
+         write(*,"(A)")"     Reading SigmaGoWo(k,iw) from "//reg(pathOUTPUT_)//"SGoWo_k_s[1,2].DAT"
          call clear_attributes(Smats_GoWo)
-         call read_FermionicField(Smats_GoWo,reg(pathINPUT),"SGoWo",Lttc%kpt)
+         call read_FermionicField(Smats_GoWo,reg(pathOUTPUT_),"SGoWo",Lttc%kpt)
          !
          if(present(Vxc))then
+            write(*,"(A)")"     Reading Vxc(k) from "//reg(pathINPUT)
             call assert_shape(Vxc,[Norb,Norb,Nkpt,Nspin],"read_Sigma_spex","Vxc")
             Vxc=czero
             call read_matrix(Vxc(:,:,:,1),reg(pathINPUT),"Vxc_k_s1.DAT")

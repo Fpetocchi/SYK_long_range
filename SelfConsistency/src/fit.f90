@@ -823,8 +823,8 @@ contains
                   !
                   write(*,"(3(A,I3))")"     Results for orb: ",iorb," spin: ",ispin," Npara: ",size(ParamVec)
                   write(*,"(A,I,2(A,F))")"     Iterations: ",Niter," Chi^2: ",chi,", Wstart: ",wmats(1)
-                  write(*,"(A,100F12.6)")"     Moments before fit: ",Moments(iorb,:,ispin)
-                  write(*,"(A,100F12.6)")"     Moments after fit:  ",0d0,1d0,ParamVec
+                  write(*,"(A,100E16.6)")"     Moments before fit: ",Moments(iorb,:,ispin)
+                  write(*,"(A,100E16.6)")"     Moments after fit:  ",0d0,1d0,ParamVec
                   !
                   Moments(iorb,3:Nfit,ispin) = ParamVec
                   !
@@ -849,8 +849,8 @@ contains
                   !
                   write(*,"(3(A,I3))")"     Results for orb: ",iorb," spin: ",ispin," Npara: ",size(ParamVec)
                   write(*,"(A,I,2(A,F))")"     Iterations: ",Niter," Chi^2: ",chi,", Wstart: ",wmats(1)
-                  write(*,"(A,100F12.6)")"     Moments before fit: ",Moments(iorb,:,ispin)
-                  write(*,"(A,100F12.6)")"     Moments after fit:  ",ParamVec
+                  write(*,"(A,100E16.6)")"     Moments before fit: ",Moments(iorb,:,ispin)
+                  write(*,"(A,100E16.6)")"     Moments after fit:  ",ParamVec
                   !
                   Moments(iorb,:,ispin) = ParamVec
                   !
@@ -875,8 +875,8 @@ contains
                   !
                   write(*,"(3(A,I3))")"     Results for orb: ",iorb," spin: ",ispin," Npara: ",size(ParamVec)
                   write(*,"(A,I,2(A,F))")"     Iterations: ",Niter," Chi^2: ",chi,", Wstart: ",wmats(1)
-                  write(*,"(A,100F12.6)")"     First 5 moments before fit: ",Moments(iorb,0:4,ispin)
-                  write(*,"(A,100F12.6)")"     First 5 moments after fit:  ",ParamVec(1:5)
+                  write(*,"(A,100E16.6)")"     First 5 moments before fit: ",Moments(iorb,0:4,ispin)
+                  write(*,"(A,100E16.6)")"     First 5 moments after fit:  ",ParamVec(1:5)
                   !
                   Moments(iorb,:,ispin) = ParamVec
                   !
