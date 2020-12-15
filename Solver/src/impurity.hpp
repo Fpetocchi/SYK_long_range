@@ -142,7 +142,7 @@ class ct_hyb
                for(int itau=0; itau < F[ifl].size(); itau++)
                {
                   path Dcomp = "Delta["+str(ifl)+"]";
-                  if(F[ifl][itau]>0.0) mpi.StopError( " ->"+Dcomp+" at tau "+str(itau)+" is positive - Exiting.");
+                  if(F[ifl][itau]<0.0) mpi.StopError( " ->"+Dcomp+" at tau "+str(itau)+" is positive - Exiting.");
                }
                //
                for(int jfl=0; jfl <= ifl; jfl++)
