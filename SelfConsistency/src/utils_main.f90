@@ -66,14 +66,17 @@ module utils_main
    !
    logical                                  :: Wlat_exists=.false.
    logical                                  :: S_Full_exists=.false.
+   logical                                  :: dump_Gk=.false.
    !
-   logical                                  :: calc_P=.false.
+   logical                                  :: calc_Pk=.false.
    logical                                  :: merge_P=.false.
    logical                                  :: calc_W=.false.
    logical                                  :: calc_Wfull=.false.
    logical                                  :: calc_Wedmft=.false.
    logical                                  :: calc_Sigmak=.false.
    logical                                  :: merge_Sigma=.false.
+   !
+   logical                                  :: MultiTier=.false.
    !
    character(len=255)                       :: ItFolder,PrevItFolder
 
@@ -379,6 +382,13 @@ contains
       do isite=1,Nsite
          write(*,"(2(A,I3),A,10I3)")"     site: ",isite,", orbital space: ",SiteNorb(isite),", orbital indexes: ",SiteOrbs(isite,1:SiteNorb(isite))
       enddo
+      if(sum(SiteNorb).ne.Lttc%Norb)then
+         MultiTier = .true.
+         if(reg(DC_type).eq."GlocWloc")then
+            DC_type="Sloc"
+            write(*,"(A,1I3)") "     DC_TYPE updated from GlocWloc to "//reg(DC_type)
+         endif
+      endif
       !
       !
       !Store the local rotation of each site
@@ -617,15 +627,14 @@ contains
             else
                call read_FermionicField(Glat,reg(PrevItFolder),"Glat_w",Crystal%kpt)
             endif
-            !
             call calc_density(Glat,Crystal,Glat%N_ks)
             call calc_density(Glat,Glat%N_s)
             !
             !Logical Flags
-            calc_P = .true.
-            calc_W = .true.
+            calc_Pk = .true.
             calc_Wfull = .true.
             calc_Sigmak = .true.
+            dump_Gk = .true.
             !
          case("DMFT+statU")
             !
@@ -646,13 +655,14 @@ contains
             call AllocateFermionicField(S_DMFT,Crystal%Norb,Nmats,Nsite=Nsite,Beta=Beta)
             if(ItStart.ne.0) call read_FermionicField(S_DMFT,reg(PrevItFolder),"Simp_w")
             !
-            !Lattice Gf
+            !Lattice local Gf
             call AllocateFermionicField(Glat,Crystal%Norb,Nmats,Nkpt=Crystal%Nkpt,Nsite=Nsite,Beta=Beta)
             if(ItStart.eq.0)then
                call calc_Gmats(Glat,Crystal)
-               call calc_density(Glat,Crystal,Glat%N_ks)
-               call calc_density(Glat,Glat%N_s)
+            else
+               call read_FermionicField(Glat,reg(PrevItFolder),"Glat_w")
             endif
+            call calc_density(Glat,Glat%N_s)
             !
          case("DMFT+dynU")
             !
@@ -673,18 +683,19 @@ contains
             call AllocateFermionicField(S_DMFT,Crystal%Norb,Nmats,Nsite=Nsite,Beta=Beta)
             if(ItStart.ne.0) call read_FermionicField(S_DMFT,reg(PrevItFolder),"Simp_w")
             !
-            !Lattice Gf
+            !Lattice local Gf
             call AllocateFermionicField(Glat,Crystal%Norb,Nmats,Nkpt=Crystal%Nkpt,Nsite=Nsite,Beta=Beta)
             if(ItStart.eq.0)then
                call calc_Gmats(Glat,Crystal)
-               call calc_density(Glat,Crystal,Glat%N_ks)
-               call calc_density(Glat,Glat%N_s)
+            else
+               call read_FermionicField(Glat,reg(PrevItFolder),"Glat_w")
             endif
+            call calc_density(Glat,Glat%N_s)
             !
          case("EDMFT")
             !
             !Unscreened interaction
-            call AllocateBosonicField(Ulat,Crystal%Norb,Nmats,Crystal%iq_gamma,Nsite=Nsite,Beta=Beta)
+            call AllocateBosonicField(Ulat,Crystal%Norb,Nmats,Crystal%iq_gamma,Nkpt=Crystal%Nkpt,Nsite=Nsite,Beta=Beta)
             if(Uspex)call read_U_spex(Ulat,save2readable=verbose,LocalOnly=.false.,doAC=U_AC,pathOUTPUT=reg(pathINPUTtr))
             if(Umodel)then
                call inquireFile(reg(pathINPUT)//"Uw_model.DAT",filexists,hardstop=.false.,verb=verbose)
@@ -699,28 +710,29 @@ contains
             !Fully screened interaction
             call AllocateBosonicField(Wlat,Crystal%Norb,Nmats,Crystal%iq_gamma,Nkpt=Crystal%Nkpt,Nsite=Nsite,Beta=Beta)
             !
+            !Polarization
+            if(ItStart.ne.0)then
+               call AllocateBosonicField(P_EDMFT,Crystal%Norb,Nmats,Crystal%iq_gamma,Nsite=Nsite,no_bare=.true.,Beta=Beta)
+               call read_BosonicField(P_EDMFT,reg(PrevItFolder),"Pimp_w.DAT")
+            endif
+            !
             !Impurity Self-energy
             call AllocateFermionicField(S_DMFT,Crystal%Norb,Nmats,Nsite=Nsite,Beta=Beta)
             if(ItStart.ne.0) call read_FermionicField(S_DMFT,reg(PrevItFolder),"Simp_w")
             !
-            !Lattice Gf
+            !Lattice local Gf
             call AllocateFermionicField(Glat,Crystal%Norb,Nmats,Nkpt=Crystal%Nkpt,Nsite=Nsite,Beta=Beta)
             if(ItStart.eq.0)then
                call calc_Gmats(Glat,Crystal)
-               call calc_density(Glat,Crystal,Glat%N_ks)
-               call calc_density(Glat,Glat%N_s)
+            else
+               call read_FermionicField(Glat,reg(PrevItFolder),"Glat_w")
             endif
-            !
-            !Polarization
-            if(ItStart.ne.0)then
-               call AllocateBosonicField(P_EDMFT,Crystal%Norb,Crystal%iq_gamma,Nmats,Nsite=Nsite,no_bare=.true.,Beta=Beta)
-               call read_BosonicField(P_EDMFT,reg(PrevItFolder),"Pimp_w")
-            endif
+            call calc_density(Glat,Glat%N_s)
             !
             !Logical Flags
-            calc_Wedmft = .true.
+            calc_Wedmft = ( ItStart.ne.0 )
             !
-         case("GW+EDMFT")
+         case("GW+EDMFT")!MODIFY THIS PART LATER ON
             !
             !Unscreened interaction
             call AllocateBosonicField(Ulat,Crystal%Norb,Nmats,Crystal%iq_gamma,Nkpt=Crystal%Nkpt,Nsite=Nsite,Beta=Beta)
@@ -767,13 +779,14 @@ contains
             call calc_density(Glat,Glat%N_s)
             !
             !Logical Flags
-            calc_P = .true.
+            calc_Pk = .true.
             calc_Wfull = .true.
             calc_Sigmak = .true.
             if(ItStart.gt.0)then
                merge_P = .true.
                merge_Sigma = .true.
             endif
+            dump_Gk = .true.
             !
       end select
       !
@@ -898,10 +911,10 @@ contains
                      do iw=1,S_Full%Npoints
                         do iorb=1,S_Full%Norb
                            do jorb=1,S_Full%Norb
-                              S_Full%wks(iorb,jorb,iw,ik,ispin) =  + S_GW%wks(iorb,jorb,iw,ik,ispin)     &
-                                                                   - S_G0W0dc%wks(iorb,jorb,iw,ik,ispin) &
-                                                                   + S_G0W0%wks(iorb,jorb,iw,ik,ispin)   &
-                                                                   - Vxc(iorb,jorb,ik,ispin)             &
+                              S_Full%wks(iorb,jorb,iw,ik,ispin) =  + S_GW%wks(iorb,jorb,iw,ik,ispin)     & !self-consistently updated
+                                                                   - S_G0W0dc%wks(iorb,jorb,iw,ik,ispin) & !fixed
+                                                                   + S_G0W0%wks(iorb,jorb,iw,ik,ispin)   & !fixed
+                                                                   - Vxc(iorb,jorb,ik,ispin)             & !fixed
                                                                    + VH(iorb,jorb)
                            enddo
                         enddo
@@ -980,16 +993,19 @@ contains
       integer                               :: ispin,iw,iwan,itau,ndx,wndx
       integer,allocatable                   :: Orbs(:)
       real(8),allocatable                   :: wmats(:),tau(:),Moments(:,:,:)
-      real(8),allocatable                   :: Eloc(:,:),PrintLine(:)
+      real(8),allocatable                   :: Eloc(:,:),PrintLine(:),coef01(:,:)
+      complex(8),allocatable                :: Hloc(:,:)
+      real(8)                               :: tailShift
       complex(8),allocatable                :: zeta(:,:,:),invGf(:,:),Rot(:,:)
       complex(8),allocatable                :: Dfit(:,:,:),Dmats(:,:,:),Ditau(:,:,:)
-      complex(8),allocatable                :: invCurlyG(:,:,:)
-      logical                               :: filexists
-      character(len=255)                    :: file,oldMomDir,newMomDir
+      complex(8),allocatable                :: invCurlyG(:,:,:)!,DeltaTail(:)
+      character(len=255)                    :: file,MomDir
       !
       !
       write(*,"(A)") new_line("A")//new_line("A")//"---- calc_Delta of "//reg(SiteName(isite))
       !
+      !
+      if(.not.S_DMFT%status) stop "S_DMFT not properly initialized."
       !
       Norb = SiteNorb(isite)
       allocate(Orbs(Norb))
@@ -997,12 +1013,11 @@ contains
       Nflavor = Norb*Nspin
       !
       allocate(Eloc(Norb,Nspin));Eloc=0d0
+      allocate(coef01(Norb,Nspin));coef01=0d0
       !
       call AllocateFermionicField(SigmaImp,Norb,Nmats,Beta=Beta)
       call AllocateFermionicField(Gloc,Norb,Nmats,Beta=Beta)
       allocate(invCurlyG(Norb,Nmats,Nspin));invCurlyG=czero
-      allocate(Dmats(Norb,Nmats,Nspin));Dmats=czero
-      allocate(Ditau(Norb,Solver%NtauF,Nspin));Ditau=0d0
       !
       allocate(wmats(Nmats));wmats=0d0
       wmats = FermionicFreqMesh(Beta,Nmats)
@@ -1038,7 +1053,8 @@ contains
             call inv(invGf)
             !
             do iwan=1,Norb
-               invCurlyG(iwan,iw,ispin) = invGf(iwan,iwan) + SigmaImp%ws(iwan,iwan,iw,ispin)
+               !invCurlyG(iwan,iw,ispin) = invGf(iwan,iwan) + SigmaImp%ws(iwan,iwan,iw,ispin)
+               invCurlyG(iwan,iw,ispin) = 1d0/Gloc%ws(iwan,iwan,iw,ispin) + SigmaImp%ws(iwan,iwan,iw,ispin)
             enddo
             !
          enddo
@@ -1068,28 +1084,36 @@ contains
                   !
                case("Analytic")
                   !
-                  file = "DeltaAndPara_"//reg(SiteName(isite))//".DAT"
-                  oldMomDir = reg(PrevItFolder)//"Solver_"//reg(SiteName(isite))//"/"
-                  newMomDir = reg(ItFolder)//"Solver_"//reg(SiteName(isite))//"/"
-                  call inquireFile(reg(oldMomDir)//reg(file),filexists,hardstop=.false.,verb=verbose)
-                  if(filexists) call execute_command_line(" cp "//reg(oldMomDir)//reg(file)//" "//reg(newMomDir))
+                  file = "DeltaPara_"//reg(SiteName(isite))//".DAT"
+                  MomDir = reg(ItFolder)//"Solver_"//reg(SiteName(isite))//"/"
                   wndx = minloc(abs(wmats-0.85*wmatsMax),dim=1)
-                  call fit_Delta(Dfit,Beta,Nfit,reg(newMomDir),reg(file),"Shifted",Eloc,filename="DeltaAnd",Wlimit=wndx)
+                  call fit_Delta(Dfit,Beta,Nfit,reg(MomDir),reg(file),"Shifted",Eloc,filename="DeltaAnd",Wlimit=wndx,coef01=coef01)
                   !
                case("Moments")
                   !
-                  file = "DeltaMomCoef_"//reg(SiteName(isite))//".DAT"
-                  oldMomDir = reg(PrevItFolder)//"Solver_"//reg(SiteName(isite))//"/"
-                  newMomDir = reg(ItFolder)//"Solver_"//reg(SiteName(isite))//"/"
-                  call inquireFile(reg(oldMomDir)//reg(file),filexists,hardstop=.false.,verb=verbose)
-                  if(filexists) call execute_command_line(" cp "//reg(oldMomDir)//reg(file)//" "//reg(newMomDir))
+                  file = "DeltaMom_"//reg(SiteName(isite))//".DAT"
+                  MomDir = reg(ItFolder)//"Solver_"//reg(SiteName(isite))//"/"
                   !
                   NfitD = Nfit
-                  if(Nfit.gt.8)NfitD=8
+                  if(Nfit.gt.5)NfitD=5
                   allocate(Moments(Norb,NfitD,Nspin));Moments=0d0
                   wndx = minloc(abs(wmats-0.85*wmatsMax),dim=1)
-                  call fit_moments(Dfit,Beta,NfitD,.false.,reg(newMomDir),reg(file),"Sigma",Moments,filename="DeltaMom",Wlimit=wndx)
+                  call fit_moments(Dfit,Beta,NfitD,.false.,reg(MomDir),reg(file),"Sigma",Moments,filename="DeltaMom",Wlimit=wndx)
+                  !
                   Eloc=Moments(:,1,:)
+                  coef01=Moments(:,2,:)
+                  !
+                  !allocate(DeltaTail(Nmats));DeltaTail=czero
+                  !wndx=int(Nmats/2)
+                  !write(*,"(A,F)")"     Replacing Delta tail starting from iw_["//str(wndx)//"]=",wmats(wndx)
+                  !do ispin=1,Nspin
+                  !  do iwan=1,Norb
+                  !     DeltaTail = S_Moments(Moments(iwan,:,ispin),wmats)
+                  !     Dfit(iwan,wndx:Nmats,ispin) = DeltaTail(wndx:Nmats)
+                  !  enddo
+                  !enddo
+                  !deallocate(Moments,DeltaTail)
+                  !
                   deallocate(Moments)
                   !
             end select
@@ -1100,24 +1124,37 @@ contains
                Eloc(:,1) = HlocEig(1:Norb,isite)
                Eloc(:,2) = HlocEig(1:Norb,isite)
             else
-               Eloc(:,1) = diagonal(HlocSite(1:Norb,1:Norb,isite))
-               Eloc(:,2) = diagonal(HlocSite(1:Norb,1:Norb,isite))
+               allocate(Hloc(Norb,Norb));Hloc=czero
+               call loc2imp(Hloc,Crystal%Hloc,Orbs)
+               Eloc(:,1) = diagonal(Hloc)
+               Eloc(:,2) = diagonal(Hloc)
+               deallocate(Hloc)
             endif
             !
       end select
       deallocate(Dfit)
       !
       !Compute Delta on matsubara
+      allocate(Dmats(Norb,Nmats,Nspin));Dmats=czero
       do ispin=1,Nspin
-         do iw=1,Nmats
-            do iwan=1,Norb
-               !
+         do iwan=1,Norb
+            !
+            do iw=1,Nmats
                Dmats(iwan,iw,ispin) = dcmplx( Glat%mu , wmats(iw) ) - Eloc(iwan,ispin) - invCurlyG(iwan,iw,ispin)
-               !
+               !Dmats(iwan,iw,ispin) = Dfit(iwan,iw,ispin) - Eloc(iwan,ispin)
             enddo
+            !
+            !Additional correction
+            if(real(Dmats(iwan,Nmats,ispin))*real(Dmats(iwan,Nmats-1,ispin)).lt.0d0)then
+               tailShift = real(Dmats(iwan,Nmats,ispin)) + (Dmats(iwan,Nmats,ispin)-Dmats(iwan,Nmats-1,ispin))*2d0
+               write(*,"(A,E13.3)")"     Additional Eloc shift orb: "//str(iwan)//" spin: "//str(ispin),tailShift
+               Eloc(iwan,ispin) = Eloc(iwan,ispin) + tailShift
+               Dmats(iwan,:,ispin) = Dmats(iwan,:,ispin) - tailShift
+            endif
+            !
          enddo
       enddo
-      deallocate(invCurlyG)
+      deallocate(invCurlyG)!Dfit)
       !
       !Mixing Delta
       if((Mixing_Delta.gt.0d0).and.(Iteration.gt.0))then
@@ -1136,18 +1173,44 @@ contains
       !
       !Spin symmetrization for paramagnetic calculations
       if(EqvGWndx%S)then
-         !
          Dmats(:,:,1) = (Dmats(:,:,1) + Dmats(:,:,2))/2d0
          Dmats(:,:,2) = Dmats(:,:,1)
-         !
          Eloc(:,1) = (Eloc(:,1) + Eloc(:,2))/2d0
          Eloc(:,2) = Eloc(:,1)
-         !
       endif
       !
       !Fourier transform to the tau axis
+      allocate(Ditau(Norb,Solver%NtauF,Nspin));Ditau=0d0
       do ispin=1,Nspin
+         !add correction that allows to use the tail correction in the FT
+         do iwan=1,Norb
+            if(reg(CalculationType).ne."GW+EDMFT") coef01(iwan,ispin) = abs(aimag(Dmats(iwan,Nmats,ispin)))*wmats(Nmats)
+            write(*,"(A,E10.3)")"     First coeff orb: "//str(iwan)//" spin: "//str(ispin),coef01(iwan,ispin)
+            Dmats(iwan,:,ispin) = Dmats(iwan,:,ispin)/coef01(iwan,ispin)
+         enddo
+         !FT
          call Fmats2itau_vec(Beta,Dmats(:,:,ispin),Ditau(:,:,ispin),asympt_corr=.true.,tau_uniform=.true.)
+         !remove correction
+         do iwan=1,Norb
+            Dmats(iwan,:,ispin) = Dmats(iwan,:,ispin)*coef01(iwan,ispin)
+            Ditau(iwan,:,ispin) = Ditau(iwan,:,ispin)*coef01(iwan,ispin)
+         enddo
+      enddo
+      !
+      !Check on Delta(tau) causality
+      do ispin=1,Nspin
+         do iwan=1,Norb
+            do itau=1,Solver%NtauF
+               if(real(Ditau(iwan,itau,ispin)).gt.0d0)then
+                  write(*,"(A,E10.3)")"     Warning: Removing non-causality from Delta(tau) at orb: "//str(iwan)//" spin: "//str(ispin)//" itau: "//str(itau)
+                  if(real(Ditau(iwan,int(Solver%NtauF/2),ispin)).lt.0d0)then
+                     Ditau(iwan,itau,ispin) = Ditau(iwan,int(Solver%NtauF/2),ispin)
+                  else
+                     Ditau(iwan,itau,ispin) = czero
+                  endif
+               endif
+            enddo
+         enddo
       enddo
       !
       !Dump Files in the proper directory - The output is printed here as it has to be customized for the solver
@@ -1477,15 +1540,15 @@ contains
       !Impurity Green's function
       type(FermionicField)                  :: Gimp
       complex(8),allocatable                :: Gitau(:,:,:)
-      complex(8),allocatable                :: Gmats(:,:,:,:),GmatsNoFit(:,:,:,:)
-      complex(8),allocatable                :: GmatsTail(:)
-      integer                               :: NfitG
+      complex(8),allocatable                :: Gmats(:,:,:,:)
+      !complex(8),allocatable                :: GmatsTail(:),GmatsNoFit(:,:,:,:)
+      !integer                               :: NfitG
       !Impurity self-energy and fermionic Dyson equation
       type(FermionicField)                  :: Simp
       type(FermionicField)                  :: G0imp
       type(BosonicField)                    :: curlyU
-      complex(8),allocatable                :: Smats(:,:,:,:),SmatsNoFit(:,:,:,:)
-      complex(8),allocatable                :: SmatsTail(:)
+      complex(8),allocatable                :: Smats(:,:,:,:)
+      complex(8),allocatable                :: SmatsTail(:),SmatsNoFit(:,:,:,:)
       integer                               :: NfitS
       !Impurity susceptibilities
       real(8),allocatable                   :: nnt(:,:,:)
@@ -1606,46 +1669,6 @@ contains
          !
       enddo
       !
-      !Replace the tail with the fitted Gf - I'm doing another loop over sites because I want to store all the GmatsNoFit
-      if((ReplaceTail_Gimp.gt.0d0).and.(ReplaceTail_Gimp.lt.wmatsMax))then
-         !
-         allocate(GmatsNoFit(Norb,Nmats,Nspin,Nsite))
-         GmatsNoFit=Gmats
-         !
-         do isite=1,Nsite
-            !
-            write(*,"(A)") "     Fitting Green's function moments of site: "//reg(SiteName(isite))
-            !
-            Norb = SiteNorb(isite)
-            allocate(Orbs(Norb))
-            Orbs = SiteOrbs(isite,1:Norb)
-            !
-            !perform the fit
-            file = "GimpMom_"//reg(SiteName(isite))//".DAT"
-            MomDir = reg(PrevItFolder)//"Solver_"//reg(SiteName(isite))//"/"
-            allocate(wmats(Nmats));wmats=FermionicFreqMesh(Beta,Nmats)
-            wndx = minloc(abs(wmats-ReplaceTail_Gimp),dim=1)
-            NfitG = Nfit
-            if(Nfit.gt.8)NfitG=8
-            allocate(Moments(Norb,NfitG,Nspin));Moments=0d0
-            call fit_moments(Gmats(:,:,:,isite),Beta,NfitG,.false.,reg(MomDir),reg(file),"Green",Moments,filename="Gimp")
-            !
-            allocate(GmatsTail(Nmats));GmatsTail=czero
-            write(*,"(A,F)")"     Replacing Gimp tail starting from iw_["//str(wndx)//"]=",wmats(wndx)
-            do ispin=1,Nspin
-               do iorb=1,Norb
-                  GmatsTail = G_Moments(Moments(iorb,3:NfitG,ispin),wmats)
-                  Gmats(iorb,wndx:Nmats,ispin,isite) = GmatsTail(wndx:Nmats)
-               enddo
-            enddo
-            deallocate(Orbs,wmats,Moments,GmatsTail)
-            !
-            if(ExpandImpurity.or.AFMselfcons)exit
-            !
-         enddo
-         !
-      endif
-      !
       !Save to file in standard format the eventually fitted Gimp
       call AllocateFermionicField(G_DMFT,Crystal%Norb,Nmats,Nsite=Nsite,Beta=Beta)
       call AllocateFermionicField(Gimp,Norb,Nmats,Beta=Beta)
@@ -1679,42 +1702,6 @@ contains
       call dump_MaxEnt(G_DMFT,"mats2itau",reg(PrevItFolder)//"Convergence/","Gimp",EqvGWndx%SetOrbs)
       call DeallocateFermionicField(G_DMFT)
       !
-      !Save the non-Fitted non-symmetrized Gf if present
-      if(ReplaceTail_Gimp.gt.0d0)then
-         !
-         if(.not.allocated(GmatsNoFit)) stop "GmatsNoFit is not allocated."
-         call AllocateFermionicField(G_DMFT,Crystal%Norb,Nmats,Nsite=Nsite,Beta=Beta)
-         call AllocateFermionicField(Gimp,Norb,Nmats,Beta=Beta)
-         do isite=1,Nsite
-            !
-            Norb = SiteNorb(isite)
-            allocate(Orbs(Norb))
-            Orbs = SiteOrbs(isite,1:Norb)
-            !
-            !Push Gimp to a Local fermionic field
-            call clear_attributes(Gimp)
-            do iorb=1,Norb
-               Gimp%ws(iorb,iorb,:,:) = GmatsNoFit(iorb,:,:,isite)
-            enddo
-            !
-            !Expand to the Lattice basis
-            if(RotateHloc)then
-               call imp2loc(G_DMFT,Gimp,Orbs,ExpandImpurity,AFMselfcons,U=HlocRotDag)
-            else
-               call imp2loc(G_DMFT,Gimp,Orbs,ExpandImpurity,AFMselfcons)
-            endif
-            !
-            deallocate(Orbs)
-            if(ExpandImpurity.or.AFMselfcons)exit
-            !
-         enddo
-         deallocate(GmatsNoFit)
-         call DeallocateFermionicField(Gimp)
-         call dump_FermionicField(G_DMFT,reg(PrevItFolder),"Gimp_noFit_w")
-         call DeallocateFermionicField(G_DMFT)
-         !
-      endif
-      !
       !Fermionic Dyson equation
       do isite=1,Nsite
          !
@@ -1729,8 +1716,8 @@ contains
          call read_FermionicField(G0imp,reg(PrevItFolder)//"Solver_"//reg(SiteName(isite))//"/","G0_"//reg(SiteName(isite))//"_w")
          !
          !Adjust with the chemical potential if the solver has changed it
-         if(G0imp%mu.ne.muQMC)then
-            write(*,"(A)") "     Updating the chemical potential of curlyG from "//str(G0imp%mu,4)//" to "//str(muQMC,4)
+         if(abs(G0imp%mu-muQMC).gt.1e-5)then
+            write(*,"(A)") "     Updating the chemical potential of curlyG from "//str(G0imp%mu)//" to "//str(muQMC)
             do ispin=1,Nspin
                do iw=1,Nmats
                   do iorb=1,Norb
@@ -1775,10 +1762,9 @@ contains
             file = "SimpMom_"//reg(SiteName(isite))//".DAT"
             MomDir = reg(PrevItFolder)//"Solver_"//reg(SiteName(isite))//"/"
             allocate(wmats(Nmats));wmats=FermionicFreqMesh(Beta,Nmats)
-
             wndx = minloc(abs(wmats-ReplaceTail_Simp),dim=1)
             NfitS = Nfit
-            if(Nfit.gt.8)NfitS=8
+            if(Nfit.gt.5)NfitS=5
             allocate(Moments(Norb,NfitS,Nspin));Moments=0d0
             call fit_moments(Smats(:,:,:,isite),Beta,NfitS,.false.,reg(MomDir),reg(file),"Sigma",Moments,filename="Simp",Wlimit=wndx)
             !
@@ -2119,23 +2105,25 @@ contains
       integer                               :: Norb,Norb_imp
       integer                               :: iorb,jorb,isite
       integer                               :: wn,ws,wsi,wnmin
-      integer                               :: l1,l2,l3,l4,l5
+      integer                               :: l1,l2,l3,l4,l5,l6
       integer                               :: enlrg_
       character(len=255)                    :: header1="Lattice density"
       character(len=255)                    :: header2="Impurity density"
       character(len=255)                    :: header3="Solver density"
       character(len=255)                    :: header4="Impurity magnetization"
       character(len=255)                    :: header5="Solver magnetization"
+      character(len=255)                    :: header6="Lattice magnetization"
       !
       Norb = Crystal%Norb
       !
       l1=len(trim(header1)//" up")
       l2=len(trim(header2)//" up")
       l3=len(trim(header3)//" up")
-      l4=len(trim(header3))
-      l5=len(trim(header3))
+      l4=len(trim(header4))
+      l5=len(trim(header5))
+      l6=len(trim(header6))
       !
-      wnmin=max(maxval([l1,l2,l3,l4,l5]),Norb*6) !6 because I have 4 precision
+      wnmin=max(maxval([l1,l2,l3,l4,l5,l6]),Norb*6) !6 because I have 4 precision
       enlrg_=3
       if(present(enlrg))enlrg_=enlrg
       !
@@ -2191,10 +2179,11 @@ contains
             !
             if(.not.EqvGWndx%S)then
                write(*,*)
+               write(*,"(A"//str(wn*Norb)//","//str(ws)//"X)")banner(trim(header6),wn*Norb)
+               write(*,"("//str(Norb)//"F"//str(wn)//".4,"//str(ws)//"X)") (real(densityGW(iorb,iorb,1)-densityGW(iorb,iorb,2)),iorb=1,Norb)
+               write(*,*)
                write(*,"(A"//str(wn*Norb)//","//str(ws)//"X)")banner(trim(header4),wn*Norb)
-               do iorb=1,Norb
-                  write(*,"("//str(Norb)//"F"//str(wn)//".4,"//str(ws)//"X)") (real(densityDMFT(iorb,jorb,1)-densityDMFT(iorb,jorb,2)),jorb=1,Norb)
-               enddo
+               write(*,"("//str(Norb)//"F"//str(wn)//".4,"//str(ws)//"X)") (real(densityDMFT(iorb,iorb,1)-densityDMFT(iorb,iorb,2)),iorb=1,Norb)
             endif
             !
             if(Nsite.gt.1)then
@@ -2213,9 +2202,9 @@ contains
                   if(.not.EqvGWndx%S)then
                      write(*,*)
                      write(*,"(A"//str(wn*Norb)//","//str(ws)//"X)")banner(trim(header5),wn*Norb)
-                     do iorb=1,Norb_imp
-                        write(*,"("//str(wsi)//"X,"//str(Norb_imp)//"F"//str(wn)//".4,"//str(ws)//"X)")(real(densityQMC(iorb,jorb,1,isite)-densityQMC(iorb,jorb,2,isite)),jorb=1,Norb_imp)
-                     enddo
+                     !do iorb=1,Norb_imp
+                     write(*,"("//str(wsi)//"X,"//str(Norb_imp)//"F"//str(wn)//".4,"//str(ws)//"X)")(real(densityQMC(iorb,iorb,1,isite)-densityQMC(iorb,iorb,2,isite)),iorb=1,Norb_imp)
+                     !enddo
                   endif
                   if(ExpandImpurity.or.AFMselfcons)exit
                   !
@@ -2241,12 +2230,90 @@ contains
 end module utils_main
 
 
-!do iter=0,1000
-!   Itpath = reg(pathDATA)//str(iter)
-!   call inquireDir(reg(Itpath),Itexist,hardstop=.false.,verb=.false.)
-!   if(.not.Itexist)then
-!      Itfound = iter
-!      Exit
-!   endif
-!enddo
+
+
+
+
+
+
+
+
+
 !
+!Replace the tail with the fitted Gf - I'm doing another loop over sites because I want to store all the GmatsNoFit
+!THIS IS GOING TO BE REMOVED AS ITS USELESS AND CREATES ONLY NOISE
+!if((ReplaceTail_Gimp.gt.0d0).and.(ReplaceTail_Gimp.lt.wmatsMax).and.(.false.))then
+!   !
+!   allocate(GmatsNoFit(Norb,Nmats,Nspin,Nsite))
+!   GmatsNoFit=Gmats
+!   !
+!   do isite=1,Nsite
+!      !
+!      write(*,"(A)") "     Fitting Green's function moments of site: "//reg(SiteName(isite))
+!      !
+!      Norb = SiteNorb(isite)
+!      allocate(Orbs(Norb))
+!      Orbs = SiteOrbs(isite,1:Norb)
+!      !
+!      !perform the fit
+!      file = "GimpMom_"//reg(SiteName(isite))//".DAT"
+!      MomDir = reg(PrevItFolder)//"Solver_"//reg(SiteName(isite))//"/"
+!      allocate(wmats(Nmats));wmats=FermionicFreqMesh(Beta,Nmats)
+!      wndx = minloc(abs(wmats-ReplaceTail_Gimp),dim=1)
+!      NfitG = Nfit
+!      if(Nfit.gt.5)NfitG=5
+!      allocate(Moments(Norb,NfitG,Nspin));Moments=0d0
+!      call fit_moments(Gmats(:,:,:,isite),Beta,NfitG,.false.,reg(MomDir),reg(file),"Green",Moments,filename="Gimp")
+!      !
+!      allocate(GmatsTail(Nmats));GmatsTail=czero
+!      write(*,"(A,F)")"     Replacing Gimp tail starting from iw_["//str(wndx)//"]=",wmats(wndx)
+!      do ispin=1,Nspin
+!         do iorb=1,Norb
+!            GmatsTail = G_Moments(Moments(iorb,3:NfitG,ispin),wmats)
+!            Gmats(iorb,wndx:Nmats,ispin,isite) = GmatsTail(wndx:Nmats)
+!         enddo
+!      enddo
+!      deallocate(Orbs,wmats,Moments,GmatsTail)
+!      !
+!      if(ExpandImpurity.or.AFMselfcons)exit
+!      !
+!   enddo
+!   !
+!endif
+!
+!Save the non-Fitted non-symmetrized Gf if present
+!THIS IS GOING TO BE REMOVED AS ITS USELESS AND CREATES ONLY NOISE
+!if(ReplaceTail_Gimp.gt.0d0)then
+!   !
+!   if(.not.allocated(GmatsNoFit)) stop "GmatsNoFit is not allocated."
+!   call AllocateFermionicField(G_DMFT,Crystal%Norb,Nmats,Nsite=Nsite,Beta=Beta)
+!   call AllocateFermionicField(Gimp,Norb,Nmats,Beta=Beta)
+!   do isite=1,Nsite
+!      !
+!      Norb = SiteNorb(isite)
+!      allocate(Orbs(Norb))
+!      Orbs = SiteOrbs(isite,1:Norb)
+!      !
+!      !Push Gimp to a Local fermionic field
+!      call clear_attributes(Gimp)
+!      do iorb=1,Norb
+!         Gimp%ws(iorb,iorb,:,:) = GmatsNoFit(iorb,:,:,isite)
+!      enddo
+!      !
+!      !Expand to the Lattice basis
+!      if(RotateHloc)then
+!         call imp2loc(G_DMFT,Gimp,Orbs,ExpandImpurity,AFMselfcons,U=HlocRotDag)
+!      else
+!         call imp2loc(G_DMFT,Gimp,Orbs,ExpandImpurity,AFMselfcons)
+!      endif
+!      !
+!      deallocate(Orbs)
+!      if(ExpandImpurity.or.AFMselfcons)exit
+!      !
+!   enddo
+!   deallocate(GmatsNoFit)
+!   call DeallocateFermionicField(Gimp)
+!   call dump_FermionicField(G_DMFT,reg(PrevItFolder),"Gimp_noFit_w")
+!   call DeallocateFermionicField(G_DMFT)
+!   !
+!endif

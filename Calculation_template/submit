@@ -1,6 +1,6 @@
 #!/bin/bash
 #$ -S /bin/bash
-#$ -N Fe_08                     # job name
+#$ -N _____                     # job name
 #$ -cwd                         # run script in current directory
 #$ -pe smp 28                   # MPI cores
 #$ -q new.q
@@ -19,10 +19,10 @@ ulimit -c 0
 GENMAT=/home/petocchif/1_GW_EDMFT/nobackup/1_production
 
 PATH_INPUT=GWinput_SPEX_bccFe
-PATH_DATA=Results_beta08
+PATH_DATA=Results_beta06
 
-START_IT=0
-END_IT=11
+START_IT=1
+END_IT=2
 
 #OPTIONAL FOR TEMPERATURE DEPENDENT CALCULATIONS
 PATH_INPUT_TR=GWinput_mats

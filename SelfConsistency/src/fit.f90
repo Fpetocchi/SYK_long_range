@@ -334,7 +334,7 @@ contains
    !         like functional form with an addtional shift.
    !TEST ON:
    !---------------------------------------------------------------------------!
-   subroutine fit_Delta(funct,Beta,Nb,dirpath,paramFile,FitMode,Eloc,filename,Wlimit)
+   subroutine fit_Delta(funct,Beta,Nb,dirpath,paramFile,FitMode,Eloc,filename,Wlimit,coef01)
       !
       use parameters
       use utils_misc
@@ -350,9 +350,10 @@ contains
       real(8),intent(inout)                 :: Eloc(:,:)
       character(len=*),intent(in),optional  :: filename
       integer,intent(in),optional           :: Wlimit
+      real(8),intent(inout),optional        :: coef01(:,:)
       !
       integer                               :: Norb,Niter,Wstart
-      integer                               :: iorb,ispin
+      integer                               :: iorb,ispin,ifit
       real(8)                               :: chi
       real(8),allocatable                   :: ParamVec(:)
       complex(8),allocatable                :: funct_print(:)
@@ -368,6 +369,7 @@ contains
       Nfreq = size(funct,dim=2) - Wstart + 1
       !
       call assert_shape(Eloc,[Norb,Nspin],"fit_Delta","Eloc")
+      if(present(coef01))call assert_shape(coef01,[Norb,Nspin],"fit_Delta","coef01")
       allocate(Component(Nfreq));Component=czero
       !
       call setupAndPrams(Norb,dirpath,paramFile)
@@ -435,7 +437,19 @@ contains
          end select
          !
          deallocate(Component,wmats)
+         !
          Eloc = AndPram%Eloc
+         if(present(coef01))then
+            coef01=0d0
+            do ispin=1,Nspin
+               do iorb=1,Norb
+                  do ifit=1,Nfit
+                     coef01(iorb,ispin) = coef01(iorb,ispin) + AndPram%Vk(iorb,ifit,ispin)**2
+                  enddo
+               enddo
+            enddo
+         endif
+         !
          call dump_AndPrams(dirpath,paramFile)
          !
          if(present(filename))then
@@ -544,9 +558,10 @@ contains
                   if(imoment.le.2)then
                      Moments(iorb,imoment,ispin) = 1d0 - (rnd*noisefact)*(imoment-1)!(imoment-1)*noisefact!
                   else
+                     Moments(iorb,imoment,ispin) = -(Moments(iorb,imoment-1,ispin)+(rnd*noisefact))
                      !odd moments
-                     if(mod(imoment,2).eq.0) Moments(iorb,imoment,ispin) = Moments(iorb,2,ispin) - (imoment/(10d0*Nfit)+(rnd*noisefact))!imoment*noisefact !
-                     if(mod(imoment,2).eq.1) Moments(iorb,imoment,ispin) = Moments(iorb,2,ispin) - (imoment/(10d0*Nfit)+(rnd*noisefact))!imoment*noisefact !
+                     !if(mod(imoment,2).eq.0) Moments(iorb,imoment,ispin) = Moments(iorb,2,ispin) - (imoment/(10d0*Nfit)+(rnd*noisefact))!imoment*noisefact !
+                     !if(mod(imoment,2).eq.1) Moments(iorb,imoment,ispin) = Moments(iorb,2,ispin) - (imoment/(10d0*Nfit)+(rnd*noisefact))!imoment*noisefact !
                   endif
                enddo
             enddo
@@ -623,13 +638,17 @@ contains
          !
          do imoment=1,size(MomentVec)
             !
-            !Moments 2,3,4,5.
+            !exp= 2,3,4,5..
             exp = imoment + 1
-            !Moments 3,5,7,9..
+            !exp= 3,5,7,9..
             if(buildReG_) exp = 2*imoment + 1
-            !Odd moments coefficient are positive for the Gf
+            !
             coeff =  MomentVec(imoment)
-            if(mod(exp,2).ne.0)coeff=abs(coeff)
+            !
+            !Odd moments coefficient are:
+            !positive for exp=1,5,9..
+            !negative for exp=3,7,11..
+            if(mod(exp,2).ne.0) coeff = ( MomentVec(imoment)**2 )*(-1d0)**int(exp/2)
             !
             Gf(iw) = Gf(iw) + coeff/(dcmplx(0d0,wm(iw))**exp)
             !
@@ -659,17 +678,21 @@ contains
       do iw=1,size(wm)
          !
          !Moments 0,1
-         Sigma(iw) = MomentVec(1) + MomentVec(2) / dcmplx(0d0,wm(iw))
+         Sigma(iw) = MomentVec(1) + ( MomentVec(2)**2 ) / dcmplx(0d0,wm(iw))
          !
          do imoment=3,size(MomentVec)
             !
-            !Moments 3,4,5,6..
+            !exp= 3,4,5,6..
             exp = imoment
-            !Moments 3,5,7,9..
+            !exp= 3,5,7,9..
             if(buildReS_) exp = 2*imoment - 3
-            !Odd moments coefficient are not necessarily positive for the self-energy
+            !
             coeff =  MomentVec(imoment)
-            !if(mod(exp,2).ne.0)coeff=abs(coeff)
+            !
+            !Odd moments coefficient are:
+            !positive for exp=1,5,9..
+            !negative for exp=3,7,11..
+            if(mod(exp,2).ne.0) coeff = ( MomentVec(imoment)**2 )*(-1d0)**int(exp/2)
             !
             Sigma(iw) = Sigma(iw) + coeff/(dcmplx(0d0,wm(iw))**exp)
             !

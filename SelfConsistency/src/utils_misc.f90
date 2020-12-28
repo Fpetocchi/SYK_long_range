@@ -80,6 +80,7 @@ module utils_misc
    !functions
    public :: FermionicFreqMesh
    public :: BosonicFreqMesh
+   public :: get_Tier_occupation
    public :: fermidirac
    public :: diff_fermidirac
    public :: find_kpt
@@ -193,6 +194,33 @@ contains
           stop "k-point for chiplot not found in k-point set"
       endif
    end function find_kpt
+
+
+   !---------------------------------------------------------------------------!
+   !PURPOSE: Extract the occupation from a subset of orbtials
+   !---------------------------------------------------------------------------!
+   function get_Tier_occupation(rho,SiteOrbs) result(occupation)
+      implicit none
+      complex(8),intent(in)                 :: rho(:,:,:)
+      integer,intent(in)                    :: SiteOrbs(:,:)
+      real(8)                               :: occupation
+      integer                               :: Norb,Nspin
+      integer                               :: iorb,ispin,isite
+      Norb=size(rho,dim=1)
+      Nspin=size(rho,dim=3)
+      if(size(rho,dim=2).ne.Norb)stop"get_Tier_occupation: density matrix not square."
+      occupation=0d0
+      do isite=1,size(SiteOrbs,dim=1)
+         if(size(SiteOrbs(isite,:)).gt.Norb)stop"get_Tier_occupation: orbital list bigger than density matrix."
+         do iorb=1,size(SiteOrbs,dim=2)
+            if(SiteOrbs(isite,iorb).gt.Norb)stop"get_Tier_occupation: orbital outside the density matrix space."
+            if(SiteOrbs(isite,iorb).eq.0)cycle
+            do ispin=1,Nspin
+               occupation = occupation + real(rho(SiteOrbs(isite,iorb),SiteOrbs(isite,iorb),ispin))
+            enddo
+         enddo
+      enddo
+   end function get_Tier_occupation
 
 
    !---------------------------------------------------------------------------!

@@ -150,7 +150,7 @@ module input_vars
    !Variables for the fit on Delta, Gimp, Simp
    character(len=256),public                :: DeltaFit
    integer,public                           :: Nfit
-   real(8),public                           :: ReplaceTail_Gimp
+   real(8),public                           :: ReplaceTail_Gimp=0d0  !TO BE REMOVED IN THE NEXT FUTURE
    real(8),public                           :: ReplaceTail_Simp
    !
    !Paths (directories must end with "/") and loop variables
@@ -340,7 +340,7 @@ contains
       !
       !Double counting types, divergencies, scaling coefficients
       call add_separator()
-      call parse_input_variable(VH_type,"VH_TYPE",InputFile,default="Ustatic",comment="Hartree term mismatch between GoWo and scGW. Available: Ubare, Ustatic, Ubare_SPEX, Ustatic_SPEX.")
+      call parse_input_variable(VH_type,"VH_TYPE",InputFile,default="Ustatic_SPEX",comment="Hartree term mismatch between GoWo and scGW. Available: Ubare, Ustatic, Ubare_SPEX(V_nodiv.DAT required), Ustatic_SPEX(V_nodiv.DAT required).")
       call parse_input_variable(DC_type,"DC_TYPE",InputFile,default="GlocWloc",comment="Local GW self-energy which is replaced by DMFT self-energy. Avalibale: GlocWloc, Sloc.")
       call parse_input_variable(Sigma_AC,"SIGMA_AC",InputFile,default=.false.,comment="Flag to force the analytic continuation on the G0W0 self-energy.")
       call parse_input_variable(HandleGammaPoint,"SMEAR_GAMMA",InputFile,default=.true.,comment="Remove the interaction divergence at the Gamma point.")
@@ -351,8 +351,7 @@ contains
       !Variables for the fit
       call parse_input_variable(DeltaFit,"DELTA_FIT",InputFile,default="Analytic",comment="Fit to extract the local energy in GW+EDMFT calculations. Available: Inf, Analytic, Moments.")
       call parse_input_variable(Nfit,"NFIT",InputFile,default=8,comment="Number of bath levels (Analytic) or coefficient (Moments-automatic limit to NFIT=8).")
-      call parse_input_variable(ReplaceTail_Gimp,"WTAIL_GIMP",InputFile,default=0d0 ,comment="Frequency value above which the tail of Gimp is replaced. If =0d0 the tail is not replaced. Only via moments (automatic limit to NFIT=8).")
-      call parse_input_variable(ReplaceTail_Simp,"WTAIL_SIMP",InputFile,default=80d0,comment="Frequency value above which the tail of Simp is replaced. If =0d0 the tail is not replaced. Only via moments (automatic limit to NFIT=8).")
+      call parse_input_variable(ReplaceTail_Simp,"WTAIL_SIMP",InputFile,default=80d0,comment="Frequency value above which the tail of Simp is replaced. If =0d0 the tail is not replaced. Only via moments (automatic limit to NFIT=5).")
       !
       !Paths and loop variables
       call add_separator()
@@ -378,7 +377,7 @@ contains
       if(mod(Solver%NtauB,2).eq.0)Solver%NtauB=Solver%NtauB+1
       Solver%TargetDensity = look4dens%TargetDensity
       if(ExpandImpurity)Solver%TargetDensity = look4dens%TargetDensity/Nsite
-      call append_to_input_list(Solver%TargetDensity,"N_READ_IMP","Target density in the impurity list. User cannot set this as its the same of N_READ_LAT if EXPAND=F otherwise its N_READ_LAT/NSITE.")
+      call append_to_input_list(Solver%TargetDensity,"N_READ_IMP","Target density in the impurity list. User cannot set this as its the the same density on within the impurity orbitals if EXPAND=F otherwise its N_READ_LAT/NSITE.")
       call parse_input_variable(Solver%Norder,"NORDER",InputFile,default=10,comment="Maximum perturbation order measured. Not used yet.")
       call parse_input_variable(Solver%Nmeas,"NMEAS",InputFile,default=1000,comment="Sweeps where expensive measurments are not performed.")
       call parse_input_variable(Solver%Ntherm,"NTHERM",InputFile,default=100,comment="Thermalization cycles. Each cycle performs NMEAS sweeps.")

@@ -94,8 +94,10 @@ contains
       if(all([Lttc%Nkpt-Nkpt,Gmats%Nkpt-Nkpt,Wmats%Nkpt-Nkpt].ne.[0,0,0])) stop "Either Lattice, Gmats or Wmats have different number of k-points with respect to Smats_C."
       if(all([Smats_X%Norb-Norb,Gmats%Norb-Norb,Wmats%Nbp-Nbp].ne.[0,0,0])) stop "Either Smats_X, Gmats or Wmats have different orbital dimension with respect to Smats_C."
       if(all([Smats_X%Beta-Beta,Gmats%Beta-Beta,Wmats%Beta-Beta].ne.[0d0,0d0,0d0])) stop "Either Smats_X, Gmats or Wmats have different Beta with respect to Smats_C."
-      if(all([Gmats%Npoints-Nmats,Wmats%Npoints-Nmats].ne.[0,0])) write(*,"(A)") "Warning: Either Smats_C, Gmats or Wmats have different number of Matsubara points. Computing up to the smaller."
-      Nmats = minval([Smats_C%Npoints,Wmats%Npoints,Wmats%Npoints])
+      if(all([Gmats%Npoints-Nmats,Wmats%Npoints-Nmats].ne.[0,0]))then
+         Nmats = minval([Smats_C%Npoints,Wmats%Npoints,Wmats%Npoints])
+         write(*,"(A)") "Warning: Either Smats_C, Gmats or Wmats have different number of Matsubara points. Computing up to the smaller: "//str(Nmats)
+      endif
       !
       call cpu_time(start)
       !
@@ -298,8 +300,10 @@ contains
       !
       if(all([Smats_Xdc%Norb-Norb,Gmats%Norb-Norb,Wmats%Nbp-Nbp].ne.[0,0,0])) stop "Either Smats_Xdc, Gmats or Wmats have different orbital dimension with respect to Smats_Cdc."
       if(all([Smats_Xdc%Beta-Beta,Gmats%Beta-Beta,Wmats%Beta-Beta].ne.[0d0,0d0,0d0])) stop "Either Smats_Xdc, Gmats or Wmats have different Beta with respect to Smats_Cdc."
-      if(all([Gmats%Npoints-Nmats,Wmats%Npoints-Nmats].ne.[0,0]))  write(*,"(A)") "Warning: Either Smats_Cdc, Gmats or Wmats have different number of Matsubara points. Computing up to the smaller."
-      Nmats = minval([Smats_Cdc%Npoints,Wmats%Npoints,Wmats%Npoints])
+      if(all([Gmats%Npoints-Nmats,Wmats%Npoints-Nmats].ne.[0,0]))then
+         Nmats = minval([Smats_Cdc%Npoints,Wmats%Npoints,Wmats%Npoints])
+         write(*,"(A)") "Warning: Either Smats_Cdc, Gmats or Wmats have different number of Matsubara points. Computing up to the smaller: "//str(Nmats)
+      endif
       !
       call cpu_time(start)
       !
@@ -662,7 +666,7 @@ contains
             path = reg(pathINPUT)//"UWAN.DAT"
          endif
          call inquireFile(reg(path),filexists,verb=verbose)
-         write(*,"(A)") "Opening "//reg(path)
+         write(*,"(A)") "     Opening "//reg(path)
          unit = free_unit()
          open(unit,file=reg(path),form="unformatted",action="read",position="rewind")
          read(unit) Nspin_Uwan,Nkpt_Uwan,ib_Uwan1,ib_Uwan2,Norb_Uwan
@@ -781,7 +785,7 @@ contains
             do iq=1,Lttc%Nkpt_irred
                !
                path = reg(pathINPUT)//"Sigma_real_"//str(iseg,2)//"/SIGMA.Q"//str(iq,4)//".DAT"
-               if(verbose)write(*,"(A)") "Opening "//reg(path)
+               if(verbose)write(*,"(A)") "     Opening "//reg(path)
                call inquireFile(reg(path),filexists,verb=verbose) !redundant control
                !
                unit = free_unit()

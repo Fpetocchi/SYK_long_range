@@ -10,7 +10,7 @@ SHELL := /bin/bash
 FC     = ifort
 FFLAGS = -assume byterecl -qopenmp -liomp5 -mkl=sequential -fpp -mcmodel=large -llapack
 DBGFFLAGS = -O0 -check bounds -traceback -fpe0 -check all -fp-model precise -fp-stack-check -p -g -warn -debug extended -warn interface --heap-arrays -check all -check noarg_temp_created -C -D_verb
-RELFFLAGS = -xHost -O3 -ftz
+RELFFLAGS = -O3 -ftz # -xAVX -xHost  -axCORE-AVX2
 
 #
 # Project files-----------------------------------------------------------------

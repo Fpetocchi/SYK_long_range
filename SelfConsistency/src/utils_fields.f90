@@ -277,7 +277,7 @@ contains
       character(len=*),intent(in),optional  :: name
       !
       if(present(name).and.verbose) write(*,"(A)") "     Deallocation of "//trim(name)
-      if(.not.G%status) stop "DeallocateFermionicField: container is unallocated."
+      !if(.not.G%status) stop "DeallocateFermionicField: container is unallocated."
       !
       if(allocated(G%N_s))deallocate(G%N_s)
       if(allocated(G%N_ks))deallocate(G%N_ks)
@@ -358,7 +358,7 @@ contains
       character(len=*),intent(in),optional  :: name
       !
       if(present(name).and.verbose) write(*,"(A)") "     Deallocation of "//trim(name)
-      if(.not.W%status) stop "DeallocateBosonicField: container is unallocated."
+      !if(.not.W%status) stop "DeallocateBosonicField: container is unallocated."
       !
       if(allocated(W%bare_local))deallocate(W%bare_local)
       if(allocated(W%screened_local))deallocate(W%screened_local)
@@ -1693,10 +1693,8 @@ contains
       !
       ! Check on the input Fields
       if(.not.SigmaGW%status) stop "SigmaGW not properly initialized."
-      if(.not.SigmaGW_DC%status) stop "SigmaGW_DC not properly initialized."
       if(.not.SigmaImp%status) stop "SigmaImp not properly initialized."
       if(SigmaGW%Nkpt.eq.0) stop "SigmaGW k dependent attributes not properly initialized."
-      if(SigmaGW_DC%Nkpt.ne.0) stop "SigmaGW_DC k dependent attributes are supposed to be unallocated."
       if(SigmaImp%Nkpt.ne.0) stop "SigmaImp k dependent attributes are supposed to be unallocated."
       !
       Norb = SigmaGW%Norb
@@ -1708,9 +1706,7 @@ contains
       if(SigmaImp%Norb.ne.Norb) stop "SigmaImp has different orbital dimension with respect to SigmaGW."
       if(SigmaImp%Beta.ne.Beta) stop "SigmaImp has different Beta with respect to SigmaGW."
       if(SigmaImp%Npoints.ne.Nmats) stop "SigmaImp has different number of Matsubara points with respect to SigmaGW."
-      if(SigmaGW_DC%Norb.ne.Norb) stop "SigmaGW_DC has different orbital dimension with respect to SigmaGW."
-      if(SigmaGW_DC%Beta.ne.Beta) stop "SigmaGW_DC has different Beta with respect to SigmaGW."
-      if(SigmaGW_DC%Npoints.ne.Nmats) stop "SigmaGW_DC has different number of Matsubara points with respect to SigmaGW."
+
       if(size(orbs,dim=1).ne.Nsite) stop "Number of orbital lists does not match the number of sites."
       Norb_imp=0
       do isite=1,Nsite
@@ -1726,6 +1722,11 @@ contains
          case("Sloc")
             localDC = .true.
          case("GlocWloc")
+            if(.not.SigmaGW_DC%status) stop "SigmaGW_DC not properly initialized."
+            if(SigmaGW_DC%Nkpt.ne.0) stop "SigmaGW_DC k dependent attributes are supposed to be unallocated."
+            if(SigmaGW_DC%Norb.ne.Norb) stop "SigmaGW_DC has different orbital dimension with respect to SigmaGW."
+            if(SigmaGW_DC%Beta.ne.Beta) stop "SigmaGW_DC has different Beta with respect to SigmaGW."
+            if(SigmaGW_DC%Npoints.ne.Nmats) stop "SigmaGW_DC has different number of Matsubara points with respect to SigmaGW."
             localDC = .false.
       end select
       !
@@ -1741,7 +1742,7 @@ contains
          do iorb=1,size(orbs(isite,:))
             do jorb=1,size(orbs(isite,:))
                !
-               if((.not.Rot).and.(iorb.ne.iorb))cycle
+               if((.not.Rot).and.(iorb.ne.jorb))cycle
                !
                !SigmaImp and SigmaGW have the same arrangements
                i_loc = orbs(isite,iorb)
@@ -1770,6 +1771,9 @@ contains
       enddo
       !$OMP END DO
       !$OMP END PARALLEL
+      !
+      !Put SigmaImp in the local attribute
+      call FermionicKsum(SigmaGW)
       !
    end subroutine MergeSelfEnergy
 
@@ -1871,6 +1875,9 @@ contains
       enddo !isite
       !$OMP END DO
       !$OMP END PARALLEL
+      !
+      !Put PiImp in the local attribute
+      call BosonicKsum(PiGW)
       !
    end subroutine MergePolarization
 

@@ -215,8 +215,10 @@ contains
       if(all([Umats%Nbp-Nbp,Pmats%Nbp-Nbp].ne.[0,0])) stop "Either Umats and/or Pmats have different orbital dimension with respect to Wmats."
       if(all([Umats%Nkpt-Nkpt,Pmats%Nkpt-Nkpt].ne.[0,0])) stop "Either Umats and/or Pmats have different number of k-points with respect to Wmats."
       if(all([Umats%Beta-Beta,Pmats%Beta-Beta].ne.[0d0,0d0])) stop "Either Umats and/or Pmats have different Beta with respect to Wmats."
-      if(all([Umats%Npoints-Nmats,Pmats%Npoints-Nmats].ne.[0,0]))  write(*,"(A)") "Warning: Either Umats and/or Pmats have different number of Matsubara points. Computing up to the smaller."
-      Nmats = minval([Wmats%Npoints,Umats%Npoints,Pmats%Npoints])
+      if(all([Umats%Npoints-Nmats,Pmats%Npoints-Nmats].ne.[0,0]))then
+         Nmats = minval([Wmats%Npoints,Umats%Npoints,Pmats%Npoints])
+         write(*,"(A)") "Warning: Either Umats and/or Pmats have different number of Matsubara points. Computing up to the smaller: "//str(Nmats)
+      endif
       !
       allocate(invW(Nbp,Nbp));invW=czero
       call clear_attributes(Wmats)
@@ -285,25 +287,6 @@ contains
          !W at gamma point should be real
          den_smallk_avrg = real(den_smallk_avrg)
          !
-         !Save the modified polarization at Gamma
-         if(allocated(Ugamma))then
-            write(*,"(A)")"Warning: The polarization at gamma is going to be reinitialized."
-            deallocate(Ugamma)
-         endif
-         allocate(Ugamma(Nbp,Nbp,Nmats));Ugamma=czero
-         !
-         invW=czero
-         do iw=1,Nmats
-            !
-            !U^-1
-            invW = Pmats%screened(:,:,iw,Umats%iq_gamma)
-            call inv(invW)
-            !
-            !Ugamma = [1 -avrg]*U^-1s
-            Ugamma(:,:,iw) = matmul(invW,zeye(Nbp)-den_smallk_avrg(:,:,iw))
-            !
-         enddo
-         !
          !Replace the Gamma point value
          do iw=1,Nmats
             Wmats%screened(:,:,iw,Umats%iq_gamma) = matmul(den_smallk_avrg(:,:,iw),Umats%screened(:,:,iw,Umats%iq_gamma))
@@ -353,7 +336,6 @@ contains
       if(.not.Wmats%status) stop "Wmats not properly initialized."
       if(.not.Umats%status) stop "Umats not properly initialized."
       if(.not.Pmats%status) stop "Pmats not properly initialized."
-      if(Wmats%Nkpt.ne.0) stop "Wmats k dependent attributes are supposed to be unallocated."
       if(Umats%Nkpt.eq.0) stop "Umats k dependent attributes not properly initialized."
       if(Pmats%Nkpt.ne.0) stop "Pmats k dependent attributes are supposed to be unallocated."
       if(Umats%iq_gamma.lt.0) stop "Umats iq_gamma not defined."
@@ -366,8 +348,10 @@ contains
       !
       if(all([Umats%Nbp-Nbp,Pmats%Nbp-Nbp].ne.[0,0])) stop "Either Umats and/or Pmats have different orbital dimension with respect to Wmats."
       if(all([Umats%Beta-Beta,Pmats%Beta-Beta].ne.[0d0,0d0])) stop "Either Umats and/or Pmats have different Beta with respect to Wmats."
-      if(all([Umats%Npoints-Nmats,Pmats%Npoints-Nmats].ne.[0,0]))  write(*,"(A)") "Warning: Either Umats and/or Pmats have different number of Matsubara points. Computing up to the smaller."
-      Nmats = minval([Wmats%Npoints,Umats%Npoints,Pmats%Npoints])
+      if(all([Umats%Npoints-Nmats,Pmats%Npoints-Nmats].ne.[0,0]))then
+         Nmats = minval([Wmats%Npoints,Umats%Npoints,Pmats%Npoints])
+         write(*,"(A)") "Warning: Either Umats and/or Pmats have different number of Matsubara points. Computing up to the smaller: "//str(Nmats)
+      endif
       !
       allocate(invW(Nbp,Nbp));invW=czero
       call clear_attributes(Wmats)
@@ -436,26 +420,7 @@ contains
          !W at gamma point should be real
          den_smallk_avrg = real(den_smallk_avrg)
          !
-         !Save the modified polarization at Gamma
-         if(allocated(Ugamma))then
-            write(*,"(A)")"Warning: The polarization at gamma is going to be reinitialized."
-            deallocate(Ugamma)
-         endif
-         allocate(Ugamma(Nbp,Nbp,Nmats));Ugamma=czero
-         !
-         invW=czero
-         do iw=1,Nmats
-            !
-            !U^-1
-            invW = Pmats%screened_local(:,:,iw)
-            call inv(invW)
-            !
-            !Ugamma = [1 -avrg]*U^-1s
-            Ugamma(:,:,iw) = matmul(invW,zeye(Nbp)-den_smallk_avrg(:,:,iw))
-            !
-         enddo
-         !
-         !Replace the Gamma point value - to test!!!!
+         !Replace the Gamma point value
          do iw=1,Nmats
             Wmats%screened_local(:,:,iw) = Wmats%screened_local(:,:,iw) + matmul(den_smallk_avrg(:,:,iw),Umats%screened(:,:,iw,Umats%iq_gamma))/Nkpt
          enddo
@@ -510,8 +475,10 @@ contains
       if(all([Umats%Nbp-Nbp,Pmats%Nbp-Nbp].ne.[0,0])) stop "Either Umats and/or Pmats have different orbital dimension with respect to Chi."
       if(all([Umats%Nkpt-Nkpt,Pmats%Nkpt-Nkpt].ne.[0,0])) stop "Either Umats and/or Pmats have different number of k-points with respect to Chi."
       if(all([Umats%Beta-Beta,Pmats%Beta-Beta].ne.[0d0,0d0])) stop "Either Umats and/or Pmats have different Beta with respect to Chi."
-      if(all([Umats%Npoints-Nmats,Pmats%Npoints-Nmats].ne.[0,0]))  write(*,"(A)") "Warning: Either Umats and/or Pmats have different number of Matsubara points. Computing up to the smaller."
-      Nmats = minval([Chi%Npoints,Umats%Npoints,Pmats%Npoints])
+      if(all([Umats%Npoints-Nmats,Pmats%Npoints-Nmats].ne.[0,0]))then
+         Nmats = minval([Chi%Npoints,Umats%Npoints,Pmats%Npoints])
+         write(*,"(A)") "Warning: Either Umats and/or Pmats have different number of Matsubara points. Computing up to the smaller: "//str(Nmats)
+      endif
       !
       allocate(invW(Nbp,Nbp));invW=czero
       call clear_attributes(Chi)
@@ -588,8 +555,10 @@ contains
       !
       if(all([Umats%Nbp-Nbp,Pmats%Nbp-Nbp].ne.[0,0])) stop "Either Umats and/or Pmats have different orbital dimension with respect to Chi."
       if(all([Umats%Beta-Beta,Pmats%Beta-Beta].ne.[0d0,0d0])) stop "Either Umats and/or Pmats have different Beta with respect to Chi."
-      if(all([Umats%Npoints-Nmats,Pmats%Npoints-Nmats].ne.[0,0]))  write(*,"(A)") "Warning: Either Umats and/or Pmats have different number of Matsubara points. Computing up to the smaller."
-      Nmats = minval([Chi%Npoints,Umats%Npoints,Pmats%Npoints])
+      if(all([Umats%Npoints-Nmats,Pmats%Npoints-Nmats].ne.[0,0]))then
+         Nmats = minval([Chi%Npoints,Umats%Npoints,Pmats%Npoints])
+         write(*,"(A)") "Warning: Either Umats and/or Pmats have different number of Matsubara points. Computing up to the smaller: "//str(Nmats)
+      endif
       !
       allocate(invW(Nbp,Nbp));invW=czero
       call clear_attributes(Chi)

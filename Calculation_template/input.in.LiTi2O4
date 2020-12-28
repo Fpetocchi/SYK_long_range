@@ -26,11 +26,11 @@
 
  #---------------------------------------------#
 
- BETA=10.000000                                !Inverse temperature in 1/eV.
- MAX_WMATS=150.000000                          !Maximum value of the Matsubara frequency mesh.
- NMATS=238                                     !Number of points on the imaginary frequency axis. User cannot set this as its computed from MAX_WMATS and BETA.
- NTAU_F_LAT=237                                !Number of points on the imaginary time axis for Fermionic lattice fields. Its gonna be made odd.
- NTAU_B_LAT=237                                !Number of points on the imaginary time axis for Bosonic lattice fields. User cannot set this as its equal to NTAU_F.
+ BETA=20.000000                                !Inverse temperature in 1/eV.
+ MAX_WMATS=200.000000                          !Maximum value of the Matsubara frequency mesh.
+ NMATS=                                        !Number of points on the imaginary frequency axis. User cannot set this as its computed from MAX_WMATS and BETA.
+ NTAU_F_LAT=637                                !Number of points on the imaginary time axis for Fermionic lattice fields. Its gonna be made odd.
+ NTAU_B_LAT=637                                !Number of points on the imaginary time axis for Bosonic lattice fields. User cannot set this as its equal to NTAU_F.
  TAU_UNIF=F                                    !Flag to use a non-tau_uniform mesh on the imaginary time axis.
  NREAL=2000                                    !Number of points on the real frequency axis.
  MAX_WREAL=10.000000                           !Maximum absolute value of the real frequency mesh.
@@ -42,8 +42,8 @@
  MU=0.000000                                   !Chemical potential.
  N_READ_LAT=2.000000                           !Target density on the lattice. Lookup is switched on to this value if its >0d0. Otherwise mu will be kept fixed.
  N_QUICK=1                                     !Integer flag to switch on the quick density lookup within the solver.
- N_ERR=1.000000E-02                            !Relative error on the target density. Better if not lower than 1e-3.
- MU_STEP=2.000000                              !Initial chemical potential step in the density lookup.
+ N_ERR=1.000000E-03                            !Relative error on the target density. Better if not lower than 1e-3.
+ MU_STEP=0.500000                              !Initial chemical potential step in the density lookup.
  MU_ITER=100                                   !Maximum number of iterations in the density lookup.
  MU_TIME=0.500000                              !Minutes of solver runtime in the density lookup.
 
@@ -58,7 +58,7 @@
 
  #---------------------------------------------#
 
- VH_TYPE=Ustatic_SPEX                          !Hartree term mismatch between GoWo and scGW. Available: Ubare, Ustatic, Ubare_SPEX, Ustatic_SPEX.
+ VH_TYPE=Ustatic_SPEX                          !Hartree term mismatch between GoWo and scGW. Available: Ubare, Ustatic, Ubare_SPEX(V_nodiv.DAT required), Ustatic_SPEX(V_nodiv.DAT required).
  DC_TYPE=GlocWloc                              !Local GW self-energy which is replaced by DMFT self-energy. Avalibale: GlocWloc, Sloc.
  SIGMA_AC=F                                    !Flag to force the analytic continuation on the G0W0 self-energy.
  SMEAR_GAMMA=T                                 !Remove the interaction divergence at the Gamma point.
@@ -67,13 +67,13 @@
  ALPHA_HK=1.000000                             !Rescaling of the non-interacting Hamiltonian.
  DELTA_FIT=Analytic                            !Fit to extract the local energy in GW+EDMFT calculations. Available: Inf, Analytic, Moments.
  NFIT=16                                       !Number of bath levels (Analytic) or coefficient (Moments-automatic limit to NFIT=8).
- WTAIL_GIMP=0.000000                           !Frequency value above which the tail of Gimp is replaced. If =0d0 the tail is not replaced. Only via moments (automatic limit to NFIT=8).
- WTAIL_SIMP=30.00000                           !Frequency value above which the tail of Simp is replaced. If =0d0 the tail is not replaced. Only via moments (automatic limit to NFIT=8).
+ WTAIL_SIMP=40.000000                          !Frequency value above which the tail of Simp is replaced. If =0d0 the tail is not replaced. Only via moments (automatic limit to NFIT=5).
 
  #---------------------------------------------#
 
  PATH_INPUT=                                   !Folder within cwd where to look for input files.
- PATH_DATA=                                    !Folder within cwd where to store data.
+ PATH_INPUT_TR=                                !Folder within cwd where to save input files after analytic continuation to the Matsubara axis.
+ PATH_DATA=                                    !Folder within cwd where to store calculation data.
  START_IT=                                     !First iteration. If its non zero the code will look for the last item in PATH_DATA/item and start there.
  LAST_IT=                                      !Last iteration.
  LOGFILE=6                                     !Standard output redirection unit. Use 6 to print to terminal. Not used yet.
@@ -86,7 +86,7 @@
 
  NIMP=1                                        !Number of impurities solved. User cannot set this as its deduced from NSITE and EXPAND.
  NTAU_F_IMP=1001                               !Number of points on the imaginary time axis for Fermionic impurity fields. Its gonna be made odd.
- NTAU_B_IMP=2001                               !Number of points on the imaginary time axis for Bosonic impurity fields. Its gonna be made odd.
+ NTAU_B_IMP=1001                               !Number of points on the imaginary time axis for Bosonic impurity fields. Its gonna be made odd.
  N_READ_IMP=0.500000                           !Target density in the impurity list. User cannot set this as its the same of N_READ_LAT if EXPAND=F otherwise its N_READ_LAT/NSITE.
  NORDER=10                                     !Maximum perturbation order measured. Not used yet.
  NMEAS=1000                                    !Sweeps where expensive measurments are not performed.
