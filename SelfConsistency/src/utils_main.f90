@@ -708,13 +708,11 @@ contains
             endif
             !
             !Fully screened interaction
-            call AllocateBosonicField(Wlat,Crystal%Norb,Nmats,Crystal%iq_gamma,Nkpt=Crystal%Nkpt,Nsite=Nsite,Beta=Beta)
+            call AllocateBosonicField(Wlat,Crystal%Norb,Nmats,Crystal%iq_gamma,Nkpt=0,Nsite=Nsite,Beta=Beta)
             !
             !Polarization
-            if(ItStart.ne.0)then
-               call AllocateBosonicField(P_EDMFT,Crystal%Norb,Nmats,Crystal%iq_gamma,Nsite=Nsite,no_bare=.true.,Beta=Beta)
-               call read_BosonicField(P_EDMFT,reg(PrevItFolder),"Pimp_w.DAT")
-            endif
+            call AllocateBosonicField(P_EDMFT,Crystal%Norb,Nmats,Crystal%iq_gamma,Nsite=Nsite,no_bare=.true.,Beta=Beta)
+            if(ItStart.ne.0)call read_BosonicField(P_EDMFT,reg(PrevItFolder),"Pimp_w.DAT")
             !
             !Impurity Self-energy
             call AllocateFermionicField(S_DMFT,Crystal%Norb,Nmats,Nsite=Nsite,Beta=Beta)
@@ -742,39 +740,26 @@ contains
             !Fully screened interaction
             call AllocateBosonicField(Wlat,Crystal%Norb,Nmats,Crystal%iq_gamma,Nkpt=Crystal%Nkpt,Nsite=Nsite,Beta=Beta)
             !
+            !Polarization
+            call AllocateBosonicField(Plat,Crystal%Norb,Nmats,Crystal%iq_gamma,Nkpt=Crystal%Nkpt,Nsite=Nsite,no_bare=.true.,Beta=Beta)
+            call AllocateBosonicField(P_EDMFT,Crystal%Norb,Nmats,Crystal%iq_gamma,Nsite=Nsite,no_bare=.true.,Beta=Beta)
+            if(ItStart.ne.0)call read_BosonicField(P_EDMFT,reg(PrevItFolder),"Pimp_w.DAT")
+            !
+            !Impurity Self-energy and Hartree contribution
+            call AllocateFermionicField(S_DMFT,Crystal%Norb,Nmats,Nsite=Nsite,Beta=Beta)
             if(ItStart.ne.0)then
-               !
-               !Polarization
-               call AllocateBosonicField(Plat,Crystal%Norb,Nmats,Crystal%iq_gamma,Nkpt=Crystal%Nkpt,Nsite=Nsite,no_bare=.true.,Beta=Beta)
-               call AllocateBosonicField(P_EDMFT,Crystal%Norb,Nmats,Crystal%iq_gamma,Nsite=Nsite,no_bare=.true.,Beta=Beta)
-               call read_BosonicField(P_EDMFT,reg(PrevItFolder),"Pimp_w.DAT")
-               !
-               !Impurity Self-energy
-               call AllocateFermionicField(S_DMFT,Crystal%Norb,Nmats,Nsite=Nsite,Beta=Beta)
                call read_FermionicField(S_DMFT,reg(PrevItFolder),"Simp_w")
-               !
-               !Hartree contribution to the Impurity self-energy
                call read_Matrix(S_DMFT%N_s(:,:,1),reg(PrevItFolder)//"HartreeU_s1.DAT")
                call read_Matrix(S_DMFT%N_s(:,:,2),reg(PrevItFolder)//"HartreeU_s2.DAT")
-               !
-               !Lattice Gf
-               call AllocateFermionicField(Glat,Crystal%Norb,Nmats,Nkpt=Crystal%Nkpt,Nsite=Nsite,Beta=Beta)
-               call read_FermionicField(Glat,reg(PrevItFolder),"Glat_w",Crystal%kpt)
-               !
-            else
-               !
-               !Polarization
-               call AllocateBosonicField(Plat,Crystal%Norb,Nmats,Crystal%iq_gamma,Nkpt=Crystal%Nkpt,Nsite=Nsite,no_bare=.true.,Beta=Beta)
-               !
-               !Impurity Self-energy
-               call AllocateFermionicField(S_DMFT,Crystal%Norb,Nmats,Nsite=Nsite,Beta=Beta)
-               !
-               !Lattice Gf
-               call AllocateFermionicField(Glat,Crystal%Norb,Nmats,Nkpt=Crystal%Nkpt,Nsite=Nsite,Beta=Beta)
-               call calc_Gmats(Glat,Crystal)
-               !
             endif
             !
+            !Lattice Gf
+            call AllocateFermionicField(Glat,Crystal%Norb,Nmats,Nkpt=Crystal%Nkpt,Nsite=Nsite,Beta=Beta)
+            if(ItStart.ne.0)then
+               call read_FermionicField(Glat,reg(PrevItFolder),"Glat_w",Crystal%kpt)
+            else
+               call calc_Gmats(Glat,Crystal)
+            endif
             call calc_density(Glat,Crystal,Glat%N_ks)
             call calc_density(Glat,Glat%N_s)
             !
@@ -1987,13 +1972,16 @@ contains
                      do jspin=1,Nspin
                         !
                         ChiCitau%screened_local(ib1,ib2,:) = ChiCitau%screened_local(ib1,ib2,:) + (NNitau(iorb,jorb,ispin,jspin,:) &
-                                                           - densityQMC(iorb,iorb,ispin,isite)*densityQMC(jorb,jorb,jspin,isite))!/2d0
+                                                           - densityQMC(iorb,iorb,ispin,isite)*densityQMC(jorb,jorb,jspin,isite))
                         !
                      enddo
                   enddo
                   !
                enddo
             enddo
+            !
+            ChiCitau%screened_local = ChiCitau%screened_local * alphaChi
+            !
             call isReal(ChiCitau)
             call dump_BosonicField(ChiCitau,reg(PrevItFolder)//"Solver_"//reg(SiteName(isite))//"/","ChiC_"//reg(SiteName(isite))//"_t.DAT",axis=tauB)
             deallocate(tauB,densityQMC)

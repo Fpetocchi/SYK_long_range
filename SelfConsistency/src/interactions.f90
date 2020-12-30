@@ -228,7 +228,7 @@ contains
          allocate(den_smallk_avrg(Nbp,Nbp,Nmats));den_smallk_avrg=czero
       endif
       !
-      ! Assuming that the Polarization vanishes at iw__>inf
+      ! Assuming that the Polarization vanishes at iw-->inf
       Wmats%bare = Umats%bare
       !
       !$OMP PARALLEL DEFAULT(NONE),&
@@ -287,7 +287,7 @@ contains
          !W at gamma point should be real
          den_smallk_avrg = real(den_smallk_avrg)
          !
-         !Replace the Gamma point value
+         !Fill the Gamma point value - element not included in the iq loop
          do iw=1,Nmats
             Wmats%screened(:,:,iw,Umats%iq_gamma) = matmul(den_smallk_avrg(:,:,iw),Umats%screened(:,:,iw,Umats%iq_gamma))
          enddo
@@ -337,6 +337,7 @@ contains
       if(.not.Umats%status) stop "Umats not properly initialized."
       if(.not.Pmats%status) stop "Pmats not properly initialized."
       if(Umats%Nkpt.eq.0) stop "Umats k dependent attributes not properly initialized."
+      if(Wmats%Nkpt.ne.0) stop "Wmats k dependent attributes are supposed to be unallocated."
       if(Pmats%Nkpt.ne.0) stop "Pmats k dependent attributes are supposed to be unallocated."
       if(Umats%iq_gamma.lt.0) stop "Umats iq_gamma not defined."
       if(.not.allocated(Lttc%small_ik)) stop "Kpoints near Gamma not stored. W divergence cannot be cured."
@@ -361,7 +362,7 @@ contains
          allocate(den_smallk_avrg(Nbp,Nbp,Nmats));den_smallk_avrg=czero
       endif
       !
-      ! Assuming that the Polarization vanishes at iw__>inf
+      ! Assuming that the Polarization vanishes at iw-->inf
       Wmats%bare_local = Umats%bare_local
       !
       !$OMP PARALLEL DEFAULT(NONE),&
@@ -420,7 +421,7 @@ contains
          !W at gamma point should be real
          den_smallk_avrg = real(den_smallk_avrg)
          !
-         !Replace the Gamma point value
+         !Add the Gamma point value - element not summed in the iq loop
          do iw=1,Nmats
             Wmats%screened_local(:,:,iw) = Wmats%screened_local(:,:,iw) + matmul(den_smallk_avrg(:,:,iw),Umats%screened(:,:,iw,Umats%iq_gamma))/Nkpt
          enddo
@@ -884,8 +885,9 @@ contains
             !$OMP END PARALLEL
             call cpu_time(finish)
             !
-            !Print out the elements with inverted Im/Re symmetry
+            !Deal with elements with inverted Im/Re symmetry
             if(UfullStructure)then
+               !
                unit = free_unit()
                path = reg(pathOUTPUT_)//"ReversedSymmetry.DAT"
                open(unit=unit,file=reg(path),form="formatted",status="unknown",position="rewind",action="write")
@@ -902,10 +904,32 @@ contains
                   enddo
                enddo
                close(unit)
+               !
+            else
+               !
+               unit = free_unit()
+               path = reg(pathOUTPUT_)//"ReversedSymmetry_Removed.DAT"
+               open(unit=unit,file=reg(path),form="formatted",status="unknown",position="rewind",action="write")
+               write(unit,"(3A5)")"iq","ib1","ib2"
+               do iq=1,Umats%Nkpt
+                  do ib1=1,Nbp_spex
+                     do ib2=1,Nbp_spex
+                        if(abs(real(Umats%bare(ib1,ib2,iq))).lt.abs(aimag(Umats%bare(ib1,ib2,iq))))then
+                           write(unit,"(5I5)")iq,PhysicalUelements%Full_Map(ib1,ib2,:)
+                           Umats%bare(ib1,ib2,iq) = dcmplx(0d0,0d0)
+                           Umats%screened(ib1,ib2,:,iq) = dcmplx(0d0,0d0)
+                        endif
+                     enddo
+                  enddo
+               enddo
+               close(unit)
+               !
             endif
             !
             deallocate(D1,D2,D3,imgFact,RevSym)
             write(*,"(A,F)") "     UcRPA(q,w) --> UcRPA(q,iw) cpu timing: ", finish-start
+            !
+            call BosonicKsum(Umats)
             !
          endif !LocalOnly
          deallocate(Utmp)
@@ -1006,21 +1030,6 @@ contains
          !
          !---------------------------------------------------------------------!
          !
-      endif
-      !
-      ! Remove elements with inverted parity from the k-dependent fields.
-      if(allocated(Umats%screened).and.allocated(Umats%bare).and.(.not.UfullStructure))then
-         do iq=1,Nkpt
-            do ib1=1,Nbp_spex
-               do ib2=1,Nbp_spex
-                  if(dabs(dimag(Umats%bare(ib1,ib2,iq))).gt.1.d-6) then
-                     write(*,"(A,4I4)") "     Warning Umats%bare imaginary. Set matrix element to static value",PhysicalUelements%Full_Map(ib1,ib2,:)
-                     Umats%bare(ib1,ib2,iq) = Umats%screened(ib1,ib2,1,iq)
-                     Umats%screened(ib1,ib2,:,iq) = Umats%screened(ib1,ib2,1,iq)
-                  endif
-               enddo
-            enddo
-         enddo
       endif
       !
    end subroutine read_U_spex_full
