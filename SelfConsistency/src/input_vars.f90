@@ -147,6 +147,8 @@ module input_vars
    real(8),public                           :: alphaPi
    real(8),public                           :: alphaSigma
    real(8),public                           :: alphaHk
+   logical,public                           :: removeCDW_C
+   logical,public                           :: removeCDW_P
    !
    !Variables for the fit on Delta, Gimp, Simp
    character(len=256),public                :: DeltaFit
@@ -164,7 +166,8 @@ module input_vars
    real(8),public                           :: Mixing_Delta
    real(8),public                           :: Mixing_curlyU
    logical,public                           :: skipLattice
-   logical,public                           :: printSfull
+   logical,public                           :: dump_Gk
+   logical,public                           :: dump_Sigmak
    !
    !Variables related to the impurity solver
    type(QMC),public                         :: Solver
@@ -349,6 +352,8 @@ contains
       call parse_input_variable(alphaPi,"ALPHA_PI",InputFile,default=1d0,comment="Fraction of the EDMFT polarization substituted within the lattice one.")
       call parse_input_variable(alphaSigma,"ALPHA_SIGMA",InputFile,default=1d0,comment="Fraction of the EDMFT self-energy substituted within the lattice one.")
       call parse_input_variable(alphaHk,"ALPHA_HK",InputFile,default=1d0,comment="Rescaling of the non-interacting Hamiltonian.")
+      call parse_input_variable(removeCDW_C,"CDW_CHI",InputFile,default=.false.,comment="Flag to remove the iw=0 divergence in the local charge susceptibility.")
+      call parse_input_variable(removeCDW_P,"CDW_PI",InputFile,default=.false.,comment="Flag to remove the iw=0 divergence in the local polarization.")
       !
       !Variables for the fit
       call parse_input_variable(DeltaFit,"DELTA_FIT",InputFile,default="Analytic",comment="Fit to extract the local energy in GW+EDMFT calculations. Available: Inf, Analytic, Moments.")
@@ -366,7 +371,11 @@ contains
       call parse_input_variable(Mixing_Delta,"MIX_D",InputFile,default=0.5d0,comment="Fraction of the old iteration Delta.")
       call parse_input_variable(Mixing_curlyU,"MIX_U",InputFile,default=0.5d0,comment="Fraction of the old iteration curlyU.")
       call parse_input_variable(skipLattice,"SKIP_LATT",InputFile,default=.false.,comment="Skip the lattice summation and assuming good the existing Gloc and Wloc. Not used yet.")
-      call parse_input_variable(printSfull,"PRINT_SFULL",InputFile,default=.false.,comment="Print the full k-dependent self-energy (binfmt) at each iteration.")
+      call parse_input_variable(dump_Gk,"PRINT_GK",InputFile,default=.false.,comment="Print the full k-dependent Green's function (binfmt) at each iteration (mandatory for CALC_TYPE=G0W0,scGW,GW+EDMFT).")
+      if(reg(CalculationType).eq."G0W0")dump_Gk=.true.
+      if(reg(CalculationType).eq."scGW")dump_Gk=.true.
+      if(reg(CalculationType).eq."GW+EDMFT")dump_Gk=.true.
+      call parse_input_variable(dump_Sigmak,"PRINT_SIGMAK",InputFile,default=.false.,comment="Print the full k-dependent self-energy (binfmt) at each iteration (always optional).")
       !
       !Variables related to the impurity solver
       call add_separator()

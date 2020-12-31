@@ -66,7 +66,6 @@ module utils_main
    !
    logical                                  :: Wlat_exists=.false.
    logical                                  :: S_Full_exists=.false.
-   logical                                  :: dump_Gk=.false.
    !
    logical                                  :: calc_Pk=.false.
    logical                                  :: merge_P=.false.
@@ -634,7 +633,6 @@ contains
             calc_Pk = .true.
             calc_Wfull = .true.
             calc_Sigmak = .true.
-            dump_Gk = .true.
             !
          case("DMFT+statU")
             !
@@ -771,7 +769,6 @@ contains
                merge_P = .true.
                merge_Sigma = .true.
             endif
-            dump_Gk = .true.
             !
       end select
       !
@@ -914,7 +911,7 @@ contains
             call FermionicKsum(S_Full)
             !
             !Print full k-dep self-energy: binfmt
-            if(printSfull)call dump_FermionicField(S_Full,reg(ItFolder),"Sfull_w",.true.,Crystal%kpt)
+            if(dump_Sigmak)call dump_FermionicField(S_Full,reg(ItFolder),"Sfull_w",.true.,Crystal%kpt)
             !
             !
          case("DMFT+statU","DMFT+dynU","EDMFT")
@@ -1543,7 +1540,7 @@ contains
       !Impurity polarization and bosonic Dyson equation
       type(BosonicField)                    :: Pimp
       type(BosonicField)                    :: Wimp
-
+      real(8),allocatable                   :: CDW(:,:)
       !
       !
       write(*,"(A)") new_line("A")//new_line("A")//"---- collect_QMC_results"
@@ -2033,6 +2030,21 @@ contains
             call symmetrize(C_EDMFT,EqvGWndx)
             !
          endif
+         !
+         if(removeCDW_C)then
+            call dump_BosonicField(C_EDMFT,reg(PrevItFolder),"Cimp_CDW_w.DAT")
+            allocate(CDW(C_EDMFT%Nbp,C_EDMFT%Nbp));CDW=0d0
+            CDW = real(C_EDMFT%screened_local(:,:,1))
+            call remove_CDW(C_EDMFT,"imp")
+            CDW = CDW - real(C_EDMFT%screened_local(:,:,1))
+            call dump_Matrix(CDW,reg(PrevItFolder)//"CDW.DAT")
+            deallocate(CDW)
+         endif
+         if(removeCDW_P)then
+            call dump_BosonicField(P_EDMFT,reg(PrevItFolder),"Pimp_CDW_w.DAT")
+            call remove_CDW(P_EDMFT,"imp")
+         endif
+         !
          call dump_BosonicField(P_EDMFT,reg(PrevItFolder),"Pimp_w.DAT")
          call dump_BosonicField(W_EDMFT,reg(PrevItFolder),"Wimp_w.DAT")
          call dump_BosonicField(curlyU_EDMFT,reg(PrevItFolder),"curlyUimp_w.DAT")
@@ -2044,7 +2056,7 @@ contains
          call dump_MaxEnt(C_EDMFT,"mats",reg(PrevItFolder)//"Convergence/","Cimp",EqvGWndx%SetOrbs)
          !
          do iw=1,Nmats
-            call check_Symmetry(curlyU_EDMFT%screened_local(:,:,iw),eps,enforce=.true.,hardstop=.false.,name="curlyU_"//str(iw))
+            call check_Symmetry(curlyU_EDMFT%screened_local(:,:,iw),0.001d0,enforce=.true.,hardstop=.false.,name="curlyU_"//str(iw))
          enddo
          !
          call DeallocateBosonicField(P_EDMFT)

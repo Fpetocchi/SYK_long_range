@@ -77,6 +77,8 @@ module utils_misc
    public :: BosonicFilon
    public :: halfbeta_symm
    public :: halfbeta_antisymm
+   public :: nspline
+   public :: splint
    !functions
    public :: FermionicFreqMesh
    public :: BosonicFreqMesh
@@ -90,6 +92,7 @@ module utils_misc
    public :: free_unit
    public :: str
    public :: reg
+   public :: cubic_interp
 
    !===========================================================================!
 
@@ -669,6 +672,118 @@ contains
       enddo
       !
    end subroutine halfbeta_antisymm
+
+
+   !---------------------------------------------------------------------------!
+   !PURPOSE: Routines for frequency interpolation using natural splines.
+   !Taken from NUMERICAL RECEPIES IN FORTRAN 77 CamUniv Press 1986-1992 p 110
+   !Given arrays x(1:n) and y(1:n) containing a tabulated function, i.e.,
+   !y_i = f( x_i ), with x_1 < x_2 < ... < x_N , this routine returns an
+   !array y2(1:n) of length n which contains the second derivatives of the
+   !interpolating function at the tabulated points x_i . The routine is signaled
+   !to set the corresponding boundary condition for a natural spline, with zero
+   !second derivative on that boundary.
+   !Parameter: NMAX is the largest anticipated value of n .
+   !---------------------------------------------------------------------------!
+   subroutine nspline(x,y,y2)
+      implicit none
+      real(8),intent(in)                    :: x(:)
+      real(8),intent(in)                    :: y(:)
+      real(8),intent(inout)                 :: y2(:)
+      !
+      integer                               :: n,i,k
+      real(8)                               :: p,qn,sig,un!yp1,ypn,
+      real(8),allocatable                   :: u(:)
+      !
+      n = size(x)
+      if(size(y).ne.n) stop "nspline: size(y).ne.size(x)."
+      if(size(y2).ne.n) stop "nspline: size(y2).ne.size(x)."
+      allocate(u(n));u=0d0
+      y2=0d0
+      !
+      y2(1)=0.
+      u(1)=0.
+      do i=2,n-1
+         sig=(x(i)-x(i-1))/(x(i+1)-x(i-1))
+         p=sig*y2(i-1)+2.
+         y2(i)=(sig-1.)/p
+         u(i)=(6.*((y(i+1)-y(i))/(x(i+1)-x(i))-(y(i)-y(i-1))/(x(i)-x(i-1)))/(x(i+1)-x(i-1))-sig*u(i-1))/p
+      enddo
+      qn=0.
+      un=0.
+      y2(n)=(un-qn*u(n-1))/(qn*y2(n-1)+1.)
+      do k=n-1,1,-1
+         y2(k)=y2(k)*y2(k+1)+u(k)
+      enddo
+      deallocate(u)
+      !
+   end subroutine nspline
+
+
+   !---------------------------------------------------------------------------!
+   !PURPOSE: Given the arrays x_i(1:n) and y_i(1:n) of length n, which tabulate
+   !a function (with the x_i is in order), and given the array y2_i(1:n),
+   !which is the output from spline above, and given a value of x, this routine
+   !returns a cubic-spline interpolated value y .
+   !---------------------------------------------------------------------------!
+   subroutine splint(x,y,y2,xp,yp)
+      implicit none
+      real(8),intent(in)                    :: x(:)
+      real(8),intent(in)                    :: y(:)
+      real(8),intent(in)                    :: y2(:)
+      real(8),intent(in)                    :: xp
+      real(8),intent(out)                   :: yp
+      !
+      integer                               :: n,k,khi,klo
+      real(8)                               :: a,b,h
+      !
+      n = size(x)
+      if(size(y).ne.n) stop "splint: size(y).ne.size(x)."
+      if(size(y2).ne.n) stop "splint: size(y2).ne.size(x)."
+      !
+      klo=1
+      khi=n
+      1 if (khi-klo.gt.1) then
+           k=(khi+klo)/2
+           if(x(k).gt.xp)then
+              khi=k
+           else
+         klo=k
+      endif
+      goto 1
+      endif
+      !klo and khi now bracket the input value of x.
+      h=x(khi)-x(klo)
+      if (h.eq.0.) stop "splint: h.eq.0." !’bad xa input in splint’ The xa’s must be distinct.
+      a=(x(khi)-xp)/h
+      !Cubic spline polynomial is now evaluated.
+      b=(xp-x(klo))/h
+      yp=a*y(klo)+b*y(khi)+((a**3-a)*y2(klo)+(b**3-b)*y2(khi))*(h**2)/6.
+      !
+   end subroutine splint
+
+
+   !---------------------------------------------------------------------------!
+   !PURPOSE: This is a wrapper that encloses nspline and splint
+   !---------------------------------------------------------------------------!
+   function cubic_interp(x,y,xp) result(yp)
+      implicit none
+      real(8),intent(in)                    :: x(:)
+      real(8),intent(in)                    :: y(:)
+      real(8),intent(in)                    :: xp
+      real(8)                               :: yp
+      !
+      integer                               :: n
+      real(8),allocatable                   :: y2(:)
+      !
+      n=size(x)
+      if(size(y).ne.n) stop "nspline: size(y).ne.size(x)."
+      allocate(y2(n));y2=0d0
+      call nspline(x,y,y2)
+      call splint(x,y,y2,xp,yp)
+      deallocate(y2)
+      !
+   end function cubic_interp
 
 
    !---------------------------------------------------------------------------!

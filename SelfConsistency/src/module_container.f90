@@ -25,7 +25,8 @@ module module_container
    check_Symmetry                           ,&
    halfbeta_symm                            ,&
    halfbeta_antisymm                        ,&
-   assert_shape
+   assert_shape                             ,&
+   splint,nspline,cubic_interp
 
 
    !(c) Lattice related quantities. Depends on (a),(b) not on specific types.
@@ -135,7 +136,8 @@ module module_container
    !(p) post-processing container. Depends on (a),(b),(c),(d),(e),(f),(g),(h)
    use post_processing, only:                &
    dump_MaxEnt                              ,&
-   pade!                                    ,&
+   pade                                     ,&
+   remove_CDW
    !calc_OptCond                            ,&
    !calc_HallCond
 

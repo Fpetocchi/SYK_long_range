@@ -35,10 +35,117 @@ module post_processing
    public :: pade
    !subroutines
    public :: dump_MaxEnt
+   public :: remove_CDW
 
    !===========================================================================!
 
 contains
+
+
+   !---------------------------------------------------------------------------!
+   !PURPOSE:
+   !TEST ON:
+   !---------------------------------------------------------------------------!
+   subroutine remove_CDW(W,mode)
+      !
+      use parameters
+      use utils_misc
+      use utils_fields
+      use interactions
+      use input_vars, only: Nsite, SiteNorb, SiteOrbs
+      implicit none
+      !
+      type(BosonicField),intent(inout)      :: W
+      character(len=*),intent(in)           :: mode
+      !
+      integer                               :: Norb,Nmats
+      integer                               :: isite,iq,ib1,ib2
+      integer                               :: i,j,k,l
+      integer                               :: i_lat,j_lat,k_lat,l_lat
+      logical                               :: LocalOnly,replace
+      real(8)                               :: ReW,ImW
+      real(8),allocatable                   :: wmats(:)
+      type(physicalU)                       :: PhysicalUelements
+      !
+      !
+      if(verbose)write(*,"(A)") "---- remove_CDW"
+      !
+      !
+      if(.not.W%status) stop "remove_CDW. BosonicField not properly initialized."
+      Norb = int(sqrt(dble(W%Nbp)))
+      Nmats = W%Npoints
+      !
+      LocalOnly=.true.
+      if(W%Nkpt.ne.0)LocalOnly=.false.
+      !
+      allocate(wmats(Nmats))
+      wmats=BosonicFreqMesh(W%Beta,Nmats)
+      !
+      select case(reg(mode))
+         case default
+            !
+            stop "remove_CDW. Available Modes are: imp, lat."
+            !
+         case("imp")
+            !
+            call init_Uelements(Norb,PhysicalUelements)
+            !
+            do isite=1,Nsite
+               !
+               do i=1,SiteNorb(isite)
+                  do j=1,SiteNorb(isite)
+                     do k=1,SiteNorb(isite)
+                        do l=1,SiteNorb(isite)
+                           !
+                           ! mapping
+                           i_lat = SiteOrbs(isite,i)
+                           j_lat = SiteOrbs(isite,j)
+                           k_lat = SiteOrbs(isite,k)
+                           l_lat = SiteOrbs(isite,l)
+                           !
+                           ! bosonic indexes on the lattice
+                           ib1 = i_lat + Norb*(j_lat-1)
+                           ib2 = k_lat + Norb*(l_lat-1)
+                           !
+                           replace = PhysicalUelements%Full_Uaa(ib1,ib2) .or. PhysicalUelements%Full_Uab(ib1,ib2)
+                           !
+                           if(replace)then
+                              ReW = cubic_interp(wmats(2:Nmats),real(W%screened_local(ib1,ib2,2:Nmats)),0d0)
+                              W%screened_local(ib1,ib2,1) = dcmplx(ReW,0d0)
+                           endif
+                           !
+                        enddo
+                     enddo
+                  enddo
+               enddo
+               !
+            enddo
+            !
+         case("lat")
+            !
+            do ib1=1,W%Nbp
+               do ib2=1,W%Nbp
+                  !
+                  ReW = 0d0 ; ImW = 0d0
+                  ReW = cubic_interp(wmats(2:Nmats),real(W%screened_local(ib1,ib2,2:Nmats)),0d0)
+                  if(aimag(W%screened_local(ib1,ib2,1)).ne.0d0) ImW = cubic_interp(wmats(2:Nmats),aimag(W%screened_local(ib1,ib2,2:Nmats)),0d0)
+                  W%screened_local(ib1,ib2,1) = dcmplx(ReW,ImW)
+                  !
+                  if(.not.LocalOnly)then
+                     do iq=1,W%Nkpt
+                        ReW = 0d0 ; ImW = 0d0
+                        ReW = cubic_interp(wmats(2:Nmats),real(W%screened(ib1,ib2,2:Nmats,iq)),0d0)
+                        if(aimag(W%screened(ib1,ib2,1,iq)).ne.0d0) ImW = cubic_interp(wmats(2:Nmats),aimag(W%screened(ib1,ib2,2:Nmats,iq)),0d0)
+                        W%screened(ib1,ib2,1,iq) = dcmplx(ReW,ImW)
+                     enddo
+                  endif
+                  !
+               enddo
+            enddo
+            !
+      end select
+      !
+   end subroutine remove_CDW
 
 
    !---------------------------------------------------------------------------!

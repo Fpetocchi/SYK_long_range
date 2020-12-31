@@ -144,10 +144,10 @@ contains
                   ib1 = iorb + Norb*(jorb-1)
                   ib2 = korb + Norb*(lorb-1)
                   !
-                  Uelements%Full_Uaa(ib1,ib2) = (ib1.eq.ib2)
-                  Uelements%Full_Uab(ib1,ib2) = (iorb.eq.jorb).and.(korb.eq.lorb)
-                  Uelements%Full_Jsf(ib1,ib2) = (iorb.eq.lorb).and.(jorb.eq.korb)
-                  Uelements%Full_Jph(ib1,ib2) = (iorb.eq.korb).and.(jorb.eq.lorb)
+                  Uelements%Full_Uaa(ib1,ib2) = (iorb.eq.jorb).and.(korb.eq.lorb).and.(iorb.eq.korb)
+                  Uelements%Full_Uab(ib1,ib2) = (iorb.eq.jorb).and.(korb.eq.lorb).and.(iorb.ne.korb)
+                  Uelements%Full_Jsf(ib1,ib2) = (iorb.eq.lorb).and.(jorb.eq.korb).and.(iorb.ne.jorb)
+                  Uelements%Full_Jph(ib1,ib2) = (iorb.eq.korb).and.(jorb.eq.lorb).and.(iorb.ne.jorb)
                   !
                   Uelements%Full_All(ib1,ib2) = Uelements%Full_Uaa(ib1,ib2) .or.  &
                                                 Uelements%Full_Uab(ib1,ib2) .or.  &
@@ -1774,12 +1774,6 @@ contains
             !
             if(retarded)then
                !
-               ! V1 ! Wrong !
-               !if(Uloc) Kaux(ib1,ib2,:) = Umats%bare_local(iu1,iu2) - Umats%screened_local(iu1,iu2,:)
-               !if(U1st) Kaux(ib1,ib2,:) = Umats%bare_local(iu1,iu2) - Umats%screened_local(iu1,iu2,:)
-               !if(U2nd) Kaux(ib1,ib2,:) = Umats%bare_local(iu1,iu2) - (Umats%bare_local(ix1,ix2)+Umats%bare_local(ip1,ip2))/2d0 - &
-               !                           (Umats%screened_local(iu1,iu2,:) - (Umats%screened_local(ix1,ix2,:)+Umats%screened_local(ip1,ip2,:))/2d0)
-               !
                if(Uloc) Kaux(ib1,ib2,:) =  Umats%screened_local(iu1,iu2,:) - Umats%screened_local(iu1,iu2,1)
                if(U1st) Kaux(ib1,ib2,:) =  Umats%screened_local(iu1,iu2,:) - Umats%screened_local(iu1,iu2,1)
                if(U2nd) Kaux(ib1,ib2,:) =  Umats%screened_local(iu1,iu2,:) - (Umats%screened_local(ix1,ix2,:)+Umats%screened_local(ip1,ip2,:))/2d0 - &
@@ -1953,7 +1947,7 @@ contains
       !$OMP END DO
       !$OMP END PARALLEL
       deallocate(Wtmp)
-      call isReal(Wtmp)
+      call isReal(Wimp)
       !
    end subroutine calc_Wimp
 
