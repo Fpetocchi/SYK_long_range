@@ -103,8 +103,7 @@ contains
       !
       allocate(Gitau(Norb,Norb,NtauB,Nkpt,Nspin));Gitau=czero
       do ispin=1,Nspin
-         call Fmats2itau_mat(Beta,Gmats%wks(:,:,:,:,ispin),Gitau(:,:,:,:,ispin), &
-         asympt_corr=.true.,tau_uniform=tau_uniform,Nkpt3=Lttc%Nkpt3,kpt=Lttc%kpt)
+         call Fmats2itau_mat(Beta,Gmats%wks(:,:,:,:,ispin),Gitau(:,:,:,:,ispin),asympt_corr=.true.,tau_uniform=tau_uniform,Nkpt3=Lttc%Nkpt3,kpt=Lttc%kpt)
       enddo
       !
       allocate(Witau(Nbp,Nbp,NtauB,Nkpt));Witau=czero
@@ -115,7 +114,6 @@ contains
             enddo
          enddo
       enddo
-      !deallocate(WmatsC)
       !
       call cpu_time(finish)
       write(*,"(A,F)") "     Glat(k,iw),Wlat(q,iw) --> Glat(k,tau),Wlat(q,tau) cpu timing:", finish-start
@@ -272,10 +270,9 @@ contains
       complex(8),allocatable                :: Sitau_loc(:,:,:,:)
       complex(8),allocatable                :: Gitau_loc(:,:,:,:)
       complex(8),allocatable                :: Witau_loc(:,:,:)
-      complex(8),allocatable                :: WmatsC_loc(:,:,:)
       real(8)                               :: Beta
       integer                               :: Nbp,Nkpt,Norb,Nmats
-      integer                               :: iw,itau,ispin
+      integer                               :: itau,ispin
       integer                               :: m,n,mp,np,ib1,ib2
       real                                  :: start,finish
       !
@@ -309,17 +306,20 @@ contains
       !
       allocate(Gitau_loc(Norb,Norb,NtauB,Nspin));Gitau_loc=czero
       do ispin=1,Nspin
-         call Fmats2itau_mat(Beta,Gmats%ws(:,:,:,ispin),Gitau_loc(:,:,:,ispin), &
-                             asympt_corr=.true.,tau_uniform=tau_uniform)
+         call Fmats2itau_mat(Beta,Gmats%ws(:,:,:,ispin),Gitau_loc(:,:,:,ispin),asympt_corr=.true.,tau_uniform=tau_uniform)
       enddo
       !
       allocate(Witau_loc(Nbp,Nbp,NtauB));Witau_loc=czero
-      allocate(WmatsC_loc(Nbp,Nbp,Nmats));WmatsC_loc=czero
-      do iw=1,Nmats
-         WmatsC_loc(:,:,iw) = Wmats%screened_local(:,:,iw) - Wmats%bare_local
+      !allocate(WmatsC_loc(Nbp,Nbp,Nmats));WmatsC_loc=czero
+      !do iw=1,Nmats
+      !   WmatsC_loc(:,:,iw) = Wmats%screened_local(:,:,iw) - Wmats%bare_local
+      !enddo
+      do ib1=1,Nbp
+         do ib2=1,Nbp
+            call Bmats2itau(Beta,(Wmats%screened_local(ib1,ib2,:)-Wmats%bare_local(ib1,ib2)),Witau_loc(ib1,ib2,:),asympt_corr=.true.,tau_uniform=tau_uniform)
+         enddo
       enddo
-      call Bmats2itau(Beta,WmatsC_loc,Witau_loc,asympt_corr=.true.,tau_uniform=tau_uniform)
-      deallocate(WmatsC_loc)
+      !deallocate(WmatsC_loc)
       !
       call cpu_time(finish)
       write(*,"(A,F)") "     Glat(iw),Wlat(iw) --> Glat(tau),Wlat(tau) cpu timing:", finish-start

@@ -171,7 +171,7 @@ contains
    !PURPOSE: Lattice inversion to get fully screened interaction - GW+EDMFT
    !TEST ON: 21-10-2020
    !---------------------------------------------------------------------------!
-   subroutine calc_W_full(Wmats,Umats,Pmats,Lttc)
+   subroutine calc_W_full(Wmats,Umats,Pmats,Lttc,sym)
       !
       use parameters
       use utils_misc
@@ -184,6 +184,7 @@ contains
       type(BosonicField),intent(in)         :: Umats
       type(BosonicField),intent(in)         :: Pmats
       type(Lattice),intent(in)              :: Lttc
+      logical,intent(in),optional           :: sym
       !
       complex(8),allocatable                :: invW(:,:)
       complex(8),allocatable                :: den_smallk(:,:,:,:)
@@ -192,6 +193,7 @@ contains
       integer                               :: Nbp,Nkpt,Nmats
       integer                               :: iq,iw
       integer                               :: ismall,num_k
+      logical                               :: sym_
       !
       !
       if(verbose)write(*,"(A)") "---- calc_W_full"
@@ -206,6 +208,9 @@ contains
       if(Pmats%Nkpt.eq.0) stop "Pmats k dependent attributes not properly initialized."
       if(Umats%iq_gamma.lt.0) stop "Umats iq_gamma not defined."
       if(.not.allocated(Lttc%small_ik)) stop "Kpoints near Gamma not stored. W divergence cannot be cured."
+      !
+      sym_=.true.
+      if(present(sym))sym_=sym
       !
       Nbp = Wmats%Nbp
       Nkpt = Wmats%Nkpt
@@ -300,13 +305,21 @@ contains
       ! Fill the local attributes
       call BosonicKsum(Wmats)
       !
+      Wmats%screened_local = dcmplx(real(Wmats%screened_local),0d0)
+      !
+      if(sym_)then
+         do iw=1,Nmats
+            call check_Symmetry(Wmats%screened_local(:,:,iw),eps,enforce=.true.,hardstop=.false.,name="Wlat_w"//str(iw))
+         enddo
+      endif
+      !
    end subroutine calc_W_full
 
 
    !---------------------------------------------------------------------------!
    !PURPOSE: Lattice inversion to get fully screened interaction - EDMFT
    !---------------------------------------------------------------------------!
-   subroutine calc_W_edmft(Wmats,Umats,Pmats,Lttc)
+   subroutine calc_W_edmft(Wmats,Umats,Pmats,Lttc,sym)
       !
       use parameters
       use utils_misc
@@ -319,6 +332,7 @@ contains
       type(BosonicField),intent(in)         :: Umats
       type(BosonicField),intent(in)         :: Pmats
       type(Lattice),intent(in)              :: Lttc
+      logical,intent(in),optional           :: sym
       !
       complex(8),allocatable                :: invW(:,:)
       complex(8),allocatable                :: den_smallk(:,:,:,:)
@@ -327,6 +341,7 @@ contains
       integer                               :: Nbp,Nkpt,Nmats
       integer                               :: iq,iw
       integer                               :: ismall,num_k
+      logical                               :: sym_
       !
       !
       if(verbose)write(*,"(A)") "---- calc_W_edmft"
@@ -341,6 +356,9 @@ contains
       if(Pmats%Nkpt.ne.0) stop "Pmats k dependent attributes are supposed to be unallocated."
       if(Umats%iq_gamma.lt.0) stop "Umats iq_gamma not defined."
       if(.not.allocated(Lttc%small_ik)) stop "Kpoints near Gamma not stored. W divergence cannot be cured."
+      !
+      sym_=.true.
+      if(present(sym))sym_=sym
       !
       Nbp = Wmats%Nbp
       Nkpt = Umats%Nkpt
@@ -430,6 +448,14 @@ contains
          !
       endif
       deallocate(invW)
+      !
+      Wmats%screened_local = dcmplx(real(Wmats%screened_local),0d0)
+      !
+      if(sym_)then
+         do iw=1,Nmats
+            call check_Symmetry(Wmats%screened_local(:,:,iw),eps,enforce=.true.,hardstop=.false.,name="Wlat_w"//str(iw))
+         enddo
+      endif
       !
    end subroutine calc_W_edmft
 
@@ -749,25 +775,6 @@ contains
          allocate(D2(Nbp_spex,Nbp_spex));D2=czero
          allocate(D3(Nbp_spex,Nbp_spex));D3=czero
          !
-         ! Check if any local Urpa component has inverted Im/Re symmetry
-         do ib1=1,Nbp_spex
-            do ib2=1,Nbp_spex
-               !
-               if(abs(Umats%bare_local(ib1,ib2)).lt.Uthresh)then
-                  Umats%bare_local(ib1,ib2)=czero ; Ureal%screened_local(ib1,ib2,:)=czero
-                  Umats%bare_local(ib2,ib1)=czero ; Ureal%screened_local(ib2,ib1,:)=czero
-               endif
-               !
-               if(PhysicalUelements%Full_All(ib1,ib2).and.abs(real(Umats%bare_local(ib1,ib2))).lt.abs(aimag(Umats%bare_local(ib1,ib2))))then
-                  write(*,"(A,2I)")"Element: ",ib1,ib2
-                  write(*,"(A,F)")"Re[Ubare(w=inf)]: ",real(Umats%bare_local(ib1,ib2))
-                  write(*,"(A,F)")"Im[Ubare(w=inf)]: ",aimag(Umats%bare_local(ib1,ib2))
-                  stop "Something wrong: Uloc cannot have inverted Re/Im parity."
-               endif
-               !
-            enddo
-         enddo
-         !
          ! Analytical continuation of the local component to imag axis using spectral rep
          call cpu_time(start)
          !$OMP PARALLEL DEFAULT(NONE),&
@@ -808,6 +815,19 @@ contains
          !$OMP END PARALLEL
          call cpu_time(finish)
          deallocate(D1,D2,D3)
+         !
+         !Remove nonPhysical elements
+         if(.not.UfullStructure)then
+            do ib1=1,Nbp_spex
+               do ib2=1,Nbp_spex
+                  if(.not.PhysicalUelements%Full_All(ib1,ib2))then
+                     Umats%bare_local(ib1,ib2) = dcmplx(0d0,0d0)
+                     Umats%screened_local(ib1,ib2,:) = dcmplx(0d0,0d0)
+                  endif
+               enddo
+            enddo
+         endif
+         !
          write(*,"(A,F)") "     UcRPA(w) --> UcRPA(iw) cpu timing: ", finish-start
          !
          !
@@ -823,7 +843,7 @@ contains
             allocate(RevSym(Nbp_spex,Nbp_spex,Umats%Nkpt));RevSym=.false.
             call cpu_time(start)
             !$OMP PARALLEL DEFAULT(NONE),&
-            !$OMP SHARED(Nbp_spex,wmats,wread,Nfreq,Ureal,Umats,UfullStructure,verbose,RevSym,Uthresh),&
+            !$OMP SHARED(Nbp_spex,wmats,wread,Nfreq,Ureal,Umats,verbose,RevSym,Uthresh),&
             !$OMP PRIVATE(iq,ib1,ib2,iw1,iw2,D1,D2,D3,Utmp,imgFact)
             !$OMP DO
             do iq=1,Umats%Nkpt
@@ -832,23 +852,15 @@ contains
                imgFact=cone
                do ib1=1,Nbp_spex
                   do ib2=1,Nbp_spex
-                     !
-                     if(abs(Umats%bare(ib1,ib2,iq)).lt.Uthresh)then
-                        Umats%bare(ib1,ib2,iq)=czero ; Ureal%screened(ib1,ib2,:,iq)=czero
-                        Umats%bare(ib2,ib1,iq)=czero ; Ureal%screened(ib2,ib1,:,iq)=czero
-                     endif
-                     !
-                     if(UfullStructure.and.(abs(real(Umats%bare(ib1,ib2,iq))).lt.abs(aimag(Umats%bare(ib1,ib2,iq)))) )then
-                        imgFact(ib1,ib2,1) = -img !this correspond to dividing by I
-                        imgFact(ib1,ib2,2) = +img !this correspond to multiplying by I
-                        !
+                     if(abs(real(Umats%bare(ib1,ib2,iq))).lt.abs(aimag(Umats%bare(ib1,ib2,iq))))then
+                        imgFact(ib1,ib2,1) = -img !this correspond to dividing by I and bring to standard Re/Im parity
+                        imgFact(ib1,ib2,2) = +img !this correspond to multiplying by I and revert to original parity   ! I am keeping everything real !
                         RevSym(ib1,ib2,iq) = .true.
-                        !
                      endif
-                     !
                   enddo
                enddo
                !
+               !Perform analytical continuation from real to Matsubara frequency
                do iw1=1,Umats%Npoints
                   Utmp=czero
                   do iw2=1,Nfreq-2,2
@@ -874,31 +886,42 @@ contains
                   !
                   do ib1=1,Nbp_spex
                      do ib2=1,Nbp_spex
-                        Umats%screened(ib1,ib2,iw1,iq) = imgFact(ib1,ib2,2)*Utmp(ib1,ib2) + Umats%bare(ib1,ib2,iq)
+                        Umats%screened(ib1,ib2,iw1,iq) = Utmp(ib1,ib2) + Umats%bare(ib1,ib2,iq)
                      enddo
                   enddo
                   !
                enddo !iw1
+               !
+               !Remove K-dependent components under threshold
+               do ib1=1,Nbp_spex
+                  do ib2=1,Nbp_spex
+                     if(abs(Umats%bare(ib1,ib2,iq)).lt.Uthresh)then
+                        Umats%bare(ib1,ib2,iq)=czero ; Umats%screened(ib1,ib2,:,iq)=czero
+                        Umats%bare(ib2,ib1,iq)=czero ; Umats%screened(ib2,ib1,:,iq)=czero
+                     endif
+                  enddo
+               enddo
+               !
                if(verbose)print *, "     UcRPA(q,iw) - done iq: ",iq
             enddo !iq
             !$OMP END DO
             !$OMP END PARALLEL
             call cpu_time(finish)
             !
-            !Deal with elements with inverted Im/Re symmetry
+            !Store indexes of elements with inverted Im/Re symmetry
             if(UfullStructure)then
                !
                unit = free_unit()
-               path = reg(pathOUTPUT_)//"ReversedSymmetry.DAT"
+               path = reg(pathOUTPUT_)//"Reversed_Symmetry.DAT"
                open(unit=unit,file=reg(path),form="formatted",status="unknown",position="rewind",action="write")
                write(unit,"(3A5)")"iq","ib1","ib2"
                do iq=1,Umats%Nkpt
                   do ib1=1,Nbp_spex
                      do ib2=ib1,Nbp_spex
                         if(RevSym(ib1,ib2,iq).and.RevSym(ib2,ib1,iq))then
-                           write(unit,"(5I5)")iq,PhysicalUelements%Full_Map(ib1,ib2,:)
+                           write(unit,"(5I4)")iq,PhysicalUelements%Full_Map(ib1,ib2,:)
                         elseif(RevSym(ib1,ib2,iq).and.(.not.RevSym(ib2,ib1,iq)))then
-                           write(unit,"(5I5,A)")iq,PhysicalUelements%Full_Map(ib1,ib2,:),"   WARNING - non symmetrical with orbital index exchange."
+                           write(unit,"(5I4,A)")iq,PhysicalUelements%Full_Map(ib1,ib2,:),"   WARNING - non symmetrical with orbital index exchange."
                         endif
                      enddo
                   enddo
@@ -908,31 +931,77 @@ contains
             else
                !
                unit = free_unit()
-               path = reg(pathOUTPUT_)//"ReversedSymmetry_Removed.DAT"
+               path = reg(pathOUTPUT_)//"Removed_Uelements.DAT"
                open(unit=unit,file=reg(path),form="formatted",status="unknown",position="rewind",action="write")
-               write(unit,"(3A5)")"iq","ib1","ib2"
-               do iq=1,Umats%Nkpt
-                  do ib1=1,Nbp_spex
-                     do ib2=1,Nbp_spex
-                        if(abs(real(Umats%bare(ib1,ib2,iq))).lt.abs(aimag(Umats%bare(ib1,ib2,iq))))then
-                           write(unit,"(5I5)")iq,PhysicalUelements%Full_Map(ib1,ib2,:)
-                           Umats%bare(ib1,ib2,iq) = dcmplx(0d0,0d0)
-                           Umats%screened(ib1,ib2,:,iq) = dcmplx(0d0,0d0)
-                        endif
-                     enddo
+               write(unit,"(2A5)")"ib1","ib2"
+               do ib1=1,Nbp_spex
+                  do ib2=1,Nbp_spex
+                     if(.not.PhysicalUelements%Full_All(ib1,ib2))then
+                        write(unit,"(4I4)")PhysicalUelements%Full_Map(ib1,ib2,:)
+                        Umats%bare(ib1,ib2,:) = dcmplx(0d0,0d0)
+                        Umats%screened(ib1,ib2,:,:) = dcmplx(0d0,0d0)
+                     endif
                   enddo
                enddo
                close(unit)
                !
             endif
             !
-            deallocate(D1,D2,D3,imgFact,RevSym)
+            deallocate(D1,D2,D3,RevSym)
             write(*,"(A,F)") "     UcRPA(q,w) --> UcRPA(q,iw) cpu timing: ", finish-start
             !
+            !Update the local attributes
             call BosonicKsum(Umats)
+            !
+            !At this point the whole Umats should be real for each K-point
+            call isReal(Umats)
+            !
+            !Put back the pure imaginary part only for K-dependent attributes
+            do ib1=1,Nbp_spex
+               do ib2=1,Nbp_spex
+                  Umats%bare(ib1,ib2,:) = Umats%bare(ib1,ib2,:)*imgFact(ib1,ib2,2)
+                  Umats%screened(ib1,ib2,:,:) = Umats%screened(ib1,ib2,:,:)*imgFact(ib1,ib2,2)
+               enddo
+            enddo
+            deallocate(imgFact)
             !
          endif !LocalOnly
          deallocate(Utmp)
+         !
+         !Remove local components under threshold and check for inverted Im/Re symmetry
+         do ib1=1,Nbp_spex
+            do ib2=1,Nbp_spex
+               !
+               if(abs(Umats%bare_local(ib1,ib2)).lt.Uthresh)then
+                  Umats%bare_local(ib1,ib2)=czero ; Umats%screened_local(ib1,ib2,:)=czero
+                  Umats%bare_local(ib2,ib1)=czero ; Umats%screened_local(ib2,ib1,:)=czero
+               endif
+               !
+               if(abs(real(Umats%bare_local(ib1,ib2))).lt.abs(aimag(Umats%bare_local(ib1,ib2))))then
+                  write(*,"(A,2I4)")"Element:  ",ib1,ib2
+                  write(*,"(A,4I4)")"Orbitals: ",PhysicalUelements%Full_Map(ib1,ib2,:)
+                  write(*,"(A,F)")"Re[Ubare(w=inf)]: ",real(Umats%bare_local(ib1,ib2))
+                  write(*,"(A,F)")"Im[Ubare(w=inf)]: ",aimag(Umats%bare_local(ib1,ib2))
+                  stop "Something wrong: Uloc cannot have inverted Re/Im parity."
+               endif
+               !
+            enddo
+         enddo
+         !
+         !Symmetry Checks on the 0th iteration
+         write(*,"(A)") "     Symmetry check on Uinst - must be symmetric -> enforced if not."
+         call check_Symmetry(Umats%screened_local(:,:,1),eps,enforce=.true.,hardstop=.false.,name="Uinst")
+         !
+         write(*,"(A)") "     Symmetry check on local Ucrpa - must be symmetric -> enforced if not."
+         call check_Symmetry(Umats%bare_local,eps,enforce=.true.,hardstop=.false.,name="Urpa_bare_local")
+         do iw=1,Umats%Npoints
+            call check_Symmetry(Umats%screened_local(:,:,iw),eps,enforce=.true.,hardstop=.false.,name="Urpa_screened_local_w"//str(iw))
+         enddo
+         !
+         write(*,"(A)") "     Symmetry check on full Ucrpa (bare)"
+         do iq=1,Umats%Nkpt
+            call check_Symmetry(Umats%bare(:,:,iq),eps,enforce=.false.,hardstop=.false.,name="Urpa_bare_k"//str(iq))
+         enddo
          !
          ! Print out the transformed stuff - local
          call dump_BosonicField(Umats,reg(pathOUTPUT_),"Uloc_mats.DAT")
@@ -1866,10 +1935,7 @@ contains
       do iw=1,Nmats
          !
          invW = zeye(Nbp) + matmul(Pimp%screened_local(:,:,iw),Wimp%screened_local(:,:,iw))
-         !
          call inv(invW)
-         !call inv_sym(invW)
-         !
          curlyU%screened_local(:,:,iw) = matmul(Wimp%screened_local(:,:,iw),invW)
          !
       enddo
@@ -1880,7 +1946,7 @@ contains
       !
       if(sym_)then
          do iw=1,Nmats
-            call check_Symmetry(curlyU%screened_local(:,:,iw),eps,enforce=.true.,hardstop=.false.,name="curlyU_"//str(iw))
+            call check_Symmetry(curlyU%screened_local(:,:,iw),eps,enforce=.true.,hardstop=.false.,name="curlyU_w"//str(iw))
          enddo
       endif
       !
@@ -1891,21 +1957,24 @@ contains
    !PURPOSE: Computes the fully screened local interaction
    !TEST ON:
    !---------------------------------------------------------------------------!
-   subroutine calc_Wimp(Wimp,curlyU,ChiC)
+   subroutine calc_Wimp(Wimp,curlyU,ChiC,sym)
       !
       use parameters
       use utils_fields
+      use utils_misc
       use linalg, only : zeye
       implicit none
       !
       type(BosonicField),intent(inout)      :: Wimp
       type(BosonicField),intent(in)         :: curlyU
       type(BosonicField),intent(in)         :: ChiC
+      logical,intent(in),optional           :: sym
       !
       complex(8),allocatable                :: Wtmp(:,:)
       real(8)                               :: Beta
       integer                               :: Nbp,Nmats
       integer                               :: iw
+      logical                               :: sym_
       !
       !
       if(verbose)write(*,"(A)") "---- calc_Wimp"
@@ -1920,6 +1989,9 @@ contains
       if(ChiC%Nkpt.ne.0) stop "ChiC k dependent attributes are supposed to be unallocated."
       if(allocated(ChiC%bare_local))  stop "ChiC bare_local attribute is supposed to be unallocated."
       if(allocated(ChiC%bare))  stop "ChiC bare attribute is supposed to be unallocated."
+      !
+      sym_=.true.
+      if(present(sym))sym_=sym
       !
       Nbp = Wimp%Nbp
       Beta = Wimp%Beta
@@ -1948,6 +2020,12 @@ contains
       !$OMP END PARALLEL
       deallocate(Wtmp)
       call isReal(Wimp)
+      !
+      if(sym_)then
+         do iw=1,Nmats
+            call check_Symmetry(Wimp%screened_local(:,:,iw),eps,enforce=.true.,hardstop=.false.,name="Wimp_w"//str(iw))
+         enddo
+      endif
       !
    end subroutine calc_Wimp
 

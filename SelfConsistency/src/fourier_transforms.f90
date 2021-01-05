@@ -1039,6 +1039,7 @@ contains
       integer                               :: Nmats,Ntau
       logical                               :: asympt_corr_
       logical                               :: tau_uniform_
+      complex(8)                            :: sym_switch
       !
       !
       if(verbose)write(*,"(A)") "---- Bmats2itau_Uw_component"
@@ -1063,15 +1064,18 @@ contains
       call mats2itau_BosonicCoeff(tau,coswt,asympt_corr_)
       deallocate(tau)
       !
+      sym_switch = dcmplx(1d0,0d0)
+      if(abs(aimag(Umats(Nmats))).gt.abs(real(Umats(Nmats)))) sym_switch = dcmplx(0d0,1d0)
+      !
       Uitau=czero
       !$OMP PARALLEL DEFAULT(NONE),&
-      !$OMP SHARED(Ntau,Nmats,Umats,coswt,Uitau),&
+      !$OMP SHARED(Ntau,Nmats,Umats,coswt,Uitau,sym_switch),&
       !$OMP PRIVATE(itau,iw)
       !$OMP DO
       do itau=1,Ntau
          do iw=1,Nmats
             !
-            Uitau(itau) = Uitau(itau) + coswt(iw,itau)*Umats(iw)
+            Uitau(itau) = Uitau(itau) + coswt(iw,itau) * (Umats(iw)*sym_switch)
             !
          enddo
       enddo
@@ -1098,6 +1102,7 @@ contains
       integer                               :: Nmats,Ntau,Nbp
       logical                               :: asympt_corr_
       logical                               :: tau_uniform_
+      complex(8)                            :: sym_switch
       !
       !
       if(verbose)write(*,"(A)") "---- Bmats2itau_Uw"
@@ -1128,14 +1133,17 @@ contains
       Uitau=czero
       !$OMP PARALLEL DEFAULT(NONE),&
       !$OMP SHARED(Ntau,Nmats,Nbp,Umats,coswt,Uitau),&
-      !$OMP PRIVATE(itau,iw,ib1,ib2)
+      !$OMP PRIVATE(itau,iw,ib1,ib2,sym_switch)
       !$OMP DO
-      do itau=1,Ntau
-         do iw=1,Nmats
+      do ib1=1,Nbp
+         do ib2=1,Nbp
             !
-            do ib1=1,Nbp
-               do ib2=1,Nbp
-                  Uitau(ib1,ib2,itau) = Uitau(ib1,ib2,itau) + coswt(iw,itau)*Umats(ib1,ib2,iw)
+            sym_switch = dcmplx(1d0,0d0)
+            if(abs(aimag(Umats(ib1,ib2,Nmats))).gt.abs(real(Umats(ib1,ib2,Nmats)))) sym_switch = dcmplx(0d0,1d0)
+            !
+            do itau=1,Ntau
+               do iw=1,Nmats
+                  Uitau(ib1,ib2,itau) = Uitau(ib1,ib2,itau) + coswt(iw,itau) * (Umats(ib1,ib2,iw)*sym_switch)
                enddo
             enddo
             !
@@ -1164,6 +1172,7 @@ contains
       integer                               :: Nmats,Ntau,Nbp,Nkpt
       logical                               :: asympt_corr_
       logical                               :: tau_uniform_
+      complex(8)                            :: sym_switch
       !
       !
       if(verbose)write(*,"(A)") "---- Bmats2itau_Uwk"
@@ -1195,15 +1204,18 @@ contains
       Uitau=czero
       !$OMP PARALLEL DEFAULT(NONE),&
       !$OMP SHARED(Nkpt,Ntau,Nmats,Nbp,Umats,coswt,Uitau),&
-      !$OMP PRIVATE(ik,itau,iw,ib1,ib2)
+      !$OMP PRIVATE(ik,itau,iw,ib1,ib2,sym_switch)
       !$OMP DO
-      do ik=1,Nkpt
-         do itau=1,Ntau
-            do iw=1,Nmats
+      do ib1=1,Nbp
+         do ib2=1,Nbp
+            do ik=1,Nkpt
                !
-               do ib1=1,Nbp
-                  do ib2=1,Nbp
-                     Uitau(ib1,ib2,itau,ik) = Uitau(ib1,ib2,itau,ik) + coswt(iw,itau)*Umats(ib1,ib2,iw,ik)
+               sym_switch = dcmplx(1d0,0d0)
+               if(abs(aimag(Umats(ib1,ib2,Nmats,ik))).gt.abs(real(Umats(ib1,ib2,Nmats,ik)))) sym_switch = dcmplx(0d0,1d0)
+               !
+               do itau=1,Ntau
+                  do iw=1,Nmats
+                     Uitau(ib1,ib2,itau,ik) = Uitau(ib1,ib2,itau,ik) + coswt(iw,itau) * (Umats(ib1,ib2,iw,ik)*sym_switch)
                   enddo
                enddo
                !

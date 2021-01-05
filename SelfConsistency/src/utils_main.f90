@@ -2056,7 +2056,7 @@ contains
          call dump_MaxEnt(C_EDMFT,"mats",reg(PrevItFolder)//"Convergence/","Cimp",EqvGWndx%SetOrbs)
          !
          do iw=1,Nmats
-            call check_Symmetry(curlyU_EDMFT%screened_local(:,:,iw),0.001d0,enforce=.true.,hardstop=.false.,name="curlyU_"//str(iw))
+            call check_Symmetry(curlyU_EDMFT%screened_local(:,:,iw),0.001d0,enforce=.true.,hardstop=.false.,name="curlyU_w"//str(iw))
          enddo
          !
          call DeallocateBosonicField(P_EDMFT)

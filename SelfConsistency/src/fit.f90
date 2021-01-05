@@ -648,7 +648,7 @@ contains
             !Odd moments coefficient are:
             !positive for exp=1,5,9..
             !negative for exp=3,7,11..
-            if(mod(exp,2).ne.0) coeff = ( MomentVec(imoment)**2 )*(-1d0)**int(exp/2)
+            if(mod(exp,2).ne.0) coeff = sqrt( MomentVec(imoment)**2 )*(-1d0)**int(exp/2)
             !
             Gf(iw) = Gf(iw) + coeff/(dcmplx(0d0,wm(iw))**exp)
             !
@@ -678,7 +678,7 @@ contains
       do iw=1,size(wm)
          !
          !Moments 0,1
-         Sigma(iw) = MomentVec(1) + ( MomentVec(2)**2 ) / dcmplx(0d0,wm(iw))
+         Sigma(iw) = MomentVec(1) + sqrt( MomentVec(2)**2 ) / dcmplx(0d0,wm(iw))
          !
          do imoment=3,size(MomentVec)
             !
@@ -692,7 +692,7 @@ contains
             !Odd moments coefficient are:
             !positive for exp=1,5,9..
             !negative for exp=3,7,11..
-            if(mod(exp,2).ne.0) coeff = ( MomentVec(imoment)**2 )*(-1d0)**int(exp/2)
+            if(mod(exp,2).ne.0) coeff = sqrt( MomentVec(imoment)**2 )*(-1d0)**int(exp/2)
             !
             Sigma(iw) = Sigma(iw) + coeff/(dcmplx(0d0,wm(iw))**exp)
             !

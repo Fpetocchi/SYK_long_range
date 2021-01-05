@@ -93,7 +93,7 @@ contains
       if(.not.G%status)stop "FermionicKsum. Field not properly initialized."
       if(G%Nkpt.eq.0)stop "FermionicKsum. Field k dependent attributes not properly initialized."
       !
-      G%N_s=czero
+      G%N_s = czero
       do ispin=1,Nspin
          do ik=1,G%Nkpt
             G%N_s(:,:,ispin) = G%N_s(:,:,ispin) + G%N_ks(:,:,ik,ispin)/G%Nkpt
@@ -101,7 +101,7 @@ contains
       enddo
       !
       if(G%Npoints.ne.0)then
-         G%ws=czero
+         G%ws = czero
          do ispin=1,Nspin
             do ik=1,G%Nkpt
                do in=1,G%Npoints
@@ -129,7 +129,7 @@ contains
       if(.not.W%status)stop "BosonicKsum. Field not properly initialized."
       if(W%Nkpt.eq.0)stop "BosonicKsum. Field k dependent attributes not properly initialized."
       !
-      W%screened_local=czero
+      W%screened_local = czero
       do ik=1,W%Nkpt
          do in=1,W%Npoints
             W%screened_local(:,:,in) = W%screened_local(:,:,in) + W%screened(:,:,in,ik)/W%Nkpt
@@ -137,6 +137,7 @@ contains
       enddo
       !
       if(allocated(W%bare_local).and.allocated(W%bare))then
+         W%bare_local = czero
          do ik=1,W%Nkpt
             W%bare_local = W%bare_local + W%bare(:,:,ik)/W%Nkpt
          enddo

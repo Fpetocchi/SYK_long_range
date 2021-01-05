@@ -305,7 +305,7 @@ contains
    !PURPOSE: Computes the local polarization vertex
    !TEST ON:
    !---------------------------------------------------------------------------!
-   subroutine calc_Pimp(Pimp,curlyU,ChiC)
+   subroutine calc_Pimp(Pimp,curlyU,ChiC,sym)
       !
       use parameters
       use utils_fields
@@ -316,11 +316,13 @@ contains
       type(BosonicField),intent(inout)      :: Pimp
       type(BosonicField),intent(in)         :: curlyU
       type(BosonicField),intent(in)         :: ChiC
+      logical,intent(in),optional           :: sym
       !
       complex(8),allocatable                :: invP(:,:)
       real(8)                               :: Beta
       integer                               :: Nbp,Nmats
       integer                               :: iw
+      logical                               :: sym_
       !
       !
       if(verbose)write(*,"(A)") "---- calc_Pimp"
@@ -337,6 +339,9 @@ contains
       if(allocated(Pimp%bare))  stop "Pimp bare attribute is supposed to be unallocated."
       if(allocated(ChiC%bare_local))  stop "ChiC bare_local attribute is supposed to be unallocated."
       if(allocated(ChiC%bare))  stop "ChiC bare attribute is supposed to be unallocated."
+      !
+      sym_=.true.
+      if(present(sym))sym_=sym
       !
       Nbp = Pimp%Nbp
       Beta = Pimp%Beta
@@ -370,9 +375,11 @@ contains
       deallocate(invP)
       call isReal(Pimp)
       !
-      do iw=1,Nmats
-         call check_Symmetry(Pimp%screened_local(:,:,iw),eps,enforce=.true.,hardstop=.false.,name="Pimp_"//str(iw))
-      enddo
+      if(sym_)then
+         do iw=1,Nmats
+            call check_Symmetry(Pimp%screened_local(:,:,iw),eps,enforce=.true.,hardstop=.false.,name="Pimp_w"//str(iw))
+         enddo
+      endif
       !
    end subroutine calc_Pimp
 
