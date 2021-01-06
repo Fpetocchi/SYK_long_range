@@ -1554,7 +1554,7 @@ contains
       !
       do isite=1,Nsite
          !
-         write(*,"(A)") "     Collecting occupation of site: "//reg(SiteName(isite))
+         write(*,"(A)")  new_line("A")//"     Collecting occupation of site: "//reg(SiteName(isite))
          !
          Norb = SiteNorb(isite)
          allocate(Orbs(Norb))
@@ -1608,7 +1608,7 @@ contains
       ! COLLECT IMPURITY GF AND FERMIONIC DYSON --------------------------------
       do isite=1,Nsite
          !
-         write(*,"(A)") "     Collecting the impurity Green's function of site: "//reg(SiteName(isite))
+         write(*,"(A)") new_line("A")//"     Collecting the impurity Green's function of site: "//reg(SiteName(isite))
          !
          Norb = SiteNorb(isite)
          allocate(Orbs(Norb))
@@ -1691,7 +1691,7 @@ contains
          allocate(Orbs(Norb))
          Orbs = SiteOrbs(isite,1:Norb)
          !
-         write(*,"(A)") "     Collecting curlyG of site: "//reg(SiteName(isite))
+         write(*,"(A)") new_line("A")//"     Collecting curlyG of site: "//reg(SiteName(isite))
          !
          !Read curlyG
          call AllocateFermionicField(G0imp,Norb,Nmats,Beta=Beta)
@@ -1699,7 +1699,7 @@ contains
          !
          !Adjust with the chemical potential if the solver has changed it
          if(abs(G0imp%mu-muQMC).gt.1e-5)then
-            write(*,"(A)") "     Updating the chemical potential of curlyG from "//str(G0imp%mu)//" to "//str(muQMC)
+            write(*,"(A)") new_line("A")//"     Updating the chemical potential of curlyG from "//str(G0imp%mu)//" to "//str(muQMC)
             do ispin=1,Nspin
                do iw=1,Nmats
                   do iorb=1,Norb
@@ -1712,7 +1712,7 @@ contains
          endif
          !
          !Fermionic Dyson equation in the solver basis (always diagonal)
-         write(*,"(A)") "     Solving fermionic Dyson of site: "//reg(SiteName(isite))
+         write(*,"(A)") new_line("A")//"     Solving fermionic Dyson of site: "//reg(SiteName(isite))
          allocate(Smats(Norb,Nmats,Nspin,Nsite));Smats=czero
          do ispin=1,Nspin
             do iorb=1,Norb
@@ -1734,7 +1734,7 @@ contains
          !
          do isite=1,Nsite
             !
-            write(*,"(A)") "     Fitting self-energy moments of site: "//reg(SiteName(isite))
+            write(*,"(A)") new_line("A")//"     Fitting self-energy moments of site: "//reg(SiteName(isite))
             !
             Norb = SiteNorb(isite)
             allocate(Orbs(Norb))
@@ -1751,7 +1751,7 @@ contains
             call fit_moments(Smats(:,:,:,isite),Beta,NfitS,.false.,reg(MomDir),reg(file),"Sigma",Moments,filename="Simp",Wlimit=wndx)
             !
             allocate(SmatsTail(Nmats));SmatsTail=czero
-            write(*,"(A,F)")"     Replacing Sigma tail starting from iw_["//str(wndx)//"]=",wmats(wndx)
+            write(*,"(A,F)") new_line("A")//"     Replacing Sigma tail starting from iw_["//str(wndx)//"]=",wmats(wndx)
             do ispin=1,Nspin
                do iorb=1,Norb
                   SmatsTail = S_Moments(Moments(iorb,:,ispin),wmats)
@@ -1881,7 +1881,7 @@ contains
          !
          do isite=1,Nsite
             !
-            write(*,"(A)") "     Collecting the impurity susceptibilities of site: "//reg(SiteName(isite))
+            write(*,"(A)") new_line("A")//"     Collecting the impurity susceptibilities of site: "//reg(SiteName(isite))
             !
             Norb = SiteNorb(isite)
             allocate(Orbs(Norb))
@@ -1902,7 +1902,7 @@ contains
             do itau=1,Solver%NtauB
                ReadLine=0d0
                read(unit,*) taup,ReadLine
-               !if(abs(taup-tauB(itau)).gt.eps) stop "Impurity bosonic tau mesh does not coincide."
+               if(abs(taup-tauB(itau)).gt.eps) stop "Impurity bosonic tau mesh does not coincide."
                !
                !this is cumbersome but better be safe
                ndx=1
@@ -1957,7 +1957,8 @@ contains
             call dump_BosonicField(ChiMmats,reg(PrevItFolder)//"Solver_"//reg(SiteName(isite))//"/","ChiM_"//reg(SiteName(isite))//"_w.DAT",wmats)
             deallocate(ChiMitau,ChiMmats,wmats)
             !
-            !Compute the charge susceptibility Sum_s1s2 <Na(tau)Nb(0)> - <Na><Nb> ! here I have to use the non-symmetrized Nqmc
+            !Compute the charge susceptibility Sum_s1s2 <Na(tau)Nb(0)> - <Na><Nb>
+            !here I have to use the non-symmetrized Nqmc because <Na><Nb> is not symmetrized
             call AllocateBosonicField(ChiCitau,Norb,Solver%NtauB,Crystal%iq_gamma,no_bare=.true.,Beta=Beta)
             do iorb=1,Norb
                do jorb=1,Norb
@@ -1977,7 +1978,10 @@ contains
                enddo
             enddo
             !
-            ChiCitau%screened_local = ChiCitau%screened_local * alphaChi
+            if(alphaChi.ne.1d0)then
+               write(*,"(A)") new_line("A")//"     Rescaling ChiC(tau) with factor: "//str(alphaChi,3)
+               ChiCitau%screened_local = ChiCitau%screened_local * alphaChi
+            endif
             !
             call isReal(ChiCitau)
             call dump_BosonicField(ChiCitau,reg(PrevItFolder)//"Solver_"//reg(SiteName(isite))//"/","ChiC_"//reg(SiteName(isite))//"_t.DAT",axis=tauB)
@@ -1990,48 +1994,25 @@ contains
             call isReal(ChiCmats)
             if(verbose)call dump_BosonicField(ChiCmats,reg(PrevItFolder)//"Solver_"//reg(SiteName(isite))//"/","ChiC_"//reg(SiteName(isite))//"_w.DAT")
             !
-            !Bosonic Dyson equations
-            call AllocateBosonicField(curlyU,Norb,Nmats,Crystal%iq_gamma,Beta=Beta)
-            call read_BosonicField(curlyU,reg(PrevItFolder)//"Solver_"//reg(SiteName(isite))//"/","curlyU_"//reg(SiteName(isite))//"_w.DAT")
-            call imp2loc(curlyU_EDMFT,curlyU,Orbs,ExpandImpurity,AFMselfcons)
-            !
-            call AllocateBosonicField(Pimp,Norb,Nmats,Crystal%iq_gamma,no_bare=.true.,Beta=Beta)
-            call calc_Pimp(Pimp,curlyU,ChiCmats)
-            call imp2loc(P_EDMFT,Pimp,Orbs,ExpandImpurity,AFMselfcons)
-            call DeallocateBosonicField(Pimp)
-            !
-            call AllocateBosonicField(Wimp,Norb,Nmats,Crystal%iq_gamma,Beta=Beta)
-            call calc_Wimp(Wimp,curlyU,ChiCmats)
-            call imp2loc(W_EDMFT,Wimp,Orbs,ExpandImpurity,AFMselfcons)
-            call DeallocateBosonicField(Wimp)
-            !
+            !Push to the lattice orbital space
             call imp2loc(C_EDMFT,ChiCmats,Orbs,ExpandImpurity,AFMselfcons)
             call DeallocateBosonicField(ChiCmats)
-            call DeallocateBosonicField(curlyU)
             !
             deallocate(Orbs)
             if(ExpandImpurity.or.AFMselfcons)exit
             !
          enddo
          !
-         !Symmetrize and print
+         !Symmetrize local charge susceptibility
          if(EqvGWndx%O)then
-            !
-            if(verbose)then
-               call dump_BosonicField(P_EDMFT,reg(PrevItFolder),"Pimp_noSym_w.DAT")
-               call dump_BosonicField(W_EDMFT,reg(PrevItFolder),"Wimp_noSym_w.DAT")
-               call dump_BosonicField(curlyU_EDMFT,reg(PrevItFolder),"curlyUimp_noSym_w.DAT")
-               call dump_BosonicField(C_EDMFT,reg(PrevItFolder),"Cimp_noSym_w.DAT")
-            endif
-            !
-            call symmetrize(P_EDMFT,EqvGWndx)
-            call symmetrize(W_EDMFT,EqvGWndx)
-            call symmetrize(curlyU_EDMFT,EqvGWndx)
+            write(*,"(A)") new_line("A")//"     Symmetrization of ChiC(iw)."
+            if(verbose)call dump_BosonicField(C_EDMFT,reg(PrevItFolder),"Cimp_noSym_w.DAT")
             call symmetrize(C_EDMFT,EqvGWndx)
-            !
          endif
          !
+         !Remove the iw=0 divergency of local charge susceptibility
          if(removeCDW_C)then
+            write(*,"(A)") new_line("A")//"     Divergency removal in ChiC(iw=0)."
             call dump_BosonicField(C_EDMFT,reg(PrevItFolder),"Cimp_CDW_w.DAT")
             allocate(CDW(C_EDMFT%Nbp,C_EDMFT%Nbp));CDW=0d0
             CDW = real(C_EDMFT%screened_local(:,:,1))
@@ -2040,24 +2021,83 @@ contains
             call dump_Matrix(CDW,reg(PrevItFolder)//"CDW.DAT")
             deallocate(CDW)
          endif
+         !
+         !Perform Dyson equation with the symmetrized local charge susceptibility
+         do isite=1,Nsite
+            !
+            write(*,"(A)") new_line("A")//"     Solving bosonic Dyson of site: "//reg(SiteName(isite))
+            !
+            Norb = SiteNorb(isite)
+            allocate(Orbs(Norb))
+            Orbs = SiteOrbs(isite,1:Norb)
+            Nbp = Norb**2
+            Nflavor = Norb*Nspin
+            allocate(wmats(Nmats));wmats=BosonicFreqMesh(Beta,Nmats)
+            !
+            !Collect and store curlyU to the lattice orbital space
+            call AllocateBosonicField(curlyU,Norb,Nmats,Crystal%iq_gamma,Beta=Beta)
+            call read_BosonicField(curlyU,reg(PrevItFolder)//"Solver_"//reg(SiteName(isite))//"/","curlyU_"//reg(SiteName(isite))//"_w.DAT")
+            call imp2loc(curlyU_EDMFT,curlyU,Orbs,ExpandImpurity,AFMselfcons)
+            !
+            !Extract back the symmetrized local charge susceptibility
+            call AllocateBosonicField(ChiCmats,Norb,Nmats,Crystal%iq_gamma,no_bare=.true.,Beta=Beta)
+            call loc2imp(ChiCmats,C_EDMFT,Orbs)
+            !
+            !Solve the Bosonic Dyson equation
+            call AllocateBosonicField(Pimp,Norb,Nmats,Crystal%iq_gamma,no_bare=.true.,Beta=Beta)
+            call calc_Pimp(Pimp,curlyU,ChiCmats)
+            call imp2loc(P_EDMFT,Pimp,Orbs,ExpandImpurity,AFMselfcons)
+            call DeallocateBosonicField(Pimp)
+            !
+            !Compute the control impurity field Wimp
+            call AllocateBosonicField(Wimp,Norb,Nmats,Crystal%iq_gamma,Beta=Beta)
+            call calc_Wimp(Wimp,curlyU,ChiCmats)
+            call imp2loc(W_EDMFT,Wimp,Orbs,ExpandImpurity,AFMselfcons)
+            call DeallocateBosonicField(Wimp)
+            !
+            call DeallocateBosonicField(ChiCmats)
+            call DeallocateBosonicField(curlyU)
+            !
+            deallocate(Orbs)
+            if(ExpandImpurity.or.AFMselfcons)exit
+            !
+         enddo
+         !
+         !Symmetrize impurity polarization
+         !Reduntant since it should be already fine if curlyU and ChiC are already symmatric
+         if(EqvGWndx%O)then
+            write(*,"(A)") new_line("A")//"     Symmetrization of Pimp(iw), Wimp(iw) and curlyU(iw)."
+            if(verbose)then
+               call dump_BosonicField(P_EDMFT,reg(PrevItFolder),"Pimp_noSym_w.DAT")
+               call dump_BosonicField(W_EDMFT,reg(PrevItFolder),"Wimp_noSym_w.DAT")
+               call dump_BosonicField(curlyU_EDMFT,reg(PrevItFolder),"curlyUimp_noSym_w.DAT")
+            endif
+            call symmetrize(P_EDMFT,EqvGWndx)
+            call symmetrize(W_EDMFT,EqvGWndx)
+            call symmetrize(curlyU_EDMFT,EqvGWndx)
+         endif
+         !
+         !Final check on curlyU
+         do iw=1,Nmats
+            call check_Symmetry(curlyU_EDMFT%screened_local(:,:,iw),0.001d0,enforce=.true.,hardstop=.false.,name="curlyU_w"//str(iw))
+         enddo
+         !
+         !Remove the iw=0 divergency of impurity polarization
          if(removeCDW_P)then
+            write(*,"(A)") new_line("A")//"     Divergency removal in Pimp(iw=0)."
             call dump_BosonicField(P_EDMFT,reg(PrevItFolder),"Pimp_CDW_w.DAT")
             call remove_CDW(P_EDMFT,"imp")
          endif
          !
+         !Store everything
          call dump_BosonicField(P_EDMFT,reg(PrevItFolder),"Pimp_w.DAT")
          call dump_BosonicField(W_EDMFT,reg(PrevItFolder),"Wimp_w.DAT")
          call dump_BosonicField(curlyU_EDMFT,reg(PrevItFolder),"curlyUimp_w.DAT")
          call dump_BosonicField(C_EDMFT,reg(PrevItFolder),"Cimp_w.DAT")
-         !
          call dump_MaxEnt(P_EDMFT,"mats",reg(PrevItFolder)//"Convergence/","Pimp",EqvGWndx%SetOrbs)
          call dump_MaxEnt(W_EDMFT,"mats",reg(PrevItFolder)//"Convergence/","Wimp",EqvGWndx%SetOrbs)
          call dump_MaxEnt(curlyU_EDMFT,"mats",reg(PrevItFolder)//"Convergence/","curlyUimp",EqvGWndx%SetOrbs)
          call dump_MaxEnt(C_EDMFT,"mats",reg(PrevItFolder)//"Convergence/","Cimp",EqvGWndx%SetOrbs)
-         !
-         do iw=1,Nmats
-            call check_Symmetry(curlyU_EDMFT%screened_local(:,:,iw),0.001d0,enforce=.true.,hardstop=.false.,name="curlyU_w"//str(iw))
-         enddo
          !
          call DeallocateBosonicField(P_EDMFT)
          call DeallocateBosonicField(W_EDMFT)
