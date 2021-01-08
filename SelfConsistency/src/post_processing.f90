@@ -46,7 +46,7 @@ contains
    !PURPOSE:
    !TEST ON:
    !---------------------------------------------------------------------------!
-   subroutine remove_CDW(W,mode)
+   subroutine remove_CDW(W,mode,site)
       !
       use parameters
       use utils_misc
@@ -57,6 +57,7 @@ contains
       !
       type(BosonicField),intent(inout)      :: W
       character(len=*),intent(in)           :: mode
+      integer,intent(in),optional           :: site
       !
       integer                               :: Norb,Nmats
       integer                               :: isite,iq,ib1,ib2
@@ -91,6 +92,8 @@ contains
             call init_Uelements(Norb,PhysicalUelements)
             !
             do isite=1,Nsite
+               !
+               if(present(site).and.(isite.ne.site))cycle
                !
                do i=1,SiteNorb(isite)
                   do j=1,SiteNorb(isite)

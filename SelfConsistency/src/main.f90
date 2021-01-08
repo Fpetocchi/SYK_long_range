@@ -92,6 +92,19 @@ program SelfConsistency
       endif
       call DeallocateBosonicField(Plat)
       !
+      !Matching the lattice and impurity problems: compute curlyU
+      if(solve_DMFT)then
+         !
+         do isite=1,Nsite
+            !
+            !Compute local effective interaction
+            call calc_Interaction(isite,Iteration,ExpandImpurity)
+            if(ExpandImpurity.or.AFMselfcons)exit
+            !
+         enddo
+         !
+      endif
+      !
       !K-dependent self-energy - only G0W0,scGW,GW+EDMFT
       if(calc_Sigmak)then
          !
@@ -195,17 +208,13 @@ program SelfConsistency
          call save_InputFile("input.in")
       endif
       !
-      !Matching the lattice and impurity problems
+      !Matching the lattice and impurity problems: compute Delta
       if(solve_DMFT)then
          !
          do isite=1,Nsite
             !
             !Extract the hybridization functions and local energies (always diagonal)
             call calc_Delta(isite,Iteration)
-            !
-            !Compute local effective interaction
-            call calc_Interaction(isite,Iteration,ExpandImpurity)
-            !
             if(ExpandImpurity.or.AFMselfcons)exit
             !
          enddo
