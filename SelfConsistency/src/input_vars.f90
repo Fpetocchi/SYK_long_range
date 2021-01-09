@@ -179,6 +179,10 @@ module input_vars
    logical,public                           :: bosonicSC=.false.
    !Once the it=0 problem is solved this can be chosen by the user
    logical,public                           :: Ustart=.true.
+   !
+   !Variables for the matching beta
+   type(OldBeta),public                     :: Beta_Match
+
 
    !---------------------------------------------------------------------------!
    !PURPOSE: Internal Rutines available for the user. Description only for interfaces.
@@ -409,10 +413,32 @@ contains
          enddo
       endif
       !
+      !Variables for the matching beta
+      call add_separator()
+      call parse_input_variable(Beta_Match%status,"MATCH_BETA",InputFile,default=.false.,comment="Interpolate to new Beta.")
+      if(Beta_Match%status)then
+         !
+         call parse_input_variable(Beta_Match%Beta_old,"OLD_BETA",InputFile,default=Beta,comment="Beta of the calculation from which Pimp and Sigma will be fitted from.")
+         call parse_input_variable(Beta_Match%Path,"OLD_BETA_PATH",InputFile,default="None",comment="Folder (within cwd) from which the old Beta Pimp and Sigma will be read from.")
+         call parse_input_variable(Beta_Match%wmatsMax,"OLD_BETA_MAX_WMATS",InputFile,default=100.d0,comment="Maximum value of the Matsubara frequency mesh of the old Beta calculation.")
+         call append_to_input_list(Beta_Match%Nmats_old,"OLD_BETA_NMATS","Number of points on the imaginary frequency axis of the old Beta calculation. User cannot set this as its computed from OLD_BETA_MAX_WMATS and OLD_BETA.")
+         !
+         Beta_Match%Beta_new = Beta
+         Beta_Match%Nmats_old = int(Beta_Match%Beta_old*Beta_Match%wmatsMax/(2d0*pi))
+         Beta_Match%Nmats_new = Nmats
+         !
+         Mixing_Delta=0d0
+         Mixing_curlyU=0d0
+         !
+      endif
+      !
+      !
+      !
+      !------------------------------------------------------------------------!
       call code_version()
       call save_InputFile(reg(InputFile))
       !
-      !The last slash is uneffective for some reason
+      !The last slash cannot be read for some reason
       pathDATA=trim(pathDATA)//"/"
       if(reg(pathINPUT).eq.reg(pathINPUTtr))then
          pathINPUT="../"//trim(pathINPUT)//"/"
@@ -421,6 +447,7 @@ contains
          pathINPUT="../"//trim(pathINPUT)//"/"
          pathINPUTtr=trim(pathINPUTtr)//"/"
       endif
+      Beta_Match%Path=trim(Beta_Match%Path)//"/"
       !
    end subroutine read_InputFile
 

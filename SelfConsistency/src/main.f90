@@ -36,7 +36,13 @@ program SelfConsistency
    !---------------------------------------------------------------------------!
    !       COLLECTING RESULTS FROM THE SOLVER AND SOLVING DYSON EQUATION       !
    !---------------------------------------------------------------------------!
-   if(solve_DMFT.and.(ItStart.gt.0))call collect_QMC_results()
+   if(ItStart.gt.0)then
+      if(Beta_Match%status)then
+         call interpolate_from_oldBeta()
+      else
+         if(solve_DMFT) call collect_QMC_results()
+      endif
+   endif
    !
    !
    !

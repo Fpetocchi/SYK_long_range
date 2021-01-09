@@ -169,5 +169,18 @@ module parameters
       integer                               :: quickloops=0
    end type QMC
 
+   !---------------------------------------------------------------------------!
+   !PURPOSE: container for the match beta variables
+   !---------------------------------------------------------------------------!
+   type OldBeta
+      logical                               :: status=.false.
+      real(8)                               :: Beta_old
+      real(8)                               :: Beta_new
+      character(len=256)                    :: Path
+      real(8)                               :: wmatsMax
+      integer                               :: Nmats_old
+      integer                               :: Nmats_new
+   end type OldBeta
+
 
 end module parameters

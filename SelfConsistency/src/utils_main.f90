@@ -728,7 +728,7 @@ contains
             !Logical Flags
             calc_Wedmft = ( ItStart.ne.0 )
             !
-         case("GW+EDMFT")!MODIFY THIS PART LATER ON
+         case("GW+EDMFT")
             !
             !Unscreened interaction
             call AllocateBosonicField(Ulat,Crystal%Norb,Nmats,Crystal%iq_gamma,Nkpt=Crystal%Nkpt,Nsite=Nsite,Beta=Beta)
@@ -2225,6 +2225,103 @@ contains
          end function banner
          !
    end subroutine show_Densities
+
+
+
+   !---------------------------------------------------------------------------!
+   !PURPOSE: Interpolate Glat, S_DMFT and P_DMFT from an old iteration
+   !TEST ON:
+   !---------------------------------------------------------------------------!
+   subroutine  interpolate_from_oldBeta()
+      !
+      implicit none
+      !
+      complex(8),allocatable                :: HartreeU(:,:,:)
+      !
+      !
+      write(*,"(A)") new_line("A")//new_line("A")//"---- interpolate_from_oldBeta"
+      !
+      !
+      select case(reg(CalculationType))
+         case default
+            !
+            stop "Available Calculation types are: G0W0, scGW, DMFT+statU, DMFT+dynU, EDMFT, GW+EDMFT."
+            !
+         case("G0W0","scGW")
+            !
+            !Lattice Gf
+            write(*,"(A)") "     Interpolating lattice Green function from Beta="//str(Beta_Match%Beta_old,2)//" to Beta="//str(Beta_Match%Beta_new,2)
+            call AllocateFermionicField(Glat,Crystal%Norb,Beta_Match%Nmats_old,Nkpt=Crystal%Nkpt,Nsite=Nsite,Beta=Beta_Match%Beta_old)
+            call read_FermionicField(Glat,reg(Beta_Match%Path),"Glat_w",Crystal%kpt)
+            call interpolate2Beta(Glat,Beta_Match,"lat",.true.)
+            call dump_FermionicField(Glat,reg(PrevItFolder),"Glat_w",.true.,Crystal%kpt)
+            call DeallocateFermionicField(Glat)
+            !
+         case("DMFT+statU","DMFT+dynU")
+            !
+            !Impurity Self-energy
+            write(*,"(A)") "     Interpolating impurity self-energy from Beta="//str(Beta_Match%Beta_old,2)//" to Beta="//str(Beta_Match%Beta_new,2)
+            call AllocateFermionicField(S_DMFT,Crystal%Norb,Beta_Match%Nmats_old,Nsite=Nsite,Beta=Beta_Match%Beta_old)
+            call read_FermionicField(S_DMFT,reg(Beta_Match%Path),"Simp_w")
+            call interpolate2Beta(S_DMFT,Beta_Match,"imp",ExpandImpurity)
+            call dump_FermionicField(S_DMFT,reg(PrevItFolder),"Simp_w")
+            call DeallocateFermionicField(S_DMFT)
+            !
+         case("EDMFT")
+            !
+            !Polarization
+            write(*,"(A)") "     Interpolating impurity polarization from Beta="//str(Beta_Match%Beta_old,2)//" to Beta="//str(Beta_Match%Beta_new,2)
+            call AllocateBosonicField(P_EDMFT,Crystal%Norb,Beta_Match%Nmats_old,Crystal%iq_gamma,Nsite=Nsite,no_bare=.true.,Beta=Beta_Match%Beta_old)
+            call read_BosonicField(P_EDMFT,reg(Beta_Match%Path),"Pimp_w.DAT")
+            call interpolate2Beta(P_EDMFT,Beta_Match,"imp",.false.)
+            call dump_BosonicField(P_EDMFT,reg(PrevItFolder),"Pimp_w.DAT")
+            call DeallocateBosonicField(P_EDMFT)
+            !
+            !Impurity Self-energy
+            write(*,"(A)") "     Interpolating impurity self-energy from Beta="//str(Beta_Match%Beta_old,2)//" to Beta="//str(Beta_Match%Beta_new,2)
+            call AllocateFermionicField(S_DMFT,Crystal%Norb,Beta_Match%Nmats_old,Nsite=Nsite,Beta=Beta_Match%Beta_old)
+            call read_FermionicField(S_DMFT,reg(Beta_Match%Path),"Simp_w")
+            call interpolate2Beta(S_DMFT,Beta_Match,"imp",ExpandImpurity)
+            call dump_FermionicField(S_DMFT,reg(PrevItFolder),"Simp_w")
+            call DeallocateFermionicField(S_DMFT)
+            !
+         case("GW+EDMFT")
+            !
+            !Polarization
+            write(*,"(A)") "     Interpolating impurity polarization from Beta="//str(Beta_Match%Beta_old,2)//" to Beta="//str(Beta_Match%Beta_new,2)
+            call AllocateBosonicField(P_EDMFT,Crystal%Norb,Beta_Match%Nmats_old,Crystal%iq_gamma,Nsite=Nsite,no_bare=.true.,Beta=Beta_Match%Beta_old)
+            call read_BosonicField(P_EDMFT,reg(Beta_Match%Path),"Pimp_w.DAT")
+            call interpolate2Beta(P_EDMFT,Beta_Match,"imp",.false.)
+            call dump_BosonicField(P_EDMFT,reg(PrevItFolder),"Pimp_w.DAT")
+            call DeallocateBosonicField(P_EDMFT)
+            !
+            !Impurity Self-energy
+            write(*,"(A)") "     Interpolating impurity self-energy from Beta="//str(Beta_Match%Beta_old,2)//" to Beta="//str(Beta_Match%Beta_new,2)
+            call AllocateFermionicField(S_DMFT,Crystal%Norb,Beta_Match%Nmats_old,Nsite=Nsite,Beta=Beta_Match%Beta_old)
+            call read_FermionicField(S_DMFT,reg(Beta_Match%Path),"Simp_w")
+            call interpolate2Beta(S_DMFT,Beta_Match,"imp",ExpandImpurity)
+            call dump_FermionicField(S_DMFT,reg(PrevItFolder),"Simp_w")
+            call DeallocateFermionicField(S_DMFT)
+            !
+            !Lattice Gf
+            write(*,"(A)") "     Interpolating lattice Green function from Beta="//str(Beta_Match%Beta_old,2)//" to Beta="//str(Beta_Match%Beta_new,2)
+            call AllocateFermionicField(Glat,Crystal%Norb,Beta_Match%Nmats_old,Nkpt=Crystal%Nkpt,Nsite=Nsite,Beta=Beta_Match%Beta_old)
+            call read_FermionicField(Glat,reg(Beta_Match%Path),"Glat_w",Crystal%kpt)
+            call interpolate2Beta(Glat,Beta_Match,"lat",.true.)
+            call dump_FermionicField(Glat,reg(PrevItFolder),"Glat_w",.true.,Crystal%kpt)
+            call DeallocateFermionicField(Glat)
+            !
+            !Read&write instead of execute_command
+            allocate(HartreeU(Crystal%Norb,Crystal%Norb,2));HartreeU=czero
+            call read_Matrix(HartreeU(:,:,1),reg(Beta_Match%Path)//"HartreeU_s1.DAT")
+            call read_Matrix(HartreeU(:,:,2),reg(Beta_Match%Path)//"HartreeU_s2.DAT")
+            call dump_Matrix(HartreeU(:,:,1),reg(PrevItFolder)//"HartreeU_s1.DAT")
+            call dump_Matrix(HartreeU(:,:,2),reg(PrevItFolder)//"HartreeU_s2.DAT")
+            deallocate(HartreeU)
+            !
+      end select
+
+   end subroutine interpolate_from_oldBeta
 
 
 end module utils_main

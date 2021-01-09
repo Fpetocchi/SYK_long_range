@@ -70,6 +70,7 @@ module module_container
    DeallocateBosonicField                   ,&
    clear_attributes                         ,&
    isReal                                   ,&
+   duplicate                                ,&
    loc2imp,imp2loc                          ,&
    symmetrize                               ,&
    MergeFields                              ,&
@@ -137,7 +138,8 @@ module module_container
    use post_processing, only:                &
    dump_MaxEnt                              ,&
    pade                                     ,&
-   remove_CDW
+   remove_CDW                               ,&
+   interpolate2Beta
    !calc_OptCond                            ,&
    !calc_HallCond
 

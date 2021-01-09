@@ -18,14 +18,14 @@ module utils_fields
    end interface clear_attributes
 
    interface loc2imp
-      module procedure loc2imp_Fermionic
       module procedure loc2imp_Matrix
+      module procedure loc2imp_Fermionic
       module procedure loc2imp_Bosonic
    end interface loc2imp
 
    interface imp2loc
-      module procedure imp2loc_Fermionic
       module procedure imp2loc_Matrix
+      module procedure imp2loc_Fermionic
       module procedure imp2loc_Bosonic
    end interface imp2loc
 
@@ -45,6 +45,11 @@ module utils_fields
       module procedure isReal_Fermionic
       module procedure isReal_Bosonic
    end interface isReal
+
+   interface duplicate
+      module procedure duplicate_Fermionic
+      module procedure duplicate_Bosonic
+   end interface duplicate
 
    !---------------------------------------------------------------------------!
    !PURPOSE: Module variables
@@ -68,6 +73,7 @@ module utils_fields
    public :: AllocateBosonicField
    public :: DeallocateBosonicField
    public :: clear_attributes
+   public :: duplicate
    public :: isReal
    public :: loc2imp
    public :: imp2loc
@@ -400,6 +406,39 @@ contains
       if(allocated(W%bare))W%bare=czero
       if(allocated(W%screened))W%screened=czero
    end subroutine clear_attributes_Boson
+
+
+   !---------------------------------------------------------------------------!
+   !PURPOSE: Duplicate a Fermionic/Bosonic field
+   !TEST ON:
+   !---------------------------------------------------------------------------!
+   subroutine duplicate_Fermionic(Gnew,Gold)
+      use parameters
+      implicit none
+      type(FermionicField),intent(inout)    :: Gnew
+      type(FermionicField),intent(in)       :: Gold
+      if(Gnew%status.and.verbose) write(*,"(A)") "Warning duplicate_Fermionic: the new fermionic field will be reinitilized."
+      call DeallocateFermionicField(Gnew)
+      call AllocateFermionicField(Gnew,Gold%Norb,Gold%Npoints,Nkpt=Gold%Nkpt,Nsite=Gold%Nsite,Beta=Gold%Beta,mu=Gold%mu)
+      if(allocated(Gold%N_s)) Gnew%N_s = Gold%N_s
+      if(allocated(Gold%ws))  Gnew%ws  = Gold%ws
+      if(allocated(Gold%N_ks))Gnew%N_ks= Gold%N_ks
+      if(allocated(Gold%wks)) Gnew%wks = Gold%wks
+   end subroutine duplicate_Fermionic
+   !
+   subroutine duplicate_Bosonic(Wnew,Wold)
+      use parameters
+      implicit none
+      type(BosonicField),intent(inout)      :: Wnew
+      type(BosonicField),intent(in)         :: Wold
+      if(Wnew%status.and.verbose) write(*,"(A)") "Warning duplicate_Bosonic: the new bosonic field will be reinitilized."
+      call DeallocateBosonicField(Wnew)
+      call AllocateBosonicField(Wnew,int(sqrt(dble(Wold%Nbp))),Wold%Npoints,Wold%iq_gamma,Nkpt=Wold%Nkpt,Nsite=Wold%Nsite,no_bare=(.not.allocated(Wold%bare)),Beta=Wold%Beta)
+      if(allocated(Wold%bare_local))    Wnew%bare_local    = Wold%bare_local
+      if(allocated(Wold%screened_local))Wnew%screened_local= Wold%screened_local
+      if(allocated(Wold%bare))          Wnew%bare          = Wold%bare
+      if(allocated(Wold%screened))      Wnew%screened      = Wold%screened
+   end subroutine duplicate_Bosonic
 
 
    !---------------------------------------------------------------------------!
