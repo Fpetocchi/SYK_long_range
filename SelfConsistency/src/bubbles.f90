@@ -310,7 +310,7 @@ contains
       use parameters
       use utils_fields
       use utils_misc
-      use linalg, only : zeye, inv, inv_sym
+      use linalg, only : zeye, inv
       implicit none
       !
       type(BosonicField),intent(inout)      :: Pimp
@@ -352,21 +352,21 @@ contains
       if(all([curlyU%Npoints-Nmats,ChiC%Npoints-Nmats].ne.[0,0]))   stop "Either curlyU and/or ChiC have different number of Matsubara points with respect to Pimp."
       !
       call clear_attributes(Pimp)
-      !call isReal(curlyU) put intent(inout)?
-      !call isReal(ChiC) put intent(inout)?
       !
       allocate(invP(Nbp,Nbp));invP=czero
       !$OMP PARALLEL DEFAULT(NONE),&
-      !$OMP SHARED(Nbp,Nmats,Pimp,ChiC,curlyU),&
+      !$OMP SHARED(Pimp,ChiC,curlyU),&
       !$OMP PRIVATE(iw,invP)
       !$OMP DO
-      do iw=1,Nmats
+      do iw=1,Pimp%Npoints
          !
-         invP = matmul(curlyU%screened_local(:,:,iw),ChiC%screened_local(:,:,iw)) - zeye(Nbp)
+         ! [ curlyU*ChiC - 1 ]
+         invP = matmul(curlyU%screened_local(:,:,iw),ChiC%screened_local(:,:,iw)) - zeye(Pimp%Nbp)
          !
+         ! [ curlyU*ChiC - 1 ]^-1
          call inv(invP)
-         !call inv_sym(invP)
          !
+         ! ChiC*[ curlyU*ChiC - 1 ]^-1
          Pimp%screened_local(:,:,iw) = matmul(ChiC%screened_local(:,:,iw),invP)
          !
       enddo

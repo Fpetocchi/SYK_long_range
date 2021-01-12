@@ -27,10 +27,7 @@
  #---------------------------------------------#
 
  BETA=20.000000                                !Inverse temperature in 1/eV.
- MAX_WMATS=200.000000                          !Maximum value of the Matsubara frequency mesh.
- NMATS=                                        !Number of points on the imaginary frequency axis. User cannot set this as its computed from MAX_WMATS and BETA.
- NTAU_F_LAT=637                                !Number of points on the imaginary time axis for Fermionic lattice fields. Its gonna be made odd.
- NTAU_B_LAT=637                                !Number of points on the imaginary time axis for Bosonic lattice fields. User cannot set this as its equal to NTAU_F.
+ MAX_WMATS=150.000000                          !Maximum value of the Matsubara frequency mesh.
  TAU_UNIF=F                                    !Flag to use a non-tau_uniform mesh on the imaginary time axis.
  NREAL=2000                                    !Number of points on the real frequency axis.
  MAX_WREAL=10.000000                           !Maximum absolute value of the real frequency mesh.
@@ -49,11 +46,11 @@
 
  #---------------------------------------------#
 
- U_FULL=T                                      !Flag to check for inverted Re/Im parity in SPEX Ucrpa.
+ U_FULL=T                                      !Flag to use all the off-diagonal components of SPEX Ucrpa or only the physical ones.
  U_MODEL=F                                     !Flag to build the screening from user chosen phononic modes.
  U_SPEX=T                                      !Flag to read SPEX Ucrpa.
  U_AC=F                                        !Flag to force the analytic continuation on the SPEX interaction.
- U_THRES=1.000000E-03                          !Lowest magnitude considered in SPEX Ucrpa bare interaction.
+ U_THRES=1.000000E-08                          !Lowest magnitude considered in SPEX Ucrpa bare interaction.
  K_DIAG=F                                      !Flag to use only one J-independent screening function.
 
  #---------------------------------------------#
@@ -62,32 +59,36 @@
  DC_TYPE=GlocWloc                              !Local GW self-energy which is replaced by DMFT self-energy. Avalibale: GlocWloc, Sloc.
  SIGMA_AC=F                                    !Flag to force the analytic continuation on the G0W0 self-energy.
  SMEAR_GAMMA=T                                 !Remove the interaction divergence at the Gamma point.
+ ALPHA_CHI=0.800000                            !Rescaling factor for the local charge susceptibility.
  ALPHA_PI=1.000000                             !Fraction of the EDMFT polarization substituted within the lattice one.
  ALPHA_SIGMA=1.000000                          !Fraction of the EDMFT self-energy substituted within the lattice one.
  ALPHA_HK=1.000000                             !Rescaling of the non-interacting Hamiltonian.
+ CDW_CHI=T                                     !Flag to remove the iw=0 divergence in the local charge susceptibility.
+ CDW_PI=T                                      !Flag to remove the iw=0 divergence in the local polarization.
  DELTA_FIT=Analytic                            !Fit to extract the local energy in GW+EDMFT calculations. Available: Inf, Analytic, Moments.
  NFIT=16                                       !Number of bath levels (Analytic) or coefficient (Moments-automatic limit to NFIT=8).
  WTAIL_SIMP=40.000000                          !Frequency value above which the tail of Simp is replaced. If =0d0 the tail is not replaced. Only via moments (automatic limit to NFIT=5).
 
  #---------------------------------------------#
 
- PATH_INPUT=                                   !Folder within cwd where to look for input files.
- PATH_INPUT_TR=                                !Folder within cwd where to save input files after analytic continuation to the Matsubara axis.
- PATH_DATA=                                    !Folder within cwd where to store calculation data.
- START_IT=                                     !First iteration. If its non zero the code will look for the last item in PATH_DATA/item and start there.
- LAST_IT=                                      !Last iteration.
+ PATH_INPUT=GWinput_SPEX_LiTi2O4           !Folder within cwd where to look for input files.
+ PATH_INPUT_TR=GWinput_mats  !Folder within cwd where to save input files after analytic continuation to the Matsubara axis.
+ PATH_DATA=Results_beta20              !Folder within cwd where to store calculation data.
+ START_IT=0         !First iteration. If its non zero the code will look for the last item in PATH_DATA/item and start there.
+ LAST_IT=6                     !Last iteration.
  LOGFILE=6                                     !Standard output redirection unit. Use 6 to print to terminal. Not used yet.
- MIX_D=0.800000                                !Fraction of the old iteration Delta.
- MIX_U=0.800000                                !Fraction of the old iteration curlyU.
+ MIX_D=0.000000                                !Fraction of the old iteration Delta.
+ MIX_U=0.000000                                !Fraction of the old iteration curlyU.
  SKIP_LATT=F                                   !Skip the lattice summation and assuming good the existing Gloc and Wloc. Not used yet.
- PRINT_SFULL=F                                 !Print the full k-dependent self-energy (binfmt) at each iteration.
+ PRINT_GK=T                                    !Print the full k-dependent Green's function (binfmt) at each iteration (mandatory for CALC_TYPE=G0W0,scGW,GW+EDMFT).
+ PRINT_SIGMAK=F                                !Print the full k-dependent self-energy (binfmt) at each iteration (always optional).
 
  #---------------------------------------------#
 
  NIMP=1                                        !Number of impurities solved. User cannot set this as its deduced from NSITE and EXPAND.
  NTAU_F_IMP=1001                               !Number of points on the imaginary time axis for Fermionic impurity fields. Its gonna be made odd.
  NTAU_B_IMP=1001                               !Number of points on the imaginary time axis for Bosonic impurity fields. Its gonna be made odd.
- N_READ_IMP=0.500000                           !Target density in the impurity list. User cannot set this as its the same of N_READ_LAT if EXPAND=F otherwise its N_READ_LAT/NSITE.
+ N_READ_IMP=0.500000                           !Target density in the impurity list. User cannot set this as its the the same density on within the impurity orbitals if EXPAND=F otherwise its N_READ_LAT/NSITE.
  NORDER=10                                     !Maximum perturbation order measured. Not used yet.
  NMEAS=1000                                    !Sweeps where expensive measurments are not performed.
  NTHERM=100                                    !Thermalization cycles. Each cycle performs NMEAS sweeps.
@@ -98,3 +99,7 @@
  RETARDED=1                                    !Integer flag to include the frequency dependent part of the interaction. User cannot set this as its deduced from CALC_TYPE.
  NNT_MEAS=1                                    !Integer flag to switch on the measurement of the susceptibility. User cannot set this as its deduced from CALC_TYPE.
  TIME_1=60                                     !Minutes of solver runtime for site number 1
+
+ #---------------------------------------------#
+
+ MATCH_BETA=F         !Interpolate to new Beta.

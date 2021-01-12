@@ -594,6 +594,7 @@ contains
       logical                               :: filexists
       integer                               :: unit,idum,ib1
       integer                               :: isite,iorb,ispin
+      integer                               :: itm,jtm
       character(len=255)                    :: file
       real(8)                               :: muQMC
       !

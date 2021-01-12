@@ -1,8 +1,8 @@
 #!/bin/bash
 #$ -S /bin/bash
-#$ -N _____                     # job name
+#$ -N Fe_07                     # job name
 #$ -cwd                         # run script in current directory
-#$ -pe smp 28                   # MPI cores
+#$ -pe orte2 112                # MPI cores
 #$ -q new.q
 
 
@@ -19,13 +19,14 @@ ulimit -c 0
 GENMAT=/home/petocchif/1_GW_EDMFT/nobackup/1_production
 
 PATH_INPUT=GWinput_SPEX_bccFe
-PATH_DATA=Results_beta06
+PATH_DATA=Results_beta07
 
-START_IT=1
-END_IT=2
+START_IT=0
+END_IT=36
 
 #OPTIONAL FOR TEMPERATURE DEPENDENT CALCULATIONS
 PATH_INPUT_TR=GWinput_mats
+###CHANGE_BETA_IT=1
 
 
 
@@ -44,11 +45,12 @@ export l1=`grep -n "PATH_INPUT_TR=" input.in | awk -F  ":" '{print $1}'`
 export l2=`grep -n "PATH_DATA=" input.in     | awk -F  ":" '{print $1}'`
 export l3=`grep -n "START_IT=" input.in      | awk -F  ":" '{print $1}'`
 export l4=`grep -n "LAST_IT=" input.in       | awk -F  ":" '{print $1}'`
+export l5=`grep -n "MATCH_BETA=" input.in    | awk -F  ":" '{print $1}'`
 
-`sed -i ${l0}'s/'"PATH_INPUT=.*!"'/'"PATH_INPUT=${PATH_INPUT}         !"'/' input.in`
-`sed -i ${l1}'s/'"PATH_INPUT_TR=.*!"'/'"PATH_INPUT_TR=${PATH_INPUT_TR}         !"'/' input.in`
-`sed -i ${l2}'s/'"PATH_DATA=.*!"'/'"PATH_DATA=${PATH_DATA}         !"'/' input.in`
-`sed -i ${l4}'s/'"LAST_IT=.*!"'/'"LAST_IT=${END_IT}         !"'/' input.in`
+`sed -i ${l0}'s/'"PATH_INPUT=.*!"'/'"PATH_INPUT=${PATH_INPUT}           !"'/' input.in`
+`sed -i ${l1}'s/'"PATH_INPUT_TR=.*!"'/'"PATH_INPUT_TR=${PATH_INPUT_TR}  !"'/' input.in`
+`sed -i ${l2}'s/'"PATH_DATA=.*!"'/'"PATH_DATA=${PATH_DATA}              !"'/' input.in`
+`sed -i ${l4}'s/'"LAST_IT=.*!"'/'"LAST_IT=${END_IT}                     !"'/' input.in`
 
 
 
@@ -56,13 +58,15 @@ export l4=`grep -n "LAST_IT=" input.in       | awk -F  ":" '{print $1}'`
 ################################################################################
 #                             SELF-CONSISTENCY LOOP                            #
 ################################################################################
-
 for IT in `seq ${START_IT} 1 ${END_IT}`
 do
 
    #
+   # Input update
    IT_DATA=${LOCAL}/${PATH_DATA}/${IT}/
    `sed -i ${l3}'s/'"START_IT=.*!"'/'"START_IT=${IT}         !"'/' input.in`
+   `sed -i ${l5}'s/'"MATCH_BETA=.*!"'/'"MATCH_BETA=F         !"'/' input.in`
+   if [ ! -z ${CHANGE_BETA_IT+x} ] && [ ${CHANGE_BETA_IT} == ${IT} ] ; then `sed -i ${l5}'s/'"MATCH_BETA=.*!"'/'"MATCH_BETA=T         !"'/' input.in` ; fi
 
    #
    # Lattice problem

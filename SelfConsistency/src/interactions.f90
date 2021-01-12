@@ -237,18 +237,17 @@ contains
       Wmats%bare = Umats%bare
       !
       !$OMP PARALLEL DEFAULT(NONE),&
-      !$OMP SHARED(Nbp,Nkpt,Nmats,Pmats,Umats,Wmats,den_smallk,Lttc,HandleGammaPoint),&
-      !$OMP PRIVATE(iq,iw,invW,ismall)
+      !$OMP SHARED(Pmats,Umats,Wmats,den_smallk,Lttc,HandleGammaPoint),&
+      !$OMP PRIVATE(iw,iq,invW,ismall)
       !$OMP DO
-      do iq=1,Nkpt
-         !
-         !avoid the gamma point
-         if((iq.eq.Umats%iq_gamma).and.HandleGammaPoint)cycle
-         !
-         do iw=1,Nmats
+      do iw=1,Wmats%Npoints
+         do iq=1,Wmats%Nkpt
+            !
+            !avoid the gamma point
+            if((iq.eq.Umats%iq_gamma).and.HandleGammaPoint)cycle
             !
             ! [ 1 - U*Pi ]
-            invW = zeye(Nbp) - matmul(Umats%screened(:,:,iw,iq),Pmats%screened(:,:,iw,iq))
+            invW = zeye(Wmats%Nbp) - matmul(Umats%screened(:,:,iw,iq),Pmats%screened(:,:,iw,iq))
             !
             ! [ 1 - U*Pi ]^-1
             call inv(invW)
@@ -304,8 +303,6 @@ contains
       !
       ! Fill the local attributes
       call BosonicKsum(Wmats)
-      !
-      Wmats%screened_local = dcmplx(real(Wmats%screened_local),0d0)
       !
       if(sym_)then
          do iw=1,Nmats
@@ -384,24 +381,23 @@ contains
       Wmats%bare_local = Umats%bare_local
       !
       !$OMP PARALLEL DEFAULT(NONE),&
-      !$OMP SHARED(Nbp,Nkpt,Nmats,Pmats,Umats,Wmats,den_smallk,Lttc,HandleGammaPoint),&
-      !$OMP PRIVATE(iq,iw,invW,ismall)
+      !$OMP SHARED(Pmats,Umats,Wmats,den_smallk,Lttc,HandleGammaPoint),&
+      !$OMP PRIVATE(iw,iq,invW,ismall)
       !$OMP DO
-      do iq=1,Nkpt
-         !
-         !avoid the gamma point
-         if((iq.eq.Umats%iq_gamma).and.HandleGammaPoint)cycle
-         !
-         do iw=1,Nmats
+      do iw=1,Wmats%Npoints
+         do iq=1,Umats%Nkpt
+            !
+            !avoid the gamma point
+            if((iq.eq.Umats%iq_gamma).and.HandleGammaPoint)cycle
             !
             ! [ 1 - U*Pi ]
-            invW = zeye(Nbp) - matmul(Umats%screened(:,:,iw,iq),Pmats%screened_local(:,:,iw))
+            invW = zeye(Umats%Nbp) - matmul(Umats%screened(:,:,iw,iq),Pmats%screened_local(:,:,iw))
             !
             ! [ 1 - U*Pi ]^-1
             call inv(invW)
             !
             ! [ 1 - U*Pi ]^-1 * U
-            Wmats%screened_local(:,:,iw) = Wmats%screened_local(:,:,iw) + matmul(invW,Umats%screened(:,:,iw,iq))/Nkpt
+            Wmats%screened_local(:,:,iw) = Wmats%screened_local(:,:,iw) + matmul(invW,Umats%screened(:,:,iw,iq))/Umats%Nkpt
             !
             !store the dielectric function around the Gamma point
             if(HandleGammaPoint)then
@@ -448,8 +444,6 @@ contains
          !
       endif
       deallocate(invW)
-      !
-      Wmats%screened_local = dcmplx(real(Wmats%screened_local),0d0)
       !
       if(sym_)then
          do iw=1,Nmats
@@ -511,18 +505,17 @@ contains
       call clear_attributes(Chi)
       Chi%bare = Umats%bare
       !$OMP PARALLEL DEFAULT(NONE),&
-      !$OMP SHARED(Nbp,Nkpt,Nmats,Pmats,Umats,Chi,Lttc),&
-      !$OMP PRIVATE(iq,iw,invW)
+      !$OMP SHARED(Pmats,Umats,Chi,Lttc),&
+      !$OMP PRIVATE(iw,iq,invW)
       !$OMP DO
-      do iq=1,Nkpt
-         !
-         !avoid the gamma point
-         if(iq.eq.Umats%iq_gamma)cycle
-         !
-         do iw=1,Nmats
+      do iw=1,Chi%Npoints
+         do iq=1,Chi%Nkpt
+            !
+            !avoid the gamma point
+            if(iq.eq.Umats%iq_gamma)cycle
             !
             ! [ 1 - U*Pi ]
-            invW = zeye(Nbp) - matmul(Umats%screened(:,:,iw,iq),Pmats%screened(:,:,iw,iq))
+            invW = zeye(Chi%Nbp) - matmul(Umats%screened(:,:,iw,iq),Pmats%screened(:,:,iw,iq))
             !
             ! [ 1 - U*Pi ]^-1
             call inv(invW)
@@ -591,24 +584,23 @@ contains
       call clear_attributes(Chi)
       Chi%bare_local = Umats%bare_local
       !$OMP PARALLEL DEFAULT(NONE),&
-      !$OMP SHARED(Nbp,Nkpt,Nmats,Pmats,Umats,Chi,Lttc),&
-      !$OMP PRIVATE(iq,iw,invW)
+      !$OMP SHARED(Pmats,Umats,Chi,Lttc),&
+      !$OMP PRIVATE(iw,iq,invW)
       !$OMP DO
-      do iq=1,Nkpt
-         !
-         !avoid the gamma point
-         if(iq.eq.Umats%iq_gamma)cycle
-         !
-         do iw=1,Nmats
+      do iw=1,Chi%Npoints
+         do iq=1,Umats%Nkpt
+            !
+            !avoid the gamma point
+            if(iq.eq.Umats%iq_gamma)cycle
             !
             ! [ 1 - U*Pi ]
-            invW = zeye(Nbp) - matmul(Umats%screened(:,:,iw,iq),Pmats%screened_local(:,:,iw))
+            invW = zeye(Chi%Nbp) - matmul(Umats%screened(:,:,iw,iq),Pmats%screened_local(:,:,iw))
             !
             ! [ 1 - U*Pi ]^-1
             call inv(invW)
             !
             ! [ 1 - U*Pi ]^-1 * Pi
-            Chi%screened_local(:,:,iw) = Chi%screened_local(:,:,iw) + matmul(invW,Pmats%screened_local(:,:,iw))/Nkpt
+            Chi%screened_local(:,:,iw) = Chi%screened_local(:,:,iw) + matmul(invW,Pmats%screened_local(:,:,iw))/Umats%Nkpt
             !
          enddo
       enddo
@@ -638,14 +630,14 @@ contains
       character(len=*),intent(in),optional  :: pathOUTPUT
       logical,intent(in),optional           :: doAC
       !
-      logical                               :: filexists,ACdone,doAC_
+      logical                               :: filexists,ACdone,doAC_,warn
       character(len=256)                    :: file_spex,path,pathOUTPUT_
       integer                               :: unit,Nkpt
       integer                               :: iq,iw,iqread,Nbp_spex
       integer                               :: idum,Nspin_spex,Norb_spex,Nfreq
       integer                               :: ib1,ib2,iw1,iw2
       real(8),allocatable                   :: wread(:),wmats(:)
-      complex(8),allocatable                :: D1(:,:),D2(:,:),D3(:,:),imgFact(:,:,:)
+      complex(8),allocatable                :: D1(:,:),D2(:,:),D3(:,:),imgFact(:,:)
       complex(8),allocatable                :: Utmp(:,:)
       logical,allocatable                   :: RevSym(:,:,:)
       type(BosonicField)                    :: Ureal
@@ -692,6 +684,7 @@ contains
       endif
       !
       call init_Uelements(int(sqrt(dble(Umats%Nbp))),PhysicalUelements)
+      call clear_attributes(Umats)
       !
       !
       ! Perform cnalytical continuation on real interaction or load existing files
@@ -770,68 +763,70 @@ contains
             !
          enddo !iq
          !
-         ! Allocate the temporary quantities needed by the Analytical continuation
-         allocate(D1(Nbp_spex,Nbp_spex));D1=czero
-         allocate(D2(Nbp_spex,Nbp_spex));D2=czero
-         allocate(D3(Nbp_spex,Nbp_spex));D3=czero
          !
-         ! Analytical continuation of the local component to imag axis using spectral rep
-         call cpu_time(start)
-         !$OMP PARALLEL DEFAULT(NONE),&
-         !$OMP SHARED(Nbp_spex,wmats,wread,Nfreq,Ureal,Umats),&
-         !$OMP PRIVATE(ib1,ib2,iw1,iw2,D1,D2,D3,Utmp)
-         !$OMP DO
-         do iw1=1,Umats%Npoints
-            Utmp=czero
-            do iw2=1,Nfreq-2,2
+         if(LocalOnly)then
+            !
+            ! Allocate the temporary quantities needed by the Analytical continuation
+            allocate(D1(Nbp_spex,Nbp_spex));D1=czero
+            allocate(D2(Nbp_spex,Nbp_spex));D2=czero
+            allocate(D3(Nbp_spex,Nbp_spex));D3=czero
+            !
+            ! Analytical continuation of the local component to imag axis using spectral rep
+            call cpu_time(start)
+            !$OMP PARALLEL DEFAULT(NONE),&
+            !$OMP SHARED(Nbp_spex,wmats,wread,Nfreq,Ureal,Umats),&
+            !$OMP PRIVATE(ib1,ib2,iw1,iw2,D1,D2,D3,Utmp)
+            !$OMP DO
+            do iw1=1,Umats%Npoints
+               Utmp=czero
+               do iw2=1,Nfreq-2,2
+                  !
+                  do ib1=1,Nbp_spex
+                     do ib2=1,Nbp_spex
+                        D1(ib1,ib2) = -dimag( Ureal%screened_local(ib1,ib2,iw2)   )/pi
+                        D2(ib1,ib2) = -dimag( Ureal%screened_local(ib1,ib2,iw2+1) )/pi
+                        D3(ib1,ib2) = -dimag( Ureal%screened_local(ib1,ib2,iw2+2) )/pi
+                     enddo
+                  enddo
+                  !
+                  !D(-w)=-D(w), integrate using Simpson method
+                  if(wread(iw2).gt.0.d0) then
+                     Utmp(:,:) = Utmp(:,:) + ( D1(:,:)/(dcmplx(0.d0,wmats(iw1))-wread(iw2)  ) - D1(:,:)/(dcmplx(0.d0,wmats(iw1))+wread(iw2)  ) ) *(wread(iw2+1)-wread(iw2))/3.d0
+                     Utmp(:,:) = Utmp(:,:) + ( D2(:,:)/(dcmplx(0.d0,wmats(iw1))-wread(iw2+1)) - D2(:,:)/(dcmplx(0.d0,wmats(iw1))+wread(iw2+1)) ) *(wread(iw2+1)-wread(iw2))*4.d0/3.d0
+                     Utmp(:,:) = Utmp(:,:) + ( D3(:,:)/(dcmplx(0.d0,wmats(iw1))-wread(iw2+2)) - D3(:,:)/(dcmplx(0.d0,wmats(iw1))+wread(iw2+2)) ) *(wread(iw2+1)-wread(iw2))/3.d0
+                  elseif(dabs(wread(iw2)).lt.1.d-12) then
+                     Utmp(:,:) = Utmp(:,:) + ( D2(:,:)/(dcmplx(0.d0,wmats(iw1))-wread(iw2+1)) - D2(:,:)/(dcmplx(0.d0,wmats(iw1))+wread(iw2+1)) ) *(wread(iw2+1)-wread(iw2))*4.d0/3.d0
+                     Utmp(:,:) = Utmp(:,:) + ( D3(:,:)/(dcmplx(0.d0,wmats(iw1))-wread(iw2+2)) - D3(:,:)/(dcmplx(0.d0,wmats(iw1))+wread(iw2+2)) ) *(wread(iw2+1)-wread(iw2))/3.d0
+                  endif
+               enddo
                !
                do ib1=1,Nbp_spex
                   do ib2=1,Nbp_spex
-                     D1(ib1,ib2) = -dimag( Ureal%screened_local(ib1,ib2,iw2)   )/pi
-                     D2(ib1,ib2) = -dimag( Ureal%screened_local(ib1,ib2,iw2+1) )/pi
-                     D3(ib1,ib2) = -dimag( Ureal%screened_local(ib1,ib2,iw2+2) )/pi
+                     Umats%screened_local(ib1,ib2,iw1) = Utmp(ib1,ib2) + Umats%bare_local(ib1,ib2)
                   enddo
                enddo
                !
-               !D(-w)=-D(w), integrate using Simpson method
-               if(wread(iw2).gt.0.d0) then
-                  Utmp(:,:) = Utmp(:,:) + ( D1(:,:)/(dcmplx(0.d0,wmats(iw1))-wread(iw2)  ) - D1(:,:)/(dcmplx(0.d0,wmats(iw1))+wread(iw2)  ) ) *(wread(iw2+1)-wread(iw2))/3.d0
-                  Utmp(:,:) = Utmp(:,:) + ( D2(:,:)/(dcmplx(0.d0,wmats(iw1))-wread(iw2+1)) - D2(:,:)/(dcmplx(0.d0,wmats(iw1))+wread(iw2+1)) ) *(wread(iw2+1)-wread(iw2))*4.d0/3.d0
-                  Utmp(:,:) = Utmp(:,:) + ( D3(:,:)/(dcmplx(0.d0,wmats(iw1))-wread(iw2+2)) - D3(:,:)/(dcmplx(0.d0,wmats(iw1))+wread(iw2+2)) ) *(wread(iw2+1)-wread(iw2))/3.d0
-               elseif(dabs(wread(iw2)).lt.1.d-12) then
-                  Utmp(:,:) = Utmp(:,:) + ( D2(:,:)/(dcmplx(0.d0,wmats(iw1))-wread(iw2+1)) - D2(:,:)/(dcmplx(0.d0,wmats(iw1))+wread(iw2+1)) ) *(wread(iw2+1)-wread(iw2))*4.d0/3.d0
-                  Utmp(:,:) = Utmp(:,:) + ( D3(:,:)/(dcmplx(0.d0,wmats(iw1))-wread(iw2+2)) - D3(:,:)/(dcmplx(0.d0,wmats(iw1))+wread(iw2+2)) ) *(wread(iw2+1)-wread(iw2))/3.d0
-               endif
-            enddo
+            enddo !iw1
+            !$OMP END DO
+            !$OMP END PARALLEL
+            call cpu_time(finish)
+            deallocate(D1,D2,D3)
             !
-            do ib1=1,Nbp_spex
-               do ib2=1,Nbp_spex
-                  Umats%screened_local(ib1,ib2,iw1) = Utmp(ib1,ib2) + Umats%bare_local(ib1,ib2)
+            !Remove nonPhysical elements
+            if(.not.UfullStructure)then
+               do ib1=1,Nbp_spex
+                  do ib2=1,Nbp_spex
+                     if(.not.PhysicalUelements%Full_All(ib1,ib2))then
+                        Umats%bare_local(ib1,ib2) = dcmplx(0d0,0d0)
+                        Umats%screened_local(ib1,ib2,:) = dcmplx(0d0,0d0)
+                     endif
+                  enddo
                enddo
-            enddo
+            endif
             !
-         enddo !iw1
-         !$OMP END DO
-         !$OMP END PARALLEL
-         call cpu_time(finish)
-         deallocate(D1,D2,D3)
-         !
-         !Remove nonPhysical elements
-         if(.not.UfullStructure)then
-            do ib1=1,Nbp_spex
-               do ib2=1,Nbp_spex
-                  if(.not.PhysicalUelements%Full_All(ib1,ib2))then
-                     Umats%bare_local(ib1,ib2) = dcmplx(0d0,0d0)
-                     Umats%screened_local(ib1,ib2,:) = dcmplx(0d0,0d0)
-                  endif
-               enddo
-            enddo
-         endif
-         !
-         write(*,"(A,F)") "     UcRPA(w) --> UcRPA(iw) cpu timing: ", finish-start
-         !
-         !
-         if(.not.LocalOnly)then
+            write(*,"(A,F)") "     UcRPA(w) --> UcRPA(iw) cpu timing: ", finish-start
+            !
+         else
             !
             ! Allocate the temporary quantities needed by the Analytical continuation
             allocate(D1(Nbp_spex,Nbp_spex));D1=czero
@@ -839,11 +834,11 @@ contains
             allocate(D3(Nbp_spex,Nbp_spex));D3=czero
             !
             ! Analytical continuation of all the K-points to imag axis using spectral rep
-            allocate(imgFact(Nbp_spex,Nbp_spex,2));imgFact=cone
+            allocate(imgFact(Nbp_spex,Nbp_spex));imgFact=cone
             allocate(RevSym(Nbp_spex,Nbp_spex,Umats%Nkpt));RevSym=.false.
             call cpu_time(start)
             !$OMP PARALLEL DEFAULT(NONE),&
-            !$OMP SHARED(Nbp_spex,wmats,wread,Nfreq,Ureal,Umats,verbose,RevSym,Uthresh),&
+            !$OMP SHARED(Nbp_spex,wmats,wread,Nfreq,Ureal,Umats,verbose,RevSym),&
             !$OMP PRIVATE(iq,ib1,ib2,iw1,iw2,D1,D2,D3,Utmp,imgFact)
             !$OMP DO
             do iq=1,Umats%Nkpt
@@ -853,9 +848,10 @@ contains
                do ib1=1,Nbp_spex
                   do ib2=1,Nbp_spex
                      if(abs(real(Umats%bare(ib1,ib2,iq))).lt.abs(aimag(Umats%bare(ib1,ib2,iq))))then
-                        imgFact(ib1,ib2,1) = -img !this correspond to dividing by I and bring to standard Re/Im parity
-                        imgFact(ib1,ib2,2) = +img !this correspond to multiplying by I and revert to original parity   ! I am keeping everything real !
+                        imgFact(ib1,ib2) = img
                         RevSym(ib1,ib2,iq) = .true.
+                        !divide component by I and bring to standard Re/Im parity
+                        Umats%bare(ib1,ib2,iq) = Umats%bare(ib1,ib2,iq)/imgFact(ib1,ib2)
                      endif
                   enddo
                enddo
@@ -867,9 +863,9 @@ contains
                      !
                      do ib1=1,Nbp_spex
                         do ib2=1,Nbp_spex
-                           D1(ib1,ib2) = -dimag( ( imgFact(ib1,ib2,1) * Ureal%screened(ib1,ib2,iw2,iq)   ) )/pi
-                           D2(ib1,ib2) = -dimag( ( imgFact(ib1,ib2,1) * Ureal%screened(ib1,ib2,iw2+1,iq) ) )/pi
-                           D3(ib1,ib2) = -dimag( ( imgFact(ib1,ib2,1) * Ureal%screened(ib1,ib2,iw2+2,iq) ) )/pi
+                           D1(ib1,ib2) = -dimag( ( Ureal%screened(ib1,ib2,iw2,iq)  /imgFact(ib1,ib2) ) )/pi
+                           D2(ib1,ib2) = -dimag( ( Ureal%screened(ib1,ib2,iw2+1,iq)/imgFact(ib1,ib2) ) )/pi
+                           D3(ib1,ib2) = -dimag( ( Ureal%screened(ib1,ib2,iw2+2,iq)/imgFact(ib1,ib2) ) )/pi
                         enddo
                      enddo
                      !
@@ -892,118 +888,103 @@ contains
                   !
                enddo !iw1
                !
-               !Remove K-dependent components under threshold
-               do ib1=1,Nbp_spex
-                  do ib2=1,Nbp_spex
-                     if(abs(Umats%bare(ib1,ib2,iq)).lt.Uthresh)then
-                        Umats%bare(ib1,ib2,iq)=czero ; Umats%screened(ib1,ib2,:,iq)=czero
-                        Umats%bare(ib2,ib1,iq)=czero ; Umats%screened(ib2,ib1,:,iq)=czero
-                     endif
-                  enddo
-               enddo
-               !
                if(verbose)print *, "     UcRPA(q,iw) - done iq: ",iq
             enddo !iq
             !$OMP END DO
             !$OMP END PARALLEL
             call cpu_time(finish)
+            deallocate(D1,D2,D3,imgFact)
             !
-            !Store indexes of elements with inverted Im/Re symmetry
-            if(UfullStructure)then
-               !
-               unit = free_unit()
-               path = reg(pathOUTPUT_)//"Reversed_Symmetry.DAT"
-               open(unit=unit,file=reg(path),form="formatted",status="unknown",position="rewind",action="write")
-               write(unit,"(3A5)")"iq","ib1","ib2"
-               do iq=1,Umats%Nkpt
-                  do ib1=1,Nbp_spex
-                     do ib2=ib1,Nbp_spex
-                        if(RevSym(ib1,ib2,iq).and.RevSym(ib2,ib1,iq))then
-                           write(unit,"(5I4)")iq,PhysicalUelements%Full_Map(ib1,ib2,:)
-                        elseif(RevSym(ib1,ib2,iq).and.(.not.RevSym(ib2,ib1,iq)))then
-                           write(unit,"(5I4,A)")iq,PhysicalUelements%Full_Map(ib1,ib2,:),"   WARNING - non symmetrical with orbital index exchange."
-                        endif
-                     enddo
-                  enddo
-               enddo
-               close(unit)
-               !
-            else
-               !
-               unit = free_unit()
-               path = reg(pathOUTPUT_)//"Removed_Uelements.DAT"
-               open(unit=unit,file=reg(path),form="formatted",status="unknown",position="rewind",action="write")
-               write(unit,"(2A5)")"ib1","ib2"
-               do ib1=1,Nbp_spex
-                  do ib2=1,Nbp_spex
-                     if(.not.PhysicalUelements%Full_All(ib1,ib2))then
-                        write(unit,"(4I4)")PhysicalUelements%Full_Map(ib1,ib2,:)
-                        Umats%bare(ib1,ib2,:) = dcmplx(0d0,0d0)
-                        Umats%screened(ib1,ib2,:,:) = dcmplx(0d0,0d0)
-                     endif
-                  enddo
-               enddo
-               close(unit)
-               !
-            endif
-            !
-            deallocate(D1,D2,D3,RevSym)
             write(*,"(A,F)") "     UcRPA(q,w) --> UcRPA(q,iw) cpu timing: ", finish-start
-            !
-            !Update the local attributes
-            call BosonicKsum(Umats)
             !
             !At this point the whole Umats should be real for each K-point
             call isReal(Umats)
             !
-            !Put back the pure imaginary part only for K-dependent attributes
+            !Clean unphysical elements / Store elements with inverted Im/Re symmetry
+            unit = free_unit()
+            path = reg(pathOUTPUT_)//"Reversed_Symmetry.DAT"
+            open(unit=unit,file=reg(path),form="formatted",status="unknown",position="rewind",action="write")
+            write(unit,"(3A5)")"iq","ib1","ib2"
             do ib1=1,Nbp_spex
-               do ib2=1,Nbp_spex
-                  Umats%bare(ib1,ib2,:) = Umats%bare(ib1,ib2,:)*imgFact(ib1,ib2,2)
-                  Umats%screened(ib1,ib2,:,:) = Umats%screened(ib1,ib2,:,:)*imgFact(ib1,ib2,2)
+               do ib2=ib1,Nbp_spex
+                  !
+                  if((.not.UfullStructure).and.(.not.PhysicalUelements%Full_All(ib1,ib2)))then
+                     !
+                     !Remove unwanted components
+                     Umats%bare(ib1,ib2,:) = dcmplx(0d0,0d0)
+                     Umats%bare(ib2,ib1,:) = dcmplx(0d0,0d0)
+                     Umats%screened(ib1,ib2,:,:) = dcmplx(0d0,0d0)
+                     Umats%screened(ib2,ib1,:,:) = dcmplx(0d0,0d0)
+                     !
+                  else
+                     !
+                     !Write parity and put back the pure imaginary part only for K-dependent attributes
+                     do iq=1,Umats%Nkpt
+                        if(RevSym(ib1,ib2,iq))then
+                           Umats%bare(ib1,ib2,:) = Umats%bare(ib1,ib2,:)*img
+                           Umats%screened(ib1,ib2,:,:) = Umats%screened(ib1,ib2,:,:)*img
+                           if(RevSym(ib2,ib1,iq))then
+                              Umats%bare(ib2,ib1,:) = Umats%bare(ib2,ib1,:)*img
+                              Umats%screened(ib2,ib1,:,:) = Umats%screened(ib2,ib1,:,:)*img
+                              write(unit,"(5I4)")iq,PhysicalUelements%Full_Map(ib1,ib2,:)
+                           else
+                              write(unit,"(5I4,A)")iq,PhysicalUelements%Full_Map(ib1,ib2,:),"   WARNING - non symmetrical with orbital index exchange."
+                           endif
+                        endif
+                     enddo
+                     !
+                  endif
+                  !
                enddo
             enddo
-            deallocate(imgFact)
+            close(unit)
+            deallocate(RevSym)
+            !
+            !Update the local attributes
+            call BosonicKsum(Umats)
             !
          endif !LocalOnly
          deallocate(Utmp)
          !
          !Remove local components under threshold and check for inverted Im/Re symmetry
+         warn=.true.
          do ib1=1,Nbp_spex
             do ib2=1,Nbp_spex
                !
                if(abs(Umats%bare_local(ib1,ib2)).lt.Uthresh)then
-                  Umats%bare_local(ib1,ib2)=czero ; Umats%screened_local(ib1,ib2,:)=czero
-                  Umats%bare_local(ib2,ib1)=czero ; Umats%screened_local(ib2,ib1,:)=czero
+                  Umats%bare_local(ib1,ib2)=czero
+                  Umats%screened_local(ib1,ib2,:)=czero
                endif
-               !
                if(abs(real(Umats%bare_local(ib1,ib2))).lt.abs(aimag(Umats%bare_local(ib1,ib2))))then
-                  write(*,"(A,2I4)")"Element:  ",ib1,ib2
-                  write(*,"(A,4I4)")"Orbitals: ",PhysicalUelements%Full_Map(ib1,ib2,:)
-                  write(*,"(A,F)")"Re[Ubare(w=inf)]: ",real(Umats%bare_local(ib1,ib2))
-                  write(*,"(A,F)")"Im[Ubare(w=inf)]: ",aimag(Umats%bare_local(ib1,ib2))
-                  stop "Something wrong: Uloc cannot have inverted Re/Im parity."
+                  if(warn) write(*,"(A)")new_line("A")//"     Warning: inverted Re/Im parity in local UcRPA. Check that orbital indexes belong to different sites."
+                  warn=.false.
+                  write(*,"(A,4I4,A,2I4)")"     Orbitals: ",PhysicalUelements%Full_Map(ib1,ib2,:)," Element:  ",ib1,ib2
+                  write(*,"(2(A,F))")     "     Re[Ubare(w=inf)]: ",real(Umats%bare_local(ib1,ib2))," Im[Ubare(w=inf)]: ",aimag(Umats%bare_local(ib1,ib2))
+                  !stop "Something wrong: Uloc cannot have inverted Re/Im parity."
                endif
                !
             enddo
          enddo
          !
          !Symmetry Checks on the 0th iteration
-         write(*,"(A)") "     Symmetry check on Uinst - must be symmetric -> enforced if not."
-         call check_Symmetry(Umats%screened_local(:,:,1),eps,enforce=.true.,hardstop=.false.,name="Uinst")
+         write(*,"(A)") new_line("A")//"     Symmetry check on Uinst - should be symmetric."
+         call check_Symmetry(Umats%screened_local(:,:,1),eps,enforce=.false.,hardstop=.false.,name="Uinst")
          !
-         write(*,"(A)") "     Symmetry check on local Ucrpa - must be symmetric -> enforced if not."
-         call check_Symmetry(Umats%bare_local,eps,enforce=.true.,hardstop=.false.,name="Urpa_bare_local")
-         do iw=1,Umats%Npoints
-            call check_Symmetry(Umats%screened_local(:,:,iw),eps,enforce=.true.,hardstop=.false.,name="Urpa_screened_local_w"//str(iw))
-         enddo
+         write(*,"(A)") "     Symmetry check on local bare Ucrpa - should be symmetric."
+         call check_Symmetry(Umats%bare_local,eps,enforce=.false.,hardstop=.false.,name="Urpa_bare_local")
          !
-         write(*,"(A)") "     Symmetry check on full Ucrpa (bare)"
+         write(*,"(A)") "     Symmetry check on bare Ucrpa - should be symmetric at all iq."
          do iq=1,Umats%Nkpt
             call check_Symmetry(Umats%bare(:,:,iq),eps,enforce=.false.,hardstop=.false.,name="Urpa_bare_k"//str(iq))
          enddo
          !
+         write(*,"(A)") "     Symmetry check on local screened Ucrpa - should be symmetric at all iw."
+         do iw=1,Umats%Npoints
+            call check_Symmetry(Umats%screened_local(:,:,iw),eps,enforce=.false.,hardstop=.false.,name="Urpa_screened_local_w"//str(iw))
+         enddo
+         !
          ! Print out the transformed stuff - local
+         write(*,"(A)") new_line("A")
          call dump_BosonicField(Umats,reg(pathOUTPUT_),"Uloc_mats.DAT")
          call dump_BosonicField(Ureal,reg(pathOUTPUT_),"Uloc_real.DAT",wread)
          !
@@ -1929,12 +1910,12 @@ contains
       !
       allocate(invW(Nbp,Nbp));invW=czero
       !$OMP PARALLEL DEFAULT(NONE),&
-      !$OMP SHARED(Nbp,Nmats,Wimp,Pimp,curlyU),&
+      !$OMP SHARED(Wimp,Pimp,curlyU),&
       !$OMP PRIVATE(iw,invW)
       !$OMP DO
-      do iw=1,Nmats
+      do iw=1,curlyU%Npoints
          !
-         invW = zeye(Nbp) + matmul(Pimp%screened_local(:,:,iw),Wimp%screened_local(:,:,iw))
+         invW = zeye(curlyU%Nbp) + matmul(Pimp%screened_local(:,:,iw),Wimp%screened_local(:,:,iw))
          call inv(invW)
          curlyU%screened_local(:,:,iw) = matmul(Wimp%screened_local(:,:,iw),invW)
          !
@@ -2007,10 +1988,10 @@ contains
       !
       allocate(Wtmp(Nbp,Nbp));Wtmp=czero
       !$OMP PARALLEL DEFAULT(NONE),&
-      !$OMP SHARED(Nbp,Nmats,Wimp,ChiC,curlyU),&
+      !$OMP SHARED(Wimp,ChiC,curlyU),&
       !$OMP PRIVATE(iw,Wtmp)
       !$OMP DO
-      do iw=1,Nmats
+      do iw=1,Wimp%Npoints
          !
          Wtmp = matmul(ChiC%screened_local(:,:,iw),curlyU%screened_local(:,:,iw))
          Wimp%screened_local(:,:,iw) = curlyU%screened_local(:,:,iw) - matmul(curlyU%screened_local(:,:,iw),Wtmp)
