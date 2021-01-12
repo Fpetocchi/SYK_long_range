@@ -1481,9 +1481,8 @@ contains
          !
          !symmetrization of the off-diagonal sets
          do iset=1,Eqv%Ntotset
-            do jset=1,Eqv%Ntotset
+            do jset=1+iset,Eqv%Ntotset
                !
-               if(iset.eq.jset)cycle
                dimoffdiag = Eqv%SetNorb(iset)*Eqv%SetNorb(jset)*2
                !
                if(verbose)write(*,"(A,2I3,A,I4)") "     Off-diagonal set: ",iset,jset," dimOD: ",int(dimoffdiag)
@@ -1496,8 +1495,9 @@ contains
                   do iorb=1,Eqv%SetNorb(iset)
                      do jorb=1,Eqv%SetNorb(jset)
                         !
-                        i = Eqv%SetOrbs(iset,iorb) ![1,2,3],[4,5]
-                        j = Eqv%SetOrbs(jset,jorb) ![4,5]  ,[1,2,3]
+                        i = Eqv%SetOrbs(iset,iorb)
+                        j = Eqv%SetOrbs(jset,jorb)
+                        if(i.eq.j) stop "symmetrize_Bosonic: different sets cannot contain the same orbital index."
                         !
                         ib1_ab = i + Norb*(i-1)
                         ib2_ab = j + Norb*(j-1)
@@ -1510,10 +1510,13 @@ contains
                         ib1_pa = i + Norb*(j-1)
                         ib2_pa = i + Norb*(j-1)
                         if(verbose)write(*,"(2(A,2I3),2(A,I4),A)")    "     W(ab)(ab): (",i,j,"),(",i,j,") = [",ib1_pa,",",ib2_pa,"]"
+                        ib1_pb = j + Norb*(i-1)
+                        ib2_pb = j + Norb*(i-1)
+                        if(verbose)write(*,"(2(A,2I3),2(A,I4),A)")    "     W(ba)(ba): (",j,i,"),(",j,i,") = [",ib1_pb,",",ib2_pb,"]"
                         !
-                        Waabb = Waabb + W%bare_local(ib1_ab,ib2_ab) / dimoffdiag
-                        Wabba = Wabba + W%bare_local(ib1_sf,ib2_sf) / dimoffdiag
-                        Wabab = Wabab + W%bare_local(ib1_pa,ib2_pa) / dimoffdiag
+                        Waabb = Waabb + (W%bare_local(ib1_ab,ib2_ab)+W%bare_local(ib2_ab,ib1_ab)) / dimoffdiag
+                        Wabba = Wabba + (W%bare_local(ib1_sf,ib2_sf)+W%bare_local(ib2_sf,ib1_sf)) / dimoffdiag
+                        Wabab = Wabab + (W%bare_local(ib1_pa,ib2_pa)+W%bare_local(ib1_pb,ib2_pb)) / dimoffdiag
                         !
                      enddo
                   enddo
@@ -1521,8 +1524,8 @@ contains
                   do iorb=1,Eqv%SetNorb(iset)
                      do jorb=1,Eqv%SetNorb(jset)
                         !
-                        i = Eqv%SetOrbs(iset,iorb) ![1,2,3],[4,5]
-                        j = Eqv%SetOrbs(jset,jorb) ![4,5]  ,[1,2,3]
+                        i = Eqv%SetOrbs(iset,iorb)
+                        j = Eqv%SetOrbs(jset,jorb)
                         !
                         ib1_ab = i + Norb*(i-1)
                         ib2_ab = j + Norb*(j-1)
@@ -1532,10 +1535,15 @@ contains
                         !
                         ib1_pa = i + Norb*(j-1)
                         ib2_pa = i + Norb*(j-1)
+                        ib1_pb = j + Norb*(i-1)
+                        ib2_pb = j + Norb*(i-1)
                         !
                         W%bare_local(ib1_ab,ib2_ab) = Waabb
+                        W%bare_local(ib2_ab,ib1_ab) = Waabb
                         W%bare_local(ib1_sf,ib2_sf) = Wabba
-                        W%bare_local(ib1_pa,ib2_pa) = Wabba
+                        W%bare_local(ib2_sf,ib1_sf) = Wabba
+                        W%bare_local(ib1_pa,ib2_pa) = Wabab
+                        W%bare_local(ib1_pb,ib2_pb) = Wabab
                         !
                      enddo
                   enddo
@@ -1552,6 +1560,7 @@ contains
                         !
                         i = Eqv%SetOrbs(iset,iorb)
                         j = Eqv%SetOrbs(jset,jorb)
+                        if(i.eq.j) stop "symmetrize_Bosonic: different sets cannot contain the same orbital index."
                         !
                         ib1_ab = i + Norb*(i-1)
                         ib2_ab = j + Norb*(j-1)
@@ -1561,10 +1570,12 @@ contains
                         !
                         ib1_pa = i + Norb*(j-1)
                         ib2_pa = i + Norb*(j-1)
+                        ib1_pb = j + Norb*(i-1)
+                        ib2_pb = j + Norb*(i-1)
                         !
-                        Waabb = Waabb + W%screened_local(ib1_ab,ib2_ab,ip) / dimoffdiag
-                        Wabba = Wabba + W%screened_local(ib1_sf,ib2_sf,ip) / dimoffdiag
-                        Wabab = Wabab + W%screened_local(ib1_pa,ib2_pa,ip) / dimoffdiag
+                        Waabb = Waabb + (W%screened_local(ib1_ab,ib2_ab,ip)+W%screened_local(ib2_ab,ib1_ab,ip)) / dimoffdiag
+                        Wabba = Wabba + (W%screened_local(ib1_sf,ib2_sf,ip)+W%screened_local(ib2_sf,ib1_sf,ip)) / dimoffdiag
+                        Wabab = Wabab + (W%screened_local(ib1_pa,ib2_pa,ip)+W%screened_local(ib1_pb,ib2_pb,ip)) / dimoffdiag
                         !
                      enddo
                   enddo
@@ -1583,10 +1594,15 @@ contains
                         !
                         ib1_pa = i + Norb*(j-1)
                         ib2_pa = i + Norb*(j-1)
+                        ib1_pb = j + Norb*(i-1)
+                        ib2_pb = j + Norb*(i-1)
                         !
                         W%screened_local(ib1_ab,ib2_ab,ip) = Waabb
+                        W%screened_local(ib2_ab,ib1_ab,ip) = Waabb
                         W%screened_local(ib1_sf,ib2_sf,ip) = Wabba
+                        W%screened_local(ib2_sf,ib1_sf,ip) = Wabba
                         W%screened_local(ib1_pa,ib2_pa,ip) = Wabab
+                        W%screened_local(ib1_pb,ib2_pb,ip) = Wabab
                         !
                      enddo
                   enddo

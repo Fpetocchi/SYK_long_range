@@ -1490,7 +1490,6 @@ contains
       endif
       !
       call DeallocateBosonicField(curlyU)
-      if(Ustart)call DeallocateBosonicField(Ulat)
       !
    end subroutine calc_Interaction
 
@@ -2133,36 +2132,6 @@ contains
       select case(reg(CalculationType))
          case default
             !
-            stop "Available Calculation types are: G0W0, scGW, DMFT+statU, DMFT+dynU, EDMFT, GW+EDMFT."
-            !
-         case("G0W0","scGW")
-            !
-            call printHeader(Iteration)
-            !
-            write(*,*)
-            write(*,"(2(A"//str(wn*Norb)//","//str(ws)//"X))")banner(trim(header1)//" up",wn*Norb),banner(trim(header1)//" dw",wn*Norb)
-            do iorb=1,Norb
-               write(*,"(2("//str(Norb)//"F"//str(wn)//".4,"//str(ws)//"X))") (real(densityGW(iorb,jorb,1)),jorb=1,Norb),(real(densityGW(iorb,jorb,2)),jorb=1,Norb)
-            enddo
-            !
-         case("DMFT+statU","DMFT+dynU","EDMFT")
-            !
-            call printHeader(Iteration)
-            !
-            write(*,*)
-            write(*,"(2(A"//str(wn*Norb)//","//str(ws)//"X))")banner(trim(header1)//" up",wn*Norb),banner(trim(header1)//" dw",wn*Norb)
-            do iorb=1,Norb
-               write(*,"(2("//str(Norb)//"F"//str(wn)//".4,"//str(ws)//"X))") (real(densityGW(iorb,jorb,1)),jorb=1,Norb),(real(densityGW(iorb,jorb,2)),jorb=1,Norb)
-            enddo
-            !
-            write(*,*)
-            write(*,"(2(A"//str(wn*Norb)//","//str(ws)//"X))")banner(trim(header2)//" up",wn*Norb),banner(trim(header2)//" dw",wn*Norb)
-            do iorb=1,Norb
-               write(*,"(2("//str(Norb)//"F"//str(wn)//".4,"//str(ws)//"X))") (real(densityDMFT(iorb,jorb,1)),jorb=1,Norb),(real(densityDMFT(iorb,jorb,2)),jorb=1,Norb)
-            enddo
-            !
-         case("GW+EDMFT")
-            !
             call printHeader(Iteration)
             !
             write(*,*)
@@ -2210,6 +2179,16 @@ contains
                   !
                enddo
             endif
+            !
+         case("G0W0","scGW")
+            !
+            call printHeader(Iteration)
+            !
+            write(*,*)
+            write(*,"(2(A"//str(wn*Norb)//","//str(ws)//"X))")banner(trim(header1)//" up",wn*Norb),banner(trim(header1)//" dw",wn*Norb)
+            do iorb=1,Norb
+               write(*,"(2("//str(Norb)//"F"//str(wn)//".4,"//str(ws)//"X))") (real(densityGW(iorb,jorb,1)),jorb=1,Norb),(real(densityGW(iorb,jorb,2)),jorb=1,Norb)
+            enddo
             !
       end select
       !
@@ -2274,6 +2253,12 @@ contains
             call AllocateBosonicField(P_EDMFT,Crystal%Norb,Beta_Match%Nmats_old,Crystal%iq_gamma,Nsite=Nsite,no_bare=.true.,Beta=Beta_Match%Beta_old)
             call read_BosonicField(P_EDMFT,reg(Beta_Match%Path),"Pimp_w.DAT")
             call interpolate2Beta(P_EDMFT,Beta_Match,"imp",.false.)
+            !Remove the iw=0 divergency of local charge susceptibility
+            if(removeCDW_P)then
+               write(*,"(A)") new_line("A")//"     Divergency removal in Pimp(iw=0)."
+               call dump_BosonicField(P_EDMFT,reg(PrevItFolder),"Pimp_CDW_w.DAT")
+               call remove_CDW(P_EDMFT,"imp")
+            endif
             call dump_BosonicField(P_EDMFT,reg(PrevItFolder),"Pimp_w.DAT")
             call DeallocateBosonicField(P_EDMFT)
             !
@@ -2292,6 +2277,12 @@ contains
             call AllocateBosonicField(P_EDMFT,Crystal%Norb,Beta_Match%Nmats_old,Crystal%iq_gamma,Nsite=Nsite,no_bare=.true.,Beta=Beta_Match%Beta_old)
             call read_BosonicField(P_EDMFT,reg(Beta_Match%Path),"Pimp_w.DAT")
             call interpolate2Beta(P_EDMFT,Beta_Match,"imp",.false.)
+            !Remove the iw=0 divergency of local charge susceptibility
+            if(removeCDW_P)then
+               write(*,"(A)") new_line("A")//"     Divergency removal in Pimp(iw=0)."
+               call dump_BosonicField(P_EDMFT,reg(PrevItFolder),"Pimp_CDW_w.DAT")
+               call remove_CDW(P_EDMFT,"imp")
+            endif
             call dump_BosonicField(P_EDMFT,reg(PrevItFolder),"Pimp_w.DAT")
             call DeallocateBosonicField(P_EDMFT)
             !

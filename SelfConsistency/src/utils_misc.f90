@@ -474,6 +474,7 @@ contains
       character(len=*),intent(in),optional  :: name
       !
       real(8)                               :: ReErr,ImErr
+      real(8)                               :: percReErr,percImErr
       logical                               :: hardstop_,enforce_
       integer                               :: N,i,j
       !
@@ -492,17 +493,19 @@ contains
             !
             ReErr = abs(real(A(i,j))-real(A(j,i)))
             ImErr = abs(aimag(A(i,j))+aimag(A(j,i)))
+            percReErr = abs(ReErr/real(A(i,j)))
+            percImErr = abs(ImErr/aimag(A(i,j)))
             !
             if((ReErr.gt.tol).or.(ImErr.gt.tol))then
                !
                if(verbose.or.enforce_)then
-                  if(ReErr.gt.1e-4)then
+                  if(percReErr.gt.1e-4)then
                      if(present(name)) write(*,"(A)") "     Non-hermitian matrix: "//reg(name)
-                     write(*,"(A,2I4,4(A,1E12.5))")   "     [i,j]:",i,j," Re(A_ij): ",real(A(i,j)) ," Re(A_ji): ",real(A(j,i)) ," err: ",ReErr," > ",tol
+                     write(*,"(A,2I4,5(A,1E12.5))")   "     [i,j]:",i,j," Re(A_ij): ",real(A(i,j)) ," Re(A_ji): ",real(A(j,i)) ," err: ",ReErr," %err: ",percReErr," > ",tol
                   endif
-                  if(ImErr.gt.1e-4)then
+                  if(percImErr.gt.1e-4)then
                      if(present(name)) write(*,"(A)") "     Non-hermitian matrix: "//reg(name)
-                     write(*,"(A,2I4,4(A,1E12.5))")   "     [i,j]:",i,j," Im(A_ij): ",aimag(A(i,j))," Im(A_ji): ",aimag(A(j,i))," err: ",ImErr," > ",tol
+                     write(*,"(A,2I4,5(A,1E12.5))")   "     [i,j]:",i,j," Im(A_ij): ",aimag(A(i,j))," Im(A_ji): ",aimag(A(j,i))," err: ",ImErr," %err: ",percImErr," > ",tol
                   endif
                endif
                !
@@ -534,7 +537,7 @@ contains
       logical,intent(in),optional           :: hardstop
       character(len=*),intent(in),optional  :: name
       !
-      real(8)                               :: ReErr
+      real(8)                               :: ReErr,percReErr
       logical                               :: hardstop_,enforce_
       integer                               :: N,i,j
       !
@@ -552,13 +555,14 @@ contains
          do j=1+i,N
             !
             ReErr = A(i,j)-A(j,i)
+            percReErr = abs(ReErr/A(i,j))
             !
             if(ReErr.gt.tol)then
                !
                if(verbose.or.enforce_)then
-                  if(ReErr.gt.1e-4)then
+                  if(percReErr.gt.1e-4)then
                      if(present(name)) write(*,"(A)") "     Non-symmetric matrix: "//reg(name)
-                     write(*,"(A,2I4,4(A,1E12.5))")   "     [i,j]:",i,j," Re(A_ij): ",A(i,j)," Re(A_ji): ",A(j,i)," err: ",ReErr," > ",tol
+                     write(*,"(A,2I4,5(A,1E12.5))")   "     [i,j]:",i,j," Re(A_ij): ",A(i,j)," Re(A_ji): ",A(j,i)," err: ",ReErr," %err: ",percReErr," > ",tol
                   endif
                endif
                !
@@ -587,6 +591,7 @@ contains
       character(len=*),intent(in),optional  :: name
       !
       real(8)                               :: ReErr,ImErr
+      real(8)                               :: percReErr,percImErr
       logical                               :: hardstop_,enforce_
       integer                               :: N,i,j
       !
@@ -605,17 +610,19 @@ contains
             !
             ReErr = abs(real(A(i,j))-real(A(j,i)))
             ImErr = abs(aimag(A(i,j))-aimag(A(j,i)))
+            percReErr = abs(ReErr/real(A(i,j)))
+            percImErr = abs(ImErr/aimag(A(i,j)))
             !
             if((ReErr.gt.tol).or.(ImErr.gt.tol))then
                !
                if(verbose.or.enforce_)then
-                  if(ReErr.gt.1e-4)then
+                  if(percReErr.gt.1e-4)then
                      if(present(name)) write(*,"(A)") "     Non-symmetric matrix: "//reg(name)
-                     write(*,"(A,2I4,4(A,1E12.5))")   "     [i,j]:",i,j," Re(A_ij): ",real(A(i,j)) ," Re(A_ji): ",real(A(j,i)) ," err: ",ReErr," > ",tol
+                     write(*,"(A,2I4,5(A,1E12.5))")   "     [i,j]:",i,j," Re(A_ij): ",real(A(i,j)) ," Re(A_ji): ",real(A(j,i)) ," err: ",ReErr," %err: ",percReErr," > ",tol
                   endif
-                  if(ImErr.gt.1e-4)then
+                  if(percImErr.gt.1e-4)then
                      if(present(name)) write(*,"(A)") "     Non-symmetric matrix: "//reg(name)
-                     write(*,"(A,2I4,4(A,1E12.5))")   "     [i,j]:",i,j," Im(A_ij): ",aimag(A(i,j))," Im(A_ji): ",aimag(A(j,i))," err: ",ImErr," > ",tol
+                     write(*,"(A,2I4,5(A,1E12.5))")   "     [i,j]:",i,j," Im(A_ij): ",aimag(A(i,j))," Im(A_ji): ",aimag(A(j,i))," err: ",ImErr," %err: ",percImErr," > ",tol
                   endif
                endif
                !

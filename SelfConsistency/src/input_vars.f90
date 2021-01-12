@@ -303,7 +303,7 @@ contains
       call parse_input_variable(wmatsMax,"MAX_WMATS",InputFile,default=100.d0,comment="Maximum value of the Matsubara frequency mesh.")
       Nmats = int(Beta*wmatsMax/(2d0*pi))
       call append_to_input_list(Nmats,"NMATS","Number of points on the imaginary frequency axis. User cannot set this as its computed from MAX_WMATS and BETA.")
-      call parse_input_variable(NtauF,"NTAU_F_LAT",InputFile,default=int(100+Nmats),comment="Number of points on the imaginary time axis for Fermionic lattice fields. Its gonna be made odd.")
+      call parse_input_variable(NtauF,"NTAU_F_LAT",InputFile,default=Nmats,comment="Number of points on the imaginary time axis for Fermionic lattice fields. Its gonna be made odd.")
       if(mod(NtauF,2).eq.0)NtauF=NtauF+1
       if(mod(NtauF-1,4).ne.0)NtauF=NtauF+mod(NtauF-1,4)
       NtauB = NtauF
