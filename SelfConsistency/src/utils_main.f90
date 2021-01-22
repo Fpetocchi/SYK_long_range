@@ -53,7 +53,7 @@ module utils_main
    type(BosonicField)                       :: C_EDMFT
    !
    real(8)                                  :: density2set
-   complex(8),allocatable                   :: densityLDA(:,:)
+   complex(8),allocatable                   :: densityLDA(:,:,:)
    complex(8),allocatable                   :: densityGW(:,:,:)
    complex(8),allocatable                   :: densityDMFT(:,:,:)
    real(8),allocatable                      :: densityQMC(:,:,:,:)
@@ -592,9 +592,9 @@ contains
       implicit none
       integer,intent(in)                    :: ItStart
       logical                               :: filexists
-      integer                               :: unit,idum,ib1
-      integer                               :: isite,iorb,ispin
-      integer                               :: itm,jtm
+      integer                               :: unit,idum,ib1,ib2
+      integer                               :: iorb,jorb,korb,lorb
+      integer                               :: isite,ispin
       character(len=255)                    :: file
       real(8)                               :: muQMC
       !
@@ -715,7 +715,11 @@ contains
             !
             !Impurity Self-energy
             call AllocateFermionicField(S_DMFT,Crystal%Norb,Nmats,Nsite=Nsite,Beta=Beta)
-            if(ItStart.ne.0) call read_FermionicField(S_DMFT,reg(PrevItFolder),"Simp_w")
+            if(ItStart.ne.0)then
+               call read_FermionicField(S_DMFT,reg(PrevItFolder),"Simp_w")
+               call read_Matrix(S_DMFT%N_s(:,:,1),reg(PrevItFolder)//"HartreeU_s1.DAT")
+               call read_Matrix(S_DMFT%N_s(:,:,2),reg(PrevItFolder)//"HartreeU_s2.DAT")
+            endif
             !
             !Lattice local Gf
             call AllocateFermionicField(Glat,Crystal%Norb,Nmats,Nkpt=Crystal%Nkpt,Nsite=Nsite,Beta=Beta)
@@ -773,29 +777,57 @@ contains
             !
       end select
       !
+      !
+      !Initial inpurity self-energy guess
+      !This differs from the one done later because the both
+      !S_DMFT and Nlda can contain (real) off-diag elements.
+      if(solve_DMFT.and.(ItStart.eq.0))then
+         do ispin=1,Nspin
+            do iorb=1,S_DMFT%Norb
+               do jorb=1,S_DMFT%Norb
+                  do korb=1,S_DMFT%Norb
+                     do lorb=1,S_DMFT%Norb
+                        !
+                        ib1 = iorb + S_DMFT%Norb*(jorb-1)
+                        ib2 = korb + S_DMFT%Norb*(lorb-1)
+                        !
+                        S_DMFT%ws(iorb,jorb,:,ispin) = S_DMFT%ws(iorb,jorb,:,ispin) + Ulat%screened_local(ib1,ib2,1)*Glat%N_s(korb,lorb,ispin)
+                        S_DMFT%N_s(iorb,jorb,ispin) = S_DMFT%ws(iorb,jorb,1,ispin)
+                        !
+                     enddo
+                 enddo
+               enddo
+            enddo
+            call dump_Matrix(S_DMFT%N_s(:,:,ispin),reg(ItFolder)//"Hartree0_s"//str(ispin)//".DAT")
+         enddo
+      endif
+      !
+      !
       calc_W = calc_Wedmft .or. calc_Wfull
       !
       !
       !Allocate and initialize different density matrices
-      allocate(densityLDA(Crystal%Norb,Crystal%Norb));densityLDA=czero
+      allocate(densityLDA(Crystal%Norb,Crystal%Norb,Nspin));densityLDA=czero
       allocate(densityGW(Crystal%Norb,Crystal%Norb,Nspin));densityGW=czero
       allocate(densityDMFT(Crystal%Norb,Crystal%Norb,Nspin));densityDMFT=czero
       allocate(densityQMC(maxval(SiteNorb),maxval(SiteNorb),Nspin,Nsite));densityQMC=0d0
-      !
       if(ItStart.eq.0)then
          !
-         densityLDA = Glat%N_s(:,:,1) + Glat%N_s(:,:,2)
-         call dump_Matrix(densityLDA,reg(pathINPUT)//"Nlda.DAT")
+         do ispin=1,Nspin
+            densityLDA(:,:,ispin) = Glat%N_s(:,:,ispin)
+            call dump_Matrix(densityLDA(:,:,ispin),reg(pathINPUT)//"Nlda_s"//str(ispin)//".DAT")
+         enddo
          densityGW=czero
          densityDMFT=czero
          densityQMC=0d0
          !
       else
          !
-         call read_Matrix(densityLDA,reg(pathINPUT)//"Nlda.DAT")
+         do ispin=1,Nspin
+            call read_Matrix(densityLDA(:,:,ispin),reg(pathINPUT)//"Nlda_s"//str(ispin)//".DAT")
+            call read_Matrix(densityDMFT(:,:,ispin),reg(PrevItFolder)//"Nimp_s"//str(ispin)//".DAT")
+         enddo
          densityGW=Glat%N_s
-         call read_Matrix(densityDMFT(:,:,1),reg(PrevItFolder)//"Nimp_s1.DAT")
-         call read_Matrix(densityDMFT(:,:,2),reg(PrevItFolder)//"Nimp_s2.DAT")
          !
          do isite=1,Nsite
             file = reg(PrevItFolder)//"Solver_"//reg(SiteName(isite))//"/resultsQMC/Nqmc.DAT"
@@ -935,7 +967,7 @@ contains
                      do iw=1,S_Full%Npoints
                         do iorb=1,S_Full%Norb
                            do jorb=1,S_Full%Norb
-                              S_Full%wks(iorb,jorb,iw,ik,ispin) = S_DMFT%ws(iorb,jorb,iw,ispin)
+                              S_Full%wks(iorb,jorb,iw,ik,ispin) = S_DMFT%ws(iorb,jorb,iw,ispin)-S_DMFT%N_s(iorb,jorb,int(Nspin/ispin))
                            enddo
                         enddo
                      enddo
@@ -1016,11 +1048,11 @@ contains
       if(RotateHloc)then
          allocate(Rot(Norb,Norb)); Rot=HlocRot(1:Norb,1:Norb,isite)
          call loc2imp(Gloc,Glat,Orbs,U=Rot)
-         call loc2imp(SigmaImp,S_DMFT,Orbs,U=Rot)!if(Iteration.gt.0)
+         call loc2imp(SigmaImp,S_DMFT,Orbs,U=Rot)
          deallocate(Rot)
       else
          call loc2imp(Gloc,Glat,Orbs)
-         call loc2imp(SigmaImp,S_DMFT,Orbs)!if(Iteration.gt.0)
+         call loc2imp(SigmaImp,S_DMFT,Orbs)
       endif
       !
       !Print what's used to compute delta
@@ -1054,7 +1086,7 @@ contains
             !
             stop "If you got so far somethig is wrong."
             !
-         case("GW+EDMFT")
+         case("GW+EDMFT","EDMFT")
             !
             select case(reg(DeltaFit))
                case default
@@ -1101,7 +1133,7 @@ contains
                   !
             end select
             !
-         case("DMFT+statU","DMFT+dynU","EDMFT")
+         case("DMFT+statU","DMFT+dynU")
             !
             if(RotateHloc)then
                Eloc(:,1) = HlocEig(1:Norb,isite)
@@ -1578,6 +1610,7 @@ contains
          !
          !Insert or Expand to the Lattice basis
          if(RotateHloc)then
+            call symmetrize_imp(densityQMC(:,:,:,isite),HlocEig(:,isite))
             call imp2loc(densityDMFT,dcmplx(densityQMC(:,:,:,isite),0d0),Orbs,ExpandImpurity,AFMselfcons,U=HlocRotDag)
          else
             call imp2loc(densityDMFT,dcmplx(densityQMC(:,:,:,isite),0d0),Orbs,ExpandImpurity,AFMselfcons)
@@ -1587,7 +1620,7 @@ contains
          !
       enddo
       !
-      !Symmetrize and print
+      !symmetrize GW indexes and print
       if(EqvGWndx%O.or.EqvGWndx%S)then
          !
          if(verbose)then
@@ -1595,7 +1628,7 @@ contains
             call dump_Matrix(densityDMFT(:,:,2),reg(PrevItFolder)//"Nimp_dw_notsymm.DAT")
          endif
          !
-         call symmetrize(densityDMFT,EqvGWndx)
+         call symmetrize_GW(densityDMFT,EqvGWndx)
          !
       endif
       call dump_Matrix(densityDMFT(:,:,1),reg(PrevItFolder)//"Nimp_s1.DAT")
@@ -1668,6 +1701,7 @@ contains
          !
          !Expand to the Lattice basis
          if(RotateHloc)then
+            call symmetrize_imp(Gimp,HlocEig(:,isite))
             call imp2loc(G_DMFT,Gimp,Orbs,ExpandImpurity,AFMselfcons,U=HlocRotDag)
          else
             call imp2loc(G_DMFT,Gimp,Orbs,ExpandImpurity,AFMselfcons)
@@ -1784,6 +1818,7 @@ contains
          !Fill up the N_s attribute that correspond to the Hartree term
          !since the impurity interaction contains only the physical interaction elements
          !(particle and spin conserving) I'm neglecting here elements in principle present
+         !Because both Simp and densityQMC are diagonal
          !like Hartree_{ab} = Sum_c curlyU_{ab}{cc} * n_{cc}.
          call AllocateBosonicField(curlyU,Norb,Nmats,Crystal%iq_gamma,Beta=Beta)
          call read_BosonicField(curlyU,reg(PrevItFolder)//"Solver_"//reg(SiteName(isite))//"/","curlyU_"//reg(SiteName(isite))//"_w.DAT")
@@ -1804,6 +1839,7 @@ contains
          !
          !Expand to the Lattice basis
          if(RotateHloc)then
+            call symmetrize_imp(Simp,HlocEig(:,isite))
             call imp2loc(S_DMFT,Simp,Orbs,ExpandImpurity,AFMselfcons,U=HlocRotDag)
          else
             call imp2loc(S_DMFT,Simp,Orbs,ExpandImpurity,AFMselfcons)
@@ -1815,7 +1851,7 @@ contains
       enddo
       call DeallocateFermionicField(Simp)
       !
-      !Symmetrize and print
+      !symmetrize GW indexes and print
       if(EqvGWndx%O.or.EqvGWndx%S)then
          !
          if(verbose)then
@@ -1824,7 +1860,7 @@ contains
             call dump_Matrix(S_DMFT%N_s(:,:,2),reg(PrevItFolder)//"HartreeU_noSym_s2.DAT")
          endif
          !
-         call symmetrize(S_DMFT,EqvGWndx)
+         call symmetrize_GW(S_DMFT,EqvGWndx)
          !
       endif
       call dump_FermionicField(S_DMFT,reg(PrevItFolder),"Simp_w")
@@ -2031,23 +2067,18 @@ contains
             !
          enddo
          !
-         !Symmetrize
+         !symmetrize GW indexes
          if(EqvGWndx%O)then
             if(verbose)call dump_BosonicField(P_EDMFT,reg(PrevItFolder),"Pimp_noSym_w.DAT")
-            call symmetrize(P_EDMFT,EqvGWndx)
+            call symmetrize_GW(P_EDMFT,EqvGWndx)
          endif
          !
-         !Remove the iw=0 divergency of local charge susceptibility
+         !Remove the iw=0 divergency of local polarization
          if(removeCDW_P)then
             write(*,"(A)") new_line("A")//"     Divergency removal in Pimp(iw=0)."
             call dump_BosonicField(P_EDMFT,reg(PrevItFolder),"Pimp_CDW_w.DAT")
             call remove_CDW(P_EDMFT,"imp")
          endif
-         !
-         !One last check
-         do iw=1,Nmats
-            call check_Symmetry(curlyU_EDMFT%screened_local(:,:,iw),0.001d0,enforce=.true.,hardstop=.false.,name="curlyU_"//str(iw))
-         enddo
          !
          !Print
          call dump_BosonicField(P_EDMFT,reg(PrevItFolder),"Pimp_w.DAT")

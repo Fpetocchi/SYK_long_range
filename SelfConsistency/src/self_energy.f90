@@ -50,7 +50,7 @@ contains
       use utils_fields
       use crystal
       use fourier_transforms
-      use input_vars, only : NtauB, tau_uniform
+      use input_vars, only : NtauB, tau_uniform, cmplxWann
       implicit none
       !
       type(FermionicField),intent(inout)    :: Smats_C
@@ -99,27 +99,32 @@ contains
          write(*,"(A)") "Warning: Either Smats_C, Gmats or Wmats have different number of Matsubara points. Computing up to the smaller: "//str(Nmats)
       endif
       !
+      ! Compute Glat(k,tau)
       call cpu_time(start)
-      !
       allocate(Gitau(Norb,Norb,NtauB,Nkpt,Nspin));Gitau=czero
-      do ispin=1,Nspin
-         call Fmats2itau_mat(Beta,Gmats%wks(:,:,:,:,ispin),Gitau(:,:,:,:,ispin),asympt_corr=.true.,tau_uniform=tau_uniform,Nkpt3=Lttc%Nkpt3,kpt=Lttc%kpt)
-      enddo
-      !
-      allocate(Witau(Nbp,Nbp,NtauB,Nkpt));Witau=czero
-      do iq=1,Nkpt
-         do ib1=1,Nbp
-            do ib2=1,Nbp
-               call Bmats2itau(Beta,(Wmats%screened(ib1,ib2,:,iq)-Wmats%bare(ib1,ib2,iq)),Witau(ib1,ib2,:,iq),asympt_corr=.true.,tau_uniform=tau_uniform)
-            enddo
+      if(cmplxWann)then
+         do ispin=1,Nspin
+            call Fmats2itau_mat(Beta,Gmats%wks(:,:,:,:,ispin),Gitau(:,:,:,:,ispin), &
+            asympt_corr=.true.,tau_uniform=tau_uniform)
          enddo
-      enddo
-      !
+      else
+         do ispin=1,Nspin
+            call Fmats2itau_mat(Beta,Gmats%wks(:,:,:,:,ispin),Gitau(:,:,:,:,ispin), &
+            asympt_corr=.true.,tau_uniform=tau_uniform,nkpt3=Lttc%Nkpt3,kpt=Lttc%kpt)
+         enddo
+      endif
       call cpu_time(finish)
-      write(*,"(A,F)") "     Glat(k,iw),Wlat(q,iw) --> Glat(k,tau),Wlat(q,tau) cpu timing:", finish-start
+      write(*,"(A,F)") "     Glat(k,iw) --> Glat(k,tau) cpu timing:", finish-start
       !
+      ! Compute Wlat(q,tau)
       call cpu_time(start)
+      allocate(Witau(Nbp,Nbp,NtauB,Nkpt));Witau=czero
+      call Bmats2itau(Beta,Wmats%screened,Witau,asympt_corr=.true.,tau_uniform=tau_uniform,Umats_bare=Wmats%bare)
+      call cpu_time(finish)
+      write(*,"(A,F)") "     Wlat(q,iw) --> Wlat(q,tau) cpu timing:", finish-start
+      !
       !Sigma_{m,n}(q,tau) = -Sum_{k,mp,np} W_{(m,mp);(n,np)}(q-k;tau)G_{mp,np}(k,tau)
+      call cpu_time(start)
       call clear_attributes(Smats_C)
       allocate(Sitau(Norb,Norb,NtauB))
       do iq=1,Lttc%Nkpt_irred
@@ -160,14 +165,12 @@ contains
          enddo
       enddo
       deallocate(Witau,Sitau)
-      !
       call cpu_time(finish)
       write(*,"(A,F)") "     Sigma_C(k,iw) cpu timing:", finish-start
       !
+      !Sigmax_nm(q) = Sum_kij V_{ni,jm}(q-k)G_ij(k,beta) <=> sigmax(r,r')=-g(r,r',tau=0-)*v(r-r')
       call cpu_time(start)
       call clear_attributes(Smats_X)
-      !sigmax(r,r')=-g(r,r',tau=0-)*v(r-r')
-      !Sigmax_nm(q) = Sum_kij V_{ni,jm}(q-k)G_ij(k,beta)
       !$OMP PARALLEL DEFAULT(NONE),&
       !$OMP SHARED(Norb,NtauB,Lttc,Nkpt,Smats_X,Gitau,Wmats),&
       !$OMP PRIVATE(m,n,iq,ispin,ik1,ik2,mp,np,ib1,ib2)
@@ -259,7 +262,7 @@ contains
       use utils_fields
       use crystal
       use fourier_transforms
-      use input_vars, only : NtauB, tau_uniform
+      use input_vars, only : NtauB, tau_uniform, ExpandImpurity, AFMselfcons
       implicit none
       !
       type(FermionicField),intent(inout)    :: Smats_Cdc
@@ -270,9 +273,10 @@ contains
       complex(8),allocatable                :: Sitau_loc(:,:,:,:)
       complex(8),allocatable                :: Gitau_loc(:,:,:,:)
       complex(8),allocatable                :: Witau_loc(:,:,:)
+      complex(8),allocatable                :: Gmats_lda(:,:),Gitau_lda(:,:)
       real(8)                               :: Beta
       integer                               :: Nbp,Nkpt,Norb,Nmats
-      integer                               :: itau,ispin
+      integer                               :: itau,ispin,iw
       integer                               :: m,n,mp,np,ib1,ib2
       real                                  :: start,finish
       !
@@ -302,30 +306,47 @@ contains
          write(*,"(A)") "Warning: Either Smats_Cdc, Gmats or Wmats have different number of Matsubara points. Computing up to the smaller: "//str(Nmats)
       endif
       !
+      ! Compute Glat(tau)
       call cpu_time(start)
-      !
       allocate(Gitau_loc(Norb,Norb,NtauB,Nspin));Gitau_loc=czero
       do ispin=1,Nspin
-         call Fmats2itau_mat(Beta,Gmats%ws(:,:,:,ispin),Gitau_loc(:,:,:,ispin),asympt_corr=.true.,tau_uniform=tau_uniform)
+         !
+         if(ExpandImpurity.or.AFMselfcons)then
+            !
+            !FT all components
+            call Fmats2itau_mat(Beta,Gmats%ws(:,:,:,ispin),Gitau_loc(:,:,:,ispin),asympt_corr=.true.,tau_uniform=tau_uniform)
+            !
+         else
+            !
+            !take the diagonal local Gf
+            allocate(Gmats_lda(Norb,Nmats));Gmats_lda=czero
+            do iw=1,Nmats
+               Gmats_lda(:,iw) = diagonal(Gmats%ws(:,:,iw,ispin))
+            enddo
+            !
+            !FT the diagonal Gf
+            allocate(Gitau_lda(Norb,NtauB));Gitau_lda=czero
+            call Fmats2itau_vec(Gmats%Beta,Gmats_lda,Gitau_lda,asympt_corr=.true.,tau_uniform=tau_uniform)
+            !
+            !put back elements in Gitau
+            do itau=1,NtauB
+               Gitau_loc(:,:,itau,ispin) = diag(Gitau_lda(:,itau))
+            enddo
+            !
+         endif
       enddo
-      !
-      allocate(Witau_loc(Nbp,Nbp,NtauB));Witau_loc=czero
-      !allocate(WmatsC_loc(Nbp,Nbp,Nmats));WmatsC_loc=czero
-      !do iw=1,Nmats
-      !   WmatsC_loc(:,:,iw) = Wmats%screened_local(:,:,iw) - Wmats%bare_local
-      !enddo
-      do ib1=1,Nbp
-         do ib2=1,Nbp
-            call Bmats2itau(Beta,(Wmats%screened_local(ib1,ib2,:)-Wmats%bare_local(ib1,ib2)),Witau_loc(ib1,ib2,:),asympt_corr=.true.,tau_uniform=tau_uniform)
-         enddo
-      enddo
-      !deallocate(WmatsC_loc)
-      !
       call cpu_time(finish)
-      write(*,"(A,F)") "     Glat(iw),Wlat(iw) --> Glat(tau),Wlat(tau) cpu timing:", finish-start
+      write(*,"(A,F)") "     Glat(iw), --> Glat(tau) cpu timing:", finish-start
       !
+      ! Compute Wlat(tau)
       call cpu_time(start)
+      allocate(Witau_loc(Nbp,Nbp,NtauB));Witau_loc=czero
+      call Bmats2itau(Beta,Wmats%screened_local,Witau_loc,asympt_corr=.true.,tau_uniform=tau_uniform,Umats_bare=Wmats%bare_local)
+      call cpu_time(finish)
+      write(*,"(A,F)") "     Wlat(iw) --> Wlat(tau) cpu timing:", finish-start
+      !
       !Sigma_{m,n}(q,tau) = -Sum_{k,mp,np} W_{(m,mp);(n,np)}(q-k;tau)G_{mp,np}(k,tau)
+      call cpu_time(start)
       allocate(Sitau_loc(Norb,Norb,NtauB,Nspin));Sitau_loc=czero
       !$OMP PARALLEL DEFAULT(NONE),&
       !$OMP SHARED(Norb,NtauB,Sitau_loc,Gitau_loc,Witau_loc),&
@@ -363,10 +384,9 @@ contains
       call cpu_time(finish)
       write(*,"(A,F)") "     Sigma_Cdc(iw) cpu timing:", finish-start
       !
+      !Sigmax_nm(q) = Sum_kij V_{ni,jm}(q-k)G_ij(k,beta) <=> sigmax(r,r')=-g(r,r',tau=0-)*v(r-r')
       call cpu_time(start)
       call clear_attributes(Smats_Xdc)
-      !sigmax(r,r')=-g(r,r',tau=0-)*v(r-r')
-      !Sigmax_nm(q) = Sum_kij V_{ni,jm}(q-k)G_ij(k,beta)
       !$OMP PARALLEL DEFAULT(NONE),&
       !$OMP SHARED(Norb,NtauB,Smats_Xdc,Gitau_loc,Wmats),&
       !$OMP PRIVATE(m,n,ispin,mp,np,ib1,ib2)
@@ -402,7 +422,7 @@ contains
    !PURPOSE: Compute Hartree difference with G0W0
    !TEST ON: 27-10-2020
    !---------------------------------------------------------------------------!
-   subroutine calc_VH(density_LDA,Gmats,Umats,VH)
+   subroutine calc_VH(density_LDA_spin,Gmats,Umats,VH)
       !
       use parameters
       use linalg
@@ -413,11 +433,12 @@ contains
       use input_vars, only :  pathINPUT, VH_type
       implicit none
       !
-      complex(8),intent(in)                 :: density_LDA(:,:)
+      complex(8),intent(in)                 :: density_LDA_spin(:,:,:)
       type(FermionicField),intent(in)       :: Gmats
       type(BosonicField),intent(in)         :: Umats
       complex(8),intent(inout)              :: VH(:,:)
       !
+      complex(8),allocatable                :: density_LDA(:,:)
       complex(8),allocatable                :: density(:,:),density_spin(:,:,:)
       complex(8),allocatable                :: Vgamma(:,:),Vevec(:,:)
       real(8),allocatable                   :: Veval(:)
@@ -437,18 +458,22 @@ contains
       if(Gmats%Nkpt.eq.0) stop "Gmats k dependent attributes not properly initialized."
       if(Umats%Nkpt.eq.0) stop "Umats k dependent attributes not properly initialized."
       if(Umats%iq_gamma.lt.0) stop "Umats iq_gamma not defined."
+      !
       Norb = Gmats%Norb
       Nbp = Umats%Nbp
       !
       if((Norb**2).ne.Nbp) stop "Umats and Gmats have different orbital space."
-      call assert_shape(density_LDA,[Norb,Norb],"calc_VH","density_LDA")
+      call assert_shape(density_LDA_spin,[Norb,Norb,Nspin],"calc_VH","density_LDA")
       call assert_shape(VH,[Norb,Norb],"calc_VH","VH")
       !
-      allocate(density(Norb,Norb));density=0d0
-      allocate(density_spin(Norb,Norb,Nspin));density_spin=0d0
+      allocate(density_spin(Norb,Norb,Nspin));density_spin=czero
       call calc_density(Gmats,density_spin)
+      allocate(density(Norb,Norb));density=czero
       density = sum(density_spin,dim=3)
       deallocate(density_spin)
+      !
+      allocate(density_LDA(Norb,Norb));density_LDA=czero
+      density_LDA = sum(density_LDA_spin,dim=3)
       !
       select case(VH_type)
          case default
@@ -518,6 +543,7 @@ contains
            enddo
          enddo
       enddo
+      deallocate(density_LDA)
       !
       contains
          !

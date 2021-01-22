@@ -29,11 +29,18 @@ module utils_fields
       module procedure imp2loc_Bosonic
    end interface imp2loc
 
-   interface symmetrize
-      module procedure symmetrize_Matrix
-      module procedure symmetrize_Fermionic
-      module procedure symmetrize_Bosonic
-   end interface symmetrize
+   interface symmetrize_GW
+      module procedure symmetrize_GW_Matrix_d
+      module procedure symmetrize_GW_Matrix_z
+      module procedure symmetrize_GW_Fermionic
+      module procedure symmetrize_GW_Bosonic
+   end interface symmetrize_GW
+
+   interface symmetrize_imp
+      module procedure symmetrize_imp_Matrix_d
+      module procedure symmetrize_imp_Matrix_z
+      module procedure symmetrize_imp_Fermionic
+   end interface symmetrize_imp
 
    interface MergeFields
       module procedure MergeSelfEnergy
@@ -77,7 +84,8 @@ module utils_fields
    public :: isReal
    public :: loc2imp
    public :: imp2loc
-   public :: symmetrize
+   public :: symmetrize_GW
+   public :: symmetrize_imp
    public :: join_SigmaCX
    public :: MergeFields
 
@@ -449,27 +457,27 @@ contains
       use parameters
       implicit none
       complex(8),allocatable,intent(inout)  :: A(:,:)
-      if(allocated(A))A=dcmplx(real(A),0d0)
+      if(allocated(A))A=dcmplx(dreal(A),0d0)
    end subroutine isReal_Matrix
    !
    subroutine isReal_Fermionic(G)
       use parameters
       implicit none
       type(FermionicField),intent(inout)    :: G
-      if(allocated(G%N_s))   G%N_s  = dcmplx(real(G%N_s),0d0)
-      if(allocated(G%ws))    G%ws   = dcmplx(real(G%ws),0d0)
-      if(allocated(G%N_ks))  G%N_ks = dcmplx(real(G%N_ks),0d0)
-      if(allocated(G%wks))   G%wks  = dcmplx(real(G%wks),0d0)
+      if(allocated(G%N_s))   G%N_s  = dcmplx(dreal(G%N_s),0d0)
+      if(allocated(G%ws))    G%ws   = dcmplx(dreal(G%ws),0d0)
+      if(allocated(G%N_ks))  G%N_ks = dcmplx(dreal(G%N_ks),0d0)
+      if(allocated(G%wks))   G%wks  = dcmplx(dreal(G%wks),0d0)
    end subroutine isReal_Fermionic
    !
    subroutine isReal_Bosonic(W)
       use parameters
       implicit none
       type(BosonicField),intent(inout)      :: W
-      if(allocated(W%bare_local))     W%bare_local     = dcmplx(real(W%bare_local),0d0)
-      if(allocated(W%screened_local)) W%screened_local = dcmplx(real(W%screened_local),0d0)
-      if(allocated(W%bare))           W%bare           = dcmplx(real(W%bare),0d0)
-      if(allocated(W%screened))       W%screened       = dcmplx(real(W%screened),0d0)
+      if(allocated(W%bare_local))     W%bare_local     = dcmplx(dreal(W%bare_local),0d0)
+      if(allocated(W%screened_local)) W%screened_local = dcmplx(dreal(W%screened_local),0d0)
+      if(allocated(W%bare))           W%bare           = dcmplx(dreal(W%bare),0d0)
+      if(allocated(W%screened))       W%screened       = dcmplx(dreal(W%screened),0d0)
    end subroutine isReal_Bosonic
 
 
@@ -1014,25 +1022,25 @@ contains
    !         The Fermionic simmetrization is done only on the local attributes
    !         The Bosonic simmetrization is done only on the physical elements
    !---------------------------------------------------------------------------!
-   subroutine symmetrize_Matrix(Mat,Eqv)
+   subroutine symmetrize_GW_Matrix_d(Mat,Eqv)
       !
       use parameters
       implicit none
       !
-      complex(8),intent(inout)              :: Mat(:,:,:)
+      real(8),intent(inout)                 :: Mat(:,:,:)
       type(Equivalent)                      :: Eqv
       !
       real(8)                               :: dimdiag,dimoffdiag
-      complex(8)                            :: Delem,Uelem,Lelem
+      real(8)                               :: Delem,Uelem,Lelem
       integer                               :: iset,jset,iorb,jorb,ispin
       integer                               :: i,j
       !
       !
-      if(verbose)write(*,"(A)") "---- symmetrize_Matrix"
+      if(verbose)write(*,"(A)") "---- symmetrize_GW_Matrix_d"
       !
       !
       ! Check on the input Fields
-      if(size(Mat,dim=1).ne.size(Mat,dim=2)) stop "symmetrize_Matrix: Matix not square."
+      if(size(Mat,dim=1).ne.size(Mat,dim=2)) stop "symmetrize_GW_Matrix_d: Matix not square."
       !
       if(Eqv%para.eq.1)then
          Mat(:,:,1) = (Mat(:,:,1) + Mat(:,:,2))/2d0
@@ -1124,9 +1132,121 @@ contains
          !
       endif
       !
-   end subroutine symmetrize_Matrix
+   end subroutine symmetrize_GW_Matrix_d
    !
-   subroutine symmetrize_Fermionic(G,Eqv)
+   subroutine symmetrize_GW_Matrix_z(Mat,Eqv)
+      !
+      use parameters
+      implicit none
+      !
+      complex(8),intent(inout)              :: Mat(:,:,:)
+      type(Equivalent)                      :: Eqv
+      !
+      real(8)                               :: dimdiag,dimoffdiag
+      complex(8)                            :: Delem,Uelem,Lelem
+      integer                               :: iset,jset,iorb,jorb,ispin
+      integer                               :: i,j
+      !
+      !
+      if(verbose)write(*,"(A)") "---- symmetrize_GW_Matrix_z"
+      !
+      !
+      ! Check on the input Fields
+      if(size(Mat,dim=1).ne.size(Mat,dim=2)) stop "symmetrize_GW_Matrix_z: Matix not square."
+      !
+      if(Eqv%para.eq.1)then
+         Mat(:,:,1) = (Mat(:,:,1) + Mat(:,:,2))/2d0
+         Mat(:,:,2) = Mat(:,:,1)
+      endif
+      !
+      if(Eqv%O)then
+         !
+         do ispin=1,Nspin
+            !
+            !symmetrization of the diagonal sets
+            do iset=1,Eqv%Ntotset
+               !
+               dimdiag = Eqv%SetNorb(iset)
+               dimoffdiag = Eqv%SetNorb(iset)*(Eqv%SetNorb(iset)-1)/2
+               !
+               if(dimdiag.eq.1)cycle
+               if(verbose)write(*,"(3(A,I4))") "     Diagonal set: ",iset," dimD: ",int(dimdiag)," dimOD: ",int(dimoffdiag)
+               !
+               !Average elements
+               Delem=czero;Lelem=czero;Uelem=czero
+               do iorb=1,Eqv%SetNorb(iset)
+                  do jorb=1,Eqv%SetNorb(iset)
+                     !
+                     i = Eqv%SetOrbs(iset,iorb)
+                     j = Eqv%SetOrbs(iset,jorb)
+                     if(verbose)write(*,"(A,2I4)")    "     Component: ",i,j
+                     !
+                     if(i.eq.j) Delem = Delem + Mat(i,j,ispin)/dimdiag
+                     if(i.gt.j) Lelem = Lelem + Mat(i,j,ispin)/dimoffdiag
+                     if(i.lt.j) Uelem = Uelem + Mat(i,j,ispin)/dimoffdiag
+                  enddo
+               enddo
+               !Re-insert elements
+               do iorb=1,Eqv%SetNorb(iset)
+                  do jorb=1,Eqv%SetNorb(iset)
+                     !
+                     i = Eqv%SetOrbs(iset,iorb)
+                     j = Eqv%SetOrbs(iset,jorb)
+                     !
+                     if(i.eq.j) Mat(i,j,ispin) = Delem
+                     if((i.gt.j).and.Eqv%Gfoffdiag) Mat(i,j,ispin) = Lelem
+                     if((i.lt.j).and.Eqv%Gfoffdiag) Mat(i,j,ispin) = Uelem
+                  enddo
+               enddo
+               !
+            enddo !iset
+            !
+            !symmetrization of the off-diagonal sets
+            if(Eqv%Gfoffdiag)then
+               do iset=1,Eqv%Ntotset
+                  do jset=1,Eqv%Ntotset
+                     !
+                     if(iset.eq.jset)cycle
+                     dimoffdiag = Eqv%SetNorb(iset)*Eqv%SetNorb(jset)
+                     !
+                     if(verbose)write(*,"(A,2I4,A,I4)") "     Off-diagonal set: ",iset,jset," dimOD: ",int(dimoffdiag)
+                     !
+                     !Average elements
+                     Lelem=czero;Uelem=czero
+                     do iorb=1,Eqv%SetNorb(iset)
+                        do jorb=1,Eqv%SetNorb(jset)
+                           !
+                           i = Eqv%SetOrbs(iset,iorb)
+                           j = Eqv%SetOrbs(jset,jorb)
+                           if(verbose)write(*,"(A,2I4)")    "     Component: ",i,j
+                           !
+                           if(iset.gt.jset) Lelem = Lelem + Mat(i,j,ispin)/dimoffdiag
+                           if(iset.lt.jset) Uelem = Uelem + Mat(i,j,ispin)/dimoffdiag
+                        enddo
+                     enddo
+                     !Re-insert elements
+                     do iorb=1,Eqv%SetNorb(iset)
+                        do jorb=1,Eqv%SetNorb(jset)
+                           !
+                           i = Eqv%SetOrbs(iset,iorb)
+                           j = Eqv%SetOrbs(jset,jorb)
+                           !
+                           if(iset.gt.jset) Mat(i,j,ispin) = Lelem
+                           if(iset.lt.jset) Mat(i,j,ispin) = Uelem
+                        enddo
+                     enddo
+                     !
+                  enddo
+               enddo
+            endif
+            !
+         enddo !ispin
+         !
+      endif
+      !
+   end subroutine symmetrize_GW_Matrix_z
+   !
+   subroutine symmetrize_GW_Fermionic(G,Eqv)
       !
       use parameters
       implicit none
@@ -1140,11 +1260,11 @@ contains
       integer                               :: i,j,ip
       !
       !
-      if(verbose)write(*,"(A)") "---- symmetrize_Fermionic"
+      if(verbose)write(*,"(A)") "---- symmetrize_GW_Fermionic"
       !
       !
       ! Check on the input Fields
-      if(.not.G%status) stop "symmetrize_Fermionic: field not properly initialized."
+      if(.not.G%status) stop "symmetrize_GW_Fermionic: field not properly initialized."
       !
       if(Eqv%para.eq.1)then
          !
@@ -1305,10 +1425,10 @@ contains
          !
       endif
       !
-   end subroutine symmetrize_Fermionic
+   end subroutine symmetrize_GW_Fermionic
    !
    !
-   subroutine symmetrize_Bosonic(W,Eqv)
+   subroutine symmetrize_GW_Bosonic(W,Eqv)
       !
       use parameters
       implicit none
@@ -1326,11 +1446,11 @@ contains
       logical                               :: doBare
       !
       !
-      if(verbose)write(*,"(A)") "---- symmetrize_Bosonic"
+      if(verbose)write(*,"(A)") "---- symmetrize_GW_Bosonic"
       !
       !
       ! Check on the input Fields
-      if(.not.W%status) stop "symmetrize_Bosonic: field not properly initialized."
+      if(.not.W%status) stop "symmetrize_GW_Bosonic: field not properly initialized."
       Norb = sqrt(dble(W%Nbp))
       doBare = allocated(W%bare_local)
       !
@@ -1497,7 +1617,7 @@ contains
                         !
                         i = Eqv%SetOrbs(iset,iorb)
                         j = Eqv%SetOrbs(jset,jorb)
-                        if(i.eq.j) stop "symmetrize_Bosonic: different sets cannot contain the same orbital index."
+                        if(i.eq.j) stop "symmetrize_GW_Bosonic: different sets cannot contain the same orbital index."
                         !
                         ib1_ab = i + Norb*(i-1)
                         ib2_ab = j + Norb*(j-1)
@@ -1560,7 +1680,7 @@ contains
                         !
                         i = Eqv%SetOrbs(iset,iorb)
                         j = Eqv%SetOrbs(jset,jorb)
-                        if(i.eq.j) stop "symmetrize_Bosonic: different sets cannot contain the same orbital index."
+                        if(i.eq.j) stop "symmetrize_GW_Bosonic: different sets cannot contain the same orbital index."
                         !
                         ib1_ab = i + Norb*(i-1)
                         ib2_ab = j + Norb*(j-1)
@@ -1614,8 +1734,196 @@ contains
          !
       endif
       !
-   end subroutine symmetrize_Bosonic
+   end subroutine symmetrize_GW_Bosonic
 
+
+
+   !---------------------------------------------------------------------------!
+   !PURPOSE: Symmetrize the Matrix/Field with respect to some impurity indexes.
+   !         The given pattern is recognized and the GW symmetrization is called
+   !         only for diagonal indexes.
+   !---------------------------------------------------------------------------!
+   subroutine symmetrize_imp_Matrix_d(Mat,Pattern)
+      !
+      use parameters
+      use utils_misc
+      use linalg, only: diag, diagonal
+      implicit none
+      !
+      real(8),intent(inout)                 :: Mat(:,:,:)
+      real(8),intent(in)                    :: Pattern(:)
+      !
+      type(Equivalent)                      :: Eqv_diag
+      integer                               :: ispin,iset,Norb
+      !
+      !
+      if(verbose)write(*,"(A)") "---- symmetrize_imp_Matrix_d"
+      !
+      !
+      ! Check on the input Fields
+      Norb = size(Mat,dim=1)
+      call assert_shape(Mat,[Norb,Norb,Nspin],"symmetrize_imp_Matrix_d","Mat")
+      call assert_shape(Pattern,[Norb],"symmetrize_imp_Matrix_d","Mat")
+      !
+      !remove accidental off-diagonal stuff
+      do ispin=1,Nspin
+         Mat(:,:,ispin) = diag(diagonal(Mat(:,:,ispin)))
+      enddo
+      !
+      !The spin symmetrization is done in utils_main
+      Eqv_diag%para = 0
+      Eqv_diag%S = .false.
+      !
+      !The off-diagonal components are absent by constuction
+      Eqv_diag%Gfoffdiag = .false.
+      !
+      !get the equivalent sets from the input pattern
+      call get_pattern(Eqv_diag%SetOrbs,Pattern,eps)
+      Eqv_diag%Nset = size(Eqv_diag%SetOrbs,dim=1)
+      !
+      !fill in other stuff
+      if(Eqv_diag%Nset.ne.0)then
+         !
+         Eqv_diag%Ntotset = Eqv_diag%Nset
+         Eqv_diag%O = .true.
+         !
+         allocate(Eqv_diag%SetNorb(Eqv_diag%Nset))
+         do iset=1,Eqv_diag%Nset
+            Eqv_diag%SetNorb(iset) = size( pack( Eqv_diag%SetOrbs(iset,:), Eqv_diag%SetOrbs(iset,:).gt.0 ) )
+         enddo
+         !
+         !call the GW subroutine
+         call symmetrize_GW(Mat,Eqv_diag)
+         !
+      else
+         !
+         write(*,"(A)") "     Warning symmetrize_imp_Matrix_d: nothing to symmetrize from the pattern."
+         !
+      endif
+      !
+   end subroutine symmetrize_imp_Matrix_d
+   !
+   subroutine symmetrize_imp_Matrix_z(Mat,Pattern)
+      !
+      use parameters
+      use utils_misc
+      use linalg, only: diag, diagonal
+      implicit none
+      !
+      complex(8),intent(inout)              :: Mat(:,:,:)
+      real(8),intent(in)                    :: Pattern(:)
+      !
+      type(Equivalent)                      :: Eqv_diag
+      integer                               :: ispin,iset,Norb
+      !
+      !
+      if(verbose)write(*,"(A)") "---- symmetrize_imp_Matrix_z"
+      !
+      !
+      ! Check on the input Fields
+      Norb = size(Mat,dim=1)
+      call assert_shape(Mat,[Norb,Norb,Nspin],"symmetrize_imp_Matrix_z","Mat")
+      call assert_shape(Pattern,[Norb],"symmetrize_imp_Matrix_z","Mat")
+      !
+      !remove accidental off-diagonal stuff
+      do ispin=1,Nspin
+         Mat(:,:,ispin) = diag(diagonal(Mat(:,:,ispin)))
+      enddo
+      !
+      !The spin symmetrization is done in utils_main
+      Eqv_diag%para = 0
+      Eqv_diag%S = .false.
+      !
+      !The off-diagonal components are absent by constuction
+      Eqv_diag%Gfoffdiag = .false.
+      !
+      !get the equivalent sets from the input pattern
+      call get_pattern(Eqv_diag%SetOrbs,Pattern,eps)
+      Eqv_diag%Nset = size(Eqv_diag%SetOrbs,dim=1)
+      !
+      !fill in other stuff
+      if(Eqv_diag%Nset.ne.0)then
+         !
+         Eqv_diag%Ntotset = Eqv_diag%Nset
+         Eqv_diag%O = .true.
+         !
+         allocate(Eqv_diag%SetNorb(Eqv_diag%Nset))
+         do iset=1,Eqv_diag%Nset
+            Eqv_diag%SetNorb(iset) = size( pack( Eqv_diag%SetOrbs(iset,:), Eqv_diag%SetOrbs(iset,:).gt.0 ) )
+         enddo
+         !
+         !call the GW subroutine
+         call symmetrize_GW(Mat,Eqv_diag)
+         !
+      else
+         !
+         write(*,"(A)") "     Warning symmetrize_imp_Matrix_z: nothing to symmetrize from the pattern."
+         !
+      endif
+      !
+   end subroutine symmetrize_imp_Matrix_z
+   !
+   subroutine symmetrize_imp_Fermionic(G,Pattern)
+      !
+      use parameters
+      use utils_misc
+      use linalg, only: diag, diagonal
+      implicit none
+      !
+      type(FermionicField),intent(inout)    :: G
+      real(8),intent(in)                    :: Pattern(:)
+      !
+      type(Equivalent)                      :: Eqv_diag
+      integer                               :: iw,ispin,iset
+      !
+      !
+      if(verbose)write(*,"(A)") "---- symmetrize_imp_Fermionic"
+      !
+      !
+      ! Check on the input Fields
+      if(.not.G%status) stop "symmetrize_imp_Fermionic: field not properly initialized."
+      if(G%Norb.ne.size(Pattern)) stop "symmetrize_imp_Fermionic: field and pattern dimension mismatch."
+      !
+      !remove accidental off-diagonal stuff
+      do ispin=1,Nspin
+         G%N_s(:,:,ispin) = diag(diagonal(G%N_s(:,:,ispin)))
+         do iw=1,G%Npoints
+            G%ws(:,:,iw,ispin) = diag(diagonal(G%ws(:,:,iw,ispin)))
+         enddo
+      enddo
+      !
+      !The spin symmetrization is done in utils_main
+      Eqv_diag%para = 0
+      Eqv_diag%S = .false.
+      !
+      !The off-diagonal components are absent by constuction
+      Eqv_diag%Gfoffdiag = .false.
+      !
+      !get the equivalent sets from the input pattern
+      call get_pattern(Eqv_diag%SetOrbs,Pattern,eps)
+      Eqv_diag%Nset = size(Eqv_diag%SetOrbs,dim=1)
+      !
+      !fill in other stuff
+      if(Eqv_diag%Nset.ne.0)then
+         !
+         Eqv_diag%Ntotset = Eqv_diag%Nset
+         Eqv_diag%O = .true.
+         !
+         allocate(Eqv_diag%SetNorb(Eqv_diag%Nset))
+         do iset=1,Eqv_diag%Nset
+            Eqv_diag%SetNorb(iset) = size( pack( Eqv_diag%SetOrbs(iset,:), Eqv_diag%SetOrbs(iset,:).gt.0 ) )
+         enddo
+         !
+         !call the GW subroutine
+         call symmetrize_GW(G,Eqv_diag)
+         !
+      else
+         !
+         write(*,"(A)") "     Warning symmetrize_imp_Fermionic: nothing to symmetrize from the pattern."
+         !
+      endif
+      !
+   end subroutine symmetrize_imp_Fermionic
 
 
 

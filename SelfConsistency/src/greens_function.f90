@@ -101,7 +101,7 @@ contains
       use parameters
       use utils_misc
       use fourier_transforms
-      use input_vars, only : NtauF, tau_uniform
+      use input_vars, only : NtauF, tau_uniform, cmplxWann
       implicit none
       !
       type(FermionicField),intent(in)       :: Gmats
@@ -132,8 +132,14 @@ contains
       n_k=czero
       allocate(Gitau(Norb,Norb,NtauF,Nkpt));Gitau=czero
       do ispin=1,Nspin
-         call Fmats2itau_mat(Beta,Gmats%wks(:,:,:,:,ispin),Gitau, &
-         asympt_corr=.true.,tau_uniform=tau_uniform,Nkpt3=Lttc%Nkpt3,kpt=Lttc%kpt,atBeta=.true.)
+         !
+         if(cmplxWann)then
+            call Fmats2itau_mat(Beta,Gmats%wks(:,:,:,:,ispin),Gitau, &
+            asympt_corr=.true.,tau_uniform=tau_uniform,atBeta=.true.)
+         else
+            call Fmats2itau_mat(Beta,Gmats%wks(:,:,:,:,ispin),Gitau, &
+            asympt_corr=.true.,tau_uniform=tau_uniform,Nkpt3=Lttc%Nkpt3,kpt=Lttc%kpt,atBeta=.true.)
+         endif
          !
          n_k(:,:,:,ispin) = -Gitau(:,:,NtauF,:)
          !

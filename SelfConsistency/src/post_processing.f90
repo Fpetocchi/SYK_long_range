@@ -438,7 +438,8 @@ contains
             tau = linspace(0d0,Beta,Solver%NtauB)
             !
             allocate(Wft(Solver%NtauB));Wft=czero
-            call Bmats2itau(Beta,W,Wft,asympt_corr=.true.,tau_uniform=.true.)
+            call Bmats2itau(Beta,W,Wft,asympt_corr=.true.,tau_uniform=.true.,Umats_bare=W(Npoints))
+            Wft = Wft + W(Npoints)
             !
             call dump_Field_component(real(Wft),reg(dirpath),reg(filename)//"_t_("//str(ndx(1))//","//str(ndx(2))//")("//str(ndx(3))//","//str(ndx(4))//").DAT",tau)
             deallocate(Wft)
@@ -962,8 +963,5 @@ contains
       end select
       !
    end subroutine interpolate2Beta_Bosonic
-
-
-
 
 end module post_processing

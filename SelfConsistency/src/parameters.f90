@@ -111,8 +111,8 @@ module parameters
    !---------------------------------------------------------------------------!
    type Equivalent
       real(8)                               :: hseed=0d0
-      integer                               :: Nset=0
-      integer                               :: Ntotset=0
+      integer                               :: Nset=0                           !set read from the input
+      integer                               :: Ntotset=0                        !set actually used
       integer,allocatable                   :: SetNorb(:)
       integer,allocatable                   :: SetOrbs(:,:)
       logical                               :: Gfoffdiag=.true.

@@ -97,7 +97,7 @@ program SelfConsistency
       endif
       call DeallocateBosonicField(Plat)
       !
-      !Matching the lattice and impurity problems: compute curlyU
+      !Matching the lattice and impurity problems: Bosons
       if(solve_DMFT)then
          !
          do isite=1,Nsite
@@ -213,7 +213,7 @@ program SelfConsistency
          call save_InputFile("input.in")
       endif
       !
-      !Matching the lattice and impurity problems: compute Delta
+      !Matching the lattice and impurity problems: Fermions
       if(solve_DMFT)then
          !
          do isite=1,Nsite

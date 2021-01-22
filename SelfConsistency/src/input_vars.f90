@@ -102,6 +102,7 @@ module input_vars
    logical,public                           :: ExpandImpurity
    logical,public                           :: RotateHloc
    logical,public                           :: AFMselfcons
+   logical,public                           :: cmplxWann
    integer,public,allocatable               :: SiteNorb(:)
    character(len=2),public,allocatable      :: SiteName(:)
    integer,public,allocatable               :: SiteOrbs(:,:)
@@ -209,7 +210,7 @@ contains
       implicit none
       character(len=*)                      :: InputFile
       integer                               :: unit
-      integer                               :: isite,iset,iph
+      integer                               :: isite,iset,iph,NtauFguess
       integer,allocatable                   :: tmpOrbs(:)
       !
       write(LOGfile,"(A)") new_line("A")//"Reading InputFile"//new_line("A")
@@ -242,6 +243,7 @@ contains
       call parse_input_variable(ExpandImpurity,"EXPAND",InputFile,default=.false.,comment="Flag to use a single impurity solution for all the sites of the lattice. Only indexes for site 1 readed.")
       call parse_input_variable(RotateHloc,"ROTATE",InputFile,default=.false.,comment="Solve the impurity problem in the basis where H(R=0) is diagonal.")
       call parse_input_variable(AFMselfcons,"AFM",InputFile,default=.false.,comment="Flag to use  the AFM self-consistency by flipping the spin. Requires input with doubled unit cell.")
+      call parse_input_variable(cmplxWann,"CMPLX_WANN",InputFile,default=.false.,comment="Flag to assume the presence of complex Wannier function.")
       allocate(SiteNorb(Nsite));SiteNorb=0
       allocate(SiteName(Nsite))
       do isite=1,Nsite
@@ -303,7 +305,9 @@ contains
       call parse_input_variable(wmatsMax,"MAX_WMATS",InputFile,default=100.d0,comment="Maximum value of the Matsubara frequency mesh.")
       Nmats = int(Beta*wmatsMax/(2d0*pi))
       call append_to_input_list(Nmats,"NMATS","Number of points on the imaginary frequency axis. User cannot set this as its computed from MAX_WMATS and BETA.")
-      call parse_input_variable(NtauF,"NTAU_F_LAT",InputFile,default=Nmats,comment="Number of points on the imaginary time axis for Fermionic lattice fields. Its gonna be made odd.")
+      NtauFguess=Nmats
+      if(Nmats.lt.200)NtauFguess=200
+      call parse_input_variable(NtauF,"NTAU_F_LAT",InputFile,default=NtauFguess,comment="Number of points on the imaginary time axis for Fermionic lattice fields. Its gonna be made odd.")
       if(mod(NtauF,2).eq.0)NtauF=NtauF+1
       if(mod(NtauF-1,4).ne.0)NtauF=NtauF+mod(NtauF-1,4)
       NtauB = NtauF

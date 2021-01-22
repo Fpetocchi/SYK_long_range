@@ -1104,6 +1104,10 @@ contains
             !
          else
             !
+            !TEST>>>
+            if(mod(iq,123).ne.0)cycle
+            !>>>TEST
+            !
             printpath = reg(dirpath)//"VW.Q"//str(iq,4)//".DAT"
             write(*,"(A)") "     Dump "//reg(printpath)//" (readable)"
             !

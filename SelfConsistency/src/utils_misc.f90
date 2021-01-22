@@ -50,6 +50,11 @@ module utils_misc
       module procedure check_Symmetry_z
    end interface check_Symmetry
 
+   interface get_pattern
+      module procedure get_pattern_d
+      module procedure get_pattern_z
+   end interface get_pattern
+
    !---------------------------------------------------------------------------!
    !PURPOSE: Module variables
    !---------------------------------------------------------------------------!
@@ -79,6 +84,7 @@ module utils_misc
    public :: halfbeta_antisymm
    public :: nspline
    public :: splint
+   public :: get_pattern
    !functions
    public :: FermionicFreqMesh
    public :: BosonicFreqMesh
@@ -465,17 +471,18 @@ contains
    !PURPOSE: Check if matrix is Hermitian
    !TEST ON: 21-10-2020
    !---------------------------------------------------------------------------!
-   subroutine check_Hermiticity(A,tol,enforce,hardstop,name)
+   subroutine check_Hermiticity(A,tol,enforce,hardstop,name,verb)
       implicit none
       complex(8),intent(inout)              :: A(:,:)
       real(8),intent(in)                    :: tol
       logical,intent(in),optional           :: enforce
       logical,intent(in),optional           :: hardstop
       character(len=*),intent(in),optional  :: name
+      logical,intent(in),optional           :: verb
       !
       real(8)                               :: ReErr,ImErr
       real(8)                               :: percReErr,percImErr
-      logical                               :: hardstop_,enforce_
+      logical                               :: hardstop_,enforce_,verb_
       integer                               :: N,i,j
       !
       if(size(A,dim=1).ne.size(A,dim=2))stop "check_Hermiticity. Matrix not square."
@@ -485,6 +492,8 @@ contains
       if(present(hardstop))hardstop_=hardstop
       enforce_=.false.
       if(present(enforce))enforce_=enforce
+      verb_=.true.
+      if(present(verb))verb_=verb
       !
       if(enforce_)hardstop_=.false.
       !
@@ -498,26 +507,22 @@ contains
             !
             if((ReErr.gt.tol).or.(ImErr.gt.tol))then
                !
-               if(verbose.or.enforce_)then
-                  if(percReErr.gt.1e-4)then
-                     if(present(name)) write(*,"(A)") "     Non-hermitian matrix: "//reg(name)
-                     write(*,"(A,2I4,5(A,1E12.5))")   "     [i,j]:",i,j," Re(A_ij): ",real(A(i,j)) ," Re(A_ji): ",real(A(j,i)) ," err: ",ReErr," %err: ",percReErr," > ",tol
-                  endif
-                  if(percImErr.gt.1e-4)then
-                     if(present(name)) write(*,"(A)") "     Non-hermitian matrix: "//reg(name)
-                     write(*,"(A,2I4,5(A,1E12.5))")   "     [i,j]:",i,j," Im(A_ij): ",aimag(A(i,j))," Im(A_ji): ",aimag(A(j,i))," err: ",ImErr," %err: ",percImErr," > ",tol
-                  endif
+               if((ReErr.gt.tol).and.verb_)then
+                  if(present(name)) write(*,"(A)") "     Non-hermitian matrix: "//reg(name)
+                  write(*,"(A,2I4,5(A,1E12.5))")   "     [i,j]:",i,j," Re(A_ij): ",real(A(i,j)) ," Re(A_ji): ",real(A(j,i)) ," err: ",ReErr," %err: ",percReErr," > ",tol
+               endif
+               if((ImErr.gt.tol).and.verb_)then
+                  if(present(name)) write(*,"(A)") "     Non-hermitian matrix: "//reg(name)
+                  write(*,"(A,2I4,5(A,1E12.5))")   "     [i,j]:",i,j," Im(A_ij): ",aimag(A(i,j))," Im(A_ji): ",aimag(A(j,i))," err: ",ImErr," %err: ",percImErr," > ",tol
                endif
                !
-               if(hardstop_)stop
+               if(hardstop_)stop  "check_Hermiticity: Matrix not Hermitian."
                !
-               if(enforce_)then
-                  !
-                  A(i,j) = (A(i,j)+conjg(A(j,i)))/2d0
-                  A(j,i) = conjg(A(i,j))
-                  !
-               endif
-               !
+            endif
+            !
+            if(enforce_)then
+               A(i,j) = (A(i,j)+conjg(A(j,i)))/2d0
+               A(j,i) = conjg(A(i,j))
             endif
             !
          enddo
@@ -529,16 +534,17 @@ contains
    !---------------------------------------------------------------------------!
    !PURPOSE: Check if matrix is Symmetric
    !---------------------------------------------------------------------------!
-   subroutine check_Symmetry_d(A,tol,enforce,hardstop,name)
+   subroutine check_Symmetry_d(A,tol,enforce,hardstop,name,verb)
       implicit none
       real(8),intent(inout)                 :: A(:,:)
       real(8),intent(in)                    :: tol
       logical,intent(in),optional           :: enforce
       logical,intent(in),optional           :: hardstop
       character(len=*),intent(in),optional  :: name
+      logical,intent(in),optional           :: verb
       !
       real(8)                               :: ReErr,percReErr
-      logical                               :: hardstop_,enforce_
+      logical                               :: hardstop_,enforce_,verb_
       integer                               :: N,i,j
       !
       if(size(A,dim=1).ne.size(A,dim=2))stop "check_Symmetry_d. Matrix not square."
@@ -548,6 +554,8 @@ contains
       if(present(hardstop))hardstop_=hardstop
       enforce_=.false.
       if(present(enforce))enforce_=enforce
+      verb_=.true.
+      if(present(verb))verb_=verb
       !
       if(enforce_)hardstop_=.false.
       !
@@ -559,22 +567,18 @@ contains
             !
             if(ReErr.gt.tol)then
                !
-               if(verbose.or.enforce_)then
-                  if(percReErr.gt.1e-4)then
-                     if(present(name)) write(*,"(A)") "     Non-symmetric matrix: "//reg(name)
-                     write(*,"(A,2I4,5(A,1E12.5))")   "     [i,j]:",i,j," Re(A_ij): ",A(i,j)," Re(A_ji): ",A(j,i)," err: ",ReErr," %err: ",percReErr," > ",tol
-                  endif
+               if(verb_)then
+                  if(present(name)) write(*,"(A)") "     Non-symmetric matrix: "//reg(name)
+                  write(*,"(A,2I4,5(A,1E12.5))")   "     [i,j]:",i,j," Re(A_ij): ",A(i,j)," Re(A_ji): ",A(j,i)," err: ",ReErr," %err: ",percReErr," > ",tol
                endif
                !
-               if(hardstop_)stop
+               if(hardstop_)stop "check_Symmetry_d: Matrix not symmatric."
                !
-               if(enforce_)then
-                  !
-                  A(i,j) = (A(i,j)+A(j,i))/2d0
-                  A(j,i) = A(i,j)
-                  !
-               endif
-               !
+            endif
+            !
+            if(enforce_)then
+               A(i,j) = (A(i,j)+A(j,i))/2d0
+               A(j,i) = A(i,j)
             endif
             !
          enddo
@@ -582,26 +586,29 @@ contains
       !
    end subroutine check_Symmetry_d
    !
-   subroutine check_Symmetry_z(A,tol,enforce,hardstop,name)
+   subroutine check_Symmetry_z(A,tol,enforce,hardstop,name,verb)
       implicit none
       complex(8),intent(inout)              :: A(:,:)
       real(8),intent(in)                    :: tol
       logical,intent(in),optional           :: enforce
       logical,intent(in),optional           :: hardstop
       character(len=*),intent(in),optional  :: name
+      logical,intent(in),optional           :: verb
       !
       real(8)                               :: ReErr,ImErr
       real(8)                               :: percReErr,percImErr
-      logical                               :: hardstop_,enforce_
+      logical                               :: hardstop_,enforce_,verb_
       integer                               :: N,i,j
       !
-      if(size(A,dim=1).ne.size(A,dim=2))stop "check_Symmetry_z. Matrix not square."
+      if(size(A,dim=1).ne.size(A,dim=2))stop "check_Symmetry_z: Matrix not square."
       N=size(A,dim=1)
       !
       hardstop_=.true.
       if(present(hardstop))hardstop_=hardstop
       enforce_=.false.
       if(present(enforce))enforce_=enforce
+      verb_=.true.
+      if(present(verb))verb_=verb
       !
       if(enforce_)hardstop_=.false.
       !
@@ -615,32 +622,168 @@ contains
             !
             if((ReErr.gt.tol).or.(ImErr.gt.tol))then
                !
-               if(verbose.or.enforce_)then
-                  if(percReErr.gt.1e-4)then
-                     if(present(name)) write(*,"(A)") "     Non-symmetric matrix: "//reg(name)
-                     write(*,"(A,2I4,5(A,1E12.5))")   "     [i,j]:",i,j," Re(A_ij): ",real(A(i,j)) ," Re(A_ji): ",real(A(j,i)) ," err: ",ReErr," %err: ",percReErr," > ",tol
-                  endif
-                  if(percImErr.gt.1e-4)then
-                     if(present(name)) write(*,"(A)") "     Non-symmetric matrix: "//reg(name)
-                     write(*,"(A,2I4,5(A,1E12.5))")   "     [i,j]:",i,j," Im(A_ij): ",aimag(A(i,j))," Im(A_ji): ",aimag(A(j,i))," err: ",ImErr," %err: ",percImErr," > ",tol
-                  endif
+               if((ReErr.gt.tol).and.verb_)then
+                  if(present(name)) write(*,"(A)") "     Non-symmetric matrix: "//reg(name)
+                  write(*,"(A,2I4,5(A,1E12.5))")   "     [i,j]:",i,j," Re(A_ij): ",real(A(i,j)) ," Re(A_ji): ",real(A(j,i)) ," err: ",ReErr," %err: ",percReErr," > ",tol
+               endif
+               if((ImErr.gt.tol).and.verb_)then
+                  if(present(name)) write(*,"(A)") "     Non-symmetric matrix: "//reg(name)
+                  write(*,"(A,2I4,5(A,1E12.5))")   "     [i,j]:",i,j," Im(A_ij): ",aimag(A(i,j))," Im(A_ji): ",aimag(A(j,i))," err: ",ImErr," %err: ",percImErr," > ",tol
                endif
                !
-               if(hardstop_)stop
+               if(hardstop_)stop "check_Symmetry_z: Matrix not symmatric."
                !
-               if(enforce_)then
-                  !
-                  A(i,j) = (A(i,j)+A(j,i))/2d0
-                  A(j,i) = A(i,j)
-                  !
-               endif
-               !
+            endif
+            !
+            if(enforce_)then
+               A(i,j) = (A(i,j)+A(j,i))/2d0
+               A(j,i) = A(i,j)
             endif
             !
          enddo
       enddo
       !
    end subroutine check_Symmetry_z
+
+
+   !---------------------------------------------------------------------------!
+   !PURPOSE: Deduce simmetrical indexes in a vector.
+   !---------------------------------------------------------------------------!
+   subroutine get_pattern_d(list,pattern,tol)
+      implicit none
+      integer,allocatable,intent(out)       :: list(:,:)
+      real(8),intent(in)                    :: pattern(:)
+      real(8),intent(in)                    :: tol
+      integer                               :: Nel,iel,jel,iset
+      integer                               :: maxLen,Nset,Neqv
+      integer,allocatable                   :: actRow(:),prvRow(:)
+      !
+      Nel = size(pattern)
+      !
+      maxLen = 1
+      Nset = Nel
+      allocate(actRow(Nel));actRow=0
+      allocate(prvRow(Nel));prvRow=0
+      do iel=1,Nel
+         !
+         !previous row
+         if(iel.gt.1) prvRow = actRow
+         !
+         !actual row
+         actRow=0
+         do jel=1,Nel
+            if(abs(pattern(iel)-pattern(jel)).lt.tol) actRow(jel) = jel
+         enddo
+         !
+         Neqv = size( pack( actRow, actRow.gt.0 ) )
+         !
+         if(Neqv.gt.maxLen) maxLen = Neqv
+         if(Neqv.eq.1) Nset = Nset - 1
+         if((iel.gt.1).and.all(actRow.eq.prvRow)) Nset = Nset - 1
+         !
+      enddo
+      !
+      if(Nset.eq.0) return
+      !
+      if(allocated(list)) deallocate(list)
+      allocate(list(Nset,maxLen));list=0
+      !
+      iset=0
+      do iel=1,Nel
+         !
+         !previous row
+         if(iel.gt.1) prvRow = actRow
+         !
+         !actual row
+         actRow=0
+         do jel=1,Nel
+            if(abs(pattern(iel)-pattern(jel)).lt.tol) actRow(jel) = jel
+         enddo
+         !
+         Neqv = size( pack( actRow, actRow.gt.0 ) )
+         !
+         if(Neqv.gt.1)then
+            if(iset.eq.0)then
+               iset = iset + 1
+               list(iset,1:Neqv) = pack( actRow, actRow.gt.0 )
+            elseif((iset.ge.1).and.all(actRow.ne.prvRow))then
+               iset = iset + 1
+               list(iset,1:Neqv) = pack( actRow, actRow.gt.0 )
+            endif
+         endif
+         !
+      enddo
+      deallocate(actRow,prvRow)
+      !
+   end subroutine get_pattern_d
+   !
+   subroutine get_pattern_z(list,pattern,tol)
+      implicit none
+      integer,allocatable,intent(out)       :: list(:,:)
+      complex(8),intent(in)                 :: pattern(:)
+      real(8),intent(in)                    :: tol
+      integer                               :: Nel,iel,jel,iset
+      integer                               :: maxLen,Nset,Neqv
+      integer,allocatable                   :: actRow(:),prvRow(:)
+      !
+      Nel = size(pattern)
+      !
+      maxLen = 1
+      Nset = Nel
+      allocate(actRow(Nel));actRow=0
+      allocate(prvRow(Nel));prvRow=0
+      do iel=1,Nel
+         !
+         !previous row
+         if(iel.gt.1) prvRow = actRow
+         !
+         !actual row
+         actRow=0
+         do jel=1,Nel
+            if(abs(pattern(iel)-pattern(jel)).lt.tol) actRow(jel) = jel
+         enddo
+         !
+         Neqv = size( pack( actRow, actRow.gt.0 ) )
+         !
+         if(Neqv.gt.maxLen) maxLen = Neqv
+         if(Neqv.eq.1) Nset = Nset - 1
+         if((iel.gt.1).and.all(actRow.eq.prvRow)) Nset = Nset - 1
+         !
+      enddo
+      !
+      if(Nset.eq.0) return
+      !
+      if(allocated(list)) deallocate(list)
+      allocate(list(Nset,maxLen));list=0
+      !
+      iset=0
+      do iel=1,Nel
+         !
+         !previous row
+         if(iel.gt.1) prvRow = actRow
+         !
+         !actual row
+         actRow=0
+         do jel=1,Nel
+            if(abs(pattern(iel)-pattern(jel)).lt.tol) actRow(jel) = jel
+         enddo
+         !
+         Neqv = size( pack( actRow, actRow.gt.0 ) )
+         !
+         if(Neqv.gt.1)then
+            if(iset.eq.0)then
+               iset = iset + 1
+               list(iset,1:Neqv) = pack( actRow, actRow.gt.0 )
+            elseif((iset.ge.1).and.all(actRow.ne.prvRow))then
+               iset = iset + 1
+               list(iset,1:Neqv) = pack( actRow, actRow.gt.0 )
+            endif
+         endif
+         !
+      enddo
+      deallocate(actRow,prvRow)
+      !
+   end subroutine get_pattern_z
 
 
    !---------------------------------------------------------------------------!

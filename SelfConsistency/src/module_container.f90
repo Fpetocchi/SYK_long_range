@@ -26,7 +26,8 @@ module module_container
    halfbeta_symm                            ,&
    halfbeta_antisymm                        ,&
    assert_shape                             ,&
-   splint,nspline,cubic_interp
+   splint,nspline,cubic_interp              ,&
+   get_pattern
 
 
    !(c) Lattice related quantities. Depends on (a),(b) not on specific types.
@@ -72,7 +73,8 @@ module module_container
    isReal                                   ,&
    duplicate                                ,&
    loc2imp,imp2loc                          ,&
-   symmetrize                               ,&
+   symmetrize_GW                            ,&
+   symmetrize_imp                           ,&
    MergeFields                              ,&
    join_SigmaCX
 
@@ -112,7 +114,7 @@ module module_container
    calc_QMCinteractions
 
 
-   !(m) Bubble diagram container. Depends on (b),(c),(d),(e),(f),(g),(h)
+   !(m) Bubble diagram container. Depends on (a),(b),(c),(d),(e),(f),(g),(h)
    use bubbles, only:                        &
    calc_Pi                                  ,&
    calc_Pimp

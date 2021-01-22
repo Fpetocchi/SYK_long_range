@@ -176,31 +176,33 @@ contains
    !PURPOSE: Computes polarization bubble from the interacting Gf
    !TEST ON: 21-10-2020
    !---------------------------------------------------------------------------!
-   subroutine calc_Pi_scGG(Pout,Gmats,Lttc,tau_output)
+   subroutine calc_Pi_scGG(Pout,Gmats,Lttc,tau_output,sym)
       !
       use parameters
+      use linalg
       use utils_misc
       use utils_fields
       use fourier_transforms
       use crystal
       use fourier_transforms
       use file_io
-      use input_vars, only : NtauB, tau_uniform !,pathDATA
+      use input_vars, only : NtauB, tau_uniform, cmplxWann
       implicit none
       !
       type(BosonicField),intent(inout)      :: Pout
       type(FermionicField),intent(in)       :: Gmats
       type(Lattice),intent(in)              :: Lttc
       logical,intent(in),optional           :: tau_output
+      logical,intent(in),optional           :: sym
       !
       complex(8),allocatable                :: Gitau(:,:,:,:,:)
       complex(8),allocatable                :: Pq_tau(:,:,:)
       real(8),allocatable                   :: tau(:)
       real(8)                               :: Beta,tau2
       integer                               :: Nbp,Nkpt,Norb,Ntau_,NaxisB
-      integer                               :: ik1,ik2,iq,itau,ispin
+      integer                               :: ik1,ik2,iq,itau,ispin,ip
       integer                               :: m,n,mp,np,ib1,ib2
-      logical                               :: tau_output_
+      logical                               :: tau_output_,sym_
       real                                  :: start,finish
       !
       !
@@ -224,6 +226,9 @@ contains
       if(Gmats%Nkpt.ne.Nkpt) stop "Pout and Green's function have different number of Kpoints."
       if(.not.allocated(Lttc%kptdif)) stop "kptdif not allocated."
       !
+      sym_=.true.
+      if(present(sym))sym_=sym
+      !
       tau_output_=.false.
       if(present(tau_output)) tau_output_ = tau_output
       Ntau_ = NtauB
@@ -236,12 +241,24 @@ contains
          tau = denspace(beta,Ntau_)
       endif
       !
+      ! Compute Glat(k,tau)
+      call cpu_time(start)
       allocate(Gitau(Norb,Norb,Ntau_,Nkpt,Nspin));Gitau=czero
-      do ispin=1,Nspin
-         call Fmats2itau_mat(Beta,Gmats%wks(:,:,:,:,ispin),Gitau(:,:,:,:,ispin), &
-         asympt_corr=.true.,tau_uniform=tau_uniform,nkpt3=Lttc%Nkpt3,kpt=Lttc%kpt)
-      enddo
+      if(cmplxWann)then
+         do ispin=1,Nspin
+            call Fmats2itau_mat(Beta,Gmats%wks(:,:,:,:,ispin),Gitau(:,:,:,:,ispin), &
+            asympt_corr=.true.,tau_uniform=tau_uniform)
+         enddo
+      else
+         do ispin=1,Nspin
+            call Fmats2itau_mat(Beta,Gmats%wks(:,:,:,:,ispin),Gitau(:,:,:,:,ispin), &
+            asympt_corr=.true.,tau_uniform=tau_uniform,nkpt3=Lttc%Nkpt3,kpt=Lttc%kpt)
+         enddo
+      endif
+      call cpu_time(finish)
+      write(*,"(A,F)") "     Glat(k,iw) --> Glat(k,tau) cpu timing:", finish-start
       !
+      ! Compute the bubble
       allocate(Pq_tau(Nbp,Nbp,Ntau_))
       call clear_attributes(Pout)
       do iq=1,Nkpt
@@ -282,21 +299,42 @@ contains
          !$OMP END DO
          !$OMP END PARALLEL
          !
+         !FT to matsubara
          if(tau_output_)then
             Pout%screened(:,:,:,iq) = Pq_tau
          else
             call Bitau2mats(Beta,Pq_tau,Pout%screened(:,:,:,iq),tau_uniform=tau_uniform)
          endif
          !
-         if(verbose)print *, "     PiGGsc(q,iw) - done iq: ",iq
+         !Hermiticity check
+         if(sym_)then
+            do ip=1,NaxisB
+               call check_Hermiticity(Pout%screened(:,:,ip,iq),eps,enforce=.true.,hardstop=.false.,name="Plat_w"//str(ip)//"_q"//str(iq),verb=verbose)
+            enddo
+         endif
+         !
+         if(verbose) write(*,"(A,I)") "     PiGGsc(q,iw) - done iq: ",iq
          !
       enddo !iq
       deallocate(tau,Gitau,Pq_tau)
       !
+      ! Fill the local attributes
       call BosonicKsum(Pout)
+      !
+      ! Check if the screened limit is locally symmetric
+      if(sym_)then
+         write(*,"(A)") "     Checking hermiticity of local Plat."
+         do ip=1,NaxisB
+            call check_Hermiticity(Pout%screened_local(:,:,ip),eps,enforce=.false.,hardstop=.false.,name="Plat_w"//str(ip))
+         enddo
+      endif
       !
       call cpu_time(finish)
       write(*,"(A,F)") "     PiGGsc cpu timing: ", finish-start
+      !
+      !TEST>>>
+      call dump_BosonicField(Pout,"./Plat_readable/",.false.)
+      !>>>TEST
       !
    end subroutine calc_Pi_scGG
 
@@ -376,6 +414,7 @@ contains
       call isReal(Pimp)
       !
       if(sym_)then
+         write(*,"(A)") "     Checking symmetry of Pimp (enforced)."
          do iw=1,Nmats
             call check_Symmetry(Pimp%screened_local(:,:,iw),eps,enforce=.true.,hardstop=.false.,name="Pimp_w"//str(iw))
          enddo
