@@ -257,7 +257,7 @@ contains
             Wmats%screened(:,:,iw,iq) = matmul(invW,Umats%screened(:,:,iw,iq))
             !
             !Hermiticity check
-            if(sym_) call check_Hermiticity(Wmats%screened(:,:,iw,iq),eps,enforce=.true.,hardstop=.false.,name="Wlat_w"//str(iw)//"_q"//str(iq),verb=verbose)
+            if(sym_) call check_Hermiticity(Wmats%screened(:,:,iw,iq),eps,enforce=.true.,hardstop=.false.,name="Wlat_w"//str(iw)//"_q"//str(iq))!,verb=verbose)
             !
             !store the dielectric function around the Gamma point
             if(HandleGammaPoint)then
@@ -298,7 +298,7 @@ contains
          !Fill the Gamma point value - element not included in the iq loop
          do iw=1,Nmats
             Wmats%screened(:,:,iw,Umats%iq_gamma) = matmul(den_smallk_avrg(:,:,iw),Umats%screened(:,:,iw,Umats%iq_gamma))
-            if(sym_) call check_Hermiticity(Wmats%screened(:,:,iw,Umats%iq_gamma),eps,enforce=.true.,hardstop=.false.,name="Wlat_w"//str(iw)//"_q"//str(Umats%iq_gamma),verb=verbose)
+            if(sym_) call check_Hermiticity(Wmats%screened(:,:,iw,Umats%iq_gamma),eps,enforce=.true.,hardstop=.false.,name="Wlat_w"//str(iw)//"_q"//str(Umats%iq_gamma))!,verb=verbose
          enddo
          !
          deallocate(den_smallk,den_smallk_avrg)
@@ -313,13 +313,11 @@ contains
       if(sym_)then
          write(*,"(A)") "     Checking hermiticity of local Wlat (enforced)."
          do iw=1,Nmats
-            call check_Hermiticity(Wmats%screened_local(:,:,iw),eps,enforce=.true.,hardstop=.false.,name="Wlat_w"//str(iw))!,verb=verbose)  <<<TEST>>>
+            call check_Hermiticity(Wmats%screened_local(:,:,iw),eps,enforce=.true.,hardstop=.false.,name="Wlat_w"//str(iw))!,verb=verbose)
          enddo
       endif
+      !call dump_BosonicField(Wmats,"./Wlat_readable/",.false.)
       !
-      !TEST>>>
-      call dump_BosonicField(Wmats,"./Wlat_readable/",.false.)
-      !>>>TEST
    end subroutine calc_W_full
 
 
@@ -456,16 +454,15 @@ contains
       endif
       deallocate(invW)
       !
+      ! Check if the screened limit is locally symmetric
       if(sym_)then
-         write(*,"(A)") "     Checking symmetry of local Wlat."
+         write(*,"(A)") "     Checking hermiticity of local Wlat (enforced)."
          do iw=1,Nmats
-            call check_Symmetry(Wmats%screened_local(:,:,iw),1e3*eps,enforce=.false.,hardstop=.false.,name="Wlat_w"//str(iw))
+            call check_Hermiticity(Wmats%screened_local(:,:,iw),eps,enforce=.true.,hardstop=.false.,name="Wlat_w"//str(iw))!,verb=verbose)
          enddo
       endif
+      !call dump_BosonicField(Wmats,"./Wlat_readable/",.false.)
       !
-      !TEST>>>
-      call dump_BosonicField(Wmats,"./Wlat_readable/",.false.)
-      !>>>TEST
    end subroutine calc_W_edmft
 
 
@@ -782,9 +779,6 @@ contains
          call dump_BosonicField(Ureal,reg(pathOUTPUT_),"Uloc_real.DAT",wread)
          if((.not.LocalOnly).and.save2readable) call dump_BosonicField(Ureal,reg(pathOUTPUT_)//"VW_real_readable/",.not.save2readable)
          !
-         !TEST>>>
-         call dump_BosonicField(Ureal,reg(pathOUTPUT_)//"VW_real_readable/",.false.)
-         !>>>TEST
          !
          if(LocalOnly)then
             !
@@ -960,11 +954,6 @@ contains
                !
             enddo
          enddo
-         !
-         !TEST>>>
-         call dump_BosonicField(Umats,reg(pathOUTPUT_),"Uloc_mats.DAT")
-         call dump_BosonicField(Umats,reg(pathOUTPUT_)//"VW_imag_readable/",.false.)
-         !>>>TEST
          !
          ! Print out the transformed Ucrpa
          write(*,"(A)")
@@ -1839,7 +1828,7 @@ contains
    !PURPOSE: Computes the local effective interaction
    !TEST ON:
    !---------------------------------------------------------------------------!
-   subroutine calc_curlyU(curlyU,Wimp,Pimp,sym)
+   subroutine calc_curlyU(curlyU,Wimp,Pimp,sym,curlyUcorr)
       !
       use parameters
       use utils_fields
@@ -1851,6 +1840,7 @@ contains
       type(BosonicField),intent(in)         :: Wimp
       type(BosonicField),intent(in)         :: Pimp
       logical,intent(in),optional           :: sym
+      type(BosonicField),intent(in),optional:: curlyUcorr
       !
       complex(8),allocatable                :: invW(:,:)
       real(8)                               :: Beta
@@ -1869,6 +1859,7 @@ contains
       if(curlyU%Nkpt.ne.0) stop "curlyU k dependent attributes are supposed to be unallocated."
       if(Wimp%Nkpt.ne.0) stop "Wimp k dependent attributes are supposed to be unallocated."
       if(Pimp%Nkpt.ne.0) stop "Pimp k dependent attributes are supposed to be unallocated."
+      if(present(curlyUcorr).and.(.not.curlyUcorr%status)) stop "Requested causality correction but curlyUcorr not properly initialized."
       !
       sym_=.true.
       if(present(sym))sym_=sym
@@ -1879,7 +1870,13 @@ contains
       !
       if(all([Wimp%Nbp-Nbp,Pimp%Nbp-Nbp].ne.[0,0])) stop "Either Wimp and/or Pimp have different orbital dimension with respect to curlyU."
       if(all([Wimp%Beta-Beta,Pimp%Beta-Beta].ne.[0d0,0d0])) stop "Either Wimp and/or Pimp have different Beta with respect to curlyU."
-      if(all([Wimp%Npoints-Nmats,Pimp%Npoints-Nmats].ne.[0,0]))   stop "Either Wimp and/or Pimp have different number of Matsubara points with respect to curlyU."
+      if(all([Wimp%Npoints-Nmats,Pimp%Npoints-Nmats].ne.[0,0])) stop "Either Wimp and/or Pimp have different number of Matsubara points with respect to curlyU."
+      if(present(curlyUcorr))then
+         if(Nbp.ne.curlyUcorr%Nbp) stop "curlyUcorr has different orbital dimension with respect to curlyU."
+         if(Beta.ne.curlyUcorr%Beta) stop "curlyUcorr has different Beta with respect to curlyU."
+         if(Nmats.ne.curlyUcorr%Npoints) stop "curlyUcorr has different number of Matsubara points with respect to curlyU."
+         if(curlyUcorr%Nkpt.ne.0) stop "curlyUcorr k dependent attributes are supposed to be unallocated."
+      endif
       !
       call clear_attributes(curlyU)
       !
@@ -1900,6 +1897,16 @@ contains
       !$OMP END DO
       !$OMP END PARALLEL
       deallocate(invW)
+      !
+      !Causality correction
+      if(present(curlyUcorr))then
+         do iw=1,curlyU%Npoints
+            !
+            curlyU%screened_local(:,:,iw) = curlyU%screened_local(:,:,iw) - curlyUcorr%screened_local(:,:,iw)
+            !
+         enddo
+      endif
+      !
       call isReal(curlyU)
       !
       if(sym_)then

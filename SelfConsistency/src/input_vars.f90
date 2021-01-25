@@ -129,6 +129,7 @@ module input_vars
    logical,public                           :: UfullStructure
    logical,public                           :: Umodel
    logical,public                           :: Uspex
+   logical,public                           :: Ustart
    logical,public                           :: U_AC
    real(8),public                           :: Uthresh
    integer,public                           :: Nphonons
@@ -139,7 +140,7 @@ module input_vars
    real(8),public                           :: J
    logical,public                           :: Kdiag
    !
-   !Double counting types, divergencies, scaling coefficients
+   !Double counting types, divergencies, scaling and self-consistency coefficients
    character(len=256),public                :: VH_type
    character(len=256),public                :: DC_type
    logical,public                           :: Sigma_AC
@@ -150,6 +151,10 @@ module input_vars
    real(8),public                           :: alphaHk
    logical,public                           :: removeCDW_C
    logical,public                           :: removeCDW_P
+   real(8),public                           :: Mixing_Delta
+   real(8),public                           :: Mixing_curlyU
+   logical,public                           :: causal_D
+   logical,public                           :: causal_U
    !
    !Variables for the fit on Delta, Gimp, Simp
    character(len=256),public                :: DeltaFit
@@ -164,8 +169,6 @@ module input_vars
    character(len=256),public                :: pathINPUTtr
    character(len=256),public                :: pathDATA
    integer,public                           :: LOGfile
-   real(8),public                           :: Mixing_Delta
-   real(8),public                           :: Mixing_curlyU
    logical,public                           :: skipLattice
    logical,public                           :: dump_Gk
    logical,public                           :: dump_Sigmak
@@ -178,8 +181,6 @@ module input_vars
    logical,public                           :: XEPSisread=.false.
    logical,public                           :: solve_DMFT=.true.
    logical,public                           :: bosonicSC=.false.
-   !Once the it=0 problem is solved this can be chosen by the user
-   logical,public                           :: Ustart=.true.
    !
    !Variables for the matching beta
    type(OldBeta),public                     :: Beta_Match
@@ -333,6 +334,7 @@ contains
       call parse_input_variable(UfullStructure,"U_FULL",InputFile,default=.true.,comment="Flag to use all the off-diagonal components of SPEX Ucrpa or only the physical ones.")
       call parse_input_variable(Umodel,"U_MODEL",InputFile,default=.false.,comment="Flag to build the screening from user chosen phononic modes.")
       call parse_input_variable(Uspex,"U_SPEX",InputFile,default=.true.,comment="Flag to read SPEX Ucrpa.")
+      call parse_input_variable(Ustart,"U_START",InputFile,default=.true.,comment="Flag to use the local Ucrpa interaction as the effetive interaction in the 0th iteration.")
       call parse_input_variable(U_AC,"U_AC",InputFile,default=.false.,comment="Flag to force the analytic continuation on the SPEX interaction.")
       call parse_input_variable(Uthresh,"U_THRES",InputFile,default=0.001d0,comment="Lowest magnitude considered in SPEX Ucrpa bare interaction (only for local interactions).")
       call parse_input_variable(Kdiag,"K_DIAG",InputFile,default=.false.,comment="Flag to use only one J-independent screening function.")
@@ -362,6 +364,12 @@ contains
       call parse_input_variable(alphaHk,"ALPHA_HK",InputFile,default=1d0,comment="Rescaling of the non-interacting Hamiltonian.")
       call parse_input_variable(removeCDW_C,"CDW_CHI",InputFile,default=.false.,comment="Flag to remove the iw=0 divergence in the local charge susceptibility.")
       call parse_input_variable(removeCDW_P,"CDW_PI",InputFile,default=.false.,comment="Flag to remove the iw=0 divergence in the local polarization.")
+      call parse_input_variable(Mixing_Delta,"MIX_D",InputFile,default=0.5d0,comment="Fraction of the old iteration Delta.")
+      call parse_input_variable(Mixing_curlyU,"MIX_U",InputFile,default=0.5d0,comment="Fraction of the old iteration curlyU.")
+      call parse_input_variable(causal_D,"CAUSAL_D",InputFile,default=.false.,comment="Flag to employ generalized cavity equation for Delta. Active only for GW+EDMFT calculation.")
+      if(reg(CalculationType).ne."GW+EDMFT")causal_D=.false.
+      call parse_input_variable(causal_U,"CAUSAL_U",InputFile,default=.false.,comment="Flag to employ generalized cavity equation for curlyU. Active only for GW+EDMFT calculation.")
+      if(reg(CalculationType).ne."GW+EDMFT")causal_U=.false.
       !
       !Variables for the fit
       call parse_input_variable(DeltaFit,"DELTA_FIT",InputFile,default="Analytic",comment="Fit to extract the local energy in GW+EDMFT calculations. Available: Inf, Analytic, Moments.")
@@ -376,8 +384,7 @@ contains
       call parse_input_variable(FirstIteration,"START_IT",InputFile,default=0,comment="First iteration. If its non zero the code will look for the last item in PATH_DATA/item and start there.")
       call parse_input_variable(LastIteration,"LAST_IT",InputFile,default=100,comment="Last iteration.")
       call parse_input_variable(LOGfile,"LOGFILE",InputFile,default=6,comment="Standard output redirection unit. Use 6 to print to terminal. Not used yet.")
-      call parse_input_variable(Mixing_Delta,"MIX_D",InputFile,default=0.5d0,comment="Fraction of the old iteration Delta.")
-      call parse_input_variable(Mixing_curlyU,"MIX_U",InputFile,default=0.5d0,comment="Fraction of the old iteration curlyU.")
+
       call parse_input_variable(skipLattice,"SKIP_LATT",InputFile,default=.false.,comment="Skip the lattice summation and assuming good the existing Gloc and Wloc. Not used yet.")
       call parse_input_variable(dump_Gk,"PRINT_GK",InputFile,default=.false.,comment="Print the full k-dependent Green's function (binfmt) at each iteration (mandatory for CALC_TYPE=G0W0,scGW,GW+EDMFT).")
       if(reg(CalculationType).eq."G0W0")dump_Gk=.true.

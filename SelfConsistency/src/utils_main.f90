@@ -45,12 +45,14 @@ module utils_main
    type(BosonicField)                       :: Wlat
    type(BosonicField)                       :: W_EDMFT
    !
-   type(BosonicField)                       :: curlyU_EDMFT
-   !
    type(BosonicField)                       :: Ulat
    type(BosonicField)                       :: Plat
    type(BosonicField)                       :: P_EDMFT
    type(BosonicField)                       :: C_EDMFT
+   type(BosonicField)                       :: curlyU_EDMFT
+   !
+   type(FermionicField)                     :: D_correction
+   type(BosonicField)                       :: curlyU_correction
    !
    real(8)                                  :: density2set
    complex(8),allocatable                   :: densityLDA(:,:,:)
@@ -618,7 +620,7 @@ contains
             call AllocateBosonicField(Wlat,Crystal%Norb,Nmats,Crystal%iq_gamma,Nkpt=Crystal%Nkpt,Nsite=Nsite,Beta=Beta)
             !
             !Polarization
-            call AllocateBosonicField(Plat,Crystal%Norb,Nmats,Crystal%iq_gamma,Nsite=Nsite,no_bare=.false.,Beta=Beta)
+            call AllocateBosonicField(Plat,Crystal%Norb,Nmats,Crystal%iq_gamma,Nsite=Nsite,no_bare=.true.,Beta=Beta)
             !
             !Lattice Gf
             call AllocateFermionicField(Glat,Crystal%Norb,Nmats,Nkpt=Crystal%Nkpt,Nsite=Nsite,Beta=Beta)
@@ -707,7 +709,12 @@ contains
             endif
             !
             !Fully screened interaction
-            call AllocateBosonicField(Wlat,Crystal%Norb,Nmats,Crystal%iq_gamma,Nkpt=0,Nsite=Nsite,Beta=Beta)
+            if((ItStart.eq.0).and.(.not.Ustart))then
+               call AllocateBosonicField(Plat,Crystal%Norb,Nmats,Crystal%iq_gamma,Nkpt=Crystal%Nkpt,Nsite=Nsite,no_bare=.true.,Beta=Beta)
+               call AllocateBosonicField(Wlat,Crystal%Norb,Nmats,Crystal%iq_gamma,Nkpt=Crystal%Nkpt,Nsite=Nsite,Beta=Beta)
+            else
+               call AllocateBosonicField(Wlat,Crystal%Norb,Nmats,Crystal%iq_gamma,Nkpt=0,Nsite=Nsite,Beta=Beta)
+            endif
             !
             !Polarization
             call AllocateBosonicField(P_EDMFT,Crystal%Norb,Nmats,Crystal%iq_gamma,Nsite=Nsite,no_bare=.true.,Beta=Beta)
@@ -731,7 +738,14 @@ contains
             call calc_density(Glat,Glat%N_s)
             !
             !Logical Flags
-            calc_Wedmft = ( ItStart.ne.0 )
+            if(ItStart.eq.0)then
+               if(.not.Ustart)then
+                  calc_Pk = .true.
+                  calc_Wfull = .true.
+               endif
+            else
+               calc_Wedmft = .true.
+            endif
             !
          case("GW+EDMFT")
             !
@@ -990,6 +1004,120 @@ contains
 
 
    !---------------------------------------------------------------------------!
+   !PURPOSE: Compute the correction to the self-consistency equations
+   !         for non-local calculations. See arxiv:2011.05311
+   !---------------------------------------------------------------------------!
+   subroutine calc_causality_Delta_correction()
+      !
+      implicit none
+      integer                               :: ik,iw,ispin
+      complex(8),allocatable                :: GS(:,:),SG(:,:),SGS(:,:)
+      complex(8),allocatable                :: invG(:,:)
+      !
+      !
+      write(*,"(A)") new_line("A")//new_line("A")//"---- calc_causality_Delta_correction"
+      !
+      !
+      if(.not.S_Full%status) stop "calc_causality_Delta_correction: S_Full not properly initialized."
+      if(.not.Glat%status) stop "calc_causality_Delta_correction: Glat not properly initialized."
+      !
+      call AllocateFermionicField(D_correction,Crystal%Norb,Nmats,Nsite=Nsite,Beta=Beta)
+      allocate(GS(S_Full%Norb,S_Full%Norb));GS=czero
+      allocate(SG(S_Full%Norb,S_Full%Norb));SG=czero
+      allocate(SGS(S_Full%Norb,S_Full%Norb));SGS=czero
+      allocate(invG(S_Full%Norb,S_Full%Norb));invG=czero
+      !
+      do ispin=1,Nspin
+         do iw=1,S_Full%Npoints
+            !
+            GS=czero;SG=czero
+            SGS=czero;invG=czero
+            !
+            do ik=1,S_Full%Nkpt
+               !
+               GS = GS + matmul(Glat%wks(:,:,iw,ik,ispin),S_Full%wks(:,:,iw,ik,ispin))/S_Full%Nkpt
+               SG = SG + matmul(S_Full%wks(:,:,iw,ik,ispin),Glat%wks(:,:,iw,ik,ispin))/S_Full%Nkpt
+               SGS = SGS + matmul(S_Full%wks(:,:,iw,ik,ispin),matmul(Glat%wks(:,:,iw,ik,ispin),S_Full%wks(:,:,iw,ik,ispin)))/S_Full%Nkpt
+               !
+            enddo
+            !
+            invG = Glat%ws(:,:,iw,ispin)
+            call inv(invG)
+            !
+            ! Put toghether all the pieces. arxiv:2011.05311 Eq.7
+            D_correction%ws(:,:,iw,ispin) = + SGS                             &
+                                            - matmul(SG,matmul(invG,GS))      &
+                                            + 2d0*S_Full%ws(:,:,iw,ispin)     &
+                                            - matmul(SG,invG)                 &
+                                            - matmul(invG,GS)
+            !
+         enddo
+      enddo
+      !
+      call dump_FermionicField(D_correction,reg(ItFolder),"D_correction_w")
+      !
+      !
+   end subroutine calc_causality_Delta_correction
+   !
+   subroutine calc_causality_curlyU_correction()
+      !
+      implicit none
+      integer                               :: iq,iw
+      complex(8),allocatable                :: WP(:,:),PW(:,:),PWP(:,:)
+      complex(8),allocatable                :: W_P(:,:),P_W(:,:)
+      complex(8),allocatable                :: invWa(:,:),invWb(:,:)
+      !
+      !
+      write(*,"(A)") new_line("A")//new_line("A")//"---- calc_causality_curlyU_correction"
+      !
+      !
+      if(.not.Plat%status) stop "calc_causality_curlyU_correction: Plat not properly initialized."
+      if(.not.Wlat%status) stop "calc_causality_curlyU_correction: Wlat not properly initialized."
+      !
+      call AllocateBosonicField(curlyU_correction,Crystal%Norb,Nmats,Crystal%iq_gamma,Beta=Beta,no_bare=.true.)
+      allocate(WP(Plat%Nbp,Plat%Nbp));WP=czero
+      allocate(PW(Plat%Nbp,Plat%Nbp));PW=czero
+      allocate(PWP(Plat%Nbp,Plat%Nbp));PWP=czero
+      allocate(W_P(Plat%Nbp,Plat%Nbp));W_P=czero
+      allocate(P_W(Plat%Nbp,Plat%Nbp));P_W=czero
+      allocate(invWa(Plat%Nbp,Plat%Nbp));invWa=czero
+      allocate(invWb(Plat%Nbp,Plat%Nbp));invWb=czero
+      !
+      do iw=1,Plat%Npoints
+         !
+         WP=czero;PW=czero;PWP=czero
+         W_P=czero;P_W=czero
+         invWa=czero;invWb=czero
+         !
+         do iq=1,Plat%Nkpt
+            !
+            WP = WP + matmul(Wlat%screened(:,:,iw,iq),Plat%screened(:,:,iw,iq))/Plat%Nkpt
+            PW = PW + matmul(Plat%screened(:,:,iw,iq),Wlat%screened(:,:,iw,iq))/Plat%Nkpt
+            PWP = PWP + matmul(Plat%screened(:,:,iw,iq),matmul(Wlat%screened(:,:,iw,iq),Plat%screened(:,:,iw,iq)))/Plat%Nkpt
+            !
+         enddo
+         !
+         W_P = matmul(Wlat%screened_local(:,:,iw),Plat%screened_local(:,:,iw))
+         P_W = matmul(Plat%screened_local(:,:,iw),Wlat%screened_local(:,:,iw))
+         !
+         invWa = Plat%screened_local(:,:,iw) + PWP
+         call inv(invWa)
+         !
+         invWb = Plat%screened_local(:,:,iw) + matmul(Plat%screened_local(:,:,iw),matmul(Wlat%screened_local(:,:,iw),Plat%screened_local(:,:,iw)))
+         call inv(invWb)
+         !
+         ! Put toghether all the pieces. arxiv:2011.05311 Eq.22
+         curlyU_correction%screened_local(:,:,iw) = + matmul(PW,matmul(invWa,WP)) - matmul(P_W,matmul(invWb,W_P))
+         !
+      enddo
+      !
+      call dump_BosonicField(curlyU_correction,reg(ItFolder),"curlyU_correction_w.DAT")
+      !
+      !
+   end subroutine calc_causality_curlyU_correction
+
+
+   !---------------------------------------------------------------------------!
    !PURPOSE: compute, dump and fit the diagonal hybridization function for each
    !         spin-orbital flavor
    !TEST ON:
@@ -1002,6 +1130,7 @@ contains
       !
       type(FermionicField)                  :: Gloc
       type(FermionicField)                  :: SigmaImp
+      type(FermionicField)                  :: DeltaCorr
       type(FermionicField)                  :: FermiPrint
       type(FermionicField)                  :: DeltaOld
       integer                               :: Norb,Nflavor,unit,NfitD
@@ -1009,9 +1138,9 @@ contains
       integer,allocatable                   :: Orbs(:)
       real(8),allocatable                   :: wmats(:),tau(:),Moments(:,:,:)
       real(8),allocatable                   :: Eloc(:,:),PrintLine(:),coef01(:,:)
-      complex(8),allocatable                :: Hloc(:,:)
+      !complex(8),allocatable                :: Hloc(:,:)
       real(8)                               :: tailShift
-      complex(8),allocatable                :: zeta(:,:,:),invGf(:,:),Rot(:,:)
+      complex(8),allocatable                :: zeta(:,:,:),invG(:,:),Rot(:,:)
       complex(8),allocatable                :: Dfit(:,:,:),Dmats(:,:,:),Ditau(:,:,:)
       complex(8),allocatable                :: invCurlyG(:,:,:)!,DeltaTail(:)
       character(len=255)                    :: file,MomDir
@@ -1020,7 +1149,9 @@ contains
       write(*,"(A)") new_line("A")//new_line("A")//"---- calc_Delta of "//reg(SiteName(isite))
       !
       !
-      if(.not.S_DMFT%status) stop "S_DMFT not properly initialized."
+      if(.not.S_DMFT%status) stop "calc_Delta: S_DMFT not properly initialized."
+      if(.not.Glat%status) stop "calc_Delta: Glat not properly initialized."
+      if(causal_D.and.(.not.D_correction%status)) stop "calc_Delta: requested causality correction but D_correction not properly initialized."
       !
       Norb = SiteNorb(isite)
       allocate(Orbs(Norb))
@@ -1032,6 +1163,7 @@ contains
       !
       call AllocateFermionicField(SigmaImp,Norb,Nmats,Beta=Beta)
       call AllocateFermionicField(Gloc,Norb,Nmats,Beta=Beta)
+      if(causal_D)call AllocateFermionicField(DeltaCorr,Norb,Nmats,Beta=Beta)
       allocate(invCurlyG(Norb,Nmats,Nspin));invCurlyG=czero
       !
       allocate(wmats(Nmats));wmats=0d0
@@ -1045,106 +1177,83 @@ contains
       !
       ! Extract and rotate from local (non-diagonal) to imp (diagonal) the given sites
       call clear_attributes(SigmaImp)
+      if(causal_D)call clear_attributes(DeltaCorr)
       if(RotateHloc)then
          allocate(Rot(Norb,Norb)); Rot=HlocRot(1:Norb,1:Norb,isite)
          call loc2imp(Gloc,Glat,Orbs,U=Rot)
          call loc2imp(SigmaImp,S_DMFT,Orbs,U=Rot)
+         if(causal_D)call loc2imp(DeltaCorr,D_correction,Orbs,U=Rot)
          deallocate(Rot)
       else
          call loc2imp(Gloc,Glat,Orbs)
          call loc2imp(SigmaImp,S_DMFT,Orbs)
+         if(causal_D)call loc2imp(DeltaCorr,D_correction,Orbs)
       endif
       !
       !Print what's used to compute delta
       call dump_FermionicField(Gloc,reg(ItFolder)//"Solver_"//reg(SiteName(isite))//"/","G_"//reg(SiteName(isite))//"_w")
       call dump_FermionicField(SigmaImp,reg(ItFolder)//"Solver_"//reg(SiteName(isite))//"/","S_"//reg(SiteName(isite))//"_w")
+      if(causal_D)call dump_FermionicField(SigmaImp,reg(ItFolder)//"Solver_"//reg(SiteName(isite))//"/","Dcorr_"//reg(SiteName(isite))//"_w")
       !
       !Compute the fermionic Weiss field aka the inverse of CurlyG
-      allocate(invGf(Norb,Norb));invGf=czero
+      allocate(invG(Norb,Norb));invG=czero
       do ispin=1,Nspin
          do iw=1,Nmats
             !
-            invGf = Gloc%ws(:,:,iw,ispin)
-            call inv(invGf)
+            invG = Gloc%ws(:,:,iw,ispin)
+            call inv(invG)
             !
-            do iwan=1,Norb
-               !invCurlyG(iwan,iw,ispin) = invGf(iwan,iwan) + SigmaImp%ws(iwan,iwan,iw,ispin)
-               invCurlyG(iwan,iw,ispin) = 1d0/Gloc%ws(iwan,iwan,iw,ispin) + SigmaImp%ws(iwan,iwan,iw,ispin)
-            enddo
+            if(causal_D)then
+               do iwan=1,Norb
+                  invCurlyG(iwan,iw,ispin) = 1d0/Gloc%ws(iwan,iwan,iw,ispin) + SigmaImp%ws(iwan,iwan,iw,ispin) - DeltaCorr%ws(iwan,iwan,iw,ispin)
+               enddo
+            else
+               do iwan=1,Norb
+                  invCurlyG(iwan,iw,ispin) = 1d0/Gloc%ws(iwan,iwan,iw,ispin) + SigmaImp%ws(iwan,iwan,iw,ispin) !invCurlyG(iwan,iw,ispin) = invG(iwan,iwan) + SigmaImp%ws(iwan,iwan,iw,ispin)
+               enddo
+            endif
             !
          enddo
       enddo
-      deallocate(invGf)
+      deallocate(invG)
       call DeallocateFermionicField(SigmaImp)
       call DeallocateFermionicField(Gloc)
       !
       !Extract the local energy
       allocate(Dfit(Norb,Nmats,Nspin));Dfit=czero
       Dfit = zeta - invCurlyG
-      select case(reg(CalculationType))
+      !
+      select case(reg(DeltaFit))
          case default
             !
-            stop "If you got so far somethig is wrong."
+            stop "Available modes for Delta fitting: Inf, Analytic, Moments."
             !
-         case("GW+EDMFT","EDMFT")
+         case("Inf")
             !
-            select case(reg(DeltaFit))
-               case default
-                  !
-                  stop "Available modes for Delta fitting: Inf, Analytic, Moments."
-                  !
-               case("Inf")
-                  !
-                  Eloc = real(Dfit(:,Nmats,:))
-                  !
-               case("Analytic")
-                  !
-                  file = "DeltaPara_"//reg(SiteName(isite))//".DAT"
-                  MomDir = reg(ItFolder)//"Solver_"//reg(SiteName(isite))//"/"
-                  wndx = minloc(abs(wmats-0.85*wmatsMax),dim=1)
-                  call fit_Delta(Dfit,Beta,Nfit,reg(MomDir),reg(file),"Shifted",Eloc,filename="DeltaAnd",Wlimit=wndx,coef01=coef01)
-                  !
-               case("Moments")
-                  !
-                  file = "DeltaMom_"//reg(SiteName(isite))//".DAT"
-                  MomDir = reg(ItFolder)//"Solver_"//reg(SiteName(isite))//"/"
-                  !
-                  NfitD = Nfit
-                  if(Nfit.gt.5)NfitD=5
-                  allocate(Moments(Norb,NfitD,Nspin));Moments=0d0
-                  wndx = minloc(abs(wmats-0.85*wmatsMax),dim=1)
-                  call fit_moments(Dfit,Beta,NfitD,.false.,reg(MomDir),reg(file),"Sigma",Moments,filename="DeltaMom",Wlimit=wndx)
-                  !
-                  Eloc=Moments(:,1,:)
-                  coef01=Moments(:,2,:)
-                  !
-                  !allocate(DeltaTail(Nmats));DeltaTail=czero
-                  !wndx=int(Nmats/2)
-                  !write(*,"(A,F)")"     Replacing Delta tail starting from iw_["//str(wndx)//"]=",wmats(wndx)
-                  !do ispin=1,Nspin
-                  !  do iwan=1,Norb
-                  !     DeltaTail = S_Moments(Moments(iwan,:,ispin),wmats)
-                  !     Dfit(iwan,wndx:Nmats,ispin) = DeltaTail(wndx:Nmats)
-                  !  enddo
-                  !enddo
-                  !deallocate(Moments,DeltaTail)
-                  !
-                  deallocate(Moments)
-                  !
-            end select
+            Eloc = real(Dfit(:,Nmats,:))
             !
-         case("DMFT+statU","DMFT+dynU")
+         case("Analytic")
             !
-            if(RotateHloc)then
-               Eloc(:,1) = HlocEig(1:Norb,isite)
-               Eloc(:,2) = HlocEig(1:Norb,isite)
-            else
-               allocate(Hloc(Norb,Norb));Hloc=czero
-               call loc2imp(Hloc,Crystal%Hloc,Orbs)
-               Eloc(:,1) = diagonal(Hloc)
-               Eloc(:,2) = diagonal(Hloc)
-               deallocate(Hloc)
-            endif
+            file = "DeltaPara_"//reg(SiteName(isite))//".DAT"
+            MomDir = reg(ItFolder)//"Solver_"//reg(SiteName(isite))//"/"
+            wndx = minloc(abs(wmats-0.85*wmatsMax),dim=1)
+            call fit_Delta(Dfit,Beta,Nfit,reg(MomDir),reg(file),"Shifted",Eloc,filename="DeltaAnd",Wlimit=wndx,coef01=coef01)
+            !
+         case("Moments")
+            !
+            file = "DeltaMom_"//reg(SiteName(isite))//".DAT"
+            MomDir = reg(ItFolder)//"Solver_"//reg(SiteName(isite))//"/"
+            !
+            NfitD = Nfit
+            if(Nfit.gt.5)NfitD=5
+            allocate(Moments(Norb,NfitD,Nspin));Moments=0d0
+            wndx = minloc(abs(wmats-0.85*wmatsMax),dim=1)
+            call fit_moments(Dfit,Beta,NfitD,.false.,reg(MomDir),reg(file),"Sigma",Moments,filename="DeltaMom",Wlimit=wndx)
+            !
+            Eloc=Moments(:,1,:)
+            coef01=Moments(:,2,:)
+            !
+            deallocate(Moments)
             !
       end select
       deallocate(Dfit)
@@ -1156,11 +1265,10 @@ contains
             !
             do iw=1,Nmats
                Dmats(iwan,iw,ispin) = dcmplx( Glat%mu , wmats(iw) ) - Eloc(iwan,ispin) - invCurlyG(iwan,iw,ispin)
-               !Dmats(iwan,iw,ispin) = Dfit(iwan,iw,ispin) - Eloc(iwan,ispin)
             enddo
             !
             !Additional correction
-            if(real(Dmats(iwan,Nmats,ispin))*real(Dmats(iwan,Nmats-1,ispin)).lt.0d0)then
+            if(dreal(Dmats(iwan,Nmats,ispin))*real(Dmats(iwan,Nmats-1,ispin)).lt.0d0)then
                tailShift = real(Dmats(iwan,Nmats,ispin)) + (Dmats(iwan,Nmats,ispin)-Dmats(iwan,Nmats-1,ispin))*2d0
                write(*,"(A,E13.3)")"     Additional Eloc shift orb: "//str(iwan)//" spin: "//str(ispin),tailShift
                Eloc(iwan,ispin) = Eloc(iwan,ispin) + tailShift
@@ -1169,7 +1277,7 @@ contains
             !
          enddo
       enddo
-      deallocate(invCurlyG)!Dfit)
+      deallocate(invCurlyG)
       !
       !Mixing Delta
       if((Mixing_Delta.gt.0d0).and.(Iteration.gt.0))then
@@ -1199,7 +1307,7 @@ contains
       do ispin=1,Nspin
          !add correction that allows to use the tail correction in the FT
          do iwan=1,Norb
-            if(reg(CalculationType).ne."GW+EDMFT") coef01(iwan,ispin) = abs(aimag(Dmats(iwan,Nmats,ispin)))*wmats(Nmats)
+            if(reg(CalculationType).ne."GW+EDMFT") coef01(iwan,ispin) = abs(dimag(Dmats(iwan,Nmats,ispin)))*wmats(Nmats)
             write(*,"(A,E10.3)")"     First coeff orb: "//str(iwan)//" spin: "//str(ispin),coef01(iwan,ispin)
             Dmats(iwan,:,ispin) = Dmats(iwan,:,ispin)/coef01(iwan,ispin)
          enddo
@@ -1216,9 +1324,9 @@ contains
       do ispin=1,Nspin
          do iwan=1,Norb
             do itau=1,Solver%NtauF
-               if(real(Ditau(iwan,itau,ispin)).gt.0d0)then
+               if(dreal(Ditau(iwan,itau,ispin)).gt.0d0)then
                   write(*,"(A,E10.3)")"     Warning: Removing non-causality from Delta(tau) at orb: "//str(iwan)//" spin: "//str(ispin)//" itau: "//str(itau)
-                  if(real(Ditau(iwan,int(Solver%NtauF/2),ispin)).lt.0d0)then
+                  if(dreal(Ditau(iwan,int(Solver%NtauF/2),ispin)).lt.0d0)then
                      Ditau(iwan,itau,ispin) = Ditau(iwan,int(Solver%NtauF/2),ispin)
                   else
                      Ditau(iwan,itau,ispin) = czero
@@ -1337,6 +1445,7 @@ contains
       type(BosonicField)                    :: Wloc
       type(BosonicField)                    :: Pimp
       type(BosonicField)                    :: curlyU,curlyUold
+      type(BosonicField)                    :: curlyUcorr
       integer                               :: Norb,Nflavor,Nbp
       integer                               :: ib1,ib2,itau,iw
       integer                               :: unit,ndx,isitecheck
@@ -1349,6 +1458,10 @@ contains
       !
       write(*,"(A)") new_line("A")//new_line("A")//"---- calc_Interaction of "//reg(SiteName(isite))
       !
+      !
+      if(.not.P_EDMFT%status) stop "calc_Interaction: P_EDMFT not properly initialized."
+      if(.not.Wlat%status) stop "calc_Interaction: Wlat not properly initialized."
+      if(causal_U.and.(.not.curlyU_correction%status)) stop "calc_Interaction: requested causality correction but curlyU_correction not properly initialized."
       !
       Norb = SiteNorb(isite)
       allocate(Orbs(Norb))
@@ -1396,7 +1509,13 @@ contains
                call loc2imp(Pimp,P_EDMFT,Orbs)
                call loc2imp(Wloc,Wlat,Orbs)
                !
-               call calc_curlyU(curlyU,Wloc,Pimp)
+               if(causal_U)then
+                  call AllocateBosonicField(curlyUcorr,Norb,Nmats,Crystal%iq_gamma,Beta=Beta)
+                  call loc2imp(curlyUcorr,curlyU_correction,Orbs)
+                  call calc_curlyU(curlyU,Wloc,Pimp,curlyUcorr=curlyUcorr)
+               else
+                  call calc_curlyU(curlyU,Wloc,Pimp)
+               endif
                !
                call DeallocateBosonicField(Pimp)
                call DeallocateBosonicField(Wloc)
@@ -2169,22 +2288,22 @@ contains
             write(*,*)
             write(*,"(2(A"//str(wn*Norb)//","//str(ws)//"X))")banner(trim(header1)//" up",wn*Norb),banner(trim(header1)//" dw",wn*Norb)
             do iorb=1,Norb
-               write(*,"(2("//str(Norb)//"F"//str(wn)//".4,"//str(ws)//"X))") (real(densityGW(iorb,jorb,1)),jorb=1,Norb),(real(densityGW(iorb,jorb,2)),jorb=1,Norb)
+               write(*,"(2("//str(Norb)//"F"//str(wn)//".4,"//str(ws)//"X))") (dreal(densityGW(iorb,jorb,1)),jorb=1,Norb),(dreal(densityGW(iorb,jorb,2)),jorb=1,Norb)
             enddo
             !
             write(*,*)
             write(*,"(2(A"//str(wn*Norb)//","//str(ws)//"X))")banner(trim(header2)//" up",wn*Norb),banner(trim(header2)//" dw",wn*Norb)
             do iorb=1,Norb
-               write(*,"(2("//str(Norb)//"F"//str(wn)//".4,"//str(ws)//"X))") (real(densityDMFT(iorb,jorb,1)),jorb=1,Norb),(real(densityDMFT(iorb,jorb,2)),jorb=1,Norb)
+               write(*,"(2("//str(Norb)//"F"//str(wn)//".4,"//str(ws)//"X))") (dreal(densityDMFT(iorb,jorb,1)),jorb=1,Norb),(dreal(densityDMFT(iorb,jorb,2)),jorb=1,Norb)
             enddo
             !
             if(.not.EqvGWndx%S)then
                write(*,*)
                write(*,"(A"//str(wn*Norb)//","//str(ws)//"X)")banner(trim(header6),wn*Norb)
-               write(*,"("//str(Norb)//"F"//str(wn)//".4,"//str(ws)//"X)") (real(densityGW(iorb,iorb,1)-densityGW(iorb,iorb,2)),iorb=1,Norb)
+               write(*,"("//str(Norb)//"F"//str(wn)//".4,"//str(ws)//"X)") (dreal(densityGW(iorb,iorb,1)-densityGW(iorb,iorb,2)),iorb=1,Norb)
                write(*,*)
                write(*,"(A"//str(wn*Norb)//","//str(ws)//"X)")banner(trim(header4),wn*Norb)
-               write(*,"("//str(Norb)//"F"//str(wn)//".4,"//str(ws)//"X)") (real(densityDMFT(iorb,iorb,1)-densityDMFT(iorb,iorb,2)),iorb=1,Norb)
+               write(*,"("//str(Norb)//"F"//str(wn)//".4,"//str(ws)//"X)") (dreal(densityDMFT(iorb,iorb,1)-densityDMFT(iorb,iorb,2)),iorb=1,Norb)
             endif
             !
             if(Nsite.gt.1)then
@@ -2197,14 +2316,14 @@ contains
                   write(*,"(2(A"//str(wn*Norb)//","//str(ws)//"X))")banner(trim(header3)//" up",wn*Norb),banner(trim(header3)//" dw",wn*Norb)
                   do iorb=1,Norb_imp
                      write(*,"(2("//str(wsi)//"X,"//str(Norb_imp)//"F"//str(wn)//".4,"//str(ws)//"X))") &
-                                       (real(densityQMC(iorb,jorb,1,isite)),jorb=1,Norb_imp),(real(densityQMC(iorb,jorb,2,isite)),jorb=1,Norb_imp)
+                                       (densityQMC(iorb,jorb,1,isite),jorb=1,Norb_imp),(densityQMC(iorb,jorb,2,isite),jorb=1,Norb_imp)
                   enddo
                   !
                   if(.not.EqvGWndx%S)then
                      write(*,*)
                      write(*,"(A"//str(wn*Norb)//","//str(ws)//"X)")banner(trim(header5),wn*Norb)
                      !do iorb=1,Norb_imp
-                     write(*,"("//str(wsi)//"X,"//str(Norb_imp)//"F"//str(wn)//".4,"//str(ws)//"X)")(real(densityQMC(iorb,iorb,1,isite)-densityQMC(iorb,iorb,2,isite)),iorb=1,Norb_imp)
+                     write(*,"("//str(wsi)//"X,"//str(Norb_imp)//"F"//str(wn)//".4,"//str(ws)//"X)")((densityQMC(iorb,iorb,1,isite)-densityQMC(iorb,iorb,2,isite)),iorb=1,Norb_imp)
                      !enddo
                   endif
                   if(ExpandImpurity.or.AFMselfcons)exit
@@ -2219,7 +2338,7 @@ contains
             write(*,*)
             write(*,"(2(A"//str(wn*Norb)//","//str(ws)//"X))")banner(trim(header1)//" up",wn*Norb),banner(trim(header1)//" dw",wn*Norb)
             do iorb=1,Norb
-               write(*,"(2("//str(Norb)//"F"//str(wn)//".4,"//str(ws)//"X))") (real(densityGW(iorb,jorb,1)),jorb=1,Norb),(real(densityGW(iorb,jorb,2)),jorb=1,Norb)
+               write(*,"(2("//str(Norb)//"F"//str(wn)//".4,"//str(ws)//"X))") (dreal(densityGW(iorb,jorb,1)),jorb=1,Norb),(dreal(densityGW(iorb,jorb,2)),jorb=1,Norb)
             enddo
             !
       end select

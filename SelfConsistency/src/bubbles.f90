@@ -309,7 +309,7 @@ contains
          !Hermiticity check
          if(sym_)then
             do ip=1,NaxisB
-               call check_Hermiticity(Pout%screened(:,:,ip,iq),eps,enforce=.true.,hardstop=.false.,name="Plat_w"//str(ip)//"_q"//str(iq),verb=verbose)
+               call check_Hermiticity(Pout%screened(:,:,ip,iq),eps,enforce=.true.,hardstop=.false.,name="Plat_w"//str(ip)//"_q"//str(iq))!,verb=verbose)
             enddo
          endif
          !
@@ -331,10 +331,7 @@ contains
       !
       call cpu_time(finish)
       write(*,"(A,F)") "     PiGGsc cpu timing: ", finish-start
-      !
-      !TEST>>>
-      call dump_BosonicField(Pout,"./Plat_readable/",.false.)
-      !>>>TEST
+      !call dump_BosonicField(Pout,"./Plat_readable/",.false.)
       !
    end subroutine calc_Pi_scGG
 

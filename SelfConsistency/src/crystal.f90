@@ -664,24 +664,24 @@ contains
       !$OMP SHARED(Nwig,Nkpt_orig,Npoints,Nsize,kpt_orig,rvecwig,mat_orig,mat_R),&
       !$OMP PRIVATE(ir,ik,id,i1,i2,kR,cfac)
       !$OMP DO
-      do ir=1,Nwig
-         do ik=1,Nkpt_orig
-            !
-            kR = 2*pi * dot_product(kpt_orig(:,ik),rvecwig(:,ir))
-            cfac = dcmplx(cos(kR),-sin(kR))
-            !
+      do i1=1,Nsize
+         do i2=1,Nsize
             do id=1,Npoints
-               do i1=1,Nsize
-                  do i2=1,Nsize
+               !
+               do ir=1,Nwig
+                  do ik=1,Nkpt_orig
+                     !
+                     kR = 2*pi * dot_product(kpt_orig(:,ik),rvecwig(:,ir))
+                     cfac = dcmplx(cos(kR),-sin(kR))
                      !
                      mat_R(i1,i2,id,ir) = mat_R(i1,i2,id,ir) + mat_orig(i1,i2,id,ik)*cfac
                      !
-                  enddo
-               enddo
+                  enddo ! ik
+               enddo ! ir
+               !
             enddo
-            !
-         enddo ! ik
-      enddo ! ir
+         enddo
+      enddo
       !$OMP END DO
       !$OMP END PARALLEL
       mat_R = mat_R/Nkpt_orig
@@ -692,24 +692,24 @@ contains
       !$OMP SHARED(Nwig,Nkpt_intp,Npoints,Nsize,kpt_intp,rvecwig,mat_intp,mat_R,nrdegwig),&
       !$OMP PRIVATE(ir,ik,id,i1,i2,kR,cfac)
       !$OMP DO
-      do ik=1,Nkpt_intp
-         do ir=1,Nwig
-            !
-            kR = 2*pi * dot_product(kpt_intp(:,ik),rvecwig(:,ir))
-            cfac = dcmplx(cos(kR),+sin(kR))/nrdegwig(ir)
-            !
+      do i1=1,Nsize
+         do i2=1,Nsize
             do id=1,Npoints
-               do i1=1,Nsize
-                  do i2=1,Nsize
+               !
+               do ik=1,Nkpt_intp
+                  do ir=1,Nwig
+                     !
+                     kR = 2*pi * dot_product(kpt_intp(:,ik),rvecwig(:,ir))
+                     cfac = dcmplx(cos(kR),+sin(kR))/nrdegwig(ir)
                      !
                      mat_intp(i1,i2,id,ik) = mat_intp(i1,i2,id,ik) + mat_R(i1,i2,id,ir)*cfac
                      !
-                  enddo
-               enddo
+                  enddo ! ir
+               enddo ! ik
+               !
             enddo
-            !
-         enddo ! ik
-      enddo ! ir
+         enddo
+      enddo
       !$OMP END DO
       !$OMP END PARALLEL
       deallocate(mat_R)
@@ -761,22 +761,22 @@ contains
       !$OMP SHARED(Nwig,Nkpt_orig,Npoints,Nsize,kpt_orig,rvecwig,mat_orig,mat_R),&
       !$OMP PRIVATE(ir,ik,id,i1,kR,cfac)
       !$OMP DO
-      do ir=1,Nwig
-         do ik=1,Nkpt_orig
+      do i1=1,Nsize
+         do id=1,Npoints
             !
-            kR = 2*pi * dot_product(kpt_orig(:,ik),rvecwig(:,ir))
-            cfac = dcmplx(cos(kR),-sin(kR))
-            !
-            do id=1,Npoints
-               do i1=1,Nsize
+            do ir=1,Nwig
+               do ik=1,Nkpt_orig
+                  !
+                  kR = 2*pi * dot_product(kpt_orig(:,ik),rvecwig(:,ir))
+                  cfac = dcmplx(cos(kR),-sin(kR))
                   !
                   mat_R(i1,id,ir) = mat_R(i1,id,ir) + mat_orig(i1,id,ik)*cfac
                   !
-               enddo
-            enddo
+               enddo ! ik
+            enddo ! ir
             !
-         enddo ! ik
-      enddo ! ir
+         enddo
+      enddo
       !$OMP END DO
       !$OMP END PARALLEL
       mat_R = mat_R/Nkpt_orig
@@ -787,22 +787,22 @@ contains
       !$OMP SHARED(Nwig,Nkpt_intp,Npoints,Nsize,kpt_intp,rvecwig,mat_intp,mat_R,nrdegwig),&
       !$OMP PRIVATE(ir,ik,id,i1,kR,cfac)
       !$OMP DO
-      do ik=1,Nkpt_intp
-         do ir=1,Nwig
+      do i1=1,Nsize
+         do id=1,Npoints
             !
-            kR = 2*pi * dot_product(kpt_intp(:,ik),rvecwig(:,ir))
-            cfac = dcmplx(cos(kR),+sin(kR))/nrdegwig(ir)
-            !
-            do id=1,Npoints
-               do i1=1,Nsize
+            do ik=1,Nkpt_intp
+               do ir=1,Nwig
+                  !
+                  kR = 2*pi * dot_product(kpt_intp(:,ik),rvecwig(:,ir))
+                  cfac = dcmplx(cos(kR),+sin(kR))/nrdegwig(ir)
                   !
                   mat_intp(i1,id,ik) = mat_intp(i1,id,ik) + mat_R(i1,id,ir)*cfac
                   !
-               enddo
-            enddo
+               enddo ! ir
+            enddo ! ik
             !
-         enddo ! ik
-      enddo ! ir
+         enddo
+      enddo
       !$OMP END DO
       !$OMP END PARALLEL
       deallocate(mat_R)
@@ -854,40 +854,39 @@ contains
       !$OMP SHARED(Nwig,Nkpt_orig,Npoints,Nsize,kpt_orig,rvecwig,mat_K,mat_R_nn),&
       !$OMP PRIVATE(Rx,Ry,Rz,ir2,ir,ik,id,i1,i2,kR,cfac)
       !$OMP DO
-      do ir=1,Nwig
-         !
-         Rx = all(rvecwig(:,ir).eq.[1,0,0])
-         Ry = all(rvecwig(:,ir).eq.[0,1,0])
-         Rz = all(rvecwig(:,ir).eq.[0,0,1])
-         !
-         if(Rx)then
-            ir2 = 1
-         elseif(Ry)then
-            ir2 = 2
-         elseif(Rz)then
-            ir2 = 3
-         else
-            cycle
-         endif
-         !
-         do ik=1,Nkpt_orig
-            !
-            kR=2*pi*dot_product(kpt_orig(:,ik),rvecwig(:,ir))
-            cfac=dcmplx(cos(kR),-sin(kR))
-            !
+      do i1=1,Nsize
+         do i2=1,Nsize
             do id=1,Npoints
-               do i1=1,Nsize
-                  do i2=1,Nsize
+               !
+               do ir=1,Nwig
+                  !
+                  Rx = all(rvecwig(:,ir).eq.[1,0,0])
+                  Ry = all(rvecwig(:,ir).eq.[0,1,0])
+                  Rz = all(rvecwig(:,ir).eq.[0,0,1])
+                  !
+                  if(Rx)then
+                     ir2 = 1
+                  elseif(Ry)then
+                     ir2 = 2
+                  elseif(Rz)then
+                     ir2 = 3
+                  else
+                     cycle
+                  endif
+                  !
+                  do ik=1,Nkpt_orig
+                     !
+                     kR=2*pi*dot_product(kpt_orig(:,ik),rvecwig(:,ir))
+                     cfac=dcmplx(cos(kR),-sin(kR))
                      !
                      mat_R_nn(i1,i2,id,ir2) = mat_R_nn(i1,i2,id,ir2) + mat_K(i1,i2,id,ik)*cfac
                      !
-                  enddo
-               enddo
+                  enddo ! ik
+               enddo ! ir
+               !
             enddo
-            !
-         enddo ! ik
-         !
-      enddo ! ir
+         enddo
+      enddo
       !$OMP END DO
       !$OMP END PARALLEL
       !
@@ -945,24 +944,24 @@ contains
       !$OMP SHARED(Nwig,Nkpt_orig,Npoints,Nsize,kpt_orig,rvecwig,mat_K,mat_R),&
       !$OMP PRIVATE(ir,ik,id,i1,i2,kR,cfac)
       !$OMP DO
-      do ir=1,Nwig
-         do ik=1,Nkpt_orig
-            !
-            kR = 2*pi * dot_product(kpt_orig(:,ik),rvecwig(:,ir))
-            cfac = dcmplx(cos(kR),-sin(kR))
-            !
+      do i1=1,Nsize
+         do i2=1,Nsize
             do id=1,Npoints
-               do i1=1,Nsize
-                  do i2=1,Nsize
+               !
+               do ir=1,Nwig
+                  do ik=1,Nkpt_orig
+                     !
+                     kR = 2*pi * dot_product(kpt_orig(:,ik),rvecwig(:,ir))
+                     cfac = dcmplx(cos(kR),-sin(kR))
                      !
                      mat_R(i1,i2,id,ir) = mat_R(i1,i2,id,ir) + mat_K(i1,i2,id,ik)*cfac
                      !
-                  enddo
-               enddo
+                  enddo ! ik
+               enddo ! ir
+               !
             enddo
-            !
-         enddo ! ik
-      enddo ! ir
+         enddo
+      enddo
       !$OMP END DO
       !$OMP END PARALLEL
       mat_R = mat_R/Nkpt_orig
@@ -1012,22 +1011,22 @@ contains
       !$OMP SHARED(Nwig,Nkpt_orig,Npoints,Nsize,kpt_orig,rvecwig,mat_K,mat_R),&
       !$OMP PRIVATE(ir,ik,id,i1,kR,cfac)
       !$OMP DO
-      do ir=1,Nwig
-         do ik=1,Nkpt_orig
+      do i1=1,Nsize
+         do id=1,Npoints
             !
-            kR = 2*pi * dot_product(kpt_orig(:,ik),rvecwig(:,ir))
-            cfac = dcmplx(cos(kR),-sin(kR))
-            !
-            do id=1,Npoints
-               do i1=1,Nsize
+            do ir=1,Nwig
+               do ik=1,Nkpt_orig
+                  !
+                  kR = 2*pi * dot_product(kpt_orig(:,ik),rvecwig(:,ir))
+                  cfac = dcmplx(cos(kR),-sin(kR))
                   !
                   mat_R(i1,id,ir) = mat_R(i1,id,ir) + mat_K(i1,id,ik)*cfac
                   !
-               enddo
-            enddo
+               enddo ! ik
+            enddo ! ir
             !
-         enddo ! ik
-      enddo ! ir
+         enddo
+      enddo
       !$OMP END DO
       !$OMP END PARALLEL
       mat_R = mat_R/Nkpt_orig
@@ -1081,24 +1080,24 @@ contains
       !$OMP SHARED(Nwig,Nkpt_intp,Npoints,Nsize,kpt_intp,rvecwig,mat_intp,mat_R,nrdegwig),&
       !$OMP PRIVATE(ir,ik,id,i1,i2,kR,cfac)
       !$OMP DO
-      do ik=1,Nkpt_intp
-         do ir=1,Nwig
-            !
-            kR = 2*pi * dot_product(kpt_intp(:,ik),rvecwig(:,ir))
-            cfac = dcmplx(cos(kR),+sin(kR))/nrdegwig(ir)
-            !
+      do i1=1,Nsize
+         do i2=1,Nsize
             do id=1,Npoints
-               do i1=1,Nsize
-                  do i2=1,Nsize
+               !
+               do ik=1,Nkpt_intp
+                  do ir=1,Nwig
+                     !
+                     kR = 2*pi * dot_product(kpt_intp(:,ik),rvecwig(:,ir))
+                     cfac = dcmplx(cos(kR),+sin(kR))/nrdegwig(ir)
                      !
                      mat_intp(i1,i2,id,ik) = mat_intp(i1,i2,id,ik) + mat_R(i1,i2,id,ir)*cfac
                      !
-                  enddo
-               enddo
+                  enddo ! ir
+               enddo ! ik
+               !
             enddo
-            !
-         enddo ! ik
-      enddo ! ir
+         enddo
+      enddo
       !$OMP END DO
       !$OMP END PARALLEL
       !
@@ -1145,22 +1144,22 @@ contains
       !$OMP SHARED(Nwig,Nkpt_intp,Npoints,Nsize,kpt_intp,rvecwig,mat_intp,mat_R,nrdegwig),&
       !$OMP PRIVATE(ir,ik,id,i1,kR,cfac)
       !$OMP DO
-      do ik=1,Nkpt_intp
-         do ir=1,Nwig
+      do i1=1,Nsize
+         do id=1,Npoints
             !
-            kR = 2*pi * dot_product(kpt_intp(:,ik),rvecwig(:,ir))
-            cfac = dcmplx(cos(kR),+sin(kR))/nrdegwig(ir)
-            !
-            do id=1,Npoints
-               do i1=1,Nsize
+            do ik=1,Nkpt_intp
+               do ir=1,Nwig
+                  !
+                  kR = 2*pi * dot_product(kpt_intp(:,ik),rvecwig(:,ir))
+                  cfac = dcmplx(cos(kR),+sin(kR))/nrdegwig(ir)
                   !
                   mat_intp(i1,id,ik) = mat_intp(i1,id,ik) + mat_R(i1,id,ir)*cfac
                   !
-               enddo
-            enddo
+               enddo ! ir
+            enddo ! ik
             !
-         enddo ! ik
-      enddo ! ir
+         enddo
+      enddo
       !$OMP END DO
       !$OMP END PARALLEL
       !

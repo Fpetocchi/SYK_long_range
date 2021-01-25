@@ -95,6 +95,9 @@ program SelfConsistency
          call dump_MaxEnt(Wlat,"mats",reg(ItFolder)//"Convergence/","Wlat",EqvGWndx%SetOrbs)
          !
       endif
+      !
+      ! Causality correction on curlyU
+      if(causal_U) call calc_causality_curlyU_correction()
       call DeallocateBosonicField(Plat)
       !
       !Matching the lattice and impurity problems: Bosons
@@ -192,7 +195,6 @@ program SelfConsistency
       !
       !Compute the Full Green's function and set the density
       call calc_Gmats(Glat,Crystal,S_Full)
-      call DeallocateFermionicField(S_Full)
       if(look4dens%TargetDensity.ne.0d0)call set_density(Glat,Crystal,look4dens)
       !
       !Print Gf: local readable and k-dep binfmt
@@ -205,6 +207,10 @@ program SelfConsistency
       call dump_Matrix(Glat%N_s(:,:,1),reg(ItFolder)//"Nlat_s1.DAT")
       call dump_Matrix(Glat%N_s(:,:,2),reg(ItFolder)//"Nlat_s2.DAT")
       densityGW=Glat%N_s
+      !
+      ! Causality correction on Delta
+      if(causal_D) call calc_causality_Delta_correction()
+      call DeallocateFermionicField(S_Full)
       !
       !The local problem must give the same density in the same subset
       if(MultiTier)then
