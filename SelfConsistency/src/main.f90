@@ -122,47 +122,36 @@ program SelfConsistency
          call dump_Matrix(VH,reg(ItFolder)//"VH.DAT")
          if(solve_DMFT.and.bosonicSC.and.(.not.Ustart))call DeallocateBosonicField(Ulat)
          !
-         !G0W0 contribution and Vexchange readed from SPEX
+         !read from SPEX G0W0 self-energy and Vexchange
          allocate(Vxc(Crystal%Norb,Crystal%Norb,Crystal%Nkpt,Nspin));Vxc=czero
          call AllocateFermionicField(S_G0W0,Crystal%Norb,Nmats,Nkpt=Crystal%Nkpt,Nsite=Nsite,Beta=Beta)
          call read_Sigma_spex(S_G0W0,Crystal,verbose,Vxc=Vxc,doAC=Sigma_AC,pathOUTPUT=reg(pathINPUTtr))
          !
-         !This is to give a slightly better approximation for the 0th solver solution
-         !if((Iteration.eq.0).and.S_DMFT%status) S_DMFT%ws = S_G0W0%ws
-         !
          !scGW
-         call AllocateFermionicField(S_GW_C,Crystal%Norb,Nmats,Nkpt=Crystal%Nkpt,Nsite=Nsite,Beta=Beta)
-         call AllocateFermionicField(S_GW_X,Crystal%Norb,0,Nkpt=Crystal%Nkpt,Nsite=Nsite,Beta=Beta)
-         call calc_sigmaGW(S_GW_C,S_GW_X,Glat,Wlat,Crystal)
-         !
-         !Dc between G0W0 and scGW
          if(Iteration.eq.0)then
             !
+            !Compute the Dc between G0W0 and scGW
             call AllocateFermionicField(S_G0W0dc,Crystal%Norb,Nmats,Nkpt=Crystal%Nkpt,Nsite=Nsite,Beta=Beta)
-            call join_SigmaCX(S_G0W0dc,S_GW_C,S_GW_X)
-            call dump_FermionicField(S_G0W0dc,reg(pathDATA)//"0/","SGoWo_w",.true.,Crystal%kpt)
+            call calc_sigmaGW(S_G0W0dc,Glat,Wlat,Crystal)
+            call dump_FermionicField(S_G0W0dc,reg(ItFolder),"SGoWo_w",.true.,Crystal%kpt)
+            call dump_FermionicField(S_G0W0dc,reg(ItFolder),"SGoWo_w")
             call DeallocateFermionicField(S_G0W0dc)
             !
-            !Dump G0W0 local self-energy
+            !Use G0W0 as self-energy for the first iteration
             call dump_FermionicField(S_G0W0,reg(ItFolder),"Slat_w")
-            !
-            !This is to give a slightly better approximation for the 0th solver solution
-            if(S_DMFT%status) S_DMFT%ws = S_G0W0%ws
             !
          elseif(Iteration.gt.0)then
             !
+            !Read the Dc between G0W0 and scGW
             call AllocateFermionicField(S_G0W0dc,Crystal%Norb,Nmats,Nkpt=Crystal%Nkpt,Nsite=Nsite,Beta=Beta)
             call read_FermionicField(S_G0W0dc,reg(pathDATA)//"0/","SGoWo_w",kpt=Crystal%kpt)
             !
+            !Compute the scGW self-energy
             call AllocateFermionicField(S_GW,Crystal%Norb,Nmats,Nkpt=Crystal%Nkpt,Nsite=Nsite,Beta=Beta)
-            call join_SigmaCX(S_GW,S_GW_C,S_GW_X)
-            !
-            !Dump scGW local self-energy
+            call calc_sigmaGW(S_GW,Glat,Wlat,Crystal)
             call dump_FermionicField(S_GW,reg(ItFolder),"Slat_w")
             !
          endif
-         call DeallocateFermionicField(S_GW_C)
-         call DeallocateFermionicField(S_GW_X)
          !
          !Merge GW and EDMFT
          if((Iteration.gt.0).and.merge_Sigma.and.solve_DMFT)then !(**)
@@ -170,12 +159,7 @@ program SelfConsistency
             !Compute the local Dc if Tier1 = Tier2
             if(reg(DC_type).eq."GlocWloc")then
                call AllocateFermionicField(S_GWdc,Crystal%Norb,Nmats,Nsite=Nsite,Beta=Beta)
-               call AllocateFermionicField(S_GW_Cdc,Crystal%Norb,Nmats,Nsite=Nsite,Beta=Beta)
-               call AllocateFermionicField(S_GW_Xdc,Crystal%Norb,0,Nsite=Nsite,Beta=Beta)
-               call calc_sigmaGWdc(S_GW_Cdc,S_GW_Xdc,Glat,Wlat)
-               call join_SigmaCX(S_GWdc,S_GW_Cdc,S_GW_Xdc)
-               call DeallocateFermionicField(S_GW_Cdc)
-               call DeallocateFermionicField(S_GW_Xdc)
+               call calc_sigmaGWdc(S_GWdc,Glat,Wlat)
             endif
             !
             !Then replace local projection of scGW with EDMFT
@@ -187,15 +171,28 @@ program SelfConsistency
          !
       endif
       !
-      !Put together all the contributions to the full self-energy
+      !Initial Guess for the impurity self-energy
+      if((Iteration.eq.0).and.solve_DMFT) call calc_SigmaGuess()
+      call DeallocateBosonicField(Wlat)
+      !
+      !Put together all the contributions to the full self-energy and deallocate useless stuff
       if(.not.S_Full_exists)then
          call join_SigmaFull(Iteration)
-         call DeallocateFermionicField(S_GW)
+         call DeallocateFermionicField(S_G0W0)
+         call DeallocateFermionicField(S_G0W0dc)
+         if(.not.causal_D) call DeallocateFermionicField(S_GW)
       endif
       !
       !Compute the Full Green's function and set the density
       call calc_Gmats(Glat,Crystal,S_Full)
+      call DeallocateFermionicField(S_Full)
       if(look4dens%TargetDensity.ne.0d0)call set_density(Glat,Crystal,look4dens)
+      !
+      ! Causality correction on Delta
+      if(causal_D) then
+         call calc_causality_Delta_correction()
+         call DeallocateFermionicField(S_GW)
+      endif
       !
       !Print Gf: local readable and k-dep binfmt
       if(dump_Gk)call dump_FermionicField(Glat,reg(ItFolder),"Glat_w",.true.,Crystal%kpt)
@@ -207,10 +204,6 @@ program SelfConsistency
       call dump_Matrix(Glat%N_s(:,:,1),reg(ItFolder)//"Nlat_s1.DAT")
       call dump_Matrix(Glat%N_s(:,:,2),reg(ItFolder)//"Nlat_s2.DAT")
       densityGW=Glat%N_s
-      !
-      ! Causality correction on Delta
-      if(causal_D) call calc_causality_Delta_correction()
-      call DeallocateFermionicField(S_Full)
       !
       !The local problem must give the same density in the same subset
       if(MultiTier)then

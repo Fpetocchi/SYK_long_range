@@ -594,9 +594,9 @@ contains
       implicit none
       integer,intent(in)                    :: ItStart
       logical                               :: filexists
-      integer                               :: unit,idum,ib1,ib2
-      integer                               :: iorb,jorb,korb,lorb
-      integer                               :: isite,ispin
+      integer                               :: unit,idum,ib1!,ib2
+      integer                               :: iorb!,jorb,korb,lorb
+      integer                               :: isite,ispin,ik!,iw
       character(len=255)                    :: file
       real(8)                               :: muQMC
       !
@@ -780,6 +780,16 @@ contains
             call calc_density(Glat,Crystal,Glat%N_ks)
             call calc_density(Glat,Glat%N_s)
             !
+            !
+            !TEST>>>
+            do ik=1,Glat%Nkpt
+               call check_Hermiticity(Glat%N_ks(:,:,ik,1),eps,enforce=.true.,hardstop=.false.,name="Nks_up_q"//str(ik))!,verb=verbose)
+               call check_Hermiticity(Glat%N_ks(:,:,ik,2),eps,enforce=.true.,hardstop=.false.,name="Nks_dw_q"//str(ik))!,verb=verbose)
+            enddo
+            call FermionicKsum(Glat)
+            !>>>TEST
+            !
+            !
             !Logical Flags
             calc_Pk = .true.
             calc_Wfull = .true.
@@ -790,31 +800,6 @@ contains
             endif
             !
       end select
-      !
-      !
-      !Initial inpurity self-energy guess
-      !This differs from the one done later because the both
-      !S_DMFT and Nlda can contain (real) off-diag elements.
-      if(solve_DMFT.and.(ItStart.eq.0))then
-         do ispin=1,Nspin
-            do iorb=1,S_DMFT%Norb
-               do jorb=1,S_DMFT%Norb
-                  do korb=1,S_DMFT%Norb
-                     do lorb=1,S_DMFT%Norb
-                        !
-                        ib1 = iorb + S_DMFT%Norb*(jorb-1)
-                        ib2 = korb + S_DMFT%Norb*(lorb-1)
-                        !
-                        S_DMFT%ws(iorb,jorb,:,ispin) = S_DMFT%ws(iorb,jorb,:,ispin) + Ulat%screened_local(ib1,ib2,1)*Glat%N_s(korb,lorb,ispin)
-                        S_DMFT%N_s(iorb,jorb,ispin) = S_DMFT%ws(iorb,jorb,1,ispin)
-                        !
-                     enddo
-                 enddo
-               enddo
-            enddo
-            call dump_Matrix(S_DMFT%N_s(:,:,ispin),reg(ItFolder)//"Hartree0_s"//str(ispin)//".DAT")
-         enddo
-      endif
       !
       !
       calc_W = calc_Wedmft .or. calc_Wfull
@@ -941,8 +926,8 @@ contains
                         do iorb=1,S_Full%Norb
                            do jorb=1,S_Full%Norb
                               S_Full%wks(iorb,jorb,iw,ik,ispin) =  + S_GW%wks(iorb,jorb,iw,ik,ispin)     & !self-consistently updated
-                                                                   - S_G0W0dc%wks(iorb,jorb,iw,ik,ispin) & !fixed
-                                                                   + S_G0W0%wks(iorb,jorb,iw,ik,ispin)   & !fixed
+                                                                   !- S_G0W0dc%wks(iorb,jorb,iw,ik,ispin) & !fixed
+                                                                   !+ S_G0W0%wks(iorb,jorb,iw,ik,ispin)   & !fixed
                                                                    - Vxc(iorb,jorb,ik,ispin)             & !fixed
                                                                    + VH(iorb,jorb)
                            enddo
@@ -1004,6 +989,65 @@ contains
 
 
    !---------------------------------------------------------------------------!
+   !PURPOSE: Estimate the impurity self-energy for the 0th iteration
+   !---------------------------------------------------------------------------!
+   subroutine calc_SigmaGuess()
+      !
+      implicit none
+      integer                               :: iorb,jorb,korb,lorb
+      integer                               :: ispin,ib1,ib2,iw
+      real(8),allocatable                   :: Uinst_0th(:,:)
+      !
+      !
+      write(*,"(A)") new_line("A")//new_line("A")//"---- calc_SigmaGuess"
+      !
+      !
+      if(.not.solve_DMFT) stop "calc_SigmaGuess: no guess needed if DMFT is not performed."
+      !
+      !
+      allocate(Uinst_0th(Crystal%Norb**2,Crystal%Norb**2));Uinst_0th=0d0
+      !
+      if(Ustart)then
+         Uinst_0th = Ulat%screened_local(:,:,1)
+      else
+         Uinst_0th = Wlat%screened_local(:,:,1)
+      endif
+      !
+      !Initial inpurity self-energy guess
+      !This differs from the one done later because the both
+      !S_DMFT and Nlda can contain (real) off-diag elements.
+      do ispin=1,Nspin
+         do iorb=1,S_DMFT%Norb
+            do jorb=1,S_DMFT%Norb
+               do korb=1,S_DMFT%Norb
+                  do lorb=1,S_DMFT%Norb
+                     !
+                     ib1 = iorb + S_DMFT%Norb*(jorb-1)
+                     ib2 = korb + S_DMFT%Norb*(lorb-1)
+                     !
+                     S_DMFT%N_s(iorb,jorb,ispin) = S_DMFT%N_s(iorb,jorb,ispin) + Uinst_0th(ib1,ib2)*Glat%N_s(korb,lorb,ispin)
+                     !
+                  enddo
+              enddo
+            enddo
+         enddo
+         !
+         if(reg(CalculationType).eq."GW+EDMFT")then
+            S_DMFT%ws = S_G0W0%ws
+         else
+            do iw=1,S_DMFT%Npoints
+               S_DMFT%ws(:,:,iw,ispin) = S_DMFT%N_s
+            enddo
+         endif
+         !
+         call dump_Matrix(S_DMFT%N_s(:,:,ispin),reg(ItFolder)//"Hartree0_s"//str(ispin)//".DAT")
+      enddo
+      deallocate(Uinst_0th)
+      !
+   end subroutine calc_SigmaGuess
+
+
+   !---------------------------------------------------------------------------!
    !PURPOSE: Compute the correction to the self-consistency equations
    !         for non-local calculations. See arxiv:2011.05311
    !---------------------------------------------------------------------------!
@@ -1018,44 +1062,51 @@ contains
       write(*,"(A)") new_line("A")//new_line("A")//"---- calc_causality_Delta_correction"
       !
       !
-      if(.not.S_Full%status) stop "calc_causality_Delta_correction: S_Full not properly initialized."
+      if(.not.S_GW%status) stop "calc_causality_Delta_correction: S_GW not properly initialized."
       if(.not.Glat%status) stop "calc_causality_Delta_correction: Glat not properly initialized."
       !
       call AllocateFermionicField(D_correction,Crystal%Norb,Nmats,Nsite=Nsite,Beta=Beta)
-      allocate(GS(S_Full%Norb,S_Full%Norb));GS=czero
-      allocate(SG(S_Full%Norb,S_Full%Norb));SG=czero
-      allocate(SGS(S_Full%Norb,S_Full%Norb));SGS=czero
-      allocate(invG(S_Full%Norb,S_Full%Norb));invG=czero
+      allocate(GS(S_GW%Norb,S_GW%Norb));GS=czero
+      allocate(SG(S_GW%Norb,S_GW%Norb));SG=czero
+      allocate(SGS(S_GW%Norb,S_GW%Norb));SGS=czero
+      allocate(invG(S_GW%Norb,S_GW%Norb));invG=czero
       !
+      !$OMP PARALLEL DEFAULT(NONE),&
+      !$OMP SHARED(S_GW,Glat,D_correction),&
+      !$OMP PRIVATE(ispin,iw,ik,GS,SG,SGS,invG)
+      !$OMP DO
       do ispin=1,Nspin
-         do iw=1,S_Full%Npoints
+         do iw=1,S_GW%Npoints
             !
-            GS=czero;SG=czero
-            SGS=czero;invG=czero
+            GS=czero;SG=czero;SGS=czero
             !
-            do ik=1,S_Full%Nkpt
+            do ik=1,S_GW%Nkpt
                !
-               GS = GS + matmul(Glat%wks(:,:,iw,ik,ispin),S_Full%wks(:,:,iw,ik,ispin))/S_Full%Nkpt
-               SG = SG + matmul(S_Full%wks(:,:,iw,ik,ispin),Glat%wks(:,:,iw,ik,ispin))/S_Full%Nkpt
-               SGS = SGS + matmul(S_Full%wks(:,:,iw,ik,ispin),matmul(Glat%wks(:,:,iw,ik,ispin),S_Full%wks(:,:,iw,ik,ispin)))/S_Full%Nkpt
+               GS = GS + matmul(Glat%wks(:,:,iw,ik,ispin),S_GW%wks(:,:,iw,ik,ispin))/S_GW%Nkpt
+               SG = SG + matmul(S_GW%wks(:,:,iw,ik,ispin),Glat%wks(:,:,iw,ik,ispin))/S_GW%Nkpt
+               SGS = SGS + matmul(S_GW%wks(:,:,iw,ik,ispin),matmul(Glat%wks(:,:,iw,ik,ispin),S_GW%wks(:,:,iw,ik,ispin)))/S_GW%Nkpt
                !
             enddo
             !
+            invG=czero
             invG = Glat%ws(:,:,iw,ispin)
             call inv(invG)
             !
             ! Put toghether all the pieces. arxiv:2011.05311 Eq.7
             D_correction%ws(:,:,iw,ispin) = + SGS                             &
                                             - matmul(SG,matmul(invG,GS))      &
-                                            + 2d0*S_Full%ws(:,:,iw,ispin)     &
+                                            + 2d0*S_GW%ws(:,:,iw,ispin)     &
                                             - matmul(SG,invG)                 &
                                             - matmul(invG,GS)
             !
          enddo
       enddo
+      !$OMP END DO
+      !$OMP END PARALLEL
+      deallocate(GS,SG,SGS,invG)
       !
+      call symmetrize_GW(D_correction,EqvGWndx)
       call dump_FermionicField(D_correction,reg(ItFolder),"D_correction_w")
-      !
       !
    end subroutine calc_causality_Delta_correction
    !
@@ -1083,11 +1134,13 @@ contains
       allocate(invWa(Plat%Nbp,Plat%Nbp));invWa=czero
       allocate(invWb(Plat%Nbp,Plat%Nbp));invWb=czero
       !
+      !$OMP PARALLEL DEFAULT(NONE),&
+      !$OMP SHARED(Plat,Wlat,curlyU_correction),&
+      !$OMP PRIVATE(iw,iq,WP,PW,PWP,W_P,P_W,invWa,invWb)
+      !$OMP DO
       do iw=1,Plat%Npoints
          !
          WP=czero;PW=czero;PWP=czero
-         W_P=czero;P_W=czero
-         invWa=czero;invWb=czero
          !
          do iq=1,Plat%Nkpt
             !
@@ -1097,12 +1150,15 @@ contains
             !
          enddo
          !
+         W_P=czero;P_W=czero
          W_P = matmul(Wlat%screened_local(:,:,iw),Plat%screened_local(:,:,iw))
          P_W = matmul(Plat%screened_local(:,:,iw),Wlat%screened_local(:,:,iw))
          !
+         invWa=czero
          invWa = Plat%screened_local(:,:,iw) + PWP
          call inv(invWa)
          !
+         invWb=czero
          invWb = Plat%screened_local(:,:,iw) + matmul(Plat%screened_local(:,:,iw),matmul(Wlat%screened_local(:,:,iw),Plat%screened_local(:,:,iw)))
          call inv(invWb)
          !
@@ -1110,9 +1166,12 @@ contains
          curlyU_correction%screened_local(:,:,iw) = + matmul(PW,matmul(invWa,WP)) - matmul(P_W,matmul(invWb,W_P))
          !
       enddo
+      !$OMP END DO
+      !$OMP END PARALLEL
+      deallocate(WP,PW,PWP,W_P,P_W,invWa,invWb)
       !
+      call symmetrize_GW(curlyU_correction,EqvGWndx)
       call dump_BosonicField(curlyU_correction,reg(ItFolder),"curlyU_correction_w.DAT")
-      !
       !
    end subroutine calc_causality_curlyU_correction
 
@@ -1179,21 +1238,29 @@ contains
       call clear_attributes(SigmaImp)
       if(causal_D)call clear_attributes(DeltaCorr)
       if(RotateHloc)then
+         !
          allocate(Rot(Norb,Norb)); Rot=HlocRot(1:Norb,1:Norb,isite)
          call loc2imp(Gloc,Glat,Orbs,U=Rot)
          call loc2imp(SigmaImp,S_DMFT,Orbs,U=Rot)
          if(causal_D)call loc2imp(DeltaCorr,D_correction,Orbs,U=Rot)
          deallocate(Rot)
+         !
+         call symmetrize_imp(Gloc,HlocEig(:,isite))
+         call symmetrize_imp(SigmaImp,HlocEig(:,isite))
+         if(causal_D)call symmetrize_imp(DeltaCorr,HlocEig(:,isite))
+         !
       else
+         !
          call loc2imp(Gloc,Glat,Orbs)
          call loc2imp(SigmaImp,S_DMFT,Orbs)
          if(causal_D)call loc2imp(DeltaCorr,D_correction,Orbs)
+         !
       endif
       !
       !Print what's used to compute delta
       call dump_FermionicField(Gloc,reg(ItFolder)//"Solver_"//reg(SiteName(isite))//"/","G_"//reg(SiteName(isite))//"_w")
       call dump_FermionicField(SigmaImp,reg(ItFolder)//"Solver_"//reg(SiteName(isite))//"/","S_"//reg(SiteName(isite))//"_w")
-      if(causal_D)call dump_FermionicField(SigmaImp,reg(ItFolder)//"Solver_"//reg(SiteName(isite))//"/","Dcorr_"//reg(SiteName(isite))//"_w")
+      if(causal_D)call dump_FermionicField(DeltaCorr,reg(ItFolder)//"Solver_"//reg(SiteName(isite))//"/","D_correction_"//reg(SiteName(isite))//"_w")
       !
       !Compute the fermionic Weiss field aka the inverse of CurlyG
       allocate(invG(Norb,Norb));invG=czero
@@ -1393,15 +1460,15 @@ contains
       FermiPrint%mu=Glat%mu
       call dump_FermionicField(FermiPrint,reg(ItFolder)//"Solver_"//reg(SiteName(isite))//"/","D_"//reg(SiteName(isite))//"_w")
       !
-      !Eo+Delta(iw)
-      call clear_attributes(FermiPrint)
-      if(reg(CalculationType).eq."GW+EDMFT")then
+      !Delta(iw) without causality correction
+      if(causal_D)then
+         call clear_attributes(FermiPrint)
          do ispin=1,Nspin
             do iwan=1,Norb
-               FermiPrint%ws(iwan,iwan,:,ispin) = Eloc(iwan,ispin) + Dmats(iwan,:,ispin)
+               FermiPrint%ws(iwan,iwan,:,ispin) = Dmats(iwan,:,ispin) - DeltaCorr%ws(iwan,iwan,iw,ispin)
             enddo
          enddo
-         call dump_FermionicField(FermiPrint,reg(ItFolder)//"Solver_"//reg(SiteName(isite))//"/fits/","test_Eo+D_"//reg(SiteName(isite))//"_w")
+         call dump_FermionicField(FermiPrint,reg(ItFolder)//"Solver_"//reg(SiteName(isite))//"/","D_noCorr_"//reg(SiteName(isite))//"_w")
       endif
       !
       !test of the fit and FT procedures
@@ -1419,6 +1486,14 @@ contains
             enddo
          enddo
          call dump_FermionicField(FermiPrint,reg(ItFolder)//"Solver_"//reg(SiteName(isite))//"/","testFT_D_"//reg(SiteName(isite))//"_w")
+         !
+         call clear_attributes(FermiPrint)
+         do ispin=1,Nspin
+            do iwan=1,Norb
+               FermiPrint%ws(iwan,iwan,:,ispin) = Eloc(iwan,ispin) + Dmats(iwan,:,ispin)
+            enddo
+         enddo
+         call dump_FermionicField(FermiPrint,reg(ItFolder)//"Solver_"//reg(SiteName(isite))//"/fits/","test_Eo+D_"//reg(SiteName(isite))//"_w")
          !
       endif
       call DeallocateFermionicField(FermiPrint)
@@ -1510,9 +1585,20 @@ contains
                call loc2imp(Wloc,Wlat,Orbs)
                !
                if(causal_U)then
-                  call AllocateBosonicField(curlyUcorr,Norb,Nmats,Crystal%iq_gamma,Beta=Beta)
+                  write(*,*)'here1'
+                  call AllocateBosonicField(curlyUcorr,Norb,Nmats,Crystal%iq_gamma,Beta=Beta,no_bare=.true.)
+                  write(*,*)'here2'
                   call loc2imp(curlyUcorr,curlyU_correction,Orbs)
+                  write(*,*)'here3'
+                  call calc_curlyU(curlyU,Wloc,Pimp)
+                  write(*,*)'here4'
+                  call dump_BosonicField(curlyU,reg(ItFolder)//"Solver_"//reg(SiteName(isite))//"/","curlyU_noCorr_"//reg(SiteName(isite))//"_w.DAT")
+                  write(*,*)'here5'
+                  call clear_attributes(curlyU)
+                  write(*,*)'here6'
                   call calc_curlyU(curlyU,Wloc,Pimp,curlyUcorr=curlyUcorr)
+                  write(*,*)'here7'
+                  call DeallocateBosonicField(curlyUcorr)
                else
                   call calc_curlyU(curlyU,Wloc,Pimp)
                endif
@@ -2160,6 +2246,15 @@ contains
                call dump_Matrix(CDW,reg(PrevItFolder)//"Solver_"//reg(SiteName(isite))//"/CDW_"//reg(SiteName(isite))//".DAT")
                deallocate(CDW)
             endif
+            !
+            !TEST>>>
+            if(Crystal%Norb.eq.9)then
+               write(*,"(A)") new_line("A")//"     Removing all off-diagonal elements from Pimp."
+               do iw=1,ChiCmats%Npoints
+                  ChiCmats%screened_local(:,:,iw) = diag(diagonal(ChiCmats%screened_local(:,:,iw)))
+               enddo
+            endif
+            !>>>TEST
             !
             !Bosonic Dyson equations
             write(*,"(A)") new_line("A")//"     Solving bosonic Dyson of site: "//reg(SiteName(isite))

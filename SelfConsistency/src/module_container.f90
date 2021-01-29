@@ -114,7 +114,7 @@ module module_container
    calc_QMCinteractions
 
 
-   !(m) Bubble diagram container. Depends on (a),(b),(c),(d),(e),(f),(g),(h)
+   !(m) Bubble diagram container. Depends on (a),(b),(c),(d),(e),(f),(g),(h),(l)
    use bubbles, only:                        &
    calc_Pi                                  ,&
    calc_Pimp

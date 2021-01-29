@@ -115,7 +115,7 @@ contains
       enddo
       write(unit,*)
       do i=1,size(Umat,dim=1)
-         write(unit,"(999E20.12)") (aimag(Umat(i,j)),j=1,size(Umat,dim=2))
+         write(unit,"(999E20.12)") (dimag(Umat(i,j)),j=1,size(Umat,dim=2))
       enddo
       close(unit)
       !
@@ -192,7 +192,7 @@ contains
             write(unit) ik
             do iwan1=1,Norb
                do iwan2=1,Norb
-                  write(unit) iwan1,iwan2,real(Umat(iwan1,iwan2,ik)),aimag(Umat(iwan1,iwan2,ik))
+                  write(unit) iwan1,iwan2,dreal(Umat(iwan1,iwan2,ik)),dimag(Umat(iwan1,iwan2,ik))
                enddo
             enddo
          enddo !ik
@@ -214,7 +214,7 @@ contains
             write(unit,"(2(A,1I7))") "ik",ik,"Norb",Norb
             do iwan1=1,Norb
                do iwan2=1,Norb
-                  write(unit,"(2I4,2E20.12)") iwan1,iwan2,real(Umat(iwan1,iwan2,ik)),aimag(Umat(iwan1,iwan2,ik))
+                  write(unit,"(2I4,2E20.12)") iwan1,iwan2,dreal(Umat(iwan1,iwan2,ik)),dimag(Umat(iwan1,iwan2,ik))
                enddo
             enddo
             !
@@ -570,7 +570,7 @@ contains
       unit = free_unit()
       open(unit,file=reg(printpath),form="formatted",status="unknown",position="rewind",action="write")
       do iaxis=1,size(axis)
-         write(unit,"(3E20.12)") axis(iaxis), real(Fcomp(iaxis)), aimag(Fcomp(iaxis))
+         write(unit,"(3E20.12)") axis(iaxis), real(Fcomp(iaxis)), dimag(Fcomp(iaxis))
       enddo
       close(unit)
       !
@@ -636,7 +636,7 @@ contains
          do iaxis=1,G%Npoints
             do iwan1=1,Norb
                do iwan2=1,Norb
-                  write(unit,"(1E20.12,2I4,2E20.12)") axis_(iaxis),iwan1,iwan2,real(G%ws(iwan1,iwan2,iaxis,ispin)),aimag(G%ws(iwan1,iwan2,iaxis,ispin))
+                  write(unit,"(1E20.12,2I4,2E20.12)") axis_(iaxis),iwan1,iwan2,dreal(G%ws(iwan1,iwan2,iaxis,ispin)),dimag(G%ws(iwan1,iwan2,iaxis,ispin))
                enddo
             enddo
          enddo
@@ -707,7 +707,7 @@ contains
                   write(unit) iaxis,axis_(iaxis)
                   do iwan1=1,Norb
                      do iwan2=1,Norb
-                        write(unit) iwan1,iwan2,real(G%wks(iwan1,iwan2,iaxis,ik,ispin)),aimag(G%wks(iwan1,iwan2,iaxis,ik,ispin))
+                        write(unit) iwan1,iwan2,dreal(G%wks(iwan1,iwan2,iaxis,ik,ispin)),dimag(G%wks(iwan1,iwan2,iaxis,ik,ispin))
                      enddo
                   enddo
                enddo !iaxis
@@ -729,7 +729,7 @@ contains
                   write(unit,"(1I7,1E20.12)") iaxis,axis_(iaxis)
                   do iwan1=1,Norb
                      do iwan2=1,Norb
-                        write(unit,"(2I4,2E20.12)") iwan1,iwan2,real(G%wks(iwan1,iwan2,iaxis,ik,ispin)),aimag(G%wks(iwan1,iwan2,iaxis,ik,ispin))
+                        write(unit,"(2I4,2E20.12)") iwan1,iwan2,dreal(G%wks(iwan1,iwan2,iaxis,ik,ispin)),dimag(G%wks(iwan1,iwan2,iaxis,ik,ispin))
                      enddo
                   enddo
                enddo !iaxis
@@ -1002,7 +1002,7 @@ contains
                   ib2 = iwan3+Norb*(iwan4-1)
                   !
                   if(allocated(U%bare_local))then
-                     write(unit,"(4I4,2E20.12)") iwan1,iwan2,iwan3,iwan4,real(U%bare_local(ib1,ib2)),aimag(U%bare_local(ib1,ib2))
+                     write(unit,"(4I4,2E20.12)") iwan1,iwan2,iwan3,iwan4,dreal(U%bare_local(ib1,ib2)),dimag(U%bare_local(ib1,ib2))
                   else
                      write(unit,"(4I4,2E20.12)") iwan1,iwan2,iwan3,iwan4,0d0,0d0
                   endif
@@ -1021,7 +1021,7 @@ contains
                      ib1 = iwan1+Norb*(iwan2-1)
                      ib2 = iwan3+Norb*(iwan4-1)
                      !
-                     write(unit,"(1E20.12,4I4,2E20.12)") axis_(iaxis),iwan1,iwan2,iwan3,iwan4,real(U%screened_local(ib1,ib2,iaxis)),aimag(U%screened_local(ib1,ib2,iaxis))
+                     write(unit,"(1E20.12,4I4,2E20.12)") axis_(iaxis),iwan1,iwan2,iwan3,iwan4,dreal(U%screened_local(ib1,ib2,iaxis)),dimag(U%screened_local(ib1,ib2,iaxis))
                   enddo
                enddo
             enddo
@@ -1104,6 +1104,8 @@ contains
             !
          else
             !
+            if((iq.gt.1).and.mod(iq,251).ne.0)cycle
+            !
             printpath = reg(dirpath)//"VW.Q"//str(iq,4)//".DAT"
             write(*,"(A)") "     Dump "//reg(printpath)//" (readable)"
             !
@@ -1121,7 +1123,7 @@ contains
                         ib2 = iwan3+Norb*(iwan4-1)
                         !
                         if(allocated(U%bare_local))then
-                           write(unit,"(4I4,2E20.12)") iwan1,iwan2,iwan3,iwan4,real(U%bare(ib1,ib2,iq)),aimag(U%bare(ib1,ib2,iq))
+                           write(unit,"(4I4,2E20.12)") iwan1,iwan2,iwan3,iwan4,dreal(U%bare(ib1,ib2,iq)),dimag(U%bare(ib1,ib2,iq))
                         else
                            write(unit,"(4I4,2E20.12)") iwan1,iwan2,iwan3,iwan4,0d0,0d0
                         endif
@@ -1140,7 +1142,7 @@ contains
                            ib1 = iwan1+Norb*(iwan2-1)
                            ib2 = iwan3+Norb*(iwan4-1)
                            !
-                           write(unit,"(1E20.12,4I4,2E20.12)") axis_(iaxis),iwan1,iwan2,iwan3,iwan4,real(U%screened(ib1,ib2,iaxis,iq)),aimag(U%screened(ib1,ib2,iaxis,iq))
+                           write(unit,"(1E20.12,4I4,2E20.12)") axis_(iaxis),iwan1,iwan2,iwan3,iwan4,dreal(U%screened(ib1,ib2,iaxis,iq)),dimag(U%screened(ib1,ib2,iaxis,iq))
                         enddo
                      enddo
                   enddo

@@ -256,8 +256,8 @@ contains
             ! [ 1 - U*Pi ]^-1 * U
             Wmats%screened(:,:,iw,iq) = matmul(invW,Umats%screened(:,:,iw,iq))
             !
-            !Hermiticity check
-            if(sym_) call check_Hermiticity(Wmats%screened(:,:,iw,iq),eps,enforce=.true.,hardstop=.false.,name="Wlat_w"//str(iw)//"_q"//str(iq))!,verb=verbose)
+            !Hermiticity check - print if error is bigger than 1e-3
+            if(sym_) call check_Hermiticity(Wmats%screened(:,:,iw,iq),1e6*eps,enforce=.true.,hardstop=.false.,name="Wlat_w"//str(iw)//"_q"//str(iq))! ,verb=(mod(iq,251).eq.0))
             !
             !store the dielectric function around the Gamma point
             if(HandleGammaPoint)then
@@ -295,10 +295,10 @@ contains
          !W at gamma point should be real
          den_smallk_avrg = dreal(den_smallk_avrg)
          !
-         !Fill the Gamma point value - element not included in the iq loop
+         !Fill the Gamma point value - element not included in the iq loop - print if error is bigger than 1e-3
          do iw=1,Nmats
-            Wmats%screened(:,:,iw,Umats%iq_gamma) = matmul(den_smallk_avrg(:,:,iw),Umats%screened(:,:,iw,Umats%iq_gamma))
-            if(sym_) call check_Hermiticity(Wmats%screened(:,:,iw,Umats%iq_gamma),eps,enforce=.true.,hardstop=.false.,name="Wlat_w"//str(iw)//"_q"//str(Umats%iq_gamma))!,verb=verbose
+            Wmats%screened(:,:,iw,Umats%iq_gamma) = dreal(matmul(den_smallk_avrg(:,:,iw),Umats%screened(:,:,iw,Umats%iq_gamma)))
+            if(sym_) call check_Symmetry(Wmats%screened(:,:,iw,Umats%iq_gamma),1e6*eps,enforce=.true.,hardstop=.false.,name="Wlat_w"//str(iw)//"_q"//str(Umats%iq_gamma),verb=verbose)
          enddo
          !
          deallocate(den_smallk,den_smallk_avrg)
@@ -313,10 +313,11 @@ contains
       if(sym_)then
          write(*,"(A)") "     Checking hermiticity of local Wlat (enforced)."
          do iw=1,Nmats
-            call check_Hermiticity(Wmats%screened_local(:,:,iw),eps,enforce=.true.,hardstop=.false.,name="Wlat_w"//str(iw))!,verb=verbose)
+            call check_Hermiticity(Wmats%screened_local(:,:,iw),eps,enforce=.true.,hardstop=.false.,name="Wlat_loc_w"//str(iw))!,verb=verbose)
          enddo
       endif
-      !call dump_BosonicField(Wmats,"./Wlat_readable/",.false.)
+      !call dump_BosonicField(Umats,"./Ulat_readable/",.false.)
+      call dump_BosonicField(Wmats,"./Wlat_readable/",.false.)
       !
    end subroutine calc_W_full
 
@@ -340,7 +341,7 @@ contains
       type(Lattice),intent(in)              :: Lttc
       logical,intent(in),optional           :: sym
       !
-      complex(8),allocatable                :: invW(:,:)
+      complex(8),allocatable                :: invW(:,:),W_q(:,:)
       complex(8),allocatable                :: den_smallk(:,:,:,:)
       complex(8),allocatable                :: den_smallk_avrg(:,:,:)
       real(8)                               :: Beta
@@ -379,6 +380,7 @@ contains
       endif
       !
       allocate(invW(Nbp,Nbp));invW=czero
+      allocate(W_q(Nbp,Nbp));W_q=czero
       call clear_attributes(Wmats)
       !
       if(HandleGammaPoint)then
@@ -390,8 +392,8 @@ contains
       Wmats%bare_local = Umats%bare_local
       !
       !$OMP PARALLEL DEFAULT(NONE),&
-      !$OMP SHARED(Pmats,Umats,Wmats,den_smallk,Lttc,HandleGammaPoint),&
-      !$OMP PRIVATE(iw,iq,invW,ismall)
+      !$OMP SHARED(Pmats,Umats,Wmats,den_smallk,Lttc,HandleGammaPoint,verbose,sym_),&
+      !$OMP PRIVATE(iw,iq,invW,W_q,ismall)
       !$OMP DO
       do iw=1,Wmats%Npoints
          do iq=1,Umats%Nkpt
@@ -406,7 +408,13 @@ contains
             call inv(invW)
             !
             ! [ 1 - U*Pi ]^-1 * U
-            Wmats%screened_local(:,:,iw) = Wmats%screened_local(:,:,iw) + matmul(invW,Umats%screened(:,:,iw,iq))/Umats%Nkpt
+            W_q = matmul(invW,Umats%screened(:,:,iw,iq))
+            !
+            !Hermiticity check - print if error is bigger than 1e-3
+            if(sym_) call check_Hermiticity(W_q,1e6*eps,enforce=.true.,hardstop=.false.,name="Wlat_w"//str(iw)//"_q"//str(iq))! ,verb=(mod(iq,251).eq.0))
+            !
+            !Sum to local attribute
+            Wmats%screened_local(:,:,iw) = Wmats%screened_local(:,:,iw) + W_q/Umats%Nkpt
             !
             !store the dielectric function around the Gamma point
             if(HandleGammaPoint)then
@@ -444,24 +452,25 @@ contains
          !W at gamma point should be real
          den_smallk_avrg = dreal(den_smallk_avrg)
          !
-         !Add the Gamma point value - element not summed in the iq loop
+         !Add the Gamma point value - element not summed in the iq loop - print if error is bigger than 1e-3
          do iw=1,Nmats
-            Wmats%screened_local(:,:,iw) = Wmats%screened_local(:,:,iw) + matmul(den_smallk_avrg(:,:,iw),Umats%screened(:,:,iw,Umats%iq_gamma))/Nkpt
+            W_q = dreal(matmul(den_smallk_avrg(:,:,iw),Umats%screened(:,:,iw,Umats%iq_gamma)))
+            if(sym_) call check_Symmetry(W_q,1e6*eps,enforce=.true.,hardstop=.false.,name="Wlat_w"//str(iw)//"_q"//str(Umats%iq_gamma),verb=verbose)
+            Wmats%screened_local(:,:,iw) = Wmats%screened_local(:,:,iw) + W_q/Nkpt
          enddo
          !
          deallocate(den_smallk,den_smallk_avrg)
          !
       endif
-      deallocate(invW)
+      deallocate(invW,W_q)
       !
       ! Check if the screened limit is locally symmetric
       if(sym_)then
          write(*,"(A)") "     Checking hermiticity of local Wlat (enforced)."
          do iw=1,Nmats
-            call check_Hermiticity(Wmats%screened_local(:,:,iw),eps,enforce=.true.,hardstop=.false.,name="Wlat_w"//str(iw))!,verb=verbose)
+            call check_Hermiticity(Wmats%screened_local(:,:,iw),eps,enforce=.true.,hardstop=.false.,name="Wlat_loc_w"//str(iw))!,verb=verbose)
          enddo
       endif
-      !call dump_BosonicField(Wmats,"./Wlat_readable/",.false.)
       !
    end subroutine calc_W_edmft
 
@@ -1902,7 +1911,7 @@ contains
       if(present(curlyUcorr))then
          do iw=1,curlyU%Npoints
             !
-            curlyU%screened_local(:,:,iw) = curlyU%screened_local(:,:,iw) - curlyUcorr%screened_local(:,:,iw)
+            curlyU%screened_local(:,:,iw) = curlyU%screened_local(:,:,iw) - dreal(curlyUcorr%screened_local(:,:,iw))
             !
          enddo
       endif

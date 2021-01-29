@@ -512,8 +512,8 @@ contains
       if(Gimp%Norb.eq.0) stop "loc2imp(F): Norb of Gimp not defined."
       if(Gloc%Npoints.eq.0) stop "loc2imp(F): Npoints of Gloc not defined."
       if(Gimp%Npoints.eq.0) stop "loc2imp(F): Npoints of Gimp not defined."
-      if(Gimp%Beta.ne.Gloc%Beta) stop "Gimp2Gimp: Gimp and Gloc have different beta."
-      if(Gimp%Npoints.ne.Gloc%Npoints) stop "Gimp2Gimp: Gimp and Gloc have different number of Matsubara points."
+      if(Gimp%Beta.ne.Gloc%Beta) stop "loc2imp(F): Gimp and Gloc have different beta."
+      if(Gimp%Npoints.ne.Gloc%Npoints) stop "loc2imp(F): Gimp and Gloc have different number of Matsubara points."
       if(Gimp%Nkpt.ne.0) stop "loc2imp(F): Gimp k-dependent attributes attributes are supposed to be unallocated."
       if(.not.allocated(Gloc%ws)) stop "loc2imp(F): Gloc local projection not allocated."
       if(.not.allocated(Gimp%ws)) stop "loc2imp(F): Gimp local projection not allocated."
@@ -633,8 +633,8 @@ contains
       if(Wimp%Nbp.eq.0) stop "loc2imp(B): Norb of Wimp not defined."
       if(Wloc%Npoints.eq.0) stop "loc2imp(B): Npoints of Wloc not defined."
       if(Wimp%Npoints.eq.0) stop "loc2imp(B): Npoints of Wimp not defined."
-      if(Wimp%Beta.ne.Wloc%Beta) stop "Wimp2Wimp: Wimp and Wloc have different beta."
-      if(Wimp%Npoints.ne.Wloc%Npoints) stop "Wimp2Wimp: Wimp and Wloc have different number of Matsubara points."
+      if(Wimp%Beta.ne.Wloc%Beta) stop "loc2imp(B): Wimp and Wloc have different beta."
+      if(Wimp%Npoints.ne.Wloc%Npoints) stop "loc2imp(B): Wimp and Wloc have different number of Matsubara points."
       if(Wimp%Nkpt.ne.0) stop "loc2imp(B): Wimp k-dependent attributes attributes are supposed to be unallocated."
       if(.not.allocated(Wloc%screened_local)) stop "loc2imp(B): Wloc screened_local attribute not allocated."
       if(.not.allocated(Wimp%screened_local)) stop "loc2imp(B): Wimp screened_local attribute not allocated."
@@ -642,6 +642,7 @@ contains
       Norb_imp = int(sqrt(dble(Wimp%Nbp)))
       Norb_loc = int(sqrt(dble(Wloc%Nbp)))
       doBare = allocated(Wimp%bare_local)
+      if(.not.allocated(Wloc%bare_local).and.doBare) stop "loc2imp(B): Wloc bare_local attribute not allocated."
       !
       if(size(orbs).ne.Norb_imp) stop "loc2imp(B): can't fit the requested orbitals inside Wimp."
       if(size(orbs).gt.Norb_loc) stop "loc2imp(B): number of requested orbitals greater than Wloc size."
