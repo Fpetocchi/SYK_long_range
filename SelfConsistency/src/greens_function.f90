@@ -225,7 +225,7 @@ contains
    !PURPOSE: Compute the Matsubara Green's Function
    !TEST ON: 16-10-2020
    !---------------------------------------------------------------------------!
-   subroutine calc_Gmats_Full(Gmats,Lttc,Smats)
+   subroutine calc_Gmats_Full(Gmats,Lttc,Smats,along_path)
       !
       use parameters
       use linalg
@@ -236,6 +236,7 @@ contains
       type(FermionicField),intent(inout)    :: Gmats
       type(Lattice),intent(in)              :: Lttc
       type(FermionicField),intent(in),optional,target :: Smats
+      logical,intent(in),optional           :: along_path
       !
       complex(8),allocatable                :: invGf(:,:)
       complex(8),pointer                    :: Swks(:,:,:,:,:)
@@ -245,6 +246,7 @@ contains
       real(8)                               :: Beta,mu
       integer                               :: Norb,Nmats,Nkpt
       integer                               :: iw,ik,iwan,ispin
+      logical                               :: along_path_
       !
       !
       if(verbose)write(*,"(A)") "---- calc_Gmats_Full"
@@ -255,8 +257,17 @@ contains
       if(.not.Lttc%status) stop "Lttc not properly initialized."
       if(Gmats%Npoints.eq.0) stop "Gmats frequency dependent attributes not properly initialized."
       if(Gmats%Nkpt.eq.0) stop "Gmats k dependent attributes not properly initialized."
-      if(Gmats%Nkpt.ne.Lttc%Nkpt) stop "Lttc has different number of k-points with respect to Gmats."
       if(Gmats%Norb.ne.Lttc%Norb) stop "Lttc has different number of orbitals with respect to Gmats."
+      !
+      along_path_=.false.
+      if(present(along_path))along_path_=along_path
+      !
+      if(along_path_)then
+         if(Gmats%Nkpt.ne.Lttc%Nkpt_path) stop "Lttc has different number of path k-points with respect to Gmats."
+         if(.not.allocated(Lttc%Hk_path)) stop "H(k) along path not allocated."
+      else
+         if(Gmats%Nkpt.ne.Lttc%Nkpt) stop "Lttc has different number of k-points with respect to Gmats."
+      endif
       !
       Norb = Gmats%Norb
       Nmats = Gmats%Npoints
@@ -276,8 +287,8 @@ contains
       !
       if(present(Smats))then
          if(.not.Smats%status) stop "Smats not properly initialized."
-         if(Smats%Npoints.eq.0) stop "Smats frequency dependent attributes not properly initialized."
-         if(Smats%Nkpt.eq.0) stop "Smats k dependent attributes not properly initialized."
+         if(Smats%Npoints.ne.Nmats) stop "Smats has different number of Matsubara points with respect to Gmats."
+         if(Smats%Nkpt.ne.Nkpt) stop "Smats has different number of k-points with respect to Gmats."
          Swks => Smats%wks
          if(verbose)write(*,"(A)") "     Interacting Green's function."
       else
@@ -287,14 +298,18 @@ contains
       call clear_attributes(Gmats)
       allocate(invGf(Norb,Norb));invGf=czero
       !$OMP PARALLEL DEFAULT(NONE),&
-      !$OMP SHARED(zeta,Lttc,Gmats,Swks),&
+      !$OMP SHARED(zeta,Lttc,Gmats,Swks,along_path_),&
       !$OMP PRIVATE(ispin,ik,iw,invGf)
       !$OMP DO
       do ispin=1,Nspin
          do ik=1,Gmats%Nkpt
             do iw=1,Gmats%Npoints
                !
-               invGf = zeta(:,:,iw) - Lttc%Hk(:,:,ik)
+               if(along_path_)then
+                  invGf = zeta(:,:,iw) - Lttc%Hk_path(:,:,ik)
+               else
+                  invGf = zeta(:,:,iw) - Lttc%Hk(:,:,ik)
+               endif
                !
                if(associated(Swks)) invGf = invGf - Swks(:,:,iw,ik,ispin)
                !
@@ -316,7 +331,7 @@ contains
       deallocate(n_k)
       !
       ! In the N_s the local density
-      call FermionicKsum(Gmats)
+      if(.not.along_path_)call FermionicKsum(Gmats)
       !
    end subroutine calc_Gmats_Full
 

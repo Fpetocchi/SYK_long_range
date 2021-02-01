@@ -42,6 +42,7 @@ module post_processing
    public :: dump_MaxEnt
    public :: remove_CDW
    public :: interpolate2Beta
+   public :: interpolate2Path
 
    !===========================================================================!
 
@@ -963,5 +964,79 @@ contains
       end select
       !
    end subroutine interpolate2Beta_Bosonic
+
+
+
+   !---------------------------------------------------------------------------!
+   !PURPOSE: Interpolate to a new frequency mesh a Fermionic field
+   !TEST ON:
+   !---------------------------------------------------------------------------!
+   subroutine interpolate2Path(Sfull,Lttc,structure)
+      !
+      use parameters
+      use utils_misc
+      use utils_fields
+      use linalg
+      use crystal
+      use greens_function
+      implicit none
+      !
+      type(FermionicField),intent(inout)    :: Sfull
+      type(Lattice),intent(inout)           :: Lttc
+      character(len=*),intent(in)           :: structure
+      !
+      type(FermionicField)                  :: Sfull_interp
+      type(FermionicField)                  :: Gmats_interp
+      integer                               :: ik,iw,ispin
+      integer                               :: Norb,Nmats,Nkpt_path
+      !
+      !
+      if(verbose)write(*,"(A)") "---- interpolate2Path"
+      !
+      !
+      ! Check on the input Fields
+      if(.not.Sfull%status) stop "Sfull not properly initialized."
+      if(.not.Lttc%status) stop "Lttc not properly initialized."
+      if(Sfull%Norb.ne.Lttc%Norb) stop "Lttc has different number of orbitals with respect to Sfull."
+      if(Sfull%Nkpt.ne.Lttc%Nkpt_path) stop "Lttc has different number of path k-points with respect to Sfull."
+      !
+      Norb = Sfull%Norb
+      Nmats = Sfull%Npoints
+      Nkpt_path = Sfull%Nkpt
+      !
+      !Create K-points along high-symmetry points
+      Lttc%Nkpt_path = Nkpt_path
+      if(allocated(Lttc%kptpath))deallocate(Lttc%kptpath)
+      call calc_path(Lttc%kptpath,reg(structure),Nkpt_path)
+      !
+      !Fill in Hk along points
+      if(allocated(Lttc%Hk_path))deallocate(Lttc%Hk_path)
+      allocate(Lttc%Hk_path(Norb,Norb,Nkpt_path));Lttc%Hk_path=czero
+      call wannierinterpolation(Lttc%Nkpt3,Lttc%kpt,Lttc%kptpath,Lttc%Hk,Lttc%Hk_path)
+      !
+      !Fill in Ek along points
+      if(allocated(Lttc%Ek_path))deallocate(Lttc%Ek_path)
+      allocate(Lttc%Ek_path(Norb,Nkpt_path));Lttc%Ek_path=0d0
+      if(allocated(Lttc%Zk_path))deallocate(Lttc%Zk_path)
+      allocate(Lttc%Zk_path(Norb,Norb,Nkpt_path));Lttc%Zk_path=czero
+      do ik=1,Nkpt_path
+         Lttc%Zk_path(:,:,ik) = Lttc%Hk_path(:,:,ik)
+         call eigh(Lttc%Zk_path(:,:,ik),Lttc%Ek_path(:,ik))
+      enddo
+      !
+      !Interpolate the self-energy
+      call AllocateFermionicField(Sfull_interp,Norb,Nmats,Nkpt=Nkpt_path,Nsite=Sfull%Nsite,Beta=Sfull%Beta,mu=Sfull%mu)
+      do ispin=1,Nspin
+         do iw=1,Nmats
+            call wannierinterpolation(Lttc%Nkpt3,Lttc%kpt,Lttc%kptpath,Sfull%wks(:,:,iw,:,ispin),Sfull_interp%wks(:,:,iw,:,ispin))
+         enddo
+      enddo
+      !
+      !Recompute the Green's function
+      call AllocateFermionicField(Gmats_interp,Norb,Nmats,Nkpt=Nkpt_path,Nsite=Sfull%Nsite,Beta=Sfull%Beta,mu=Sfull%mu)
+      call calc_Gmats(Gmats_interp,Lttc,Sfull_interp,along_path=.true.)
+      call DeallocateFermionicField(Sfull_interp)
+      !
+   end subroutine interpolate2Path
 
 end module post_processing

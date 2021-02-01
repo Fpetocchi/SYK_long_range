@@ -1,7 +1,7 @@
 # copy MaxEnt.sh inside PATH_DATA
 
 
-for it in `seq 13 1 30`
+for it in `seq 44 1 50`
 do
    cd $it/Convergence
    cp ../../MaxEnt.sh .
@@ -9,6 +9,7 @@ do
 
    ./MaxEnt.sh -e 0.001 -w 2000 -W 200 -f G -o 1 -i lat
    ./MaxEnt.sh -e 0.001 -w 2000 -W 200 -f G -o 1 -i qmc_Mo
+   ./MaxEnt.sh -e 0.005 -w 1000 -W 100 -f W -o 1 -i lat
 
    cd ../../
 

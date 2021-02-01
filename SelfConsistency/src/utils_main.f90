@@ -172,6 +172,9 @@ contains
       if(ExpandImpurity.and.(Nsite.eq.1)) stop "Cannot expand a single site."
       if(AFMselfcons.and.(Nsite.ne.2)) stop "AFM self-consistency is implemented only for lattices with 2 sites."
       !
+      causal_D = causal_D .and. (FirstIteration.ne.0)
+      causal_U = causal_U .and. (FirstIteration.ne.0)
+      !
       call inquireDir(reg(pathDATA)//str(FirstIteration-1),PrvItexist,hardstop=.false.,verb=.false.)
       call inquireDir(reg(pathDATA)//str(0),ZeroItexist,hardstop=.false.,verb=.false.)
       !
@@ -783,8 +786,8 @@ contains
             !
             !TEST>>>
             do ik=1,Glat%Nkpt
-               call check_Hermiticity(Glat%N_ks(:,:,ik,1),eps,enforce=.true.,hardstop=.false.,name="Nks_up_q"//str(ik))!,verb=verbose)
-               call check_Hermiticity(Glat%N_ks(:,:,ik,2),eps,enforce=.true.,hardstop=.false.,name="Nks_dw_q"//str(ik))!,verb=verbose)
+               call check_Hermiticity(Glat%N_ks(:,:,ik,1),eps,enforce=.true.,hardstop=.false.,name="Nks_up_q"//str(ik),verb=verbose)
+               call check_Hermiticity(Glat%N_ks(:,:,ik,2),eps,enforce=.true.,hardstop=.false.,name="Nks_dw_q"//str(ik),verb=verbose)
             enddo
             call FermionicKsum(Glat)
             !>>>TEST
@@ -861,7 +864,13 @@ contains
 
 
    !---------------------------------------------------------------------------!
-   !PURPOSE: Join the all the component of the self-energy
+   !PURPOSE: Join the all the component of the self-energy. This subroutine
+   !         will correct the K dependent self-energy by removing from G0W0 the
+   !         dc and local part. So that the local proj. of the self-energyexactly
+   !         matches the DMFT one.
+   !         In order to get a better estimate of Silke's caussality correction
+   !         the S_GW field in output is modified so as to contain all the K-dependent
+   !         contributions so also those coming from G0W0.
    !TEST ON: 27-10-2020
    !---------------------------------------------------------------------------!
    subroutine join_SigmaFull(Iteration)
@@ -874,7 +883,7 @@ contains
       write(*,"(A)") new_line("A")//new_line("A")//"---- join_SigmaFull"
       !
       !
-      call AllocateFermionicField(S_Full,Crystal%Norb,Nmats,Nkpt=Crystal%Nkpt,Nsite=Nsite,Beta=Beta)
+      call AllocateFermionicField(S_Full,Crystal%Norb,Nmats,Nkpt=Crystal%Nkpt,Nsite=Nsite,Beta=Beta,mu=Glat%mu)
       !
       select case(reg(CalculationType))
          case default
@@ -916,6 +925,19 @@ contains
                if(.not.S_G0W0dc%status) stop "join_SigmaFull: S_G0W0dc not properly initialized."
                if(.not.S_G0W0%status) stop "join_SigmaFull: S_G0W0 not properly initialized."
                !
+               !Remove Dc between G0W0 and scGW self-energies
+               S_G0W0%wks = S_G0W0%wks - S_G0W0dc%wks
+               call FermionicKsum(S_G0W0)
+               !
+               !Remove local contributuin from G0W0 self-energy.
+               !This is what was making Delta non-causal and its due to the not perfect S_G0W0dc
+               do ik=1,S_G0W0%Nkpt
+                  S_G0W0%wks(:,:,:,ik,:) = S_G0W0%wks(:,:,:,ik,:) - S_G0W0%ws
+               enddo
+               !
+               !Put every K-dependent part inside S_GW
+               S_GW%wks = S_GW%wks + S_G0W0%wks
+               !
                !$OMP PARALLEL DEFAULT(NONE),&
                !$OMP SHARED(S_Full,S_GW,S_G0W0dc,S_G0W0,VH,Vxc),&
                !$OMP PRIVATE(iorb,jorb,ik,iw,ispin)
@@ -926,10 +948,10 @@ contains
                         do iorb=1,S_Full%Norb
                            do jorb=1,S_Full%Norb
                               S_Full%wks(iorb,jorb,iw,ik,ispin) =  + S_GW%wks(iorb,jorb,iw,ik,ispin)     & !self-consistently updated
-                                                                   !- S_G0W0dc%wks(iorb,jorb,iw,ik,ispin) & !fixed
-                                                                   !+ S_G0W0%wks(iorb,jorb,iw,ik,ispin)   & !fixed
                                                                    - Vxc(iorb,jorb,ik,ispin)             & !fixed
                                                                    + VH(iorb,jorb)
+                                                                 ! - S_G0W0dc%wks(iorb,jorb,iw,ik,ispin) & !fixed --> included in S_GW
+                                                                 ! + S_G0W0%wks(iorb,jorb,iw,ik,ispin)   & !fixed --> included in S_GW
                            enddo
                         enddo
                      enddo
@@ -939,11 +961,15 @@ contains
                !$OMP END PARALLEL
                !
             endif
-            !
             call FermionicKsum(S_Full)
             !
             !Print full k-dep self-energy: binfmt
             if(dump_Sigmak)call dump_FermionicField(S_Full,reg(ItFolder),"Sfull_w",.true.,Crystal%kpt)
+            !
+            !Deallocate K-dependent self-energy if not needed
+            if(.not.causal_D) call DeallocateFermionicField(S_GW)
+            call DeallocateFermionicField(S_G0W0)
+            call DeallocateFermionicField(S_G0W0dc)
             !
             !
          case("DMFT+statU","DMFT+dynU","EDMFT")
@@ -1036,7 +1062,7 @@ contains
             S_DMFT%ws = S_G0W0%ws
          else
             do iw=1,S_DMFT%Npoints
-               S_DMFT%ws(:,:,iw,ispin) = S_DMFT%N_s
+               S_DMFT%ws(:,:,iw,ispin) = S_DMFT%N_s(:,:,ispin)
             enddo
          endif
          !
@@ -1095,7 +1121,7 @@ contains
             ! Put toghether all the pieces. arxiv:2011.05311 Eq.7
             D_correction%ws(:,:,iw,ispin) = + SGS                             &
                                             - matmul(SG,matmul(invG,GS))      &
-                                            + 2d0*S_GW%ws(:,:,iw,ispin)     &
+                                            + 2d0*S_GW%ws(:,:,iw,ispin)       & !<-- this is S_DMFT
                                             - matmul(SG,invG)                 &
                                             - matmul(invG,GS)
             !
@@ -1107,6 +1133,8 @@ contains
       !
       call symmetrize_GW(D_correction,EqvGWndx)
       call dump_FermionicField(D_correction,reg(ItFolder),"D_correction_w")
+      !
+      call DeallocateFermionicField(S_GW)
       !
    end subroutine calc_causality_Delta_correction
    !
@@ -1465,7 +1493,7 @@ contains
          call clear_attributes(FermiPrint)
          do ispin=1,Nspin
             do iwan=1,Norb
-               FermiPrint%ws(iwan,iwan,:,ispin) = Dmats(iwan,:,ispin) - DeltaCorr%ws(iwan,iwan,iw,ispin)
+               FermiPrint%ws(iwan,iwan,:,ispin) = Dmats(iwan,:,ispin) - DeltaCorr%ws(iwan,iwan,:,ispin)
             enddo
          enddo
          call dump_FermionicField(FermiPrint,reg(ItFolder)//"Solver_"//reg(SiteName(isite))//"/","D_noCorr_"//reg(SiteName(isite))//"_w")
@@ -1585,19 +1613,12 @@ contains
                call loc2imp(Wloc,Wlat,Orbs)
                !
                if(causal_U)then
-                  write(*,*)'here1'
                   call AllocateBosonicField(curlyUcorr,Norb,Nmats,Crystal%iq_gamma,Beta=Beta,no_bare=.true.)
-                  write(*,*)'here2'
                   call loc2imp(curlyUcorr,curlyU_correction,Orbs)
-                  write(*,*)'here3'
                   call calc_curlyU(curlyU,Wloc,Pimp)
-                  write(*,*)'here4'
                   call dump_BosonicField(curlyU,reg(ItFolder)//"Solver_"//reg(SiteName(isite))//"/","curlyU_noCorr_"//reg(SiteName(isite))//"_w.DAT")
-                  write(*,*)'here5'
                   call clear_attributes(curlyU)
-                  write(*,*)'here6'
                   call calc_curlyU(curlyU,Wloc,Pimp,curlyUcorr=curlyUcorr)
-                  write(*,*)'here7'
                   call DeallocateBosonicField(curlyUcorr)
                else
                   call calc_curlyU(curlyU,Wloc,Pimp)
@@ -2235,26 +2256,25 @@ contains
             call isReal(ChiCmats)
             if(verbose)call dump_BosonicField(ChiCmats,reg(PrevItFolder)//"Solver_"//reg(SiteName(isite))//"/","ChiC_"//reg(SiteName(isite))//"_w.DAT")
             !
+            !Remove the off-diagonal components of the local charge susceptibility
+            if(ChiDiag)then
+               write(*,"(A)") new_line("A")//"     Removing all off-diagonal elements from ChiC."
+               do iw=1,ChiCmats%Npoints
+                  ChiCmats%screened_local(:,:,iw) = diag(diagonal(ChiCmats%screened_local(:,:,iw)))
+               enddo
+            endif
+            !
             !Remove the iw=0 divergency of local charge susceptibility
             if(removeCDW_C)then
                write(*,"(A)") new_line("A")//"     Divergency removal in ChiC(iw=0) of site: "//reg(SiteName(isite))
                call dump_BosonicField(ChiCmats,reg(PrevItFolder)//"Solver_"//reg(SiteName(isite))//"/","ChiC_CDW_"//reg(SiteName(isite))//"_w.DAT")
                allocate(CDW(ChiCmats%Nbp,ChiCmats%Nbp));CDW=0d0
                CDW = real(ChiCmats%screened_local(:,:,1))
-               call remove_CDW(ChiCmats,"imp",site=isite)
+               call remove_CDW(ChiCmats,"lat",site=isite)
                CDW = CDW - real(ChiCmats%screened_local(:,:,1))
                call dump_Matrix(CDW,reg(PrevItFolder)//"Solver_"//reg(SiteName(isite))//"/CDW_"//reg(SiteName(isite))//".DAT")
                deallocate(CDW)
             endif
-            !
-            !TEST>>>
-            if(Crystal%Norb.eq.9)then
-               write(*,"(A)") new_line("A")//"     Removing all off-diagonal elements from Pimp."
-               do iw=1,ChiCmats%Npoints
-                  ChiCmats%screened_local(:,:,iw) = diag(diagonal(ChiCmats%screened_local(:,:,iw)))
-               enddo
-            endif
-            !>>>TEST
             !
             !Bosonic Dyson equations
             write(*,"(A)") new_line("A")//"     Solving bosonic Dyson of site: "//reg(SiteName(isite))

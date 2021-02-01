@@ -130,7 +130,7 @@ program SelfConsistency
          !scGW
          if(Iteration.eq.0)then
             !
-            !Compute the Dc between G0W0 and scGW
+            !Compute the Dc between G0W0 and scGW self-energies
             call AllocateFermionicField(S_G0W0dc,Crystal%Norb,Nmats,Nkpt=Crystal%Nkpt,Nsite=Nsite,Beta=Beta)
             call calc_sigmaGW(S_G0W0dc,Glat,Wlat,Crystal)
             call dump_FermionicField(S_G0W0dc,reg(ItFolder),"SGoWo_w",.true.,Crystal%kpt)
@@ -175,13 +175,8 @@ program SelfConsistency
       if((Iteration.eq.0).and.solve_DMFT) call calc_SigmaGuess()
       call DeallocateBosonicField(Wlat)
       !
-      !Put together all the contributions to the full self-energy and deallocate useless stuff
-      if(.not.S_Full_exists)then
-         call join_SigmaFull(Iteration)
-         call DeallocateFermionicField(S_G0W0)
-         call DeallocateFermionicField(S_G0W0dc)
-         if(.not.causal_D) call DeallocateFermionicField(S_GW)
-      endif
+      !Put together all the contributions to the full self-energy and deallocate all the components
+      if(.not.S_Full_exists) call join_SigmaFull(Iteration)
       !
       !Compute the Full Green's function and set the density
       call calc_Gmats(Glat,Crystal,S_Full)
@@ -189,10 +184,7 @@ program SelfConsistency
       if(look4dens%TargetDensity.ne.0d0)call set_density(Glat,Crystal,look4dens)
       !
       ! Causality correction on Delta
-      if(causal_D) then
-         call calc_causality_Delta_correction()
-         call DeallocateFermionicField(S_GW)
-      endif
+      if(causal_D) call calc_causality_Delta_correction()
       !
       !Print Gf: local readable and k-dep binfmt
       if(dump_Gk)call dump_FermionicField(Glat,reg(ItFolder),"Glat_w",.true.,Crystal%kpt)
@@ -207,6 +199,7 @@ program SelfConsistency
       !
       !The local problem must give the same density in the same subset
       if(MultiTier)then
+         write(*,*)
          write(*,"(A,1I3)") "     N_READ_IMP updated from "//str(Solver%TargetDensity,4)//" to "//str(get_Tier_occupation(densityGW,SiteOrbs),4)
          Solver%TargetDensity = get_Tier_occupation(densityGW,SiteOrbs)
          call save_InputFile("input.in")

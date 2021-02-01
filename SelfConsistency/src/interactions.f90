@@ -317,7 +317,7 @@ contains
          enddo
       endif
       !call dump_BosonicField(Umats,"./Ulat_readable/",.false.)
-      call dump_BosonicField(Wmats,"./Wlat_readable/",.false.)
+      !call dump_BosonicField(Wmats,"./Wlat_readable/",.false.)
       !
    end subroutine calc_W_full
 

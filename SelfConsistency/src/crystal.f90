@@ -82,6 +82,7 @@ module crystal
    public :: wannier_K2R_NN                                                     ![Nkpt3_orig(3),Kpt_orig(3,Nkpt_orig),Mat_orig(n,n,Npoins,Nkpt_orig),mat_R_nn(n,n,Npoins,3)]
    public :: wannier_K2R
    public :: wannier_R2K
+   public :: calc_path
    !public :: add_crystalfields
 
    !===========================================================================!
@@ -1164,6 +1165,172 @@ contains
       !$OMP END PARALLEL
       !
    end subroutine wannier_R2K_vec
+
+
+   !---------------------------------------------------------------------------!
+   !PURPOSE: generates thew K-points along some pre-stored high-symmetry points.
+   !---------------------------------------------------------------------------!
+   subroutine calc_path(kpt_path,structure,Nkpt_path)
+      !
+      use utils_misc
+      implicit none
+      !
+      real(8),allocatable,intent(out)       :: kpt_path(:,:)
+      character(len=*),intent(in)           :: structure
+      integer,intent(in)                    :: Nkpt_path
+      !
+      real(8),dimension(3)                  :: Gamma,M,R,X,K,L,U,W,H,N,P,A,Z,S,T,Y
+      real(8),dimension(3)                  :: Kdiff
+      real(8),allocatable                   :: Kpoints(:,:),Kdist(:)
+      integer                               :: idir,Ndir,idk,ik,lastK
+      real(8)                               :: dKtot,theta,phi,dk,kx,ky,kz
+      !
+      !
+      if(verbose)write(*,"(A)") "---- calc_path"
+      !
+      !
+      !
+      if(allocated(kpt_path))deallocate(kpt_path)
+      select case(reg(structure))
+         case default
+            !
+            stop "Available structures: cubic, fcc, bcc, hex, tetragonal, orthorhombic."
+            !
+         case("cubic")
+            !
+            Gamma = [     0d0,     0d0,     0d0 ]
+            M     = [ 1d0/2d0, 1d0/2d0,     0d0 ]
+            R     = [ 1d0/2d0, 1d0/2d0, 1d0/2d0 ]
+            X     = [ 1d0/2d0,     0d0,     0d0 ]
+            !
+            allocate(Kpoints(3,4));Kpoints=0d0
+            Kpoints(:,1) = Gamma
+            Kpoints(:,2) = M
+            Kpoints(:,3) = R
+            Kpoints(:,4) = X
+            !
+         case("fcc")
+            !
+            Gamma = [     0d0,     0d0,     0d0 ]
+            K     = [ 3d0/8d0, 3d0/8d0, 3d0/4d0 ]
+            L     = [ 1d0/2d0, 1d0/2d0, 1d0/2d0 ]
+            U     = [ 1d0/4d0, 5d0/8d0, 5d0/8d0 ]
+            W     = [ 1d0/4d0, 1d0/2d0, 3d0/4d0 ]
+            X     = [     0d0, 1d0/2d0, 1d0/2d0 ]
+            !
+            allocate(Kpoints(3,6));Kpoints=0d0
+            Kpoints(:,1) = Gamma
+            Kpoints(:,2) = K
+            Kpoints(:,3) = L
+            Kpoints(:,4) = U
+            Kpoints(:,5) = W
+            Kpoints(:,6) = X
+            !
+         case("bcc")
+            !
+            Gamma = [     0d0,     0d0,     0d0 ]
+            H     = [-1d0/2d0, 1d0/2d0, 1d0/2d0 ]
+            N     = [     0d0,     0d0, 1d0/2d0 ]
+            P     = [ 1d0/4d0, 1d0/4d0, 1d0/4d0 ]
+            !
+            allocate(Kpoints(3,4));Kpoints=0d0
+            Kpoints(:,1) = Gamma
+            Kpoints(:,2) = H
+            Kpoints(:,3) = N
+            Kpoints(:,4) = P
+            !
+         case("hex")
+            !
+            A     = [     0d0,     0d0, 1d0/2d0 ]
+            Gamma = [     0d0,     0d0,     0d0 ]
+            H     = [ 1d0/3d0, 1d0/3d0, 1d0/2d0 ]
+            K     = [ 1d0/3d0, 1d0/3d0,     0d0 ]
+            L     = [     0d0, 1d0/2d0, 1d0/2d0 ]
+            M     = [     0d0, 1d0/2d0,     0d0 ]
+            !
+            allocate(Kpoints(3,6));Kpoints=0d0
+            Kpoints(:,1) = A
+            Kpoints(:,2) = Gamma
+            Kpoints(:,3) = H
+            Kpoints(:,4) = K
+            Kpoints(:,5) = L
+            Kpoints(:,6) = M
+            !
+         case("tetragonal")
+            !
+            A     = [ 1d0/2d0, 1d0/2d0, 1d0/2d0 ]
+            Gamma = [     0d0,     0d0,     0d0 ]
+            M     = [ 1d0/2d0, 1d0/2d0,     0d0 ]
+            R     = [ 1d0/2d0,     0d0, 1d0/2d0 ]
+            X     = [ 1d0/2d0,     0d0,     0d0 ]
+            Z     = [     0d0,     0d0, 1d0/2d0 ]
+            !
+            allocate(Kpoints(3,6));Kpoints=0d0
+            Kpoints(:,1) = A
+            Kpoints(:,2) = Gamma
+            Kpoints(:,3) = M
+            Kpoints(:,4) = R
+            Kpoints(:,5) = X
+            Kpoints(:,6) = Z
+            !
+         case("orthorhombic")
+            !
+            Gamma = [     0d0,     0d0,     0d0 ]
+            R     = [ 1d0/2d0, 1d0/2d0, 1d0/2d0 ]
+            S     = [ 1d0/2d0, 1d0/2d0,     0d0 ]
+            T     = [     0d0, 1d0/2d0, 1d0/2d0 ]
+            U     = [ 1d0/2d0,     0d0, 1d0/2d0 ]
+            X     = [ 1d0/2d0,     0d0,     0d0 ]
+            Y     = [     0d0, 1d0/2d0,     0d0 ]
+            Z     = [     0d0,     0d0, 1d0/2d0 ]
+            !
+            allocate(Kpoints(3,8));Kpoints=0d0
+            Kpoints(:,1) = Gamma
+            Kpoints(:,2) = R
+            Kpoints(:,3) = S
+            Kpoints(:,4) = T
+            Kpoints(:,5) = U
+            Kpoints(:,6) = X
+            Kpoints(:,7) = Y
+            Kpoints(:,8) = Z
+            !
+      end select
+      !
+      !
+      Ndir = size(Kpoints,dim=2)
+      allocate(Kdist(Ndir*Nkpt_path));Kdist=0d0
+      allocate(kpt_path(3,Ndir*Nkpt_path+1));kpt_path=0d0
+      !
+      ik=0
+      do idir=2,Ndir
+         !
+         Kdiff = Kpoints(:,idir) - Kpoints(:,idir-1)
+         !
+         dKtot = sqrt(dot_product(Kdiff,Kdiff))
+         theta = acos(Kdiff(3)/dKtot)
+         phi = atan2(Kdiff(2),Kdiff(1))
+         !
+         dk = dKtot/Nkpt_path
+         !
+         lastK=0
+         if(idir.eq.Ndir)lastK=1
+         do idk=1,Nkpt_path+lastK
+            !
+            kx = Kpoints(1,idir-1) + (idk-1)*dk*sin(theta)*cos(phi)
+            ky = Kpoints(2,idir-1) + (idk-1)*dk*sin(theta)*sin(phi)
+            kz = Kpoints(3,idir-1) + (idk-1)*dk*cos(theta)
+            !
+            ik=ik+1
+            !
+            kpt_path(:,ik) = [kx,ky,kz]
+            if(ik.gt.1) Kdist(ik) = Kdist(ik-1) + (idk-1)*dk
+            !
+         enddo
+         !
+      enddo
+
+      !
+   end subroutine calc_path
 
 
 end module crystal

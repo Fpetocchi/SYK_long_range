@@ -347,7 +347,7 @@ contains
       !
       call cpu_time(finish)
       write(*,"(A,F)") "     PiGGsc cpu timing: ", finish-start
-      call dump_BosonicField(Pout,"./Plat_readable/",.false.)
+      !call dump_BosonicField(Pout,"./Plat_readable/",.false.)
       !
    end subroutine calc_Pi_scGG
 

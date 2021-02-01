@@ -32,17 +32,22 @@ module parameters
    type Lattice
       real(8),allocatable                   :: kpt(:,:)
       integer                               :: Nkpt3(3)
-      complex(8),allocatable                :: Hk(:,:,:)                        ![Norb,Norb,Nkpt]
       complex(8),allocatable                :: Hloc(:,:)                        ![Norb,Norb]
+      complex(8),allocatable                :: Hk(:,:,:)                        ![Norb,Norb,Nkpt]
       complex(8),allocatable                :: Zk(:,:,:)                        ![Norb,Norb,Nkpt]
       real(8),allocatable                   :: Ek(:,:)                          ![Norb,Nkpt]
+      complex(8),allocatable                :: Hk_path(:,:,:)                   ![Norb,Norb,Nkpt_path]
+      complex(8),allocatable                :: Zk_path(:,:,:)                   ![Norb,Norb,Nkpt_path]
+      real(8),allocatable                   :: Ek_path(:,:)                     ![Norb,Nkpt_path]
       integer,allocatable                   :: kptPos(:)                        ![Nkpt]
       integer,allocatable                   :: kptsum(:,:)                      ![Nkpt,Nkpt]
       integer,allocatable                   :: kptdif(:,:)                      ![Nkpt,Nkpt]
       integer,allocatable                   :: kprint(:)
       integer,allocatable                   :: small_ik(:,:)                    ![12,2]
+      real(8),allocatable                   :: kptpath(:,:)                     ![3,Nkpt_path]
       integer                               :: Nkpt=0
       integer                               :: Nkpt_irred=0
+      integer                               :: Nkpt_path=0
       integer                               :: iq_gamma=-1
       integer                               :: Norb=0
       real(8)                               :: mu=0d0

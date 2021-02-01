@@ -198,9 +198,9 @@ contains
          endif
       enddo
       if(ik.eq.Nkpt) then
-          write(*,*)"requested k-point not found in k-point set"
-          write(*,*)"kvec=",kvec
-          stop "k-point for chiplot not found in k-point set"
+          write(*,"(A)")"find_kpt: requested k-point not found in k-point set"
+          write(*,"(A,300F)")"find_kpt: kvec=",kvec
+          stop "find_kpt: k-point for chiplot not found in k-point set"
       endif
    end function find_kpt
 
@@ -481,7 +481,7 @@ contains
       logical,intent(in),optional           :: verb
       !
       real(8)                               :: ReErr,ImErr
-      real(8)                               :: percReErr,percImErr
+      real(8)                               :: percReErr=0d0,percImErr=0d0
       logical                               :: hardstop_,enforce_,verb_
       integer                               :: N,i,j
       !
@@ -500,20 +500,20 @@ contains
       do i=1,N
          do j=1+i,N
             !
-            ReErr = abs(real(A(i,j))-real(A(j,i)))
-            ImErr = abs(aimag(A(i,j))+aimag(A(j,i)))
-            percReErr = abs(ReErr/real(A(i,j)))
-            percImErr = abs(ImErr/aimag(A(i,j)))
+            ReErr = abs(dreal(A(i,j))-dreal(A(j,i)))
+            ImErr = abs(dimag(A(i,j))+dimag(A(j,i)))
+            if(dreal(A(i,j)).ne.0d0) percReErr = abs(ReErr/dreal(A(i,j)))
+            if(dimag(A(i,j)).ne.0d0) percImErr = abs(ImErr/dimag(A(i,j)))
             !
             if((ReErr.gt.tol).or.(ImErr.gt.tol))then
                !
                if((ReErr.gt.tol).and.verb_)then
                   if(present(name)) write(*,"(A)") "     Non-hermitian matrix: "//reg(name)
-                  write(*,"(A,2I4,5(A,1E12.5))")   "     [i,j]:",i,j," Re(A_ij): ",real(A(i,j)) ," Re(A_ji): ",real(A(j,i)) ," err: ",ReErr," %err: ",percReErr," > ",tol
+                  write(*,"(A,2I4,5(A,1E12.5))")   "     [i,j]:",i,j," Re(A_ij): ",dreal(A(i,j)) ," Re(A_ji): ",dreal(A(j,i)) ," err: ",ReErr," %err: ",percReErr," > ",tol
                endif
                if((ImErr.gt.tol).and.verb_)then
                   if(present(name)) write(*,"(A)") "     Non-hermitian matrix: "//reg(name)
-                  write(*,"(A,2I4,5(A,1E12.5))")   "     [i,j]:",i,j," Im(A_ij): ",aimag(A(i,j))," Im(A_ji): ",aimag(A(j,i))," err: ",ImErr," %err: ",percImErr," > ",tol
+                  write(*,"(A,2I4,5(A,1E12.5))")   "     [i,j]:",i,j," Im(A_ij): ",dimag(A(i,j))," Im(A_ji): ",dimag(A(j,i))," err: ",ImErr," %err: ",percImErr," > ",tol
                endif
                !
                if(hardstop_)stop  "check_Hermiticity: Matrix not Hermitian."
@@ -543,7 +543,7 @@ contains
       character(len=*),intent(in),optional  :: name
       logical,intent(in),optional           :: verb
       !
-      real(8)                               :: ReErr,percReErr
+      real(8)                               :: ReErr,percReErr=0d0
       logical                               :: hardstop_,enforce_,verb_
       integer                               :: N,i,j
       !
@@ -563,7 +563,7 @@ contains
          do j=1+i,N
             !
             ReErr = A(i,j)-A(j,i)
-            percReErr = abs(ReErr/A(i,j))
+            if(A(i,j).ne.0d0) percReErr = abs(ReErr/A(i,j))
             !
             if(ReErr.gt.tol)then
                !
@@ -596,7 +596,7 @@ contains
       logical,intent(in),optional           :: verb
       !
       real(8)                               :: ReErr,ImErr
-      real(8)                               :: percReErr,percImErr
+      real(8)                               :: percReErr=0d0,percImErr=0d0
       logical                               :: hardstop_,enforce_,verb_
       integer                               :: N,i,j
       !
@@ -615,20 +615,20 @@ contains
       do i=1,N
          do j=1+i,N
             !
-            ReErr = abs(real(A(i,j))-real(A(j,i)))
-            ImErr = abs(aimag(A(i,j))-aimag(A(j,i)))
-            percReErr = abs(ReErr/real(A(i,j)))
-            percImErr = abs(ImErr/aimag(A(i,j)))
+            ReErr = abs(dreal(A(i,j))-dreal(A(j,i)))
+            ImErr = abs(dimag(A(i,j))-dimag(A(j,i)))
+            if(dreal(A(i,j)).ne.0d0) percReErr = abs(ReErr/dreal(A(i,j)))
+            if(dimag(A(i,j)).ne.0d0) percImErr = abs(ImErr/dimag(A(i,j)))
             !
             if((ReErr.gt.tol).or.(ImErr.gt.tol))then
                !
                if((ReErr.gt.tol).and.verb_)then
                   if(present(name)) write(*,"(A)") "     Non-symmetric matrix: "//reg(name)
-                  write(*,"(A,2I4,5(A,1E12.5))")   "     [i,j]:",i,j," Re(A_ij): ",real(A(i,j)) ," Re(A_ji): ",real(A(j,i)) ," err: ",ReErr," %err: ",percReErr," > ",tol
+                  write(*,"(A,2I4,5(A,1E12.5))")   "     [i,j]:",i,j," Re(A_ij): ",dreal(A(i,j)) ," Re(A_ji): ",dreal(A(j,i)) ," err: ",ReErr," %err: ",percReErr," > ",tol
                endif
                if((ImErr.gt.tol).and.verb_)then
                   if(present(name)) write(*,"(A)") "     Non-symmetric matrix: "//reg(name)
-                  write(*,"(A,2I4,5(A,1E12.5))")   "     [i,j]:",i,j," Im(A_ij): ",aimag(A(i,j))," Im(A_ji): ",aimag(A(j,i))," err: ",ImErr," %err: ",percImErr," > ",tol
+                  write(*,"(A,2I4,5(A,1E12.5))")   "     [i,j]:",i,j," Im(A_ij): ",dimag(A(i,j))," Im(A_ji): ",dimag(A(j,i))," err: ",ImErr," %err: ",percImErr," > ",tol
                endif
                !
                if(hardstop_)stop "check_Symmetry_z: Matrix not symmatric."
@@ -1052,7 +1052,7 @@ contains
          h = x(n2) - x(n2-1)
          !
          if(dabs(x(n2+1)-x(n2)-h) .gt. 1d-10) then
-            write(*,*) "Segment= ",n
+            write(*,"(A,I)") "Segment= ",n
             stop "FermionicFilon: the above segment is not equally divided"
          endif
          !
@@ -1227,7 +1227,7 @@ contains
             h = x(n2) - x(n2-1)
             !
             if(dabs(x(n2+1)-x(n2)-h).gt.1d-10) then
-               write(*,*) "Segment= ",n
+               write(*,"(A,I)") "Segment= ",n
                stop "BosonicFilon: the above segment is not equally divided"
             endif
             !
@@ -1278,7 +1278,7 @@ contains
             h = x(n2) - x(n2-1)
             !
             if(dabs(x(n2+1)-x(n2)-h).gt.1d-10) then
-               write(*,*) "Segment= ",n
+               write(*,"(A,I)") "Segment= ",n
                stop "BosonicFilon: the above segment is not equally divided"
             endif
             !

@@ -40,8 +40,8 @@ module module_container
    wannierinterpolation                     ,&
    wannier_K2R                              ,&
    wannier_R2K                              ,&
-   wannier_K2R_NN!                          ,&
-   !add_crystalfields
+   wannier_K2R_NN                           ,&
+   calc_path
 
 
    !(d) Fermionic and Bosonic Fourier transforms. Depends on (b),(c) not on specific types.

@@ -964,10 +964,10 @@ contains
          !
          Smats_GoWo%wks = Smats_GoWo%wks * H2eV
          !
+         call FermionicKsum(Smats_GoWo)
+         !
          call cpu_time(finish)
          write(*,"(A,F)") "     Sigma_GoWo(k,w) --> Sigma_GoWo(k,iw) cpu timing:", finish-start
-         !
-         call FermionicKsum(Smats_GoWo)
          !
          ! Print out the transformed stuff
          call dump_FermionicField(Smats_GoWo,reg(pathOUTPUT_),"SGoWo",.true.,Lttc%kpt)
@@ -986,6 +986,7 @@ contains
          write(*,"(A)")"     Reading SigmaGoWo(k,iw) from "//reg(pathOUTPUT_)//"SGoWo_k_s[1,2].DAT"
          call clear_attributes(Smats_GoWo)
          call read_FermionicField(Smats_GoWo,reg(pathOUTPUT_),"SGoWo",Lttc%kpt)
+         call FermionicKsum(Smats_GoWo)
          !
          if(present(Vxc))then
             write(*,"(A)")"     Reading Vxc(k) from "//reg(pathINPUT)
