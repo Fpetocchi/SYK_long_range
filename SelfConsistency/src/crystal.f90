@@ -1170,7 +1170,7 @@ contains
    !---------------------------------------------------------------------------!
    !PURPOSE: generates thew K-points along some pre-stored high-symmetry points.
    !---------------------------------------------------------------------------!
-   subroutine calc_path(kpt_path,structure,Nkpt_path)
+   subroutine calc_path(kpt_path,structure,Nkpt_path,Kaxis)
       !
       use utils_misc
       implicit none
@@ -1178,6 +1178,7 @@ contains
       real(8),allocatable,intent(out)       :: kpt_path(:,:)
       character(len=*),intent(in)           :: structure
       integer,intent(in)                    :: Nkpt_path
+      real(8),allocatable,intent(out),optional :: Kaxis(:)
       !
       real(8),dimension(3)                  :: Gamma,M,R,X,K,L,U,W,H,N,P,A,Z,S,T,Y
       real(8),dimension(3)                  :: Kdiff
@@ -1186,7 +1187,7 @@ contains
       real(8)                               :: dKtot,theta,phi,dk,kx,ky,kz
       !
       !
-      if(verbose)write(*,"(A)") "---- calc_path"
+      write(*,"(A)") new_line("A")//new_line("A")//"---- calc_path"
       !
       !
       !
@@ -1203,11 +1204,17 @@ contains
             R     = [ 1d0/2d0, 1d0/2d0, 1d0/2d0 ]
             X     = [ 1d0/2d0,     0d0,     0d0 ]
             !
-            allocate(Kpoints(3,4));Kpoints=0d0
+            allocate(Kpoints(3,8));Kpoints=0d0
             Kpoints(:,1) = Gamma
-            Kpoints(:,2) = M
-            Kpoints(:,3) = R
-            Kpoints(:,4) = X
+            Kpoints(:,2) = X
+            Kpoints(:,3) = M
+            Kpoints(:,4) = Gamma
+            Kpoints(:,5) = R
+            Kpoints(:,6) = X
+            Kpoints(:,7) = M
+            Kpoints(:,8) = R
+            write(*,"(A)") "     structure: simple-cubic."
+            write(*,"(A)") "     path: GXMGRX,MR"
             !
          case("fcc")
             !
@@ -1218,13 +1225,21 @@ contains
             W     = [ 1d0/4d0, 1d0/2d0, 3d0/4d0 ]
             X     = [     0d0, 1d0/2d0, 1d0/2d0 ]
             !
-            allocate(Kpoints(3,6));Kpoints=0d0
-            Kpoints(:,1) = Gamma
-            Kpoints(:,2) = K
-            Kpoints(:,3) = L
-            Kpoints(:,4) = U
-            Kpoints(:,5) = W
-            Kpoints(:,6) = X
+            allocate(Kpoints(3,12));Kpoints=0d0
+            Kpoints(:,1)  = Gamma
+            Kpoints(:,2)  = X
+            Kpoints(:,3)  = W
+            Kpoints(:,4)  = K
+            Kpoints(:,5)  = Gamma
+            Kpoints(:,6)  = L
+            Kpoints(:,7)  = U
+            Kpoints(:,8)  = W
+            Kpoints(:,9)  = L
+            Kpoints(:,10) = K
+            Kpoints(:,11) = U
+            Kpoints(:,12) = X
+            write(*,"(A)") "     structure: face-centred cubic."
+            write(*,"(A)") "     path: GXWKGLUWLK,UX"
             !
          case("bcc")
             !
@@ -1233,11 +1248,17 @@ contains
             N     = [     0d0,     0d0, 1d0/2d0 ]
             P     = [ 1d0/4d0, 1d0/4d0, 1d0/4d0 ]
             !
-            allocate(Kpoints(3,4));Kpoints=0d0
+            allocate(Kpoints(3,8));Kpoints=0d0
             Kpoints(:,1) = Gamma
             Kpoints(:,2) = H
             Kpoints(:,3) = N
-            Kpoints(:,4) = P
+            Kpoints(:,4) = Gamma
+            Kpoints(:,5) = P
+            Kpoints(:,6) = H
+            Kpoints(:,7) = P
+            Kpoints(:,8) = N
+            write(*,"(A)") "     structure: body-centred cubic."
+            write(*,"(A)") "     path: GHNGPH,PN"
             !
          case("hex")
             !
@@ -1248,13 +1269,21 @@ contains
             L     = [     0d0, 1d0/2d0, 1d0/2d0 ]
             M     = [     0d0, 1d0/2d0,     0d0 ]
             !
-            allocate(Kpoints(3,6));Kpoints=0d0
-            Kpoints(:,1) = A
-            Kpoints(:,2) = Gamma
-            Kpoints(:,3) = H
-            Kpoints(:,4) = K
-            Kpoints(:,5) = L
-            Kpoints(:,6) = M
+            allocate(Kpoints(3,12));Kpoints=0d0
+            Kpoints(:,1)  = Gamma
+            Kpoints(:,2)  = M
+            Kpoints(:,3)  = K
+            Kpoints(:,4)  = Gamma
+            Kpoints(:,5)  = A
+            Kpoints(:,6)  = L
+            Kpoints(:,7)  = H
+            Kpoints(:,8)  = A
+            Kpoints(:,9)  = L
+            Kpoints(:,10) = M
+            Kpoints(:,11) = K
+            Kpoints(:,12) = H
+            write(*,"(A)") "     structure: hexagonal."
+            write(*,"(A)") "     path: GMKGALHA,LM,KH"
             !
          case("tetragonal")
             !
@@ -1265,13 +1294,21 @@ contains
             X     = [ 1d0/2d0,     0d0,     0d0 ]
             Z     = [     0d0,     0d0, 1d0/2d0 ]
             !
-            allocate(Kpoints(3,6));Kpoints=0d0
-            Kpoints(:,1) = A
-            Kpoints(:,2) = Gamma
-            Kpoints(:,3) = M
-            Kpoints(:,4) = R
-            Kpoints(:,5) = X
-            Kpoints(:,6) = Z
+            allocate(Kpoints(3,12));Kpoints=0d0
+            Kpoints(:,1)  = Gamma
+            Kpoints(:,2)  = X
+            Kpoints(:,3)  = M
+            Kpoints(:,4)  = Gamma
+            Kpoints(:,5)  = Z
+            Kpoints(:,6)  = R
+            Kpoints(:,7)  = A
+            Kpoints(:,8)  = Z
+            Kpoints(:,9)  = X
+            Kpoints(:,10) = R
+            Kpoints(:,11) = M
+            Kpoints(:,12) = A
+            write(*,"(A)") "     structure: tetragonal."
+            write(*,"(A)") "     path: GXMGZRAZ,XR,MA"
             !
          case("orthorhombic")
             !
@@ -1284,22 +1321,32 @@ contains
             Y     = [     0d0, 1d0/2d0,     0d0 ]
             Z     = [     0d0,     0d0, 1d0/2d0 ]
             !
-            allocate(Kpoints(3,8));Kpoints=0d0
-            Kpoints(:,1) = Gamma
-            Kpoints(:,2) = R
-            Kpoints(:,3) = S
-            Kpoints(:,4) = T
-            Kpoints(:,5) = U
-            Kpoints(:,6) = X
-            Kpoints(:,7) = Y
-            Kpoints(:,8) = Z
+            allocate(Kpoints(3,16));Kpoints=0d0
+            Kpoints(:,1)  = Gamma
+            Kpoints(:,2)  = X
+            Kpoints(:,3)  = S
+            Kpoints(:,4)  = Y
+            Kpoints(:,5)  = Gamma
+            Kpoints(:,6)  = Z
+            Kpoints(:,7)  = U
+            Kpoints(:,8)  = R
+            Kpoints(:,9)  = T
+            Kpoints(:,10) = Z
+            Kpoints(:,11) = Y
+            Kpoints(:,12) = T
+            Kpoints(:,13) = U
+            Kpoints(:,14) = X
+            Kpoints(:,15) = S
+            Kpoints(:,16) = R
+            write(*,"(A)") "     structure: orthorhombic."
+            write(*,"(A)") "     path: GXSYGZURTZ,YT,UX,SR"
             !
       end select
       !
       !
       Ndir = size(Kpoints,dim=2)
-      allocate(Kdist(Ndir*Nkpt_path));Kdist=0d0
-      allocate(kpt_path(3,Ndir*Nkpt_path+1));kpt_path=0d0
+      allocate(Kdist((Ndir-1)*Nkpt_path+1));Kdist=0d0
+      allocate(kpt_path(3,(Ndir-1)*Nkpt_path+1));kpt_path=0d0
       !
       ik=0
       do idir=2,Ndir
@@ -1323,12 +1370,13 @@ contains
             ik=ik+1
             !
             kpt_path(:,ik) = [kx,ky,kz]
-            if(ik.gt.1) Kdist(ik) = Kdist(ik-1) + (idk-1)*dk
+            if(ik.gt.1) Kdist(ik) = Kdist(ik-1) + dk
             !
          enddo
          !
       enddo
-
+      Kdist = Kdist/Kdist((Ndir-1)*Nkpt_path+1)
+      if(present(Kaxis))Kaxis=Kdist
       !
    end subroutine calc_path
 

@@ -4,7 +4,7 @@
 ################################################################################
 #                                USER SETTINGS                                 #
 ################################################################################
-GENMAT=/home/petocchif/1_GW_EDMFT/1_gw_fp_NEW/GenericMaterial
+GENMAT=/home/petocchif/1_GW_EDMFT/nobackup/1_production/a_LiTi2O4               # Replace last field with project name
 
 G_model=" " #  -M 0.5,1"
 W_model=" " #  -m "$SRC"/Wmodel.dat"
@@ -98,10 +98,11 @@ if [ "$FIELD"  == "G" ]; then
    WORKDIR="MaxEnt_"${FIELD}${SOURCE}"_o"${ORB}"_s"${SPIN}
    mkdir $WORKDIR
    cd $WORKDIR
-   JOBNAME=$FIELD$ORB$SPIN
+   JOBNAME=${FIELD}${ORB}"s"${SPIN}
    #
    DATA=${FIELD}${SOURCE}"_t_o"${ORB}"_s"${SPIN}".DAT"
-   cp ../${DATA} .
+   DATA_=$DATA
+   cp ../${DATA} ./${DATA_}
    #
 elif [ "$FIELD"  == "M" ]; then
    #
@@ -111,7 +112,8 @@ elif [ "$FIELD"  == "M" ]; then
    JOBNAME=$FIELD$ORB$JOR
    #
    DATA=${FIELD}${SOURCE}"_w.DAT"
-   cp ../${DATA} .
+   DATA_=$DATA
+   cp ../${DATA} ./${DATA_}
    #
 else
    #
@@ -120,8 +122,9 @@ else
    cd $WORKDIR
    JOBNAME=$FIELD$ORB$JOR
    #
-   DATA=${FIELD}${SOURCE}"_w_"${ORB}${JOR}${JOR}${ORB}".DAT"
-   cp ../${DATA} .
+   DATA=${FIELD}${SOURCE}"_w_("${ORB}","${JOR}")("${JOR}","${ORB}").DAT"
+   DATA_=${FIELD}${SOURCE}"_w_"${ORB}${JOR}${JOR}${ORB}".DAT"
+   cp ../${DATA} ./${DATA_}
    #
 fi
 
@@ -131,11 +134,11 @@ fi
 ################################################################################
 #                                  PRINT INFOS                                 #
 ################################################################################
-BIN=${GENMAT}/Calculations/MaxEnt
+BIN=${GENMAT}/MaxEnt
 echo
 echo "Binary from: " ${BIN}
 echo "Run options: "${RUNOPTIONS}
-echo "File: "${DATA}
+echo "File: "${DATA_}
 echo "Jobname: "${JOBNAME}
 echo
 
@@ -152,13 +155,14 @@ cat << EOF > submit_MaxEnt
 #$ -N   $JOBNAME
 #$ -e   error.out
 #$ -o   log.out
-#$ -pe  orte 1
-#$ -q   big.q,new.q
+#$ -pe  smp 1
+#$ -q   big.q
 
 echo \$RUNOPTIONS
-export PYTHONPATH=${BIN}/docopt/
+export PYTHONPATH=\${PYTHONPATH}:${BIN}/docopt/
+export OMP_NUM_THREADS=1
 
-python2.7  $BIN/bryan.py $RUNOPTIONS $DATA > job.out
+mpiexec -np 1 python3.6  $BIN/bryan.py $RUNOPTIONS $DATA_ > job.out
 
 EOF
 

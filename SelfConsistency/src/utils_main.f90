@@ -164,7 +164,7 @@ contains
       integer,intent(out)                   :: ItStart
       integer,intent(out)                   :: Itend
       character(len=256)                    :: Itpath
-      integer                               :: isite
+      integer                               :: isite,ispin
       logical                               :: PrvItexist,ZeroItexist
       !
       !Few general checks
@@ -276,6 +276,14 @@ contains
       ItFolder = reg(pathDATA)//str(ItStart)//"/"
       PrevItFolder = reg(pathDATA)//str(ItStart-1)//"/"
       !
+      !Creates folders for the K-resolved stuff
+      if(reg(print_path).ne."None")then
+         do ispin=1,Nspin
+            call createDir(reg(Itpath)//"/K_resolved/Gkt_s"//str(ispin),verb=verbose)
+         enddo
+      endif
+      !
+      !Just to be sure
       Ustart = Ustart .and. (ItStart.eq.0)
       !
    end subroutine initialize_DataStructure

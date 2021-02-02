@@ -1,9 +1,9 @@
 #!/bin/bash
 #$ -S /bin/bash
-#$ -N Fe_07                     # job name
+#$ -N Ti_20                     # job name
 #$ -cwd                         # run script in current directory
-#$ -pe orte2 112                # MPI cores
-#$ -q new.q
+#$ -pe smp 128                  # MPI cores
+#$ -q amd.q
 
 
 export OMP_NUM_THREADS=1
@@ -18,15 +18,15 @@ ulimit -c 0
 #COMPULSORY
 GENMAT=/home/petocchif/1_GW_EDMFT/nobackup/1_production
 
-PATH_INPUT=GWinput_SPEX_bccFe
-PATH_DATA=Results_beta07
+PATH_INPUT=GWinput_SPEX_LiTi2O4
+PATH_DATA=Results_beta20
 
-START_IT=0
-END_IT=36
+START_IT=1
+END_IT=31
 
 #OPTIONAL FOR TEMPERATURE DEPENDENT CALCULATIONS
 PATH_INPUT_TR=GWinput_mats
-###CHANGE_BETA_IT=1
+CHANGE_BETA_IT=1
 
 
 

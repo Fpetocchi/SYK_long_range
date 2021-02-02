@@ -180,6 +180,7 @@ program SelfConsistency
       !
       !Compute the Full Green's function and set the density
       call calc_Gmats(Glat,Crystal,S_Full)
+      if(reg(print_path).ne."None") call interpolate2Path(S_Full,Crystal,reg(print_path),reg(ItFolder))
       call DeallocateFermionicField(S_Full)
       if(look4dens%TargetDensity.ne.0d0)call set_density(Glat,Crystal,look4dens)
       !

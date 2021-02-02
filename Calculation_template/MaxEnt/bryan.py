@@ -14,7 +14,6 @@ import itertools
 import os
 import sys
 import time
-#from scipy import interpolate
 
 class Bryan:
     def __init__(self, tauMesh, omegaMesh, Beta, model, kernel='fermionic',norm=1.0):
@@ -27,9 +26,9 @@ class Bryan:
             self.K=self.deltaOmega*np.array([[np.exp((Beta/2-tau)*omega)/(np.exp(Beta/2*omega)+np.exp(-Beta/2*omega)) for omega in omegaMesh] for tau in tauMesh], np.float64)
         elif kernel=='realbosonic':
             self.K=self.deltaOmega*np.array([[(np.cosh((Beta/2-tau)*omega)*(omega/np.sinh(Beta/2*omega) if abs(omega)>1e-8 else 2.0/Beta)*norm/2.0) if Beta*omega<700.0 else (np.exp(-tau*omega)+np.exp(-(Beta-tau)*omega))*omega*norm/2.0 for omega in omegaMesh] for tau in tauMesh], np.float64)
-        print "Calculating SVD"
+        print("Calculating SVD")
         (V,Sigma,Ut)=np.linalg.svd(self.K)
-        print "Done"
+        print("Done")
         self.model=np.array(model,np.float64)
         self.oneovermodel=np.where(model>0.0,1.0/model,0.0)
         good=[i for i in range (Sigma.shape[0]) if Sigma[i]>Sigma[-1]*100]
@@ -37,7 +36,7 @@ class Bryan:
         self.TSigma=Sigma[good]
         self.TU=Ut.transpose()[:,good]
         self.TVt=V.transpose()[good,:]
-        print "Dimension of kernel:%s; Dimension of singular space:%s"%(self.K.shape, self.s)
+        print("Dimension of kernel:%s; Dimension of singular space:%s"%(self.K.shape, self.s))
 
     def initG(self,G,sigmapm2):
         self.G=np.array(G,np.float64)
@@ -45,9 +44,9 @@ class Bryan:
         self.M=np.dot(np.dot(np.diag(self.TSigma),np.dot(np.dot(self.TVt,np.diag(self.sigmapm2)),self.TVt.transpose())),np.diag(self.TSigma)) #before (11)
 
     def maxent(self,alpha,initA=None):
-        if initA==None:
+        if any(initA==None):
             initA=np.array([1.0/(np.sqrt(2*np.pi)*0.5)*np.exp(-((x)/0.5)**2*0.5)+1e-3 for x in self.omegaMesh],np.float64)
-        print "Calculating maxent with alpha=%s"%alpha
+        print("Calculating maxent with alpha=%s"%alpha)
         A=np.copy(initA)
         A+=1e-8
         u=np.dot(self.TU.transpose(),np.log(A*self.oneovermodel))
@@ -74,7 +73,7 @@ class Bryan:
         tmp=np.log(np.where(A>1e-6,A*(self.oneovermodel+1e-8),1e-6*self.oneovermodel))
         S=np.sum(A-model-(A*tmp)[tmp>-np.inf])
         L=0.5*np.sum((G_+self.G)**2*self.deltaTau*self.sigmapm2) # page 166 left column upper half
-        print "Q=%s"%(alpha*S-L)
+        print("Q=%s"%(alpha*S-L))
         return (A,S,L,lam,-G_)
 
     def approxMax(self,aMax=1.0):
@@ -83,7 +82,7 @@ class Bryan:
             (AMax,S,L,lam,_)=self.maxent(aMax,AMax)
             tmp=np.sum(lam/(aMax+lam))/(-2*aMax*S)
             if abs(tmp-1)<1e-4: break
-            print tmp
+            print(tmp)
             aMax*=(tmp-1)*1.0+1
         return(aMax,AMax,S,L,lam)
 
@@ -124,7 +123,7 @@ class MeasureFunctor:
             self.plot.plot(Data(self.logAlpha,self.logPrAlpha, with_="l"), Data(self.logAlpha,np.exp(self.logPrAlpha), with_="l", axes="x1y2"))
             self.plot2.plot(Data(self.omegaMesh, A, with_="lp"), Data(self.omegaMesh, model, with_='l ls 3',inline=True))
             self.plot3.plot(Data(self.tauMesh,self.G,with_="p"),Data(self.tauMesh,G,with_="l ls 3",inline=True))
-        print "logP=%s, thresh=%s"%(logP, self.thresh)
+        print("logP=%s, thresh=%s"%(logP, self.thresh))
         return (logP>self.thresh)
 
     def finalize (self):
@@ -149,9 +148,9 @@ if __name__=="__main__":
         Ww=np.loadtxt(arguments['<datafile>'])[:,:2]
         Ww[:,1]*=-1
         Beta=2*np.pi/Ww[1,0]
-        p,c,d=leastsq(lambda p,m,d: [ np.sum( [(pi/((1j*mi)**(2*i))).real for i,pi in enumerate(p)] )-di for mi,di in itertools.izip(m,d) ], [1,-2,-4] , args=(Ww[-5:,0],Ww[-15:,1]) )[0]
+        p,c,d=leastsq(lambda p,m,d: [ np.sum( [(pi/((1j*mi)**(2*i))).real for i,pi in enumerate(p)] )-di for mi,di in zip(m,d) ], [1,-2,-4] , args=(Ww[-5:,0],Ww[-15:,1]) )[0]
         Ww[:,1]-=p
-        tauMesh=np.linspace(0,Beta,Ww.shape[0]/2-1)
+        tauMesh=np.linspace(0,Beta,int(Ww.shape[0]/2-1))
         with warnings.catch_warnings():
             warnings.simplefilter("ignore")
             oneoverWwmesh=np.where(Ww[:,0]>0.0,1/Ww[:,0],0.0)
@@ -252,12 +251,12 @@ if __name__=="__main__":
                 m=np.array(momentset.split(','),np.float)
                 if len(m)<3:
                     m=np.hstack([[1.0],m])
-                print "using moments %s"%m
+                print("using moments %s"%m)
                 model+=m[0]*np.exp(-(omegaMesh-m[1])**2/2.0/m[2]**2)/np.sqrt(2*np.pi*m[2]**2)+1e-8
         else:
             model=np.ones(omegaMesh.shape, np.float64)
         model*=float(arguments["--modelnorm"])/np.trapz(model,omegaMesh)
-        print "Done"
+        print("Done")
 
         ######### MAXENTING #############
 
@@ -267,7 +266,7 @@ if __name__=="__main__":
         sys.exit(1)
 
     outputA=[]
-    print "shape(G)=%s, shape(sigmapm2=%s)"%(G.shape,sigmapm2.shape)
+    print("shape(G)=%s, shape(sigmapm2=%s)"%(G.shape,sigmapm2.shape))
     for i in range(G.shape[1]):
         B.initG(G[:,i], sigmapm2[:,i])
         (aMax,AMax,S,L,lam)=B.approxMax()
@@ -288,12 +287,12 @@ if __name__=="__main__":
         elif arguments['--statistics']=='Xt':
             outputA.append(ABryan*B.omegaMesh*np.pi/2.0*np.trapz(G[:,0],tauMesh)/Beta)
         if gnuplot:
-            print "Press return to go on"
+            print("Press return to go on")
             sys.stdin.readline()
 
     ####### WRTINTING FILE #########
 
-    print "writing output"
+    print("writing output")
     outfile=arguments['--outfile'] if arguments['--outfile'] else arguments['<datafile>']+'_dos.dat'
     np.savetxt(outfile,np.hstack([B.omegaMesh.reshape(B.omegaMesh.shape[0],1),np.array(outputA).transpose()]))
     f=open(outfile,'a')
@@ -308,4 +307,4 @@ if __name__=="__main__":
         s+="\n"
         GtauRepFile.write(s)
     GtauRepFile.close()
-    print "done"
+    print("done")

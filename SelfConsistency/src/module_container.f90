@@ -141,9 +141,9 @@ module module_container
    dump_MaxEnt                              ,&
    pade                                     ,&
    remove_CDW                               ,&
-   interpolate2Beta
-   !calc_OptCond                            ,&
-   !calc_HallCond
+   interpolate2Beta                         ,&
+   interpolate2Path
+   !calc_OptCond,calc_HallCond
 
 
 end module module_container
