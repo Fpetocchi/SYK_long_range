@@ -171,7 +171,7 @@ program SelfConsistency
          !
       endif
       !
-      !Initial Guess for the impurity self-energy
+      !Initial Guess for the impurity self-energy only in the 0th iteration
       if((Iteration.eq.0).and.solve_DMFT) call calc_SigmaGuess()
       call DeallocateBosonicField(Wlat)
       !

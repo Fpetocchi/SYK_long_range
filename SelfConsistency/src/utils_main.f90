@@ -872,6 +872,66 @@ contains
 
 
    !---------------------------------------------------------------------------!
+   !PURPOSE: Estimate the impurity self-energy for the 0th iteration
+   !---------------------------------------------------------------------------!
+   subroutine calc_SigmaGuess()
+      !
+      implicit none
+      integer                               :: iorb,jorb,korb,lorb
+      integer                               :: ispin,ib1,ib2,iw
+      real(8),allocatable                   :: Uinst_0th(:,:)
+      real(8)                               :: HartreeFact
+      !
+      !
+      write(*,"(A)") new_line("A")//new_line("A")//"---- calc_SigmaGuess"
+      !
+      !
+      if(.not.solve_DMFT) stop "calc_SigmaGuess: no guess needed if DMFT is not performed."
+      !
+      !
+      allocate(Uinst_0th(Crystal%Norb**2,Crystal%Norb**2));Uinst_0th=0d0
+      !
+      if(Ustart)then
+         Uinst_0th = dreal(Ulat%screened_local(:,:,1))
+      else
+         Uinst_0th = dreal(Wlat%screened_local(:,:,1))
+      endif
+      !
+      !Initial inpurity self-energy guess
+      !This differs from the one done later because the both
+      !S_DMFT and Nlda can contain (real) off-diag elements.
+      do ispin=1,Nspin
+         do iorb=1,S_DMFT%Norb
+            do jorb=1,S_DMFT%Norb
+               do korb=1,S_DMFT%Norb
+                  do lorb=1,S_DMFT%Norb
+                     !
+                     ib1 = iorb + S_DMFT%Norb*(jorb-1)
+                     ib2 = korb + S_DMFT%Norb*(lorb-1)
+                     !
+                     S_DMFT%N_s(iorb,jorb,ispin) = S_DMFT%N_s(iorb,jorb,ispin) + Uinst_0th(ib1,ib2)*dreal(Glat%N_s(korb,lorb,ispin))
+                     !
+                  enddo
+              enddo
+            enddo
+         enddo
+         call dump_Matrix(S_DMFT%N_s(:,:,ispin),reg(ItFolder)//"Hartree0_s"//str(ispin)//".DAT")
+      enddo
+      deallocate(Uinst_0th)
+      !
+      !local projection of G0W0 self-energy otherwise just Hartree
+      if(reg(CalculationType).eq."GW+EDMFT")then
+         S_DMFT%ws = S_G0W0%ws
+      else
+         do iw=1,S_DMFT%Npoints
+            S_DMFT%ws(:,:,iw,:) = S_DMFT%N_s
+         enddo
+      endif
+      !
+   end subroutine calc_SigmaGuess
+
+
+   !---------------------------------------------------------------------------!
    !PURPOSE: Join the all the component of the self-energy. This subroutine
    !         will correct the K dependent self-energy by removing from G0W0 the
    !         dc and local part. So that the local proj. of the self-energyexactly
@@ -943,7 +1003,7 @@ contains
                   S_G0W0%wks(:,:,:,ik,:) = S_G0W0%wks(:,:,:,ik,:) - S_G0W0%ws
                enddo
                !
-               !Put every K-dependent part inside S_GW
+               !Add non local S_G0W0 to S_GW
                S_GW%wks = S_GW%wks + S_G0W0%wks
                !
                !$OMP PARALLEL DEFAULT(NONE),&
@@ -1020,65 +1080,6 @@ contains
       end select
       !
    end subroutine join_SigmaFull
-
-
-   !---------------------------------------------------------------------------!
-   !PURPOSE: Estimate the impurity self-energy for the 0th iteration
-   !---------------------------------------------------------------------------!
-   subroutine calc_SigmaGuess()
-      !
-      implicit none
-      integer                               :: iorb,jorb,korb,lorb
-      integer                               :: ispin,ib1,ib2,iw
-      real(8),allocatable                   :: Uinst_0th(:,:)
-      !
-      !
-      write(*,"(A)") new_line("A")//new_line("A")//"---- calc_SigmaGuess"
-      !
-      !
-      if(.not.solve_DMFT) stop "calc_SigmaGuess: no guess needed if DMFT is not performed."
-      !
-      !
-      allocate(Uinst_0th(Crystal%Norb**2,Crystal%Norb**2));Uinst_0th=0d0
-      !
-      if(Ustart)then
-         Uinst_0th = Ulat%screened_local(:,:,1)
-      else
-         Uinst_0th = Wlat%screened_local(:,:,1)
-      endif
-      !
-      !Initial inpurity self-energy guess
-      !This differs from the one done later because the both
-      !S_DMFT and Nlda can contain (real) off-diag elements.
-      do ispin=1,Nspin
-         do iorb=1,S_DMFT%Norb
-            do jorb=1,S_DMFT%Norb
-               do korb=1,S_DMFT%Norb
-                  do lorb=1,S_DMFT%Norb
-                     !
-                     ib1 = iorb + S_DMFT%Norb*(jorb-1)
-                     ib2 = korb + S_DMFT%Norb*(lorb-1)
-                     !
-                     S_DMFT%N_s(iorb,jorb,ispin) = S_DMFT%N_s(iorb,jorb,ispin) + Uinst_0th(ib1,ib2)*Glat%N_s(korb,lorb,ispin)
-                     !
-                  enddo
-              enddo
-            enddo
-         enddo
-         !
-         if(reg(CalculationType).eq."GW+EDMFT")then
-            S_DMFT%ws = S_G0W0%ws
-         else
-            do iw=1,S_DMFT%Npoints
-               S_DMFT%ws(:,:,iw,ispin) = S_DMFT%N_s(:,:,ispin)
-            enddo
-         endif
-         !
-         call dump_Matrix(S_DMFT%N_s(:,:,ispin),reg(ItFolder)//"Hartree0_s"//str(ispin)//".DAT")
-      enddo
-      deallocate(Uinst_0th)
-      !
-   end subroutine calc_SigmaGuess
 
 
    !---------------------------------------------------------------------------!
