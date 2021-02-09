@@ -1,6 +1,6 @@
 #!/bin/bash
 #$ -S /bin/bash
-#$ -N Ti_20                     # job name
+#$ -N .....                     # job name
 #$ -cwd                         # run script in current directory
 #$ -pe smp 128                  # MPI cores
 #$ -q amd.q
@@ -18,15 +18,16 @@ ulimit -c 0
 #COMPULSORY
 GENMAT=/home/petocchif/1_GW_EDMFT/nobackup/1_production
 
-PATH_INPUT=GWinput_SPEX_LiTi2O4
-PATH_DATA=Results_beta20
+PATH_INPUT=GWinput_SPEX_.......
+PATH_DATA=Results_beta..
 
-START_IT=1
-END_IT=31
+START_IT=...
+END_IT=...
 
 #OPTIONAL FOR TEMPERATURE DEPENDENT CALCULATIONS
 PATH_INPUT_TR=GWinput_mats
-CHANGE_BETA_IT=1
+####SKIP_FIRST_SC="T"
+####CHANGE_BETA_IT=1
 
 
 
@@ -39,6 +40,7 @@ BINqmc=${GENMAT}/Solver/bin
 BINsc=${GENMAT}/SelfConsistency/bin
 
 if [ -z ${PATH_INPUT_TR+x} ]; then PATH_INPUT_TR=${PATH_INPUT} ; fi
+if [ -z ${SKIP_FIRST_SC+x} ]; then SKIP_FIRST_SC="F" ; fi
 
 export l0=`grep -n "PATH_INPUT=" input.in    | awk -F  ":" '{print $1}'`
 export l1=`grep -n "PATH_INPUT_TR=" input.in | awk -F  ":" '{print $1}'`
@@ -47,10 +49,10 @@ export l3=`grep -n "START_IT=" input.in      | awk -F  ":" '{print $1}'`
 export l4=`grep -n "LAST_IT=" input.in       | awk -F  ":" '{print $1}'`
 export l5=`grep -n "MATCH_BETA=" input.in    | awk -F  ":" '{print $1}'`
 
-`sed -i ${l0}'s/'"PATH_INPUT=.*!"'/'"PATH_INPUT=${PATH_INPUT}           !"'/' input.in`
-`sed -i ${l1}'s/'"PATH_INPUT_TR=.*!"'/'"PATH_INPUT_TR=${PATH_INPUT_TR}  !"'/' input.in`
-`sed -i ${l2}'s/'"PATH_DATA=.*!"'/'"PATH_DATA=${PATH_DATA}              !"'/' input.in`
-`sed -i ${l4}'s/'"LAST_IT=.*!"'/'"LAST_IT=${END_IT}                     !"'/' input.in`
+sed -i ${l0}'s/'"PATH_INPUT=.*!"'/'"PATH_INPUT=${PATH_INPUT}           !"'/' input.in
+sed -i ${l1}'s/'"PATH_INPUT_TR=.*!"'/'"PATH_INPUT_TR=${PATH_INPUT_TR}  !"'/' input.in
+sed -i ${l2}'s/'"PATH_DATA=.*!"'/'"PATH_DATA=${PATH_DATA}              !"'/' input.in
+sed -i ${l4}'s/'"LAST_IT=.*!"'/'"LAST_IT=${END_IT}                     !"'/' input.in
 
 
 
@@ -64,14 +66,20 @@ do
    #
    # Input update
    IT_DATA=${LOCAL}/${PATH_DATA}/${IT}/
-   `sed -i ${l3}'s/'"START_IT=.*!"'/'"START_IT=${IT}         !"'/' input.in`
-   `sed -i ${l5}'s/'"MATCH_BETA=.*!"'/'"MATCH_BETA=F         !"'/' input.in`
-   if [ ! -z ${CHANGE_BETA_IT+x} ] && [ ${CHANGE_BETA_IT} == ${IT} ] ; then `sed -i ${l5}'s/'"MATCH_BETA=.*!"'/'"MATCH_BETA=T         !"'/' input.in` ; fi
+   sed -i ${l3}'s/'"START_IT=.*!"'/'"START_IT=${IT}         !"'/' input.in
+   sed -i ${l5}'s/'"MATCH_BETA=.*!"'/'"MATCH_BETA=F         !"'/' input.in
+   if [ ! -z ${CHANGE_BETA_IT+x} ] && [ ${CHANGE_BETA_IT} == ${IT} ] ; then sed -i ${l5}'s/'"MATCH_BETA=.*!"'/'"MATCH_BETA=T         !"'/' input.in ; fi
+   sleep 2
 
    #
    # Lattice problem
-   ${BINsc}/SelfConsistency > report_sc_it${IT} 2> err_sc_it${IT}
-   mv {report_sc_it${IT},err_sc_it${IT}} ${IT_DATA}
+   if [ ${IT} -eq ${START_IT} ] && [ "${SKIP_FIRST_SC}" == "T" ] ; then
+      touch doSolver
+   else
+      ${BINsc}/SelfConsistency > report_sc_it${IT} 2> err_sc_it${IT}
+      mv {report_sc_it${IT},err_sc_it${IT}} ${IT_DATA}
+   fi
+   sleep 2
 
    #
    # Impurity problem
@@ -82,5 +90,6 @@ do
    else
       break
    fi
+   sleep 2
 
 done

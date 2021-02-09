@@ -80,7 +80,7 @@ program SelfConsistency
          call dump_BosonicField(Plat,reg(ItFolder),"Plat_w.DAT")
          !
          if(merge_P.and.solve_DMFT) then !(**)
-            call MergeFields(Plat,P_EDMFT,alphaPi,SiteOrbs)
+            call MergeFields(Plat,P_EDMFT,alphaPi,SiteOrbs,RotateHloc)
             call dump_BosonicField(Plat,reg(ItFolder),"Plat_merged_w.DAT")
          endif
          !

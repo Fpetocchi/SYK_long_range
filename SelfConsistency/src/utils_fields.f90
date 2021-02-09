@@ -17,6 +17,12 @@ module utils_fields
       module procedure clear_attributes_Boson
    end interface clear_attributes
 
+   interface clear_MatrixElements
+      module procedure clear_MatrixElements_Matrix
+      module procedure clear_MatrixElements_Fermion
+      module procedure clear_MatrixElements_Boson
+   end interface clear_MatrixElements
+
    interface loc2imp
       module procedure loc2imp_Matrix
       module procedure loc2imp_Fermionic
@@ -79,7 +85,9 @@ module utils_fields
    public :: DeallocateFermionicField
    public :: AllocateBosonicField
    public :: DeallocateBosonicField
+   public :: TransformBosonicField
    public :: clear_attributes
+   public :: clear_MatrixElements
    public :: duplicate
    public :: isReal
    public :: loc2imp
@@ -392,6 +400,55 @@ contains
 
 
    !---------------------------------------------------------------------------!
+   !PURPOSE: Rotate a tensor
+   !---------------------------------------------------------------------------!
+   subroutine TransformBosonicField(W,U,Map,onlyNaNb,LocalOnly)
+      !
+      use parameters
+      use utils_misc
+      use linalg, only : tensor_transform
+      implicit none
+      !
+      type(BosonicField),intent(inout)      :: W
+      complex(8),intent(in)                 :: U(:,:)
+      integer,intent(in)                    :: Map(:,:,:)
+      logical,intent(in),optional           :: onlyNaNb
+      logical,intent(in),optional           :: LocalOnly
+      !
+      integer                               :: iw,ik,Norb
+      logical                               :: onlyNaNb_,LocalOnly_
+      !
+      if(.not.W%status) stop "TransformBosonicField: field not properly initialized."
+      call assert_shape(Map,[W%Nbp,W%Nbp,4],"TransformBosonicField","Map")
+      Norb = int(sqrt(dble(W%Nbp)))
+      call assert_shape(U,[Norb,Norb],"TransformBosonicField","U")
+      LocalOnly_=.true.
+      if(present(LocalOnly))LocalOnly_=LocalOnly
+      onlyNaNb_=.false.
+      if(present(onlyNaNb))onlyNaNb_=onlyNaNb
+      !
+      if(allocated(W%bare_local))call tensor_transform(W%bare_local,Map,U,NaNb=onlyNaNb_)
+      if(allocated(W%screened_local))then
+         do iw=1,W%Npoints
+            call tensor_transform(W%screened_local(:,:,iw),Map,U,NaNb=onlyNaNb_)
+         enddo
+      endif
+      !
+      if(.not.LocalOnly_)then
+         do ik=1,W%Nkpt
+            if(allocated(W%bare))call tensor_transform(W%bare(:,:,ik),Map,U,NaNb=onlyNaNb_)
+            if(allocated(W%screened))then
+               do iw=1,W%Npoints
+                  call tensor_transform(W%screened(:,:,iw,ik),Map,U,NaNb=onlyNaNb_)
+               enddo
+            endif
+         enddo
+      endif
+      !
+   end subroutine TransformBosonicField
+
+
+   !---------------------------------------------------------------------------!
    !PURPOSE: Clear the internal attributes of a Fermionic/Bosonic field
    !TEST ON: 16-10-2020(both)
    !---------------------------------------------------------------------------!
@@ -399,6 +456,7 @@ contains
       use parameters
       implicit none
       type(FermionicField),intent(inout)    :: G
+      if(.not.G%status) stop "clear_attributes_Fermion: field not properly initialized."
       if(allocated(G%N_s))G%N_s=czero
       if(allocated(G%ws))G%ws=czero
       if(allocated(G%N_ks))G%N_ks=czero
@@ -409,11 +467,84 @@ contains
       use parameters
       implicit none
       type(BosonicField),intent(inout)      :: W
+      if(.not.W%status) stop "clear_attributes_Boson: field not properly initialized."
       if(allocated(W%bare_local))W%bare_local=czero
       if(allocated(W%screened_local))W%screened_local=czero
       if(allocated(W%bare))W%bare=czero
       if(allocated(W%screened))W%screened=czero
    end subroutine clear_attributes_Boson
+
+
+   !---------------------------------------------------------------------------!
+   !PURPOSE: Clear Matix elements of a Matrix/Fermionic/Bosonic field attributes
+   !         from user-provided Map
+   !---------------------------------------------------------------------------!
+   subroutine clear_MatrixElements_Matrix(O,Map)
+      use parameters
+      use utils_misc
+      implicit none
+      complex(8),intent(inout)              :: O(:,:)
+      logical,intent(in)                    :: Map(:,:)
+      integer                               :: iorb,jorb
+      call assert_shape(Map,[size(O,dim=1),size(O,dim=2)],"clear_MatrixElements_Matrix","Map")
+      do iorb=1,size(O,dim=1)
+         do jorb=1,size(O,dim=2)
+            if(.not.Map(iorb,jorb)) O(iorb,jorb)=czero
+         enddo
+      enddo
+   end subroutine clear_MatrixElements_Matrix
+   !
+   subroutine clear_MatrixElements_Fermion(G,Map,LocalOnly)
+      use parameters
+      use utils_misc
+      implicit none
+      type(FermionicField),intent(inout)    :: G
+      logical,intent(in)                    :: Map(:,:)
+      logical,intent(in),optional           :: LocalOnly
+      integer                               :: ispin,iorb,jorb
+      logical                               :: LocalOnly_
+      if(.not.G%status) stop "clear_MatrixElements_Fermion: field not properly initialized."
+      call assert_shape(Map,[G%Norb,G%Norb],"clear_MatrixElements_Fermion","Map")
+      LocalOnly_=.true.
+      if(present(LocalOnly))LocalOnly_=LocalOnly
+      do ispin=1,Nspin
+         do iorb=1,G%Norb
+            do jorb=1,G%Norb
+               if(allocated(G%N_s).and.(.not.Map(iorb,jorb))) G%N_s(iorb,jorb,ispin)=czero
+               if(allocated(G%ws).and.(.not.Map(iorb,jorb)))  G%ws(iorb,jorb,:,ispin)=czero
+               if(.not.LocalOnly_)then
+                  if(allocated(G%N_ks).and.(.not.Map(iorb,jorb))) G%N_ks(iorb,jorb,:,ispin)=czero
+                  if(allocated(G%wks).and.(.not.Map(iorb,jorb)))  G%wks(iorb,jorb,:,:,ispin)=czero
+               endif
+            enddo
+         enddo
+      enddo
+   end subroutine clear_MatrixElements_Fermion
+   !
+   subroutine clear_MatrixElements_Boson(W,Map,LocalOnly)
+      use parameters
+      use utils_misc
+      implicit none
+      type(BosonicField),intent(inout)      :: W
+      logical,intent(in)                    :: Map(:,:)
+      logical,intent(in),optional           :: LocalOnly
+      integer                               :: ib1,ib2
+      logical                               :: LocalOnly_
+      if(.not.W%status) stop "clear_MatrixElements_Boson: field not properly initialized."
+      call assert_shape(Map,[W%Nbp,W%Nbp],"clear_MatrixElements_Boson","Map")
+      LocalOnly_=.true.
+      if(present(LocalOnly))LocalOnly_=LocalOnly
+      do ib1=1,W%Nbp
+         do ib2=1,W%Nbp
+            if(allocated(W%bare_local).and.(.not.Map(ib1,ib2))) W%bare_local(ib1,ib2)=czero
+            if(allocated(W%screened_local).and.(.not.Map(ib1,ib2)))  W%screened_local(ib1,ib2,:)=czero
+            if(.not.LocalOnly_)then
+               if(allocated(W%bare).and.(.not.Map(ib1,ib2))) W%bare(ib1,ib2,:)=czero
+               if(allocated(W%screened).and.(.not.Map(ib1,ib2)))  W%screened(ib1,ib2,:,:)=czero
+            endif
+         enddo
+      enddo
+   end subroutine clear_MatrixElements_Boson
 
 
    !---------------------------------------------------------------------------!
@@ -488,6 +619,7 @@ contains
    subroutine loc2imp_Fermionic(Gimp,Gloc,orbs,sitename,U)
       !
       use parameters
+      use utils_misc
       use linalg, only : rotate
       implicit none
       !
@@ -520,10 +652,9 @@ contains
       if(size(orbs).ne.Gimp%Norb) stop "loc2imp(F): can't fit the requested orbitals inside Gimp."
       if(size(orbs).gt.Gloc%Norb) stop "loc2imp(F): number of requested orbitals greater than Gloc size."
       if(present(U))then
-         write(*,"(A)") "     The local orbital space will be rotated during extraction."
-         if(size(U,dim=1).ne.size(U,dim=2)) stop "Rotation matrix not square."
-         if(size(U,dim=1).ne.size(orbs)) stop "Rotation matrix has the wrong dimension."
+         call assert_shape(U,[size(orbs),size(orbs)],"loc2imp(F)","U")
          if(size(U,dim=1).ne.3) write(*,"(A)") "     Warning: The local orbital space rotation is well defined only for a t2g sub-shell."
+         write(*,"(A)") "     The local orbital space will be rotated during extraction."
       endif
       !
       call clear_attributes(Gimp)
@@ -560,6 +691,7 @@ contains
    subroutine loc2imp_Matrix(Oimp,Oloc,orbs,sitename,U)
       !
       use parameters
+      use utils_misc
       use linalg, only : rotate
       implicit none
       !
@@ -582,10 +714,9 @@ contains
       if(size(orbs).ne.size(Oimp,dim=1)) stop "loc2imp(O): can't fit the requested orbitals inside Oimp."
       if(size(orbs).gt.size(Oloc,dim=1)) stop "loc2imp(O): number of requested orbitals greater than Oloc size."
       if(present(U))then
-         write(*,"(A)") "     The local orbital space will be rotated during extraction."
-         if(size(U,dim=1).ne.size(U,dim=2)) stop "Rotation matrix not square."
-         if(size(U,dim=1).ne.size(orbs)) stop "Rotation matrix has the wrong dimension."
+         call assert_shape(U,[size(orbs),size(orbs)],"loc2imp(O)","U")
          if(size(U,dim=1).ne.3) write(*,"(A)") "     Warning: The local orbital space rotation is well defined only for a t2g sub-shell."
+         write(*,"(A)") "     The local orbital space will be rotated during extraction."
       endif
       !
       Oimp=czero
@@ -605,22 +736,27 @@ contains
       !
    end subroutine loc2imp_Matrix
    !
-   subroutine loc2imp_Bosonic(Wimp,Wloc,orbs,sitename)
+   subroutine loc2imp_Bosonic(Wimp,Wloc,orbs,sitename,U,Map,onlyNaNb)
       !
       use parameters
+      use utils_misc
+      use linalg, only : tensor_transform
       implicit none
       !
       type(BosonicField),intent(inout)      :: Wimp
       type(BosonicField),intent(in)         :: Wloc
       integer,allocatable,intent(in)        :: orbs(:)
       character(len=*),intent(in),optional  :: sitename
+      complex(8),allocatable,optional       :: U(:,:)
+      integer,allocatable,optional          :: Map(:,:,:)
+      logical,intent(in),optional           :: onlyNaNb
       !
       integer                               :: ip
       integer                               :: Norb_imp,Norb_loc
       integer                               :: ib_imp,jb_imp,ib_loc,jb_loc
       integer                               :: i_loc,j_loc,k_loc,l_loc
       integer                               :: i_imp,j_imp,k_imp,l_imp
-      logical                               :: doBare
+      logical                               :: doBare,rotate,onlyNaNb_
       !
       !
       if(verbose)write(*,"(A)") "---- loc2imp(B)"
@@ -646,6 +782,21 @@ contains
       !
       if(size(orbs).ne.Norb_imp) stop "loc2imp(B): can't fit the requested orbitals inside Wimp."
       if(size(orbs).gt.Norb_loc) stop "loc2imp(B): number of requested orbitals greater than Wloc size."
+      if(present(U))then
+         if(.not.present(Map)) stop "Also the map must be provided."
+         call assert_shape(U,[size(orbs),size(orbs)],"loc2imp(B)","U")
+         if(size(U,dim=1).ne.3) write(*,"(A)") "     Warning: The local orbital space rotation is well defined only for a t2g sub-shell."
+         write(*,"(A)") "     The local orbital space will be rotated during extraction."
+      endif
+      if(present(Map))then
+         if(.not.present(U)) stop "Also the rotation must be provided."
+         call assert_shape(Map,[Wimp%Nbp,Wimp%Nbp,4],"loc2imp(B)","Map")
+      endif
+      rotate=.false.
+      if(present(U).and.present(Map))rotate=.true.
+      onlyNaNb_=.false.
+      if(present(onlyNaNb))onlyNaNb_=onlyNaNb
+      if(onlyNaNb_)write(*,"(A)") "     Rotation of (aa)(bb) indexes only."
       !
       call clear_attributes(Wimp)
       !
@@ -677,6 +828,13 @@ contains
             enddo
          enddo
       enddo
+      !
+      if(rotate)then
+         if(doBare) call tensor_transform(Wimp%bare_local,Map,U,NaNb=onlyNaNb_)
+         do ip=1,Wimp%Npoints
+            call tensor_transform(Wimp%screened_local(:,:,ip),Map,U,NaNb=onlyNaNb_)
+         enddo
+      endif
       !
    end subroutine loc2imp_Bosonic
 
@@ -916,9 +1074,11 @@ contains
       !
    end subroutine imp2loc_Matrix
    !
-   subroutine imp2loc_Bosonic(Wloc,Wimp,orbs,expand,AFM)
+   subroutine imp2loc_Bosonic(Wloc,Wimp,orbs,expand,AFM,U,Map,onlyNaNb)
       !
       use parameters
+      use utils_misc
+      use linalg, only : tensor_transform
       implicit none
       !
       type(BosonicField),intent(inout)      :: Wloc
@@ -926,13 +1086,18 @@ contains
       integer,allocatable,intent(in)        :: orbs(:)
       logical,intent(in)                    :: expand
       logical,intent(in)                    :: AFM
+      complex(8),allocatable,optional       :: U(:,:,:)
+      integer,allocatable,optional          :: Map(:,:,:)
+      logical,intent(in),optional           :: onlyNaNb
       !
+      complex(8),allocatable                :: Rot(:,:)
+      complex(8),allocatable                :: Wbtmp(:,:,:),Wstmp(:,:,:,:)
       integer                               :: ip,isite,Nsite,shift
       integer                               :: Norb_imp,Norb_loc
       integer                               :: ib_imp,jb_imp,ib_loc,jb_loc
       integer                               :: i_loc,j_loc,k_loc,l_loc
       integer                               :: i_imp,j_imp,k_imp,l_imp
-      logical                               :: doBare
+      logical                               :: doBare,rotate,onlyNaNb_
       !
       !
       if(verbose)write(*,"(A)") "---- imp2loc(B)"
@@ -975,6 +1140,46 @@ contains
          Nsite = 1
       endif
       !
+      if(present(U))then
+         if(.not.present(Map)) stop "Also the map must be provided."
+         if(size(U,dim=1).ne.size(U,dim=2)) stop "Rotation matrix not square."
+         if(size(U,dim=3).ne.Wloc%Nsite) stop "Number of rotation matrices and number of sites does not match."
+         if(size(U,dim=1).ne.3) write(*,"(A)") "     Warning: The local orbital space rotation is well defined only for a t2g sub-shell."
+         write(*,"(A)") "     The impurity orbital space will be rotated during insertion in "//str(Nsite)//" sites."
+      endif
+      if(present(Map))then
+         if(.not.present(U)) stop "Also the rotation must be provided."
+         if(size(Map,dim=1).ne.size(Map,dim=2)) stop "Map not square."
+         if(size(Map,dim=1).ne.Wimp%Nbp) stop "Map does not match the impurity orbital space."
+         if(size(Map,dim=3).ne.4) stop "Map last index with dimension different than 4."
+      endif
+      rotate=.false.
+      if(present(U).and.present(Map))rotate=.true.
+      onlyNaNb_=.false.
+      if(present(onlyNaNb))onlyNaNb_=onlyNaNb
+      if(onlyNaNb_)write(*,"(A)") "     Rotation of (aa)(bb) indexes only."
+      !
+      if(doBare) allocate(Wbtmp(Wimp%Nbp,Wimp%Nbp,Nsite));Wbtmp=czero
+      allocate(Wstmp(Wimp%Nbp,Wimp%Nbp,Wimp%Npoints,Nsite));Wstmp=czero
+      !
+      ! Rotating either one site or all of them depending on expand
+      do isite=1,Nsite
+         if(doBare) Wbtmp(:,:,isite) = Wimp%bare_local
+         Wstmp(:,:,:,isite) = Wimp%screened_local
+      enddo
+      if(rotate)then
+         do isite=1,Nsite
+            !
+            allocate(Rot(Norb_imp,Norb_imp)); Rot=U(1:Norb_imp,1:Norb_imp,isite)
+            if(doBare) call tensor_transform(Wbtmp(:,:,isite),Map,Rot,NaNb=onlyNaNb_)
+            do ip=1,Wimp%Npoints
+               call tensor_transform(Wstmp(:,:,ip,isite),Map,Rot,NaNb=onlyNaNb_)
+            enddo
+            deallocate(Rot)
+            !
+         enddo
+      endif
+      !
       do isite=1,Nsite
          !
          ! only two possible arrangements
@@ -1003,9 +1208,9 @@ contains
                      ib_loc = k_loc + Norb_loc*(i_loc-1)
                      jb_loc = l_loc + Norb_loc*(j_loc-1)
                      !
-                     if(doBare)Wloc%bare_local(ib_loc,jb_loc) = Wimp%bare_local(ib_imp,jb_imp)
+                     if(doBare)Wloc%bare_local(ib_loc,jb_loc) = Wbtmp(ib_imp,jb_imp,isite)
                      do ip=1,Wimp%Npoints
-                        Wloc%screened_local(ib_loc,jb_loc,ip) = Wimp%screened_local(ib_imp,jb_imp,ip)
+                        Wloc%screened_local(ib_loc,jb_loc,ip) = Wstmp(ib_imp,jb_imp,ip,isite)
                      enddo
                      !
                   enddo
@@ -1014,6 +1219,8 @@ contains
          enddo
          !
       enddo
+      if(doBare) deallocate(Wbtmp)
+      deallocate(Wstmp)
       !
    end subroutine imp2loc_Bosonic
 
@@ -1780,11 +1987,11 @@ contains
       !
       !get the equivalent sets from the input pattern
       call get_pattern(Eqv_diag%SetOrbs,Pattern,eps)
-      Eqv_diag%Nset = size(Eqv_diag%SetOrbs,dim=1)
       !
       !fill in other stuff
-      if(Eqv_diag%Nset.ne.0)then
+      if(allocated(Eqv_diag%SetOrbs))then
          !
+         Eqv_diag%Nset = size(Eqv_diag%SetOrbs,dim=1)
          Eqv_diag%Ntotset = Eqv_diag%Nset
          Eqv_diag%O = .true.
          !
@@ -1840,11 +2047,11 @@ contains
       !
       !get the equivalent sets from the input pattern
       call get_pattern(Eqv_diag%SetOrbs,Pattern,eps)
-      Eqv_diag%Nset = size(Eqv_diag%SetOrbs,dim=1)
       !
       !fill in other stuff
-      if(Eqv_diag%Nset.ne.0)then
+      if(allocated(Eqv_diag%SetOrbs))then
          !
+         Eqv_diag%Nset = size(Eqv_diag%SetOrbs,dim=1)
          Eqv_diag%Ntotset = Eqv_diag%Nset
          Eqv_diag%O = .true.
          !
@@ -1902,11 +2109,11 @@ contains
       !
       !get the equivalent sets from the input pattern
       call get_pattern(Eqv_diag%SetOrbs,Pattern,eps)
-      Eqv_diag%Nset = size(Eqv_diag%SetOrbs,dim=1)
       !
       !fill in other stuff
-      if(Eqv_diag%Nset.ne.0)then
+      if(allocated(Eqv_diag%SetOrbs))then
          !
+         Eqv_diag%Nset = size(Eqv_diag%SetOrbs,dim=1)
          Eqv_diag%Ntotset = Eqv_diag%Nset
          Eqv_diag%O = .true.
          !
@@ -2030,11 +2237,10 @@ contains
    !         SigmaImp%N_s attribute and it is removed during the merge.
    !TEST ON: 27-10-2020
    !---------------------------------------------------------------------------!
-   subroutine MergeSelfEnergy(SigmaGW,SigmaGW_DC,SigmaImp,coeff,orbs,DC_type,Rot)
+   subroutine MergeSelfEnergy(SigmaGW,SigmaGW_DC,SigmaImp,coeff,orbs,DC_type,OffDiag)
       !
       use parameters
       use utils_misc
-      use linalg, only : rotate
       implicit none
       !
       type(FermionicField),intent(inout)    :: SigmaGW
@@ -2043,7 +2249,7 @@ contains
       real(8),intent(in)                    :: coeff
       integer,allocatable,intent(in)        :: orbs(:,:)
       character(len=*),intent(in)           :: DC_type
-      logical,intent(in)                    :: Rot
+      logical,intent(in)                    :: OffDiag
       !
       real(8)                               :: Beta
       integer                               :: iw,ik,isite,iorb,jorb
@@ -2100,14 +2306,14 @@ contains
       !
       !all sites if(expand.or.AFM) otherwise only one site and the orbitals within orbs
       !$OMP PARALLEL DEFAULT(NONE),&
-      !$OMP SHARED(Nsite,Nmats,Nkpt,orbs,coeff,SigmaGW,SigmaGW_DC,SigmaImp,localDC,Rot),&
+      !$OMP SHARED(Nsite,Nmats,Nkpt,orbs,coeff,SigmaGW,SigmaGW_DC,SigmaImp,localDC,OffDiag),&
       !$OMP PRIVATE(isite,ispin,iorb,jorb,i_loc,j_loc,iw,ik)
       !$OMP DO
       do isite=1,Nsite
          do iorb=1,size(orbs(isite,:))
             do jorb=1,size(orbs(isite,:))
                !
-               if((.not.Rot).and.(iorb.ne.jorb))cycle
+               if((.not.OffDiag).and.(iorb.ne.jorb))cycle
                !
                !SigmaImp and SigmaGW have the same arrangements
                i_loc = orbs(isite,iorb)
@@ -2147,16 +2353,16 @@ contains
    !PURPOSE: Replace PiImp in PiGW at the indexes contained in orbs
    !TEST ON: 23-10-2020
    !---------------------------------------------------------------------------!
-   subroutine MergePolarization(PiGW,PiImp,coeff,orbs)
+   subroutine MergePolarization(PiGW,PiImp,coeff,orbs,OffDiag)
       !
       use parameters
-      use linalg, only : rotate
       implicit none
       !
       type(BosonicField),intent(inout)      :: PiGW
       type(BosonicField),intent(in)         :: PiImp
       real(8),intent(in)                    :: coeff
       integer,allocatable,intent(in)        :: orbs(:,:)
+      logical,intent(in)                    :: OffDiag
       !
       real(8)                               :: Beta
       integer                               :: iw,ik,isite
@@ -2198,7 +2404,7 @@ contains
       !
       !all sites if(expand) otherwise only one site and the orbitals within orbs
       !$OMP PARALLEL DEFAULT(NONE),&
-      !$OMP SHARED(Nsite,Nmats,Nkpt,Norb,orbs,coeff,PiGW,PiImp),&
+      !$OMP SHARED(Nsite,Nmats,Nkpt,Norb,orbs,coeff,PiGW,PiImp,OffDiag),&
       !$OMP PRIVATE(isite,iorb,jorb,korb,lorb,iw,ik),&
       !$OMP PRIVATE(i_loc,j_loc,k_loc,l_loc,ib_loc,jb_loc)
       !$OMP DO
@@ -2218,19 +2424,21 @@ contains
                      ib_loc = k_loc + Norb*(i_loc-1)
                      jb_loc = l_loc + Norb*(j_loc-1)
                      !
-                     if((i_loc.eq.k_loc).and.(l_loc.eq.j_loc))then
-                        !
-                        do iw=1,Nmats
-                           do ik=1,Nkpt
-                              !
-                              PiGW%screened(ib_loc,jb_loc,iw,ik) = PiGW%screened(ib_loc,jb_loc,iw,ik)                &
-                                                                 - coeff*PiGW%screened_local(ib_loc,jb_loc,iw)       &
-                                                                 + coeff*PiImp%screened_local(ib_loc,jb_loc,iw)
-                              !
-                           enddo
+                     if((.not.OffDiag).and.(.not.((i_loc.eq.k_loc).and.(l_loc.eq.j_loc))))cycle
+                     !
+                     !if((i_loc.eq.k_loc).and.(l_loc.eq.j_loc))then
+                     !
+                     do iw=1,Nmats
+                        do ik=1,Nkpt
+                           !
+                           PiGW%screened(ib_loc,jb_loc,iw,ik) = PiGW%screened(ib_loc,jb_loc,iw,ik)                &
+                                                              - coeff*PiGW%screened_local(ib_loc,jb_loc,iw)       &
+                                                              + coeff*PiImp%screened_local(ib_loc,jb_loc,iw)
+                           !
                         enddo
-                        !
-                     endif
+                     enddo
+                     !
+                     !endif
                      !
                   enddo
                enddo

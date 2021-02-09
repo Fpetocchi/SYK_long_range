@@ -73,7 +73,7 @@ $(DBGDIR)/parameters.o: $(SRCDIR)/parameters.f90
 $(DBGDIR)/input_vars.o: $(SRCDIR)/input_vars.f90 $(DBGDIR)/utils_misc.o $(DBGDIR)/parameters.o
 	$(FC) -c $(FFLAGS) $(DBGFFLAGS) -o $@ $<
 
-$(DBGDIR)/utils_fields.o: $(SRCDIR)/utils_fields.f90 $(DBGDIR)/parameters.o
+$(DBGDIR)/utils_fields.o: $(SRCDIR)/utils_fields.f90 $(DBGDIR)/parameters.o $(DBGDIR)/linalg.o $(DBGDIR)/utils_misc.o
 	$(FC) -c $(FFLAGS) $(DBGFFLAGS) -o $@ $<
 
 $(DBGDIR)/file_io.o: $(SRCDIR)/file_io.f90 $(DBGDIR)/utils_misc.o $(DBGDIR)/parameters.o $(DBGDIR)/utils_fields.o
@@ -137,7 +137,7 @@ $(RELDIR)/parameters.o: $(SRCDIR)/parameters.f90
 $(RELDIR)/input_vars.o: $(SRCDIR)/input_vars.f90 $(RELDIR)/utils_misc.o $(RELDIR)/parameters.o
 	$(FC) -c $(FFLAGS) $(RELFFLAGS) -o $@ $<
 
-$(RELDIR)/utils_fields.o: $(SRCDIR)/utils_fields.f90 $(RELDIR)/parameters.o
+$(RELDIR)/utils_fields.o: $(SRCDIR)/utils_fields.f90 $(RELDIR)/parameters.o $(RELDIR)/linalg.o $(RELDIR)/utils_misc.o
 	$(FC) -c $(FFLAGS) $(RELFFLAGS) -o $@ $<
 
 $(RELDIR)/file_io.o: $(SRCDIR)/file_io.f90 $(RELDIR)/utils_misc.o $(RELDIR)/parameters.o $(RELDIR)/utils_fields.o

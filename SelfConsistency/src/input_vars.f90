@@ -101,6 +101,7 @@ module input_vars
    integer,public                           :: Nsite
    logical,public                           :: ExpandImpurity
    logical,public                           :: RotateHloc
+   logical,public                           :: RotateUloc
    logical,public                           :: AFMselfcons
    logical,public                           :: cmplxWann
    integer,public,allocatable               :: SiteNorb(:)
@@ -245,7 +246,8 @@ contains
       call append_to_input_list(Nspin,"NSPIN","Number of spins (fixed to 2).")
       call parse_input_variable(Nsite,"NSITE",InputFile,default=1,comment="Number of inequivalent sites in the lattice.")
       call parse_input_variable(ExpandImpurity,"EXPAND",InputFile,default=.false.,comment="Flag to use a single impurity solution for all the sites of the lattice. Only indexes for site 1 readed.")
-      call parse_input_variable(RotateHloc,"ROTATE",InputFile,default=.false.,comment="Solve the impurity problem in the basis where H(R=0) is diagonal.")
+      call parse_input_variable(RotateHloc,"ROTATE_F",InputFile,default=.false.,comment="Solve the Fermionic impurity problem in the basis where H(R=0) is diagonal.")
+      call parse_input_variable(RotateUloc,"ROTATE_B",InputFile,default=RotateHloc,comment="Solve Bosonic the impurity problem in the basis where H(R=0) is diagonal.")
       call parse_input_variable(AFMselfcons,"AFM",InputFile,default=.false.,comment="Flag to use  the AFM self-consistency by flipping the spin. Requires input with doubled unit cell.")
       call parse_input_variable(cmplxWann,"CMPLX_WANN",InputFile,default=.false.,comment="Flag to assume the presence of complex Wannier function.")
       allocate(SiteNorb(Nsite));SiteNorb=0
@@ -416,6 +418,7 @@ contains
       call parse_input_variable(Solver%PrintTime,"PRINT_TIME",InputFile,default=10,comment="Minutes that have to pass before observables are updated and stored.")
       call parse_input_variable(Solver%binlength,"BINLENGTH",InputFile,default=4,comment="If >0 the Green's function at itau will be the average within +/-binlength.")
       call parse_input_variable(Solver%binstart,"BINSTART",InputFile,default=100,comment="Tau points skipped at the beginning and end of the Green's function average.")
+      call parse_input_variable(Solver%avrg_shift,"AVG_SHIFT",InputFile,default=0,comment="Integer flag to average the local energy correction isisde the solver.")
       call append_to_input_list(Solver%retarded,"RETARDED","Integer flag to include the frequency dependent part of the interaction. User cannot set this as its deduced from CALC_TYPE.")
       call append_to_input_list(Solver%nnt_meas,"NNT_MEAS","Integer flag to switch on the measurement of the susceptibility. User cannot set this as its deduced from CALC_TYPE.")
       Solver%quickloops=look4dens%quickloops

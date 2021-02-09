@@ -6,7 +6,10 @@ module module_container
    inv, inv_sym, inv_her                    ,&
    det,trace                                ,&
    deye, zeye, zeros, ones                  ,&
-   diag, diagonal, rotate
+   diag, diagonal, rotate                   ,&
+   kronecker_product, outerprod             ,&
+   cross_product, s3_product                ,&
+   tensor_transform
 
 
    !(b) Standalone module. Can be used as generic library.
@@ -59,7 +62,7 @@ module module_container
    use input_vars
 
 
-   !(g) Container attributes manipulations. Depends on (e)
+   !(g) Container attributes manipulations. Depends on (a),(b) and (e)
    use utils_fields, only:                   &
    FermionicKsum                            ,&
    BosonicKsum                              ,&
@@ -69,7 +72,9 @@ module module_container
    DeallocateFermionicField                 ,&
    AllocateBosonicField                     ,&
    DeallocateBosonicField                   ,&
+   TransformBosonicField                    ,&
    clear_attributes                         ,&
+   clear_MatrixElements                     ,&
    isReal                                   ,&
    duplicate                                ,&
    loc2imp,imp2loc                          ,&

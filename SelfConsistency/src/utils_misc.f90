@@ -43,6 +43,13 @@ module utils_misc
       module procedure z_assert_shape_N5
       module procedure z_assert_shape_N6
       module procedure z_assert_shape_N7
+      module procedure l_assert_shape_N1
+      module procedure l_assert_shape_N2
+      module procedure l_assert_shape_N3
+      module procedure l_assert_shape_N4
+      module procedure l_assert_shape_N5
+      module procedure l_assert_shape_N6
+      module procedure l_assert_shape_N7
    end interface assert_shape
 
    interface check_Symmetry
@@ -1801,5 +1808,78 @@ contains
         stop "assert_shape error: wrong matrix shape"
      end if
    end subroutine z_assert_shape_N7
+   !
+   !
+   !
+   subroutine l_assert_shape_N1(A,Ndim,routine,matname)
+     logical,dimension(:),intent(in)         :: A
+     integer,dimension(:),intent(in)            :: Ndim
+     character(len=*),optional                  :: routine, matname
+     if(any(shape(A) /= Ndim)) then
+        if(present(routine).AND.present(matname))&
+             write(*,"(A,10I2)")trim(routine)//" error: "//trim(matname)//" has illegal shape"
+        stop "assert_shape error: wrong matrix shape"
+     end if
+  end subroutine l_assert_shape_N1
+   subroutine l_assert_shape_N2(A,Ndim,routine,matname)
+     logical,dimension(:,:),intent(in)          :: A
+     integer,dimension(:),intent(in)            :: Ndim
+     character(len=*),optional                  :: routine, matname
+     if(any(shape(A) /= Ndim)) then
+        if(present(routine).AND.present(matname))&
+             write(*,"(A,10I2)")trim(routine)//" error: "//trim(matname)//" has illegal shape"
+        stop "assert_shape error: wrong matrix shape"
+     end if
+  end subroutine l_assert_shape_N2
+   subroutine l_assert_shape_N3(A,Ndim,routine,matname)
+     logical,dimension(:,:,:),intent(in)        :: A
+     integer,dimension(:),intent(in)            :: Ndim
+     character(len=*),optional                  :: routine, matname
+     if(any(shape(A) /= Ndim)) then
+        if(present(routine).AND.present(matname))&
+             write(*,"(A,10I2)")trim(routine)//" error: "//trim(matname)//" has illegal shape"
+        stop "assert_shape error: wrong matrix shape"
+     end if
+  end subroutine l_assert_shape_N3
+   subroutine l_assert_shape_N4(A,Ndim,routine,matname)
+     logical,dimension(:,:,:,:),intent(in)        :: A
+     integer,dimension(:),intent(in)            :: Ndim
+     character(len=*),optional                  :: routine, matname
+     if(any(shape(A) /= Ndim)) then
+        if(present(routine).AND.present(matname))&
+             write(*,"(A,10I2)")trim(routine)//" error: "//trim(matname)//" has illegal shape"
+        stop "assert_shape error: wrong matrix shape"
+     end if
+  end subroutine l_assert_shape_N4
+   subroutine l_assert_shape_N5(A,Ndim,routine,matname)
+     logical,dimension(:,:,:,:,:),intent(in)    :: A
+     integer,dimension(:),intent(in)            :: Ndim
+     character(len=*),optional                  :: routine, matname
+     if(any(shape(A) /= Ndim)) then
+        if(present(routine).AND.present(matname))&
+             write(*,"(A,10I2)")trim(routine)//" error: "//trim(matname)//" has illegal shape"
+        stop "assert_shape error: wrong matrix shape"
+     end if
+  end subroutine l_assert_shape_N5
+   subroutine l_assert_shape_N6(A,Ndim,routine,matname)
+     logical,dimension(:,:,:,:,:,:),intent(in)    :: A
+     integer,dimension(:),intent(in)            :: Ndim
+     character(len=*),optional                  :: routine, matname
+     if(any(shape(A) /= Ndim)) then
+        if(present(routine).AND.present(matname))&
+             write(*,"(A,10I2)")trim(routine)//" error: "//trim(matname)//" has illegal shape"
+        stop "assert_shape error: wrong matrix shape"
+     end if
+  end subroutine l_assert_shape_N6
+   subroutine l_assert_shape_N7(A,Ndim,routine,matname)
+     logical,dimension(:,:,:,:,:,:,:),intent(in)    :: A
+     integer,dimension(:),intent(in)            :: Ndim
+     character(len=*),optional                  :: routine, matname
+     if(any(shape(A) /= Ndim)) then
+        if(present(routine).AND.present(matname))&
+             write(*,"(A,10I2)")trim(routine)//" error: "//trim(matname)//" has illegal shape"
+        stop "assert_shape error: wrong matrix shape"
+     end if
+  end subroutine l_assert_shape_N7
 
 end module utils_misc

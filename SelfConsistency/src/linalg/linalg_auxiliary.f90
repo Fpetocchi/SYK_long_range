@@ -110,16 +110,26 @@ end function zdiag
 !-------------------------------------------------------------------------------------------
 !PURPOSE:  Rotate matrix with a given rotation
 !-------------------------------------------------------------------------------------------
-function rotate(A,U) result(Arot)
+function rotate_d(A,U) result(Arot)
+  real(8),intent(in)           :: A(:,:)
+  complex(8),intent(in)        :: U(:,:)
+  complex(8),allocatable       :: Arot(:,:)
+  integer                      :: NA,NU
+  NA = size(A,dim=1) ; if(size(A,dim=2).ne.NA) stop "rotate_d: input matrix not square."
+  NU = size(U,dim=1) ; if(size(U,dim=2).ne.NU) stop "rotate_d: rotation matrix not square."
+  allocate(Arot(NA,NA));Arot=dcmplx(0d0,0d0)
+  Arot = matmul(transpose(conjg(U)),matmul(A,U))
+end function rotate_d
+function rotate_z(A,U) result(Arot)
   complex(8),intent(in)        :: A(:,:)
   complex(8),intent(in)        :: U(:,:)
   complex(8),allocatable       :: Arot(:,:)
   integer                      :: NA,NU
-  NA = size(A,dim=1) ; if(size(A,dim=2).ne.NA) stop "rotate: input matrix not square."
-  NU = size(U,dim=1) ; if(size(U,dim=2).ne.NU) stop "rotate: rotation matrix not square."
+  NA = size(A,dim=1) ; if(size(A,dim=2).ne.NA) stop "rotate_z: input matrix not square."
+  NU = size(U,dim=1) ; if(size(U,dim=2).ne.NU) stop "rotate_z: rotation matrix not square."
   allocate(Arot(NA,NA));Arot=dcmplx(0d0,0d0)
   Arot = matmul(transpose(conjg(U)),matmul(A,U))
-end function rotate
+end function rotate_z
 
 
 

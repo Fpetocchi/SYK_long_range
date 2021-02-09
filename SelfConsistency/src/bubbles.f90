@@ -427,7 +427,7 @@ contains
       call isReal(Pimp)
       !
       if(sym_)then
-         write(*,"(A)") "     Checking symmetry of Pimp (enforced)."
+         write(*,"(A)") "     Checking symmetry of Pimp (enforced)"
          do iw=1,Nmats
             call check_Symmetry(Pimp%screened_local(:,:,iw),eps,enforce=.true.,hardstop=.false.,name="Pimp_w"//str(iw))
          enddo

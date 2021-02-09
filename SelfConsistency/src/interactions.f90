@@ -257,7 +257,7 @@ contains
             Wmats%screened(:,:,iw,iq) = matmul(invW,Umats%screened(:,:,iw,iq))
             !
             !Hermiticity check - print if error is bigger than 1e-3
-            if(sym_) call check_Hermiticity(Wmats%screened(:,:,iw,iq),1e6*eps,enforce=.true.,hardstop=.false.,name="Wlat_w"//str(iw)//"_q"//str(iq))! ,verb=(mod(iq,251).eq.0))
+            if(sym_) call check_Hermiticity(Wmats%screened(:,:,iw,iq),1e7*eps,enforce=.true.,hardstop=.false.,name="Wlat_w"//str(iw)//"_q"//str(iq))! ,verb=(mod(iq,251).eq.0))
             !
             !store the dielectric function around the Gamma point
             if(HandleGammaPoint)then
@@ -298,7 +298,7 @@ contains
          !Fill the Gamma point value - element not included in the iq loop - print if error is bigger than 1e-3
          do iw=1,Nmats
             Wmats%screened(:,:,iw,Umats%iq_gamma) = dreal(matmul(den_smallk_avrg(:,:,iw),Umats%screened(:,:,iw,Umats%iq_gamma)))
-            if(sym_) call check_Symmetry(Wmats%screened(:,:,iw,Umats%iq_gamma),1e6*eps,enforce=.true.,hardstop=.false.,name="Wlat_w"//str(iw)//"_q"//str(Umats%iq_gamma),verb=verbose)
+            if(sym_) call check_Symmetry(Wmats%screened(:,:,iw,Umats%iq_gamma),1e7*eps,enforce=.true.,hardstop=.false.,name="Wlat_w"//str(iw)//"_q"//str(Umats%iq_gamma),verb=verbose)
          enddo
          !
          deallocate(den_smallk,den_smallk_avrg)
@@ -310,12 +310,12 @@ contains
       call BosonicKsum(Wmats)
       !
       ! Check if the screened limit is locally symmetric
-      if(sym_)then
-         write(*,"(A)") "     Checking hermiticity of local Wlat (enforced)."
-         do iw=1,Nmats
-            call check_Hermiticity(Wmats%screened_local(:,:,iw),eps,enforce=.true.,hardstop=.false.,name="Wlat_loc_w"//str(iw))!,verb=verbose)
-         enddo
-      endif
+      !if(sym_)then
+      write(*,"(A)") "     Checking hermiticity of local Wlat (enforced)"
+      do iw=1,Nmats
+         call check_Hermiticity(Wmats%screened_local(:,:,iw),eps,enforce=.true.,hardstop=.false.,name="Wlat_loc_w"//str(iw))!,verb=verbose)
+      enddo
+      !endif
       !call dump_BosonicField(Umats,"./Ulat_readable/",.false.)
       !call dump_BosonicField(Wmats,"./Wlat_readable/",.false.)
       !
@@ -411,7 +411,7 @@ contains
             W_q = matmul(invW,Umats%screened(:,:,iw,iq))
             !
             !Hermiticity check - print if error is bigger than 1e-3
-            if(sym_) call check_Hermiticity(W_q,1e6*eps,enforce=.true.,hardstop=.false.,name="Wlat_w"//str(iw)//"_q"//str(iq))! ,verb=(mod(iq,251).eq.0))
+            if(sym_) call check_Hermiticity(W_q,1e7*eps,enforce=.true.,hardstop=.false.,name="Wlat_w"//str(iw)//"_q"//str(iq))! ,verb=(mod(iq,251).eq.0))
             !
             !Sum to local attribute
             Wmats%screened_local(:,:,iw) = Wmats%screened_local(:,:,iw) + W_q/Umats%Nkpt
@@ -455,7 +455,7 @@ contains
          !Add the Gamma point value - element not summed in the iq loop - print if error is bigger than 1e-3
          do iw=1,Nmats
             W_q = dreal(matmul(den_smallk_avrg(:,:,iw),Umats%screened(:,:,iw,Umats%iq_gamma)))
-            if(sym_) call check_Symmetry(W_q,1e6*eps,enforce=.true.,hardstop=.false.,name="Wlat_w"//str(iw)//"_q"//str(Umats%iq_gamma),verb=verbose)
+            if(sym_) call check_Symmetry(W_q,1e7*eps,enforce=.true.,hardstop=.false.,name="Wlat_w"//str(iw)//"_q"//str(Umats%iq_gamma),verb=verbose)
             Wmats%screened_local(:,:,iw) = Wmats%screened_local(:,:,iw) + W_q/Nkpt
          enddo
          !
@@ -465,12 +465,12 @@ contains
       deallocate(invW,W_q)
       !
       ! Check if the screened limit is locally symmetric
-      if(sym_)then
-         write(*,"(A)") "     Checking hermiticity of local Wlat (enforced)."
-         do iw=1,Nmats
-            call check_Hermiticity(Wmats%screened_local(:,:,iw),eps,enforce=.true.,hardstop=.false.,name="Wlat_loc_w"//str(iw))!,verb=verbose)
-         enddo
-      endif
+      !if(sym_)then
+      write(*,"(A)") "     Checking hermiticity of local Wlat (enforced)"
+      do iw=1,Nmats
+         call check_Hermiticity(Wmats%screened_local(:,:,iw),eps,enforce=.true.,hardstop=.false.,name="Wlat_loc_w"//str(iw))!,verb=verbose)
+      enddo
+      !endif
       !
    end subroutine calc_W_edmft
 
@@ -1753,6 +1753,7 @@ contains
       Nflavor = Norb*Nspin
       !
       call init_Uelements(Norb,PhysicalUelements)
+      !
       call assert_shape(Uinst,[Nflavor,Nflavor],"calc_QMCinteractions","Uinst")
       Uinst=0d0
       if(retarded)then
@@ -1919,7 +1920,7 @@ contains
       call isReal(curlyU)
       !
       if(sym_)then
-         write(*,"(A)") "     Checking symmetry of curlyU (enforced)."
+         write(*,"(A)") "     Checking symmetry of curlyU (enforced)"
          do iw=1,Nmats
             call check_Symmetry(curlyU%screened_local(:,:,iw),eps,enforce=.true.,hardstop=.false.,name="curlyU_w"//str(iw))
          enddo
@@ -1997,7 +1998,7 @@ contains
       call isReal(Wimp)
       !
       if(sym_)then
-         write(*,"(A)") "     Checking symmetry of Wimp (enforced)."
+         write(*,"(A)") "     Checking symmetry of Wimp (enforced)"
          do iw=1,Nmats
             call check_Symmetry(Wimp%screened_local(:,:,iw),eps,enforce=.true.,hardstop=.false.,name="Wimp_w"//str(iw))
          enddo

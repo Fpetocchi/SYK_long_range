@@ -10,9 +10,10 @@
  NSPIN=2                                       !Number of spins (fixed to 2).
  NSITE=4                                       !Number of inequivalent sites in the lattice.
  EXPAND=T                                      !Flag to use a single impurity solution for all the sites of the lattice. Only indexes for site 1 readed.
- ROTATE=T                                      !Solve the impurity problem in the basis where H(R=0) is diagonal.
+ ROTATE_F=T                                    !Solve the Fermionic impurity problem in the basis where H(R=0) is diagonal.
+ ROTATE_B=F                                    !Solve Bosonic the impurity problem in the basis where H(R=0) is diagonal.
  AFM=F                                         !Flag to use  the AFM self-consistency by flipping the spin. Requires input with doubled unit cell.
- CMPLX_WANN=F                                  !Flag to assume the presence of complex Wannier function.
+ CMPLX_WANN=T                                  !Flag to assume the presence of complex Wannier function.
  NAME_1=Ti                                     !Chemical species of the site number 1
  NORB_1=3                                      !Number of orbitals in site number 1
  ORBS_1=1,2,3                                  !Lattice orbital indexes of site number 1
@@ -27,7 +28,7 @@
 
  #---------------------------------------------#
 
- BETA=20.000000                                !Inverse temperature in 1/eV.
+ BETA=25.000000                                !Inverse temperature in 1/eV.
  MAX_WMATS=150.000000                          !Maximum value of the Matsubara frequency mesh.
  TAU_UNIF=F                                    !Flag to use a non-tau_uniform mesh on the imaginary time axis.
  NREAL=2000                                    !Number of points on the real frequency axis.
@@ -103,14 +104,14 @@
  PRINT_TIME=40                                 !Minutes that have to pass before observables are updated and stored.
  BINLENGTH=4                                   !If >0 the Green's function at itau will be the average within +/-binlength.
  BINSTART=50                                   !Tau points skipped at the beginning and end of the Green's function average.
+ AVG_SHIFT=0                                   !Integer flag to average the local energy correction isisde the solver.
  RETARDED=1                                    !Integer flag to include the frequency dependent part of the interaction. User cannot set this as its deduced from CALC_TYPE.
  NNT_MEAS=1                                    !Integer flag to switch on the measurement of the susceptibility. User cannot set this as its deduced from CALC_TYPE.
  TIME_1=60                                     !Minutes of solver runtime for site number 1
 
  #---------------------------------------------#
 
- MATCH_BETA=F                                  !Interpolate to new Beta.
- OLD_BETA=                                     !Beta of the calculation from which Pimp and Sigma will be fitted from.
- OLD_BETA_PATH=                                !Folder (within cwd) from which the old Beta Pimp and Sigma will be read from.
- OLD_BETA_MAX_WMATS=                           !Maximum value of the Matsubara frequency mesh of the old Beta calculation.
-                    
+ MATCH_BETA=F         !Interpolate to new Beta.
+ OLD_BETA=20                                     !Beta of the calculation from which Pimp and Sigma will be fitted from.
+ OLD_BETA_PATH=data_20                                !Folder (within cwd) from which the old Beta Pimp and Sigma will be read from.
+ OLD_BETA_MAX_WMATS=150                           !Maximum value of the Matsubara frequency mesh of the old Beta calculation.

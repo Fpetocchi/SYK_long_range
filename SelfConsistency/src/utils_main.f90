@@ -429,7 +429,7 @@ contains
                !
                !Extract then local Hamiltonian for each site
                call loc2imp(Hloc,Lttc%Hloc,Orbs)
-               Rot = Hloc
+               Rot = dreal(Hloc)
                !
                !Rotate
                call eigh(Rot,Eig)
@@ -472,7 +472,7 @@ contains
                !
                !Extract then local Hamiltonian for each site
                call loc2imp(Hloc,Lttc%Hloc,Orbs)
-               Rot = Hloc
+               Rot = dreal(Hloc)
                !
                !Rotate
                call eigh(Rot,Eig)
@@ -592,6 +592,7 @@ contains
       do iset=1,size(EqvGWndx%SetOrbs,dim=1)
          write(*,"(2(A,I3),A,10I3)")"     set: ",iset,", number of orbitals: ",EqvGWndx%SetNorb(iset),", indexes: ",EqvGWndx%SetOrbs(iset,1:EqvGWndx%SetNorb(iset))
       enddo
+      write(*,"(A,L)") "     Syimmetrizing off-diagonal: ",EqvGWndx%Gfoffdiag
       !
    end subroutine initialize_Lattice
 
@@ -880,7 +881,6 @@ contains
       integer                               :: iorb,jorb,korb,lorb
       integer                               :: ispin,ib1,ib2,iw
       real(8),allocatable                   :: Uinst_0th(:,:)
-      real(8)                               :: HartreeFact
       !
       !
       write(*,"(A)") new_line("A")//new_line("A")//"---- calc_SigmaGuess"
@@ -1505,7 +1505,8 @@ contains
                FermiPrint%ws(iwan,iwan,:,ispin) = Dmats(iwan,:,ispin) - DeltaCorr%ws(iwan,iwan,:,ispin)
             enddo
          enddo
-         call dump_FermionicField(FermiPrint,reg(ItFolder)//"Solver_"//reg(SiteName(isite))//"/","D_noCorr_"//reg(SiteName(isite))//"_w")
+         call dump_FermionicField(FermiPrint,reg(ItFolder)//"Solver_"//reg(SiteName(isite))//"/","D_notCorr_"//reg(SiteName(isite))//"_w")
+         call DeallocateFermionicField(DeltaCorr)
       endif
       !
       !test of the fit and FT procedures
@@ -1558,6 +1559,7 @@ contains
       type(BosonicField)                    :: Pimp
       type(BosonicField)                    :: curlyU,curlyUold
       type(BosonicField)                    :: curlyUcorr
+      type(physicalU)                       :: PhysicalUelements
       integer                               :: Norb,Nflavor,Nbp
       integer                               :: ib1,ib2,itau,iw
       integer                               :: unit,ndx,isitecheck
@@ -1565,6 +1567,7 @@ contains
       real(8),allocatable                   :: Uinst(:,:),Ucheck(:,:)
       real(8),allocatable                   :: Kfunct(:,:,:)
       real(8),allocatable                   :: tau(:),PrintLine(:)
+      complex(8),allocatable                :: Rot(:,:)
       character(len=255)                    :: file
       !
       !
@@ -1584,6 +1587,8 @@ contains
       allocate(tau(Solver%NtauB));tau=0d0
       tau = linspace(0d0,Beta,Solver%NtauB)
       !
+      call init_Uelements(Norb,PhysicalUelements)
+      !
       allocate(Uinst(Nflavor,Nflavor));Uinst=0d0
       call AllocateBosonicField(curlyU,Norb,Nmats,Crystal%iq_gamma,Beta=Beta)
       !
@@ -1596,12 +1601,32 @@ contains
             !
             call loc2imp(curlyU,Ulat,Orbs)
             call isReal(curlyU)
+            call clear_MatrixElements(curlyU,PhysicalUelements%Full_All)
+            !
+            if(RotateUloc)then
+               allocate(Rot(Norb,Norb)); Rot=HlocRot(1:Norb,1:Norb,isite)
+               call TransformBosonicField(curlyU,Rot,PhysicalUelements%Full_Map)
+               deallocate(Rot)
+               call isReal(curlyU)
+               call clear_MatrixElements(curlyU,PhysicalUelements%Full_All)
+            endif
+            !
             call calc_QMCinteractions(curlyU,Uinst)
             !
          case("DMFT+dynU")
             !
             call loc2imp(curlyU,Ulat,Orbs)
             call isReal(curlyU)
+            call clear_MatrixElements(curlyU,PhysicalUelements%Full_All)
+            !
+            if(RotateUloc)then
+               allocate(Rot(Norb,Norb)); Rot=HlocRot(1:Norb,1:Norb,isite)
+               call TransformBosonicField(curlyU,Rot,PhysicalUelements%Full_Map)
+               deallocate(Rot)
+               call isReal(curlyU)
+               call clear_MatrixElements(curlyU,PhysicalUelements%Full_All)
+            endif
+            !
             allocate(Kfunct(Nflavor,Nflavor,Solver%NtauB));Kfunct=0d0
             call calc_QMCinteractions(curlyU,Uinst,Kfunct)
             !
@@ -1612,25 +1637,50 @@ contains
                write(*,"(A)") "     Using local Ucrpa as effective interaction."
                call loc2imp(curlyU,Ulat,Orbs)
                call isReal(curlyU)
+               call clear_MatrixElements(curlyU,PhysicalUelements%Full_All)
+               !
+               if(RotateUloc)then
+                  call dump_BosonicField(curlyU,reg(ItFolder)//"Solver_"//reg(SiteName(isite))//"/","curlyU_notRot_"//reg(SiteName(isite))//"_w.DAT") !remove is the same of curlyU_EDMFT
+                  allocate(Rot(Norb,Norb)); Rot=HlocRot(1:Norb,1:Norb,isite)
+                  call TransformBosonicField(curlyU,Rot,PhysicalUelements%Full_Map)
+                  deallocate(Rot)
+                  call isReal(curlyU)
+                  call clear_MatrixElements(curlyU,PhysicalUelements%Full_All)
+               endif
                !
             else
                !
                write(*,"(A)") "     Computing the local effective interaction."
                call AllocateBosonicField(Pimp,Norb,Nmats,Crystal%iq_gamma,no_bare=.true.,Beta=Beta)
                call AllocateBosonicField(Wloc,Norb,Nmats,Crystal%iq_gamma,Beta=Beta)
+               if(causal_U)call AllocateBosonicField(curlyUcorr,Norb,Nmats,Crystal%iq_gamma,Beta=Beta,no_bare=.true.)
+               !
                call loc2imp(Pimp,P_EDMFT,Orbs)
                call loc2imp(Wloc,Wlat,Orbs)
                !
                if(causal_U)then
-                  call AllocateBosonicField(curlyUcorr,Norb,Nmats,Crystal%iq_gamma,Beta=Beta,no_bare=.true.)
                   call loc2imp(curlyUcorr,curlyU_correction,Orbs)
-                  call calc_curlyU(curlyU,Wloc,Pimp)
-                  call dump_BosonicField(curlyU,reg(ItFolder)//"Solver_"//reg(SiteName(isite))//"/","curlyU_noCorr_"//reg(SiteName(isite))//"_w.DAT")
-                  call clear_attributes(curlyU)
                   call calc_curlyU(curlyU,Wloc,Pimp,curlyUcorr=curlyUcorr)
-                  call DeallocateBosonicField(curlyUcorr)
                else
                   call calc_curlyU(curlyU,Wloc,Pimp)
+               endif
+               call isReal(curlyU)
+               call clear_MatrixElements(curlyU,PhysicalUelements%Full_All)
+               if(causal_U)call clear_MatrixElements(curlyUcorr,PhysicalUelements%Full_All)
+               !
+               if(RotateUloc)then
+                  call dump_BosonicField(curlyU,reg(ItFolder)//"Solver_"//reg(SiteName(isite))//"/","curlyU_notRot_"//reg(SiteName(isite))//"_w.DAT") !remove is the same of curlyU_EDMFT
+                  allocate(Rot(Norb,Norb)); Rot=HlocRot(1:Norb,1:Norb,isite)
+                  call TransformBosonicField(curlyU,Rot,PhysicalUelements%Full_Map)
+                  if(causal_U)call TransformBosonicField(curlyUcorr,Rot,PhysicalUelements%Full_Map)
+                  deallocate(Rot)
+                  call isReal(curlyU)
+                  call clear_MatrixElements(curlyU,PhysicalUelements%Full_All)
+               endif
+               !
+               if(causal_U)then
+                  call dump_BosonicField(curlyUcorr,reg(ItFolder)//"Solver_"//reg(SiteName(isite))//"/","curlyU_correction_"//reg(SiteName(isite))//"_w.DAT")
+                  call DeallocateBosonicField(curlyUcorr)
                endif
                !
                call DeallocateBosonicField(Pimp)
@@ -1656,8 +1706,8 @@ contains
       end select
       deallocate(Orbs)
       !
-      !Dump Files in the proper directory - The output is printed here as it has to be customized for the solver
-      call createDir(reg(ItFolder)//"Solver_"//reg(SiteName(isite)),verb=verbose)
+      !Print curlyU in the solver basis
+      call dump_BosonicField(curlyU,reg(ItFolder)//"Solver_"//reg(SiteName(isite))//"/","curlyU_"//reg(SiteName(isite))//"_w.DAT")
       !
       !Istantaneous interaction
       file = reg(ItFolder)//"Solver_"//reg(SiteName(isite))//"/Umat.DAT"
@@ -1679,8 +1729,6 @@ contains
                   !
                   PrintLine(ndx) = Kfunct(ib1,ib2,itau)
                   if(Kdiag) PrintLine(ndx) = Kfunct(ib1,ib1,itau)
-                  !if(Kdiag.and.((mod(ib1,2).eq.0)).and.(abs(ib1-ib2).gt.1))PrintLine(ndx) = 0d0
-                  !if(Kdiag.and.((mod(ib1,2).eq.1)).and.(abs(ib1-ib2).ne.0))PrintLine(ndx) = 0d0
                   ndx=ndx+1
                   !
                enddo
@@ -1689,9 +1737,6 @@ contains
          enddo
          deallocate(PrintLine)
          close(unit)
-         !
-         !curlyU
-         call dump_BosonicField(curlyU,reg(ItFolder)//"Solver_"//reg(SiteName(isite))//"/","curlyU_"//reg(SiteName(isite))//"_w.DAT")
          !
          deallocate(Kfunct)
          !
@@ -1786,6 +1831,7 @@ contains
       real(8),allocatable                   :: Moments(:,:,:)
       character(len=255)                    :: file,MomDir
       logical                               :: filexists
+      type(physicalU)                       :: PhysicalUelements
       !Impurity Green's function
       type(FermionicField)                  :: Gimp
       complex(8),allocatable                :: Gitau(:,:,:)
@@ -1919,7 +1965,7 @@ contains
          !
       enddo
       !
-      !Save to file in standard format the eventually fitted Gimp
+      !Save to file in standard format Gimp
       call AllocateFermionicField(G_DMFT,Crystal%Norb,Nmats,Nsite=Nsite,Beta=Beta)
       call AllocateFermionicField(Gimp,Norb,Nmats,Beta=Beta)
       do isite=1,Nsite
@@ -2145,10 +2191,10 @@ contains
       ! COLLECT IMPURITY CHARGE SUSCEPTIBILITY AND BOSONIC DYSON ---------------
       if(bosonicSC)then
          !
-         call AllocateBosonicField(P_EDMFT,Crystal%Norb,Nmats,Crystal%iq_gamma,Nsite=Nsite,no_bare=.true.,Beta=Beta)
          call AllocateBosonicField(C_EDMFT,Crystal%Norb,Nmats,Crystal%iq_gamma,Nsite=Nsite,no_bare=.true.,Beta=Beta)
-         call AllocateBosonicField(W_EDMFT,Crystal%Norb,Nmats,Crystal%iq_gamma,Nsite=Nsite,Beta=Beta)
          call AllocateBosonicField(curlyU_EDMFT,Crystal%Norb,Nmats,Crystal%iq_gamma,Nsite=Nsite,Beta=Beta)
+         call AllocateBosonicField(P_EDMFT,Crystal%Norb,Nmats,Crystal%iq_gamma,Nsite=Nsite,no_bare=.true.,Beta=Beta)
+         call AllocateBosonicField(W_EDMFT,Crystal%Norb,Nmats,Crystal%iq_gamma,Nsite=Nsite,Beta=Beta)
          !
          do isite=1,Nsite
             !
@@ -2204,7 +2250,9 @@ contains
             enddo
             deallocate(nnt)
             !
-            !Compute the spin susceptibility ChiM(tau) = Sum_ab <S(tau)S(0)>
+            !
+            !Spin susceptibility------------------------------------------------
+            !ChiM(tau) = Sum_ab <S(tau)S(0)> in the solver basis
             allocate(ChiMitau(Solver%NtauB));ChiMitau=czero
             do ispin=1,Nspin
                do jspin=1,Nspin
@@ -2228,7 +2276,9 @@ contains
             call dump_BosonicField(ChiMmats,reg(PrevItFolder)//"Solver_"//reg(SiteName(isite))//"/","ChiM_"//reg(SiteName(isite))//"_w.DAT",wmats)
             deallocate(ChiMitau,ChiMmats,wmats)
             !
-            !Compute the charge susceptibility Sum_s1s2 <Na(tau)Nb(0)> - <Na><Nb>
+            !
+            !Charge susceptibility----------------------------------------------
+            !ChiC(tau) = Sum_s1s2 <Na(tau)Nb(0)> - <Na><Nb> in the solver basis
             !here I have to use the non-symmetrized Nqmc because <Na><Nb> is not symmetrized
             call AllocateBosonicField(ChiCitau,Norb,Solver%NtauB,Crystal%iq_gamma,no_bare=.true.,Beta=Beta)
             do iorb=1,Norb
@@ -2248,30 +2298,29 @@ contains
                   !
                enddo
             enddo
+            deallocate(densityQMC,NNitau)
+            call isReal(ChiCitau)
             !
+            !User-defined modification of local charge susceptibility
             if(alphaChi.ne.1d0)then
                write(*,"(A)") new_line("A")//"     Rescaling ChiC(tau) with factor: "//str(alphaChi,3)
                ChiCitau%screened_local = ChiCitau%screened_local * alphaChi
             endif
+            if(ChiDiag)then
+               write(*,"(A)") new_line("A")//"     Removing all off-diagonal elements from ChiC(tau)."
+               do itau=1,ChiCitau%Npoints
+                  ChiCitau%screened_local(:,:,itau) = diag(diagonal(ChiCitau%screened_local(:,:,itau)))
+               enddo
+            endif
             !
-            call isReal(ChiCitau)
             call dump_BosonicField(ChiCitau,reg(PrevItFolder)//"Solver_"//reg(SiteName(isite))//"/","ChiC_"//reg(SiteName(isite))//"_t.DAT",axis=tauB)
-            deallocate(tauB,densityQMC)
+            deallocate(tauB)
             !
             !FT to get ChiC(iw)
             call AllocateBosonicField(ChiCmats,Norb,Nmats,Crystal%iq_gamma,no_bare=.true.,Beta=Beta)
             call Bitau2mats(Beta,ChiCitau%screened_local,ChiCmats%screened_local,tau_uniform=.true.)
             call DeallocateBosonicField(ChiCitau)
             call isReal(ChiCmats)
-            if(verbose)call dump_BosonicField(ChiCmats,reg(PrevItFolder)//"Solver_"//reg(SiteName(isite))//"/","ChiC_"//reg(SiteName(isite))//"_w.DAT")
-            !
-            !Remove the off-diagonal components of the local charge susceptibility
-            if(ChiDiag)then
-               write(*,"(A)") new_line("A")//"     Removing all off-diagonal elements from ChiC."
-               do iw=1,ChiCmats%Npoints
-                  ChiCmats%screened_local(:,:,iw) = diag(diagonal(ChiCmats%screened_local(:,:,iw)))
-               enddo
-            endif
             !
             !Remove the iw=0 divergency of local charge susceptibility
             if(removeCDW_C)then
@@ -2279,31 +2328,49 @@ contains
                call dump_BosonicField(ChiCmats,reg(PrevItFolder)//"Solver_"//reg(SiteName(isite))//"/","ChiC_CDW_"//reg(SiteName(isite))//"_w.DAT")
                allocate(CDW(ChiCmats%Nbp,ChiCmats%Nbp));CDW=0d0
                CDW = real(ChiCmats%screened_local(:,:,1))
-               call remove_CDW(ChiCmats,"lat",site=isite)
+               call remove_CDW(ChiCmats,"diag")
                CDW = CDW - real(ChiCmats%screened_local(:,:,1))
                call dump_Matrix(CDW,reg(PrevItFolder)//"Solver_"//reg(SiteName(isite))//"/CDW_"//reg(SiteName(isite))//".DAT")
                deallocate(CDW)
             endif
             !
-            !Bosonic Dyson equations
-            write(*,"(A)") new_line("A")//"     Solving bosonic Dyson of site: "//reg(SiteName(isite))
+            !Print ChiC
+            call dump_BosonicField(ChiCmats,reg(PrevItFolder)//"Solver_"//reg(SiteName(isite))//"/","ChiC_"//reg(SiteName(isite))//"_w.DAT")
+            !
+            !recollect curlyU
             call AllocateBosonicField(curlyU,Norb,Nmats,Crystal%iq_gamma,Beta=Beta)
             call read_BosonicField(curlyU,reg(PrevItFolder)//"Solver_"//reg(SiteName(isite))//"/","curlyU_"//reg(SiteName(isite))//"_w.DAT")
-            call imp2loc(curlyU_EDMFT,curlyU,Orbs,ExpandImpurity,AFMselfcons)
             !
+            !Bosonic Dyson equation in the solver basis
+            write(*,"(A)") new_line("A")//"     Solving bosonic Dyson of site: "//reg(SiteName(isite))
             call AllocateBosonicField(Pimp,Norb,Nmats,Crystal%iq_gamma,no_bare=.true.,Beta=Beta)
             call calc_Pimp(Pimp,curlyU,ChiCmats)
-            call imp2loc(P_EDMFT,Pimp,Orbs,ExpandImpurity,AFMselfcons)
-            call DeallocateBosonicField(Pimp)
             !
+            !Compute convergence benchmark for the interaction
             call AllocateBosonicField(Wimp,Norb,Nmats,Crystal%iq_gamma,Beta=Beta)
             call calc_Wimp(Wimp,curlyU,ChiCmats)
-            call imp2loc(W_EDMFT,Wimp,Orbs,ExpandImpurity,AFMselfcons)
-            call DeallocateBosonicField(Wimp)
             !
-            call imp2loc(C_EDMFT,ChiCmats,Orbs,ExpandImpurity,AFMselfcons)
+            !Expand to the Lattice basis
+            if(RotateHloc)then
+               call init_Uelements(Norb,PhysicalUelements)
+               call imp2loc(C_EDMFT,ChiCmats,Orbs,ExpandImpurity,AFMselfcons,U=HlocRotDag,Map=PhysicalUelements%Full_Map)!,onlyNaNb=.true.
+               call imp2loc(P_EDMFT,Pimp,Orbs,ExpandImpurity,AFMselfcons,U=HlocRotDag,Map=PhysicalUelements%Full_Map)!,onlyNaNb=.true.
+               call imp2loc(W_EDMFT,Wimp,Orbs,ExpandImpurity,AFMselfcons,U=HlocRotDag,Map=PhysicalUelements%Full_Map)
+            else
+               call imp2loc(C_EDMFT,ChiCmats,Orbs,ExpandImpurity,AFMselfcons)
+               call imp2loc(P_EDMFT,Pimp,Orbs,ExpandImpurity,AFMselfcons)
+               call imp2loc(W_EDMFT,Wimp,Orbs,ExpandImpurity,AFMselfcons)
+            endif
+            if(RotateUloc)then
+               call imp2loc(curlyU_EDMFT,curlyU,Orbs,ExpandImpurity,AFMselfcons,U=HlocRotDag,Map=PhysicalUelements%Full_Map)
+            else
+               call imp2loc(curlyU_EDMFT,curlyU,Orbs,ExpandImpurity,AFMselfcons)
+            endif
+            !
             call DeallocateBosonicField(ChiCmats)
             call DeallocateBosonicField(curlyU)
+            call DeallocateBosonicField(Pimp)
+            call DeallocateBosonicField(Wimp)
             !
             deallocate(Orbs)
             if(ExpandImpurity.or.AFMselfcons)exit
@@ -2320,14 +2387,15 @@ contains
          if(removeCDW_P)then
             write(*,"(A)") new_line("A")//"     Divergency removal in Pimp(iw=0)."
             call dump_BosonicField(P_EDMFT,reg(PrevItFolder),"Pimp_CDW_w.DAT")
-            call remove_CDW(P_EDMFT,"imp")
+            call remove_CDW(P_EDMFT,"diag")
          endif
          !
          !Print
          call dump_BosonicField(P_EDMFT,reg(PrevItFolder),"Pimp_w.DAT")
          call dump_BosonicField(W_EDMFT,reg(PrevItFolder),"Wimp_w.DAT")
-         call dump_BosonicField(curlyU_EDMFT,reg(PrevItFolder),"curlyUimp_w.DAT")
          call dump_BosonicField(C_EDMFT,reg(PrevItFolder),"Cimp_w.DAT")
+         call dump_BosonicField(curlyU_EDMFT,reg(PrevItFolder),"curlyUimp_w.DAT")
+         !
          call dump_MaxEnt(P_EDMFT,"mats",reg(PrevItFolder)//"Convergence/","Pimp",EqvGWndx%SetOrbs)
          call dump_MaxEnt(W_EDMFT,"mats",reg(PrevItFolder)//"Convergence/","Wimp",EqvGWndx%SetOrbs)
          call dump_MaxEnt(curlyU_EDMFT,"mats",reg(PrevItFolder)//"Convergence/","curlyUimp",EqvGWndx%SetOrbs)
