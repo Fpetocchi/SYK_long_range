@@ -37,8 +37,8 @@ int main(int argc, char *argv[])
    double Beta;
    int Nspin,NtauF,NtauB,Norder,Nmeas,Ntherm,Nshift,printTime;
    //logical flags and compatibility typo fix
-   bool paramagnet,retarded,nnt_meas,quickloops,dichotomy;
-   int para_read,ret_read,nnt_read,quick_read;
+   bool paramagnet,retarded,nnt_meas,quickloops,dichotomy,OrbSym;
+   int para_read,ret_read,nnt_read,quick_read,sym_read;
    // Post-processing of the Green's function
    int binlength,binstart;
    // Density lookup algorithm (dichotomy)
@@ -51,6 +51,8 @@ int main(int argc, char *argv[])
    std::vector<std::string> SiteName;
    std::vector<std::string> SiteDir;
    char* IterationDir;
+   //Equivalent manifold per site
+   std::vector<std::vector<int>> SiteSetsNorb;
 
 #ifdef _verb
    bool debug=true;
@@ -97,8 +99,10 @@ int main(int argc, char *argv[])
       find_param(argv[1], "MU_TIME"    , muTime    );
       find_param(argv[1], "N_ERR"      , muErr     );
       find_param(argv[1], "N_QUICK"    , quick_read); quickloops = (quick_read == 1) ? true : false;
+      //Symmetrization type
+      find_param(argv[1], "SYM_MODE"   , sym_read  ); OrbSym = (sym_read > 1) ? true : false;
       // Site Dependent Vars
-      find_param(argv[1], "NIMP"       , Nimp     );
+      find_param(argv[1], "NIMP"       , Nimp      );
       //
       if(mpi.is_master()) //debug &&
       {
@@ -115,6 +119,7 @@ int main(int argc, char *argv[])
          mpi.report(" quickloops= "+str(quickloops));
          mpi.report(" paramagnet= "+str(paramagnet));
          mpi.report(" nnt_meas= "+str(nnt_meas));
+         mpi.report(" OrbSym= "+str(OrbSym));
          mpi.report(" debug= "+str(debug));
          if(binlength>0)
          {
@@ -131,6 +136,9 @@ int main(int argc, char *argv[])
             mpi.report(" muTime= "+str(muTime)+"min");
          }
       }
+
+      //
+      if(OrbSym)SiteSetsNorb.resize(Nimp);
 
       //
       for(int isite=0; isite < Nimp; isite++)
@@ -164,6 +172,44 @@ int main(int argc, char *argv[])
          strcat(folder,element);
          SiteDir.push_back(folder);
          //
+
+         //
+         if(OrbSym)
+         {
+            //
+            char lineSets[10];
+            char lineNorb[12];
+            int Sets,Norb;
+
+            //
+            strcpy(lineSets,"EQV_");
+            strcat(lineSets,s);
+            strcat(lineSets,"_SETS");
+            find_param(argv[1], lineSets, Sets );
+            if(Sets>0)
+            {
+               //
+               SiteSetsNorb[isite].resize(Sets);
+
+               //
+               for(int iset=0; iset < Sets; iset++)
+               {
+                  std::string sst=str(iset+1);
+                  const char * st  = sst.c_str();
+
+                  //
+                  strcpy(lineNorb,"EQV_");
+                  strcat(lineNorb,s);
+                  strcat(lineNorb,"_NORB_");
+                  strcat(lineNorb,st);
+                  find_param(argv[1], lineNorb, Norb );
+                  SiteSetsNorb[isite][iset] = Norb;
+
+               }
+            }
+         }
+
+
       }
 
 
@@ -178,6 +224,10 @@ int main(int argc, char *argv[])
          mpi.report(" Name = "+SiteName[isite]);
          mpi.report(" Norb = "+str(SiteNorb[isite]));
          mpi.report(" Time = "+str(SiteTime[isite])+"min");
+         if(OrbSym)
+         {
+            for(int iset=0; iset < SiteSetsNorb[isite].size(); iset++) mpi.report(" Norb in Eqv set #"+str(iset+1)+" = "+str(SiteSetsNorb[isite][iset]));
+         }
 
          //
          if(PathExist(strcpy(new char[SiteDir[isite].length() + 1], SiteDir[isite].c_str())))
@@ -185,7 +235,7 @@ int main(int argc, char *argv[])
             mpi.report(" Folder = "+SiteDir[isite]+" (Found).");
             ImpurityList.push_back(ct_hyb( SiteName[isite], Beta, Nspin, SiteNorb[isite],
                                            NtauF, NtauB, Norder, Nmeas, Ntherm, Nshift,
-                                           paramagnet, retarded, nnt_meas,
+                                           paramagnet, retarded, nnt_meas, SiteSetsNorb[isite],
                                            printTime, std::vector<int> { binlength,binstart }, mpi ));
             ImpurityList[isite].init( SiteDir[isite]);
          }

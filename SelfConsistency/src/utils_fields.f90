@@ -402,7 +402,7 @@ contains
    !---------------------------------------------------------------------------!
    !PURPOSE: Rotate a tensor
    !---------------------------------------------------------------------------!
-   subroutine TransformBosonicField(W,U,Map,onlyNaNb,LocalOnly)
+   subroutine TransformBosonicField(W,U,Map,LocalOnly)
       !
       use parameters
       use utils_misc
@@ -412,11 +412,10 @@ contains
       type(BosonicField),intent(inout)      :: W
       complex(8),intent(in)                 :: U(:,:)
       integer,intent(in)                    :: Map(:,:,:)
-      logical,intent(in),optional           :: onlyNaNb
       logical,intent(in),optional           :: LocalOnly
       !
       integer                               :: iw,ik,Norb
-      logical                               :: onlyNaNb_,LocalOnly_
+      logical                               :: LocalOnly_
       !
       if(.not.W%status) stop "TransformBosonicField: field not properly initialized."
       call assert_shape(Map,[W%Nbp,W%Nbp,4],"TransformBosonicField","Map")
@@ -424,22 +423,20 @@ contains
       call assert_shape(U,[Norb,Norb],"TransformBosonicField","U")
       LocalOnly_=.true.
       if(present(LocalOnly))LocalOnly_=LocalOnly
-      onlyNaNb_=.false.
-      if(present(onlyNaNb))onlyNaNb_=onlyNaNb
       !
-      if(allocated(W%bare_local))call tensor_transform(W%bare_local,Map,U,NaNb=onlyNaNb_)
+      if(allocated(W%bare_local))call tensor_transform(W%bare_local,Map,U)
       if(allocated(W%screened_local))then
          do iw=1,W%Npoints
-            call tensor_transform(W%screened_local(:,:,iw),Map,U,NaNb=onlyNaNb_)
+            call tensor_transform(W%screened_local(:,:,iw),Map,U)
          enddo
       endif
       !
       if(.not.LocalOnly_)then
          do ik=1,W%Nkpt
-            if(allocated(W%bare))call tensor_transform(W%bare(:,:,ik),Map,U,NaNb=onlyNaNb_)
+            if(allocated(W%bare))call tensor_transform(W%bare(:,:,ik),Map,U)
             if(allocated(W%screened))then
                do iw=1,W%Npoints
-                  call tensor_transform(W%screened(:,:,iw,ik),Map,U,NaNb=onlyNaNb_)
+                  call tensor_transform(W%screened(:,:,iw,ik),Map,U)
                enddo
             endif
          enddo
@@ -736,7 +733,7 @@ contains
       !
    end subroutine loc2imp_Matrix
    !
-   subroutine loc2imp_Bosonic(Wimp,Wloc,orbs,sitename,U,Map,onlyNaNb)
+   subroutine loc2imp_Bosonic(Wimp,Wloc,orbs,sitename,U,Map)
       !
       use parameters
       use utils_misc
@@ -749,14 +746,13 @@ contains
       character(len=*),intent(in),optional  :: sitename
       complex(8),allocatable,optional       :: U(:,:)
       integer,allocatable,optional          :: Map(:,:,:)
-      logical,intent(in),optional           :: onlyNaNb
       !
       integer                               :: ip
       integer                               :: Norb_imp,Norb_loc
       integer                               :: ib_imp,jb_imp,ib_loc,jb_loc
       integer                               :: i_loc,j_loc,k_loc,l_loc
       integer                               :: i_imp,j_imp,k_imp,l_imp
-      logical                               :: doBare,rotate,onlyNaNb_
+      logical                               :: doBare,rotate
       !
       !
       if(verbose)write(*,"(A)") "---- loc2imp(B)"
@@ -794,9 +790,6 @@ contains
       endif
       rotate=.false.
       if(present(U).and.present(Map))rotate=.true.
-      onlyNaNb_=.false.
-      if(present(onlyNaNb))onlyNaNb_=onlyNaNb
-      if(onlyNaNb_)write(*,"(A)") "     Rotation of (aa)(bb) indexes only."
       !
       call clear_attributes(Wimp)
       !
@@ -830,9 +823,9 @@ contains
       enddo
       !
       if(rotate)then
-         if(doBare) call tensor_transform(Wimp%bare_local,Map,U,NaNb=onlyNaNb_)
+         if(doBare) call tensor_transform(Wimp%bare_local,Map,U)
          do ip=1,Wimp%Npoints
-            call tensor_transform(Wimp%screened_local(:,:,ip),Map,U,NaNb=onlyNaNb_)
+            call tensor_transform(Wimp%screened_local(:,:,ip),Map,U)
          enddo
       endif
       !
@@ -1074,7 +1067,7 @@ contains
       !
    end subroutine imp2loc_Matrix
    !
-   subroutine imp2loc_Bosonic(Wloc,Wimp,orbs,expand,AFM,U,Map,onlyNaNb)
+   subroutine imp2loc_Bosonic(Wloc,Wimp,orbs,expand,AFM,U,Map)
       !
       use parameters
       use utils_misc
@@ -1088,7 +1081,6 @@ contains
       logical,intent(in)                    :: AFM
       complex(8),allocatable,optional       :: U(:,:,:)
       integer,allocatable,optional          :: Map(:,:,:)
-      logical,intent(in),optional           :: onlyNaNb
       !
       complex(8),allocatable                :: Rot(:,:)
       complex(8),allocatable                :: Wbtmp(:,:,:),Wstmp(:,:,:,:)
@@ -1097,7 +1089,7 @@ contains
       integer                               :: ib_imp,jb_imp,ib_loc,jb_loc
       integer                               :: i_loc,j_loc,k_loc,l_loc
       integer                               :: i_imp,j_imp,k_imp,l_imp
-      logical                               :: doBare,rotate,onlyNaNb_
+      logical                               :: doBare,rotate
       !
       !
       if(verbose)write(*,"(A)") "---- imp2loc(B)"
@@ -1155,9 +1147,6 @@ contains
       endif
       rotate=.false.
       if(present(U).and.present(Map))rotate=.true.
-      onlyNaNb_=.false.
-      if(present(onlyNaNb))onlyNaNb_=onlyNaNb
-      if(onlyNaNb_)write(*,"(A)") "     Rotation of (aa)(bb) indexes only."
       !
       if(doBare) allocate(Wbtmp(Wimp%Nbp,Wimp%Nbp,Nsite));Wbtmp=czero
       allocate(Wstmp(Wimp%Nbp,Wimp%Nbp,Wimp%Npoints,Nsite));Wstmp=czero
@@ -1171,9 +1160,9 @@ contains
          do isite=1,Nsite
             !
             allocate(Rot(Norb_imp,Norb_imp)); Rot=U(1:Norb_imp,1:Norb_imp,isite)
-            if(doBare) call tensor_transform(Wbtmp(:,:,isite),Map,Rot,NaNb=onlyNaNb_)
+            if(doBare) call tensor_transform(Wbtmp(:,:,isite),Map,Rot)
             do ip=1,Wimp%Npoints
-               call tensor_transform(Wstmp(:,:,ip,isite),Map,Rot,NaNb=onlyNaNb_)
+               call tensor_transform(Wstmp(:,:,ip,isite),Map,Rot)
             enddo
             deallocate(Rot)
             !

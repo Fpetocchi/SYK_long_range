@@ -172,7 +172,6 @@ module parameters
       integer                               :: retarded=0
       integer                               :: nnt_meas=0
       integer                               :: quickloops=0
-      integer                               :: avrg_shift=0
    end type QMC
 
    !---------------------------------------------------------------------------!

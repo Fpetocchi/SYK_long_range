@@ -22,9 +22,10 @@ module file_io
       module procedure :: dump_Matrix_Kdep_d                                    ![Umat(Norb,Norb,Nkpt),dirpath,filename,binfmt].........................( Writes output depending on binfmt )
       module procedure :: dump_Matrix_Kdep_z                                    ![Umat(Norb,Norb,Nkpt),dirpath,filename,binfmt].........................( Writes output depending on binfmt )
    end interface dump_Matrix
+
    interface read_Matrix
-      module procedure :: read_Matrix_local_d                                   ![Umat(Norb,Norb),printpath]............................................( Reads only from formatted input )
-      module procedure :: read_Matrix_local_z                                   ![Umat(Norb,Norb),printpath]............................................( Reads only from formatted input )
+      module procedure :: read_Matrix_local_d                                   ![Umat(Norb,Norb),readpath].............................................( Reads only from formatted input )
+      module procedure :: read_Matrix_local_z                                   ![Umat(Norb,Norb),readpath].............................................( Reads only from formatted input )
       module procedure :: read_Matrix_Kdep_d                                    ![Umat(Norb,Norb,Nkpt),dirpath,filename]................................( Reads only from unformatted input )
       module procedure :: read_Matrix_Kdep_z                                    ![Umat(Norb,Norb,Nkpt),dirpath,filename]................................( Reads only from unformatted input )
    end interface read_Matrix

@@ -38,11 +38,11 @@ class ct_hyb
 
       ct_hyb( path SiteName, double beta, int Nspin, int Norb, int NtauF, int NtauB,
               int Norder, int Nmeas, int Ntherm, int Nshift,
-              bool paramagnet, bool retarded, bool nnt_meas,
+              bool paramagnet, bool retarded, bool nnt_meas, std::vector<int> SetsNorb,
               int printTime, std::vector<int> bins, CustomMPI &mpi):
       SiteName(SiteName), Beta(beta), Nspin(Nspin), Norb(Norb), NtauF(NtauF), NtauB(NtauB),
       Norder(Norder), Nmeas(Nmeas), Ntherm(Ntherm), Nshift(Nshift),
-      paramagnet(paramagnet), retarded(retarded), nnt_meas(nnt_meas),
+      paramagnet(paramagnet), retarded(retarded), nnt_meas(nnt_meas), SetsNorb(SetsNorb),
       printTime(printTime), bins(bins), mpi(mpi)
       {}
 
@@ -92,9 +92,15 @@ class ct_hyb
          }
 
          //
+         // Check if Orbital symmetrization is required
+         OrbSym=false;
+         if(SetsNorb.size()>0)OrbSym=true;
+
+         //
          // Check if mandatory files are present
          std::vector<path> mandatoryFiles{"/Eloc.DAT", "/Delta_t.DAT", "/Umat.DAT"};
          if(retarded) mandatoryFiles.push_back("/K_t.DAT");
+         if(OrbSym) mandatoryFiles.push_back("/Eqv.DAT");
          for(int ifile=0; ifile < (int)mandatoryFiles.size(); ifile++)
          {
             path filepath=inputDir+mandatoryFiles[ifile];
@@ -156,6 +162,18 @@ class ct_hyb
                   if(K_zero!=0.0) mpi.StopError( " ->"+Kcomp+" at tau=0 is not vanishing - Exiting.");
                   if(K_beta!=0.0) mpi.StopError( " ->"+Kcomp+" at tau=beta is not vanishing - Exiting.");
                }
+            }
+         }
+
+         //
+         //read in the indexes contained to each equivalent set
+         if(OrbSym)
+         {
+            read_list(inputDir+"/Eqv.DAT",SetsNorb,SetsOrbs);
+            for(int iset=0; iset < SetsNorb.size(); iset++)
+            {
+               mpi.report(" "+SiteName+" Eqv set #"+str(iset+1)+" indexes:");
+               for(int iorb=0; iorb < SetsNorb[iset]; iorb++) mpi.report(" "+str(SetsOrbs[iset][iorb]));
             }
          }
 
@@ -336,6 +354,7 @@ class ct_hyb
       bool                                retarded;
       bool                                nnt_meas;
       int                                 printTime;
+      std::vector<int>                    SetsNorb;
       std::vector<int>                    bins;                                 // 2D vec Contains binlength and binstart in [0] and [1] respectively
       CustomMPI                           mpi;
       // Internal vars
@@ -355,6 +374,8 @@ class ct_hyb
    #else
       bool debug=false;
    #endif
+      std::vector<std::vector<int>>       SetsOrbs;
+      bool                                OrbSym;
       // Input data
       Vec                                 Levels;                               // mu - <\epsilon> + mu_correction
       Vec                                 mu_correction;                        // chemical potential correction due to the interaction shift
@@ -466,11 +487,19 @@ class ct_hyb
          //.........................Expensive measurments.......................
          //
          if(paramagnet) spin_symm(G_tmp);
+         if(OrbSym)
+         {
+            orb_symm(Nloc,SetsOrbs);
+            orb_symm(G_tmp,SetsOrbs);
+         }
          accumulate_G( G, G_tmp );
          //
          if(nnt_meas)
          {
+            //
             n_tau = measure_nt( segments, full_line, NtauB, Beta );
+            if(OrbSym)orb_symm(n_tau,SetsOrbs);
+            //
             accumulate_nt( nt, n_tau );
             accumulate_nnt( nnt, n_tau );
             accumulate_Szhist( Szhist, n_tau );
@@ -526,7 +555,7 @@ class ct_hyb
 
       void print_observables(path pad, std::vector<int> bins)
       {
-         if(debug) // All ranks print their own observables
+         if(debug) // All ranks print their own observables - NOT orbitally symmetrized
          {
             //
             mpi.report(" Rank #"+str(mpi.rank())+" is printing observables.");

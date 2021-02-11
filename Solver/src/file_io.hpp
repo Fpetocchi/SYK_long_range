@@ -285,6 +285,27 @@ void print_line_space(int height, bool flag=true) {
 //------------------------------------------------------------------------------
 
 
+void read_list( std::string path, std::vector<int> &ListDim, std::vector<std::vector<int>> &ListObj)
+{
+   //
+   ListObj.resize(ListDim.size());
+   ifstream file( path );
+   //
+   for (int ilist=0; ilist<(int)ListDim.size(); ilist++)
+   {
+      ListObj[ilist].resize(ListDim[ilist]);
+      for (int iobj=0; iobj<(int)ListDim[ilist]; iobj++)
+      {
+         file >> ListObj[ilist][iobj];
+      }
+   }
+   file.close();
+}
+
+
+//------------------------------------------------------------------------------
+
+
 void read_Vec( std::string path, std::vector<double> &Vec, int &idim)
 {
    //

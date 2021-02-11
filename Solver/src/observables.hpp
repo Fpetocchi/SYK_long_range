@@ -213,6 +213,52 @@ void spin_symm( VecVec &VecVec )
    }
 }
 
+void orb_symm( Vec &Vec, std::vector<std::vector<int>> &Lists )
+{
+   for (int ilist=0; ilist<Lists.size(); ++ilist)
+   {
+      double val_up=0.0;
+      double val_dw=0.0;
+      for (int iobj=0; iobj<Lists[ilist].size(); ++iobj)
+      {
+         int ifl = Lists[ilist][iobj];
+         val_up += Vec[2*ifl]/Lists[ilist].size();
+         val_dw += Vec[2*ifl+1]/Lists[ilist].size();
+      }
+      for (int iobj=0; iobj<Lists[ilist].size(); ++iobj)
+      {
+         int ifl = Lists[ilist][iobj];
+         Vec[2*ifl]=val_up;
+         Vec[2*ifl+1]=val_dw;
+      }
+   }
+}
+
+void orb_symm( VecVec &VecVec, std::vector<std::vector<int>> &Lists )
+{
+   int Ntau = VecVec[0].size();
+   for (int i=0; i<Ntau; ++i)
+   {
+      for (int ilist=0; ilist<Lists.size(); ++ilist)
+      {
+         double val_up=0.0;
+         double val_dw=0.0;
+         for (int iobj=0; iobj<Lists[ilist].size(); ++iobj)
+         {
+            int ifl = Lists[ilist][iobj];
+            val_up += VecVec[2*ifl][i]/Lists[ilist].size();
+            val_dw += VecVec[2*ifl+1][i]/Lists[ilist].size();
+         }
+         for (int iobj=0; iobj<Lists[ilist].size(); ++iobj)
+         {
+            int ifl = Lists[ilist][iobj];
+            VecVec[2*ifl][i]=val_up;
+            VecVec[2*ifl+1][i]=val_dw;
+         }
+      }
+   }
+}
+
 
 //------------------------------------------------------------------------------
 
@@ -367,21 +413,16 @@ VecVec measure_nnt( VecVec &n_tau)
    {
       for (int jfl=0; jfl<=ifl; ++jfl)
       {
-         //
          for (int i=0; i<Ntau; ++i)
          {
             for (int index=0; index<Ntau; ++index)
             {
                int j=i+index;
-               if ( j>(Ntau-1) ) j -= (Ntau-1);
-               nn_corr_meas[position][index] += n_tau[ifl][i]*n_tau[jfl][j];
+               if (j>Ntau) j -= Ntau;
+               nn_corr_meas[position][index] += n_tau[ifl][i]*n_tau[jfl][j] / (double)Ntau;
             }
          }
-         for (int i=0; i<Ntau; ++i)nn_corr_meas[position][i]/=(double)Ntau;
-
-         //
          position++;
-         //
       }
    }
    //

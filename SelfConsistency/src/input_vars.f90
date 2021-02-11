@@ -109,7 +109,9 @@ module input_vars
    integer,public,allocatable               :: SiteOrbs(:,:)
    !
    !Equivalent lattice indexes
+   integer,public                           :: sym_mode
    type(Equivalent),public                  :: EqvGWndx
+   type(Equivalent),allocatable,public      :: EqvImpndx(:)
    !
    !Imaginary time and frequency meshes
    real(8),public                           :: Beta
@@ -199,7 +201,9 @@ module input_vars
    public :: delete_Input
    public :: parse_Cmd_variable
    public :: parse_Input_variable
+   public :: append_to_input_list
    public :: read_InputFile
+   public :: add_separator
 
    !===========================================================================!
 
@@ -289,6 +293,7 @@ contains
       call add_separator()
       call parse_input_variable(EqvGWndx%para,"PARAMAGNET",InputFile,default=1,comment="Integer flag to impose spin symmetry.")
       call parse_input_variable(EqvGWndx%hseed,"H_SEED",InputFile,default=0d0,comment="Seed to break spin symmetry (persistent if non zero).")
+      call parse_input_variable(sym_mode,"SYM_MODE",InputFile,default=2,comment="If =1 only the lattice orbitals will be symmetrized, if =2 also the corrssponding n(tau) inside the solver, if =3 only n(tau).")
       call parse_input_variable(EqvGWndx%Nset,"EQV_SETS",InputFile,default=1,comment="Number of sets of locally equivalent lattice orbitals.")
       if(EqvGWndx%Nset.gt.0)then
          allocate(EqvGWndx%SetNorb(EqvGWndx%Nset))
@@ -399,6 +404,25 @@ contains
       if(reg(CalculationType).eq."scGW")dump_Gk=.true.
       if(reg(CalculationType).eq."GW+EDMFT")dump_Gk=.true.
       !
+      !Variables for the matching beta
+      call add_separator()
+      call parse_input_variable(Beta_Match%status,"MATCH_BETA",InputFile,default=.false.,comment="Interpolate to new Beta.")
+      if(Beta_Match%status)then
+         !
+         call parse_input_variable(Beta_Match%Beta_old,"OLD_BETA",InputFile,default=Beta,comment="Beta of the calculation from which Pimp and Sigma will be fitted from.")
+         call parse_input_variable(Beta_Match%Path,"OLD_BETA_PATH",InputFile,default="None",comment="Folder (within cwd) from which the old Beta Pimp and Sigma will be read from.")
+         call parse_input_variable(Beta_Match%wmatsMax,"OLD_BETA_MAX_WMATS",InputFile,default=100.d0,comment="Maximum value of the Matsubara frequency mesh of the old Beta calculation.")
+         call append_to_input_list(Beta_Match%Nmats_old,"OLD_BETA_NMATS","Number of points on the imaginary frequency axis of the old Beta calculation. User cannot set this as its computed from OLD_BETA_MAX_WMATS and OLD_BETA.")
+         !
+         Beta_Match%Beta_new = Beta
+         Beta_Match%Nmats_old = int(Beta_Match%Beta_old*Beta_Match%wmatsMax/(2d0*pi))
+         Beta_Match%Nmats_new = Nmats
+         !
+         Mixing_Delta=0d0
+         Mixing_curlyU=0d0
+         !
+      endif
+      !
       !Variables related to the impurity solver
       call add_separator()
       Solver%Nimp = Nsite
@@ -418,7 +442,6 @@ contains
       call parse_input_variable(Solver%PrintTime,"PRINT_TIME",InputFile,default=10,comment="Minutes that have to pass before observables are updated and stored.")
       call parse_input_variable(Solver%binlength,"BINLENGTH",InputFile,default=4,comment="If >0 the Green's function at itau will be the average within +/-binlength.")
       call parse_input_variable(Solver%binstart,"BINSTART",InputFile,default=100,comment="Tau points skipped at the beginning and end of the Green's function average.")
-      call parse_input_variable(Solver%avrg_shift,"AVG_SHIFT",InputFile,default=0,comment="Integer flag to average the local energy correction isisde the solver.")
       call append_to_input_list(Solver%retarded,"RETARDED","Integer flag to include the frequency dependent part of the interaction. User cannot set this as its deduced from CALC_TYPE.")
       call append_to_input_list(Solver%nnt_meas,"NNT_MEAS","Integer flag to switch on the measurement of the susceptibility. User cannot set this as its deduced from CALC_TYPE.")
       Solver%quickloops=look4dens%quickloops
@@ -430,25 +453,6 @@ contains
          do isite=1,Nsite
             call parse_input_variable(Solver%Time(isite),"TIME_"//str(isite),InputFile,default=15,comment="Minutes of solver runtime for site number "//str(isite))
          enddo
-      endif
-      !
-      !Variables for the matching beta
-      call add_separator()
-      call parse_input_variable(Beta_Match%status,"MATCH_BETA",InputFile,default=.false.,comment="Interpolate to new Beta.")
-      if(Beta_Match%status)then
-         !
-         call parse_input_variable(Beta_Match%Beta_old,"OLD_BETA",InputFile,default=Beta,comment="Beta of the calculation from which Pimp and Sigma will be fitted from.")
-         call parse_input_variable(Beta_Match%Path,"OLD_BETA_PATH",InputFile,default="None",comment="Folder (within cwd) from which the old Beta Pimp and Sigma will be read from.")
-         call parse_input_variable(Beta_Match%wmatsMax,"OLD_BETA_MAX_WMATS",InputFile,default=100.d0,comment="Maximum value of the Matsubara frequency mesh of the old Beta calculation.")
-         call append_to_input_list(Beta_Match%Nmats_old,"OLD_BETA_NMATS","Number of points on the imaginary frequency axis of the old Beta calculation. User cannot set this as its computed from OLD_BETA_MAX_WMATS and OLD_BETA.")
-         !
-         Beta_Match%Beta_new = Beta
-         Beta_Match%Nmats_old = int(Beta_Match%Beta_old*Beta_Match%wmatsMax/(2d0*pi))
-         Beta_Match%Nmats_new = Nmats
-         !
-         Mixing_Delta=0d0
-         Mixing_curlyU=0d0
-         !
       endif
       !
       !

@@ -54,7 +54,9 @@ program SelfConsistency
    !
    do Iteration=ItStart,Itend,1
       !
+      !
       call printHeader(Iteration)
+      !
       !
       !Check if needed fields are already present
       call inquireFile(reg(ItFolder)//"Wlat_w.DAT",Wlat_exists,hardstop=.false.,verb=verbose)
@@ -73,18 +75,22 @@ program SelfConsistency
          call read_FermionicField(S_Full,reg(ItFolder),"Sfull_w",Crystal%kpt)
       endif
       !
+      !
       !K-dependent Polarization - only G0W0,scGW,GW+EDMFT
       if(calc_Pk)then
          !
          call calc_Pi(Plat,Glat,Crystal)
          call dump_BosonicField(Plat,reg(ItFolder),"Plat_w.DAT")
          !
-         if(merge_P.and.solve_DMFT) then !(**)
+         if(solve_DMFT.and.merge_P) then !(**)
             call MergeFields(Plat,P_EDMFT,alphaPi,SiteOrbs,RotateHloc)
             call dump_BosonicField(Plat,reg(ItFolder),"Plat_merged_w.DAT")
+         elseif(solve_DMFT.and.(Iteration.eq.0)) then
+            P_EDMFT%screened_local = Plat%screened_local*alphaPi !initial guess if(.not.Ustart)
          endif
          !
       endif
+      !
       !
       !Fully screened interaction - only G0W0,scGW,GW+EDMFT,EDMFT
       if(calc_W)then
@@ -96,9 +102,11 @@ program SelfConsistency
          !
       endif
       !
+      !
       ! Causality correction on curlyU
       if(causal_U) call calc_causality_curlyU_correction()
       call DeallocateBosonicField(Plat)
+      !
       !
       !Matching the lattice and impurity problems: Bosons
       if(solve_DMFT)then
@@ -112,6 +120,7 @@ program SelfConsistency
          enddo
          !
       endif
+      !
       !
       !K-dependent self-energy - only G0W0,scGW,GW+EDMFT
       if(calc_Sigmak)then
@@ -129,6 +138,13 @@ program SelfConsistency
          !
          !scGW
          if(Iteration.eq.0)then
+            !
+            !Update the rotation of the local space if a Vxc is present questo lo metto dopo calc_Sigmak che se S_Full e' printed nella prima it allora lo salta
+            if(RotateHloc)then
+               write(*,"(A)") new_line("A")//new_line("A")//"---- Rotations of the local LDA Hamiltonian + local Vxc (used)"
+               call build_rotations("Hren",OlocSite,OlocEig,OlocRot,OlocRotDag,LatticeOp=calc_rot_Op("Hren",1))
+               call update_ImpEqvOrbs()
+            endif
             !
             !Compute the Dc between G0W0 and scGW self-energies
             call AllocateFermionicField(S_G0W0dc,Crystal%Norb,Nmats,Nkpt=Crystal%Nkpt,Nsite=Nsite,Beta=Beta)
@@ -171,12 +187,15 @@ program SelfConsistency
          !
       endif
       !
+      !
       !Initial Guess for the impurity self-energy only in the 0th iteration
       if((Iteration.eq.0).and.solve_DMFT) call calc_SigmaGuess()
       call DeallocateBosonicField(Wlat)
       !
+      !
       !Put together all the contributions to the full self-energy and deallocate all the components
       if(.not.S_Full_exists) call join_SigmaFull(Iteration)
+      !
       !
       !Compute the Full Green's function and set the density
       call calc_Gmats(Glat,Crystal,S_Full)
@@ -184,8 +203,10 @@ program SelfConsistency
       call DeallocateFermionicField(S_Full)
       if(look4dens%TargetDensity.ne.0d0)call set_density(Glat,Crystal,look4dens)
       !
+      !
       ! Causality correction on Delta
       if(causal_D) call calc_causality_Delta_correction()
+      !
       !
       !Print Gf: local readable and k-dep binfmt
       if(dump_Gk)call dump_FermionicField(Glat,reg(ItFolder),"Glat_w",.true.,Crystal%kpt)
@@ -193,10 +214,12 @@ program SelfConsistency
       call dump_MaxEnt(Glat,"mats",reg(ItFolder)//"Convergence/","Glat",EqvGWndx%SetOrbs,WmaxPade=PadeWlimit)
       call dump_MaxEnt(Glat,"mats2itau",reg(ItFolder)//"Convergence/","Glat",EqvGWndx%SetOrbs)
       !
+      !
       !Print lattice density
       call dump_Matrix(Glat%N_s(:,:,1),reg(ItFolder)//"Nlat_s1.DAT")
       call dump_Matrix(Glat%N_s(:,:,2),reg(ItFolder)//"Nlat_s2.DAT")
       densityGW=Glat%N_s
+      !
       !
       !The local problem must give the same density in the same subset
       if(MultiTier)then
@@ -205,6 +228,7 @@ program SelfConsistency
          Solver%TargetDensity = get_Tier_occupation(densityGW,SiteOrbs)
          call save_InputFile("input.in")
       endif
+      !
       !
       !Matching the lattice and impurity problems: Fermions
       if(solve_DMFT)then
