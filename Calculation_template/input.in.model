@@ -28,12 +28,12 @@
 
  PARAMAGNET=1                                  !Integer flag to impose spin symmetry.
  H_SEED=0.000000                               !Seed to break spin symmetry (persistent if non zero).
- SYM_MODE=2                                    !If =1 only the lattice orbitals will be symmetrized, if =2 also the corrssponding n(tau) inside the solver, if =3 only n(tau).
+ SYM_MODE=1                                    !If =1 only the lattice orbitals will be symmetrized, if =2 also the corrssponding n(tau) inside the solver, if =3 only n(tau).
  EQV_SETS=0                                    !Number of sets of locally equivalent lattice orbitals.
 
  #---------------------------------------------#
 
- BETA=10.000000                                !Inverse temperature in 1/eV.
+ BETA=20.000000                                !Inverse temperature in 1/eV.
  MAX_WMATS=150.000000                          !Maximum value of the Matsubara frequency mesh.
  TAU_UNIF=F                                    !Flag to use a non-tau_uniform mesh on the imaginary time axis.
  NREAL=2000                                    !Number of points on the real frequency axis.
@@ -71,7 +71,7 @@
  DC_TYPE=Sloc                                  !Local GW self-energy which is replaced by DMFT self-energy. Avalibale: GlocWloc, Sloc.
  SIGMA_AC=F                                    !Flag to force the analytic continuation on the G0W0 self-energy.
  SMEAR_GAMMA=F                                 !Remove the interaction divergence at the Gamma point.
- S_GUESS=F                                     !Use G0W0_loc as a first guess for the DMFT self-energy.
+ S_GUESS=T                                     !Use G0W0_loc as a first guess for the DMFT self-energy.
  P_GUESS=F                                     !Use GG_loc as a first guess for the DMFT polarization.
  ALPHA_CHI=1.000000                            !Rescaling factor for the local charge susceptibility.
  ALPHA_PI=1.000000                             !Fraction of the EDMFT polarization substituted within the lattice one.
