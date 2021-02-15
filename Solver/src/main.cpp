@@ -138,7 +138,7 @@ int main(int argc, char *argv[])
       }
 
       //
-      if(OrbSym)SiteSetsNorb.resize(Nimp);
+      SiteSetsNorb.resize(Nimp);
 
       //
       for(int isite=0; isite < Nimp; isite++)
