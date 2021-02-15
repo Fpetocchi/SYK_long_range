@@ -495,11 +495,13 @@ contains
          !
          EqvGWndx%O=.false.
          EqvGWndx%Ntotset=EqvGWndx%Nset
+         EqvGWndx%Gfoffdiag=.false.
          !
       elseif((EqvGWndx%Nset.ne.0).and.(.not.ExpandImpurity))then
          !
          EqvGWndx%O = sym_mode.le.2
          EqvGWndx%Ntotset=EqvGWndx%Nset
+         EqvGWndx%Gfoffdiag = sym_mode.le.2
          !
          if(sum(EqvGWndx%SetNorb).lt.Lttc%Norb)then !sum(SiteNorb)
             !
@@ -541,6 +543,7 @@ contains
          !
          EqvGWndx%O = sym_mode.le.2
          EqvGWndx%Ntotset = EqvGWndx%Nset + (Nsite-1)
+         EqvGWndx%Gfoffdiag = .false.
          !
          !reshape of SetNorb
          allocate(oldSetNorb(size(EqvGWndx%SetNorb)))
@@ -832,93 +835,77 @@ contains
       character(len=255)                    :: file
       logical                               :: contained
       !
-      if(sym_mode.gt.1)then
+      Nimp = Nsite
+      if(ExpandImpurity.or.AFMselfcons) Nimp=1
+      !
+      if(allocated(EqvImpndx))deallocate(EqvImpndx)
+      allocate(EqvImpndx(Nimp))
+      !
+      if(RotateHloc)then
          !
-         Nimp = Nsite
-         if(ExpandImpurity.or.AFMselfcons) Nimp=1
-         !
-         if(allocated(EqvImpndx))deallocate(EqvImpndx)
-         allocate(EqvImpndx(Nimp))
-         !
-         if(RotateHloc)then
+         !loop over sites
+         do isite=1,Nsite
             !
-            !loop over sites
-            do isite=1,Nsite
+            !look for pattern given by the diagonal lattice operator
+            call get_pattern(EqvImpndx(isite)%SetOrbs,OlocEig(:,isite),1e4*eps)
+            !
+            if(allocated(EqvImpndx(isite)%SetOrbs))then
                !
-               !look for pattern given by the diagonal lattice operator
-               call get_pattern(EqvImpndx(isite)%SetOrbs,OlocEig(:,isite),1e4*eps)
+               EqvImpndx(isite)%Nset = size(EqvImpndx(isite)%SetOrbs,dim=1)
+               allocate(EqvImpndx(isite)%SetNorb(EqvImpndx(isite)%Nset))
+               do iset=1,EqvImpndx(isite)%Nset
+                  EqvImpndx(isite)%SetNorb(iset) = size( pack( EqvImpndx(isite)%SetOrbs(iset,:), EqvImpndx(isite)%SetOrbs(iset,:).gt.0 ) )
+               enddo
                !
-               if(allocated(EqvImpndx(isite)%SetOrbs))then
-                  !
-                  EqvImpndx(isite)%Nset = size(EqvImpndx(isite)%SetOrbs,dim=1)
-                  allocate(EqvImpndx(isite)%SetNorb(EqvImpndx(isite)%Nset))
-                  do iset=1,EqvImpndx(isite)%Nset
-                     EqvImpndx(isite)%SetNorb(iset) = size( pack( EqvImpndx(isite)%SetOrbs(iset,:), EqvImpndx(isite)%SetOrbs(iset,:).gt.0 ) )
-                  enddo
-                  !
-               else
-                  !
-                  EqvImpndx(isite)%Nset = 0
-                  !
+            else
+               !
+               EqvImpndx(isite)%Nset = 0
+               !
+            endif
+            !
+            if(ExpandImpurity.or.AFMselfcons)exit
+            !
+         enddo
+         !
+      else
+         !
+         !loop over sites
+         do isite=1,Nsite
+            !
+            !dimensional initialization
+            EqvImpndx(isite) = EqvGWndx
+            EqvImpndx(isite)%Nset = 0
+            EqvImpndx(isite)%SetNorb = 0
+            EqvImpndx(isite)%SetOrbs = 0
+            !
+            !loop over lattice sets
+            do iset=1,EqvGWndx%Nset
+               !
+               !scroll elements in the set
+               contained=.true.
+               do set_ndx=1,EqvGWndx%SetNorb(iset)
+                  set_orb = EqvGWndx%SetOrbs(iset,set_ndx)
+                  contained = contained.and.any( SiteOrbs(isite,1:SiteNorb(isite)).eq. set_orb )
+               enddo
+               !
+               !the site contains all the indexes within the set
+               if(contained.and.(EqvGWndx%SetNorb(iset).gt.1))then
+                  EqvImpndx(isite)%Nset = EqvImpndx(isite)%Nset+1
+                  EqvImpndx(isite)%SetNorb(EqvImpndx(isite)%Nset) = EqvGWndx%SetNorb(iset)
+                  EqvImpndx(isite)%SetOrbs(EqvImpndx(isite)%Nset,:) = EqvGWndx%SetOrbs(iset,:) - (SiteOrbs(isite,1)-1)
                endif
                !
-               if(ExpandImpurity.or.AFMselfcons)exit
-               !
             enddo
             !
-         else
-            !
-            !loop over sites
-            do isite=1,Nsite
-               !
-               !dimensional initialization
-               EqvImpndx(isite) = EqvGWndx
-               EqvImpndx(isite)%Nset = 0
-               EqvImpndx(isite)%SetNorb = 0
-               EqvImpndx(isite)%SetOrbs = 0
-               !
-               !loop over lattice sets
-               do iset=1,EqvGWndx%Nset
-                  !
-                  !scroll elements in the set
-                  contained=.true.
-                  do set_ndx=1,EqvGWndx%SetNorb(iset)
-                     set_orb = EqvGWndx%SetOrbs(iset,set_ndx)
-                     contained = contained.and.any( SiteOrbs(isite,1:SiteNorb(isite)).eq. set_orb )
-                  enddo
-                  !
-                  !the site contains all the indexes within the set
-                  if(contained.and.(EqvGWndx%SetNorb(iset).gt.1))then
-                     EqvImpndx(isite)%Nset = EqvImpndx(isite)%Nset+1
-                     EqvImpndx(isite)%SetNorb(EqvImpndx(isite)%Nset) = EqvGWndx%SetNorb(iset)
-                     EqvImpndx(isite)%SetOrbs(EqvImpndx(isite)%Nset,:) = EqvGWndx%SetOrbs(iset,:) - (SiteOrbs(isite,1)-1)
-                  endif
-                  !
-               enddo
-               !
-               if(ExpandImpurity.or.AFMselfcons)exit
-               !
-            enddo
-            !
-         endif
-         !
-         !update input file
-         call add_separator()
-         do isite=1,Nsite
-            call append_to_input_list(EqvImpndx(isite)%Nset,"EQV_"//str(isite)//"_SETS","Number of sets of locally equivalent orbitals in site number "//str(isite)) !User cannot set the EQV_IMP_* fields as they are deduced from EQV_*, EXPAND and ROTATE_F.
-            if(EqvImpndx(isite)%Nset.gt.0)then
-               do iset=1,EqvImpndx(isite)%Nset
-                  call append_to_input_list(EqvImpndx(isite)%SetNorb(iset),"EQV_"//str(isite)//"_NORB_"//str(iset),"Number of equivalent orbitals in the set number "//str(iset)//" in site number "//str(isite))
-               enddo
-               do iset=1,EqvImpndx(isite)%Nset
-                  call append_to_input_list(EqvImpndx(isite)%SetOrbs(iset,1:EqvImpndx(isite)%SetNorb(iset)),"EQV_"//str(isite)//"_ORBS_"//str(iset),"Orbital indexes of equivalent set number "//str(iset)//" in site number "//str(isite))
-               enddo
-            endif
             if(ExpandImpurity.or.AFMselfcons)exit
+            !
          enddo
-         call save_InputFile("input.in")
          !
-         !write lists
+      endif
+      !
+      !write lists
+      if(sym_mode.gt.1)then
+         !
          if(FirstIteration.ne.LastIteration)then
             do isite=1,Nsite
                if(EqvImpndx(isite)%Nset.eq.0)cycle
@@ -934,6 +921,22 @@ contains
          endif
          !
       endif
+      !
+      !update input file
+      call add_separator()
+      do isite=1,Nsite
+         call append_to_input_list(EqvImpndx(isite)%Nset,"EQV_"//str(isite)//"_SETS","Number of sets of locally equivalent orbitals in site number "//str(isite)) !User cannot set the EQV_IMP_* fields as they are deduced from EQV_*, EXPAND and ROTATE_F.
+         if(EqvImpndx(isite)%Nset.gt.0)then
+            do iset=1,EqvImpndx(isite)%Nset
+               call append_to_input_list(EqvImpndx(isite)%SetNorb(iset),"EQV_"//str(isite)//"_NORB_"//str(iset),"Number of equivalent orbitals in the set number "//str(iset)//" in site number "//str(isite))
+            enddo
+            do iset=1,EqvImpndx(isite)%Nset
+               call append_to_input_list(EqvImpndx(isite)%SetOrbs(iset,1:EqvImpndx(isite)%SetNorb(iset)),"EQV_"//str(isite)//"_ORBS_"//str(iset),"Orbital indexes of equivalent set number "//str(iset)//" in site number "//str(isite))
+            enddo
+         endif
+         if(ExpandImpurity.or.AFMselfcons)exit
+      enddo
+      call save_InputFile("input.in")
       !
    end subroutine update_ImpEqvOrbs
 

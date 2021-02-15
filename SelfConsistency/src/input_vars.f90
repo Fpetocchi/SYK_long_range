@@ -328,7 +328,6 @@ contains
          enddo
       endif
       if(EqvGWndx%para.eq.1)EqvGWndx%S=.true.
-      EqvGWndx%Gfoffdiag=.not.ExpandImpurity
       !
       !Imaginary time and frequency meshes
       call add_separator()
