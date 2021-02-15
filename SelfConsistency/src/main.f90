@@ -82,11 +82,11 @@ program SelfConsistency
          call calc_Pi(Plat,Glat,Crystal)
          call dump_BosonicField(Plat,reg(ItFolder),"Plat_w.DAT")
          !
-         if(solve_DMFT.and.merge_P) then !(**)
+         if(merge_P)then
             call MergeFields(Plat,P_EDMFT,alphaPi,SiteOrbs,RotateHloc)
             call dump_BosonicField(Plat,reg(ItFolder),"Plat_merged_w.DAT")
-         elseif(solve_DMFT.and.(Iteration.eq.0)) then
-            P_EDMFT%screened_local = Plat%screened_local*alphaPi !initial guess if(.not.Ustart)
+         elseif(calc_Pguess)then
+            P_EDMFT%screened_local = Plat%screened_local*alphaPi
          endif
          !
       endif
@@ -127,40 +127,39 @@ program SelfConsistency
          !
          !Hartree shift between G0W0 and LDA
          allocate(VH(Crystal%Norb,Crystal%Norb));VH=czero
-         call calc_VH(densityLDA,Glat,Ulat,VH)
+         if(.not.Hmodel)call calc_VH(densityLDA,Glat,Ulat,VH)
          call dump_Matrix(VH,reg(ItFolder)//"VH.DAT")
          if(solve_DMFT.and.bosonicSC.and.(.not.Ustart))call DeallocateBosonicField(Ulat)
          !
          !read from SPEX G0W0 self-energy and Vexchange
          allocate(Vxc(Crystal%Norb,Crystal%Norb,Crystal%Nkpt,Nspin));Vxc=czero
          call AllocateFermionicField(S_G0W0,Crystal%Norb,Nmats,Nkpt=Crystal%Nkpt,Nsite=Nsite,Beta=Beta)
-         call read_Sigma_spex(S_G0W0,Crystal,verbose,Vxc=Vxc,doAC=Sigma_AC,pathOUTPUT=reg(pathINPUTtr))
+         if(.not.Hmodel)call read_Sigma_spex(S_G0W0,Crystal,verbose,Vxc=Vxc,doAC=Sigma_AC,pathOUTPUT=reg(pathINPUTtr))
          !
          !scGW
          if(Iteration.eq.0)then
             !
-            !Update the rotation of the local space if a Vxc is present questo lo metto dopo calc_Sigmak che se S_Full e' printed nella prima it allora lo salta
-            if(RotateHloc)then
-               write(*,"(A)") new_line("A")//new_line("A")//"---- Rotations of the local LDA Hamiltonian + local Vxc (used)"
-               call build_rotations("Hren",OlocSite,OlocEig,OlocRot,OlocRotDag,LatticeOp=calc_rot_Op("Hren",1))
-               call update_ImpEqvOrbs()
-            endif
-            !
             !Compute the Dc between G0W0 and scGW self-energies
             call AllocateFermionicField(S_G0W0dc,Crystal%Norb,Nmats,Nkpt=Crystal%Nkpt,Nsite=Nsite,Beta=Beta)
             call calc_sigmaGW(S_G0W0dc,Glat,Wlat,Crystal)
-            call dump_FermionicField(S_G0W0dc,reg(ItFolder),"SGoWo_w",.true.,Crystal%kpt)
-            call dump_FermionicField(S_G0W0dc,reg(ItFolder),"SGoWo_w")
-            call DeallocateFermionicField(S_G0W0dc)
             !
-            !Use G0W0 as self-energy for the first iteration
+            if(Hmodel)then
+               !Use directly the DC since G0W0 is absent for model calculations
+               call duplicate(S_G0W0,S_G0W0dc)
+            else
+               !Store the Dc between G0W0 and scGW self-energies and use G0W0 as self-energy for the first iteration because the DC is equal to scGW
+               call dump_FermionicField(S_G0W0dc,reg(ItFolder),"SGoWo_w",.true.,Crystal%kpt)
+               call dump_FermionicField(S_G0W0dc,reg(ItFolder),"SGoWo_w")
+               call DeallocateFermionicField(S_G0W0dc)
+            endif
+            !
             call dump_FermionicField(S_G0W0,reg(ItFolder),"Slat_w")
             !
          elseif(Iteration.gt.0)then
             !
-            !Read the Dc between G0W0 and scGW
+            !Read the Dc between G0W0 and scGW if present
             call AllocateFermionicField(S_G0W0dc,Crystal%Norb,Nmats,Nkpt=Crystal%Nkpt,Nsite=Nsite,Beta=Beta)
-            call read_FermionicField(S_G0W0dc,reg(pathDATA)//"0/","SGoWo_w",kpt=Crystal%kpt)
+            if(.not.Hmodel)call read_FermionicField(S_G0W0dc,reg(pathDATA)//"0/","SGoWo_w",kpt=Crystal%kpt)
             !
             !Compute the scGW self-energy
             call AllocateFermionicField(S_GW,Crystal%Norb,Nmats,Nkpt=Crystal%Nkpt,Nsite=Nsite,Beta=Beta)
@@ -170,7 +169,7 @@ program SelfConsistency
          endif
          !
          !Merge GW and EDMFT
-         if((Iteration.gt.0).and.merge_Sigma.and.solve_DMFT)then !(**)
+         if(merge_Sigma)then
             !
             !Compute the local Dc if Tier1 = Tier2
             if(reg(DC_type).eq."GlocWloc")then
@@ -188,8 +187,16 @@ program SelfConsistency
       endif
       !
       !
+      !Store rotation after first Vxc allocation
+      if((RotateHloc).and.(Iteration.eq.0))then
+         write(*,"(A)") new_line("A")//new_line("A")//"---- Rotations of the local LDA Hamiltonian + local Vxc (used)"
+         call build_rotations("Hren",OlocSite,OlocEig,OlocRot,OlocRotDag,LatticeOp=(Crystal%Hloc-sum(Vxc(:,:,:,1),dim=3)/Crystal%Nkpt))
+         call update_ImpEqvOrbs()
+      endif
+      !
+      !
       !Initial Guess for the impurity self-energy only in the 0th iteration
-      if((Iteration.eq.0).and.solve_DMFT) call calc_SigmaGuess()
+      if(calc_Sguess) call calc_SigmaGuess()
       call DeallocateBosonicField(Wlat)
       !
       !

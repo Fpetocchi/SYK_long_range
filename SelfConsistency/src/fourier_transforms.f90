@@ -437,7 +437,7 @@ contains
       complex(8),allocatable                :: Ge(:,:),Go(:,:)
       integer                               :: iw,itau,idat
       integer,pointer                       :: Ndat
-      integer,target                        :: Nwig
+      integer,target                        :: Nrs
       integer,target                        :: Nkpt
       integer                               :: Ntau,Norb,Nmats
       logical                               :: asympt_corr_
@@ -487,12 +487,12 @@ contains
       if(real_space)then
          !
          call wannier_K2R(nkpt3,kpt,Gmats,Gmats_rs)
-         Nwig = size(Gmats_rs,dim=4)
-         allocate(Gitau_rs(Norb,Norb,Ntau,Nwig));Gitau_rs=czero
+         Nrs = size(Gmats_rs,dim=4)
+         allocate(Gitau_rs(Norb,Norb,Ntau,Nrs));Gitau_rs=czero
          !
          Gft_in  => Gmats_rs
          Gft_out => Gitau_rs
-         Ndat => Nwig
+         Ndat => Nrs
          !
       else
          !
@@ -637,7 +637,7 @@ contains
       complex(8),allocatable                :: Ge(:),Go(:)
       integer                               :: iw,itau,idat
       integer,pointer                       :: Ndat
-      integer,target                        :: Nwig
+      integer,target                        :: Nrs
       integer,target                        :: Nkpt
       integer                               :: Ntau,Norb,Nmats
       logical                               :: asympt_corr_
@@ -686,12 +686,12 @@ contains
       if(real_space)then
          !
          call wannier_K2R(nkpt3,kpt,Gmats,Gmats_rs)
-         Nwig = size(Gmats_rs,dim=3)
-         allocate(Gitau_rs(Norb,Ntau,Nwig));Gitau_rs=czero
+         Nrs = size(Gmats_rs,dim=3)
+         allocate(Gitau_rs(Norb,Ntau,Nrs));Gitau_rs=czero
          !
          Gft_in  => Gmats_rs
          Gft_out => Gitau_rs
-         Ndat => Nwig
+         Ndat => Nrs
          !
       else
          !

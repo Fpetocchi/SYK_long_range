@@ -85,7 +85,7 @@ contains
       if(Gmats%Nkpt.eq.0) stop "Gmats k dependent attributes not properly initialized."
       if(Wmats%Nkpt.eq.0) stop "Wmats k dependent attributes not properly initialized."
       if(.not.allocated(Lttc%kptdif)) stop "kptdif not allocated."
-      if(.not.allocated(Lttc%kptPos)) stop "kptPos not allocated."
+      if((Lttc%Nkpt_irred.lt.Smats%Nkpt).and.(.not.allocated(Lttc%kptPos))) stop "kptPos not allocated."
       !
       Norb = Smats%Norb
       Nkpt = Smats%Nkpt

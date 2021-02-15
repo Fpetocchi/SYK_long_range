@@ -52,6 +52,11 @@ module utils_misc
       module procedure l_assert_shape_N7
    end interface assert_shape
 
+   interface sort_array
+      module procedure sort_array_i
+      module procedure sort_array_d
+   end interface sort_array
+
    interface check_Symmetry
       module procedure check_Symmetry_d
       module procedure check_Symmetry_z
@@ -85,6 +90,7 @@ module utils_misc
    public :: check_Hermiticity
    public :: check_Symmetry
    public :: assert_shape
+   public :: sort_array
    public :: FermionicFilon
    public :: BosonicFilon
    public :: halfbeta_symm
@@ -1318,6 +1324,140 @@ contains
       endif
       !
     end subroutine BosonicFilon
+
+
+    !---------------------------------------------------------------------------
+    !PURPOSE : sort array of integer using random algorithm
+    !---------------------------------------------------------------------------
+    subroutine sort_array_i(array,order)
+      implicit none
+      integer,dimension(:)                    :: array
+      integer,dimension(size(array))          :: order
+      integer,dimension(size(array))          :: backup
+      integer                                 :: i
+      integer                                 :: lf,rg
+      lf=1
+      rg=size(array)
+      forall(i=1:size(array))order(i)=i
+      call qsort_sort(array, order,lf, rg)
+      do i=1,size(array)
+         backup(i)=array(order(i))
+      enddo
+      !array=backup
+    contains
+      recursive subroutine qsort_sort( array, order, left, right )
+        integer, dimension(:) :: array
+        integer, dimension(:) :: order
+        integer               :: left
+        integer               :: right
+        integer               :: i
+        integer               :: last
+        if ( left .ge. right ) return
+        call qsort_swap( order, left, qsort_rand(left,right) )
+        last = left
+        do i = left+1, right
+           if ( compare(array(order(i)), array(order(left)) ) .lt. 0 ) then
+              last = last + 1
+              call qsort_swap( order, last, i )
+           endif
+        enddo
+        call qsort_swap( order, left, last )
+        call qsort_sort( array, order, left, last-1 )
+        call qsort_sort( array, order, last+1, right )
+      end subroutine qsort_sort
+      !---------------------------------------------!
+      subroutine qsort_swap( order, first, second )
+        integer, dimension(:) :: order
+        integer               :: first, second
+        integer               :: tmp
+        tmp           = order(first)
+        order(first)  = order(second)
+        order(second) = tmp
+      end subroutine qsort_swap
+      !---------------------------------------------!
+      integer function qsort_rand( lower, upper )
+        integer            :: lower, upper
+        real(8)               :: r
+        call random_number(r)
+        qsort_rand =  lower + nint(r * (upper-lower))
+      end function qsort_rand
+      !---------------------------------------------!
+      function compare(f,g)
+        implicit none
+        integer               :: f,g
+        integer               :: compare
+        if(f<g) then
+           compare=-1
+        else
+           compare=1
+        endif
+      end function compare
+   end subroutine sort_array_i
+   !
+   subroutine sort_array_d(array,order)
+     implicit none
+     real(8),dimension(:)                    :: array
+     integer,dimension(size(array))          :: order
+     integer,dimension(size(array))          :: backup
+     integer                                 :: i
+     integer                                 :: lf,rg
+     lf=1
+     rg=size(array)
+     forall(i=1:size(array))order(i)=i
+     call qsort_sort(array, order,lf, rg)
+     do i=1,size(array)
+        backup(i)=array(order(i))
+     enddo
+     !array=backup
+   contains
+     recursive subroutine qsort_sort( array, order, left, right )
+      real(8), dimension(:) :: array
+      integer, dimension(:) :: order
+      integer               :: left
+      integer               :: right
+      integer               :: i
+      integer               :: last
+      if ( left .ge. right ) return
+      call qsort_swap( order, left, qsort_rand(left,right) )
+      last = left
+      do i = left+1, right
+          if ( compare(array(order(i)), array(order(left)) ) .lt. 0 ) then
+             last = last + 1
+             call qsort_swap( order, last, i )
+          endif
+      enddo
+      call qsort_swap( order, left, last )
+      call qsort_sort( array, order, left, last-1 )
+      call qsort_sort( array, order, last+1, right )
+     end subroutine qsort_sort
+     !---------------------------------------------!
+     subroutine qsort_swap( order, first, second )
+      integer, dimension(:) :: order
+      integer               :: first, second
+      integer               :: tmp
+      tmp           = order(first)
+      order(first)  = order(second)
+      order(second) = tmp
+     end subroutine qsort_swap
+     !---------------------------------------------!
+     integer function qsort_rand( lower, upper )
+      integer               :: lower, upper
+      real(8)               :: r
+      call random_number(r)
+      qsort_rand =  lower + nint(r * (upper-lower))
+     end function qsort_rand
+     !---------------------------------------------!
+     function compare(f,g)
+      implicit none
+      real(8)               :: f,g
+      integer               :: compare
+      if(f<g) then
+          compare=-1
+      else
+          compare=1
+      endif
+     end function compare
+  end subroutine sort_array_d
 
 
    !---------------------------------------------------------------------------!

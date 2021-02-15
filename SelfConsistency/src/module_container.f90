@@ -30,7 +30,7 @@ module module_container
    halfbeta_antisymm                        ,&
    assert_shape                             ,&
    splint,nspline,cubic_interp              ,&
-   get_pattern
+   get_pattern,sort_array
 
 
    !(c) Lattice related quantities. Depends on (a),(b) not on specific types.
@@ -38,6 +38,7 @@ module module_container
    read_lattice                             ,&
    read_xeps                                ,&
    read_Hk                                  ,&
+   build_Hk                                 ,&
    fill_ksumkdiff                           ,&
    fill_smallk                              ,&
    wannierinterpolation                     ,&

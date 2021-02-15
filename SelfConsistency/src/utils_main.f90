@@ -178,6 +178,9 @@ contains
       causal_D = causal_D .and. (FirstIteration.ne.0)
       causal_U = causal_U .and. (FirstIteration.ne.0)
       !
+      calc_Sguess = calc_Sguess .and. (FirstIteration.eq.0) .and. solve_DMFT
+      calc_Pguess = calc_Pguess .and. (FirstIteration.eq.0) .and. solve_DMFT
+      !
       call inquireDir(reg(pathDATA)//str(FirstIteration-1),PrvItexist,hardstop=.false.,verb=.false.)
       call inquireDir(reg(pathDATA)//str(0),ZeroItexist,hardstop=.false.,verb=.false.)
       !
@@ -213,7 +216,7 @@ contains
             !
             if(ItStart.ne.0)then
                if(.not.PrvItexist)then
-                  write(*,"(A)") "Previous iteration: "//str(FirstIteration-1)//". Not found, exiting."
+                  write(*,"(A)") "     Previous iteration: "//str(FirstIteration-1)//". Not found, exiting."
                   stop
                endif
                if(.not.ZeroItexist)stop "G0W0 0th iteration not found, exiting."
@@ -236,7 +239,7 @@ contains
             !
             if(ItStart.ne.0)then
                if(.not.PrvItexist)then
-                  write(*,"(A)") "Previous iteration: "//str(FirstIteration-1)//". Not found, exiting."
+                  write(*,"(A)") "     Previous iteration: "//str(FirstIteration-1)//". Not found, exiting."
                   stop
                endif
                if((reg(CalculationType).eq."GW+EDMFT").and.(.not.ZeroItexist)) stop "G0W0 0th iteration not found, exiting."
@@ -270,9 +273,9 @@ contains
       !
       !Print info to user
       if(FirstIteration.eq.0)then
-         write(*,"(A)") "Brand new calculation. Initializing "//reg(Itpath)
+         write(*,"(A)") "     Brand new calculation. Initializing "//reg(Itpath)
       else
-          write(*,"(A)") "Initializing "//reg(Itpath)
+          write(*,"(A)") "     Initializing "//reg(Itpath)
        endif
       !
       !These are used throughout the whole calculation
@@ -288,6 +291,10 @@ contains
       !
       !Just to be sure
       Ustart = Ustart .and. (ItStart.eq.0)
+      calc_Pguess = calc_Pguess .and. (.not.Ustart)
+      !
+      !Save changes to the inputfile
+      call save_InputFile("input.in")
       !
    end subroutine initialize_DataStructure
 
@@ -307,6 +314,7 @@ contains
       integer                               :: shift
       logical                               :: present
       integer,allocatable                   :: oldSetNorb(:),oldSetOrbs(:,:)
+      complex(8),allocatable                :: Vxc_loc(:,:)
       !
       !
       write(*,"(A)") new_line("A")//new_line("A")//"---- initialize_Lattice"
@@ -322,19 +330,31 @@ contains
             !
          case("G0W0","scGW")
             !
-            call read_Hk(pathINPUT,alphaHk,Lttc%Hk,Lttc%kpt,Lttc%Ek,Lttc%Zk,Lttc%Hloc,iq_gamma_Hk)
-            !
-            Lttc%Norb = size(Lttc%Hk,dim=1)
-            Lttc%Nkpt = size(Lttc%Hk,dim=3)
-            !
-            allocate(Lttc%kptPos(Lttc%Nkpt));Lttc%kptPos=0
-            call read_xeps(pathINPUT,Lttc%kpt,Nkpt3,UseXepsKorder, &
-            Lttc%kptPos,Lttc%Nkpt_irred,Lttc%UseDisentangledBS,iq_gamma_XEPS,paramagneticSPEX)
-            XEPSisread=.true.
-            if(iq_gamma_Hk.eq.iq_gamma_XEPS)then
-               Lttc%iq_gamma = iq_gamma_Hk
+            if(Hmodel)then
+               !
+               call build_Hk(LatticeVec,Norb_model,hopping,Nkpt3,alphaHk, &
+                             Lttc%Hk,Lttc%kpt,Lttc%Ek,Lttc%Zk,Lttc%Hloc,  &
+                             iq_gamma=Lttc%iq_gamma,pathOUTPUT=reg(pathINPUT))
+               Lttc%Norb = size(Lttc%Hk,dim=1)
+               Lttc%Nkpt = size(Lttc%Hk,dim=3)
+               Lttc%Nkpt_irred = Lttc%Nkpt
+               !
             else
-               stop "Index of the Gamma point is not the same in H(k) and XEPS."
+               !
+               call read_Hk(pathINPUT,alphaHk,Lttc%Hk,Lttc%kpt,Lttc%Ek,Lttc%Zk,Lttc%Hloc,iq_gamma_Hk)
+               Lttc%Norb = size(Lttc%Hk,dim=1)
+               Lttc%Nkpt = size(Lttc%Hk,dim=3)
+               !
+               allocate(Lttc%kptPos(Lttc%Nkpt));Lttc%kptPos=0
+               call read_xeps(pathINPUT,Lttc%kpt,Nkpt3,UseXepsKorder, &
+               Lttc%kptPos,Lttc%Nkpt_irred,Lttc%UseDisentangledBS,iq_gamma_XEPS,paramagneticSPEX)
+               XEPSisread=.true.
+               if(iq_gamma_Hk.eq.iq_gamma_XEPS)then
+                  Lttc%iq_gamma = iq_gamma_Hk
+               else
+                  stop "Index of the Gamma point is not the same in H(k) and XEPS."
+               endif
+               !
             endif
             !
             allocate(Lttc%kptsum(Lttc%Nkpt,Lttc%Nkpt));Lttc%kptsum=0
@@ -348,28 +368,52 @@ contains
             !
          case("DMFT+statU","DMFT+dynU")
             !
-            call read_Hk(pathINPUT,alphaHk,Lttc%Hk,Lttc%kpt,Lttc%Ek,Lttc%Zk,Lttc%Hloc)
-            !
-            Lttc%Norb = size(Lttc%Hk,dim=1)
-            Lttc%Nkpt = size(Lttc%Hk,dim=3)
+            if(Hmodel)then
+               !
+               call build_Hk(LatticeVec,Norb_model,hopping,Nkpt3,alphaHk, &
+                             Lttc%Hk,Lttc%kpt,Lttc%Ek,Lttc%Zk,Lttc%Hloc,  &
+                             pathOUTPUT=reg(pathINPUT))
+               Lttc%Norb = size(Lttc%Hk,dim=1)
+               Lttc%Nkpt = size(Lttc%Hk,dim=3)
+               Lttc%Nkpt_irred = Lttc%Nkpt
+               !
+            else
+               !
+               call read_Hk(pathINPUT,alphaHk,Lttc%Hk,Lttc%kpt,Lttc%Ek,Lttc%Zk,Lttc%Hloc)
+               Lttc%Norb = size(Lttc%Hk,dim=1)
+               Lttc%Nkpt = size(Lttc%Hk,dim=3)
+               !
+            endif
             !
             Lttc%status=.true.
             !
          case("EDMFT","GW+EDMFT")
             !
-            call read_Hk(pathINPUT,alphaHk,Lttc%Hk,Lttc%kpt,Lttc%Ek,Lttc%Zk,Lttc%Hloc,iq_gamma_Hk)
-            !
-            Lttc%Norb = size(Lttc%Hk,dim=1)
-            Lttc%Nkpt = size(Lttc%Hk,dim=3)
-            !
-            allocate(Lttc%kptPos(Lttc%Nkpt));Lttc%kptPos=0
-            call read_xeps(pathINPUT,Lttc%kpt,Nkpt3,UseXepsKorder, &
-            Lttc%kptPos,Lttc%Nkpt_irred,Lttc%UseDisentangledBS,iq_gamma_XEPS,paramagneticSPEX)
-            XEPSisread=.true.
-            if(iq_gamma_Hk.eq.iq_gamma_XEPS)then
-               Lttc%iq_gamma = iq_gamma_Hk
+            if(Hmodel)then
+               !
+               call build_Hk(LatticeVec,Norb_model,hopping,Nkpt3,alphaHk, &
+                             Lttc%Hk,Lttc%kpt,Lttc%Ek,Lttc%Zk,Lttc%Hloc,  &
+                             iq_gamma=Lttc%iq_gamma,pathOUTPUT=reg(pathINPUT))
+               Lttc%Norb = size(Lttc%Hk,dim=1)
+               Lttc%Nkpt = size(Lttc%Hk,dim=3)
+               Lttc%Nkpt_irred = Lttc%Nkpt
+               !
             else
-               stop "Index of the Gamma point is not the same in H(k) and XEPS."
+               !
+               call read_Hk(pathINPUT,alphaHk,Lttc%Hk,Lttc%kpt,Lttc%Ek,Lttc%Zk,Lttc%Hloc,iq_gamma_Hk)
+               Lttc%Norb = size(Lttc%Hk,dim=1)
+               Lttc%Nkpt = size(Lttc%Hk,dim=3)
+               !
+               allocate(Lttc%kptPos(Lttc%Nkpt));Lttc%kptPos=0
+               call read_xeps(pathINPUT,Lttc%kpt,Nkpt3,UseXepsKorder, &
+               Lttc%kptPos,Lttc%Nkpt_irred,Lttc%UseDisentangledBS,iq_gamma_XEPS,paramagneticSPEX)
+               XEPSisread=.true.
+               if(iq_gamma_Hk.eq.iq_gamma_XEPS)then
+                  Lttc%iq_gamma = iq_gamma_Hk
+               else
+                  stop "Index of the Gamma point is not the same in H(k) and XEPS."
+               endif
+               !
             endif
             !
             allocate(Lttc%kptsum(Lttc%Nkpt,Lttc%Nkpt));Lttc%kptsum=0
@@ -382,6 +426,7 @@ contains
             Lttc%status=.true.
             !
       end select
+      if(Lttc%Nkpt.ne.(Nkpt3(1)*Nkpt3(2)*Nkpt3(3)))stop "Total number of K-points does not match with number of K-points per dimension."
       !
       !
       !Store the local Hamiltonian
@@ -411,14 +456,24 @@ contains
       if(RotateHloc)then
          !
          if(reg(CalculationType).eq."GW+EDMFT")then
-            if(ItStart.eq.0)then
-               write(*,"(A)") new_line("A")//new_line("A")//"---- Rotations of the local LDA Hamiltonian"
-               call build_rotations("Hloc",OlocSite,OlocEig,OlocRot,OlocRotDag,LatticeOp=Lttc%Hloc)
-            else
+            !
+            write(*,"(A)") new_line("A")//new_line("A")//"---- Rotations of the local LDA Hamiltonian"
+            call build_rotations("Hloc",OlocSite,OlocEig,OlocRot,OlocRotDag,LatticeOp=Lttc%Hloc)
+            !
+            !On the 0th iteration in general Vxc_loc is not yet written
+            if(ItStart.gt.0)then
+               !
+               allocate(Vxc_loc(Lttc%Norb,Lttc%Norb));Vxc_loc=czero
+               write(*,"(A)")"     Trying to read Vxc from pathINPUT."
+               call inquireFile(reg(pathINPUT)//"Vxc_s1.DAT",present,hardstop=.true.)
+               call read_Matrix(Vxc_loc,reg(pathINPUT)//"Vxc_s1.DAT")
+               !
                write(*,"(A)") new_line("A")//new_line("A")//"---- Rotations of the local LDA Hamiltonian + local Vxc (used)"
-               call build_rotations("Hren",OlocSite,OlocEig,OlocRot,OlocRotDag,read=.true.)
+               call build_rotations("Hren",OlocSite,OlocEig,OlocRot,OlocRotDag,LatticeOp=(Lttc%Hloc-Vxc_loc))
                call update_ImpEqvOrbs()
+               !
             endif
+            !
          else
             write(*,"(A)") new_line("A")//new_line("A")//"---- Rotations of the local LDA Hamiltonian (used)"
             call build_rotations("Hloc",OlocSite,OlocEig,OlocRot,OlocRotDag,LatticeOp=Lttc%Hloc)
@@ -443,7 +498,7 @@ contains
          !
       elseif((EqvGWndx%Nset.ne.0).and.(.not.ExpandImpurity))then
          !
-         EqvGWndx%O=.true.
+         EqvGWndx%O = sym_mode.le.2
          EqvGWndx%Ntotset=EqvGWndx%Nset
          !
          if(sum(EqvGWndx%SetNorb).lt.Lttc%Norb)then !sum(SiteNorb)
@@ -484,7 +539,7 @@ contains
          !
          if(EqvGWndx%Nset.ne.1) stop "Orbital symmetrization is not implemented for more than one set if the impurity has to be expanded."
          !
-         EqvGWndx%O=.true.
+         EqvGWndx%O = sym_mode.le.2
          EqvGWndx%Ntotset = EqvGWndx%Nset + (Nsite-1)
          !
          !reshape of SetNorb
@@ -791,7 +846,7 @@ contains
             do isite=1,Nsite
                !
                !look for pattern given by the diagonal lattice operator
-               call get_pattern(EqvImpndx(isite)%SetOrbs,OlocEig(:,isite),eps)
+               call get_pattern(EqvImpndx(isite)%SetOrbs,OlocEig(:,isite),1e4*eps)
                !
                if(allocated(EqvImpndx(isite)%SetOrbs))then
                   !
@@ -901,6 +956,8 @@ contains
       write(*,"(A)") new_line("A")//new_line("A")//"---- initialize_Fields"
       !
       !
+      if(.not.Crystal%status) stop "Crystal is not properly initialized."
+      !
       select case(reg(CalculationType))
          case default
             !
@@ -909,9 +966,20 @@ contains
          case("G0W0","scGW")
             !
             !Unscreened interaction
-            call AllocateBosonicField(Ulat,Crystal%Norb,Nmats,Crystal%iq_gamma,Nkpt=Crystal%Nkpt,Nsite=Nsite,Beta=Beta)
-            if(Umodel)stop "U model is implemented only for non-GW (fully local) screened calculations."
-            if(Uspex)call read_U_spex(Ulat,save2readable=verbose,LocalOnly=.false.,doAC=U_AC,pathOUTPUT=reg(pathINPUTtr))
+            if(Uspex)then
+               call AllocateBosonicField(Ulat,Crystal%Norb,Nmats,Crystal%iq_gamma,Nkpt=Crystal%Nkpt,Nsite=Nsite,Beta=Beta)
+               call read_U_spex(Ulat,save2readable=verbose,LocalOnly=.false.,doAC=U_AC,pathOUTPUT=reg(pathINPUTtr))
+            elseif(Umodel)then
+               if(Nphonons.eq.0)then
+                  write(*,"(A)")"     Warning: the model interaction built with long-range couplings is frequency-independent."
+                  call AllocateBosonicField(Ulat,Crystal%Norb,1,Crystal%iq_gamma,Nkpt=Crystal%Nkpt,Nsite=Nsite,Beta=Beta)
+                  call build_Uret(Ulat,Uaa,Uab,J,Vnn,Crystal)
+               elseif(N_Vnn.eq.0)then
+                  write(*,"(A)")"     Warning: the model interaction built with phononic modes is K-independent."
+                  call AllocateBosonicField(Ulat,Crystal%Norb,Nmats,Crystal%iq_gamma,Nkpt=Crystal%Nkpt,Nsite=Nsite,Beta=Beta)
+                  call build_Uret(Ulat,Uaa,Uab,J,g_eph,wo_eph,LocalOnly=.false.)
+               endif
+            endif
             !
             !Fully screened interaction
             call AllocateBosonicField(Wlat,Crystal%Norb,Nmats,Crystal%iq_gamma,Nkpt=Crystal%Nkpt,Nsite=Nsite,Beta=Beta)
@@ -938,8 +1006,9 @@ contains
             !
             !Hubbard interaction
             allocate(Umat(Crystal%Norb**2,Crystal%Norb**2));Umat=0d0
-            if(Uspex) call read_U_spex(Umat)
-            if(Umodel)then
+            if(Uspex)then
+               call read_U_spex(Umat)
+            elseif(Umodel)then
                call inquireFile(reg(pathINPUT)//"Umat_model.DAT",filexists,hardstop=.false.,verb=verbose)
                if(filexists)then
                   call read_Matrix(Umat,reg(pathINPUT)//"Umat_model.DAT")
@@ -965,15 +1034,23 @@ contains
          case("DMFT+dynU")
             !
             !Unscreened interaction
-            call AllocateBosonicField(Ulat,Crystal%Norb,Nmats,Crystal%iq_gamma,Nsite=Nsite,Beta=Beta)
-            if(Uspex)call read_U_spex(Ulat,save2readable=verbose,LocalOnly=.true.,doAC=U_AC,pathOUTPUT=reg(pathINPUTtr))
-            if(Umodel)then
-               call inquireFile(reg(pathINPUT)//"Uw_model.DAT",filexists,hardstop=.false.,verb=verbose)
-               if(filexists)then
-                  call read_BosonicField(Ulat,reg(pathINPUT),"Uw_model.DAT")
-               else
-                  call build_Uret(Ulat,Uaa,Uab,J,g_eph,wo_eph)
-                  call dump_BosonicField(Ulat,reg(pathINPUT),"Uw_model.DAT")
+            if(Uspex)then
+               call AllocateBosonicField(Ulat,Crystal%Norb,Nmats,Crystal%iq_gamma,Nsite=Nsite,Beta=Beta)
+               call read_U_spex(Ulat,save2readable=verbose,LocalOnly=.true.,doAC=U_AC,pathOUTPUT=reg(pathINPUTtr))
+            elseif(Umodel)then
+               if(Nphonons.eq.0)then
+                  write(*,"(A)")"     Warning: the model interaction built with long-range couplings is frequency-independent."
+                  call AllocateBosonicField(Ulat,Crystal%Norb,1,Crystal%iq_gamma,Nsite=Nsite,Beta=Beta)
+                  call build_Uret(Ulat,Uaa,Uab,J,Vnn,Crystal,LocalOnly=.true.)
+               elseif(N_Vnn.eq.0)then
+                  write(*,"(A)")"     Warning: the model interaction built with phononic modes is K-independent."
+                  call AllocateBosonicField(Ulat,Crystal%Norb,Nmats,Crystal%iq_gamma,Nsite=Nsite,Beta=Beta)
+                  call inquireFile(reg(pathINPUTtr)//"Uloc_mats.DAT",filexists,hardstop=.false.,verb=verbose)
+                  if(filexists)then
+                     call read_BosonicField(Ulat,reg(pathINPUTtr),"Uloc_mats.DAT")
+                  else
+                     call build_Uret(Ulat,Uaa,Uab,J,g_eph,wo_eph)
+                  endif
                endif
             endif
             !
@@ -993,15 +1070,18 @@ contains
          case("EDMFT")
             !
             !Unscreened interaction
-            call AllocateBosonicField(Ulat,Crystal%Norb,Nmats,Crystal%iq_gamma,Nkpt=Crystal%Nkpt,Nsite=Nsite,Beta=Beta)
-            if(Uspex)call read_U_spex(Ulat,save2readable=verbose,LocalOnly=.false.,doAC=U_AC,pathOUTPUT=reg(pathINPUTtr))
-            if(Umodel)then
-               call inquireFile(reg(pathINPUT)//"Uw_model.DAT",filexists,hardstop=.false.,verb=verbose)
-               if(filexists)then
-                  call read_BosonicField(Ulat,reg(pathINPUT),"Uw_model.DAT")
-               else
-                  call build_Uret(Ulat,Uaa,Uab,J,g_eph,wo_eph)
-                  call dump_BosonicField(Ulat,reg(pathINPUT),"Uw_model.DAT")
+            if(Uspex)then
+               call AllocateBosonicField(Ulat,Crystal%Norb,Nmats,Crystal%iq_gamma,Nkpt=Crystal%Nkpt,Nsite=Nsite,Beta=Beta)
+               call read_U_spex(Ulat,save2readable=verbose,LocalOnly=.false.,doAC=U_AC,pathOUTPUT=reg(pathINPUTtr))
+            elseif(Umodel)then
+               if(Nphonons.eq.0)then
+                  write(*,"(A)")"     Warning: the model interaction built with long-range couplings is frequency-independent."
+                  call AllocateBosonicField(Ulat,Crystal%Norb,1,Crystal%iq_gamma,Nkpt=Crystal%Nkpt,Nsite=Nsite,Beta=Beta)
+                  call build_Uret(Ulat,Uaa,Uab,J,Vnn,Crystal)
+               elseif(N_Vnn.eq.0)then
+                  write(*,"(A)")"     Warning: the model interaction built with phononic modes is K-independent."
+                  call AllocateBosonicField(Ulat,Crystal%Norb,Nmats,Crystal%iq_gamma,Nkpt=Crystal%Nkpt,Nsite=Nsite,Beta=Beta)
+                  call build_Uret(Ulat,Uaa,Uab,J,g_eph,wo_eph,LocalOnly=.false.)
                endif
             endif
             !
@@ -1047,9 +1127,20 @@ contains
          case("GW+EDMFT")
             !
             !Unscreened interaction
-            call AllocateBosonicField(Ulat,Crystal%Norb,Nmats,Crystal%iq_gamma,Nkpt=Crystal%Nkpt,Nsite=Nsite,Beta=Beta)
-            if(Umodel)stop "U model is implemented only for non-GW (fully local) screened calculations."
-            if(Uspex)call read_U_spex(Ulat,save2readable=verbose,LocalOnly=.false.,doAC=U_AC,pathOUTPUT=reg(pathINPUTtr))
+            if(Uspex)then
+               call AllocateBosonicField(Ulat,Crystal%Norb,Nmats,Crystal%iq_gamma,Nkpt=Crystal%Nkpt,Nsite=Nsite,Beta=Beta)
+               call read_U_spex(Ulat,save2readable=verbose,LocalOnly=.false.,doAC=U_AC,pathOUTPUT=reg(pathINPUTtr))
+            elseif(Umodel)then
+               if(Nphonons.eq.0)then
+                  write(*,"(A)")"     Warning: the model interaction built with long-range couplings is frequency-independent."
+                  call AllocateBosonicField(Ulat,Crystal%Norb,1,Crystal%iq_gamma,Nkpt=Crystal%Nkpt,Nsite=Nsite,Beta=Beta)
+                  call build_Uret(Ulat,Uaa,Uab,J,Vnn,Crystal)
+               elseif(N_Vnn.eq.0)then
+                  write(*,"(A)")"     Warning: the model interaction built with phononic modes is K-independent."
+                  call AllocateBosonicField(Ulat,Crystal%Norb,Nmats,Crystal%iq_gamma,Nkpt=Crystal%Nkpt,Nsite=Nsite,Beta=Beta)
+                  call build_Uret(Ulat,Uaa,Uab,J,g_eph,wo_eph,LocalOnly=.false.)
+               endif
+            endif
             !
             !Fully screened interaction
             call AllocateBosonicField(Wlat,Crystal%Norb,Nmats,Crystal%iq_gamma,Nkpt=Crystal%Nkpt,Nsite=Nsite,Beta=Beta)
@@ -1173,6 +1264,7 @@ contains
       !
       !
       if(.not.solve_DMFT) stop "calc_SigmaGuess: no guess needed if DMFT is not performed."
+      if(FirstIteration.ne.0) stop "calc_SigmaGuess: this subroutine works only in the 0th iteration."
       if((reg(CalculationType).eq."GW+EDMFT").and.(.not.S_G0W0%status))then
          call AllocateFermionicField(S_G0W0,Crystal%Norb,Nmats,Nkpt=Crystal%Nkpt,Nsite=Nsite,Beta=Beta)
          call read_Sigma_spex(S_G0W0,Crystal,verbose,Vxc=Vxc,doAC=Sigma_AC,pathOUTPUT=reg(pathINPUTtr))
@@ -1430,7 +1522,7 @@ contains
       !$OMP END PARALLEL
       deallocate(GS,SG,SGS,invG)
       !
-      if(sym_mode.le.2) call symmetrize_GW(D_correction,EqvGWndx)
+      call symmetrize_GW(D_correction,EqvGWndx)
       call dump_FermionicField(D_correction,reg(ItFolder),"D_correction_w")
       !
       call DeallocateFermionicField(S_GW)
@@ -1497,7 +1589,7 @@ contains
       !$OMP END PARALLEL
       deallocate(WP,PW,PWP,W_P,P_W,invWa,invWb)
       !
-      if(sym_mode.le.2) call symmetrize_GW(curlyU_correction,EqvGWndx)
+      call symmetrize_GW(curlyU_correction,EqvGWndx)
       call dump_BosonicField(curlyU_correction,reg(ItFolder),"curlyU_correction_w.DAT")
       !
    end subroutine calc_causality_curlyU_correction
@@ -2196,7 +2288,7 @@ contains
             call dump_Matrix(densityDMFT(:,:,2),reg(PrevItFolder)//"Nimp_dw_notsymm.DAT")
          endif
          !
-         if(sym_mode.le.2) call symmetrize_GW(densityDMFT,EqvGWndx)
+         call symmetrize_GW(densityDMFT,EqvGWndx)
          !
       endif
       call dump_Matrix(densityDMFT(:,:,1),reg(PrevItFolder)//"Nimp_s1.DAT")
@@ -2428,7 +2520,7 @@ contains
             call dump_Matrix(S_DMFT%N_s(:,:,2),reg(PrevItFolder)//"HartreeU_noSym_s2.DAT")
          endif
          !
-         if(sym_mode.le.2) call symmetrize_GW(S_DMFT,EqvGWndx)
+         call symmetrize_GW(S_DMFT,EqvGWndx)
          !
       endif
       call dump_FermionicField(S_DMFT,reg(PrevItFolder),"Simp_w")
@@ -2667,7 +2759,7 @@ contains
          !symmetrize GW indexes
          if(EqvGWndx%O)then
             if(verbose)call dump_BosonicField(P_EDMFT,reg(PrevItFolder),"Pimp_noSym_w.DAT")
-            if(sym_mode.le.2) call symmetrize_GW(P_EDMFT,EqvGWndx)
+            call symmetrize_GW(P_EDMFT,EqvGWndx)
          endif
          !
          !Remove the iw=0 divergency of local polarization
@@ -2753,10 +2845,10 @@ contains
                call inquireFile(reg(pathINPUT)//"Vxc_s"//str(ispin_out)//".DAT",Vxcexists,hardstop=.true.)
                call read_Matrix(Vxc_loc,reg(pathINPUT)//"Vxc_s"//str(ispin_out)//".DAT")
             else
-               Vxc_loc = sum(Vxc(:,:,:,ispin_out),dim=3)
+               Vxc_loc = sum(Vxc(:,:,:,ispin_out),dim=3)/Crystal%Nkpt
             endif
             !
-            RotOp = Crystal%Hloc + Vxc_loc
+            RotOp = Crystal%Hloc - Vxc_loc
             !
          case("Nbare")
             !

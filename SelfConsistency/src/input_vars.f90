@@ -97,6 +97,12 @@ module input_vars
    integer,public                           :: Nkpt3(3)
    logical,public                           :: UseXepsKorder
    !
+   !model H(k)
+   logical,public                           :: Hmodel
+   real(8),public                           :: LatticeVec(3,3)
+   integer,public                           :: Norb_model
+   real(8),public,allocatable               :: hopping(:)
+   !
    !Site and Orbital space
    integer,public                           :: Nsite
    logical,public                           :: ExpandImpurity
@@ -135,12 +141,14 @@ module input_vars
    logical,public                           :: Ustart
    logical,public                           :: U_AC
    real(8),public                           :: Uthresh
-   integer,public                           :: Nphonons
-   real(8),public,allocatable               :: g_eph(:)
-   real(8),public,allocatable               :: wo_eph(:)
    real(8),public                           :: Uaa
    real(8),public                           :: Uab
    real(8),public                           :: J
+   integer,public                           :: Nphonons
+   real(8),public,allocatable               :: g_eph(:)
+   real(8),public,allocatable               :: wo_eph(:)
+   integer,public                           :: N_Vnn
+   real(8),public,allocatable               :: Vnn(:,:)
    logical,public                           :: Kdiag
    !
    !Double counting types, divergencies, scaling and self-consistency coefficients
@@ -148,6 +156,8 @@ module input_vars
    character(len=256),public                :: DC_type
    logical,public                           :: Sigma_AC
    logical,public                           :: HandleGammaPoint
+   logical,public                           :: calc_Sguess
+   logical,public                           :: calc_Pguess
    real(8),public                           :: alphaChi
    real(8),public                           :: alphaPi
    real(8),public                           :: alphaSigma
@@ -173,7 +183,6 @@ module input_vars
    character(len=256),public                :: pathINPUTtr
    character(len=256),public                :: pathDATA
    integer,public                           :: LOGfile
-   logical,public                           :: skipLattice
    logical,public                           :: dump_Gk
    logical,public                           :: dump_Sigmak
    character(len=256),public                :: print_path
@@ -219,7 +228,7 @@ contains
       implicit none
       character(len=*)                      :: InputFile
       integer                               :: unit
-      integer                               :: isite,iset,iph,NtauFguess
+      integer                               :: isite,iset,iph,iorb,NtauFguess
       integer,allocatable                   :: tmpOrbs(:)
       !
       write(LOGfile,"(A)") new_line("A")//"Reading InputFile"//new_line("A")
@@ -245,9 +254,20 @@ contains
       call parse_input_variable(Nkpt3,"NKPT3",InputFile,default=[8,8,8],comment="Number of K-points per dimension.")
       call parse_input_variable(UseXepsKorder,"XEPS_KORDER",InputFile,default=.true.,comment="Flag to use the K-point ordering of XEPS.DAT if present.")
       !
+      !model H(k)
+      call parse_input_variable(Hmodel,"H_MODEL",InputFile,default=.false.,comment="Flag to build a model H(k).")
+      if(Hmodel)then
+         call parse_input_variable(LatticeVec(:,1),"LAT_VEC_1",InputFile,default=[1d0,0d0,0d0],comment="Unit cell vector #1 of the model lattice.")
+         call parse_input_variable(LatticeVec(:,2),"LAT_VEC_2",InputFile,default=[0d0,1d0,0d0],comment="Unit cell vector #2 of the model lattice.")
+         call parse_input_variable(LatticeVec(:,3),"LAT_VEC_3",InputFile,default=[0d0,0d0,1d0],comment="Unit cell vector #3 of the model lattice.")
+         call parse_input_variable(Norb_model,"NORB_MODEL",InputFile,default=1,comment="Orbtilas in the model H(k).")
+         allocate(hopping(Norb_model))
+         call parse_input_variable(hopping,"HOPPING",InputFile,comment="Magnitude of the nearest neighbor hopping integral for each orbital in the model H(k).")
+      endif
+      !
       !Site and Orbital space
       call add_separator()
-      call append_to_input_list(Nspin,"NSPIN","Number of spins (fixed to 2).")
+      call append_to_input_list(Nspin,"NSPIN","Number of spins. User cannot set this as its fixed to 2.")
       call parse_input_variable(Nsite,"NSITE",InputFile,default=1,comment="Number of inequivalent sites in the lattice.")
       call parse_input_variable(ExpandImpurity,"EXPAND",InputFile,default=.false.,comment="Flag to use a single impurity solution for all the sites of the lattice. Only indexes for site 1 readed.")
       call parse_input_variable(RotateHloc,"ROTATE_F",InputFile,default=.false.,comment="Solve the Fermionic impurity problem in the basis where H(R=0) is diagonal.")
@@ -342,32 +362,56 @@ contains
       !Interaction variables
       call add_separator()
       call parse_input_variable(UfullStructure,"U_FULL",InputFile,default=.true.,comment="Flag to use all the off-diagonal components of SPEX Ucrpa or only the physical ones.")
-      call parse_input_variable(Umodel,"U_MODEL",InputFile,default=.false.,comment="Flag to build the screening from user chosen phononic modes.")
+      call parse_input_variable(Umodel,"U_MODEL",InputFile,default=.false.,comment="Flag to build a model interaction.")
       call parse_input_variable(Uspex,"U_SPEX",InputFile,default=.true.,comment="Flag to read SPEX Ucrpa.")
       call parse_input_variable(Ustart,"U_START",InputFile,default=.true.,comment="Flag to use the local Ucrpa interaction as the effetive interaction in the 0th iteration.")
       call parse_input_variable(U_AC,"U_AC",InputFile,default=.false.,comment="Flag to force the analytic continuation on the SPEX interaction.")
       call parse_input_variable(Uthresh,"U_THRES",InputFile,default=0.001d0,comment="Lowest magnitude considered in SPEX Ucrpa bare interaction (only for local interactions).")
       call parse_input_variable(Kdiag,"K_DIAG",InputFile,default=.false.,comment="Flag to use only one J-independent screening function.")
-      if(Umodel.and.Uspex) stop "Make up your mind, U_MODEL or U_SPEX ?"
+      if((Umodel.and.Uspex).or.((.not.Umodel).and.(.not.Uspex))) stop "Make up your mind, U_MODEL or U_SPEX?"
       if(Umodel)then
-         call parse_input_variable(Uaa,"UAA",InputFile,default=5d0,comment="Interaction between same orbital and opposite spin electrons.")
-         call parse_input_variable(Uab,"UAB",InputFile,default=4d0,comment="Interaction between different orbital and opposite spin electrons.")
-         call parse_input_variable(J,"JH",InputFile,default=0.5d0,comment="Hund's coupling.")
+         call parse_input_variable(Uaa,"UAA",InputFile,default=5d0,comment="Interaction between same orbital and opposite spin electrons (orbital independent).")
+         if(Norb_model.gt.1)then
+            call parse_input_variable(Uab,"UAB",InputFile,default=4d0,comment="Interaction between different orbital and opposite spin electrons (orbital independent).")
+            call parse_input_variable(J,"JH",InputFile,default=0.5d0,comment="Hund's coupling (orbital independent).")
+         endif
+         !phononic model U
          call parse_input_variable(Nphonons,"N_PH",InputFile,default=3,comment="Number of custom phononic modes.")
-         allocate(g_eph(Nphonons));g_eph=0d0
-         allocate(wo_eph(Nphonons));wo_eph=0d0
-         do iph=1,Nphonons
-            call parse_input_variable(g_eph,"G_PH",InputFile,comment="Custom phononic couplings.")
-            call parse_input_variable(wo_eph,"WO_PH",InputFile,comment="Custom phononic energies.")
-         enddo
+         if(Nphonons.gt.0)then
+            allocate(g_eph(Nphonons));g_eph=0d0
+            allocate(wo_eph(Nphonons));wo_eph=0d0
+            do iph=1,Nphonons
+               call parse_input_variable(g_eph,"G_PH",InputFile,comment="Custom phononic couplings.")
+               call parse_input_variable(wo_eph,"WO_PH",InputFile,comment="Custom phononic energies.")
+            enddo
+         endif
+         !long-range model U
+         call parse_input_variable(N_Vnn,"N_V",InputFile,default=1,comment="Range of the non-local interaction in real space (orbital independent).")
+         if(N_Vnn.gt.0)then
+            allocate(Vnn(Norb_model,N_Vnn));Vnn=0d0
+            do iorb=1,Norb_model
+               call parse_input_variable(Vnn(iorb,:),"VNN_"//str(iorb),InputFile,comment="Magnitudes of the long-range interactions for orbital number "//str(iorb))
+            enddo
+            Ustart=.false. !because of the loc2imp: curlyU has the frequency
+         endif
+         if((Nphonons.gt.0).and.(N_Vnn.gt.0)) stop "Model interaction with both phonons and non-local couplings not implemented."
+         if((Nphonons.eq.0).and.(N_Vnn.eq.0)) stop "Model interaction requested buth neither phonons nor long-range couplings provided."
       endif
       !
       !Double counting types, divergencies, scaling coefficients
       call add_separator()
       call parse_input_variable(VH_type,"VH_TYPE",InputFile,default="Ustatic_SPEX",comment="Hartree term mismatch between GoWo and scGW. Available: Ubare, Ustatic, Ubare_SPEX(V_nodiv.DAT required), Ustatic_SPEX(V_nodiv.DAT required).")
+      if(Umodel)VH_type="Ustatic"
       call parse_input_variable(DC_type,"DC_TYPE",InputFile,default="GlocWloc",comment="Local GW self-energy which is replaced by DMFT self-energy. Avalibale: GlocWloc, Sloc.")
       call parse_input_variable(Sigma_AC,"SIGMA_AC",InputFile,default=.false.,comment="Flag to force the analytic continuation on the G0W0 self-energy.")
       call parse_input_variable(HandleGammaPoint,"SMEAR_GAMMA",InputFile,default=.true.,comment="Remove the interaction divergence at the Gamma point.")
+      if(Umodel)HandleGammaPoint=.false.
+      call parse_input_variable(calc_Sguess,"S_GUESS",InputFile,default=.true.,comment="Use G0W0_loc as a first guess for the DMFT self-energy.")
+      call parse_input_variable(calc_Pguess,"P_GUESS",InputFile,default=.true.,comment="Use GG_loc as a first guess for the DMFT polarization.")
+      if(.not.solve_DMFT)then
+         calc_Sguess=.false.
+         calc_Pguess=.false.
+      endif
       call parse_input_variable(alphaChi,"ALPHA_CHI",InputFile,default=1d0,comment="Rescaling factor for the local charge susceptibility.")
       call parse_input_variable(alphaPi,"ALPHA_PI",InputFile,default=1d0,comment="Fraction of the EDMFT polarization substituted within the lattice one.")
       call parse_input_variable(alphaSigma,"ALPHA_SIGMA",InputFile,default=1d0,comment="Fraction of the EDMFT self-energy substituted within the lattice one.")
@@ -395,7 +439,6 @@ contains
       call parse_input_variable(FirstIteration,"START_IT",InputFile,default=0,comment="First iteration. If its non zero the code will look for the last item in PATH_DATA/item and start there.")
       call parse_input_variable(LastIteration,"LAST_IT",InputFile,default=100,comment="Last iteration.")
       call parse_input_variable(LOGfile,"LOGFILE",InputFile,default=6,comment="Standard output redirection unit. Use 6 to print to terminal. Not used yet.")
-      call parse_input_variable(skipLattice,"SKIP_LATT",InputFile,default=.false.,comment="Skip the lattice summation and assuming good the existing Gloc and Wloc. Not used yet.")
       call parse_input_variable(dump_Gk,"PRINT_GK",InputFile,default=.false.,comment="Print the full k-dependent Green's function (binfmt) at each iteration (mandatory for CALC_TYPE=G0W0,scGW,GW+EDMFT).")
       call parse_input_variable(dump_Sigmak,"PRINT_SIGMAK",InputFile,default=.false.,comment="Print the full k-dependent self-energy (binfmt) at each iteration (always optional).")
       call parse_input_variable(print_path,"PRINT_PATH",InputFile,default="None",comment="Print the H(k) and interacting Green's function along high-symmetry points. Available structures: cubic, fcc, bcc, hex, tetragonal, orthorhombic, None to avoid")

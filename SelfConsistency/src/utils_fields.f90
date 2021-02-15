@@ -928,10 +928,13 @@ contains
       do isite=1,Nsite
          !
          ! only two possible arrangements
-         if(abs(orbs(2)-orbs(1)).eq.1)then
-            shift = size(orbs)*(isite-1)
-         elseif(abs(orbs(2)-orbs(1)).eq.Nsite)then
-            shift = isite-1
+         shift=0
+         if(size(Orbs).gt.1)then
+            if(abs(orbs(2)-orbs(1)).eq.1)then
+               shift = Norb_imp*(isite-1)
+            elseif(abs(orbs(2)-orbs(1)).eq.Nsite)then
+               shift = isite-1
+            endif
          endif
          !
          do i_imp=1,size(orbs)
@@ -1038,10 +1041,13 @@ contains
       do isite=1,Nsite
          !
          ! only two possible arrangements
-         if(abs(orbs(2)-orbs(1)).eq.1)then
-            shift = Norb_imp*(isite-1)
-         elseif(abs(orbs(2)-orbs(1)).eq.Nsite)then
-            shift = isite-1
+         shift=0
+         if(size(Orbs).gt.1)then
+            if(abs(orbs(2)-orbs(1)).eq.1)then
+               shift = Norb_imp*(isite-1)
+            elseif(abs(orbs(2)-orbs(1)).eq.Nsite)then
+               shift = isite-1
+            endif
          endif
          !
          do i_imp=1,Norb_imp
@@ -1172,10 +1178,13 @@ contains
       do isite=1,Nsite
          !
          ! only two possible arrangements
-         if(abs(orbs(2)-orbs(1)).eq.1)then
-            shift = size(orbs)*(isite-1)
-         elseif(abs(orbs(2)-orbs(1)).eq.Nsite)then
-            shift = isite-1
+         shift=0
+         if(size(Orbs).gt.1)then
+            if(abs(orbs(2)-orbs(1)).eq.1)then
+               shift = Norb_imp*(isite-1)
+            elseif(abs(orbs(2)-orbs(1)).eq.Nsite)then
+               shift = isite-1
+            endif
          endif
          !
          do i_imp=1,Norb_imp
@@ -1975,7 +1984,7 @@ contains
       Eqv_diag%Gfoffdiag = .false.
       !
       !get the equivalent sets from the input pattern
-      call get_pattern(Eqv_diag%SetOrbs,Pattern,eps)
+      call get_pattern(Eqv_diag%SetOrbs,Pattern,1e4*eps)
       !
       !fill in other stuff
       if(allocated(Eqv_diag%SetOrbs))then
@@ -2035,7 +2044,7 @@ contains
       Eqv_diag%Gfoffdiag = .false.
       !
       !get the equivalent sets from the input pattern
-      call get_pattern(Eqv_diag%SetOrbs,Pattern,eps)
+      call get_pattern(Eqv_diag%SetOrbs,Pattern,1e4*eps)
       !
       !fill in other stuff
       if(allocated(Eqv_diag%SetOrbs))then
@@ -2097,7 +2106,7 @@ contains
       Eqv_diag%Gfoffdiag = .false.
       !
       !get the equivalent sets from the input pattern
-      call get_pattern(Eqv_diag%SetOrbs,Pattern,eps)
+      call get_pattern(Eqv_diag%SetOrbs,Pattern,1e4*eps)
       !
       !fill in other stuff
       if(allocated(Eqv_diag%SetOrbs))then
