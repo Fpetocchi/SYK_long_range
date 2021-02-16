@@ -129,12 +129,16 @@ program SelfConsistency
          allocate(VH(Crystal%Norb,Crystal%Norb));VH=czero
          if(.not.Hmodel)call calc_VH(densityLDA,Glat,Ulat,VH)
          call dump_Matrix(VH,reg(ItFolder)//"VH.DAT")
+         if(.not.VH_use)VH=czero
          if(solve_DMFT.and.bosonicSC.and.(.not.Ustart))call DeallocateBosonicField(Ulat)
          !
          !read from SPEX G0W0 self-energy and Vexchange
          allocate(Vxc(Crystal%Norb,Crystal%Norb,Crystal%Nkpt,Nspin));Vxc=czero
          call AllocateFermionicField(S_G0W0,Crystal%Norb,Nmats,Nkpt=Crystal%Nkpt,Nsite=Nsite,Beta=Beta)
-         if(.not.Hmodel)call read_Sigma_spex(S_G0W0,Crystal,verbose,Vxc=Vxc,doAC=Sigma_AC,pathOUTPUT=reg(pathINPUTtr))
+         if(.not.Hmodel)then
+            call read_Sigma_spex(S_G0W0,Crystal,verbose,Vxc=Vxc,doAC=Sigma_AC,pathOUTPUT=reg(pathINPUTtr))
+            if(.not.Vxc_use)Vxc=czero
+         endif
          !
          !scGW
          if(Iteration.eq.0)then
@@ -190,7 +194,7 @@ program SelfConsistency
       !Store rotation after first Vxc allocation
       if((RotateHloc).and.(Iteration.eq.0))then
          write(*,"(A)") new_line("A")//new_line("A")//"---- Rotations of the local LDA Hamiltonian + local Vxc (used)"
-         call build_rotations("Hren",OlocSite,OlocEig,OlocRot,OlocRotDag,LatticeOp=(Crystal%Hloc-sum(Vxc(:,:,:,1),dim=3)/Crystal%Nkpt))
+         call build_rotations("Hren",OlocSite,OlocEig,OlocRot,OlocRotDag,LatticeOp=diag_factor(Crystal%Hloc-sum(Vxc(:,:,:,1),dim=3)/Crystal%Nkpt,-1d0))
          call update_ImpEqvOrbs()
       endif
       !

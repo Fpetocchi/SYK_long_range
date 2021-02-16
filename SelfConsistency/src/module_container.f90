@@ -6,7 +6,7 @@ module module_container
    inv, inv_sym, inv_her                    ,&
    det,trace                                ,&
    deye, zeye, zeros, ones                  ,&
-   diag, diagonal, rotate                   ,&
+   diag, diagonal, rotate, diag_factor      ,&
    kronecker_product, outerprod             ,&
    cross_product, s3_product                ,&
    tensor_transform

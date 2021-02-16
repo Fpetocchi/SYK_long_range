@@ -152,6 +152,8 @@ module input_vars
    logical,public                           :: Kdiag
    !
    !Double counting types, divergencies, scaling and self-consistency coefficients
+   logical,public                           :: VH_use
+   logical,public                           :: Vxc_use
    character(len=256),public                :: VH_type
    character(len=256),public                :: DC_type
    logical,public                           :: Sigma_AC
@@ -400,6 +402,8 @@ contains
       !Double counting types, divergencies, scaling coefficients
       call add_separator()
       call parse_input_variable(VH_type,"VH_TYPE",InputFile,default="Ustatic_SPEX",comment="Hartree term mismatch between GoWo and scGW. Available: Ubare, Ustatic, Ubare_SPEX(V_nodiv.DAT required), Ustatic_SPEX(V_nodiv.DAT required).")
+      call parse_input_variable(VH_use,"VH_USE",InputFile,default=.true.,comment="Flag to use the Hartree term correction between Tier-III and Tier-II, which is printed in PATH_INPUT even if not used.")
+      call parse_input_variable(Vxc_use,"VXC_USE",InputFile,default=.true.,comment="Flag to use the exchange potential, which is printed in PATH_INPUT even if not used.")
       if(Umodel)VH_type="Ustatic"
       call parse_input_variable(DC_type,"DC_TYPE",InputFile,default="GlocWloc",comment="Local GW self-energy which is replaced by DMFT self-energy. Avalibale: GlocWloc, Sloc.")
       call parse_input_variable(Sigma_AC,"SIGMA_AC",InputFile,default=.false.,comment="Flag to force the analytic continuation on the G0W0 self-energy.")

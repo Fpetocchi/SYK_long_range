@@ -196,7 +196,7 @@ contains
       integer                               :: Nbp,Nkpt,Nmats
       integer                               :: iq,iw,iwU
       integer                               :: ismall,num_k
-      logical                               :: sym_
+      logical                               :: Ustatic,sym_
       !
       !
       if(verbose)write(*,"(A)") "---- calc_W_full"
@@ -214,6 +214,9 @@ contains
       !
       sym_=.true.
       if(present(sym))sym_=sym
+      Ustatic=.false.
+      if(Umodel.and.(Umats%Npoints.eq.1))Ustatic=.true.
+      if(Ustatic)write(*,"(A)")"     Static U bare."
       !
       Nbp = Wmats%Nbp
       Nkpt = Wmats%Nkpt
@@ -223,10 +226,7 @@ contains
       if(all([Umats%Nbp-Nbp,Pmats%Nbp-Nbp].ne.[0,0])) stop "Either Umats and/or Pmats have different orbital dimension with respect to Wmats."
       if(all([Umats%Nkpt-Nkpt,Pmats%Nkpt-Nkpt].ne.[0,0])) stop "Either Umats and/or Pmats have different number of k-points with respect to Wmats."
       if(all([Umats%Beta-Beta,Pmats%Beta-Beta].ne.[0d0,0d0])) stop "Either Umats and/or Pmats have different Beta with respect to Wmats."
-      if(all([Umats%Npoints-Nmats,Pmats%Npoints-Nmats].ne.[0,0]))then
-         Nmats = minval([Wmats%Npoints,Umats%Npoints,Pmats%Npoints])
-         write(*,"(A)") "Warning: Either Umats and/or Pmats have different number of Matsubara points. Computing up to the smaller: "//str(Nmats)
-      endif
+      if(Pmats%Npoints.ne.Nmats) stop "Pmats has different number of Matsubara points with respect to Wmats."
       !
       allocate(invW(Nbp,Nbp));invW=czero
       call clear_attributes(Wmats)
@@ -240,13 +240,13 @@ contains
       Wmats%bare = Umats%bare
       !
       !$OMP PARALLEL DEFAULT(NONE),&
-      !$OMP SHARED(Pmats,Umats,Wmats,den_smallk,Lttc,HandleGammaPoint,Umodel,verbose,sym_),&
+      !$OMP SHARED(Pmats,Umats,Wmats,den_smallk,Lttc,HandleGammaPoint,Ustatic,verbose,sym_),&
       !$OMP PRIVATE(iw,iwU,iq,invW,ismall)
       !$OMP DO
       do iw=1,Wmats%Npoints
          !
          iwU = iw
-         if(Umodel.and.(Umats%Npoints.eq.1))iwU = 1
+         if(Ustatic)iwU = 1
          !
          do iq=1,Wmats%Nkpt
             !
@@ -304,7 +304,7 @@ contains
          !Fill the Gamma point value - element not included in the iq loop - print if error is bigger than 1e-3
          do iw=1,Nmats
             iwU = iw
-            if(Umodel.and.(Umats%Npoints.eq.1))iwU = 1
+            if(Ustatic)iwU = 1
             Wmats%screened(:,:,iw,Umats%iq_gamma) = dreal(matmul(den_smallk_avrg(:,:,iw),Umats%screened(:,:,iwU,Umats%iq_gamma)))
             if(sym_) call check_Symmetry(Wmats%screened(:,:,iw,Umats%iq_gamma),1e7*eps,enforce=.true.,hardstop=.false.,name="Wlat_w"//str(iw)//"_q"//str(Umats%iq_gamma),verb=verbose)
          enddo
@@ -323,9 +323,6 @@ contains
       do iw=1,Nmats
          call check_Hermiticity(Wmats%screened_local(:,:,iw),eps,enforce=.true.,hardstop=.false.,name="Wlat_loc_w"//str(iw))!,verb=verbose)
       enddo
-      !endif
-      !call dump_BosonicField(Umats,"./Ulat_readable/",.false.)
-      !call dump_BosonicField(Wmats,"./Wlat_readable/",.false.)
       !
    end subroutine calc_W_full
 
@@ -356,7 +353,7 @@ contains
       integer                               :: Nbp,Nkpt,Nmats
       integer                               :: iq,iw,iwU
       integer                               :: ismall,num_k
-      logical                               :: sym_
+      logical                               :: Ustatic,sym_
       !
       !
       if(verbose)write(*,"(A)") "---- calc_W_edmft"
@@ -374,6 +371,9 @@ contains
       !
       sym_=.true.
       if(present(sym))sym_=sym
+      Ustatic=.false.
+      if(Umodel.and.(Umats%Npoints.eq.1))Ustatic=.true.
+      if(Ustatic)write(*,"(A)")"     Static U bare."
       !
       Nbp = Wmats%Nbp
       Nkpt = Umats%Nkpt
@@ -382,10 +382,7 @@ contains
       !
       if(all([Umats%Nbp-Nbp,Pmats%Nbp-Nbp].ne.[0,0])) stop "Either Umats and/or Pmats have different orbital dimension with respect to Wmats."
       if(all([Umats%Beta-Beta,Pmats%Beta-Beta].ne.[0d0,0d0])) stop "Either Umats and/or Pmats have different Beta with respect to Wmats."
-      if(all([Umats%Npoints-Nmats,Pmats%Npoints-Nmats].ne.[0,0]))then
-         Nmats = minval([Wmats%Npoints,Umats%Npoints,Pmats%Npoints])
-         write(*,"(A)") "Warning: Either Umats and/or Pmats have different number of Matsubara points. Computing up to the smaller: "//str(Nmats)
-      endif
+      if(Pmats%Npoints.ne.Nmats) stop "Pmats has different number of Matsubara points with respect to Wmats."
       !
       allocate(invW(Nbp,Nbp));invW=czero
       allocate(W_q(Nbp,Nbp));W_q=czero
@@ -400,13 +397,13 @@ contains
       Wmats%bare_local = Umats%bare_local
       !
       !$OMP PARALLEL DEFAULT(NONE),&
-      !$OMP SHARED(Pmats,Umats,Wmats,den_smallk,Lttc,HandleGammaPoint,Umodel,verbose,sym_),&
+      !$OMP SHARED(Pmats,Umats,Wmats,den_smallk,Lttc,HandleGammaPoint,Ustatic,verbose,sym_),&
       !$OMP PRIVATE(iw,iwU,iq,invW,W_q,ismall)
       !$OMP DO
       do iw=1,Wmats%Npoints
          !
          iwU = iw
-         if(Umodel.and.(Umats%Npoints.eq.1))iwU = 1
+         if(Ustatic)iwU = 1
          !
          do iq=1,Umats%Nkpt
             !
@@ -467,7 +464,7 @@ contains
          !Add the Gamma point value - element not summed in the iq loop - print if error is bigger than 1e-3
          do iw=1,Nmats
             iwU = iw
-            if(Umodel.and.(Umats%Npoints.eq.1))iwU = 1
+            if(Ustatic)iwU = 1
             W_q = dreal(matmul(den_smallk_avrg(:,:,iw),Umats%screened(:,:,iwU,Umats%iq_gamma)))
             if(sym_) call check_Symmetry(W_q,1e7*eps,enforce=.true.,hardstop=.false.,name="Wlat_w"//str(iw)//"_q"//str(Umats%iq_gamma),verb=verbose)
             Wmats%screened_local(:,:,iw) = Wmats%screened_local(:,:,iw) + W_q/Nkpt
@@ -532,10 +529,7 @@ contains
       if(all([Umats%Nbp-Nbp,Pmats%Nbp-Nbp].ne.[0,0])) stop "Either Umats and/or Pmats have different orbital dimension with respect to Chi."
       if(all([Umats%Nkpt-Nkpt,Pmats%Nkpt-Nkpt].ne.[0,0])) stop "Either Umats and/or Pmats have different number of k-points with respect to Chi."
       if(all([Umats%Beta-Beta,Pmats%Beta-Beta].ne.[0d0,0d0])) stop "Either Umats and/or Pmats have different Beta with respect to Chi."
-      if(all([Umats%Npoints-Nmats,Pmats%Npoints-Nmats].ne.[0,0]))then
-         Nmats = minval([Chi%Npoints,Umats%Npoints,Pmats%Npoints])
-         write(*,"(A)") "Warning: Either Umats and/or Pmats have different number of Matsubara points. Computing up to the smaller: "//str(Nmats)
-      endif
+      if(Pmats%Npoints.ne.Nmats) stop "Pmats has different number of Matsubara points with respect to Chi."
       !
       allocate(invW(Nbp,Nbp));invW=czero
       call clear_attributes(Chi)
@@ -616,10 +610,7 @@ contains
       !
       if(all([Umats%Nbp-Nbp,Pmats%Nbp-Nbp].ne.[0,0])) stop "Either Umats and/or Pmats have different orbital dimension with respect to Chi."
       if(all([Umats%Beta-Beta,Pmats%Beta-Beta].ne.[0d0,0d0])) stop "Either Umats and/or Pmats have different Beta with respect to Chi."
-      if(all([Umats%Npoints-Nmats,Pmats%Npoints-Nmats].ne.[0,0]))then
-         Nmats = minval([Chi%Npoints,Umats%Npoints,Pmats%Npoints])
-         write(*,"(A)") "Warning: Either Umats and/or Pmats have different number of Matsubara points. Computing up to the smaller: "//str(Nmats)
-      endif
+      if(Pmats%Npoints.ne.Nmats) stop "Pmats has different number of Matsubara points with respect to Chi."
       !
       allocate(invW(Nbp,Nbp));invW=czero
       call clear_attributes(Chi)

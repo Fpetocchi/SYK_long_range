@@ -74,8 +74,15 @@ module linalg
       module procedure zones_7
    end interface ones
 
+   interface diag_factor
+      module procedure diag_factor_d
+      module procedure diag_factor_z
+   end interface diag_factor
+
    interface kronecker_product
-      module procedure i_kronecker_product,d_kronecker_product,c_kronecker_product
+      module procedure i_kronecker_product
+      module procedure d_kronecker_product
+      module procedure c_kronecker_product
    end interface kronecker_product
 
    interface outerprod
@@ -138,10 +145,11 @@ module linalg
    !functions
    public :: det,trace                                                          !numpy-like. Takes matrix returns scalar.
    public :: deye, zeye, zeros, ones                                            !numpy-like. Takes integer returns square matrix.
-   public :: diag                                                               !numpy-like. Takes vector returns diagonal sqaure matrix.
-   public :: diagonal                                                           !numpy-like. Takes sqaure matrix returns diagonal vector.
-   public :: rotate                                                             !numpy-like. Takes two sqaure matrix returns sqaure matrix.
-   public :: kronecker_product                                                  !Takes two sqaure matrix (size Norb) returns sqaure matrix (size Norb**2).
+   public :: diag                                                               !numpy-like. Takes vector returns diagonal square matrix.
+   public :: diagonal                                                           !numpy-like. Takes square matrix returns diagonal vector.
+   public :: rotate                                                             !numpy-like. Takes two square matrix returns square matrix.
+   public :: diag_factor                                                        !numpy-like. Takes square matrix and real factor returns square matrix.
+   public :: kronecker_product                                                  !Takes two square matrix (size Norb) returns square matrix (size Norb**2).
    !
    public :: outerprod                                                          !Form a matrix A(:,:) from the outerproduct of two 1d arrays: A(i,j) = a_i*b_j
    public :: cross_product                                                      !cross or vector product for 2d and 3d vectors.

@@ -509,7 +509,7 @@ contains
       allocate(density_LDA(Norb,Norb));density_LDA=czero
       density_LDA = sum(density_LDA_spin,dim=3)
       !
-      select case(VH_type)
+      select case(reg(VH_type))
          case default
             stop "Available VH_type are: Ubare, Ustatic, Ubare_SPEX, Ustatic_SPEX."
          case("Ubare")
@@ -561,6 +561,8 @@ contains
             call read_Vgamma(0)
             !
       end select
+      !
+      call dump_matrix(Vgamma,reg(pathINPUT)//"Vgamma_"//reg(VH_type)//".DAT")
       !
       VH=czero
       do i=1,Norb
@@ -617,7 +619,6 @@ contains
          !
       !
    end subroutine calc_VH
-
 
 
    !---------------------------------------------------------------------------!

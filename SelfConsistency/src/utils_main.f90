@@ -458,7 +458,7 @@ contains
          if(reg(CalculationType).eq."GW+EDMFT")then
             !
             write(*,"(A)") new_line("A")//new_line("A")//"---- Rotations of the local LDA Hamiltonian"
-            call build_rotations("Hloc",OlocSite,OlocEig,OlocRot,OlocRotDag,LatticeOp=Lttc%Hloc)
+            call build_rotations("Hloc",OlocSite,OlocEig,OlocRot,OlocRotDag,LatticeOp=diag_factor(Lttc%Hloc,-1d0))
             !
             !On the 0th iteration in general Vxc_loc is not yet written
             if(ItStart.gt.0)then
@@ -469,14 +469,14 @@ contains
                call read_Matrix(Vxc_loc,reg(pathINPUT)//"Vxc_s1.DAT")
                !
                write(*,"(A)") new_line("A")//new_line("A")//"---- Rotations of the local LDA Hamiltonian + local Vxc (used)"
-               call build_rotations("Hren",OlocSite,OlocEig,OlocRot,OlocRotDag,LatticeOp=(Lttc%Hloc-Vxc_loc))
+               call build_rotations("Hren",OlocSite,OlocEig,OlocRot,OlocRotDag,LatticeOp=diag_factor(Lttc%Hloc-Vxc_loc,-1d0))
                call update_ImpEqvOrbs()
                !
             endif
             !
          else
             write(*,"(A)") new_line("A")//new_line("A")//"---- Rotations of the local LDA Hamiltonian (used)"
-            call build_rotations("Hloc",OlocSite,OlocEig,OlocRot,OlocRotDag,LatticeOp=Lttc%Hloc)
+            call build_rotations("Hloc",OlocSite,OlocEig,OlocRot,OlocRotDag,LatticeOp=diag_factor(Lttc%Hloc,-1d0))
             call update_ImpEqvOrbs()
          endif
          !
@@ -1239,8 +1239,8 @@ contains
       !
       if(look4dens%TargetDensity.eq.0d0)then
          Glat%mu = look4dens%mu
-      else
-         if(ItStart.eq.0)call set_density(Glat%mu,Beta,Crystal,look4dens)
+      elseif(ItStart.eq.0)then
+         call set_density(Glat%mu,Beta,Crystal,look4dens)
       endif
       !
       write(*,"(A,F)") new_line("A")//"     Lattice chemical potential:  ",Glat%mu
@@ -2168,7 +2168,7 @@ contains
                !
                do ib1=1,Nflavor
                   do ib2=1,Nflavor
-                     if(abs(Ucheck(ib1,ib2)-Uinst(ib1,ib2)).gt.1e-6)then
+                     if(abs(Ucheck(ib1,ib2)-Uinst(ib1,ib2)).gt.1e-3)then
                         write(*,"(A,F,A,F)")"     Warning: Element["//str(ib1)//"]["//str(ib2)//"] is different:",Ucheck(ib1,ib2)," instead of: ",Uinst(ib1,ib2)
                      endif
                   enddo
