@@ -113,6 +113,7 @@ module input_vars
    integer,public,allocatable               :: SiteNorb(:)
    character(len=2),public,allocatable      :: SiteName(:)
    integer,public,allocatable               :: SiteOrbs(:,:)
+   real(8),public,allocatable               :: SiteCF(:,:)
    !
    !Equivalent lattice indexes
    integer,public                           :: sym_mode
@@ -232,6 +233,7 @@ contains
       integer                               :: unit
       integer                               :: isite,iset,iph,iorb,NtauFguess
       integer,allocatable                   :: tmpOrbs(:)
+      real(8),allocatable                   :: tmpCF(:)
       !
       write(LOGfile,"(A)") new_line("A")//"Reading InputFile"//new_line("A")
       !
@@ -310,10 +312,19 @@ contains
          endif
          deallocate(tmpOrbs)
       enddo
+      allocate(SiteCF(Nsite,maxval(SiteNorb)-1));SiteCF=0d0
+      if(RotateHloc)then
+         do isite=1,Nsite
+            allocate(tmpCF(1:SiteNorb(isite)-1));tmpCF=0d0
+            call parse_input_variable(SiteCF(isite,1:SiteNorb(isite)-1),"CF_"//str(isite),InputFile,default=tmpCF,comment="Additional crystal-fields on diagonal orbitals of site number "//str(isite))
+            if(ExpandImpurity.or.AFMselfcons)exit
+            deallocate(tmpCF)
+         enddo
+      endif
       !
       !Equivalent lattice indexes
       call add_separator()
-      call parse_input_variable(EqvGWndx%para,"PARAMAGNET",InputFile,default=1,comment="Integer flag to impose spin symmetry.")
+      call parse_input_variable(EqvGWndx%para,"PARAMAGNET",InputFile,default=1,comment="If =1 spin symmetry is enforced if =2 the solver will copy the closer to half-filling if =0 spin is left free.")
       call parse_input_variable(EqvGWndx%hseed,"H_SEED",InputFile,default=0d0,comment="Seed to break spin symmetry (persistent if non zero).")
       call parse_input_variable(sym_mode,"SYM_MODE",InputFile,default=2,comment="If =1 only the lattice orbitals will be symmetrized, if =2 also the corrssponding n(tau) inside the solver, if =3 only n(tau).")
       call parse_input_variable(EqvGWndx%Nset,"EQV_SETS",InputFile,default=1,comment="Number of sets of locally equivalent lattice orbitals.")
@@ -329,7 +340,7 @@ contains
             deallocate(tmpOrbs)
          enddo
       endif
-      if(EqvGWndx%para.eq.1)EqvGWndx%S=.true.
+      if(EqvGWndx%para.gt.0)EqvGWndx%S=.true.
       !
       !Imaginary time and frequency meshes
       call add_separator()

@@ -187,26 +187,50 @@ void binAverageVec( std::vector<int> &bins, VecVec &G, VecVec &Gerr)
 //------------------------------------------------------------------------------
 
 
-void spin_symm( Vec &Vec )
+void spin_symm( Vec &Vec , int para_mode=1 )
 {
    int Nflavor = Vec.size();
    for (int ifl=0; ifl<(Nflavor/2); ++ifl)
    {
-      double val = ( Vec[2*ifl] + Vec[2*ifl+1] ) /2.0;
+      //
+      int up = 2*ifl;
+      int dw = 2*ifl+1;
+      //
+      if(para_mode == 2)
+      {
+         std::vector<double> shift = { abs(Vec[up]-0.5), abs(Vec[dw]-0.5) };
+         int ndx = std::min_element( shift.begin(), shift.end() ) - shift.begin();
+         if(ndx==0) dw = up;
+         if(ndx==1) up = dw;
+      }
+      //
+      double val = ( Vec[up] + Vec[dw] ) /2.0;
       Vec[2*ifl] = val;
       Vec[2*ifl+1] = val;
    }
 }
 
-void spin_symm( VecVec &VecVec )
+void spin_symm( VecVec &VecVec , int para_mode=1 )
 {
    int Nflavor = VecVec.size();
    int Ntau = VecVec[0].size();
-   for (int i=0; i<Ntau; ++i)
+   for (int ifl=0; ifl<(Nflavor/2); ++ifl)
    {
-      for (int ifl=0; ifl<(Nflavor/2); ++ifl)
+      //
+      int up = 2*ifl;
+      int dw = 2*ifl+1;
+      //
+      if(para_mode == 2)
       {
-         double val = ( VecVec[2*ifl][i] + VecVec[2*ifl+1][i] ) /2.0;
+         std::vector<double> shift = { abs(VecVec[up].back()+0.5), abs(VecVec[dw].back()+0.5) };
+         int ndx = std::min_element( shift.begin(), shift.end() ) - shift.begin();
+         if(ndx==0) dw = up;
+         if(ndx==1) up = dw;
+      }
+      //
+      for (int i=0; i<Ntau; ++i)
+      {
+         double val = ( VecVec[up][i] + VecVec[dw][i] ) /2.0;
          VecVec[2*ifl][i] = val;
          VecVec[2*ifl+1][i] = val;
       }

@@ -78,6 +78,7 @@ module utils_main
    logical                                  :: calc_Sigmak=.false.
    logical                                  :: merge_Sigma=.false.
    !
+   logical                                  :: sym_constrained=.false.
    logical                                  :: MultiTier=.false.
    logical                                  :: update_rotations=.false.
    !
@@ -180,6 +181,9 @@ contains
       !
       calc_Sguess = calc_Sguess .and. (FirstIteration.eq.0) .and. solve_DMFT
       calc_Pguess = calc_Pguess .and. (FirstIteration.eq.0) .and. solve_DMFT
+      !
+      sym_constrained = ExpandImpurity .and. (reg(VH_type).ne."Ustatic")
+      sym_constrained = ExpandImpurity .and. (reg(VH_type).ne."Ubare")
       !
       call inquireDir(reg(pathDATA)//str(FirstIteration-1),PrvItexist,hardstop=.false.,verb=.false.)
       call inquireDir(reg(pathDATA)//str(0),ZeroItexist,hardstop=.false.,verb=.false.)
@@ -908,14 +912,15 @@ contains
          !
          if(FirstIteration.ne.LastIteration)then
             do isite=1,Nsite
-               if(EqvImpndx(isite)%Nset.eq.0)cycle
-               file = reg(ItFolder)//"Solver_"//reg(SiteName(isite))//"/Eqv.DAT"
-               unit = free_unit()
-               open(unit,file=reg(file),form="formatted",status="unknown",position="rewind",action="write")
-               do iset=1,EqvImpndx(isite)%Nset
-                  write(unit,"("//str(EqvImpndx(isite)%SetNorb(iset))//"I4)")EqvImpndx(isite)%SetOrbs(iset,1:EqvImpndx(isite)%SetNorb(iset))-1
-               enddo
-               close(unit)
+               if(EqvImpndx(isite)%Nset.gt.0)then
+                  file = reg(ItFolder)//"Solver_"//reg(SiteName(isite))//"/Eqv.DAT"
+                  unit = free_unit()
+                  open(unit,file=reg(file),form="formatted",status="unknown",position="rewind",action="write")
+                  do iset=1,EqvImpndx(isite)%Nset
+                     write(unit,"("//str(EqvImpndx(isite)%SetNorb(iset))//"I4)")EqvImpndx(isite)%SetOrbs(iset,1:EqvImpndx(isite)%SetNorb(iset))-1
+                  enddo
+                  close(unit)
+               endif
                if(ExpandImpurity.or.AFMselfcons)exit
             enddo
          endif
@@ -1620,7 +1625,7 @@ contains
       real(8),allocatable                   :: wmats(:),tau(:),Moments(:,:,:)
       real(8),allocatable                   :: Eloc(:,:),PrintLine(:),coef01(:,:)
       !complex(8),allocatable                :: Hloc(:,:)
-      real(8)                               :: tailShift
+      real(8)                               :: tailShift,CrystalField
       complex(8),allocatable                :: zeta(:,:,:),invG(:,:),Rot(:,:)
       complex(8),allocatable                :: Dfit(:,:,:),Dmats(:,:,:),Ditau(:,:,:)
       complex(8),allocatable                :: invCurlyG(:,:,:)!,DeltaTail(:)
@@ -1826,12 +1831,24 @@ contains
       enddo
       !
       !Eloc and chemical potential
+      if(any(SiteCF(isite,:).ne.0d0))then
+         file = reg(ItFolder)//"Solver_"//reg(SiteName(isite))//"/Eloc_noCF.DAT"
+         unit = free_unit()
+         open(unit,file=reg(file),form="formatted",status="unknown",position="rewind",action="write")
+         write(unit,"(1E20.12)") Glat%mu
+         do iwan=1,Norb
+            write(unit,"(2E20.12)") Eloc(iwan,1)+EqvGWndx%hseed,Eloc(iwan,2)-EqvGWndx%hseed
+         enddo
+         close(unit)
+      endif
       file = reg(ItFolder)//"Solver_"//reg(SiteName(isite))//"/Eloc.DAT"
       unit = free_unit()
       open(unit,file=reg(file),form="formatted",status="unknown",position="rewind",action="write")
       write(unit,"(1E20.12)") Glat%mu
+      CrystalField=0d0
       do iwan=1,Norb
-         write(unit,"(2E20.12)") Eloc(iwan,1)+EqvGWndx%hseed,Eloc(iwan,2)-EqvGWndx%hseed
+         if(iwan.gt.1)CrystalField=SiteCF(isite,iwan-1)
+         write(unit,"(2E20.12)") Eloc(iwan,1)+EqvGWndx%hseed+CrystalField,Eloc(iwan,2)-EqvGWndx%hseed+CrystalField
       enddo
       close(unit)
       !
@@ -3018,7 +3035,8 @@ contains
       !
       implicit none
       !
-      complex(8),allocatable                :: HartreeU(:,:,:)
+      complex(8),allocatable                :: HartreeU(:,:),Nimp(:,:)
+      integer                               :: ispin
       !
       !
       write(*,"(A)") new_line("A")//new_line("A")//"---- interpolate_from_oldBeta"
@@ -3106,12 +3124,20 @@ contains
             call DeallocateFermionicField(Glat)
             !
             !Read&write instead of execute_command
-            allocate(HartreeU(Crystal%Norb,Crystal%Norb,2));HartreeU=czero
-            call read_Matrix(HartreeU(:,:,1),reg(Beta_Match%Path)//"HartreeU_s1.DAT")
-            call read_Matrix(HartreeU(:,:,2),reg(Beta_Match%Path)//"HartreeU_s2.DAT")
-            call dump_Matrix(HartreeU(:,:,1),reg(PrevItFolder)//"HartreeU_s1.DAT")
-            call dump_Matrix(HartreeU(:,:,2),reg(PrevItFolder)//"HartreeU_s2.DAT")
-            deallocate(HartreeU)
+            allocate(HartreeU(Crystal%Norb,Crystal%Norb))
+            allocate(Nimp(Crystal%Norb,Crystal%Norb))
+            do ispin=1,Nspin
+               !
+               HartreeU=czero
+               call read_Matrix(HartreeU,reg(Beta_Match%Path)//"HartreeU_s"//str(ispin)//".DAT")
+               call dump_Matrix(HartreeU,reg(PrevItFolder)//"HartreeU_s"//str(ispin)//".DAT")
+               !
+               Nimp=czero
+               call read_Matrix(Nimp,reg(Beta_Match%Path)//"Nimp_s"//str(ispin)//".DAT")
+               call dump_Matrix(Nimp,reg(PrevItFolder)//"Nimp_s"//str(ispin)//".DAT")
+               !
+            enddo
+            deallocate(HartreeU,Nimp)
             !
       end select
 
@@ -3119,3 +3145,12 @@ contains
 
 
 end module utils_main
+
+
+
+!allocate(HartreeU(Crystal%Norb,Crystal%Norb,2));HartreeU=czero
+!call read_Matrix(HartreeU(:,:,1),reg(Beta_Match%Path)//"HartreeU_s1.DAT")
+!call read_Matrix(HartreeU(:,:,2),reg(Beta_Match%Path)//"HartreeU_s2.DAT")
+!call dump_Matrix(HartreeU(:,:,1),reg(PrevItFolder)//"HartreeU_s1.DAT")
+!call dump_Matrix(HartreeU(:,:,2),reg(PrevItFolder)//"HartreeU_s2.DAT")
+!deallocate(HartreeU)

@@ -127,7 +127,7 @@ program SelfConsistency
          !
          !Hartree shift between G0W0 and LDA
          allocate(VH(Crystal%Norb,Crystal%Norb));VH=czero
-         if(.not.Hmodel)call calc_VH(densityLDA,Glat,Ulat,VH)
+         if(.not.Hmodel)call calc_VH(VH,densityLDA,Glat,Ulat)
          call dump_Matrix(VH,reg(ItFolder)//"VH.DAT")
          if(.not.VH_use)VH=czero
          if(solve_DMFT.and.bosonicSC.and.(.not.Ustart))call DeallocateBosonicField(Ulat)

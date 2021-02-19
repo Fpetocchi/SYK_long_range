@@ -38,7 +38,7 @@ int main(int argc, char *argv[])
    int Nspin,NtauF,NtauB,Norder,Nmeas,Ntherm,Nshift,printTime;
    //logical flags and compatibility typo fix
    bool paramagnet,retarded,nnt_meas,quickloops,dichotomy,OrbSym;
-   int para_read,ret_read,nnt_read,quick_read,sym_read;
+   int para_mode,ret_read,nnt_read,quick_read,sym_read;
    // Post-processing of the Green's function
    int binlength,binstart;
    // Density lookup algorithm (dichotomy)
@@ -86,7 +86,7 @@ int main(int argc, char *argv[])
       find_param(argv[1], "NTHERM"     , Ntherm    );
       find_param(argv[1], "NSHIFT"     , Nshift    );
       find_param(argv[1], "PRINT_TIME" , printTime );
-      find_param(argv[1], "PARAMAGNET" , para_read ); paramagnet = (para_read == 1) ? true : false;
+      find_param(argv[1], "PARAMAGNET" , para_mode ); //paramagnet = (para_read == 1) ? true : false;
       find_param(argv[1], "RETARDED"   , ret_read  ); retarded = (ret_read == 1) ? true : false;
       find_param(argv[1], "NNT_MEAS"   , nnt_read  ); nnt_meas = (nnt_read == 1) ? true : false;
       // Post-processing of the Green's function
@@ -117,7 +117,7 @@ int main(int argc, char *argv[])
          mpi.report(" printTime= "+str(printTime)+"min");
          mpi.report(" retarded= "+str(retarded));
          mpi.report(" quickloops= "+str(quickloops));
-         mpi.report(" paramagnet= "+str(paramagnet));
+         mpi.report(" paramagnet= "+str(para_mode));
          mpi.report(" nnt_meas= "+str(nnt_meas));
          mpi.report(" OrbSym= "+str(OrbSym));
          mpi.report(" debug= "+str(debug));
@@ -235,7 +235,7 @@ int main(int argc, char *argv[])
             mpi.report(" Folder = "+SiteDir[isite]+" (Found).");
             ImpurityList.push_back(ct_hyb( SiteName[isite], Beta, Nspin, SiteNorb[isite],
                                            NtauF, NtauB, Norder, Nmeas, Ntherm, Nshift,
-                                           paramagnet, retarded, nnt_meas, SiteSetsNorb[isite],
+                                           para_mode, retarded, nnt_meas, SiteSetsNorb[isite],
                                            printTime, std::vector<int> { binlength,binstart }, mpi ));
             ImpurityList[isite].init( SiteDir[isite]);
          }

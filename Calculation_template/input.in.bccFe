@@ -4,10 +4,11 @@
 
  NKPT3=8,8,8                                   !Number of K-points per dimension.
  XEPS_KORDER=T                                 !Flag to use the K-point ordering of XEPS.DAT if present.
+ H_MODEL=F                                     !Flag to build a model H(k).
 
  #---------------------------------------------#
 
- NSPIN=2                                       !Number of spins (fixed to 2).
+ NSPIN=2                                       !Number of spins. User cannot set this as its fixed to 2.
  NSITE=1                                       !Number of inequivalent sites in the lattice.
  EXPAND=F                                      !Flag to use a single impurity solution for all the sites of the lattice. Only indexes for site 1 readed.
  ROTATE_F=F                                    !Solve the Fermionic impurity problem in the basis where H(R=0) is diagonal.
@@ -15,12 +16,12 @@
  AFM=F                                         !Flag to use  the AFM self-consistency by flipping the spin. Requires input with doubled unit cell.
  CMPLX_WANN=T                                  !Flag to assume the presence of complex Wannier function.
  NAME_1=Fe                                     !Chemical species of the site number 1
- NORB_1=5                                      !Number of orbitals in site number 1
- ORBS_1=5,6,7,8,9                              !Lattice orbital indexes of site number 1
+ NORB_1=9                                      !Number of orbitals in site number 1
+ ORBS_1=1,2,3,4,5,6,7,8,9                      !Lattice orbital indexes of site number 1
 
  #---------------------------------------------#
 
- PARAMAGNET=1                                  !Integer flag to impose spin symmetry.
+ PARAMAGNET=1                                  !If =1 spin symmetry is enforced if =2 the solver will copy the closer to half-filling if =0 spin is left free.
  H_SEED=0.000000                               !Seed to break spin symmetry (persistent if non zero).
  SYM_MODE=3                                    !If =1 only the lattice orbitals will be symmetrized, if =2 also the corrssponding n(tau) inside the solver, if =3 only n(tau).
  EQV_SETS=3                                    !Number of sets of locally equivalent lattice orbitals.
@@ -57,7 +58,7 @@
  #---------------------------------------------#
 
  U_FULL=T                                      !Flag to use all the off-diagonal components of SPEX Ucrpa or only the physical ones.
- U_MODEL=F                                     !Flag to build the screening from user chosen phononic modes.
+ U_MODEL=F                                     !Flag to build a model interaction.
  U_SPEX=T                                      !Flag to read SPEX Ucrpa.
  U_START=F                                     !Flag to use the local Ucrpa interaction as the effetive interaction in the 0th iteration.
  U_AC=F                                        !Flag to force the analytic continuation on the SPEX interaction.
@@ -67,33 +68,36 @@
  #---------------------------------------------#
 
  VH_TYPE=Ustatic_SPEX                          !Hartree term mismatch between GoWo and scGW. Available: Ubare, Ustatic, Ubare_SPEX(V_nodiv.DAT required), Ustatic_SPEX(V_nodiv.DAT required).
+ VH_USE=T                                      !Flag to use the Hartree term correction between Tier-III and Tier-II, which is printed in PATH_INPUT even if not used.
+ VXC_USE=T                                     !Flag to use the exchange potential, which is printed in PATH_INPUT even if not used.
  DC_TYPE=Sloc                                  !Local GW self-energy which is replaced by DMFT self-energy. Avalibale: GlocWloc, Sloc.
  SIGMA_AC=F                                    !Flag to force the analytic continuation on the G0W0 self-energy.
  SMEAR_GAMMA=T                                 !Remove the interaction divergence at the Gamma point.
- ALPHA_CHI=1.000000                            !Rescaling factor for the local charge susceptibility.
- ALPHA_PI=0.250000                             !Fraction of the EDMFT polarization substituted within the lattice one.
+ S_GUESS=F                                     !Use G0W0_loc as a first guess for the DMFT self-energy.
+ P_GUESS=F                                     !Use GG_loc as a first guess for the DMFT polarization.
+ ALPHA_CHI=0.820000                            !Rescaling factor for the local charge susceptibility.
+ ALPHA_PI=1.000000                             !Fraction of the EDMFT polarization substituted within the lattice one.
  ALPHA_SIGMA=1.000000                          !Fraction of the EDMFT self-energy substituted within the lattice one.
  ALPHA_HK=1.000000                             !Rescaling of the non-interacting Hamiltonian.
  CHI_DIAG=F                                    !Flag to remove the off-diagonal components of the local charge susceptibility.
  CDW_CHI=T                                     !Flag to remove the iw=0 divergence in the local charge susceptibility.
  CDW_PI=T                                      !Flag to remove the iw=0 divergence in the local polarization.
  MIX_D=0.000000                                !Fraction of the old iteration Delta.
- MIX_U=0.980000                                !Fraction of the old iteration curlyU.
+ MIX_U=0.800000                                !Fraction of the old iteration curlyU.
  CAUSAL_D=F                                    !Flag to employ generalized cavity equation for Delta. Active only for GW+EDMFT calculation.
  CAUSAL_U=F                                    !Flag to employ generalized cavity equation for curlyU. Active only for GW+EDMFT calculation.
  DELTA_FIT=Analytic                            !Fit to extract the local energy in GW+EDMFT calculations. Available: Inf, Analytic, Moments.
  NFIT=16                                       !Number of bath levels (Analytic) or coefficient (Moments-automatic limit to NFIT=8).
- WTAIL_SIMP=100.000000                         !Frequency value above which the tail of Simp is replaced. If =0d0 the tail is not replaced. Only via moments (automatic limit to NFIT=5).
+ WTAIL_SIMP=140.000000                         !Frequency value above which the tail of Simp is replaced. If =0d0 the tail is not replaced. Only via moments (automatic limit to NFIT=5).
 
  #---------------------------------------------#
 
  PATH_INPUT=../GWinput_SPEX_bccFe/             !Folder within cwd where to look for input files.
  PATH_INPUT_TR=GWinput_mats/                   !Folder within cwd where to save input files after analytic continuation to the Matsubara axis.
  PATH_DATA=Results_beta07/                     !Folder within cwd where to store calculation data.
- START_IT=4                                    !First iteration. If its non zero the code will look for the last item in PATH_DATA/item and start there.
- LAST_IT=21                                    !Last iteration.
+ START_IT=101                                  !First iteration. If its non zero the code will look for the last item in PATH_DATA/item and start there.
+ LAST_IT=201                                   !Last iteration.
  LOGFILE=6                                     !Standard output redirection unit. Use 6 to print to terminal. Not used yet.
- SKIP_LATT=F                                   !Skip the lattice summation and assuming good the existing Gloc and Wloc. Not used yet.
  PRINT_GK=F                                    !Print the full k-dependent Green's function (binfmt) at each iteration (mandatory for CALC_TYPE=G0W0,scGW,GW+EDMFT).
  PRINT_SIGMAK=F                                !Print the full k-dependent self-energy (binfmt) at each iteration (always optional).
  PRINT_PATH=None                               !Print the H(k) and interacting Green's function along high-symmetry points. Available structures: cubic, fcc, bcc, hex, tetragonal, orthorhombic, None to avoid
@@ -118,12 +122,14 @@
  BINSTART=50                                   !Tau points skipped at the beginning and end of the Green's function average.
  RETARDED=1                                    !Integer flag to include the frequency dependent part of the interaction. User cannot set this as its deduced from CALC_TYPE.
  NNT_MEAS=1                                    !Integer flag to switch on the measurement of the susceptibility. User cannot set this as its deduced from CALC_TYPE.
- TIME_1=20                                     !Minutes of solver runtime for site number 1
+ TIME_1=60                                     !Minutes of solver runtime for site number 1
 
  #---------------------------------------------#
 
- EQV_1_SETS=2                                  !Number of sets of locally equivalent orbitals in site number 1
+ EQV_1_SETS=3                                  !Number of sets of locally equivalent orbitals in site number 1
  EQV_1_NORB_1=3                                !Number of equivalent orbitals in the set number 1 in site number 1
- EQV_1_NORB_2=2                                !Number of equivalent orbitals in the set number 2 in site number 1
- EQV_1_ORBS_1=1,2,3                            !Orbital indexes of equivalent set number 1 in site number 1
- EQV_1_ORBS_2=4,5                              !Orbital indexes of equivalent set number 2 in site number 1
+ EQV_1_NORB_2=3                                !Number of equivalent orbitals in the set number 2 in site number 1
+ EQV_1_NORB_3=2                                !Number of equivalent orbitals in the set number 3 in site number 1
+ EQV_1_ORBS_1=2,3,4                            !Orbital indexes of equivalent set number 1 in site number 1
+ EQV_1_ORBS_2=5,6,7                            !Orbital indexes of equivalent set number 2 in site number 1
+ EQV_1_ORBS_3=8,9                              !Orbital indexes of equivalent set number 3 in site number 1

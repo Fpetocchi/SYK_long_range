@@ -12,7 +12,10 @@ module self_energy
    !---------------------------------------------------------------------------!
    !PURPOSE: Module interfaces
    !---------------------------------------------------------------------------!
-   !
+   interface calc_VH
+      module procedure calc_VH_G
+      module procedure calc_VH_N
+   end interface calc_VH
 
    !---------------------------------------------------------------------------!
    !PURPOSE: Module variables
@@ -456,7 +459,7 @@ contains
    !PURPOSE: Compute Hartree difference with G0W0
    !TEST ON: 27-10-2020
    !---------------------------------------------------------------------------!
-   subroutine calc_VH(density_LDA_spin,Gmats,Umats,VH)
+   subroutine calc_VH_G(VH,density_LDA_spin,Gmats,Umats,sym_constrained)
       !
       use parameters
       use linalg
@@ -464,26 +467,32 @@ contains
       use utils_misc
       use utils_fields
       use greens_function, only : calc_density
-      use input_vars, only :  pathINPUT, VH_type
+      use input_vars, only :  Nsite, SiteNorb
+      use input_vars, only :  pathINPUT, VH_type, Nsite
       implicit none
       !
+      complex(8),intent(inout)              :: VH(:,:)
       complex(8),intent(in)                 :: density_LDA_spin(:,:,:)
       type(FermionicField),intent(in)       :: Gmats
       type(BosonicField),intent(in)         :: Umats
-      complex(8),intent(inout)              :: VH(:,:)
+      logical,intent(in),optional           :: sym_constrained
       !
       complex(8),allocatable                :: density_LDA(:,:)
       complex(8),allocatable                :: density(:,:),density_spin(:,:,:)
       complex(8),allocatable                :: Vgamma(:,:),Vevec(:,:)
       real(8),allocatable                   :: Veval(:)
+      integer,allocatable                   :: orbs(:)
       integer                               :: Norb,Nbp
-      integer                               :: ib1,ib2,ib3
+      integer                               :: isite,shift_N,shift_V
+      integer                               :: ib1,ib2
       integer                               :: i,j,k,l
-      logical                               :: filexists
+      integer                               :: i_N,j_N,k_N,l_N
+      integer                               :: i_V,j_V,k_V,l_V
+      logical                               :: filexists,sym_constrained_
       character(len=256)                    :: path
       !
       !
-      if(verbose)write(*,"(A)") "---- calc_VH"
+      if(verbose)write(*,"(A)") "---- calc_VH_G"
       !
       !
       ! Check on the input Field
@@ -493,12 +502,18 @@ contains
       if(Umats%Nkpt.eq.0) stop "Umats k dependent attributes not properly initialized."
       if(Umats%iq_gamma.lt.0) stop "Umats iq_gamma not defined."
       !
+      sym_constrained_=.false.
+      if(present(sym_constrained))sym_constrained_=sym_constrained
+      !
+      if(sym_constrained_.and.(reg(VH_type).eq."Ustatic")) stop "Ordering of sym_constrained is not implemented for Ustatic."
+      if(sym_constrained_.and.(reg(VH_type).eq."Ubare")) stop "Ordering of sym_constrained_ is not implemented for Ubare."
+      !
       Norb = Gmats%Norb
       Nbp = Umats%Nbp
       !
       if((Norb**2).ne.Nbp) stop "Umats and Gmats have different orbital space."
-      call assert_shape(density_LDA_spin,[Norb,Norb,Nspin],"calc_VH","density_LDA")
-      call assert_shape(VH,[Norb,Norb],"calc_VH","VH")
+      call assert_shape(density_LDA_spin,[Norb,Norb,Nspin],"calc_VH_G","density_LDA_spin")
+      call assert_shape(VH,[Norb,Norb],"calc_VH_G","VH")
       !
       allocate(density_spin(Norb,Norb,Nspin));density_spin=czero
       call calc_density(Gmats,density_spin)
@@ -517,37 +532,38 @@ contains
             allocate(Vgamma(Nbp,Nbp));Vgamma=czero
             Vgamma = Umats%bare(:,:,Umats%iq_gamma)
             !
+            !rotating to diagonal basis
             allocate(Veval(Nbp));Veval=0d0
             allocate(Vevec(Nbp,Nbp));Vevec=Vgamma
             call eigh(Vevec,Veval)
             !
-            do ib1=1,Nbp
-               do ib2=1,Nbp
-                  do ib3=1,Nbp
-                     Vgamma(ib1,ib2) = Vgamma(ib1,ib2) + Vevec(ib1,ib3)*Veval(ib3)*conjg(Vevec(ib2,ib3))
-                  enddo
-               enddo
-            enddo
+            !removing largest eigenvalue
+            Veval(Nbp)=0d0
+            !
+            !rotate back
+            Vgamma=czero
+            Vgamma = rotate(diag(Veval),conjg(transpose(Vevec)))
             !
          case("Ustatic")
             !
             allocate(Vgamma(Nbp,Nbp));Vgamma=czero
             Vgamma = Umats%screened(:,:,1,Umats%iq_gamma)
             !
+            !rotating to diagonal basis
             allocate(Veval(Nbp));Veval=0d0
             allocate(Vevec(Nbp,Nbp));Vevec=Vgamma
             call eigh(Vevec,Veval)
             !
-            do ib1=1,Nbp
-               do ib2=1,Nbp
-                  do ib3=1,Nbp
-                     Vgamma(ib1,ib2) = Vgamma(ib1,ib2) + Vevec(ib1,ib3)*Veval(ib3)*conjg(Vevec(ib2,ib3))
-                  enddo
-               enddo
-            enddo
+            !removing largest eigenvalue
+            Veval(Nbp)=0d0
+            !
+            !rotate back
+            Vgamma=czero
+            Vgamma = rotate(diag(Veval),conjg(transpose(Vevec)))
             !
          case("Ubare_SPEX")
             !
+            if(sym_constrained_) write(*,"(A)") "     Assuming [Norb*[Nsite]] Vgamma arrangement."
             allocate(Vgamma(Nbp,Nbp));Vgamma=czero
             path = reg(pathINPUT)//"V_nodiv.DAT"
             call inquireFile(reg(path),filexists,verb=verbose)
@@ -555,6 +571,7 @@ contains
             !
          case("Ustatic_SPEX")
             !
+            if(sym_constrained_) write(*,"(A)") "     Assuming [Norb*[Nsite]] Vgamma arrangement."
             allocate(Vgamma(Nbp,Nbp));Vgamma=czero
             path = reg(pathINPUT)//"V_nodiv.DAT"
             call inquireFile(reg(path),filexists,verb=verbose)
@@ -565,21 +582,71 @@ contains
       call dump_matrix(Vgamma,reg(pathINPUT)//"Vgamma_"//reg(VH_type)//".DAT")
       !
       VH=czero
-      do i=1,Norb
-         do j=1,Norb
-            do k=1,Norb
-               do l=1,Norb
-                 !
-                 ib1 = i + Norb*(j-1)
-                 ib2 = k + Norb*(l-1)
-                 !
-                 VH(i,j) = VH(i,j) + real( (density(k,l)-density_LDA(k,l))*Vgamma(ib1,ib2) )
-                 !
-               enddo
-           enddo
+      if(sym_constrained_)then
+         !
+         allocate(orbs(SiteNorb(1)));orbs=0
+         do i=1,SiteNorb(1)
+            orbs(i) = (i-1)*Nsite + 1
          enddo
-      enddo
-      deallocate(density_LDA)
+         write(*,"(A,"//str(SiteNorb(1))//"I4)") "     Orbs: ",orbs
+         !
+         do isite=1,Nsite
+            !
+            if(isite.gt.1)then
+               if(SiteNorb(isite).ne.SiteNorb(isite-1)) stop "sym_constrained not implemented for non-identical sites."
+            endif
+            !
+            ![Nsite*[Norb]] arrangement
+            shift_N = SiteNorb(isite)*(isite-1)
+            shift_V = isite-1
+            !
+            do i=1,SiteNorb(isite)
+               do j=1,SiteNorb(isite)
+                  do k=1,SiteNorb(isite)
+                     do l=1,SiteNorb(isite)
+                        !
+                        i_N = i + shift_N
+                        j_N = j + shift_N
+                        k_N = k + shift_N
+                        l_N = l + shift_N
+                        !
+                        i_V = orbs(i) + shift_V
+                        j_V = orbs(j) + shift_V
+                        k_V = orbs(k) + shift_V
+                        l_V = orbs(l) + shift_V
+                        !
+                        ib1 = i_V + Norb*(j_V-1)
+                        ib2 = k_V + Norb*(l_V-1)
+                        !
+                        VH(i_N,j_N) = VH(i_N,j_N) + dreal(density(k_N,l_N)-density_LDA(k_N,l_N)) * dreal(Vgamma(ib1,ib2))
+                        !
+                     enddo
+                  enddo
+               enddo
+            enddo
+            !
+         enddo
+         deallocate(orbs)
+         !
+      else
+         !
+         do i=1,Norb
+            do j=1,Norb
+               do k=1,Norb
+                  do l=1,Norb
+                     !
+                     ib1 = i + Norb*(j-1)
+                     ib2 = k + Norb*(l-1)
+                     !
+                     VH(i,j) = VH(i,j) + dreal(density(k,l)-density_LDA(k,l)) * dreal(Vgamma(ib1,ib2))
+                     !
+                  enddo
+               enddo
+            enddo
+         enddo
+         !
+      endif
+      deallocate(density_LDA,density,Vgamma)
       !
       contains
          !
@@ -618,7 +685,220 @@ contains
          end subroutine read_Vgamma
          !
       !
-   end subroutine calc_VH
+   end subroutine calc_VH_G
+   !
+   subroutine calc_VH_N(VH,density_LDA_spin,density_spin,Umats,sym_constrained)
+      !
+      use parameters
+      use linalg
+      use file_io
+      use utils_misc
+      use utils_fields
+      use greens_function, only : calc_density
+      use input_vars, only :  Nsite, SiteNorb
+      use input_vars, only :  pathINPUT, VH_type, Nsite
+      implicit none
+      !
+      complex(8),intent(inout)              :: VH(:,:)
+      complex(8),intent(in)                 :: density_LDA_spin(:,:,:)
+      complex(8),intent(in)                 :: density_spin(:,:,:)
+      type(BosonicField),intent(in)         :: Umats
+      logical,intent(in),optional           :: sym_constrained
+      !
+      complex(8),allocatable                :: density_LDA(:,:)
+      complex(8),allocatable                :: density(:,:)
+      complex(8),allocatable                :: Vgamma(:,:),Vevec(:,:)
+      real(8),allocatable                   :: Veval(:)
+      integer,allocatable                   :: orbs(:)
+      integer                               :: Norb,Nbp
+      integer                               :: isite,shift_N,shift_V
+      integer                               :: ib1,ib2
+      integer                               :: i,j,k,l
+      integer                               :: i_N,j_N,k_N,l_N
+      integer                               :: i_V,j_V,k_V,l_V
+      logical                               :: filexists,sym_constrained_
+      character(len=256)                    :: path
+      !
+      !
+      if(verbose)write(*,"(A)") "---- calc_VH_N"
+      write(*,"(A)") "---- calc_VH_N"
+      !
+      !
+      ! Check on the input Field
+      if(.not.Umats%status) stop "Umats not properly initialized."
+      if(Umats%Nkpt.eq.0) stop "Umats k dependent attributes not properly initialized."
+      if(Umats%iq_gamma.lt.0) stop "Umats iq_gamma not defined."
+      !
+      sym_constrained_=.false.
+      if(present(sym_constrained))sym_constrained_=sym_constrained
+      !
+      if(sym_constrained_.and.(reg(VH_type).eq."Ustatic")) stop "Ordering of sym_constrained is not implemented for Ustatic."
+      if(sym_constrained_.and.(reg(VH_type).eq."Ubare")) stop "Ordering of sym_constrained is not implemented for Ubare."
+      !
+      Norb = size(density_LDA_spin,dim=1)
+      Nbp = Umats%Nbp
+      !
+      if((Norb**2).ne.Nbp) stop "Umats and Gmats have different orbital space."
+      call assert_shape(density_LDA_spin,[Norb,Norb,Nspin],"calc_VH_N","density_LDA_spin")
+      call assert_shape(density_spin,[Norb,Norb,Nspin],"calc_VH_N","density_spin")
+      call assert_shape(VH,[Norb,Norb],"calc_VH_N","VH")
+      !
+      allocate(density(Norb,Norb));density=czero
+      density = sum(density_spin,dim=3)
+      !
+      allocate(density_LDA(Norb,Norb));density_LDA=czero
+      density_LDA = sum(density_LDA_spin,dim=3)
+      !
+      select case(reg(VH_type))
+         case default
+            stop "Available VH_type are: Ubare, Ustatic, Ubare_SPEX, Ustatic_SPEX."
+         case("Ubare")
+            !
+            allocate(Vgamma(Nbp,Nbp));Vgamma=czero
+            Vgamma = Umats%bare(:,:,Umats%iq_gamma)
+            !
+            !rotating to diagonal basis
+            allocate(Veval(Nbp));Veval=0d0
+            allocate(Vevec(Nbp,Nbp));Vevec=Vgamma
+            call eigh(Vevec,Veval)
+            !
+            !removing largest eigenvalue
+            Veval(Nbp)=0d0
+            !
+            !rotate back
+            Vgamma=czero
+            Vgamma = rotate(diag(Veval),conjg(transpose(Vevec)))
+            !
+         case("Ustatic")
+            !
+            allocate(Vgamma(Nbp,Nbp));Vgamma=czero
+            Vgamma = Umats%screened(:,:,1,Umats%iq_gamma)
+            !
+            !rotating to diagonal basis
+            allocate(Veval(Nbp));Veval=0d0
+            allocate(Vevec(Nbp,Nbp));Vevec=Vgamma
+            call eigh(Vevec,Veval)
+            !
+            !removing largest eigenvalue
+            Veval(Nbp)=0d0
+            !
+            !rotate back
+            Vgamma=czero
+            Vgamma = rotate(diag(Veval),conjg(transpose(Vevec)))
+            !
+         case("Ubare_SPEX")
+            !
+            if(sym_constrained_) write(*,"(A)") "     Assuming [Norb*[Nsite]] Vgamma arrangement."
+            allocate(Vgamma(Nbp,Nbp));Vgamma=czero
+            path = reg(pathINPUT)//"V_nodiv.DAT"
+            call inquireFile(reg(path),filexists,verb=verbose)
+            call read_Vgamma(-1)
+            !
+         case("Ustatic_SPEX")
+            !
+            if(sym_constrained_) write(*,"(A)") "     Assuming [Norb*[Nsite]] Vgamma arrangement."
+            allocate(Vgamma(Nbp,Nbp));Vgamma=czero
+            path = reg(pathINPUT)//"V_nodiv.DAT"
+            call inquireFile(reg(path),filexists,verb=verbose)
+            call read_Vgamma(0)
+            !
+      end select
+      !
+      call dump_matrix(Vgamma,reg(pathINPUT)//"Vgamma_"//reg(VH_type)//".DAT")
+      !
+      allocate(orbs(SiteNorb(1)));orbs=0
+      if(sym_constrained_)then
+         do i=1,SiteNorb(1)
+            orbs(i) = (i-1)*Nsite + 1
+         enddo
+      else
+         do i=1,SiteNorb(1)
+            orbs(i) = i
+         enddo
+      endif
+      write(*,"(A,"//str(SiteNorb(1))//"I4)") "     Orbs: ",orbs
+      !
+      VH=czero
+      do isite=1,Nsite
+         !
+         ![Nsite*[Norb]] arrangement
+         shift_N = SiteNorb(isite)*(isite-1)
+         shift_V = shift_N
+         !
+         ![Norb*[Nsite]] arrangement only for Vgamma
+         if(sym_constrained_)then
+            shift_V = isite-1
+            if(isite.gt.1)then
+               if(SiteNorb(isite).ne.SiteNorb(isite-1)) stop "sym_constrained not implemented for non-identical sites."
+            endif
+         endif
+         !
+         do i=1,SiteNorb(isite)
+            do j=1,SiteNorb(isite)
+               do k=1,SiteNorb(isite)
+                  do l=1,SiteNorb(isite)
+                     !
+                     i_N = i + shift_N
+                     j_N = j + shift_N
+                     k_N = k + shift_N
+                     l_N = l + shift_N
+                     !
+                     i_V = orbs(i) + shift_V
+                     j_V = orbs(j) + shift_V
+                     k_V = orbs(k) + shift_V
+                     l_V = orbs(l) + shift_V
+                     !
+                     ib1 = i_V + Norb*(j_V-1)
+                     ib2 = k_V + Norb*(l_V-1)
+                     !
+                     VH(i_N,j_N) = VH(i_N,j_N) + dreal(density(k_N,l_N)-density_LDA(k_N,l_N)) * dreal(Vgamma(ib1,ib2))
+                     !
+                  enddo
+               enddo
+            enddo
+         enddo
+         !
+      enddo
+      deallocate(orbs,density_LDA,density,Vgamma)
+      !
+      contains
+         !
+         subroutine read_Vgamma(Vtype)
+            use utils_misc
+            implicit none
+            integer,intent(in)                 :: Vtype
+            integer                            :: unit
+            real(8)                            :: rdum1,rdum2,rdum3,rdum4
+            integer                            :: idum1,idum2,idum3,idum4
+            integer                            :: iwan1,iwan2,iwan3,iwan4
+            integer                            :: indx1,indx2,limits
+            unit = free_unit()
+            open(unit,file=reg(path),position="rewind",action="read")
+            read(unit,*) idum1 !,'Number of Wannier functions:'
+            if(idum1.ne.Norb) stop "read_Vgamma Norb"
+            do limits=1,2
+               do iwan1=1,Norb
+                  do iwan2=1,Norb
+                     do iwan3=1,Norb
+                       do iwan4=1,Norb
+                           indx1=iwan1+Norb*(iwan2-1)
+                           indx2=iwan3+Norb*(iwan4-1)
+                           read(unit,*) rdum1,rdum2,idum1,idum2,idum3,idum4,rdum3,rdum4
+                           if (idum1.ne.iwan1) stop "read_Vgamma: iwan1"
+                           if (idum2.ne.iwan2) stop "read_Vgamma: iwan2"
+                           if (idum3.ne.iwan3) stop "read_Vgamma: iwan3"
+                           if (idum4.ne.iwan4) stop "read_Vgamma: iwan4"
+                           if(dble(Vtype).eq.rdum1) Vgamma(indx1,indx2) = dcmplx(rdum3,rdum4) * H2eV
+                       enddo
+                     enddo
+                  enddo
+               enddo
+               if(Vtype.eq.-1) exit
+            enddo
+         end subroutine read_Vgamma
+         !
+      !
+   end subroutine calc_VH_N
 
 
    !---------------------------------------------------------------------------!
@@ -1155,7 +1435,7 @@ contains
                                     ((rdum,l=1,nlod),i=1,ntypd),(rdum,i=1,3),rdum,nband
             !write(*,*) 'ispin,ik,neigd,nband=',ispin,ik,neigd,nband
             if (nband.lt.1.or.nband.gt.neigd) then
-               write(*,*) "ispin,ik,neigd,nband: ",ispin,ik,neigd,nband
+               write(*,"(A,4I5)") "ispin,ik,neigd,nband: ",ispin,ik,neigd,nband
                stop 'read_vxc:nband'
             endif
             read(unit_vxc) ((vxcmat(i,j),i=1,j),j=1,nband)

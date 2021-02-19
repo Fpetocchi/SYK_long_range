@@ -38,11 +38,11 @@ class ct_hyb
 
       ct_hyb( path SiteName, double beta, int Nspin, int Norb, int NtauF, int NtauB,
               int Norder, int Nmeas, int Ntherm, int Nshift,
-              bool paramagnet, bool retarded, bool nnt_meas, std::vector<int> SetsNorb,
+              int para_mode, bool retarded, bool nnt_meas, std::vector<int> SetsNorb,
               int printTime, std::vector<int> bins, CustomMPI &mpi):
       SiteName(SiteName), Beta(beta), Nspin(Nspin), Norb(Norb), NtauF(NtauF), NtauB(NtauB),
       Norder(Norder), Nmeas(Nmeas), Ntherm(Ntherm), Nshift(Nshift),
-      paramagnet(paramagnet), retarded(retarded), nnt_meas(nnt_meas), SetsNorb(SetsNorb),
+      para_mode(para_mode), retarded(retarded), nnt_meas(nnt_meas), SetsNorb(SetsNorb),
       printTime(printTime), bins(bins), mpi(mpi)
       {}
 
@@ -350,6 +350,7 @@ class ct_hyb
       int                                 Nmeas;                                // Number of sweeps between expensive measurments
       int                                 Ntherm;
       int                                 Nshift;
+      int                                 para_mode;
       bool                                paramagnet;
       bool                                retarded;
       bool                                nnt_meas;
@@ -486,7 +487,7 @@ class ct_hyb
          //
          //.........................Expensive measurments.......................
          //
-         if(paramagnet) spin_symm(G_tmp);
+         if(para_mode>0) spin_symm(G_tmp,para_mode);
          if(OrbSym)
          {
             orb_symm(Nloc,SetsOrbs);
@@ -576,7 +577,7 @@ class ct_hyb
             //
             // Green's function
             Vec Ntmp = Nloc;
-            if(paramagnet) spin_symm(Ntmp);
+            if(para_mode>0) spin_symm(Ntmp,para_mode);
             for (int ifl=0; ifl<Nflavor; ifl++)
             {
                G[ifl].front() = +Ntmp[ifl]-(long double)RankSweeps ;
@@ -627,7 +628,7 @@ class ct_hyb
          //
          // Green's function
          Vec Ntmp = Nloc;
-         if(paramagnet) spin_symm(Ntmp);
+         if(para_mode>0) spin_symm(Ntmp,para_mode);
          for (int ifl=0; ifl<Nflavor; ifl++)
          {
             G[ifl].front() = +Ntmp[ifl]-(long double)RankSweeps ;
