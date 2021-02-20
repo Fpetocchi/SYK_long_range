@@ -1178,11 +1178,11 @@ contains
             !
             !
             !TEST>>>
-            do ik=1,Glat%Nkpt
-               call check_Hermiticity(Glat%N_ks(:,:,ik,1),eps,enforce=.true.,hardstop=.false.,name="Nks_up_q"//str(ik),verb=verbose)
-               call check_Hermiticity(Glat%N_ks(:,:,ik,2),eps,enforce=.true.,hardstop=.false.,name="Nks_dw_q"//str(ik),verb=verbose)
-            enddo
-            call FermionicKsum(Glat)
+            !do ik=1,Glat%Nkpt
+            !   call check_Hermiticity(Glat%N_ks(:,:,ik,1),eps,enforce=.false.,hardstop=.false.,name="Nks_up_q"//str(ik),verb=.true.)
+            !   call check_Hermiticity(Glat%N_ks(:,:,ik,2),eps,enforce=.false.,hardstop=.false.,name="Nks_dw_q"//str(ik),verb=.true.)
+            !enddo
+            !call FermionicKsum(Glat)
             !>>>TEST
             !
             !
