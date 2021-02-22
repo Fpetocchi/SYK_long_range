@@ -35,7 +35,7 @@ DBGFFLAGS += -module $(DBGDIR)
 #
 # Release build settings--------------------------------------------------------
 RELDIR = release
-RELEXE = $(EXECDIR)/$(EXE)
+RELEXE = $(EXECDIR)/$(EXE)_new
 RELOBJS = $(addprefix $(RELDIR)/, $(OBJS))
 RELFFLAGS += -module $(RELDIR)
 

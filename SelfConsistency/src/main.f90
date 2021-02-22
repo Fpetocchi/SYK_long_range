@@ -194,7 +194,7 @@ program SelfConsistency
       !Store rotation after first Vxc allocation
       if((RotateHloc).and.(Iteration.eq.0))then
          write(*,"(A)") new_line("A")//new_line("A")//"---- Rotations of the local LDA Hamiltonian + local Vxc (used)"
-         call build_rotations("Hren",OlocSite,OlocEig,OlocRot,OlocRotDag,LatticeOp=diag_factor(Crystal%Hloc-sum(Vxc(:,:,:,1),dim=3)/Crystal%Nkpt,-1d0))
+         call build_rotations("Hren",OlocSite,OlocEig,OlocRot,OlocRotDag,LatticeOp=(Crystal%Hloc-sum(Vxc(:,:,:,1),dim=3)/Crystal%Nkpt))
          call update_ImpEqvOrbs()
       endif
       !

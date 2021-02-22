@@ -462,7 +462,7 @@ contains
          if(reg(CalculationType).eq."GW+EDMFT")then
             !
             write(*,"(A)") new_line("A")//new_line("A")//"---- Rotations of the local LDA Hamiltonian"
-            call build_rotations("Hloc",OlocSite,OlocEig,OlocRot,OlocRotDag,LatticeOp=diag_factor(Lttc%Hloc,-1d0))
+            call build_rotations("Hloc",OlocSite,OlocEig,OlocRot,OlocRotDag,LatticeOp=Lttc%Hloc)
             !
             !On the 0th iteration in general Vxc_loc is not yet written
             if(ItStart.gt.0)then
@@ -473,14 +473,14 @@ contains
                call read_Matrix(Vxc_loc,reg(pathINPUT)//"Vxc_s1.DAT")
                !
                write(*,"(A)") new_line("A")//new_line("A")//"---- Rotations of the local LDA Hamiltonian + local Vxc (used)"
-               call build_rotations("Hren",OlocSite,OlocEig,OlocRot,OlocRotDag,LatticeOp=diag_factor(Lttc%Hloc-Vxc_loc,-1d0))
+               call build_rotations("Hren",OlocSite,OlocEig,OlocRot,OlocRotDag,LatticeOp=(Lttc%Hloc-Vxc_loc))
                call update_ImpEqvOrbs()
                !
             endif
             !
          else
             write(*,"(A)") new_line("A")//new_line("A")//"---- Rotations of the local LDA Hamiltonian (used)"
-            call build_rotations("Hloc",OlocSite,OlocEig,OlocRot,OlocRotDag,LatticeOp=diag_factor(Lttc%Hloc,-1d0))
+            call build_rotations("Hloc",OlocSite,OlocEig,OlocRot,OlocRotDag,LatticeOp=Lttc%Hloc)
             call update_ImpEqvOrbs()
          endif
          !
@@ -1624,7 +1624,7 @@ contains
       integer,allocatable                   :: Orbs(:)
       real(8),allocatable                   :: wmats(:),tau(:),Moments(:,:,:)
       real(8),allocatable                   :: Eloc(:,:),PrintLine(:),coef01(:,:)
-      !complex(8),allocatable                :: Hloc(:,:)
+      complex(8),allocatable                :: Nloc(:,:,:)
       real(8)                               :: tailShift,CrystalField
       complex(8),allocatable                :: zeta(:,:,:),invG(:,:),Rot(:,:)
       complex(8),allocatable                :: Dfit(:,:,:),Dmats(:,:,:),Ditau(:,:,:)
@@ -1662,12 +1662,15 @@ contains
       enddo
       !
       ! Extract and rotate from local (non-diagonal) to imp (diagonal) the given sites
+      allocate(Nloc(Norb,Norb,Nspin));Nloc=czero
+      call clear_attributes(Gloc)
       call clear_attributes(SigmaImp)
       if(causal_D)call clear_attributes(DeltaCorr)
       if(RotateHloc)then
          !
          allocate(Rot(Norb,Norb)); Rot=OlocRot(1:Norb,1:Norb,isite)
          call loc2imp(Gloc,Glat,Orbs,U=Rot)
+         call calc_density(Gloc,Nloc)
          call loc2imp(SigmaImp,S_DMFT,Orbs,U=Rot)
          if(causal_D)call loc2imp(DeltaCorr,D_correction,Orbs,U=Rot)
          deallocate(Rot)
@@ -1679,12 +1682,17 @@ contains
       else
          !
          call loc2imp(Gloc,Glat,Orbs)
+         call calc_density(Gloc,Nloc)
          call loc2imp(SigmaImp,S_DMFT,Orbs)
          if(causal_D)call loc2imp(DeltaCorr,D_correction,Orbs)
          !
       endif
       !
       !Print what's used to compute delta
+      do ispin=1,Nspin
+         call dump_Matrix(Nloc(:,:,ispin),reg(ItFolder)//"Solver_"//reg(SiteName(isite))//"/N_"//reg(SiteName(isite))//"_s"//str(ispin)//".DAT")
+      enddo
+      deallocate(Nloc)
       call dump_FermionicField(Gloc,reg(ItFolder)//"Solver_"//reg(SiteName(isite))//"/","G_"//reg(SiteName(isite))//"_w")
       call dump_FermionicField(SigmaImp,reg(ItFolder)//"Solver_"//reg(SiteName(isite))//"/","S_"//reg(SiteName(isite))//"_w")
       if(causal_D)call dump_FermionicField(DeltaCorr,reg(ItFolder)//"Solver_"//reg(SiteName(isite))//"/","D_correction_"//reg(SiteName(isite))//"_w")
