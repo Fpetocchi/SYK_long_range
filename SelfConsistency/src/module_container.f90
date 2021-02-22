@@ -70,9 +70,10 @@ module module_container
    AllocateLattice                          ,&
    DeallocateLattice                        ,&
    AllocateFermionicField                   ,&
-   DeallocateFermionicField                 ,&
    AllocateBosonicField                     ,&
+   DeallocateFermionicField                 ,&
    DeallocateBosonicField                   ,&
+   DeallocateField                          ,&
    TransformBosonicField                    ,&
    clear_attributes                         ,&
    clear_MatrixElements                     ,&

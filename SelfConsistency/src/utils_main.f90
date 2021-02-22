@@ -1707,11 +1707,13 @@ contains
             !
             if(causal_D)then
                do iwan=1,Norb
-                  invCurlyG(iwan,iw,ispin) = 1d0/Gloc%ws(iwan,iwan,iw,ispin) + SigmaImp%ws(iwan,iwan,iw,ispin) - DeltaCorr%ws(iwan,iwan,iw,ispin)
+                  !invCurlyG(iwan,iw,ispin) = 1d0/Gloc%ws(iwan,iwan,iw,ispin) + SigmaImp%ws(iwan,iwan,iw,ispin) - DeltaCorr%ws(iwan,iwan,iw,ispin)
+                  invCurlyG(iwan,iw,ispin) = invG(iwan,iwan) + SigmaImp%ws(iwan,iwan,iw,ispin) - DeltaCorr%ws(iwan,iwan,iw,ispin)
                enddo
             else
                do iwan=1,Norb
-                  invCurlyG(iwan,iw,ispin) = 1d0/Gloc%ws(iwan,iwan,iw,ispin) + SigmaImp%ws(iwan,iwan,iw,ispin) !invCurlyG(iwan,iw,ispin) = invG(iwan,iwan) + SigmaImp%ws(iwan,iwan,iw,ispin)
+                  !invCurlyG(iwan,iw,ispin) = 1d0/Gloc%ws(iwan,iwan,iw,ispin) + SigmaImp%ws(iwan,iwan,iw,ispin) !invCurlyG(iwan,iw,ispin) = invG(iwan,iwan) + SigmaImp%ws(iwan,iwan,iw,ispin)
+                  invCurlyG(iwan,iw,ispin) = invG(iwan,iwan) + SigmaImp%ws(iwan,iwan,iw,ispin)
                enddo
             endif
             !

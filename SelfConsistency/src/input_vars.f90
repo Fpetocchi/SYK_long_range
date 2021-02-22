@@ -247,7 +247,8 @@ contains
       if(reg(CalculationType).eq."DMFT+dynU")Solver%retarded=1!.true.
       !
       !OMP parallelization
-      call execute_command_line(" lscpu | grep 'CPU(s):       ' | awk '{print $2}' > Nthread.used ")
+      !call execute_command_line(" lscpu | grep 'CPU(s):       ' | awk '{print $2}' > Nthread.used ")
+      call execute_command_line(" grep '#$ -pe' submit          | awk '{print $4}' > Nthread.used ")
       unit=free_unit()
       open(unit,file=reg("Nthread.used"),form="formatted",action="read",status="old")
       read(unit,*)Nthread

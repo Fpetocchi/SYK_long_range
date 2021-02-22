@@ -64,6 +64,11 @@ module utils_fields
       module procedure duplicate_Bosonic
    end interface duplicate
 
+   interface DeallocateField
+      module procedure DeallocateFermionicField
+      module procedure DeallocateBosonicField
+   end interface DeallocateField
+
    !---------------------------------------------------------------------------!
    !PURPOSE: Module variables
    !---------------------------------------------------------------------------!
@@ -82,9 +87,10 @@ module utils_fields
    public :: AllocateLattice
    public :: DeallocateLattice
    public :: AllocateFermionicField
-   public :: DeallocateFermionicField
    public :: AllocateBosonicField
+   public :: DeallocateFermionicField
    public :: DeallocateBosonicField
+   public :: DeallocateField
    public :: TransformBosonicField
    public :: clear_attributes
    public :: clear_MatrixElements
