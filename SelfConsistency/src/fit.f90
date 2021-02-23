@@ -202,7 +202,7 @@ contains
       !
       !
       if(verbose)write(*,"(A)") "---- dump_AndPrams"
-      if(.not.AndPram%status) stop "Anderson parameters not initilized."
+      if(.not.AndPram%status) stop "dump_AndPrams: Anderson parameters not initilized."
       !
       !
       call inquireDir(reg(dirpath),filexists,verb=verbose)
@@ -592,7 +592,7 @@ contains
       !
       !
       if(verbose)write(*,"(A)") "---- dump_Moments"
-      if(.not.allocated(Moments)) stop "Moments not allocated."
+      if(.not.allocated(Moments)) stop "dump_Moments: Moments not allocated."
       Norb=size(Moments,dim=1)
       !
       !

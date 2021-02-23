@@ -73,6 +73,7 @@ program SelfConsistency
          calc_Sigmak=.false.
          call AllocateFermionicField(S_Full,Crystal%Norb,Nmats,Nkpt=Crystal%Nkpt,Nsite=Nsite,Beta=Beta)
          call read_FermionicField(S_Full,reg(ItFolder),"Sfull_w",Crystal%kpt)
+         if(print_Gpath) call interpolateG2Path(S_Full,Crystal,reg(structure),Nkpt_path,reg(ItFolder))
       endif
       !
       !
@@ -127,9 +128,12 @@ program SelfConsistency
          !
          !Hartree shift between G0W0 and LDA
          allocate(VH(Crystal%Norb,Crystal%Norb));VH=czero
-         if(.not.Hmodel)call calc_VH(VH,densityLDA,densityDMFT,Ulat)
+         if(.not.Hmodel)call calc_VH(VH,densityLDA,Glat,Ulat) !call calc_VH(VH,densityLDA,densityDMFT,Ulat)
          call dump_Matrix(VH,reg(ItFolder)//"VH.DAT")
-         if(.not.VH_use)VH=czero
+         if(.not.VH_use)then
+            VH=czero
+            write(*,"(A)")"     VH not used."
+         endif
          if(solve_DMFT.and.bosonicSC.and.(.not.Ustart))call DeallocateBosonicField(Ulat)
          !
          !read from SPEX G0W0 self-energy and Vexchange
@@ -210,9 +214,14 @@ program SelfConsistency
       !
       !Compute the Full Green's function and set the density
       call calc_Gmats(Glat,Crystal,S_Full)
-      if(reg(print_path).ne."None") call interpolate2Path(S_Full,Crystal,reg(print_path),reg(ItFolder))
-      call DeallocateFermionicField(S_Full)
       if(look4dens%TargetDensity.ne.0d0)call set_density(Glat,Crystal,look4dens)
+      !
+      !
+      !Update the full self-energy, print and compute Glat along the path
+      S_Full%mu = Glat%mu
+      if(dump_Sigmak)call dump_FermionicField(S_Full,reg(ItFolder),"Sfull_w",.true.,Crystal%kpt)
+      if(print_Gpath)call interpolateG2Path(S_Full,Crystal,reg(structure),Nkpt_path,reg(ItFolder))
+      call DeallocateFermionicField(S_Full)
       !
       !
       ! Causality correction on Delta

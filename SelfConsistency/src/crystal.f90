@@ -85,6 +85,7 @@ module crystal
    public :: wannier_K2R_NN                                                     ![Nkpt3_orig(3),Kpt_orig(3,Nkpt_orig),Mat_orig(n,n,Npoins,Nkpt_orig),mat_R_nn(n,n,Npoins,3)]
    public :: wannier_K2R
    public :: wannier_R2K
+   public :: interpolateHk2Path
    public :: calc_path
    !public :: add_crystalfields
 
@@ -275,18 +276,18 @@ contains
       if(present(spex_para))spex_para_=spex_para
       !
       ! Global checks
-      if(spex_para_.and.(Nspin_xeps.ne.1)) stop "Nspin_xeps.ne.1 in XEPS.DAT"
-      if(Nkpt_xeps.ne.Nkpt)         stop "Nkpt_xeps.ne.Nkpt in XEPS.DAT"
-      if(Nkpt3_xeps(1).ne.Nkpt3(1)) stop "Nkpt(1)_xeps.ne.Nkpt(1) in XEPS.DAT"
-      if(Nkpt3_xeps(2).ne.Nkpt3(2)) stop "Nkpt(2)_xeps.ne.Nkpt(2) in XEPS.DAT"
-      if(Nkpt3_xeps(3).ne.Nkpt3(3)) stop "Nkpt(3)_xeps.ne.Nkpt(3) in XEPS.DAT"
+      if(spex_para_.and.(Nspin_xeps.ne.1)) stop "read_xeps: Nspin_xeps.ne.1 in XEPS.DAT"
+      if(Nkpt_xeps.ne.Nkpt)         stop "read_xeps: Nkpt_xeps.ne.Nkpt in XEPS.DAT"
+      if(Nkpt3_xeps(1).ne.Nkpt3(1)) stop "read_xeps: Nkpt(1)_xeps.ne.Nkpt(1) in XEPS.DAT"
+      if(Nkpt3_xeps(2).ne.Nkpt3(2)) stop "read_xeps: Nkpt(2)_xeps.ne.Nkpt(2) in XEPS.DAT"
+      if(Nkpt3_xeps(3).ne.Nkpt3(3)) stop "read_xeps: Nkpt(3)_xeps.ne.Nkpt(3) in XEPS.DAT"
       !
       ! Check of the K-point ordering
       do ik=1,Nkpt
          if (.not.keq(kpt_xeps(:,ik),kpt(:,ik))) then
             write(*,"(A)")"ik=",ik,"kpt(:,ik)=",kpt(:,ik),"kpt_loc(:,ik=)",kpt_xeps(:,ik)
             !write(*,"(A)") "kptp(ik)=",kptPos(ik),"kptp_loc(ik)=",kptPos_xeps(ik)
-            stop "K-points grid does not match"
+            stop "read_xeps: K-points grid does not match"
          endif
       enddo
       !
@@ -364,8 +365,8 @@ contains
          do iwan1=1,Norb
             do iwan2=1,Norb
                read(unit,*) idum1,idum2,ReHk,ImHk
-               if (idum1.ne.iwan1) stop "iwan1"
-               if (idum2.ne.iwan2) stop "iwan2"
+               if (idum1.ne.iwan1) stop "read_Hk: wrong index iwan1."
+               if (idum2.ne.iwan2) stop "read_Hk: wrong index iwan2."
                Hk(iwan1,iwan2,ik) = dcmplx(ReHk,ImHk)*H2eV*alphaHk
             enddo
          enddo
@@ -453,7 +454,7 @@ contains
          !
          !setting the local energy
          if(Rsorted(Rorder(iwig)).eq.0d0)then
-            if(Rorder(iwig).ne.wig0)stop "wrong zero position"
+            if(Rorder(iwig).ne.wig0)stop "build_Hk: wrong index of R=0 vector."
             cycle
          endif
          !
@@ -570,7 +571,7 @@ contains
             endif
             !
             !missing sum
-            if (kptsum(ik1,iq).eq.0) stop "kptsum"
+            if (kptsum(ik1,iq).eq.0) stop "fill_ksumkdiff: kptsum failed."
             !
          enddo ! ik1
       enddo ! iq
@@ -603,8 +604,8 @@ contains
             endif
             !
             !missing difference
-            if (kptdif(ik1,iq).eq.0) stop "kptdif"
-            if (kptdif(ik1,iq).gt.nkpt) stop "kptdif2"
+            if (kptdif(ik1,iq).eq.0) stop "fill_ksumkdiff: kptdif failed."
+            if (kptdif(ik1,iq).gt.nkpt) stop "fill_ksumkdiff: kptdif2 failed."
             !
          enddo ! ik1
       enddo ! iq
@@ -644,7 +645,7 @@ contains
                   endif
                   !
                   !missing positon
-                  if (pkpt_(i1,i2,i3).eq.0) stop "pkpt"
+                  if (pkpt_(i1,i2,i3).eq.0) stop "fill_ksumkdiff: pkpt failed."
                   !
                enddo
             enddo
@@ -754,7 +755,7 @@ contains
       !
       !
       if(verbose)write(*,"(A)") "---- calc_wignerseiz"
-      if(.not.Lat_stored)stop "Lattice positions not stored. Either call read_lattice(path) or read_Hk(path,Hk,kpt)."
+      if(.not.Lat_stored)stop "calc_wignerseiz: Lattice positions not stored. Either call read_lattice(path) or read_Hk(path,Hk,kpt)."
       !
       !public,protected
       allocate(rvecwig_tmp(3,10*nkpt));rvecwig_tmp=0
@@ -798,7 +799,7 @@ contains
                         rtmpsc(:)=matmul(lat,(/rscan(1)*irsc1,rscan(2)*irsc2,rscan(3)*irsc3/))
                         dr(:)=rtmp(:)-rtmpsc(:)
                         dist(i)=sum(dr(:)**2)
-                        if((i.eq.i0).and.(.not.all([irsc1,irsc2,irsc3].eq.[0,0,0])))stop "calc_wignerseiz: wrong zero postition."
+                        if((i.eq.i0).and.(.not.all([irsc1,irsc2,irsc3].eq.[0,0,0])))stop "calc_wignerseiz: wrong index of R=0 vector."
                      enddo ! irsc3
                   enddo ! irsc2
                enddo ! irsc1
@@ -806,7 +807,7 @@ contains
                distmin=minval(dist(:))
                if (abs(distmin-dist(i0)).le.epsWig) then
                   nwig=nwig+1
-                  if (nwig.gt.10*nkpt) stop "nwig>10*nkpt"
+                  if (nwig.gt.10*nkpt) stop "calc_wignerseiz: nwig>10*nkpt."
                   rvecwig_tmp(:,nwig)=(/ir1,ir2,ir3/)
                   nrdegwig_tmp(nwig)=count(abs(distmin-dist(:)).le.epsWig)
                   radiuswig_tmp(nwig)=sqrt(dble(dot_product([ir1,ir2,ir3],[ir1,ir2,ir3])))
@@ -821,7 +822,7 @@ contains
       !
       if (abs(sum(1d0/nrdegwig_tmp(1:nwig))-nkpt).gt.epsWig) then
          write(*,"(A,F)") "Error: sum(1/nrdeg(:))=",sum(1d0/nrdegwig_tmp(1:nwig))
-         stop "nrdeg"
+         stop "calc_wignerseiz: nrdeg failed."
       endif
       !
       !public,protected
@@ -886,8 +887,8 @@ contains
       !
       !
       ! Size checks on Kpoint vectors
-      if(size(kpt_orig,dim=1).ne.3) stop "size(kpt_orig,dim=1).ne.3"
-      if(size(kpt_intp,dim=1).ne.3) stop "size(kpt_intp,dim=1).ne.3"
+      if(size(kpt_orig,dim=1).ne.3) stop "wannierinterpolation_d1: size(kpt_orig,dim=1).ne.3"
+      if(size(kpt_intp,dim=1).ne.3) stop "wannierinterpolation_d1: size(kpt_intp,dim=1).ne.3"
       Nkpt_orig = size(kpt_orig,dim=2)
       Nkpt_intp = size(kpt_intp,dim=2)
       !if (Nkpt_orig.ne.size(nrdegwig)/2) stop 'nkpt'
@@ -975,8 +976,8 @@ contains
       !
       !
       ! Size checks on Kpoint vectors
-      if(size(kpt_orig,dim=1).ne.3) stop "size(kpt_orig,dim=1).ne.3"
-      if(size(kpt_intp,dim=1).ne.3) stop "size(kpt_intp,dim=1).ne.3"
+      if(size(kpt_orig,dim=1).ne.3) stop "wannierinterpolation_d2: size(kpt_orig,dim=1).ne.3"
+      if(size(kpt_intp,dim=1).ne.3) stop "wannierinterpolation_d2: size(kpt_intp,dim=1).ne.3"
       Nkpt_orig = size(kpt_orig,dim=2)
       Nkpt_intp = size(kpt_intp,dim=2)
       !if (Nkpt_orig.ne.size(nrdegwig)/2) stop 'nkpt'
@@ -1069,8 +1070,8 @@ contains
       !
       !
       ! Size checks on Kpoint vectors
-      if(size(kpt_orig,dim=1).ne.3) stop "size(kpt_orig,dim=1).ne.3"
-      if(size(kpt_intp,dim=1).ne.3) stop "size(kpt_intp,dim=1).ne.3"
+      if(size(kpt_orig,dim=1).ne.3) stop "wannierinterpolation_d3: size(kpt_orig,dim=1).ne.3"
+      if(size(kpt_intp,dim=1).ne.3) stop "wannierinterpolation_d3: size(kpt_intp,dim=1).ne.3"
       Nkpt_orig = size(kpt_orig,dim=2)
       Nkpt_intp = size(kpt_intp,dim=2)
       !if (Nkpt_orig.ne.size(nrdegwig)/2) stop 'nkpt'
@@ -1169,13 +1170,13 @@ contains
       endif
       !
       ! Size checks on Kpoint vectors
-      if(size(kpt_orig,dim=1).ne.3) stop "size(kpt_orig,dim=1).ne.3"
+      if(size(kpt_orig,dim=1).ne.3) stop "wannier_K2R_NN: size(kpt_orig,dim=1).ne.3"
       Nkpt_orig = size(kpt_orig,dim=2)
       !if (Nkpt_orig.ne.size(nrdegwig)/2) stop 'nkpt'
       !
       ! Size checks on Matrices
       Npoints = size(mat_K,dim=3)
-      if(size(mat_K,dim=1).ne.size(mat_K,dim=2)) stop "mat_K not square."
+      if(size(mat_K,dim=1).ne.size(mat_K,dim=2)) stop "wannier_K2R_NN: mat_K not square."
       Nsize = size(mat_K,dim=1)
       call assert_shape(mat_R_nn,[Nsize,Nsize,Npoints,3],"wannierinterpolation","mat_R_nn")
       !
@@ -1257,7 +1258,7 @@ contains
       !
       !
       ! Size checks on Kpoint vectors
-      if(size(kpt_orig,dim=1).ne.3) stop "size(kpt_orig,dim=1).ne.3"
+      if(size(kpt_orig,dim=1).ne.3) stop "wannier_K2R_d1: size(kpt_orig,dim=1).ne.3"
       Nkpt_orig = size(kpt_orig,dim=2)
       !if (Nkpt_orig.ne.size(nrdegwig)/2) stop 'nkpt'
       !
@@ -1319,7 +1320,7 @@ contains
       !
       !
       ! Size checks on Kpoint vectors
-      if(size(kpt_orig,dim=1).ne.3) stop "size(kpt_orig,dim=1).ne.3"
+      if(size(kpt_orig,dim=1).ne.3) stop "wannier_K2R_d2: size(kpt_orig,dim=1).ne.3"
       Nkpt_orig = size(kpt_orig,dim=2)
       !if (Nkpt_orig.ne.size(nrdegwig)/2) stop 'nkpt'
       !
@@ -1384,7 +1385,7 @@ contains
       !
       !
       ! Size checks on Kpoint vectors
-      if(size(kpt_orig,dim=1).ne.3) stop "size(kpt_orig,dim=1).ne.3"
+      if(size(kpt_orig,dim=1).ne.3) stop "wannier_K2R_d3: size(kpt_orig,dim=1).ne.3"
       Nkpt_orig = size(kpt_orig,dim=2)
       !if (Nkpt_orig.ne.size(nrdegwig)/2) stop 'nkpt'
       !
@@ -1457,7 +1458,7 @@ contains
       !
       !
       ! Size checks on Kpoint vectors
-      if(size(kpt_intp,dim=1).ne.3) stop "size(kpt_intp,dim=1).ne.3"
+      if(size(kpt_intp,dim=1).ne.3) stop "wannier_R2K_d1: size(kpt_intp,dim=1).ne.3"
       Nkpt_intp = size(kpt_intp,dim=2)
       !if (Nkpt_orig.ne.size(nrdegwig)/2) stop 'nkpt'
       !
@@ -1517,7 +1518,7 @@ contains
       !
       !
       ! Size checks on Kpoint vectors
-      if(size(kpt_intp,dim=1).ne.3) stop "size(kpt_intp,dim=1).ne.3"
+      if(size(kpt_intp,dim=1).ne.3) stop "wannier_R2K_d2: size(kpt_intp,dim=1).ne.3"
       Nkpt_intp = size(kpt_intp,dim=2)
       !if (Nkpt_orig.ne.size(nrdegwig)/2) stop 'nkpt'
       !
@@ -1580,7 +1581,7 @@ contains
       !
       !
       ! Size checks on Kpoint vectors
-      if(size(kpt_intp,dim=1).ne.3) stop "size(kpt_intp,dim=1).ne.3"
+      if(size(kpt_intp,dim=1).ne.3) stop "wannier_R2K_d3: size(kpt_intp,dim=1).ne.3"
       Nkpt_intp = size(kpt_intp,dim=2)
       !if (Nkpt_orig.ne.size(nrdegwig)/2) stop 'nkpt'
       !
@@ -1833,6 +1834,74 @@ contains
       if(present(Kaxis))Kaxis=Kdist
       !
    end subroutine calc_path
+
+
+   !---------------------------------------------------------------------------!
+   !PURPOSE: Interpolate to a user provided K-point path the Hamiltonian
+   !---------------------------------------------------------------------------!
+   subroutine interpolateHk2Path(Lttc,structure,Nkpt_path,pathOUTPUT)
+      !
+      use parameters
+      use utils_misc
+      use linalg, only : eigh, inv
+      implicit none
+      !
+      type(Lattice),intent(inout)           :: Lttc
+      character(len=*),intent(in)           :: structure
+      integer,intent(in)                    :: Nkpt_path
+      character(len=*),intent(in)           :: pathOUTPUT
+      !
+      character(len=256)                    :: path
+      integer                               :: ik,iorb,unit
+      integer                               :: Norb
+      real                                  :: start,finish
+      !
+      !
+      write(*,"(A)") new_line("A")//new_line("A")//"---- interpolateHk2Path"
+      !
+      !
+      ! Check on the input Fields
+      if(.not.Lttc%status) stop "interpolateHk2Path: Lttc not properly initialized."
+      Norb = Lttc%Norb
+      !
+      !
+      !Create K-points along high-symmetry points
+      if(allocated(Lttc%kptpath))deallocate(Lttc%kptpath)
+      if(allocated(Lttc%Kpathaxis))deallocate(Lttc%Kpathaxis)
+      call calc_path(Lttc%kptpath,reg(structure),Nkpt_path,Kaxis=Lttc%Kpathaxis)
+      Lttc%Nkpt_path = size(Lttc%kptpath,dim=2)
+      !
+      !Fill in Hk along points
+      if(allocated(Lttc%Hk_path))deallocate(Lttc%Hk_path)
+      allocate(Lttc%Hk_path(Norb,Norb,Lttc%Nkpt_path));Lttc%Hk_path=czero
+      call cpu_time(start)
+      call wannierinterpolation(Lttc%Nkpt3,Lttc%kpt,Lttc%kptpath,Lttc%Hk,Lttc%Hk_path)
+      call cpu_time(finish)
+      write(*,"(A,F)") "     H(fullBZ) --> H(Kpath) cpu timing:", finish-start
+      !
+      !Fill in Ek along points
+      if(allocated(Lttc%Ek_path))deallocate(Lttc%Ek_path)
+      allocate(Lttc%Ek_path(Norb,Lttc%Nkpt_path));Lttc%Ek_path=0d0
+      if(allocated(Lttc%Zk_path))deallocate(Lttc%Zk_path)
+      allocate(Lttc%Zk_path(Norb,Norb,Lttc%Nkpt_path));Lttc%Zk_path=czero
+      do ik=1,Lttc%Nkpt_path
+         Lttc%Zk_path(:,:,ik) = Lttc%Hk_path(:,:,ik)
+         call eigh(Lttc%Zk_path(:,:,ik),Lttc%Ek_path(:,ik))
+      enddo
+      !
+      !Print bands
+      path = reg(pathOUTPUT)//"Bands.DAT"
+      unit = free_unit()
+      open(unit,file=reg(path),form="formatted",status="unknown",position="rewind",action="write")
+      do ik=1,Lttc%Nkpt_path
+         write(unit,"(1I5,200E20.12)") ik,Lttc%Kpathaxis(ik),(Lttc%Ek_path(:,ik),iorb=1,Norb)
+      enddo
+      close(unit)
+      write(*,"(A,I)") "     Total number of K-points along path:",Lttc%Nkpt_path
+      !
+      Lttc%pathStored=.true.
+      !
+   end subroutine interpolateHk2Path
 
 
 end module crystal

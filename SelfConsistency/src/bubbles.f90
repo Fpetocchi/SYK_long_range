@@ -70,18 +70,18 @@ contains
       !
       !
       ! Check on the input Fields
-      if(.not.Pmats%status) stop "Pmats not properly initialized."
-      if(Pmats%Nkpt.eq.0) stop "Pmats k dependent attributes not properly initialized."
+      if(.not.Pmats%status) stop "calc_Pi_GoGo: Pmats not properly initialized."
+      if(Pmats%Nkpt.eq.0) stop "calc_Pi_GoGo: Pmats k dependent attributes not properly initialized."
       !
       Nbp = Pmats%Nbp
       Nkpt = Pmats%Nkpt
       Beta = Pmats%Beta
       Nmats = Pmats%Npoints
       Norb = int(sqrt(dble(Nbp)))
-      if(Lttc%Norb.ne.Norb) stop "Pmats and Lattice have different orbital dimension."
-      if(.not.allocated(Lttc%kptsum)) stop "kptsum not allocated."
-      if(.not.allocated(Lttc%Zk)) stop "Zk not allocated."
-      if(.not.allocated(Lttc%Ek)) stop "Ek not allocated."
+      if(Lttc%Norb.ne.Norb) stop "calc_Pi_GoGo: Pmats and Lattice have different orbital dimension."
+      if(.not.allocated(Lttc%kptsum)) stop "calc_Pi_GoGo: kptsum not allocated."
+      if(.not.allocated(Lttc%Zk)) stop "calc_Pi_GoGo: Zk not allocated."
+      if(.not.allocated(Lttc%Ek)) stop "calc_Pi_GoGo: Ek not allocated."
       allocate(wmats(Nmats));wmats=0d0
       wmats = BosonicFreqMesh(Beta,Nmats)
       !
@@ -187,7 +187,7 @@ contains
       use fourier_transforms
       use file_io
       use interactions, only: init_Uelements
-      use input_vars, only : NtauB, tau_uniform, cmplxWann, UfullStructure
+      use input_vars, only : NtauB, tau_uniform, cmplxWann, UfullStructure, paramagnet
       implicit none
       !
       type(BosonicField),intent(inout)      :: Pout
@@ -213,20 +213,20 @@ contains
       !
       !
       ! Check on the input Fields
-      if(.not.Pout%status) stop "Pout not properly initialized."
-      if(.not.Gmats%status) stop "Green's function not properly initialized."
-      if(Pout%Nkpt.eq.0) stop "Pout k dependent attributes not properly initialized."
-      if(Gmats%Nkpt.eq.0) stop "Green's function k dependent attributes not properly initialized."
-      if(Pout%Beta.ne.Gmats%Beta) stop "Pout and Green's have different Beta."
+      if(.not.Pout%status) stop "calc_Pi_scGG: Pout not properly initialized."
+      if(.not.Gmats%status) stop "calc_Pi_scGG: Green's function not properly initialized."
+      if(Pout%Nkpt.eq.0) stop "calc_Pi_scGG: Pout k dependent attributes not properly initialized."
+      if(Gmats%Nkpt.eq.0) stop "calc_Pi_scGG: Green's function k dependent attributes not properly initialized."
+      if(Pout%Beta.ne.Gmats%Beta) stop "calc_Pi_scGG: Pout and Green's have different Beta."
       !
       Nbp = Pout%Nbp
       Nkpt = Pout%Nkpt
       Beta = Pout%Beta
       NaxisB = Pout%Npoints
       Norb = int(sqrt(dble(Nbp)))
-      if(Gmats%Norb.ne.Norb) stop "Pout and Green's function have different orbital dimension."
-      if(Gmats%Nkpt.ne.Nkpt) stop "Pout and Green's function have different number of Kpoints."
-      if(.not.allocated(Lttc%kptdif)) stop "kptdif not allocated."
+      if(Gmats%Norb.ne.Norb) stop "calc_Pi_scGG: Pout and Green's function have different orbital dimension."
+      if(Gmats%Nkpt.ne.Nkpt) stop "calc_Pi_scGG: Pout and Green's function have different number of Kpoints."
+      if(.not.allocated(Lttc%kptdif)) stop "calc_Pi_scGG: kptdif not allocated."
       !
       sym_=.true.
       if(present(sym))sym_=sym
@@ -249,15 +249,23 @@ contains
       call cpu_time(start)
       allocate(Gitau(Norb,Norb,Ntau_,Nkpt,Nspin));Gitau=czero
       if(cmplxWann)then
-         do ispin=1,Nspin
+         spinloopC: do ispin=1,Nspin
             call Fmats2itau_mat(Beta,Gmats%wks(:,:,:,:,ispin),Gitau(:,:,:,:,ispin), &
             asympt_corr=.true.,tau_uniform=tau_uniform)
-         enddo
+            if(paramagnet)then
+               Gitau(:,:,:,:,Nspin) = Gitau(:,:,:,:,1)
+               exit spinloopC
+            endif
+         enddo spinloopC
       else
-         do ispin=1,Nspin
+         spinloopR: do ispin=1,Nspin
             call Fmats2itau_mat(Beta,Gmats%wks(:,:,:,:,ispin),Gitau(:,:,:,:,ispin), &
             asympt_corr=.true.,tau_uniform=tau_uniform,nkpt3=Lttc%Nkpt3,kpt=Lttc%kpt)
-         enddo
+            if(paramagnet)then
+               Gitau(:,:,:,:,Nspin) = Gitau(:,:,:,:,1)
+               exit spinloopR
+            endif
+         enddo spinloopR
       endif
       call cpu_time(finish)
       write(*,"(A,F)") "     Glat(k,iw) --> Glat(k,tau) cpu timing:", finish-start
@@ -266,7 +274,7 @@ contains
       do ip=1,Ntau_
          do iq=1,Nkpt
             call check_Hermiticity(Gitau(:,:,ip,iq,1),eps,enforce=.false.,hardstop=.false.,name="Glat_up_t"//str(ip)//"_q"//str(iq))
-            call check_Hermiticity(Gitau(:,:,ip,iq,2),eps,enforce=.false.,hardstop=.false.,name="Glat_dw_t"//str(ip)//"_q"//str(iq))
+            !call check_Hermiticity(Gitau(:,:,ip,iq,2),eps,enforce=.false.,hardstop=.false.,name="Glat_dw_t"//str(ip)//"_q"//str(iq))
          enddo
       enddo
       !>>>TEST
@@ -284,7 +292,7 @@ contains
          do itau=1,Ntau_
             !
             tau2=tau(Ntau_)-tau(itau)
-            if (dabs(tau2-tau(Ntau_-itau+1)).gt.eps) stop "itau2"
+            if (dabs(tau2-tau(Ntau_-itau+1)).gt.eps) stop "calc_Pi_scGG: itau2"
             !
             do ik1=1,Nkpt
                ik2=Lttc%kptdif(ik1,iq)
@@ -380,16 +388,16 @@ contains
       !
       !
       ! Check on the input Fields
-      if(.not.Pimp%status) stop "Pimp not properly initialized."
-      if(.not.curlyU%status) stop "curlyU not properly initialized."
-      if(.not.ChiC%status) stop "ChiC not properly initialized."
-      if(Pimp%Nkpt.ne.0) stop "Pimp k dependent attributes are supposed to be unallocated."
-      if(curlyU%Nkpt.ne.0) stop "curlyU k dependent attributes are supposed to be unallocated."
-      if(ChiC%Nkpt.ne.0) stop "ChiC k dependent attributes are supposed to be unallocated."
-      if(allocated(Pimp%bare_local))  stop "Pimp bare_local attribute is supposed to be unallocated."
-      if(allocated(Pimp%bare))  stop "Pimp bare attribute is supposed to be unallocated."
-      if(allocated(ChiC%bare_local))  stop "ChiC bare_local attribute is supposed to be unallocated."
-      if(allocated(ChiC%bare))  stop "ChiC bare attribute is supposed to be unallocated."
+      if(.not.Pimp%status) stop "calc_Pimp: Pimp not properly initialized."
+      if(.not.curlyU%status) stop "calc_Pimp: curlyU not properly initialized."
+      if(.not.ChiC%status) stop "calc_Pimp: ChiC not properly initialized."
+      if(Pimp%Nkpt.ne.0) stop "calc_Pimp: Pimp k dependent attributes are supposed to be unallocated."
+      if(curlyU%Nkpt.ne.0) stop "calc_Pimp: curlyU k dependent attributes are supposed to be unallocated."
+      if(ChiC%Nkpt.ne.0) stop "calc_Pimp: ChiC k dependent attributes are supposed to be unallocated."
+      if(allocated(Pimp%bare_local))  stop "calc_Pimp: Pimp bare_local attribute is supposed to be unallocated."
+      if(allocated(Pimp%bare))  stop "calc_Pimp: Pimp bare attribute is supposed to be unallocated."
+      if(allocated(ChiC%bare_local))  stop "calc_Pimp: ChiC bare_local attribute is supposed to be unallocated."
+      if(allocated(ChiC%bare))  stop "calc_Pimp: ChiC bare attribute is supposed to be unallocated."
       !
       sym_=.true.
       if(present(sym))sym_=sym
@@ -398,9 +406,9 @@ contains
       Beta = Pimp%Beta
       Nmats = Pimp%Npoints
       !
-      if(all([curlyU%Nbp-Nbp,ChiC%Nbp-Nbp].ne.[0,0])) stop "Either curlyU and/or ChiC have different orbital dimension with respect to Pimp."
-      if(all([curlyU%Beta-Beta,ChiC%Beta-Beta].ne.[0d0,0d0])) stop "Either curlyU and/or ChiC have different Beta with respect to Pimp."
-      if(all([curlyU%Npoints-Nmats,ChiC%Npoints-Nmats].ne.[0,0]))   stop "Either curlyU and/or ChiC have different number of Matsubara points with respect to Pimp."
+      if(all([curlyU%Nbp-Nbp,ChiC%Nbp-Nbp].ne.[0,0])) stop "calc_Pimp: Either curlyU and/or ChiC have different orbital dimension with respect to Pimp."
+      if(all([curlyU%Beta-Beta,ChiC%Beta-Beta].ne.[0d0,0d0])) stop "calc_Pimp: Either curlyU and/or ChiC have different Beta with respect to Pimp."
+      if(all([curlyU%Npoints-Nmats,ChiC%Npoints-Nmats].ne.[0,0]))   stop "calc_Pimp: Either curlyU and/or ChiC have different number of Matsubara points with respect to Pimp."
       !
       call clear_attributes(Pimp)
       !

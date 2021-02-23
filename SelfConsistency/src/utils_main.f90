@@ -80,7 +80,6 @@ module utils_main
    !
    logical                                  :: sym_constrained=.false.
    logical                                  :: MultiTier=.false.
-   logical                                  :: update_rotations=.false.
    !
    character(len=255)                       :: ItFolder,PrevItFolder
 
@@ -185,6 +184,8 @@ contains
       sym_constrained = ExpandImpurity .and. (reg(VH_type).ne."Ustatic")
       sym_constrained = ExpandImpurity .and. (reg(VH_type).ne."Ubare")
       !
+      print_Gpath = print_Gpath .and. (reg(structure).ne."None")
+      !
       call inquireDir(reg(pathDATA)//str(FirstIteration-1),PrvItexist,hardstop=.false.,verb=.false.)
       call inquireDir(reg(pathDATA)//str(0),ZeroItexist,hardstop=.false.,verb=.false.)
       !
@@ -287,7 +288,7 @@ contains
       PrevItFolder = reg(pathDATA)//str(ItStart-1)//"/"
       !
       !Creates folders for the K-resolved stuff
-      if(reg(print_path).ne."None")then
+      if(print_Gpath)then
          do ispin=1,Nspin
             call createDir(reg(Itpath)//"/K_resolved/Gkt_s"//str(ispin),verb=verbose)
          enddo
@@ -590,7 +591,10 @@ contains
       !
       !
       !Dump some LDA results
-      if(ItStart.eq.0)call calc_Glda(0d0,Beta,Lttc)
+      if(ItStart.eq.0)then
+         call calc_Glda(0d0,Beta,Lttc)
+         if(reg(structure).ne."None")call interpolateHk2Path(Lttc,reg(structure),Nkpt_path,reg(pathINPUT))
+      endif
       !
       !
    end subroutine initialize_Lattice
@@ -956,7 +960,7 @@ contains
       integer,intent(in)                    :: ItStart
       logical                               :: filexists
       integer                               :: unit,idum,ib1
-      integer                               :: iorb,isite,ispin,ik
+      integer                               :: iorb,isite,ispin
       character(len=255)                    :: file
       real(8)                               :: muQMC
       !
@@ -1199,7 +1203,7 @@ contains
       !
       !
       calc_W = calc_Wedmft .or. calc_Wfull
-      update_rotations = calc_Sigmak.and.RotateHloc!.and.(ItStart.eq.0)          !fixing the change in calc_Sigmak if S_Full is present
+      dump_Sigmak = dump_Sigmak .and. calc_Sigmak
       !
       !
       !Allocate and initialize different density matrices
@@ -1420,9 +1424,6 @@ contains
                !
             endif
             call FermionicKsum(S_Full)
-            !
-            !Print full k-dep self-energy: binfmt
-            if(dump_Sigmak)call dump_FermionicField(S_Full,reg(ItFolder),"Sfull_w",.true.,Crystal%kpt)
             !
             !Deallocate K-dependent self-energy if not needed
             if(.not.causal_D) call DeallocateFermionicField(S_GW)
@@ -2526,6 +2527,8 @@ contains
             enddo
          enddo
          call DeallocateBosonicField(curlyU)
+         call dump_Matrix(Simp%N_s(:,:,1),reg(PrevItFolder)//"Solver_"//reg(SiteName(isite))//"/HartreeU_"//reg(SiteName(isite))//"_s1.DAT")
+         call dump_Matrix(Simp%N_s(:,:,2),reg(PrevItFolder)//"Solver_"//reg(SiteName(isite))//"/HartreeU_"//reg(SiteName(isite))//"_s2.DAT")
          !
          !Expand to the Lattice basis
          if(RotateHloc)then

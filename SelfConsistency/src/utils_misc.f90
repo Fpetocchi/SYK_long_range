@@ -385,7 +385,7 @@ contains
          unit_=unit_+1
          INQUIRE(unit=unit_,OPENED=opened,iostat=ios)
          if(.not.opened.AND.ios==0)exit
-         if(unit_>900) stop "ERROR free_unit: no unit free smaller than 900. Possible BUG"
+         if(unit_>900) stop "free_unit: no unit free smaller than 900. Possible BUG"
       enddo
       if(present(n))n=unit_
    end function free_unit
@@ -427,7 +427,7 @@ contains
       inquire(file=reg(file),exist=exists)
       if(.not.exists) then
          if(verbose_.or.hardstop_)write(*,"(A)")"     Unable to find file: "//reg(file)
-         if(hardstop_) stop "Stop."
+         if(hardstop_) stop "inquireFile: Stop."
       endif
       !
    end subroutine inquireFile
@@ -448,7 +448,7 @@ contains
       !inquire(file=reg(dir),exist=exists)                                      !<===GFORTRAN
       if(.not.exists) then
          if(verbose_.or.hardstop_)write(*,"(A)")"     Unable to find directory: "//reg(dir)
-         if(hardstop_) stop "Stop."
+         if(hardstop_) stop "inquireDir: Stop."
       endif
       !
    end subroutine inquireDir
@@ -498,7 +498,7 @@ contains
       logical                               :: hardstop_,enforce_,verb_
       integer                               :: N,i,j
       !
-      if(size(A,dim=1).ne.size(A,dim=2))stop "check_Hermiticity. Matrix not square."
+      if(size(A,dim=1).ne.size(A,dim=2))stop "check_Hermiticity: Matrix not square."
       N=size(A,dim=1)
       !
       hardstop_=.true.
@@ -560,7 +560,7 @@ contains
       logical                               :: hardstop_,enforce_,verb_
       integer                               :: N,i,j
       !
-      if(size(A,dim=1).ne.size(A,dim=2))stop "check_Symmetry_d. Matrix not square."
+      if(size(A,dim=1).ne.size(A,dim=2))stop "check_Symmetry_d: Matrix not square."
       N=size(A,dim=1)
       !
       hardstop_=.true.

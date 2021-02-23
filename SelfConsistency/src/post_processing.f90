@@ -42,7 +42,7 @@ module post_processing
    public :: dump_MaxEnt
    public :: remove_CDW
    public :: interpolate2Beta
-   public :: interpolate2Path
+   public :: interpolateG2Path
 
    !===========================================================================!
 
@@ -81,7 +81,7 @@ contains
       if(verbose)write(*,"(A)") "---- remove_CDW"
       !
       !
-      if(.not.W%status) stop "remove_CDW. BosonicField not properly initialized."
+      if(.not.W%status) stop "remove_CDW: BosonicField not properly initialized."
       Norb = int(sqrt(dble(W%Nbp)))
       Nmats = W%Npoints
       !
@@ -91,7 +91,7 @@ contains
       select case(reg(mode))
          case default
             !
-            stop "remove_CDW. Available Modes are: imp, imp_exp, diag, lat."
+            stop "remove_CDW: Available Modes are: imp, imp_exp, diag, lat."
             !
          case("imp")
             !
@@ -697,9 +697,9 @@ contains
       if(verbose)write(*,"(A)") "---- interpolate2Beta_Fermionic"
       !
       !
-      if(.not.G%status) stop "interpolate2Beta_Fermionic. FermionicField not properly initialized."
-      if(G%Beta.ne.Beta_Match%Beta_old) stop "interpolate2Beta_Fermionic. Fermionic field Beta is different from the expected one."
-      if(G%Npoints.ne.Beta_Match%Nmats_old) stop "interpolate2Beta_Fermionic. Fermionic field Npoints is different from the expected one."
+      if(.not.G%status) stop "interpolate2Beta_Fermionic: FermionicField not properly initialized."
+      if(G%Beta.ne.Beta_Match%Beta_old) stop "interpolate2Beta_Fermionic: Fermionic field Beta is different from the expected one."
+      if(G%Npoints.ne.Beta_Match%Nmats_old) stop "interpolate2Beta_Fermionic: Fermionic field Npoints is different from the expected one."
       !
       LocalOnly=.true.
       if(G%Nkpt.ne.0)LocalOnly=.false.
@@ -714,7 +714,7 @@ contains
       select case(reg(mode))
          case default
             !
-            stop "interpolate2Beta_Fermionic. Available Modes are: imp, lat."
+            stop "interpolate2Beta_Fermionic: Available Modes are: imp, lat."
             !
          case("imp")
             !
@@ -859,9 +859,9 @@ contains
       if(verbose)write(*,"(A)") "---- interpolate2Beta_Bosonic"
       !
       !
-      if(.not.W%status) stop "interpolate2Beta_Bosonic. BosonicField not properly initialized."
-      if(W%Beta.ne.Beta_Match%Beta_old) stop "interpolate2Beta_Bosonic. Bosonic field Beta is different from the expected one."
-      if(W%Npoints.ne.Beta_Match%Nmats_old) stop "interpolate2Beta_Bosonic. Bosonic field Npoints is different from the expected one."
+      if(.not.W%status) stop "interpolate2Beta_Bosonic: BosonicField not properly initialized."
+      if(W%Beta.ne.Beta_Match%Beta_old) stop "interpolate2Beta_Bosonic: Bosonic field Beta is different from the expected one."
+      if(W%Npoints.ne.Beta_Match%Nmats_old) stop "interpolate2Beta_Bosonic: Bosonic field Npoints is different from the expected one."
       !
       Norb = int(sqrt(dble(W%Nbp)))
       !
@@ -878,7 +878,7 @@ contains
       select case(reg(mode))
          case default
             !
-            stop "interpolate2Beta_Bosonic. Available Modes are: imp, lat."
+            stop "interpolate2Beta_Bosonic: Available Modes are: imp, lat."
             !
          case("imp")
             !
@@ -1007,10 +1007,9 @@ contains
 
 
    !---------------------------------------------------------------------------!
-   !PURPOSE: Interpolate to a new frequency mesh a Fermionic field
-   !TEST ON:
+   !PURPOSE: Interpolate to a user provided K-point path a Fermionic field
    !---------------------------------------------------------------------------!
-   subroutine interpolate2Path(Sfull,Lttc,structure,pathOUTPUT)
+   subroutine interpolateG2Path(Sfull,Lttc,structure,Nkpt_path,pathOUTPUT)
       !
       use parameters
       use utils_misc
@@ -1019,34 +1018,35 @@ contains
       use crystal
       use greens_function, only : calc_Gmats
       use fourier_transforms
-      use input_vars, only : Nkpt_path, cmplxWann, Solver
-      use input_vars, only : Nreal, wrealMax, eta
+      use input_vars, only : Nreal, wrealMax, eta, Solver
       implicit none
       !
       type(FermionicField),intent(inout)    :: Sfull
       type(Lattice),intent(inout)           :: Lttc
       character(len=*),intent(in)           :: structure
+      integer,intent(in)                    :: Nkpt_path
       character(len=*),intent(in)           :: pathOUTPUT
       !
       type(FermionicField)                  :: Sfull_interp
       type(FermionicField)                  :: Gmats_interp
-      real(8),allocatable                   :: Kaxis(:),wreal(:),tau(:)
-      complex(8),allocatable                :: zeta(:,:,:),invGf(:,:),Akw(:,:,:,:)
+      real(8),allocatable                   :: wreal(:),tau(:)
+      complex(8),allocatable                :: zeta(:,:,:),invGf(:,:)
+      real(8),allocatable                   :: Akw(:,:,:,:)
       complex(8),allocatable                :: Gmats_diag(:,:,:,:),Gitau_diag(:,:,:,:)
       character(len=256)                    :: path
       integer                               :: ik,iw,itau,ispin,iorb,unit
-      integer                               :: Norb,Nmats,Nkpt,Ntau
+      integer                               :: Norb,Nmats,Ntau
       real                                  :: start,finish
       !
       !
-      write(*,"(A)") new_line("A")//new_line("A")//"---- interpolate2Path"
+      write(*,"(A)") new_line("A")//new_line("A")//"---- interpolateG2Path"
       !
       !
       ! Check on the input Fields
-      if(.not.Lttc%status) stop "Lttc not properly initialized."
+      if(.not.Lttc%status) stop "interpolateG2Path: Lttc not properly initialized."
       if(Sfull%status)then
-         if(Sfull%Norb.ne.Lttc%Norb) stop "Lttc has different number of orbitals with respect to Sfull."
-         if(Sfull%Nkpt.ne.Lttc%Nkpt) stop "Lttc has different number of k-points with respect to Sfull."
+         if(Sfull%Norb.ne.Lttc%Norb) stop "interpolateG2Path: Lttc has different number of orbitals with respect to Sfull."
+         if(Sfull%Nkpt.ne.Lttc%Nkpt) stop "interpolateG2Path: Lttc has different number of k-points with respect to Sfull."
          Norb = Sfull%Norb
          Nmats = Sfull%Npoints
       else
@@ -1054,39 +1054,34 @@ contains
       endif
       !
       !
-      !Create K-points along high-symmetry points
-      if(allocated(Lttc%kptpath))deallocate(Lttc%kptpath)
-      call calc_path(Lttc%kptpath,reg(structure),Nkpt_path,Kaxis=Kaxis)
-      Nkpt = size(Lttc%kptpath,dim=2) !Here Nkpt is the total number of K-points along the path
-      Lttc%Nkpt_path = Nkpt
-      write(*,"(A,I)") "     Total number of K-points along path:",Nkpt
+      if(.not.Lttc%pathStored)then
+         !
+         !Create K-points along high-symmetry points
+         if(allocated(Lttc%kptpath))deallocate(Lttc%kptpath)
+         call calc_path(Lttc%kptpath,reg(structure),Nkpt_path,Kaxis=Lttc%Kpathaxis)
+         Lttc%Nkpt_path = size(Lttc%kptpath,dim=2)
+         !
+         !Fill in Hk along points
+         if(allocated(Lttc%Hk_path))deallocate(Lttc%Hk_path)
+         allocate(Lttc%Hk_path(Norb,Norb,Lttc%Nkpt_path));Lttc%Hk_path=czero
+         call cpu_time(start)
+         call wannierinterpolation(Lttc%Nkpt3,Lttc%kpt,Lttc%kptpath,Lttc%Hk,Lttc%Hk_path)
+         call cpu_time(finish)
+         write(*,"(A,F)") "     H(fullBZ) --> H(Kpath) cpu timing:", finish-start
+         !
+         !Fill in Ek along points
+         if(allocated(Lttc%Ek_path))deallocate(Lttc%Ek_path)
+         allocate(Lttc%Ek_path(Norb,Lttc%Nkpt_path));Lttc%Ek_path=0d0
+         if(allocated(Lttc%Zk_path))deallocate(Lttc%Zk_path)
+         allocate(Lttc%Zk_path(Norb,Norb,Lttc%Nkpt_path));Lttc%Zk_path=czero
+         do ik=1,Lttc%Nkpt_path
+            Lttc%Zk_path(:,:,ik) = Lttc%Hk_path(:,:,ik)
+            call eigh(Lttc%Zk_path(:,:,ik),Lttc%Ek_path(:,ik))
+         enddo
+         !
+      endif
+      write(*,"(A,I)") "     Total number of K-points along path:",Lttc%Nkpt_path
       !
-      !Fill in Hk along points
-      if(allocated(Lttc%Hk_path))deallocate(Lttc%Hk_path)
-      allocate(Lttc%Hk_path(Norb,Norb,Nkpt));Lttc%Hk_path=czero
-      call cpu_time(start)
-      call wannierinterpolation(Lttc%Nkpt3,Lttc%kpt,Lttc%kptpath,Lttc%Hk,Lttc%Hk_path)
-      call cpu_time(finish)
-      write(*,"(A,F)") "     H(fullBZ) --> H(Kpath) cpu timing:", finish-start
-      !
-      !Fill in Ek along points
-      if(allocated(Lttc%Ek_path))deallocate(Lttc%Ek_path)
-      allocate(Lttc%Ek_path(Norb,Nkpt));Lttc%Ek_path=0d0
-      if(allocated(Lttc%Zk_path))deallocate(Lttc%Zk_path)
-      allocate(Lttc%Zk_path(Norb,Norb,Nkpt));Lttc%Zk_path=czero
-      do ik=1,Nkpt
-         Lttc%Zk_path(:,:,ik) = Lttc%Hk_path(:,:,ik)
-         call eigh(Lttc%Zk_path(:,:,ik),Lttc%Ek_path(:,ik))
-      enddo
-      !
-      !Print bands
-      path = reg(pathOUTPUT)//"K_resolved/Bands.DAT"
-      unit = free_unit()
-      open(unit,file=reg(path),form="formatted",status="unknown",position="rewind",action="write")
-      do ik=1,Nkpt
-         write(unit,"(1I5,200E20.12)") ik,Kaxis(ik),(Lttc%Ek_path(:,ik),iorb=1,Norb)
-      enddo
-      close(unit)
       !
       !Compute non-interacting spectral function in the Wannier basis
       allocate(wreal(Nreal));wreal=0d0
@@ -1098,14 +1093,14 @@ contains
          enddo
       enddo
       !
-      allocate(Akw(Norb,Nreal,Nkpt,Nspin));Akw=0d0
+      allocate(Akw(Norb,Nreal,Lttc%Nkpt_path,Nspin));Akw=0d0
       allocate(invGf(Norb,Norb));invGf=czero
       !$OMP PARALLEL DEFAULT(NONE),&
-      !$OMP SHARED(Nkpt,Nreal,Norb,zeta,Lttc,Akw),&
+      !$OMP SHARED(Nreal,Norb,zeta,Lttc,Akw),&
       !$OMP PRIVATE(ispin,ik,iw,iorb,invGf)
       !$OMP DO
       do ispin=1,Nspin
-         do ik=1,Nkpt
+         do ik=1,Lttc%Nkpt_path
             do iw=1,Nreal
                !
                invGf = zeta(:,:,iw) - Lttc%Hk_path(:,:,ik)
@@ -1123,7 +1118,7 @@ contains
       !
       !Normalize spectral function
       do ispin=1,Nspin
-         do ik=1,Nkpt
+         do ik=1,Lttc%Nkpt_path
             do iorb=1,Norb
                Akw(iorb,:,ik,ispin) = Akw(iorb,:,ik,ispin)/sum(Akw(iorb,:,ik,ispin))
             enddo
@@ -1135,9 +1130,9 @@ contains
          path = reg(pathOUTPUT)//"K_resolved/Akw_Glda_s"//str(ispin)//".DAT"
          unit = free_unit()
          open(unit,file=reg(path),form="formatted",status="unknown",position="rewind",action="write")
-         do ik=1,Nkpt
+         do ik=1,Lttc%Nkpt_path
             do iw=1,Nreal
-                write(unit,"(1I5,200E20.12)") ik,Kaxis(ik),wreal(iw),(Akw(iorb,iw,ik,ispin),iorb=1,Norb)
+                write(unit,"(1I5,200E20.12)") ik,Lttc%Kpathaxis(ik),wreal(iw),(Akw(iorb,iw,ik,ispin),iorb=1,Norb)
             enddo
          enddo
          close(unit)
@@ -1148,7 +1143,7 @@ contains
          !
          !Interpolate the self-energy along the path
          call cpu_time(start)
-         call AllocateFermionicField(Sfull_interp,Norb,Nmats,Nkpt=Nkpt,Nsite=Sfull%Nsite,Beta=Sfull%Beta,mu=Sfull%mu)
+         call AllocateFermionicField(Sfull_interp,Norb,Nmats,Nkpt=Lttc%Nkpt_path,Nsite=Sfull%Nsite,Beta=Sfull%Beta,mu=Sfull%mu)
          do ispin=1,Nspin
             do iw=1,Nmats
                call wannierinterpolation(Lttc%Nkpt3,Lttc%kpt,Lttc%kptpath,Sfull%wks(:,:,iw,:,ispin),Sfull_interp%wks(:,:,iw,:,ispin))
@@ -1158,13 +1153,13 @@ contains
          write(*,"(A,F)") "     Sfull(fullBZ,iw) --> Sfull(Kpath,iw) cpu timing:", finish-start
          !
          !Recompute the Green's function along the path
-         call AllocateFermionicField(Gmats_interp,Norb,Nmats,Nkpt=Nkpt,Nsite=Sfull%Nsite,Beta=Sfull%Beta,mu=Sfull%mu)
+         call AllocateFermionicField(Gmats_interp,Norb,Nmats,Nkpt=Lttc%Nkpt_path,Nsite=Sfull%Nsite,Beta=Sfull%Beta,mu=Sfull%mu)
          call calc_Gmats(Gmats_interp,Lttc,Smats=Sfull_interp,along_path=.true.)
          call DeallocateFermionicField(Sfull_interp)
          !
-         allocate(Gmats_diag(Norb,Nmats,Nkpt,Nspin));Gmats_diag=czero
+         allocate(Gmats_diag(Norb,Nmats,Lttc%Nkpt_path,Nspin));Gmats_diag=czero
          do ispin=1,Nspin
-            do ik=1,Nkpt
+            do ik=1,Lttc%Nkpt_path
                do iw=1,Nmats
                   do iorb=1,Norb
                      Gmats_diag(iorb,iw,ik,ispin) = Gmats_interp%wks(iorb,iorb,iw,ik,ispin)
@@ -1177,18 +1172,11 @@ contains
          !Fourier transform
          Ntau = Solver%NtauF
          call cpu_time(start)
-         allocate(Gitau_diag(Norb,Ntau,Nkpt,Nspin));Gitau_diag=czero
-         if(cmplxWann)then
-            do ispin=1,Nspin
-               call Fmats2itau_vec(Sfull%Beta,Gmats_diag(:,:,:,ispin),Gitau_diag(:,:,:,ispin), &
-               asympt_corr=.true.,tau_uniform=.true.)
-            enddo
-         else
-            do ispin=1,Nspin
-               call Fmats2itau_vec(Sfull%Beta,Gmats_diag(:,:,:,ispin),Gitau_diag(:,:,:,ispin), &
-               asympt_corr=.true.,tau_uniform=.true.,nkpt3=Lttc%Nkpt3,kpt=Lttc%kpt)
-            enddo
-         endif
+         allocate(Gitau_diag(Norb,Ntau,Lttc%Nkpt_path,Nspin));Gitau_diag=czero
+         do ispin=1,Nspin
+            call Fmats2itau_vec(Sfull%Beta,Gmats_diag(:,:,:,ispin),Gitau_diag(:,:,:,ispin), &
+            asympt_corr=.true.,tau_uniform=.true.)
+         enddo
          deallocate(Gmats_diag)
          call cpu_time(finish)
          write(*,"(A,F)") "     Glat(Kpath,iw) --> Glat(Kpath,tau) cpu timing:", finish-start
@@ -1196,7 +1184,7 @@ contains
          !Print data for K-resolved MaxEnt
          allocate(tau(Ntau));tau = linspace(0d0,Sfull%Beta,Ntau)
          do ispin=1,Nspin
-            do ik=1,Nkpt
+            do ik=1,Lttc%Nkpt_path
                !
                path = reg(pathOUTPUT)//"K_resolved/Gkt_s"//str(ispin)//"/Gkt_k"//str(ik)//".DAT"
                unit = free_unit()
@@ -1212,7 +1200,7 @@ contains
          !
       endif
       !
-   end subroutine interpolate2Path
+   end subroutine interpolateG2Path
 
 
 

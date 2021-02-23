@@ -118,8 +118,8 @@ contains
       type(FermionicField),intent(inout)    :: G
       integer                               :: ik,in,ispin
       !
-      if(.not.G%status)stop "FermionicKsum. Field not properly initialized."
-      if(G%Nkpt.eq.0)stop "FermionicKsum. Field k dependent attributes not properly initialized."
+      if(.not.G%status)stop "FermionicKsum: Field not properly initialized."
+      if(G%Nkpt.eq.0)stop "FermionicKsum: Field k dependent attributes not properly initialized."
       !
       G%N_s = czero
       do ispin=1,Nspin
@@ -154,8 +154,8 @@ contains
       type(BosonicField),intent(inout)      :: W
       integer                               :: ik,in
       !
-      if(.not.W%status)stop "BosonicKsum. Field not properly initialized."
-      if(W%Nkpt.eq.0)stop "BosonicKsum. Field k dependent attributes not properly initialized."
+      if(.not.W%status)stop "BosonicKsum: Field not properly initialized."
+      if(W%Nkpt.eq.0)stop "BosonicKsum: Field k dependent attributes not properly initialized."
       !
       W%screened_local = czero
       do ik=1,W%Nkpt
@@ -637,25 +637,25 @@ contains
       integer                               :: i_imp,j_imp
       !
       !
-      if(verbose)write(*,"(A)") "---- loc2imp(F)"
+      if(verbose)write(*,"(A)") "---- loc2imp_Fermionic"
       !
       !
       if(present(sitename)) write(*,"(A)") "     Extraction of Gloc for site: "//trim(sitename)
-      if(.not.Gloc%status) stop "loc2imp(F): Gloc not properly initialized."
-      if(.not.Gimp%status) stop "loc2imp(F): Gimp not properly initialized."
-      if(Gloc%Norb.eq.0) stop "loc2imp(F): Norb of Gloc not defined."
-      if(Gimp%Norb.eq.0) stop "loc2imp(F): Norb of Gimp not defined."
-      if(Gloc%Npoints.eq.0) stop "loc2imp(F): Npoints of Gloc not defined."
-      if(Gimp%Npoints.eq.0) stop "loc2imp(F): Npoints of Gimp not defined."
-      if(Gimp%Beta.ne.Gloc%Beta) stop "loc2imp(F): Gimp and Gloc have different beta."
-      if(Gimp%Npoints.ne.Gloc%Npoints) stop "loc2imp(F): Gimp and Gloc have different number of Matsubara points."
-      if(Gimp%Nkpt.ne.0) stop "loc2imp(F): Gimp k-dependent attributes attributes are supposed to be unallocated."
-      if(.not.allocated(Gloc%ws)) stop "loc2imp(F): Gloc local projection not allocated."
-      if(.not.allocated(Gimp%ws)) stop "loc2imp(F): Gimp local projection not allocated."
-      if(size(orbs).ne.Gimp%Norb) stop "loc2imp(F): can't fit the requested orbitals inside Gimp."
-      if(size(orbs).gt.Gloc%Norb) stop "loc2imp(F): number of requested orbitals greater than Gloc size."
+      if(.not.Gloc%status) stop "loc2imp_Fermionic: Gloc not properly initialized."
+      if(.not.Gimp%status) stop "loc2imp_Fermionic: Gimp not properly initialized."
+      if(Gloc%Norb.eq.0) stop "loc2imp_Fermionic: Norb of Gloc not defined."
+      if(Gimp%Norb.eq.0) stop "loc2imp_Fermionic: Norb of Gimp not defined."
+      if(Gloc%Npoints.eq.0) stop "loc2imp_Fermionic: Npoints of Gloc not defined."
+      if(Gimp%Npoints.eq.0) stop "loc2imp_Fermionic: Npoints of Gimp not defined."
+      if(Gimp%Beta.ne.Gloc%Beta) stop "loc2imp_Fermionic: Gimp and Gloc have different beta."
+      if(Gimp%Npoints.ne.Gloc%Npoints) stop "loc2imp_Fermionic: Gimp and Gloc have different number of Matsubara points."
+      if(Gimp%Nkpt.ne.0) stop "loc2imp_Fermionic: Gimp k-dependent attributes attributes are supposed to be unallocated."
+      if(.not.allocated(Gloc%ws)) stop "loc2imp_Fermionic: Gloc local projection not allocated."
+      if(.not.allocated(Gimp%ws)) stop "loc2imp_Fermionic: Gimp local projection not allocated."
+      if(size(orbs).ne.Gimp%Norb) stop "loc2imp_Fermionic: can't fit the requested orbitals inside Gimp."
+      if(size(orbs).gt.Gloc%Norb) stop "loc2imp_Fermionic: number of requested orbitals greater than Gloc size."
       if(present(U))then
-         call assert_shape(U,[size(orbs),size(orbs)],"loc2imp(F)","U")
+         call assert_shape(U,[size(orbs),size(orbs)],"loc2imp_Fermionic","U")
          if(size(U,dim=1).ne.3) write(*,"(A)") "     Warning: The local orbital space rotation is well defined only for a t2g sub-shell."
          write(*,"(A)") "     The local orbital space will be rotated during extraction."
       endif
@@ -708,16 +708,16 @@ contains
       integer                               :: i_imp,j_imp
       !
       !
-      if(verbose)write(*,"(A)") "---- loc2imp(O)"
+      if(verbose)write(*,"(A)") "---- loc2imp_Matrix"
       !
       !
       if(present(sitename)) write(*,"(A)") "     Extraction of Operator for site: "//trim(sitename)
-      if(size(Oloc,dim=1).ne.size(Oloc,dim=2)) stop "loc2imp(O): Oloc not square."
-      if(size(Oimp,dim=1).ne.size(Oimp,dim=2)) stop "loc2imp(O): Oimp not square."
-      if(size(orbs).ne.size(Oimp,dim=1)) stop "loc2imp(O): can't fit the requested orbitals inside Oimp."
-      if(size(orbs).gt.size(Oloc,dim=1)) stop "loc2imp(O): number of requested orbitals greater than Oloc size."
+      if(size(Oloc,dim=1).ne.size(Oloc,dim=2)) stop "loc2imp_Matrix: Oloc not square."
+      if(size(Oimp,dim=1).ne.size(Oimp,dim=2)) stop "loc2imp_Matrix: Oimp not square."
+      if(size(orbs).ne.size(Oimp,dim=1)) stop "loc2imp_Matrix: can't fit the requested orbitals inside Oimp."
+      if(size(orbs).gt.size(Oloc,dim=1)) stop "loc2imp_Matrix: number of requested orbitals greater than Oloc size."
       if(present(U))then
-         call assert_shape(U,[size(orbs),size(orbs)],"loc2imp(O)","U")
+         call assert_shape(U,[size(orbs),size(orbs)],"loc2imp_Matrix","U")
          if(size(U,dim=1).ne.3) write(*,"(A)") "     Warning: The local orbital space rotation is well defined only for a t2g sub-shell."
          write(*,"(A)") "     The local orbital space will be rotated during extraction."
       endif
@@ -761,38 +761,38 @@ contains
       logical                               :: doBare,rotate
       !
       !
-      if(verbose)write(*,"(A)") "---- loc2imp(B)"
+      if(verbose)write(*,"(A)") "---- loc2imp_Bosonic"
       !
       !
       if(present(sitename)) write(*,"(A)") "     Extraction of Wloc for site: "//trim(sitename)
-      if(.not.Wloc%status) stop "loc2imp(B): Wloc not properly initialized."
-      if(.not.Wimp%status) stop "loc2imp(B): Wimp not properly initialized."
-      if(Wloc%Nbp.eq.0) stop "loc2imp(B): Norb of Wloc not defined."
-      if(Wimp%Nbp.eq.0) stop "loc2imp(B): Norb of Wimp not defined."
-      if(Wloc%Npoints.eq.0) stop "loc2imp(B): Npoints of Wloc not defined."
-      if(Wimp%Npoints.eq.0) stop "loc2imp(B): Npoints of Wimp not defined."
-      if(Wimp%Beta.ne.Wloc%Beta) stop "loc2imp(B): Wimp and Wloc have different beta."
-      if(Wimp%Npoints.ne.Wloc%Npoints) stop "loc2imp(B): Wimp and Wloc have different number of Matsubara points."
-      if(Wimp%Nkpt.ne.0) stop "loc2imp(B): Wimp k-dependent attributes attributes are supposed to be unallocated."
-      if(.not.allocated(Wloc%screened_local)) stop "loc2imp(B): Wloc screened_local attribute not allocated."
-      if(.not.allocated(Wimp%screened_local)) stop "loc2imp(B): Wimp screened_local attribute not allocated."
+      if(.not.Wloc%status) stop "loc2imp_Bosonic: Wloc not properly initialized."
+      if(.not.Wimp%status) stop "loc2imp_Bosonic: Wimp not properly initialized."
+      if(Wloc%Nbp.eq.0) stop "loc2imp_Bosonic: Norb of Wloc not defined."
+      if(Wimp%Nbp.eq.0) stop "loc2imp_Bosonic: Norb of Wimp not defined."
+      if(Wloc%Npoints.eq.0) stop "loc2imp_Bosonic: Npoints of Wloc not defined."
+      if(Wimp%Npoints.eq.0) stop "loc2imp_Bosonic: Npoints of Wimp not defined."
+      if(Wimp%Beta.ne.Wloc%Beta) stop "loc2imp_Bosonic: Wimp and Wloc have different beta."
+      if(Wimp%Npoints.ne.Wloc%Npoints) stop "loc2imp_Bosonic: Wimp and Wloc have different number of Matsubara points."
+      if(Wimp%Nkpt.ne.0) stop "loc2imp_Bosonic: Wimp k-dependent attributes attributes are supposed to be unallocated."
+      if(.not.allocated(Wloc%screened_local)) stop "loc2imp_Bosonic: Wloc screened_local attribute not allocated."
+      if(.not.allocated(Wimp%screened_local)) stop "loc2imp_Bosonic: Wimp screened_local attribute not allocated."
       !
       Norb_imp = int(sqrt(dble(Wimp%Nbp)))
       Norb_loc = int(sqrt(dble(Wloc%Nbp)))
       doBare = allocated(Wimp%bare_local)
-      if(.not.allocated(Wloc%bare_local).and.doBare) stop "loc2imp(B): Wloc bare_local attribute not allocated."
+      if(.not.allocated(Wloc%bare_local).and.doBare) stop "loc2imp_Bosonic: Wloc bare_local attribute not allocated."
       !
-      if(size(orbs).ne.Norb_imp) stop "loc2imp(B): can't fit the requested orbitals inside Wimp."
-      if(size(orbs).gt.Norb_loc) stop "loc2imp(B): number of requested orbitals greater than Wloc size."
+      if(size(orbs).ne.Norb_imp) stop "loc2imp_Bosonic: can't fit the requested orbitals inside Wimp."
+      if(size(orbs).gt.Norb_loc) stop "loc2imp_Bosonic: number of requested orbitals greater than Wloc size."
       if(present(U))then
-         if(.not.present(Map)) stop "Also the map must be provided."
-         call assert_shape(U,[size(orbs),size(orbs)],"loc2imp(B)","U")
+         if(.not.present(Map)) stop "loc2imp_Bosonic: Also the map must be provided."
+         call assert_shape(U,[size(orbs),size(orbs)],"loc2imp_Bosonic","U")
          if(size(U,dim=1).ne.3) write(*,"(A)") "     Warning: The local orbital space rotation is well defined only for a t2g sub-shell."
          write(*,"(A)") "     The local orbital space will be rotated during extraction."
       endif
       if(present(Map))then
-         if(.not.present(U)) stop "Also the rotation must be provided."
-         call assert_shape(Map,[Wimp%Nbp,Wimp%Nbp,4],"loc2imp(B)","Map")
+         if(.not.present(U)) stop "loc2imp_Bosonic: Also the rotation must be provided."
+         call assert_shape(Map,[Wimp%Nbp,Wimp%Nbp,4],"loc2imp_Bosonic","Map")
       endif
       rotate=.false.
       if(present(U).and.present(Map))rotate=.true.
@@ -864,38 +864,38 @@ contains
       integer                               :: i_imp,j_imp
       !
       !
-      if(verbose)write(*,"(A)") "---- imp2loc(F)"
+      if(verbose)write(*,"(A)") "---- imp2loc_Fermionic"
       !
       !
-      if(.not.Gloc%status) stop "imp2loc(F): Gloc not properly initialized."
-      if(.not.Gimp%status) stop "imp2loc(F): Gimp not properly initialized."
-      if(Gloc%Norb.eq.0) stop "imp2loc(F): Norb of Gloc not defined."
-      if(Gimp%Norb.eq.0) stop "imp2loc(F): Norb of Gimp not defined."
-      if(Gloc%Npoints.eq.0) stop "imp2loc(F): Npoints of Gloc not defined."
-      if(Gimp%Npoints.eq.0) stop "imp2loc(F): Npoints of Gimp not defined."
-      if(Gloc%Beta.ne.Gimp%Beta) stop "imp2loc(F): Gimp and Gloc have different beta."
-      if(Gloc%Npoints.ne.Gimp%Npoints) stop "imp2loc(F): Gimp and Gloc have different number of Matsubara points."
-      if(Gimp%Nkpt.ne.0) stop "imp2loc(F): Gimp k-dependent attributes attributes are supposed to be unallocated."
-      if(.not.allocated(Gloc%ws)) stop "imp2loc(F): Gloc local projection not allocated."
-      if(.not.allocated(Gimp%ws)) stop "imp2loc(F): Gimp local projection not allocated."
-      if(size(orbs).ne.Gimp%Norb) stop "imp2loc(F): can't fit the requested orbitals from Gimp."
-      if(size(orbs).gt.Gloc%Norb) stop "imp2loc(F): number of requested orbitals greater than Gloc size."
+      if(.not.Gloc%status) stop "imp2loc_Fermionic: Gloc not properly initialized."
+      if(.not.Gimp%status) stop "imp2loc_Fermionic: Gimp not properly initialized."
+      if(Gloc%Norb.eq.0) stop "imp2loc_Fermionic: Norb of Gloc not defined."
+      if(Gimp%Norb.eq.0) stop "imp2loc_Fermionic: Norb of Gimp not defined."
+      if(Gloc%Npoints.eq.0) stop "imp2loc_Fermionic: Npoints of Gloc not defined."
+      if(Gimp%Npoints.eq.0) stop "imp2loc_Fermionic: Npoints of Gimp not defined."
+      if(Gloc%Beta.ne.Gimp%Beta) stop "imp2loc_Fermionic: Gimp and Gloc have different beta."
+      if(Gloc%Npoints.ne.Gimp%Npoints) stop "imp2loc_Fermionic: Gimp and Gloc have different number of Matsubara points."
+      if(Gimp%Nkpt.ne.0) stop "imp2loc_Fermionic: Gimp k-dependent attributes attributes are supposed to be unallocated."
+      if(.not.allocated(Gloc%ws)) stop "imp2loc_Fermionic: Gloc local projection not allocated."
+      if(.not.allocated(Gimp%ws)) stop "imp2loc_Fermionic: Gimp local projection not allocated."
+      if(size(orbs).ne.Gimp%Norb) stop "imp2loc_Fermionic: can't fit the requested orbitals from Gimp."
+      if(size(orbs).gt.Gloc%Norb) stop "imp2loc_Fermionic: number of requested orbitals greater than Gloc size."
       !
       Norb_loc = Gloc%Norb
       Norb_imp = Gimp%Norb
       Nsite=1
       !
       if(AFM)then
-         if(Gloc%Nsite.ne.2) stop "AFM is implemented only for a two site lattice."
-         if(Norb_loc/Norb_imp.ne.2) stop "Lattice indexes are not twice the impurity ones."
-         if(expand) stop "AFM condition and expansion to real space not yet implemented."
+         if(Gloc%Nsite.ne.2) stop "imp2loc_Fermionic: AFM is implemented only for a two site lattice."
+         if(Norb_loc/Norb_imp.ne.2) stop "imp2loc_Fermionic: Lattice indexes are not twice the impurity ones."
+         if(expand) stop "imp2loc_Fermionic: AFM condition and expansion to real space not yet implemented."
          Nsite = 2
       endif
       !
       if(expand)then
          Nsite = Gloc%Nsite
-         if(mod(Norb_loc,size(orbs)).ne.0)stop "Number of requested orbitals is not a commensurate subset of the lattice field."
-         if(AFM) stop "Expansion to real space and AFM condition not yet implemented."
+         if(mod(Norb_loc,size(orbs)).ne.0)stop "imp2loc_Fermionic: Number of requested orbitals is not a commensurate subset of the lattice field."
+         if(AFM) stop "imp2loc_Fermionic: Expansion to real space and AFM condition not yet implemented."
          write(*,"(A)") "     The impurity field will be expanded to match the lattice orbital space."
       else
          write(*,"(A,15I3)") "     Impurity field will be inserted into the lattice orbital indexes: ",orbs
@@ -903,8 +903,8 @@ contains
       endif
       !
       if(present(U))then
-         if(size(U,dim=1).ne.size(U,dim=2)) stop "Rotation matrix not square."
-         if(size(U,dim=3).ne.Gloc%Nsite) stop "Number of rotation matrices and number of sites does not match."
+         if(size(U,dim=1).ne.size(U,dim=2)) stop "imp2loc_Fermionic: Rotation matrix not square."
+         if(size(U,dim=3).ne.Gloc%Nsite) stop "imp2loc_Fermionic: Number of rotation matrices and number of sites does not match."
          if(size(U,dim=1).ne.3) write(*,"(A)") "     Warning: The local orbital space rotation is well defined only for a t2g sub-shell."
          write(*,"(A)") "     The impurity orbital space will be rotated during insertion in "//str(Nsite)//" sites."
       endif
@@ -990,30 +990,30 @@ contains
       integer                               :: i_imp,j_imp
       !
       !
-      if(verbose)write(*,"(A)") "---- imp2loc(O)"
+      if(verbose)write(*,"(A)") "---- imp2loc_Matrix"
       !
       !
-      if(size(Oloc,dim=1).ne.size(Oloc,dim=2)) stop "imp2loc(O): Oloc not square."
-      if(size(Oimp,dim=1).ne.size(Oimp,dim=2)) stop "imp2loc(O): Oimp not square."
-      if(size(Oimp,dim=3).ne.Nspin) stop "imp2loc(O): Oimp third dimension is not Nspin."
-      if(size(Oloc,dim=3).ne.Nspin) stop "imp2loc(O): Oloc third dimension is not Nspin."
-      if(size(orbs).ne.size(Oimp,dim=1)) stop "imp2loc(O): can't fit the requested orbitals from Gimp."
-      if(size(orbs).gt.size(Oloc,dim=1)) stop "imp2loc(O): number of requested orbitals greater than Gloc size."
+      if(size(Oloc,dim=1).ne.size(Oloc,dim=2)) stop "imp2loc_Matrix: Oloc not square."
+      if(size(Oimp,dim=1).ne.size(Oimp,dim=2)) stop "imp2loc_Matrix: Oimp not square."
+      if(size(Oimp,dim=3).ne.Nspin) stop "imp2loc_Matrix: Oimp third dimension is not Nspin."
+      if(size(Oloc,dim=3).ne.Nspin) stop "imp2loc_Matrix: Oloc third dimension is not Nspin."
+      if(size(orbs).ne.size(Oimp,dim=1)) stop "imp2loc_Matrix: can't fit the requested orbitals from Gimp."
+      if(size(orbs).gt.size(Oloc,dim=1)) stop "imp2loc_Matrix: number of requested orbitals greater than Gloc size."
       !
       Norb_loc = size(Oloc,dim=1)
       Norb_imp = size(orbs)
       Nsite=1
       !
       if(AFM)then
-         if(Norb_loc/Norb_imp.ne.2) stop "Lattice indexes are not twice the impurity ones."
-         if(expand) stop "AFM condition and expansion to real space not yet implemented."
+         if(Norb_loc/Norb_imp.ne.2) stop "imp2loc_Matrix: Lattice indexes are not twice the impurity ones."
+         if(expand) stop "imp2loc_Matrix: AFM condition and expansion to real space not yet implemented."
          Nsite = 2
       endif
       !
       if(expand)then
          Nsite = size(Oloc,dim=1)/size(orbs)
-         if(mod(size(Oloc,dim=1),size(orbs)).ne.0)stop "Number of requested orbitals is not a commensurate subset of the lattice observable."
-         if(AFM) stop "Expansion to real space and AFM condition not yet implemented."
+         if(mod(size(Oloc,dim=1),size(orbs)).ne.0)stop "imp2loc_Matrix: Number of requested orbitals is not a commensurate subset of the lattice observable."
+         if(AFM) stop "imp2loc_Matrix: Expansion to real space and AFM condition not yet implemented."
          write(*,"(A)") "     The impurity field will be expanded to match the lattice orbital space."
       else
          write(*,"(A,15I3)") "     Impurity field will be inserted into the lattice orbital indexes: ",orbs
@@ -1021,8 +1021,8 @@ contains
       endif
       !
       if(present(U))then
-         if(size(U,dim=1).ne.size(U,dim=2)) stop "Rotation matrix not square."
-         if((size(U,dim=3).ne.Nsite))stop "Number of rotation matrices and number of sites does not match."
+         if(size(U,dim=1).ne.size(U,dim=2)) stop "imp2loc_Matrix: Rotation matrix not square."
+         if((size(U,dim=3).ne.Nsite))stop "imp2loc_Matrix: Number of rotation matrices and number of sites does not match."
          if(size(U,dim=1).ne.3) write(*,"(A)") "     Warning: The local orbital space rotation is well defined only for a t2g sub-shell."
          write(*,"(A)") "     The impurity orbital space will be rotated during insertion in "//str(Nsite)//" sites."
       endif
@@ -1104,40 +1104,40 @@ contains
       logical                               :: doBare,rotate
       !
       !
-      if(verbose)write(*,"(A)") "---- imp2loc(B)"
+      if(verbose)write(*,"(A)") "---- imp2loc_Bosonic"
       !
       !
-      if(.not.Wloc%status) stop "imp2loc(B): Wloc not properly initialized."
-      if(.not.Wimp%status) stop "imp2loc(B): Wimp not properly initialized."
-      if(Wloc%Nbp.eq.0) stop "imp2loc(B): Norb of Wloc not defined."
-      if(Wimp%Nbp.eq.0) stop "imp2loc(B): Norb of Wimp not defined."
-      if(Wloc%Npoints.eq.0) stop "imp2loc(B): Npoints of Wloc not defined."
-      if(Wimp%Npoints.eq.0) stop "imp2loc(B): Npoints of Wimp not defined."
-      if(Wloc%Beta.ne.Wimp%Beta) stop "imp2loc(B): Wimp and Wloc have different beta."
-      if(Wloc%Npoints.ne.Wimp%Npoints) stop "imp2loc(B): Wimp and Wloc have different number of Matsubara points."
-      if(Wimp%Nkpt.ne.0) stop "imp2loc(B): Wimp k-dependent attributes attributes are supposed to be unallocated."
-      if(.not.allocated(Wloc%screened_local)) stop "imp2loc(B): Wloc screened_local attribute not allocated."
-      if(.not.allocated(Wimp%screened_local)) stop "imp2loc(B): Wimp screened_local attribute not allocated."
+      if(.not.Wloc%status) stop "imp2loc_Bosonic: Wloc not properly initialized."
+      if(.not.Wimp%status) stop "imp2loc_Bosonic: Wimp not properly initialized."
+      if(Wloc%Nbp.eq.0) stop "imp2loc_Bosonic: Norb of Wloc not defined."
+      if(Wimp%Nbp.eq.0) stop "imp2loc_Bosonic: Norb of Wimp not defined."
+      if(Wloc%Npoints.eq.0) stop "imp2loc_Bosonic: Npoints of Wloc not defined."
+      if(Wimp%Npoints.eq.0) stop "imp2loc_Bosonic: Npoints of Wimp not defined."
+      if(Wloc%Beta.ne.Wimp%Beta) stop "imp2loc_Bosonic: Wimp and Wloc have different beta."
+      if(Wloc%Npoints.ne.Wimp%Npoints) stop "imp2loc_Bosonic: Wimp and Wloc have different number of Matsubara points."
+      if(Wimp%Nkpt.ne.0) stop "imp2loc_Bosonic: Wimp k-dependent attributes attributes are supposed to be unallocated."
+      if(.not.allocated(Wloc%screened_local)) stop "imp2loc_Bosonic: Wloc screened_local attribute not allocated."
+      if(.not.allocated(Wimp%screened_local)) stop "imp2loc_Bosonic: Wimp screened_local attribute not allocated."
       !
       Norb_imp = int(sqrt(dble(Wimp%Nbp)))
       Norb_loc = int(sqrt(dble(Wloc%Nbp)))
       doBare = allocated(Wimp%bare_local)
       Nsite=1
       !
-      if(size(orbs).ne.Norb_imp) stop "imp2loc(B): can't fit the requested orbitals from Wimp."
-      if(size(orbs).gt.Norb_loc) stop "imp2loc(B): number of requested orbitals greater than Wloc size."
+      if(size(orbs).ne.Norb_imp) stop "imp2loc_Bosonic: can't fit the requested orbitals from Wimp."
+      if(size(orbs).gt.Norb_loc) stop "imp2loc_Bosonic: number of requested orbitals greater than Wloc size."
       !
       if(AFM)then
-         if(Wloc%Nsite.ne.2) stop "AFM is implemented only for a two site lattice."
-         if(Norb_loc/Norb_imp.ne.2) stop "Lattice indexes are not twice the impurity ones."
-         if(expand) stop "AFM condition and expansion to real space not yet implemented."
+         if(Wloc%Nsite.ne.2) stop "imp2loc_Bosonic: AFM is implemented only for a two site lattice."
+         if(Norb_loc/Norb_imp.ne.2) stop "imp2loc_Bosonic: Lattice indexes are not twice the impurity ones."
+         if(expand) stop "imp2loc_Bosonic: AFM condition and expansion to real space not yet implemented."
          Nsite = 2
       endif
       !
       if(expand)then
          Nsite = Wloc%Nsite
-         if(mod(Norb_loc,size(orbs)).ne.0)stop "Number of requested orbitals is not a commensurate subset of Wloc."
-         if(AFM) stop "Expansion to real space and AFM condition not yet implemented."
+         if(mod(Norb_loc,size(orbs)).ne.0)stop "imp2loc_Bosonic: Number of requested orbitals is not a commensurate subset of Wloc."
+         if(AFM) stop "imp2loc_Bosonic: Expansion to real space and AFM condition not yet implemented."
          write(*,"(A)") "     The impurity field will be expanded to match the lattice orbital space."
       else
          write(*,"(A,15I3)") "     Impurity field will be inserted into the lattice orbital indexes: ",orbs
@@ -1145,17 +1145,17 @@ contains
       endif
       !
       if(present(U))then
-         if(.not.present(Map)) stop "Also the map must be provided."
-         if(size(U,dim=1).ne.size(U,dim=2)) stop "Rotation matrix not square."
-         if(size(U,dim=3).ne.Wloc%Nsite) stop "Number of rotation matrices and number of sites does not match."
+         if(.not.present(Map)) stop "imp2loc_Bosonic: Also the map must be provided."
+         if(size(U,dim=1).ne.size(U,dim=2)) stop "imp2loc_Bosonic: Rotation matrix not square."
+         if(size(U,dim=3).ne.Wloc%Nsite) stop "imp2loc_Bosonic: Number of rotation matrices and number of sites does not match."
          if(size(U,dim=1).ne.3) write(*,"(A)") "     Warning: The local orbital space rotation is well defined only for a t2g sub-shell."
          write(*,"(A)") "     The impurity orbital space will be rotated during insertion in "//str(Nsite)//" sites."
       endif
       if(present(Map))then
-         if(.not.present(U)) stop "Also the rotation must be provided."
-         if(size(Map,dim=1).ne.size(Map,dim=2)) stop "Map not square."
-         if(size(Map,dim=1).ne.Wimp%Nbp) stop "Map does not match the impurity orbital space."
-         if(size(Map,dim=3).ne.4) stop "Map last index with dimension different than 4."
+         if(.not.present(U)) stop "imp2loc_Bosonic: Also the rotation must be provided."
+         if(size(Map,dim=1).ne.size(Map,dim=2)) stop "imp2loc_Bosonic: Map not square."
+         if(size(Map,dim=1).ne.Wimp%Nbp) stop "imp2loc_Bosonic: Map does not match the impurity orbital space."
+         if(size(Map,dim=3).ne.4) stop "imp2loc_Bosonic: Map last index with dimension different than 4."
       endif
       rotate=.false.
       if(present(U).and.present(Map))rotate=.true.
@@ -2162,21 +2162,21 @@ contains
       !
       !
       ! Check on the input Fields
-      if(.not.SigmaFull%status) stop "SigmaFull not properly initialized."
-      if(.not.Sigma_C%status) stop "Sigma_C not properly initialized."
-      if(.not.Sigma_X%status) stop "Sigma_X not properly initialized."
+      if(.not.SigmaFull%status) stop "join_SigmaCX: SigmaFull not properly initialized."
+      if(.not.Sigma_C%status) stop "join_SigmaCX: Sigma_C not properly initialized."
+      if(.not.Sigma_X%status) stop "join_SigmaCX: Sigma_X not properly initialized."
       !
       if(SigmaFull%Nkpt.eq.0) local=.true.
       if(SigmaFull%Nkpt.ne.0) local=.false.
       !
       if(local)then
-         if(Sigma_C%Nkpt.ne.0) stop "Sigma_C k dependent attributes are supposed to be unallocated."
-         if(Sigma_X%Nkpt.ne.0) stop "Sigma_X k dependent attributes are supposed to be unallocated."
+         if(Sigma_C%Nkpt.ne.0) stop "join_SigmaCX: Sigma_C k dependent attributes are supposed to be unallocated."
+         if(Sigma_X%Nkpt.ne.0) stop "join_SigmaCX: Sigma_X k dependent attributes are supposed to be unallocated."
       else
-         if(Sigma_C%Nkpt.eq.0) stop "Sigma_C k dependent attributes not properly initialized."
-         if(Sigma_X%Nkpt.eq.0) stop "Sigma_X k dependent attributes not properly initialized."
+         if(Sigma_C%Nkpt.eq.0) stop "join_SigmaCX: Sigma_C k dependent attributes not properly initialized."
+         if(Sigma_X%Nkpt.eq.0) stop "join_SigmaCX: Sigma_X k dependent attributes not properly initialized."
       endif
-      if(Sigma_X%Npoints.ne.0) stop "Sigma_X frequency dependent attributes are supposed to be unallocated."
+      if(Sigma_X%Npoints.ne.0) stop "join_SigmaCX: Sigma_X frequency dependent attributes are supposed to be unallocated."
       !
       Norb = SigmaFull%Norb
       Beta = SigmaFull%Beta
@@ -2184,11 +2184,11 @@ contains
       !
       if(.not.local)then
          Nkpt = SigmaFull%Nkpt
-         if(all([Sigma_C%Nkpt-Nkpt,Sigma_X%Nkpt-Nkpt].ne.[0,0])) stop "Either Sigma_C or Sigma_X have different number of k-points with respect to SigmaFull."
+         if(all([Sigma_C%Nkpt-Nkpt,Sigma_X%Nkpt-Nkpt].ne.[0,0])) stop "join_SigmaCX: Either Sigma_C or Sigma_X have different number of k-points with respect to SigmaFull."
       endif
       !
-      if(all([Sigma_C%Beta-Beta,Sigma_X%Beta-Beta].ne.[0d0,0d0])) stop "Either Sigma_C or Sigma_X have different Beta with respect to SigmaFull."
-      if(Nmats.ne.Sigma_C%Npoints) stop "Sigma_C has different number of Matsubara points with respect to SigmaFull."
+      if(all([Sigma_C%Beta-Beta,Sigma_X%Beta-Beta].ne.[0d0,0d0])) stop "join_SigmaCX: Either Sigma_C or Sigma_X have different Beta with respect to SigmaFull."
+      if(Nmats.ne.Sigma_C%Npoints) stop "join_SigmaCX: Sigma_C has different number of Matsubara points with respect to SigmaFull."
       !
       if(local)then
          !
@@ -2267,10 +2267,10 @@ contains
       !
       !
       ! Check on the input Fields
-      if(.not.SigmaGW%status) stop "SigmaGW not properly initialized."
-      if(.not.SigmaImp%status) stop "SigmaImp not properly initialized."
-      if(SigmaGW%Nkpt.eq.0) stop "SigmaGW k dependent attributes not properly initialized."
-      if(SigmaImp%Nkpt.ne.0) stop "SigmaImp k dependent attributes are supposed to be unallocated."
+      if(.not.SigmaGW%status) stop "MergeSelfEnergy: SigmaGW not properly initialized."
+      if(.not.SigmaImp%status) stop "MergeSelfEnergy: SigmaImp not properly initialized."
+      if(SigmaGW%Nkpt.eq.0) stop "MergeSelfEnergy: SigmaGW k dependent attributes not properly initialized."
+      if(SigmaImp%Nkpt.ne.0) stop "MergeSelfEnergy: SigmaImp k dependent attributes are supposed to be unallocated."
       !
       Norb = SigmaGW%Norb
       Nkpt = SigmaGW%Nkpt
@@ -2278,30 +2278,30 @@ contains
       Nmats = SigmaGW%Npoints
       Nsite = SigmaGW%Nsite
       !
-      if(SigmaImp%Norb.ne.Norb) stop "SigmaImp has different orbital dimension with respect to SigmaGW."
-      if(SigmaImp%Beta.ne.Beta) stop "SigmaImp has different Beta with respect to SigmaGW."
-      if(SigmaImp%Npoints.ne.Nmats) stop "SigmaImp has different number of Matsubara points with respect to SigmaGW."
+      if(SigmaImp%Norb.ne.Norb) stop "MergeSelfEnergy: SigmaImp has different orbital dimension with respect to SigmaGW."
+      if(SigmaImp%Beta.ne.Beta) stop "MergeSelfEnergy: SigmaImp has different Beta with respect to SigmaGW."
+      if(SigmaImp%Npoints.ne.Nmats) stop "MergeSelfEnergy: SigmaImp has different number of Matsubara points with respect to SigmaGW."
 
-      if(size(orbs,dim=1).ne.Nsite) stop "Number of orbital lists does not match the number of sites."
+      if(size(orbs,dim=1).ne.Nsite) stop "MergeSelfEnergy: Number of orbital lists does not match the number of sites."
       Norb_imp=0
       do isite=1,Nsite
          do iorb=1,size(orbs(isite,:))
             if(orbs(isite,iorb).ne.0) Norb_imp=Norb_imp+1
          enddo
       enddo
-      if(Norb_imp.gt.Norb) stop "Number of orbital to be inserted is bigger than the total lattice orbital space."
+      if(Norb_imp.gt.Norb) stop "MergeSelfEnergy: Number of orbital to be inserted is bigger than the total lattice orbital space."
       !
       select case(DC_type)
          case default
-            stop "Available DC types for the self-energy: Sloc or GlocWloc."
+            stop "MergeSelfEnergy: Available DC types for the self-energy: Sloc or GlocWloc."
          case("Sloc")
             localDC = .true.
          case("GlocWloc")
-            if(.not.SigmaGW_DC%status) stop "SigmaGW_DC not properly initialized."
-            if(SigmaGW_DC%Nkpt.ne.0) stop "SigmaGW_DC k dependent attributes are supposed to be unallocated."
-            if(SigmaGW_DC%Norb.ne.Norb) stop "SigmaGW_DC has different orbital dimension with respect to SigmaGW."
-            if(SigmaGW_DC%Beta.ne.Beta) stop "SigmaGW_DC has different Beta with respect to SigmaGW."
-            if(SigmaGW_DC%Npoints.ne.Nmats) stop "SigmaGW_DC has different number of Matsubara points with respect to SigmaGW."
+            if(.not.SigmaGW_DC%status) stop "MergeSelfEnergy: SigmaGW_DC not properly initialized."
+            if(SigmaGW_DC%Nkpt.ne.0) stop "MergeSelfEnergy: SigmaGW_DC k dependent attributes are supposed to be unallocated."
+            if(SigmaGW_DC%Norb.ne.Norb) stop "MergeSelfEnergy: SigmaGW_DC has different orbital dimension with respect to SigmaGW."
+            if(SigmaGW_DC%Beta.ne.Beta) stop "MergeSelfEnergy: SigmaGW_DC has different Beta with respect to SigmaGW."
+            if(SigmaGW_DC%Npoints.ne.Nmats) stop "MergeSelfEnergy: SigmaGW_DC has different number of Matsubara points with respect to SigmaGW."
             localDC = .false.
       end select
       !
@@ -2380,10 +2380,10 @@ contains
       !
       !
       ! Check on the input Fields
-      if(.not.PiGW%status) stop "PiGW not properly initialized."
-      if(.not.PiImp%status) stop "PiImp not properly initialized."
-      if(PiGW%Nkpt.eq.0) stop "PiGW k dependent attributes not properly initialized."
-      if(PiImp%Nkpt.ne.0) stop "PiImp k dependent attributes are supposed to be unallocated."
+      if(.not.PiGW%status) stop "MergePolarization: PiGW not properly initialized."
+      if(.not.PiImp%status) stop "MergePolarization: PiImp not properly initialized."
+      if(PiGW%Nkpt.eq.0) stop "MergePolarization: PiGW k dependent attributes not properly initialized."
+      if(PiImp%Nkpt.ne.0) stop "MergePolarization: PiImp k dependent attributes are supposed to be unallocated."
       !
       Norb = int(sqrt(dble(PiGW%Nbp)))
       Nkpt = PiGW%Nkpt
@@ -2391,17 +2391,17 @@ contains
       Nmats = PiGW%Npoints
       Nsite = PiGW%Nsite
       !
-      if(PiImp%Beta.ne.Beta) stop "PiImp has different Beta with respect to PiGW."
-      if(PiImp%Npoints.ne.Nmats) stop "PiImp has different number of Matsubara points with respect to PiGW."
+      if(PiImp%Beta.ne.Beta) stop "MergePolarization: PiImp has different Beta with respect to PiGW."
+      if(PiImp%Npoints.ne.Nmats) stop "MergePolarization: PiImp has different number of Matsubara points with respect to PiGW."
       !
-      if(size(orbs,dim=1).ne.Nsite) stop "Number of orbital lists does not match the number of sites."
+      if(size(orbs,dim=1).ne.Nsite) stop "MergePolarization: Number of orbital lists does not match the number of sites."
       Norb_imp=0
       do isite=1,Nsite
          do iorb=1,size(orbs(isite,:))
             if(orbs(isite,iorb).ne.0) Norb_imp=Norb_imp+1
          enddo
       enddo
-      if(Norb_imp.gt.Norb) stop "Number of orbital to be inserted is bigger than the total lattice orbital space."
+      if(Norb_imp.gt.Norb) stop "MergePolarization: Number of orbital to be inserted is bigger than the total lattice orbital space."
       !
       !Fill the local attributes so as to fully replace the local GW contibution
       call BosonicKsum(PiGW)

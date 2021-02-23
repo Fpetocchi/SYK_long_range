@@ -45,7 +45,8 @@ module module_container
    wannier_K2R                              ,&
    wannier_R2K                              ,&
    wannier_K2R_NN                           ,&
-   calc_path
+   calc_path                                ,&
+   interpolateHk2Path
 
 
    !(d) Fermionic and Bosonic Fourier transforms. Depends on (b),(c) not on specific types.
@@ -149,7 +150,7 @@ module module_container
    pade                                     ,&
    remove_CDW                               ,&
    interpolate2Beta                         ,&
-   interpolate2Path
+   interpolateG2Path
    !calc_OptCond,calc_HallCond
 
 

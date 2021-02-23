@@ -45,6 +45,7 @@ module parameters
       integer,allocatable                   :: kprint(:)
       integer,allocatable                   :: small_ik(:,:)                    ![12,2]
       real(8),allocatable                   :: kptpath(:,:)                     ![3,Nkpt_path]
+      real(8),allocatable                   :: Kpathaxis(:)
       integer                               :: Nkpt=0
       integer                               :: Nkpt_irred=0
       integer                               :: Nkpt_path=0
@@ -53,6 +54,7 @@ module parameters
       real(8)                               :: mu=0d0
       real(8)                               :: density=0d0
       logical                               :: UseDisentangledBS=.false.
+      logical                               :: pathStored=.false.
       logical                               :: status=.false.
    end type Lattice
 

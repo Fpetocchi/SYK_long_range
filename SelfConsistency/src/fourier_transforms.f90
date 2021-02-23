@@ -368,7 +368,7 @@ contains
       Norb = size(Gmats,dim=1)
       Nmats = size(Gmats,dim=3)
       Ntau = size(Gitau,dim=3)
-      if(size(Gmats,dim=1).ne.size(Gmats,dim=2)) stop "Gmats not square."
+      if(size(Gmats,dim=1).ne.size(Gmats,dim=2)) stop "Fmats2itau_mat_Gw: Gmats not square."
       call assert_shape(Gitau,[Norb,Norb,Ntau],"Fmats2itau_mat_Gw","Gitau")
       !
       asympt_corr_ = .true.
@@ -453,7 +453,7 @@ contains
       Nmats = size(Gmats,dim=3)
       Nkpt = size(Gmats,dim=4)
       Ntau = size(Gitau,dim=3)
-      if(size(Gmats,dim=1).ne.size(Gmats,dim=2)) stop "Gmats not square."
+      if(size(Gmats,dim=1).ne.size(Gmats,dim=2)) stop "Fmats2itau_mat_Gwk: Gmats not square."
       call assert_shape(Gitau,[Norb,Norb,Ntau,Nkpt],"Fmats2itau_mat_Gwk","Gitau")
       !
       real_space=.false.
@@ -764,9 +764,9 @@ contains
       Norb = size(Gitau,dim=1)
       Ntau = size(Gitau,dim=3)
       Nmats = size(Gmats,dim=3)
-      if(size(Gitau,dim=1).ne.size(Gitau,dim=2)) stop "Gitau not square."
+      if(size(Gitau,dim=1).ne.size(Gitau,dim=2)) stop "Fitau2mats_mat_Gw: Gitau not square."
       call assert_shape(Gmats,[Norb,Norb,Nmats],"Fitau2mats_mat_Gw","Gmats")
-      if(mod(Ntau,2).eq.0) stop "Required Filon routines are not working with odd segments."
+      if(mod(Ntau,2).eq.0) stop "Fitau2mats_mat_Gw: Required Filon routines are not working with odd segments."
       !
       tau_uniform_ = .false.
       if(present(tau_uniform)) tau_uniform_ = tau_uniform
@@ -833,9 +833,9 @@ contains
       Ntau = size(Gitau,dim=3)
       Nkpt = size(Gitau,dim=4)
       Nmats = size(Gmats,dim=3)
-      if(size(Gitau,dim=1).ne.size(Gitau,dim=2)) stop "Gitau not square."
+      if(size(Gitau,dim=1).ne.size(Gitau,dim=2)) stop "Fitau2mats_mat_Gwk: Gitau not square."
       call assert_shape(Gmats,[Norb,Norb,Nmats,Nkpt],"Fitau2mats_mat_Gwk","Gmats")
-      if(mod(Ntau,2).eq.0) stop "Required Filon routines are not working with odd segments."
+      if(mod(Ntau,2).eq.0) stop "Fitau2mats_mat_Gwk: Required Filon routines are not working with odd segments."
       !
       tau_uniform_ = .false.
       if(present(tau_uniform)) tau_uniform_ = tau_uniform
@@ -909,7 +909,7 @@ contains
       Ntau = size(Gitau,dim=2)
       Nmats = size(Gmats,dim=2)
       call assert_shape(Gmats,[Norb,Nmats],"Fitau2mats_vec_Gw","Gmats")
-      if(mod(Ntau,2).eq.0) stop "Required Filon routines are not working with odd segments."
+      if(mod(Ntau,2).eq.0) stop "Fitau2mats_vec_Gw: Required Filon routines are not working with odd segments."
       !
       tau_uniform_ = .false.
       if(present(tau_uniform)) tau_uniform_ = tau_uniform
@@ -975,7 +975,7 @@ contains
       Nkpt = size(Gitau,dim=3)
       Nmats = size(Gmats,dim=2)
       call assert_shape(Gmats,[Norb,Nmats,Nkpt],"Fitau2mats_vec_Gwk","Gmats")
-      if(mod(Ntau,2).eq.0) stop "Required Filon routines are not working with odd segments."
+      if(mod(Ntau,2).eq.0) stop "Fitau2mats_vec_Gwk: Required Filon routines are not working with odd segments."
       !
       tau_uniform_ = .false.
       if(present(tau_uniform)) tau_uniform_ = tau_uniform
@@ -1112,7 +1112,7 @@ contains
       Nbp = size(Umats,dim=1)
       Nmats = size(Umats,dim=3)
       Ntau = size(Uitau,dim=3)
-      if(size(Umats,dim=1).ne.size(Umats,dim=2)) stop "Umats not square."
+      if(size(Umats,dim=1).ne.size(Umats,dim=2)) stop "Bmats2itau_Uw: Umats not square."
       call assert_shape(Uitau,[Nbp,Nbp,Ntau],"Bmats2itau_Uw","Uitau")
       !
       asympt_corr_ = .true.
@@ -1192,7 +1192,7 @@ contains
       Nmats = size(Umats,dim=3)
       Nkpt = size(Umats,dim=4)
       Ntau = size(Uitau,dim=3)
-      if(size(Umats,dim=1).ne.size(Umats,dim=2)) stop "Umats not square."
+      if(size(Umats,dim=1).ne.size(Umats,dim=2)) stop "Bmats2itau_Uwk: Umats not square."
       call assert_shape(Uitau,[Nbp,Nbp,Ntau,Nkpt],"Bmats2itau_Uwk","Uitau")
       !
       asympt_corr_ = .true.
@@ -1272,7 +1272,7 @@ contains
       !
       Ntau = size(Uitau)
       Nmats = size(Umats)
-      if(mod(Ntau,2).eq.0) stop "Required Filon routines are not working with odd segments."
+      if(mod(Ntau,2).eq.0) stop "Bitau2mats_Uw_component: Required Filon routines are not working with odd segments."
       !
       tau_uniform_ = .false.
       if(present(tau_uniform)) tau_uniform_ = tau_uniform
@@ -1339,9 +1339,9 @@ contains
       Nbp = size(Uitau,dim=1)
       Ntau = size(Uitau,dim=3)
       Nmats = size(Umats,dim=3)
-      if(size(Uitau,dim=1).ne.size(Uitau,dim=2)) stop "Uitau not square."
+      if(size(Uitau,dim=1).ne.size(Uitau,dim=2)) stop "Bitau2mats_Uw: Uitau not square."
       call assert_shape(Umats,[Nbp,Nbp,Nmats],"Bitau2mats_Uw","Umats")
-      if(mod(Ntau,2).eq.0) stop "Required Filon routines are not working with odd segments."
+      if(mod(Ntau,2).eq.0) stop "Bitau2mats_Uw: Required Filon routines are not working with odd segments."
       !
       tau_uniform_ = .false.
       if(present(tau_uniform)) tau_uniform_ = tau_uniform
@@ -1413,9 +1413,9 @@ contains
       Ntau = size(Uitau,dim=3)
       Nkpt = size(Uitau,dim=4)
       Nmats = size(Umats,dim=3)
-      if(size(Uitau,dim=1).ne.size(Uitau,dim=2)) stop "Uitau not square."
+      if(size(Uitau,dim=1).ne.size(Uitau,dim=2)) stop "Bitau2mats_Uwk: Uitau not square."
       call assert_shape(Umats,[Nbp,Nbp,Nmats,Nkpt],"Bitau2mats_Uwk","Umats")
-      if(mod(Ntau,2).eq.0) stop "Required Filon routines are not working with odd segments."
+      if(mod(Ntau,2).eq.0) stop "Bitau2mats_Uwk: Required Filon routines are not working with odd segments."
       !
       tau_uniform_ = .false.
       if(present(tau_uniform)) tau_uniform_ = tau_uniform

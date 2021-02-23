@@ -188,13 +188,15 @@ module input_vars
    integer,public                           :: LOGfile
    logical,public                           :: dump_Gk
    logical,public                           :: dump_Sigmak
-   character(len=256),public                :: print_path
+   character(len=256),public                :: structure
+   logical,public                           :: print_Gpath
    integer,public                           :: Nkpt_path
    !
    !Variables related to the impurity solver
    type(QMC),public                         :: Solver
    !
    !Variables not to be readed
+   logical,public                           :: paramagnet=.true.
    logical,public                           :: paramagneticSPEX=.true.
    logical,public                           :: XEPSisread=.false.
    logical,public                           :: solve_DMFT=.true.
@@ -329,6 +331,7 @@ contains
       call parse_input_variable(EqvGWndx%hseed,"H_SEED",InputFile,default=0d0,comment="Seed to break spin symmetry (persistent if non zero).")
       call parse_input_variable(sym_mode,"SYM_MODE",InputFile,default=2,comment="If =1 only the lattice orbitals will be symmetrized, if =2 also the corrssponding n(tau) inside the solver, if =3 only n(tau).")
       call parse_input_variable(EqvGWndx%Nset,"EQV_SETS",InputFile,default=1,comment="Number of sets of locally equivalent lattice orbitals.")
+      paramagnet = EqvGWndx%para.gt.0
       if(EqvGWndx%Nset.gt.0)then
          allocate(EqvGWndx%SetNorb(EqvGWndx%Nset))
          do iset=1,EqvGWndx%Nset
@@ -381,7 +384,7 @@ contains
       call parse_input_variable(U_AC,"U_AC",InputFile,default=.false.,comment="Flag to force the analytic continuation on the SPEX interaction.")
       call parse_input_variable(Uthresh,"U_THRES",InputFile,default=0.001d0,comment="Lowest magnitude considered in SPEX Ucrpa bare interaction (only for local interactions).")
       call parse_input_variable(Kdiag,"K_DIAG",InputFile,default=.false.,comment="Flag to use only one J-independent screening function.")
-      if((Umodel.and.Uspex).or.((.not.Umodel).and.(.not.Uspex))) stop "Make up your mind, U_MODEL or U_SPEX?"
+      if((Umodel.and.Uspex).or.((.not.Umodel).and.(.not.Uspex))) stop "read_InputFile: Make up your mind, U_MODEL or U_SPEX?"
       if(Umodel)then
          call parse_input_variable(Uaa,"UAA",InputFile,default=5d0,comment="Interaction between same orbital and opposite spin electrons (orbital independent).")
          if(Norb_model.gt.1)then
@@ -407,8 +410,8 @@ contains
             enddo
             Ustart=.false. !because of the loc2imp: curlyU has the frequency
          endif
-         if((Nphonons.gt.0).and.(N_Vnn.gt.0)) stop "Model interaction with both phonons and non-local couplings not implemented."
-         if((Nphonons.eq.0).and.(N_Vnn.eq.0)) stop "Model interaction requested buth neither phonons nor long-range couplings provided."
+         if((Nphonons.gt.0).and.(N_Vnn.gt.0)) stop "read_InputFile: Model interaction with both phonons and non-local couplings not implemented."
+         if((Nphonons.eq.0).and.(N_Vnn.eq.0)) stop "read_InputFile: Model interaction requested buth neither phonons nor long-range couplings provided."
       endif
       !
       !Double counting types, divergencies, scaling coefficients
@@ -456,7 +459,8 @@ contains
       call parse_input_variable(LOGfile,"LOGFILE",InputFile,default=6,comment="Standard output redirection unit. Use 6 to print to terminal. Not used yet.")
       call parse_input_variable(dump_Gk,"PRINT_GK",InputFile,default=.false.,comment="Print the full k-dependent Green's function (binfmt) at each iteration (mandatory for CALC_TYPE=G0W0,scGW,GW+EDMFT).")
       call parse_input_variable(dump_Sigmak,"PRINT_SIGMAK",InputFile,default=.false.,comment="Print the full k-dependent self-energy (binfmt) at each iteration (always optional).")
-      call parse_input_variable(print_path,"PRINT_PATH",InputFile,default="None",comment="Print the H(k) and interacting Green's function along high-symmetry points. Available structures: cubic, fcc, bcc, hex, tetragonal, orthorhombic, None to avoid")
+      call parse_input_variable(structure,"STRUCTURE",InputFile,default="cubic",comment="Available structures: cubic, fcc, bcc, hex, tetragonal, orthorhombic, None to avoid.")
+      call parse_input_variable(print_Gpath,"PRINT_GPATH",InputFile,default=(reg(structure).ne."None"),comment="Print the interacting Green's function along high-symmetry points.")
       call parse_input_variable(Nkpt_path,"NK_PATH",InputFile,default=50,comment="Number of segments between two hig-symmetry Kpoints.")
       if(reg(CalculationType).eq."G0W0")dump_Gk=.true.
       if(reg(CalculationType).eq."scGW")dump_Gk=.true.

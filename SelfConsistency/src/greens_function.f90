@@ -59,7 +59,7 @@ contains
       use parameters
       use utils_misc
       use fourier_transforms
-      use input_vars, only : NtauF, tau_uniform
+      use input_vars, only : NtauF, tau_uniform, paramagnet
       implicit none
       !
       type(FermionicField),intent(in)       :: Gmats
@@ -74,8 +74,8 @@ contains
       !
       !
       ! Check on the input Fields
-      if(.not.Gmats%status) stop "Gmats not properly initialized."
-      if(Gmats%Npoints.eq.0) stop "Gmats frequency dependent attributes not properly initialized."
+      if(.not.Gmats%status) stop "calc_density_loc: Gmats not properly initialized."
+      if(Gmats%Npoints.eq.0) stop "calc_density_loc: Gmats frequency dependent attributes not properly initialized."
       !
       Norb = Gmats%Norb
       Beta = Gmats%Beta
@@ -84,44 +84,59 @@ contains
       !
       n_loc=czero
       allocate(Gitau(Norb,Norb,NtauF));Gitau=czero
-      do ispin=1,Nspin
+      spinloop: do ispin=1,Nspin
          !
          call Fmats2itau_mat(Beta,Gmats%ws(:,:,:,ispin),Gitau, &
          asympt_corr=.true.,tau_uniform=tau_uniform,atBeta=.true.)
          !
          n_loc(:,:,ispin) = -Gitau(:,:,NtauF)
+         if(paramagnet)then
+            n_loc(:,:,Nspin) = n_loc(:,:,1)
+            exit spinloop
+         endif
          !
-      enddo
+      enddo spinloop
       deallocate(Gitau)
       !
    end subroutine calc_density_loc
    !
-   subroutine calc_density_Kdep(Gmats,Lttc,n_k)
+   subroutine calc_density_Kdep(Gmats,Lttc,n_k,along_path)
       !
       use parameters
       use utils_misc
       use fourier_transforms
-      use input_vars, only : NtauF, tau_uniform, cmplxWann
+      use input_vars, only : NtauF, tau_uniform, cmplxWann, paramagnet
       implicit none
       !
       type(FermionicField),intent(in)       :: Gmats
       type(Lattice),intent(in)              :: Lttc
       complex(8),allocatable,intent(inout)  :: n_k(:,:,:,:)
+      logical,intent(in),optional           :: along_path
       !
       complex(8),allocatable                :: Gitau(:,:,:,:)
       real(8)                               :: Beta
       integer                               :: ispin,Norb,Nkpt
+      logical                               :: along_path_
       !
       !
       if(verbose)write(*,"(A)") "---- calc_density_Kdep"
       !
       !
       ! Check on the input Fields
-      if(.not.Gmats%status) stop "Gmats not properly initialized."
-      if(Gmats%Npoints.eq.0) stop "Gmats frequency dependent attributes not properly initialized."
-      if(Gmats%Nkpt.eq.0) stop "Gmats k dependent attributes not properly initialized."
-      if(Gmats%Nkpt.ne.Lttc%Nkpt) stop "Lttc has different number of k-points with respect to Gmats."
-      if(Gmats%Norb.ne.Lttc%Norb) stop "Lttc has different number of orbitals with respect to Gmats."
+      if(.not.Gmats%status) stop "calc_density_Kdep: Gmats not properly initialized."
+      if(Gmats%Npoints.eq.0) stop "calc_density_Kdep: Gmats frequency dependent attributes not properly initialized."
+      if(Gmats%Nkpt.eq.0) stop "calc_density_Kdep: Gmats k dependent attributes not properly initialized."
+      if(Gmats%Norb.ne.Lttc%Norb) stop "calc_density_Kdep: Lttc has different number of orbitals with respect to Gmats."
+      !
+      along_path_=.false.
+      if(present(along_path))along_path_=along_path
+      !
+      if(along_path_)then
+         if(Gmats%Nkpt.ne.Lttc%Nkpt_path) stop "calc_density_Kdep: Lttc has different number of path k-points with respect to Gmats."
+         if(.not.allocated(Lttc%kptpath)) stop "calc_density_Kdep: K-point path not allocated."
+      else
+         if(Gmats%Nkpt.ne.Lttc%Nkpt) stop "calc_density_Kdep: Lttc has different number of k-points with respect to Gmats."
+      endif
       !
       Norb = Gmats%Norb
       Nkpt = Gmats%Nkpt
@@ -131,9 +146,9 @@ contains
       !
       n_k=czero
       allocate(Gitau(Norb,Norb,NtauF,Nkpt));Gitau=czero
-      do ispin=1,Nspin
+      spinloop: do ispin=1,Nspin
          !
-         if(cmplxWann)then
+         if(cmplxWann.or.along_path_)then
             call Fmats2itau_mat(Beta,Gmats%wks(:,:,:,:,ispin),Gitau, &
             asympt_corr=.true.,tau_uniform=tau_uniform,atBeta=.true.)
          else
@@ -142,8 +157,12 @@ contains
          endif
          !
          n_k(:,:,:,ispin) = -Gitau(:,:,NtauF,:)
+         if(paramagnet)then
+            n_k(:,:,:,Nspin) = n_k(:,:,:,1)
+            exit spinloop
+         endif
          !
-      enddo
+      enddo spinloop
       deallocate(Gitau)
       !
    end subroutine calc_density_Kdep
@@ -253,20 +272,20 @@ contains
       !
       !
       ! Check on the input Fields
-      if(.not.Gmats%status) stop "Gmats not properly initialized."
-      if(.not.Lttc%status) stop "Lttc not properly initialized."
-      if(Gmats%Npoints.eq.0) stop "Gmats frequency dependent attributes not properly initialized."
-      if(Gmats%Nkpt.eq.0) stop "Gmats k dependent attributes not properly initialized."
-      if(Gmats%Norb.ne.Lttc%Norb) stop "Lttc has different number of orbitals with respect to Gmats."
+      if(.not.Gmats%status) stop "calc_Gmats_Full: Gmats not properly initialized."
+      if(.not.Lttc%status) stop "calc_Gmats_Full: Lttc not properly initialized."
+      if(Gmats%Npoints.eq.0) stop "calc_Gmats_Full: Gmats frequency dependent attributes not properly initialized."
+      if(Gmats%Nkpt.eq.0) stop "calc_Gmats_Full: Gmats k dependent attributes not properly initialized."
+      if(Gmats%Norb.ne.Lttc%Norb) stop "calc_Gmats_Full: Lttc has different number of orbitals with respect to Gmats."
       !
       along_path_=.false.
       if(present(along_path))along_path_=along_path
       !
       if(along_path_)then
-         if(Gmats%Nkpt.ne.Lttc%Nkpt_path) stop "Lttc has different number of path k-points with respect to Gmats."
-         if(.not.allocated(Lttc%Hk_path)) stop "H(k) along path not allocated."
+         if(Gmats%Nkpt.ne.Lttc%Nkpt_path) stop "calc_Gmats_Full: Lttc has different number of path k-points with respect to Gmats."
+         if(.not.allocated(Lttc%Hk_path)) stop "calc_Gmats_Full: H(k) along path not allocated."
       else
-         if(Gmats%Nkpt.ne.Lttc%Nkpt) stop "Lttc has different number of k-points with respect to Gmats."
+         if(Gmats%Nkpt.ne.Lttc%Nkpt) stop "calc_Gmats_Full: Lttc has different number of k-points with respect to Gmats."
       endif
       !
       Norb = Gmats%Norb
@@ -286,9 +305,9 @@ contains
       deallocate(wmats)
       !
       if(present(Smats))then
-         if(.not.Smats%status) stop "Smats not properly initialized."
-         if(Smats%Npoints.ne.Nmats) stop "Smats has different number of Matsubara points with respect to Gmats."
-         if(Smats%Nkpt.ne.Nkpt) stop "Smats has different number of k-points with respect to Gmats."
+         if(.not.Smats%status) stop "calc_Gmats_Full: Smats not properly initialized."
+         if(Smats%Npoints.ne.Nmats) stop "calc_Gmats_Full: Smats has different number of Matsubara points with respect to Gmats."
+         if(Smats%Nkpt.ne.Nkpt) stop "calc_Gmats_Full: Smats has different number of k-points with respect to Gmats."
          Swks => Smats%wks
          if(verbose)write(*,"(A)") "     Interacting Green's function."
       else
@@ -326,7 +345,7 @@ contains
       !
       ! In the N_ks attribute is stored the k-dep occupation
       allocate(n_k(Norb,Norb,Nkpt,Nspin));n_k=czero
-      call calc_density(Gmats,Lttc,n_k)
+      call calc_density(Gmats,Lttc,n_k,along_path=along_path_)
       Gmats%N_ks = n_k
       deallocate(n_k)
       !
@@ -363,13 +382,13 @@ contains
       !
       !
       ! Check on the input Fields
-      if(.not.Gmats%status) stop "Gmats not properly initialized."
-      if(.not.Lttc%status) stop "Lttc not properly initialized."
-      if(Gmats%Npoints.eq.0) stop "Gmats frequency dependent attributes not properly initialized."
-      if(Gmats%Nkpt.eq.0) stop "Gmats k dependent attributes not properly initialized."
-      if(Gmats%Nkpt.ne.Lttc%Nkpt) stop "Lttc has different number of k-points with respect to Gmats."
-      if(Gmats%Norb.ne.Lttc%Norb) stop "Lttc has different number of orbitals with respect to Gmats."
-      if(mu_shift.eq.0d0) stop "Chemical potential shift is zero."
+      if(.not.Gmats%status) stop "calc_Gmats_Shift: Gmats not properly initialized."
+      if(.not.Lttc%status) stop "calc_Gmats_Shift: Lttc not properly initialized."
+      if(Gmats%Npoints.eq.0) stop "calc_Gmats_Shift: Gmats frequency dependent attributes not properly initialized."
+      if(Gmats%Nkpt.eq.0) stop "calc_Gmats_Shift: Gmats k dependent attributes not properly initialized."
+      if(Gmats%Nkpt.ne.Lttc%Nkpt) stop "calc_Gmats_Shift: Lttc has different number of k-points with respect to Gmats."
+      if(Gmats%Norb.ne.Lttc%Norb) stop "calc_Gmats_Shift: Lttc has different number of orbitals with respect to Gmats."
+      if(mu_shift.eq.0d0) stop "calc_Gmats_Shift: Chemical potential shift is zero."
       !
       Norb = Gmats%Norb
       Nmats = Gmats%Npoints
@@ -443,17 +462,17 @@ contains
       !
       !
       ! Check on the input Fields
-      if(.not.Gmats%status) stop "Gmats not properly initialized."
-      if(.not.Lttc%status) stop "Lttc not properly initialized."
-      if(present(Smats).and.(.not.Smats%status)) stop "Smats not properly initialized."
-      if(Gmats%Npoints.eq.0) stop "Gmats frequency dependent attributes not properly initialized."
-      if(Gmats%Nkpt.eq.0) stop "Gmats k dependent attributes not properly initialized."
-      if(Gmats%Nkpt.ne.Lttc%Nkpt) stop "Lttc has different number of k-points with respect to Gmats."
-      if(Gmats%Norb.ne.Lttc%Norb) stop "Lttc has different number of orbitals with respect to Gmats."
-      if(mu_param%TargetDensity.eq.0d0) stop "TargetDensity is set to zero."
+      if(.not.Gmats%status) stop "set_density_Int: Gmats not properly initialized."
+      if(.not.Lttc%status) stop "set_density_Int: Lttc not properly initialized."
+      if(present(Smats).and.(.not.Smats%status)) stop "set_density_Int: Smats not properly initialized."
+      if(Gmats%Npoints.eq.0) stop "set_density_Int: Gmats frequency dependent attributes not properly initialized."
+      if(Gmats%Nkpt.eq.0) stop "set_density_Int: Gmats k dependent attributes not properly initialized."
+      if(Gmats%Nkpt.ne.Lttc%Nkpt) stop "set_density_Int: Lttc has different number of k-points with respect to Gmats."
+      if(Gmats%Norb.ne.Lttc%Norb) stop "set_density_Int: Lttc has different number of orbitals with respect to Gmats."
+      if(mu_param%TargetDensity.eq.0d0) stop "set_density_Int: TargetDensity is set to zero."
       if(present(Smats))then
-         if(Smats%Npoints.eq.0) stop "Smats frequency dependent attributes not properly initialized."
-         if(Smats%Nkpt.eq.0) stop "Smats k dependent attributes not properly initialized."
+         if(Smats%Npoints.eq.0) stop "set_density_Int: Smats frequency dependent attributes not properly initialized."
+         if(Smats%Nkpt.eq.0) stop "set_density_Int: Smats k dependent attributes not properly initialized."
       endif
       write(*,"(A,F6.3)") "     Target density: ",mu_param%TargetDensity
       !
@@ -590,9 +609,9 @@ contains
       !
       !
       ! Check on the input Fields
-      if(.not.Lttc%status) stop "Lttc not properly initialized."
-      if(Lttc%Nkpt.eq.0) stop "Lttc k dependent attributes not properly initialized."
-      if(mu_param%TargetDensity.eq.0d0) stop "TargetDensity is set to zero."
+      if(.not.Lttc%status) stop "set_density_NonInt: Lttc not properly initialized."
+      if(Lttc%Nkpt.eq.0) stop "set_density_NonInt: Lttc k dependent attributes not properly initialized."
+      if(mu_param%TargetDensity.eq.0d0) stop "set_density_NonInt: TargetDensity is set to zero."
       write(*,"(A,F10.5)") "     Target density: ",mu_param%TargetDensity
       !
       Norb = Lttc%Norb
@@ -714,7 +733,7 @@ contains
       character(len=*),intent(in),optional  :: pathOUTPUT
       !
       character(len=256)                    :: pathOUTPUT_
-      real(8),allocatable                   :: axis(:)
+      real(8),allocatable                   :: axis(:),Akw(:)
       complex(8),allocatable                :: zeta(:,:,:),invGf(:,:)
       complex(8),allocatable                :: Gitau(:,:,:),Gftmp(:,:)
       complex(8),allocatable                :: Gprint_Hk(:,:,:)
@@ -729,8 +748,8 @@ contains
       !
       !
       ! Check on the input Fields
-      if(.not.Lttc%status) stop "Lttc not properly initialized."
-      if(Lttc%Nkpt.eq.0) stop "Lttc k dependent attributes not properly initialized."
+      if(.not.Lttc%status) stop "calc_Glda: Lttc not properly initialized."
+      if(Lttc%Nkpt.eq.0) stop "calc_Glda: Lttc k dependent attributes not properly initialized."
       !
       Norb = Lttc%Norb
       Nkpt = Lttc%Nkpt
@@ -773,13 +792,18 @@ contains
       deallocate(zeta,invGf)
       !
       ! Print
+      allocate(Akw(Nreal));Akw=0d0
       do iwan1=1,Norb
          call dump_FermionicField(Gprint_Ek(iwan1,:),reg(pathOUTPUT_),"Greal_Ek_"//str(iwan1)//".lda",axis)
+         Akw = dimag(Gprint_Ek(iwan1,:));Akw = Akw/sum(Akw)
+         call dump_FermionicField(Akw,reg(pathOUTPUT_),"Akw_Ek_"//str(iwan1)//".lda",axis)
          do iwan2=1,Norb
             call dump_FermionicField(Gprint_Hk(iwan1,iwan2,:),reg(pathOUTPUT_),"Greal_Hk_"//str(iwan1)//"_"//str(iwan2)//".lda",axis)
+            Akw = dimag(Gprint_Hk(iwan1,iwan2,:));Akw = Akw/sum(Akw)
+            call dump_FermionicField(Akw,reg(pathOUTPUT_),"Akw_Hk_"//str(iwan1)//"_"//str(iwan2)//".lda",axis)
          enddo
       enddo
-      deallocate(axis,Gprint_Hk,Gprint_Ek)
+      deallocate(axis,Gprint_Hk,Gprint_Ek,Akw)
       !
       !
       !print G(tau) in diagonal and Wannier basis-------------------------------

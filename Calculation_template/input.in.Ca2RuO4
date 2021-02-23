@@ -31,9 +31,6 @@
 
  BETA=40.000000                                !Inverse temperature in 1/eV.
  MAX_WMATS=150.000000                          !Maximum value of the Matsubara frequency mesh.
- NMATS=954                                     !Number of points on the imaginary frequency axis. User cannot set this as its computed from MAX_WMATS and BETA.
- NTAU_F_LAT=957                                !Number of points on the imaginary time axis for Fermionic lattice fields. Its gonna be made odd.
- NTAU_B_LAT=957                                !Number of points on the imaginary time axis for Bosonic lattice fields. User cannot set this as its equal to NTAU_F.
  TAU_UNIF=F                                    !Flag to use a non-tau_uniform mesh on the imaginary time axis.
  NREAL=2000                                    !Number of points on the real frequency axis.
  MAX_WREAL=10.000000                           !Maximum absolute value of the real frequency mesh.
@@ -55,7 +52,7 @@
  U_FULL=T                                      !Flag to use all the off-diagonal components of SPEX Ucrpa or only the physical ones.
  U_MODEL=F                                     !Flag to build a model interaction.
  U_SPEX=T                                      !Flag to read SPEX Ucrpa.
- U_START=F                                     !Flag to use the local Ucrpa interaction as the effetive interaction in the 0th iteration.
+ U_START=T                                     !Flag to use the local Ucrpa interaction as the effetive interaction in the 0th iteration.
  U_AC=F                                        !Flag to force the analytic continuation on the SPEX interaction.
  U_THRES=1.000000E-08                          !Lowest magnitude considered in SPEX Ucrpa bare interaction (only for local interactions).
  K_DIAG=F                                      !Flag to use only one J-independent screening function.
@@ -68,7 +65,7 @@
  DC_TYPE=Sloc                                  !Local GW self-energy which is replaced by DMFT self-energy. Avalibale: GlocWloc, Sloc.
  SIGMA_AC=F                                    !Flag to force the analytic continuation on the G0W0 self-energy.
  SMEAR_GAMMA=T                                 !Remove the interaction divergence at the Gamma point.
- S_GUESS=F                                     !Use G0W0_loc as a first guess for the DMFT self-energy.
+ S_GUESS=T                                     !Use G0W0_loc as a first guess for the DMFT self-energy.
  P_GUESS=F                                     !Use GG_loc as a first guess for the DMFT polarization.
  ALPHA_CHI=1.000000                            !Rescaling factor for the local charge susceptibility.
  ALPHA_PI=1.000000                             !Fraction of the EDMFT polarization substituted within the lattice one.
@@ -77,8 +74,8 @@
  CHI_DIAG=F                                    !Flag to remove the off-diagonal components of the local charge susceptibility.
  CDW_CHI=T                                     !Flag to remove the iw=0 divergence in the local charge susceptibility.
  CDW_PI=T                                      !Flag to remove the iw=0 divergence in the local polarization.
- MIX_D=0.500000                                !Fraction of the old iteration Delta.
- MIX_U=0.500000                                !Fraction of the old iteration curlyU.
+ MIX_D=0.000000                                !Fraction of the old iteration Delta.
+ MIX_U=0.990000                                !Fraction of the old iteration curlyU.
  CAUSAL_D=F                                    !Flag to employ generalized cavity equation for Delta. Active only for GW+EDMFT calculation.
  CAUSAL_U=F                                    !Flag to employ generalized cavity equation for curlyU. Active only for GW+EDMFT calculation.
  DELTA_FIT=Analytic                            !Fit to extract the local energy in GW+EDMFT calculations. Available: Inf, Analytic, Moments.
@@ -87,11 +84,11 @@
 
  #---------------------------------------------#
 
- PATH_INPUT=../GWinput_SPEX_Ca2RuO4_S/         !Folder within cwd where to look for input files.
- PATH_INPUT_TR=GWinput_mats/                   !Folder within cwd where to save input files after analytic continuation to the Matsubara axis.
- PATH_DATA=Results_beta40/                     !Folder within cwd where to store calculation data.
- START_IT=0                                    !First iteration. If its non zero the code will look for the last item in PATH_DATA/item and start there.
- LAST_IT=26                                    !Last iteration.
+ PATH_INPUT=GWinput_SPEX_Ca2RuO4_S           !Folder within cwd where to look for input files.
+ PATH_INPUT_TR=GWinput_mats  !Folder within cwd where to save input files after analytic continuation to the Matsubara axis.
+ PATH_DATA=Results_beta40              !Folder within cwd where to store calculation data.
+ START_IT=4         !First iteration. If its non zero the code will look for the last item in PATH_DATA/item and start there.
+ LAST_IT=26                     !Last iteration.
  LOGFILE=6                                     !Standard output redirection unit. Use 6 to print to terminal. Not used yet.
  PRINT_GK=T                                    !Print the full k-dependent Green's function (binfmt) at each iteration (mandatory for CALC_TYPE=G0W0,scGW,GW+EDMFT).
  PRINT_SIGMAK=F                                !Print the full k-dependent self-energy (binfmt) at each iteration (always optional).
@@ -100,7 +97,7 @@
 
  #---------------------------------------------#
 
- MATCH_BETA=F                                  !Interpolate to new Beta.
+ MATCH_BETA=F         !Interpolate to new Beta.
 
  #---------------------------------------------#
 

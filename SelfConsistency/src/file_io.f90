@@ -170,7 +170,7 @@ contains
       ! Check on the input matrix
       Nkpt = size(Umat,dim=3)
       Norb = size(Umat,dim=1)
-      if(Norb.ne.size(Umat,dim=2)) stop "The provided matrix is not square."
+      if(Norb.ne.size(Umat,dim=2)) stop "dump_Matrix_Kdep_z: The provided matrix is not square."
       !
       ! Create directory
       call createDir(reg(dirpath),verb=verbose)
@@ -250,7 +250,7 @@ contains
       ! Check on the input matrix
       Nkpt = size(Umat,dim=3)
       Norb = size(Umat,dim=1)
-      if(Norb.ne.size(Umat,dim=2)) stop "The provided matrix is not square."
+      if(Norb.ne.size(Umat,dim=2)) stop "dump_Matrix_Kdep_d: The provided matrix is not square."
       !
       ! Create directory
       call createDir(reg(dirpath),verb=verbose)
@@ -410,7 +410,7 @@ contains
       ! Check on the input Matrix
       Nkpt = size(Umat,dim=3)
       Norb = size(Umat,dim=1)
-      if(Norb.ne.size(Umat,dim=2)) stop "The provided matrix is not square."
+      if(Norb.ne.size(Umat,dim=2)) stop "read_Matrix_Kdep_z:The provided matrix is not square."
       !
       ! Check file existence
       call inquireFile(reg(readpath),filexists,verb=verbose)
@@ -421,20 +421,20 @@ contains
       !
       read(unit) Nkpt_read,Norb_read
       !
-      if(Nkpt_read.ne.Nkpt) stop "File with wrong number of K-points."
-      if(Norb_read.ne.Norb) stop "File with wrong number of Wannier functions."
+      if(Nkpt_read.ne.Nkpt) stop "read_Matrix_Kdep_z: File with wrong number of K-points."
+      if(Norb_read.ne.Norb) stop "read_Matrix_Kdep_z: File with wrong number of Wannier functions."
       !
       do ik=1,Nkpt
          !
          read(unit) idum1
-         if (idum1.ne.ik) stop "ik does not match"
+         if (idum1.ne.ik) stop "read_Matrix_Kdep_z: ik does not match."
          !
          do iwan1=1,Norb
             do iwan2=1,Norb
                !
                read(unit) idum1,idum2,RealM,ImagM
-               if (idum1.ne.iwan1) stop "iwan1 does not match"
-               if (idum2.ne.iwan2) stop "iwan2 does not match"
+               if (idum1.ne.iwan1) stop "read_Matrix_Kdep_z: iwan1 does not match."
+               if (idum2.ne.iwan2) stop "read_Matrix_Kdep_z: iwan2 does not match."
                Umat(iwan1,iwan2,ik) = dcmplx(RealM,ImagM)
                !
             enddo
@@ -473,7 +473,7 @@ contains
       ! Check on the input Matrix
       Nkpt = size(Umat,dim=3)
       Norb = size(Umat,dim=1)
-      if(Norb.ne.size(Umat,dim=2)) stop "The provided matrix is not square."
+      if(Norb.ne.size(Umat,dim=2)) stop "read_Matrix_Kdep_d: The provided matrix is not square."
       !
       ! Check file existence
       call inquireFile(reg(readpath),filexists,verb=verbose)
@@ -484,20 +484,20 @@ contains
       !
       read(unit) Nkpt_read,Norb_read
       !
-      if(Nkpt_read.ne.Nkpt) stop "File with wrong number of K-points."
-      if(Norb_read.ne.Norb) stop "File with wrong number of Wannier functions."
+      if(Nkpt_read.ne.Nkpt) stop "read_Matrix_Kdep_d: File with wrong number of K-points."
+      if(Norb_read.ne.Norb) stop "read_Matrix_Kdep_d: File with wrong number of Wannier functions."
       !
       do ik=1,Nkpt
          !
          read(unit) idum1
-         if (idum2.ne.ik) stop "ik does not match"
+         if (idum2.ne.ik) stop "read_Matrix_Kdep_d: ik does not match."
          !
          do iwan1=1,Norb
             do iwan2=1,Norb
                !
                read(unit) idum1,idum2,RealM
-               if (idum1.ne.iwan1) stop "iwan1 does not match"
-               if (idum2.ne.iwan2) stop "iwan2 does not match"
+               if (idum1.ne.iwan1) stop "read_Matrix_Kdep_d: iwan1 does not match."
+               if (idum2.ne.iwan2) stop "read_Matrix_Kdep_d: iwan2 does not match."
                Umat(iwan1,iwan2,ik) = RealM
                !
             enddo
@@ -604,9 +604,9 @@ contains
       !
       !
       ! Check on the input Field
-      if(.not.G%status) stop "Field not properly initialized."
+      if(.not.G%status) stop "dump_FermionicField_local: Field not properly initialized."
       if(present(axis))then
-         if(size(axis).ne.G%Npoints)write(*,"(A)")"Warning: axis provided but its length: "//str(size(axis))//" does not match with field mesh: "//str(G%Npoints)//". Writing up to the smaller."
+         if(size(axis).ne.G%Npoints)write(*,"(A)")"     Warning: axis provided but its length: "//str(size(axis))//" does not match with field mesh: "//str(G%Npoints)//". Writing up to the smaller."
          Naxis = min(size(axis),G%Npoints)
          if(allocated(axis_))deallocate(axis_)
          allocate(axis_(Naxis));axis_=0d0
@@ -670,11 +670,11 @@ contains
       !
       !
       ! Check on the input Field
-      if(.not.G%status) stop "Field not properly initialized."
-      if(G%Nkpt.eq.0) stop "K-dependent part not allocated."
+      if(.not.G%status) stop "dump_FermionicField_Kdep: Field not properly initialized."
+      if(G%Nkpt.eq.0) stop "dump_FermionicField_Kdep: K-dependent part not allocated."
       call assert_shape(kpt,[3,G%Nkpt],"dump_FermionicField_Kdep","kpt")
       if(present(axis))then
-         if(size(axis).ne.G%Npoints)write(*,"(A)")"Warning: axis provided but its length: "//str(size(axis))//" does not match with field mesh: "//str(G%Npoints)//". Writing up to the smaller."
+         if(size(axis).ne.G%Npoints)write(*,"(A)")"     Warning: axis provided but its length: "//str(size(axis))//" does not match with field mesh: "//str(G%Npoints)//". Writing up to the smaller."
          Naxis = min(size(axis),G%Npoints)
          if(allocated(axis_))deallocate(axis_)
          allocate(axis_(Naxis));axis_=0d0
@@ -777,7 +777,7 @@ contains
       !
       !
       ! Check on the input Field
-      if(.not.G%status) stop "Field not properly initialized."
+      if(.not.G%status) stop "read_FermionicField_local: Field not properly initialized."
       Norb = G%Norb
       !
       do ispin=1,Nspin
@@ -794,16 +794,16 @@ contains
          read(unit,*) Naxis_read !," Number of grid points"
          read(unit,*) mu_read(ispin) !," chemical potential"
          !
-         if(Norb_read.ne.Norb) stop "File with wrong number of Wannier functions."
+         if(Norb_read.ne.Norb) stop "read_FermionicField_local: File with wrong number of Wannier functions."
          if(present(axis))then
-            if(size(axis).ne.G%Npoints)write(*,"(A)")"Warning: Axis provided but its length: "//str(size(axis))//" does not match with field mesh: "//str(G%Npoints)//". Reading up to the smaller."
+            if(size(axis).ne.G%Npoints)write(*,"(A)")"     Warning: Axis provided but its length: "//str(size(axis))//" does not match with field mesh: "//str(G%Npoints)//". Reading up to the smaller."
             Naxis = min(size(axis),G%Npoints)
-            if(Naxis.ne.Naxis_read)write(*,"(A)")"Warning: Expected grid: "//str(Naxis)//" does not match with files grid: "//str(Naxis_read)//". Reading up to the smaller."
+            if(Naxis.ne.Naxis_read)write(*,"(A)")"     Warning: Expected grid: "//str(Naxis)//" does not match with files grid: "//str(Naxis_read)//". Reading up to the smaller."
             Naxis = min(Naxis,Naxis_read)
             if(allocated(axis_))deallocate(axis_)
             allocate(axis_(Naxis));axis_=0d0
          else
-            if(Naxis_read.ne.G%Npoints)write(*,"(A)")"Warning: Files grid: "//str(Naxis_read)//" does not match with field mesh: "//str(G%Npoints)//". Reading up to the smaller."
+            if(Naxis_read.ne.G%Npoints)write(*,"(A)")"     Warning: Files grid: "//str(Naxis_read)//" does not match with field mesh: "//str(G%Npoints)//". Reading up to the smaller."
             Naxis = min(Naxis_read,G%Npoints)
             if(allocated(axis_))deallocate(axis_)
             allocate(axis_(Naxis));axis_=0d0
@@ -816,20 +816,20 @@ contains
                do iwan2=1,Norb
                   !
                   read(unit,"(1F20.10,2I4,2E20.12)") axispoint,idum1,idum2,RealG,ImagG
-                  if (idum1.ne.iwan1) stop "iwan1 does not match"
-                  if (idum2.ne.iwan2) stop "iwan2 does not match"
+                  if (idum1.ne.iwan1) stop "read_FermionicField_local: iwan1 does not match."
+                  if (idum2.ne.iwan2) stop "read_FermionicField_local: iwan2 does not match."
                   G%ws(iwan1,iwan2,iaxis,ispin) = dcmplx(RealG,ImagG)
                   !
                enddo
             enddo
-            if((.not.present(axis)).and.(abs(axispoint-axis_(iaxis)).gt.eps)) stop "axispoint does not match with expected grid."
+            if((.not.present(axis)).and.(abs(axispoint-axis_(iaxis)).gt.eps)) stop "read_FermionicField_local: axispoint does not match with expected grid."
             axis_(iaxis) = axispoint
          enddo
          close(unit)
          !
       enddo
       !
-      if((Nspin.eq.2).and.(mu_read(1).ne.mu_read(2))) stop "Chemical potential is different between up and down."
+      if((Nspin.eq.2).and.(mu_read(1).ne.mu_read(2))) stop "read_FermionicField_local: Chemical potential is different between up and down."
       G%mu=mu_read(1)
       if(present(axis)) axis(1:Naxis)=axis_
       !
@@ -864,8 +864,8 @@ contains
       !
       !
       ! Check on the input Field
-      if(.not.G%status) stop "Field not properly initialized."
-      if(G%Nkpt.eq.0) stop "K-dependent part not allocated."
+      if(.not.G%status) stop "read_FermionicField_Kdep: Field not properly initialized."
+      if(G%Nkpt.eq.0) stop "read_FermionicField_Kdep: K-dependent part not allocated."
       Norb = G%Norb
       call assert_shape(kpt,[3,G%Nkpt],"read_FermionicField_Kdep","kpt")
       !
@@ -882,18 +882,18 @@ contains
          !
          read(unit) ispin_read,Nkpt_read,Norb_read,Naxis_read,mu_read(ispin)
          !
-         if(ispin_read.ne.ispin) stop "File with wrong spin index."
-         if(Nkpt_read.ne.G%Nkpt) stop "File with wrong number of K-points."
-         if(Norb_read.ne.Norb) stop "File with wrong number of Wannier functions."
+         if(ispin_read.ne.ispin) stop "read_FermionicField_Kdep: File with wrong spin index."
+         if(Nkpt_read.ne.G%Nkpt) stop "read_FermionicField_Kdep: File with wrong number of K-points."
+         if(Norb_read.ne.Norb) stop "read_FermionicField_Kdep: File with wrong number of Wannier functions."
          if(present(axis))then
-            if(size(axis).ne.G%Npoints)write(*,"(A)")"Warning: Axis provided but its length: "//str(size(axis))//" does not match with field mesh: "//str(G%Npoints)//". Reading up to the smaller."
+            if(size(axis).ne.G%Npoints)write(*,"(A)")"     Warning: Axis provided but its length: "//str(size(axis))//" does not match with field mesh: "//str(G%Npoints)//". Reading up to the smaller."
             Naxis = min(size(axis),G%Npoints)
-            if(Naxis.ne.Naxis_read)write(*,"(A)")"Warning: Expected grid: "//str(Naxis)//" does not match with files grid: "//str(Naxis_read)//". Reading up to the smaller."
+            if(Naxis.ne.Naxis_read)write(*,"(A)")"     Warning: Expected grid: "//str(Naxis)//" does not match with files grid: "//str(Naxis_read)//". Reading up to the smaller."
             Naxis = min(Naxis,Naxis_read)
             if(allocated(axis_))deallocate(axis_)
             allocate(axis_(Naxis));axis_=0d0
          else
-            if(Naxis_read.ne.G%Npoints)write(*,"(A)")"Warning: Files grid: "//str(Naxis_read)//" does not match with field mesh: "//str(G%Npoints)//". Reading up to the smaller."
+            if(Naxis_read.ne.G%Npoints)write(*,"(A)")"     Warning: Files grid: "//str(Naxis_read)//" does not match with field mesh: "//str(G%Npoints)//". Reading up to the smaller."
             Naxis = min(Naxis_read,G%Npoints)
             if(allocated(axis_))deallocate(axis_)
             allocate(axis_(Naxis));axis_=0d0
@@ -903,25 +903,25 @@ contains
          do ik=1,G%Nkpt
             !
             read(unit) idum1,idum2,kvec
-            if (idum1.ne.ispin) stop "ispin does not match"
-            if (idum2.ne.ik) stop "ik does not match"
-            if(abs(kvec(1)-kpt(1,ik)).gt.eps)stop "kvec(1) does not match"
-            if(abs(kvec(2)-kpt(2,ik)).gt.eps)stop "kvec(1) does not match"
-            if(abs(kvec(3)-kpt(3,ik)).gt.eps)stop "kvec(1) does not match"
+            if (idum1.ne.ispin) stop "read_FermionicField_Kdep: ispin does not match."
+            if (idum2.ne.ik) stop "read_FermionicField_Kdep: ik does not match."
+            if(abs(kvec(1)-kpt(1,ik)).gt.eps)stop "read_FermionicField_Kdep: kvec(1) does not match."
+            if(abs(kvec(2)-kpt(2,ik)).gt.eps)stop "read_FermionicField_Kdep: kvec(1) does not match."
+            if(abs(kvec(3)-kpt(3,ik)).gt.eps)stop "read_FermionicField_Kdep: kvec(1) does not match."
             !
             do iaxis=1,Naxis
                !
                read(unit) idum1,axispoint
-               if (idum1.ne.iaxis) stop "iaxis does not match"
-               if((.not.present(axis)).and.(abs(axispoint-axis_(iaxis)).gt.eps)) stop "axispoint does not match with expected grid."
+               if (idum1.ne.iaxis) stop "read_FermionicField_Kdep: iaxis does not match"
+               if((.not.present(axis)).and.(abs(axispoint-axis_(iaxis)).gt.eps)) stop "read_FermionicField_Kdep: axispoint does not match with expected grid."
                axis_(iaxis) = axispoint
                !
                do iwan1=1,Norb
                   do iwan2=1,Norb
                      !
                      read(unit) idum1,idum2,RealG,ImagG
-                     if (idum1.ne.iwan1) stop "iwan1 does not match"
-                     if (idum2.ne.iwan2) stop "iwan2 does not match"
+                     if (idum1.ne.iwan1) stop "read_FermionicField_Kdep: iwan1 does not match."
+                     if (idum2.ne.iwan2) stop "read_FermionicField_Kdep: iwan2 does not match."
                      G%wks(iwan1,iwan2,iaxis,ik,ispin) = dcmplx(RealG,ImagG)
                      !
                   enddo
@@ -935,7 +935,7 @@ contains
       enddo !ispin
       !
       call FermionicKsum(G)
-      if((Nspin.eq.2).and.(mu_read(1).ne.mu_read(2))) stop "Chemical potential is different between up and down."
+      if((Nspin.eq.2).and.(mu_read(1).ne.mu_read(2))) stop "read_FermionicField_Kdep: Chemical potential is different between up and down."
       G%mu=mu_read(1)
       !
    end subroutine read_FermionicField_Kdep
@@ -970,9 +970,9 @@ contains
       !
       !
       ! Check on the input Field
-      if(.not.U%status) stop "Field not properly initialized."
+      if(.not.U%status) stop "dump_BosonicField_local: Field not properly initialized."
       if(present(axis))then
-         if(size(axis).ne.U%Npoints)write(*,"(A)")"Warning: axis provided but its length: "//str(size(axis))//" does not match with field mesh: "//str(U%Npoints)//". Writing up to the smaller."
+         if(size(axis).ne.U%Npoints)write(*,"(A)")"     Warning: axis provided but its length: "//str(size(axis))//" does not match with field mesh: "//str(U%Npoints)//". Writing up to the smaller."
          Naxis = min(size(axis),U%Npoints)
          if(allocated(axis_))deallocate(axis_)
          allocate(axis_(Naxis));axis_=0d0
@@ -1056,10 +1056,10 @@ contains
       !
       !
       ! Check on the input Field
-      if(.not.U%status) stop "Field not properly initialized."
-      if(U%Nkpt.eq.0) stop "K-dependent part not allocated."
+      if(.not.U%status) stop "dump_BosonicField_Kdep_SPEXlike: Field not properly initialized."
+      if(U%Nkpt.eq.0) stop "dump_BosonicField_Kdep_SPEXlike: K-dependent part not allocated."
       if(present(axis))then
-         if(size(axis).ne.U%Npoints)write(*,"(A)")"Warning: axis provided but its length: "//str(size(axis))//" does not match with field mesh: "//str(U%Npoints)//". Writing up to the smaller."
+         if(size(axis).ne.U%Npoints)write(*,"(A)")"     Warning: axis provided but its length: "//str(size(axis))//" does not match with field mesh: "//str(U%Npoints)//". Writing up to the smaller."
          Naxis = min(size(axis),U%Npoints)
          if(allocated(axis_))deallocate(axis_)
          allocate(axis_(Naxis));axis_=0d0
@@ -1192,7 +1192,7 @@ contains
       !
       !
       ! Check on the input Field
-      if(.not.U%status) stop "Field not properly initialized."
+      if(.not.U%status) stop "read_BosonicField_local: Field not properly initialized."
       Norb = int(sqrt(dble(U%Nbp)))
       !
       ! Check file existence
@@ -1204,16 +1204,16 @@ contains
       read(unit,*) Norb_read !," Number of Wannier functions"
       read(unit,*) Naxis_read !," Number of grid points"
       !
-      if(Norb_read.ne.Norb) stop "File with wrong number of Wannier functions."
+      if(Norb_read.ne.Norb) stop "read_BosonicField_local: File with wrong number of Wannier functions."
       if(present(axis))then
-         if(size(axis).ne.U%Npoints)write(*,"(A)")"Warning: Axis provided but its length: "//str(size(axis))//" does not match with field mesh: "//str(U%Npoints)//". Reading up to the smaller."
+         if(size(axis).ne.U%Npoints)write(*,"(A)")"     Warning: Axis provided but its length: "//str(size(axis))//" does not match with field mesh: "//str(U%Npoints)//". Reading up to the smaller."
          Naxis = min(size(axis),U%Npoints)
-         if(Naxis.ne.Naxis_read)write(*,"(A)")"Warning: Expected grid: "//str(Naxis)//" does not match with files grid: "//str(Naxis_read)//". Reading up to the smaller."
+         if(Naxis.ne.Naxis_read)write(*,"(A)")"     Warning: Expected grid: "//str(Naxis)//" does not match with files grid: "//str(Naxis_read)//". Reading up to the smaller."
          Naxis = min(Naxis,Naxis_read)
          if(allocated(axis_))deallocate(axis_)
          allocate(axis_(Naxis));axis_=0d0
       else
-         if(Naxis_read.ne.U%Npoints)write(*,"(A)")"Warning: Files grid: "//str(Naxis_read)//" does not match with field mesh: "//str(U%Npoints)//". Reading up to the smaller."
+         if(Naxis_read.ne.U%Npoints)write(*,"(A)")"     Warning: Files grid: "//str(Naxis_read)//" does not match with field mesh: "//str(U%Npoints)//". Reading up to the smaller."
          Naxis = min(Naxis_read,U%Npoints)
          if(allocated(axis_))deallocate(axis_)
          allocate(axis_(Naxis));axis_=0d0
@@ -1230,10 +1230,10 @@ contains
                   ib2 = iwan3+Norb*(iwan4-1)
                   !
                   read(unit,"(4I4,2E20.12)") idum1,idum2,idum3,idum4,RealU,ImagU
-                  if (idum1.ne.iwan1) stop "iwan1 (bare) does not match"
-                  if (idum2.ne.iwan2) stop "iwan2 (bare) does not match"
-                  if (idum3.ne.iwan3) stop "iwan3 (bare) does not match"
-                  if (idum4.ne.iwan4) stop "iwan4 (bare) does not match"
+                  if (idum1.ne.iwan1) stop "read_BosonicField_local: iwan1 (bare) does not match."
+                  if (idum2.ne.iwan2) stop "read_BosonicField_local: iwan2 (bare) does not match."
+                  if (idum3.ne.iwan3) stop "read_BosonicField_local: iwan3 (bare) does not match."
+                  if (idum4.ne.iwan4) stop "read_BosonicField_local: iwan4 (bare) does not match."
                   if(allocated(U%bare_local))U%bare_local(ib1,ib2) = dcmplx(RealU,ImagU)
                   !
                enddo
@@ -1251,17 +1251,17 @@ contains
                      ib2 = iwan3+Norb*(iwan4-1)
                      !
                      read(unit,"(1F20.10,4I4,2E20.12)") axispoint,idum1,idum2,idum3,idum4,RealU,ImagU
-                     if (idum1.ne.iwan1) stop "iwan1 (screened) does not match"
-                     if (idum2.ne.iwan2) stop "iwan2 (screened) does not match"
-                     if (idum3.ne.iwan3) stop "iwan3 (screened) does not match"
-                     if (idum4.ne.iwan4) stop "iwan4 (screened) does not match"
+                     if (idum1.ne.iwan1) stop "read_BosonicField_local: iwan1 (screened) does not match."
+                     if (idum2.ne.iwan2) stop "read_BosonicField_local: iwan2 (screened) does not match."
+                     if (idum3.ne.iwan3) stop "read_BosonicField_local: iwan3 (screened) does not match."
+                     if (idum4.ne.iwan4) stop "read_BosonicField_local: iwan4 (screened) does not match."
                      U%screened_local(ib1,ib2,iaxis) = dcmplx(RealU,ImagU)
                      !
                   enddo
                enddo
             enddo
          enddo
-         if((.not.present(axis)).and.(abs(axispoint-axis_(iaxis)).gt.eps)) stop "axispoint does not match with expected grid."
+         if((.not.present(axis)).and.(abs(axispoint-axis_(iaxis)).gt.eps)) stop "read_BosonicField_local: axispoint does not match with expected grid."
          axis_(iaxis) = axispoint
       enddo
       close(unit)

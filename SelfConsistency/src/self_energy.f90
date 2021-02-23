@@ -53,7 +53,7 @@ contains
       use utils_fields
       use crystal
       use fourier_transforms
-      use input_vars, only : NtauB, tau_uniform, cmplxWann
+      use input_vars, only : NtauB, tau_uniform, cmplxWann, paramagnet
       implicit none
       !
       type(FermionicField),intent(inout)    :: Smats
@@ -81,14 +81,14 @@ contains
       !
       !
       ! Check on the input Fields
-      if(.not.Smats%status) stop "Smats not properly initialized."
-      if(.not.Gmats%status) stop "Gmats not properly initialized."
-      if(.not.Wmats%status) stop "Wmats not properly initialized."
-      if(Smats%Nkpt.eq.0) stop "Smats k dependent attributes not properly initialized."
-      if(Gmats%Nkpt.eq.0) stop "Gmats k dependent attributes not properly initialized."
-      if(Wmats%Nkpt.eq.0) stop "Wmats k dependent attributes not properly initialized."
-      if(.not.allocated(Lttc%kptdif)) stop "kptdif not allocated."
-      if((Lttc%Nkpt_irred.lt.Smats%Nkpt).and.(.not.allocated(Lttc%kptPos))) stop "kptPos not allocated."
+      if(.not.Smats%status) stop "calc_sigmaGW: Smats not properly initialized."
+      if(.not.Gmats%status) stop "calc_sigmaGW: Gmats not properly initialized."
+      if(.not.Wmats%status) stop "calc_sigmaGW: Wmats not properly initialized."
+      if(Smats%Nkpt.eq.0) stop "calc_sigmaGW: Smats k dependent attributes not properly initialized."
+      if(Gmats%Nkpt.eq.0) stop "calc_sigmaGW: Gmats k dependent attributes not properly initialized."
+      if(Wmats%Nkpt.eq.0) stop "calc_sigmaGW: Wmats k dependent attributes not properly initialized."
+      if(.not.allocated(Lttc%kptdif)) stop "calc_sigmaGW: kptdif not allocated."
+      if((Lttc%Nkpt_irred.lt.Smats%Nkpt).and.(.not.allocated(Lttc%kptPos))) stop "calc_sigmaGW: kptPos not allocated."
       !
       Norb = Smats%Norb
       Nkpt = Smats%Nkpt
@@ -96,10 +96,10 @@ contains
       Nmats = Smats%Npoints
       Nbp = Norb**2
       !
-      if(all([Gmats%Nkpt-Nkpt,Wmats%Nkpt-Nkpt,Lttc%Nkpt-Nkpt].ne.[0,0,0])) stop "Either Lattice, Gmats or Wmats have different number of k-points with respect to Smats."
-      if(all([Gmats%Norb-Norb,Wmats%Nbp-Nbp].ne.[0,0])) stop "Either Gmats or Wmats have different orbital dimension with respect to Smats."
-      if(all([Gmats%Beta-Beta,Wmats%Beta-Beta].ne.[0d0,0d0])) stop "Either Gmats or Wmats have different Beta with respect to Smats."
-      if(all([Gmats%Npoints-Nmats,Wmats%Npoints-Nmats].ne.[0,0])) stop "Either Gmats or Wmats have different number of Matsubara points with respect to Smats."
+      if(all([Gmats%Nkpt-Nkpt,Wmats%Nkpt-Nkpt,Lttc%Nkpt-Nkpt].ne.[0,0,0])) stop "calc_sigmaGW: Either Lattice, Gmats or Wmats have different number of k-points with respect to Smats."
+      if(all([Gmats%Norb-Norb,Wmats%Nbp-Nbp].ne.[0,0])) stop "calc_sigmaGW: Either Gmats or Wmats have different orbital dimension with respect to Smats."
+      if(all([Gmats%Beta-Beta,Wmats%Beta-Beta].ne.[0d0,0d0])) stop "calc_sigmaGW: Either Gmats or Wmats have different Beta with respect to Smats."
+      if(all([Gmats%Npoints-Nmats,Wmats%Npoints-Nmats].ne.[0,0])) stop "calc_sigmaGW: Either Gmats or Wmats have different number of Matsubara points with respect to Smats."
       !
       call AllocateFermionicField(Smats_C_,Norb,Nmats,Nkpt=Nkpt,Nsite=Smats%Nsite,Beta=Beta)
       call AllocateFermionicField(Smats_X_,Norb,0,Nkpt=Nkpt,Nsite=Smats%Nsite,Beta=Beta)
@@ -111,15 +111,23 @@ contains
       call cpu_time(start)
       allocate(Gitau(Norb,Norb,NtauB,Nkpt,Nspin));Gitau=czero
       if(cmplxWann)then
-         do ispin=1,Nspin
+         spinloopC: do ispin=1,Nspin
             call Fmats2itau_mat(Beta,Gmats%wks(:,:,:,:,ispin),Gitau(:,:,:,:,ispin), &
             asympt_corr=.true.,tau_uniform=tau_uniform)
-         enddo
+            if(paramagnet)then
+               Gitau(:,:,:,:,Nspin) = Gitau(:,:,:,:,1)
+               exit spinloopC
+            endif
+         enddo spinloopC
       else
-         do ispin=1,Nspin
+         spinloopR: do ispin=1,Nspin
             call Fmats2itau_mat(Beta,Gmats%wks(:,:,:,:,ispin),Gitau(:,:,:,:,ispin), &
             asympt_corr=.true.,tau_uniform=tau_uniform,nkpt3=Lttc%Nkpt3,kpt=Lttc%kpt)
-         enddo
+            if(paramagnet)then
+               Gitau(:,:,:,:,Nspin) = Gitau(:,:,:,:,1)
+               exit spinloopR
+            endif
+         enddo spinloopR
       endif
       call cpu_time(finish)
       write(*,"(A,F)") "     Glat(k,iw) --> Glat(k,tau) cpu timing:", finish-start
@@ -135,8 +143,8 @@ contains
       call cpu_time(start)
       call clear_attributes(Smats_C_)
       allocate(Sitau(Norb,Norb,NtauB))
-      do iq=1,Lttc%Nkpt_irred
-         do ispin=1,Nspin
+      spinloop: do ispin=1,Nspin
+         do iq=1,Lttc%Nkpt_irred
             !
             Sitau=czero
             !
@@ -171,7 +179,11 @@ contains
             call Fitau2mats_mat(Beta,Sitau,Smats_C_%wks(:,:,:,iq,ispin),tau_uniform=tau_uniform)
             !
          enddo
-      enddo
+         if(paramagnet)then
+            Smats_C_%wks(:,:,:,:,Nspin) = Smats_C_%wks(:,:,:,:,1)
+            exit spinloop
+         endif
+      enddo spinloop
       deallocate(Witau,Sitau)
       call cpu_time(finish)
       write(*,"(A,F)") "     Sigma_C(k,iw) cpu timing:", finish-start
@@ -317,10 +329,10 @@ contains
       !
       !
       ! Check on the input Fields
-      if(.not.Smats_dc%status) stop "Smats_dc not properly initialized."
-      if(.not.Gmats%status) stop "Gmats not properly initialized."
-      if(.not.Wmats%status) stop "Wmats not properly initialized."
-      if(Smats_dc%Nkpt.ne.0) stop "Smats_dc k dependent attributes are supposed to be unallocated."
+      if(.not.Smats_dc%status) stop "calc_sigmaGWdc: Smats_dc not properly initialized."
+      if(.not.Gmats%status) stop "calc_sigmaGWdc: Gmats not properly initialized."
+      if(.not.Wmats%status) stop "calc_sigmaGWdc: Wmats not properly initialized."
+      if(Smats_dc%Nkpt.ne.0) stop "calc_sigmaGWdc: Smats_dc k dependent attributes are supposed to be unallocated."
       !
       Norb = Smats_dc%Norb
       Nkpt = Smats_dc%Nkpt
@@ -328,9 +340,9 @@ contains
       Nmats = Smats_dc%Npoints
       Nbp = Norb**2
       !
-      if(all([Gmats%Norb-Norb,Wmats%Nbp-Nbp].ne.[0,0])) stop "Either Gmats or Wmats have different orbital dimension with respect to Smats_dc."
-      if(all([Gmats%Beta-Beta,Wmats%Beta-Beta].ne.[0d0,0d0])) stop "Either Gmats or Wmats have different Beta with respect to Smats_dc."
-      if(all([Gmats%Npoints-Nmats,Wmats%Npoints-Nmats].ne.[0,0])) stop "Either Gmats or Wmats have different number of Matsubara points with respect to Smats_dc."
+      if(all([Gmats%Norb-Norb,Wmats%Nbp-Nbp].ne.[0,0])) stop "calc_sigmaGWdc: Either Gmats or Wmats have different orbital dimension with respect to Smats_dc."
+      if(all([Gmats%Beta-Beta,Wmats%Beta-Beta].ne.[0d0,0d0])) stop "calc_sigmaGWdc: Either Gmats or Wmats have different Beta with respect to Smats_dc."
+      if(all([Gmats%Npoints-Nmats,Wmats%Npoints-Nmats].ne.[0,0])) stop "calc_sigmaGWdc: Either Gmats or Wmats have different number of Matsubara points with respect to Smats_dc."
       !
       call AllocateFermionicField(Smats_Cdc_,Norb,Nmats,Nsite=Smats_dc%Nsite,Beta=Beta)
       call AllocateFermionicField(Smats_Xdc_,Norb,0,Nsite=Smats_dc%Nsite,Beta=Beta)
@@ -496,22 +508,22 @@ contains
       !
       !
       ! Check on the input Field
-      if(.not.Gmats%status) stop "Gmats not properly initialized."
-      if(.not.Umats%status) stop "Umats not properly initialized."
-      if(Gmats%Nkpt.eq.0) stop "Gmats k dependent attributes not properly initialized."
-      if(Umats%Nkpt.eq.0) stop "Umats k dependent attributes not properly initialized."
-      if(Umats%iq_gamma.lt.0) stop "Umats iq_gamma not defined."
+      if(.not.Gmats%status) stop "calc_VH_G: Gmats not properly initialized."
+      if(.not.Umats%status) stop "calc_VH_G: Umats not properly initialized."
+      if(Gmats%Nkpt.eq.0) stop "calc_VH_G: Gmats k dependent attributes not properly initialized."
+      if(Umats%Nkpt.eq.0) stop "calc_VH_G: Umats k dependent attributes not properly initialized."
+      if(Umats%iq_gamma.lt.0) stop "calc_VH_G: Umats iq_gamma not defined."
       !
       sym_constrained_=.false.
       if(present(sym_constrained))sym_constrained_=sym_constrained
       !
-      if(sym_constrained_.and.(reg(VH_type).eq."Ustatic")) stop "Ordering of sym_constrained is not implemented for Ustatic."
-      if(sym_constrained_.and.(reg(VH_type).eq."Ubare")) stop "Ordering of sym_constrained_ is not implemented for Ubare."
+      if(sym_constrained_.and.(reg(VH_type).eq."Ustatic")) stop "calc_VH_G: Ordering of sym_constrained is not implemented for Ustatic."
+      if(sym_constrained_.and.(reg(VH_type).eq."Ubare")) stop "calc_VH_G: Ordering of sym_constrained_ is not implemented for Ubare."
       !
       Norb = Gmats%Norb
       Nbp = Umats%Nbp
       !
-      if((Norb**2).ne.Nbp) stop "Umats and Gmats have different orbital space."
+      if((Norb**2).ne.Nbp) stop "calc_VH_G: Umats and Gmats have different orbital space."
       call assert_shape(density_LDA_spin,[Norb,Norb,Nspin],"calc_VH_G","density_LDA_spin")
       call assert_shape(VH,[Norb,Norb],"calc_VH_G","VH")
       !
@@ -593,7 +605,7 @@ contains
          do isite=1,Nsite
             !
             if(isite.gt.1)then
-               if(SiteNorb(isite).ne.SiteNorb(isite-1)) stop "sym_constrained not implemented for non-identical sites."
+               if(SiteNorb(isite).ne.SiteNorb(isite-1)) stop "calc_VH_G: sym_constrained not implemented for non-identical sites."
             endif
             !
             ![Nsite*[Norb]] arrangement
@@ -662,7 +674,7 @@ contains
             unit = free_unit()
             open(unit,file=reg(path),position="rewind",action="read")
             read(unit,*) idum1 !,'Number of Wannier functions:'
-            if(idum1.ne.Norb) stop "read_Vgamma Norb"
+            if(idum1.ne.Norb) stop "read_Vgamma(calc_VH_G): wrong index Norb."
             do limits=1,2
                do iwan1=1,Norb
                   do iwan2=1,Norb
@@ -671,10 +683,10 @@ contains
                            indx1=iwan1+Norb*(iwan2-1)
                            indx2=iwan3+Norb*(iwan4-1)
                            read(unit,*) rdum1,rdum2,idum1,idum2,idum3,idum4,rdum3,rdum4
-                           if (idum1.ne.iwan1) stop "read_Vgamma: iwan1"
-                           if (idum2.ne.iwan2) stop "read_Vgamma: iwan2"
-                           if (idum3.ne.iwan3) stop "read_Vgamma: iwan3"
-                           if (idum4.ne.iwan4) stop "read_Vgamma: iwan4"
+                           if (idum1.ne.iwan1) stop "read_Vgamma(calc_VH_G): wrong index iwan1."
+                           if (idum2.ne.iwan2) stop "read_Vgamma(calc_VH_G): wrong index iwan2."
+                           if (idum3.ne.iwan3) stop "read_Vgamma(calc_VH_G): wrong index iwan3."
+                           if (idum4.ne.iwan4) stop "read_Vgamma(calc_VH_G): wrong index iwan4."
                            if(dble(Vtype).eq.rdum1) Vgamma(indx1,indx2) = dcmplx(rdum3,rdum4) * H2eV
                        enddo
                      enddo
@@ -721,24 +733,23 @@ contains
       !
       !
       if(verbose)write(*,"(A)") "---- calc_VH_N"
-      write(*,"(A)") "---- calc_VH_N"
       !
       !
       ! Check on the input Field
-      if(.not.Umats%status) stop "Umats not properly initialized."
-      if(Umats%Nkpt.eq.0) stop "Umats k dependent attributes not properly initialized."
-      if(Umats%iq_gamma.lt.0) stop "Umats iq_gamma not defined."
+      if(.not.Umats%status) stop "calc_VH_N: Umats not properly initialized."
+      if(Umats%Nkpt.eq.0) stop "calc_VH_N: Umats k dependent attributes not properly initialized."
+      if(Umats%iq_gamma.lt.0) stop "calc_VH_N: Umats iq_gamma not defined."
       !
       sym_constrained_=.false.
       if(present(sym_constrained))sym_constrained_=sym_constrained
       !
-      if(sym_constrained_.and.(reg(VH_type).eq."Ustatic")) stop "Ordering of sym_constrained is not implemented for Ustatic."
-      if(sym_constrained_.and.(reg(VH_type).eq."Ubare")) stop "Ordering of sym_constrained is not implemented for Ubare."
+      if(sym_constrained_.and.(reg(VH_type).eq."Ustatic")) stop "calc_VH_N: Ordering of sym_constrained is not implemented for Ustatic."
+      if(sym_constrained_.and.(reg(VH_type).eq."Ubare")) stop "calc_VH_N: Ordering of sym_constrained is not implemented for Ubare."
       !
       Norb = size(density_LDA_spin,dim=1)
       Nbp = Umats%Nbp
       !
-      if((Norb**2).ne.Nbp) stop "Umats and Gmats have different orbital space."
+      if((Norb**2).ne.Nbp) stop "calc_VH_N: Umats and Gmats have different orbital space."
       call assert_shape(density_LDA_spin,[Norb,Norb,Nspin],"calc_VH_N","density_LDA_spin")
       call assert_shape(density_spin,[Norb,Norb,Nspin],"calc_VH_N","density_spin")
       call assert_shape(VH,[Norb,Norb],"calc_VH_N","VH")
@@ -829,7 +840,7 @@ contains
          if(sym_constrained_)then
             shift_V = isite-1
             if(isite.gt.1)then
-               if(SiteNorb(isite).ne.SiteNorb(isite-1)) stop "sym_constrained not implemented for non-identical sites."
+               if(SiteNorb(isite).ne.SiteNorb(isite-1)) stop "calc_VH_N: sym_constrained not implemented for non-identical sites."
             endif
          endif
          !
@@ -875,7 +886,7 @@ contains
             unit = free_unit()
             open(unit,file=reg(path),position="rewind",action="read")
             read(unit,*) idum1 !,'Number of Wannier functions:'
-            if(idum1.ne.Norb) stop "read_Vgamma Norb"
+            if(idum1.ne.Norb) stop "read_Vgamma(calc_VH_N): wrong index Norb."
             do limits=1,2
                do iwan1=1,Norb
                   do iwan2=1,Norb
@@ -884,10 +895,10 @@ contains
                            indx1=iwan1+Norb*(iwan2-1)
                            indx2=iwan3+Norb*(iwan4-1)
                            read(unit,*) rdum1,rdum2,idum1,idum2,idum3,idum4,rdum3,rdum4
-                           if (idum1.ne.iwan1) stop "read_Vgamma: iwan1"
-                           if (idum2.ne.iwan2) stop "read_Vgamma: iwan2"
-                           if (idum3.ne.iwan3) stop "read_Vgamma: iwan3"
-                           if (idum4.ne.iwan4) stop "read_Vgamma: iwan4"
+                           if (idum1.ne.iwan1) stop "read_Vgamma(calc_VH_N): wrong index iwan1."
+                           if (idum2.ne.iwan2) stop "read_Vgamma(calc_VH_N): wrong index iwan2."
+                           if (idum3.ne.iwan3) stop "read_Vgamma(calc_VH_N): wrong index iwan3."
+                           if (idum4.ne.iwan4) stop "read_Vgamma(calc_VH_N): wrong index iwan4."
                            if(dble(Vtype).eq.rdum1) Vgamma(indx1,indx2) = dcmplx(rdum3,rdum4) * H2eV
                        enddo
                      enddo
@@ -956,9 +967,9 @@ contains
       !
       !
       ! Check on the input Fields
-      if(.not.Smats_GoWo%status) stop "FermionicField not properly initialized."
-      if(.not.Lttc%status) stop "Lattice container not properly initialized."
-      if(Lttc%Nkpt.ne.Smats_GoWo%Nkpt) stop "Lattice has different number of k-points with respect to Smats_GoWo."
+      if(.not.Smats_GoWo%status) stop "read_Sigma_spex: FermionicField not properly initialized."
+      if(.not.Lttc%status) stop "read_Sigma_spex: Lattice container not properly initialized."
+      if(Lttc%Nkpt.ne.Smats_GoWo%Nkpt) stop "read_Sigma_spex: Lattice has different number of k-points with respect to Smats_GoWo."
       !
       Norb = Smats_GoWo%Norb
       Nkpt = Smats_GoWo%Nkpt
@@ -1011,9 +1022,9 @@ contains
          unit = free_unit()
          open(unit,file=reg(path),form="unformatted",action="read",position="rewind")
          read(unit) Nspin_Uwan,Nkpt_Uwan,ib_Uwan1,ib_Uwan2,Norb_Uwan
-         if(paramagneticSPEX.and.(Nspin_Uwan.ne.1)) stop "UWAN file is not paramagnetic."
-         if(Nkpt_Uwan.ne.Nkpt) stop "UWAN file has wrong number of k-points (not irreducible)."
-         if(Norb_Uwan.ne.Norb) stop "UWAN file has wrong orbital dimension."
+         if(paramagneticSPEX.and.(Nspin_Uwan.ne.1)) stop "read_Sigma_spex: UWAN file is not paramagnetic."
+         if(Nkpt_Uwan.ne.Nkpt) stop "read_Sigma_spex: UWAN file has wrong number of k-points (not irreducible)."
+         if(Norb_Uwan.ne.Norb) stop "read_Sigma_spex: UWAN file has wrong orbital dimension."
          write(*,"(A,2I4)") "     The band indexes in the "//reg(path)//" rotation are: ",ib_Uwan1,ib_Uwan2
          allocate(Uwan(ib_Uwan1:ib_Uwan2,Norb,Nkpt,Nspin_Uwan))
          do ispin=1,Nspin_Uwan
@@ -1048,8 +1059,8 @@ contains
             enddo
             write(*,"(A,1I4,A,1I6)") "     The number k-points in the segment number: ",iseg," is: ",Nkpt_file
             Nkpt_file_old = Nkpt_file
-            if((iseg.gt.1).and.(Nkpt_file.ne.Nkpt_file_old)) stop "Number of K-points does not match among segments."
-            if(Nkpt_file.ne.Lttc%Nkpt_irred) stop "Number of K-points does not match with Nkpt_irred readed from XEPS."
+            if((iseg.gt.1).and.(Nkpt_file.ne.Nkpt_file_old)) stop "read_Sigma_spex: Number of K-points does not match among segments."
+            if(Nkpt_file.ne.Lttc%Nkpt_irred) stop "read_Sigma_spex: Number of K-points does not match with Nkpt_irred readed from XEPS."
          enddo
          !
          ! Check that all the Sigma parameters are cosistent and that the segments match
@@ -1066,7 +1077,7 @@ contains
                allocate(wread(Nfreq));wread=0d0
                read(unit) wread
                close(unit)
-               if(lexonly) stop "lexonly"
+               if(lexonly) stop "read_Sigma_spex: lexonly"
                !
                iseg_old = iseg
                Nspin_spex_old = Nspin_spex
@@ -1078,24 +1089,24 @@ contains
                wE_old = wread(Nfreq)
                !
                ! Each k-point controls
-               if(ib_sigma1.gt.ib_Uwan1) stop "ib_sigma1>ib_Uwan1"
-               if(ib_sigma2.lt.ib_Uwan2) stop "ib_sigma2<ib_Uwan2"
-               if(paramagneticSPEX.and.(Nspin_spex.ne.1)) stop "Spex self-energy file is not paramagnetic."
-               if(ik.ne.ik_spex) stop "K-point index in SPEX not match the expected index."
+               if(ib_sigma1.gt.ib_Uwan1) stop "read_Sigma_spex: ib_sigma1>ib_Uwan1"
+               if(ib_sigma2.lt.ib_Uwan2) stop "read_Sigma_spex: ib_sigma2<ib_Uwan2"
+               if(paramagneticSPEX.and.(Nspin_spex.ne.1)) stop "read_Sigma_spex: Spex self-energy file is not paramagnetic."
+               if(ik.ne.ik_spex) stop "read_Sigma_spex: K-point index in SPEX not match the expected index."
                if(ik.gt.1)then
-                  if(ib_sigma1_old.ne.ib_sigma1) stop "ib_sigma1 does not match with previous file."
-                  if(Nspin_spex_old.ne.Nspin_spex) stop "Nspin_spex does not match with previous file."
-                  if(Nkpt_irred_spex_old.ne.Nkpt_irred_spex) stop "Nkpt_irred_spex does not match with previous file."
-                  if(ib_sigma2_old.ne.ib_sigma2) stop "ib_sigma2 does not match with previous file."
+                  if(ib_sigma1_old.ne.ib_sigma1) stop "read_Sigma_spex: ib_sigma1 does not match with previous file."
+                  if(Nspin_spex_old.ne.Nspin_spex) stop "read_Sigma_spex: Nspin_spex does not match with previous file."
+                  if(Nkpt_irred_spex_old.ne.Nkpt_irred_spex) stop "read_Sigma_spex: Nkpt_irred_spex does not match with previous file."
+                  if(ib_sigma2_old.ne.ib_sigma2) stop "read_Sigma_spex: ib_sigma2 does not match with previous file."
                   if(iseg.eq.iseg_old)then
-                     if(Nfreq_old.ne.Nfreq) stop "Nfreq does not match among different k-points same segment."
-                     if(wS_old.ne.wread(1)) stop "First freq does not match among different k-points same segment."
-                     if(wE_old.ne.wread(Nfreq)) stop "Last freq does not match among different k-points same segment."
+                     if(Nfreq_old.ne.Nfreq) stop "read_Sigma_spex: Nfreq does not match among different k-points same segment."
+                     if(wS_old.ne.wread(1)) stop "read_Sigma_spex: First freq does not match among different k-points same segment."
+                     if(wE_old.ne.wread(Nfreq)) stop "read_Sigma_spex: Last freq does not match among different k-points same segment."
                   else
                      if(dabs(wread(1)-wE_old).gt.eps)then
                         write(*,"(A,2F10.5)") "w_old, w(1):",wE_old,wread(1)
                         write(*,"(A,2I5)") "iq,iseg:",ik,iseg
-                        stop "Segments in sigma do not match."
+                        stop "read_Sigma_spex: Segments in sigma do not match."
                      endif
                   endif
                endif
@@ -1339,10 +1350,10 @@ contains
       !
       ! Check on the input Vxc matrix
       Norb = size(Vxc,dim=1)
-      if(Norb.ne.size(Vxc,dim=2)) stop "Vxc is not a square matrix."
+      if(Norb.ne.size(Vxc,dim=2)) stop "read_Vxc: Vxc is not a square matrix."
       Nkpt = size(Vxc,dim=3)
-      if(.not.Lttc%status) stop "Lattice container not properly initialized."
-      if(Lttc%Nkpt.ne.Nkpt) stop "Lattice has different number of k-points with respect to Vxc."
+      if(.not.Lttc%status) stop "read_Vxc: Lattice container not properly initialized."
+      if(Lttc%Nkpt.ne.Nkpt) stop "read_Vxc: Lattice has different number of k-points with respect to Vxc."
       !
       ! Read XEPS data
       if(.not.XEPSisread)then
@@ -1363,9 +1374,9 @@ contains
       unit = free_unit()
       open(unit,file=reg(path),form="unformatted",action="read",position="rewind")
       read(unit) Nspin_Uwan,Nkpt_Uwan,ib_Uwan1,ib_Uwan2,Norb_Uwan
-      if(paramagneticSPEX.and.(Nspin_Uwan.ne.1)) stop "UWAN file is not paramagnetic."
-      if(Nkpt_Uwan.ne.Nkpt) stop "UWAN file has wrong number of k-points (not irreducible)."
-      if(Norb_Uwan.ne.Norb) stop "UWAN file has wrong orbital dimension."
+      if(paramagneticSPEX.and.(Nspin_Uwan.ne.1)) stop "read_Vxc: UWAN file is not paramagnetic."
+      if(Nkpt_Uwan.ne.Nkpt) stop "read_Vxc: UWAN file has wrong number of k-points (not irreducible)."
+      if(Norb_Uwan.ne.Norb) stop "read_Vxc: UWAN file has wrong orbital dimension."
       write(*,"(A,2I4)") "     The band indexes in the "//reg(path)//" rotation are: ",ib_Uwan1,ib_Uwan2
       allocate(Uwan(ib_Uwan1:ib_Uwan2,Norb,Nkpt,Nspin_Uwan))
       do ispin=1,Nspin_Uwan
@@ -1401,10 +1412,10 @@ contains
          unit_dis = free_unit()
          open(unit_dis,file=reg(path),form="unformatted",action="read",position="rewind")
          read(unit_dis) Nspin_disent,Nkpt_irred_disent,Norb_disent,ib_Dwan1,ib_Dwan2
-         if (Nspin_disent.ne.Nspin_Uwan) stop 'DISENT_EVEC.DAT: nspin'
-         if (Nkpt_irred_disent.ne.Lttc%Nkpt_irred) stop 'DISENT_EVEC.DAT: nkpt1'
-         if (Norb_disent.ne.Norb) stop 'DISENT_EVEC.DAT: nwan'
-         if (ib_Dwan1.ne.ib_Uwan1) stop 'DISENT_EVEC.DAT: ib_wan1'
+         if (Nspin_disent.ne.Nspin_Uwan) stop "DISENT_EVEC.DAT: wrong index nspin."
+         if (Nkpt_irred_disent.ne.Lttc%Nkpt_irred) stop "read_Vxc: DISENT_EVEC.DAT: wrong index nkpt1."
+         if (Norb_disent.ne.Norb) stop "read_Vxc: DISENT_EVEC.DAT: wrong index nwan."
+         if (ib_Dwan1.ne.ib_Uwan1) stop "read_Vxc: DISENT_EVEC.DAT: wrong index ib_wan1."
          if (ib_Dwan2.ne.ib_Uwan2) then
             write(*,"(A,2I4)") "     ib_Uwan2,ib_Dwan2: ",ib_Uwan2, ib_Dwan2
          endif
@@ -1436,7 +1447,7 @@ contains
             !write(*,*) 'ispin,ik,neigd,nband=',ispin,ik,neigd,nband
             if (nband.lt.1.or.nband.gt.neigd) then
                write(*,"(A,4I5)") "ispin,ik,neigd,nband: ",ispin,ik,neigd,nband
-               stop 'read_vxc:nband'
+               stop "read_Vxc: nband is out of bound."
             endif
             read(unit_vxc) ((vxcmat(i,j),i=1,j),j=1,nband)
             do j=1,nband

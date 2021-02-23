@@ -179,7 +179,7 @@ contains
       use parameters
       use utils_misc
       use utils_fields
-      use linalg, only : zeye, inv  !_her !or sym??
+      use linalg, only : zeye, inv
       use input_vars, only : HandleGammaPoint, Umodel
       implicit none
       !
@@ -203,14 +203,14 @@ contains
       !
       !
       ! Check on the input Fields
-      if(.not.Wmats%status) stop "Wmats not properly initialized."
-      if(.not.Umats%status) stop "Umats not properly initialized."
-      if(.not.Pmats%status) stop "Pmats not properly initialized."
-      if(Wmats%Nkpt.eq.0) stop "Wmats k dependent attributes not properly initialized."
-      if(Umats%Nkpt.eq.0) stop "Umats k dependent attributes not properly initialized."
-      if(Pmats%Nkpt.eq.0) stop "Pmats k dependent attributes not properly initialized."
-      if(Umats%iq_gamma.lt.0) stop "Umats iq_gamma not defined."
-      if(.not.allocated(Lttc%small_ik)) stop "Kpoints near Gamma not stored. W divergence cannot be cured."
+      if(.not.Wmats%status) stop "calc_W_full: Wmats not properly initialized."
+      if(.not.Umats%status) stop "calc_W_full: Umats not properly initialized."
+      if(.not.Pmats%status) stop "calc_W_full: Pmats not properly initialized."
+      if(Wmats%Nkpt.eq.0) stop "calc_W_full: Wmats k dependent attributes not properly initialized."
+      if(Umats%Nkpt.eq.0) stop "calc_W_full: Umats k dependent attributes not properly initialized."
+      if(Pmats%Nkpt.eq.0) stop "calc_W_full: Pmats k dependent attributes not properly initialized."
+      if(Umats%iq_gamma.lt.0) stop "calc_W_full: Umats iq_gamma not defined."
+      if(.not.allocated(Lttc%small_ik)) stop "calc_W_full: Kpoints near Gamma not stored. W divergence cannot be cured."
       !
       sym_=.true.
       if(present(sym))sym_=sym
@@ -223,10 +223,10 @@ contains
       Beta = Wmats%Beta
       Nmats = Wmats%Npoints
       !
-      if(all([Umats%Nbp-Nbp,Pmats%Nbp-Nbp].ne.[0,0])) stop "Either Umats and/or Pmats have different orbital dimension with respect to Wmats."
-      if(all([Umats%Nkpt-Nkpt,Pmats%Nkpt-Nkpt].ne.[0,0])) stop "Either Umats and/or Pmats have different number of k-points with respect to Wmats."
-      if(all([Umats%Beta-Beta,Pmats%Beta-Beta].ne.[0d0,0d0])) stop "Either Umats and/or Pmats have different Beta with respect to Wmats."
-      if(Pmats%Npoints.ne.Nmats) stop "Pmats has different number of Matsubara points with respect to Wmats."
+      if(all([Umats%Nbp-Nbp,Pmats%Nbp-Nbp].ne.[0,0])) stop "calc_W_full: Either Umats and/or Pmats have different orbital dimension with respect to Wmats."
+      if(all([Umats%Nkpt-Nkpt,Pmats%Nkpt-Nkpt].ne.[0,0])) stop "calc_W_full: Either Umats and/or Pmats have different number of k-points with respect to Wmats."
+      if(all([Umats%Beta-Beta,Pmats%Beta-Beta].ne.[0d0,0d0])) stop "calc_W_full: Either Umats and/or Pmats have different Beta with respect to Wmats."
+      if(Pmats%Npoints.ne.Nmats) stop "calc_W_full: Pmats has different number of Matsubara points with respect to Wmats."
       !
       allocate(invW(Nbp,Nbp));invW=czero
       call clear_attributes(Wmats)
@@ -360,14 +360,14 @@ contains
       !
       !
       ! Check on the input Fields
-      if(.not.Wmats%status) stop "Wmats not properly initialized."
-      if(.not.Umats%status) stop "Umats not properly initialized."
-      if(.not.Pmats%status) stop "Pmats not properly initialized."
-      if(Umats%Nkpt.eq.0) stop "Umats k dependent attributes not properly initialized."
-      if(Wmats%Nkpt.ne.0) stop "Wmats k dependent attributes are supposed to be unallocated."
-      if(Pmats%Nkpt.ne.0) stop "Pmats k dependent attributes are supposed to be unallocated."
-      if(Umats%iq_gamma.lt.0) stop "Umats iq_gamma not defined."
-      if(.not.allocated(Lttc%small_ik)) stop "Kpoints near Gamma not stored. W divergence cannot be cured."
+      if(.not.Wmats%status) stop "calc_W_edmft: Wmats not properly initialized."
+      if(.not.Umats%status) stop "calc_W_edmft: Umats not properly initialized."
+      if(.not.Pmats%status) stop "calc_W_edmft: Pmats not properly initialized."
+      if(Umats%Nkpt.eq.0) stop "calc_W_edmft: Umats k dependent attributes not properly initialized."
+      if(Wmats%Nkpt.ne.0) stop "calc_W_edmft: Wmats k dependent attributes are supposed to be unallocated."
+      if(Pmats%Nkpt.ne.0) stop "calc_W_edmft: Pmats k dependent attributes are supposed to be unallocated."
+      if(Umats%iq_gamma.lt.0) stop "calc_W_edmft: Umats iq_gamma not defined."
+      if(.not.allocated(Lttc%small_ik)) stop "calc_W_edmft: Kpoints near Gamma not stored. W divergence cannot be cured."
       !
       sym_=.true.
       if(present(sym))sym_=sym
@@ -380,9 +380,9 @@ contains
       Beta = Wmats%Beta
       Nmats = Wmats%Npoints
       !
-      if(all([Umats%Nbp-Nbp,Pmats%Nbp-Nbp].ne.[0,0])) stop "Either Umats and/or Pmats have different orbital dimension with respect to Wmats."
-      if(all([Umats%Beta-Beta,Pmats%Beta-Beta].ne.[0d0,0d0])) stop "Either Umats and/or Pmats have different Beta with respect to Wmats."
-      if(Pmats%Npoints.ne.Nmats) stop "Pmats has different number of Matsubara points with respect to Wmats."
+      if(all([Umats%Nbp-Nbp,Pmats%Nbp-Nbp].ne.[0,0])) stop "calc_W_edmft: Either Umats and/or Pmats have different orbital dimension with respect to Wmats."
+      if(all([Umats%Beta-Beta,Pmats%Beta-Beta].ne.[0d0,0d0])) stop "calc_W_edmft: Either Umats and/or Pmats have different Beta with respect to Wmats."
+      if(Pmats%Npoints.ne.Nmats) stop "calc_W_edmft: Pmats has different number of Matsubara points with respect to Wmats."
       !
       allocate(invW(Nbp,Nbp));invW=czero
       allocate(W_q(Nbp,Nbp));W_q=czero
@@ -513,23 +513,23 @@ contains
       !
       !
       ! Check on the input Fields
-      if(.not.Chi%status) stop "Chi not properly initialized."
-      if(.not.Umats%status) stop "Umats not properly initialized."
-      if(.not.Pmats%status) stop "Pmats not properly initialized."
-      if(Chi%Nkpt.eq.0) stop "Chi k dependent attributes not properly initialized."
-      if(Umats%Nkpt.eq.0) stop "Umats k dependent attributes not properly initialized."
-      if(Pmats%Nkpt.eq.0) stop "Pmats k dependent attributes not properly initialized."
-      if(Umats%iq_gamma.lt.0) stop "Umats iq_gamma not defined."
+      if(.not.Chi%status) stop "calc_chi_full: Chi not properly initialized."
+      if(.not.Umats%status) stop "calc_chi_full: Umats not properly initialized."
+      if(.not.Pmats%status) stop "calc_chi_full: Pmats not properly initialized."
+      if(Chi%Nkpt.eq.0) stop "calc_chi_full: Chi k dependent attributes not properly initialized."
+      if(Umats%Nkpt.eq.0) stop "calc_chi_full: Umats k dependent attributes not properly initialized."
+      if(Pmats%Nkpt.eq.0) stop "calc_chi_full: Pmats k dependent attributes not properly initialized."
+      if(Umats%iq_gamma.lt.0) stop "calc_chi_full: Umats iq_gamma not defined."
       !
       Nbp = Chi%Nbp
       Nkpt = Chi%Nkpt
       Beta = Chi%Beta
       Nmats = Chi%Npoints
       !
-      if(all([Umats%Nbp-Nbp,Pmats%Nbp-Nbp].ne.[0,0])) stop "Either Umats and/or Pmats have different orbital dimension with respect to Chi."
-      if(all([Umats%Nkpt-Nkpt,Pmats%Nkpt-Nkpt].ne.[0,0])) stop "Either Umats and/or Pmats have different number of k-points with respect to Chi."
-      if(all([Umats%Beta-Beta,Pmats%Beta-Beta].ne.[0d0,0d0])) stop "Either Umats and/or Pmats have different Beta with respect to Chi."
-      if(Pmats%Npoints.ne.Nmats) stop "Pmats has different number of Matsubara points with respect to Chi."
+      if(all([Umats%Nbp-Nbp,Pmats%Nbp-Nbp].ne.[0,0])) stop "calc_chi_full: Either Umats and/or Pmats have different orbital dimension with respect to Chi."
+      if(all([Umats%Nkpt-Nkpt,Pmats%Nkpt-Nkpt].ne.[0,0])) stop "calc_chi_full: Either Umats and/or Pmats have different number of k-points with respect to Chi."
+      if(all([Umats%Beta-Beta,Pmats%Beta-Beta].ne.[0d0,0d0])) stop "calc_chi_full: Either Umats and/or Pmats have different Beta with respect to Chi."
+      if(Pmats%Npoints.ne.Nmats) stop "calc_chi_full: Pmats has different number of Matsubara points with respect to Chi."
       !
       allocate(invW(Nbp,Nbp));invW=czero
       call clear_attributes(Chi)
@@ -595,22 +595,22 @@ contains
       !
       !
       ! Check on the input Fields
-      if(.not.Chi%status) stop "Chi not properly initialized."
-      if(.not.Umats%status) stop "Umats not properly initialized."
-      if(.not.Pmats%status) stop "Pmats not properly initialized."
-      if(Chi%Nkpt.ne.0) stop "Chi k dependent attributes are supposed to be unallocated."
-      if(Umats%Nkpt.eq.0) stop "Umats k dependent attributes not properly initialized."
-      if(Pmats%Nkpt.ne.0) stop "Pmats k dependent attributes are supposed to be unallocated."
-      if(Umats%iq_gamma.lt.0) stop "Umats iq_gamma not defined."
+      if(.not.Chi%status) stop "calc_chi_edmft: Chi not properly initialized."
+      if(.not.Umats%status) stop "calc_chi_edmft: Umats not properly initialized."
+      if(.not.Pmats%status) stop "calc_chi_edmft: Pmats not properly initialized."
+      if(Chi%Nkpt.ne.0) stop "calc_chi_edmft: Chi k dependent attributes are supposed to be unallocated."
+      if(Umats%Nkpt.eq.0) stop "calc_chi_edmft: Umats k dependent attributes not properly initialized."
+      if(Pmats%Nkpt.ne.0) stop "calc_chi_edmft: Pmats k dependent attributes are supposed to be unallocated."
+      if(Umats%iq_gamma.lt.0) stop "calc_chi_edmft: Umats iq_gamma not defined."
       !
       Nbp = Chi%Nbp
       Nkpt = Umats%Nkpt
       Beta = Chi%Beta
       Nmats = Chi%Npoints
       !
-      if(all([Umats%Nbp-Nbp,Pmats%Nbp-Nbp].ne.[0,0])) stop "Either Umats and/or Pmats have different orbital dimension with respect to Chi."
-      if(all([Umats%Beta-Beta,Pmats%Beta-Beta].ne.[0d0,0d0])) stop "Either Umats and/or Pmats have different Beta with respect to Chi."
-      if(Pmats%Npoints.ne.Nmats) stop "Pmats has different number of Matsubara points with respect to Chi."
+      if(all([Umats%Nbp-Nbp,Pmats%Nbp-Nbp].ne.[0,0])) stop "calc_chi_edmft: Either Umats and/or Pmats have different orbital dimension with respect to Chi."
+      if(all([Umats%Beta-Beta,Pmats%Beta-Beta].ne.[0d0,0d0])) stop "calc_chi_edmft: Either Umats and/or Pmats have different Beta with respect to Chi."
+      if(Pmats%Npoints.ne.Nmats) stop "calc_chi_edmft: Pmats has different number of Matsubara points with respect to Chi."
       !
       allocate(invW(Nbp,Nbp));invW=czero
       call clear_attributes(Chi)
@@ -686,11 +686,11 @@ contains
       !
       !
       ! Check on the input Boson
-      if(.not.Umats%status) stop "BosonicField not properly initialized."
-      if((.not.LocalOnly).and.(.not.allocated(Umats%bare))) stop "Requested k-dependence but bare attribute not allocated."
-      if((.not.LocalOnly).and.(.not.allocated(Umats%screened))) stop "Requested k-dependence but screened attribute not allocated."
-      if(LocalOnly.and.allocated(Umats%bare)) stop "Bare K-dependent attributes is present but not used."
-      if(LocalOnly.and.allocated(Umats%screened)) stop "Screened K-dependent attributes is present but not used."
+      if(.not.Umats%status) stop "read_U_spex_full: BosonicField not properly initialized."
+      if((.not.LocalOnly).and.(.not.allocated(Umats%bare))) stop "read_U_spex_full: Requested k-dependence but bare attribute not allocated."
+      if((.not.LocalOnly).and.(.not.allocated(Umats%screened))) stop "read_U_spex_full: Requested k-dependence but screened attribute not allocated."
+      if(LocalOnly.and.allocated(Umats%bare)) stop "read_U_spex_full: Bare K-dependent attributes is present but not used."
+      if(LocalOnly.and.allocated(Umats%screened)) stop "read_U_spex_full: Screened K-dependent attributes is present but not used."
       allocate(wmats(Umats%Npoints));wmats=0d0
       wmats = BosonicFreqMesh(Umats%Beta,Umats%Npoints)
       !
@@ -743,8 +743,8 @@ contains
          write(*,"(A,I)")"     Real frequencies: ",Nfreq
          !
          ! Few checks
-         if(Nspin_spex.ne.1) stop "Nspin_spex.ne.1"
-         if(Umats%Nbp.ne.Nbp_spex) stop "Size of given BosonicField and VW_real orbital space do not coincide."
+         if(Nspin_spex.ne.1) stop "read_U_spex_full: Nspin_spex.ne.1"
+         if(Umats%Nbp.ne.Nbp_spex) stop "read_U_spex_full: Size of given BosonicField and VW_real orbital space do not coincide."
          !
          ! Look for the Number of SPEX files. Which are supposed to be ordered.
          Nkpt = 0
@@ -755,7 +755,7 @@ contains
             Nkpt = Nkpt + 1
          enddo
          write(*,"(A,I)") "     The number of SPEX files (Nkpt) in VW_real is: ",Nkpt
-         if((.not.LocalOnly).and.(Umats%Nkpt.ne.Nkpt)) stop "Number of k-points of given BosonicField and number of VW_real k-points do not coincide."
+         if((.not.LocalOnly).and.(Umats%Nkpt.ne.Nkpt)) stop "read_U_spex_full: Number of k-points of given BosonicField and number of VW_real k-points do not coincide."
          !
          ! Allocate the Bosonic field on the real axis
          if(LocalOnly)then
@@ -774,11 +774,11 @@ contains
             unit = free_unit()
             open(unit,file=reg(file_spex),form="unformatted",action="read")
             read(unit) iqread,Nspin_spex,Norb_spex,Nfreq
-            if (iq.ne.iqread) stop "iqread.ne.iq"
+            if (iq.ne.iqread) stop "read_U_spex_full: iqread.ne.iq"
             !
             read(unit) wread
             wread = H2eV*wread
-            if (dabs(wread(1)).gt.eps) stop "wread(1) not zero"
+            if (dabs(wread(1)).gt.eps) stop "read_U_spex_full: wread(1) not zero"
             !
             do iw=0,Nfreq
                read(unit) Utmp
@@ -1015,9 +1015,9 @@ contains
          write(*,"(A,I)")"     Matsubara frequencies: ",Nfreq
          !
          ! Few checks
-         if(Nspin_spex.ne.1) stop "Nspin_spex.ne.1"
-         if(Umats%Nbp.ne.Nbp_spex) stop "Size of given BosonicField and VW_imag orbital space do not coincide."
-         if(Umats%Npoints.ne.Nfreq) stop "Number of VW_imag Matsubara points and bosonic field mesh does not coincide."
+         if(Nspin_spex.ne.1) stop "read_U_spex_full: Nspin_spex.ne.1"
+         if(Umats%Nbp.ne.Nbp_spex) stop "read_U_spex_full: Size of given BosonicField and VW_imag orbital space do not coincide."
+         if(Umats%Npoints.ne.Nfreq) stop "read_U_spex_full: Number of VW_imag Matsubara points and bosonic field mesh does not coincide."
          !
          ! Look for the Number of SPEX files. Which are supposed to be ordered.
          Nkpt = 0
@@ -1028,7 +1028,7 @@ contains
             Nkpt = Nkpt + 1
          enddo
          write(*,"(A,I)") "     The number of SPEX files (Nkpt) in VW_imag is: ",Nkpt
-         if((.not.LocalOnly).and.(Umats%Nkpt.ne.Nkpt)) stop "Number of k-points of given BosonicField and number of VW_imag k-points do not coincide."
+         if((.not.LocalOnly).and.(Umats%Nkpt.ne.Nkpt)) stop "read_U_spex_full: Number of k-points of given BosonicField and number of VW_imag k-points do not coincide."
          !
          ! Read VW_imag accumulating local attribute and optionally storing the k-dependent part
          path = reg(pathOUTPUT_)//"VW_imag/"
@@ -1040,14 +1040,14 @@ contains
             unit = free_unit()
             open(unit,file=reg(file_spex),form="unformatted",action="read")
             read(unit) iqread,Nspin_spex,Norb_spex,Nfreq
-            if (iq.ne.iqread) stop "iqread.ne.iq"
+            if (iq.ne.iqread) stop "read_U_spex_full: iqread.ne.iq"
             !
             read(unit) wread
             !wread = H2eV*wread
             do iw=1,Nfreq
                if(dabs(wread(iw)-wmats(iw)).gt.eps) Then
                   write(*,"(F)")dabs(wread(iw)-wmats(iw)),iw,iq
-                  stop "wread.ne.wmats"
+                  stop "read_U_spex_full: wread.ne.wmats"
                endif
             enddo
             !
@@ -1172,7 +1172,7 @@ contains
          return
          !
       else
-         stop "No useful interaction file found."
+         stop "read_U_spex_Uloc0: No useful interaction file found."
       endif
       !
    end subroutine read_U_spex_Uloc0
@@ -1199,7 +1199,7 @@ contains
       !
       !
       if(verbose)write(*,"(A)") "---- checkAnalyticContinuation"
-      if(Umats%Nbp.ne.Ureal%Nbp) stop "Umats%Nbp.ne.Ureal%Nbp"
+      if(Umats%Nbp.ne.Ureal%Nbp) stop "checkAnalyticContinuation: Umats%Nbp.ne.Ureal%Nbp"
       Nbp = Umats%Nbp
       Nmats = Umats%Npoints
       Nreal = Ureal%Npoints
@@ -1395,7 +1395,7 @@ contains
       Nbp = size(Umat,dim=1)
       Norb = Nbp/Nspin
       Nflavor = Norb*Nspin
-      if((Nspin.eq.2).and.(mod(Nbp,2).ne.0.0)) stop "Wrong matrix dimension."
+      if((Nspin.eq.2).and.(mod(Nbp,2).ne.0.0)) stop "build_Umat_singlParam: Wrong matrix dimension."
       call init_Uelements(Norb,PhysicalUelements)
       call assert_shape(Umat,[Nbp,Nbp],"build_Umat_singlParam","Umat")
       !
@@ -1435,7 +1435,7 @@ contains
       Nbp = size(Umat,dim=1)
       Norb = Nbp/Nspin
       Nflavor = Norb*Nspin
-      if((Nspin.eq.2).and.(mod(Nbp,2).ne.0.0)) stop "Wrong matrix dimension."
+      if((Nspin.eq.2).and.(mod(Nbp,2).ne.0.0)) stop "build_Umat_multiParam: Wrong matrix dimension."
       call init_Uelements(Norb,PhysicalUelements)
       call assert_shape(Umat,[Nbp,Nbp],"build_Umat_multiParam","Umat")
       call assert_shape(Uaa,[Norb],"build_Umat_multiParam","Uaa")
@@ -1494,18 +1494,18 @@ contains
       !
       !
       ! Check on the input field
-      if(.not.Umats%status) stop "BosonicField not properly initialized."
+      if(.not.Umats%status) stop "build_Uret_singlParam_ph: BosonicField not properly initialized."
       !
       LocalOnly_=.true.
       if(present(LocalOnly))LocalOnly_=LocalOnly
-      if(LocalOnly_.and.(Umats%Nkpt.ne.0)) stop "Umats k dependent attributes are supposed to be unallocated."
+      if(LocalOnly_.and.(Umats%Nkpt.ne.0)) stop "build_Uret_singlParam_ph: Umats k dependent attributes are supposed to be unallocated."
       !
       Nbp = Umats%Nbp
       Norb = int(sqrt(dble(Nbp)))
       Nph = size(g_eph)
       !
       call init_Uelements(Norb,PhysicalUelements)
-      if(size(g_eph).ne.size(wo_eph)) stop "Phonon sizes does not match."
+      if(size(g_eph).ne.size(wo_eph)) stop "build_Uret_singlParam_ph: Phonon sizes does not match."
       !
       allocate(wmats(Umats%Npoints));wmats=0d0
       wmats = BosonicFreqMesh(Umats%Beta,Umats%Npoints)
@@ -1637,18 +1637,18 @@ contains
       !
       !
       ! Check on the input field
-      if(.not.Umats%status) stop "BosonicField not properly initialized."
+      if(.not.Umats%status) stop "build_Uret_multiParam_ph: BosonicField not properly initialized."
       !
       LocalOnly_=.true.
       if(present(LocalOnly))LocalOnly_=LocalOnly
-      if(LocalOnly_.and.(Umats%Nkpt.ne.0)) stop "Umats k dependent attributes are supposed to be unallocated."
+      if(LocalOnly_.and.(Umats%Nkpt.ne.0)) stop "build_Uret_multiParam_ph: Umats k dependent attributes are supposed to be unallocated."
       !
       Nbp = Umats%Nbp
       Norb = int(sqrt(dble(Nbp)))
       Nph = size(g_eph)
       !
       call init_Uelements(Norb,PhysicalUelements)
-      if(size(g_eph).ne.size(wo_eph)) stop "Phonon sizes does not match."
+      if(size(g_eph).ne.size(wo_eph)) stop "build_Uret_multiParam_ph: Phonon sizes does not match."
       !
       call assert_shape(Uaa,[Norb],"build_Uret_multiParam_ph","Uaa")
       call assert_shape(Uab,[Norb,Norb],"build_Uret_multiParam_ph","Uab")
@@ -1794,13 +1794,13 @@ contains
       !
       !
       ! Check on the input field
-      if(.not.Umats%status) stop "BosonicField not properly initialized."
-      if(Umats%Npoints.ne.1) stop "Number of matsubara points in Umats is supposed to be equal to 1."
+      if(.not.Umats%status) stop "build_Uret_singlParam_Vn: BosonicField not properly initialized."
+      if(Umats%Npoints.ne.1) stop "build_Uret_singlParam_Vn: Number of matsubara points in Umats is supposed to be equal to 1."
       !
       LocalOnly_=.false.
       if(present(LocalOnly))LocalOnly_=LocalOnly
-      if(LocalOnly_.and.(Umats%Nkpt.ne.0)) stop "Umats k dependent attributes are supposed to be unallocated."
-      if((.not.LocalOnly_).and.(Umats%Nkpt.ne.Lttc%Nkpt)) stop "Umats number of K-points does not match with the lattice."
+      if(LocalOnly_.and.(Umats%Nkpt.ne.0)) stop "build_Uret_singlParam_Vn: Umats k dependent attributes are supposed to be unallocated."
+      if((.not.LocalOnly_).and.(Umats%Nkpt.ne.Lttc%Nkpt)) stop "build_Uret_singlParam_Vn: Umats number of K-points does not match with the lattice."
       !
       Nbp = Umats%Nbp
       Norb = int(sqrt(dble(Nbp)))
@@ -1825,7 +1825,7 @@ contains
          !
          !setting the local interaction
          if(Rsorted(Rorder(iwig)).eq.0d0)then
-            if(Rorder(iwig).ne.wig0)stop "wrong zero position"
+            if(Rorder(iwig).ne.wig0)stop "build_Uret_singlParam_Vn: wrong index of R=0 vector."
             do ib1=1,Nbp
                do ib2=1,Nbp
                   !
@@ -1935,13 +1935,13 @@ contains
       !
       !
       ! Check on the input field
-      if(.not.Umats%status) stop "BosonicField not properly initialized."
-      if(Umats%Npoints.ne.1) stop "Number of matsubara points in Umats is supposed to be equal to 1."
+      if(.not.Umats%status) stop "build_Uret_multiParam_Vn: BosonicField not properly initialized."
+      if(Umats%Npoints.ne.1) stop "build_Uret_multiParam_Vn: Number of matsubara points in Umats is supposed to be equal to 1."
       !
       LocalOnly_=.false.
       if(present(LocalOnly))LocalOnly_=LocalOnly
-      if(LocalOnly_.and.(Umats%Nkpt.ne.0)) stop "Umats k dependent attributes are supposed to be unallocated."
-      if((.not.LocalOnly_).and.(Umats%Nkpt.ne.Lttc%Nkpt)) stop "Umats number of K-points does not match with the lattice."
+      if(LocalOnly_.and.(Umats%Nkpt.ne.0)) stop "build_Uret_multiParam_Vn: Umats k dependent attributes are supposed to be unallocated."
+      if((.not.LocalOnly_).and.(Umats%Nkpt.ne.Lttc%Nkpt)) stop "build_Uret_multiParam_Vn: Umats number of K-points does not match with the lattice."
       !
       Nbp = Umats%Nbp
       Norb = int(sqrt(dble(Nbp)))
@@ -1969,7 +1969,7 @@ contains
          !
          !setting the local interaction
          if(Rsorted(Rorder(iwig)).eq.0d0)then
-            if(Rorder(iwig).ne.wig0)stop "wrong zero position"
+            if(Rorder(iwig).ne.wig0)stop "build_Uret_multiParam_Vn: wrong index of R=0 vector."
             do ib1=1,Nbp
                do ib2=1,Nbp
                   !
@@ -2085,7 +2085,7 @@ contains
       !
       !
       ! Check on the input field
-      if(.not.Umats%status) stop "Umats not properly initialized."
+      if(.not.Umats%status) stop "calc_QMCinteractions: Umats not properly initialized."
       retarded=.false.
       if(present(Kfunct))retarded=.true.
       !
@@ -2207,13 +2207,13 @@ contains
       !
       !
       ! Check on the input Fields
-      if(.not.curlyU%status) stop "curlyU not properly initialized."
-      if(.not.Wimp%status) stop "Wimp not properly initialized."
-      if(.not.Pimp%status) stop "Pimp not properly initialized."
-      if(curlyU%Nkpt.ne.0) stop "curlyU k dependent attributes are supposed to be unallocated."
-      if(Wimp%Nkpt.ne.0) stop "Wimp k dependent attributes are supposed to be unallocated."
-      if(Pimp%Nkpt.ne.0) stop "Pimp k dependent attributes are supposed to be unallocated."
-      if(present(curlyUcorr).and.(.not.curlyUcorr%status)) stop "Requested causality correction but curlyUcorr not properly initialized."
+      if(.not.curlyU%status) stop "calc_curlyU: curlyU not properly initialized."
+      if(.not.Wimp%status) stop "calc_curlyU: Wimp not properly initialized."
+      if(.not.Pimp%status) stop "calc_curlyU: Pimp not properly initialized."
+      if(curlyU%Nkpt.ne.0) stop "calc_curlyU: curlyU k dependent attributes are supposed to be unallocated."
+      if(Wimp%Nkpt.ne.0) stop "calc_curlyU: Wimp k dependent attributes are supposed to be unallocated."
+      if(Pimp%Nkpt.ne.0) stop "calc_curlyU: Pimp k dependent attributes are supposed to be unallocated."
+      if(present(curlyUcorr).and.(.not.curlyUcorr%status)) stop "calc_curlyU: Requested causality correction but curlyUcorr not properly initialized."
       !
       sym_=.true.
       if(present(sym))sym_=sym
@@ -2222,14 +2222,14 @@ contains
       Beta = curlyU%Beta
       Nmats = curlyU%Npoints
       !
-      if(all([Wimp%Nbp-Nbp,Pimp%Nbp-Nbp].ne.[0,0])) stop "Either Wimp and/or Pimp have different orbital dimension with respect to curlyU."
-      if(all([Wimp%Beta-Beta,Pimp%Beta-Beta].ne.[0d0,0d0])) stop "Either Wimp and/or Pimp have different Beta with respect to curlyU."
-      if(all([Wimp%Npoints-Nmats,Pimp%Npoints-Nmats].ne.[0,0])) stop "Either Wimp and/or Pimp have different number of Matsubara points with respect to curlyU."
+      if(all([Wimp%Nbp-Nbp,Pimp%Nbp-Nbp].ne.[0,0])) stop "calc_curlyU: Either Wimp and/or Pimp have different orbital dimension with respect to curlyU."
+      if(all([Wimp%Beta-Beta,Pimp%Beta-Beta].ne.[0d0,0d0])) stop "calc_curlyU: Either Wimp and/or Pimp have different Beta with respect to curlyU."
+      if(all([Wimp%Npoints-Nmats,Pimp%Npoints-Nmats].ne.[0,0])) stop "calc_curlyU: Either Wimp and/or Pimp have different number of Matsubara points with respect to curlyU."
       if(present(curlyUcorr))then
-         if(Nbp.ne.curlyUcorr%Nbp) stop "curlyUcorr has different orbital dimension with respect to curlyU."
-         if(Beta.ne.curlyUcorr%Beta) stop "curlyUcorr has different Beta with respect to curlyU."
-         if(Nmats.ne.curlyUcorr%Npoints) stop "curlyUcorr has different number of Matsubara points with respect to curlyU."
-         if(curlyUcorr%Nkpt.ne.0) stop "curlyUcorr k dependent attributes are supposed to be unallocated."
+         if(Nbp.ne.curlyUcorr%Nbp) stop "calc_curlyU: curlyUcorr has different orbital dimension with respect to curlyU."
+         if(Beta.ne.curlyUcorr%Beta) stop "calc_curlyU: curlyUcorr has different Beta with respect to curlyU."
+         if(Nmats.ne.curlyUcorr%Npoints) stop "calc_curlyU: curlyUcorr has different number of Matsubara points with respect to curlyU."
+         if(curlyUcorr%Nkpt.ne.0) stop "calc_curlyU: curlyUcorr k dependent attributes are supposed to be unallocated."
       endif
       !
       call clear_attributes(curlyU)
@@ -2301,14 +2301,14 @@ contains
       !
       !
       ! Check on the input Fields
-      if(.not.Wimp%status) stop "Wimp not properly initialized."
-      if(.not.curlyU%status) stop "curlyU not properly initialized."
-      if(.not.ChiC%status) stop "ChiC not properly initialized."
-      if(Wimp%Nkpt.ne.0) stop "Wimp k dependent attributes are supposed to be unallocated."
-      if(curlyU%Nkpt.ne.0) stop "curlyU k dependent attributes are supposed to be unallocated."
-      if(ChiC%Nkpt.ne.0) stop "ChiC k dependent attributes are supposed to be unallocated."
-      if(allocated(ChiC%bare_local))  stop "ChiC bare_local attribute is supposed to be unallocated."
-      if(allocated(ChiC%bare))  stop "ChiC bare attribute is supposed to be unallocated."
+      if(.not.Wimp%status) stop "calc_Wimp: Wimp not properly initialized."
+      if(.not.curlyU%status) stop "calc_Wimp: curlyU not properly initialized."
+      if(.not.ChiC%status) stop "calc_Wimp: ChiC not properly initialized."
+      if(Wimp%Nkpt.ne.0) stop "calc_Wimp: Wimp k dependent attributes are supposed to be unallocated."
+      if(curlyU%Nkpt.ne.0) stop "calc_Wimp: curlyU k dependent attributes are supposed to be unallocated."
+      if(ChiC%Nkpt.ne.0) stop "calc_Wimp: ChiC k dependent attributes are supposed to be unallocated."
+      if(allocated(ChiC%bare_local))  stop "calc_Wimp: ChiC bare_local attribute is supposed to be unallocated."
+      if(allocated(ChiC%bare))  stop "calc_Wimp: ChiC bare attribute is supposed to be unallocated."
       !
       sym_=.true.
       if(present(sym))sym_=sym
@@ -2317,9 +2317,9 @@ contains
       Beta = Wimp%Beta
       Nmats = Wimp%Npoints
       !
-      if(all([curlyU%Nbp-Nbp,ChiC%Nbp-Nbp].ne.[0,0])) stop "Either curlyU and/or ChiC have different orbital dimension with respect to Wimp."
-      if(all([curlyU%Beta-Beta,ChiC%Beta-Beta].ne.[0d0,0d0])) stop "Either curlyU and/or ChiC have different Beta with respect to Wimp."
-      if(all([curlyU%Npoints-Nmats,ChiC%Npoints-Nmats].ne.[0,0]))   stop "Either curlyU and/or ChiC have different number of Matsubara points with respect to Wimp."
+      if(all([curlyU%Nbp-Nbp,ChiC%Nbp-Nbp].ne.[0,0])) stop "calc_Wimp: Either curlyU and/or ChiC have different orbital dimension with respect to Wimp."
+      if(all([curlyU%Beta-Beta,ChiC%Beta-Beta].ne.[0d0,0d0])) stop "calc_Wimp: Either curlyU and/or ChiC have different Beta with respect to Wimp."
+      if(all([curlyU%Npoints-Nmats,ChiC%Npoints-Nmats].ne.[0,0]))   stop "calc_Wimp: Either curlyU and/or ChiC have different number of Matsubara points with respect to Wimp."
       !
       call clear_attributes(Wimp)
       !
