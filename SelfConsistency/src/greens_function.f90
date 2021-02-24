@@ -566,7 +566,7 @@ contains
          !
          if(aimag(dens_C).gt.eps)then
             write(*,"(A,2F10.5)")"Density (Int) is complex: ",real(dens_C),aimag(dens_C)
-            stop
+            stop "get_dens(set_density_Int)"
          endif
          dens = real(dens_C)
          !
@@ -699,7 +699,7 @@ contains
          !
          if(aimag(dens_C).gt.eps)then
             write(*,"(A,2F10.5)")"Density (NonInt) is complex: ",real(dens_C),aimag(dens_C)
-            stop
+            stop "get_dens(set_density_NonInt)"
          endif
          dens = real(dens_C)
          !

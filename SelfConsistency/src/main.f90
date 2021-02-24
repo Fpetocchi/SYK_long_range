@@ -214,7 +214,11 @@ program SelfConsistency
       !
       !Compute the Full Green's function and set the density
       call calc_Gmats(Glat,Crystal,S_Full)
-      if(look4dens%TargetDensity.ne.0d0)call set_density(Glat,Crystal,look4dens)
+      if(look4dens%TargetDensity.ne.0d0)then
+         call set_density(Glat,Crystal,look4dens)
+      else
+         write(*,"(A,F)")"     Lattice density:",trace(Glat%N_s(:,:,1)+Glat%N_s(:,:,2))
+      endif
       !
       !
       !Update the full self-energy, print and compute Glat along the path

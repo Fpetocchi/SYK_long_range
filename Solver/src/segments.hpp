@@ -90,7 +90,10 @@ typedef std::chrono::time_point<std::chrono::system_clock> duration;
 inline int cycle(int i, int size) {return (i>0 ? i-1 : size-1);}
 
 
-template <class G> inline double interpolate_F(double t, double Beta, G& F)
+//------------------------------------------------------------------------------
+
+
+template <class G> inline double interpolate_F(double t, double Beta, G &F)
 {
    double sign=1;
    if (t<0)
@@ -106,6 +109,54 @@ template <class G> inline double interpolate_F(double t, double Beta, G& F)
 
    //
    return sign*(F[n_lower] + (n-n_lower)*(F[n_lower+1]-F[n_lower]));
+}
+
+
+//------------------------------------------------------------------------------
+
+
+template <class S, class G> double det_inverse( Mat &M, S &segments, double Beta,  G&F)
+{
+    construct_matrix(M, segments, Beta, F);
+    Mat invM = M.inverse();
+    swap(M,invM);
+    double det = invM.determinant();
+    return det;
+}
+
+template <class S, class G> void construct_matrix( Mat &M, S &segments, double Beta,  G &F)
+{
+   //
+   int N = segments.size();
+   M.resize(N,N);
+   int row=-1;
+   int col=-1;
+
+   //
+   for (typename S::iterator it1=segments.begin(); it1!=segments.end(); it1++)
+   {
+      row++;
+      for (typename S::iterator it2=segments.begin(); it2!=segments.end(); it2++)
+      {
+         col++;
+
+         //
+         double argument = it1->t_end()-it2->t_start();
+         double sign = 1;
+
+         //
+         if(argument<0)
+         {
+            argument += Beta;
+            sign = -1;
+         }
+
+         //
+         M(row,col) = interpolate_F(argument, Beta, F)*sign;
+      }
+      //
+      col = -1;
+   }
 }
 
 

@@ -31,11 +31,11 @@ template <class S> void insert_remove_full_line(double Eo, Mat &Umat, double Bet
    if ((insert==1 && full_line==1) || (insert==0 && full_line==0)) return;
 
    //
-   int FLAVORS = other_full_line.size();
+   int Nflavor = other_full_line.size();
    double otherlength_u=0;
 
    //
-   for (int i=0; i<FLAVORS; i++)
+   for (int i=0; i<Nflavor; i++)
    {
       if (i==this_flavor) continue;
       //
@@ -92,8 +92,8 @@ template <class S, class G> void insert_remove_antisegment( double t, double Bet
 
          //
          double otherlength_u=0;
-         int FLAVORS=other_full_line.size();
-         for(int i=0; i<FLAVORS; i++)
+         int Nflavor=other_full_line.size();
+         for(int i=0; i<Nflavor; i++)
          {
             if (i==this_flavor) continue;
             double other_length = compute_overlap(segment_remove, other_segments[i], other_full_line[i], Beta);
@@ -140,8 +140,8 @@ template <class S, class G> void insert_remove_antisegment( double t, double Bet
 
             //
             double otherlength_u=0;
-            int FLAVORS=other_full_line.size();
-            for (int i=0; i<FLAVORS; i++)
+            int Nflavor=other_full_line.size();
+            for (int i=0; i<Nflavor; i++)
             {
                 if (i==this_flavor) continue;
                 double other_length = compute_overlap(anti_segment, other_segments[i], other_full_line[i], Beta);
@@ -246,8 +246,8 @@ template <class S, class G> void insert_remove_antisegment( double t, double Bet
 
       //
       double otherlength_u=0;
-      int FLAVORS=other_full_line.size();
-      for(int i=0; i<FLAVORS; i++)
+      int Nflavor=other_full_line.size();
+      for(int i=0; i<Nflavor; i++)
       {
          if (i==this_flavor) continue;
          double other_length = compute_overlap(anti_segment, other_segments[i], other_full_line[i], Beta);
@@ -303,8 +303,8 @@ template <class S, class G> void insert_remove_antisegment( double t, double Bet
 
       //
       double otherlength_u=0;
-      int FLAVORS=other_full_line.size();
-      for(int i=0; i<FLAVORS; i++)
+      int Nflavor=other_full_line.size();
+      for(int i=0; i<Nflavor; i++)
       {
          if (i==this_flavor) continue;
          double other_length = compute_overlap(anti_segment, other_segments[i], other_full_line[i], Beta);
@@ -364,8 +364,8 @@ template <class S, class G> void insert_remove_segment( double t, double Beta,
 
          //
          double otherlength_u=0;
-         int FLAVORS=other_full_line.size();
-         for (int i=0; i<FLAVORS; i++)
+         int Nflavor=other_full_line.size();
+         for (int i=0; i<Nflavor; i++)
          {
              if (i==this_flavor) continue;
              double other_length = compute_overlap(segment_insert, other_segments[i], other_full_line[i], Beta);
@@ -417,8 +417,8 @@ template <class S, class G> void insert_remove_segment( double t, double Beta,
 
       //
       double otherlength_u=0;
-      int FLAVORS=other_full_line.size();
-      for (int i=0; i<FLAVORS; i++)
+      int Nflavor=other_full_line.size();
+      for (int i=0; i<Nflavor; i++)
       {
          if (i==this_flavor) continue;
          double other_length = compute_overlap(segment_remove, other_segments[i], other_full_line[i], Beta);
@@ -481,8 +481,8 @@ template <class S, class G> void shift_segment( S &segments, double Beta, double
 
    //
    double otherlength_u=0;
-   int FLAVORS=other_full_line.size();
-   for (int i=0; i<FLAVORS; i++)
+   int Nflavor=other_full_line.size();
+   for (int i=0; i<Nflavor; i++)
    {
       if (i==this_flavor) continue;
       double other_length = compute_overlap(segment_insert, other_segments[i], other_full_line[i], Beta)-compute_overlap(segment_remove, other_segments[i], other_full_line[i], Beta);
@@ -509,6 +509,60 @@ template <class S, class G> void shift_segment( S &segments, double Beta, double
       sit=segments.insert(s_new).first;
       if(sit==segments.end()){std::cerr<<"segment could not be inserted! exiting."<<std::endl;}
    }
+}
+
+
+//------------------------------------------------------------------------------
+
+
+template <class G, class S> void swap_spins( double Beta, G &F, S &segments,
+   std::vector<int> &full_line, Vec &sign, VecMat &M)
+{
+   int Nflavor = F.size();
+   VecMat M_new(Nflavor);
+   double det_rat=1.0;
+
+   //
+   for (int i=0; i<Nflavor/2; i++)
+   {
+      //
+      int up = 2*i;
+      int dw = 2*i+1;
+
+      //
+      // before swap
+      double det_old_up = det_inverse( M_new[up], segments[up], Beta, F[up] );
+      double det_old_dw = det_inverse( M_new[dw], segments[dw], Beta, F[dw] ); // here M_new is just a dummy
+      // after swap
+      double det_new_up = det_inverse( M_new[up], segments[dw], Beta, F[up] );
+      double det_new_dw = det_inverse( M_new[dw], segments[up], Beta, F[dw] );
+
+      //
+      det_rat *= (det_new_up/det_old_up)*(det_new_dw/det_old_dw);
+   }
+
+   //
+   if(rndm() < fabs(det_rat))
+   {
+      for (int i=0; i<Nflavor/2; i++)
+      {
+         //
+         int up = 2*i;
+         int dw = 2*i+1;
+
+         //
+         //swap inverse hyb
+         swap( M_new[up], M[up] );
+         swap( M_new[dw], M[dw] );
+         //swap segments
+         swap(segments[up], segments[dw]);
+         //swap full lines
+         std::swap(full_line[up], full_line[dw]);
+         //swap signs
+         std::swap(sign[up], sign[dw]);
+      }
+   }
+
 }
 
 

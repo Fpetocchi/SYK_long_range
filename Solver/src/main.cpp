@@ -35,7 +35,7 @@ int main(int argc, char *argv[])
    //.........................................................................//
    // Global Vars
    double Beta;
-   int Nspin,NtauF,NtauB,Norder,Nmeas,Ntherm,Nshift,printTime;
+   int Nspin,NtauF,NtauB,Norder,Nmeas,Ntherm,Nshift,Nswap,printTime;
    //logical flags and compatibility typo fix
    bool paramagnet,retarded,nnt_meas,quickloops,dichotomy,OrbSym;
    int para_mode,ret_read,nnt_read,quick_read,sym_read;
@@ -85,6 +85,7 @@ int main(int argc, char *argv[])
       find_param(argv[1], "NMEAS"      , Nmeas     );
       find_param(argv[1], "NTHERM"     , Ntherm    );
       find_param(argv[1], "NSHIFT"     , Nshift    );
+      find_param(argv[1], "NSWAP"      , Nswap     );
       find_param(argv[1], "PRINT_TIME" , printTime );
       find_param(argv[1], "PARAMAGNET" , para_mode ); //paramagnet = (para_read == 1) ? true : false;
       find_param(argv[1], "RETARDED"   , ret_read  ); retarded = (ret_read == 1) ? true : false;
@@ -135,6 +136,22 @@ int main(int argc, char *argv[])
             mpi.report(" muErr= "+str(muErr));
             mpi.report(" muTime= "+str(muTime)+"min");
          }
+
+
+         if(mpi.is_master())
+         {
+            Eigen::Matrix3f A;
+            Eigen::Matrix3f B;
+            A << 1, 2, 1,2, 1, 0,-1, 1, 2;
+            B=A.inverse();
+            std::cout << "Here is the matrix A:\n" << A << std::endl;
+            std::cout << "The determinant of invA is " << B.determinant() << std::endl;
+            std::cout << "The invA is:\n" << B << std::endl;
+         }
+
+
+
+
       }
 
       //
@@ -234,7 +251,7 @@ int main(int argc, char *argv[])
          {
             mpi.report(" Folder = "+SiteDir[isite]+" (Found).");
             ImpurityList.push_back(ct_hyb( SiteName[isite], Beta, Nspin, SiteNorb[isite],
-                                           NtauF, NtauB, Norder, Nmeas, Ntherm, Nshift,
+                                           NtauF, NtauB, Norder, Nmeas, Ntherm, Nshift, Nswap,
                                            para_mode, retarded, nnt_meas, SiteSetsNorb[isite],
                                            printTime, std::vector<int> { binlength,binstart }, mpi ));
             ImpurityList[isite].init( SiteDir[isite]);

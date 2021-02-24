@@ -107,6 +107,7 @@ module parameters
       real(8)                               :: muStep=0d0
       integer                               :: muIter=0
       real(8)                               :: muTime=0d0
+      logical                               :: local
       integer,allocatable                   :: orbs(:)                          !orbital restriction (has to be added to the input)
       !I'm writing this as integers due to some mismatch on how to write boolean between fortrann and c++
       integer                               :: quickloops=0
@@ -166,6 +167,7 @@ module parameters
       integer                               :: Norder=0
       integer                               :: Nmeas=1000
       integer                               :: Ntherm=1000
+      integer                               :: Nswap=1000
       integer                               :: Nshift=2
       integer                               :: PrintTime=10
       integer                               :: binlength=4

@@ -37,11 +37,11 @@ class ct_hyb
       //----------------------------------------------------------------------//
 
       ct_hyb( path SiteName, double beta, int Nspin, int Norb, int NtauF, int NtauB,
-              int Norder, int Nmeas, int Ntherm, int Nshift,
+              int Norder, int Nmeas, int Ntherm, int NsegShift, int NspinSwap,
               int para_mode, bool retarded, bool nnt_meas, std::vector<int> SetsNorb,
               int printTime, std::vector<int> bins, CustomMPI &mpi):
       SiteName(SiteName), Beta(beta), Nspin(Nspin), Norb(Norb), NtauF(NtauF), NtauB(NtauB),
-      Norder(Norder), Nmeas(Nmeas), Ntherm(Ntherm), Nshift(Nshift),
+      Norder(Norder), Nmeas(Nmeas), Ntherm(Ntherm), NsegShift(NsegShift), NspinSwap(NspinSwap),
       para_mode(para_mode), retarded(retarded), nnt_meas(nnt_meas), SetsNorb(SetsNorb),
       printTime(printTime), bins(bins), mpi(mpi)
       {}
@@ -349,7 +349,8 @@ class ct_hyb
       int                                 Norder;                               // Max perturbation order
       int                                 Nmeas;                                // Number of sweeps between expensive measurments
       int                                 Ntherm;
-      int                                 Nshift;
+      int                                 NsegShift;
+      int                                 NspinSwap;
       int                                 para_mode;
       bool                                paramagnet;
       bool                                retarded;
@@ -464,8 +465,8 @@ class ct_hyb
                   // local update
                   insert_remove_segment( Beta*rndm(), Beta, Levels[ifl], Uloc, F[ifl], segments[ifl], M[ifl], sign[ifl], segments, full_line, ifl, K_table);
                   // shift segments
-                  for (int k=0; k<Nshift; k++) shift_segment( segments[ifl], Beta, Levels[ifl], Uloc, F[ifl], M[ifl], sign[ifl], segments, full_line, ifl, K_table );
-                  // flip segment
+                  if(imeas%NsegShift==1) shift_segment( segments[ifl], Beta, Levels[ifl], Uloc, F[ifl], M[ifl], sign[ifl], segments, full_line, ifl, K_table );
+                  // flip segment - NOT IMPLEMENTED
                   //for (int i=0; i<N_flip; i++)flip_segment( segments_up, NtauF_m1, Beta, M_up, sign_up, sign_down, F_down, M_down, segments_down, full_line_down);
                }
 
@@ -482,6 +483,14 @@ class ct_hyb
             }
             //
             sign_meas += s/(double)Nmeas_;
+            //
+            //global spin flip (does not require overlap calculation)
+            if(imeas%NspinSwap==1)
+            {
+               bool SpinSwap;
+               for (int ifl=0; ifl<Nflavor; ifl++) SpinSwap = ( M[ifl].rows() == 0 ) ? false : true;
+               if(SpinSwap) swap_spins( Beta, F, segments, full_line, sign, M );
+            }
          }
 
          //
@@ -532,14 +541,22 @@ class ct_hyb
                   // local update
                   insert_remove_segment( Beta*rndm(), Beta, Levels[ifl], Uloc, F[ifl], segments[ifl], M[ifl], sign[ifl], segments, full_line, ifl, K_table );
                   // shift segments
-                  for (int k=0; k<Nshift; k++) shift_segment( segments[ifl], Beta, Levels[ifl], Uloc, F[ifl], M[ifl], sign[ifl], segments, full_line, ifl, K_table );
-                  // flip segment
+                  if(imeas%NsegShift==1) shift_segment( segments[ifl], Beta, Levels[ifl], Uloc, F[ifl], M[ifl], sign[ifl], segments, full_line, ifl, K_table );
+                  // flip segment - NOT IMPLEMENTED
                   //for (int i=0; i<N_flip; i++)flip_segment( segments_up, NtauF_m1, Beta, M_up, sign_up, sign_down, F_down, M_down, segments_down, full_line_down);
                }
 
                //.........................Cheap measurments.....................
                // flavour occupation
                if(!fulldry) Nloc[ifl] += compute_overlap(full_segment, segments[ifl], full_line[ifl], Beta)/(Beta*Nmeas_);
+            }
+            //
+            //global spin flip (does not require overlap calculation)
+            if(imeas%NspinSwap==1)
+            {
+               bool SpinSwap;
+               for (int ifl=0; ifl<Nflavor; ifl++) SpinSwap = ( M[ifl].rows() == 0 ) ? false : true;
+               if(SpinSwap) swap_spins( Beta, F, segments, full_line, sign, M );
             }
          }
       }

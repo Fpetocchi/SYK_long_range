@@ -369,6 +369,13 @@ contains
       call add_separator()
       call parse_input_variable(look4dens%mu,"MU",InputFile,default=0d0,comment="Chemical potential.")
       call parse_input_variable(look4dens%TargetDensity,"N_READ_LAT",InputFile,default=0d0,comment="Target density on the lattice. Lookup is switched on to this value if its >0d0. Otherwise mu will be kept fixed.")
+      if(ExpandImpurity)then
+         call parse_input_variable(look4dens%local,"N_READ_LAT_LOC",InputFile,default=.false.,comment="Flag to restrict the lattice density lookup to the ORBS_1 indexes corresponding to the solved impurity.")
+         if(look4dens%local)then
+            look4dens%orbs = SiteOrbs(1,1:SiteNorb(1))
+            look4dens%TargetDensity = look4dens%TargetDensity/Nsite
+         endif
+      endif
       call parse_input_variable(look4dens%quickloops,"N_QUICK",InputFile,default=1,comment="Integer flag to switch on the quick density lookup within the solver.")
       call parse_input_variable(look4dens%densityRelErr,"N_ERR",InputFile,default=0.01d0,comment="Relative error on the target density. Better if not lower than 1e-3.")
       call parse_input_variable(look4dens%muStep,"MU_STEP",InputFile,default=0.2d0,comment="Initial chemical potential step in the density lookup.")
@@ -494,13 +501,15 @@ contains
       if(mod(Solver%NtauF,2).eq.0)Solver%NtauF=Solver%NtauF+1
       call parse_input_variable(Solver%NtauB,"NTAU_B_IMP",InputFile,default=int(2d0*pi*Nmats),comment="Number of points on the imaginary time axis for Bosonic impurity fields. Its gonna be made odd.")
       if(mod(Solver%NtauB,2).eq.0)Solver%NtauB=Solver%NtauB+1
-      Solver%TargetDensity = look4dens%TargetDensity
-      if(ExpandImpurity)Solver%TargetDensity = look4dens%TargetDensity/Nsite
-      call append_to_input_list(Solver%TargetDensity,"N_READ_IMP","Target density in the impurity list. User cannot set this as its the the same density on within the impurity orbitals if EXPAND=F otherwise its N_READ_LAT/NSITE.")
+      !Solver%TargetDensity = look4dens%TargetDensity
+      !if(ExpandImpurity)Solver%TargetDensity = look4dens%TargetDensity/Nsite
+      !call append_to_input_list(Solver%TargetDensity,"N_READ_IMP","Target density in the impurity list. User cannot set this as its the the same density on within the impurity orbitals if EXPAND=F otherwise its N_READ_LAT/NSITE.")
+      call parse_input_variable(Solver%TargetDensity,"N_READ_IMP",InputFile,default=look4dens%TargetDensity,comment="Target density in the impurity list.")
       call parse_input_variable(Solver%Norder,"NORDER",InputFile,default=10,comment="Maximum perturbation order measured. Not used yet.")
       call parse_input_variable(Solver%Nmeas,"NMEAS",InputFile,default=1000,comment="Sweeps where expensive measurments are not performed.")
       call parse_input_variable(Solver%Ntherm,"NTHERM",InputFile,default=100,comment="Thermalization cycles. Each cycle performs NMEAS sweeps.")
-      call parse_input_variable(Solver%Nshift,"NSHIFT",InputFile,default=2,comment="Attempted shift moves at each sweep.")
+      call parse_input_variable(Solver%Nshift,"NSHIFT",InputFile,default=100,comment="Sweeps where segment shifts are not proposed.")
+      call parse_input_variable(Solver%Nswap,"NSWAP",InputFile,default=100,comment="Sweeps where global spin swaps are not proposed.")
       call parse_input_variable(Solver%PrintTime,"PRINT_TIME",InputFile,default=10,comment="Minutes that have to pass before observables are updated and stored.")
       call parse_input_variable(Solver%binlength,"BINLENGTH",InputFile,default=4,comment="If >0 the Green's function at itau will be the average within +/-binlength.")
       call parse_input_variable(Solver%binstart,"BINSTART",InputFile,default=100,comment="Tau points skipped at the beginning and end of the Green's function average.")
