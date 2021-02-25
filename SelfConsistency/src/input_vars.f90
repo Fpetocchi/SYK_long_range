@@ -111,7 +111,7 @@ module input_vars
    logical,public                           :: AFMselfcons
    logical,public                           :: cmplxWann
    integer,public,allocatable               :: SiteNorb(:)
-   character(len=2),public,allocatable      :: SiteName(:)
+   character(len=255),public,allocatable    :: SiteName(:)
    integer,public,allocatable               :: SiteOrbs(:,:)
    real(8),public,allocatable               :: SiteCF(:,:)
    !
@@ -289,7 +289,7 @@ contains
                call parse_input_variable(SiteNorb(isite),"NORB_1",InputFile,default=1,comment="Number of orbitals in site number 1")
             else
                SiteNorb(isite) = SiteNorb(1)
-               SiteName(isite) = SiteName(1)
+               SiteName(isite) = reg(SiteName(1))
             endif
          else
             call parse_input_variable(SiteName(isite),"NAME_"//str(isite),InputFile,default="El",comment="Chemical species of the site number "//str(isite))

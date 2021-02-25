@@ -150,7 +150,7 @@ int main(int argc, char *argv[])
          char lineT[5];
          char lineO[5];
          char folder[999];
-         char element[2];
+         char element[999];
          int minutes,Norb;
          //
          strcpy(lineT,"TIME_");
