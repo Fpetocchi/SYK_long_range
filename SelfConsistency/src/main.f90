@@ -128,7 +128,7 @@ program SelfConsistency
          !
          !Hartree shift between G0W0 and LDA
          allocate(VH(Crystal%Norb,Crystal%Norb));VH=czero
-         if(.not.Hmodel)call calc_VH(VH,densityLDA,Glat,Ulat) !call calc_VH(VH,densityLDA,densityDMFT,Ulat)
+         if(.not.Hmodel)call calc_VH(VH,densityLDA,densityDMFT,Ulat) !call calc_VH(VH,densityLDA,Glat,Ulat)
          call dump_Matrix(VH,reg(ItFolder)//"VH.DAT")
          if(.not.VH_use)then
             VH=czero
@@ -137,11 +137,9 @@ program SelfConsistency
          if(solve_DMFT.and.bosonicSC.and.(.not.Ustart))call DeallocateBosonicField(Ulat)
          !
          !read from SPEX G0W0 self-energy and Vexchange
-         allocate(Vxc(Crystal%Norb,Crystal%Norb,Crystal%Nkpt,Nspin));Vxc=czero
          call AllocateFermionicField(S_G0W0,Crystal%Norb,Nmats,Nkpt=Crystal%Nkpt,Nsite=Nsite,Beta=Beta)
          if(.not.Hmodel)then
-            call read_Sigma_spex(S_G0W0,Crystal,verbose,Vxc=Vxc,doAC=Sigma_AC,pathOUTPUT=reg(pathINPUTtr))
-            if(.not.Vxc_use)Vxc=czero
+            call read_Sigma_spex(S_G0W0,Crystal,verbose,doAC=Sigma_AC,pathOUTPUT=reg(pathINPUTtr))
          endif
          !
          !scGW
@@ -156,8 +154,8 @@ program SelfConsistency
                call duplicate(S_G0W0,S_G0W0dc)
             else
                !Store the Dc between G0W0 and scGW self-energies and use G0W0 as self-energy for the first iteration because the DC is equal to scGW
-               call dump_FermionicField(S_G0W0dc,reg(ItFolder),"SGoWo_w",.true.,Crystal%kpt)
-               call dump_FermionicField(S_G0W0dc,reg(ItFolder),"SGoWo_w")
+               call dump_FermionicField(S_G0W0dc,reg(ItFolder),"SGoWo_dc_w",.true.,Crystal%kpt)
+               call dump_FermionicField(S_G0W0dc,reg(ItFolder),"SGoWo_dc_w")
                call DeallocateFermionicField(S_G0W0dc)
             endif
             !
@@ -167,7 +165,7 @@ program SelfConsistency
             !
             !Read the Dc between G0W0 and scGW if present
             call AllocateFermionicField(S_G0W0dc,Crystal%Norb,Nmats,Nkpt=Crystal%Nkpt,Nsite=Nsite,Beta=Beta)
-            if(.not.Hmodel)call read_FermionicField(S_G0W0dc,reg(pathDATA)//"0/","SGoWo_w",kpt=Crystal%kpt)
+            if(.not.Hmodel)call read_FermionicField(S_G0W0dc,reg(pathDATA)//"0/","SGoWo_dc_w",kpt=Crystal%kpt)
             !
             !Compute the scGW self-energy
             call AllocateFermionicField(S_GW,Crystal%Norb,Nmats,Nkpt=Crystal%Nkpt,Nsite=Nsite,Beta=Beta)
@@ -192,14 +190,6 @@ program SelfConsistency
             !
          endif
          !
-      endif
-      !
-      !
-      !Store rotation after first Vxc allocation
-      if((RotateHloc).and.(Iteration.eq.0))then
-         write(*,"(A)") new_line("A")//new_line("A")//"---- Rotations of the local LDA Hamiltonian + local Vxc (used)"
-         call build_rotations("Hren",OlocSite,OlocEig,OlocRot,OlocRotDag,LatticeOp=(Crystal%Hloc-sum(Vxc(:,:,:,1),dim=3)/Crystal%Nkpt))
-         call update_ImpEqvOrbs()
       endif
       !
       !

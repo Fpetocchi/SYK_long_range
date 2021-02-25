@@ -29,7 +29,7 @@
 
  #---------------------------------------------#
 
- BETA=40.000000                                !Inverse temperature in 1/eV.
+ BETA=35.000000                                !Inverse temperature in 1/eV.
  MAX_WMATS=150.000000                          !Maximum value of the Matsubara frequency mesh.
  TAU_UNIF=F                                    !Flag to use a non-tau_uniform mesh on the imaginary time axis.
  NREAL=2000                                    !Number of points on the real frequency axis.
@@ -40,7 +40,8 @@
  #---------------------------------------------#
 
  MU=0.000000                                   !Chemical potential.
- N_READ_LAT=16.000000                          !Target density on the lattice. Lookup is switched on to this value if its >0d0. Otherwise mu will be kept fixed.
+ N_READ_LAT=16.00000                           !Target density on the lattice. Lookup is switched on to this value if its >0d0. Otherwise mu will be kept fixed.
+ N_READ_LAT_LOC=T                              !Flag to restrict the lattice density lookup to the ORBS_1 indexes corresponding to the solved impurity.
  N_QUICK=1                                     !Integer flag to switch on the quick density lookup within the solver.
  N_ERR=1.000000E-03                            !Relative error on the target density. Better if not lower than 1e-3.
  MU_STEP=0.500000                              !Initial chemical potential step in the density lookup.
@@ -61,11 +62,10 @@
 
  VH_TYPE=Ustatic_SPEX                          !Hartree term mismatch between GoWo and scGW. Available: Ubare, Ustatic, Ubare_SPEX(V_nodiv.DAT required), Ustatic_SPEX(V_nodiv.DAT required).
  VH_USE=F                                      !Flag to use the Hartree term correction between Tier-III and Tier-II, which is printed in PATH_INPUT even if not used.
- VXC_USE=T                                     !Flag to use the exchange potential, which is printed in PATH_INPUT even if not used.
  DC_TYPE=Sloc                                  !Local GW self-energy which is replaced by DMFT self-energy. Avalibale: GlocWloc, Sloc.
  SIGMA_AC=F                                    !Flag to force the analytic continuation on the G0W0 self-energy.
  SMEAR_GAMMA=T                                 !Remove the interaction divergence at the Gamma point.
- S_GUESS=T                                     !Use G0W0_loc as a first guess for the DMFT self-energy.
+ S_GUESS=F                                     !Use G0W0_loc as a first guess for the DMFT self-energy.
  P_GUESS=F                                     !Use GG_loc as a first guess for the DMFT polarization.
  ALPHA_CHI=1.000000                            !Rescaling factor for the local charge susceptibility.
  ALPHA_PI=1.000000                             !Fraction of the EDMFT polarization substituted within the lattice one.
@@ -73,9 +73,9 @@
  ALPHA_HK=1.000000                             !Rescaling of the non-interacting Hamiltonian.
  CHI_DIAG=F                                    !Flag to remove the off-diagonal components of the local charge susceptibility.
  CDW_CHI=T                                     !Flag to remove the iw=0 divergence in the local charge susceptibility.
- CDW_PI=T                                      !Flag to remove the iw=0 divergence in the local polarization.
- MIX_D=0.000000                                !Fraction of the old iteration Delta.
- MIX_U=0.990000                                !Fraction of the old iteration curlyU.
+ CDW_PI=F                                      !Flag to remove the iw=0 divergence in the local polarization.
+ MIX_D=0.500000                                !Fraction of the old iteration Delta.
+ MIX_U=0.900000                                !Fraction of the old iteration curlyU.
  CAUSAL_D=F                                    !Flag to employ generalized cavity equation for Delta. Active only for GW+EDMFT calculation.
  CAUSAL_U=F                                    !Flag to employ generalized cavity equation for curlyU. Active only for GW+EDMFT calculation.
  DELTA_FIT=Analytic                            !Fit to extract the local energy in GW+EDMFT calculations. Available: Inf, Analytic, Moments.
@@ -84,20 +84,24 @@
 
  #---------------------------------------------#
 
- PATH_INPUT=GWinput_SPEX_Ca2RuO4_S           !Folder within cwd where to look for input files.
- PATH_INPUT_TR=GWinput_mats  !Folder within cwd where to save input files after analytic continuation to the Matsubara axis.
- PATH_DATA=Results_beta40              !Folder within cwd where to store calculation data.
- START_IT=4         !First iteration. If its non zero the code will look for the last item in PATH_DATA/item and start there.
- LAST_IT=26                     !Last iteration.
+ PATH_INPUT=                                   !Folder within cwd where to look for input files.
+ PATH_INPUT_TR=                                !Folder within cwd where to save input files after analytic continuation to the Matsubara axis.
+ PATH_DATA=                                    !Folder within cwd where to store calculation data.
+ START_IT=                                     !First iteration. If its non zero the code will look for the last item in PATH_DATA/item and start there.
+ LAST_IT=                                      !Last iteration.
  LOGFILE=6                                     !Standard output redirection unit. Use 6 to print to terminal. Not used yet.
  PRINT_GK=T                                    !Print the full k-dependent Green's function (binfmt) at each iteration (mandatory for CALC_TYPE=G0W0,scGW,GW+EDMFT).
  PRINT_SIGMAK=F                                !Print the full k-dependent self-energy (binfmt) at each iteration (always optional).
- PRINT_PATH=None                               !Print the H(k) and interacting Green's function along high-symmetry points. Available structures: cubic, fcc, bcc, hex, tetragonal, orthorhombic, None to avoid
+ STRUCTURE=None                                !Available structures: cubic, fcc, bcc, hex, tetragonal, orthorhombic, None to avoid.
+ PRINT_GPATH=F                                 !Print the interacting Green's function along high-symmetry points.
  NK_PATH=50                                    !Number of segments between two hig-symmetry Kpoints.
 
  #---------------------------------------------#
 
- MATCH_BETA=F         !Interpolate to new Beta.
+ MATCH_BETA=F                                  !Interpolate to new Beta.
+ OLD_BETA=40                                   !Beta of the calculation from which Pimp and Sigma will be fitted from.
+ OLD_BETA_PATH=data_40                         !Folder (within cwd) from which the old Beta Pimp and Sigma will be read from.
+ OLD_BETA_MAX_WMATS=150                        !Maximum value of the Matsubara frequency mesh of the old Beta calculation.
 
  #---------------------------------------------#
 
@@ -108,7 +112,8 @@
  NORDER=10                                     !Maximum perturbation order measured. Not used yet.
  NMEAS=1000                                    !Sweeps where expensive measurments are not performed.
  NTHERM=100                                    !Thermalization cycles. Each cycle performs NMEAS sweeps.
- NSHIFT=1                                      !Attempted shift moves at each sweep.
+ NSHIFT=100                                    !Sweeps where segment shifts are not proposed. Not proposed if >NMEAS.
+ NSWAP=100                                     !Sweeps where global spin swaps are not proposed. Not proposed if >NMEAS.
  PRINT_TIME=40                                 !Minutes that have to pass before observables are updated and stored.
  BINLENGTH=4                                   !If >0 the Green's function at itau will be the average within +/-binlength.
  BINSTART=50                                   !Tau points skipped at the beginning and end of the Green's function average.

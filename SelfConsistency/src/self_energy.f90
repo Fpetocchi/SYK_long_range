@@ -916,7 +916,7 @@ contains
    !PURPOSE: Read self-energy from SPEX files.
    !TEST ON: 27-10-2020(both write and read)
    !---------------------------------------------------------------------------!
-   subroutine read_Sigma_spex(Smats_GoWo,Lttc,save2readable,Vxc,pathOUTPUT,doAC)
+   subroutine read_Sigma_spex(Smats_GoWo,Lttc,save2readable,Vxc_out,pathOUTPUT,doAC)
       !
       use linalg
       use parameters
@@ -930,7 +930,7 @@ contains
       type(FermionicField),intent(inout)    :: Smats_GoWo
       type(Lattice),intent(inout)           :: Lttc
       logical,intent(in)                    :: save2readable
-      complex(8),intent(inout),optional     :: Vxc(:,:,:,:)
+      complex(8),intent(inout),optional     :: Vxc_out(:,:,:,:)
       character(len=*),intent(in),optional  :: pathOUTPUT
       logical,intent(in),optional           :: doAC
       !
@@ -959,6 +959,7 @@ contains
       real(8),allocatable                   :: SigmaX_seg(:,:,:),SigmaX_tmp(:,:)
       complex(8),allocatable                :: SigmaC_seg(:,:,:,:),SigmaC_tmp(:,:,:)
       complex(8),allocatable                :: SigmaC_diag(:,:,:,:)
+      complex(8),allocatable                :: Vxc(:,:,:,:)
       !
       !
       write(*,"(A)") new_line("A")//new_line("A")//"---- read_Sigma_spex"
@@ -975,6 +976,8 @@ contains
       Nkpt = Smats_GoWo%Nkpt
       Nmats = Smats_GoWo%Npoints
       !
+      allocate(Vxc(Norb,Norb,Nkpt,Nspin));Vxc=czero
+      !
       allocate(wmats(Smats_GoWo%Npoints));wmats=0d0
       wmats = FermionicFreqMesh(Smats_GoWo%Beta,Smats_GoWo%Npoints)
       !
@@ -987,7 +990,7 @@ contains
       endif
       !
       ! Check if the data on the Matsubara axis are present if(.not.paramagneticSPEX) look also for spin2
-      path = reg(pathOUTPUT_)//"SGoWo_k_s1.DAT"
+      path = reg(pathOUTPUT_)//"SGoWo_w_k_s1.DAT"
       call inquireFile(reg(path),ACdone,hardstop=.false.,verb=verbose)
       doAC_ = .not.ACdone
       if(present(doAC)) doAC_ = doAC .or. doAC_
@@ -995,9 +998,11 @@ contains
       ! Check if the Vxc_wann is present
       path = reg(pathINPUT)//"Vxc_k_s1.DAT"
       call inquireFile(reg(path),Vxcdone,hardstop=.false.,verb=verbose)
-      doVxc = .not.Vxcdone .and. present(Vxc)
+      doVxc = .not.Vxcdone! .or. present(Vxc_out)
+      !
+      !
       if(doVxc.and.(.not.doAC_))then
-         call assert_shape(Vxc,[Norb,Norb,Nkpt,Nspin],"read_Sigma_spex","Vxc")
+         !call assert_shape(Vxc,[Norb,Norb,Nkpt,Nspin],"read_Sigma_spex","Vxc")
          write(*,"(A)")"     Sorry but I can't produce Vxc_wann without reading the self-energy."
          write(*,"(A)")"     Analytic continuation will be perforemd anyway."
          doAC_ = .true.
@@ -1262,28 +1267,14 @@ contains
          write(*,"(A,F)") "     Sigma_GoWo(k,w) --> Sigma_GoWo(k,iw) cpu timing:", finish-start
          !
          ! Print out the transformed stuff
-         call dump_FermionicField(Smats_GoWo,reg(pathOUTPUT_),"SGoWo",.true.,Lttc%kpt)
-         if(save2readable)call dump_FermionicField(Smats_GoWo,reg(pathOUTPUT_)//"Sigma_imag/","SGoWo",.false.,Lttc%kpt)
+         call dump_FermionicField(Smats_GoWo,reg(pathOUTPUT_),"SGoWo_w",.true.,Lttc%kpt)
+         if(save2readable)call dump_FermionicField(Smats_GoWo,reg(pathOUTPUT_)//"Sigma_imag/","SGoWo_w",.false.,Lttc%kpt)
          !
-         !
-         if(doVxc)call read_Vxc(Vxc,Lttc,ib_sigma1,ib_sigma2,save2readable)
-         !
-         !---------------------------------------------------------------------!
-         !
-      else
-         !
-         !---------------------------------------------------------------------!
-         !
-         ! Just read all
-         write(*,"(A)")"     Reading SigmaGoWo(k,iw) from "//reg(pathOUTPUT_)//"SGoWo_k_s[1,2].DAT"
-         call clear_attributes(Smats_GoWo)
-         call read_FermionicField(Smats_GoWo,reg(pathOUTPUT_),"SGoWo",Lttc%kpt)
-         call FermionicKsum(Smats_GoWo)
-         !
-         if(present(Vxc))then
+         ! Read the Vxc and print it out
+         if(doVxc)then
+            call read_Vxc(Vxc,Lttc,ib_sigma1,ib_sigma2,save2readable)
+         else
             write(*,"(A)")"     Reading Vxc(k) from "//reg(pathINPUT)
-            call assert_shape(Vxc,[Norb,Norb,Nkpt,Nspin],"read_Sigma_spex","Vxc")
-            Vxc=czero
             call read_matrix(Vxc(:,:,:,1),reg(pathINPUT),"Vxc_k_s1.DAT")
             if(paramagneticSPEX)then
                Vxc(:,:,:,2) = Vxc(:,:,:,1)
@@ -1292,6 +1283,42 @@ contains
             endif
          endif
          !
+         !---------------------------------------------------------------------!
+         !
+      else
+         !
+         !---------------------------------------------------------------------!
+         !
+         ! Just read all
+         write(*,"(A)")"     Reading SigmaGoWo(k,iw) from "//reg(pathOUTPUT_)//"SGoWo_w_k_s[1,2].DAT"
+         call clear_attributes(Smats_GoWo)
+         call read_FermionicField(Smats_GoWo,reg(pathOUTPUT_),"SGoWo_w",Lttc%kpt)
+         call FermionicKsum(Smats_GoWo)
+         !
+         write(*,"(A)")"     Reading Vxc(k) from "//reg(pathINPUT)
+         call read_matrix(Vxc(:,:,:,1),reg(pathINPUT),"Vxc_k_s1.DAT")
+         if(paramagneticSPEX)then
+            Vxc(:,:,:,2) = Vxc(:,:,:,1)
+         else
+            call read_matrix(Vxc(:,:,:,2),reg(pathINPUT),"Vxc_k_s2.DAT")
+         endif
+         !
+         !
+      endif
+      !
+      ! Provide output
+      if(present(Vxc_out))then
+         !
+         write(*,"(A)")"     SigmaGoWo(k,iw) and  Vxc(k) are provided separately."
+         Vxc_out = Vxc
+         !
+      else
+         !
+         write(*,"(A)")"     SigmaGoWo(k,iw)-Vxc(k) is provided in the Fermionic Field."
+         do iw=1,Nmats
+            Smats_GoWo%wks(:,:,iw,:,:) = Smats_GoWo%wks(:,:,iw,:,:) - Vxc
+         enddo
+         call FermionicKsum(Smats_GoWo)
          !
       endif
       !

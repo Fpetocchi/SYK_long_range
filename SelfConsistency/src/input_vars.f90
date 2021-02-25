@@ -154,7 +154,6 @@ module input_vars
    !
    !Double counting types, divergencies, scaling and self-consistency coefficients
    logical,public                           :: VH_use
-   logical,public                           :: Vxc_use
    character(len=256),public                :: VH_type
    character(len=256),public                :: DC_type
    logical,public                           :: Sigma_AC
@@ -425,7 +424,6 @@ contains
       call add_separator()
       call parse_input_variable(VH_type,"VH_TYPE",InputFile,default="Ustatic_SPEX",comment="Hartree term mismatch between GoWo and scGW. Available: Ubare, Ustatic, Ubare_SPEX(V_nodiv.DAT required), Ustatic_SPEX(V_nodiv.DAT required).")
       call parse_input_variable(VH_use,"VH_USE",InputFile,default=.true.,comment="Flag to use the Hartree term correction between Tier-III and Tier-II, which is printed in PATH_INPUT even if not used.")
-      call parse_input_variable(Vxc_use,"VXC_USE",InputFile,default=.true.,comment="Flag to use the exchange potential, which is printed in PATH_INPUT even if not used.")
       if(Umodel)VH_type="Ustatic"
       call parse_input_variable(DC_type,"DC_TYPE",InputFile,default="GlocWloc",comment="Local GW self-energy which is replaced by DMFT self-energy. Avalibale: GlocWloc, Sloc.")
       call parse_input_variable(Sigma_AC,"SIGMA_AC",InputFile,default=.false.,comment="Flag to force the analytic continuation on the G0W0 self-energy.")
@@ -501,15 +499,15 @@ contains
       if(mod(Solver%NtauF,2).eq.0)Solver%NtauF=Solver%NtauF+1
       call parse_input_variable(Solver%NtauB,"NTAU_B_IMP",InputFile,default=int(2d0*pi*Nmats),comment="Number of points on the imaginary time axis for Bosonic impurity fields. Its gonna be made odd.")
       if(mod(Solver%NtauB,2).eq.0)Solver%NtauB=Solver%NtauB+1
-      !Solver%TargetDensity = look4dens%TargetDensity
-      !if(ExpandImpurity)Solver%TargetDensity = look4dens%TargetDensity/Nsite
-      !call append_to_input_list(Solver%TargetDensity,"N_READ_IMP","Target density in the impurity list. User cannot set this as its the the same density on within the impurity orbitals if EXPAND=F otherwise its N_READ_LAT/NSITE.")
-      call parse_input_variable(Solver%TargetDensity,"N_READ_IMP",InputFile,default=look4dens%TargetDensity,comment="Target density in the impurity list.")
+      Solver%TargetDensity = look4dens%TargetDensity
+      if(ExpandImpurity.and.(.not.look4dens%local))Solver%TargetDensity = look4dens%TargetDensity/Nsite
+      call append_to_input_list(Solver%TargetDensity,"N_READ_IMP","Target density in the impurity list. User cannot set this as its the the same density on within the impurity orbitals if EXPAND=F otherwise its N_READ_LAT/NSITE.")
+      !call parse_input_variable(Solver%TargetDensity,"N_READ_IMP",InputFile,default=look4dens%TargetDensity,comment="Target density in the impurity list.")
       call parse_input_variable(Solver%Norder,"NORDER",InputFile,default=10,comment="Maximum perturbation order measured. Not used yet.")
       call parse_input_variable(Solver%Nmeas,"NMEAS",InputFile,default=1000,comment="Sweeps where expensive measurments are not performed.")
       call parse_input_variable(Solver%Ntherm,"NTHERM",InputFile,default=100,comment="Thermalization cycles. Each cycle performs NMEAS sweeps.")
-      call parse_input_variable(Solver%Nshift,"NSHIFT",InputFile,default=100,comment="Sweeps where segment shifts are not proposed.")
-      call parse_input_variable(Solver%Nswap,"NSWAP",InputFile,default=100,comment="Sweeps where global spin swaps are not proposed.")
+      call parse_input_variable(Solver%Nshift,"NSHIFT",InputFile,default=100,comment="Sweeps where segment shifts are not proposed. Not proposed if >NMEAS.")
+      call parse_input_variable(Solver%Nswap,"NSWAP",InputFile,default=100,comment="Sweeps where global spin swaps are not proposed. Not proposed if >NMEAS.")
       call parse_input_variable(Solver%PrintTime,"PRINT_TIME",InputFile,default=10,comment="Minutes that have to pass before observables are updated and stored.")
       call parse_input_variable(Solver%binlength,"BINLENGTH",InputFile,default=4,comment="If >0 the Green's function at itau will be the average within +/-binlength.")
       call parse_input_variable(Solver%binstart,"BINSTART",InputFile,default=100,comment="Tau points skipped at the beginning and end of the Green's function average.")

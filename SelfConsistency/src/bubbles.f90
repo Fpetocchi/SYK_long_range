@@ -270,14 +270,19 @@ contains
       call cpu_time(finish)
       write(*,"(A,F)") "     Glat(k,iw) --> Glat(k,tau) cpu timing:", finish-start
       !
-      !TEST>>>
+      !Hermiticity check
+      !$OMP PARALLEL DEFAULT(NONE),&
+      !$OMP SHARED(Ntau_,Nkpt,Gitau,paramagnet),&
+      !$OMP PRIVATE(ip,iq)
+      !$OMP DO
       do ip=1,Ntau_
          do iq=1,Nkpt
-            call check_Hermiticity(Gitau(:,:,ip,iq,1),eps,enforce=.false.,hardstop=.false.,name="Glat_up_t"//str(ip)//"_q"//str(iq))
-            !call check_Hermiticity(Gitau(:,:,ip,iq,2),eps,enforce=.false.,hardstop=.false.,name="Glat_dw_t"//str(ip)//"_q"//str(iq))
+            call check_Hermiticity(Gitau(:,:,ip,iq,1),eps,enforce=.false.,hardstop=.false.,name="Glat_t"//str(ip)//"_q"//str(iq)//"_s1",verb=.true.)
+            if(.not.paramagnet)call check_Hermiticity(Gitau(:,:,ip,iq,1),eps,enforce=.false.,hardstop=.false.,name="Glat_t"//str(ip)//"_q"//str(iq)//"_s1",verb=.true.)
          enddo
       enddo
-      !>>>TEST
+      !$OMP END DO
+      !$OMP END PARALLEL
       !
       ! Compute the bubble
       allocate(Pq_tau(Nbp,Nbp,Ntau_))

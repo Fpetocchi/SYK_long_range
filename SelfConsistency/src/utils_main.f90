@@ -319,7 +319,7 @@ contains
       integer                               :: shift
       logical                               :: present
       integer,allocatable                   :: oldSetNorb(:),oldSetOrbs(:,:)
-      complex(8),allocatable                :: Vxc_loc(:,:)
+      !complex(8),allocatable                :: Vxc_loc(:,:)
       !
       !
       write(*,"(A)") new_line("A")//new_line("A")//"---- initialize_Lattice"
@@ -460,30 +460,9 @@ contains
       !Store the local rotation of each site and add to the input list the Impurity equivalent orbitals
       if(RotateHloc)then
          !
-         if(reg(CalculationType).eq."GW+EDMFT")then
-            !
-            write(*,"(A)") new_line("A")//new_line("A")//"---- Rotations of the local LDA Hamiltonian"
-            call build_rotations("Hloc",OlocSite,OlocEig,OlocRot,OlocRotDag,LatticeOp=Lttc%Hloc)
-            !
-            !On the 0th iteration in general Vxc_loc is not yet written
-            if(ItStart.gt.0)then
-               !
-               allocate(Vxc_loc(Lttc%Norb,Lttc%Norb));Vxc_loc=czero
-               write(*,"(A)")"     Trying to read Vxc from pathINPUT."
-               call inquireFile(reg(pathINPUT)//"Vxc_s1.DAT",present,hardstop=.true.)
-               call read_Matrix(Vxc_loc,reg(pathINPUT)//"Vxc_s1.DAT")
-               !
-               write(*,"(A)") new_line("A")//new_line("A")//"---- Rotations of the local LDA Hamiltonian + local Vxc (used)"
-               call build_rotations("Hren",OlocSite,OlocEig,OlocRot,OlocRotDag,LatticeOp=(Lttc%Hloc-Vxc_loc))
-               call update_ImpEqvOrbs()
-               !
-            endif
-            !
-         else
-            write(*,"(A)") new_line("A")//new_line("A")//"---- Rotations of the local LDA Hamiltonian (used)"
-            call build_rotations("Hloc",OlocSite,OlocEig,OlocRot,OlocRotDag,LatticeOp=Lttc%Hloc)
-            call update_ImpEqvOrbs()
-         endif
+         write(*,"(A)") new_line("A")//new_line("A")//"---- Rotations of the local LDA Hamiltonian (used)"
+         call build_rotations("Hloc",OlocSite,OlocEig,OlocRot,OlocRotDag,LatticeOp=Lttc%Hloc)
+         call update_ImpEqvOrbs()
          !
       else
          !
@@ -638,11 +617,11 @@ contains
       !
       select case(reg(Opname))
          case default
-            stop "Available rotation Operators are: Hloc, Hren, Nloc, Nbare."
+            stop "Available rotation Operators are: Hloc, Hren, Nloc."
          case("Hloc","Hren")
             Folder=reg(pathINPUT)
             storeIt=.false.
-         case("Nloc","Nbare")
+         case("Nloc")
             storeIt=.true.
       end select
       !
@@ -959,7 +938,7 @@ contains
       implicit none
       integer,intent(in)                    :: ItStart
       logical                               :: filexists
-      integer                               :: unit,idum,ib1
+      integer                               :: unit,idum,ib1,ik
       integer                               :: iorb,isite,ispin
       character(len=255)                    :: file
       real(8)                               :: muQMC
@@ -1181,13 +1160,11 @@ contains
             call calc_density(Glat,Glat%N_s)
             !
             !
-            !TEST>>>
-            !do ik=1,Glat%Nkpt
-            !   call check_Hermiticity(Glat%N_ks(:,:,ik,1),eps,enforce=.false.,hardstop=.false.,name="Nks_up_q"//str(ik),verb=.true.)
-            !   call check_Hermiticity(Glat%N_ks(:,:,ik,2),eps,enforce=.false.,hardstop=.false.,name="Nks_dw_q"//str(ik),verb=.true.)
-            !enddo
-            !call FermionicKsum(Glat)
-            !>>>TEST
+            !just a sanity check
+            do ik=1,Glat%Nkpt
+               call check_Hermiticity(Glat%N_ks(:,:,ik,1),eps,enforce=.false.,hardstop=.false.,name="Nlat_k"//str(ik)//"_s1",verb=.true.)
+               if(.not.paramagnet)call check_Hermiticity(Glat%N_ks(:,:,ik,2),eps,enforce=.false.,hardstop=.false.,name="Nlat_k"//str(ik)//"_s2",verb=.true.)
+            enddo
             !
             !
             !Logical Flags
@@ -1279,7 +1256,7 @@ contains
       if(FirstIteration.ne.0) stop "calc_SigmaGuess: this subroutine works only in the 0th iteration."
       if((reg(CalculationType).eq."GW+EDMFT").and.(.not.S_G0W0%status))then
          call AllocateFermionicField(S_G0W0,Crystal%Norb,Nmats,Nkpt=Crystal%Nkpt,Nsite=Nsite,Beta=Beta)
-         call read_Sigma_spex(S_G0W0,Crystal,verbose,Vxc=Vxc,doAC=Sigma_AC,pathOUTPUT=reg(pathINPUTtr))
+         call read_Sigma_spex(S_G0W0,Crystal,verbose,doAC=Sigma_AC,pathOUTPUT=reg(pathINPUTtr))
       endif
       !
       !
@@ -1362,7 +1339,7 @@ contains
                if(.not.S_G0W0%status) stop "join_SigmaFull: S_G0W0 not properly initialized."
                !
                !$OMP PARALLEL DEFAULT(NONE),&
-               !$OMP SHARED(S_Full,S_G0W0,VH,Vxc),&
+               !$OMP SHARED(S_Full,S_G0W0,VH),&
                !$OMP PRIVATE(iorb,jorb,ik,iw,ispin)
                !$OMP DO
                do ispin=1,Nspin
@@ -1371,8 +1348,8 @@ contains
                         do iorb=1,S_Full%Norb
                            do jorb=1,S_Full%Norb
                               S_Full%wks(iorb,jorb,iw,ik,ispin) =  + S_G0W0%wks(iorb,jorb,iw,ik,ispin)   &
-                                                                   - Vxc(iorb,jorb,ik,ispin)             &
                                                                    + VH(iorb,jorb)
+                                                                 ! - Vxc(iorb,jorb,ik,ispin)             & !fixed --> included in S_G0W0
                            enddo
                         enddo
                      enddo
@@ -1393,6 +1370,7 @@ contains
                !
                !Remove local contributuin from G0W0 self-energy.
                !This is what was making Delta non-causal and its due to the not perfect S_G0W0dc
+               !here also the local contribution from Vxc_loc is also removed
                do ik=1,S_G0W0%Nkpt
                   S_G0W0%wks(:,:,:,ik,:) = S_G0W0%wks(:,:,:,ik,:) - S_G0W0%ws
                enddo
@@ -1401,7 +1379,7 @@ contains
                S_GW%wks = S_GW%wks + S_G0W0%wks
                !
                !$OMP PARALLEL DEFAULT(NONE),&
-               !$OMP SHARED(S_Full,S_GW,S_G0W0dc,S_G0W0,VH,Vxc),&
+               !$OMP SHARED(S_Full,S_GW,S_G0W0dc,S_G0W0,VH),&
                !$OMP PRIVATE(iorb,jorb,ik,iw,ispin)
                !$OMP DO
                do ispin=1,Nspin
@@ -1410,8 +1388,8 @@ contains
                         do iorb=1,S_Full%Norb
                            do jorb=1,S_Full%Norb
                               S_Full%wks(iorb,jorb,iw,ik,ispin) =  + S_GW%wks(iorb,jorb,iw,ik,ispin)     & !self-consistently updated
-                                                                   - Vxc(iorb,jorb,ik,ispin)             & !fixed
                                                                    + VH(iorb,jorb)
+                                                                 ! - Vxc(iorb,jorb,ik,ispin)             & !fixed --> included in S_G0W0
                                                                  ! - S_G0W0dc%wks(iorb,jorb,iw,ik,ispin) & !fixed --> included in S_GW
                                                                  ! + S_G0W0%wks(iorb,jorb,iw,ik,ispin)   & !fixed --> included in S_GW
                            enddo
@@ -1708,12 +1686,10 @@ contains
             !
             if(causal_D)then
                do iwan=1,Norb
-                  !invCurlyG(iwan,iw,ispin) = 1d0/Gloc%ws(iwan,iwan,iw,ispin) + SigmaImp%ws(iwan,iwan,iw,ispin) - DeltaCorr%ws(iwan,iwan,iw,ispin)
                   invCurlyG(iwan,iw,ispin) = invG(iwan,iwan) + SigmaImp%ws(iwan,iwan,iw,ispin) - DeltaCorr%ws(iwan,iwan,iw,ispin)
                enddo
             else
                do iwan=1,Norb
-                  !invCurlyG(iwan,iw,ispin) = 1d0/Gloc%ws(iwan,iwan,iw,ispin) + SigmaImp%ws(iwan,iwan,iw,ispin) !invCurlyG(iwan,iw,ispin) = invG(iwan,iwan) + SigmaImp%ws(iwan,iwan,iw,ispin)
                   invCurlyG(iwan,iw,ispin) = invG(iwan,iwan) + SigmaImp%ws(iwan,iwan,iw,ispin)
                enddo
             endif
@@ -2848,84 +2824,6 @@ contains
 
 
    !---------------------------------------------------------------------------!
-   !PURPOSE: Compute the density matrix for the bare propagator. Not used.
-   !---------------------------------------------------------------------------!
-   function calc_rot_Op(mode,ispin_out) result(RotOp)
-      implicit none
-      character(len=*),intent(in)           :: mode
-      integer,intent(in)                    :: ispin_out
-      complex(8),allocatable                :: RotOp(:,:)
-      complex(8),allocatable                :: Vxc_loc(:,:)
-      type(FermionicField)                  :: Gbare
-      complex(8),allocatable                :: invGf(:,:)
-      integer                               :: ik,iw,ispin
-      logical                               :: Vxcexists
-      !
-      if(reg(CalculationType).ne."GW+EDMFT")  stop "calc_rot_Op: this function can be called only during GW+EDMFT."
-      if(ispin_out.gt.Nspin)  stop "calc_rot_Op: requested ispin is bigger than Nspin."
-      !
-      select case(reg(mode))
-         case default
-            !
-            stop "calc_rot_Op: Available modes are: Hren, Nbare, Nloc."
-            !
-         case("Hren")
-            !
-            if(.not.Crystal%status) stop "calc_rot_Op: Crystal not properly initialized."
-            allocate(Vxc_loc(Crystal%Norb,Crystal%Norb));Vxc_loc=czero
-            if(.not.allocated(Vxc))then
-               write(*,"(A)")"     calc_rot_Op: Vxc not allocated, trying to read from pathINPUT."
-               call inquireFile(reg(pathINPUT)//"Vxc_s"//str(ispin_out)//".DAT",Vxcexists,hardstop=.true.)
-               call read_Matrix(Vxc_loc,reg(pathINPUT)//"Vxc_s"//str(ispin_out)//".DAT")
-            else
-               Vxc_loc = sum(Vxc(:,:,:,ispin_out),dim=3)/Crystal%Nkpt
-            endif
-            !
-            RotOp = Crystal%Hloc - Vxc_loc
-            !
-         case("Nbare")
-            !
-            if(.not.Glat%status) stop "calc_rot_Op: Glat not properly initialized."
-            if(.not.S_DMFT%status) stop "calc_rot_Op: S_DMFT not properly initialized."
-            if(.not.Crystal%status) stop "calc_rot_Op: Crystal not properly initialized."
-            !
-            call AllocateFermionicField(Gbare,Glat%Norb,Nmats,Nkpt=Glat%Nkpt,Nsite=Nsite,Beta=Beta,mu=Glat%mu)
-            allocate(invGf(Glat%Norb,Glat%Norb));invGf=czero
-            !
-            do ispin=1,Nspin
-               do ik=1,Glat%Nkpt
-                  do iw=1,Glat%Npoints
-                     !get invG
-                     invGf = Glat%wks(:,:,iw,ik,ispin)
-                     call inv(invGf)
-                     !remove initial guess
-                     invGf = invGf + S_DMFT%ws(:,:,iw,ispin)
-                     !recompute G
-                     call inv(invGf)
-                     Gbare%wks(:,:,iw,ik,ispin) = invGf
-                  enddo
-               enddo
-            enddo
-            deallocate(invGf)
-            call calc_density(Gbare,Crystal,Gbare%N_ks)
-            call FermionicKsum(Gbare)
-            if(look4dens%TargetDensity.ne.0d0)call set_density(Gbare,Crystal,look4dens)
-            !
-            RotOp = Gbare%N_s(:,:,ispin_out)
-            !
-            call DeallocateFermionicField(Gbare)
-            !
-         case("Nloc")
-            !
-            if(.not.Glat%status) stop "calc_rot_Op: Glat not properly initialized."
-            RotOp = Glat%N_s(:,:,ispin_out)
-            !
-      end select
-      !
-   end function calc_rot_Op
-
-
-   !---------------------------------------------------------------------------!
    !PURPOSE: Print the different density matrices
    !TEST ON:
    !---------------------------------------------------------------------------!
@@ -3161,9 +3059,92 @@ end module utils_main
 
 
 
+
+
+
+
+
+
+
 !allocate(HartreeU(Crystal%Norb,Crystal%Norb,2));HartreeU=czero
 !call read_Matrix(HartreeU(:,:,1),reg(Beta_Match%Path)//"HartreeU_s1.DAT")
 !call read_Matrix(HartreeU(:,:,2),reg(Beta_Match%Path)//"HartreeU_s2.DAT")
 !call dump_Matrix(HartreeU(:,:,1),reg(PrevItFolder)//"HartreeU_s1.DAT")
 !call dump_Matrix(HartreeU(:,:,2),reg(PrevItFolder)//"HartreeU_s2.DAT")
 !deallocate(HartreeU)
+!---------------------------------------------------------------------------!
+!PURPOSE: Compute the density matrix for the bare propagator. Not used.
+!---------------------------------------------------------------------------!
+!function calc_rot_Op(mode,ispin_out) result(RotOp)
+!   implicit none
+!   character(len=*),intent(in)           :: mode
+!   integer,intent(in)                    :: ispin_out
+!   complex(8),allocatable                :: RotOp(:,:)
+!   complex(8),allocatable                :: Vxc_loc(:,:)
+!   type(FermionicField)                  :: Gbare
+!   complex(8),allocatable                :: invGf(:,:)
+!   integer                               :: ik,iw,ispin
+!   logical                               :: Vxcexists
+!   !
+!   if(reg(CalculationType).ne."GW+EDMFT")  stop "calc_rot_Op: this function can be called only during GW+EDMFT."
+!   if(ispin_out.gt.Nspin)  stop "calc_rot_Op: requested ispin is bigger than Nspin."
+!   !
+!   select case(reg(mode))
+!      case default
+!         !
+!         stop "calc_rot_Op: Available modes are: Hren, Nbare, Nloc."
+!         !
+!      case("Hren")
+!         !
+!         if(.not.Crystal%status) stop "calc_rot_Op: Crystal not properly initialized."
+!         allocate(Vxc_loc(Crystal%Norb,Crystal%Norb));Vxc_loc=czero
+!         if(.not.allocated(Vxc))then
+!            write(*,"(A)")"     calc_rot_Op: Vxc not allocated, trying to read from pathINPUT."
+!            call inquireFile(reg(pathINPUT)//"Vxc_s"//str(ispin_out)//".DAT",Vxcexists,hardstop=.true.)
+!            call read_Matrix(Vxc_loc,reg(pathINPUT)//"Vxc_s"//str(ispin_out)//".DAT")
+!         else
+!            Vxc_loc = sum(Vxc(:,:,:,ispin_out),dim=3)/Crystal%Nkpt
+!         endif
+!         !
+!         RotOp = Crystal%Hloc - Vxc_loc
+!         !
+!      case("Nbare")
+!         !
+!         if(.not.Glat%status) stop "calc_rot_Op: Glat not properly initialized."
+!         if(.not.S_DMFT%status) stop "calc_rot_Op: S_DMFT not properly initialized."
+!         if(.not.Crystal%status) stop "calc_rot_Op: Crystal not properly initialized."
+!         !
+!         call AllocateFermionicField(Gbare,Glat%Norb,Nmats,Nkpt=Glat%Nkpt,Nsite=Nsite,Beta=Beta,mu=Glat%mu)
+!         allocate(invGf(Glat%Norb,Glat%Norb));invGf=czero
+!         !
+!         do ispin=1,Nspin
+!            do ik=1,Glat%Nkpt
+!               do iw=1,Glat%Npoints
+!                  !get invG
+!                  invGf = Glat%wks(:,:,iw,ik,ispin)
+!                  call inv(invGf)
+!                  !remove initial guess
+!                  invGf = invGf + S_DMFT%ws(:,:,iw,ispin)
+!                  !recompute G
+!                  call inv(invGf)
+!                  Gbare%wks(:,:,iw,ik,ispin) = invGf
+!               enddo
+!            enddo
+!         enddo
+!         deallocate(invGf)
+!         call calc_density(Gbare,Crystal,Gbare%N_ks)
+!         call FermionicKsum(Gbare)
+!         if(look4dens%TargetDensity.ne.0d0)call set_density(Gbare,Crystal,look4dens)
+!         !
+!         RotOp = Gbare%N_s(:,:,ispin_out)
+!         !
+!         call DeallocateFermionicField(Gbare)
+!         !
+!      case("Nloc")
+!         !
+!         if(.not.Glat%status) stop "calc_rot_Op: Glat not properly initialized."
+!         RotOp = Glat%N_s(:,:,ispin_out)
+!         !
+!   end select
+!   !
+!end function calc_rot_Op

@@ -67,7 +67,6 @@ do
    # Input update
    IT_DATA=${LOCAL}/${PATH_DATA}/${IT}/
    sed -i ${l3}'s/'"START_IT=.*!"'/'"START_IT=${IT}         !"'/' input.in
-   sed -i ${l5}'s/'"MATCH_BETA=.*!"'/'"MATCH_BETA=F         !"'/' input.in
    if [ ! -z ${CHANGE_BETA_IT+x} ] && [ ${CHANGE_BETA_IT} == ${IT} ] ; then sed -i ${l5}'s/'"MATCH_BETA=.*!"'/'"MATCH_BETA=T         !"'/' input.in ; fi
    sleep 2
 

@@ -37,7 +37,7 @@ int main(int argc, char *argv[])
    double Beta;
    int Nspin,NtauF,NtauB,Norder,Nmeas,Ntherm,Nshift,Nswap,printTime;
    //logical flags and compatibility typo fix
-   bool paramagnet,retarded,nnt_meas,quickloops,dichotomy,OrbSym;
+   bool retarded,nnt_meas,quickloops,dichotomy,OrbSym;
    int para_mode,ret_read,nnt_read,quick_read,sym_read;
    // Post-processing of the Green's function
    int binlength,binstart;
@@ -136,22 +136,6 @@ int main(int argc, char *argv[])
             mpi.report(" muErr= "+str(muErr));
             mpi.report(" muTime= "+str(muTime)+"min");
          }
-
-
-         if(mpi.is_master())
-         {
-            Eigen::Matrix3f A;
-            Eigen::Matrix3f B;
-            A << 1, 2, 1,2, 1, 0,-1, 1, 2;
-            B=A.inverse();
-            std::cout << "Here is the matrix A:\n" << A << std::endl;
-            std::cout << "The determinant of invA is " << B.determinant() << std::endl;
-            std::cout << "The invA is:\n" << B << std::endl;
-         }
-
-
-
-
       }
 
       //

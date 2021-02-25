@@ -565,10 +565,10 @@ contains
          endif
          !
          if(aimag(dens_C).gt.eps)then
-            write(*,"(A,2F10.5)")"Density (Int) is complex: ",real(dens_C),aimag(dens_C)
+            write(*,"(A,2F10.5)")"     Density (Int) is complex: ",real(dens_C),aimag(dens_C)
             stop "get_dens(set_density_Int)"
          endif
-         dens = real(dens_C)
+         dens = dreal(dens_C)
          !
       end function get_dens
       !
@@ -599,8 +599,6 @@ contains
       real(8)                               :: n_iter,mu_start,mu_last,mu_sign
       real(8)                               :: mu_below,mu_above,n_err
       complex(8),allocatable                :: Gitau(:,:,:)
-      complex(8),allocatable                :: n_loc(:,:)
-      complex(8),allocatable                :: n_k(:,:,:)
       integer                               :: Norb,Nkpt
       integer                               :: iter
       !
@@ -619,8 +617,8 @@ contains
       mu_start = mu
       !
       !Everything is paramagnetic
-      allocate(n_loc(Norb,Norb));n_loc=czero
-      allocate(n_k(Norb,Norb,Nkpt));n_k=czero
+
+
       allocate(Gitau(Norb,NtauF,Nkpt));Gitau=czero
       call calc_G0_tau(Gitau,mu_start,Beta,Lttc%Ek,atBeta=.true.)
       n_iter = get_dens()
@@ -669,7 +667,7 @@ contains
          endif
          !
       enddo !iter
-      deallocate(Gitau,n_loc,n_k)
+      deallocate(Gitau)
       !
    contains
       !
@@ -680,12 +678,18 @@ contains
          complex(8)               :: dens_C
          real(8)                  :: dens
          integer                  :: iwan,ik
+         complex(8),allocatable   :: n_k(:,:,:)
+         complex(8),allocatable   :: n_loc(:,:)
+         !
+         allocate(n_k(Norb,Norb,Nkpt));n_k=czero
          do ik=1,Nkpt
             !paramagnetic
-            n_k(:,:,ik) = -2.d0*diag(Gitau(:,NtauF,ik))
+            n_k(:,:,ik) = -2.d0*diag(dreal(Gitau(:,NtauF,ik)))
             !if present, the restriction is on the orbitals in Wannier basis
             n_k(:,:,ik) = rotate(n_k(:,:,ik),transpose(conjg(Lttc%Zk(:,:,ik))))
          enddo
+         !
+         allocate(n_loc(Norb,Norb));n_loc=czero
          n_loc = sum(n_k,dim=3)/Nkpt
          !
          if(allocated(mu_param%orbs))then
@@ -696,12 +700,13 @@ contains
          else
             dens_C = trace(n_loc)
          endif
+         deallocate(n_loc,n_k)
          !
          if(aimag(dens_C).gt.eps)then
-            write(*,"(A,2F10.5)")"Density (NonInt) is complex: ",real(dens_C),aimag(dens_C)
+            write(*,"(A,2F10.5)")"     Density (NonInt) is complex: ",real(dens_C),aimag(dens_C)
             stop "get_dens(set_density_NonInt)"
          endif
-         dens = real(dens_C)
+         dens = dreal(dens_C)
          !
       end function get_dens
       !
