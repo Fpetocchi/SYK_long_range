@@ -430,7 +430,7 @@ contains
       call parse_input_variable(HandleGammaPoint,"SMEAR_GAMMA",InputFile,default=.true.,comment="Remove the interaction divergence at the Gamma point.")
       if(Umodel)HandleGammaPoint=.false.
       call parse_input_variable(calc_Sguess,"S_GUESS",InputFile,default=.true.,comment="Use G0W0_loc as a first guess for the DMFT self-energy.")
-      call parse_input_variable(calc_Pguess,"P_GUESS",InputFile,default=.true.,comment="Use GG_loc as a first guess for the DMFT polarization.")
+      call parse_input_variable(calc_Pguess,"P_GUESS",InputFile,default=.false.,comment="Use GG_loc as a first guess for the DMFT polarization.")
       if(.not.solve_DMFT)then
          calc_Sguess=.false.
          calc_Pguess=.false.
@@ -464,7 +464,7 @@ contains
       call parse_input_variable(LOGfile,"LOGFILE",InputFile,default=6,comment="Standard output redirection unit. Use 6 to print to terminal. Not used yet.")
       call parse_input_variable(dump_Gk,"PRINT_GK",InputFile,default=.false.,comment="Print the full k-dependent Green's function (binfmt) at each iteration (mandatory for CALC_TYPE=G0W0,scGW,GW+EDMFT).")
       call parse_input_variable(dump_Sigmak,"PRINT_SIGMAK",InputFile,default=.false.,comment="Print the full k-dependent self-energy (binfmt) at each iteration (always optional).")
-      call parse_input_variable(structure,"STRUCTURE",InputFile,default="cubic",comment="Available structures: cubic, fcc, bcc, hex, tetragonal, orthorhombic, None to avoid.")
+      call parse_input_variable(structure,"STRUCTURE",InputFile,default="cubic",comment="Available structures: cubic, fcc, bcc, hex, tetragonal, orthorhombic_[1,2], None to avoid.")
       call parse_input_variable(print_Gpath,"PRINT_GPATH",InputFile,default=(reg(structure).ne."None"),comment="Print the interacting Green's function along high-symmetry points.")
       call parse_input_variable(Nkpt_path,"NK_PATH",InputFile,default=50,comment="Number of segments between two hig-symmetry Kpoints.")
       if(reg(CalculationType).eq."G0W0")dump_Gk=.true.

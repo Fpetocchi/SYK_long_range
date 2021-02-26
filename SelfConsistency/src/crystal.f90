@@ -1765,7 +1765,7 @@ contains
             write(*,"(A)") "     structure: tetragonal."
             write(*,"(A)") "     path: GXMGZRAZ,XR,MA"
             !
-         case("orthorhombic")
+         case("orthorhombic_1")
             !
             Gamma = [     0d0,     0d0,     0d0 ]
             R     = [ 1d0/2d0, 1d0/2d0, 1d0/2d0 ]
@@ -1793,8 +1793,31 @@ contains
             Kpoints(:,14) = X
             Kpoints(:,15) = S
             Kpoints(:,16) = R
-            write(*,"(A)") "     structure: orthorhombic."
+            write(*,"(A)") "     structure: orthorhombic - version 1."
             write(*,"(A)") "     path: GXSYGZURTZ,YT,UX,SR"
+            !
+         case("orthorhombic_2")
+            !
+            Gamma = [     0d0,     0d0,     0d0 ]
+            R     = [ 1d0/2d0, 1d0/2d0, 1d0/2d0 ]
+            S     = [ 1d0/2d0, 1d0/2d0,     0d0 ]
+            T     = [     0d0, 1d0/2d0, 1d0/2d0 ]
+            U     = [ 1d0/2d0,     0d0, 1d0/2d0 ]
+            X     = [ 1d0/2d0,     0d0,     0d0 ]
+            Y     = [     0d0, 1d0/2d0,     0d0 ]
+            Z     = [     0d0,     0d0, 1d0/2d0 ]
+            !
+            allocate(Kpoints(3,8));Kpoints=0d0
+            Kpoints(:,1) = Gamma
+            Kpoints(:,2) = X
+            Kpoints(:,3) = S
+            Kpoints(:,4) = Gamma
+            Kpoints(:,5) = Y
+            Kpoints(:,6) = T
+            Kpoints(:,7) = Gamma
+            Kpoints(:,8) = Z
+            write(*,"(A)") "     structure: orthorhombic - version 2."
+            write(*,"(A)") "     path: GXSGYTGZ"
             !
       end select
       !

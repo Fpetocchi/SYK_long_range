@@ -146,9 +146,9 @@ int main(int argc, char *argv[])
       {
          std::string ss=str(isite+1);
          const char * s  = ss.c_str();
-         char lineN[5];
-         char lineT[5];
-         char lineO[5];
+         char lineN[7];
+         char lineT[7];
+         char lineO[7];
          char folder[999];
          char element[999];
          int minutes,Norb;

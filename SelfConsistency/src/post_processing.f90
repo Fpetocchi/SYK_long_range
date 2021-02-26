@@ -1018,7 +1018,7 @@ contains
       use crystal
       use greens_function, only : calc_Gmats
       use fourier_transforms
-      use input_vars, only : Nreal, wrealMax, eta, Solver
+      use input_vars, only : Nreal, wrealMax, eta, Solver, pathINPUT
       implicit none
       !
       type(FermionicField),intent(inout)    :: Sfull
@@ -1080,6 +1080,15 @@ contains
          enddo
          !
       endif
+      !
+      !Re-Print bands
+      path = reg(pathINPUT)//"Bands.DAT"
+      unit = free_unit()
+      open(unit,file=reg(path),form="formatted",status="unknown",position="rewind",action="write")
+      do ik=1,Lttc%Nkpt_path
+         write(unit,"(1I5,200E20.12)") ik,Lttc%Kpathaxis(ik),(Lttc%Ek_path(:,ik),iorb=1,Norb)
+      enddo
+      close(unit)
       write(*,"(A,I)") "     Total number of K-points along path:",Lttc%Nkpt_path
       !
       !
