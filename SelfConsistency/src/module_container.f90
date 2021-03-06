@@ -26,6 +26,7 @@ module module_container
    inquireFile,inquireDir,createDir         ,&
    check_Hermiticity                        ,&
    check_Symmetry                           ,&
+   KK_Im2Re,KK_Re2Im                        ,&
    halfbeta_symm                            ,&
    halfbeta_antisymm                        ,&
    assert_shape                             ,&
@@ -51,8 +52,8 @@ module module_container
 
    !(d) Fermionic and Bosonic Fourier transforms. Depends on (b),(c) not on specific types.
    use fourier_transforms, only:             &
-   Fmats2itau_mat,Fmats2itau_vec            ,&
-   Fitau2mats_mat,Fitau2mats_vec            ,&
+   Fmats2itau_mat,Fmats2itau_vec,Fmats2itau ,&
+   Fitau2mats_mat,Fitau2mats_vec,Fitau2mats ,&
    Bmats2itau,Bitau2mats
 
 
@@ -132,6 +133,7 @@ module module_container
    use greens_function, only:                &
    calc_density                             ,&
    set_density                              ,&
+   calc_G0_tau                              ,&
    calc_Gmats                               ,&
    calc_Glda
 

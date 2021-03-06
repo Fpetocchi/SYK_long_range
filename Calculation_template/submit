@@ -13,9 +13,9 @@ ulimit -c 0
 
 
 ################################################################################
-#                                USER SETTINGS                                 #
+#                                 USER SETTINGS                                #
 ################################################################################
-#COMPULSORY
+#----------------------------------COMPULSORY----------------------------------#
 GENMAT=/home/petocchif/1_GW_EDMFT/nobackup/1_production
 
 PATH_INPUT=GWinput_SPEX_.......
@@ -24,9 +24,13 @@ PATH_DATA=Results_beta..
 START_IT=...
 END_IT=...
 
-#OPTIONAL FOR TEMPERATURE DEPENDENT CALCULATIONS
+EXE_SC=SelfConsistency
+EXE_QMC=ct_hyb
+
+#-----------------------------------OPTIONAL-----------------------------------#
 PATH_INPUT_TR=GWinput_mats
 ####SKIP_FIRST_SC="T"
+####SKIP_ALL_QMC="T"
 ####CHANGE_BETA_IT=1
 
 
@@ -41,6 +45,7 @@ BINsc=${GENMAT}/SelfConsistency/bin
 
 if [ -z ${PATH_INPUT_TR+x} ]; then PATH_INPUT_TR=${PATH_INPUT} ; fi
 if [ -z ${SKIP_FIRST_SC+x} ]; then SKIP_FIRST_SC="F" ; fi
+if [ -z ${SKIP_ALL_QMC+x} ] ; then SKIP_ALL_QMC="F"  ; fi
 
 export l0=`grep -n "PATH_INPUT=" input.in    | awk -F  ":" '{print $1}'`
 export l1=`grep -n "PATH_INPUT_TR=" input.in | awk -F  ":" '{print $1}'`
@@ -67,7 +72,10 @@ do
    # Input update
    IT_DATA=${LOCAL}/${PATH_DATA}/${IT}/
    sed -i ${l3}'s/'"START_IT=.*!"'/'"START_IT=${IT}         !"'/' input.in
-   if [ ! -z ${CHANGE_BETA_IT+x} ] && [ ${CHANGE_BETA_IT} == ${IT} ] ; then sed -i ${l5}'s/'"MATCH_BETA=.*!"'/'"MATCH_BETA=T         !"'/' input.in ; fi
+   sed -i ${l5}'s/'"MATCH_BETA=.*!"'/'"MATCH_BETA=F                                   !"'/' input.in
+   if [ ! -z ${CHANGE_BETA_IT+x} ] && [ ${CHANGE_BETA_IT} == ${IT} ] ; then
+      sed -i ${l5}'s/'"MATCH_BETA=.*!"'/'"MATCH_BETA=T                                  !"'/' input.in
+   fi
    sleep 2
 
    #
@@ -75,19 +83,28 @@ do
    if [ ${IT} -eq ${START_IT} ] && [ "${SKIP_FIRST_SC}" == "T" ] ; then
       touch doSolver
    else
-      ${BINsc}/SelfConsistency > report_sc_it${IT} 2> err_sc_it${IT}
+      ${BINsc}/${EXE_SC} > report_sc_it${IT} 2> err_sc_it${IT}
       mv {report_sc_it${IT},err_sc_it${IT}} ${IT_DATA}
    fi
    sleep 2
 
    #
    # Impurity problem
-   if [ -f "doSolver" ]; then
-      rm doSolver
-      mpiexec -np ${NSLOTS} ${BINqmc}/ct_hyb used.input.in ${IT_DATA} > report_qmc_it${IT} 2> err_qmc_it${IT}
-      mv {report_qmc_it${IT},err_qmc_it${IT}} ${IT_DATA}
+   if [ "${SKIP_ALL_QMC}" == "F" ] ; then
+      if [ -f "doSolver" ]; then
+         rm doSolver
+         mpiexec -np ${NSLOTS} ${BINqmc}/${EXE_QMC} used.input.in ${IT_DATA} > report_qmc_it${IT} 2> err_qmc_it${IT}
+         mv {report_qmc_it${IT},err_qmc_it${IT}} ${IT_DATA}
+      else
+         break
+      fi
    else
-      break
+      if [ -f "doSolver" ]; then
+         rm doSolver
+         continue
+      else
+         break
+      fi
    fi
    sleep 2
 

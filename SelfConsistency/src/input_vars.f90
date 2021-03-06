@@ -188,7 +188,7 @@ module input_vars
    logical,public                           :: dump_Gk
    logical,public                           :: dump_Sigmak
    character(len=256),public                :: structure
-   logical,public                           :: print_Gpath
+   character(len=256),public                :: path_funct
    integer,public                           :: Nkpt_path
    !
    !Variables related to the impurity solver
@@ -465,7 +465,7 @@ contains
       call parse_input_variable(dump_Gk,"PRINT_GK",InputFile,default=.false.,comment="Print the full k-dependent Green's function (binfmt) at each iteration (mandatory for CALC_TYPE=G0W0,scGW,GW+EDMFT).")
       call parse_input_variable(dump_Sigmak,"PRINT_SIGMAK",InputFile,default=.false.,comment="Print the full k-dependent self-energy (binfmt) at each iteration (always optional).")
       call parse_input_variable(structure,"STRUCTURE",InputFile,default="cubic",comment="Available structures: cubic, fcc, bcc, hex, tetragonal, orthorhombic_[1,2], None to avoid.")
-      call parse_input_variable(print_Gpath,"PRINT_GPATH",InputFile,default=(reg(structure).ne."None"),comment="Print the interacting Green's function along high-symmetry points.")
+      call parse_input_variable(path_funct,"PATH_FUNCT",InputFile,default="None",comment="Print interacting fields on high-symmetry points. Available fields: G=Green's function, S=self-energy, GS=both. None to avoid.")
       call parse_input_variable(Nkpt_path,"NK_PATH",InputFile,default=50,comment="Number of segments between two hig-symmetry Kpoints.")
       if(reg(CalculationType).eq."G0W0")dump_Gk=.true.
       if(reg(CalculationType).eq."scGW")dump_Gk=.true.

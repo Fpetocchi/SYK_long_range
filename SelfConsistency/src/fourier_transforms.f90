@@ -59,8 +59,10 @@ module fourier_transforms
    !subroutines
    public :: Fmats2itau_mat
    public :: Fmats2itau_vec
+   public :: Fmats2itau
    public :: Fitau2mats_mat
    public :: Fitau2mats_vec
+   public :: Fitau2mats
    public :: Bmats2itau
    public :: Bitau2mats
 
@@ -737,6 +739,83 @@ contains
 
 
    !---------------------------------------------------------------------------!
+   !PURPOSE: Perform the Fourier transform from mats to tau of a Gf
+   !---------------------------------------------------------------------------!
+   subroutine Fmats2itau(beta,Gmats,Gitau,asympt_corr,tau_uniform,atBeta)
+      !
+      use utils_misc
+      implicit none
+      !
+      real(8),intent(in)                    :: beta
+      complex(8),intent(in)                 :: Gmats(:)
+      complex(8),intent(inout)              :: Gitau(:)
+      logical,intent(in),optional           :: asympt_corr
+      logical,intent(in),optional           :: tau_uniform
+      logical,intent(in),optional           :: atBeta
+      !
+      real(8),allocatable                   :: coswt(:,:),sinwt(:,:)
+      real(8),allocatable                   :: tau(:)
+      complex(8)                            :: Ge,Go
+      integer                               :: iw,itau
+      integer                               :: Nmats,Ntau
+      logical                               :: asympt_corr_
+      logical                               :: tau_uniform_
+      logical                               :: atBeta_
+      !
+      !
+      if(verbose)write(*,"(A)") "---- Fmats2itau"
+      !
+      !
+      Nmats = size(Gmats)
+      Ntau = size(Gitau)
+      call assert_shape(Gitau,[Ntau],"Fmats2itau","Gitau")
+      !
+      asympt_corr_ = .true.
+      if(present(asympt_corr)) asympt_corr_ = asympt_corr
+      tau_uniform_ = .false.
+      if(present(tau_uniform)) tau_uniform_ = tau_uniform
+      atBeta_ = .false.
+      if(present(atBeta)) atBeta_ = atBeta
+      !
+      allocate(tau(Ntau));tau=0d0
+      if(tau_uniform_)then
+         tau = linspace(0d0,beta,Ntau)
+      else
+         tau = denspace(beta,Ntau)
+      endif
+      !
+      allocate(coswt(Nmats,Ntau));coswt=0d0
+      allocate(sinwt(Nmats,Ntau));sinwt=0d0
+      call mats2itau_FermionicCoeff(tau,coswt,sinwt,asympt_corr_)
+      deallocate(tau)
+      !
+      Gitau=czero
+      Ge=czero
+      Go=czero
+      !$OMP PARALLEL DEFAULT(NONE),&
+      !$OMP SHARED(atBeta_,Ntau,Nmats,Gmats,coswt,sinwt,Gitau),&
+      !$OMP PRIVATE(itau,iw,Ge,Go)
+      !$OMP DO
+      do itau=1,Ntau
+         if(atBeta_.and.(itau.ne.Ntau))cycle
+         do iw=1,Nmats
+            !
+            ! Gab(iw) = Gba*(-iwn) --> Gab(-iw) = Gba*(iwn)
+            Ge = Gmats(iw) + conjg(Gmats(iw))
+            Go = Gmats(iw) - conjg(Gmats(iw))
+            !
+            Gitau(itau) = Gitau(itau) + coswt(iw,itau)*Ge -dcmplx(0d0,1d0)*sinwt(iw,itau)*Go
+            !
+         enddo
+      enddo
+      !$OMP END DO
+      !$OMP END PARALLEL
+      deallocate(coswt,sinwt)
+      !
+   end subroutine Fmats2itau
+
+
+   !---------------------------------------------------------------------------!
    !PURPOSE: Perform the Fourier transform from tau to mats of a matrix Gf
    !TEST ON: 27-10-2020(Gwk)
    !---------------------------------------------------------------------------!
@@ -1016,6 +1095,72 @@ contains
       deallocate(RealG,ImagG,tau,wmats)
       !
    end subroutine Fitau2mats_vec_Gwk
+
+
+   !---------------------------------------------------------------------------!
+   !PURPOSE: Perform the Fourier transform from tau to mats of a Gf
+   !---------------------------------------------------------------------------!
+   subroutine Fitau2mats(beta,Gitau,Gmats,tau_uniform)
+      !
+      use utils_misc
+      implicit none
+      !
+      real(8),intent(in)                    :: beta
+      complex(8),intent(in)                 :: Gitau(:)
+      complex(8),intent(inout)              :: Gmats(:)
+      logical,intent(in),optional           :: tau_uniform
+      !
+      real(8),allocatable                   :: wmats(:),tau(:)
+      real(8),allocatable                   :: RealG(:),ImagG(:)
+      real(8)                               :: rwcos,rwsin,cwcos,cwsin
+      integer                               :: iw
+      integer                               :: Nmats,Ntau
+      logical                               :: tau_uniform_
+      !
+      !
+      if(verbose)write(*,"(A)") "---- Fitau2mats"
+      !
+      !
+      Ntau = size(Gitau)
+      Nmats = size(Gmats)
+      call assert_shape(Gmats,[Nmats],"Fitau2mats","Gmats")
+      if(mod(Ntau,2).eq.0) stop "Fitau2mats: Required Filon routines are not working with odd segments."
+      !
+      tau_uniform_ = .false.
+      if(present(tau_uniform)) tau_uniform_ = tau_uniform
+      !
+      allocate(wmats(Nmats));wmats=0d0
+      wmats = FermionicFreqMesh(beta,Nmats)
+      allocate(tau(Ntau));tau=0d0
+      if(tau_uniform_)then
+         tau = linspace(0d0,beta,Ntau)
+      else
+         tau = denspace(beta,Ntau)
+      endif
+      !
+      Gmats=czero
+      allocate(RealG(Ntau));RealG=0d0
+      allocate(ImagG(Ntau));ImagG=0d0
+      !$OMP PARALLEL DEFAULT(NONE),&
+      !$OMP SHARED(Nmats,wmats,tau,Gitau,Gmats),&
+      !$OMP PRIVATE(iw,RealG,ImagG,rwcos,rwsin,cwcos,cwsin)
+      !$OMP DO
+      do iw=1,Nmats
+         !
+         RealG = dreal( Gitau )
+         ImagG = dimag( Gitau )
+         !
+         call FermionicFilon(wmats(iw),tau,RealG,rwcos,rwsin)
+         call FermionicFilon(wmats(iw),tau,ImagG,cwcos,cwsin)
+         !
+         Gmats(iw) = dcmplx(rwcos-cwsin,0d0) + dcmplx(0d0,rwsin+cwcos)
+         !
+      enddo
+      !$OMP END DO
+      !$OMP END PARALLEL
+      deallocate(RealG,ImagG,tau,wmats)
+      !
+   end subroutine Fitau2mats
 
 
    !---------------------------------------------------------------------------!

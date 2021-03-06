@@ -80,6 +80,7 @@ module utils_main
    !
    logical                                  :: sym_constrained=.false.
    logical                                  :: MultiTier=.false.
+   logical                                  :: print_path=.false.
    !
    character(len=255)                       :: ItFolder,PrevItFolder
 
@@ -184,7 +185,7 @@ contains
       sym_constrained = ExpandImpurity .and. (reg(VH_type).ne."Ustatic")
       sym_constrained = ExpandImpurity .and. (reg(VH_type).ne."Ubare")
       !
-      print_Gpath = print_Gpath .and. (reg(structure).ne."None")
+      print_path = (reg(path_funct).ne."None") .and. (reg(structure).ne."None")
       !
       call inquireDir(reg(pathDATA)//str(FirstIteration-1),PrvItexist,hardstop=.false.,verb=.false.)
       call inquireDir(reg(pathDATA)//str(0),ZeroItexist,hardstop=.false.,verb=.false.)
@@ -288,15 +289,32 @@ contains
       PrevItFolder = reg(pathDATA)//str(ItStart-1)//"/"
       !
       !Creates folders for the K-resolved stuff
-      if(print_Gpath)then
+      if(print_path)then
          do ispin=1,Nspin
-            call createDir(reg(Itpath)//"/K_resolved/Gkt_s"//str(ispin),verb=verbose)
+            !
+            if(reg(path_funct).eq."G")then
+               call createDir(reg(Itpath)//"/K_resolved/Gkt_s"//str(ispin),verb=verbose)
+            elseif(reg(path_funct).eq."S")then
+               call createDir(reg(Itpath)//"/K_resolved/Skt_s"//str(ispin),verb=verbose)
+               call createDir(reg(Itpath)//"/K_resolved/Skw_s"//str(ispin),verb=verbose)
+               call createDir(reg(Itpath)//"/K_resolved/Spath_vars",verb=verbose)
+            elseif(reg(path_funct).eq."GS")then
+               call createDir(reg(Itpath)//"/K_resolved/Gkt_s"//str(ispin),verb=verbose)
+               call createDir(reg(Itpath)//"/K_resolved/Skt_s"//str(ispin),verb=verbose)
+               call createDir(reg(Itpath)//"/K_resolved/Skw_s"//str(ispin),verb=verbose)
+               call createDir(reg(Itpath)//"/K_resolved/Spath_vars",verb=verbose)
+            endif
          enddo
       endif
       !
       !Just to be sure
       Ustart = Ustart .and. (ItStart.eq.0)
       calc_Pguess = calc_Pguess .and. (.not.Ustart)
+      !
+      if((reg(path_funct).ne."G") .and. (reg(path_funct).ne."S"))then
+         write(*,"(A)")"     Invalid content of PATH_FUNCT. The calculation on the path will be avoided."
+         print_path=.false.
+      endif
       !
       !Save changes to the inputfile
       call save_InputFile("input.in")
@@ -1598,7 +1616,7 @@ contains
       type(FermionicField)                  :: DeltaCorr
       type(FermionicField)                  :: FermiPrint
       type(FermionicField)                  :: DeltaOld
-      integer                               :: Norb,Nflavor,unit,NfitD
+      integer                               :: Norb,Nflavor,unit
       integer                               :: ispin,iw,iwan,itau,ndx,wndx
       integer,allocatable                   :: Orbs(:)
       real(8),allocatable                   :: wmats(:),tau(:),Moments(:,:,:)
@@ -1725,14 +1743,12 @@ contains
             file = "DeltaMom_"//reg(SiteName(isite))//".DAT"
             MomDir = reg(ItFolder)//"Solver_"//reg(SiteName(isite))//"/"
             !
-            NfitD = Nfit
-            if(Nfit.gt.5)NfitD=5
-            allocate(Moments(Norb,NfitD,Nspin));Moments=0d0
+            allocate(Moments(Norb,Nspin,0:4));Moments=0d0
             wndx = minloc(abs(wmats-0.85*wmatsMax),dim=1)
-            call fit_moments(Dfit,Beta,NfitD,.false.,reg(MomDir),reg(file),"Sigma",Moments,filename="DeltaMom",Wlimit=wndx)
+            call fit_moments(Dfit,Beta,reg(MomDir),reg(file),"Sigma",Moments,filename="DeltaMom",Wlimit=wndx)
             !
-            Eloc=Moments(:,1,:)
-            coef01=Moments(:,2,:)
+            Eloc=Moments(:,0,:)
+            coef01=Moments(:,1,:)
             !
             deallocate(Moments)
             !
@@ -2209,7 +2225,7 @@ contains
       integer                               :: Norb,Nflavor,Nbp
       integer                               :: iorb,jorb,ispin,jspin
       integer                               :: ib1,ib2,isite,idum
-      integer                               :: unit,ndx,itau,iw,wndx
+      integer                               :: unit,ndx,itau,iw,wndx,wndxOpt
       real(8)                               :: taup,muQMC
       integer,allocatable                   :: Orbs(:)
       real(8),allocatable                   :: tauF(:),tauB(:),wmats(:)
@@ -2222,15 +2238,12 @@ contains
       type(FermionicField)                  :: Gimp
       complex(8),allocatable                :: Gitau(:,:,:)
       complex(8),allocatable                :: Gmats(:,:,:,:)
-      !complex(8),allocatable                :: GmatsTail(:),GmatsNoFit(:,:,:,:)
-      !integer                               :: NfitG
       !Impurity self-energy and fermionic Dyson equation
       type(FermionicField)                  :: Simp
       type(FermionicField)                  :: G0imp
       type(BosonicField)                    :: curlyU
       complex(8),allocatable                :: Smats(:,:,:,:)
       complex(8),allocatable                :: SmatsTail(:),SmatsNoFit(:,:,:,:)
-      integer                               :: NfitS
       !Impurity susceptibilities
       real(8),allocatable                   :: nnt(:,:,:)
       complex(8),allocatable                :: NNitau(:,:,:,:,:)
@@ -2445,17 +2458,25 @@ contains
             file = "SimpMom_"//reg(SiteName(isite))//".DAT"
             MomDir = reg(PrevItFolder)//"Solver_"//reg(SiteName(isite))//"/"
             allocate(wmats(Nmats));wmats=FermionicFreqMesh(Beta,Nmats)
+            !
+            !define the frequency index from which substitute the tail
             wndx = minloc(abs(wmats-ReplaceTail_Simp),dim=1)
-            NfitS = Nfit
-            if(Nfit.gt.5)NfitS=5
-            allocate(Moments(Norb,NfitS,Nspin));Moments=0d0
-            call fit_moments(Smats(:,:,:,isite),Beta,NfitS,.false.,reg(MomDir),reg(file),"Sigma",Moments,filename="Simp",Wlimit=wndx)
+            wndxOpt = wndx
+            do ispin=1,Nspin
+               do iorb=1,Norb
+                  wndxOpt = min(wndxOpt,minloc(abs(SmatsNoFit(iorb,:,ispin,isite)-0.3d0*minval(dimag(SmatsNoFit(iorb,:,ispin,isite)))),dim=1))
+               enddo
+            enddo
+            !
+            allocate(Moments(Norb,Nspin,0:4));Moments=0d0
+            call fit_moments(Smats(:,:,:,isite),Beta,reg(MomDir),reg(file),"Sigma",Moments,filename="Simp",Wlimit=wndx)
             !
             allocate(SmatsTail(Nmats));SmatsTail=czero
             write(*,"(A,F)") new_line("A")//"     Replacing Sigma tail starting from iw_["//str(wndx)//"]=",wmats(wndx)
+            if(abs(wmats(wndx)-wmats(wndxOpt)).gt.1d0)write(*,"(A,F)") "     Optimal would be iw_["//str(wndxOpt)//"]=",wmats(wndxOpt)
             do ispin=1,Nspin
                do iorb=1,Norb
-                  SmatsTail = S_Moments(Moments(iorb,:,ispin),wmats)
+                  SmatsTail = S_Moments(Moments(iorb,ispin,:),wmats)
                   Smats(iorb,wndx:Nmats,ispin,isite) = SmatsTail(wndx:Nmats)
                enddo
             enddo

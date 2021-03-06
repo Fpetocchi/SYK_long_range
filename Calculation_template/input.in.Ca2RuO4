@@ -80,7 +80,7 @@
  CAUSAL_U=F                                    !Flag to employ generalized cavity equation for curlyU. Active only for GW+EDMFT calculation.
  DELTA_FIT=Analytic                            !Fit to extract the local energy in GW+EDMFT calculations. Available: Inf, Analytic, Moments.
  NFIT=16                                       !Number of bath levels (Analytic) or coefficient (Moments-automatic limit to NFIT=8).
- WTAIL_SIMP=60.000000                          !Frequency value above which the tail of Simp is replaced. If =0d0 the tail is not replaced. Only via moments (automatic limit to NFIT=5).
+ WTAIL_SIMP=40.000000                          !Frequency value above which the tail of Simp is replaced. If =0d0 the tail is not replaced. Only via moments (automatic limit to NFIT=5).
 
  #---------------------------------------------#
 
@@ -91,10 +91,10 @@
  LAST_IT=                                      !Last iteration.
  LOGFILE=6                                     !Standard output redirection unit. Use 6 to print to terminal. Not used yet.
  PRINT_GK=T                                    !Print the full k-dependent Green's function (binfmt) at each iteration (mandatory for CALC_TYPE=G0W0,scGW,GW+EDMFT).
- PRINT_SIGMAK=F                                !Print the full k-dependent self-energy (binfmt) at each iteration (always optional).
- STRUCTURE=None                                !Available structures: cubic, fcc, bcc, hex, tetragonal, orthorhombic, None to avoid.
- PRINT_GPATH=F                                 !Print the interacting Green's function along high-symmetry points.
- NK_PATH=50                                    !Number of segments between two hig-symmetry Kpoints.
+ PRINT_SIGMAK=T                                !Print the full k-dependent self-energy (binfmt) at each iteration (always optional).
+ STRUCTURE=orthorhombic_2                      !Available structures: cubic, fcc, bcc, hex, tetragonal, orthorhombic_[1,2], None to avoid.
+ PATH_FUNCT=S                                  !Print interacting fields on high-symmetry points. Available fields: G=Green's function, S=self-energy, GS=both. None to avoid.
+ NK_PATH=60                                    !Number of segments between two hig-symmetry Kpoints.
 
  #---------------------------------------------#
 

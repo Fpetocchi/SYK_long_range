@@ -9,8 +9,18 @@ module fit
    !
    !
 
+
    !---------------------------------------------------------------------------!
-   !PURPOSE: container for density lookup parameters
+   !PURPOSE: Module interfaces
+   !---------------------------------------------------------------------------!
+   interface reconstruct_lastCoeffs
+      module procedure :: reconstruct_lastCoeffs_F
+      module procedure :: reconstruct_lastCoeffs_B
+   end interface reconstruct_lastCoeffs
+
+
+   !---------------------------------------------------------------------------!
+   !PURPOSE: Module custom types
    !---------------------------------------------------------------------------!
    type AndersonParam
       integer                               :: Norb
@@ -31,17 +41,20 @@ module fit
    !Global parameters
    !Fit variables
    integer,private                          :: Nfit
+   integer,private                          :: MaxMom
    integer,private                          :: Nfreq
+   !
+   complex(8),private                       :: ContinuityConstraint(2)
+   !
    integer,parameter,private                :: cg_niter=400
    real(8),parameter,private                :: cg_Ftol=1e-8
    real(8),parameter,private                :: hwband=10d0
-   real(8),parameter,private                :: noisefact=0.01
+   real(8),parameter,private                :: noisefact=0.1
    !Anderson Parameters variables
    type(AndersonParam),private              :: AndPram
    !Moments
    real(8),allocatable,private              :: Moments(:,:,:)
    !Shared
-   logical,private                          :: KramersKronig
    real(8),allocatable,private              :: wmats(:)
    complex(8),allocatable,private           :: Component(:)
    real(8),private                          :: df_eps=tiny(1d0)
@@ -58,6 +71,77 @@ module fit
    !===========================================================================!
 
 contains
+
+
+   subroutine reconstruct_lastCoeffs_F(Coeff,ConstrF)
+      !
+      use utils_misc
+      implicit none
+      !
+      real(8),intent(inout),allocatable     :: Coeff(:)
+      complex(8),intent(in)                 :: ConstrF(2)
+      integer                               :: imoment,lastMom
+      integer                               :: EvenExp,OddExp
+      logical                               :: lastisEven
+      real(8)                               :: EvenCoef,OddCoef
+      !
+      if(verbose)write(*,"(A)") "---- reconstruct_lastCoeffs_F"
+      lastMom = size(Coeff)-1
+      !
+      if(mod(lastMom,2).eq.0)then
+         EvenExp = lastMom
+         OddExp = lastMom - 1
+         lastisEven=.true.
+      else
+         OddExp = lastMom
+         EvenExp = lastMom - 1
+         lastisEven=.false.
+      endif
+      !
+      EvenCoef = dreal(ConstrF(1))*(ConstrF(2)**EvenExp)
+      do imoment=0,EvenExp-2,2
+         EvenCoef = EvenCoef - Coeff(imoment)*(ConstrF(2)**(EvenExp-imoment))
+      enddo
+      !
+      OddCoef = -dimag(ConstrF(1))*(ConstrF(2)**OddExp)
+      do imoment=1,OddExp-2,2
+         OddCoef = OddCoef - abs(Coeff(imoment))*(ConstrF(2)**(OddExp-imoment))
+      enddo
+      !
+      if(lastisEven)then
+         Coeff(lastMom) = EvenCoef
+         Coeff(lastMom-1) = abs(OddCoef)
+      else
+         Coeff(lastMom) = abs(OddCoef)
+         Coeff(lastMom-1) = EvenCoef
+      endif
+      !
+   end subroutine reconstruct_lastCoeffs_F
+   !
+   subroutine reconstruct_lastCoeffs_B(Coeff,ConstrF)
+      !
+      use utils_misc
+      implicit none
+      !
+      real(8),intent(inout),allocatable     :: Coeff(:)
+      real(8),intent(in)                    :: ConstrF(2)
+      integer                               :: imoment,lastMom
+      integer                               :: EvenExp
+      real(8)                               :: EvenCoef
+      !
+      if(verbose)write(*,"(A)") "---- reconstruct_lastCoeffs_B"
+      !
+      lastMom = size(Coeff)
+      EvenExp = 2*lastMom
+      !
+      EvenCoef = -ConstrF(1)*(ConstrF(2)**EvenExp)
+      do imoment=0,lastMom-1
+         EvenCoef = EvenCoef + Coeff(imoment)*(ConstrF(2)**(EvenExp-2*imoment))
+      enddo
+      !
+      Coeff(lastMom) = EvenCoef
+      !
+   end subroutine reconstruct_lastCoeffs_B
 
 
    !=============================== FIT DELTA =================================!
@@ -486,7 +570,7 @@ contains
    !PURPOSE: Setup/initilize the Green's function moments.
    !TEST ON:
    !---------------------------------------------------------------------------!
-   subroutine setupMoments(Norb,dirpath,paramFile)
+   subroutine setupMoments(Norb,dirpath,paramFile,refresh)
       !
       use parameters
       use utils_misc
@@ -495,6 +579,7 @@ contains
       integer,intent(in)                    :: Norb
       character(len=*),intent(in)           :: dirpath
       character(len=*),intent(in)           :: paramFile
+      logical,intent(in)                    :: refresh
       !
       character(len=255)                    :: path
       integer                               :: unit,ierr
@@ -509,7 +594,7 @@ contains
       !
       !
       if(allocated(Moments)) deallocate(Moments)
-      allocate(Moments(Norb,Nfit,Nspin))
+      allocate(Moments(Norb,Nspin,0:Nfit))
       !
       path = reg(dirpath)//reg(paramFile)
       call inquireFile(reg(path),filexists,hardstop=.false.,verb=verbose)
@@ -518,7 +603,7 @@ contains
          if(verbose)write(*,"(A)") "     Checking the number of coefficients in "//reg(path)
          unit = free_unit()
          open(unit,file=reg(path),form="formatted",status="old",action="read",position="rewind",iostat=ierr)
-         read(unit,*) Nfit_read
+         read(unit,"(1I5)") Nfit_read
          close(unit)
          !
          if(Nfit_read.ne.Nfit)then
@@ -531,18 +616,18 @@ contains
          !
       endif
       !
-      if(filexists)then
+      if(filexists.and.(.not.refresh))then
          !
          if(verbose)write(*,"(A)") "     Reading Moments from "//reg(paramFile)
          allocate(ReadLine(Nspin*Norb))
          unit = free_unit()
          open(unit,file=reg(path),form="formatted",status="old",action="read",position="rewind")
          read(unit,*) Nfit_read
-         do imoment=1,Nfit
+         do imoment=0,MaxMom
             ReadLine=0d0
             read(unit,*) ReadLine
-            Moments(:,imoment,1) = ReadLine(1:Norb)
-            Moments(:,imoment,2) = ReadLine(1+Norb:2*Norb)
+            Moments(:,1,imoment) = ReadLine(1:Norb)
+            Moments(:,2,imoment) = ReadLine(1+Norb:2*Norb)
          enddo
          deallocate(ReadLine)
          close(unit)
@@ -551,18 +636,12 @@ contains
          !
          if(verbose)write(*,"(A)") "     Initializing Moments."
          Moments = 0d0
-         do imoment=1,Nfit
+         do imoment=0,MaxMom
             do iorb=1,Norb
                do ispin=1,Nspin
                   call random_number(rnd)
-                  if(imoment.le.2)then
-                     Moments(iorb,imoment,ispin) = 1d0 - (rnd*noisefact)*(imoment-1)!(imoment-1)*noisefact!
-                  else
-                     Moments(iorb,imoment,ispin) = -(Moments(iorb,imoment-1,ispin)+(rnd*noisefact))
-                     !odd moments
-                     !if(mod(imoment,2).eq.0) Moments(iorb,imoment,ispin) = Moments(iorb,2,ispin) - (imoment/(10d0*Nfit)+(rnd*noisefact))!imoment*noisefact !
-                     !if(mod(imoment,2).eq.1) Moments(iorb,imoment,ispin) = Moments(iorb,2,ispin) - (imoment/(10d0*Nfit)+(rnd*noisefact))!imoment*noisefact !
-                  endif
+                  Moments(iorb,ispin,imoment) = 1d0 - (rnd*noisefact)
+                  if((imoment.gt.0).and.(mod(imoment,2).eq.0)) Moments(iorb,ispin,imoment) = -abs(Moments(iorb,ispin,imoment))
                enddo
             enddo
          enddo
@@ -601,9 +680,9 @@ contains
       if(verbose)write(*,"(A)") "     Dump "//reg(path)//" (readable)"
       unit = free_unit()
       open(unit,file=reg(path),form="formatted",status="unknown",action="write",position="rewind")
-      write(unit,"(I5,A)") Nfit," Number of coefficients."
-      do imoment=1,Nfit
-         write(unit,"(999E20.12)") (Moments(iorb,imoment,1),iorb=1,Norb),(Moments(iorb,imoment,2),iorb=1,Norb)
+      write(unit,"(1I5,A)") Nfit," Number of coefficients."
+      do imoment=0,MaxMom
+         write(unit,"(999E20.12)") (Moments(iorb,1,imoment),iorb=1,Norb),(Moments(iorb,2,imoment),iorb=1,Norb)
       enddo
       close(unit)
       !
@@ -612,117 +691,174 @@ contains
 
    !---------------------------------------------------------------------------!
    !PURPOSE: Creates the generic functional form via a moment representation.
-   !         The frequency mesh is not global as the routines are made available
+   !         Global module variables are not used as the routines are available
    !         in the main.
    !TEST ON:
    !---------------------------------------------------------------------------!
-   function G_Moments(MomentVec,wm,buildReG) result(Gf)
+   function G_Moments(ParamVec,wm,Gconstr) result(Gf)
       use parameters
       implicit none
-      real(8),dimension(:)                  :: MomentVec
+      real(8),dimension(:)                  :: ParamVec
       real(8),dimension(:)                  :: wm
-      logical,optional                      :: buildReG
+      complex(8),optional                   :: Gconstr(2)
       complex(8),dimension(size(wm))        :: Gf
-      real(8)                               :: coeff
-      integer                               :: imoment,iw,exp
-      logical                               :: buildReG_
+      real(8),dimension(size(wm))           :: ReGf
+      real(8),dimension(size(wm))           :: ImGf
+      real(8),allocatable                   :: Coeff(:)
+      integer                               :: iw,exp
+      integer                               :: imoment,lastMom
+      !
+      if(verbose)write(*,"(A)") "---- G_Moments"
+      !
+      if(present(Gconstr))then
+         !
+         !ParamVec contains from exp 2 and without the last two
+         lastMom = size(ParamVec) + 2 + 2 - 1      ! +(fixed M0&M1) + (2 reconstucted) - (starting from 0)
+         allocate(Coeff(0:lastMom));Coeff=0d0
+         !
+         Coeff(0) = 0d0
+         Coeff(1) = -1d0
+         Coeff(2:lastMom-2) = ParamVec
+         call reconstruct_lastCoeffs(Coeff,Gconstr)
+         !
+      else
+         !
+         !ParamVec contains also the last two recontructed elements
+         lastMom = size(ParamVec) + 2 - 1      ! +(fixed M0&M1) - (starting from 0)
+         allocate(Coeff(0:lastMom));Coeff=0d0
+         !
+         Coeff(0) = 0d0
+         Coeff(1) = -1d0
+         Coeff(2:lastMom) = ParamVec
+         !
+      endif
       !
       Gf=czero
-      buildReG_=.false.
-      if(present(buildReG))buildReG_=buildReG
-      !
+      ReGf=0d0
+      ImGf=0d0
       do iw=1,size(wm)
          !
-         !Moments 0,1
-         Gf(iw) = 0d0 + 1d0 / dcmplx(0d0,wm(iw))
-         !
-         do imoment=1,size(MomentVec)
+         do imoment=0,lastMom
             !
-            !exp= 2,3,4,5..
-            exp = imoment + 1
-            !exp= 3,5,7,9..
-            if(buildReG_) exp = 2*imoment + 1
+            !the index is equal to the exponent
+            exp = imoment
             !
-            coeff =  MomentVec(imoment)
-            !
-            !Odd moments coefficient are:
-            !positive for exp=1,5,9..
-            !negative for exp=3,7,11..
-            if(mod(exp,2).ne.0) coeff = sqrt( MomentVec(imoment)**2 )*(-1d0)**int(exp/2)
-            !
-            Gf(iw) = Gf(iw) + coeff/(dcmplx(0d0,wm(iw))**exp)
+            if(mod(exp,2).eq.0)then
+               ReGf(iw) = ReGf(iw) + Coeff(imoment)/(wm(iw)**exp)
+            else
+               ImGf(iw) = ImGf(iw) - abs(Coeff(imoment))/(wm(iw)**exp)
+            endif
             !
          enddo
          !
+         Gf(iw) = dcmplx( ReGf(iw) , ImGf(iw) )
+         !
       enddo
-      !
-      !if(buildReG_) call kramers_kronig(Gf,wm)
       !
    end function G_Moments
    !
-   function S_Moments(MomentVec,wm,buildReS) result(Sigma)
+   function S_Moments(ParamVec,wm,Sconstr) result(Sigma)
       use parameters
       implicit none
-      real(8),dimension(:)                  :: MomentVec
+      real(8),dimension(:)                  :: ParamVec
       real(8),dimension(:)                  :: wm
-      logical,optional                      :: buildReS
+      complex(8),optional                   :: Sconstr(2)
       complex(8),dimension(size(wm))        :: Sigma
-      real(8)                               :: coeff
-      integer                               :: imoment,iw,exp
-      logical                               :: buildReS_
+      real(8),dimension(size(wm))           :: ReSigma
+      real(8),dimension(size(wm))           :: ImSigma
+      real(8),allocatable                   :: Coeff(:)
+      integer                               :: iw,exp
+      integer                               :: imoment,lastMom
+      !
+      if(verbose)write(*,"(A)") "---- S_Moments"
+      !
+      if(present(Sconstr))then
+         !
+         !ParamVec contains from exp 0 and without the last two
+         lastMom = size(ParamVec) + 2 - 1      ! + (2 reconstucted) - (starting from 0)
+         allocate(Coeff(0:lastMom));Coeff=0d0
+         !
+         Coeff(0:lastMom-2) = ParamVec
+         call reconstruct_lastCoeffs(Coeff,Sconstr)
+         !
+      else
+         !
+         !ParamVec contains also the last two recontructed elements
+         lastMom = size(ParamVec) - 1      ! - (starting from 0)
+         allocate(Coeff(0:lastMom));Coeff=0d0
+         !
+         Coeff(0:lastMom) = ParamVec
+         !
+      endif
       !
       Sigma=czero
-      buildReS_=.false.
-      if(present(buildReS))buildReS_=buildReS
-      !
+      ReSigma=0d0
+      ImSigma=0d0
       do iw=1,size(wm)
          !
-         !Moments 0,1
-         Sigma(iw) = MomentVec(1) + sqrt( MomentVec(2)**2 ) / dcmplx(0d0,wm(iw))
-         !
-         do imoment=3,size(MomentVec)
+         do imoment=0,lastMom
             !
-            !exp= 3,4,5,6..
+            !the index is equal to the exponent
             exp = imoment
-            !exp= 3,5,7,9..
-            if(buildReS_) exp = 2*imoment - 3
             !
-            coeff =  MomentVec(imoment)
-            !
-            !Odd moments coefficient are:
-            !positive for exp=1,5,9..
-            !negative for exp=3,7,11..
-            if(mod(exp,2).ne.0) coeff = sqrt( MomentVec(imoment)**2 )*(-1d0)**int(exp/2)
-            !
-            Sigma(iw) = Sigma(iw) + coeff/(dcmplx(0d0,wm(iw))**exp)
+            if(mod(exp,2).eq.0)then
+               ReSigma(iw) = ReSigma(iw) + Coeff(imoment)/(wm(iw)**exp)
+            else
+               ImSigma(iw) = ImSigma(iw) - abs(Coeff(imoment))/(wm(iw)**exp)
+            endif
             !
          enddo
+         !
+         Sigma(iw) = dcmplx( ReSigma(iw) , ImSigma(iw) )
          !
       enddo
       !
-      !if(buildReS_) call kramers_kronig(Sigma,wm)
-      !
    end function S_Moments
    !
-   function W_Moments(MomentVec,wm) result(W)
+   function W_Moments(ParamVec,wm,Wconstr) result(W)
       use parameters
       implicit none
-      real(8),dimension(:)                  :: MomentVec
+      real(8),dimension(:)                  :: ParamVec
       real(8),dimension(:)                  :: wm
+      complex(8),optional                   :: Wconstr(2)
       complex(8),dimension(size(wm))        :: W
-      integer                               :: imoment,iw,exp
+      real(8),allocatable                   :: Coeff(:)
+      integer                               :: iw,exp
+      integer                               :: imoment,lastMom
+      !
+      if(verbose)write(*,"(A)") "---- W_Moments"
+      !
+      if(present(Wconstr))then
+         !
+         !ParamVec contains from exp 0 and without the last one
+         lastMom = size(ParamVec) + 1 - 1      ! + (1 reconstucted) - (starting from 0)
+         allocate(Coeff(0:lastMom));Coeff=0d0
+         !
+         Coeff(0:lastMom-1) = ParamVec
+         call reconstruct_lastCoeffs(Coeff,dreal(Wconstr))
+         !
+      else
+         !
+         !ParamVec contains also the last one recontructed elements
+         lastMom = size(ParamVec) - 1      ! - (starting from 0)
+         allocate(Coeff(0:lastMom));Coeff=0d0
+         !
+         Coeff(0:lastMom) = ParamVec
+         !
+      endif
       !
       W=czero
-      !
       do iw=1,size(wm)
          !
-         !Moments 0
-         W(iw) = MomentVec(1)
-         !
-         do imoment=2,size(MomentVec)
-            exp = 2*imoment - 2 !Moments 2,4,6,8..
-            W(iw) = W(iw) + MomentVec(imoment)/(dcmplx(0d0,wm(iw))**exp)
+         do imoment=0,lastMom
+            !
+            !the index is equal to the even exponent
+            exp = 2*imoment
+            !
+            W(iw) = W(iw) + Coeff(imoment)/(wm(iw)**exp)
+            !
          enddo
+         !
       enddo
       !
    end function W_Moments
@@ -741,7 +877,7 @@ contains
       real(8)                               :: chi2
       complex(8),dimension(Nfreq)           :: Gf
       !
-      Gf = G_Moments(MomentVec,wmats,buildReG=KramersKronig)
+      Gf = G_Moments(MomentVec,wmats,Gconstr=ContinuityConstraint)
       !
       chi2=sum(abs(Component(:)-Gf(:))**2)
       !
@@ -755,7 +891,7 @@ contains
       real(8)                               :: chi2
       complex(8),dimension(Nfreq)           :: Sigma
       !
-      Sigma = S_Moments(MomentVec,wmats,buildReS=KramersKronig)
+      Sigma = S_Moments(MomentVec,wmats,Sconstr=ContinuityConstraint)
       !
       chi2=sum(abs(Component(:)-Sigma(:))**2)
       !
@@ -769,7 +905,7 @@ contains
       real(8)                               :: chi2
       complex(8),dimension(Nfreq)           :: W
       !
-      W = W_Moments(MomentVec,wmats)
+      W = W_Moments(MomentVec,wmats,Wconstr=ContinuityConstraint)
       !
       chi2=sum(abs(Component(:)-W(:))**2)
       !
@@ -781,7 +917,7 @@ contains
    !         functional moment formulation.
    !TEST ON:
    !---------------------------------------------------------------------------!
-   subroutine fit_moments(funct,Beta,Nb,KK,dirpath,paramFile,FitMode,MomentsOut,filename,Wlimit)
+   subroutine fit_moments(funct,Beta,dirpath,paramFile,FitMode,MomentsOut,filename,Wlimit,verb,refresh)
       !
       use parameters
       use utils_misc
@@ -790,36 +926,45 @@ contains
       !
       complex(8),intent(in)                 :: funct(:,:,:)
       real(8),intent(in)                    :: Beta
-      integer,intent(in)                    :: Nb
-      logical,intent(in)                    :: KK
       character(len=*),intent(in)           :: dirpath
       character(len=*),intent(in)           :: paramFile
       character(len=*),intent(in)           :: FitMode
-      real(8),intent(inout)                 :: MomentsOut(:,:,:)
+      real(8),intent(inout),allocatable     :: MomentsOut(:,:,:)
       character(len=*),intent(in),optional  :: filename
       integer,intent(in),optional           :: Wlimit
+      logical,intent(in),optional           :: verb
+      logical,intent(in),optional           :: refresh
       !
       integer                               :: Norb,Niter,Wstart
       integer                               :: iorb,ispin
       real(8)                               :: chi
-      real(8),allocatable                   :: ParamVec(:)
+      real(8),allocatable                   :: ParamVec(:),MomentsRebuilt(:)
       complex(8),allocatable                :: funct_print(:)
+      logical                               :: verb_,refresh_
       !
       !
       if(verbose)write(*,"(A)") "---- fit_moments"
       !
       !
-      Nfit = Nb
-      KramersKronig = KK
+      Nfit = size(MomentsOut,dim=3)
+      if(Nfit.lt.5) stop "fit_moments: the fit will not work with less than five moments (min order is 4)."
+      if(.not.allocated(MomentsOut)) stop "fit_moments: output moment container not allocated."
+      MaxMom = Nfit - 1
+      !
       Norb = size(funct,dim=1)
       Wstart = 1
       if(present(Wlimit))Wstart = Wlimit
       Nfreq = size(funct,dim=2) - Wstart + 1
       !
-      call assert_shape(MomentsOut,[Norb,Nfit,Nspin],"fit_moments","MomentsOut")
+      verb_=.true.
+      if(present(verb))verb_=verb
+      refresh_=.false.
+      if(present(refresh))refresh_=refresh
+      !
       allocate(Component(Nfreq));Component=czero
       !
-      call setupMoments(Norb,dirpath,paramFile)
+      call setupMoments(Norb,dirpath,paramFile,refresh_)
+      allocate(MomentsRebuilt(0:MaxMom));MomentsRebuilt=0d0
       !
       select case(reg(FitMode))
          case default
@@ -828,87 +973,110 @@ contains
             !
          case("Green")
             !
-            write(*,"(A)")"     Fitting moments [2:N]."
+            if(verb_)write(*,"(A)")"     Fitting moments [2:"//str(MaxMom)//"]."
             !
             allocate(wmats(Nfreq));wmats=0d0
             wmats = FermionicFreqMesh(Beta,Nfreq) + (Wstart-1)*2d0*pi/Beta
-            allocate(ParamVec(Nfit-2));ParamVec=0d0
+            allocate(ParamVec(Nfit-4));ParamVec=0d0                             !starts from exponent -2 and interanlly reconstruct the last two
             !
             do ispin=1,Nspin
                do iorb=1,Norb
                   !
-                  Moments(iorb,1,ispin) = 0d0
-                  Moments(iorb,2,ispin) = 1d0
+                  Moments(iorb,ispin,0) = 0d0
+                  Moments(iorb,ispin,1) = 1d0
                   Component = funct(iorb,Wstart:Wstart+Nfreq-1,ispin)
-                  ParamVec = Moments(iorb,3:Nfit,ispin)
+                  ParamVec = Moments(iorb,ispin,2:MaxMom-2)                     !starts from exponent -2 and interanlly reconstruct the last two
+                  ContinuityConstraint = [Component(1),dcmplx(wmats(1),0d0)]
                   !
                   call fit_wrapper(chi2_G_Moments,ParamVec,chi,Niter)
                   !
-                  write(*,"(3(A,I3))")"     Results for orb: ",iorb," spin: ",ispin," Npara: ",size(ParamVec)
-                  write(*,"(A,I,2(A,F))")"     Iterations: ",Niter," Chi^2: ",chi,", Wstart: ",wmats(1)
-                  write(*,"(A,100E16.6)")"     Moments before fit: ",Moments(iorb,:,ispin)
-                  write(*,"(A,100E16.6)")"     Moments after fit:  ",0d0,1d0,ParamVec
+                  !This sucks but in order to start from 0 in the subr I need to pass an allocatable which cannot be sliced
+                  MomentsRebuilt(0) = 0d0
+                  MomentsRebuilt(1) = 1d0
+                  MomentsRebuilt(2:MaxMom-2)=ParamVec
+                  call reconstruct_lastCoeffs(MomentsRebuilt,ContinuityConstraint)
                   !
-                  Moments(iorb,3:Nfit,ispin) = ParamVec
+                  if(verb_)then
+                     write(*,"(3(A,I3))")"     Results for orb: ",iorb," spin: ",ispin," Npara: ",size(ParamVec)
+                     write(*,"(A,I,2(A,F))")"     Iterations: ",Niter," Chi^2: ",chi,", Wstart: ",wmats(1)
+                     write(*,"(A,100E16.6)")"     Moments before fit: ",Moments(iorb,ispin,0:MaxMom)
+                     write(*,"(A,100E16.6)")"     Moments after fit:  ",MomentsRebuilt(0:MaxMom)
+                  endif
+                  !
+                  Moments(iorb,ispin,0:MaxMom)=MomentsRebuilt(0:MaxMom)
                   !
                enddo
             enddo
             !
          case("Sigma")
             !
-            write(*,"(A)")"     Fitting moments [0:N]."
+            if(verb_)write(*,"(A)")"     Fitting moments [0:"//str(MaxMom)//"]."
             !
             allocate(wmats(Nfreq));wmats=0d0
             wmats = FermionicFreqMesh(Beta,Nfreq) + (Wstart-1)*2*pi/Beta
-            allocate(ParamVec(Nfit));ParamVec=0d0
+            allocate(ParamVec(Nfit-2));ParamVec=0d0                             !starts from exponent 0 and interanlly reconstruct the last two
             !
             do ispin=1,Nspin
                do iorb=1,Norb
                   !
                   Component = funct(iorb,Wstart:Wstart+Nfreq-1,ispin)
-                  ParamVec = Moments(iorb,:,ispin)
+                  ParamVec = Moments(iorb,ispin,0:MaxMom-2)                     !starts from exponent 0 and interanlly reconstruct the last two
+                  ContinuityConstraint = [Component(1),dcmplx(wmats(1),0d0)]
                   !
                   call fit_wrapper(chi2_S_Moments,ParamVec,chi,Niter)
                   !
-                  write(*,"(3(A,I3))")"     Results for orb: ",iorb," spin: ",ispin," Npara: ",size(ParamVec)
-                  write(*,"(A,I,2(A,F))")"     Iterations: ",Niter," Chi^2: ",chi,", Wstart: ",wmats(1)
-                  write(*,"(A,100E16.6)")"     Moments before fit: ",Moments(iorb,:,ispin)
-                  write(*,"(A,100E16.6)")"     Moments after fit:  ",ParamVec
+                  !This sucks but in order to start from 0 in the subr I need to pass an allocatable which cannot be sliced
+                  MomentsRebuilt(0:MaxMom-2)=ParamVec
+                  call reconstruct_lastCoeffs(MomentsRebuilt,ContinuityConstraint)
                   !
-                  Moments(iorb,:,ispin) = ParamVec
+                  if(verb_)then
+                     write(*,"(3(A,I3))")"     Results for orb: ",iorb," spin: ",ispin," Npara: ",size(ParamVec)
+                     write(*,"(A,I,2(A,F))")"     Iterations: ",Niter," Chi^2: ",chi,", Wstart: ",wmats(1)
+                     write(*,"(A,100E16.6)")"     Moments before fit: ",Moments(iorb,ispin,0:MaxMom)
+                     write(*,"(A,100E16.6)")"     Moments after fit:  ",MomentsRebuilt(0:MaxMom)
+                  endif
+                  !
+                  Moments(iorb,ispin,0:MaxMom)=MomentsRebuilt(0:MaxMom)
                   !
                enddo
             enddo
             !
          case("Boson")
             !
-            write(*,"(A)")"     Fitting even moments [0:N]."
+            if(verb_)write(*,"(A)")"     Fitting even moments [0:"//str(MaxMom)//"]."
             !
             allocate(wmats(Nfreq));wmats=0d0
             wmats = BosonicFreqMesh(Beta,Nfreq) + (Wstart-1)*2d0*pi/Beta
-            allocate(ParamVec(Nfit));ParamVec=0d0
+            allocate(ParamVec(Nfit-2));ParamVec=0d0                             !starts from exponent 0 and interanlly reconstruct the last two
             !
             do ispin=1,Nspin
                do iorb=1,Norb
                   !
                   Component = funct(iorb,Wstart:Wstart+Nfreq-1,ispin)
-                  ParamVec = Moments(iorb,:,ispin)
+                  ParamVec = Moments(iorb,ispin,0:MaxMom-2)                     !starts from exponent 0 and interanlly reconstruct the last two
+                  ContinuityConstraint = [Component(1),dcmplx(wmats(1),0d0)]
                   !
                   call fit_wrapper(chi2_W_Moments,ParamVec,chi,Niter)
                   !
-                  write(*,"(3(A,I3))")"     Results for orb: ",iorb," spin: ",ispin," Npara: ",size(ParamVec)
-                  write(*,"(A,I,2(A,F))")"     Iterations: ",Niter," Chi^2: ",chi,", Wstart: ",wmats(1)
-                  write(*,"(A,100E16.6)")"     First 5 moments before fit: ",Moments(iorb,0:4,ispin)
-                  write(*,"(A,100E16.6)")"     First 5 moments after fit:  ",ParamVec(1:5)
+                  !This sucks but in order to start from 0 in the subr I need to pass an allocatable which cannot be sliced
+                  MomentsRebuilt(0:MaxMom-2)=ParamVec
+                  call reconstruct_lastCoeffs(MomentsRebuilt,dreal(ContinuityConstraint))
                   !
-                  Moments(iorb,:,ispin) = ParamVec
+                  if(verb_)then
+                     write(*,"(3(A,I3))")"     Results for orb: ",iorb," spin: ",ispin," Npara: ",size(ParamVec)
+                     write(*,"(A,I,2(A,F))")"     Iterations: ",Niter," Chi^2: ",chi,", Wstart: ",wmats(1)
+                     write(*,"(A,100E16.6)")"     Moments before fit: ",Moments(iorb,ispin,0:MaxMom)
+                     write(*,"(A,100E16.6)")"     Moments after fit:  ",MomentsRebuilt(0:MaxMom)
+                  endif
+                  !
+                  Moments(iorb,ispin,0:MaxMom)=MomentsRebuilt(0:MaxMom)
                   !
                enddo
             enddo
             !
       end select
       !
-      deallocate(Component,ParamVec,wmats)
+      deallocate(Component,ParamVec,MomentsRebuilt,wmats)
       MomentsOut = Moments
       call dump_Moments(dirpath,paramFile)
       !
@@ -928,11 +1096,11 @@ contains
                funct_print=czero
                select case(reg(FitMode))
                   case("Green")
-                     funct_print = G_Moments(Moments(iorb,3:Nfit,ispin),wmats)
+                     funct_print = G_Moments(Moments(iorb,ispin,2:Nfit),wmats)
                   case("Sigma")
-                     funct_print = S_Moments(Moments(iorb,:,ispin),wmats)
+                     funct_print = S_Moments(Moments(iorb,ispin,:),wmats)
                   case("Boson")
-                     funct_print = W_Moments(Moments(iorb,:,ispin),wmats)
+                     funct_print = W_Moments(Moments(iorb,ispin,:),wmats)
                end select
                !
                call dump_FermionicField(funct_print,reg(dirpath)//"fits/",reg(filename)//"_o"//str(iorb)//"_s"//str(ispin)//".DAT",wmats)

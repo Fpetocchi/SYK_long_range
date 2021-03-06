@@ -44,6 +44,7 @@ module greens_function
    public :: set_density
    public :: calc_Gmats
    public :: calc_Glda
+   public :: calc_G0_tau
 
    !===========================================================================!
 
@@ -178,7 +179,7 @@ contains
       use parameters
       use utils_misc
       use fourier_transforms
-      use input_vars, only : NtauF, tau_uniform
+      use input_vars, only : tau_uniform
       implicit none
       !
       complex(8),allocatable,intent(inout)  :: Gitau(:,:,:)
@@ -189,7 +190,7 @@ contains
       !
       real(8),allocatable                   :: tau(:)
       real(8)                               :: eu,fermicut
-      integer                               :: iwan,ik,itau
+      integer                               :: iwan,ik,itau,Ntau
       integer                               :: Norb,Nkpt
       logical                               :: upper,lower,atBeta_
       !
@@ -201,24 +202,25 @@ contains
       ! Check on the input Fields
       Norb = size(Ek,dim=1)
       Nkpt = size(Ek,dim=2)
-      call assert_shape(Gitau,[Norb,NtauF,Nkpt],"calc_G0_tau","Gitau")
+      Ntau = size(Gitau,dim=2)
+      call assert_shape(Gitau,[Norb,Ntau,Nkpt],"calc_G0_tau","Gitau")
       atBeta_ = .false.
       if(present(atBeta)) atBeta_ = atBeta
       !
-      allocate(tau(NtauF));tau=0d0
+      allocate(tau(Ntau));tau=0d0
       if(tau_uniform)then
-         tau = linspace(0d0,Beta,NtauF)
+         tau = linspace(0d0,Beta,Ntau)
       else
-         tau = denspace(Beta,NtauF)
+         tau = denspace(Beta,Ntau)
       endif
       !
       Gitau=czero
       !$OMP PARALLEL DEFAULT(NONE),&
-      !$OMP SHARED(Nkpt,NtauF,Norb,atBeta_,tau,Ek,mu,fermicut,Beta,Gitau),&      !VEDI SE PUOI TOGLIERE QUALCHE IF
+      !$OMP SHARED(Nkpt,Ntau,Norb,atBeta_,tau,Ek,mu,fermicut,Beta,Gitau),&      !VEDI SE PUOI TOGLIERE QUALCHE IF
       !$OMP PRIVATE(ik,itau,iwan,eu,upper,lower)
       !$OMP DO
-      do itau=1,NtauF
-         if(atBeta_.and.(itau.ne.NtauF))cycle
+      do itau=1,Ntau
+         if(atBeta_.and.(itau.ne.Ntau))cycle
          do ik=1,Nkpt
             do iwan=1,Norb
                !
@@ -617,8 +619,6 @@ contains
       mu_start = mu
       !
       !Everything is paramagnetic
-
-
       allocate(Gitau(Norb,NtauF,Nkpt));Gitau=czero
       call calc_G0_tau(Gitau,mu_start,Beta,Lttc%Ek,atBeta=.true.)
       n_iter = get_dens()

@@ -1,15 +1,5 @@
-program SelfConsistency
+program self_energy_builder
    !
-   ! COMMENTS:
-   ! tengo collect_QMC_results(ItStart) separato perche forse in un futuro riscrivero il solver
-   ! e quindi potro semplicemnte sponstare collect_QMC_results(ItStart) in fondo e tenere
-   ! initialize_Fields(ItStart) invariato, Se metto dyson dentro initialize_Fields
-   ! dopo se cambio solver mi tocca riscriverlo.
-   ! quindi tengo separato collect_QMC_results che crea e scrive le self-energie e Pimp
-   ! oi dealloco e rileggo
-   ! tutta la roba che alloco qui e' solo temporaea e principalemtne dovuta la fatto che thengo seprate C e X componenti di sigmaGW
-
-
    use module_container
    use utils_main
    implicit none
@@ -17,7 +7,6 @@ program SelfConsistency
    integer                                  :: TimeStart
    integer                                  :: isite
    integer                                  :: Iteration,ItStart,Itend
-   !
    !
    !
    !
@@ -34,6 +23,126 @@ program SelfConsistency
    !
    !
    !
+   !---------------------------------------------------------------------------!
+   !             COLLECTING RESULTS FROM MAXENT ON THE SELF-ENERGY             !
+   !---------------------------------------------------------------------------!
+
+
+
+   do ispin=1,Nspin
+      !
+      PathData = reg(ItFolder)//"K_resolved/"
+      !
+      !First check that all the files contains the same number fo real frequecies
+      do ik=1,Crystal%Nkpt_path
+         !
+         path = reg(PathData)//"Skt_s"//str(ispin)//"/Skt_k"//str(ik)//".DAT_dos.dat"
+         unit = free_unit()
+         open(unit,file=reg(path),form="formatted",status="unknown",position="rewind",action="read",iostat=ierr)
+         !
+         Nreal=0
+         do while (ierr.eq.0)
+            read(unit,*)
+            Nreal = Nreal + 1
+         enddo
+         close(unit)
+         !
+         write(*,"(A,1I5)") "     The file "//reg(path)//"contains "//str(Nreal)//" real frequencies."
+         if((ik.gt.1).and.(Nreal.ne.Nreal_old))then
+            write(*,"(A,1I5)") "     Stop. Real mesh is not consistent among K-points."
+            stop
+         endif
+         Nreal_old=Nreal
+         !
+      enddo
+      !
+      allocate(wreal(Nreal));wreal=0d0
+      allocate(ImSigma(Crystal%Norb,Nreal,Crystal%Nkpt_path));ImSigma=0d0
+      do ik=1,Crystal%Nkpt_path
+         !
+         path = reg(PathData)//"Skt_k"//str(ik)//".DAT_dos.dat"
+         unit = free_unit()
+         open(unit,file=reg(path),form="formatted",status="unknown",position="rewind",action="read")
+         do iw=1,Nreal
+            read(unit,*) wreal(iw),(ImSigma(iorb,iw,ik),iorb=1,Crystal%Norb)
+         enddo
+         close(unit)
+         !
+      enddo
+      !
+      !Read the parameters for the Self-energy rescaling
+      allocate(Sparams(Norb,Crystal%Nkpt_path,Nspin,2));Sparams=0d0
+      path = reg(PathData)//"Spath_vars/Spath_Params.DAT"
+      unit = free_unit()
+      open(unit,file=reg(ParaFile),form="formatted",status="unknown",position="rewind",action="read")
+      do ik=1,Crystal%Nkpt_path
+         read(unit,*) (Sparams(iorb,ik,1,1),iorb=1,Crystal%Norb),(Sparams(iorb,ik,1,2),iorb=1,Crystal%Norb), &
+                      (Sparams(iorb,ik,Nspin,1),iorb=1,Crystal%Norb),(Sparams(iorb,ik,Nspin,2),iorb=1,Crystal%Norb)
+      enddo
+      close(unit)
+      !
+      !Rescale the Self-energy
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+         do itau=1,Ntau
+             write(unit,"(200E20.12)") tau(itau),(dreal(Sitau_diag(iorb,itau,ik,ispin)),iorb=1,Norb)
+         enddo
+         close(unit)
+         !
+      enddo
+      if(paramagnet)exit
+   enddo
+
+
+   !
+
+
+   if(filexists)then
+      if(verbose)write(*,"(A)") "     Checking the number of Anderson Parameters in "//reg(path)
+      unit = free_unit()
+      open(unit,file=reg(path),form="formatted",status="old",action="read",position="rewind",iostat=ierr)
+      read(unit,*) Nfit_read
+      close(unit)
+      !
+      if(Nfit_read.ne.Nfit)then
+         if(verbose)write(*,"(A)") "     Number of Parameters is different. Reinitializing."
+         filexists = .false.
+      elseif(ierr.ne.0)then
+         if(verbose)write(*,"(A)") "     Error in opening file. Reinitializing."
+         filexists = .false.
+      endif
+      !
+   endif
+
+
+
+
+
+
+
+
+
+   call AllocateFermionicField(S_Full,Crystal%Norb,Nmats,Nkpt=Crystal%Nkpt,Nsite=Nsite,Beta=Beta)
+   call read_FermionicField(S_Full,reg(ItFolder),"Sfull_w",Crystal%kpt)
+   call interpolateG2Path(S_Full,Crystal,reg(structure),Nkpt_path,reg(ItFolder))
+   stop
+   !
+   !
    !
    !---------------------------------------------------------------------------!
    !       COLLECTING RESULTS FROM THE SOLVER AND SOLVING DYSON EQUATION       !
@@ -45,7 +154,6 @@ program SelfConsistency
          if(solve_DMFT) call collect_QMC_results()
       endif
    endif
-   !
    !
    !
    !
@@ -273,7 +381,7 @@ program SelfConsistency
       if(solve_DMFT)call execute_command_line(" touch doSolver ")
    endif
    !
-end program SelfConsistency
+end program self_energy_builder
 
 
 

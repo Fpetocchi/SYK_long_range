@@ -98,6 +98,8 @@ module utils_misc
    public :: nspline
    public :: splint
    public :: get_pattern
+   public :: KK_Im2Re
+   public :: KK_Re2Im
    !functions
    public :: FermionicFreqMesh
    public :: BosonicFreqMesh
@@ -835,6 +837,194 @@ contains
       enddo
       !
    end subroutine halfbeta_antisymm
+
+
+   !---------------------------------------------------------------------------!
+   !PURPOSE: Compute the Re/Im part of a causal function on the real frequency
+   !axis using Kramers Kronig relatins
+   !---------------------------------------------------------------------------!
+   subroutine KK_Im2Re(RePart,ImPart,wreal,cutoff,BareVal,ZeroVal,symmetric)
+      implicit none
+      real(8),intent(inout)                 :: RePart(:)
+      real(8),intent(in)                    :: ImPart(:)
+      real(8),intent(in)                    :: wreal(:)
+      real(8),intent(in)                    :: cutoff
+      real(8),intent(in),optional           :: BareVal
+      real(8),intent(in),optional           :: ZeroVal
+      logical,intent(in),optional           :: symmetric
+      !
+      real(8),parameter                     :: pi=3.14159265358979323846d0
+      integer                               :: iw,iwp,Nreal
+      integer                               :: Nwmax,Nwmin,Nwzero
+      real(8)                               :: dw,w,wp
+      real(8),allocatable                   :: ImDeriv(:)
+      logical                               :: symmetric_
+      !
+      Nreal=size(wreal)
+      call assert_shape(RePart,[Nreal],"KK_Im2Re","RePart")
+      call assert_shape(ImPart,[Nreal],"KK_Im2Re","ImPart")
+      !
+      symmetric_=.false.
+      if(present(symmetric))symmetric_=symmetric
+      !
+      Nwmax = minloc(abs(wreal-cutoff),dim=1)-2
+      Nwmin = minloc(abs(wreal+cutoff),dim=1)+2
+      Nwzero = minloc(abs(wreal),dim=1)
+      !
+      allocate(ImDeriv(Nreal));ImDeriv=0d0
+      dw = abs(wreal(2)-wreal(1))/pi
+      do iw=2,Nreal-1
+         ImDeriv(iw) = (ImPart(iw+1)-ImPart(iw-1))/(2d0*dw)
+      enddo
+      !
+      RePart=0d0
+      if(symmetric_)then
+         !
+         !
+         do iw=Nwzero,Nwmax
+            do iwp=Nwzero,Nwmax
+               !
+               w  = wreal(iw)
+               wp = wreal(iwp)
+               !
+               if(iw.eq.iwp)then
+                  RePart(iw) = RePart(iw) + dw * 2d0*ImDeriv(iw)
+               else
+                  RePart(iw) = RePart(iw) + dw * 2d0*(ImPart(iwp)-ImPart(iw)) * w / ( wp**2 - w**2 )
+               endif
+               !
+            enddo
+            !
+            RePart(iw) = RePart(iw) + ImPart(iw) * log( (cutoff-w)/(cutoff+w) )/pi
+            !
+         enddo
+         !
+         do iw=Nwzero,Nwmax
+            if((Nwzero-iw).lt.Nwmin)exit
+            RePart( Nwzero-iw ) = RePart(iw)
+         enddo
+         !
+         !
+      else
+         !
+         !
+         do iw=1,Nwmax
+            do iwp=1,Nwmax
+               !
+               w  = wreal(iw)
+               wp = wreal(iwp)
+               !
+               if(iw.eq.iwp)then
+                  RePart(iw) = RePart(iw) + dw * ImDeriv(iw)
+               else
+                  RePart(iw) = RePart(iw) + dw * (ImPart(iwp)-ImPart(iw)) / ( wp - w )
+               endif
+               !
+            enddo
+            !
+            RePart(iw) = RePart(iw) + ImPart(iw) * log( (cutoff-w)/(cutoff+w) )/pi
+            !
+         enddo
+         !
+         !
+      endif
+      !
+      if(present(BareVal))then
+         RePart = RePart + BareVal
+      elseif(present(ZeroVal))then
+         RePart = RePart - RePart(Nwzero) + ZeroVal
+      elseif(present(BareVal).and.present(ZeroVal))then
+         write(*,"(A)")"     KK_Im2Re: Warning, both bare and screened values provided. Shift ignored."
+      endif
+      !
+   end subroutine KK_Im2Re
+   !
+   subroutine KK_Re2Im(ImPart,RePart,wreal,cutoff,symmetric)
+      implicit none
+      real(8),intent(inout)                 :: ImPart(:)
+      real(8),intent(in)                    :: RePart(:)
+      real(8),intent(in)                    :: wreal(:)
+      real(8),intent(in)                    :: cutoff
+      logical,intent(in),optional           :: symmetric
+      !
+      real(8),parameter                     :: pi=3.14159265358979323846d0
+      integer                               :: iw,iwp,Nreal
+      integer                               :: Nwmax,Nwmin,Nwzero
+      real(8)                               :: dw,w,wp
+      real(8),allocatable                   :: ReDeriv(:)
+      logical                               :: symmetric_
+      !
+      Nreal=size(wreal)
+      call assert_shape(RePart,[Nreal],"KK_Re2Im","RePart")
+      call assert_shape(ImPart,[Nreal],"KK_Re2Im","ImPart")
+      !
+      symmetric_=.false.
+      if(present(symmetric))symmetric_=symmetric
+      !
+      Nwmax = minloc(abs(wreal-cutoff),dim=1)-2
+      Nwmin = minloc(abs(wreal+cutoff),dim=1)+2
+      Nwzero = minloc(abs(wreal),dim=1)
+      !
+      allocate(ReDeriv(Nreal));ReDeriv=0d0
+      dw = abs(wreal(2)-wreal(1))/pi
+      do iw=2,Nreal-1
+         ReDeriv(iw) = (RePart(iw+1)-RePart(iw-1))/(2d0*dw)
+      enddo
+      !
+      ImPart=0d0
+      if(symmetric_)then
+         !
+         !
+         do iw=Nwzero,Nwmax
+            do iwp=Nwzero,Nwmax
+               !
+               w  = wreal(iw)
+               wp = wreal(iwp)
+               !
+               if(iw.eq.iwp)then
+                  ImPart(iw) = ImPart(iw) - dw * 2d0*ReDeriv(iw)
+               else
+                  ImPart(iw) = ImPart(iw) - dw * 2d0*(RePart(iwp)-RePart(iw)) * wp / ( wp**2 - w**2 )
+               endif
+               !
+            enddo
+            !
+            ImPart(iw) = ImPart(iw) - RePart(iw) * log( (cutoff-w)/(cutoff+w) )/pi
+            !
+         enddo
+         !
+         do iw=Nwzero,Nwmax
+            if((Nwzero-iw).lt.Nwmin)exit
+            ImPart( Nwzero-iw ) = -ImPart(iw)
+         enddo
+         !
+         !
+      else
+         !
+         !
+         do iw=1,Nwmax
+            do iwp=1,Nwmax
+               !
+               w  = wreal(iw)
+               wp = wreal(iwp)
+               !
+               if(iw.eq.iwp)then
+                  ImPart(iw) = ImPart(iw) + dw * ReDeriv(iw)
+               else
+                  ImPart(iw) = ImPart(iw) + dw * (RePart(iwp)-RePart(iw)) / ( wp - w )
+               endif
+               !
+            enddo
+            !
+            ImPart(iw) = ImPart(iw) - RePart(iw) * log( (cutoff-w)/(cutoff+w) )/pi
+            !
+         enddo
+         !
+         !
+      endif
+      !
+      !
+   end subroutine KK_Re2Im
 
 
    !---------------------------------------------------------------------------!
