@@ -1014,7 +1014,7 @@ contains
       use parameters
       use utils_misc
       use utils_fields
-      use linalg, only : eigh, inv, diagonal, rotate
+      use linalg, only : eigh, inv, det, diagonal, rotate
       use crystal
       use fit
       use file_io
@@ -1035,14 +1035,15 @@ contains
       real(8),allocatable                   :: wmats(:),wreal(:),tau(:)
       complex(8),allocatable                :: zeta(:,:,:),invGf(:,:)
       real(8),allocatable                   :: Akw(:,:,:,:)
-      complex(8),allocatable                :: Gmats_diag(:,:,:,:),Gitau_diag(:,:,:,:)
+      complex(8),allocatable                :: Gmats_diag(:,:,:,:),Gitau_diag(:,:,:,:),Gmats_rho(:,:,:,:)
       complex(8),allocatable                :: Smats_diag(:,:,:,:),Sitau_diag(:,:,:,:)
-      real(8),allocatable                   :: Moments(:,:,:),Sparams(:,:,:,:)
-      character(len=256)                    :: path,ParaDir,ParaFile
-      real(8)                               :: ReCoeff,ImCoeff,BareVal,ImError
-      real(8)                               :: x1,x2,y1,y2
+      complex(8),allocatable                :: RotN(:,:,:,:)
+      real(8),allocatable                   :: Sparams(:,:,:,:),EigN(:,:,:)
+      character(len=256)                    :: path,ParaFile
+      real(8)                               :: M0,M1,M2,M3,M4
+      real(8)                               :: x1,x2,x3,y1,y2,y3
       integer                               :: ik,iw,itau,ispin,iorb
-      integer                               :: unit,wndx
+      integer                               :: unit,wndx,iw1,iw2,iw3
       integer                               :: Norb,Nmats,Ntau
       real                                  :: start,finish
       !
@@ -1144,13 +1145,14 @@ contains
       !
       !Print spectral function
       do ispin=1,Nspin
-         path = reg(pathOUTPUT)//"K_resolved/Akw_Glda_s"//str(ispin)//".DAT"
+         path = reg(pathOUTPUT)//"K_resolved/Akw_nonInt_s"//str(ispin)//".DAT"
          unit = free_unit()
          open(unit,file=reg(path),form="formatted",status="unknown",position="rewind",action="write")
          do ik=1,Lttc%Nkpt_path
             do iw=1,Nreal
                 write(unit,"(1I5,200E20.12)") ik,Lttc%Kpathaxis(ik),wreal(iw),(Akw(iorb,iw,ik,ispin),iorb=1,Norb)
             enddo
+            write(unit,*)
          enddo
          close(unit)
       enddo
@@ -1179,7 +1181,7 @@ contains
          call DeallocateFermionicField(Sfull_interp)
          !
          !
-         if((reg(path_funct).eq."G").or.(reg(path_funct).eq."GS"))then
+         if(scan(reg(path_funct),"G").gt.0)then !(reg(path_funct).eq."G").or.(reg(path_funct).eq."GS")
             !
             !Extract the diagonal
             allocate(Gmats_diag(Norb,Nmats,Lttc%Nkpt_path,Nspin));Gmats_diag=czero
@@ -1214,7 +1216,7 @@ contains
             do ispin=1,Nspin
                do ik=1,Lttc%Nkpt_path
                   !
-                  path = reg(pathOUTPUT)//"K_resolved/Gkt_s"//str(ispin)//"/Gkt_k"//str(ik)//".DAT"
+                  path = reg(pathOUTPUT)//"K_resolved/MaxEnt_Gk_t_s"//str(ispin)//"/Gk_t_k"//str(ik)//".DAT"
                   unit = free_unit()
                   open(unit,file=reg(path),form="formatted",status="unknown",position="rewind",action="write")
                   do itau=1,Ntau
@@ -1229,111 +1231,166 @@ contains
          endif
          !
          !
-         if((reg(path_funct).eq."S").or.(reg(path_funct).eq."GS"))then
+         if(scan(reg(path_funct),"S").gt.0)then !(reg(path_funct).eq."S").or.(reg(path_funct).eq."GS")
             !
-            !Bring the Green's function on the path to the LDA basis
-            allocate(Gmats_diag(Norb,Nmats,Lttc%Nkpt_path,Nspin));Gmats_diag=czero
-            do ispin=1,Nspin
-               do ik=1,Lttc%Nkpt_path
-                  do iw=1,Nmats
-                     Gmats_diag(:,iw,ik,ispin) = diagonal(rotate(Gmats_interp%wks(:,:,iw,ik,ispin),Lttc%Zk_path(:,:,ik)))
-                  enddo
-               enddo
-            enddo
-            !
-            !Get the self-energy on the path in the LDA basis
-            allocate(wmats(Nmats));wmats=FermionicFreqMesh(Sfull%Beta,Nmats)
-            allocate(Smats_diag(Norb,Nmats,Lttc%Nkpt_path,Nspin));Smats_diag=czero
-            do ispin=1,Nspin
-               do ik=1,Lttc%Nkpt_path
-                  do iw=1,Nmats
-                     do iorb=1,Norb
-                        Smats_diag(iorb,iw,ik,ispin) = img*wmats(iw) + Sfull%mu - Lttc%Ek_path(iorb,ik) - 1d0/Gmats_diag(iorb,iw,ik,ispin)
-                     enddo
-                  enddo
-               enddo
-            enddo
-            deallocate(Gmats_diag)
-            if(paramagnet) Smats_diag(:,:,:,Nspin) = Smats_diag(:,:,:,1)
-            !
-            !Do the fit and store the parameters
             allocate(Sparams(Norb,Lttc%Nkpt_path,Nspin,2));Sparams=0d0
-            ParaDir = reg(pathOUTPUT)//"K_resolved/Spath_vars/"
+            allocate(wmats(Nmats));wmats=FermionicFreqMesh(Sfull%Beta,Nmats)
+            wndx = minloc(abs(wmats-ReplaceTail_Simp),dim=1)
+            !
+            !Find the basis where the K-dependent density matrix is diagoal on the path
+            allocate(RotN(Norb,Norb,Lttc%Nkpt_path,Nspin));RotN=czero
+            allocate(EigN(Norb,Lttc%Nkpt_path,Nspin));EigN=0d0
+            do ik=1,Lttc%Nkpt_path
+               do ispin=1,Nspin
+                  RotN(:,:,ik,ispin) = Gmats_interp%N_ks(:,:,ik,ispin)
+                  call eigh(RotN(:,:,ik,ispin),EigN(:,ik,ispin))
+               enddo
+            enddo
+            !
+            !Operations at each K-point
+            allocate(Smats_diag(Norb,Nmats,Lttc%Nkpt_path,Nspin));Smats_diag=czero
             do ik=1,Lttc%Nkpt_path
                !
-               wndx = minloc(abs(wmats-ReplaceTail_Simp),dim=1)
-               !save the moments - this turned out to work quite bad after the rotation
-               !ParaFile = "Spath_Mom_k"//str(ik)//".DAT"
-               !allocate(Moments(Norb,Nspin,0:4));Moments=0d0
-               !call fit_moments(Smats_diag(:,:,ik,:),Sfull%Beta,reg(ParaDir),reg(ParaFile),"Sigma",Moments,Wlimit=wndx,verb=.false.,refresh=.true.)
                !
-               !Reshape the self-energy
+               !Bring the Green's function on the path to basis where the K-dependent density matrix is diagonal
+               allocate(Gmats_rho(Norb,Norb,Nmats,Nspin));Gmats_rho=czero
                do ispin=1,Nspin
-                  do iorb=1,Norb
-                     !
-                     !BareVal = Moments(iorb,ispin,0)
-                     !
-                     !This is crude but very effective in getting M0 and M2
-                     y1 = dreal(Smats_diag(iorb,int(0.3*wndx),ik,ispin))
-                     y2 = dreal(Smats_diag(iorb,wndx+10,ik,ispin))
-                     x1 = wmats(int(0.3*wndx))
-                     x2 = wmats(wndx+10)
-                     BareVal = y2 - (y1-y2)*(x1**2)/(x2**2 - x1**2)      !M0
-                     ReCoeff = (y1-y2)*(x1**2 * x2**2)/(x2**2 - x1**2)   !M2
-                     !
-                     !Correction on the Real part that otherwise would give wrong S(tau=0)
-                     do iw=wndx+10,Nmats
-                        Smats_diag(iorb,iw,ik,ispin) = dcmplx(BareVal+ReCoeff/(wmats(iw)**2),dimag(Smats_diag(iorb,iw,ik,ispin)))
-                     enddo
-                     !
-                     !Removing the bare limit M0
-                     Smats_diag(iorb,:,ik,ispin) = Smats_diag(iorb,:,ik,ispin) - BareVal
-                     !
-                     !This is crude but very effective in getting M1 and the correction to ImSigma
-                     y1 = dimag(Smats_diag(iorb,int(0.8*Nmats),ik,ispin))
-                     y2 = dimag(Smats_diag(iorb,Nmats,ik,ispin))
-                     x1 = wmats(int(0.8*Nmats))
-                     x2 = wmats(Nmats)
-                     ImCoeff = abs((y1-y2)*(x1 * x2)/(x1 - x2))          !M1
-                     ImError = y2 + (y1-y2)*x1/(x1- x2)                  !numerical error
-                     !
-                     !Removing the numerical error
-                     Smats_diag(iorb,:,ik,ispin) = Smats_diag(iorb,:,ik,ispin) - dcmplx(0d0,ImError)
-                     !
-                     !Rescale so as to have ImS~1/iw and revert the real part
-                     Smats_diag(iorb,:,ik,ispin) = dcmplx( -dreal(Smats_diag(iorb,:,ik,ispin)) , dimag(Smats_diag(iorb,:,ik,ispin))/ImCoeff )
-                     !
-                     !Save the parameters
-                     Sparams(iorb,ik,ispin,1) = BareVal
-                     Sparams(iorb,ik,ispin,2) = ImCoeff
-                     !
+                  do iw=1,Nmats
+                     Gmats_rho(:,:,iw,ispin) = rotate(Gmats_interp%wks(:,:,iw,ik,ispin),RotN(:,:,ik,ispin))
                   enddo
                enddo
-               deallocate(Moments)
-               if(paramagnet)then
-                  Smats_diag(:,:,ik,Nspin) = Smats_diag(:,:,ik,1)
-                  Sparams(:,ik,Nspin,1) = Sparams(:,ik,1,1)
-                  Sparams(:,ik,Nspin,2) = Sparams(:,ik,1,2)
-               endif
+               if(paramagnet) Gmats_rho(:,:,:,Nspin) = Gmats_rho(:,:,:,1)
                !
-               !Print on Matsubara
+               !Check Print
                do ispin=1,Nspin
-                  !
-                  path = reg(pathOUTPUT)//"K_resolved/Skw_s"//str(ispin)//"/Skw_k"//str(ik)//".DAT"
+                  path = reg(pathOUTPUT)//"K_resolved/Gk_wm_s"//str(ispin)//"/Gk_wm_rho_k"//str(ik)//".DAT"
                   unit = free_unit()
                   open(unit,file=reg(path),form="formatted",status="unknown",position="rewind",action="write")
                   do iw=1,Nmats
-                      write(unit,"(200E20.12)") wmats(iw),(Smats_diag(iorb,iw,ik,ispin),iorb=1,Norb)
+                     write(unit,"(200E20.12)") wmats(iw),(Gmats_rho(iorb,iorb,iw,ispin),iorb=1,Norb),(Gmats_rho(1,iorb,iw,ispin),iorb=2,Norb)
                   enddo
                   close(unit)
-                  !
                enddo
+               !
+               !Reference frequencies
+               iw1 = wndx-30   ; x1 = wmats(iw1)
+               iw2 = wndx-1    ; x2 = wmats(iw2)
+               iw3 = Nmats     ; x3 = wmats(iw3)
+               !
+               !Replace the tail of the diagonal Green's function
+               do ispin=1,Nspin
+                  do iorb=1,Norb
+                     !
+                     !Real part asymptotic behaviour M0=0, M2, M4
+                     y1 = dreal(Gmats_rho(iorb,iorb,iw1,ispin))
+                     y2 = dreal(Gmats_rho(iorb,iorb,iw2,ispin))
+                     M4 = (y1*x1**2 - y2*x2**2) * ( x1**2 * x2**2 )/( x2**2 - x1**2 )
+                     M4 = 0d0
+                     M2 = y2*x2**2 - M4/x2**2
+                     !
+                     !Imaginary part asymptotic behaviour M1=1, M3>0 by definition
+                     y2 = dimag(Gmats_rho(iorb,iorb,iw2,ispin))
+                     M3 = y2*x2**3 + x2**2
+                     !
+                     !Replace the tail of the diagoal Green's function
+                     do iw=iw2,Nmats
+                        Gmats_rho(iorb,iorb,iw,ispin) = dcmplx( M2/(wmats(iw)**2)+M4/(wmats(iw)**4) , -1d0/wmats(iw)+M3/(wmats(iw)**3) )
+                     enddo
+                     !
+                     !The corresponding M0 and M1 of the self-energy
+                     Sparams(iorb,ik,ispin,1) = Sfull%mu - M2
+                     Sparams(iorb,ik,ispin,2) = M2**2 - M3
+                     !
+                  enddo
+               enddo
+               !
+               !Check Print
+               do ispin=1,Nspin
+                  path = reg(pathOUTPUT)//"K_resolved/Gk_wm_s"//str(ispin)//"/Gk_wm_rho_tail_k"//str(ik)//".DAT"
+                  unit = free_unit()
+                  open(unit,file=reg(path),form="formatted",status="unknown",position="rewind",action="write")
+                  do iw=1,Nmats
+                     write(unit,"(200E20.12)") wmats(iw),(Gmats_rho(iorb,iorb,iw,ispin),iorb=1,Norb)
+                  enddo
+                  close(unit)
+               enddo
+               !
+               !Get the self-energy on the path in the basis where the K-dependent density matrix is diagonal
+               !Here H(k) is enclosed inside the self-energy
+               do ispin=1,Nspin
+                  do iorb=1,Norb
+                     do iw=1,Nmats
+                        Smats_diag(iorb,iw,ik,ispin) = img*wmats(iw) + Sfull%mu - 1d0/Gmats_rho(iorb,iorb,iw,ispin)
+                     enddo
+                  enddo
+               enddo
+               deallocate(Gmats_rho)
+               !
+               !Check Print
+               do ispin=1,Nspin
+                  path = reg(pathOUTPUT)//"K_resolved/Sk_wm_s"//str(ispin)//"/Sk_wm_rho_tail_k"//str(ik)//".DAT"
+                  unit = free_unit()
+                  open(unit,file=reg(path),form="formatted",status="unknown",position="rewind",action="write")
+                  do iw=1,Nmats
+                     write(unit,"(200E20.12)") wmats(iw),(Smats_diag(iorb,iw,ik,ispin),iorb=1,Norb)
+                  enddo
+                  close(unit)
+               enddo
+               !
+               !Extract the rescaling parameters from the Self-energy just for comparison
+               do ispin=1,Nspin
+                  do iorb=1,Norb
+                     !
+                     !Real part asymptotic behaviour M0, M2
+                     y1 = dreal(Smats_diag(iorb,iw1,ik,ispin))
+                     y2 = dreal(Smats_diag(iorb,iw2,ik,ispin))
+                     y3 = dreal(Smats_diag(iorb,iw3,ik,ispin))
+                     !M0 = get_Meven(y1,y2,y3,x1,x2,x3,0)
+                     !M2 = get_Meven(y1,y2,y3,x1,x2,x3,2)
+                     !M4 = get_Meven(y1,y2,y3,x1,x2,x3,4)
+                     M2 = (y1-y2)*(x1**2 * x2**2)/(x2**2 - x1**2)
+                     M0 = y2 - M2/x2**2
+                     !
+                     !Imaginary part asymptotic behaviour M1
+                     y2 = dimag(Smats_diag(iorb,iw2,ik,ispin))
+                     !M1 = get_Modd(y1,y2,x1,x2,1)
+                     !M3 = get_Modd(y1,y2,x1,x2,3)
+                     M1 = y2*x2
+                     !
+                     !Print comparison
+                     write(*,"(5X,2(A8,I5))")"ik=",ik,"  iorb=",iorb
+                     write(*,"(5X,2(A12,1F20.8))")"M0(1/G): ",Sparams(iorb,ik,ispin,1),"M0(S): ",M0
+                     write(*,"(5X,2(A12,1F20.8))")"M1(1/G): ",Sparams(iorb,ik,ispin,2),"M1(S): ",M1
+                     !
+                     !Remove the bare limit M0
+                     Smats_diag(iorb,:,ik,ispin) = Smats_diag(iorb,:,ik,ispin) - Sparams(iorb,ik,ispin,1)
+                     !
+                     !Rescale so as to have -ImS~1/iw
+                     Smats_diag(iorb,:,ik,ispin) = Smats_diag(iorb,:,ik,ispin)/abs(Sparams(iorb,ik,ispin,2))
+                     !
+                     !Revert the real part
+                     Smats_diag(iorb,:,ik,ispin) = -conjg(Smats_diag(iorb,:,ik,ispin))
+                     !
+                  enddo
+               enddo
+               !
+               !Check Print
+               do ispin=1,Nspin
+                  path = reg(pathOUTPUT)//"K_resolved/Sk_wm_s"//str(ispin)//"/Sk_wm_rho_tail_rescaled_k"//str(ik)//".DAT"
+                  unit = free_unit()
+                  open(unit,file=reg(path),form="formatted",status="unknown",position="rewind",action="write")
+                  do iw=1,Nmats
+                     write(unit,"(200E20.12)") wmats(iw),(Smats_diag(iorb,iw,ik,ispin),iorb=1,Norb)
+                  enddo
+                  close(unit)
+               enddo
+               !
                !
             enddo
             deallocate(wmats)
             !
             !Fourier transform
-            Ntau = int(0.7*Solver%NtauF)
+            Ntau = 300
             call cpu_time(start)
             allocate(Sitau_diag(Norb,Ntau,Lttc%Nkpt_path,Nspin));Sitau_diag=czero
             spinloopSft: do ispin=1,Nspin
@@ -1348,13 +1405,19 @@ contains
             call cpu_time(finish)
             write(*,"(A,F)") "     Slat(Kpath,iw) --> Slat(Kpath,tau) cpu timing:", finish-start
             !
-            !Additional correction
+            !Final correction
             do ik=1,Lttc%Nkpt_path
-               do ispin=1,Nspin
-                  do iorb=1,Norb
-                     Sitau_diag(iorb,:,ik,ispin) = Sitau_diag(iorb,:,ik,ispin) / (abs(Sitau_diag(iorb,1,ik,ispin))+abs(Sitau_diag(iorb,Ntau,ik,ispin)))
-                     Sitau_diag(iorb,:,ik,ispin) = -abs(Sitau_diag(iorb,:,ik,ispin))
-                  enddo
+               do iorb=1,Norb
+                  if(dreal(Sitau_diag(iorb,1,ik,1)).gt.0d0) then
+                     write(*,"(A)")"     Warning: orbital# "//str(iorb)//" of K-point # "//str(ik)//" is positive in tau=0"
+                  elseif(dreal(Sitau_diag(iorb,Ntau,ik,1)).gt.0d0)then
+                     write(*,"(A)")"     Warning: orbital# "//str(iorb)//" of K-point # "//str(ik)//" is positive in tau=beta"
+                  else
+                     write(*,"(A)")"     Orbital# "//str(iorb)//" of K-point # "//str(ik)//" is fine. Reverting positive noise."
+                     do ispin=1,Nspin
+                        Sitau_diag(iorb,:,ik,ispin) = -abs(Sitau_diag(iorb,:,ik,ispin))
+                     enddo
+                  endif
                enddo
             enddo
             !
@@ -1363,11 +1426,11 @@ contains
             do ispin=1,Nspin
                do ik=1,Lttc%Nkpt_path
                   !
-                  path = reg(pathOUTPUT)//"K_resolved/Skt_s"//str(ispin)//"/Skt_k"//str(ik)//".DAT"
+                  path = reg(pathOUTPUT)//"K_resolved/MaxEnt_Sk_t_s"//str(ispin)//"/Sk_t_k"//str(ik)//".DAT"
                   unit = free_unit()
                   open(unit,file=reg(path),form="formatted",status="unknown",position="rewind",action="write")
                   do itau=1,Ntau
-                      write(unit,"(200E20.12)") tau(itau),(dreal(Sitau_diag(iorb,itau,ik,ispin)),iorb=1,Norb)
+                     write(unit,"(200E20.12)") tau(itau),(dreal(Sitau_diag(iorb,itau,ik,ispin)),iorb=1,Norb)
                   enddo
                   close(unit)
                   !
@@ -1376,26 +1439,81 @@ contains
             deallocate(Sitau_diag,tau)
             !
             !Print data needed to reconstruct the Self-energy
-            ParaFile = reg(ParaDir)//"Spath_Params.DAT"
+            ParaFile = reg(pathOUTPUT)//"K_resolved/Spath_vars/Spath_Params.DAT"
             unit = free_unit()
             open(unit,file=reg(ParaFile),form="formatted",status="unknown",position="rewind",action="write")
             do ik=1,Lttc%Nkpt_path
                !
                !rotation
-               path = reg(ParaDir)//"Spath_Rot_k"//str(ik)//".DAT"
-               call dump_Matrix(Lttc%Zk_path(:,:,ik),reg(path))
+               do ispin=1,Nspin
+                  path = reg(pathOUTPUT)//"K_resolved/Spath_vars/Spath_Rot_k"//str(ik)//"_s"//str(ispin)//".DAT"
+                  call dump_Matrix(RotN(:,:,ik,ispin),reg(path))
+                  if(paramagnet)exit
+               enddo
                !
                !Parameters
                write(unit,"(200E20.12)") (Sparams(iorb,ik,1,1),iorb=1,Norb),(Sparams(iorb,ik,1,2),iorb=1,Norb),         &
                                          (Sparams(iorb,ik,Nspin,1),iorb=1,Norb),(Sparams(iorb,ik,Nspin,2),iorb=1,Norb)
                !
             enddo
+            deallocate(Sparams,RotN,EigN)
             close(unit)
             !
          endif
          call DeallocateFermionicField(Gmats_interp)
          !
       endif
+      !
+      !
+   contains
+      !
+      !
+      !
+      function get_Meven(b1,b2,b3,w1,w2,w3,coeff) result(M)
+         implicit none
+         real(8),intent(in)      :: b1,b2,b3,w1,w2,w3
+         integer,intent(in)      :: coeff
+         real(8)                 :: M
+         !
+         real(8)                 :: num(3,3),den(3,3)
+         !
+         den(:,1)=1d0
+         den(:,2)=[1d0/w1**2,1d0/w2**2,1d0/w3**2]
+         den(:,3)=[1d0/w1**4,1d0/w2**4,1d0/w3**4]
+         if(det(den).eq.0d0)stop"get_Meven"
+         if(coeff.gt.4)stop"wrong even coeff"
+         !
+         num=den
+         num(:,1+coeff/2)=[b1,b2,b3]
+         !
+         M = det(num) / det(den)
+         !
+      end function get_Meven
+      !
+      function get_Modd(b1,b2,w1,w2,coeff) result(M)
+         implicit none
+         real(8),intent(in)      :: b1,b2,w1,w2
+         integer,intent(in)      :: coeff
+         real(8)                 :: M
+         !
+         real(8)                 :: num(2,2),den(2,2)
+         !
+         den(:,1)=[1d0/w1   ,1d0/w2   ]
+         den(:,2)=[1d0/w1**3,1d0/w2**3]
+         if(det(den).eq.0d0)stop"get_Modd"
+         if(coeff.gt.3)stop"wrong odd coeff"
+         !
+         num=den
+         if(coeff.eq.1)num(:,1)=[b1,b2]
+         if(coeff.eq.3)num(:,2)=[b1,b2]
+         !num(:,1+(coeff-1)/2)=[b1,b2]
+         !
+         M = det(num) / det(den)
+         !
+      end function get_Modd
+      !
+      !
+      !
       !
    end subroutine interpolateG2Path
 

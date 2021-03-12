@@ -34,7 +34,7 @@
  TAU_UNIF=F                                    !Flag to use a non-tau_uniform mesh on the imaginary time axis.
  NREAL=2000                                    !Number of points on the real frequency axis.
  MAX_WREAL=10.000000                           !Maximum absolute value of the real frequency mesh.
- ETA=4.000000E-02                              !Real frequency broadening.
+ ETA=5.000000E-02                              !Real frequency broadening.
  WPADE=0                                       !Number of Matsubara frequencies used in pade' analytic continuation. If its =0 Pade will not be performed.
 
  #---------------------------------------------#
@@ -75,7 +75,7 @@
  CDW_CHI=T                                     !Flag to remove the iw=0 divergence in the local charge susceptibility.
  CDW_PI=F                                      !Flag to remove the iw=0 divergence in the local polarization.
  MIX_D=0.500000                                !Fraction of the old iteration Delta.
- MIX_U=0.900000                                !Fraction of the old iteration curlyU.
+ MIX_U=0.500000                                !Fraction of the old iteration curlyU.
  CAUSAL_D=F                                    !Flag to employ generalized cavity equation for Delta. Active only for GW+EDMFT calculation.
  CAUSAL_U=F                                    !Flag to employ generalized cavity equation for curlyU. Active only for GW+EDMFT calculation.
  DELTA_FIT=Analytic                            !Fit to extract the local energy in GW+EDMFT calculations. Available: Inf, Analytic, Moments.
@@ -95,6 +95,7 @@
  STRUCTURE=orthorhombic_2                      !Available structures: cubic, fcc, bcc, hex, tetragonal, orthorhombic_[1,2], None to avoid.
  PATH_FUNCT=S                                  !Print interacting fields on high-symmetry points. Available fields: G=Green's function, S=self-energy, GS=both. None to avoid.
  NK_PATH=60                                    !Number of segments between two hig-symmetry Kpoints.
+ KK_CUTOFF=50                                  !Real frequency cutoff for Kramers Kronig integrals.
 
  #---------------------------------------------#
 
@@ -113,10 +114,10 @@
  NMEAS=1000                                    !Sweeps where expensive measurments are not performed.
  NTHERM=100                                    !Thermalization cycles. Each cycle performs NMEAS sweeps.
  NSHIFT=100                                    !Sweeps where segment shifts are not proposed. Not proposed if >NMEAS.
- NSWAP=100                                     !Sweeps where global spin swaps are not proposed. Not proposed if >NMEAS.
+ NSWAP=10                                      !Sweeps where global spin swaps are not proposed. Not proposed if >NMEAS.
  PRINT_TIME=40                                 !Minutes that have to pass before observables are updated and stored.
  BINLENGTH=4                                   !If >0 the Green's function at itau will be the average within +/-binlength.
  BINSTART=50                                   !Tau points skipped at the beginning and end of the Green's function average.
  RETARDED=1                                    !Integer flag to include the frequency dependent part of the interaction. User cannot set this as its deduced from CALC_TYPE.
  NNT_MEAS=1                                    !Integer flag to switch on the measurement of the susceptibility. User cannot set this as its deduced from CALC_TYPE.
- TIME_1=30                                     !Minutes of solver runtime for site number 1
+ TIME_1=60                                     !Minutes of solver runtime for site number 1

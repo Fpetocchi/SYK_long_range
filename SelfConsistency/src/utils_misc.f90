@@ -857,7 +857,6 @@ contains
       integer                               :: iw,iwp,Nreal
       integer                               :: Nwmax,Nwmin,Nwzero
       real(8)                               :: dw,w,wp
-      real(8),allocatable                   :: ImDeriv(:)
       logical                               :: symmetric_
       !
       Nreal=size(wreal)
@@ -867,29 +866,34 @@ contains
       symmetric_=.false.
       if(present(symmetric))symmetric_=symmetric
       !
-      Nwmax = minloc(abs(wreal-cutoff),dim=1)-2
-      Nwmin = minloc(abs(wreal+cutoff),dim=1)+2
+      !this is to avoid floating point error with logarithm and for the derivative boundaries
+      Nwmin = 5
+      Nwmax = Nreal - Nwmin
       Nwzero = minloc(abs(wreal),dim=1)
       !
-      allocate(ImDeriv(Nreal));ImDeriv=0d0
       dw = abs(wreal(2)-wreal(1))/pi
-      do iw=2,Nreal-1
-         ImDeriv(iw) = (ImPart(iw+1)-ImPart(iw-1))/(2d0*dw)
-      enddo
       !
       RePart=0d0
       if(symmetric_)then
          !
          !
+         !$OMP PARALLEL DEFAULT(NONE),&
+         !$OMP SHARED(Nwzero,Nwmax,dw,ImPart,cutoff,wreal,RePart),&
+         !$OMP PRIVATE(iw,iwp,w,wp)
+         !$OMP DO
          do iw=Nwzero,Nwmax
+            !
+            w  = wreal(iw)
+            !
             do iwp=Nwzero,Nwmax
                !
-               w  = wreal(iw)
                wp = wreal(iwp)
                !
                if(iw.eq.iwp)then
-                  RePart(iw) = RePart(iw) + dw * 2d0*ImDeriv(iw)
+                  !derivative estimation
+                  RePart(iw) = RePart(iw) + (ImPart(iw+1)-ImPart(iw-1))
                else
+                  !KK relations
                   RePart(iw) = RePart(iw) + dw * 2d0*(ImPart(iwp)-ImPart(iw)) * w / ( wp**2 - w**2 )
                endif
                !
@@ -898,6 +902,8 @@ contains
             RePart(iw) = RePart(iw) + ImPart(iw) * log( (cutoff-w)/(cutoff+w) )/pi
             !
          enddo
+         !$OMP END DO
+         !$OMP END PARALLEL
          !
          do iw=Nwzero,Nwmax
             if((Nwzero-iw).lt.Nwmin)exit
@@ -908,15 +914,23 @@ contains
       else
          !
          !
-         do iw=1,Nwmax
-            do iwp=1,Nwmax
+         !$OMP PARALLEL DEFAULT(NONE),&
+         !$OMP SHARED(Nwmin,Nwmax,dw,ImPart,cutoff,wreal,RePart),&
+         !$OMP PRIVATE(iw,iwp,w,wp)
+         !$OMP DO
+         do iw=Nwmin,Nwmax
+            !
+            w  = wreal(iw)
+            !
+            do iwp=Nwmin,Nwmax
                !
-               w  = wreal(iw)
                wp = wreal(iwp)
                !
                if(iw.eq.iwp)then
-                  RePart(iw) = RePart(iw) + dw * ImDeriv(iw)
+                  !derivative estimation
+                  RePart(iw) = RePart(iw) + (ImPart(iw+1)-ImPart(iw-1))/2d0
                else
+                  !KK relations
                   RePart(iw) = RePart(iw) + dw * (ImPart(iwp)-ImPart(iw)) / ( wp - w )
                endif
                !
@@ -925,6 +939,8 @@ contains
             RePart(iw) = RePart(iw) + ImPart(iw) * log( (cutoff-w)/(cutoff+w) )/pi
             !
          enddo
+         !$OMP END DO
+         !$OMP END PARALLEL
          !
          !
       endif
@@ -951,7 +967,6 @@ contains
       integer                               :: iw,iwp,Nreal
       integer                               :: Nwmax,Nwmin,Nwzero
       real(8)                               :: dw,w,wp
-      real(8),allocatable                   :: ReDeriv(:)
       logical                               :: symmetric_
       !
       Nreal=size(wreal)
@@ -961,29 +976,34 @@ contains
       symmetric_=.false.
       if(present(symmetric))symmetric_=symmetric
       !
-      Nwmax = minloc(abs(wreal-cutoff),dim=1)-2
-      Nwmin = minloc(abs(wreal+cutoff),dim=1)+2
+      !this is to avoid floating point error with logarithm
+      Nwmin = 5
+      Nwmax = Nreal - Nwmin
       Nwzero = minloc(abs(wreal),dim=1)
       !
-      allocate(ReDeriv(Nreal));ReDeriv=0d0
       dw = abs(wreal(2)-wreal(1))/pi
-      do iw=2,Nreal-1
-         ReDeriv(iw) = (RePart(iw+1)-RePart(iw-1))/(2d0*dw)
-      enddo
       !
       ImPart=0d0
       if(symmetric_)then
          !
          !
+         !$OMP PARALLEL DEFAULT(NONE),&
+         !$OMP SHARED(Nwzero,Nwmax,dw,RePart,cutoff,wreal,ImPart),&
+         !$OMP PRIVATE(iw,iwp,w,wp)
+         !$OMP DO
          do iw=Nwzero,Nwmax
+            !
+            w  = wreal(iw)
+            !
             do iwp=Nwzero,Nwmax
                !
-               w  = wreal(iw)
                wp = wreal(iwp)
                !
                if(iw.eq.iwp)then
-                  ImPart(iw) = ImPart(iw) - dw * 2d0*ReDeriv(iw)
+                  !derivative estimation
+                  ImPart(iw) = ImPart(iw) - (RePart(iw+1)-RePart(iw-1))
                else
+                  !KK relations
                   ImPart(iw) = ImPart(iw) - dw * 2d0*(RePart(iwp)-RePart(iw)) * wp / ( wp**2 - w**2 )
                endif
                !
@@ -992,6 +1012,8 @@ contains
             ImPart(iw) = ImPart(iw) - RePart(iw) * log( (cutoff-w)/(cutoff+w) )/pi
             !
          enddo
+         !$OMP END DO
+         !$OMP END PARALLEL
          !
          do iw=Nwzero,Nwmax
             if((Nwzero-iw).lt.Nwmin)exit
@@ -1002,15 +1024,23 @@ contains
       else
          !
          !
-         do iw=1,Nwmax
-            do iwp=1,Nwmax
+         !$OMP PARALLEL DEFAULT(NONE),&
+         !$OMP SHARED(Nwmin,Nwmax,dw,RePart,cutoff,wreal,ImPart),&
+         !$OMP PRIVATE(iw,iwp,w,wp)
+         !$OMP DO
+         do iw=Nwmin,Nwmax
+            !
+            w  = wreal(iw)
+            !
+            do iwp=Nwmin,Nwmax
                !
-               w  = wreal(iw)
                wp = wreal(iwp)
                !
                if(iw.eq.iwp)then
-                  ImPart(iw) = ImPart(iw) + dw * ReDeriv(iw)
+                  !derivative estimation
+                  ImPart(iw) = ImPart(iw) + (RePart(iw+1)-RePart(iw-1))/2d0
                else
+                  !KK relations
                   ImPart(iw) = ImPart(iw) + dw * (RePart(iwp)-RePart(iw)) / ( wp - w )
                endif
                !
@@ -1019,6 +1049,8 @@ contains
             ImPart(iw) = ImPart(iw) - RePart(iw) * log( (cutoff-w)/(cutoff+w) )/pi
             !
          enddo
+         !$OMP END DO
+         !$OMP END PARALLEL
          !
          !
       endif

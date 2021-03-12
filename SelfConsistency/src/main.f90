@@ -296,6 +296,9 @@ end program SelfConsistency
 !If the orbital subspace for the EDMFT calculation is smaller than that of the GW
 !calculation the difference between DC and the local projection of the full GW self-energy is...
 
+!call AllocateFermionicField(S_Full,Crystal%Norb,Nmats,Nkpt=Crystal%Nkpt,Nsite=Nsite,Beta=Beta)
+!call read_FermionicField(S_Full,reg(ItFolder),"Sfull_w",Crystal%kpt)
+!call interpolateG2Path(S_Full,Crystal,reg(structure),Nkpt_path,reg(ItFolder))
 
 
 

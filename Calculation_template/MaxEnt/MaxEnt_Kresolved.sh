@@ -174,7 +174,7 @@ EOF
       #
       #
       #Loop on user-provided K-points
-      for kp in `seq ${STARTK} ${STOPK}`; do
+      for kp in `seq -w ${STARTK} ${STOPK}`; do
          #
          #Info
          echo "k point: "${kp}
@@ -200,7 +200,7 @@ EOF
       done
       #
       #submit all the user-provided K-points
-      for kp in `seq ${STARTK} ${STOPK}`; do # -w
+      for kp in `seq -w ${STARTK} ${STOPK}`; do
          qsub submit_MaxEnt_${NAME}_K_${kp}
       done
       #

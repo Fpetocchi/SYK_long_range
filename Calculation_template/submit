@@ -26,12 +26,14 @@ END_IT=...
 
 EXE_SC=SelfConsistency
 EXE_QMC=ct_hyb
+EXE_AKW=Akw_builder
 
 #-----------------------------------OPTIONAL-----------------------------------#
 PATH_INPUT_TR=GWinput_mats
 ####SKIP_FIRST_SC="T"
 ####SKIP_ALL_QMC="T"
 ####CHANGE_BETA_IT=1
+####COLLECT_AKW="T"
 
 
 
@@ -44,8 +46,9 @@ BINqmc=${GENMAT}/Solver/bin
 BINsc=${GENMAT}/SelfConsistency/bin
 
 if [ -z ${PATH_INPUT_TR+x} ]; then PATH_INPUT_TR=${PATH_INPUT} ; fi
-if [ -z ${SKIP_FIRST_SC+x} ]; then SKIP_FIRST_SC="F" ; fi
-if [ -z ${SKIP_ALL_QMC+x} ] ; then SKIP_ALL_QMC="F"  ; fi
+if [ -z ${SKIP_FIRST_SC+x} ]; then SKIP_FIRST_SC="F"           ; fi
+if [ -z ${SKIP_ALL_QMC+x}  ]; then SKIP_ALL_QMC="F"            ; fi
+if [ -z ${COLLECT_AKW+x}   ]; then COLLECT_AKW="F"             ; fi
 
 export l0=`grep -n "PATH_INPUT=" input.in    | awk -F  ":" '{print $1}'`
 export l1=`grep -n "PATH_INPUT_TR=" input.in | awk -F  ":" '{print $1}'`
@@ -69,6 +72,7 @@ for IT in `seq ${START_IT} 1 ${END_IT}`
 do
 
    #
+   #
    # Input update
    IT_DATA=${LOCAL}/${PATH_DATA}/${IT}/
    sed -i ${l3}'s/'"START_IT=.*!"'/'"START_IT=${IT}         !"'/' input.in
@@ -79,6 +83,17 @@ do
    sleep 2
 
    #
+   #
+   # Collect spectral functions and break the loop
+   if [ "${COLLECT_AKW}" == "T" ] ; then
+      ${BINsc}/${EXE_AKW} > report_Akw_it${IT} 2> err_Akw_it${IT}
+      mv {report_Akw_it${IT},err_Akw_it${IT}} ${IT_DATA}
+      break
+   fi
+   sleep 2
+
+   #
+   #
    # Lattice problem
    if [ ${IT} -eq ${START_IT} ] && [ "${SKIP_FIRST_SC}" == "T" ] ; then
       touch doSolver
@@ -88,6 +103,7 @@ do
    fi
    sleep 2
 
+   #
    #
    # Impurity problem
    if [ "${SKIP_ALL_QMC}" == "F" ] ; then

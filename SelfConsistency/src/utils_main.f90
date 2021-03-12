@@ -83,6 +83,7 @@ module utils_main
    logical                                  :: print_path=.false.
    !
    character(len=255)                       :: ItFolder,PrevItFolder
+   character(len=256)                       :: MaxEnt_K
 
    !---------------------------------------------------------------------------!
    !PURPOSE: Rutines available for the user. Description only for interfaces.
@@ -287,22 +288,24 @@ contains
       !These are used throughout the whole calculation
       ItFolder = reg(pathDATA)//str(ItStart)//"/"
       PrevItFolder = reg(pathDATA)//str(ItStart-1)//"/"
+      MaxEnt_K = reg(ItFolder)//"K_resolved/"
       !
       !Creates folders for the K-resolved stuff
       if(print_path)then
          do ispin=1,Nspin
-            !
             if(reg(path_funct).eq."G")then
-               call createDir(reg(Itpath)//"/K_resolved/Gkt_s"//str(ispin),verb=verbose)
+               call createDir(reg(MaxEnt_K)//"/MaxEnt_Gk_t_s"//str(ispin),verb=verbose)
             elseif(reg(path_funct).eq."S")then
-               call createDir(reg(Itpath)//"/K_resolved/Skt_s"//str(ispin),verb=verbose)
-               call createDir(reg(Itpath)//"/K_resolved/Skw_s"//str(ispin),verb=verbose)
-               call createDir(reg(Itpath)//"/K_resolved/Spath_vars",verb=verbose)
+               call createDir(reg(MaxEnt_K)//"/MaxEnt_Sk_t_s"//str(ispin),verb=verbose)
+               call createDir(reg(MaxEnt_K)//"/Gk_wm_s"//str(ispin),verb=verbose)
+               call createDir(reg(MaxEnt_K)//"/Sk_wm_s"//str(ispin),verb=verbose)
+               call createDir(reg(MaxEnt_K)//"/Spath_vars",verb=verbose)
             elseif(reg(path_funct).eq."GS")then
-               call createDir(reg(Itpath)//"/K_resolved/Gkt_s"//str(ispin),verb=verbose)
-               call createDir(reg(Itpath)//"/K_resolved/Skt_s"//str(ispin),verb=verbose)
-               call createDir(reg(Itpath)//"/K_resolved/Skw_s"//str(ispin),verb=verbose)
-               call createDir(reg(Itpath)//"/K_resolved/Spath_vars",verb=verbose)
+               call createDir(reg(MaxEnt_K)//"/MaxEnt_Gk_t_s"//str(ispin),verb=verbose)
+               call createDir(reg(MaxEnt_K)//"/MaxEnt_Sk_t_s"//str(ispin),verb=verbose)
+               call createDir(reg(MaxEnt_K)//"/Gk_wm_s"//str(ispin),verb=verbose)
+               call createDir(reg(MaxEnt_K)//"/Sk_wm_s"//str(ispin),verb=verbose)
+               call createDir(reg(MaxEnt_K)//"/Spath_vars",verb=verbose)
             endif
          enddo
       endif
@@ -311,8 +314,10 @@ contains
       Ustart = Ustart .and. (ItStart.eq.0)
       calc_Pguess = calc_Pguess .and. (.not.Ustart)
       !
-      if((reg(path_funct).ne."G") .and. (reg(path_funct).ne."S"))then
+      if((reg(path_funct).ne."G") .and. (reg(path_funct).ne."S") .and. (reg(path_funct).ne."GS") .and. (reg(path_funct).ne."None"))then
          write(*,"(A)")"     Invalid content of PATH_FUNCT. The calculation on the path will be avoided."
+         print_path=.false.
+      elseif(reg(path_funct).eq."None")then
          print_path=.false.
       endif
       !
@@ -978,6 +983,7 @@ contains
             if(Uspex)then
                call AllocateBosonicField(Ulat,Crystal%Norb,Nmats,Crystal%iq_gamma,Nkpt=Crystal%Nkpt,Nsite=Nsite,Beta=Beta)
                call read_U_spex(Ulat,save2readable=verbose,LocalOnly=.false.,doAC=U_AC,pathOUTPUT=reg(pathINPUTtr))
+               call dump_MaxEnt(Ulat,"mats",reg(ItFolder)//"Convergence/","Ulat",EqvGWndx%SetOrbs)
             elseif(Umodel)then
                if(Nphonons.eq.0)then
                   write(*,"(A)")"     Warning: the model interaction built with long-range couplings is frequency-independent."
@@ -987,6 +993,7 @@ contains
                   write(*,"(A)")"     Warning: the model interaction built with phononic modes is K-independent."
                   call AllocateBosonicField(Ulat,Crystal%Norb,Nmats,Crystal%iq_gamma,Nkpt=Crystal%Nkpt,Nsite=Nsite,Beta=Beta)
                   call build_Uret(Ulat,Uaa,Uab,J,g_eph,wo_eph,LocalOnly=.false.)
+                  call dump_MaxEnt(Ulat,"mats",reg(ItFolder)//"Convergence/","Ulat",EqvGWndx%SetOrbs)
                endif
             endif
             !
@@ -1046,6 +1053,7 @@ contains
             if(Uspex)then
                call AllocateBosonicField(Ulat,Crystal%Norb,Nmats,Crystal%iq_gamma,Nsite=Nsite,Beta=Beta)
                call read_U_spex(Ulat,save2readable=verbose,LocalOnly=.true.,doAC=U_AC,pathOUTPUT=reg(pathINPUTtr))
+               call dump_MaxEnt(Ulat,"mats",reg(ItFolder)//"Convergence/","Ulat",EqvGWndx%SetOrbs)
             elseif(Umodel)then
                if(Nphonons.eq.0)then
                   write(*,"(A)")"     Warning: the model interaction built with long-range couplings is frequency-independent."
@@ -1060,6 +1068,7 @@ contains
                   else
                      call build_Uret(Ulat,Uaa,Uab,J,g_eph,wo_eph)
                   endif
+                  call dump_MaxEnt(Ulat,"mats",reg(ItFolder)//"Convergence/","Ulat",EqvGWndx%SetOrbs)
                endif
             endif
             !
@@ -1082,6 +1091,7 @@ contains
             if(Uspex)then
                call AllocateBosonicField(Ulat,Crystal%Norb,Nmats,Crystal%iq_gamma,Nkpt=Crystal%Nkpt,Nsite=Nsite,Beta=Beta)
                call read_U_spex(Ulat,save2readable=verbose,LocalOnly=.false.,doAC=U_AC,pathOUTPUT=reg(pathINPUTtr))
+               call dump_MaxEnt(Ulat,"mats",reg(ItFolder)//"Convergence/","Ulat",EqvGWndx%SetOrbs)
             elseif(Umodel)then
                if(Nphonons.eq.0)then
                   write(*,"(A)")"     Warning: the model interaction built with long-range couplings is frequency-independent."
@@ -1091,6 +1101,7 @@ contains
                   write(*,"(A)")"     Warning: the model interaction built with phononic modes is K-independent."
                   call AllocateBosonicField(Ulat,Crystal%Norb,Nmats,Crystal%iq_gamma,Nkpt=Crystal%Nkpt,Nsite=Nsite,Beta=Beta)
                   call build_Uret(Ulat,Uaa,Uab,J,g_eph,wo_eph,LocalOnly=.false.)
+                  call dump_MaxEnt(Ulat,"mats",reg(ItFolder)//"Convergence/","Ulat",EqvGWndx%SetOrbs)
                endif
             endif
             !
@@ -1139,6 +1150,7 @@ contains
             if(Uspex)then
                call AllocateBosonicField(Ulat,Crystal%Norb,Nmats,Crystal%iq_gamma,Nkpt=Crystal%Nkpt,Nsite=Nsite,Beta=Beta)
                call read_U_spex(Ulat,save2readable=verbose,LocalOnly=.false.,doAC=U_AC,pathOUTPUT=reg(pathINPUTtr))
+               call dump_MaxEnt(Ulat,"mats",reg(ItFolder)//"Convergence/","Ulat",EqvGWndx%SetOrbs)
             elseif(Umodel)then
                if(Nphonons.eq.0)then
                   write(*,"(A)")"     Warning: the model interaction built with long-range couplings is frequency-independent."
@@ -1148,6 +1160,7 @@ contains
                   write(*,"(A)")"     Warning: the model interaction built with phononic modes is K-independent."
                   call AllocateBosonicField(Ulat,Crystal%Norb,Nmats,Crystal%iq_gamma,Nkpt=Crystal%Nkpt,Nsite=Nsite,Beta=Beta)
                   call build_Uret(Ulat,Uaa,Uab,J,g_eph,wo_eph,LocalOnly=.false.)
+                  call dump_MaxEnt(Ulat,"mats",reg(ItFolder)//"Convergence/","Ulat",EqvGWndx%SetOrbs)
                endif
             endif
             !

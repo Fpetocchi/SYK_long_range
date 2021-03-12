@@ -9,9 +9,10 @@ SHELL := /bin/bash
 #
 FC     = ifort
 FFLAGS = -assume byterecl -qopenmp -liomp5 -mkl=sequential -fpp -mcmodel=large -llapack
-DBGFFLAGS = -O0 -check bounds -traceback -fpe0 -check all -fp-model precise -fp-stack-check -p -g -warn -debug extended -warn interface --heap-arrays -check all -check noarg_temp_created -C -D_verb
+DBGFFLAGS = -O0 -check bounds -traceback -fpe3 -check all -fp-model precise -fp-stack-check -p -g -warn -debug extended -warn interface --heap-arrays -check all -check noarg_temp_created -C -D_verb
 RELFFLAGS = -O3 -ftz
 # -xAVX -xHost  -axCORE-AVX2
+
 
 #
 # Project files-----------------------------------------------------------------
@@ -19,25 +20,35 @@ EXECDIR = bin
 TSTSDIR = tests
 SRCDIR = src
 SRCS = linalg.f90 parameters.f90 input_vars.f90 utils_misc.f90 fit.f90 utils_fields.f90 file_io.f90 interactions.f90 crystal.f90 \
-       fourier_transforms.f90 bubbles.f90 post_processing.f90 self_energy.f90 greens_function.f90 utils_main.f90 module_container.f90 main.f90
-OBJS = $(SRCS:.f90=.o) minimize.o
+       fourier_transforms.f90 bubbles.f90 post_processing.f90 self_energy.f90 greens_function.f90 utils_main.f90 module_container.f90
+OBJS = $(SRCS:.f90=.o) minimize.o main.o
 EXE  = SelfConsistency
+OBJS_PP = $(SRCS:.f90=.o) minimize.o Akf_builder.o
+EXE_PP  = Akw_builder
 
 
 #
 # Debug build settings----------------------------------------------------------
 DBGDIR = debug
+DBGFFLAGS += -module $(DBGDIR)
+# Main code
 DBGEXE = $(EXECDIR)/$(EXE)_debug
 DBGOBJS = $(addprefix $(DBGDIR)/, $(OBJS))
-DBGFFLAGS += -module $(DBGDIR)
+# Post-processing sub executable
+DBGEXE_PP = $(EXECDIR)/$(EXE_PP)_debug
+DBGOBJS_PP = $(addprefix $(DBGDIR)/, $(OBJS_PP))
 
 
 #
 # Release build settings--------------------------------------------------------
 RELDIR = release
+RELFFLAGS += -module $(RELDIR)
+# Main code
 RELEXE = $(EXECDIR)/$(EXE)
 RELOBJS = $(addprefix $(RELDIR)/, $(OBJS))
-RELFFLAGS += -module $(RELDIR)
+# Post-processing sub executable
+RELEXE_PP = $(EXECDIR)/$(EXE_PP)
+RELOBJS_PP = $(addprefix $(RELDIR)/, $(OBJS_PP))
 
 
 #
@@ -52,7 +63,7 @@ all: prepREL release
 
 #
 # Debug rules-------------------------------------------------------------------
-debug: prepDBG $(DBGEXE)
+debug: prepDBG $(DBGEXE) $(DBGEXE_PP)
 
 # Modules
 $(DBGDIR)/linalg.o: $(SRCDIR)/linalg.f90
@@ -100,7 +111,7 @@ $(DBGDIR)/self_energy.o: $(SRCDIR)/self_energy.f90 $(DBGDIR)/linalg.o $(DBGDIR)/
 $(DBGDIR)/post_processing.o: $(SRCDIR)/post_processing.f90 $(DBGDIR)/linalg.o $(DBGDIR)/utils_misc.o $(DBGDIR)/crystal.o $(DBGDIR)/parameters.o $(DBGDIR)/input_vars.o $(DBGDIR)/utils_fields.o $(DBGDIR)/file_io.o $(DBGDIR)/fourier_transforms.o $(DBGDIR)/greens_function.o
 	$(FC) -c $(FFLAGS) $(DBGFFLAGS) -o $@ $<
 
-# Module contaier and main
+# Module contaier, main and post-processing
 $(DBGDIR)/module_container.o: $(SRCDIR)/module_container.f90
 	$(FC) -c $(FFLAGS) $(DBGFFLAGS) -o $@ $<
 
@@ -110,13 +121,20 @@ $(DBGDIR)/utils_main.o: $(SRCDIR)/utils_main.f90 $(DBGDIR)/parameters.o $(DBGDIR
 $(DBGDIR)/main.o: $(SRCDIR)/main.f90
 	$(FC) -c $(FFLAGS) $(DBGFFLAGS) -o $@ $<
 
+$(DBGDIR)/Akf_builder.o: $(SRCDIR)/Akf_builder.f90
+	$(FC) -c $(FFLAGS) $(DBGFFLAGS) -o $@ $<
+
+# Executables
 $(DBGEXE): $(DBGOBJS)
 	$(FC) $(FFLAGS) $(DBGFFLAGS) -o $(DBGEXE) $^
+
+$(DBGEXE_PP): $(DBGOBJS_PP)
+	$(FC) $(FFLAGS) $(DBGFFLAGS) -o $(DBGEXE_PP) $^
 
 
 #
 # Release rules-----------------------------------------------------------------
-release: prepREL $(RELEXE)
+release: prepREL $(RELEXE) $(RELEXE_PP)
 
 # Modules
 $(RELDIR)/linalg.o: $(SRCDIR)/linalg.f90
@@ -164,7 +182,7 @@ $(RELDIR)/self_energy.o: $(SRCDIR)/self_energy.f90 $(RELDIR)/linalg.o $(RELDIR)/
 $(RELDIR)/post_processing.o: $(SRCDIR)/post_processing.f90 $(RELDIR)/linalg.o $(RELDIR)/utils_misc.o $(RELDIR)/crystal.o $(RELDIR)/parameters.o $(RELDIR)/input_vars.o $(RELDIR)/utils_fields.o $(RELDIR)/file_io.o $(RELDIR)/fourier_transforms.o $(RELDIR)/greens_function.o
 	$(FC) -c $(FFLAGS) $(RELFFLAGS) -o $@ $<
 
-# Module contaier and main
+# Module contaier, main and post-processing
 $(RELDIR)/module_container.o: $(SRCDIR)/module_container.f90
 	$(FC) -c $(FFLAGS) $(RELFFLAGS) -o $@ $<
 
@@ -174,8 +192,15 @@ $(RELDIR)/utils_main.o: $(SRCDIR)/utils_main.f90 $(RELDIR)/parameters.o $(RELDIR
 $(RELDIR)/main.o: $(SRCDIR)/main.f90
 	$(FC) -c $(FFLAGS) $(RELFFLAGS) -o $@ $<
 
+$(RELDIR)/Akf_builder.o: $(SRCDIR)/Akf_builder.f90
+	$(FC) -c $(FFLAGS) $(RELFFLAGS) -o $@ $<
+
+# Executables
 $(RELEXE): $(RELOBJS)
 	$(FC) $(FFLAGS) $(RELFFLAGS) -o $(RELEXE) $^
+
+$(RELEXE_PP): $(RELOBJS_PP)
+	$(FC) $(FFLAGS) $(RELFFLAGS) -o $(RELEXE_PP) $^
 
 
 #

@@ -190,6 +190,7 @@ module input_vars
    character(len=256),public                :: structure
    character(len=256),public                :: path_funct
    integer,public                           :: Nkpt_path
+   real(8),public                           :: KKcutoff
    !
    !Variables related to the impurity solver
    type(QMC),public                         :: Solver
@@ -463,13 +464,15 @@ contains
       call parse_input_variable(LastIteration,"LAST_IT",InputFile,default=100,comment="Last iteration.")
       call parse_input_variable(LOGfile,"LOGFILE",InputFile,default=6,comment="Standard output redirection unit. Use 6 to print to terminal. Not used yet.")
       call parse_input_variable(dump_Gk,"PRINT_GK",InputFile,default=.false.,comment="Print the full k-dependent Green's function (binfmt) at each iteration (mandatory for CALC_TYPE=G0W0,scGW,GW+EDMFT).")
+      if(reg(CalculationType).eq."G0W0")dump_Gk=.true.
+      if(reg(CalculationType).eq."scGW")dump_Gk=.true.
+      if(reg(CalculationType).eq."GW+EDMFT")dump_Gk=.true.
       call parse_input_variable(dump_Sigmak,"PRINT_SIGMAK",InputFile,default=.false.,comment="Print the full k-dependent self-energy (binfmt) at each iteration (always optional).")
       call parse_input_variable(structure,"STRUCTURE",InputFile,default="cubic",comment="Available structures: cubic, fcc, bcc, hex, tetragonal, orthorhombic_[1,2], None to avoid.")
       call parse_input_variable(path_funct,"PATH_FUNCT",InputFile,default="None",comment="Print interacting fields on high-symmetry points. Available fields: G=Green's function, S=self-energy, GS=both. None to avoid.")
       call parse_input_variable(Nkpt_path,"NK_PATH",InputFile,default=50,comment="Number of segments between two hig-symmetry Kpoints.")
-      if(reg(CalculationType).eq."G0W0")dump_Gk=.true.
-      if(reg(CalculationType).eq."scGW")dump_Gk=.true.
-      if(reg(CalculationType).eq."GW+EDMFT")dump_Gk=.true.
+      call parse_input_variable(KKcutoff,"KK_CUTOFF",InputFile,default=50d0,comment="Real frequency cutoff for Kramers Kronig integrals.")
+      KKcutoff=abs(KKcutoff)
       !
       !Variables for the matching beta
       call add_separator()

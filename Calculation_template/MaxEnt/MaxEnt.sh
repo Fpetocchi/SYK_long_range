@@ -4,7 +4,7 @@
 ################################################################################
 #                                USER SETTINGS                                 #
 ################################################################################
-GENMAT=/home/petocchif/1_GW_EDMFT/nobackup/1_production/a_LiTi2O4               # Replace last field with project name
+GENMAT=/home/petocchif/1_GW_EDMFT/nobackup/1_production/c_Ca2RuO4               # Replace last field with project name
 
 G_model=" " #  -M 0.5,1"
 W_model=" " #  -m "$SRC"/Wmodel.dat"
@@ -156,7 +156,7 @@ cat << EOF > submit_MaxEnt
 #$ -e   error.out
 #$ -o   log.out
 #$ -pe  smp 1
-#$ -q   big.q
+#$ -q   big.q,new.q
 
 echo \$RUNOPTIONS
 export PYTHONPATH=\${PYTHONPATH}:${BIN}/docopt/
