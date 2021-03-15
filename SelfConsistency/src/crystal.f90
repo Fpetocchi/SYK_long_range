@@ -1625,7 +1625,7 @@ contains
    !PURPOSE: generates thew K-points along some pre-stored high-symmetry points.
    !         taken from https://wiki.fysik.dtu.dk/ase/ase/dft/kpoints.html#high-symmetry-pathsv
    !---------------------------------------------------------------------------!
-   subroutine calc_path(kpt_path,structure,Nkpt_path,Kaxis)
+   subroutine calc_path(kpt_path,structure,Nkpt_path,Kaxis,KaxisPoints)
       !
       use utils_misc
       implicit none
@@ -1634,10 +1634,11 @@ contains
       character(len=*),intent(in)           :: structure
       integer,intent(in)                    :: Nkpt_path
       real(8),allocatable,intent(out),optional :: Kaxis(:)
+      real(8),allocatable,intent(out),optional :: KaxisPoints(:)
       !
       real(8),dimension(3)                  :: Gamma,M,R,X,K,L,U,W,H,N,P,A,Z,S,T,Y
       real(8),dimension(3)                  :: Kdiff
-      real(8),allocatable                   :: Kpoints(:,:),Kdist(:)
+      real(8),allocatable                   :: Kpoints(:,:),Kdist(:),Kturn(:)
       integer                               :: idir,Ndir,idk,ik,lastK
       real(8)                               :: dKtot,theta,phi,dk,kx,ky,kz
       !
@@ -1825,6 +1826,7 @@ contains
       Ndir = size(Kpoints,dim=2)
       allocate(Kdist((Ndir-1)*Nkpt_path+1));Kdist=0d0
       allocate(kpt_path(3,(Ndir-1)*Nkpt_path+1));kpt_path=0d0
+      allocate(Kturn(Ndir));Kturn=0d0
       !
       ik=0
       do idir=2,Ndir
@@ -1848,13 +1850,16 @@ contains
             ik=ik+1
             !
             kpt_path(:,ik) = [kx,ky,kz]
-            if(ik.gt.1) Kdist(ik) = Kdist(ik-1) + dk
+            if(ik.gt.1)Kdist(ik) = Kdist(ik-1) + dk
+            if(idk.eq.(Nkpt_path+lastK)) Kturn(idir) = Kdist(ik)
             !
          enddo
          !
       enddo
       Kdist = Kdist/Kdist((Ndir-1)*Nkpt_path+1)
+      Kturn = Kturn/Kturn(Ndir)
       if(present(Kaxis))Kaxis=Kdist
+      if(present(KaxisPoints))KaxisPoints=Kturn
       !
    end subroutine calc_path
 
@@ -1891,7 +1896,7 @@ contains
       !Create K-points along high-symmetry points
       if(allocated(Lttc%kptpath))deallocate(Lttc%kptpath)
       if(allocated(Lttc%Kpathaxis))deallocate(Lttc%Kpathaxis)
-      call calc_path(Lttc%kptpath,reg(structure),Nkpt_path,Kaxis=Lttc%Kpathaxis)
+      call calc_path(Lttc%kptpath,reg(structure),Nkpt_path,Kaxis=Lttc%Kpathaxis,KaxisPoints=Lttc%KpathaxisPoints)
       Lttc%Nkpt_path = size(Lttc%kptpath,dim=2)
       !
       !Fill in Hk along points
@@ -1921,6 +1926,16 @@ contains
       enddo
       close(unit)
       write(*,"(A,I)") "     Total number of K-points along path:",Lttc%Nkpt_path
+      !
+      !Print position of High-symmetry points in the same folder where the function is
+      path = reg(pathOUTPUT)//"Kpoints.DAT"
+      unit = free_unit()
+      open(unit,file=reg(path),form="formatted",status="unknown",position="rewind",action="write")
+      do ik=1,size(Lttc%KpathaxisPoints,dim=1)
+         write(unit,"(1I5,200E20.12)") ik,Lttc%KpathaxisPoints(ik)
+      enddo
+      close(unit)
+      write(*,"(A,I)") "     Total number of High symmetry points:",size(Lttc%KpathaxisPoints,dim=1)
       !
       Lttc%pathStored=.true.
       !

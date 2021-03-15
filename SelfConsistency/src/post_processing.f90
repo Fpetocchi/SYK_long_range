@@ -1067,7 +1067,7 @@ contains
          !
          !Create K-points along high-symmetry points
          if(allocated(Lttc%kptpath))deallocate(Lttc%kptpath)
-         call calc_path(Lttc%kptpath,reg(structure),Nkpt_path,Kaxis=Lttc%Kpathaxis)
+         call calc_path(Lttc%kptpath,reg(structure),Nkpt_path,Kaxis=Lttc%Kpathaxis,KaxisPoints=Lttc%KpathaxisPoints)
          Lttc%Nkpt_path = size(Lttc%kptpath,dim=2)
          !
          !Fill in Hk along points
@@ -1099,6 +1099,16 @@ contains
       enddo
       close(unit)
       write(*,"(A,I)") "     Total number of K-points along path:",Lttc%Nkpt_path
+      !
+      !Re-Print position of High-symmetry points in the same folder where the function is
+      path = reg(pathOUTPUT)//"K_resolved/Kpoints.DAT"
+      unit = free_unit()
+      open(unit,file=reg(path),form="formatted",status="unknown",position="rewind",action="write")
+      do ik=1,size(Lttc%KpathaxisPoints,dim=1)
+         write(unit,"(1I5,200E20.12)") ik,Lttc%KpathaxisPoints(ik)
+      enddo
+      close(unit)
+      write(*,"(A,I)") "     Total number of High symmetry points:",size(Lttc%KpathaxisPoints,dim=1)
       !
       !
       !Compute non-interacting spectral function in the Wannier basis
@@ -1242,7 +1252,7 @@ contains
             allocate(EigN(Norb,Lttc%Nkpt_path,Nspin));EigN=0d0
             do ik=1,Lttc%Nkpt_path
                do ispin=1,Nspin
-                  RotN(:,:,ik,ispin) = Gmats_interp%N_ks(:,:,ik,ispin)
+                  RotN(:,:,ik,ispin) = dreal(Gmats_interp%N_ks(:,:,ik,ispin))
                   call eigh(RotN(:,:,ik,ispin),EigN(:,ik,ispin))
                enddo
             enddo

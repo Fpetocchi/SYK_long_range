@@ -60,11 +60,6 @@ program Akw_builder
    !             COLLECTING RESULTS FROM MAXENT ON THE SELF-ENERGY             !
    !---------------------------------------------------------------------------!
    !
-   !This is only to fetch the chemical potential
-   call AllocateFermionicField(S_Full,Crystal%Norb,Nmats,Nkpt=Crystal%Nkpt,Nsite=Nsite,Beta=Beta)
-   call read_FermionicField(S_Full,reg(ItFolder),"Sfull_w",Crystal%kpt)
-   write(*,"(A)")"     Lattice chemical potential is: "//str(S_Full%mu)
-   !
    !
    call interpolateHk2Path(Crystal,reg(structure),Nkpt_path,reg(pathINPUT))
    Crystal%Nkpt_path = Crystal%Nkpt_path-1
@@ -168,6 +163,7 @@ program Akw_builder
          !$OMP END DO
          !$OMP END PARALLEL
          deallocate(ImG_read)
+         where(abs((Akw_orb))<1.d-12)Akw_orb=0d0
          write(*,"(A)") "     MaxEnt output is Normalized."
          !
          !Print
@@ -199,6 +195,12 @@ program Akw_builder
       !
       !
       if(scan(reg(path_funct),"S").gt.0)then
+         !
+         !
+         !This is only to fetch the chemical potential
+         call AllocateFermionicField(S_Full,Crystal%Norb,Nmats,Nkpt=Crystal%Nkpt,Nsite=Nsite,Beta=Beta)
+         call read_FermionicField(S_Full,reg(ItFolder),"Sfull_w",Crystal%kpt)
+         write(*,"(A)")"     Lattice chemical potential is: "//str(S_Full%mu)
          !
          allocate(Kmask(Crystal%Nkpt_path));Kmask=.false.
          !
@@ -361,6 +363,7 @@ program Akw_builder
                !
             enddo
             deallocate(Sigma_rho)
+            where(abs((Akw_rho(:,:,ik)))<1.d-12)Akw_rho(:,:,ik)=0d0
             !
             !Print
             path = reg(MaxEnt_K)//"Akw_S_s"//str(ispin)//"/Akw_rho_k"//str(ik)//".DAT"
@@ -381,6 +384,7 @@ program Akw_builder
                Akw_orb(iorb,:,ik) = Akw_orb(iorb,:,ik) / (sum(Akw_orb(iorb,:,ik))*dw)
             enddo
             deallocate(Greal_rho,Greal_orb)
+            where(abs((Akw_orb(:,:,ik)))<1.d-12)Akw_orb(:,:,ik)=0d0
             !
             !Print
             path = reg(MaxEnt_K)//"Akw_S_s"//str(ispin)//"/Akw_orb_k"//str(ik)//".DAT"

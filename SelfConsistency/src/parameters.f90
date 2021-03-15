@@ -46,6 +46,7 @@ module parameters
       integer,allocatable                   :: small_ik(:,:)                    ![12,2]
       real(8),allocatable                   :: kptpath(:,:)                     ![3,Nkpt_path]
       real(8),allocatable                   :: Kpathaxis(:)
+      real(8),allocatable                   :: KpathaxisPoints(:)
       integer                               :: Nkpt=0
       integer                               :: Nkpt_irred=0
       integer                               :: Nkpt_path=0
