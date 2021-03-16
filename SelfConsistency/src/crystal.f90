@@ -188,9 +188,9 @@ contains
       allocate(kpt(3,Nkpt));kpt=0d0
       !
       Dkx=0d0;Dky=0d0;Dkz=0d0
-      if(Nkpt3(1).ne.1) Dkx = 1d0/dble(Nkpt3(1)-1)
-      if(Nkpt3(2).ne.1) Dky = 1d0/dble(Nkpt3(2)-1)
-      if(Nkpt3(3).ne.1) Dkz = 1d0/dble(Nkpt3(3)-1)
+      if(Nkpt3(1).ne.1) Dkx = 1d0/dble(Nkpt3(1))
+      if(Nkpt3(2).ne.1) Dky = 1d0/dble(Nkpt3(2))
+      if(Nkpt3(3).ne.1) Dkz = 1d0/dble(Nkpt3(3))
       !
       ik=0
       do ikx=1,Nkpt3(1)
@@ -207,6 +207,14 @@ contains
             enddo
          enddo
       enddo
+      !
+      if(verbose)then
+         write(*,*)"     BZ K-point mesh:"
+         do ik=1,Nkpt
+            write(*,"(5X,1I5,3F12.6)")ik,kpt(:,ik)
+         enddo
+      endif
+      !
       !
    end subroutine build_kpt
 

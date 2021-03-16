@@ -753,12 +753,12 @@ contains
       complex(8),allocatable,optional       :: U(:,:)
       integer,allocatable,optional          :: Map(:,:,:)
       !
-      integer                               :: ip
+      integer                               :: ip,ip_loc
       integer                               :: Norb_imp,Norb_loc
       integer                               :: ib_imp,jb_imp,ib_loc,jb_loc
       integer                               :: i_loc,j_loc,k_loc,l_loc
       integer                               :: i_imp,j_imp,k_imp,l_imp
-      logical                               :: doBare,rotate
+      logical                               :: doBare,rotate,WlocStatic
       !
       !
       if(verbose)write(*,"(A)") "---- loc2imp_Bosonic"
@@ -772,14 +772,15 @@ contains
       if(Wloc%Npoints.eq.0) stop "loc2imp_Bosonic: Npoints of Wloc not defined."
       if(Wimp%Npoints.eq.0) stop "loc2imp_Bosonic: Npoints of Wimp not defined."
       if(Wimp%Beta.ne.Wloc%Beta) stop "loc2imp_Bosonic: Wimp and Wloc have different beta."
-      if(Wimp%Npoints.ne.Wloc%Npoints) stop "loc2imp_Bosonic: Wimp and Wloc have different number of Matsubara points."
       if(Wimp%Nkpt.ne.0) stop "loc2imp_Bosonic: Wimp k-dependent attributes attributes are supposed to be unallocated."
+      if((Wloc%Npoints.ne.1).and.(Wimp%Npoints.ne.Wloc%Npoints))stop "loc2imp_Bosonic: Wimp and Wloc have different number of Matsubara points."
       if(.not.allocated(Wloc%screened_local)) stop "loc2imp_Bosonic: Wloc screened_local attribute not allocated."
       if(.not.allocated(Wimp%screened_local)) stop "loc2imp_Bosonic: Wimp screened_local attribute not allocated."
       !
       Norb_imp = int(sqrt(dble(Wimp%Nbp)))
       Norb_loc = int(sqrt(dble(Wloc%Nbp)))
       doBare = allocated(Wimp%bare_local)
+      WlocStatic = Wloc%Npoints .eq. 1
       if(.not.allocated(Wloc%bare_local).and.doBare) stop "loc2imp_Bosonic: Wloc bare_local attribute not allocated."
       !
       if(size(orbs).ne.Norb_imp) stop "loc2imp_Bosonic: can't fit the requested orbitals inside Wimp."
@@ -820,7 +821,9 @@ contains
                   !
                   if(doBare)Wimp%bare_local(ib_imp,jb_imp) =  Wloc%bare_local(ib_loc,jb_loc)
                   do ip=1,Wimp%Npoints
-                     Wimp%screened_local(ib_imp,jb_imp,ip) = Wloc%screened_local(ib_loc,jb_loc,ip)
+                     ip_loc = ip
+                     if(WlocStatic) ip_loc=1
+                     Wimp%screened_local(ib_imp,jb_imp,ip) = Wloc%screened_local(ib_loc,jb_loc,ip_loc)
                   enddo
                   !
                enddo

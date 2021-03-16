@@ -73,6 +73,13 @@ module fit
 contains
 
 
+   !---------------------------------------------------------------------------!
+   !PURPOSE: Rebuild the last Even and Odd coefficients so as to impse continuity
+   !betwee the fitted tail and the original function.
+   !Here I'm assuming that all the odd coefficients are negative
+   !even if M3 should be positive. However the fit is unable to simultaneously
+   !find M1>M3 and preserve continuitiy. So I'm keeping negative M3.
+   !---------------------------------------------------------------------------!
    subroutine reconstruct_lastCoeffs_F(Coeff,ConstrF)
       !
       use utils_misc
@@ -743,6 +750,9 @@ contains
             !the index is equal to the exponent
             exp = imoment
             !
+            !Here I'm assuming that all the odd coefficients are negative
+            !even if M3 should be positive. However the fit is unable to simultaneously
+            !find M1>M3 and preserve continuitiy. So I'm keeping negative M3.
             if(mod(exp,2).eq.0)then
                ReGf(iw) = ReGf(iw) + Coeff(imoment)/(wm(iw)**exp)
             else
@@ -801,6 +811,9 @@ contains
             !the index is equal to the exponent
             exp = imoment
             !
+            !Here I'm assuming that all the odd coefficients are negative
+            !even if M3 should be positive. However the fit is unable to simultaneously
+            !find M1>M3 and preserve continuitiy. So I'm keeping negative M3.
             if(mod(exp,2).eq.0)then
                ReSigma(iw) = ReSigma(iw) + Coeff(imoment)/(wm(iw)**exp)
             else

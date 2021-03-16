@@ -290,23 +290,41 @@ contains
       PrevItFolder = reg(pathDATA)//str(ItStart-1)//"/"
       MaxEnt_K = reg(ItFolder)//"K_resolved/"
       !
-      !Creates folders for the K-resolved stuff
+      !Creates folders for the K-resolved data
       if(print_path)then
          do ispin=1,Nspin
             if(reg(path_funct).eq."G")then
-               call createDir(reg(MaxEnt_K)//"/MaxEnt_Gk_t_s"//str(ispin),verb=verbose)
+               !
+               call createDir(reg(MaxEnt_K)//"/MaxEnt_Gk_path_t_s"//str(ispin),verb=verbose)  ! This is for MaxEnt on G along the K-path
+               !
             elseif(reg(path_funct).eq."S")then
-               call createDir(reg(MaxEnt_K)//"/MaxEnt_Sk_t_s"//str(ispin),verb=verbose)
-               call createDir(reg(MaxEnt_K)//"/Gk_wm_s"//str(ispin),verb=verbose)
-               call createDir(reg(MaxEnt_K)//"/Sk_wm_s"//str(ispin),verb=verbose)
-               call createDir(reg(MaxEnt_K)//"/Spath_vars",verb=verbose)
+               !
+               call createDir(reg(MaxEnt_K)//"/MaxEnt_Sk_path_t_s"//str(ispin),verb=verbose)  ! This is for MaxEnt on S along the K-path
+               call createDir(reg(MaxEnt_K)//"/Gk_path_wm_s"//str(ispin),verb=verbose)        ! This is for MaxEnt on S along the K-path
+               call createDir(reg(MaxEnt_K)//"/Sk_path_wm_s"//str(ispin),verb=verbose)        ! This is for MaxEnt on S along the K-path
+               !
+               call createDir(reg(MaxEnt_K)//"/MaxEnt_Sk_full_t_s"//str(ispin),verb=verbose)  ! This is for MaxEnt on S in the full BZ to get Gloc
+               call createDir(reg(MaxEnt_K)//"/Gk_full_wm_s"//str(ispin),verb=verbose)        ! This is for MaxEnt on S in the full BZ to get Gloc
+               call createDir(reg(MaxEnt_K)//"/Sk_full_wm_s"//str(ispin),verb=verbose)        ! This is for MaxEnt on S in the full BZ to get Gloc
+               !
+               call createDir(reg(MaxEnt_K)//"/Sigma_vars",verb=verbose)
+               !
             elseif(reg(path_funct).eq."GS")then
-               call createDir(reg(MaxEnt_K)//"/MaxEnt_Gk_t_s"//str(ispin),verb=verbose)
-               call createDir(reg(MaxEnt_K)//"/MaxEnt_Sk_t_s"//str(ispin),verb=verbose)
-               call createDir(reg(MaxEnt_K)//"/Gk_wm_s"//str(ispin),verb=verbose)
-               call createDir(reg(MaxEnt_K)//"/Sk_wm_s"//str(ispin),verb=verbose)
-               call createDir(reg(MaxEnt_K)//"/Spath_vars",verb=verbose)
+               !
+               call createDir(reg(MaxEnt_K)//"/MaxEnt_Gk_path_t_s"//str(ispin),verb=verbose)  ! This is for MaxEnt on G along the K-path
+               !
+               call createDir(reg(MaxEnt_K)//"/MaxEnt_Sk_path_t_s"//str(ispin),verb=verbose)  ! This is for MaxEnt on S along the K-path
+               call createDir(reg(MaxEnt_K)//"/Gk_path_wm_s"//str(ispin),verb=verbose)        ! This is for MaxEnt on S along the K-path
+               call createDir(reg(MaxEnt_K)//"/Sk_path_wm_s"//str(ispin),verb=verbose)        ! This is for MaxEnt on S along the K-path
+               !
+               call createDir(reg(MaxEnt_K)//"/MaxEnt_Sk_full_t_s"//str(ispin),verb=verbose)  ! This is for MaxEnt on S in the full BZ to get Gloc
+               call createDir(reg(MaxEnt_K)//"/Gk_full_wm_s"//str(ispin),verb=verbose)        ! This is for MaxEnt on S in the full BZ to get Gloc
+               call createDir(reg(MaxEnt_K)//"/Sk_full_wm_s"//str(ispin),verb=verbose)        ! This is for MaxEnt on S in the full BZ to get Gloc
+               !
+               call createDir(reg(MaxEnt_K)//"/Sigma_vars",verb=verbose)
+               !
             endif
+            if(paramagnet)exit
          enddo
       endif
       !

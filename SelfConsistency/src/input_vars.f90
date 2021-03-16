@@ -278,7 +278,7 @@ contains
       call parse_input_variable(Nsite,"NSITE",InputFile,default=1,comment="Number of inequivalent sites in the lattice.")
       call parse_input_variable(ExpandImpurity,"EXPAND",InputFile,default=.false.,comment="Flag to use a single impurity solution for all the sites of the lattice. Only indexes for site 1 readed.")
       call parse_input_variable(RotateHloc,"ROTATE_F",InputFile,default=.false.,comment="Solve the Fermionic impurity problem in the basis where H(R=0) is diagonal.")
-      call parse_input_variable(RotateUloc,"ROTATE_B",InputFile,default=RotateHloc,comment="Solve Bosonic the impurity problem in the basis where H(R=0) is diagonal.")
+      call parse_input_variable(RotateUloc,"ROTATE_B",InputFile,default=RotateHloc,comment="Solve the Bosonic impurity problem in the basis where H(R=0) is diagonal.")
       call parse_input_variable(AFMselfcons,"AFM",InputFile,default=.false.,comment="Flag to use  the AFM self-consistency by flipping the spin. Requires input with doubled unit cell.")
       call parse_input_variable(cmplxWann,"CMPLX_WANN",InputFile,default=.false.,comment="Flag to assume the presence of complex Wannier function.")
       allocate(SiteNorb(Nsite));SiteNorb=0
@@ -359,7 +359,7 @@ contains
       if(mod(NtauF-1,4).ne.0)NtauF=NtauF+mod(NtauF-1,4)
       NtauB = NtauF
       call append_to_input_list(NtauB,"NTAU_B_LAT","Number of points on the imaginary time axis for Bosonic lattice fields. User cannot set this as its equal to NTAU_F.")
-      call parse_input_variable(tau_uniform,"TAU_UNIF",InputFile,default=.false.,comment="Flag to use a non-tau_uniform mesh on the imaginary time axis.")
+      call parse_input_variable(tau_uniform,"TAU_UNIF",InputFile,default=.false.,comment="Flag to use a uniform mesh on the imaginary time axis.")
       call parse_input_variable(Nreal,"NREAL",InputFile,default=2000,comment="Number of points on the real frequency axis.")
       call parse_input_variable(wrealMax,"MAX_WREAL",InputFile,default=10.d0,comment="Maximum absolute value of the real frequency mesh.")
       call parse_input_variable(eta,"ETA",InputFile,default=0.04d0,comment="Real frequency broadening.")
@@ -415,7 +415,7 @@ contains
             do iorb=1,Norb_model
                call parse_input_variable(Vnn(iorb,:),"VNN_"//str(iorb),InputFile,comment="Magnitudes of the long-range interactions for orbital number "//str(iorb))
             enddo
-            Ustart=.false. !because of the loc2imp: curlyU has the frequency
+            !Ustart=.false. !because of the loc2imp: curlyU has the frequency
          endif
          if((Nphonons.gt.0).and.(N_Vnn.gt.0)) stop "read_InputFile: Model interaction with both phonons and non-local couplings not implemented."
          if((Nphonons.eq.0).and.(N_Vnn.eq.0)) stop "read_InputFile: Model interaction requested buth neither phonons nor long-range couplings provided."
@@ -471,7 +471,7 @@ contains
       call parse_input_variable(structure,"STRUCTURE",InputFile,default="cubic",comment="Available structures: cubic, fcc, bcc, hex, tetragonal, orthorhombic_[1,2], None to avoid.")
       call parse_input_variable(path_funct,"PATH_FUNCT",InputFile,default="None",comment="Print interacting fields on high-symmetry points. Available fields: G=Green's function, S=self-energy, GS=both. None to avoid.")
       call parse_input_variable(Nkpt_path,"NK_PATH",InputFile,default=50,comment="Number of segments between two hig-symmetry Kpoints.")
-      call parse_input_variable(KKcutoff,"KK_CUTOFF",InputFile,default=50d0,comment="Real frequency cutoff for Kramers Kronig integrals.")
+      call parse_input_variable(KKcutoff,"KK_CUTOFF",InputFile,default=50d0,comment="Real frequency cutoff for Kramers Kronig integrals, should be twice the region of interest.")
       KKcutoff=abs(KKcutoff)
       !
       !Variables for the matching beta
@@ -537,7 +537,7 @@ contains
       pathDATA=trim(pathDATA)//"/"
       if(reg(pathINPUT).eq.reg(pathINPUTtr))then
          pathINPUT="../"//trim(pathINPUT)//"/"
-         pathINPUTtr="../"//trim(pathINPUT)//"/"
+         pathINPUTtr=reg(pathINPUT)
       else
          pathINPUT="../"//trim(pathINPUT)//"/"
          pathINPUTtr=trim(pathINPUTtr)//"/"
