@@ -13,12 +13,8 @@ program Akw_builder
    integer                                  :: Nreal_min,Nreal_max,Nreal_read,Nreal_old
    logical,allocatable                      :: Kmask(:)
    real(8),allocatable                      :: wreal(:),wreal_read(:)
-   real(8),allocatable                      :: ImSigma_read(:,:,:),ImG_read(:,:,:)
-   real(8),allocatable                      :: ImSigma(:,:,:),ReSigma(:)
-   real(8),allocatable                      :: Sparams(:,:,:,:)
-   complex(8),allocatable                   :: Sigma_rho(:,:),RotN(:,:,:)
-   complex(8),allocatable                   :: Greal_rho(:,:),Greal_orb(:,:,:)
-   real(8),allocatable                      :: Akw_rho(:,:,:),Akw_orb(:,:,:)
+   real(8),allocatable                      :: ImG_read(:,:,:)
+   real(8),allocatable                      :: Akw_orb(:,:,:)
    real(8)                                  :: dw
    character(len=256)                       :: path
    !
@@ -256,6 +252,12 @@ contains
       character(len=*),intent(in)           :: mode
       integer                               :: Nkpt
       real(8)                               :: etafact
+      real(8),allocatable                   :: ImSigma_read(:,:,:)
+      real(8),allocatable                   :: ImSigma(:,:,:),ReSigma(:)
+      real(8),allocatable                   :: Sparams(:,:,:,:)
+      complex(8),allocatable                :: Sigma_rho(:,:),RotN(:,:,:),Srot(:,:)
+      complex(8),allocatable                :: Sigma_orb(:,:,:),Greal_orb(:,:,:)
+      complex(8),allocatable                :: Hk(:,:,:),Hkrot(:,:,:)
       !
       select case(reg(mode))
          case default
@@ -264,8 +266,10 @@ contains
             !
          case("path")
             !
-            etafact=2d0
+            etafact=5d0
             Nkpt = Crystal%Nkpt_path
+            allocate(Hk(Crystal%Norb,Crystal%Norb,Nkpt))
+            Hk = Crystal%Hk_path
             write(*,"(A,I)") new_line("A")//new_line("A")//"     Sigma path. Total number of K-points along path:",Nkpt
             !
          case("full")
@@ -274,6 +278,8 @@ contains
             !etafact=0.2
             etafact=1d0
             Nkpt = Crystal%Nkpt
+            allocate(Hk(Crystal%Norb,Crystal%Norb,Nkpt))
+            Hk = Crystal%Hk
             write(*,"(A,I)") new_line("A")//new_line("A")//"     Sigma full. Total number of K-points in the BZ:",Nkpt
             !
       end select
@@ -353,9 +359,14 @@ contains
       !
       !Read the rotations of the K-dependent self-energy matrix
       allocate(RotN(Crystal%Norb,Crystal%Norb,Nkpt));RotN=czero
+      allocate(Hkrot(Crystal%Norb,Crystal%Norb,Nkpt));Hkrot=czero
       do ik=1,Nkpt
+         !
          path = reg(MaxEnt_K)//"Sigma_vars/S"//reg(mode)//"_Rot_k"//str(ik)//"_s"//str(ispin)//".DAT"
          call read_Matrix(RotN(:,:,ik),reg(path))
+         !
+         Hkrot(:,:,ik) = rotate(Hk(:,:,ik),RotN(:,:,ik))
+         !
       enddo
       write(*,"(A)") "     Rotations are read(K"//reg(mode)//")."
       !
@@ -405,7 +416,6 @@ contains
       write(*,"(A)") "     MaxEnt output is cooked(K"//reg(mode)//")."
       !
       !Operations at each K-point
-      allocate(Akw_rho(Crystal%Norb,Nreal,Nkpt));Akw_rho=0d0
       allocate(Akw_orb(Crystal%Norb,Nreal,Nkpt));Akw_orb=0d0
       do ik=1,Nkpt
          !
@@ -416,7 +426,7 @@ contains
          allocate(ReSigma(Nreal));ReSigma=0d0
          do iorb=1,Crystal%Norb
             !
-            call KK_Im2Re(ReSigma,ImSigma(iorb,:,ik),wreal,KKcutoff,BareVal=Sparams(iorb,ik,ispin,1),symmetric=.false.)
+            call KK_Im2Re(ReSigma,ImSigma(iorb,:,ik),wreal,KKcutoff,BareVal=Sparams(iorb,ik,ispin,1)-dreal(Hkrot(iorb,iorb,ik)),symmetric=.false.)
             !
             Sigma_rho(iorb,:) = dcmplx(ReSigma,ImSigma(iorb,:,ik))
             !
@@ -433,39 +443,29 @@ contains
          enddo
          close(unit)
          !
-         !Rebuild the Green's function in the basis where the K-dependent density matrix is diagonal
-         allocate(Greal_rho(Crystal%Norb,Nreal));Greal_rho=czero
-         do iorb=1,Crystal%Norb
-            do iw=1,Nreal
-               Greal_rho(iorb,iw) = 1d0 / (  dcmplx(wreal(iw),eta*etafact) + S_Full%mu - Sigma_rho(iorb,iw) )
-            enddo
-            !
-            Akw_rho(iorb,:,ik) = dimag(Greal_rho(iorb,:))
-            Akw_rho(iorb,:,ik) = Akw_rho(iorb,:,ik) / (sum(Akw_rho(iorb,:,ik))*dw)
-            !
-         enddo
-         deallocate(Sigma_rho)
-         where(abs((Akw_rho(:,:,ik)))<1.d-12)Akw_rho(:,:,ik)=0d0
-         !
-         !Print
-         path = reg(MaxEnt_K)//"Akw_S_"//reg(mode)//"_s"//str(ispin)//"/Akw_rho_k"//str(ik)//".DAT"
-         unit = free_unit()
-         open(unit,file=reg(path),form="formatted",status="unknown",position="rewind",action="write")
+         !Rotate the self-energy to the orbital basis
+         allocate(Sigma_orb(Crystal%Norb,Crystal%Norb,Nreal));Sigma_orb=czero
+         allocate(Srot(Crystal%Norb,Crystal%Norb));Srot=czero
          do iw=1,Nreal
-            write(unit,"(200E20.12)") wreal(iw),(Akw_rho(iorb,iw,ik),iorb=1,Crystal%Norb)
+            Srot = diag(Sigma_rho(:,iw)) !- ( Hkrot(:,:,ik)-diag(diagonal(Hkrot(:,:,ik))) )
+            Sigma_orb(:,:,iw) = rotate(Srot,transpose(conjg(RotN(:,:,ik))))
          enddo
-         close(unit)
+         deallocate(Sigma_rho,Srot)
          !
-         !Rotate the Green's function to the orbital basis
+         !Rebuild the Green's function in the orbital basis
          allocate(Greal_orb(Crystal%Norb,Crystal%Norb,Nreal));Greal_orb=czero
          do iw=1,Nreal
-            Greal_orb(:,:,iw) = rotate(diag(Greal_rho(:,iw)),transpose(conjg(RotN(:,:,ik))))
+            Greal_orb(:,:,iw) = zeye(Crystal%Norb)*dcmplx(wreal(iw)+S_Full%mu,eta*etafact) - Hk(:,:,ik) - Sigma_orb(:,:,iw)
+            call inv(Greal_orb(:,:,iw))
          enddo
+         deallocate(Sigma_orb)
+         !
+         !Get the spectral function in the orbital basis
          do iorb=1,Crystal%Norb
             Akw_orb(iorb,:,ik) = dimag(Greal_orb(iorb,iorb,:))
             Akw_orb(iorb,:,ik) = Akw_orb(iorb,:,ik) / (sum(Akw_orb(iorb,:,ik))*dw)
          enddo
-         deallocate(Greal_rho,Greal_orb)
+         deallocate(Greal_orb)
          where(abs((Akw_orb(:,:,ik)))<1.d-12)Akw_orb(:,:,ik)=0d0
          !
          !Print
@@ -482,19 +482,6 @@ contains
       !
       if(reg(mode).eq."path")then
          !
-         !Write down spectral function on the path in usual format - LDA basis
-         path = reg(MaxEnt_K)//"Akw_S_rho_s"//str(ispin)//".DAT"
-         unit = free_unit()
-         open(unit,file=reg(path),form="formatted",status="unknown",position="rewind",action="write")
-         do ik=1,Nkpt
-            do iw=1,Nreal
-               if(abs(wreal(iw)).gt.0.5*KKcutoff)cycle
-               write(unit,"(1I5,200E20.12)") ik,Crystal%Kpathaxis(ik),wreal(iw),(Akw_rho(iorb,iw,ik),iorb=1,Crystal%Norb)
-            enddo
-            write(unit,*)
-         enddo
-         close(unit)
-         !
          !Write down spectral function on the path in usual format - orbital basis
          path = reg(MaxEnt_K)//"Akw_S_orb_s"//str(ispin)//".DAT"
          unit = free_unit()
@@ -510,15 +497,6 @@ contains
          !
       else
          !
-         !Write down the local spectral function - LDA basis
-         path = reg(MaxEnt_K)//"Aw_S_rho_s"//str(ispin)//".DAT"
-         unit = free_unit()
-         open(unit,file=reg(path),form="formatted",status="unknown",position="rewind",action="write")
-         do iw=1,Nreal
-            write(unit,"(200E20.12)") wreal(iw),(sum(Akw_rho(iorb,iw,:)/Nkpt),iorb=1,Crystal%Norb)
-         enddo
-         close(unit)
-         !
          !Write down the local spectral function - orbital basis
          path = reg(MaxEnt_K)//"Aw_S_orb_s"//str(ispin)//".DAT"
          unit = free_unit()
@@ -529,7 +507,7 @@ contains
          close(unit)
          !
       endif
-      deallocate(Kmask,Sparams,RotN,ImSigma,wreal,Akw_orb,Akw_rho)
+      deallocate(Kmask,Sparams,RotN,Hkrot,ImSigma,wreal,Akw_orb)
       !
    end subroutine rebuild_Sigma
    !
