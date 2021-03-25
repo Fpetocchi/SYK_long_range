@@ -154,6 +154,7 @@ module input_vars
    !
    !Double counting types, divergencies, scaling and self-consistency coefficients
    logical,public                           :: VH_use
+   logical,public                           :: Vxc_in
    character(len=256),public                :: VH_type
    character(len=256),public                :: DC_type
    logical,public                           :: Sigma_AC
@@ -244,7 +245,6 @@ contains
       if((reg(CalculationType).eq."EDMFT").or.(reg(CalculationType).eq."GW+EDMFT")) then
          bosonicSC=.true.
          Solver%retarded=1!.true.
-         Solver%nnt_meas=1!.true.
       endif
       if(reg(CalculationType).eq."DMFT+dynU")Solver%retarded=1!.true.
       !
@@ -280,7 +280,7 @@ contains
       call parse_input_variable(RotateHloc,"ROTATE_F",InputFile,default=.false.,comment="Solve the Fermionic impurity problem in the basis where H(R=0) is diagonal.")
       call parse_input_variable(RotateUloc,"ROTATE_B",InputFile,default=RotateHloc,comment="Solve the Bosonic impurity problem in the basis where H(R=0) is diagonal.")
       call parse_input_variable(AFMselfcons,"AFM",InputFile,default=.false.,comment="Flag to use  the AFM self-consistency by flipping the spin. Requires input with doubled unit cell.")
-      call parse_input_variable(cmplxWann,"CMPLX_WANN",InputFile,default=.false.,comment="Flag to assume the presence of complex Wannier function.")
+      call parse_input_variable(cmplxWann,"GTAU_K",InputFile,default=.false.,comment="Flag to perform the iw->tau FT of the Green's function in K space.")
       allocate(SiteNorb(Nsite));SiteNorb=0
       allocate(SiteName(Nsite))
       do isite=1,Nsite
@@ -359,7 +359,7 @@ contains
       if(mod(NtauF-1,4).ne.0)NtauF=NtauF+mod(NtauF-1,4)
       NtauB = NtauF
       call append_to_input_list(NtauB,"NTAU_B_LAT","Number of points on the imaginary time axis for Bosonic lattice fields. User cannot set this as its equal to NTAU_F.")
-      call parse_input_variable(tau_uniform,"TAU_UNIF",InputFile,default=.false.,comment="Flag to use a uniform mesh on the imaginary time axis.")
+      call parse_input_variable(tau_uniform,"TAU_UNIF",InputFile,default=.false.,comment="Flag to use a uniform mesh on the imaginary time axis. Only internal for GW.")
       call parse_input_variable(Nreal,"NREAL",InputFile,default=2000,comment="Number of points on the real frequency axis.")
       call parse_input_variable(wrealMax,"MAX_WREAL",InputFile,default=10.d0,comment="Maximum absolute value of the real frequency mesh.")
       call parse_input_variable(eta,"ETA",InputFile,default=0.04d0,comment="Real frequency broadening.")
@@ -424,8 +424,9 @@ contains
       !Double counting types, divergencies, scaling coefficients
       call add_separator()
       call parse_input_variable(VH_type,"VH_TYPE",InputFile,default="Ustatic_SPEX",comment="Hartree term mismatch between GoWo and scGW. Available: Ubare, Ustatic, Ubare_SPEX(V_nodiv.DAT required), Ustatic_SPEX(V_nodiv.DAT required).")
-      call parse_input_variable(VH_use,"VH_USE",InputFile,default=.true.,comment="Flag to use the Hartree term correction between Tier-III and Tier-II, which is printed in PATH_INPUT even if not used.")
       if(Umodel)VH_type="Ustatic"
+      call parse_input_variable(VH_use,"VH_USE",InputFile,default=.true.,comment="Flag to use the Hartree term correction between Tier-III and Tier-II, which is printed in PATH_INPUT even if not used.")
+      call parse_input_variable(Vxc_in,"VXC_IN",InputFile,default=.true.,comment="Flag to include the Vxc potential inside the SigmaG0W0.")
       call parse_input_variable(DC_type,"DC_TYPE",InputFile,default="GlocWloc",comment="Local GW self-energy which is replaced by DMFT self-energy. Avalibale: GlocWloc, Sloc.")
       call parse_input_variable(Sigma_AC,"SIGMA_AC",InputFile,default=.false.,comment="Flag to force the analytic continuation on the G0W0 self-energy.")
       call parse_input_variable(HandleGammaPoint,"SMEAR_GAMMA",InputFile,default=.true.,comment="Remove the interaction divergence at the Gamma point.")
@@ -506,16 +507,17 @@ contains
       if(ExpandImpurity.and.(.not.look4dens%local))Solver%TargetDensity = look4dens%TargetDensity/Nsite
       call append_to_input_list(Solver%TargetDensity,"N_READ_IMP","Target density in the impurity list. User cannot set this as its the the same density on within the impurity orbitals if EXPAND=F otherwise its N_READ_LAT/NSITE.")
       !call parse_input_variable(Solver%TargetDensity,"N_READ_IMP",InputFile,default=look4dens%TargetDensity,comment="Target density in the impurity list.")
-      call parse_input_variable(Solver%Norder,"NORDER",InputFile,default=10,comment="Maximum perturbation order measured. Not used yet.")
+      call parse_input_variable(Solver%Norder,"NORDER",InputFile,default=10,comment="Maximum perturbation order measured. Not yet implemented.")
       call parse_input_variable(Solver%Nmeas,"NMEAS",InputFile,default=1000,comment="Sweeps where expensive measurments are not performed.")
       call parse_input_variable(Solver%Ntherm,"NTHERM",InputFile,default=100,comment="Thermalization cycles. Each cycle performs NMEAS sweeps.")
-      call parse_input_variable(Solver%Nshift,"NSHIFT",InputFile,default=100,comment="Sweeps where segment shifts are not proposed. Not proposed if >NMEAS.")
-      call parse_input_variable(Solver%Nswap,"NSWAP",InputFile,default=100,comment="Sweeps where global spin swaps are not proposed. Not proposed if >NMEAS.")
+      call parse_input_variable(Solver%Nshift,"NSHIFT",InputFile,default=1,comment="Proposed segment shifts at each sweep.")
+      call parse_input_variable(Solver%Nswap,"NSWAP",InputFile,default=1,comment="Proposed global spin swaps at each sweep.")
+      call parse_input_variable(Solver%N_nnt,"N_NNT",InputFile,default=100,comment="Measurment for n(tau)n(0) evaluation. Updated according to CALC_TYPE.")
+      if(.not.bosonicSC)Solver%N_nnt=0
       call parse_input_variable(Solver%PrintTime,"PRINT_TIME",InputFile,default=10,comment="Minutes that have to pass before observables are updated and stored.")
       call parse_input_variable(Solver%binlength,"BINLENGTH",InputFile,default=4,comment="If >0 the Green's function at itau will be the average within +/-binlength.")
       call parse_input_variable(Solver%binstart,"BINSTART",InputFile,default=100,comment="Tau points skipped at the beginning and end of the Green's function average.")
       call append_to_input_list(Solver%retarded,"RETARDED","Integer flag to include the frequency dependent part of the interaction. User cannot set this as its deduced from CALC_TYPE.")
-      call append_to_input_list(Solver%nnt_meas,"NNT_MEAS","Integer flag to switch on the measurement of the susceptibility. User cannot set this as its deduced from CALC_TYPE.")
       Solver%quickloops=look4dens%quickloops
       if(ExpandImpurity)then
          allocate(Solver%Time(1));Solver%Time=0

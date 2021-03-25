@@ -140,9 +140,14 @@ program SelfConsistency
          if(solve_DMFT.and.bosonicSC.and.(.not.Ustart))call DeallocateBosonicField(Ulat)
          !
          !read from SPEX G0W0 self-energy and Vexchange
+         allocate(Vxc(Crystal%Norb,Crystal%Norb,Crystal%Nkpt,Nspin));Vxc=czero
          call AllocateFermionicField(S_G0W0,Crystal%Norb,Nmats,Nkpt=Crystal%Nkpt,Nsite=Nsite,Beta=Beta)
          if(.not.Hmodel)then
-            call read_Sigma_spex(S_G0W0,Crystal,verbose,doAC=Sigma_AC,pathOUTPUT=reg(pathINPUTtr))
+            if(Vxc_in)then
+               call read_Sigma_spex(S_G0W0,Crystal,verbose,doAC=Sigma_AC,pathOUTPUT=reg(pathINPUTtr))
+            else
+               call read_Sigma_spex(S_G0W0,Crystal,verbose,doAC=Sigma_AC,pathOUTPUT=reg(pathINPUTtr),Vxc_out=Vxc)
+            endif
          endif
          !
          !scGW
@@ -186,8 +191,8 @@ program SelfConsistency
                call calc_sigmaGWdc(S_GWdc,Glat,Wlat)
             endif
             !
-            !Then replace local projection of scGW with EDMFT
-            call MergeFields(S_GW,S_GWdc,S_DMFT,alphaSigma,SiteOrbs,DC_type,RotateHloc)
+            !Then replace local projection of scGW with EDMFT, S_GWdc is empty for DC_type=Sloc or for model calculations
+            call MergeFields(S_GW,S_GWdc,S_DMFT,[alphaSigma,HartreeFact],SiteOrbs,DC_type,RotateHloc)
             call DeallocateFermionicField(S_GWdc)
             call dump_FermionicField(S_GW,reg(ItFolder),"Slat_merged_w")
             !

@@ -278,7 +278,7 @@ contains
       do ip=1,Ntau_
          do iq=1,Nkpt
             call check_Hermiticity(Gitau(:,:,ip,iq,1),eps,enforce=.false.,hardstop=.false.,name="Glat_t"//str(ip)//"_q"//str(iq)//"_s1",verb=.true.)
-            if(.not.paramagnet)call check_Hermiticity(Gitau(:,:,ip,iq,1),eps,enforce=.false.,hardstop=.false.,name="Glat_t"//str(ip)//"_q"//str(iq)//"_s1",verb=.true.)
+            if(.not.paramagnet)call check_Hermiticity(Gitau(:,:,ip,iq,Nspin),eps,enforce=.false.,hardstop=.false.,name="Glat_t"//str(ip)//"_q"//str(iq)//"_s2",verb=.true.)
          enddo
       enddo
       !$OMP END DO

@@ -471,7 +471,7 @@ void print_Vec( std::string path, std::vector<double> &Vec, double mu=0.0, doubl
    int Nrows = Vec.size();
    //
    //if(std::is_same<T, double>::value) fprintf (printFile , "%.20e\n",mu);
-   if(mu!=0.0) fprintf (printFile , "%.20e\n",mu);
+   fprintf (printFile , "%.20e\n",mu);
    //
    if(Beta==0.0)
    {

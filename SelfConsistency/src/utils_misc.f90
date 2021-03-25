@@ -1455,6 +1455,7 @@ contains
       wcos=0d0;wsin=0d0
       !
       if(dabs(q).lt.1.d-2) then
+      !if(dabs(q).lt.1.d-4) then
          !
          !Small q
          do n=1,nseg

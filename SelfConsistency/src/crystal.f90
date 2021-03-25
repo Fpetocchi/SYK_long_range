@@ -1659,9 +1659,23 @@ contains
       select case(reg(structure))
          case default
             !
-            stop "Available structures: cubic, fcc, bcc, hex, tetragonal, orthorhombic."
+            stop "Available structures: cubic_[2,3], fcc, bcc, hex, tetragonal, orthorhombic_[1,2]."
             !
-         case("cubic")
+         case("cubic_2")
+            !
+            Gamma = [     0d0,     0d0,     0d0 ]
+            X     = [ 1d0/2d0,     0d0,     0d0 ]
+            M     = [ 1d0/2d0, 1d0/2d0,     0d0 ]
+            !
+            allocate(Kpoints(3,4));Kpoints=0d0
+            Kpoints(:,1) = Gamma
+            Kpoints(:,2) = X
+            Kpoints(:,3) = M
+            Kpoints(:,4) = Gamma
+            write(*,"(A)") "     structure: simple-cubic (2D)."
+            write(*,"(A)") "     path: GXMG"
+            !
+         case("cubic_3")
             !
             Gamma = [     0d0,     0d0,     0d0 ]
             M     = [ 1d0/2d0, 1d0/2d0,     0d0 ]
@@ -1677,7 +1691,7 @@ contains
             Kpoints(:,6) = X
             Kpoints(:,7) = M
             Kpoints(:,8) = R
-            write(*,"(A)") "     structure: simple-cubic."
+            write(*,"(A)") "     structure: simple-cubic (3D)."
             write(*,"(A)") "     path: GXMGRX,MR"
             !
          case("fcc")
@@ -1875,7 +1889,7 @@ contains
    !---------------------------------------------------------------------------!
    !PURPOSE: Interpolate to a user provided K-point path the Hamiltonian
    !---------------------------------------------------------------------------!
-   subroutine interpolateHk2Path(Lttc,structure,Nkpt_path,pathOUTPUT)
+   subroutine interpolateHk2Path(Lttc,structure,Nkpt_path,pathOUTPUT,filename,data)
       !
       use parameters
       use utils_misc
@@ -1886,10 +1900,14 @@ contains
       character(len=*),intent(in)           :: structure
       integer,intent(in)                    :: Nkpt_path
       character(len=*),intent(in)           :: pathOUTPUT
+      character(len=*),intent(in),optional  :: filename
+      complex(8),intent(in),allocatable,optional :: data(:,:,:)
       !
-      character(len=256)                    :: path
+      character(len=256)                    :: path,filename_
       integer                               :: ik,iorb,unit
       integer                               :: Norb
+      complex(8),allocatable                :: data_intp(:,:,:)
+      real(8),allocatable                   :: dataEk(:,:)
       real                                  :: start,finish
       !
       !
@@ -1898,8 +1916,10 @@ contains
       !
       ! Check on the input Fields
       if(.not.Lttc%status) stop "interpolateHk2Path: Lttc not properly initialized."
-      Norb = Lttc%Norb
       !
+      !
+      filename_="Bands.DAT"
+      if(present(filename))filename_=reg(filename)
       !
       !Create K-points along high-symmetry points
       if(allocated(Lttc%kptpath))deallocate(Lttc%kptpath)
@@ -1907,33 +1927,72 @@ contains
       call calc_path(Lttc%kptpath,reg(structure),Nkpt_path,Kaxis=Lttc%Kpathaxis,KaxisPoints=Lttc%KpathaxisPoints)
       Lttc%Nkpt_path = size(Lttc%kptpath,dim=2)
       !
-      !Fill in Hk along points
-      if(allocated(Lttc%Hk_path))deallocate(Lttc%Hk_path)
-      allocate(Lttc%Hk_path(Norb,Norb,Lttc%Nkpt_path));Lttc%Hk_path=czero
-      call cpu_time(start)
-      call wannierinterpolation(Lttc%Nkpt3,Lttc%kpt,Lttc%kptpath,Lttc%Hk,Lttc%Hk_path)
-      call cpu_time(finish)
-      write(*,"(A,F)") "     H(fullBZ) --> H(Kpath) cpu timing:", finish-start
-      !
-      !Fill in Ek along points
-      if(allocated(Lttc%Ek_path))deallocate(Lttc%Ek_path)
-      allocate(Lttc%Ek_path(Norb,Lttc%Nkpt_path));Lttc%Ek_path=0d0
-      if(allocated(Lttc%Zk_path))deallocate(Lttc%Zk_path)
-      allocate(Lttc%Zk_path(Norb,Norb,Lttc%Nkpt_path));Lttc%Zk_path=czero
-      do ik=1,Lttc%Nkpt_path
-         Lttc%Zk_path(:,:,ik) = Lttc%Hk_path(:,:,ik)
-         call eigh(Lttc%Zk_path(:,:,ik),Lttc%Ek_path(:,ik))
-      enddo
-      !
-      !Print bands
-      path = reg(pathOUTPUT)//"Bands.DAT"
-      unit = free_unit()
-      open(unit,file=reg(path),form="formatted",status="unknown",position="rewind",action="write")
-      do ik=1,Lttc%Nkpt_path
-         write(unit,"(1I5,200E20.12)") ik,Lttc%Kpathaxis(ik),(Lttc%Ek_path(:,ik),iorb=1,Norb)
-      enddo
-      close(unit)
-      write(*,"(A,I)") "     Total number of K-points along path:",Lttc%Nkpt_path
+      if(present(data))then
+         !
+         Norb = size(data,dim=1)
+         call assert_shape(data,[Norb,Norb,Lttc%Nkpt],"interpolateHk2Path","dataK")
+         !
+         !Fill in Hk along points
+         allocate(data_intp(Norb,Norb,Lttc%Nkpt_path));data_intp=czero
+         call cpu_time(start)
+         call wannierinterpolation(Lttc%Nkpt3,Lttc%kpt,Lttc%kptpath,data,data_intp)
+         call cpu_time(finish)
+         write(*,"(A,F)") "     "//reg(filename)//"(fullBZ) --> "//reg(filename)//"(Kpath) cpu timing:", finish-start
+         !
+         !Fill in Ek along points
+         allocate(dataEk(Norb,Lttc%Nkpt_path));dataEk=0d0
+         do ik=1,Lttc%Nkpt_path
+            call eigh(data_intp(:,:,ik),dataEk(:,ik))
+         enddo
+         deallocate(data_intp)
+         !
+         !Print Data along the path
+         path = reg(pathOUTPUT)//reg(filename_)//".DAT"
+         unit = free_unit()
+         open(unit,file=reg(path),form="formatted",status="unknown",position="rewind",action="write")
+         do ik=1,Lttc%Nkpt_path
+            write(unit,"(1I5,200E20.12)") ik,Lttc%Kpathaxis(ik),(dataEk(:,ik),iorb=1,Norb)
+         enddo
+         close(unit)
+         write(*,"(A,I)") "     Total number of K-points along path:",Lttc%Nkpt_path
+         !
+         deallocate(dataEk)
+         !
+      else
+         !
+         Norb = Lttc%Norb
+         !
+         !Fill in Hk along points
+         if(allocated(Lttc%Hk_path))deallocate(Lttc%Hk_path)
+         allocate(Lttc%Hk_path(Norb,Norb,Lttc%Nkpt_path));Lttc%Hk_path=czero
+         call cpu_time(start)
+         call wannierinterpolation(Lttc%Nkpt3,Lttc%kpt,Lttc%kptpath,Lttc%Hk,Lttc%Hk_path)
+         call cpu_time(finish)
+         write(*,"(A,F)") "     H(fullBZ) --> H(Kpath) cpu timing:", finish-start
+         !
+         !Fill in Ek along points
+         if(allocated(Lttc%Ek_path))deallocate(Lttc%Ek_path)
+         allocate(Lttc%Ek_path(Norb,Lttc%Nkpt_path));Lttc%Ek_path=0d0
+         if(allocated(Lttc%Zk_path))deallocate(Lttc%Zk_path)
+         allocate(Lttc%Zk_path(Norb,Norb,Lttc%Nkpt_path));Lttc%Zk_path=czero
+         do ik=1,Lttc%Nkpt_path
+            Lttc%Zk_path(:,:,ik) = Lttc%Hk_path(:,:,ik)
+            call eigh(Lttc%Zk_path(:,:,ik),Lttc%Ek_path(:,ik))
+         enddo
+         !
+         !Print bands
+         path = reg(pathOUTPUT)//reg(filename_)
+         unit = free_unit()
+         open(unit,file=reg(path),form="formatted",status="unknown",position="rewind",action="write")
+         do ik=1,Lttc%Nkpt_path
+            write(unit,"(1I5,200E20.12)") ik,Lttc%Kpathaxis(ik),(Lttc%Ek_path(:,ik),iorb=1,Norb)
+         enddo
+         close(unit)
+         write(*,"(A,I)") "     Total number of K-points along path:",Lttc%Nkpt_path
+         !
+         Lttc%pathStored=.true.
+         !
+      endif
       !
       !Print position of High-symmetry points in the same folder where the function is
       path = reg(pathOUTPUT)//"Kpoints.DAT"
@@ -1944,8 +2003,6 @@ contains
       enddo
       close(unit)
       write(*,"(A,I)") "     Total number of High symmetry points:",size(Lttc%KpathaxisPoints,dim=1)
-      !
-      Lttc%pathStored=.true.
       !
    end subroutine interpolateHk2Path
 

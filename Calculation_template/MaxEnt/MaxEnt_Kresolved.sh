@@ -14,7 +14,6 @@ BIN=${GENMAT}/MaxEnt
 ################################################################################
 #
 FIELD="G"
-PAD="R"
 #
 err="0.01"
 mesh="3000"
@@ -27,6 +26,9 @@ DEFAULT=-10000
 STARTK=$DEFAULT
 STOPK=$DEFAULT
 #
+MODE="path"
+PAD="K"
+#
 Nspin=1
 SPIN_DW="F"
 SINGSUB="F"
@@ -37,7 +39,7 @@ SINGSUB="F"
 ################################################################################
 #                             PROVIDED ARGUMENTS                               #
 ################################################################################
-while getopts ":e:w:W:F:N:B:i:f:d:" o; do
+while getopts ":e:w:W:F:N:B:i:f:m:d:" o; do
    case ${o} in
       e)
          err="${OPTARG}"
@@ -50,7 +52,7 @@ while getopts ":e:w:W:F:N:B:i:f:d:" o; do
          ;;
       F)
          FIELD="${OPTARG}"
-         if [ "$FIELD"  != "G" ] && [ "$FIELD"  != "S" ]; then echo "Option Error - s" ; exit 1 ; fi
+         if [ "$FIELD"  != "G" ] && [ "$FIELD"  != "S" ]; then echo "Option Error - F" ; exit 1 ; fi
          ;;
       N)
          Nktot="${OPTARG}"
@@ -65,6 +67,12 @@ while getopts ":e:w:W:F:N:B:i:f:d:" o; do
       f)
          STOPK="${OPTARG}"
          SINGSUB="T"
+         ;;
+      m)
+         MODE="${OPTARG}"
+         if [ "$MODE"  != "path" ] && [ "$MODE"  != "full" ]; then echo "Option Error - m" ; exit 1 ; fi
+         if [ "$MODE"  == "path" ] ; then PAD="K" ; fi
+         if [ "$MODE"  == "full" ] ; then PAD="F" ; fi
          ;;
       d)
          SPIN_DW="${OPTARG}"
@@ -117,7 +125,7 @@ for ispin in `seq 1 1 ${Nspin}` ; do
 
    #
    #Check if the I/O folder are present
-   Gsource=${FIELD}kt_s${ispin}
+   Gsource=MaxEnt_${FIELD}k_${MODE}_t_s${ispin}
    reports=${Gsource}_report
    if [ ! -d ${Gsource} ]; then
        echo ${Gsource} " (source) does not exists."
@@ -157,7 +165,7 @@ export OMP_NUM_THREADS=1
 
 for i in \`seq  ${startk} ${stopk}\`; do
    echo K_\${i} > job_Kb_\${i}.out
-   mpiexec -np 1 python3.6  ${BIN}/bryan.py ${RUNOPTIONS} ../${Gsource}/${FIELD}kt_k\${i}.DAT >> job_Kb_\${i}.out
+   mpiexec -np 1 python3.6  ${BIN}/bryan.py ${RUNOPTIONS} ../${Gsource}/${FIELD}k_t_k\${i}.DAT >> job_Kb_\${i}.out
    echo "MaxEnt on K_\${i} done" >> job_Kb_\${i}.out
 done
 EOF
@@ -174,7 +182,7 @@ EOF
       #
       #
       #Loop on user-provided K-points
-      for kp in `seq -w ${STARTK} ${STOPK}`; do
+      for kp in `seq ${STARTK} ${STOPK}`; do
          #
          #Info
          echo "k point: "${kp}
@@ -194,13 +202,13 @@ export PYTHONPATH=\${PYTHONPATH}:${BIN}/docopt/
 export OMP_NUM_THREADS=1
 
 echo K_${kp} > job_K_${kp}.out
-mpiexec -np 1 python3.6  ${BIN}/bryan.py ${RUNOPTIONS} ../${Gsource}/${FIELD}kt_k${kp}.DAT >> job_K_${kp}.out
+mpiexec -np 1 python3.6  ${BIN}/bryan.py ${RUNOPTIONS} ../${Gsource}/${FIELD}k_t_k${kp}.DAT >> job_K_${kp}.out
 echo "MaxEnt on K_${kp} done" >> job_K_${kp}.out
 EOF
       done
       #
       #submit all the user-provided K-points
-      for kp in `seq -w ${STARTK} ${STOPK}`; do
+      for kp in `seq ${STARTK} ${STOPK}`; do # -w
          qsub submit_MaxEnt_${NAME}_K_${kp}
       done
       #

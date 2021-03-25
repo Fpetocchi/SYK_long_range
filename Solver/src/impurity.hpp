@@ -37,13 +37,27 @@ class ct_hyb
       //----------------------------------------------------------------------//
 
       ct_hyb( path SiteName, double beta, int Nspin, int Norb, int NtauF, int NtauB,
-              int Norder, int Nmeas, int Ntherm, int NsegShift, int NspinSwap,
-              int para_mode, bool retarded, bool nnt_meas, std::vector<int> SetsNorb,
+              int Norder, int Nmeas, int Ntherm, int NsegShift, int NspinSwap, int NnntMeas,
+              bool paramagnet, bool retarded, std::vector<int> SetsNorb,
               int printTime, std::vector<int> bins, CustomMPI &mpi):
-      SiteName(SiteName), Beta(beta), Nspin(Nspin), Norb(Norb), NtauF(NtauF), NtauB(NtauB),
-      Norder(Norder), Nmeas(Nmeas), Ntherm(Ntherm), NsegShift(NsegShift), NspinSwap(NspinSwap),
-      para_mode(para_mode), retarded(retarded), nnt_meas(nnt_meas), SetsNorb(SetsNorb),
-      printTime(printTime), bins(bins), mpi(mpi)
+      SiteName(SiteName),
+      Beta(beta),
+      Nspin(Nspin),
+      Norb(Norb),
+      NtauF(NtauF),
+      NtauB(NtauB),
+      Norder(Norder),
+      Nmeas(Nmeas),
+      Ntherm(Ntherm),
+      NsegShift(NsegShift),
+      NspinSwap(NspinSwap),
+      NnntMeas(NnntMeas),
+      paramagnet(paramagnet),
+      retarded(retarded),
+      SetsNorb(SetsNorb),
+      printTime(printTime),
+      bins(bins),
+      mpi(mpi)
       {}
 
       //----------------------------------------------------------------------//
@@ -351,10 +365,9 @@ class ct_hyb
       int                                 Ntherm;
       int                                 NsegShift;
       int                                 NspinSwap;
-      int                                 para_mode;
+      int                                 NnntMeas;
       bool                                paramagnet;
       bool                                retarded;
-      bool                                nnt_meas;
       int                                 printTime;
       std::vector<int>                    SetsNorb;
       std::vector<int>                    bins;                                 // 2D vec Contains binlength and binstart in [0] and [1] respectively
@@ -447,8 +460,8 @@ class ct_hyb
          //
          times full_segment(0,Beta);
          double s=1;
+         Vec N_tmp(Nflavor,0.0);
          VecVec G_tmp(Nflavor,Vec(NtauF,0.0));
-         VecVec n_tau(Nflavor,Vec(NtauB,0.0));
 
          // The measurments I'm going to do regardless from the time
          for (int imeas=0; imeas<Nmeas_; imeas++)
@@ -465,56 +478,65 @@ class ct_hyb
                   // local update
                   insert_remove_segment( Beta*rndm(), Beta, Levels[ifl], Uloc, F[ifl], segments[ifl], M[ifl], sign[ifl], segments, full_line, ifl, K_table);
                   // shift segments
-                  if(imeas%NsegShift==1) shift_segment( segments[ifl], Beta, Levels[ifl], Uloc, F[ifl], M[ifl], sign[ifl], segments, full_line, ifl, K_table );
+                  for (int ishift=0; ishift<NsegShift; ishift++) // if(imeas%NsegShift==1)
+                     shift_segment( segments[ifl], Beta, Levels[ifl], Uloc, F[ifl], M[ifl], sign[ifl], segments, full_line, ifl, K_table );
                   // flip segment - NOT IMPLEMENTED
                   //for (int i=0; i<N_flip; i++)flip_segment( segments_up, NtauF_m1, Beta, M_up, sign_up, sign_down, F_down, M_down, segments_down, full_line_down);
                }
-
                //
-               //.........................Cheap measurments..................... add perturbation order
-               // Green's functions
-               if (segments[ifl].size()>0) measure_G( G_tmp[ifl], segments[ifl], M[ifl], NtauF, Beta );
+               //....................Observables Measurments....................
+               //
                // sign among the segments
                s *= sign[ifl];
-               // flavour occupation
-               for (int i=0; i<G_tmp[ifl].size(); i++)G_tmp[ifl][i]*=(1.*NtauF_m1)/Nmeas_;
-               Nloc[ifl] += compute_overlap(full_segment, segments[ifl], full_line[ifl], Beta)/(Beta*Nmeas_);
+               //
+               // flavour occupation - measurment averaged
+               N_tmp[ifl] += compute_overlap(full_segment, segments[ifl], full_line[ifl], Beta)/(Beta*Nmeas_);
+               //
+               // Green's functions - measurment averaged
+               if (segments[ifl].size()>0) measure_G( G_tmp[ifl], segments[ifl], M[ifl], Beta, (double)(NtauF_m1/Nmeas_) );
                //...............................................................
             }
             //
+            //  sign among the segments - measurment averaged - step summed
             sign_meas += s/(double)Nmeas_;
+
             //
             //global spin flip (does not require overlap calculation)
-            if(imeas%NspinSwap==1)
+            for (int iswap=0; iswap<NspinSwap; iswap++) // if(imeas%NspinSwap==1)
             {
                bool SpinSwap;
                for (int ifl=0; ifl<Nflavor; ifl++) SpinSwap = ( M[ifl].rows() == 0 ) ? false : true;
                if(SpinSwap) swap_spins( Beta, F, segments, full_line, sign, M );
             }
+
          }
 
          //
-         //.........................Expensive measurments.......................
+         //........................Observables sweep sums.......................
          //
-         if(para_mode>0) spin_symm(G_tmp,para_mode);
-         if(OrbSym)
-         {
-            orb_symm(Nloc,SetsOrbs);
-            orb_symm(G_tmp,SetsOrbs);
-         }
-         accumulate_G( G, G_tmp );
+         // flavour occupation - symmetrization - step sum
+         if(OrbSym) orb_symm( N_tmp, SetsOrbs );
+         accumulate_Vec( Nloc, N_tmp );
          //
-         if(nnt_meas)
-         {
-            //
-            n_tau = measure_nt( segments, full_line, NtauB, Beta );
-            if(OrbSym)orb_symm(n_tau,SetsOrbs);
-            //
-            accumulate_nt( nt, n_tau );
-            accumulate_nnt( nnt, n_tau );
-            accumulate_Szhist( Szhist, n_tau );
-            accumulate_Nhist( Nhist, n_tau );
-         }
+         //  Green's functions - symmetrization - step sum
+         if(paramagnet) spin_symm( G_tmp );
+         if(OrbSym) orb_symm( G_tmp, SetsOrbs );
+         accumulate_VecVec( G, G_tmp );
+         //
+         // n(tau) - computed every Nmeas - symmetrization - step sum
+         VecVec n_tau(Nflavor,Vec(NtauB,0.0));
+         n_tau = measure_nt( segments, full_line, NtauB, Beta );
+         if(OrbSym) orb_symm( n_tau, SetsOrbs );
+         accumulate_VecVec( nt, n_tau );
+         //
+         // Histograms - computed every Nmeas - step sum
+         accumulate_Nhist( Nhist, n_tau );
+         accumulate_Szhist( Szhist, n_tau );
+         //
+         // n(tau)n(0) - computed every Nmeas - step sum
+         if(NnntMeas>1) accumulate_nnt( nnt, n_tau, s, NnntMeas );
+         if(NnntMeas==1) accumulate_nnt( nnt, n_tau );
+         //
          //.....................................................................
 
       }
@@ -539,25 +561,29 @@ class ct_hyb
                if (!full_line[ifl])
                {
                   // local update
-                  insert_remove_segment( Beta*rndm(), Beta, Levels[ifl], Uloc, F[ifl], segments[ifl], M[ifl], sign[ifl], segments, full_line, ifl, K_table );
+                  insert_remove_segment( Beta*rndm(), Beta, Levels[ifl], Uloc, F[ifl], segments[ifl], M[ifl], sign[ifl], segments, full_line, ifl, K_table);
                   // shift segments
-                  if(imeas%NsegShift==1) shift_segment( segments[ifl], Beta, Levels[ifl], Uloc, F[ifl], M[ifl], sign[ifl], segments, full_line, ifl, K_table );
+                  for (int ishift=0; ishift<NsegShift; ishift++) // if(imeas%NsegShift==1)
+                     shift_segment( segments[ifl], Beta, Levels[ifl], Uloc, F[ifl], M[ifl], sign[ifl], segments, full_line, ifl, K_table );
                   // flip segment - NOT IMPLEMENTED
                   //for (int i=0; i<N_flip; i++)flip_segment( segments_up, NtauF_m1, Beta, M_up, sign_up, sign_down, F_down, M_down, segments_down, full_line_down);
                }
-
-               //.........................Cheap measurments.....................
-               // flavour occupation
+               //
+               //....................Observables Measurments....................
+               //
+               // flavour occupation - measurment averaged - step summed
                if(!fulldry) Nloc[ifl] += compute_overlap(full_segment, segments[ifl], full_line[ifl], Beta)/(Beta*Nmeas_);
+               //...............................................................
             }
             //
             //global spin flip (does not require overlap calculation)
-            if(imeas%NspinSwap==1)
+            for (int iswap=0; iswap<NspinSwap; iswap++) // if(imeas%NspinSwap==1)
             {
                bool SpinSwap;
                for (int ifl=0; ifl<Nflavor; ifl++) SpinSwap = ( M[ifl].rows() == 0 ) ? false : true;
                if(SpinSwap) swap_spins( Beta, F, segments, full_line, sign, M );
             }
+
          }
       }
 
@@ -594,7 +620,7 @@ class ct_hyb
             //
             // Green's function
             Vec Ntmp = Nloc;
-            if(para_mode>0) spin_symm(Ntmp,para_mode);
+            if(paramagnet) spin_symm(Ntmp);
             for (int ifl=0; ifl<Nflavor; ifl++)
             {
                G[ifl].front() = +Ntmp[ifl]-(long double)RankSweeps ;
@@ -603,19 +629,19 @@ class ct_hyb
             print_VecVec(resultsDir+"/Gimp_t_rank"+str(mpi.rank())+pad, G, Beta, (double)RankSweeps);
             mpi.report(" Gimp_t_rank"+str(mpi.rank())+pad+" is printed.");
             //
-            // observables derived from n(tau)n(0)
-            if(nnt_meas)
+            // observables derived from n(tau)
+            print_VecVec(resultsDir+"/n_t_rank"+str(mpi.rank())+pad, nt, Beta, (double)RankSweeps);
+            mpi.report(" n_t_rank"+str(mpi.rank())+pad+" is printed.");
+            //
+            print_Vec(resultsDir+"/Nhist_rank"+str(mpi.rank())+pad, Nhist );
+            mpi.report(" Nhist_rank"+str(mpi.rank())+pad+" is printed.");
+            //
+            print_Vec(resultsDir+"/Szhist_rank"+str(mpi.rank())+pad, Szhist );
+            mpi.report(" Szhist_rank"+str(mpi.rank())+pad+" is printed.");
+            //
+            // n(tau)n(0)
+            if(NnntMeas>0)
             {
-               //
-               print_Vec(resultsDir+"/Nhist_rank"+str(mpi.rank())+pad, Nhist );
-               mpi.report(" Nhist_rank"+str(mpi.rank())+pad+" is printed.");
-               //
-               print_Vec(resultsDir+"/Szhist_rank"+str(mpi.rank())+pad, Szhist );
-               mpi.report(" Szhist_rank"+str(mpi.rank())+pad+" is printed.");
-
-               print_VecVec(resultsDir+"/n_t_rank"+str(mpi.rank())+pad, nt, Beta, (double)RankSweeps);
-               mpi.report(" n_t_rank"+str(mpi.rank())+pad+" is printed.");
-               //
                print_VecVec(resultsDir+"/nn_t_rank"+str(mpi.rank())+pad, nnt, Beta, (double)RankSweeps);
                mpi.report(" nn_t_rank"+str(mpi.rank())+pad+" is printed.");
             }
@@ -645,7 +671,7 @@ class ct_hyb
          //
          // Green's function
          Vec Ntmp = Nloc;
-         if(para_mode>0) spin_symm(Ntmp,para_mode);
+         if(paramagnet) spin_symm(Ntmp);
          for (int ifl=0; ifl<Nflavor; ifl++)
          {
             G[ifl].front() = +Ntmp[ifl]-(long double)RankSweeps ;
@@ -657,28 +683,28 @@ class ct_hyb
          if(mpi.is_master()) print_VecVec(resultsDir+"/Gimp_t"+pad, PrintG, Beta);
          mpi.report(" Gimp_t"+pad+" is printed.");
          //
-         // observables derived from n(tau)n(0)
-         if(nnt_meas)
+         // observables derived from n(tau)
+         VecVec Normnt = normalize_VecVec(nt, RankSweeps);
+         VecVec Printnt(Nflavor,std::vector<double>(NtauB,0.0));
+         mpi.allreduce(Normnt, Printnt, true);
+         if(mpi.is_master()) print_VecVec(resultsDir+"/n_t"+pad, Printnt, Beta);
+         mpi.report(" n_t"+pad+" is printed.");
+         //
+         Vec NormNhist = normalize_Vec(Nhist, RankSweeps);
+         Vec PrintNhist(Nflavor+1,0.0);
+         mpi.allreduce(NormNhist, PrintNhist, true);
+         if(mpi.is_master()) print_Vec(resultsDir+"/Nhist"+pad, PrintNhist);
+         mpi.report(" Nhist"+pad+" is printed.");
+         //
+         Vec NormSzhist = normalize_Vec(Szhist, RankSweeps);
+         Vec PrintSzhist(Nflavor/2+1,0.0);
+         mpi.allreduce(NormSzhist, PrintSzhist, true);
+         if(mpi.is_master()) print_Vec(resultsDir+"/Szhist"+pad, PrintSzhist);
+         mpi.report(" Szhist"+pad+" is printed.");
+         //
+         // n(tau)n(0)
+         if(NnntMeas>0)
          {
-            //
-            Vec NormNhist = normalize_Vec(Nhist, RankSweeps);
-            Vec PrintNhist(Nflavor+1,0.0);
-            mpi.allreduce(NormNhist, PrintNhist, true);
-            if(mpi.is_master()) print_Vec(resultsDir+"/Nhist"+pad, PrintNhist);
-            mpi.report(" Nhist"+pad+" is printed.");
-            //
-            Vec NormSzhist = normalize_Vec(Szhist, RankSweeps);
-            Vec PrintSzhist(Nflavor/2+1,0.0);
-            mpi.allreduce(NormSzhist, PrintSzhist, true);
-            if(mpi.is_master()) print_Vec(resultsDir+"/Szhist"+pad, PrintSzhist);
-            mpi.report(" Szhist"+pad+" is printed.");
-            //
-            VecVec Normnt = normalize_VecVec(nt, RankSweeps);
-            VecVec Printnt(Nflavor,std::vector<double>(NtauB,0.0));
-            mpi.allreduce(Normnt, Printnt, true);
-            if(mpi.is_master()) print_VecVec(resultsDir+"/n_t"+pad, Printnt, Beta);
-            mpi.report(" n_t"+pad+" is printed.");
-            //
             VecVec Normnnt = normalize_VecVec(nnt, RankSweeps);
             VecVec Printnnt(Nflavor*(Nflavor+1)/2,std::vector<double>(NtauB,0.0));
             mpi.allreduce(Normnnt, Printnnt, true);

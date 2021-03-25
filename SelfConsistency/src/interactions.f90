@@ -1770,12 +1770,13 @@ contains
       use utils_fields
       use crystal
       use input_vars, only : pathINPUTtr
+      use input_vars, only : pathINPUT, FirstIteration, structure, Nkpt_path
       implicit none
       !
       type(BosonicField),intent(inout)      :: Umats
       real(8),intent(in)                    :: Uaa,Uab,J
       real(8),intent(in)                    :: Vnn(:,:)
-      type(Lattice),intent(in)              :: Lttc
+      type(Lattice),intent(inout)           :: Lttc
       logical,intent(in),optional           :: LocalOnly
       !
       complex(8),allocatable                :: U_K(:,:,:)
@@ -1868,6 +1869,10 @@ contains
       call cpu_time(finish)
       write(*,"(A,F)") "     Unn(R) --> Unn(K) cpu timing:", finish-start
       !
+      if((FirstIteration.eq.0).and.(reg(structure).ne."None"))then
+         call interpolateHk2Path(Lttc,reg(structure),Nkpt_path,reg(pathINPUT),filename="Uk",data=U_K)
+      endif
+      !
       !fill in the output
       do ib1=1,Nbp
          do ib2=1,Nbp
@@ -1911,12 +1916,13 @@ contains
       use utils_fields
       use crystal
       use input_vars, only : pathINPUTtr
+      use input_vars, only : pathINPUT, FirstIteration, structure, Nkpt_path
       implicit none
       !
       type(BosonicField),intent(inout)      :: Umats
       real(8),intent(in)                    :: Uaa(:),Uab(:,:),J(:,:)
       real(8),intent(in)                    :: Vnn(:,:)
-      type(Lattice),intent(in)              :: Lttc
+      type(Lattice),intent(inout)           :: Lttc
       logical,intent(in),optional           :: LocalOnly
       !
       complex(8),allocatable                :: U_K(:,:,:)
@@ -2014,6 +2020,10 @@ contains
       !
       call cpu_time(finish)
       write(*,"(A,F)") "     Unn(R) --> Unn(K) cpu timing:", finish-start
+      !
+      if((FirstIteration.eq.0).and.(reg(structure).ne."None"))then
+         call interpolateHk2Path(Lttc,reg(structure),Nkpt_path,reg(pathINPUT),filename="Uk",data=U_K)
+      endif
       !
       !fill in the output
       do ib1=1,Nbp

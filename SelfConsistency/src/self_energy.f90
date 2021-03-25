@@ -210,6 +210,7 @@ contains
                            ib2 = k + Norb*(l-1)
                            !
                            Smats_X_%N_ks(i,k,iq,ispin) = Smats_X_%N_ks(i,k,iq,ispin) + Gitau(j,l,NtauB,ik1,ispin)*Wmats%bare(ib1,ib2,ik2)/Nkpt
+                           !Smats_X_%N_ks(i,k,iq,ispin) = Smats_X_%N_ks(i,k,iq,ispin) - Gitau(j,l,1,ik1,ispin)*Wmats%bare(ib1,ib2,ik2)/Nkpt
                            !
                         enddo
                      enddo

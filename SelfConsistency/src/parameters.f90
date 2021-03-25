@@ -166,16 +166,16 @@ module parameters
       integer                               :: NtauF
       integer                               :: NtauB
       integer                               :: Norder=0
-      integer                               :: Nmeas=1000
-      integer                               :: Ntherm=1000
-      integer                               :: Nswap=1000
-      integer                               :: Nshift=2
-      integer                               :: PrintTime=10
-      integer                               :: binlength=4
-      integer                               :: binstart=100
+      integer                               :: Nmeas=0
+      integer                               :: Ntherm=0
+      integer                               :: Nshift=0
+      integer                               :: Nswap=0
+      integer                               :: N_nnt=0
+      integer                               :: PrintTime=0
+      integer                               :: binlength=0
+      integer                               :: binstart=0
       !I'm writing these as integers due to some mismatch on how to write boolean between fortrann and c++
       integer                               :: retarded=0
-      integer                               :: nnt_meas=0
       integer                               :: quickloops=0
    end type QMC
 

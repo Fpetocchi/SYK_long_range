@@ -12,9 +12,9 @@
  NSITE=4                                       !Number of inequivalent sites in the lattice.
  EXPAND=T                                      !Flag to use a single impurity solution for all the sites of the lattice. Only indexes for site 1 readed.
  ROTATE_F=T                                    !Solve the Fermionic impurity problem in the basis where H(R=0) is diagonal.
- ROTATE_B=T                                    !Solve Bosonic the impurity problem in the basis where H(R=0) is diagonal.
+ ROTATE_B=T                                    !Solve the Bosonic impurity problem in the basis where H(R=0) is diagonal.
  AFM=F                                         !Flag to use  the AFM self-consistency by flipping the spin. Requires input with doubled unit cell.
- CMPLX_WANN=T                                  !Flag to assume the presence of complex Wannier function.
+ GTAU_K=T                                      !Flag to perform the iw->tau FT of the Green's function in K space.
  NAME_1=Ru                                     !Chemical species of the site number 1
  NORB_1=3                                      !Number of orbitals in site number 1
  ORBS_1=1,2,3                                  !Lattice orbital indexes of site number 1
@@ -29,9 +29,9 @@
 
  #---------------------------------------------#
 
- BETA=35.000000                                !Inverse temperature in 1/eV.
+ BETA=40.000000                                !Inverse temperature in 1/eV.
  MAX_WMATS=150.000000                          !Maximum value of the Matsubara frequency mesh.
- TAU_UNIF=F                                    !Flag to use a non-tau_uniform mesh on the imaginary time axis.
+ TAU_UNIF=F                                    !Flag to use a uniform mesh on the imaginary time axis. Only internal for GW.
  NREAL=2000                                    !Number of points on the real frequency axis.
  MAX_WREAL=10.000000                           !Maximum absolute value of the real frequency mesh.
  ETA=5.000000E-02                              !Real frequency broadening.
@@ -40,7 +40,7 @@
  #---------------------------------------------#
 
  MU=0.000000                                   !Chemical potential.
- N_READ_LAT=16.00000                           !Target density on the lattice. Lookup is switched on to this value if its >0d0. Otherwise mu will be kept fixed.
+ N_READ_LAT=4.000000                           !Target density on the lattice. Lookup is switched on to this value if its >0d0. Otherwise mu will be kept fixed.
  N_READ_LAT_LOC=T                              !Flag to restrict the lattice density lookup to the ORBS_1 indexes corresponding to the solved impurity.
  N_QUICK=1                                     !Integer flag to switch on the quick density lookup within the solver.
  N_ERR=1.000000E-03                            !Relative error on the target density. Better if not lower than 1e-3.
@@ -53,7 +53,7 @@
  U_FULL=T                                      !Flag to use all the off-diagonal components of SPEX Ucrpa or only the physical ones.
  U_MODEL=F                                     !Flag to build a model interaction.
  U_SPEX=T                                      !Flag to read SPEX Ucrpa.
- U_START=T                                     !Flag to use the local Ucrpa interaction as the effetive interaction in the 0th iteration.
+ U_START=F                                     !Flag to use the local Ucrpa interaction as the effetive interaction in the 0th iteration.
  U_AC=F                                        !Flag to force the analytic continuation on the SPEX interaction.
  U_THRES=1.000000E-08                          !Lowest magnitude considered in SPEX Ucrpa bare interaction (only for local interactions).
  K_DIAG=F                                      !Flag to use only one J-independent screening function.
@@ -62,6 +62,7 @@
 
  VH_TYPE=Ustatic_SPEX                          !Hartree term mismatch between GoWo and scGW. Available: Ubare, Ustatic, Ubare_SPEX(V_nodiv.DAT required), Ustatic_SPEX(V_nodiv.DAT required).
  VH_USE=F                                      !Flag to use the Hartree term correction between Tier-III and Tier-II, which is printed in PATH_INPUT even if not used.
+ VXC_IN=T                                      !Flag to include the Vxc potential inside the SigmaG0W0.
  DC_TYPE=Sloc                                  !Local GW self-energy which is replaced by DMFT self-energy. Avalibale: GlocWloc, Sloc.
  SIGMA_AC=F                                    !Flag to force the analytic continuation on the G0W0 self-energy.
  SMEAR_GAMMA=T                                 !Remove the interaction divergence at the Gamma point.
@@ -72,7 +73,7 @@
  ALPHA_SIGMA=1.000000                          !Fraction of the EDMFT self-energy substituted within the lattice one.
  ALPHA_HK=1.000000                             !Rescaling of the non-interacting Hamiltonian.
  CHI_DIAG=F                                    !Flag to remove the off-diagonal components of the local charge susceptibility.
- CDW_CHI=T                                     !Flag to remove the iw=0 divergence in the local charge susceptibility.
+ CDW_CHI=F                                     !Flag to remove the iw=0 divergence in the local charge susceptibility.
  CDW_PI=F                                      !Flag to remove the iw=0 divergence in the local polarization.
  MIX_D=0.500000                                !Fraction of the old iteration Delta.
  MIX_U=0.500000                                !Fraction of the old iteration curlyU.
@@ -93,16 +94,13 @@
  PRINT_GK=T                                    !Print the full k-dependent Green's function (binfmt) at each iteration (mandatory for CALC_TYPE=G0W0,scGW,GW+EDMFT).
  PRINT_SIGMAK=T                                !Print the full k-dependent self-energy (binfmt) at each iteration (always optional).
  STRUCTURE=orthorhombic_2                      !Available structures: cubic, fcc, bcc, hex, tetragonal, orthorhombic_[1,2], None to avoid.
- PATH_FUNCT=S                                  !Print interacting fields on high-symmetry points. Available fields: G=Green's function, S=self-energy, GS=both. None to avoid.
+ PATH_FUNCT=None                               !Print interacting fields on high-symmetry points. Available fields: G=Green's function, S=self-energy, GS=both. None to avoid.
  NK_PATH=60                                    !Number of segments between two hig-symmetry Kpoints.
- KK_CUTOFF=50                                  !Real frequency cutoff for Kramers Kronig integrals.
+ KK_CUTOFF=90.000000                           !Real frequency cutoff for Kramers Kronig integrals, should be twice the region of interest.
 
  #---------------------------------------------#
 
  MATCH_BETA=F                                  !Interpolate to new Beta.
- OLD_BETA=40                                   !Beta of the calculation from which Pimp and Sigma will be fitted from.
- OLD_BETA_PATH=data_40                         !Folder (within cwd) from which the old Beta Pimp and Sigma will be read from.
- OLD_BETA_MAX_WMATS=150                        !Maximum value of the Matsubara frequency mesh of the old Beta calculation.
 
  #---------------------------------------------#
 
@@ -110,14 +108,14 @@
  NTAU_F_IMP=1001                               !Number of points on the imaginary time axis for Fermionic impurity fields. Its gonna be made odd.
  NTAU_B_IMP=1001                               !Number of points on the imaginary time axis for Bosonic impurity fields. Its gonna be made odd.
  N_READ_IMP=4.000000                           !Target density in the impurity list. User cannot set this as its the the same density on within the impurity orbitals if EXPAND=F otherwise its N_READ_LAT/NSITE.
- NORDER=10                                     !Maximum perturbation order measured. Not used yet.
+ NORDER=10                                     !Maximum perturbation order measured. Not yet implemented.
  NMEAS=1000                                    !Sweeps where expensive measurments are not performed.
  NTHERM=100                                    !Thermalization cycles. Each cycle performs NMEAS sweeps.
- NSHIFT=100                                    !Sweeps where segment shifts are not proposed. Not proposed if >NMEAS.
- NSWAP=10                                      !Sweeps where global spin swaps are not proposed. Not proposed if >NMEAS.
+ NSHIFT=1                                      !Proposed segment shifts at each sweep.
+ NSWAP=1                                       !Proposed global spin swaps at each sweep.
+ N_NNT=1                                       !Measurment for n(tau)n(0) evaluation. Updated according to CALC_TYPE.
  PRINT_TIME=40                                 !Minutes that have to pass before observables are updated and stored.
  BINLENGTH=4                                   !If >0 the Green's function at itau will be the average within +/-binlength.
  BINSTART=50                                   !Tau points skipped at the beginning and end of the Green's function average.
  RETARDED=1                                    !Integer flag to include the frequency dependent part of the interaction. User cannot set this as its deduced from CALC_TYPE.
- NNT_MEAS=1                                    !Integer flag to switch on the measurement of the susceptibility. User cannot set this as its deduced from CALC_TYPE.
  TIME_1=60                                     !Minutes of solver runtime for site number 1

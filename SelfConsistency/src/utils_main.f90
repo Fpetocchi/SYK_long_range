@@ -78,6 +78,9 @@ module utils_main
    logical                                  :: calc_Sigmak=.false.
    logical                                  :: merge_Sigma=.false.
    !
+   real(8)                                  :: HartreeFact=1d0
+   logical                                  :: update_curlyG=.true.
+   !
    logical                                  :: sym_constrained=.false.
    logical                                  :: MultiTier=.false.
    logical                                  :: print_path=.false.
@@ -176,6 +179,8 @@ contains
       if(ExpandImpurity.and.(Nsite.eq.1)) stop "Cannot expand a single site."
       if(AFMselfcons.and.(Nsite.ne.2)) stop "AFM self-consistency is implemented only for lattices with 2 sites."
       if(RotateUloc.and.(.not.RotateHloc)) stop "Rotate the Bosonic impurity problem without rotating the Ferminic one is not allowed."
+      !
+      if(Hmodel)HartreeFact=0d0
       !
       causal_D = causal_D .and. (FirstIteration.ne.0)
       causal_U = causal_U .and. (FirstIteration.ne.0)
@@ -338,6 +343,8 @@ contains
       elseif(reg(path_funct).eq."None")then
          print_path=.false.
       endif
+      !
+      write(*,"(A)") "     HartreeFact: "//str(HartreeFact)
       !
       !Save changes to the inputfile
       call save_InputFile("input.in")
@@ -1289,6 +1296,7 @@ contains
 
    !---------------------------------------------------------------------------!
    !PURPOSE: Estimate the impurity self-energy for the 0th iteration
+   !this is the the local G0W0 contribution if present, the Hartree term otherwise
    !---------------------------------------------------------------------------!
    subroutine calc_SigmaGuess()
       !
@@ -1388,7 +1396,7 @@ contains
                if(.not.S_G0W0%status) stop "join_SigmaFull: S_G0W0 not properly initialized."
                !
                !$OMP PARALLEL DEFAULT(NONE),&
-               !$OMP SHARED(S_Full,S_G0W0,VH),&
+               !$OMP SHARED(S_Full,S_G0W0,VH,Vxc),&
                !$OMP PRIVATE(iorb,jorb,ik,iw,ispin)
                !$OMP DO
                do ispin=1,Nspin
@@ -1397,8 +1405,8 @@ contains
                         do iorb=1,S_Full%Norb
                            do jorb=1,S_Full%Norb
                               S_Full%wks(iorb,jorb,iw,ik,ispin) =  + S_G0W0%wks(iorb,jorb,iw,ik,ispin)   &
-                                                                   + VH(iorb,jorb)
-                                                                 ! - Vxc(iorb,jorb,ik,ispin)             & !fixed --> included in S_G0W0
+                                                                   + VH(iorb,jorb)                       &
+                                                                   - Vxc(iorb,jorb,ik,ispin)               !fixed --> included in S_G0W0
                            enddo
                         enddo
                      enddo
@@ -1419,7 +1427,7 @@ contains
                !
                !Remove local contributuin from G0W0 self-energy.
                !This is what was making Delta non-causal and its due to the not perfect S_G0W0dc
-               !here also the local contribution from Vxc_loc is also removed
+               !here, if Vxc is inside S_G0W0, also the local contribution from Vxc is removed
                do ik=1,S_G0W0%Nkpt
                   S_G0W0%wks(:,:,:,ik,:) = S_G0W0%wks(:,:,:,ik,:) - S_G0W0%ws
                enddo
@@ -1428,7 +1436,7 @@ contains
                S_GW%wks = S_GW%wks + S_G0W0%wks
                !
                !$OMP PARALLEL DEFAULT(NONE),&
-               !$OMP SHARED(S_Full,S_GW,S_G0W0dc,S_G0W0,VH),&
+               !$OMP SHARED(S_Full,S_GW,S_G0W0dc,S_G0W0,VH,Vxc),&
                !$OMP PRIVATE(iorb,jorb,ik,iw,ispin)
                !$OMP DO
                do ispin=1,Nspin
@@ -1437,8 +1445,8 @@ contains
                         do iorb=1,S_Full%Norb
                            do jorb=1,S_Full%Norb
                               S_Full%wks(iorb,jorb,iw,ik,ispin) =  + S_GW%wks(iorb,jorb,iw,ik,ispin)     & !self-consistently updated
-                                                                   + VH(iorb,jorb)
-                                                                 ! - Vxc(iorb,jorb,ik,ispin)             & !fixed --> included in S_G0W0
+                                                                   + VH(iorb,jorb)                       &
+                                                                   - Vxc(iorb,jorb,ik,ispin)               !fixed --> included in S_G0W0
                                                                  ! - S_G0W0dc%wks(iorb,jorb,iw,ik,ispin) & !fixed --> included in S_GW
                                                                  ! + S_G0W0%wks(iorb,jorb,iw,ik,ispin)   & !fixed --> included in S_GW
                            enddo
@@ -1461,39 +1469,30 @@ contains
          case("DMFT+statU","DMFT+dynU","EDMFT")
             !
             !
-            if(Iteration.eq.0)then
-               !
-               call clear_attributes(S_Full)
-               !
-            elseif(Iteration.gt.0)then
-               !
-               if(.not.S_DMFT%status) stop "join_SigmaFull: S_DMFT not properly initialized."
-               !
-               !$OMP PARALLEL DEFAULT(NONE),&
-               !$OMP SHARED(S_Full,S_DMFT),&
-               !$OMP PRIVATE(iorb,jorb,ik,iw,ispin)
-               !$OMP DO
-               do ispin=1,Nspin
-                  do ik=1,S_Full%Nkpt
-                     do iw=1,S_Full%Npoints
-                        do iorb=1,S_Full%Norb
-                           do jorb=1,S_Full%Norb
-                              S_Full%wks(iorb,jorb,iw,ik,ispin) = S_DMFT%ws(iorb,jorb,iw,ispin)-S_DMFT%N_s(iorb,jorb,int(Nspin/ispin))
-                           enddo
+            if(.not.S_DMFT%status) stop "join_SigmaFull: S_DMFT not properly initialized."
+            !
+            !$OMP PARALLEL DEFAULT(NONE),&
+            !$OMP SHARED(HartreeFact,S_Full,S_DMFT),&
+            !$OMP PRIVATE(iorb,jorb,ik,iw,ispin)
+            !$OMP DO
+            do ispin=1,Nspin
+               do ik=1,S_Full%Nkpt
+                  do iw=1,S_Full%Npoints
+                     do iorb=1,S_Full%Norb
+                        do jorb=1,S_Full%Norb
+                           S_Full%wks(iorb,jorb,iw,ik,ispin) = S_DMFT%ws(iorb,jorb,iw,ispin)-HartreeFact*S_DMFT%N_s(iorb,jorb,int(Nspin/ispin))
                         enddo
                      enddo
                   enddo
                enddo
-               !$OMP END DO
-               !$OMP END PARALLEL
-               !
-            endif
+            enddo
+            !$OMP END DO
+            !$OMP END PARALLEL
             !
             call FermionicKsum(S_Full)
             !
             !Print full k-dep self-energy: binfmt
             !Not dumping anything since S_DMFT is already present
-            !
             !
       end select
       !
@@ -2443,7 +2442,7 @@ contains
          call read_FermionicField(G0imp,reg(PrevItFolder)//"Solver_"//reg(SiteName(isite))//"/","G0_"//reg(SiteName(isite))//"_w")
          !
          !Adjust with the chemical potential if the solver has changed it
-         if(abs(G0imp%mu-muQMC).gt.1e-5)then
+         if((abs(G0imp%mu-muQMC).gt.1e-5).and.update_curlyG)then
             write(*,"(A)") new_line("A")//"     Updating the chemical potential of curlyG from "//str(G0imp%mu)//" to "//str(muQMC)
             do ispin=1,Nspin
                do iw=1,Nmats
@@ -2698,9 +2697,6 @@ contains
                do jspin=1,Nspin
                   do iorb=1,Norb
                      do jorb=1,Norb
-                        !
-                        ib1 = iorb + Norb*(iorb-1)
-                        ib2 = jorb + Norb*(jorb-1)
                         !
                         ChiMitau = ChiMitau + NNitau(iorb,jorb,ispin,jspin,:)*(-1d0)**(ispin-jspin)/4d0
                         !

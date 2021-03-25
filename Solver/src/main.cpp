@@ -35,12 +35,16 @@ int main(int argc, char *argv[])
    //.........................................................................//
    // Global Vars
    double Beta;
-   int Nspin,NtauF,NtauB,Norder,Nmeas,Ntherm,Nshift,Nswap,printTime;
+   int Nspin,NtauF,NtauB,Norder;
+   int Nmeas,Ntherm,Nshift,Nswap,Nnnt,printTime;
    //logical flags and compatibility typo fix
-   bool retarded,nnt_meas,quickloops,dichotomy,OrbSym;
-   int para_mode,ret_read,nnt_read,quick_read,sym_read;
+   bool paramagnet,retarded,quickloops,dichotomy;
+   int para_read,ret_read,quick_read;
    // Post-processing of the Green's function
    int binlength,binstart;
+   //Symmetrization type
+   bool OrbSym;
+   int sym_read;
    // Density lookup algorithm (dichotomy)
    int muIter;
    double density,muStep,muTime,muErr;
@@ -82,14 +86,15 @@ int main(int argc, char *argv[])
       find_param(argv[1], "NTAU_F_IMP" , NtauF     );
       find_param(argv[1], "NTAU_B_IMP" , NtauB     );
       find_param(argv[1], "NORDER"     , Norder    );
+      // Measurments
       find_param(argv[1], "NMEAS"      , Nmeas     );
       find_param(argv[1], "NTHERM"     , Ntherm    );
       find_param(argv[1], "NSHIFT"     , Nshift    );
       find_param(argv[1], "NSWAP"      , Nswap     );
+      find_param(argv[1], "N_NNT"      , Nnnt      );
       find_param(argv[1], "PRINT_TIME" , printTime );
-      find_param(argv[1], "PARAMAGNET" , para_mode ); //paramagnet = (para_read == 1) ? true : false;
+      find_param(argv[1], "PARAMAGNET" , para_read ); paramagnet = (para_read == 1) ? true : false;
       find_param(argv[1], "RETARDED"   , ret_read  ); retarded = (ret_read == 1) ? true : false;
-      find_param(argv[1], "NNT_MEAS"   , nnt_read  ); nnt_meas = (nnt_read == 1) ? true : false;
       // Post-processing of the Green's function
       find_param(argv[1], "BINLENGTH"  , binlength );
       find_param(argv[1], "BINSTART"   , binstart  );
@@ -115,11 +120,12 @@ int main(int argc, char *argv[])
          mpi.report(" Nmeas= "+str(Nmeas));
          mpi.report(" Ntherm= "+str(Ntherm));
          mpi.report(" Nshift= "+str(Nshift));
+         mpi.report(" Nswap= "+str(Nswap));
+         mpi.report(" Nnnt= "+str(Nnnt));
          mpi.report(" printTime= "+str(printTime)+"min");
          mpi.report(" retarded= "+str(retarded));
          mpi.report(" quickloops= "+str(quickloops));
-         mpi.report(" paramagnet= "+str(para_mode));
-         mpi.report(" nnt_meas= "+str(nnt_meas));
+         mpi.report(" paramagnet= "+str(paramagnet));
          mpi.report(" OrbSym= "+str(OrbSym));
          mpi.report(" debug= "+str(debug));
          if(binlength>0)
@@ -209,8 +215,7 @@ int main(int argc, char *argv[])
                }
             }
          }
-
-
+         //
       }
 
 
@@ -234,9 +239,9 @@ int main(int argc, char *argv[])
          if(PathExist(strcpy(new char[SiteDir[isite].length() + 1], SiteDir[isite].c_str())))
          {
             mpi.report(" Folder = "+SiteDir[isite]+" (Found).");
-            ImpurityList.push_back(ct_hyb( SiteName[isite], Beta, Nspin, SiteNorb[isite],
-                                           NtauF, NtauB, Norder, Nmeas, Ntherm, Nshift, Nswap,
-                                           para_mode, retarded, nnt_meas, SiteSetsNorb[isite],
+            ImpurityList.push_back(ct_hyb( SiteName[isite], Beta, Nspin, SiteNorb[isite], NtauF, NtauB,
+                                           Norder, Nmeas, Ntherm, Nshift, Nswap, Nnnt,
+                                           paramagnet, retarded, SiteSetsNorb[isite],
                                            printTime, std::vector<int> { binlength,binstart }, mpi ));
             ImpurityList[isite].init( SiteDir[isite]);
          }

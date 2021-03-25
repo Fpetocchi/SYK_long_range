@@ -2253,7 +2253,7 @@ contains
       type(FermionicField),intent(inout)    :: SigmaGW
       type(FermionicField),intent(in)       :: SigmaGW_DC
       type(FermionicField),intent(in)       :: SigmaImp
-      real(8),intent(in)                    :: coeff
+      real(8),intent(in)                    :: coeff(2)
       integer,allocatable,intent(in)        :: orbs(:,:)
       character(len=*),intent(in)           :: DC_type
       logical,intent(in)                    :: OffDiag
@@ -2332,12 +2332,12 @@ contains
                         !
                         if(localDC)then
                            SigmaGW%wks(i_loc,j_loc,iw,ik,ispin) = SigmaGW%wks(i_loc,j_loc,iw,ik,ispin)              &
-                                                                - coeff*SigmaGW%ws(i_loc,j_loc,iw,ispin)            &
-                                                                + coeff*(SigmaImp%ws(i_loc,j_loc,iw,ispin)-2d0*SigmaImp%N_s(i_loc,j_loc,ispin))
+                                                                - coeff(1)*SigmaGW%ws(i_loc,j_loc,iw,ispin)            &
+                                                                + coeff(1)*(SigmaImp%ws(i_loc,j_loc,iw,ispin)-coeff(2)*SigmaImp%N_s(i_loc,j_loc,ispin))
                         else
                            SigmaGW%wks(i_loc,j_loc,iw,ik,ispin) = SigmaGW%wks(i_loc,j_loc,iw,ik,ispin)              &
-                                                                - coeff*SigmaGW_DC%ws(i_loc,j_loc,iw,ispin)         &
-                                                                + coeff*(SigmaImp%ws(i_loc,j_loc,iw,ispin)-2d0*SigmaImp%N_s(i_loc,j_loc,ispin))
+                                                                - coeff(1)*SigmaGW_DC%ws(i_loc,j_loc,iw,ispin)         &
+                                                                + coeff(1)*(SigmaImp%ws(i_loc,j_loc,iw,ispin)-coeff(2)*SigmaImp%N_s(i_loc,j_loc,ispin))
                         endif
                         !
                      enddo
