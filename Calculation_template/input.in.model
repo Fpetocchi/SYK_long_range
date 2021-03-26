@@ -1,4 +1,4 @@
- CALC_TYPE=EDMFT                            !Calculation type. Avalibale: G0W0, scGW, DMFT+statU, DMFT+dynU, EDMFT, GW+EDMFT.
+ CALC_TYPE=EDMFT                               !Calculation type. Avalibale: G0W0, scGW, DMFT+statU, DMFT+dynU, EDMFT, GW+EDMFT.
 
  #---------------------------------------------#
 
@@ -19,7 +19,7 @@
  ROTATE_F=F                                    !Solve the Fermionic impurity problem in the basis where H(R=0) is diagonal.
  ROTATE_B=F                                    !Solve the Bosonic impurity problem in the basis where H(R=0) is diagonal.
  AFM=F                                         !Flag to use  the AFM self-consistency by flipping the spin. Requires input with doubled unit cell.
- GTAU_K=T                                      !Flag to assume the presence of complex Wannier function.
+ GTAU_K=T                                      !Flag to perform the iw->tau FT of the Green's function in K space.
  NAME_1=Sq                                     !Chemical species of the site number 1
  NORB_1=1                                      !Number of orbitals in site number 1
  ORBS_1=1                                      !Lattice orbital indexes of site number 1
@@ -47,7 +47,7 @@
  N_READ_LAT=1.000000                           !Target density on the lattice. Lookup is switched on to this value if its >0d0. Otherwise mu will be kept fixed.
  N_QUICK=1                                     !Integer flag to switch on the quick density lookup within the solver.
  N_ERR=1.000000E-03                            !Relative error on the target density. Better if not lower than 1e-3.
- MU_STEP=0.500000                              !Initial chemical potential step in the density lookup.
+ MU_STEP=0.100000                              !Initial chemical potential step in the density lookup.
  MU_ITER=50                                    !Maximum number of iterations in the density lookup.
  MU_TIME=0.500000                              !Minutes of solver runtime in the density lookup.
 
@@ -80,7 +80,7 @@
  ALPHA_SIGMA=1.000000                          !Fraction of the EDMFT self-energy substituted within the lattice one.
  ALPHA_HK=1.000000                             !Rescaling of the non-interacting Hamiltonian.
  CHI_DIAG=F                                    !Flag to remove the off-diagonal components of the local charge susceptibility.
- CDW_CHI=F                                     !Flag to remove the iw=0 divergence in the local charge susceptibility.
+ CDW_CHI=T                                     !Flag to remove the iw=0 divergence in the local charge susceptibility.
  CDW_PI=F                                      !Flag to remove the iw=0 divergence in the local polarization.
  MIX_D=0.000000                                !Fraction of the old iteration Delta.
  MIX_U=0.000000                                !Fraction of the old iteration curlyU.
@@ -114,16 +114,16 @@
  NIMP=1                                        !Number of impurities solved. User cannot set this as its deduced from NSITE and EXPAND.
  NTAU_F_IMP=1001                               !Number of points on the imaginary time axis for Fermionic impurity fields. Its gonna be made odd.
  NTAU_B_IMP=1001                               !Number of points on the imaginary time axis for Bosonic impurity fields. Its gonna be made odd.
- N_READ_IMP=0.000000                           !Target density in the impurity list. User cannot set this as its the the same density on within the impurity orbitals if EXPAND=F otherwise its N_READ_LAT/NSITE.
+ N_READ_IMP=1.000000                           !Target density in the impurity list. User cannot set this as its the the same density on within the impurity orbitals if EXPAND=F otherwise its N_READ_LAT/NSITE.
  NORDER=10                                     !Maximum perturbation order measured. Not yet implemented.
  NMEAS=1000                                    !Sweeps where expensive measurments are not performed.
  NTHERM=1000                                   !Thermalization cycles. Each cycle performs NMEAS sweeps.
  NSHIFT=1                                      !Proposed segment shifts at each sweep.
  NSWAP=0                                       !Proposed global spin swaps at each sweep.
- N_NNT=1                                       !Measurment for n(tau)n(0) evaluation. Updated according to CALC_TYPE.
+ N_NNT=2000                                    !Measurment for n(tau)n(0) evaluation. Updated according to CALC_TYPE.
  PRINT_TIME=20                                 !Minutes that have to pass before observables are updated and stored.
  BINLENGTH=4                                   !If >0 the Green's function at itau will be the average within +/-binlength.
  BINSTART=100                                  !Tau points skipped at the beginning and end of the Green's function average.
  RETARDED=1                                    !Integer flag to include the frequency dependent part of the interaction. User cannot set this as its deduced from CALC_TYPE.
- TIME_1=4                                      !Minutes of solver runtime for site number 1
+ TIME_1=10                                     !Minutes of solver runtime for site number 1
 

@@ -2554,6 +2554,11 @@ contains
             enddo
          enddo
          call DeallocateBosonicField(curlyU)
+         !
+         !The magnetization will be given only by the self-energy
+         Simp%N_s(:,:,1) = (Simp%N_s(:,:,1)+Simp%N_s(:,:,2))/2d0
+         Simp%N_s(:,:,2) = Simp%N_s(:,:,1)
+         !
          call dump_Matrix(Simp%N_s(:,:,1),reg(PrevItFolder)//"Solver_"//reg(SiteName(isite))//"/HartreeU_"//reg(SiteName(isite))//"_s1.DAT")
          call dump_Matrix(Simp%N_s(:,:,2),reg(PrevItFolder)//"Solver_"//reg(SiteName(isite))//"/HartreeU_"//reg(SiteName(isite))//"_s2.DAT")
          !
@@ -3049,6 +3054,22 @@ contains
             call interpolate2Beta(S_DMFT,Beta_Match,"imp",ExpandImpurity)
             call dump_FermionicField(S_DMFT,reg(PrevItFolder),"Simp_w")
             call DeallocateFermionicField(S_DMFT)
+            !
+            !Read&write instead of execute_command
+            allocate(HartreeU(Crystal%Norb,Crystal%Norb))
+            allocate(Nimp(Crystal%Norb,Crystal%Norb))
+            do ispin=1,Nspin
+               !
+               HartreeU=czero
+               call read_Matrix(HartreeU,reg(Beta_Match%Path)//"HartreeU_s"//str(ispin)//".DAT")
+               call dump_Matrix(HartreeU,reg(PrevItFolder)//"HartreeU_s"//str(ispin)//".DAT")
+               !
+               Nimp=czero
+               call read_Matrix(Nimp,reg(Beta_Match%Path)//"Nimp_s"//str(ispin)//".DAT")
+               call dump_Matrix(Nimp,reg(PrevItFolder)//"Nimp_s"//str(ispin)//".DAT")
+               !
+            enddo
+            deallocate(HartreeU,Nimp)
             !
          case("GW+EDMFT")
             !
