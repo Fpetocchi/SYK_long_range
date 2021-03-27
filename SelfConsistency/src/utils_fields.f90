@@ -2433,6 +2433,8 @@ contains
                      !
                      if((.not.OffDiag).and.(.not.((i_loc.eq.k_loc).and.(l_loc.eq.j_loc))))cycle
                      !
+                     !if(.not.((i_loc.eq.k_loc).and.(l_loc.eq.j_loc)))cycle
+                     !
                      !if((i_loc.eq.k_loc).and.(l_loc.eq.j_loc))then
                      !
                      do iw=1,Nmats
