@@ -447,7 +447,7 @@ contains
       call build_kpt(Nkpt3,kpt)
       !
       !recover the vectors in real space and allocate hopping in real space
-      if(.not.Wig_stored)call calc_wignerseiz(Nkpt,Nkpt3)
+      if(.not.Wig_stored)call calc_wignerseiz(Nkpt3)
       allocate(Rsorted(Nwig));Rsorted = radiuswig
       allocate(Rorder(Nwig))
       call sort_array(Rsorted,Rorder)
@@ -468,7 +468,8 @@ contains
          !
          !increasing range
          if(iwig.gt.2)then
-            if(Rsorted(Rorder(iwig)).gt.Rsorted(Rorder(iwig-1))) idist=idist+1
+            !if(Rsorted(Rorder(iwig)).gt.Rsorted(Rorder(iwig-1))) idist=idist+1
+            if((Rsorted(Rorder(iwig))-Rsorted(Rorder(iwig-1))).gt.1e-5) idist=idist+1
             if(idist.gt.Trange) exit loopwig
          endif
          !
@@ -744,17 +745,16 @@ contains
    ! nrdeg(2*nkpt) : degeneracy
    !TEST ON: 16-10-2020
    !---------------------------------------------------------------------------!
-   subroutine calc_wignerseiz(nkpt,nkpt3)
+   subroutine calc_wignerseiz(nkpt3)
       !
       use utils_misc
       implicit none
       !
-      integer,intent(in)                    :: nkpt
       integer,intent(in)                    :: nkpt3(3)
       !
+      integer                               :: Nkpt
       integer                               :: ir1,ir2,ir3,irsc1,irsc2,irsc3
-      integer                               :: i,i0
-      integer                               :: rscan(3),rshel(3),dims(3)
+      integer                               :: i,i0,iwig
       integer,parameter                     :: nshell=2
       real(8)                               :: rtmp(3),rtmpsc(3),dr(3)
       real(8),allocatable                   :: dist(:),radiuswig_tmp(:)
@@ -765,62 +765,51 @@ contains
       if(verbose)write(*,"(A)") "---- calc_wignerseiz"
       if(.not.Lat_stored)stop "calc_wignerseiz: Lattice positions not stored. Either call read_lattice(path) or read_Hk(path,Hk,kpt)."
       !
-      !public,protected
-      allocate(rvecwig_tmp(3,10*nkpt));rvecwig_tmp=0
-      allocate(nrdegwig_tmp(10*nkpt));nrdegwig_tmp=0
-      allocate(radiuswig_tmp(10*nkpt));radiuswig_tmp=0d0
+      Nkpt = nkpt3(1)*nkpt3(2)*nkpt3(3)
       !
-      rscan=nkpt3
-      if(nkpt3(1).eq.1)rscan(1)=0
-      if(nkpt3(2).eq.1)rscan(2)=0
-      if(nkpt3(3).eq.1)rscan(3)=0
-      rshel=nshell
-      if(nkpt3(1).eq.1)rshel(1)=0
-      if(nkpt3(2).eq.1)rshel(2)=0
-      if(nkpt3(3).eq.1)rshel(3)=0
-      dims=(2*nshell+1)
-      if(nkpt3(1).eq.1)dims(1)=1
-      if(nkpt3(2).eq.1)dims(2)=1
-      if(nkpt3(3).eq.1)dims(3)=1
+      allocate(rvecwig_tmp(3,100*nkpt));rvecwig_tmp=0
+      allocate(nrdegwig_tmp(100*nkpt));nrdegwig_tmp=0
+      allocate(radiuswig_tmp(100*nkpt));radiuswig_tmp=0d0
       !
-      !OLD
       !this i0 corresponds to irsc1=irsc2=irsc3=0
-      !allocate(dist((2*nshell+1)**3))
-      !i0=nshell*(1+(2*nshell+1)*(1+(2*nshell+1)))+1
+      allocate(dist((2*nshell+1)**3))
+      i0=nshell*(1+(2*nshell+1)*(1+(2*nshell+1)))+1
       !
-      !NEW
-      allocate(dist(dims(1)*dims(2)*dims(3)))
-      i0=int((dims(1)*dims(2)*dims(3))/2)+1
-      !
-      !
-      nwig=0
-      do ir1=-rscan(1),+rscan(1)
-         do ir2=-rscan(2),+rscan(2)
-            do ir3=-rscan(3),+rscan(3)
+      iwig=0
+      do ir1=-nkpt3(1),+nkpt3(1)
+         do ir2=-nkpt3(2),+nkpt3(2)
+            do ir3=-nkpt3(3),+nkpt3(3)
+               !
                rtmp(:)=matmul(lat,(/ir1,ir2,ir3/))
                i=0
                !
-               do irsc1=-rshel(1),+rshel(1)
-                  do irsc2=-rshel(2),+rshel(2)
-                     do irsc3=-rshel(3),+rshel(3)
+               do irsc1=-nshell,+nshell
+                  do irsc2=-nshell,+nshell
+                     do irsc3=-nshell,+nshell
+                        !
                         i=i+1
-                        rtmpsc(:)=matmul(lat,(/rscan(1)*irsc1,rscan(2)*irsc2,rscan(3)*irsc3/))
+                        rtmpsc(:)=matmul(lat,(/nkpt3(1)*irsc1,nkpt3(2)*irsc2,nkpt3(3)*irsc3/))
                         dr(:)=rtmp(:)-rtmpsc(:)
                         dist(i)=sum(dr(:)**2)
                         if((i.eq.i0).and.(.not.all([irsc1,irsc2,irsc3].eq.[0,0,0])))stop "calc_wignerseiz: wrong index of R=0 vector."
+                        !
                      enddo ! irsc3
                   enddo ! irsc2
                enddo ! irsc1
                !
                distmin=minval(dist(:))
                if (abs(distmin-dist(i0)).le.epsWig) then
-                  nwig=nwig+1
-                  if (nwig.gt.10*nkpt) stop "calc_wignerseiz: nwig>10*nkpt."
-                  rvecwig_tmp(:,nwig)=(/ir1,ir2,ir3/)
-                  nrdegwig_tmp(nwig)=count(abs(distmin-dist(:)).le.epsWig)
-                  radiuswig_tmp(nwig)=sqrt(dble(dot_product([ir1,ir2,ir3],[ir1,ir2,ir3])))
-                  if(all([ir1,ir2,ir3].eq.[0,0,0]))wig0=nwig
-                  !if(verbose)write(*,*) nwig,rvecwig_tmp(:,nwig),nrdegwig(nwig)
+                  !
+                  iwig=iwig+1
+                  if (iwig.gt.100*nkpt) stop "calc_wignerseiz: iwig>100*nkpt."
+                  !
+                  rvecwig_tmp(:,iwig)=(/ir1,ir2,ir3/)
+                  nrdegwig_tmp(iwig)=count(abs(distmin-dist(:)).le.epsWig)
+                  radiuswig_tmp(iwig)=sqrt(dble(dot_product(rtmp,rtmp)))
+                  if(all([ir1,ir2,ir3].eq.[0,0,0]))wig0=iwig
+                  !
+                  if(verbose)write(*,*) iwig,rvecwig_tmp(:,iwig),nrdegwig_tmp(iwig)
+                  !
                endif
                !
             enddo
@@ -828,12 +817,13 @@ contains
       enddo
       deallocate(dist)
       !
-      if (abs(sum(1d0/nrdegwig_tmp(1:nwig))-nkpt).gt.epsWig) then
-         write(*,"(A,F)") "Error: sum(1/nrdeg(:))=",sum(1d0/nrdegwig_tmp(1:nwig))
+      if (abs(sum(1d0/nrdegwig_tmp(1:iwig))-nkpt).gt.epsWig) then
+         write(*,"(A,F)") "Error: sum(1/nrdeg(:))=",sum(1d0/nrdegwig_tmp(1:iwig))
          stop "calc_wignerseiz: nrdeg failed."
       endif
       !
       !public,protected
+      Nwig = iwig
       allocate(rvecwig(3,nwig)) ; rvecwig=rvecwig_tmp(:,1:nwig)
       allocate(nrdegwig(nwig))  ; nrdegwig=nrdegwig_tmp(1:nwig)
       allocate(radiuswig(nwig)) ; radiuswig=radiuswig_tmp(1:nwig)
@@ -890,7 +880,7 @@ contains
       if(.not.Wig_stored)then
          if(verbose)write(*,"(A)") "     Calculating Wigner Seiz."
          call assert_shape(nkpt3_orig,[3],"wannierinterpolation_d1","nkpt3_orig")
-         call calc_wignerseiz(size(kpt_orig,dim=2),nkpt3_orig)
+         call calc_wignerseiz(nkpt3_orig)
       endif
       !
       !
@@ -979,7 +969,7 @@ contains
       if(.not.Wig_stored)then
          if(verbose)write(*,"(A)") "     Calculating Wigner Seiz."
          call assert_shape(nkpt3_orig,[3],"wannierinterpolation_d2","nkpt3_orig")
-         call calc_wignerseiz(size(kpt_orig,dim=2),nkpt3_orig)
+         call calc_wignerseiz(nkpt3_orig)
       endif
       !
       !
@@ -1073,7 +1063,7 @@ contains
       if(.not.Wig_stored)then
          if(verbose)write(*,"(A)") "     Calculating Wigner Seiz."
          call assert_shape(nkpt3_orig,[3],"wannierinterpolation_d3","nkpt3_orig")
-         call calc_wignerseiz(size(kpt_orig,dim=2),nkpt3_orig)
+         call calc_wignerseiz(nkpt3_orig)
       endif
       !
       !
@@ -1174,7 +1164,7 @@ contains
       if(.not.Wig_stored)then
          if(verbose)write(*,"(A)") "     Calculating Wigner Seiz."
          call assert_shape(nkpt3_orig,[3],"wannier_K2R_NN","nkpt3_orig")
-         call calc_wignerseiz(size(kpt_orig,dim=2),nkpt3_orig)
+         call calc_wignerseiz(nkpt3_orig)
       endif
       !
       ! Size checks on Kpoint vectors
@@ -1261,7 +1251,7 @@ contains
       if(.not.Wig_stored)then
          if(verbose)write(*,"(A)") "     Calculating Wigner Seiz."
          call assert_shape(nkpt3_orig,[3],"wannierinterpolation","nkpt3_orig")
-         call calc_wignerseiz(size(kpt_orig,dim=2),nkpt3_orig)
+         call calc_wignerseiz(nkpt3_orig)
       endif
       !
       !
@@ -1323,7 +1313,7 @@ contains
       if(.not.Wig_stored)then
          if(verbose)write(*,"(A)") "     Calculating Wigner Seiz."
          call assert_shape(nkpt3_orig,[3],"wannierinterpolation","nkpt3_orig")
-         call calc_wignerseiz(size(kpt_orig,dim=2),nkpt3_orig)
+         call calc_wignerseiz(nkpt3_orig)
       endif
       !
       !
@@ -1388,7 +1378,7 @@ contains
       if(.not.Wig_stored)then
          if(verbose)write(*,"(A)") "     Calculating Wigner Seiz."
          call assert_shape(nkpt3_orig,[3],"wannierinterpolation","nkpt3_orig")
-         call calc_wignerseiz(size(kpt_orig,dim=2),nkpt3_orig)
+         call calc_wignerseiz(nkpt3_orig)
       endif
       !
       !
@@ -1461,7 +1451,7 @@ contains
       if(.not.Wig_stored)then
          if(verbose)write(*,"(A)") "     Calculating Wigner Seiz."
          call assert_shape(nkpt3_orig,[3],"wannierinterpolation","nkpt3_orig")
-         call calc_wignerseiz(size(kpt_intp,dim=2),nkpt3_orig)
+         call calc_wignerseiz(nkpt3_orig)
       endif
       !
       !
@@ -1521,7 +1511,7 @@ contains
       if(.not.Wig_stored)then
          if(verbose)write(*,"(A)") "     Calculating Wigner Seiz."
          call assert_shape(nkpt3_orig,[3],"wannierinterpolation","nkpt3_orig")
-         call calc_wignerseiz(size(kpt_intp,dim=2),nkpt3_orig)
+         call calc_wignerseiz(nkpt3_orig)
       endif
       !
       !
@@ -1584,7 +1574,7 @@ contains
       if(.not.Wig_stored)then
          if(verbose)write(*,"(A)") "     Calculating Wigner Seiz."
          call assert_shape(nkpt3_orig,[3],"wannierinterpolation","nkpt3_orig")
-         call calc_wignerseiz(size(kpt_intp,dim=2),nkpt3_orig)
+         call calc_wignerseiz(nkpt3_orig)
       endif
       !
       !
@@ -1659,7 +1649,21 @@ contains
       select case(reg(structure))
          case default
             !
-            stop "Available structures: cubic_[2,3], fcc, bcc, hex, tetragonal, orthorhombic_[1,2]."
+            stop "Available structures: triangular, cubic_[2,3], fcc, bcc, hex, tetragonal, orthorhombic_[1,2]."
+            !
+         case("triangular")
+            !
+            Gamma = [     0d0,     0d0,     0d0 ]
+            M     = [     0d0,1d0/sqrt(3d0),0d0 ]
+            K     = [ 2d0/3d0,     0d0,     0d0 ]
+            !
+            allocate(Kpoints(3,4));Kpoints=0d0
+            Kpoints(:,1) = Gamma
+            Kpoints(:,2) = M
+            Kpoints(:,3) = K
+            Kpoints(:,4) = Gamma
+            write(*,"(A)") "     structure: simple-triangular (2D)."
+            write(*,"(A)") "     path: GMKG"
             !
          case("cubic_2")
             !

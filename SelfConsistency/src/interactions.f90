@@ -1814,7 +1814,7 @@ contains
       call cpu_time(start)
       !
       !recover the vectors in real space and allocate interaction in real space
-      if(.not.Wig_stored)call calc_wignerseiz(Lttc%Nkpt,Lttc%Nkpt3)
+      if(.not.Wig_stored)call calc_wignerseiz(Lttc%Nkpt3)
       allocate(Rsorted(Nwig));Rsorted = radiuswig
       allocate(Rorder(Nwig))
       call sort_array(Rsorted,Rorder)
@@ -1963,7 +1963,7 @@ contains
       call cpu_time(start)
       !
       !recover the vectors in real space and allocate interaction in real space
-      if(.not.Wig_stored)call calc_wignerseiz(Lttc%Nkpt,Lttc%Nkpt3)
+      if(.not.Wig_stored)call calc_wignerseiz(Lttc%Nkpt3)
       allocate(Rsorted(Nwig));Rsorted = radiuswig
       allocate(Rorder(Nwig))
       call sort_array(Rsorted,Rorder)
