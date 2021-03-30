@@ -2431,9 +2431,9 @@ contains
                      ib_loc = k_loc + Norb*(i_loc-1)
                      jb_loc = l_loc + Norb*(j_loc-1)
                      !
-                     if((.not.OffDiag).and.(.not.((i_loc.eq.k_loc).and.(l_loc.eq.j_loc))))cycle
+                     !if((.not.OffDiag).and.(.not.((i_loc.eq.k_loc).and.(l_loc.eq.j_loc))))cycle
                      !
-                     !if(.not.((i_loc.eq.k_loc).and.(l_loc.eq.j_loc)))cycle
+                     if(.not.((i_loc.eq.k_loc).and.(l_loc.eq.j_loc)))cycle
                      !
                      !if((i_loc.eq.k_loc).and.(l_loc.eq.j_loc))then
                      !

@@ -329,7 +329,7 @@ contains
       call add_separator()
       call parse_input_variable(EqvGWndx%para,"PARAMAGNET",InputFile,default=1,comment="If =1 spin symmetry is enforced if =2 the solver will copy the closer to half-filling if =0 spin is left free.")
       call parse_input_variable(EqvGWndx%hseed,"H_SEED",InputFile,default=0d0,comment="Seed to break spin symmetry (persistent if non zero).")
-      call parse_input_variable(sym_mode,"SYM_MODE",InputFile,default=2,comment="If =1 only the lattice orbitals will be symmetrized, if =2 also the corrssponding n(tau) inside the solver, if =3 only n(tau).")
+      call parse_input_variable(sym_mode,"SYM_MODE",InputFile,default=2,comment="If =1 only the lattice orbitals will be symmetrized, if =2 also the corresponding n(tau) inside the solver, if =3 only n(tau). Ineffective if =0 or if EQV_SETS=0.")
       call parse_input_variable(EqvGWndx%Nset,"EQV_SETS",InputFile,default=1,comment="Number of sets of locally equivalent lattice orbitals.")
       paramagnet = EqvGWndx%para.gt.0
       if(EqvGWndx%Nset.gt.0)then
@@ -512,7 +512,7 @@ contains
       call parse_input_variable(Solver%Ntherm,"NTHERM",InputFile,default=100,comment="Thermalization cycles. Each cycle performs NMEAS sweeps.")
       call parse_input_variable(Solver%Nshift,"NSHIFT",InputFile,default=1,comment="Proposed segment shifts at each sweep.")
       call parse_input_variable(Solver%Nswap,"NSWAP",InputFile,default=1,comment="Proposed global spin swaps at each sweep.")
-      call parse_input_variable(Solver%N_nnt,"N_NNT",InputFile,default=100,comment="Measurment for n(tau)n(0) evaluation. Updated according to CALC_TYPE.")
+      call parse_input_variable(Solver%N_nnt,"N_NNT",InputFile,default=2*Solver%NtauB,comment="Measurment for n(tau)n(0) evaluation. Updated according to CALC_TYPE. Should be either =1 or 2*NTAU_B_IMP.")
       if(.not.bosonicSC)Solver%N_nnt=0
       call parse_input_variable(Solver%PrintTime,"PRINT_TIME",InputFile,default=10,comment="Minutes that have to pass before observables are updated and stored.")
       call parse_input_variable(Solver%binlength,"BINLENGTH",InputFile,default=4,comment="If >0 the Green's function at itau will be the average within +/-binlength.")

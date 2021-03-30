@@ -956,22 +956,23 @@ contains
             enddo
          endif
          !
+         call add_separator()
+         do isite=1,Nsite
+            call append_to_input_list(EqvImpndx(isite)%Nset,"EQV_"//str(isite)//"_SETS","Number of sets of locally equivalent orbitals in site number "//str(isite)) !User cannot set the EQV_IMP_* fields as they are deduced from EQV_*, EXPAND and ROTATE_F.
+            if(EqvImpndx(isite)%Nset.gt.0)then
+               do iset=1,EqvImpndx(isite)%Nset
+                  call append_to_input_list(EqvImpndx(isite)%SetNorb(iset),"EQV_"//str(isite)//"_NORB_"//str(iset),"Number of equivalent orbitals in the set number "//str(iset)//" in site number "//str(isite))
+               enddo
+               do iset=1,EqvImpndx(isite)%Nset
+                  call append_to_input_list(EqvImpndx(isite)%SetOrbs(iset,1:EqvImpndx(isite)%SetNorb(iset)),"EQV_"//str(isite)//"_ORBS_"//str(iset),"Orbital indexes of equivalent set number "//str(iset)//" in site number "//str(isite))
+               enddo
+            endif
+            if(ExpandImpurity.or.AFMselfcons)exit
+         enddo
+         !
       endif
       !
       !update input file
-      call add_separator()
-      do isite=1,Nsite
-         call append_to_input_list(EqvImpndx(isite)%Nset,"EQV_"//str(isite)//"_SETS","Number of sets of locally equivalent orbitals in site number "//str(isite)) !User cannot set the EQV_IMP_* fields as they are deduced from EQV_*, EXPAND and ROTATE_F.
-         if(EqvImpndx(isite)%Nset.gt.0)then
-            do iset=1,EqvImpndx(isite)%Nset
-               call append_to_input_list(EqvImpndx(isite)%SetNorb(iset),"EQV_"//str(isite)//"_NORB_"//str(iset),"Number of equivalent orbitals in the set number "//str(iset)//" in site number "//str(isite))
-            enddo
-            do iset=1,EqvImpndx(isite)%Nset
-               call append_to_input_list(EqvImpndx(isite)%SetOrbs(iset,1:EqvImpndx(isite)%SetNorb(iset)),"EQV_"//str(isite)//"_ORBS_"//str(iset),"Orbital indexes of equivalent set number "//str(iset)//" in site number "//str(isite))
-            enddo
-         endif
-         if(ExpandImpurity.or.AFMselfcons)exit
-      enddo
       call save_InputFile("input.in")
       !
    end subroutine update_ImpEqvOrbs
@@ -1702,9 +1703,11 @@ contains
          if(causal_D)call loc2imp(DeltaCorr,D_correction,Orbs,U=Rot)
          deallocate(Rot)
          !
-         call symmetrize_imp(Gloc,OlocEig(:,isite))
-         call symmetrize_imp(SigmaImp,OlocEig(:,isite))
-         if(causal_D)call symmetrize_imp(DeltaCorr,OlocEig(:,isite))
+         if(sym_mode.gt.1)then
+            call symmetrize_imp(Gloc,OlocEig(:,isite))
+            call symmetrize_imp(SigmaImp,OlocEig(:,isite))
+            if(causal_D)call symmetrize_imp(DeltaCorr,OlocEig(:,isite))
+         endif
          !
       else
          !
@@ -2320,7 +2323,7 @@ contains
          !
          !Insert or Expand to the Lattice basis
          if(RotateHloc)then
-            call symmetrize_imp(densityQMC(:,:,:,isite),OlocEig(:,isite))
+            if(sym_mode.gt.1)call symmetrize_imp(densityQMC(:,:,:,isite),OlocEig(:,isite))
             call imp2loc(densityDMFT,dcmplx(densityQMC(:,:,:,isite),0d0),Orbs,ExpandImpurity,AFMselfcons,U=OlocRotDag)
          else
             call imp2loc(densityDMFT,dcmplx(densityQMC(:,:,:,isite),0d0),Orbs,ExpandImpurity,AFMselfcons)
@@ -2411,7 +2414,7 @@ contains
          !
          !Expand to the Lattice basis
          if(RotateHloc)then
-            call symmetrize_imp(Gimp,OlocEig(:,isite))
+            if(sym_mode.gt.1)call symmetrize_imp(Gimp,OlocEig(:,isite))
             call imp2loc(G_DMFT,Gimp,Orbs,ExpandImpurity,AFMselfcons,U=OlocRotDag)
          else
             call imp2loc(G_DMFT,Gimp,Orbs,ExpandImpurity,AFMselfcons)
@@ -2564,7 +2567,7 @@ contains
          !
          !Expand to the Lattice basis
          if(RotateHloc)then
-            call symmetrize_imp(Simp,OlocEig(:,isite))
+            if(sym_mode.gt.1)call symmetrize_imp(Simp,OlocEig(:,isite))
             call imp2loc(S_DMFT,Simp,Orbs,ExpandImpurity,AFMselfcons,U=OlocRotDag)
          else
             call imp2loc(S_DMFT,Simp,Orbs,ExpandImpurity,AFMselfcons)

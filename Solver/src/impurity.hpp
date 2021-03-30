@@ -518,7 +518,7 @@ class ct_hyb
          if(OrbSym) orb_symm( N_tmp, SetsOrbs );
          accumulate_Vec( Nloc, N_tmp );
          //
-         //  Green's functions - symmetrization - step sum
+         // Green's functions - symmetrization - step sum
          if(paramagnet) spin_symm( G_tmp );
          if(OrbSym) orb_symm( G_tmp, SetsOrbs );
          accumulate_VecVec( G, G_tmp );
