@@ -152,14 +152,14 @@ contains
             !$OMP SHARED(Norb,iq,ispin,NtauB,Lttc,Nkpt,Sitau,Gitau,Witau),&
             !$OMP PRIVATE(itau,ik1,ik2,i,j,k,l,ib1,ib2)
             !$OMP DO
-            do i=1,Norb
+            do itau=1,NtauB
                do k=1,Norb
-                  do itau=1,NtauB
+                  do i=1,Norb
                      !
                      do ik1=1,Nkpt
                         ik2=Lttc%kptdif(iq,ik1)
-                        do j=1,Norb
-                           do l=1,Norb
+                        do l=1,Norb
+                           do j=1,Norb
                               !
                               ib1 = i + Norb*(j-1)
                               ib2 = k + Norb*(l-1)
@@ -198,13 +198,13 @@ contains
       do iq=1,Lttc%Nkpt_irred
          do ispin=1,Nspin
             !
-            do i=1,Norb
-               do k=1,Norb
+            do k=1,Norb
+               do i=1,Norb
                   !
                   do ik1=1,Nkpt
                      ik2=Lttc%kptdif(iq,ik1)
-                     do j=1,Norb
-                        do l=1,Norb
+                     do l=1,Norb
+                        do j=1,Norb
                            !
                            ib1 = i + Norb*(j-1)
                            ib2 = k + Norb*(l-1)
@@ -390,17 +390,17 @@ contains
       !Sigma_{m,n}(q,tau) = -Sum_{k,mp,np} W_{(m,mp);(n,np)}(q-k;tau)G_{mp,np}(k,tau)
       call cpu_time(start)
       allocate(Sitau_loc(Norb,Norb,NtauB,Nspin));Sitau_loc=czero
-      !$OMP PARALLEL DEFAULT(NONE),&
-      !$OMP SHARED(Norb,NtauB,Sitau_loc,Gitau_loc,Witau_loc),&
-      !$OMP PRIVATE(itau,ispin,i,j,k,l,ib1,ib2)
-      !$OMP DO
       do ispin=1,Nspin
-         do i=1,Norb
+         !$OMP PARALLEL DEFAULT(NONE),&
+         !$OMP SHARED(Norb,NtauB,ispin,Sitau_loc,Gitau_loc,Witau_loc),&
+         !$OMP PRIVATE(itau,i,j,k,l,ib1,ib2)
+         !$OMP DO
+         do itau=1,NtauB
             do k=1,Norb
-               do itau=1,NtauB
+               do i=1,Norb
                   !
-                  do j=1,Norb
-                     do l=1,Norb
+                  do l=1,Norb
+                     do j=1,Norb
                         !
                         ib1 = i + Norb*(j-1)
                         ib2 = k + Norb*(l-1)
@@ -413,9 +413,9 @@ contains
                enddo
             enddo
          enddo
+         !$OMP END DO
+         !$OMP END PARALLEL
       enddo
-      !$OMP END DO
-      !$OMP END PARALLEL
       deallocate(Witau_loc)
       !
       call clear_attributes(Smats_Cdc_)
@@ -429,16 +429,16 @@ contains
       !Sigmax_nm(q) = Sum_kij V_{ni,jm}(q-k)G_ij(k,beta) <=> sigmax(r,r')=-g(r,r',tau=0-)*v(r-r')
       call cpu_time(start)
       call clear_attributes(Smats_Xdc_)
-      !$OMP PARALLEL DEFAULT(NONE),&
-      !$OMP SHARED(Norb,NtauB,Smats_Xdc_,Gitau_loc,Wmats),&
-      !$OMP PRIVATE(ispin,i,j,k,l,ib1,ib2)
-      !$OMP DO
       do ispin=1,Nspin
-         do i=1,Norb
-            do k=1,Norb
+         !$OMP PARALLEL DEFAULT(NONE),&
+         !$OMP SHARED(Norb,NtauB,ispin,Smats_Xdc_,Gitau_loc,Wmats),&
+         !$OMP PRIVATE(i,j,k,l,ib1,ib2)
+         !$OMP DO
+         do k=1,Norb
+            do i=1,Norb
                !
-               do j=1,Norb
-                  do l=1,Norb
+               do l=1,Norb
+                  do j=1,Norb
                      !
                      ib1 = i + Norb*(j-1)
                      ib2 = k + Norb*(l-1)
@@ -450,9 +450,9 @@ contains
                !
             enddo
          enddo
+         !$OMP END DO
+         !$OMP END PARALLEL
       enddo
-      !$OMP END DO
-      !$OMP END PARALLEL
       deallocate(Gitau_loc)
       call cpu_time(finish)
       write(*,"(A,F)") "     Sigma_Xdc cpu timing:", finish-start
@@ -1448,7 +1448,7 @@ contains
             write(*,"(A,2I4)") "     ib_Uwan2,ib_Dwan2: ",ib_Uwan2, ib_Dwan2
          endif
          allocate(dis_evec(ib_Uwan1:ib_Dwan2,ib_Uwan1:ib_Dwan2));dis_evec=czero
-         allocate(cmat(ib_Uwan1:ib_Dwan2,ib_Uwan2:ib_Dwan2));cmat=czero
+         allocate(cmat(ib_Uwan1:ib_Dwan2,ib_Uwan1:ib_Dwan2));cmat=czero
       endif
       !
       ! Read eig and vxcfull files
@@ -1550,6 +1550,6 @@ contains
       if(Nspin_Uwan.eq.2)call dump_matrix(Vxc_loc(:,:,2),reg(pathINPUT)//"Vxc_s2.DAT")
       deallocate(Vxc_loc)
       !
-    end subroutine read_vxc
+   end subroutine read_vxc
 
 end module self_energy

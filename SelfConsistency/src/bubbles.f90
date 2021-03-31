@@ -14,7 +14,7 @@ module bubbles
    !---------------------------------------------------------------------------!
    interface calc_Pi
       module procedure calc_Pi_GoGo                                             ![BosonicField,Lattice]
-      module procedure calc_Pi_scGG                                         ![BosonicField,FermionicField,Lattice,tau_output(optional)]
+      module procedure calc_Pi_scGG                                             ![BosonicField,FermionicField,Lattice,tau_output(optional)]
    end interface calc_Pi
 
    !---------------------------------------------------------------------------!
@@ -118,8 +118,8 @@ contains
       allocate(alpha(Nmats));alpha=czero
       call clear_attributes(Pmats)
       !$OMP PARALLEL DEFAULT(NONE),&
-      !$OMP SHARED(Nbp,Nkpt,Nmats,Norb,wmats,cprod,alpha,Lttc,Pmats,verbose),&
-      !$OMP PRIVATE(iq,ik1,ik2,iwan1,iwan2)
+      !$OMP SHARED(Nbp,Nkpt,Nmats,Norb,wmats,cprod,Lttc,Pmats,verbose),&
+      !$OMP PRIVATE(iq,ik1,ik2,iwan1,iwan2,alpha)
       !$OMP DO
       do iq=1,Nkpt
          alpha=czero
@@ -271,6 +271,7 @@ contains
       write(*,"(A,F)") "     Glat(k,iw) --> Glat(k,tau) cpu timing:", finish-start
       !
       !Hermiticity check
+      call cpu_time(start)
       !$OMP PARALLEL DEFAULT(NONE),&
       !$OMP SHARED(Ntau_,Nkpt,Gitau,paramagnet),&
       !$OMP PRIVATE(ip,iq)
@@ -283,6 +284,8 @@ contains
       enddo
       !$OMP END DO
       !$OMP END PARALLEL
+      call cpu_time(finish)
+      write(*,"(A,F)") "     Hermiticity check on Glat(k,tau) cpu timing:", finish-start
       !
       ! Compute the bubble
       allocate(Pq_tau(Nbp,Nbp,Ntau_))
@@ -302,10 +305,10 @@ contains
             do ik1=1,Nkpt
                ik2=Lttc%kptdif(ik1,iq)
                !
-               do i=1,Norb
-                  do j=1,Norb
+               do j=1,Norb
+                  do l=1,Norb
                      do k=1,Norb
-                        do l=1,Norb
+                        do i=1,Norb
                            !
                            ib1 = i + Norb*(j-1)
                            ib2 = k + Norb*(l-1)

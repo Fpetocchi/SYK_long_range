@@ -867,8 +867,8 @@ contains
       !$OMP PRIVATE(iw,iwan1,iwan2,RealG,ImagG,rwcos,rwsin,cwcos,cwsin)
       !$OMP DO
       do iw=1,Nmats
-         do iwan1=1,Norb
-            do iwan2=1,Norb
+         do iwan2=1,Norb
+            do iwan1=1,Norb
                !
                RealG = dreal( Gitau(iwan1,iwan2,:) )
                ImagG = dimag( Gitau(iwan1,iwan2,:) )
@@ -937,8 +937,8 @@ contains
       !$OMP DO
       do ik=1,Nkpt
          do iw=1,Nmats
-            do iwan1=1,Norb
-               do iwan2=1,Norb
+            do iwan2=1,Norb
+               do iwan1=1,Norb
                   !
                   RealG = dreal( Gitau(iwan1,iwan2,:,ik) )
                   ImagG = dimag( Gitau(iwan1,iwan2,:,ik) )
@@ -1281,28 +1281,30 @@ contains
       !$OMP SHARED(Ntau,Nmats,Nbp,Umats,coswt,Uitau,Umats_bare),&
       !$OMP PRIVATE(itau,iw,ib1,ib2)
       !$OMP DO
-      do ib1=1,Nbp
-         do ib2=1,Nbp
+      do itau=1,Ntau
+         !
+         if(present(Umats_bare))then
             !
-            if(present(Umats_bare))then
-               !
-               do itau=1,Ntau
+            do ib2=1,Nbp
+               do ib1=1,Nbp
                   do iw=1,Nmats
                      Uitau(ib1,ib2,itau) = Uitau(ib1,ib2,itau) + coswt(iw,itau) * (Umats(ib1,ib2,iw)-Umats_bare(ib1,ib2))
                   enddo
                enddo
-               !
-            else
-               !
-               do itau=1,Ntau
+            enddo
+            !
+         else
+            !
+            do ib2=1,Nbp
+               do ib1=1,Nbp
                   do iw=1,Nmats
                      Uitau(ib1,ib2,itau) = Uitau(ib1,ib2,itau) + coswt(iw,itau) * Umats(ib1,ib2,iw)
                   enddo
                enddo
-               !
-            endif
+            enddo
             !
-         enddo
+         endif
+         !
       enddo
       !$OMP END DO
       !$OMP END PARALLEL
@@ -1361,27 +1363,34 @@ contains
       !$OMP SHARED(Nkpt,Ntau,Nmats,Nbp,Umats,coswt,Uitau,Umats_bare),&
       !$OMP PRIVATE(iq,itau,iw,ib1,ib2)
       !$OMP DO
-      do ib1=1,Nbp
-         do ib2=1,Nbp
-            do iq=1,Nkpt
-               !
-               !
-               if(present(Umats_bare))then
-                  do itau=1,Ntau
-                     do iw=1,Nmats
+      do iq=1,Nkpt
+         !
+         if(present(Umats_bare))then
+            !
+            do itau=1,Ntau
+               do iw=1,Nmats
+                  do ib2=1,Nbp
+                     do ib1=1,Nbp
                         Uitau(ib1,ib2,itau,iq) = Uitau(ib1,ib2,itau,iq) + coswt(iw,itau) * (Umats(ib1,ib2,iw,iq)-Umats_bare(ib1,ib2,iq))
                      enddo
                   enddo
-               else
-                  do itau=1,Ntau
-                     do iw=1,Nmats
+               enddo
+            enddo
+            !
+         else
+            !
+            do itau=1,Ntau
+               do iw=1,Nmats
+                  do ib2=1,Nbp
+                     do ib1=1,Nbp
                         Uitau(ib1,ib2,itau,iq) = Uitau(ib1,ib2,itau,iq) + coswt(iw,itau) * Umats(ib1,ib2,iw,iq)
                      enddo
                   enddo
-               endif
-               !
+               enddo
             enddo
-         enddo
+            !
+         endif
+         !
       enddo
       !$OMP END DO
       !$OMP END PARALLEL
@@ -1511,9 +1520,9 @@ contains
          !
          call BosonicFilon(wmats(iw),tau,wcos,wsin)
          !
-         do ib1=1,Nbp
+         do itau=1,Ntau
             do ib2=1,Nbp
-               do itau=1,Ntau
+               do ib1=1,Nbp
                   !
                   RealU = dreal( Uitau(ib1,ib2,itau) )
                   ImagU = dimag( Uitau(ib1,ib2,itau) )
@@ -1586,9 +1595,9 @@ contains
          call BosonicFilon(wmats(iw),tau,wcos,wsin)
          !
          do iq=1,Nkpt
-            do ib1=1,Nbp
+            do itau=1,Ntau
                do ib2=1,Nbp
-                  do itau=1,Ntau
+                  do ib1=1,Nbp
                      !
                      RealU = dreal( Uitau(ib1,ib2,itau,iq) )
                      ImagU = dimag( Uitau(ib1,ib2,itau,iq) )
