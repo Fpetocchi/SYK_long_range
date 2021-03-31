@@ -280,7 +280,7 @@ contains
       call parse_input_variable(RotateHloc,"ROTATE_F",InputFile,default=.false.,comment="Solve the Fermionic impurity problem in the basis where H(R=0) is diagonal.")
       call parse_input_variable(RotateUloc,"ROTATE_B",InputFile,default=RotateHloc,comment="Solve the Bosonic impurity problem in the basis where H(R=0) is diagonal.")
       call parse_input_variable(AFMselfcons,"AFM",InputFile,default=.false.,comment="Flag to use  the AFM self-consistency by flipping the spin. Requires input with doubled unit cell.")
-      call parse_input_variable(cmplxWann,"GTAU_K",InputFile,default=.false.,comment="Flag to perform the iw->tau FT of the Green's function in K space.")
+      call parse_input_variable(cmplxWann,"GTAU_K",InputFile,default=.true.,comment="Flag to perform the iw->tau FT of the Green's function in K space.")
       allocate(SiteNorb(Nsite));SiteNorb=0
       allocate(SiteName(Nsite))
       do isite=1,Nsite

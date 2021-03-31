@@ -173,7 +173,7 @@ contains
    !PURPOSE: Lattice inversion to get fully screened interaction - GW+EDMFT
    !TEST ON: 21-10-2020
    !---------------------------------------------------------------------------!
-   subroutine calc_W_full(Wmats,Umats,Pmats,Lttc,sym)
+   subroutine calc_W_full(Wmats,Umats,Pmats,Lttc,symQ)
       !
       use file_io
       use parameters
@@ -187,7 +187,7 @@ contains
       type(BosonicField),intent(in)         :: Umats
       type(BosonicField),intent(in)         :: Pmats
       type(Lattice),intent(in)              :: Lttc
-      logical,intent(in),optional           :: sym
+      logical,intent(in),optional           :: symQ
       !
       complex(8),allocatable                :: invW(:,:)
       complex(8),allocatable                :: den_smallk(:,:,:,:)
@@ -196,7 +196,7 @@ contains
       integer                               :: Nbp,Nkpt,Nmats
       integer                               :: iq,iw,iwU
       integer                               :: ismall,num_k
-      logical                               :: Ustatic,sym_
+      logical                               :: Ustatic,symQ_
       !
       !
       if(verbose)write(*,"(A)") "---- calc_W_full"
@@ -212,8 +212,8 @@ contains
       if(Umats%iq_gamma.lt.0) stop "calc_W_full: Umats iq_gamma not defined."
       if(.not.allocated(Lttc%small_ik)) stop "calc_W_full: Kpoints near Gamma not stored. W divergence cannot be cured."
       !
-      sym_=.true.
-      if(present(sym))sym_=sym
+      symQ_=.false.
+      if(present(symQ))symQ_=symQ
       Ustatic=.false.
       if(Umodel.and.(Umats%Npoints.eq.1))Ustatic=.true.
       if(Ustatic)write(*,"(A)")"     Static U bare."
@@ -240,7 +240,7 @@ contains
       Wmats%bare = Umats%bare
       !
       !$OMP PARALLEL DEFAULT(NONE),&
-      !$OMP SHARED(Pmats,Umats,Wmats,den_smallk,Lttc,HandleGammaPoint,Ustatic,verbose,sym_),&
+      !$OMP SHARED(Pmats,Umats,Wmats,den_smallk,Lttc,HandleGammaPoint,Ustatic,verbose,symQ_),&
       !$OMP PRIVATE(iw,iwU,iq,invW,ismall)
       !$OMP DO
       do iw=1,Wmats%Npoints
@@ -263,7 +263,7 @@ contains
             Wmats%screened(:,:,iw,iq) = matmul(invW,Umats%screened(:,:,iwU,iq))
             !
             !Hermiticity check - print if error is bigger than 1e-3
-            if(sym_) call check_Hermiticity(Wmats%screened(:,:,iw,iq),1e7*eps,enforce=.true.,hardstop=.false.,name="Wlat_w"//str(iw)//"_q"//str(iq))! ,verb=(mod(iq,251).eq.0))
+            if(symQ_) call check_Hermiticity(Wmats%screened(:,:,iw,iq),1e7*eps,enforce=.true.,hardstop=.false.,name="Wlat_w"//str(iw)//"_q"//str(iq),verb=.true.)
             !
             !store the dielectric function around the Gamma point
             if(HandleGammaPoint)then
@@ -306,7 +306,7 @@ contains
             iwU = iw
             if(Ustatic)iwU = 1
             Wmats%screened(:,:,iw,Umats%iq_gamma) = dreal(matmul(den_smallk_avrg(:,:,iw),Umats%screened(:,:,iwU,Umats%iq_gamma)))
-            if(sym_) call check_Symmetry(Wmats%screened(:,:,iw,Umats%iq_gamma),1e7*eps,enforce=.true.,hardstop=.false.,name="Wlat_w"//str(iw)//"_q"//str(Umats%iq_gamma),verb=verbose)
+            if(symQ_) call check_Symmetry(Wmats%screened(:,:,iw,Umats%iq_gamma),1e7*eps,enforce=.true.,hardstop=.false.,name="Wlat_w"//str(iw)//"_q"//str(Umats%iq_gamma),verb=.true.)
          enddo
          !
          deallocate(den_smallk,den_smallk_avrg)
@@ -317,11 +317,11 @@ contains
       ! Fill the local attributes
       call BosonicKsum(Wmats)
       !
-      ! Check if the screened limit is locally symmetric
+      ! Check if the screened limit is locally symmetric - print if error is bigger than 1e-3
       !if(sym_)then
-      write(*,"(A)") "     Checking hermiticity of local Wlat (enforced)"
+      write(*,"(A)") "     Enforcing hermiticity of local Wlat."
       do iw=1,Nmats
-         call check_Hermiticity(Wmats%screened_local(:,:,iw),eps,enforce=.true.,hardstop=.false.,name="Wlat_loc_w"//str(iw))!,verb=verbose)
+         call check_Hermiticity(Wmats%screened_local(:,:,iw),1e7*eps,enforce=.true.,hardstop=.false.,name="Wlat_loc_w"//str(iw),verb=.true.)
       enddo
       !
    end subroutine calc_W_full
@@ -330,7 +330,7 @@ contains
    !---------------------------------------------------------------------------!
    !PURPOSE: Lattice inversion to get fully screened interaction - EDMFT
    !---------------------------------------------------------------------------!
-   subroutine calc_W_edmft(Wmats,Umats,Pmats,Lttc,sym)
+   subroutine calc_W_edmft(Wmats,Umats,Pmats,Lttc,symQ)
       !
       use file_io
       use parameters
@@ -344,7 +344,7 @@ contains
       type(BosonicField),intent(in)         :: Umats
       type(BosonicField),intent(in)         :: Pmats
       type(Lattice),intent(in)              :: Lttc
-      logical,intent(in),optional           :: sym
+      logical,intent(in),optional           :: symQ
       !
       complex(8),allocatable                :: invW(:,:),W_q(:,:)
       complex(8),allocatable                :: den_smallk(:,:,:,:)
@@ -353,7 +353,7 @@ contains
       integer                               :: Nbp,Nkpt,Nmats
       integer                               :: iq,iw,iwU
       integer                               :: ismall,num_k
-      logical                               :: Ustatic,sym_
+      logical                               :: Ustatic,symQ_
       !
       !
       if(verbose)write(*,"(A)") "---- calc_W_edmft"
@@ -369,8 +369,8 @@ contains
       if(Umats%iq_gamma.lt.0) stop "calc_W_edmft: Umats iq_gamma not defined."
       if(.not.allocated(Lttc%small_ik)) stop "calc_W_edmft: Kpoints near Gamma not stored. W divergence cannot be cured."
       !
-      sym_=.true.
-      if(present(sym))sym_=sym
+      symQ_=.true.
+      if(present(symQ))symQ_=symQ
       Ustatic=.false.
       if(Umodel.and.(Umats%Npoints.eq.1))Ustatic=.true.
       if(Ustatic)write(*,"(A)")"     Static U bare."
@@ -397,7 +397,7 @@ contains
       Wmats%bare_local = Umats%bare_local
       !
       !$OMP PARALLEL DEFAULT(NONE),&
-      !$OMP SHARED(Pmats,Umats,Wmats,den_smallk,Lttc,HandleGammaPoint,Ustatic,verbose,sym_),&
+      !$OMP SHARED(Pmats,Umats,Wmats,den_smallk,Lttc,HandleGammaPoint,Ustatic,verbose,symQ_),&
       !$OMP PRIVATE(iw,iwU,iq,invW,W_q,ismall)
       !$OMP DO
       do iw=1,Wmats%Npoints
@@ -420,7 +420,7 @@ contains
             W_q = matmul(invW,Umats%screened(:,:,iwU,iq))
             !
             !Hermiticity check - print if error is bigger than 1e-3
-            if(sym_) call check_Hermiticity(W_q,1e7*eps,enforce=.true.,hardstop=.false.,name="Wlat_w"//str(iw)//"_q"//str(iq))! ,verb=(mod(iq,251).eq.0))
+            if(symQ_) call check_Hermiticity(W_q,1e7*eps,enforce=.true.,hardstop=.false.,name="Wlat_w"//str(iw)//"_q"//str(iq),verb=.true.)
             !
             !Sum to local attribute
             Wmats%screened_local(:,:,iw) = Wmats%screened_local(:,:,iw) + W_q/Umats%Nkpt
@@ -466,7 +466,7 @@ contains
             iwU = iw
             if(Ustatic)iwU = 1
             W_q = dreal(matmul(den_smallk_avrg(:,:,iw),Umats%screened(:,:,iwU,Umats%iq_gamma)))
-            if(sym_) call check_Symmetry(W_q,1e7*eps,enforce=.true.,hardstop=.false.,name="Wlat_w"//str(iw)//"_q"//str(Umats%iq_gamma),verb=verbose)
+            if(symQ_) call check_Symmetry(W_q,1e7*eps,enforce=.true.,hardstop=.false.,name="Wlat_w"//str(iw)//"_q"//str(Umats%iq_gamma),verb=.true.)
             Wmats%screened_local(:,:,iw) = Wmats%screened_local(:,:,iw) + W_q/Nkpt
          enddo
          !
@@ -475,13 +475,11 @@ contains
       endif
       deallocate(invW,W_q)
       !
-      ! Check if the screened limit is locally symmetric
-      !if(sym_)then
-      write(*,"(A)") "     Checking hermiticity of local Wlat (enforced)"
+      ! Check if the screened limit is locally symmetric - print if error is bigger than 1e-3
+      write(*,"(A)") "     Enforcing hermiticity of local Wlat."
       do iw=1,Nmats
-         call check_Hermiticity(Wmats%screened_local(:,:,iw),eps,enforce=.true.,hardstop=.false.,name="Wlat_loc_w"//str(iw))!,verb=verbose)
+         call check_Hermiticity(Wmats%screened_local(:,:,iw),1e7*eps,enforce=.true.,hardstop=.false.,name="Wlat_loc_w"//str(iw),verb=.true.)
       enddo
-      !endif
       !
    end subroutine calc_W_edmft
 
