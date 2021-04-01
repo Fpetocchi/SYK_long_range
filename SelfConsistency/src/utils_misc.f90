@@ -405,7 +405,7 @@ contains
       integer, intent(in)                   :: t
       integer                               :: now, clock_rate
       call system_clock(now,clock_rate)
-      tock = real(now - t)/real(clock_rate)
+      tock = real(dble(now)-dble(t))/real(clock_rate)
    end function tock
 
 

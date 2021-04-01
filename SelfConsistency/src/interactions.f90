@@ -306,7 +306,7 @@ contains
             iwU = iw
             if(Ustatic)iwU = 1
             Wmats%screened(:,:,iw,Umats%iq_gamma) = dreal(matmul(den_smallk_avrg(:,:,iw),Umats%screened(:,:,iwU,Umats%iq_gamma)))
-            if(symQ_) call check_Symmetry(Wmats%screened(:,:,iw,Umats%iq_gamma),1e7*eps,enforce=.true.,hardstop=.false.,name="Wlat_w"//str(iw)//"_q"//str(Umats%iq_gamma),verb=.true.)
+            call check_Symmetry(Wmats%screened(:,:,iw,Umats%iq_gamma),eps,enforce=.true.,hardstop=.false.,name="Wlat_w"//str(iw)//"_q"//str(Umats%iq_gamma),verb=.false.)
          enddo
          !
          deallocate(den_smallk,den_smallk_avrg)
@@ -466,7 +466,7 @@ contains
             iwU = iw
             if(Ustatic)iwU = 1
             W_q = dreal(matmul(den_smallk_avrg(:,:,iw),Umats%screened(:,:,iwU,Umats%iq_gamma)))
-            if(symQ_) call check_Symmetry(W_q,1e7*eps,enforce=.true.,hardstop=.false.,name="Wlat_w"//str(iw)//"_q"//str(Umats%iq_gamma),verb=.true.)
+            call check_Symmetry(W_q,eps,enforce=.true.,hardstop=.false.,name="Wlat_w"//str(iw)//"_q"//str(Umats%iq_gamma),verb=.false.)
             Wmats%screened_local(:,:,iw) = Wmats%screened_local(:,:,iw) + W_q/Nkpt
          enddo
          !
