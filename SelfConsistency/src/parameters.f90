@@ -24,39 +24,50 @@ module parameters
    integer,parameter                        :: Nspin=2
    !
    real(8),parameter                        :: eps=1e-9
+   !
+   real(8),parameter                        :: EcutSheet=0d0
 
 
    !---------------------------------------------------------------------------!
    !PURPOSE: container for lattice data
    !---------------------------------------------------------------------------!
    type Lattice
-      real(8),allocatable                   :: kpt(:,:)
+      !generic
       integer                               :: Nkpt3(3)
+      integer                               :: Nkpt_irred=0
+      integer                               :: iq_gamma=-1
       complex(8),allocatable                :: Hloc(:,:)                        ![Norb,Norb]
-      complex(8),allocatable                :: Hk(:,:,:)                        ![Norb,Norb,Nkpt]
-      complex(8),allocatable                :: Zk(:,:,:)                        ![Norb,Norb,Nkpt]
-      real(8),allocatable                   :: Ek(:,:)                          ![Norb,Nkpt]
-      complex(8),allocatable                :: Hk_path(:,:,:)                   ![Norb,Norb,Nkpt_path]
-      complex(8),allocatable                :: Zk_path(:,:,:)                   ![Norb,Norb,Nkpt_path]
-      real(8),allocatable                   :: Ek_path(:,:)                     ![Norb,Nkpt_path]
       integer,allocatable                   :: kptPos(:)                        ![Nkpt]
       integer,allocatable                   :: kptsum(:,:)                      ![Nkpt,Nkpt]
       integer,allocatable                   :: kptdif(:,:)                      ![Nkpt,Nkpt]
-      integer,allocatable                   :: kprint(:)
       integer,allocatable                   :: small_ik(:,:)                    ![12,2]
-      real(8),allocatable                   :: kptpath(:,:)                     ![3,Nkpt_path]
-      real(8),allocatable                   :: Kpathaxis(:)
-      real(8),allocatable                   :: KpathaxisPoints(:)
-      integer                               :: Nkpt=0
-      integer                               :: Nkpt_irred=0
-      integer                               :: Nkpt_path=0
-      integer                               :: iq_gamma=-1
       integer                               :: Norb=0
       real(8)                               :: mu=0d0
       real(8)                               :: density=0d0
       logical                               :: UseDisentangledBS=.false.
-      logical                               :: pathStored=.false.
       logical                               :: status=.false.
+      !full BZ
+      integer                               :: Nkpt=0
+      real(8),allocatable                   :: kpt(:,:)
+      complex(8),allocatable                :: Hk(:,:,:)                        ![Norb,Norb,Nkpt]
+      complex(8),allocatable                :: Zk(:,:,:)                        ![Norb,Norb,Nkpt]
+      real(8),allocatable                   :: Ek(:,:)                          ![Norb,Nkpt]
+      !path along high-symmetry points
+      integer                               :: Nkpt_path=0
+      real(8),allocatable                   :: kptpath(:,:)                     ![3,Nkpt_path]
+      complex(8),allocatable                :: Hk_path(:,:,:)                   ![Norb,Norb,Nkpt_path]
+      complex(8),allocatable                :: Zk_path(:,:,:)                   ![Norb,Norb,Nkpt_path]
+      real(8),allocatable                   :: Ek_path(:,:)                     ![Norb,Nkpt_path]
+      real(8),allocatable                   :: Kpathaxis(:)
+      real(8),allocatable                   :: KpathaxisPoints(:)
+      logical                               :: pathStored=.false.
+      !path along planar sheet on kx,ky
+      integer                               :: Nkpt_Plane=0
+      real(8),allocatable                   :: kptPlane(:,:)                    ![3,Nkpt_path]
+      complex(8),allocatable                :: Hk_Plane(:,:,:)                  ![Norb,Norb,Nkpt_Plane]
+      logical                               :: planeStored=.false.
+      !not used
+      integer,allocatable                   :: kprint(:)
    end type Lattice
 
 

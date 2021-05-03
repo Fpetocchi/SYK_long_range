@@ -101,7 +101,7 @@ contains
       !
    end subroutine calc_density_loc
    !
-   subroutine calc_density_Kdep(Gmats,Lttc,n_k,along_path)
+   subroutine calc_density_Kdep(Gmats,Lttc,n_k,along_path,along_plane)
       !
       use parameters
       use utils_misc
@@ -113,11 +113,12 @@ contains
       type(Lattice),intent(in)              :: Lttc
       complex(8),allocatable,intent(inout)  :: n_k(:,:,:,:)
       logical,intent(in),optional           :: along_path
+      logical,intent(in),optional           :: along_plane
       !
       complex(8),allocatable                :: Gitau(:,:,:,:)
       real(8)                               :: Beta
       integer                               :: ispin,Norb,Nkpt
-      logical                               :: along_path_
+      logical                               :: along_path_,along_plane_
       !
       !
       if(verbose)write(*,"(A)") "---- calc_density_Kdep"
@@ -131,10 +132,17 @@ contains
       !
       along_path_=.false.
       if(present(along_path))along_path_=along_path
+      along_plane_=.false.
+      if(present(along_plane))along_plane_=along_plane
+      !
+      if(along_path_.and.along_plane_) stop "calc_density_Kdep: cannot have along_path=T and along_plane=T simultaneously."
       !
       if(along_path_)then
-         if(Gmats%Nkpt.ne.Lttc%Nkpt_path) stop "calc_density_Kdep: Lttc has different number of path k-points with respect to Gmats."
+         if(Gmats%Nkpt.ne.Lttc%Nkpt_path) stop "calc_density_Kdep: Lttc Kpath has different number of path k-points with respect to Gmats."
          if(.not.allocated(Lttc%kptpath)) stop "calc_density_Kdep: K-point path not allocated."
+      elseif(along_plane_)then
+         if(Gmats%Nkpt.ne.Lttc%Nkpt_Plane) stop "calc_density_Kdep: Lttc Kplane has different number of path k-points with respect to Gmats."
+         if(.not.allocated(Lttc%kptPlane)) stop "calc_density_Kdep: K-point on plane not allocated."
       else
          if(Gmats%Nkpt.ne.Lttc%Nkpt) stop "calc_density_Kdep: Lttc has different number of k-points with respect to Gmats."
       endif
@@ -149,7 +157,7 @@ contains
       allocate(Gitau(Norb,Norb,NtauF,Nkpt));Gitau=czero
       spinloop: do ispin=1,Nspin
          !
-         if(cmplxWann.or.along_path_)then
+         if(cmplxWann.or.along_path_.or.along_plane_)then
             call Fmats2itau_mat(Beta,Gmats%wks(:,:,:,:,ispin),Gitau, &
             asympt_corr=.true.,tau_uniform=tau_uniform,atBeta=.true.)
          else
@@ -246,28 +254,31 @@ contains
    !PURPOSE: Compute the Matsubara Green's Function
    !TEST ON: 16-10-2020
    !---------------------------------------------------------------------------!
-   subroutine calc_Gmats_Full(Gmats,Lttc,Smats,along_path)
+   subroutine calc_Gmats_Full(Gmats,Lttc,Smats,along_path,along_plane)
       !
       use parameters
       use linalg
       use utils_misc
       use utils_fields
+      use input_vars, only : paramagnet
       implicit none
       !
       type(FermionicField),intent(inout)    :: Gmats
-      type(Lattice),intent(in)              :: Lttc
+      type(Lattice),intent(in),target       :: Lttc
       type(FermionicField),intent(in),optional,target :: Smats
       logical,intent(in),optional           :: along_path
+      logical,intent(in),optional           :: along_plane
       !
       complex(8),allocatable                :: invGf(:,:)
       complex(8),pointer                    :: Swks(:,:,:,:,:)
+      complex(8),pointer                    :: Hk(:,:,:)
       complex(8),allocatable                :: zeta(:,:,:)
       complex(8),allocatable                :: n_k(:,:,:,:)
       real(8),allocatable                   :: wmats(:)
       real(8)                               :: Beta,mu
       integer                               :: Norb,Nmats,Nkpt
       integer                               :: iw,ik,iwan,ispin
-      logical                               :: along_path_
+      logical                               :: along_path_,along_plane_
       !
       !
       if(verbose)write(*,"(A)") "---- calc_Gmats_Full"
@@ -282,12 +293,26 @@ contains
       !
       along_path_=.false.
       if(present(along_path))along_path_=along_path
+      along_plane_=.false.
+      if(present(along_plane))along_plane_=along_plane
       !
       if(along_path_)then
-         if(Gmats%Nkpt.ne.Lttc%Nkpt_path) stop "calc_Gmats_Full: Lttc has different number of path k-points with respect to Gmats."
+         Hk => Lttc%Hk_path
+         if(Gmats%Nkpt.ne.Lttc%Nkpt_path) stop "calc_Gmats_Full: Lttc Kpath has different number of path k-points with respect to Gmats."
+         if(Gmats%Nkpt.ne.size(Hk,dim=3)) stop "calc_Gmats_Full: Lttc Hk_path has different number of path k-points with respect to Gmats."
          if(.not.allocated(Lttc%Hk_path)) stop "calc_Gmats_Full: H(k) along path not allocated."
+         if(verbose)write(*,"(A)") "     H(k) is along a path."
+      elseif(along_plane_)then
+         Hk => Lttc%Hk_Plane
+         if(Gmats%Nkpt.ne.Lttc%Nkpt_Plane) stop "calc_Gmats_Full: Lttc Kplane has different number of path k-points with respect to Gmats."
+         if(Gmats%Nkpt.ne.size(Hk,dim=3)) stop "calc_Gmats_Full: Lttc Hk_Plane has different number of path k-points with respect to Gmats."
+         if(.not.allocated(Lttc%Hk_Plane)) stop "calc_Gmats_Full: H(k) in plane not allocated."
+         if(verbose)write(*,"(A)") "     H(k) is within a plane."
       else
+         Hk => Lttc%Hk
          if(Gmats%Nkpt.ne.Lttc%Nkpt) stop "calc_Gmats_Full: Lttc has different number of k-points with respect to Gmats."
+         if(Gmats%Nkpt.ne.size(Hk,dim=3)) stop "calc_Gmats_Full: Lttc Hk has different number of path k-points with respect to Gmats."
+         if(verbose)write(*,"(A)") "     H(k) is within the full BZ."
       endif
       !
       Norb = Gmats%Norb
@@ -318,19 +343,15 @@ contains
       !
       call clear_attributes(Gmats)
       allocate(invGf(Norb,Norb));invGf=czero
-      !$OMP PARALLEL DEFAULT(NONE),&
-      !$OMP SHARED(zeta,Lttc,Gmats,Swks,along_path_),&
-      !$OMP PRIVATE(ispin,ik,iw,invGf)
-      !$OMP DO
-      do ispin=1,Nspin
-         do ik=1,Gmats%Nkpt
-            do iw=1,Gmats%Npoints
+      spinloop: do ispin=1,Nspin
+         !$OMP PARALLEL DEFAULT(NONE),&
+         !$OMP SHARED(ispin,zeta,Gmats,Swks,Hk),&
+         !$OMP PRIVATE(ik,iw,invGf)
+         !$OMP DO
+         do iw=1,Gmats%Npoints
+            do ik=1,Gmats%Nkpt
                !
-               if(along_path_)then
-                  invGf = zeta(:,:,iw) - Lttc%Hk_path(:,:,ik)
-               else
-                  invGf = zeta(:,:,iw) - Lttc%Hk(:,:,ik)
-               endif
+               invGf = zeta(:,:,iw) - Hk(:,:,ik)
                !
                if(associated(Swks)) invGf = invGf - Swks(:,:,iw,ik,ispin)
                !
@@ -339,20 +360,29 @@ contains
                !
             enddo
          enddo
-      enddo
-      !$OMP END DO
-      !$OMP END PARALLEL
+         !$OMP END DO
+         !$OMP END PARALLEL
+         if(paramagnet)then
+            Gmats%wks(:,:,:,:,Nspin) = Gmats%wks(:,:,:,:,1)
+            exit spinloop
+         endif
+      enddo spinloop
       deallocate(zeta,invGf)
       if(associated(Swks))nullify(Swks)
+      if(associated(Hk))nullify(Hk)
       !
       ! In the N_ks attribute is stored the k-dep occupation
       allocate(n_k(Norb,Norb,Nkpt,Nspin));n_k=czero
-      call calc_density(Gmats,Lttc,n_k,along_path=along_path_)
+      if(along_path_)then
+         call calc_density(Gmats,Lttc,n_k,along_path=along_path_)
+      elseif((.not.along_path_).and.(.not.along_plane_))then
+         call calc_density(Gmats,Lttc,n_k)
+      endif
       Gmats%N_ks = n_k
       deallocate(n_k)
       !
       ! In the N_s the local density
-      if(.not.along_path_)call FermionicKsum(Gmats)
+      if(.not.(along_path_.or.along_plane_))call FermionicKsum(Gmats)
       !
    end subroutine calc_Gmats_Full
 
@@ -367,6 +397,7 @@ contains
       use linalg
       use utils_misc
       use utils_fields
+      use input_vars, only : paramagnet
       implicit none
       !
       type(FermionicField),intent(inout)    :: Gmats
@@ -400,11 +431,11 @@ contains
       zeta = deye(Norb)*mu_shift
       !
       allocate(invGf(Norb,Norb));invGf=czero
-      !$OMP PARALLEL DEFAULT(NONE),&
-      !$OMP SHARED(zeta,Gmats),&
-      !$OMP PRIVATE(ispin,ik,iw,invGf)
-      !$OMP DO
-      do ispin=1,Nspin
+      spinloop: do ispin=1,Nspin
+         !$OMP PARALLEL DEFAULT(NONE),&
+         !$OMP SHARED(ispin,zeta,Gmats),&
+         !$OMP PRIVATE(ik,iw,invGf)
+         !$OMP DO
          do ik=1,Gmats%Nkpt
             do iw=1,Gmats%Npoints
                !
@@ -418,9 +449,13 @@ contains
                !
             enddo
          enddo
-      enddo
-      !$OMP END DO
-      !$OMP END PARALLEL
+         !$OMP END DO
+         !$OMP END PARALLEL
+         if(paramagnet)then
+            Gmats%wks(:,:,:,:,Nspin) = Gmats%wks(:,:,:,:,1)
+            exit spinloop
+         endif
+      enddo spinloop
       deallocate(zeta,invGf)
       !
       ! In the N_ks attribute is stored the k-dep occupation

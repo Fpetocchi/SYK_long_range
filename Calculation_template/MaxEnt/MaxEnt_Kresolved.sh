@@ -32,6 +32,7 @@ PAD="K"
 Nspin=1
 SPIN_DW="F"
 SINGSUB="F"
+MODEL="F"
 
 
 
@@ -39,7 +40,7 @@ SINGSUB="F"
 ################################################################################
 #                             PROVIDED ARGUMENTS                               #
 ################################################################################
-while getopts ":e:w:W:F:N:B:i:f:m:d:" o; do
+while getopts ":e:w:W:F:N:B:i:f:m:d:M:" o; do
    case ${o} in
       e)
          err="${OPTARG}"
@@ -70,13 +71,18 @@ while getopts ":e:w:W:F:N:B:i:f:m:d:" o; do
          ;;
       m)
          MODE="${OPTARG}"
-         if [ "$MODE"  != "path" ] && [ "$MODE"  != "full" ]; then echo "Option Error - m" ; exit 1 ; fi
+         if [ "$MODE"  != "path" ] && [ "$MODE"  != "full" ] && [ "$MODE"  != "plane" ]; then echo "Option Error - m" ; exit 1 ; fi
          if [ "$MODE"  == "path" ] ; then PAD="K" ; fi
          if [ "$MODE"  == "full" ] ; then PAD="F" ; fi
+         if [ "$MODE"  == "plane" ] ; then PAD="P" ; fi
          ;;
       d)
          SPIN_DW="${OPTARG}"
          #if [ "$SPIN_DW"  != "T" ] && [ "$SPIN_DW"  != "F" ]; then echo "Option Error - s" ; exit 1 ; fi
+         ;;
+      M)
+         MODEL="${OPTARG}"
+         if [ "$MODEL"  != "T" ] && [ "$MODEL"  != "F" ]; then echo "Option Error - M" ; exit 1 ; fi
          ;;
       \? )
          echo "Invalid option: $OPTARG" 1>&2
@@ -164,9 +170,21 @@ export PYTHONPATH=\${PYTHONPATH}:${BIN}/docopt/
 export OMP_NUM_THREADS=1
 
 for i in \`seq  ${startk} ${stopk}\`; do
+   #
    echo K_\${i} > job_Kb_\${i}.out
-   mpiexec -np 1 python3.6  ${BIN}/bryan.py ${RUNOPTIONS} ../${Gsource}/${FIELD}k_t_k\${i}.DAT >> job_Kb_\${i}.out
+   #
+   if [ "$MODEL"  == "T" ] && [ -f ../${Gsource}/${FIELD}k_t_k\${i}.DAT_dos.dat ]; then
+      #
+      mpiexec -np 1 python3.6  ${BIN}/bryan.py ${RUNOPTIONS} -m  ../${Gsource}/${FIELD}k_t_k\${i}.DAT_dos.dat ../${Gsource}/${FIELD}k_t_k\${i}.DAT >> job_Kb_\${i}.out
+      #
+   else
+      #
+      mpiexec -np 1 python3.6  ${BIN}/bryan.py ${RUNOPTIONS} ../${Gsource}/${FIELD}k_t_k\${i}.DAT >> job_Kb_\${i}.out
+      #
+   fi
+   #
    echo "MaxEnt on K_\${i} done" >> job_Kb_\${i}.out
+   #
 done
 EOF
       #
@@ -201,9 +219,21 @@ EOF
 export PYTHONPATH=\${PYTHONPATH}:${BIN}/docopt/
 export OMP_NUM_THREADS=1
 
+#
 echo K_${kp} > job_K_${kp}.out
-mpiexec -np 1 python3.6  ${BIN}/bryan.py ${RUNOPTIONS} ../${Gsource}/${FIELD}k_t_k${kp}.DAT >> job_K_${kp}.out
+#
+if [ "$MODEL"  == "T" ] && [ -f ../${Gsource}/${FIELD}k_t_k${kp}.DAT_dos.dat ]; then
+   #
+   mpiexec -np 1 python3.6  ${BIN}/bryan.py ${RUNOPTIONS} -m ../${Gsource}/${FIELD}k_t_k${kp}.DAT_dos.dat ../${Gsource}/${FIELD}k_t_k${kp}.DAT >> job_K_${kp}.out
+   #
+else
+   #
+   mpiexec -np 1 python3.6  ${BIN}/bryan.py ${RUNOPTIONS} ../${Gsource}/${FIELD}k_t_k${kp}.DAT >> job_K_${kp}.out
+   #
+fi
+#
 echo "MaxEnt on K_${kp} done" >> job_K_${kp}.out
+#
 EOF
       done
       #

@@ -19,7 +19,7 @@ U_model=" " #  -m ../../2_Wt2g/t2_new/Wt2g.dat_dos.dat"  #  -m "$SRC"/Wmodel.dat
 err="0.008"                    # -e
 mesh="6000"                    # -w
 width="200"                    # -W
-#FIELD=    MUST BE PROVIDED    # -f Available: "G" "W" "curlyU" "C" "M" "P"
+#FIELD=    MUST BE PROVIDED    # -f Available: "G" "W" "curlyU" "C" "M" "P" "S"(only for SOURCE=qmc_El)
 #ORB=      MUST BE PROVIDED    # -o
 JOR="1"                        # -j
 SPIN="1"                       # -s Available: "1" "2"
@@ -49,6 +49,7 @@ while getopts ":e:w:W:f:o:s:i:m:p:" o; do
          #echo ${OPTARG}
          FIELD="${OPTARG}"
          if [ "$FIELD"  == "G" ];      then RUNOPTIONS=" -s      "$err" -w "$mesh" -W "$width$G_model ; fi
+         if [ "$FIELD"  == "S" ];      then RUNOPTIONS=" -s      "$err" -w "$mesh" -W "$width$G_model ; fi
          if [ "$FIELD"  == "W" ];      then RUNOPTIONS=" -S X -s "$err" -w "$mesh" -W "$width$W_model ; fi
          if [ "$FIELD"  == "curlyU" ]; then RUNOPTIONS=" -S X -s "$err" -w "$mesh" -W "$width$U_model ; fi
          if [ "$FIELD"  == "C" ];      then RUNOPTIONS=" -S X -s "$err" -w "$mesh" -W "$width$W_model ; fi
@@ -93,7 +94,7 @@ done
 ################################################################################
 #                               DATA EXTRACTION                                #
 ################################################################################
-if [ "$FIELD"  == "G" ]; then
+if [ "$FIELD"  == "G" ] || [ "$FIELD"  == "S" ]; then
    #
    WORKDIR="MaxEnt_"${FIELD}${SOURCE}"_o"${ORB}"_s"${SPIN}
    mkdir $WORKDIR

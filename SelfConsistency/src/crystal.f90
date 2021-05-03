@@ -86,7 +86,8 @@ module crystal
    public :: wannier_K2R
    public :: wannier_R2K
    public :: interpolateHk2Path
-   public :: calc_path
+   public :: calc_Kpath
+   public :: calc_Kplane
    !public :: add_crystalfields
 
    !===========================================================================!
@@ -1623,7 +1624,7 @@ contains
    !PURPOSE: generates thew K-points along some pre-stored high-symmetry points.
    !         taken from https://wiki.fysik.dtu.dk/ase/ase/dft/kpoints.html#high-symmetry-pathsv
    !---------------------------------------------------------------------------!
-   subroutine calc_path(kpt_path,structure,Nkpt_path,Kaxis,KaxisPoints)
+   subroutine calc_Kpath(kpt_path,structure,Nkpt_path,Kaxis,KaxisPoints)
       !
       use utils_misc
       implicit none
@@ -1641,7 +1642,7 @@ contains
       real(8)                               :: dKtot,theta,phi,dk,kx,ky,kz
       !
       !
-      write(*,"(A)") new_line("A")//new_line("A")//"---- calc_path"
+      write(*,"(A)") new_line("A")//new_line("A")//"---- calc_Kpath"
       !
       !
       !
@@ -1887,13 +1888,54 @@ contains
       if(present(Kaxis))Kaxis=Kdist
       if(present(KaxisPoints))KaxisPoints=Kturn
       !
-   end subroutine calc_path
+   end subroutine calc_Kpath
+
+
+   !---------------------------------------------------------------------------!
+   !PURPOSE: generates a uniform K mesh in the kx,ky plane
+   !---------------------------------------------------------------------------!
+   subroutine calc_Kplane(kpt_plane,Nkpt_Kside)
+      !
+      use utils_misc
+      implicit none
+      !
+      real(8),allocatable,intent(out)       :: kpt_plane(:,:)
+      integer,intent(in)                    :: Nkpt_Kside
+      !
+      integer                               :: ikx,iky,ik
+      real(8)                               :: Kmax=1d0
+      real(8)                               :: kx,ky,dK
+      !
+      !
+      write(*,"(A)") new_line("A")//new_line("A")//"---- calc_Kplane"
+      !
+      !
+      if(allocated(kpt_plane))deallocate(kpt_plane)
+      allocate(kpt_plane(3,Nkpt_Kside**2))
+      !
+      dk=Kmax/(Nkpt_Kside-1)
+      !
+      ik=0
+      do ikx=1,Nkpt_Kside
+         do iky=1,Nkpt_Kside
+            !
+            ik=ik+1
+            !
+            kx = (ikx-1)*dk
+            ky = (iky-1)*dk
+            !
+            kpt_plane(:,ik) = [kx,ky,0d0]
+            !
+         enddo
+      enddo
+      !
+   end subroutine calc_Kplane
 
 
    !---------------------------------------------------------------------------!
    !PURPOSE: Interpolate to a user provided K-point path the Hamiltonian
    !---------------------------------------------------------------------------!
-   subroutine interpolateHk2Path(Lttc,structure,Nkpt_path,pathOUTPUT,filename,data)
+   subroutine interpolateHk2Path(Lttc,structure,Nkpt_path,pathOUTPUT,filename,data,doplane)
       !
       use parameters
       use utils_misc
@@ -1905,13 +1947,15 @@ contains
       integer,intent(in)                    :: Nkpt_path
       character(len=*),intent(in)           :: pathOUTPUT
       character(len=*),intent(in),optional  :: filename
+      logical,intent(in),optional           :: doplane
       complex(8),intent(in),allocatable,optional :: data(:,:,:)
       !
       character(len=256)                    :: path,filename_
       integer                               :: ik,iorb,unit
-      integer                               :: Norb
+      integer                               :: Norb,Nkpt_Kside
       complex(8),allocatable                :: data_intp(:,:,:)
       real(8),allocatable                   :: dataEk(:,:)
+      logical                               :: doplane_
       real                                  :: start,finish
       !
       !
@@ -1924,11 +1968,13 @@ contains
       !
       filename_="Bands.DAT"
       if(present(filename))filename_=reg(filename)
+      doplane_=.false.
+      if(present(doplane))doplane_=doplane
       !
       !Create K-points along high-symmetry points
       if(allocated(Lttc%kptpath))deallocate(Lttc%kptpath)
       if(allocated(Lttc%Kpathaxis))deallocate(Lttc%Kpathaxis)
-      call calc_path(Lttc%kptpath,reg(structure),Nkpt_path,Kaxis=Lttc%Kpathaxis,KaxisPoints=Lttc%KpathaxisPoints)
+      call calc_Kpath(Lttc%kptpath,reg(structure),Nkpt_path,Kaxis=Lttc%Kpathaxis,KaxisPoints=Lttc%KpathaxisPoints)
       Lttc%Nkpt_path = size(Lttc%kptpath,dim=2)
       !
       if(present(data))then
@@ -1996,6 +2042,27 @@ contains
          !
          Lttc%pathStored=.true.
          !
+         if(doplane_)then
+            !
+            Nkpt_Kside = int(Nkpt_path/2)
+            !
+            !Create K-points along high-symmetry points
+            if(allocated(Lttc%kptPlane))deallocate(Lttc%kptPlane)
+            call calc_Kplane(Lttc%kptPlane,Nkpt_Kside)
+            Lttc%Nkpt_Plane = size(Lttc%kptPlane,dim=2)
+            !
+            !Fill in Hk in the points on the kx,ky plane - stored row-wise
+            if(allocated(Lttc%Hk_Plane))deallocate(Lttc%Hk_Plane)
+            allocate(Lttc%Hk_Plane(Norb,Norb,Lttc%Nkpt_Plane));Lttc%Hk_Plane=czero
+            call cpu_time(start)
+            call wannierinterpolation(Lttc%Nkpt3,Lttc%kpt,Lttc%kptPlane,Lttc%Hk,Lttc%Hk_Plane)
+            call cpu_time(finish)
+            write(*,"(A,F)") "     H(fullBZ) --> H(kx,ky) cpu timing:", finish-start
+            !
+            Lttc%planeStored=.true.
+            !
+         endif
+         !
       endif
       !
       !Print position of High-symmetry points in the same folder where the function is
@@ -2006,7 +2073,9 @@ contains
          write(unit,"(1I5,200E20.12)") ik,Lttc%KpathaxisPoints(ik)
       enddo
       close(unit)
+      !
       write(*,"(A,I)") "     Total number of High symmetry points:",size(Lttc%KpathaxisPoints,dim=1)
+      if(doplane_)write(*,"(A,I)") "     Total number of K-points along {kx,ky} plane:",Lttc%Nkpt_Plane
       !
    end subroutine interpolateHk2Path
 

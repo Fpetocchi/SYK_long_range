@@ -191,6 +191,7 @@ module input_vars
    character(len=256),public                :: structure
    character(len=256),public                :: path_funct
    integer,public                           :: Nkpt_path
+   logical,public                           :: FermiSurf
    real(8),public                           :: KKcutoff
    !
    !Variables related to the impurity solver
@@ -202,6 +203,12 @@ module input_vars
    logical,public                           :: XEPSisread=.false.
    logical,public                           :: solve_DMFT=.true.
    logical,public                           :: bosonicSC=.false.
+   !
+   !Variables that are needed in post_processing
+   complex(8),allocatable,public            :: OlocSite(:,:,:)
+   complex(8),allocatable,public            :: OlocRot(:,:,:)
+   complex(8),allocatable,public            :: OlocRotDag(:,:,:)
+   real(8),allocatable,public               :: OlocEig(:,:)
    !
    !Variables for the matching beta
    type(OldBeta),public                     :: Beta_Match
@@ -472,6 +479,7 @@ contains
       call parse_input_variable(structure,"STRUCTURE",InputFile,default="cubic",comment="Available structures: triangular, cubic_[2,3], fcc, bcc, hex, tetragonal, orthorhombic_[1,2], None to avoid.")
       call parse_input_variable(path_funct,"PATH_FUNCT",InputFile,default="None",comment="Print interacting fields on high-symmetry points. Available fields: G=Green's function, S=self-energy, GS=both. None to avoid.")
       call parse_input_variable(Nkpt_path,"NK_PATH",InputFile,default=50,comment="Number of segments between two hig-symmetry Kpoints.")
+      call parse_input_variable(FermiSurf,"FERMI_SURF",InputFile,default=.false.,comment="Flag to compute the Green's function on the planar {kx,ky} sheet. The mesh is set by NK_PATH/2. Ignored if PATH_FUNCT=None.")
       call parse_input_variable(KKcutoff,"KK_CUTOFF",InputFile,default=50d0,comment="Real frequency cutoff for Kramers Kronig integrals, should be twice the region of interest.")
       KKcutoff=abs(KKcutoff)
       !
@@ -512,7 +520,7 @@ contains
       call parse_input_variable(Solver%Ntherm,"NTHERM",InputFile,default=100,comment="Thermalization cycles. Each cycle performs NMEAS sweeps.")
       call parse_input_variable(Solver%Nshift,"NSHIFT",InputFile,default=1,comment="Proposed segment shifts at each sweep.")
       call parse_input_variable(Solver%Nswap,"NSWAP",InputFile,default=1,comment="Proposed global spin swaps at each sweep.")
-      call parse_input_variable(Solver%N_nnt,"N_NNT",InputFile,default=2*Solver%NtauB,comment="Measurment for n(tau)n(0) evaluation. Updated according to CALC_TYPE. Should be either =1 or 2*NTAU_B_IMP.")
+      call parse_input_variable(Solver%N_nnt,"N_NNT",InputFile,default=1,comment="Measurment for n(tau)n(0) evaluation. Updated according to CALC_TYPE. Should be either =1 or 2*NTAU_B_IMP.")
       if(.not.bosonicSC)Solver%N_nnt=0
       call parse_input_variable(Solver%PrintTime,"PRINT_TIME",InputFile,default=10,comment="Minutes that have to pass before observables are updated and stored.")
       call parse_input_variable(Solver%binlength,"BINLENGTH",InputFile,default=4,comment="If >0 the Green's function at itau will be the average within +/-binlength.")

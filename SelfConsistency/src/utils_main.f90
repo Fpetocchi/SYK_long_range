@@ -29,10 +29,11 @@ module utils_main
    !
    type(Lattice)                            :: Crystal
    !
-   complex(8),allocatable                   :: OlocSite(:,:,:)
-   complex(8),allocatable                   :: OlocRot(:,:,:)
-   complex(8),allocatable                   :: OlocRotDag(:,:,:)
-   real(8),allocatable                      :: OlocEig(:,:)
+   !movved to input_vars
+   !complex(8),allocatable                   :: OlocSite(:,:,:)
+   !complex(8),allocatable                   :: OlocRot(:,:,:)
+   !complex(8),allocatable                   :: OlocRotDag(:,:,:)
+   !real(8),allocatable                      :: OlocEig(:,:)
    !
    type(FermionicField)                     :: Glat
    type(FermionicField)                     :: G_DMFT
@@ -301,30 +302,52 @@ contains
             if(reg(path_funct).eq."G")then
                !
                call createDir(reg(MaxEnt_K)//"/MaxEnt_Gk_path_t_s"//str(ispin),verb=verbose)  ! This is for MaxEnt on G along the K-path
+               if(FermiSurf)call createDir(reg(MaxEnt_K)//"/MaxEnt_Gk_plane_t_s"//str(ispin),verb=verbose)  ! This is for MaxEnt on G in the full BZ to get Fermi surface
                !
             elseif(reg(path_funct).eq."S")then
                !
-               call createDir(reg(MaxEnt_K)//"/MaxEnt_Sk_path_t_s"//str(ispin),verb=verbose)  ! This is for MaxEnt on S along the K-path
-               call createDir(reg(MaxEnt_K)//"/Gk_path_wm_s"//str(ispin),verb=verbose)        ! This is for MaxEnt on S along the K-path
-               call createDir(reg(MaxEnt_K)//"/Sk_path_wm_s"//str(ispin),verb=verbose)        ! This is for MaxEnt on S along the K-path
-               !
-               call createDir(reg(MaxEnt_K)//"/MaxEnt_Sk_full_t_s"//str(ispin),verb=verbose)  ! This is for MaxEnt on S in the full BZ to get Gloc
-               call createDir(reg(MaxEnt_K)//"/Gk_full_wm_s"//str(ispin),verb=verbose)        ! This is for MaxEnt on S in the full BZ to get Gloc
-               call createDir(reg(MaxEnt_K)//"/Sk_full_wm_s"//str(ispin),verb=verbose)        ! This is for MaxEnt on S in the full BZ to get Gloc
+               if((reg(CalculationType).eq."G0W0").or.(reg(CalculationType).eq."scGW").or.(reg(CalculationType).eq."GW+EDMFT"))then
+                  !
+                  call createDir(reg(MaxEnt_K)//"/MaxEnt_Sk_path_t_s"//str(ispin),verb=verbose)  ! This is for MaxEnt on S along the K-path
+                  call createDir(reg(MaxEnt_K)//"/Gk_path_wm_s"//str(ispin),verb=verbose)        ! This is for MaxEnt on S along the K-path
+                  call createDir(reg(MaxEnt_K)//"/Sk_path_wm_s"//str(ispin),verb=verbose)        ! This is for MaxEnt on S along the K-path
+                  !
+                  call createDir(reg(MaxEnt_K)//"/MaxEnt_Sk_full_t_s"//str(ispin),verb=verbose)  ! This is for MaxEnt on S in the full BZ to get Gloc
+                  call createDir(reg(MaxEnt_K)//"/Gk_full_wm_s"//str(ispin),verb=verbose)        ! This is for MaxEnt on S in the full BZ to get Gloc
+                  call createDir(reg(MaxEnt_K)//"/Sk_full_wm_s"//str(ispin),verb=verbose)        ! This is for MaxEnt on S in the full BZ to get Gloc
+                  !
+                  if(FermiSurf)then
+                     call createDir(reg(MaxEnt_K)//"/MaxEnt_Sk_plane_t_s"//str(ispin),verb=verbose)  ! This is for MaxEnt on S in the {kx,ky} plane to get the Fermi surface
+                     call createDir(reg(MaxEnt_K)//"/Gk_plane_wm_s"//str(ispin),verb=verbose)        ! This is for MaxEnt on S in the {kx,ky} plane to get the Fermi surface
+                     call createDir(reg(MaxEnt_K)//"/Sk_plane_wm_s"//str(ispin),verb=verbose)        ! This is for MaxEnt on S in the {kx,ky} plane to get the Fermi surface
+                  endif
+                  !
+               endif
                !
                call createDir(reg(MaxEnt_K)//"/Sigma_vars",verb=verbose)
                !
             elseif(reg(path_funct).eq."GS")then
                !
                call createDir(reg(MaxEnt_K)//"/MaxEnt_Gk_path_t_s"//str(ispin),verb=verbose)  ! This is for MaxEnt on G along the K-path
+               if(FermiSurf)call createDir(reg(MaxEnt_K)//"/MaxEnt_Gk_plane_t_s"//str(ispin),verb=verbose)  ! This is for MaxEnt on G in the full BZ to get Fermi surface
                !
-               call createDir(reg(MaxEnt_K)//"/MaxEnt_Sk_path_t_s"//str(ispin),verb=verbose)  ! This is for MaxEnt on S along the K-path
-               call createDir(reg(MaxEnt_K)//"/Gk_path_wm_s"//str(ispin),verb=verbose)        ! This is for MaxEnt on S along the K-path
-               call createDir(reg(MaxEnt_K)//"/Sk_path_wm_s"//str(ispin),verb=verbose)        ! This is for MaxEnt on S along the K-path
-               !
-               call createDir(reg(MaxEnt_K)//"/MaxEnt_Sk_full_t_s"//str(ispin),verb=verbose)  ! This is for MaxEnt on S in the full BZ to get Gloc
-               call createDir(reg(MaxEnt_K)//"/Gk_full_wm_s"//str(ispin),verb=verbose)        ! This is for MaxEnt on S in the full BZ to get Gloc
-               call createDir(reg(MaxEnt_K)//"/Sk_full_wm_s"//str(ispin),verb=verbose)        ! This is for MaxEnt on S in the full BZ to get Gloc
+               if((reg(CalculationType).eq."G0W0").or.(reg(CalculationType).eq."scGW").or.(reg(CalculationType).eq."GW+EDMFT"))then
+                  !
+                  call createDir(reg(MaxEnt_K)//"/MaxEnt_Sk_path_t_s"//str(ispin),verb=verbose)  ! This is for MaxEnt on S along the K-path
+                  call createDir(reg(MaxEnt_K)//"/Gk_path_wm_s"//str(ispin),verb=verbose)        ! This is for MaxEnt on S along the K-path
+                  call createDir(reg(MaxEnt_K)//"/Sk_path_wm_s"//str(ispin),verb=verbose)        ! This is for MaxEnt on S along the K-path
+                  !
+                  call createDir(reg(MaxEnt_K)//"/MaxEnt_Sk_full_t_s"//str(ispin),verb=verbose)  ! This is for MaxEnt on S in the full BZ to get Gloc
+                  call createDir(reg(MaxEnt_K)//"/Gk_full_wm_s"//str(ispin),verb=verbose)        ! This is for MaxEnt on S in the full BZ to get Gloc
+                  call createDir(reg(MaxEnt_K)//"/Sk_full_wm_s"//str(ispin),verb=verbose)        ! This is for MaxEnt on S in the full BZ to get Gloc
+                  !
+                  if(FermiSurf)then
+                     call createDir(reg(MaxEnt_K)//"/MaxEnt_Sk_plane_t_s"//str(ispin),verb=verbose)  ! This is for MaxEnt on S in the {kx,ky} plane to get the Fermi surface
+                     call createDir(reg(MaxEnt_K)//"/Gk_plane_wm_s"//str(ispin),verb=verbose)        ! This is for MaxEnt on S in the {kx,ky} plane to get the Fermi surface
+                     call createDir(reg(MaxEnt_K)//"/Sk_plane_wm_s"//str(ispin),verb=verbose)        ! This is for MaxEnt on S in the {kx,ky} plane to get the Fermi surface
+                  endif
+                  !
+               endif
                !
                call createDir(reg(MaxEnt_K)//"/Sigma_vars",verb=verbose)
                !
@@ -1237,7 +1260,6 @@ contains
       !
       !
       calc_W = calc_Wedmft .or. calc_Wfull
-      dump_Sigmak = dump_Sigmak .and. calc_Sigmak
       !
       !
       !Allocate and initialize different density matrices
@@ -1374,7 +1396,11 @@ contains
       !
       implicit none
       integer,intent(in)                    :: Iteration
+      integer                               :: isite,Norb
       integer                               :: iorb,jorb,ik,iw,ispin
+      integer,allocatable                   :: Orbs(:)
+      type(FermionicField)                  :: S_G0W0_imp
+      type(FermionicField)                  :: S_G0W0_EDMFT
       !
       !
       write(*,"(A)") new_line("A")//new_line("A")//"---- join_SigmaFull"
@@ -1426,21 +1452,46 @@ contains
                S_G0W0%wks = S_G0W0%wks - S_G0W0dc%wks
                call FermionicKsum(S_G0W0)
                !
-               !Remove local contributuin from G0W0 self-energy.
-               !This is what was making Delta non-causal and its due to the not perfect S_G0W0dc
+               !If the DC is not properly computed meaning that the Dc computed here
+               !is not fully removing the local part of S_G0W0 as if it were computed in SPEX
+               !all the sites will have a local self-energy that would not be included in the
+               !DMFT one then making the Delta non-causal.
+               call AllocateFermionicField(S_G0W0_EDMFT,Crystal%Norb,Nmats,Nkpt=Crystal%Nkpt,Nsite=Nsite,Beta=Beta,mu=Glat%mu)
+               do isite=1,Nsite
+                  !
+                  Norb = SiteNorb(isite)
+                  allocate(Orbs(Norb))
+                  Orbs = SiteOrbs(isite,1:Norb)
+                  !
+                  call AllocateFermionicField(S_G0W0_imp,Norb,Nmats,Beta=Beta)
+                  !
+                  !Extract the local G0W0 self-energy for each site
+                  call loc2imp(S_G0W0_imp,S_G0W0,Orbs)
+                  !
+                  !Put it into an-object that contains only the site indexes
+                  call imp2loc(S_G0W0_EDMFT,S_G0W0_imp,isite,Orbs,.false.,.false.)
+                  !
+                  call DeallocateField(S_G0W0_imp)
+                  deallocate(Orbs)
+                  !
+               enddo
+               !
                !here, if Vxc is inside S_G0W0, also the local contribution from Vxc is removed
                do ik=1,S_G0W0%Nkpt
-                  S_G0W0%wks(:,:,:,ik,:) = S_G0W0%wks(:,:,:,ik,:) - S_G0W0%ws
+                  S_G0W0%wks(:,:,:,ik,:) = S_G0W0%wks(:,:,:,ik,:) - S_G0W0_EDMFT%ws
                enddo
+               call DeallocateField(S_G0W0_EDMFT)
                !
                !Add non local S_G0W0 to S_GW
                S_GW%wks = S_GW%wks + S_G0W0%wks
                !
-               !$OMP PARALLEL DEFAULT(NONE),&
-               !$OMP SHARED(S_Full,S_GW,S_G0W0dc,S_G0W0,VH,Vxc),&
-               !$OMP PRIVATE(iorb,jorb,ik,iw,ispin)
-               !$OMP DO
+               !Put together all the terms
                do ispin=1,Nspin
+                  !
+                  !$OMP PARALLEL DEFAULT(NONE),&
+                  !$OMP SHARED(S_Full,S_GW,S_G0W0dc,S_G0W0,VH,Vxc,ispin),&
+                  !$OMP PRIVATE(iorb,jorb,ik,iw)
+                  !$OMP DO
                   do ik=1,S_Full%Nkpt
                      do iw=1,S_Full%Npoints
                         do iorb=1,S_Full%Norb
@@ -1454,9 +1505,15 @@ contains
                         enddo
                      enddo
                   enddo
+                  !$OMP END DO
+                  !$OMP END PARALLEL
+                  !
+                  if(paramagnet)then
+                     S_Full%wks(:,:,:,:,Nspin) = S_Full%wks(:,:,:,:,1)
+                     exit
+                  endif
+                  !
                enddo
-               !$OMP END DO
-               !$OMP END PARALLEL
                !
             endif
             call FermionicKsum(S_Full)
@@ -1472,11 +1529,13 @@ contains
             !
             if(.not.S_DMFT%status) stop "join_SigmaFull: S_DMFT not properly initialized."
             !
-            !$OMP PARALLEL DEFAULT(NONE),&
-            !$OMP SHARED(HartreeFact,S_Full,S_DMFT),&
-            !$OMP PRIVATE(iorb,jorb,ik,iw,ispin)
-            !$OMP DO
+            !Put together all the terms
             do ispin=1,Nspin
+               !
+               !$OMP PARALLEL DEFAULT(NONE),&
+               !$OMP SHARED(HartreeFact,S_Full,S_DMFT,ispin),&
+               !$OMP PRIVATE(iorb,jorb,ik,iw)
+               !$OMP DO
                do ik=1,S_Full%Nkpt
                   do iw=1,S_Full%Npoints
                      do iorb=1,S_Full%Norb
@@ -1486,9 +1545,15 @@ contains
                      enddo
                   enddo
                enddo
+               !$OMP END DO
+               !$OMP END PARALLEL
+               !
+               if(paramagnet)then
+                  S_Full%wks(:,:,:,:,Nspin) = S_Full%wks(:,:,:,:,1)
+                  exit
+               endif
+               !
             enddo
-            !$OMP END DO
-            !$OMP END PARALLEL
             !
             call FermionicKsum(S_Full)
             !
@@ -2324,9 +2389,9 @@ contains
          !Insert or Expand to the Lattice basis
          if(RotateHloc)then
             if(sym_mode.gt.1)call symmetrize_imp(densityQMC(:,:,:,isite),OlocEig(:,isite))
-            call imp2loc(densityDMFT,dcmplx(densityQMC(:,:,:,isite),0d0),Orbs,ExpandImpurity,AFMselfcons,U=OlocRotDag)
+            call imp2loc(densityDMFT,dcmplx(densityQMC(:,:,:,isite),0d0),isite,Orbs,ExpandImpurity,AFMselfcons,U=OlocRotDag)
          else
-            call imp2loc(densityDMFT,dcmplx(densityQMC(:,:,:,isite),0d0),Orbs,ExpandImpurity,AFMselfcons)
+            call imp2loc(densityDMFT,dcmplx(densityQMC(:,:,:,isite),0d0),isite,Orbs,ExpandImpurity,AFMselfcons)
          endif
          !
          if(ExpandImpurity.or.AFMselfcons)exit
@@ -2415,9 +2480,9 @@ contains
          !Expand to the Lattice basis
          if(RotateHloc)then
             if(sym_mode.gt.1)call symmetrize_imp(Gimp,OlocEig(:,isite))
-            call imp2loc(G_DMFT,Gimp,Orbs,ExpandImpurity,AFMselfcons,U=OlocRotDag)
+            call imp2loc(G_DMFT,Gimp,isite,Orbs,ExpandImpurity,AFMselfcons,U=OlocRotDag)
          else
-            call imp2loc(G_DMFT,Gimp,Orbs,ExpandImpurity,AFMselfcons)
+            call imp2loc(G_DMFT,Gimp,isite,Orbs,ExpandImpurity,AFMselfcons)
          endif
          !
          deallocate(Orbs)
@@ -2568,9 +2633,9 @@ contains
          !Expand to the Lattice basis
          if(RotateHloc)then
             if(sym_mode.gt.1)call symmetrize_imp(Simp,OlocEig(:,isite))
-            call imp2loc(S_DMFT,Simp,Orbs,ExpandImpurity,AFMselfcons,U=OlocRotDag)
+            call imp2loc(S_DMFT,Simp,isite,Orbs,ExpandImpurity,AFMselfcons,U=OlocRotDag)
          else
-            call imp2loc(S_DMFT,Simp,Orbs,ExpandImpurity,AFMselfcons)
+            call imp2loc(S_DMFT,Simp,isite,Orbs,ExpandImpurity,AFMselfcons)
          endif
          !
          deallocate(Orbs)
@@ -2616,9 +2681,9 @@ contains
             !
             !Expand to the Lattice basis
             if(RotateHloc)then
-               call imp2loc(S_DMFT,Simp,Orbs,ExpandImpurity,AFMselfcons,U=OlocRotDag)
+               call imp2loc(S_DMFT,Simp,isite,Orbs,ExpandImpurity,AFMselfcons,U=OlocRotDag)
             else
-               call imp2loc(S_DMFT,Simp,Orbs,ExpandImpurity,AFMselfcons)
+               call imp2loc(S_DMFT,Simp,isite,Orbs,ExpandImpurity,AFMselfcons)
             endif
             !
             deallocate(Orbs)
@@ -2797,18 +2862,18 @@ contains
             !Expand to the Lattice basis
             if(RotateHloc)then
                call init_Uelements(Norb,PhysicalUelements)
-               call imp2loc(C_EDMFT,ChiCmats,Orbs,ExpandImpurity,AFMselfcons,U=OlocRotDag,Map=PhysicalUelements%Full_Map)
-               call imp2loc(P_EDMFT,Pimp,Orbs,ExpandImpurity,AFMselfcons,U=OlocRotDag,Map=PhysicalUelements%Full_Map)
-               call imp2loc(W_EDMFT,Wimp,Orbs,ExpandImpurity,AFMselfcons,U=OlocRotDag,Map=PhysicalUelements%Full_Map)
+               call imp2loc(C_EDMFT,ChiCmats,isite,Orbs,ExpandImpurity,AFMselfcons,U=OlocRotDag,Map=PhysicalUelements%Full_Map)
+               call imp2loc(P_EDMFT,Pimp,isite,Orbs,ExpandImpurity,AFMselfcons,U=OlocRotDag,Map=PhysicalUelements%Full_Map)
+               call imp2loc(W_EDMFT,Wimp,isite,Orbs,ExpandImpurity,AFMselfcons,U=OlocRotDag,Map=PhysicalUelements%Full_Map)
             else
-               call imp2loc(C_EDMFT,ChiCmats,Orbs,ExpandImpurity,AFMselfcons)
-               call imp2loc(P_EDMFT,Pimp,Orbs,ExpandImpurity,AFMselfcons)
-               call imp2loc(W_EDMFT,Wimp,Orbs,ExpandImpurity,AFMselfcons)
+               call imp2loc(C_EDMFT,ChiCmats,isite,Orbs,ExpandImpurity,AFMselfcons)
+               call imp2loc(P_EDMFT,Pimp,isite,Orbs,ExpandImpurity,AFMselfcons)
+               call imp2loc(W_EDMFT,Wimp,isite,Orbs,ExpandImpurity,AFMselfcons)
             endif
             if(RotateUloc)then
-               call imp2loc(curlyU_EDMFT,curlyU,Orbs,ExpandImpurity,AFMselfcons,U=OlocRotDag,Map=PhysicalUelements%Full_Map)
+               call imp2loc(curlyU_EDMFT,curlyU,isite,Orbs,ExpandImpurity,AFMselfcons,U=OlocRotDag,Map=PhysicalUelements%Full_Map)
             else
-               call imp2loc(curlyU_EDMFT,curlyU,Orbs,ExpandImpurity,AFMselfcons)
+               call imp2loc(curlyU_EDMFT,curlyU,isite,Orbs,ExpandImpurity,AFMselfcons)
             endif
             !
             call DeallocateBosonicField(ChiCmats)

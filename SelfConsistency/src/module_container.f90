@@ -46,7 +46,8 @@ module module_container
    wannier_K2R                              ,&
    wannier_R2K                              ,&
    wannier_K2R_NN                           ,&
-   calc_path                                ,&
+   calc_Kpath                               ,&
+   calc_Kplane                              ,&
    interpolateHk2Path
 
 

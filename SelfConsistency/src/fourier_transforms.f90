@@ -511,9 +511,9 @@ contains
       !$OMP SHARED(atBeta_,Ndat,Ntau,Nmats,coswt,sinwt,Gft_in,Gft_out),&
       !$OMP PRIVATE(idat,itau,iw,Ge,Go)
       !$OMP DO
-      do idat=1,Ndat
-         do itau=1,Ntau
-            if(atBeta_.and.(itau.ne.Ntau))cycle
+      do itau=1,Ntau
+         if(atBeta_.and.(itau.ne.Ntau))cycle
+         do idat=1,Ndat
             do iw=1,Nmats
                !
                ! Gab(iw) = Gba*(-iwn) --> Gab(iw) = Gba*(-iwn)
@@ -710,9 +710,9 @@ contains
       !$OMP SHARED(atBeta_,Ndat,Ntau,Nmats,coswt,sinwt,Gft_in,Gft_out),&
       !$OMP PRIVATE(idat,itau,iw,Ge,Go)
       !$OMP DO
-      do idat=1,Ndat
-         do itau=1,Ntau
-            if(atBeta_.and.(itau.ne.Ntau))cycle
+      do itau=1,Ntau
+         if(atBeta_.and.(itau.ne.Ntau))cycle
+         do idat=1,Ndat
             do iw=1,Nmats
                !
                ! Gab(iw) = Gba*(-iwn) --> Gab(-iw) = Gba*(iwn)
