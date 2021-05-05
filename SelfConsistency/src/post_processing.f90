@@ -1272,7 +1272,7 @@ contains
                !Compute the quasiparticle weight along the path
                do ispin=1,Nspin
                   !
-                  allocate(Zk(Lttc%Nkpt_path,Spath%Norb));Zk=0d0
+                  allocate(Zk(Lttc%Nkpt_path,Norb));Zk=0d0
                   do ik=1,Lttc%Nkpt_path
                      do iorb=1,Norb
                         Zk(ik,iorb) = 1d0 / (1d0 + abs(dimag(Spath%wks(iorb,iorb,1,ik,ispin)))*Spath%Beta/pi)
@@ -1317,7 +1317,7 @@ contains
                   !Compute the quasiparticle weight along the plane
                   do ispin=1,Nspin
                      !
-                     allocate(Zk(Lttc%Nkpt_Plane,Spath%Norb));Zk=0d0
+                     allocate(Zk(Lttc%Nkpt_Plane,Norb));Zk=0d0
                      do ik=1,Lttc%Nkpt_Plane
                         do iorb=1,Norb
                            Zk(ik,iorb) = 1d0 / (1d0 + abs(dimag(Sfermi%wks(iorb,iorb,1,ik,ispin)))*Sfermi%Beta/pi)
@@ -1520,7 +1520,7 @@ contains
          !Compute the spectral weight at Fermi along the path. See arxiv:0805.3778 Eq.(5)
          do ispin=1,Nspin
             !
-            allocate(Ak(Nkpt,Gmats_in%Norb));Ak=0d0
+            allocate(Ak(Nkpt,Norb));Ak=0d0
             do ik=1,Nkpt
                do iorb=1,Norb
                   Ak(ik,iorb) = -dreal(Gitau_diag(iorb,int(Ntau/2),ik,ispin))*Gmats_in%Beta

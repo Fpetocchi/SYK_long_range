@@ -151,6 +151,7 @@ contains
       Nkpt = Gmats%Nkpt
       Beta = Gmats%Beta
       !
+      if(verbose)write(*,"(A,I)") "     Number of K-points:",Nkpt
       call assert_shape(n_k,[Norb,Norb,Nkpt,Nspin],"calc_density_Kdep","n_k")
       !
       n_k=czero
@@ -321,6 +322,8 @@ contains
       Beta = Gmats%Beta
       mu = Gmats%mu
       !
+      if(verbose)write(*,"(A,I)") "     Number of K-points:",Nkpt
+      !
       allocate(wmats(Nmats));wmats=0d0
       wmats = FermionicFreqMesh(Beta,Nmats)
       allocate(zeta(Norb,Norb,Nmats));zeta=czero
@@ -426,6 +429,8 @@ contains
       Norb = Gmats%Norb
       Nmats = Gmats%Npoints
       Nkpt = Gmats%Nkpt
+      !
+      if(verbose)write(*,"(A,I)") "     Number of K-points:",Nkpt
       !
       allocate(zeta(Norb,Norb));zeta=0d0
       zeta = deye(Norb)*mu_shift

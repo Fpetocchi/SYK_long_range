@@ -9,7 +9,7 @@ SHELL := /bin/bash
 #
 FC     = ifort
 FFLAGS = -assume byterecl -qopenmp -liomp5 -mkl=sequential -fpp -mcmodel=large -llapack
-DBGFFLAGS = -O0 -check bounds -traceback -fpe3 -check all -fp-model precise -fp-stack-check -p -g -warn -debug extended -warn interface --heap-arrays -check all -check noarg_temp_created -C -D_verb
+DBGFFLAGS = -O0 -check bounds -traceback -fpe3 -check all -fp-model precise -fp-stack-check -p -g -warn -debug extended -warn interface --heap-arrays -check all -check noarg_temp_created -qdiag-enable:sc3 -qdiag-enable:sc-parallel3 -C -D_verb
 RELFFLAGS = -O3 -ftz
 # -xAVX -xHost  -axCORE-AVX2
 
@@ -32,7 +32,7 @@ EXE_PP  = Akw_builder
 DBGDIR = debug
 DBGFFLAGS += -module $(DBGDIR)
 # Main code
-DBGEXE = $(EXECDIR)/$(EXE)_GS_debug
+DBGEXE = $(EXECDIR)/$(EXE)_debug
 DBGOBJS = $(addprefix $(DBGDIR)/, $(OBJS))
 # Post-processing sub executable
 DBGEXE_PP = $(EXECDIR)/$(EXE_PP)_debug
@@ -44,7 +44,7 @@ DBGOBJS_PP = $(addprefix $(DBGDIR)/, $(OBJS_PP))
 RELDIR = release
 RELFFLAGS += -module $(RELDIR)
 # Main code
-RELEXE = $(EXECDIR)/$(EXE)_GS
+RELEXE = $(EXECDIR)/$(EXE)
 RELOBJS = $(addprefix $(RELDIR)/, $(OBJS))
 # Post-processing sub executable
 RELEXE_PP = $(EXECDIR)/$(EXE_PP)
