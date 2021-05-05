@@ -1840,7 +1840,7 @@ contains
          !
          !increasing range
          if(iwig.gt.2)then
-            if(Rsorted(Rorder(iwig)).gt.Rsorted(Rorder(iwig-1))) idist=idist+1
+            if((Rsorted(Rorder(iwig))-Rsorted(Rorder(iwig-1))).gt.1e-5) idist=idist+1
             if(idist.gt.Vrange) exit loopwig
          endif
          !
@@ -1992,7 +1992,7 @@ contains
          !
          !increasing range
          if(iwig.gt.2)then
-            if(Rsorted(Rorder(iwig)).gt.Rsorted(Rorder(iwig-1))) idist=idist+1
+            if((Rsorted(Rorder(iwig))-Rsorted(Rorder(iwig-1))).gt.1e-5) idist=idist+1
             if(idist.gt.Vrange) exit loopwig
          endif
          !

@@ -33,10 +33,10 @@ program SelfConsistency
    call initialize_Lattice(Crystal,ItStart)
    !
    !
-   call AllocateFermionicField(S_Full,Crystal%Norb,Nmats,Nkpt=Crystal%Nkpt,Nsite=Nsite,Beta=Beta)
-   call read_FermionicField(S_Full,reg(ItFolder),"Sfull_w",Crystal%kpt)
-   call interpolateG2Path(S_Full,Crystal,reg(structure),Nkpt_path,reg(ItFolder))
-   stop
+   !call AllocateFermionicField(S_Full,Crystal%Norb,Nmats,Nkpt=Crystal%Nkpt,Nsite=Nsite,Beta=Beta)
+   !call read_FermionicField(S_Full,reg(ItFolder),"Sfull_w",Crystal%kpt)
+   !call interpolateG2Path(S_Full,Crystal,reg(structure),Nkpt_path,reg(ItFolder))
+   !stop
    !
    !
    !---------------------------------------------------------------------------!
