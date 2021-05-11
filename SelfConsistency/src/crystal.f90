@@ -45,18 +45,19 @@ module crystal
    real(8),parameter,private                :: epsWig=1e-5
    !
    real(8),allocatable                      :: rsite(:,:)
-   real(8)                                  :: rlat(3,3)
    integer,allocatable                      :: Kprint(:)
    !
-   real(8),private                          :: lat(3,3)
+   real(8),private                          :: Rlat(3,3)
+   real(8),private                          :: RlatMod(3,3)
    real(8),private                          :: vol
-   real(8),private                          :: rvol
+   real(8),private                          :: Blat(3,3)
    !
    integer,public,protected                 :: Nwig=0
    integer,public,protected                 :: wig0=0
-   integer,allocatable,public,protected     :: rvecwig(:,:)
-   integer,allocatable,public,protected     :: nrdegwig(:)
    real(8),allocatable,public,protected     :: radiuswig(:)
+   integer,allocatable,public,protected     :: Nvecwig(:,:)
+   real(8),allocatable,public,protected     :: Rvecwig(:,:)
+   integer,allocatable,public,protected     :: nrdegwig(:)
    !
    logical,public,protected                 :: Hk_stored=.false.
    logical,public,protected                 :: Ruc_stored=.false.               !Global flag for routines that need positions within the u.c.
@@ -67,6 +68,11 @@ module crystal
    logical,private                          :: verbose=.true.
 #else
    logical,private                          :: verbose=.false.
+#endif
+#ifdef _Klib
+   logical,private                          :: Klib=.true.
+#else
+   logical,private                          :: Klib=.false.
 #endif
 
    !---------------------------------------------------------------------------!
@@ -88,7 +94,7 @@ module crystal
    public :: interpolateHk2Path
    public :: calc_Kpath
    public :: calc_Kplane
-   !public :: add_crystalfields
+   public :: calc_Ewald
 
    !===========================================================================!
 
@@ -102,12 +108,12 @@ contains
    subroutine read_lattice(pathINPUT)
       !
       use utils_misc
-      use linalg, only : det, inv_sym
+      use linalg, only : det, inv_sym, cross_product
       implicit none
       !
       character(len=*),intent(in)           :: pathINPUT
       character(len=256)                    :: path
-      integer                               :: unit
+      integer                               :: unit,ir,idim
       logical                               :: filexists
       !
       !
@@ -121,19 +127,36 @@ contains
       unit = free_unit()
       open(unit,file=reg(path),form="formatted",status="old",position="rewind",action="read")
       read(unit,*)
-      read(unit,*) lat(1:3,1)
-      read(unit,*) lat(1:3,2)
-      read(unit,*) lat(1:3,3)
+      read(unit,*) Rlat(1:3,1)
+      read(unit,*) Rlat(1:3,2)
+      read(unit,*) Rlat(1:3,3)
       close(unit)
       !
-      rlat = lat
-      call inv_sym(rlat)
+      do ir=1,3
+         do idim=1,3
+            RlatMod(idim,ir) = Rlat(idim,ir)/abs(Rlat(idim,ir))
+         enddo
+      enddo
       !
-      rlat = 2*pi*transpose(rlat)
-      !
-      vol = det(lat)
-      rvol = 8*pi**3 / vol
+      vol = dot_product(cross_product(Rlat(:,1),Rlat(:,2)),Rlat(:,3))
       if(verbose)write(*,"(A,F)")"     Unit cell volume: ",vol
+      !
+      Blat(:,1) = cross_product(Rlat(:,2),Rlat(:,3))/vol
+      Blat(:,2) = cross_product(Rlat(:,3),Rlat(:,1))/vol
+      Blat(:,3) = cross_product(Rlat(:,1),Rlat(:,2))/vol
+      !
+      write(*,"(A)")new_line("A")//"     Unit cell vectors: "
+      do ir=1,3
+         write(*,"(A)")"     R_"//str(ir)//": [ "//str(Rlat(1,ir),3)//" , "//str(Rlat(2,ir),3)//" , "//str(Rlat(3,ir),3)//" ]"
+      enddo
+      write(*,"(A)")new_line("A")//"     Unit cell vectors rescaled: "
+      do ir=1,3
+         write(*,"(A)")"     R_"//str(ir)//": [ "//str(RlatMod(1,ir),3)//" , "//str(RlatMod(2,ir),3)//" , "//str(RlatMod(3,ir),3)//" ]"
+      enddo
+      write(*,"(A)")new_line("A")//"     Reciprocal lattice vectors: "
+      do ir=1,3
+         write(*,"(A)")"     B_"//str(ir)//": [ "//str(Blat(1,ir),3)//" , "//str(Blat(2,ir),3)//" , "//str(Blat(3,ir),3)//" ]*2pi"
+      enddo
       !
       Lat_stored=.true.
       !
@@ -146,18 +169,42 @@ contains
    subroutine set_lattice(Rinput)
       !
       use utils_misc
-      use linalg, only : det, inv_sym
+      use linalg, only : det, inv_sym, cross_product
       implicit none
       !
       real(8),intent(in)                    :: Rinput(3,3)
+      integer                               :: ir
       !
       !
       if(verbose)write(*,"(A)") "---- set_lattice"
       !
       !
-      lat(:,1) = Rinput(:,1)
-      lat(:,2) = Rinput(:,2)
-      lat(:,3) = Rinput(:,3)
+      Rlat(:,1) = Rinput(:,1)
+      Rlat(:,2) = Rinput(:,2)
+      Rlat(:,3) = Rinput(:,3)
+      !
+      !all the lattice constant are assumed to be a=1
+      RlatMod = Rlat
+      !
+      vol = dot_product(cross_product(Rlat(:,1),Rlat(:,2)),Rlat(:,3))
+      if(verbose)write(*,"(A,F)")"     Unit cell volume: ",vol
+      !
+      Blat(:,1) = cross_product(Rlat(:,2),Rlat(:,3))/vol
+      Blat(:,2) = cross_product(Rlat(:,3),Rlat(:,1))/vol
+      Blat(:,3) = cross_product(Rlat(:,1),Rlat(:,2))/vol
+      !
+      write(*,"(A)")new_line("A")//"     Unit cell vectors: "
+      do ir=1,3
+         write(*,"(A)")"     R_"//str(ir)//": [ "//str(Rlat(1,ir),3)//" , "//str(Rlat(2,ir),3)//" , "//str(Rlat(3,ir),3)//" ]"
+      enddo
+      write(*,"(A)")new_line("A")//"     Unit cell vectors rescaled: "
+      do ir=1,3
+         write(*,"(A)")"     R_"//str(ir)//": [ "//str(RlatMod(1,ir),3)//" , "//str(RlatMod(2,ir),3)//" , "//str(RlatMod(3,ir),3)//" ]"
+      enddo
+      write(*,"(A)")new_line("A")//"     Reciprocal lattice vectors: "
+      do ir=1,3
+         write(*,"(A)")"     B_"//str(ir)//": [ "//str(Blat(1,ir),3)//" , "//str(Blat(2,ir),3)//" , "//str(Blat(3,ir),3)//" ]*2pi"
+      enddo
       !
       Lat_stored=.true.
       !
@@ -167,57 +214,94 @@ contains
    !---------------------------------------------------------------------------!
    !PURPOSE: Build the k-point mesh
    !---------------------------------------------------------------------------!
-   subroutine build_kpt(Nkpt3,kpt)
+   subroutine build_kpt(Nkpt3,kpt,pathOUTPUT)
       !
       use utils_misc
       implicit none
       !
       integer,dimension(3),intent(in)       :: Nkpt3
       real(8),allocatable,intent(inout)     :: kpt(:,:)
-      !
-      integer                               :: ikx,iky,ikz,ik,Nkpt
-      real(8)                               :: Dkx,Dky,Dkz
-      real(8)                               :: kx,ky,kz
+      character(len=*),intent(in),optional  :: pathOUTPUT
+      integer                               :: ik,Nkpt,unit
       !
       !
       if(verbose)write(*,"(A)") "---- build_kpt"
       !
       !
-      Nkpt = Nkpt3(1)*Nkpt3(2)*Nkpt3(3)
+      if(.not.Klib)stop "build_kpt: lthis routine needs an outer library. Recompile the code with the option GT=T."
+      if(.not.Lat_stored)stop "build_kpt: lattice vectors are not stored."
       !
+      Nkpt = Nkpt3(1)*Nkpt3(2)*Nkpt3(3)
       if(allocated(kpt))deallocate(kpt)
       allocate(kpt(3,Nkpt));kpt=0d0
       !
-      Dkx=0d0;Dky=0d0;Dkz=0d0
-      if(Nkpt3(1).ne.1) Dkx = 1d0/dble(Nkpt3(1))
-      if(Nkpt3(2).ne.1) Dky = 1d0/dble(Nkpt3(2))
-      if(Nkpt3(3).ne.1) Dkz = 1d0/dble(Nkpt3(3))
+#ifdef _Klib
+      call build_kptGT(kpt,Nkpt3,Blat,[0d0,0d0,0d0])
+#endif
       !
-      ik=0
-      do ikx=1,Nkpt3(1)
-         do iky=1,Nkpt3(2)
-            do ikz=1,Nkpt3(3)
-               !
-               kx = (ikx-1)*Dkx
-               ky = (iky-1)*Dky
-               kz = (ikz-1)*Dkz
-               !
-               ik=ik+1
-               kpt(:,ik) = [kx,ky,kz]
-               !
-            enddo
-         enddo
-      enddo
-      !
-      if(verbose)then
-         write(*,*)"     BZ K-point mesh:"
+      if(present(pathOUTPUT))then
+         unit = free_unit()
+         open(unit,file=reg(pathOUTPUT)//"Kpoints_BZ.DAT",form="formatted",status="unknown",position="rewind",action="write")
          do ik=1,Nkpt
-            write(*,"(5X,1I5,3F12.6)")ik,kpt(:,ik)
+            write(unit,"(1I8,3F20.10)")ik,kpt(:,ik)
          enddo
+         close(unit)
       endif
       !
-      !
    end subroutine build_kpt
+   !
+#ifdef _Klib
+   !
+   subroutine build_kptGT(kpt,Nkpt3,Blat,shift)
+      use kpointGeneration
+      use num_types
+      use vector_matrix_utilities
+      use utils_misc
+      implicit none
+      real(8),intent(inout)           :: kpt(:,:)
+      integer,intent(in)              :: Nkpt3(3)
+      real(8),intent(in)              :: Blat(:,:)
+      real(8),intent(in)              :: shift(3)
+      !
+      real(dp)                        :: B(3,3),H(3,3)
+      real(dp)                        :: K(3,3),Hinv(3,3)
+      real(dp)                        :: reps,aeps
+      real(dp),pointer                :: klist(:,:)
+      integer                         :: ik
+      !
+      !
+      if(verbose)write(*,"(A)") "---- build_kptGT"
+      !
+      !
+      call assert_shape(kpt,[3,Nkpt3(1)*Nkpt3(2)*Nkpt3(3)],"build_kptGT","kpt")
+      !
+      ! Finite precision tolerance (same as default value)
+      reps = 1e-8_dp
+      aeps = 1e-10_dp
+      !
+      ! Reciprocal lattice vectors
+      B(:,1) = Blat(:,1)
+      B(:,2) = Blat(:,2)
+      B(:,3) = Blat(:,3)
+      !
+      ! HNF Matrix. See arXiv:1009.4826 and arXiv:0804.3544v1
+      H(:,1) = [ Nkpt3(1), 0, 0 ]
+      H(:,2) = [ 0, Nkpt3(2), 0 ]
+      H(:,3) = [ 0, 0, Nkpt3(3) ]
+      !
+      ! Columns of K are the grid generating vectors.
+      call matrix_inverse(real(H,dp), Hinv, eps_=aeps)
+      K = matmul(Blat,Hinv)
+      !
+      ! create the kpt list
+      call generateFullKpointList(K, B, real(shift,dp), klist, reps_=reps,aeps_=aeps)
+      do ik = 1,determinant(H)
+         kpt(:,ik) = klist(ik,:)
+      enddo
+      !
+   end subroutine build_kptGT
+   !
+#endif
 
 
    !---------------------------------------------------------------------------!
@@ -445,7 +529,7 @@ contains
       allocate(Hloc(Norb,Norb));Hloc=czero
       !
       call set_lattice(Rinput)
-      call build_kpt(Nkpt3,kpt)
+      call build_kpt(Nkpt3,kpt,pathOUTPUT=reg(pathOUTPUT))
       !
       !recover the vectors in real space and allocate hopping in real space
       if(.not.Wig_stored)call calc_wignerseiz(Nkpt3)
@@ -483,8 +567,9 @@ contains
       !
       if(verbose)then
          write(*,*)"     Real-space hopping elements:"
+         write(*,"(A6,3A12)") "  i  ","  Ri  ","  H(Ri)  ","  N[Ri]  "
          do iwig=1,Nwig
-            write(*,"(5X,2F12.6)")Rsorted(Rorder(iwig)),real(Hr(1,1,Rorder(iwig)))
+            write(*,"(1I6,2F12.4,3I4)")Rorder(iwig),Rsorted(Rorder(iwig)),real(Hr(1,1,Rorder(iwig))),Nvecwig(:,Rorder(iwig))
          enddo
       endif
       !
@@ -537,10 +622,10 @@ contains
       integer,intent(inout),optional        :: pkpt(:,:,:)
       !
       integer                               :: Nkpt
-      integer                               :: iq,ik1,ik2
+      integer                               :: iq,ik1,ik2,ib
       integer                               :: i1,i2,i3
       integer                               :: k(3)
-      real(8)                               :: dk(3)
+      real(8)                               :: dk(3),Lk,LB(3)
       integer,allocatable                   :: pkpt_(:,:,:)
       !
       !
@@ -551,7 +636,11 @@ contains
       call assert_shape(kptsum,[Nkpt,Nkpt],"fill_ksumkdiff","kptsum")
       call assert_shape(kptdif,[Nkpt,Nkpt],"fill_ksumkdiff","kptdif")
       !
-      ! k1+q=k2
+      do ib=1,3
+         LB(ib)=sqrt(dot_product(Blat(:,ib),Blat(:,ib)))
+      enddo
+      !
+      !k1 + q = k2
       kptsum=0
       do iq=1,Nkpt
          do ik1=1,iq
@@ -559,25 +648,29 @@ contains
             !first attempt
             do ik2=1,Nkpt
                dk(:)=kpt(:,ik1)+kpt(:,iq)-kpt(:,ik2)
-               dk(:)=dk(:)-nint(dk(:))
-               if (all(abs(dk(:)).lt.eps)) then
+               Lk=sqrt(dot_product(dk,dk))
+               !Inside 1st BZ or modulo a reciprocal vector
+               if((Lk.lt.eps).or.(any((LB-Lk).lt.eps)))then
                   kptsum(ik1,iq)=ik2
                   if (ik1.ne.iq) kptsum(iq,ik1)=kptsum(ik1,iq)
                   exit
                endif
-            enddo ! ik2
+            enddo
             !
             !second attempt with larger tolerance
             if (kptsum(ik1,iq).eq.0)then
+               !
                do ik2=1,Nkpt
                   dk(:)=kpt(:,ik1)+kpt(:,iq)-kpt(:,ik2)
-                  dk(:)=dk(:)-nint(dk(:))
-                  if (all(abs(dk(:)).lt.1e-6)) then
+                  Lk=sqrt(dot_product(dk,dk))
+                  !Inside 1st BZ or modulo a reciprocal vector
+                  if((Lk.lt.eps).or.(any((LB-Lk).lt.1e-6)))then
                      kptsum(ik1,iq)=ik2
                      if (ik1.ne.iq) kptsum(iq,ik1)=kptsum(ik1,iq)
                      exit
                   endif
-               enddo ! ik2
+               enddo
+               !
             endif
             !
             !missing sum
@@ -586,31 +679,35 @@ contains
          enddo ! ik1
       enddo ! iq
       !
-      ! k1-q=k2
+      !k1 - q = k2
       kptdif=0
       do iq=1,nkpt
          do ik1=1,nkpt
             !
             !first attempt
-            do ik2=1,nkpt
+            do ik2=1,Nkpt
                dk(:)=kpt(:,ik1)-kpt(:,iq)-kpt(:,ik2)
-               dk(:)=dk(:)-nint(dk(:))
-               if (all(abs(dk(:)).lt.eps)) then
+               Lk=sqrt(dot_product(dk,dk))
+               !Inside 1st BZ or modulo a reciprocal vector
+               if((Lk.lt.eps).or.(any((LB-Lk).lt.eps)))then
                   kptdif(ik1,iq)=ik2
                   exit
                endif
-            enddo ! ik2
+            enddo
             !
             !second attempt with larger tolerance
             if (kptdif(ik1,iq).eq.0)then
-               do ik2=1,nkpt
+               !
+               do ik2=1,Nkpt
                   dk(:)=kpt(:,ik1)-kpt(:,iq)-kpt(:,ik2)
-                  dk(:)=dk(:)-nint(dk(:))
-                  if (all(abs(dk(:)).lt.1e-6)) then
+                  Lk=sqrt(dot_product(dk,dk))
+                  !Inside 1st BZ or modulo a reciprocal vector
+                  if((Lk.lt.eps).or.(any((LB-Lk).lt.1e-6)))then
                      kptdif(ik1,iq)=ik2
                      exit
                   endif
-               enddo ! ik2
+               enddo
+               !
             endif
             !
             !missing difference
@@ -635,8 +732,8 @@ contains
                   !first attempt
                   do ik1=1,nkpt
                      dk(:)=kpt(:,ik1)-k(:)
-                     dk(:)=dk(:)-nint(dk(:))
-                     if (all(abs(dk(:)).lt.eps)) then
+                     Lk=sqrt(dot_product(dk,dk))
+                     if((Lk.lt.eps).or.(any((LB-Lk).lt.eps)))then
                         pkpt_(i1,i2,i3)=ik1
                         exit
                      endif
@@ -646,8 +743,8 @@ contains
                   if (pkpt_(i1,i2,i3).eq.0)then
                      do ik1=1,nkpt
                         dk(:)=kpt(:,ik1)-k(:)
-                        dk(:)=dk(:)-nint(dk(:))
-                        if (all(abs(dk(:)).lt.1e-6)) then
+                        Lk=sqrt(dot_product(dk,dk))
+                        if((Lk.lt.eps).or.(any((LB-Lk).lt.1e-6)))then
                            pkpt_(i1,i2,i3)=ik1
                            exit
                         endif
@@ -737,7 +834,7 @@ contains
    !---------------------------------------------------------------------------!
    !PURPOSE: calculate lattice points inside Wigner-Seitz cell of given supercell
    !NEEDED:
-   ! lat(3,3) : premitive lattice vectors
+   ! Rlat(3,3) : premitive lattice vectors
    ! nkpt : number of k-points
    ! nkpt3(3) : number of k-points along each direction
    !OUTPUT:
@@ -759,7 +856,8 @@ contains
       integer,parameter                     :: nshell=2
       real(8)                               :: rtmp(3),rtmpsc(3),dr(3)
       real(8),allocatable                   :: dist(:),radiuswig_tmp(:)
-      integer,allocatable                   :: rvecwig_tmp(:,:),nrdegwig_tmp(:)
+      real(8),allocatable                   :: Rvecwig_tmp(:,:)
+      integer,allocatable                   :: Nvecwig_tmp(:,:),nrdegwig_tmp(:)
       real(8)                               :: distmin
       !
       !
@@ -768,7 +866,8 @@ contains
       !
       Nkpt = nkpt3(1)*nkpt3(2)*nkpt3(3)
       !
-      allocate(rvecwig_tmp(3,100*nkpt));rvecwig_tmp=0
+      allocate(Nvecwig_tmp(3,100*nkpt));Nvecwig_tmp=0
+      allocate(Rvecwig_tmp(3,100*nkpt));Rvecwig_tmp=0d0
       allocate(nrdegwig_tmp(100*nkpt));nrdegwig_tmp=0
       allocate(radiuswig_tmp(100*nkpt));radiuswig_tmp=0d0
       !
@@ -781,7 +880,7 @@ contains
          do ir2=-nkpt3(2),+nkpt3(2)
             do ir3=-nkpt3(3),+nkpt3(3)
                !
-               rtmp(:)=matmul(lat,(/ir1,ir2,ir3/))
+               rtmp(:)=matmul(Rlat,(/ir1,ir2,ir3/))
                i=0
                !
                do irsc1=-nshell,+nshell
@@ -789,7 +888,7 @@ contains
                      do irsc3=-nshell,+nshell
                         !
                         i=i+1
-                        rtmpsc(:)=matmul(lat,(/nkpt3(1)*irsc1,nkpt3(2)*irsc2,nkpt3(3)*irsc3/))
+                        rtmpsc(:)=matmul(Rlat,(/nkpt3(1)*irsc1,nkpt3(2)*irsc2,nkpt3(3)*irsc3/))
                         dr(:)=rtmp(:)-rtmpsc(:)
                         dist(i)=sum(dr(:)**2)
                         if((i.eq.i0).and.(.not.all([irsc1,irsc2,irsc3].eq.[0,0,0])))stop "calc_wignerseiz: wrong index of R=0 vector."
@@ -804,12 +903,17 @@ contains
                   iwig=iwig+1
                   if (iwig.gt.100*nkpt) stop "calc_wignerseiz: iwig>100*nkpt."
                   !
-                  rvecwig_tmp(:,iwig)=(/ir1,ir2,ir3/)
+                  Nvecwig_tmp(:,iwig)=(/ir1,ir2,ir3/)
+                  Rvecwig_tmp(:,iwig)=matmul(RlatMod,(/ir1,ir2,ir3/))
                   nrdegwig_tmp(iwig)=count(abs(distmin-dist(:)).le.epsWig)
                   radiuswig_tmp(iwig)=sqrt(dble(dot_product(rtmp,rtmp)))
                   if(all([ir1,ir2,ir3].eq.[0,0,0]))wig0=iwig
                   !
-                  if(verbose)write(*,*) iwig,rvecwig_tmp(:,iwig),nrdegwig_tmp(iwig)
+                  !if(verbose)then
+                  !   write(*,"(A12,I10,A5,I4)") "     iwig:",iwig,"deg:",nrdegwig_tmp(iwig)
+                  !   write(*,"(A,3I8)") "     Nvecwig:",Nvecwig_tmp(:,iwig)
+                  !   write(*,"(A,3F8.2)") "     Rvecwig:",Rvecwig_tmp(:,iwig)
+                  !endif
                   !
                endif
                !
@@ -825,12 +929,14 @@ contains
       !
       !public,protected
       Nwig = iwig
-      allocate(rvecwig(3,nwig)) ; rvecwig=rvecwig_tmp(:,1:nwig)
-      allocate(nrdegwig(nwig))  ; nrdegwig=nrdegwig_tmp(1:nwig)
-      allocate(radiuswig(nwig)) ; radiuswig=radiuswig_tmp(1:nwig)
+      allocate(radiuswig(Nwig)) ; radiuswig=radiuswig_tmp(1:Nwig)
+      allocate(Nvecwig(3,Nwig)) ; Nvecwig=Nvecwig_tmp(:,1:Nwig)
+      allocate(Rvecwig(3,Nwig)) ; Rvecwig=Rvecwig_tmp(:,1:Nwig)
+      allocate(nrdegwig(Nwig))  ; nrdegwig=nrdegwig_tmp(1:Nwig)
+      !
       Wig_stored=.true.
       !
-      deallocate(rvecwig_tmp,nrdegwig_tmp,radiuswig_tmp)
+      deallocate(Nvecwig_tmp,Rvecwig_tmp,nrdegwig_tmp,radiuswig_tmp)
       !
    end subroutine calc_wignerseiz
 
@@ -899,23 +1005,23 @@ contains
       ! M(R)=\sum_{k} M(k)*exp[-ik*R]
       allocate(mat_R(Nsize1,Nwig));mat_R=czero
       !$OMP PARALLEL DEFAULT(NONE),&
-      !$OMP SHARED(Nwig,Nkpt_orig,Nsize1,kpt_orig,rvecwig,mat_orig,mat_R),&
+      !$OMP SHARED(Nwig,Nkpt_orig,Nsize1,kpt_orig,Rvecwig,mat_orig,mat_R),&
       !$OMP PRIVATE(ir,ik,i1,kR,cfac)
       !$OMP DO
-      do i1=1,Nsize1
-         !
-         do ir=1,Nwig
+      do ir=1,Nwig
+         do i1=1,Nsize1
+            !
             do ik=1,Nkpt_orig
                !
-               kR = 2*pi * dot_product(kpt_orig(:,ik),rvecwig(:,ir))
+               kR = 2*pi * dot_product(kpt_orig(:,ik),Rvecwig(:,ir))
                cfac = dcmplx(cos(kR),-sin(kR))
                !
                mat_R(i1,ir) = mat_R(i1,ir) + mat_orig(i1,ik)*cfac
                !
             enddo ! ik
-         enddo ! ir
-         !
-      enddo
+            !
+         enddo ! i1
+      enddo ! ir
       !$OMP END DO
       !$OMP END PARALLEL
       mat_R = mat_R/Nkpt_orig
@@ -923,23 +1029,23 @@ contains
       ! M(k_{intp})=\sum_{R} M(R)*exp[+ik_{intp}*R]
       mat_intp=czero
       !$OMP PARALLEL DEFAULT(NONE),&
-      !$OMP SHARED(Nwig,Nkpt_intp,Nsize1,kpt_intp,rvecwig,mat_intp,mat_R,nrdegwig),&
+      !$OMP SHARED(Nwig,Nkpt_intp,Nsize1,kpt_intp,Rvecwig,mat_intp,mat_R,nrdegwig),&
       !$OMP PRIVATE(ir,ik,i1,kR,cfac)
       !$OMP DO
-      do i1=1,Nsize1
-         !
-         do ik=1,Nkpt_intp
+      do ik=1,Nkpt_intp
+         do i1=1,Nsize1
+            !
             do ir=1,Nwig
                !
-               kR = 2*pi * dot_product(kpt_intp(:,ik),rvecwig(:,ir))
+               kR = 2*pi * dot_product(kpt_intp(:,ik),Rvecwig(:,ir))
                cfac = dcmplx(cos(kR),+sin(kR))/nrdegwig(ir)
                !
                mat_intp(i1,ik) = mat_intp(i1,ik) + mat_R(i1,ir)*cfac
                !
             enddo ! ir
-         enddo ! ik
-         !
-      enddo
+            !
+         enddo ! i1
+      enddo ! ik
       !$OMP END DO
       !$OMP END PARALLEL
       deallocate(mat_R)
@@ -989,25 +1095,25 @@ contains
       ! M(R)=\sum_{k} M(k)*exp[-ik*R]
       allocate(mat_R(Nsize1,Nsize2,Nwig));mat_R=czero
       !$OMP PARALLEL DEFAULT(NONE),&
-      !$OMP SHARED(Nwig,Nkpt_orig,Nsize1,Nsize2,kpt_orig,rvecwig,mat_orig,mat_R),&
+      !$OMP SHARED(Nwig,Nkpt_orig,Nsize1,Nsize2,kpt_orig,Rvecwig,mat_orig,mat_R,nrdegwig),&
       !$OMP PRIVATE(ir,ik,i1,i2,kR,cfac)
       !$OMP DO
-      do i1=1,Nsize1
-         do i2=1,Nsize2
-            !
-            do ir=1,Nwig
+      do ir=1,Nwig
+         do i1=1,Nsize1
+            do i2=1,Nsize2
+               !
                do ik=1,Nkpt_orig
                   !
-                  kR = 2*pi * dot_product(kpt_orig(:,ik),rvecwig(:,ir))
+                  kR = 2*pi * dot_product(kpt_orig(:,ik),Rvecwig(:,ir))
                   cfac = dcmplx(cos(kR),-sin(kR))
                   !
                   mat_R(i1,i2,ir) = mat_R(i1,i2,ir) + mat_orig(i1,i2,ik)*cfac
                   !
                enddo ! ik
-            enddo ! ir
-            !
-         enddo
-      enddo
+               !
+            enddo ! i2
+         enddo ! i1
+      enddo ! ir
       !$OMP END DO
       !$OMP END PARALLEL
       mat_R = mat_R/Nkpt_orig
@@ -1015,25 +1121,25 @@ contains
       ! M(k_{intp})=\sum_{R} M(R)*exp[+ik_{intp}*R]
       mat_intp=czero
       !$OMP PARALLEL DEFAULT(NONE),&
-      !$OMP SHARED(Nwig,Nkpt_intp,Nsize1,Nsize2,kpt_intp,rvecwig,mat_intp,mat_R,nrdegwig),&
+      !$OMP SHARED(Nwig,Nkpt_intp,Nsize1,Nsize2,kpt_intp,Rvecwig,mat_intp,mat_R,nrdegwig),&
       !$OMP PRIVATE(ir,ik,i1,i2,kR,cfac)
       !$OMP DO
-      do i1=1,Nsize1
-         do i2=1,Nsize2
-            !
-            do ik=1,Nkpt_intp
+      do ik=1,Nkpt_intp
+         do i1=1,Nsize1
+            do i2=1,Nsize2
+               !
                do ir=1,Nwig
                   !
-                  kR = 2*pi * dot_product(kpt_intp(:,ik),rvecwig(:,ir))
+                  kR = 2*pi * dot_product(kpt_intp(:,ik),Rvecwig(:,ir))
                   cfac = dcmplx(cos(kR),+sin(kR))/nrdegwig(ir)
                   !
                   mat_intp(i1,i2,ik) = mat_intp(i1,i2,ik) + mat_R(i1,i2,ir)*cfac
                   !
                enddo ! ir
-            enddo ! ik
-            !
-         enddo
-      enddo
+               !
+            enddo ! i2
+         enddo ! i1
+      enddo ! ik
       !$OMP END DO
       !$OMP END PARALLEL
       deallocate(mat_R)
@@ -1084,27 +1190,27 @@ contains
       ! M(R)=\sum_{k} M(k)*exp[-ik*R]
       allocate(mat_R(Nsize1,Nsize2,Nsize3,Nwig));mat_R=czero
       !$OMP PARALLEL DEFAULT(NONE),&
-      !$OMP SHARED(Nwig,Nkpt_orig,Nsize1,Nsize2,Nsize3,kpt_orig,rvecwig,mat_orig,mat_R),&
+      !$OMP SHARED(Nwig,Nkpt_orig,Nsize1,Nsize2,Nsize3,kpt_orig,Rvecwig,mat_orig,mat_R),&
       !$OMP PRIVATE(ir,ik,i1,i2,i3,kR,cfac)
       !$OMP DO
-      do i1=1,Nsize1
-         do i2=1,Nsize2
-            do i3=1,Nsize3
-               !
-               do ir=1,Nwig
+      do ir=1,Nwig
+         do i1=1,Nsize1
+            do i2=1,Nsize2
+               do i3=1,Nsize3
+                  !
                   do ik=1,Nkpt_orig
                      !
-                     kR = 2*pi * dot_product(kpt_orig(:,ik),rvecwig(:,ir))
+                     kR = 2*pi * dot_product(kpt_orig(:,ik),Rvecwig(:,ir))
                      cfac = dcmplx(cos(kR),-sin(kR))
                      !
                      mat_R(i1,i2,i3,ir) = mat_R(i1,i2,i3,ir) + mat_orig(i1,i2,i3,ik)*cfac
                      !
                   enddo ! ik
-               enddo ! ir
-               !
-            enddo
-         enddo
-      enddo
+                  !
+               enddo ! i3
+            enddo ! i2
+         enddo ! i1
+      enddo ! ir
       !$OMP END DO
       !$OMP END PARALLEL
       mat_R = mat_R/Nkpt_orig
@@ -1112,27 +1218,27 @@ contains
       ! M(k_{intp})=\sum_{R} M(R)*exp[+ik_{intp}*R]
       mat_intp(:,:,:,:)=0
       !$OMP PARALLEL DEFAULT(NONE),&
-      !$OMP SHARED(Nwig,Nkpt_intp,Nsize1,Nsize2,Nsize3,kpt_intp,rvecwig,mat_intp,mat_R,nrdegwig),&
+      !$OMP SHARED(Nwig,Nkpt_intp,Nsize1,Nsize2,Nsize3,kpt_intp,Rvecwig,mat_intp,mat_R,nrdegwig),&
       !$OMP PRIVATE(ir,ik,i1,i2,i3,kR,cfac)
       !$OMP DO
-      do i1=1,Nsize1
-         do i2=1,Nsize2
-            do i3=1,Nsize3
-               !
-               do ik=1,Nkpt_intp
+      do ik=1,Nkpt_intp
+         do i1=1,Nsize1
+            do i2=1,Nsize2
+               do i3=1,Nsize3
+                  !
                   do ir=1,Nwig
                      !
-                     kR = 2*pi * dot_product(kpt_intp(:,ik),rvecwig(:,ir))
+                     kR = 2*pi * dot_product(kpt_intp(:,ik),Rvecwig(:,ir))
                      cfac = dcmplx(cos(kR),+sin(kR))/nrdegwig(ir)
                      !
                      mat_intp(i1,i2,i3,ik) = mat_intp(i1,i2,i3,ik) + mat_R(i1,i2,i3,ir)*cfac
                      !
                   enddo ! ir
-               enddo ! ik
-               !
-            enddo
-         enddo
-      enddo
+                  !
+               enddo ! i3
+            enddo ! i2
+         enddo ! i1
+      enddo ! ik
       !$OMP END DO
       !$OMP END PARALLEL
       deallocate(mat_R)
@@ -1181,18 +1287,17 @@ contains
       !
       ! M(R)=\sum_{k} M(k)*exp[-ik*R]
       !$OMP PARALLEL DEFAULT(NONE),&
-      !$OMP SHARED(Nwig,Nkpt_orig,Npoints,Nsize,kpt_orig,rvecwig,mat_K,mat_R_nn),&
+      !$OMP SHARED(Nwig,Nkpt_orig,Npoints,Nsize,kpt_orig,Nvecwig,Rvecwig,mat_K,mat_R_nn),&
       !$OMP PRIVATE(Rx,Ry,Rz,ir2,ir,ik,id,i1,i2,kR,cfac)
       !$OMP DO
-      do i1=1,Nsize
-         do i2=1,Nsize
-            do id=1,Npoints
-               !
-               do ir=1,Nwig
+      do ir=1,Nwig
+         do i1=1,Nsize
+            do i2=1,Nsize
+               do id=1,Npoints
                   !
-                  Rx = all(rvecwig(:,ir).eq.[1,0,0])
-                  Ry = all(rvecwig(:,ir).eq.[0,1,0])
-                  Rz = all(rvecwig(:,ir).eq.[0,0,1])
+                  Rx = all(Nvecwig(:,ir).eq.[1,0,0])
+                  Ry = all(Nvecwig(:,ir).eq.[0,1,0])
+                  Rz = all(Nvecwig(:,ir).eq.[0,0,1])
                   !
                   if(Rx)then
                      ir2 = 1
@@ -1206,17 +1311,17 @@ contains
                   !
                   do ik=1,Nkpt_orig
                      !
-                     kR=2*pi*dot_product(kpt_orig(:,ik),rvecwig(:,ir))
+                     kR=2*pi*dot_product(kpt_orig(:,ik),Rvecwig(:,ir))
                      cfac=dcmplx(cos(kR),-sin(kR))
                      !
                      mat_R_nn(i1,i2,id,ir2) = mat_R_nn(i1,i2,id,ir2) + mat_K(i1,i2,id,ik)*cfac
                      !
                   enddo ! ik
-               enddo ! ir
-               !
-            enddo
-         enddo
-      enddo
+                  !
+               enddo ! id
+            enddo ! i2
+         enddo ! i1
+      enddo ! ir
       !$OMP END DO
       !$OMP END PARALLEL
       !
@@ -1269,23 +1374,23 @@ contains
       !
       ! M(R)=\sum_{k} M(k)*exp[-ik*R]
       !$OMP PARALLEL DEFAULT(NONE),&
-      !$OMP SHARED(Nwig,Nkpt_orig,Nsize1,kpt_orig,rvecwig,mat_K,mat_R),&
+      !$OMP SHARED(Nwig,Nkpt_orig,Nsize1,kpt_orig,Rvecwig,mat_K,mat_R),&
       !$OMP PRIVATE(ir,ik,i1,kR,cfac)
       !$OMP DO
-      do i1=1,Nsize1
-         !
-         do ir=1,Nwig
+      do ir=1,Nwig
+         do i1=1,Nsize1
+            !
             do ik=1,Nkpt_orig
                !
-               kR = 2*pi * dot_product(kpt_orig(:,ik),rvecwig(:,ir))
+               kR = 2*pi * dot_product(kpt_orig(:,ik),Rvecwig(:,ir))
                cfac = dcmplx(cos(kR),-sin(kR))
                !
                mat_R(i1,ir) = mat_R(i1,ir) + mat_K(i1,ik)*cfac
                !
             enddo ! ik
-         enddo ! ir
-         !
-      enddo
+            !
+         enddo ! i1
+      enddo! ir
       !$OMP END DO
       !$OMP END PARALLEL
       mat_R = mat_R/Nkpt_orig
@@ -1332,25 +1437,25 @@ contains
       !
       ! M(R)=\sum_{k} M(k)*exp[-ik*R]
       !$OMP PARALLEL DEFAULT(NONE),&
-      !$OMP SHARED(Nwig,Nkpt_orig,Nsize1,Nsize2,kpt_orig,rvecwig,mat_K,mat_R),&
+      !$OMP SHARED(Nwig,Nkpt_orig,Nsize1,Nsize2,kpt_orig,Rvecwig,mat_K,mat_R),&
       !$OMP PRIVATE(ir,ik,i1,i2,kR,cfac)
       !$OMP DO
-      do i1=1,Nsize1
-         do i2=1,Nsize2
-            !
-            do ir=1,Nwig
+      do ir=1,Nwig
+         do i1=1,Nsize1
+            do i2=1,Nsize2
+               !
                do ik=1,Nkpt_orig
                   !
-                  kR = 2*pi * dot_product(kpt_orig(:,ik),rvecwig(:,ir))
+                  kR = 2*pi * dot_product(kpt_orig(:,ik),Rvecwig(:,ir))
                   cfac = dcmplx(cos(kR),-sin(kR))
                   !
                   mat_R(i1,i2,ir) = mat_R(i1,i2,ir) + mat_K(i1,i2,ik)*cfac
                   !
                enddo ! ik
-            enddo ! ir
-            !
-         enddo
-      enddo
+               !
+            enddo ! i2
+         enddo ! i1
+      enddo ! ir
       !$OMP END DO
       !$OMP END PARALLEL
       mat_R = mat_R/Nkpt_orig
@@ -1398,27 +1503,27 @@ contains
       !
       ! M(R)=\sum_{k} M(k)*exp[-ik*R]
       !$OMP PARALLEL DEFAULT(NONE),&
-      !$OMP SHARED(Nwig,Nkpt_orig,Nsize1,Nsize2,Nsize3,kpt_orig,rvecwig,mat_K,mat_R),&
+      !$OMP SHARED(Nwig,Nkpt_orig,Nsize1,Nsize2,Nsize3,kpt_orig,Rvecwig,mat_K,mat_R),&
       !$OMP PRIVATE(ir,ik,i1,i2,i3,kR,cfac)
       !$OMP DO
-      do i1=1,Nsize1
-         do i2=1,Nsize2
-            do i3=1,Nsize3
-               !
-               do ir=1,Nwig
+      do ir=1,Nwig
+         do i1=1,Nsize1
+            do i2=1,Nsize2
+               do i3=1,Nsize3
+                  !
                   do ik=1,Nkpt_orig
                      !
-                     kR = 2*pi * dot_product(kpt_orig(:,ik),rvecwig(:,ir))
+                     kR = 2*pi * dot_product(kpt_orig(:,ik),Rvecwig(:,ir))
                      cfac = dcmplx(cos(kR),-sin(kR))
                      !
                      mat_R(i1,i2,i3,ir) = mat_R(i1,i2,i3,ir) + mat_K(i1,i2,i3,ik)*cfac
                      !
                   enddo ! ik
-               enddo ! ir
-               !
-            enddo
-         enddo
-      enddo
+                  !
+               enddo ! i3
+            enddo ! i2
+         enddo ! i1
+      enddo ! ir
       !$OMP END DO
       !$OMP END PARALLEL
       mat_R = mat_R/Nkpt_orig
@@ -1468,23 +1573,23 @@ contains
       ! M(k_{intp})=\sum_{R} M(R)*exp[+ik_{intp}*R]
       mat_intp=czero
       !$OMP PARALLEL DEFAULT(NONE),&
-      !$OMP SHARED(Nwig,Nkpt_intp,Nsize1,kpt_intp,rvecwig,mat_intp,mat_R,nrdegwig),&
+      !$OMP SHARED(Nwig,Nkpt_intp,Nsize1,kpt_intp,Rvecwig,mat_intp,mat_R,nrdegwig),&
       !$OMP PRIVATE(ir,ik,i1,kR,cfac)
       !$OMP DO
-      do i1=1,Nsize1
-         !
-         do ik=1,Nkpt_intp
+      do ik=1,Nkpt_intp
+         do i1=1,Nsize1
+            !
             do ir=1,Nwig
                !
-               kR = 2*pi * dot_product(kpt_intp(:,ik),rvecwig(:,ir))
+               kR = 2*pi * dot_product(kpt_intp(:,ik),Rvecwig(:,ir))
                cfac = dcmplx(cos(kR),+sin(kR))/nrdegwig(ir)
                !
                mat_intp(i1,ik) = mat_intp(i1,ik) + mat_R(i1,ir)*cfac
                !
             enddo ! ir
-         enddo ! ik
-         !
-      enddo
+            !
+         enddo ! i1
+      enddo ! ik
       !$OMP END DO
       !$OMP END PARALLEL
       !
@@ -1529,25 +1634,25 @@ contains
       ! M(k_{intp})=\sum_{R} M(R)*exp[+ik_{intp}*R]
       mat_intp=czero
       !$OMP PARALLEL DEFAULT(NONE),&
-      !$OMP SHARED(Nwig,Nkpt_intp,Nsize1,Nsize2,kpt_intp,rvecwig,mat_intp,mat_R,nrdegwig),&
+      !$OMP SHARED(Nwig,Nkpt_intp,Nsize1,Nsize2,kpt_intp,Rvecwig,mat_intp,mat_R,nrdegwig),&
       !$OMP PRIVATE(ir,ik,i1,i2,kR,cfac)
       !$OMP DO
-      do i1=1,Nsize1
-         do i2=1,Nsize2
-            !
-            do ik=1,Nkpt_intp
+      do ik=1,Nkpt_intp
+         do i1=1,Nsize1
+            do i2=1,Nsize2
+               !
                do ir=1,Nwig
                   !
-                  kR = 2*pi * dot_product(kpt_intp(:,ik),rvecwig(:,ir))
+                  kR = 2*pi * dot_product(kpt_intp(:,ik),Rvecwig(:,ir))
                   cfac = dcmplx(cos(kR),+sin(kR))/nrdegwig(ir)
                   !
                   mat_intp(i1,i2,ik) = mat_intp(i1,i2,ik) + mat_R(i1,i2,ir)*cfac
                   !
                enddo ! ir
-            enddo ! ik
-            !
-         enddo
-      enddo
+               !
+            enddo ! i2
+         enddo ! i1
+      enddo ! ik
       !$OMP END DO
       !$OMP END PARALLEL
       !
@@ -1593,27 +1698,27 @@ contains
       ! M(k_{intp})=\sum_{R} M(R)*exp[+ik_{intp}*R]
       mat_intp=czero
       !$OMP PARALLEL DEFAULT(NONE),&
-      !$OMP SHARED(Nwig,Nkpt_intp,Nsize1,Nsize2,Nsize3,kpt_intp,rvecwig,mat_intp,mat_R,nrdegwig),&
+      !$OMP SHARED(Nwig,Nkpt_intp,Nsize1,Nsize2,Nsize3,kpt_intp,Rvecwig,mat_intp,mat_R,nrdegwig),&
       !$OMP PRIVATE(ir,ik,i1,i2,i3,kR,cfac)
       !$OMP DO
-      do i1=1,Nsize1
-         do i2=1,Nsize2
-            do i3=1,Nsize3
-               !
-               do ik=1,Nkpt_intp
+      do ik=1,Nkpt_intp
+         do i1=1,Nsize1
+            do i2=1,Nsize2
+               do i3=1,Nsize3
+                  !
                   do ir=1,Nwig
                      !
-                     kR = 2*pi * dot_product(kpt_intp(:,ik),rvecwig(:,ir))
+                     kR = 2*pi * dot_product(kpt_intp(:,ik),Rvecwig(:,ir))
                      cfac = dcmplx(cos(kR),+sin(kR))/nrdegwig(ir)
                      !
                      mat_intp(i1,i2,i3,ik) = mat_intp(i1,i2,i3,ik) + mat_R(i1,i2,i3,ir)*cfac
                      !
                   enddo ! ir
-               enddo ! ik
-               !
-            enddo
-         enddo
-      enddo
+                  !
+               enddo ! i3
+            enddo ! i2
+         enddo ! i1
+      enddo ! ik
       !$OMP END DO
       !$OMP END PARALLEL
       !
@@ -2066,7 +2171,7 @@ contains
       endif
       !
       !Print position of High-symmetry points in the same folder where the function is
-      path = reg(pathOUTPUT)//"Kpoints.DAT"
+      path = reg(pathOUTPUT)//"Kpoints_path.DAT"
       unit = free_unit()
       open(unit,file=reg(path),form="formatted",status="unknown",position="rewind",action="write")
       do ik=1,size(Lttc%KpathaxisPoints,dim=1)
@@ -2078,6 +2183,61 @@ contains
       if(doplane_)write(*,"(A,I)") "     Total number of K-points along {kx,ky} plane:",Lttc%Nkpt_Plane
       !
    end subroutine interpolateHk2Path
+
+
+   !---------------------------------------------------------------------------!
+   !PURPOSE: computes the Ewald corrections to the infinite range coulombian
+   !---------------------------------------------------------------------------!
+   subroutine calc_Ewald(EwaldShift,kpt,eta,mode)
+      !
+      use parameters
+      use utils_misc
+      implicit none
+      !
+      complex(8),intent(inout)              :: EwaldShift(:)
+      real(8),intent(in)                    :: kpt(:,:)
+      real(8),intent(in)                    :: eta
+      character(len=*),intent(in)           :: mode
+      !
+      integer                               :: ik,ir,Nkpt
+      real(8)                               :: kR,Lk,funct
+      complex(8)                            :: cfac
+      !
+      !
+      if(verbose)write(*,"(A)") new_line("A")//new_line("A")//"---- calc_Ewald"
+      if(verbose)write(*,"(A)") "     mode: "//str(reg(mode))
+      !
+      !
+      if(.not.Wig_stored) stop "calc_Ewald: the Wigner-Seiz positions are not stored."
+      if((reg(mode).ne."2D").and.(reg(mode).ne."3D")) stop "calc_Ewald: Available modes: 2D, 3D."
+      call assert_shape(EwaldShift,[Nwig],"calc_Ewald","EwaldShift")
+      EwaldShift=czero
+      !
+      Nkpt = size(kpt,dim=2)
+      !$OMP PARALLEL DEFAULT(NONE),&
+      !$OMP SHARED(Nwig,Nkpt,kpt,Rvecwig,EwaldShift,eta,mode),&
+      !$OMP PRIVATE(ir,ik,kR,Lk,cfac,funct)
+      !$OMP DO
+      do ir=1,Nwig
+         do ik=1,Nkpt
+            !
+            kR = 2*pi * dot_product(kpt(:,ik),Rvecwig(:,ir))
+            cfac = dcmplx(cos(kR),sin(kR))
+            !
+            Lk = 2*pi * sqrt(dot_product(kpt(:,ik),kpt(:,ik)))
+            if(Lk.lt.eps)cycle
+            !
+            if(reg(mode).eq."2D") funct = 2d0*pi*erfc(Lk*eta)/Lk
+            if(reg(mode).eq."3D") funct = 4d0*pi*exp(-eta*Lk**2)/(Lk**2)
+            !
+            EwaldShift(ir) = EwaldShift(ir) + funct*cfac/Nkpt
+            !
+         enddo ! ik
+      enddo! ir
+      !$OMP END DO
+      !$OMP END PARALLEL
+      !
+   end subroutine calc_Ewald
 
 
 end module crystal

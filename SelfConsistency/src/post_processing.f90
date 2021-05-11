@@ -1103,7 +1103,7 @@ contains
       write(*,"(A,I)") "     Total number of K-points along path:",Lttc%Nkpt_path
       !
       !Re-Print position of High-symmetry points in the same folder where the function is
-      path = reg(pathOUTPUT)//"K_resolved/Kpoints.DAT"
+      path = reg(pathOUTPUT)//"K_resolved/Kpoints_path.DAT"
       unit = free_unit()
       open(unit,file=reg(path),form="formatted",status="unknown",position="rewind",action="write")
       do ik=1,size(Lttc%KpathaxisPoints,dim=1)

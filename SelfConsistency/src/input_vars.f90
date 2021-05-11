@@ -150,6 +150,7 @@ module input_vars
    real(8),public,allocatable               :: wo_eph(:)
    integer,public                           :: N_Vnn
    real(8),public,allocatable               :: Vnn(:,:)
+   character(len=256),public                :: long_range
    logical,public                           :: Kdiag
    !
    !Double counting types, divergencies, scaling and self-consistency coefficients
@@ -418,11 +419,18 @@ contains
          !long-range model U
          call parse_input_variable(N_Vnn,"N_V",InputFile,default=1,comment="Range of the non-local interaction in real space (orbital independent).")
          if(N_Vnn.gt.0)then
+            !long-range coulombian
+            call parse_input_variable(long_range,"LONG_RANGE",InputFile,default="None",comment="Long range interaction. The strength is the first entry of VNN. Avalibale: None, Coulomb(range truncated to N_V), Ewald(unrestricted range).")
             allocate(Vnn(Norb_model,N_Vnn));Vnn=0d0
-            do iorb=1,Norb_model
-               call parse_input_variable(Vnn(iorb,:),"VNN_"//str(iorb),InputFile,comment="Magnitudes of the long-range interactions for orbital number "//str(iorb))
-            enddo
-            !Ustart=.false. !because of the loc2imp: curlyU has the frequency
+            if(reg(long_range).eq."None")then
+               do iorb=1,Norb_model
+                  call parse_input_variable(Vnn(iorb,:),"VNN_"//str(iorb),InputFile,comment="Magnitude of the long-range interactions for orbital number "//str(iorb))
+               enddo
+            else
+               do iorb=1,Norb_model
+                  call parse_input_variable(Vnn(iorb,1),"VNN_"//str(iorb),InputFile,comment="Magnitude of the long-range interactions for orbital number "//str(iorb))
+               enddo
+            endif
          endif
          if((Nphonons.gt.0).and.(N_Vnn.gt.0)) stop "read_InputFile: Model interaction with both phonons and non-local couplings not implemented."
          if((Nphonons.eq.0).and.(N_Vnn.eq.0)) stop "read_InputFile: Model interaction requested buth neither phonons nor long-range couplings provided."

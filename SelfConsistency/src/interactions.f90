@@ -23,10 +23,10 @@ module interactions
    end interface build_Umat
 
    interface build_Uret
-      module procedure build_Uret_singlParam_ph                !   (GW Format)  ![BosonicField,Uaa_bare,Uab_bare,J_bare,vector_g,vector_w0,LocalOnly(optional)]
-      module procedure build_Uret_multiParam_ph                !   (GW Format)  ![BosonicField,Vector,Matrix,Matrix,vector_g,vector_w0,LocalOnly(optional)]      !NOT USED: the input is not formatted for interactions with different matrix elements
-      module procedure build_Uret_singlParam_Vn                !   (GW Format)  ![BosonicField,Uaa_bare,Uab_bare,J_bare,vector_g,vector_w0,LocalOnly(optional)]
-      module procedure build_Uret_multiParam_Vn                !   (GW Format)  ![BosonicField,Vector,Matrix,Matrix,vector_g,vector_w0,LocalOnly(optional)]      !NOT USED: the input is not formatted for interactions with different matrix elements
+      module procedure build_Uret_singlParam_ph              !      (GW Format) ![BosonicField,Uaa_bare,Uab_bare,J_bare,vector_g,vector_w0,LocalOnly(optional)]
+      module procedure build_Uret_multiParam_ph              !      (GW Format) ![BosonicField,Vector,Matrix,Matrix,vector_g,vector_w0,LocalOnly(optional)]      !NOT USED: the input is not formatted for interactions with different matrix elements
+      module procedure build_Uret_singlParam_Vn              !      (GW Format) ![BosonicField,Uaa_bare,Uab_bare,J_bare,vector_g,vector_w0,LocalOnly(optional)]
+      module procedure build_Uret_multiParam_Vn              !      (GW Format) ![BosonicField,Vector,Matrix,Matrix,vector_g,vector_w0,LocalOnly(optional)]      !NOT USED: the input is not formatted for interactions with different matrix elements
    end interface build_Uret
 
    !---------------------------------------------------------------------------!
@@ -1767,8 +1767,8 @@ contains
       use utils_misc
       use utils_fields
       use crystal
-      use input_vars, only : pathINPUTtr
-      use input_vars, only : pathINPUT, FirstIteration, structure, Nkpt_path
+      use input_vars, only : pathINPUTtr, pathINPUT
+      use input_vars, only : long_range, FirstIteration, structure, Nkpt_path
       implicit none
       !
       type(BosonicField),intent(inout)      :: Umats
@@ -1785,6 +1785,9 @@ contains
       real(8),allocatable                   :: Rsorted(:)
       integer,allocatable                   :: Rorder(:)
       type(physicalU)                       :: PhysicalUelements
+      complex(8),allocatable                :: EwaldShift(:)
+      real(8),allocatable                   :: V(:)
+      real(8)                               :: eta,den
       logical                               :: LocalOnly_
       real                                  :: start,finish
       !
@@ -1817,6 +1820,16 @@ contains
       allocate(Rorder(Nwig))
       call sort_array(Rsorted,Rorder)
       allocate(U_R(Nbp,Nbp,Nwig));U_R=czero
+      allocate(V(Norb));V=czero
+      if(reg(long_range).eq."Ewald")then
+         eta = Rsorted(Rorder(Nwig))/2d0
+         allocate(EwaldShift(Nwig));EwaldShift=czero
+         if(any(Lttc%Nkpt3.eq.1))then
+            call calc_Ewald(EwaldShift,Lttc%kpt,eta,"2D")
+         else
+            call calc_Ewald(EwaldShift,Lttc%kpt,eta,"3D")
+         endif
+      endif
       !
       !loop over the sorted Wigner Seiz positions
       idist=1
@@ -1841,21 +1854,37 @@ contains
          !increasing range
          if(iwig.gt.2)then
             if((Rsorted(Rorder(iwig))-Rsorted(Rorder(iwig-1))).gt.1e-5) idist=idist+1
-            if(idist.gt.Vrange) exit loopwig
+            if((idist.gt.Vrange).and.(reg(long_range).ne."Ewald")) exit loopwig
+         endif
+         !
+         !setting the R dependence
+         if(reg(long_range).eq."None")then
+            V = Vnn(:,idist)
+         elseif(reg(long_range).eq."Coulomb")then
+            V = Vnn(:,1)/Rsorted(Rorder(iwig))
+         elseif(reg(long_range).eq."Ewald")then
+            den = 2d0*sqrt(eta)
+            if(any(Lttc%Nkpt3.eq.1)) den = 2d0*eta
+            V = (Vnn(:,1)/Rsorted(Rorder(iwig)))*erfc(Rsorted(Rorder(iwig))/den) + EwaldShift(Rorder(iwig))
+         else
+            stop "build_Uret_singlParam_Vn: the long_range varibale is not set."
          endif
          !
          !setting matrix element
          do ib1=1,Nbp
             iorb = PhysicalUelements%Full_Map(ib1,ib1,1)
-            if(PhysicalUelements%Full_Uaa(ib1,ib1)) U_R(ib1,ib1,Rorder(iwig)) = dcmplx(Vnn(iorb,idist),0d0)
+            if(PhysicalUelements%Full_Uaa(ib1,ib1)) U_R(ib1,ib1,Rorder(iwig)) = dcmplx(V(iorb),0d0)
          enddo
          !
       enddo loopwig
+      deallocate(V)
+      if(allocated(EwaldShift))deallocate(EwaldShift)
       !
       if(verbose)then
          write(*,*)"     Real-space interaction elements:"
+         write(*,"(A6,3A12)") "  i  ","  Ri  ","  H(Ri)  ","  N[Ri]  "
          do iwig=1,Nwig
-            write(*,"(5X,2F12.6)")Rsorted(Rorder(iwig)),real(U_R(1,1,Rorder(iwig)))
+            write(*,"(1I6,2F12.4,3I4)")Rorder(iwig),Rsorted(Rorder(iwig)),real(U_R(1,1,Rorder(iwig))),Nvecwig(:,Rorder(iwig))
          enddo
       endif
       !
@@ -1913,8 +1942,8 @@ contains
       use utils_misc
       use utils_fields
       use crystal
-      use input_vars, only : pathINPUTtr
-      use input_vars, only : pathINPUT, FirstIteration, structure, Nkpt_path
+      use input_vars, only : pathINPUTtr, pathINPUT
+      use input_vars, only : long_range, FirstIteration, structure, Nkpt_path
       implicit none
       !
       type(BosonicField),intent(inout)      :: Umats
@@ -1931,6 +1960,9 @@ contains
       real(8),allocatable                   :: Rsorted(:)
       integer,allocatable                   :: Rorder(:)
       type(physicalU)                       :: PhysicalUelements
+      complex(8),allocatable                :: EwaldShift(:)
+      real(8),allocatable                   :: V(:)
+      real(8)                               :: eta,den
       logical                               :: LocalOnly_
       real                                  :: start,finish
       !
@@ -1966,6 +1998,16 @@ contains
       allocate(Rorder(Nwig))
       call sort_array(Rsorted,Rorder)
       allocate(U_R(Nbp,Nbp,Nwig));U_R=czero
+      allocate(V(Norb));V=czero
+      if(reg(long_range).eq."Ewald")then
+         eta = Rsorted(Rorder(Nwig))/2d0
+         allocate(EwaldShift(Nwig));EwaldShift=czero
+         if(any(Lttc%Nkpt3.eq.1))then
+            call calc_Ewald(EwaldShift,Lttc%kpt,eta,"2D")
+         else
+            call calc_Ewald(EwaldShift,Lttc%kpt,eta,"3D")
+         endif
+      endif
       !
       !loop over the sorted Wigner Seiz positions
       idist=1
@@ -1996,18 +2038,34 @@ contains
             if(idist.gt.Vrange) exit loopwig
          endif
          !
+         !setting the R dependence
+         if(reg(long_range).eq."None")then
+            V = Vnn(:,idist)
+         elseif(reg(long_range).eq."Coulomb")then
+            V = Vnn(:,1)/Rsorted(Rorder(iwig))
+         elseif(reg(long_range).eq."Ewald")then
+            den = 2d0*sqrt(eta)
+            if(any(Lttc%Nkpt3.eq.1)) den = 2d0*eta
+            V = (Vnn(:,1)/Rsorted(Rorder(iwig)))*erfc(Rsorted(Rorder(iwig))/den) + EwaldShift(Rorder(iwig))
+         else
+            stop "build_Uret_singlParam_Vn: the long_range varibale is not set."
+         endif
+         !
          !setting matrix element
          do ib1=1,Nbp
             iorb = PhysicalUelements%Full_Map(ib1,ib1,1)
-            if(PhysicalUelements%Full_Uaa(ib1,ib1)) U_R(ib1,ib1,Rorder(iwig)) = dcmplx(Vnn(iorb,idist),0d0)
+            if(PhysicalUelements%Full_Uaa(ib1,ib1)) U_R(ib1,ib1,Rorder(iwig)) = dcmplx(V(iorb),0d0)
          enddo
          !
       enddo loopwig
+      deallocate(V)
+      if(allocated(EwaldShift))deallocate(EwaldShift)
       !
       if(verbose)then
          write(*,*)"     Real-space interaction elements:"
+         write(*,"(A6,3A12)") "  i  ","  Ri  ","  H(Ri)  ","  N[Ri]  "
          do iwig=1,Nwig
-            write(*,"(5X,2F12.6)")Rsorted(Rorder(iwig)),real(U_R(1,1,Rorder(iwig)))
+            write(*,"(1I6,2F12.4,3I4)")Rorder(iwig),Rsorted(Rorder(iwig)),real(U_R(1,1,Rorder(iwig))),Nvecwig(:,Rorder(iwig))
          enddo
       endif
       !
