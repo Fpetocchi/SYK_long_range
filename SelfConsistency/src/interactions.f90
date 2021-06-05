@@ -318,11 +318,19 @@ contains
       call BosonicKsum(Wmats)
       !
       ! Check if the screened limit is locally symmetric - print if error is bigger than 1e-3
-      !if(sym_)then
-      write(*,"(A)") "     Enforcing hermiticity of local Wlat."
-      do iw=1,Nmats
-         call check_Hermiticity(Wmats%screened_local(:,:,iw),1e7*eps,enforce=.true.,hardstop=.false.,name="Wlat_loc_w"//str(iw),verb=.true.)
-      enddo
+      if(Wmats%Nsite.eq.1)then
+         write(*,"(A)") "     Enforcing symmetry of local Wlat."
+         call isReal(Wmats%bare_local)
+         do iw=1,Nmats
+            call isReal(Wmats%screened_local(:,:,iw))
+            call check_Symmetry(Wmats%screened_local(:,:,iw),1e7*eps,enforce=.true.,hardstop=.false.,name="Wlat_loc_w"//str(iw),verb=.true.)
+         enddo
+      else
+         write(*,"(A)") "     Enforcing hermiticity of local Wlat."
+         do iw=1,Nmats
+            call check_Hermiticity(Wmats%screened_local(:,:,iw),1e7*eps,enforce=.true.,hardstop=.false.,name="Wlat_loc_w"//str(iw),verb=.true.)
+         enddo
+      endif
       !
    end subroutine calc_W_full
 
@@ -476,10 +484,19 @@ contains
       deallocate(invW,W_q)
       !
       ! Check if the screened limit is locally symmetric - print if error is bigger than 1e-3
-      write(*,"(A)") "     Enforcing hermiticity of local Wlat."
-      do iw=1,Nmats
-         call check_Hermiticity(Wmats%screened_local(:,:,iw),1e7*eps,enforce=.true.,hardstop=.false.,name="Wlat_loc_w"//str(iw),verb=.true.)
-      enddo
+      if(Wmats%Nsite.eq.1)then
+         write(*,"(A)") "     Enforcing symmetry of local Wlat."
+         call isReal(Wmats%bare_local)
+         do iw=1,Nmats
+            call isReal(Wmats%screened_local(:,:,iw))
+            call check_Symmetry(Wmats%screened_local(:,:,iw),1e7*eps,enforce=.true.,hardstop=.false.,name="Wlat_loc_w"//str(iw),verb=.true.)
+         enddo
+      else
+         write(*,"(A)") "     Enforcing hermiticity of local Wlat."
+         do iw=1,Nmats
+            call check_Hermiticity(Wmats%screened_local(:,:,iw),1e7*eps,enforce=.true.,hardstop=.false.,name="Wlat_loc_w"//str(iw),verb=.true.)
+         enddo
+      endif
       !
    end subroutine calc_W_edmft
 

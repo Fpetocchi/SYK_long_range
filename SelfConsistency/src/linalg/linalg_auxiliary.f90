@@ -75,6 +75,28 @@ function zdet(A) result(x)
      endif
   end do
 end function zdet
+!
+function ddet3(A) result(x)
+  real(8), intent(in)  :: A(3,3)
+  real(8)              :: x
+  x =     A(1,1)*A(2,2)*A(3,3)
+  x = x + A(1,2)*A(2,3)*A(3,1)
+  x = x + A(1,3)*A(2,1)*A(3,2)
+  x = x - A(1,3)*A(2,2)*A(3,1)
+  x = x - A(1,2)*A(2,1)*A(3,3)
+  x = x - A(1,1)*A(2,3)*A(3,2)
+end function ddet3
+!
+function zdet3(A) result(x)
+  complex(8), intent(in)  :: A(3,3)
+  complex(8)              :: x
+  x =     A(1,1)*A(2,2)*A(3,3)
+  x = x + A(1,2)*A(2,3)*A(3,1)
+  x = x + A(1,3)*A(2,1)*A(3,2)
+  x = x - A(1,3)*A(2,2)*A(3,1)
+  x = x - A(1,2)*A(2,1)*A(3,3)
+  x = x - A(1,1)*A(2,3)*A(3,2)
+end function zdet3
 
 
 

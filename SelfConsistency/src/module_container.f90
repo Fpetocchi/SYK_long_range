@@ -4,7 +4,7 @@ module module_container
    use linalg, only:                         &
    eig, eigh                                ,&
    inv, inv_sym, inv_her                    ,&
-   det,trace                                ,&
+   det, det3, trace                         ,&
    deye, zeye, zeros, ones                  ,&
    diag, diagonal, rotate, diag_factor      ,&
    kronecker_product, outerprod             ,&

@@ -591,8 +591,8 @@ contains
    subroutine isReal_Matrix(A)
       use parameters
       implicit none
-      complex(8),allocatable,intent(inout)  :: A(:,:)
-      if(allocated(A))A=dcmplx(dreal(A),0d0)
+      complex(8),intent(inout)              :: A(:,:)
+      A=dcmplx(dreal(A),0d0)
    end subroutine isReal_Matrix
    !
    subroutine isReal_Fermionic(G)

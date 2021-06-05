@@ -222,6 +222,7 @@ contains
       integer                               :: iwan,ispin
       integer                               :: Norb,Npoints
       real(8),allocatable                   :: tau(:),wmats(:),wreal(:)
+      character(len=255)                    :: filepath
       !
       !
       if(verbose)write(*,"(A)") "---- dump_MaxEnt_Gfunct"
@@ -230,6 +231,9 @@ contains
       Norb = size(G,dim=1)
       Npoints = size(G,dim=2)
       if(Nspin.ne.size(G,dim=3)) stop "dump_MaxEnt_Gfunct: wrong Nspin dimension."
+      !
+      filepath = reg(dirpath)//reg(filename)//"/"
+      call createDir(reg(filepath),verb=verbose)
       !
       select case(reg(mode))
          case default
@@ -246,7 +250,7 @@ contains
             do iwan=1,Norb
                if(present(iorb).and.(iwan.ne.iorb))cycle
                do ispin=1,Nspin
-                  call dump_Field_component(real(G(iwan,:,ispin)),reg(dirpath),reg(filename)//"_t_o"//str(iwan)//"_s"//str(ispin)//".DAT",tau)
+                  call dump_Field_component(real(G(iwan,:,ispin)),reg(filepath),reg(filename)//"_t_o"//str(iwan)//"_s"//str(ispin)//".DAT",tau)
                enddo
             enddo
             !
@@ -260,13 +264,13 @@ contains
                if(present(iorb).and.(iwan.ne.iorb))cycle
                do ispin=1,Nspin
                   !
-                  call dump_Field_component(G(iwan,:,ispin),reg(dirpath),reg(filename)//"_w_o"//str(iwan)//"_s"//str(ispin)//".DAT",wmats)
+                  call dump_Field_component(G(iwan,:,ispin),reg(filepath),reg(filename)//"_w_o"//str(iwan)//"_s"//str(ispin)//".DAT",wmats)
                   !
                   if(present(WmaxPade).and.(WmaxPade.gt.0))then
                      allocate(wreal(Nreal));wreal=linspace(-wrealMax,+wrealMax,Nreal)
                      allocate(Gpade(Nreal));Gpade=czero
                      Gpade = pade(G(iwan,:,ispin),"Fermionic",wlimit=WmaxPade)
-                     call dump_Field_component(Gpade,reg(dirpath),reg(filename)//"_w_o"//str(iwan)//"_s"//str(ispin)//"_pade.DAT",wreal)
+                     call dump_Field_component(Gpade,reg(filepath),reg(filename)//"_w_o"//str(iwan)//"_s"//str(ispin)//"_pade.DAT",wreal)
                      deallocate(Gpade,wreal)
                   endif
                   !
@@ -288,13 +292,13 @@ contains
                if(present(iorb).and.(iwan.ne.iorb))cycle
                do ispin=1,Nspin
                   !
-                  call dump_Field_component(Gft(iwan,:,ispin),reg(dirpath),reg(filename)//"_w_o"//str(iwan)//"_s"//str(ispin)//".DAT",wmats)
+                  call dump_Field_component(Gft(iwan,:,ispin),reg(filepath),reg(filename)//"_w_o"//str(iwan)//"_s"//str(ispin)//".DAT",wmats)
                   !
                   if(present(WmaxPade).and.(WmaxPade.gt.0))then
                      allocate(wreal(Nreal));wreal=linspace(-wrealMax,+wrealMax,Nreal)
                      allocate(Gpade(Nreal));Gpade=czero
                      Gpade = pade(G(iwan,:,ispin),"Fermionic",wlimit=WmaxPade)
-                     call dump_Field_component(Gpade,reg(dirpath),reg(filename)//"_w_o"//str(iwan)//"_s"//str(ispin)//"_pade.DAT",wreal)
+                     call dump_Field_component(Gpade,reg(filepath),reg(filename)//"_w_o"//str(iwan)//"_s"//str(ispin)//"_pade.DAT",wreal)
                      deallocate(Gpade,wreal)
                   endif
                   !
@@ -317,7 +321,7 @@ contains
             do iwan=1,Norb
                if(present(iorb).and.(iwan.ne.iorb))cycle
                do ispin=1,Nspin
-                  call dump_Field_component(real(Gft(iwan,:,ispin)),reg(dirpath),reg(filename)//"_t_o"//str(iwan)//"_s"//str(ispin)//".DAT",tau)
+                  call dump_Field_component(real(Gft(iwan,:,ispin)),reg(filepath),reg(filename)//"_t_o"//str(iwan)//"_s"//str(ispin)//".DAT",tau)
                enddo
             enddo
             deallocate(Gft)
@@ -389,6 +393,7 @@ contains
       complex(8),allocatable                :: Wft(:),Wpade(:)
       integer                               :: Npoints
       real(8),allocatable                   :: tau(:),wmats(:),wreal(:)
+      character(len=255)                    :: filepath
       !
       !
       if(verbose)write(*,"(A)") "---- dump_MaxEnt_Wfunct"
@@ -419,6 +424,9 @@ contains
             ndx(4)=iorb(2)
       end select
       !
+      filepath = reg(dirpath)//reg(filename)//"/"
+      call createDir(reg(filepath),verb=verbose)
+      !
       select case(reg(mode))
          case default
             !
@@ -431,7 +439,7 @@ contains
             allocate(tau(Npoints));tau=0d0
             tau = linspace(0d0,Beta,Npoints)
             !
-            call dump_Field_component(real(W),reg(dirpath),reg(filename)//"_t_("//str(ndx(1))//","//str(ndx(2))//")("//str(ndx(3))//","//str(ndx(4))//").DAT",tau)
+            call dump_Field_component(real(W),reg(filepath),reg(filename)//"_t_("//str(ndx(1))//","//str(ndx(2))//")("//str(ndx(3))//","//str(ndx(4))//").DAT",tau)
             !
          case("mats")
             !
@@ -439,13 +447,13 @@ contains
             allocate(wmats(Npoints));wmats=0d0
             wmats = BosonicFreqMesh(Beta,Npoints)
             !
-            call dump_Field_component(real(W),reg(dirpath),reg(filename)//"_w_("//str(ndx(1))//","//str(ndx(2))//")("//str(ndx(3))//","//str(ndx(4))//").DAT",wmats)
+            call dump_Field_component(real(W),reg(filepath),reg(filename)//"_w_("//str(ndx(1))//","//str(ndx(2))//")("//str(ndx(3))//","//str(ndx(4))//").DAT",wmats)
             !
             if(present(WmaxPade).and.(WmaxPade.gt.0))then
                allocate(wreal(Nreal));wreal=linspace(-wrealMax,+wrealMax,Nreal)
                allocate(Wpade(Nreal));Wpade=czero
                Wpade = pade(W,"Bosonic",wlimit=WmaxPade)
-               call dump_Field_component(real(Wpade),reg(dirpath),reg(filename)//"_w_("//str(ndx(1))//","//str(ndx(2))//")("//str(ndx(3))//","//str(ndx(4))//")_pade.DAT",wreal)
+               call dump_Field_component(real(Wpade),reg(filepath),reg(filename)//"_w_("//str(ndx(1))//","//str(ndx(2))//")("//str(ndx(3))//","//str(ndx(4))//")_pade.DAT",wreal)
                deallocate(Wpade,wreal)
             endif
             !
@@ -458,13 +466,13 @@ contains
             allocate(Wft(Nmats));Wft=czero
             call Bitau2mats(Beta,W,Wft,tau_uniform=.true.)
             !
-            call dump_Field_component(real(Wft),reg(dirpath),reg(filename)//"_w_("//str(ndx(1))//","//str(ndx(2))//")("//str(ndx(3))//","//str(ndx(4))//").DAT",wmats)
+            call dump_Field_component(real(Wft),reg(filepath),reg(filename)//"_w_("//str(ndx(1))//","//str(ndx(2))//")("//str(ndx(3))//","//str(ndx(4))//").DAT",wmats)
             !
             if(present(WmaxPade).and.(WmaxPade.gt.0))then
                allocate(wreal(Nreal));wreal=linspace(-wrealMax,+wrealMax,Nreal)
                allocate(Wpade(Nreal));Wpade=czero
                Wpade = pade(Wft,"Bosonic",wlimit=WmaxPade)
-               call dump_Field_component(real(Wpade),reg(dirpath),reg(filename)//"_w_("//str(ndx(1))//","//str(ndx(2))//")("//str(ndx(3))//","//str(ndx(4))//")_pade.DAT",wreal)
+               call dump_Field_component(real(Wpade),reg(filepath),reg(filename)//"_w_("//str(ndx(1))//","//str(ndx(2))//")("//str(ndx(3))//","//str(ndx(4))//")_pade.DAT",wreal)
                deallocate(Wpade,wreal)
             endif
             !
@@ -481,7 +489,7 @@ contains
             call Bmats2itau(Beta,W,Wft,asympt_corr=.true.,tau_uniform=.true.,Umats_bare=W(Npoints))
             Wft = Wft + W(Npoints)
             !
-            call dump_Field_component(real(Wft),reg(dirpath),reg(filename)//"_t_("//str(ndx(1))//","//str(ndx(2))//")("//str(ndx(3))//","//str(ndx(4))//").DAT",tau)
+            call dump_Field_component(real(Wft),reg(filepath),reg(filename)//"_t_("//str(ndx(1))//","//str(ndx(2))//")("//str(ndx(3))//","//str(ndx(4))//").DAT",tau)
             deallocate(Wft)
             !
       end select
@@ -1014,7 +1022,7 @@ contains
       use parameters
       use utils_misc
       use utils_fields
-      use linalg, only : eigh, inv, zeye
+      use linalg, only : eigh, inv, zeye, det
       use crystal
       use file_io
       use greens_function, only : calc_Gmats
@@ -1037,13 +1045,15 @@ contains
       !
       real(8),allocatable                   :: wreal(:)
       complex(8),allocatable                :: zeta(:,:,:),invGf(:,:)
-      real(8),allocatable                   :: Akw(:,:,:,:),Fk(:,:,:)
+      real(8),allocatable                   :: Akw(:,:,:,:),Fk(:,:)
       real(8),allocatable                   :: Zk(:,:)
+      complex(8),allocatable                :: SigmaFermi(:,:,:,:)
       integer                               :: Norb,Nmats,Ntau,unit
       integer                               :: ik,iw,itau,ispin,iorb
       integer                               :: ikx,iky
       integer                               :: Nkpt_Kside,wndx_cut
       character(len=256)                    :: path
+      logical                               :: Kdependence
       real                                  :: start,finish
       !
       !
@@ -1197,46 +1207,42 @@ contains
             !
             Lttc%planeStored=.true.
             !
-         endif
-         write(*,"(A,I)") "     Total number of K-points along {kx,ky} plane:",Lttc%Nkpt_Plane
-         !
-         !Compute non-interacting Fermisurface
-         allocate(Fk(Norb,Lttc%Nkpt_Plane,Nspin));Fk=0d0
-         allocate(invGf(Norb,Norb));invGf=czero
-         do ispin=1,Nspin
+            !Compute non-interacting Fermi surface
+            !well defined orbital character
+            allocate(Fk(Lttc%Norb,Lttc%Nkpt_Plane));Fk=0d0
+            allocate(invGf(Norb,Norb));invGf=czero
             do ik=1,Lttc%Nkpt_Plane
-               !
-               invGf = zeye(Norb)*dcmplx(EcutSheet,eta) - Lttc%Hk_Plane(:,:,ik)
-               !
+               invGf = zeye(Lttc%Norb)*dcmplx(EcutSheet,eta) - Lttc%Hk_Plane(:,:,ik)
                call inv(invGf)
-               do iorb=1,Norb
-                  Fk(iorb,ik,ispin) = -dimag(invGf(iorb,iorb))
+               do iorb=1,Lttc%Norb
+                  Fk(iorb,ik) = -dimag(invGf(iorb,iorb))
                enddo
-               !
             enddo
-         enddo
-         deallocate(invGf)
-         !
-         !Print Fermi surface
-         do ispin=1,Nspin
-            path = reg(pathOUTPUT)//"K_resolved/Fk_nonInt_s"//str(ispin)//".DAT"
+            deallocate(invGf)
+            !
+            !Print Fermi surface
+            path = reg(pathOUTPUT)//"K_resolved/Fk_nonInt.DAT"
             unit = free_unit()
             open(unit,file=reg(path),form="formatted",status="unknown",position="rewind",action="write")
             do ik=1,Lttc%Nkpt_Plane
                ikx = int(ik/(Nkpt_Kside+0.001))+1
                iky = ik - (ikx-1)*Nkpt_Kside
-               write(unit,"(3I5,200E20.12)") ik,ikx,iky,(Fk(iorb,ik,ispin),iorb=1,Norb)
+               write(unit,"(3I5,200E20.12)") ik,ikx,iky,(Fk(iorb,ik),iorb=1,Lttc%Norb)
                if(iky.eq.Nkpt_Kside)write(unit,*)
             enddo
             close(unit)
-            if(paramagnet)exit
-         enddo
-         deallocate(Fk)
+            deallocate(Fk)
+            !
+         endif
+         write(*,"(A,I)") "     Total number of K-points along {kx,ky} plane:",Lttc%Nkpt_Plane
          !
       endif
       !
       !
       if(Sfull%status)then
+         !
+         !Dump MaxEnt data for the local self-energy (always done for every setup)
+         call calc_MaxEnt_on_Sigma_imp(Sfull)
          !
          !Interpolate the slef-energy along the path if its K-dependent otherwise duplicate the local one
          select case(reg(CalculationType))
@@ -1245,6 +1251,8 @@ contains
                stop "Available Calculation types are: G0W0, scGW, DMFT+statU, DMFT+dynU, EDMFT, GW+EDMFT."
                !
             case("G0W0","scGW","GW+EDMFT")
+               !
+               Kdependence = .true.
                !
                !
                !
@@ -1342,13 +1350,22 @@ contains
                   !Recompute the Green's function
                   call AllocateFermionicField(Gfermi,Norb,Nmats,Nkpt=Lttc%Nkpt_Plane,Nsite=Sfull%Nsite,Beta=Sfull%Beta,mu=Sfull%mu)
                   call calc_Gmats(Gfermi,Lttc,Smats=Sfermi,along_plane=.true.)
-                  call DeallocateFermionicField(Sfermi)
                   !
+                  !Sigma for qpsc - removing ImSigma on the diagonal
+                  allocate(SigmaFermi(Norb,Norb,Lttc%Nkpt_Plane,Nspin));SigmaFermi=czero
+                  SigmaFermi = Sfermi%wks(:,:,1,:,:)
+                  do iorb=1,Norb
+                     SigmaFermi(iorb,iorb,:,:) = dcmplx(dreal(SigmaFermi(iorb,iorb,:,:)),0d0)
+                  enddo
+                  !
+                  call DeallocateFermionicField(Sfermi)
                endif
                !
                !
                !
             case("DMFT+statU","DMFT+dynU","EDMFT")
+               !
+               Kdependence = .false.
                !
                !
                !
@@ -1379,11 +1396,81 @@ contains
                   call calc_Gmats(Gfermi,Lttc,Smats=Sfermi,along_plane=.true.)
                   call DeallocateFermionicField(Sfermi)
                endif
-
                !
                !
                !
          end  select
+         !
+         !
+         !Quasiparticle self-consistency to get the Fermi surface
+         !no need to get to the real axis since we care only about w=0
+         if(FermiSurf)then
+            !
+            write(*,"(A,F)") new_line("A")//new_line("A")//"     Computing QPSC Fermi surface."
+            !
+            do ispin=1,Nspin
+               !
+               !correct bandstructure with ReSigma_DMFT
+               allocate(Fk(Lttc%Norb,Lttc%Nkpt_Plane));Fk=0d0
+               allocate(invGf(Norb,Norb));invGf=czero
+               do ik=1,Lttc%Nkpt_Plane
+                  invGf = zeye(Lttc%Norb)*dcmplx(EcutSheet+Sfull%mu,eta) - Lttc%Hk_Plane(:,:,ik) - dreal(Sfull%ws(:,:,1,ispin))
+                  call inv(invGf)
+                  !extract FS
+                  do iorb=1,Norb
+                     Fk(iorb,ik) = -dimag(invGf(iorb,iorb))
+                  enddo
+               enddo
+               deallocate(invGf)
+               !
+               !Print Fermi surface
+               path = reg(pathOUTPUT)//"K_resolved/Fk_dmft_s"//str(ispin)//".DAT"
+               unit = free_unit()
+               open(unit,file=reg(path),form="formatted",status="unknown",position="rewind",action="write")
+               do ik=1,Lttc%Nkpt_Plane
+                  ikx = int(ik/(Nkpt_Kside+0.001))+1
+                  iky = ik - (ikx-1)*Nkpt_Kside
+                  write(unit,"(3I5,200E20.12)") ik,ikx,iky,(Fk(iorb,ik),iorb=1,Lttc%Norb)
+                  if(iky.eq.Nkpt_Kside)write(unit,*)
+               enddo
+               close(unit)
+               deallocate(Fk)
+               !
+               !correct bandstructure with ReSigma_GW
+               if(Kdependence)then
+                  !
+                  allocate(Fk(Lttc%Norb,Lttc%Nkpt_Plane));Fk=0d0
+                  allocate(invGf(Norb,Norb));invGf=czero
+                  do ik=1,Lttc%Nkpt_Plane
+                     invGf = zeye(Lttc%Norb)*dcmplx(EcutSheet+Sfull%mu,10*eta) - Lttc%Hk_Plane(:,:,ik) - SigmaFermi(:,:,ik,ispin)
+                     call inv(invGf)
+                     !extract FS
+                     do iorb=1,Norb
+                        Fk(iorb,ik) = -dimag(invGf(iorb,iorb))
+                     enddo
+                  enddo
+                  deallocate(invGf)
+                  !
+                  !Print Fermi surface
+                  path = reg(pathOUTPUT)//"K_resolved/Fk_qpsc_s"//str(ispin)//".DAT"
+                  unit = free_unit()
+                  open(unit,file=reg(path),form="formatted",status="unknown",position="rewind",action="write")
+                  do ik=1,Lttc%Nkpt_Plane
+                     ikx = int(ik/(Nkpt_Kside+0.001))+1
+                     iky = ik - (ikx-1)*Nkpt_Kside
+                     write(unit,"(3I5,200E20.12)") ik,ikx,iky,(Fk(iorb,ik),iorb=1,Lttc%Norb)
+                     if(iky.eq.Nkpt_Kside)write(unit,*)
+                  enddo
+                  close(unit)
+                  deallocate(Fk)
+                  !
+               endif
+               !
+               if(paramagnet)exit
+            enddo
+            if(Kdependence)deallocate(SigmaFermi)
+            !
+         endif
          !
          !
          if(scan(reg(path_funct),"G").gt.0)then
@@ -1399,28 +1486,18 @@ contains
          !
          if(scan(reg(path_funct),"S").gt.0)then
             !
-            select case(reg(CalculationType))
-               case default
-                  !
-                  stop "Available Calculation types are: G0W0, scGW, DMFT+statU, DMFT+dynU, EDMFT, GW+EDMFT."
-                  !
-               case("G0W0","scGW","GW+EDMFT")
-                  !
-                  !Dump K-resolved MaxEnt data in the full BZ
-                  call calc_MaxEnt_on_Sigma_K(Gfull,"full")
-                  !
-                  !Dump K-resolved MaxEnt data along the path
-                  call calc_MaxEnt_on_Sigma_K(Gpath,"path")
-                  !
-                  !Dump K-resolved MaxEnt data along the {kx,ky} plane
-                  call calc_MaxEnt_on_Sigma_K(Gfermi,"plane")
-                  !
-               case("DMFT+statU","DMFT+dynU","EDMFT")
-                  !
-                  !Dump MaxEnt data for the local self-energy
-                  call calc_MaxEnt_on_Sigma_imp(Sfull)
-                  !
-            end  select
+            if(Kdependence)then
+               !
+               !Dump K-resolved MaxEnt data in the full BZ
+               call calc_MaxEnt_on_Sigma_K(Gfull,"full")
+               !
+               !Dump K-resolved MaxEnt data along the path
+               call calc_MaxEnt_on_Sigma_K(Gpath,"path")
+               !
+               !Dump K-resolved MaxEnt data along the {kx,ky} plane
+               call calc_MaxEnt_on_Sigma_K(Gfermi,"plane")
+               !
+            endif
             !
          endif
          !

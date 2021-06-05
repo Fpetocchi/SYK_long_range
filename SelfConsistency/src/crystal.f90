@@ -51,6 +51,7 @@ module crystal
    real(8),private                          :: RlatMod(3,3)
    real(8),private                          :: vol
    real(8),private                          :: Blat(3,3)
+   real(8),private                          :: BlatMod(3,3)
    !
    integer,public,protected                 :: Nwig=0
    integer,public,protected                 :: wig0=0
@@ -131,19 +132,21 @@ contains
       read(unit,*) Rlat(1:3,2)
       read(unit,*) Rlat(1:3,3)
       close(unit)
-      !
-      do ir=1,3
-         do idim=1,3
-            RlatMod(idim,ir) = Rlat(idim,ir)/abs(Rlat(idim,ir))
-         enddo
-      enddo
-      !
       vol = dot_product(cross_product(Rlat(:,1),Rlat(:,2)),Rlat(:,3))
       if(verbose)write(*,"(A,F)")"     Unit cell volume: ",vol
-      !
       Blat(:,1) = cross_product(Rlat(:,2),Rlat(:,3))/vol
       Blat(:,2) = cross_product(Rlat(:,3),Rlat(:,1))/vol
       Blat(:,3) = cross_product(Rlat(:,1),Rlat(:,2))/vol
+      !
+      do ir=1,3
+         do idim=1,3
+            RlatMod(idim,ir) = Rlat(idim,ir)/sqrt(dot_product(Rlat(:,ir),Rlat(:,ir)))
+         enddo
+      enddo
+      vol = dot_product(cross_product(RlatMod(:,1),RlatMod(:,2)),RlatMod(:,3))
+      BlatMod(:,1) = cross_product(RlatMod(:,2),RlatMod(:,3))/vol
+      BlatMod(:,2) = cross_product(RlatMod(:,3),RlatMod(:,1))/vol
+      BlatMod(:,3) = cross_product(RlatMod(:,1),RlatMod(:,2))/vol
       !
       write(*,"(A)")new_line("A")//"     Unit cell vectors: "
       do ir=1,3
@@ -156,6 +159,10 @@ contains
       write(*,"(A)")new_line("A")//"     Reciprocal lattice vectors: "
       do ir=1,3
          write(*,"(A)")"     B_"//str(ir)//": [ "//str(Blat(1,ir),3)//" , "//str(Blat(2,ir),3)//" , "//str(Blat(3,ir),3)//" ]*2pi"
+      enddo
+      write(*,"(A)")new_line("A")//"     Reciprocal lattice vectors rescaled: "
+      do ir=1,3
+         write(*,"(A)")"     B_"//str(ir)//": [ "//str(BlatMod(1,ir),3)//" , "//str(BlatMod(2,ir),3)//" , "//str(BlatMod(3,ir),3)//" ]*2pi"
       enddo
       !
       Lat_stored=.true.
@@ -173,7 +180,7 @@ contains
       implicit none
       !
       real(8),intent(in)                    :: Rinput(3,3)
-      integer                               :: ir
+      integer                               :: ir,idim
       !
       !
       if(verbose)write(*,"(A)") "---- set_lattice"
@@ -182,16 +189,21 @@ contains
       Rlat(:,1) = Rinput(:,1)
       Rlat(:,2) = Rinput(:,2)
       Rlat(:,3) = Rinput(:,3)
-      !
-      !all the lattice constant are assumed to be a=1
-      RlatMod = Rlat
-      !
       vol = dot_product(cross_product(Rlat(:,1),Rlat(:,2)),Rlat(:,3))
       if(verbose)write(*,"(A,F)")"     Unit cell volume: ",vol
-      !
       Blat(:,1) = cross_product(Rlat(:,2),Rlat(:,3))/vol
       Blat(:,2) = cross_product(Rlat(:,3),Rlat(:,1))/vol
       Blat(:,3) = cross_product(Rlat(:,1),Rlat(:,2))/vol
+      !
+      do ir=1,3
+         do idim=1,3
+            RlatMod(idim,ir) = Rlat(idim,ir)/sqrt(dot_product(Rlat(:,ir),Rlat(:,ir)))
+         enddo
+      enddo
+      vol = dot_product(cross_product(RlatMod(:,1),RlatMod(:,2)),RlatMod(:,3))
+      BlatMod(:,1) = cross_product(RlatMod(:,2),RlatMod(:,3))/vol
+      BlatMod(:,2) = cross_product(RlatMod(:,3),RlatMod(:,1))/vol
+      BlatMod(:,3) = cross_product(RlatMod(:,1),RlatMod(:,2))/vol
       !
       write(*,"(A)")new_line("A")//"     Unit cell vectors: "
       do ir=1,3
@@ -204,6 +216,10 @@ contains
       write(*,"(A)")new_line("A")//"     Reciprocal lattice vectors: "
       do ir=1,3
          write(*,"(A)")"     B_"//str(ir)//": [ "//str(Blat(1,ir),3)//" , "//str(Blat(2,ir),3)//" , "//str(Blat(3,ir),3)//" ]*2pi"
+      enddo
+      write(*,"(A)")new_line("A")//"     Reciprocal lattice vectors rescaled: "
+      do ir=1,3
+         write(*,"(A)")"     B_"//str(ir)//": [ "//str(BlatMod(1,ir),3)//" , "//str(BlatMod(2,ir),3)//" , "//str(BlatMod(3,ir),3)//" ]*2pi"
       enddo
       !
       Lat_stored=.true.
@@ -279,7 +295,7 @@ contains
       reps = 1e-8_dp
       aeps = 1e-10_dp
       !
-      ! Reciprocal lattice vectors
+      ! Reciprocal lattice vectors - not sure if here goes Blat or BlatMod
       B(:,1) = Blat(:,1)
       B(:,2) = Blat(:,2)
       B(:,3) = Blat(:,3)
@@ -297,6 +313,7 @@ contains
       call generateFullKpointList(K, B, real(shift,dp), klist, reps_=reps,aeps_=aeps)
       do ik = 1,determinant(H)
          kpt(:,ik) = klist(ik,:)
+         if(verbose) write(*,"(5X,1I5,3F15.7)")ik,kpt(:,ik)
       enddo
       !
    end subroutine build_kptGT
@@ -608,11 +625,15 @@ contains
 
    !---------------------------------------------------------------------------!
    !PURPOSE: Fill up the list likning indexes of the sum and diff of K-points
-   !TEST ON: 14-10-2020
+   !         that was originally meant for cubic systems and the points external
+   !         to the 1st BZ recovered by just removing nint(dk) to dk.
+   !         For generic lattice the BZ vector is not simply the versor as implied
+   !         by nint.
    !---------------------------------------------------------------------------!
    subroutine fill_ksumkdiff(kpt,kptsum,kptdif,nkpt3,pkpt)
       !
       use utils_misc
+      use linalg, only : det3
       implicit none
       !
       real(8),intent(in)                    :: kpt(:,:)
@@ -622,10 +643,10 @@ contains
       integer,intent(inout),optional        :: pkpt(:,:,:)
       !
       integer                               :: Nkpt
-      integer                               :: iq,ik1,ik2,ib
+      integer                               :: iq,ik1,ik2
       integer                               :: i1,i2,i3
       integer                               :: k(3)
-      real(8)                               :: dk(3),Lk,LB(3)
+      real(8)                               :: dk(3)
       integer,allocatable                   :: pkpt_(:,:,:)
       !
       !
@@ -636,10 +657,6 @@ contains
       call assert_shape(kptsum,[Nkpt,Nkpt],"fill_ksumkdiff","kptsum")
       call assert_shape(kptdif,[Nkpt,Nkpt],"fill_ksumkdiff","kptdif")
       !
-      do ib=1,3
-         LB(ib)=sqrt(dot_product(Blat(:,ib),Blat(:,ib)))
-      enddo
-      !
       !k1 + q = k2
       kptsum=0
       do iq=1,Nkpt
@@ -648,9 +665,7 @@ contains
             !first attempt
             do ik2=1,Nkpt
                dk(:)=kpt(:,ik1)+kpt(:,iq)-kpt(:,ik2)
-               Lk=sqrt(dot_product(dk,dk))
-               !Inside 1st BZ or modulo a reciprocal vector
-               if((Lk.lt.eps).or.(any((LB-Lk).lt.eps)))then
+               if(all(abs(dk).lt.eps).or.moduloG(dk,eps))then
                   kptsum(ik1,iq)=ik2
                   if (ik1.ne.iq) kptsum(iq,ik1)=kptsum(ik1,iq)
                   exit
@@ -658,19 +673,15 @@ contains
             enddo
             !
             !second attempt with larger tolerance
-            if (kptsum(ik1,iq).eq.0)then
-               !
+            if (kptdif(ik1,iq).eq.0)then
                do ik2=1,Nkpt
                   dk(:)=kpt(:,ik1)+kpt(:,iq)-kpt(:,ik2)
-                  Lk=sqrt(dot_product(dk,dk))
-                  !Inside 1st BZ or modulo a reciprocal vector
-                  if((Lk.lt.eps).or.(any((LB-Lk).lt.1e-6)))then
+                  if(all(abs(dk).lt.eps).or.moduloG(dk,1e6*eps))then
                      kptsum(ik1,iq)=ik2
                      if (ik1.ne.iq) kptsum(iq,ik1)=kptsum(ik1,iq)
                      exit
                   endif
                enddo
-               !
             endif
             !
             !missing sum
@@ -687,9 +698,7 @@ contains
             !first attempt
             do ik2=1,Nkpt
                dk(:)=kpt(:,ik1)-kpt(:,iq)-kpt(:,ik2)
-               Lk=sqrt(dot_product(dk,dk))
-               !Inside 1st BZ or modulo a reciprocal vector
-               if((Lk.lt.eps).or.(any((LB-Lk).lt.eps)))then
+               if(all(abs(dk).lt.eps).or.moduloG(dk,eps))then
                   kptdif(ik1,iq)=ik2
                   exit
                endif
@@ -697,17 +706,13 @@ contains
             !
             !second attempt with larger tolerance
             if (kptdif(ik1,iq).eq.0)then
-               !
                do ik2=1,Nkpt
                   dk(:)=kpt(:,ik1)-kpt(:,iq)-kpt(:,ik2)
-                  Lk=sqrt(dot_product(dk,dk))
-                  !Inside 1st BZ or modulo a reciprocal vector
-                  if((Lk.lt.eps).or.(any((LB-Lk).lt.1e-6)))then
+                  if(all(abs(dk).lt.eps).or.moduloG(dk,1e6*eps))then
                      kptdif(ik1,iq)=ik2
                      exit
                   endif
                enddo
-               !
             endif
             !
             !missing difference
@@ -732,8 +737,7 @@ contains
                   !first attempt
                   do ik1=1,nkpt
                      dk(:)=kpt(:,ik1)-k(:)
-                     Lk=sqrt(dot_product(dk,dk))
-                     if((Lk.lt.eps).or.(any((LB-Lk).lt.eps)))then
+                     if(all(abs(dk).lt.eps).or.moduloG(dk,eps))then
                         pkpt_(i1,i2,i3)=ik1
                         exit
                      endif
@@ -743,8 +747,7 @@ contains
                   if (pkpt_(i1,i2,i3).eq.0)then
                      do ik1=1,nkpt
                         dk(:)=kpt(:,ik1)-k(:)
-                        Lk=sqrt(dot_product(dk,dk))
-                        if((Lk.lt.eps).or.(any((LB-Lk).lt.1e-6)))then
+                        if(all(abs(dk).lt.eps).or.moduloG(dk,1e6*eps))then
                            pkpt_(i1,i2,i3)=ik1
                            exit
                         endif
@@ -762,6 +765,38 @@ contains
             pkpt = pkpt_
          endif
       endif
+      !
+      !
+   contains
+      !
+      !
+      logical function moduloG(Dk,tol)
+         implicit none
+         real(8),intent(in)                 :: Dk(3)
+         real(8),intent(in)                 :: tol
+         real(8)                            :: M1(3,3),M2(3,3),M3(3,3)
+         real(8)                            :: n1,n2,n3
+         !
+         !that's simply the Cramer's rule
+         M1 = BlatMod
+         M2 = BlatMod
+         M3 = BlatMod
+         !
+         M1(:,1) = Dk
+         M2(:,2) = Dk
+         M3(:,3) = Dk
+         !
+         n1 = det3(M1)/det3(BlatMod)
+         n2 = det3(M2)/det3(BlatMod)
+         n3 = det3(M3)/det3(BlatMod)
+         !
+         !true if all are equal to 0,+1,-1
+         moduloG = (abs(n1*(n1+1)*(n1-1)).lt.tol) .and. &
+                   (abs(n2*(n2+1)*(n2-1)).lt.tol) .and. &
+                   (abs(n3*(n3+1)*(n3-1)).lt.tol)
+         !
+      end function moduloG
+      !
       !
    end subroutine fill_ksumkdiff
 
@@ -2026,8 +2061,8 @@ contains
             !
             ik=ik+1
             !
-            kx = (ikx-1)*dk
-            ky = (iky-1)*dk
+            kx = (ikx-1)*dk - Kmax/2d0
+            ky = (iky-1)*dk - Kmax/2d0
             !
             kpt_plane(:,ik) = [kx,ky,0d0]
             !
@@ -2044,7 +2079,7 @@ contains
       !
       use parameters
       use utils_misc
-      use linalg, only : eigh, inv
+      use linalg, only : eigh, inv, zeye
       implicit none
       !
       type(Lattice),intent(inout)           :: Lttc
@@ -2057,9 +2092,9 @@ contains
       !
       character(len=256)                    :: path,filename_
       integer                               :: ik,iorb,unit
-      integer                               :: Norb,Nkpt_Kside
-      complex(8),allocatable                :: data_intp(:,:,:)
-      real(8),allocatable                   :: dataEk(:,:)
+      integer                               :: Norb,Nkpt_Kside,ikx,iky
+      complex(8),allocatable                :: data_intp(:,:,:),invGf(:,:)
+      real(8),allocatable                   :: dataEk(:,:),Fk(:,:)
       logical                               :: doplane_
       real                                  :: start,finish
       !
@@ -2165,6 +2200,31 @@ contains
             write(*,"(A,F)") "     H(fullBZ) --> H(kx,ky) cpu timing:", finish-start
             !
             Lttc%planeStored=.true.
+            !
+            !Compute non-interacting Fermi surface
+            allocate(Fk(Lttc%Norb,Lttc%Nkpt_Plane));Fk=0d0
+            allocate(invGf(Norb,Norb));invGf=czero
+            do ik=1,Lttc%Nkpt_Plane
+               invGf = zeye(Norb)*dcmplx(EcutSheet,0.01d0) - Lttc%Hk_Plane(:,:,ik)
+               call inv(invGf)
+               do iorb=1,Norb
+                  Fk(iorb,ik) = -dimag(invGf(iorb,iorb))
+               enddo
+            enddo
+            deallocate(invGf)
+            !
+            !Print Fermi surface
+            path = reg(pathOUTPUT)//"Fk_nonInt.DAT"
+            unit = free_unit()
+            open(unit,file=reg(path),form="formatted",status="unknown",position="rewind",action="write")
+            do ik=1,Lttc%Nkpt_Plane
+               ikx = int(ik/(Nkpt_Kside+0.001))+1
+               iky = ik - (ikx-1)*Nkpt_Kside
+               write(unit,"(3I5,200E20.12)") ik,ikx,iky,(Fk(iorb,ik),iorb=1,Norb)
+               if(iky.eq.Nkpt_Kside)write(unit,*)
+            enddo
+            close(unit)
+            deallocate(Fk)
             !
          endif
          !

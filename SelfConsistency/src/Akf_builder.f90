@@ -80,6 +80,8 @@ program Akw_builder
    !
    do ispin=1,Nspin
       !
+      !Dump MaxEnt data for the local self-energy (always done for every setup)
+      call rebuild_Sigma_imp("full",justSigma=.true.)
       !
       if(scan(reg(path_funct),"G").gt.0)then
          !
@@ -628,9 +630,10 @@ contains
    !
    !
    !
-   subroutine rebuild_Sigma_imp(mode)
+   subroutine rebuild_Sigma_imp(mode,justSigma)
       implicit none
       character(len=*),intent(in)           :: mode
+      logical,intent(in),optional           :: justSigma
       !
       integer                               :: ik,Nkpt,Nkpt_Kside
       integer                               :: iw,iorb,ikx,iky,wndx_cut
@@ -651,6 +654,10 @@ contains
       complex(8),allocatable                :: Sigma_orb(:,:,:),Greal_orb(:,:,:)
       complex(8),allocatable                :: Hk(:,:,:)
       integer,allocatable                   :: Orbs(:)
+      logical                               :: justSigma_
+      !
+      justSigma_=.false.
+      if(present(justSigma))justSigma_=justSigma
       !
       select case(reg(mode))
          case default
@@ -846,76 +853,80 @@ contains
       enddo
       !
       !Operations at each K-point
-      do ik=1,Nkpt
+      if(.not.justSigma_)then
          !
-         !Rebuild the Green's function in the orbital basis
-         allocate(Greal_orb(Crystal%Norb,Crystal%Norb,Nreal));Greal_orb=czero
-         do iw=1,Nreal
-            Greal_orb(:,:,iw) = zeye(Crystal%Norb)*dcmplx(wreal(iw)+S_Full%mu,eta*etafact) - Hk(:,:,ik) - Sigma_orb(:,:,iw)
-            call inv(Greal_orb(:,:,iw))
-         enddo
-         !
-         !Get the spectral function in the orbital basis
-         do iorb=1,Crystal%Norb
-            Akw_orb(iorb,:,ik) = dimag(Greal_orb(iorb,iorb,:))
-            Akw_orb(iorb,:,ik) = Akw_orb(iorb,:,ik) / (sum(Akw_orb(iorb,:,ik))*dw)
-         enddo
-         deallocate(Greal_orb)
-         where(abs((Akw_orb(:,:,ik)))<1.d-12)Akw_orb(:,:,ik)=0d0
-         !
-         !Print
-         path = reg(MaxEnt_K)//"Akw_S_"//reg(mode)//"_s"//str(ispin)//"/Akw_orb_k"//str(ik)//".DAT"
-         unit = free_unit()
-         open(unit,file=reg(path),form="formatted",status="unknown",position="rewind",action="write")
-         do iw=1,Nreal
-            write(unit,"(200E20.12)") wreal(iw),(Akw_orb(iorb,iw,ik),iorb=1,Crystal%Norb)
-         enddo
-         close(unit)
-         !
-      enddo
-      deallocate(Sigma_orb)
-      !
-      !
-      if(reg(mode).eq."path")then
-         !
-         !Write down spectral function on the path in usual format - orbital basis
-         path = reg(MaxEnt_K)//"Akw_S_orb_s"//str(ispin)//".DAT"
-         unit = free_unit()
-         open(unit,file=reg(path),form="formatted",status="unknown",position="rewind",action="write")
          do ik=1,Nkpt
+            !
+            !Rebuild the Green's function in the orbital basis
+            allocate(Greal_orb(Crystal%Norb,Crystal%Norb,Nreal));Greal_orb=czero
             do iw=1,Nreal
-               if(abs(wreal(iw)).gt.0.5*KKcutoff)cycle
-               write(unit,"(1I5,200E20.12)") ik,Crystal%Kpathaxis(ik),wreal(iw),(Akw_orb(iorb,iw,ik),iorb=1,Crystal%Norb)
+               Greal_orb(:,:,iw) = zeye(Crystal%Norb)*dcmplx(wreal(iw)+S_Full%mu,eta*etafact) - Hk(:,:,ik) - Sigma_orb(:,:,iw)
+               call inv(Greal_orb(:,:,iw))
             enddo
-            write(unit,*)
+            !
+            !Get the spectral function in the orbital basis
+            do iorb=1,Crystal%Norb
+               Akw_orb(iorb,:,ik) = dimag(Greal_orb(iorb,iorb,:))
+               Akw_orb(iorb,:,ik) = Akw_orb(iorb,:,ik) / (sum(Akw_orb(iorb,:,ik))*dw)
+            enddo
+            deallocate(Greal_orb)
+            where(abs((Akw_orb(:,:,ik)))<1.d-12)Akw_orb(:,:,ik)=0d0
+            !
+            !Print
+            path = reg(MaxEnt_K)//"Akw_S_"//reg(mode)//"_s"//str(ispin)//"/Akw_orb_k"//str(ik)//".DAT"
+            unit = free_unit()
+            open(unit,file=reg(path),form="formatted",status="unknown",position="rewind",action="write")
+            do iw=1,Nreal
+               write(unit,"(200E20.12)") wreal(iw),(Akw_orb(iorb,iw,ik),iorb=1,Crystal%Norb)
+            enddo
+            close(unit)
+            !
          enddo
-         close(unit)
+         deallocate(Sigma_orb)
          !
-      elseif(reg(mode).eq."full")then
          !
-         !Write down the local spectral function - orbital basis
-         path = reg(MaxEnt_K)//"Aw_S_orb_s"//str(ispin)//".DAT"
-         unit = free_unit()
-         open(unit,file=reg(path),form="formatted",status="unknown",position="rewind",action="write")
-         do iw=1,Nreal
-            write(unit,"(200E20.12)") wreal(iw),(sum(Akw_orb(iorb,iw,:)/Nkpt),iorb=1,Crystal%Norb)
-         enddo
-         close(unit)
-         !
-      elseif(reg(mode).eq."plane")then
-         !
-         !Print cut at energy EcutSheet in the {kx,ky} plane
-         wndx_cut = minloc(abs(wreal-EcutSheet),dim=1)
-         path = reg(MaxEnt_K)//"Fk_S_s"//str(ispin)//".DAT"
-         unit = free_unit()
-         open(unit,file=reg(path),form="formatted",status="unknown",position="rewind",action="write")
-         do ik=1,Nkpt
-            ikx = int(ik/(Nkpt_Kside+0.001))+1
-            iky = ik - (ikx-1)*Nkpt_Kside
-            write(unit,"(3I5,200E20.12)") ik,ikx,iky,(Akw_orb(iorb,wndx_cut,ik),iorb=1,Crystal%Norb)
-            if(iky.eq.Nkpt_Kside)write(unit,*)
-         enddo
-         close(unit)
+         if(reg(mode).eq."path")then
+            !
+            !Write down spectral function on the path in usual format - orbital basis
+            path = reg(MaxEnt_K)//"Akw_S_orb_s"//str(ispin)//".DAT"
+            unit = free_unit()
+            open(unit,file=reg(path),form="formatted",status="unknown",position="rewind",action="write")
+            do ik=1,Nkpt
+               do iw=1,Nreal
+                  if(abs(wreal(iw)).gt.0.5*KKcutoff)cycle
+                  write(unit,"(1I5,200E20.12)") ik,Crystal%Kpathaxis(ik),wreal(iw),(Akw_orb(iorb,iw,ik),iorb=1,Crystal%Norb)
+               enddo
+               write(unit,*)
+            enddo
+            close(unit)
+            !
+         elseif(reg(mode).eq."full")then
+            !
+            !Write down the local spectral function - orbital basis
+            path = reg(MaxEnt_K)//"Aw_S_orb_s"//str(ispin)//".DAT"
+            unit = free_unit()
+            open(unit,file=reg(path),form="formatted",status="unknown",position="rewind",action="write")
+            do iw=1,Nreal
+               write(unit,"(200E20.12)") wreal(iw),(sum(Akw_orb(iorb,iw,:)/Nkpt),iorb=1,Crystal%Norb)
+            enddo
+            close(unit)
+            !
+         elseif(reg(mode).eq."plane")then
+            !
+            !Print cut at energy EcutSheet in the {kx,ky} plane
+            wndx_cut = minloc(abs(wreal-EcutSheet),dim=1)
+            path = reg(MaxEnt_K)//"Fk_S_s"//str(ispin)//".DAT"
+            unit = free_unit()
+            open(unit,file=reg(path),form="formatted",status="unknown",position="rewind",action="write")
+            do ik=1,Nkpt
+               ikx = int(ik/(Nkpt_Kside+0.001))+1
+               iky = ik - (ikx-1)*Nkpt_Kside
+               write(unit,"(3I5,200E20.12)") ik,ikx,iky,(Akw_orb(iorb,wndx_cut,ik),iorb=1,Crystal%Norb)
+               if(iky.eq.Nkpt_Kside)write(unit,*)
+            enddo
+            close(unit)
+            !
+         endif
          !
       endif
       deallocate(Kmask,Sparams,wreal,Akw_orb)

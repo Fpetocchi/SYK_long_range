@@ -298,6 +298,9 @@ contains
       !
       !Creates folders for the K-resolved data
       if(print_path)then
+         !
+         call createDir(reg(MaxEnt_K)//"/Sigma_vars",verb=verbose)
+         !
          do ispin=1,Nspin
             if(reg(path_funct).eq."G")then
                !
@@ -324,8 +327,6 @@ contains
                   !
                endif
                !
-               call createDir(reg(MaxEnt_K)//"/Sigma_vars",verb=verbose)
-               !
             elseif(reg(path_funct).eq."GS")then
                !
                call createDir(reg(MaxEnt_K)//"/MaxEnt_Gk_path_t_s"//str(ispin),verb=verbose)  ! This is for MaxEnt on G along the K-path
@@ -348,8 +349,6 @@ contains
                   endif
                   !
                endif
-               !
-               call createDir(reg(MaxEnt_K)//"/Sigma_vars",verb=verbose)
                !
             endif
             if(paramagnet)exit
@@ -643,7 +642,7 @@ contains
       !Dump some LDA results
       if(ItStart.eq.0)then
          call calc_Glda(0d0,Beta,Lttc)
-         if(reg(structure).ne."None")call interpolateHk2Path(Lttc,reg(structure),Nkpt_path,reg(pathINPUT))
+         if(reg(structure).ne."None")call interpolateHk2Path(Lttc,reg(structure),Nkpt_path,reg(pathINPUT),doplane=.true.)
       endif
       !
       !
@@ -1456,33 +1455,39 @@ contains
                !is not fully removing the local part of S_G0W0 as if it were computed in SPEX
                !all the sites will have a local self-energy that would not be included in the
                !DMFT one then making the Delta non-causal.
-               call AllocateFermionicField(S_G0W0_EDMFT,Crystal%Norb,Nmats,Nkpt=Crystal%Nkpt,Nsite=Nsite,Beta=Beta,mu=Glat%mu)
-               do isite=1,Nsite
+               if(Nsite.eq.1)then
+                  do ik=1,S_G0W0%Nkpt
+                     S_G0W0%wks(:,:,:,ik,:) = S_G0W0%wks(:,:,:,ik,:) - S_G0W0%ws
+                  enddo
+               else
+                  call AllocateFermionicField(S_G0W0_EDMFT,Crystal%Norb,Nmats,Nkpt=Crystal%Nkpt,Nsite=Nsite,Beta=Beta,mu=Glat%mu)
+                  do isite=1,Nsite
+                     !
+                     Norb = SiteNorb(isite)
+                     allocate(Orbs(Norb))
+                     Orbs = SiteOrbs(isite,1:Norb)
+                     !
+                     call AllocateFermionicField(S_G0W0_imp,Norb,Nmats,Beta=Beta)
+                     !
+                     !Extract the local G0W0 self-energy for each site
+                     call loc2imp(S_G0W0_imp,S_G0W0,Orbs)
+                     !
+                     !Put it into an-object that contains only the site indexes
+                     call imp2loc(S_G0W0_EDMFT,S_G0W0_imp,isite,Orbs,.false.,.false.)
+                     !
+                     call DeallocateField(S_G0W0_imp)
+                     deallocate(Orbs)
+                     !
+                  enddo
                   !
-                  Norb = SiteNorb(isite)
-                  allocate(Orbs(Norb))
-                  Orbs = SiteOrbs(isite,1:Norb)
-                  !
-                  call AllocateFermionicField(S_G0W0_imp,Norb,Nmats,Beta=Beta)
-                  !
-                  !Extract the local G0W0 self-energy for each site
-                  call loc2imp(S_G0W0_imp,S_G0W0,Orbs)
-                  !
-                  !Put it into an-object that contains only the site indexes
-                  call imp2loc(S_G0W0_EDMFT,S_G0W0_imp,isite,Orbs,.false.,.false.)
-                  !
-                  call DeallocateField(S_G0W0_imp)
-                  deallocate(Orbs)
-                  !
-               enddo
+                  !here, if Vxc is inside S_G0W0, also the local contribution from Vxc is removed
+                  do ik=1,S_G0W0%Nkpt
+                     S_G0W0%wks(:,:,:,ik,:) = S_G0W0%wks(:,:,:,ik,:) - S_G0W0_EDMFT%ws
+                  enddo
+                  call DeallocateField(S_G0W0_EDMFT)
+               endif
                !
-               !here, if Vxc is inside S_G0W0, also the local contribution from Vxc is removed
-               do ik=1,S_G0W0%Nkpt
-                  S_G0W0%wks(:,:,:,ik,:) = S_G0W0%wks(:,:,:,ik,:) - S_G0W0_EDMFT%ws
-               enddo
-               call DeallocateField(S_G0W0_EDMFT)
-               !
-               !Add non local S_G0W0 to S_GW
+               !Add non local S_G0W0 to S_GW. thge latter already contains Simp
                S_GW%wks = S_GW%wks + S_G0W0%wks
                !
                !Put together all the terms

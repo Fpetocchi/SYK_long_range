@@ -37,6 +37,10 @@ module linalg
       module procedure ddet
       module procedure zdet
    end interface det
+   interface det3
+      module procedure ddet3
+      module procedure zdet3
+   end interface det3
    interface diag
       module procedure ddiag
       module procedure zdiag
@@ -143,7 +147,7 @@ module linalg
    public :: inv_her                                                            ![HermitainMatrix(replaced with inverse),uplo(optional for upper or lower)])
    public :: tensor_transform                                                   ![Tensor, either (Norb,Norb,Norb,Norb) or (Norb**2,Norb**2), Rotation(Norb,Norb)]
    !functions
-   public :: det,trace                                                          !numpy-like. Takes matrix returns scalar.
+   public :: det, det3, trace                                                   !numpy-like. Takes matrix returns scalar.
    public :: deye, zeye, zeros, ones                                            !numpy-like. Takes integer returns square matrix.
    public :: diag                                                               !numpy-like. Takes vector returns diagonal square matrix.
    public :: diagonal                                                           !numpy-like. Takes square matrix returns diagonal vector.
