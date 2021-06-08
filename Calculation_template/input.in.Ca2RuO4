@@ -24,7 +24,7 @@
 
  PARAMAGNET=1                                  !If =1 spin symmetry is enforced if =2 the solver will copy the closer to half-filling if =0 spin is left free.
  H_SEED=0.000000                               !Seed to break spin symmetry (persistent if non zero).
- SYM_MODE=3                                    !If =1 only the lattice orbitals will be symmetrized, if =2 also the corrssponding n(tau) inside the solver, if =3 only n(tau).
+ SYM_MODE=3                                    !If =1 only the lattice orbitals will be symmetrized, if =2 also the corresponding n(tau) inside the solver, if =3 only n(tau). Ineffective if =0 or if EQV_SETS=0.
  EQV_SETS=0                                    !Number of sets of locally equivalent lattice orbitals.
 
  #---------------------------------------------#
@@ -34,13 +34,13 @@
  TAU_UNIF=F                                    !Flag to use a uniform mesh on the imaginary time axis. Only internal for GW.
  NREAL=2000                                    !Number of points on the real frequency axis.
  MAX_WREAL=10.000000                           !Maximum absolute value of the real frequency mesh.
- ETA=5.000000E-02                              !Real frequency broadening.
+ ETA=1.000000E-02                              !Real frequency broadening.
  WPADE=0                                       !Number of Matsubara frequencies used in pade' analytic continuation. If its =0 Pade will not be performed.
 
  #---------------------------------------------#
 
  MU=0.000000                                   !Chemical potential.
- N_READ_LAT=4.000000                           !Target density on the lattice. Lookup is switched on to this value if its >0d0. Otherwise mu will be kept fixed.
+ N_READ_LAT=16.000000                          !Target density on the lattice. Lookup is switched on to this value if its >0d0. Otherwise mu will be kept fixed.
  N_READ_LAT_LOC=T                              !Flag to restrict the lattice density lookup to the ORBS_1 indexes corresponding to the solved impurity.
  N_QUICK=1                                     !Integer flag to switch on the quick density lookup within the solver.
  N_ERR=1.000000E-03                            !Relative error on the target density. Better if not lower than 1e-3.
@@ -81,7 +81,7 @@
  CAUSAL_U=F                                    !Flag to employ generalized cavity equation for curlyU. Active only for GW+EDMFT calculation.
  DELTA_FIT=Analytic                            !Fit to extract the local energy in GW+EDMFT calculations. Available: Inf, Analytic, Moments.
  NFIT=16                                       !Number of bath levels (Analytic) or coefficient (Moments-automatic limit to NFIT=8).
- WTAIL_SIMP=40.000000                          !Frequency value above which the tail of Simp is replaced. If =0d0 the tail is not replaced. Only via moments (automatic limit to NFIT=5).
+ WTAIL_SIMP=30.000000                          !Frequency value above which the tail of Simp is replaced. If =0d0 the tail is not replaced. Only via moments (automatic limit to NFIT=5).
 
  #---------------------------------------------#
 
@@ -93,9 +93,10 @@
  LOGFILE=6                                     !Standard output redirection unit. Use 6 to print to terminal. Not used yet.
  PRINT_GK=T                                    !Print the full k-dependent Green's function (binfmt) at each iteration (mandatory for CALC_TYPE=G0W0,scGW,GW+EDMFT).
  PRINT_SIGMAK=T                                !Print the full k-dependent self-energy (binfmt) at each iteration (always optional).
- STRUCTURE=orthorhombic_2                      !Available structures: cubic, fcc, bcc, hex, tetragonal, orthorhombic_[1,2], None to avoid.
- PATH_FUNCT=None                               !Print interacting fields on high-symmetry points. Available fields: G=Green's function, S=self-energy, GS=both. None to avoid.
- NK_PATH=60                                    !Number of segments between two hig-symmetry Kpoints.
+ STRUCTURE=orthorhombic_2                      !Available structures: triangular, cubic_[2,3], fcc, bcc, hex, tetragonal, orthorhombic_[1,2], None to avoid.
+ PATH_FUNCT=G                                  !Print interacting fields on high-symmetry points. Available fields: G=Green's function, S=self-energy, GS=both. None to avoid.
+ NK_PATH=102                                   !Number of segments between two hig-symmetry Kpoints.
+ FERMI_SURF=T                                  !Flag to compute the Green's function on the planar {kx,ky} sheet. The mesh is set by NK_PATH/2. Ignored if PATH_FUNCT=None.
  KK_CUTOFF=90.000000                           !Real frequency cutoff for Kramers Kronig integrals, should be twice the region of interest.
 
  #---------------------------------------------#
@@ -113,7 +114,7 @@
  NTHERM=100                                    !Thermalization cycles. Each cycle performs NMEAS sweeps.
  NSHIFT=1                                      !Proposed segment shifts at each sweep.
  NSWAP=1                                       !Proposed global spin swaps at each sweep.
- N_NNT=1                                       !Measurment for n(tau)n(0) evaluation. Updated according to CALC_TYPE.
+ N_NNT=1                                       !Measurment for n(tau)n(0) evaluation. Updated according to CALC_TYPE. Should be either =1 or 2*NTAU_B_IMP.
  PRINT_TIME=40                                 !Minutes that have to pass before observables are updated and stored.
  BINLENGTH=4                                   !If >0 the Green's function at itau will be the average within +/-binlength.
  BINSTART=50                                   !Tau points skipped at the beginning and end of the Green's function average.
