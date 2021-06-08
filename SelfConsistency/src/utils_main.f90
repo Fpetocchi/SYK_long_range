@@ -2571,7 +2571,7 @@ contains
                enddo
             enddo
             !
-            allocate(Moments(Norb,Nspin,0:4));Moments=0d0
+            allocate(Moments(Norb,Nspin,0:min(4,Nfit)));Moments=0d0
             call fit_moments(Smats(:,:,:,isite),Beta,reg(MomDir),reg(file),"Sigma",Moments,filename="Simp",Wlimit=wndx)
             !
             allocate(SmatsTail(Nmats));SmatsTail=czero

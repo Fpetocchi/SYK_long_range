@@ -526,7 +526,7 @@ class ct_hyb
          // n(tau) - computed every Nmeas - symmetrization - step sum
          VecVec n_tau(Nflavor,Vec(NtauB,0.0));
          n_tau = measure_nt( segments, full_line, NtauB, Beta );
-         if(OrbSym) orb_symm( n_tau, SetsOrbs );
+         //if(OrbSym) orb_symm( n_tau, SetsOrbs ); this is wrong as nnt is reduced too much
          accumulate_VecVec( nt, n_tau );
          //
          // Histograms - computed every Nmeas - step sum
@@ -708,7 +708,11 @@ class ct_hyb
             VecVec Normnnt = normalize_VecVec(nnt, RankSweeps);
             VecVec Printnnt(Nflavor*(Nflavor+1)/2,std::vector<double>(NtauB,0.0));
             mpi.allreduce(Normnnt, Printnnt, true);
-            if(mpi.is_master()) print_VecVec(resultsDir+"/nn_t"+pad, Printnnt, Beta);
+            if(mpi.is_master())
+            {
+               if(OrbSym) orb_symm( Printnnt, SetsOrbs, Norb );
+               print_VecVec(resultsDir+"/nn_t"+pad, Printnnt, Beta);
+            }
             mpi.report(" nn_t"+pad+" is printed.");
          }
       }

@@ -57,9 +57,9 @@ template<typename T> VecVec normalize_VecVec( VecVec &VecVec_in, std::vector<T> 
 //----------------------------------------------------------------------------//
 //                               SYMMETRIZATIONS                              //
 //----------------------------------------------------------------------------//
-void spin_symm( Vec &Vec )
+void spin_symm( Vec &Vec_in )
 {
-   int Nflavor = Vec.size();
+   int Nflavor = Vec_in.size();
    for (int ifl=0; ifl<(Nflavor/2); ++ifl)
    {
       //
@@ -68,22 +68,22 @@ void spin_symm( Vec &Vec )
       //
       //if(para_mode == 2)
       //{
-      //   std::vector<double> shift = { abs(Vec[up]-0.5), abs(Vec[dw]-0.5) };
+      //   std::vector<double> shift = { abs(Vec_in[up]-0.5), abs(Vec_in[dw]-0.5) };
       //   int ndx = std::min_element( shift.begin(), shift.end() ) - shift.begin();
       //   if(ndx==0) dw = up;
       //   if(ndx==1) up = dw;
       //}
       //
-      double val = ( Vec[up] + Vec[dw] ) /2.0;
-      Vec[up] = val;
-      Vec[dw] = val;
+      double val = ( Vec_in[up] + Vec_in[dw] ) /2.0;
+      Vec_in[up] = val;
+      Vec_in[dw] = val;
    }
 }
 
-void spin_symm( VecVec &VecVec )
+void spin_symm( VecVec &VecVec_in )
 {
-   int Nflavor = VecVec.size();
-   int Ntau = VecVec[0].size();
+   int Nflavor = VecVec_in.size();
+   int Ntau = VecVec_in[0].size();
    for (int ifl=0; ifl<(Nflavor/2); ++ifl)
    {
       //
@@ -92,14 +92,14 @@ void spin_symm( VecVec &VecVec )
       //
       for (int i=0; i<Ntau; ++i)
       {
-         double val = ( VecVec[up][i] + VecVec[dw][i] ) /2.0;
-         VecVec[up][i] = val;
-         VecVec[dw][i] = val;
+         double val = ( VecVec_in[up][i] + VecVec_in[dw][i] ) /2.0;
+         VecVec_in[up][i] = val;
+         VecVec_in[dw][i] = val;
       }
    }
 }
 
-void orb_symm( Vec &Vec, std::vector<std::vector<int>> &Lists )
+void orb_symm( Vec &Vec_in, std::vector<std::vector<int>> &Lists )
 {
    for (int ilist=0; ilist<Lists.size(); ++ilist)
    {
@@ -107,41 +107,197 @@ void orb_symm( Vec &Vec, std::vector<std::vector<int>> &Lists )
       double val_dw=0.0;
       for (int iobj=0; iobj<Lists[ilist].size(); ++iobj)
       {
-         int ifl = Lists[ilist][iobj];
-         val_up += Vec[2*ifl]/Lists[ilist].size();
-         val_dw += Vec[2*ifl+1]/Lists[ilist].size();
+         int iorb = Lists[ilist][iobj];
+         val_up += Vec_in[2*iorb]/Lists[ilist].size();
+         val_dw += Vec_in[2*iorb+1]/Lists[ilist].size();
       }
       for (int iobj=0; iobj<Lists[ilist].size(); ++iobj)
       {
-         int ifl = Lists[ilist][iobj];
-         Vec[2*ifl]=val_up;
-         Vec[2*ifl+1]=val_dw;
+         int iorb = Lists[ilist][iobj];
+         Vec_in[2*iorb]=val_up;
+         Vec_in[2*iorb+1]=val_dw;
       }
    }
 }
 
-void orb_symm( VecVec &VecVec, std::vector<std::vector<int>> &Lists )
+void orb_symm( VecVec &VecVec_in, std::vector<std::vector<int>> &Lists, int Norb=0 )
 {
-   int Ntau = VecVec[0].size();
-   for (int i=0; i<Ntau; ++i)
+   //
+   int Ntau = VecVec_in[0].size();
+
+   //
+   if(Norb==0) //Green's function like
    {
-      for (int ilist=0; ilist<Lists.size(); ++ilist)
+      for (int i=0; i<Ntau; ++i)
       {
-         double val_up=0.0;
-         double val_dw=0.0;
-         for (int iobj=0; iobj<Lists[ilist].size(); ++iobj)
+         for (int ilist=0; ilist<Lists.size(); ++ilist)
          {
-            int ifl = Lists[ilist][iobj];
-            val_up += VecVec[2*ifl][i]/Lists[ilist].size();
-            val_dw += VecVec[2*ifl+1][i]/Lists[ilist].size();
-         }
-         for (int iobj=0; iobj<Lists[ilist].size(); ++iobj)
-         {
-            int ifl = Lists[ilist][iobj];
-            VecVec[2*ifl][i]=val_up;
-            VecVec[2*ifl+1][i]=val_dw;
+            double val_up=0.0;
+            double val_dw=0.0;
+            for (int iobj=0; iobj<Lists[ilist].size(); ++iobj)
+            {
+               int iorb = Lists[ilist][iobj];
+               val_up += VecVec_in[2*iorb][i]/Lists[ilist].size();
+               val_dw += VecVec_in[2*iorb+1][i]/Lists[ilist].size();
+            }
+            for (int iobj=0; iobj<Lists[ilist].size(); ++iobj)
+            {
+               int iorb = Lists[ilist][iobj];
+               VecVec_in[2*iorb][i]=val_up;
+               VecVec_in[2*iorb+1][i]=val_dw;
+            }
          }
       }
+   }
+   else //n(tau)n(0) correlator like
+   {
+      //enlarge list with missing orbitals
+      for (int iorb=0; iorb<Norb; ++iorb)
+      {
+         bool found=false;
+         for (int ilist=0; ilist<Lists.size(); ++ilist)
+         {
+            for (int iobj=0; iobj<Lists[ilist].size(); ++iobj)
+            {
+               if(iorb == Lists[ilist][iobj]) found=true;
+            }
+            if(found)break;
+         }
+         if(!found)Lists.push_back(std::vector<int>(1,iorb));
+      }
+
+      //symmetrization at each itau
+      int Nflavor=2*Norb;
+      for (int i=0; i<Ntau; ++i)
+      {
+         //reshuffle vector in [Norb]*Nspin block shape
+         VecVec Wmat(Nflavor,Vec(Nflavor,0.0));
+         int position=0;
+         for (int ifl=0; ifl<Nflavor; ++ifl)
+         {
+            for (int jfl=0; jfl<=ifl; ++jfl)
+            {
+               // iorb = ifl/2; ispin = ifl%2
+               int io = (ifl/2) + Norb*(ifl%2);
+               int jo = (jfl/2) + Norb*(jfl%2);
+               Wmat[io][jo] =  VecVec_in[position][i];
+               Wmat[jo][io] =  Wmat[io][jo];
+               position++;
+            }
+         }
+
+         //loop over indexes within diagonal blocks
+         for (int ilist=0; ilist<Lists.size(); ++ilist)
+         {
+            double D_uu=0.0,D_ud=0.0;
+            double D_du=0.0,D_dd=0.0;
+            double OD_uu=0.0,OD_ud=0.0;
+            double OD_du=0.0,OD_dd=0.0;
+            int O_dim = Lists[ilist].size();
+            int OD_dim = O_dim*(O_dim-1);
+            //compute average
+            for (int iobj=0; iobj<Lists[ilist].size(); ++iobj)
+            {
+               for (int jobj=0; jobj<Lists[ilist].size(); ++jobj)
+               {
+                  int iorb = Lists[ilist][iobj];
+                  int jorb = Lists[ilist][jobj];
+                  if(iorb==jorb)
+                  {
+                     D_uu += Wmat[iorb][iorb]/O_dim;
+                     D_ud += Wmat[iorb][iorb+Norb]/O_dim;
+                     D_du += Wmat[iorb+Norb][iorb]/O_dim;
+                     D_dd += Wmat[iorb+Norb][iorb+Norb]/O_dim;
+                  }
+                  else
+                  {
+                     OD_uu += Wmat[iorb][jorb]/OD_dim;
+                     OD_ud += Wmat[iorb][jorb+Norb]/OD_dim;
+                     OD_du += Wmat[iorb+Norb][jorb]/OD_dim;
+                     OD_dd += Wmat[iorb+Norb][jorb+Norb]/OD_dim;
+                  }
+               }
+            }
+            //reinsert average
+            for (int iobj=0; iobj<Lists[ilist].size(); ++iobj)
+            {
+               for (int jobj=0; jobj<Lists[ilist].size(); ++jobj)
+               {
+                  int iorb = Lists[ilist][iobj];
+                  int jorb = Lists[ilist][jobj];
+                  if(iorb==jorb)
+                  {
+                     Wmat[iorb][iorb] = D_uu;
+                     Wmat[iorb][iorb+Norb] = D_ud;
+                     Wmat[iorb+Norb][iorb] = D_du;
+                     Wmat[iorb+Norb][iorb+Norb] = D_dd;
+                  }
+                  else
+                  {
+                      Wmat[iorb][jorb] = OD_uu;
+                      Wmat[iorb][jorb+Norb] = OD_ud;
+                      Wmat[iorb+Norb][jorb] = OD_du;
+                      Wmat[iorb+Norb][jorb+Norb] = OD_dd;
+                  }
+               }
+            }
+         }
+
+         //loop over indexes within off-diagonal blocks
+         for (int ilist=0; ilist<Lists.size(); ++ilist)
+         {
+            for (int jlist=0; jlist<Lists.size(); ++jlist)
+            {
+               if(ilist!=jlist)
+               {
+                  double OD_uu=0.0,OD_ud=0.0;
+                  double OD_du=0.0,OD_dd=0.0;
+                  int OD_dim = Lists[ilist].size()*Lists[jlist].size();
+                  //compute average
+                  for (int iobj=0; iobj<Lists[ilist].size(); ++iobj)
+                  {
+                     for (int jobj=0; jobj<Lists[jlist].size(); ++jobj)
+                     {
+                        int iorb = Lists[ilist][iobj];
+                        int jorb = Lists[jlist][jobj];
+                        OD_uu += Wmat[iorb][jorb]/OD_dim;
+                        OD_ud += Wmat[iorb][jorb+Norb]/OD_dim;
+                        OD_du += Wmat[iorb+Norb][jorb]/OD_dim;
+                        OD_dd += Wmat[iorb+Norb][jorb+Norb]/OD_dim;
+                     }
+                  }
+                  //reinsert average
+                  for (int iobj=0; iobj<Lists[ilist].size(); ++iobj)
+                  {
+                     for (int jobj=0; jobj<Lists[jlist].size(); ++jobj)
+                     {
+                        int iorb = Lists[ilist][iobj];
+                        int jorb = Lists[jlist][jobj];
+                        Wmat[iorb][jorb] = OD_uu;
+                        Wmat[iorb][jorb+Norb] = OD_ud;
+                        Wmat[iorb+Norb][jorb] = OD_du;
+                        Wmat[iorb+Norb][jorb+Norb] = OD_dd;
+                     }
+                  }
+               }
+            }
+         }
+
+         //put back [Norb]*Nspin block into vector
+         position=0;
+         for (int ifl=0; ifl<Nflavor; ++ifl)
+         {
+            for (int jfl=0; jfl<=ifl; ++jfl)
+            {
+               // iorb = ifl/2; ispin = ifl%2
+               int io = (ifl/2) + Norb*(ifl%2);
+               int jo = (jfl/2) + Norb*(jfl%2);
+               VecVec_in[position][i] = Wmat[io][jo];
+               position++;
+            }
+         }
+
+      } // itau loop
    }
 }
 
@@ -435,8 +591,6 @@ VecVec measure_nnt( VecVec &n_tau)
             {
                int j=i+index;
                if (j>Ntau-1) j -= (Ntau-1);
-               //int j=i-index;
-               //if (j<0) j += (Ntau-1);
                nn_corr_meas[position][index] += n_tau[ifl][i]*n_tau[jfl][j] / (double)Ntau;
             }
          }
@@ -465,8 +619,6 @@ void accumulate_nnt( VecVec &nn_corr_meas, VecVec &n_tau )
             {
                int j=i+index;
                if (j>Ntau-1) j -= (Ntau-1);
-               //int j=i-index;
-               //if (j<0) j += (Ntau-1);
                nn_corr_meas[position][index] += n_tau[ifl][i]*n_tau[jfl][j] / (double)Ntau;
             }
          }

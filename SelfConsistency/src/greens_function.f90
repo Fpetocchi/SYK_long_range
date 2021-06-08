@@ -527,6 +527,12 @@ contains
       n_iter = get_dens()
       write(*,"(2(A,F12.5))") "     Starting density: ",n_iter,", starting mu: ",mu_start
       !
+      n_err = abs(n_iter-mu_param%TargetDensity)/mu_param%TargetDensity
+      if(n_err.lt.mu_param%densityRelErr)then
+         write(*,"(A)") "     Density already under threshold, skipping mu scan."
+         return
+      endif
+      !
       mu_sign = sign(1d0,mu_param%TargetDensity-n_iter)
       mu_last = mu_start
       !
@@ -663,6 +669,12 @@ contains
       call calc_G0_tau(Gitau,mu_start,Beta,Lttc%Ek,atBeta=.true.)
       n_iter = get_dens()
       write(*,"(2(A,F12.5))") "     Starting density: ",n_iter,", starting mu: ",mu_start
+      !
+      n_err = abs(n_iter-mu_param%TargetDensity)/mu_param%TargetDensity
+      if(n_err.lt.mu_param%densityRelErr)then
+         write(*,"(A)") "     Density already under threshold, skipping mu scan."
+         return
+      endif
       !
       mu_sign = sign(1d0,mu_param%TargetDensity-n_iter)
       mu_last = mu_start;
