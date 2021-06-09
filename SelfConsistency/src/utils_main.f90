@@ -209,7 +209,6 @@ contains
             !
             if(ItStart.ne.0) stop "CalculationType is G0W0 but the starting iteration is not 0."
             call createDir(reg(Itpath),verb=verbose)
-            call createDir(reg(Itpath)//"Convergence",verb=verbose)
             do isite=1,Nsite
                call createDir(reg(Itpath)//"Solver_"//reg(SiteName(isite))//"/fits",verb=verbose)
                if(ExpandImpurity.or.AFMselfcons)exit
@@ -244,7 +243,6 @@ contains
             endif
             !
             call createDir(reg(Itpath),verb=verbose)
-            call createDir(reg(Itpath)//"Convergence",verb=verbose)
             !
             Itend = LastIteration
             !
@@ -273,7 +271,6 @@ contains
             else
                !
                call createDir(reg(Itpath),verb=verbose)
-               call createDir(reg(Itpath)//"/Convergence",verb=verbose)
                do isite=1,Nsite
                   call createDir(reg(Itpath)//"/Solver_"//reg(SiteName(isite))//"/fits",verb=verbose)
                   if(ExpandImpurity.or.AFMselfcons)exit
@@ -283,6 +280,20 @@ contains
             endif
             !
       end select
+      !
+      !For memory demanding applications one has to creat the folders at the beginning
+      call createDir(reg(Itpath)//"/Convergence",verb=verbose)
+      call createDir(reg(Itpath)//"/Convergence/Glat",verb=verbose)
+      call createDir(reg(Itpath)//"/Convergence/Gimp",verb=verbose)
+      call createDir(reg(Itpath)//"/Convergence/Slat",verb=verbose)
+      call createDir(reg(Itpath)//"/Convergence/Simp",verb=verbose)
+      call createDir(reg(Itpath)//"/Convergence/Cimp",verb=verbose)
+      call createDir(reg(Itpath)//"/Convergence/Ulat",verb=verbose)
+      call createDir(reg(Itpath)//"/Convergence/Wlat",verb=verbose)
+      call createDir(reg(Itpath)//"/Convergence/Wimp",verb=verbose)
+      call createDir(reg(Itpath)//"/Convergence/curlyUimp",verb=verbose)
+      call createDir(reg(Itpath)//"/Convergence/Plat",verb=verbose)
+      call createDir(reg(Itpath)//"/Convergence/Pimp",verb=verbose)
       !
       !Print info to user
       if(FirstIteration.eq.0)then
@@ -1452,14 +1463,8 @@ contains
                call FermionicKsum(S_G0W0)
                !
                !If the DC is not properly computed meaning that the Dc computed here
-               !is not fully removing the local part of S_G0W0 as if it were computed in SPEX
-               !all the sites will have a local self-energy that would not be included in the
-               !DMFT one then making the Delta non-causal.
-               if(Nsite.eq.1)then
-                  do ik=1,S_G0W0%Nkpt
-                     S_G0W0%wks(:,:,:,ik,:) = S_G0W0%wks(:,:,:,ik,:) - S_G0W0%ws
-                  enddo
-               else
+               !yielding non causal S_G0W0 - S_G0W0dc
+               if(Nsite.gt.1)then
                   call AllocateFermionicField(S_G0W0_EDMFT,Crystal%Norb,Nmats,Nkpt=Crystal%Nkpt,Nsite=Nsite,Beta=Beta,mu=Glat%mu)
                   do isite=1,Nsite
                      !
