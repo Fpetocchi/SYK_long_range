@@ -2662,6 +2662,7 @@ contains
          !
       endif
       call dump_FermionicField(S_DMFT,reg(PrevItFolder),"Simp_w")
+      call dump_MaxEnt(S_DMFT,"mats",reg(PrevItFolder)//"Convergence/","Simp",EqvGWndx%SetOrbs,WmaxPade=PadeWlimit)
       call dump_Matrix(S_DMFT%N_s(:,:,1),reg(PrevItFolder)//"HartreeU_s1.DAT")
       call dump_Matrix(S_DMFT%N_s(:,:,2),reg(PrevItFolder)//"HartreeU_s2.DAT")
       call DeallocateFermionicField(S_DMFT)

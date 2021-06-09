@@ -138,7 +138,7 @@ class ct_hyb
          mu_correction.resize(Norb,0.0);
          for(int iorb=0; iorb < Norb; iorb++)
          {
-            mu_correction[iorb] += Uloc(2*iorb,2*iorb+1)/2.0;
+            mu_correction[iorb] = Uloc(2*iorb,2*iorb+1)/2.0;
             mpi.report(" Orbital "+str(iorb)+": correction of the local level: "+str(mu_correction[iorb],4));
          }
 

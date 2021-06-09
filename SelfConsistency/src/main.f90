@@ -89,6 +89,7 @@ program SelfConsistency
          !
          call calc_Pi(Plat,Glat,Crystal)
          call dump_BosonicField(Plat,reg(ItFolder),"Plat_w.DAT")
+         call dump_MaxEnt(Plat,"mats",reg(ItFolder)//"Convergence/","Plat",EqvGWndx%SetOrbs)
          !
          if(merge_P)then
             call MergeFields(Plat,P_EDMFT,alphaPi,SiteOrbs,RotateHloc)
@@ -183,6 +184,7 @@ program SelfConsistency
             call AllocateFermionicField(S_GW,Crystal%Norb,Nmats,Nkpt=Crystal%Nkpt,Nsite=Nsite,Beta=Beta)
             call calc_sigmaGW(S_GW,Glat,Wlat,Crystal)
             call dump_FermionicField(S_GW,reg(ItFolder),"Slat_w")
+            call dump_MaxEnt(S_GW,"mats",reg(ItFolder)//"Convergence/","Slat",EqvGWndx%SetOrbs,WmaxPade=PadeWlimit)
             !
          endif
          !

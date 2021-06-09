@@ -103,7 +103,7 @@ if [ "$FIELD"  == "G" ] || [ "$FIELD"  == "S" ]; then
    #
    DATA=${FIELD}${SOURCE}"_t_o"${ORB}"_s"${SPIN}".DAT"
    DATA_=$DATA
-   cp ../${DATA} ./${DATA_}
+   cp ../${FIELD}${SOURCE}/${DATA} ./${DATA_}
    #
 elif [ "$FIELD"  == "M" ]; then
    #
@@ -114,7 +114,7 @@ elif [ "$FIELD"  == "M" ]; then
    #
    DATA=${FIELD}${SOURCE}"_w.DAT"
    DATA_=$DATA
-   cp ../${DATA} ./${DATA_}
+   cp ../${FIELD}${SOURCE}/${DATA} ./${DATA_}
    #
 else
    #
@@ -125,7 +125,7 @@ else
    #
    DATA=${FIELD}${SOURCE}"_w_("${ORB}","${JOR}")("${JOR}","${ORB}").DAT"
    DATA_=${FIELD}${SOURCE}"_w_"${ORB}${JOR}${JOR}${ORB}".DAT"
-   cp ../${DATA} ./${DATA_}
+   cp ../${FIELD}${SOURCE}/${DATA} ./${DATA_}
    #
 fi
 
