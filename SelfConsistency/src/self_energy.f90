@@ -111,23 +111,23 @@ contains
       call cpu_time(start)
       allocate(Gitau(Norb,Norb,NtauB,Nkpt,Nspin));Gitau=czero
       if(cmplxWann)then
-         spinloopC: do ispin=1,Nspin
+         spinloopGWc: do ispin=1,Nspin
             call Fmats2itau_mat(Beta,Gmats%wks(:,:,:,:,ispin),Gitau(:,:,:,:,ispin), &
             asympt_corr=.true.,tau_uniform=tau_uniform)
             if(paramagnet)then
                Gitau(:,:,:,:,Nspin) = Gitau(:,:,:,:,1)
-               exit spinloopC
+               exit spinloopGWc
             endif
-         enddo spinloopC
+         enddo spinloopGWc
       else
-         spinloopR: do ispin=1,Nspin
+         spinloopGWr: do ispin=1,Nspin
             call Fmats2itau_mat(Beta,Gmats%wks(:,:,:,:,ispin),Gitau(:,:,:,:,ispin), &
             asympt_corr=.true.,tau_uniform=tau_uniform,nkpt3=Lttc%Nkpt3,kpt=Lttc%kpt)
             if(paramagnet)then
                Gitau(:,:,:,:,Nspin) = Gitau(:,:,:,:,1)
-               exit spinloopR
+               exit spinloopGWr
             endif
-         enddo spinloopR
+         enddo spinloopGWr
       endif
       call cpu_time(finish)
       write(*,"(A,F)") "     Glat(k,iw) --> Glat(k,tau) cpu timing:", finish-start
@@ -143,7 +143,7 @@ contains
       call cpu_time(start)
       call clear_attributes(Smats_C_)
       allocate(Sitau(Norb,Norb,NtauB))
-      spinloop: do ispin=1,Nspin
+      spinloopGW: do ispin=1,Nspin
          do iq=1,Lttc%Nkpt_irred
             !
             Sitau=czero
@@ -181,9 +181,9 @@ contains
          enddo
          if(paramagnet)then
             Smats_C_%wks(:,:,:,:,Nspin) = Smats_C_%wks(:,:,:,:,1)
-            exit spinloop
+            exit spinloopGW
          endif
-      enddo spinloop
+      enddo spinloopGW
       deallocate(Witau,Sitau)
       call cpu_time(finish)
       write(*,"(A,F)") "     Sigma_C(k,iw) cpu timing:", finish-start
@@ -304,7 +304,7 @@ contains
       use utils_fields
       use crystal
       use fourier_transforms
-      use input_vars, only : NtauB, tau_uniform, ExpandImpurity, AFMselfcons
+      use input_vars, only : NtauB, tau_uniform, paramagnet
       implicit none
       !
       type(FermionicField),intent(inout)    :: Smats_dc
@@ -318,10 +318,10 @@ contains
       complex(8),allocatable                :: Sitau_loc(:,:,:,:)
       complex(8),allocatable                :: Gitau_loc(:,:,:,:)
       complex(8),allocatable                :: Witau_loc(:,:,:)
-      complex(8),allocatable                :: Gmats_lda(:,:),Gitau_lda(:,:)
+      !complex(8),allocatable                :: Gmats_lda(:,:),Gitau_lda(:,:)
       real(8)                               :: Beta
       integer                               :: Nbp,Nkpt,Norb,Nmats
-      integer                               :: itau,ispin,iw
+      integer                               :: itau,ispin!,iw
       integer                               :: i,j,k,l,ib1,ib2
       real                                  :: start,finish
       !
@@ -348,34 +348,11 @@ contains
       call AllocateFermionicField(Smats_Cdc_,Norb,Nmats,Nsite=Smats_dc%Nsite,Beta=Beta)
       call AllocateFermionicField(Smats_Xdc_,Norb,0,Nsite=Smats_dc%Nsite,Beta=Beta)
       !
-      ! Compute Glat(tau)
+      ! Compute Glat(tau) - FT all components
       call cpu_time(start)
       allocate(Gitau_loc(Norb,Norb,NtauB,Nspin));Gitau_loc=czero
       do ispin=1,Nspin
-         !
-         if(ExpandImpurity.or.AFMselfcons)then
-            !
-            !FT all components
-            call Fmats2itau_mat(Beta,Gmats%ws(:,:,:,ispin),Gitau_loc(:,:,:,ispin),asympt_corr=.true.,tau_uniform=tau_uniform)
-            !
-         else
-            !
-            !take the diagonal local Gf
-            allocate(Gmats_lda(Norb,Nmats));Gmats_lda=czero
-            do iw=1,Nmats
-               Gmats_lda(:,iw) = diagonal(Gmats%ws(:,:,iw,ispin))
-            enddo
-            !
-            !FT the diagonal Gf
-            allocate(Gitau_lda(Norb,NtauB));Gitau_lda=czero
-            call Fmats2itau_vec(Gmats%Beta,Gmats_lda,Gitau_lda,asympt_corr=.true.,tau_uniform=tau_uniform)
-            !
-            !put back elements in Gitau
-            do itau=1,NtauB
-               Gitau_loc(:,:,itau,ispin) = diag(Gitau_lda(:,itau))
-            enddo
-            !
-         endif
+         call Fmats2itau_mat(Beta,Gmats%ws(:,:,:,ispin),Gitau_loc(:,:,:,ispin),asympt_corr=.true.,tau_uniform=tau_uniform)
       enddo
       call cpu_time(finish)
       write(*,"(A,F)") "     Glat(iw), --> Glat(tau) cpu timing:", finish-start
@@ -390,7 +367,7 @@ contains
       !Sigma_{m,n}(q,tau) = -Sum_{k,mp,np} W_{(m,mp);(n,np)}(q-k;tau)G_{mp,np}(k,tau)
       call cpu_time(start)
       allocate(Sitau_loc(Norb,Norb,NtauB,Nspin));Sitau_loc=czero
-      do ispin=1,Nspin
+      spinloopGWdc: do ispin=1,Nspin
          !$OMP PARALLEL DEFAULT(NONE),&
          !$OMP SHARED(Norb,NtauB,ispin,Sitau_loc,Gitau_loc,Witau_loc),&
          !$OMP PRIVATE(itau,i,j,k,l,ib1,ib2)
@@ -415,7 +392,11 @@ contains
          enddo
          !$OMP END DO
          !$OMP END PARALLEL
-      enddo
+         if(paramagnet)then
+            Sitau_loc(:,:,:,Nspin) = Sitau_loc(:,:,:,1)
+            exit spinloopGWdc
+         endif
+      enddo spinloopGWdc
       deallocate(Witau_loc)
       !
       call clear_attributes(Smats_Cdc_)
