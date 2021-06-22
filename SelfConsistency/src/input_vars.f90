@@ -420,9 +420,9 @@ contains
          call parse_input_variable(N_Vnn,"N_V",InputFile,default=1,comment="Range of the non-local interaction in real space (orbital independent).")
          if(N_Vnn.gt.0)then
             !long-range coulombian
-            call parse_input_variable(long_range,"LONG_RANGE",InputFile,default="None",comment="Long range interaction. The strength is the first entry of VNN. Avalibale: None, Coulomb(range truncated to N_V), Ewald(unrestricted range).")
+            call parse_input_variable(long_range,"LONG_RANGE",InputFile,default="Explicit",comment="Avalibale long range interaction: Explicit(reads VNN for each N_V), Coulomb(reads first VNN, max neighbor N_V), Ewald(reads first VNN, unrestricted range).")
             allocate(Vnn(Norb_model,N_Vnn));Vnn=0d0
-            if(reg(long_range).eq."None")then
+            if(reg(long_range).eq."Explicit")then
                do iorb=1,Norb_model
                   call parse_input_variable(Vnn(iorb,:),"VNN_"//str(iorb),InputFile,comment="Magnitude of the long-range interactions for orbital number "//str(iorb))
                enddo
@@ -468,7 +468,7 @@ contains
       !
       !Variables for the fit
       call parse_input_variable(DeltaFit,"DELTA_FIT",InputFile,default="Analytic",comment="Fit to extract the local energy in GW+EDMFT calculations. Available: Inf, Analytic, Moments.")
-      call parse_input_variable(Nfit,"NFIT",InputFile,default=8,comment="Number of bath levels (Analytic) or coefficient (Moments-automatic limit to NFIT=8).")
+      call parse_input_variable(Nfit,"NFIT",InputFile,default=8,comment="Number of bath levels (Analytic) or coefficient (Moments-automatic limit to NFIT=5).")
       call parse_input_variable(ReplaceTail_Simp,"WTAIL_SIMP",InputFile,default=80d0,comment="Frequency value above which the tail of Simp is replaced. If =0d0 the tail is not replaced. Only via moments (automatic limit to NFIT=5).")
       !
       !Paths and loop variables

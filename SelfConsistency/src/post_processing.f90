@@ -220,7 +220,7 @@ contains
       complex(8),allocatable                :: Gft(:,:,:)
       complex(8),allocatable                :: Gpade(:)
       integer                               :: iwan,ispin
-      integer                               :: Norb,Npoints
+      integer                               :: Norb,Npoints,Ntau
       real(8),allocatable                   :: tau(:),wmats(:),wreal(:)
       character(len=255)                    :: filepath
       !
@@ -308,12 +308,13 @@ contains
             !
          case("mats2itau")
             !
+            Ntau = int(2d0*pi*Nmats)
             if(Npoints.ne.Nmats) write(*,"(A)")"     Warning: dump_MaxEnt_Gfunct number fo Matsubara points differ from input."
             if(present(WmaxPade).and.(WmaxPade.gt.0)) write(*,"(A)")"     Warning: dump_MaxEnt_Gfunct pade from mats2itau not done."
-            allocate(tau(Solver%NtauF));tau=0d0
-            tau = linspace(0d0,Beta,Solver%NtauF)
+            allocate(tau(Ntau));tau=0d0
+            tau = linspace(0d0,Beta,Ntau)
             !
-            allocate(Gft(Norb,Solver%NtauF,Nspin));Gft=czero
+            allocate(Gft(Norb,Ntau,Nspin));Gft=czero
             do ispin=1,Nspin
                call Fmats2itau_vec(Beta,G(:,:,ispin),Gft(:,:,ispin),asympt_corr=.true.,tau_uniform=.true.)
             enddo
@@ -324,7 +325,7 @@ contains
                   call dump_Field_component(real(Gft(iwan,:,ispin)),reg(filepath),reg(filename)//"_t_o"//str(iwan)//"_s"//str(ispin)//".DAT",tau)
                enddo
             enddo
-            deallocate(Gft)
+            deallocate(Gft,tau)
             !
       end select
       !
@@ -391,7 +392,7 @@ contains
       !
       integer                               :: ndx(4)
       complex(8),allocatable                :: Wft(:),Wpade(:)
-      integer                               :: Npoints
+      integer                               :: Npoints,Ntau
       real(8),allocatable                   :: tau(:),wmats(:),wreal(:)
       character(len=255)                    :: filepath
       !
@@ -480,17 +481,19 @@ contains
             !
          case("mats2itau")
             !
+            Ntau = int(2d0*pi*Nmats)
             if(Npoints.ne.Nmats) write(*,"(A)")"     Warning: dump_MaxEnt_Wfunct number fo Matsubara points differ from input."
             if(present(WmaxPade).and.(WmaxPade.gt.0)) write(*,"(A)")"     Warning: dump_MaxEnt_Wfunct pade from mats2itau not done."
-            allocate(tau(Solver%NtauB));tau=0d0
-            tau = linspace(0d0,Beta,Solver%NtauB)
+            allocate(tau(Ntau));tau=0d0
+            tau = linspace(0d0,Beta,Ntau)
             !
-            allocate(Wft(Solver%NtauB));Wft=czero
+            allocate(Wft(Ntau));Wft=czero
             call Bmats2itau(Beta,W,Wft,asympt_corr=.true.,tau_uniform=.true.,Umats_bare=W(Npoints))
-            Wft = Wft + W(Npoints)
+            Wft(1) = Wft(1) + W(Npoints)
+            Wft(Ntau) = Wft(Ntau) + W(Npoints)
             !
             call dump_Field_component(real(Wft),reg(filepath),reg(filename)//"_t_("//str(ndx(1))//","//str(ndx(2))//")("//str(ndx(3))//","//str(ndx(4))//").DAT",tau)
-            deallocate(Wft)
+            deallocate(Wft,tau)
             !
       end select
       !

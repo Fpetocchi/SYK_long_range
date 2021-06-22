@@ -180,7 +180,7 @@ contains
       use utils_misc
       use utils_fields
       use linalg, only : zeye, inv
-      use input_vars, only : HandleGammaPoint, Umodel
+      use input_vars, only : HandleGammaPoint, Umodel, look4dens
       implicit none
       !
       type(BosonicField),intent(inout)      :: Wmats
@@ -331,6 +331,9 @@ contains
             call check_Hermiticity(Wmats%screened_local(:,:,iw),1e7*eps,enforce=.true.,hardstop=.false.,name="Wlat_loc_w"//str(iw),verb=.true.)
          enddo
       endif
+      !
+      !call dump_BosonicField(Wmats,"/flash/Wk_for_Viktor/N_"//str(look4dens%TargetDensity,3)//"/",.true.)
+      !stop
       !
    end subroutine calc_W_full
 
@@ -1785,7 +1788,7 @@ contains
       use utils_fields
       use crystal
       use input_vars, only : pathINPUTtr, pathINPUT
-      use input_vars, only : long_range, FirstIteration, structure, Nkpt_path
+      use input_vars, only : long_range, structure, Nkpt_path
       implicit none
       !
       type(BosonicField),intent(inout)      :: Umats
@@ -1875,7 +1878,7 @@ contains
          endif
          !
          !setting the R dependence
-         if(reg(long_range).eq."None")then
+         if(reg(long_range).eq."Explicit")then
             V = Vnn(:,idist)
          elseif(reg(long_range).eq."Coulomb")then
             V = Vnn(:,1)/Rsorted(Rorder(iwig))
@@ -1913,7 +1916,7 @@ contains
       call cpu_time(finish)
       write(*,"(A,F)") "     Unn(R) --> Unn(K) cpu timing:", finish-start
       !
-      if((FirstIteration.eq.0).and.(reg(structure).ne."None"))then
+      if(reg(structure).ne."None")then
          call interpolateHk2Path(Lttc,reg(structure),Nkpt_path,reg(pathINPUT),filename="Uk",data=U_K)
       endif
       !
@@ -1960,7 +1963,7 @@ contains
       use utils_fields
       use crystal
       use input_vars, only : pathINPUTtr, pathINPUT
-      use input_vars, only : long_range, FirstIteration, structure, Nkpt_path
+      use input_vars, only : long_range, structure, Nkpt_path
       implicit none
       !
       type(BosonicField),intent(inout)      :: Umats
@@ -2056,7 +2059,7 @@ contains
          endif
          !
          !setting the R dependence
-         if(reg(long_range).eq."None")then
+         if(reg(long_range).eq."Explicit")then
             V = Vnn(:,idist)
          elseif(reg(long_range).eq."Coulomb")then
             V = Vnn(:,1)/Rsorted(Rorder(iwig))
@@ -2080,7 +2083,7 @@ contains
       !
       if(verbose)then
          write(*,*)"     Real-space interaction elements:"
-         write(*,"(A6,3A12)") "  i  ","  Ri  ","  H(Ri)  ","  N[Ri]  "
+         write(*,"(A6,3A12)") "  i  ","  Ri  ","  H(Ri)  "," [n1,n2,n3] "
          do iwig=1,Nwig
             write(*,"(1I6,2F12.4,3I4)")Rorder(iwig),Rsorted(Rorder(iwig)),real(U_R(1,1,Rorder(iwig))),Nvecwig(:,Rorder(iwig))
          enddo
@@ -2094,7 +2097,7 @@ contains
       call cpu_time(finish)
       write(*,"(A,F)") "     Unn(R) --> Unn(K) cpu timing:", finish-start
       !
-      if((FirstIteration.eq.0).and.(reg(structure).ne."None"))then
+      if(reg(structure).ne."None")then
          call interpolateHk2Path(Lttc,reg(structure),Nkpt_path,reg(pathINPUT),filename="Uk",data=U_K)
       endif
       !
