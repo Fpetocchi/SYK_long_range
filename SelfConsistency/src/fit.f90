@@ -18,7 +18,6 @@ module fit
       module procedure :: reconstruct_lastCoeffs_B
    end interface reconstruct_lastCoeffs
 
-
    !---------------------------------------------------------------------------!
    !PURPOSE: Module custom types
    !---------------------------------------------------------------------------!

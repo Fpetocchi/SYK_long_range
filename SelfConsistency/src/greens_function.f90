@@ -852,11 +852,13 @@ contains
       allocate(Akw(Nreal));Akw=0d0
       do iwan1=1,Norb
          call dump_FermionicField(Gprint_Ek(iwan1,:),reg(pathOUTPUT_),"Greal_Ek_"//str(iwan1)//".lda",axis)
-         Akw = dimag(Gprint_Ek(iwan1,:));Akw = Akw/(sum(Akw)*abs(axis(2)-axis(1)))
+         Akw = dimag(Gprint_Ek(iwan1,:))
+         Akw = Akw/(sum(Akw)*abs(axis(2)-axis(1)))
          call dump_FermionicField(Akw,reg(pathOUTPUT_),"Akw_Ek_"//str(iwan1)//".lda",axis)
          do iwan2=1,Norb
             call dump_FermionicField(Gprint_Hk(iwan1,iwan2,:),reg(pathOUTPUT_),"Greal_Hk_"//str(iwan1)//"_"//str(iwan2)//".lda",axis)
-            Akw = dimag(Gprint_Hk(iwan1,iwan2,:));Akw = Akw/(sum(Akw)*abs(axis(2)-axis(1)))
+            Akw = dimag(Gprint_Hk(iwan1,iwan2,:))
+            Akw = Akw/(sum(Akw)*abs(axis(2)-axis(1)))
             call dump_FermionicField(Akw,reg(pathOUTPUT_),"Akw_Hk_"//str(iwan1)//"_"//str(iwan2)//".lda",axis)
          enddo
       enddo

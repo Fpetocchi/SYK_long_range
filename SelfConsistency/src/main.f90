@@ -295,7 +295,7 @@ end program SelfConsistency
 !                                   COMMENTS                                   !
 !------------------------------------------------------------------------------!
 !
-!(*): because I need the full K dependent Wlat, which is never stored, in ordeer to compute S_Full
+!(*): the S_Full_exists flag is present because I need the full K dependent Wlat, which is never stored, in ordeer to compute S_Full
 !
 !(**): a bit redundant since there is no merge wihtout DMFT
 !

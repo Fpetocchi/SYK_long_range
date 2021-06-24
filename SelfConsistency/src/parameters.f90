@@ -18,6 +18,7 @@ module parameters
    complex(8),parameter                     :: czero=dcmplx(0.d0,0.d0)
    !
    real(8),parameter                        :: H2eV=27.2113831243217d0
+   real(8),parameter                        :: Ry2H=0.5d0
    real(8),parameter                        :: bohr=0.5291772108d0
    !
    integer,parameter                        :: spatial_directions=4 !100,010,001,110

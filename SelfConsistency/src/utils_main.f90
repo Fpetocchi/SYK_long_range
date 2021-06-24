@@ -400,6 +400,7 @@ contains
       integer                               :: shift
       logical                               :: present
       integer,allocatable                   :: oldSetNorb(:),oldSetOrbs(:,:)
+      real(8),allocatable                   :: Egrid(:)
       !complex(8),allocatable                :: Vxc_loc(:,:)
       !
       !
@@ -652,9 +653,18 @@ contains
       !
       !Dump some LDA results
       if(ItStart.eq.0)then
+         !
          call calc_Glda(0d0,Beta,Lttc)
+         !
+         allocate(Egrid(Nreal));Egrid=0d0
+         Egrid = linspace(-wrealMax,+wrealMax,Nreal)
+         call tetrahedron_integration(reg(pathINPUT),Lttc%Ek,Lttc%Nkpt3,Lttc%kpt,Egrid,fact_intp=2)
+         deallocate(Egrid)
+         !
          if(reg(structure).ne."None")call interpolateHk2Path(Lttc,reg(structure),Nkpt_path,reg(pathINPUT),doplane=.true.)
+         !
       endif
+      stop
       !
       !
    end subroutine initialize_Lattice

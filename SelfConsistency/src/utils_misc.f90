@@ -105,6 +105,7 @@ module utils_misc
    public :: BosonicFreqMesh
    public :: get_Tier_occupation
    public :: fermidirac
+   public :: boseeinstein
    public :: diff_fermidirac
    public :: find_kpt
    public :: keq
@@ -172,6 +173,26 @@ contains
       endif
       !
    end function fermidirac
+   !
+   double precision function boseeinstein(e,beta)
+      implicit none
+      real(8),intent(in)                    :: e,beta
+      real(8)                               :: temp
+      real(8)                               :: bosecut
+      !
+      bosecut=log(huge(1.0d0)-1e2)/2.d0 !bosecut=600.d0
+      temp=e*beta
+      if (temp.ge.bosecut) then
+         boseeinstein=0.d0
+      elseif (temp.le.-bosecut) then
+         boseeinstein=-1.d0
+      elseif (abs(temp).lt.1d-6) then
+         stop "boseeinstein: abs(beta*e).lt.1d-6 in Bose-Einstein distribution"
+      else
+         boseeinstein=1.d0/(dexp(temp)-1.d0)
+      endif
+      !
+   end function boseeinstein
 
 
    !---------------------------------------------------------------------------!

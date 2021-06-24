@@ -1,4 +1,4 @@
-module module_name
+module gap_equation
 
    implicit none
    private
@@ -29,6 +29,10 @@ module module_name
    !---------------------------------------------------------------------------!
    !PURPOSE: Module variables
    !---------------------------------------------------------------------------!
+   real(8),allocatable,private              :: omega(:)                         ! Phonon energy on logarithmic grid
+   real(8),allocatable,private              :: a2F(:)                           ! alpha^2*F(\Omega) function
+   logical,private                          :: Phonons_stored=.false.
+   !
 #ifdef _verb
    logical,private                          :: verbose=.true.
 #else
@@ -38,15 +42,7 @@ module module_name
    !---------------------------------------------------------------------------!
    !PURPOSE: Rutines available for the user. Description only for interfaces.
    !---------------------------------------------------------------------------!
-   !variables
-   !public ::
-   !public ::
-   !subroutines
-   !public ::
-   !public ::
-   !functions
-   !public ::
-   !public ::
+   public :: calc_Tc
 
    !===========================================================================!
 
@@ -54,13 +50,68 @@ contains
 
 
    !---------------------------------------------------------------------------!
-   !PURPOSE: subroutine1_name does this
-   !TEST ON:
+   !PURPOSE: Read the output of phonon calculations with  Elk or QuantumEspresso
    !---------------------------------------------------------------------------!
-   subroutine subroutine1_name()
+   subroutine read_a2F(pathINPUT,mode)
       !
-      !use mod_a
-      !use mod_a
+      use parameters
+      use utils_misc
+      implicit none
+      !
+      character(len=*),intent(in)           :: pathINPUT
+      character(len=*),intent(in)           :: mode
+      !
+      integer                               :: iomega,Nomega
+      real(8)                               :: ConversionFactor
+      logical                               :: filexists
+      !
+      !
+      if(verbose)write(*,"(A)") "---- read_a2F"
+      !
+      !
+      select case(reg(mode))
+         case default
+            !
+            stop "Available phonon inputs: Elk, QEspresso."
+            !
+         case("Elk")
+            !
+            ConversionFactor = H2eV
+            !
+         case("QEspresso")
+            !
+            ConversionFactor = Ry2H*H2eV
+            !
+      end select
+      !
+      !reading phonons form file
+      call inquireFile(reg(pathINPUT)//"ALPHA2F.DAT",filexists)
+      unit = free_unit()
+      open(unit,file=reg(pathINPUT)//"ALPHA2F.DAT",form="formatted",action="read",position="rewind")
+      read(unit,'("# nw alpha2F: ",I8)') Nomega
+      !
+      allocate(omega(Nomega));omega=0d0
+      allocate(a2F(Nomega));a2F=0d0
+      !
+      read(unit,*)
+      do iomega=1,Nomega
+        read(unit,'(2G18.10)') omega(iomega),a2F(iomega)
+      enddo
+      close(unit)
+      !
+      a2F = a2F * ConversionFactor
+      !
+      Phonons_stored=.true.
+      !
+   end subroutine read_a2F
+
+
+   !---------------------------------------------------------------------------!
+   !PURPOSE: Compute the phononic renormalization factor on an energy grid
+   !---------------------------------------------------------------------------!
+   subroutine calc_Zph_e(beta,Egrid,DoS,Zph_e,mode)
+      !
+      use utils_misc
       implicit none
       !
       !input var 1
@@ -70,39 +121,13 @@ contains
       !internal var 2
       !
       !
-      if(verbose)write(*,"(A)") "---- subroutine1_name"
+      if(verbose)write(*,"(A)") "---- calc_Zph_e"
       !
       !
       ! Checks on the input
 
       !
-   end subroutine subroutine1_name
+   end subroutine calc_Zph_e
 
 
-   !---------------------------------------------------------------------------!
-   !PURPOSE: subroutine2_name does this
-   !TEST ON:
-   !---------------------------------------------------------------------------!
-   subroutine subroutine2_name()
-      !
-      !use mod_a
-      !use mod_a
-      implicit none
-      !
-      !input var 1
-      !input var 2
-      !
-      !internal var 1
-      !internal var 2
-      !
-      !
-      if(verbose)write(*,"(A)") "--- subroutine2_name"
-      !
-      !
-      ! Checks on the input
-
-      !
-   end subroutine subroutine2_name
-
-
-end module module_name
+end module gap_equation

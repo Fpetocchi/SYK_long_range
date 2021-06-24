@@ -49,7 +49,8 @@ module module_container
    calc_Kpath                               ,&
    calc_Kplane                              ,&
    calc_Ewald                               ,&
-   interpolateHk2Path
+   interpolateHk2Path                       ,&
+   tetrahedron_integration
 
 
    !(d) Fermionic and Bosonic Fourier transforms. Depends on (b),(c) not on specific types.

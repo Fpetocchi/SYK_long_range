@@ -10,16 +10,19 @@ module crystal
    !in genere mai al codice che lavora in spazio K.
    !cmq possono essere accessibili e sbattuti nell"attributo lattice con suroutine dedicate
    !il calc wigsiez e smallk hanno bisogno che LATTC sia letto
-   ! qui mantengo il path allinputfile dato dall'utente perche cmq se leggo la Hk la devo leggere da qulahce parte
-   ! per funzionare wannier intp devo leggere Hk perche' e' l'unico modo per dare il path
+   ! qui mantengo il path allinputfile dato dall"utente perche cmq se leggo la Hk la devo leggere da qulahce parte
+   ! per funzionare wannier intp devo leggere Hk perche" e" l"unico modo per dare il path
 
    !---------------------------------------------------------------------------!
    !PURPOSE: Module interfaces
    !---------------------------------------------------------------------------!
    interface wannierinterpolation
-      module procedure wannierinterpolation_d1                                  !(nkpt3_orig(3),kpt_orig(3,Nkpt_orig),kpt_intp(3,Nkpt_intp),mat_K(d1,Nkpt_orig),mat_intp(d1,Nkpt_intp))
-      module procedure wannierinterpolation_d2                                  !(nkpt3_orig(3),kpt_orig(3,Nkpt_orig),kpt_intp(3,Nkpt_intp),mat_K(d1,d2,Nkpt_orig),mat_intp(d1,d2,Nkpt_intp))
-      module procedure wannierinterpolation_d3                                  !(nkpt3_orig(3),kpt_orig(3,Nkpt_orig),kpt_intp(3,Nkpt_intp),mat_K(d1,d2,d3,Nkpt_orig),mat_intp(d1,d2,d3,Nkpt_intp))
+      module procedure wannierinterpolation_D1_d
+      module procedure wannierinterpolation_D2_d
+      module procedure wannierinterpolation_D3_d
+      module procedure wannierinterpolation_D1_z                                !(nkpt3_orig(3),kpt_orig(3,Nkpt_orig),kpt_intp(3,Nkpt_intp),mat_K(d1,Nkpt_orig),mat_intp(d1,Nkpt_intp))
+      module procedure wannierinterpolation_D2_z                                !(nkpt3_orig(3),kpt_orig(3,Nkpt_orig),kpt_intp(3,Nkpt_intp),mat_K(d1,d2,Nkpt_orig),mat_intp(d1,d2,Nkpt_intp))
+      module procedure wannierinterpolation_D3_z                                !(nkpt3_orig(3),kpt_orig(3,Nkpt_orig),kpt_intp(3,Nkpt_intp),mat_K(d1,d2,d3,Nkpt_orig),mat_intp(d1,d2,d3,Nkpt_intp))
    end interface wannierinterpolation
 
    interface wannier_K2R
@@ -33,6 +36,17 @@ module crystal
       module procedure wannier_R2K_d2                                           !(nkpt3_orig(3),kpt_orig(3,Nkpt_orig),mat_R(d1,d2,Nwig),mat_K(d1,d2,Nkpt_orig))
       module procedure wannier_R2K_d3                                           !(nkpt3_orig(3),kpt_orig(3,Nkpt_orig),mat_R(d1,d2,d3,Nwig),mat_K(d1,d2,d3,Nkpt_orig))
    end interface wannier_R2K
+
+   !---------------------------------------------------------------------------!
+   !PURPOSE: Module custom types
+   !---------------------------------------------------------------------------!
+   type symtype
+      integer                               :: rot(3,3)                         !rotation in real space(lattice coords.)
+      integer                               :: rrot(3,3)                        !rotation in recip. space(inverse of transpose(rot))
+      real(8)                               :: transl(3)
+      integer                               :: inv
+      logical                               :: symmor
+   end type symtype
 
    !---------------------------------------------------------------------------!
    !PURPOSE: Module variables
@@ -79,9 +93,11 @@ module crystal
    !---------------------------------------------------------------------------!
    !subroutines
    public :: read_lattice
+   public :: build_kpt
    public :: read_xeps
    public :: read_Hk
    public :: build_Hk
+   public :: calc_irredBZ
    public :: fill_ksumkdiff
    public :: fill_smallk
    public :: set_siteposition
@@ -94,6 +110,7 @@ module crystal
    public :: calc_Kpath
    public :: calc_Kplane
    public :: calc_Ewald
+   public :: tetrahedron_integration
 
    !===========================================================================!
 
@@ -201,9 +218,10 @@ contains
       real(8),allocatable,intent(inout)     :: kpt(:,:)
       character(len=*),intent(in),optional  :: pathOUTPUT
       integer                               :: ik,Nkpt,unit
-      integer                               :: ikx,iky,ikz
-      real(8)                               :: Dkx,Dky,Dkz
-      real(8)                               :: kx,ky,kz
+      integer                               :: k1,k2,k3
+      !integer                               :: ikx,iky,ikz
+      !real(8)                               :: Dkx,Dky,Dkz
+      !real(8)                               :: kx,ky,kz
       !
       !
       if(verbose)write(*,"(A)") "---- build_kpt"
@@ -212,26 +230,27 @@ contains
       !if(.not.Klib)stop "build_kpt: lthis routine needs an outer library. Recompile the code with the option GT=T."
       if(.not.Lat_stored)stop "build_kpt: lattice vectors are not stored."
       !
-      Nkpt = Nkpt3(1)*Nkpt3(2)*Nkpt3(3)
+      Nkpt = product(Nkpt3)
       if(allocated(kpt))deallocate(kpt)
       allocate(kpt(3,Nkpt));kpt=0d0
       !
-      Dkx=0d0;Dky=0d0;Dkz=0d0
-      if(Nkpt3(1).ne.1) Dkx = 1d0/dble(Nkpt3(1))
-      if(Nkpt3(2).ne.1) Dky = 1d0/dble(Nkpt3(2))
-      if(Nkpt3(3).ne.1) Dkz = 1d0/dble(Nkpt3(3))
+      !Dkx=0d0;Dky=0d0;Dkz=0d0
+      !if(Nkpt3(1).ne.1) Dkx = 1d0/dble(Nkpt3(1))
+      !if(Nkpt3(2).ne.1) Dky = 1d0/dble(Nkpt3(2))
+      !if(Nkpt3(3).ne.1) Dkz = 1d0/dble(Nkpt3(3))
       !
       ik=0
-      do ikx=1,Nkpt3(1)
-         do iky=1,Nkpt3(2)
-            do ikz=1,Nkpt3(3)
+      do k1=1,Nkpt3(1)
+         do k2=1,Nkpt3(2)
+            do k3=1,Nkpt3(3)
                !
-               kx = (ikx-1)*Dkx
-               ky = (iky-1)*Dky
-               kz = (ikz-1)*Dkz
+               !kx = (ikx-1)*Dkx
+               !ky = (iky-1)*Dky
+               !kz = (ikz-1)*Dkz
+               !kpt(:,ik) = [kx,ky,kz]
                !
                ik=ik+1
-               kpt(:,ik) = [kx,ky,kz]
+               kpt(:,ik) = [ dble(k1-1)/nkpt3(1), dble(k2-1)/nkpt3(2), dble(k3-1)/nkpt3(3) ]
                !
             enddo
          enddo
@@ -481,6 +500,13 @@ contains
       Hk_stored=.true.
       call read_lattice(reg(pathINPUT))
       !
+      unit = free_unit()
+      open(unit,file=reg(pathINPUT)//"Kpoints_BZ.DAT",form="formatted",status="unknown",position="rewind",action="write")
+      do ik=1,Nkpt
+         write(unit,"(1I8,6F20.10)")ik,kpt(:,ik),kpt(1,ik)*Blat(:,1)+kpt(2,ik)*Blat(:,2)+kpt(3,ik)*Blat(:,3)
+      enddo
+      close(unit)
+      !
    end subroutine read_Hk
 
 
@@ -611,13 +637,329 @@ contains
 
 
    !---------------------------------------------------------------------------!
+   !PURPOSE: Generate K-points in the irreducible BZ
+   !         symkpt(1:nkpt) contains symmetry operation indices that transforms
+   !         a k-point in IBZ to the current k-point: R(symkpt(ik)) * kptp(ik) = kpt(ik)
+   !         kptsym(1:nkpt,nsym): k-point indices after performing a symmetry operation
+   !         to each k: R(isym)*kpt(ik) = kpt(kptsym(ik,isym)) + gkptsym(1:3,ik,isym)
+   !---------------------------------------------------------------------------!
+   subroutine calc_irredBZ(pathINPUT,nkpt3,nkpti,kptp,pkpt,nkstar,kpt_out)
+      !
+      use utils_misc
+      implicit none
+      !
+      character(len=*),intent(in)           :: pathINPUT
+      integer,intent(in)                    :: nkpt3(3)
+      integer,intent(out)                   :: nkpti
+      integer,allocatable,intent(out)       :: kptp(:)
+      integer,allocatable,intent(out)       :: pkpt(:,:,:)
+      real(8),allocatable,intent(out)       :: nkstar(:)
+      real(8),allocatable,intent(out),optional :: kpt_out(:,:)
+      !
+      type(symtype),allocatable             :: sym(:)
+      integer                               :: Nsym,Nkpt,ik,k1,k2,k3
+      integer                               :: i,j,k,l,idum
+      integer                               :: iarr2(3)
+      real(8)                               :: scale,rarr(3),kvec(3)
+      real(8),allocatable                   :: kpt(:,:),kptw(:)
+      integer,allocatable                   :: symkpt(:),iarr(:),kptsym(:,:)!,gkptsym(:,:,:)
+      integer                               :: unit
+      logical                               :: filexists,cond1,cond2,err
+      !
+      !
+      if(verbose)write(*,"(A)") "---- calc_irredBZ"
+      !
+      !
+      !reading symmetry file from SPEX
+      call inquireFile(reg(pathINPUT)//"sym.DAT",filexists)
+      unit = free_unit()
+      open(unit,file=reg(pathINPUT)//"sym.DAT",form="formatted",action="read",position="rewind")
+      read(unit,*) Nsym
+      allocate(sym(Nsym))
+      do i=1,Nsym
+         read(unit,*)
+         read(unit,*) ( sym(i)%rot(j,:),sym(i)%transl(j), j=1,3 )
+      enddo
+      close(unit)
+      !
+      do i=1,Nsym
+         !
+         if(any(sym(i)%transl.ne.0)) then
+            sym(i)%symmor = .false.
+         else
+            sym(i)%symmor = .true.
+         endif
+         !
+         sym(i)%inv = 0
+         do j=1,Nsym
+            !
+            cond1 = all(matmul(sym(i)%rot,sym(j)%rot) .eq. reshape((/1,0,0,0,1,0,0,0,1/),(/3,3/)))
+            cond2 = all(modulo1r(matmul(sym(i)%rot,sym(j)%transl)+sym(i)%transl).lt.1d-10)
+            !
+            if(cond1.and.cond2)then
+               if(sym(i)%inv.ne.0) stop "calc_irredBZ: inverse operation already defined."
+               sym(i)%inv = j
+               !sym(i)%rrot = transpose_int ( sym(j)%rot ) ! temporary fix for ifc
+               sym(i)%rrot = transpose( sym(j)%rot )
+            endif
+            !
+         enddo
+         if(sym(i)%inv.eq.0) stop "calc_irredBZ: inverse operation not found."
+         !
+      enddo
+      !
+      Nkpt = product(Nkpt3)
+      !
+      !internal K-point arrays
+      allocate(kpt(3,Nkpt));kpt=0d0
+      allocate(symkpt(Nkpt));symkpt=0
+      !
+      !output K-point arrays
+      if(allocated(kptp))deallocate(kptp)
+      if(allocated(pkpt))deallocate(pkpt)
+      allocate(kptp(Nkpt));kptp=0
+      allocate(pkpt(Nkpt3(1)+1,Nkpt3(2)+1,Nkpt3(3)+1));pkpt=0
+      !
+      !fill in kpt exactly as in build_kpt
+      ik=0
+      do k1 = 1,nkpt3(1)
+         do k2 = 1,nkpt3(2)
+            do k3 = 1,nkpt3(3)
+               ik=ik+1
+               kpt(:,ik) = [ dble(k1-1)/nkpt3(1), dble(k2-1)/nkpt3(2), dble(k3-1)/nkpt3(3) ]
+            enddo
+         enddo
+      enddo
+      !
+      !fill in the kpt pointer
+      do ik=1,Nkpt
+        iarr2 = nint( kpt(:,ik) * nkpt3 ) + 1
+        pkpt(iarr2(1),iarr2(2),iarr2(3)) = ik
+      enddo
+      pkpt(nkpt3(1)+1,    :     ,    :     ) = pkpt(1,:,:)
+      pkpt(    :     ,nkpt3(2)+1,    :     ) = pkpt(:,1,:)
+      pkpt(    :     ,    :     ,nkpt3(3)+1) = pkpt(:,:,1)
+      if(any(pkpt.eq.0)) stop "calc_irredBZ: Definition of pkpt-pointer failed."
+      !
+      !Very obscure part
+      allocate(iarr(Nkpt));iarr=1
+      err = .false.
+      do i=1,Nkpt
+         !
+         if(iarr(i).eq.0) cycle
+         kptp(i) = i
+         symkpt(i) = 1
+         !
+         do k=2,Nsym
+            !
+            l = k
+            rarr  = matmul(sym(l)%rrot,kpt(:,i)) * nkpt3
+            iarr2 = nint(rarr)
+            if(any(abs(iarr2-rarr).gt.1d-10)) then
+               write(0,"(A)") "calc_irredBZ: Symmetry operation "//str(l)//" incompatible with k-point set."
+               err = .true.
+            endif
+            iarr2 = modulo(iarr2,nkpt3) + 1
+            !
+            if(any(iarr2.gt.nkpt3)) stop "calc_irredBZ: pointer indices exceed pointer dimensions. (bug?)"
+            j = pkpt(iarr2(1),iarr2(2),iarr2(3))
+            !
+            if(j.eq.0) stop "calc_irredBZ: k-point index is zero (bug?)"
+            if((iarr(j).eq.0).or.(j.eq.i)) cycle
+            iarr(j) = 0
+            kptp(j) = i
+            symkpt(j) = l
+         enddo
+      enddo
+      !
+      if(err) then
+        stop "calc_irredBZ: Some symmetry operations are incompatible with k-point set."
+      endif
+      !
+      i=0
+      do ik=1,nkpt
+         if(iarr(ik).eq.1) then
+            i = i + 1
+            iarr(ik) = i
+         endif
+      enddo
+      nkpti = i
+      !
+      do ik=1,nkpt
+         if(iarr(ik).eq.0) then
+            i = i + 1
+            iarr(ik) = i
+         endif
+      enddo
+      kpt(:,iarr)  = kpt
+      kptp         = iarr(kptp)
+      kptp(iarr)   = kptp
+      symkpt(iarr) = symkpt
+      !
+      do i=1,nkpt3(1)+1
+         do j=1,nkpt3(2)+1
+            do k=1,nkpt3(3)+1
+               pkpt(i,j,k) = iarr(pkpt(i,j,k))
+            enddo
+         enddo
+      enddo
+      !
+      !Define k-point mapping wrt symmetry operations (->kptsym,gkptsym)
+      !allocate(gkptsym(3,Nkpt,Nsym));gkptsym=0  !not used
+      allocate(kptsym(Nkpt,Nsym));kptsym=0
+      do ik=1,Nkpt
+         do k=1,Nsym
+            !
+            if(ik.le.nkpt) then
+               rarr = matmul(sym(k)%rrot,kpt(:,ik))
+               iarr(1:3) = nint ( modulo1(rarr) * nkpt3 ) + 1
+               idum = pkpt(iarr(1),iarr(2),iarr(3))
+               kvec = kpt(:,idum)
+            else
+               stop "calc_irredBZ: Bug?"
+            endif
+            !
+            if(idum.eq.0) then
+              write(*,"(A,I3)") "calc_irredBZ: K-point mapping failed for symmetry operation",k
+              write(*,"(A)")    "              (K-point mesh and symmetry consistent?)"
+              stop              "calc_irredBZ: K-point mapping failed."
+            endif
+            !
+            iarr(1:3) = nint ( rarr - kvec )
+            kptsym(ik,k) = idum
+            !gkptsym(:,ik,k) = iarr(1:3) !not used
+            !
+            if(any(abs(rarr-iarr(1:3)-kvec).gt.1d-8)) then
+               write(*,"(A,I3)") "calc_irredBZ: K-point mapping failed for symmetry operation",k
+               write(*,"(A)")    "              (K-point mesh and symmetry consistent?)"
+               stop              "calc_irredBZ: K-point mapping failed."
+            endif
+            !
+         enddo ! k
+      enddo ! ik
+      !
+      scale = kgv(nkpt3,3)
+      !
+      if(allocated(nkstar))deallocate(nkstar)
+      allocate(nkstar(Nkpti));nkstar=0d0
+      allocate(kptw(Nkpti));kptw=0d0
+      do ik=1,Nkpti
+        iarr=0
+        do j=1,Nsym
+           iarr(kptsym(ik,j)) = 1
+        enddo
+        kptw(ik) = dble(sum(iarr))/dble(Nkpt)
+        nkstar(ik) = kptw(ik)*Nkpt
+      enddo
+      !
+      unit = free_unit()
+      open(unit,file=reg(pathINPUT)//"Kpoints_BZirred.DAT",form="formatted",status="unknown",position="rewind",action="write")
+      write(unit,"(I5,F20.10)") Nkpti,scale
+      do ik=1,Nkpti
+         write(unit,"(1I8,6F20.10)")ik,kpt(:,ik)*scale,count(iarr.eq.1)*1d0,kptw(ik),nkstar(ik)
+      enddo
+      close(unit)
+      !
+      if(present(kpt_out))kpt_out=kpt
+      deallocate(sym,kpt,symkpt,iarr,kptw)
+      !
+      write(*,"(A,I6)") "     Total number of k-points: ",Nkpt
+      write(*,"(A,I6)") "     Number of k-points in IBZ: ",Nkpti
+      write(*,"(A)") "     Written to file: "//reg(pathINPUT)//"Kpoints_BZirred.DAT"
+      !
+      !
+   contains
+      !
+      !
+      !
+      integer function kgv(iarr,n)
+         implicit none
+         integer,intent(in)                 :: n,iarr(n)
+         logical                            :: lprim(2:maxval(iarr))
+         integer,allocatable                :: prim(:),expo(:)
+         integer                            :: nprim,marr
+         integer                            :: i,j,ia,k
+         !
+         !Determine prime numbers
+         marr=maxval(iarr)
+         lprim=.true.
+         do i=2,marr
+            j = 2
+            do while (i*j.le.marr)
+               lprim(i*j) = .false.
+               j = j + 1
+            enddo
+         enddo
+         nprim=count(lprim)
+         allocate(prim(nprim),expo(nprim))
+         j=0
+         do i=2,marr
+            if(lprim(i))then
+               j = j + 1
+               prim(j) = i
+            endif
+         enddo
+         !
+         !Determine least common multiple
+         expo=0
+         do i=1,n
+            ia = iarr(i)
+            if(ia.eq.0) cycle
+            do j=1,nprim
+               k=0
+               do while(ia/prim(j)*prim(j).eq.ia)
+                  k  = k + 1
+                  ia = ia / prim(j)
+               enddo
+               expo(j) = max(expo(j),k)
+            enddo
+         enddo
+         kgv=1
+         do j=1,nprim
+            kgv = kgv * prim(j)**expo(j)
+         enddo
+         deallocate(prim,expo)
+      end function kgv
+      !
+      !Replaces the function modulo(kpoint,1d0) for a kpoint in kpt(:,ikpt).
+      function modulo1(kpoint)
+         implicit none
+         real(8),intent(in)                 :: kpoint(3)
+         real(8)                            :: modulo1(3)
+         integer                            :: help(3)
+         modulo1 = kpoint*nkpt3
+         help = nint(modulo1)
+         if(any(abs(help-modulo1).gt.1d-10)) then
+            write(*,"(A)") "     modulo1: argument ("//str(kpoint(1),5)//","//str(kpoint(2),5)//","//str(kpoint(3),5)//") is not an element of the k-point set."
+            stop "modulo1: argument not an element of k-point set."
+         endif
+         modulo1 = modulo(help,nkpt3)*1d0/nkpt3
+      end function modulo1
+      !
+      !Same for shifted k-point set
+      function modulo1r(kpoint)
+         implicit none
+         real(8),intent(in)                 :: kpoint(3)
+         real(8)                            :: modulo1r(3)
+         integer                            :: i
+         modulo1r = modulo( kpoint , 1d0 )
+         do i=1,3
+          if(abs(1-abs(modulo1r(i))).lt.1d-13) modulo1r(i) = 0d0
+        enddo
+      end function modulo1r
+      !
+      !
+   end subroutine calc_irredBZ
+
+
+   !---------------------------------------------------------------------------!
    !PURPOSE: Fill up the list likning indexes of the sum and diff of K-points
    !         that was originally meant for cubic systems and the points external
    !         to the 1st BZ recovered by just removing nint(dk) to dk.
    !         For generic lattice the BZ vector is not simply the versor as implied
    !         by nint.
    !---------------------------------------------------------------------------!
-   subroutine fill_ksumkdiff(kpt,kptsum,kptdif,nkpt3,pkpt)
+   subroutine fill_ksumkdiff(kpt,kptsum,kptdif,Nkpt3,pkpt)
       !
       use utils_misc
       use linalg, only : det3
@@ -763,6 +1105,8 @@ contains
    contains
       !
       !
+      !
+      !Not used
       logical function moduloG(Dk,tol)
          implicit none
          real(8),intent(in)                 :: Dk(3)
@@ -770,7 +1114,7 @@ contains
          real(8)                            :: M1(3,3),M2(3,3),M3(3,3)
          real(8)                            :: n1,n2,n3
          !
-         !that's simply the Cramer's rule
+         !that"s simply the Cramer rule
          M1 = Blat
          M2 = Blat
          M3 = Blat
@@ -991,7 +1335,96 @@ contains
    !---------------------------------------------------------------------------!
    !PURPOSE: Interpolates a K-dependent matrix between two different K meshes
    !---------------------------------------------------------------------------!
-   subroutine wannierinterpolation_d1(nkpt3_orig,kpt_orig,kpt_intp,mat_orig,mat_intp)
+   subroutine wannierinterpolation_D1_d(nkpt3_orig,kpt_orig,kpt_intp,mat_orig,mat_intp)
+      !
+      use utils_misc
+      implicit none
+      !
+      integer,intent(in)                    :: nkpt3_orig(:)
+      real(8),intent(in)                    :: kpt_orig(:,:)
+      real(8),intent(in)                    :: kpt_intp(:,:)
+      real(8),intent(in)                    :: mat_orig(:,:)
+      real(8),intent(inout)                 :: mat_intp(:,:)
+      !
+      integer                               :: Nkpt_orig,Nkpt_intp
+      integer                               :: Nsize1
+      integer                               :: i1
+      integer                               :: ik,ir
+      real(8)                               :: kR
+      complex(8)                            :: cfac
+      complex(8),allocatable                :: mat_R(:,:)
+      !
+      !
+      if(verbose)write(*,"(A)") "---- wannierinterpolation_D1_d"
+      if(.not.Wig_stored)then
+         if(verbose)write(*,"(A)") "     Calculating Wigner Seiz."
+         call assert_shape(nkpt3_orig,[3],"wannierinterpolation_D1_d","nkpt3_orig")
+         call calc_wignerseiz(nkpt3_orig)
+      endif
+      !
+      !
+      ! Size checks on Kpoint vectors
+      if(size(kpt_orig,dim=1).ne.3) stop "wannierinterpolation_D1_d: size(kpt_orig,dim=1).ne.3"
+      if(size(kpt_intp,dim=1).ne.3) stop "wannierinterpolation_D1_d: size(kpt_intp,dim=1).ne.3"
+      Nkpt_orig = size(kpt_orig,dim=2)
+      Nkpt_intp = size(kpt_intp,dim=2)
+      !if (Nkpt_orig.ne.size(nrdegwig)/2) stop "nkpt"
+      !
+      ! Size checks on Matrices
+      Nsize1 = size(mat_orig,dim=1)
+      call assert_shape(mat_intp,[Nsize1,Nkpt_intp],"wannierinterpolation_D1_d","mat_intp")
+      !
+      ! M(R)=\sum_{k} M(k)*exp[-ik*R]
+      allocate(mat_R(Nsize1,Nwig));mat_R=0d0
+      !$OMP PARALLEL DEFAULT(NONE),&
+      !$OMP SHARED(Nwig,Nkpt_orig,Nsize1,kpt_orig,Nvecwig,mat_orig,mat_R),&
+      !$OMP PRIVATE(ir,ik,i1,kR,cfac)
+      !$OMP DO
+      do ir=1,Nwig
+         do i1=1,Nsize1
+            !
+            do ik=1,Nkpt_orig
+               !
+               kR = 2*pi * dot_product(kpt_orig(:,ik),Nvecwig(:,ir))
+               cfac = dcmplx(cos(kR),-sin(kR))
+               !
+               mat_R(i1,ir) = mat_R(i1,ir) + mat_orig(i1,ik)*cfac
+               !
+            enddo ! ik
+            !
+         enddo ! i1
+      enddo ! ir
+      !$OMP END DO
+      !$OMP END PARALLEL
+      mat_R = mat_R/Nkpt_orig
+      !
+      ! M(k_{intp})=\sum_{R} M(R)*exp[+ik_{intp}*R]
+      mat_intp=0d0
+      !$OMP PARALLEL DEFAULT(NONE),&
+      !$OMP SHARED(Nwig,Nkpt_intp,Nsize1,kpt_intp,Nvecwig,mat_intp,mat_R,nrdegwig),&
+      !$OMP PRIVATE(ir,ik,i1,kR,cfac)
+      !$OMP DO
+      do ik=1,Nkpt_intp
+         do i1=1,Nsize1
+            !
+            do ir=1,Nwig
+               !
+               kR = 2*pi * dot_product(kpt_intp(:,ik),Nvecwig(:,ir))
+               cfac = dcmplx(cos(kR),+sin(kR))/nrdegwig(ir)
+               !
+               mat_intp(i1,ik) = mat_intp(i1,ik) + mat_R(i1,ir)*cfac
+               !
+            enddo ! ir
+            !
+         enddo ! i1
+      enddo ! ik
+      !$OMP END DO
+      !$OMP END PARALLEL
+      deallocate(mat_R)
+      !
+   end subroutine wannierinterpolation_D1_d
+   !
+   subroutine wannierinterpolation_D1_z(nkpt3_orig,kpt_orig,kpt_intp,mat_orig,mat_intp)
       !
       use utils_misc
       implicit none
@@ -1011,24 +1444,24 @@ contains
       complex(8),allocatable                :: mat_R(:,:)
       !
       !
-      if(verbose)write(*,"(A)") "---- wannierinterpolation_d1"
+      if(verbose)write(*,"(A)") "---- wannierinterpolation_D1_z"
       if(.not.Wig_stored)then
          if(verbose)write(*,"(A)") "     Calculating Wigner Seiz."
-         call assert_shape(nkpt3_orig,[3],"wannierinterpolation_d1","nkpt3_orig")
+         call assert_shape(nkpt3_orig,[3],"wannierinterpolation_D1_z","nkpt3_orig")
          call calc_wignerseiz(nkpt3_orig)
       endif
       !
       !
       ! Size checks on Kpoint vectors
-      if(size(kpt_orig,dim=1).ne.3) stop "wannierinterpolation_d1: size(kpt_orig,dim=1).ne.3"
-      if(size(kpt_intp,dim=1).ne.3) stop "wannierinterpolation_d1: size(kpt_intp,dim=1).ne.3"
+      if(size(kpt_orig,dim=1).ne.3) stop "wannierinterpolation_D1_z: size(kpt_orig,dim=1).ne.3"
+      if(size(kpt_intp,dim=1).ne.3) stop "wannierinterpolation_D1_z: size(kpt_intp,dim=1).ne.3"
       Nkpt_orig = size(kpt_orig,dim=2)
       Nkpt_intp = size(kpt_intp,dim=2)
-      !if (Nkpt_orig.ne.size(nrdegwig)/2) stop 'nkpt'
+      !if (Nkpt_orig.ne.size(nrdegwig)/2) stop "nkpt"
       !
       ! Size checks on Matrices
       Nsize1 = size(mat_orig,dim=1)
-      call assert_shape(mat_intp,[Nsize1,Nkpt_intp],"wannierinterpolation_d1","mat_intp")
+      call assert_shape(mat_intp,[Nsize1,Nkpt_intp],"wannierinterpolation_D1_z","mat_intp")
       !
       ! M(R)=\sum_{k} M(k)*exp[-ik*R]
       allocate(mat_R(Nsize1,Nwig));mat_R=czero
@@ -1078,9 +1511,104 @@ contains
       !$OMP END PARALLEL
       deallocate(mat_R)
       !
-   end subroutine wannierinterpolation_d1
+   end subroutine wannierinterpolation_D1_z
    !
-   subroutine wannierinterpolation_d2(nkpt3_orig,kpt_orig,kpt_intp,mat_orig,mat_intp)
+   !
+   subroutine wannierinterpolation_D2_d(nkpt3_orig,kpt_orig,kpt_intp,mat_orig,mat_intp)
+      !
+      use utils_misc
+      implicit none
+      !
+      integer,intent(in)                    :: nkpt3_orig(:)
+      real(8),intent(in)                    :: kpt_orig(:,:)
+      real(8),intent(in)                    :: kpt_intp(:,:)
+      real(8),intent(in)                    :: mat_orig(:,:,:)
+      real(8),intent(inout)                 :: mat_intp(:,:,:)
+      !
+      integer                               :: Nkpt_orig,Nkpt_intp
+      integer                               :: Nsize1,Nsize2
+      integer                               :: i1,i2
+      integer                               :: ik,ir
+      real(8)                               :: kR
+      complex(8)                            :: cfac
+      complex(8),allocatable                :: mat_R(:,:,:)
+      !
+      !
+      if(verbose)write(*,"(A)") "---- wannierinterpolation_D2_d"
+      if(.not.Wig_stored)then
+         if(verbose)write(*,"(A)") "     Calculating Wigner Seiz."
+         call assert_shape(nkpt3_orig,[3],"wannierinterpolation_D2_d","nkpt3_orig")
+         call calc_wignerseiz(nkpt3_orig)
+      endif
+      !
+      !
+      ! Size checks on Kpoint vectors
+      if(size(kpt_orig,dim=1).ne.3) stop "wannierinterpolation_D2_d: size(kpt_orig,dim=1).ne.3"
+      if(size(kpt_intp,dim=1).ne.3) stop "wannierinterpolation_D2_d: size(kpt_intp,dim=1).ne.3"
+      Nkpt_orig = size(kpt_orig,dim=2)
+      Nkpt_intp = size(kpt_intp,dim=2)
+      !if (Nkpt_orig.ne.size(nrdegwig)/2) stop "nkpt"
+      !
+      ! Size checks on Matrices
+      Nsize1 = size(mat_orig,dim=1)
+      Nsize2 = size(mat_orig,dim=2)
+      call assert_shape(mat_intp,[Nsize1,Nsize2,Nkpt_intp],"wannierinterpolation_D2_d","mat_intp")
+      !
+      ! M(R)=\sum_{k} M(k)*exp[-ik*R]
+      allocate(mat_R(Nsize1,Nsize2,Nwig));mat_R=0d0
+      !$OMP PARALLEL DEFAULT(NONE),&
+      !$OMP SHARED(Nwig,Nkpt_orig,Nsize1,Nsize2,kpt_orig,Nvecwig,mat_orig,mat_R,nrdegwig),&
+      !$OMP PRIVATE(ir,ik,i1,i2,kR,cfac)
+      !$OMP DO
+      do ir=1,Nwig
+         do i1=1,Nsize1
+            do i2=1,Nsize2
+               !
+               do ik=1,Nkpt_orig
+                  !
+                  kR = 2*pi * dot_product(kpt_orig(:,ik),Nvecwig(:,ir))
+                  cfac = dcmplx(cos(kR),-sin(kR))
+                  !
+                  mat_R(i1,i2,ir) = mat_R(i1,i2,ir) + mat_orig(i1,i2,ik)*cfac
+                  !
+               enddo ! ik
+               !
+            enddo ! i2
+         enddo ! i1
+      enddo ! ir
+      !$OMP END DO
+      !$OMP END PARALLEL
+      mat_R = mat_R/Nkpt_orig
+      !
+      ! M(k_{intp})=\sum_{R} M(R)*exp[+ik_{intp}*R]
+      mat_intp=0d0
+      !$OMP PARALLEL DEFAULT(NONE),&
+      !$OMP SHARED(Nwig,Nkpt_intp,Nsize1,Nsize2,kpt_intp,Nvecwig,mat_intp,mat_R,nrdegwig),&
+      !$OMP PRIVATE(ir,ik,i1,i2,kR,cfac)
+      !$OMP DO
+      do ik=1,Nkpt_intp
+         do i1=1,Nsize1
+            do i2=1,Nsize2
+               !
+               do ir=1,Nwig
+                  !
+                  kR = 2*pi * dot_product(kpt_intp(:,ik),Nvecwig(:,ir))
+                  cfac = dcmplx(cos(kR),+sin(kR))/nrdegwig(ir)
+                  !
+                  mat_intp(i1,i2,ik) = mat_intp(i1,i2,ik) + mat_R(i1,i2,ir)*cfac
+                  !
+               enddo ! ir
+               !
+            enddo ! i2
+         enddo ! i1
+      enddo ! ik
+      !$OMP END DO
+      !$OMP END PARALLEL
+      deallocate(mat_R)
+      !
+   end subroutine wannierinterpolation_D2_d
+   !
+   subroutine wannierinterpolation_D2_z(nkpt3_orig,kpt_orig,kpt_intp,mat_orig,mat_intp)
       !
       use utils_misc
       implicit none
@@ -1100,25 +1628,25 @@ contains
       complex(8),allocatable                :: mat_R(:,:,:)
       !
       !
-      if(verbose)write(*,"(A)") "---- wannierinterpolation_d2"
+      if(verbose)write(*,"(A)") "---- wannierinterpolation_D2_z"
       if(.not.Wig_stored)then
          if(verbose)write(*,"(A)") "     Calculating Wigner Seiz."
-         call assert_shape(nkpt3_orig,[3],"wannierinterpolation_d2","nkpt3_orig")
+         call assert_shape(nkpt3_orig,[3],"wannierinterpolation_D2_z","nkpt3_orig")
          call calc_wignerseiz(nkpt3_orig)
       endif
       !
       !
       ! Size checks on Kpoint vectors
-      if(size(kpt_orig,dim=1).ne.3) stop "wannierinterpolation_d2: size(kpt_orig,dim=1).ne.3"
-      if(size(kpt_intp,dim=1).ne.3) stop "wannierinterpolation_d2: size(kpt_intp,dim=1).ne.3"
+      if(size(kpt_orig,dim=1).ne.3) stop "wannierinterpolation_D2_z: size(kpt_orig,dim=1).ne.3"
+      if(size(kpt_intp,dim=1).ne.3) stop "wannierinterpolation_D2_z: size(kpt_intp,dim=1).ne.3"
       Nkpt_orig = size(kpt_orig,dim=2)
       Nkpt_intp = size(kpt_intp,dim=2)
-      !if (Nkpt_orig.ne.size(nrdegwig)/2) stop 'nkpt'
+      !if (Nkpt_orig.ne.size(nrdegwig)/2) stop "nkpt"
       !
       ! Size checks on Matrices
       Nsize1 = size(mat_orig,dim=1)
       Nsize2 = size(mat_orig,dim=2)
-      call assert_shape(mat_intp,[Nsize1,Nsize2,Nkpt_intp],"wannierinterpolation_d2","mat_intp")
+      call assert_shape(mat_intp,[Nsize1,Nsize2,Nkpt_intp],"wannierinterpolation_D2_z","mat_intp")
       !
       ! M(R)=\sum_{k} M(k)*exp[-ik*R]
       allocate(mat_R(Nsize1,Nsize2,Nwig));mat_R=czero
@@ -1172,9 +1700,109 @@ contains
       !$OMP END PARALLEL
       deallocate(mat_R)
       !
-   end subroutine wannierinterpolation_d2
+   end subroutine wannierinterpolation_D2_z
    !
-   subroutine wannierinterpolation_d3(nkpt3_orig,kpt_orig,kpt_intp,mat_orig,mat_intp)
+   !
+   subroutine wannierinterpolation_D3_d(nkpt3_orig,kpt_orig,kpt_intp,mat_orig,mat_intp)
+      !
+      use utils_misc
+      implicit none
+      !
+      integer,intent(in)                    :: nkpt3_orig(:)
+      real(8),intent(in)                    :: kpt_orig(:,:)
+      real(8),intent(in)                    :: kpt_intp(:,:)
+      real(8),intent(in)                    :: mat_orig(:,:,:,:)
+      real(8),intent(inout)                 :: mat_intp(:,:,:,:)
+      !
+      integer                               :: Nkpt_orig,Nkpt_intp
+      integer                               :: Nsize1,Nsize2,Nsize3
+      integer                               :: i1,i2,i3
+      integer                               :: ik,ir
+      real(8)                               :: kR
+      complex(8)                            :: cfac
+      complex(8),allocatable                :: mat_R(:,:,:,:)
+      !
+      !
+      if(verbose)write(*,"(A)") "---- wannierinterpolation_D3_d"
+      if(.not.Wig_stored)then
+         if(verbose)write(*,"(A)") "     Calculating Wigner Seiz."
+         call assert_shape(nkpt3_orig,[3],"wannierinterpolation_D3_d","nkpt3_orig")
+         call calc_wignerseiz(nkpt3_orig)
+      endif
+      !
+      !
+      ! Size checks on Kpoint vectors
+      if(size(kpt_orig,dim=1).ne.3) stop "wannierinterpolation_D3_d: size(kpt_orig,dim=1).ne.3"
+      if(size(kpt_intp,dim=1).ne.3) stop "wannierinterpolation_D3_d: size(kpt_intp,dim=1).ne.3"
+      Nkpt_orig = size(kpt_orig,dim=2)
+      Nkpt_intp = size(kpt_intp,dim=2)
+      !if (Nkpt_orig.ne.size(nrdegwig)/2) stop "nkpt"
+      !
+      ! Size checks on Matrices
+      Nsize1 = size(mat_orig,dim=1)
+      Nsize2 = size(mat_orig,dim=2)
+      Nsize3 = size(mat_orig,dim=3)
+      call assert_shape(mat_intp,[Nsize1,Nsize2,Nsize3,Nkpt_intp],"wannierinterpolation_D3_d","mat_intp")
+      !
+      ! M(R)=\sum_{k} M(k)*exp[-ik*R]
+      allocate(mat_R(Nsize1,Nsize2,Nsize3,Nwig));mat_R=0d0
+      !$OMP PARALLEL DEFAULT(NONE),&
+      !$OMP SHARED(Nwig,Nkpt_orig,Nsize1,Nsize2,Nsize3,kpt_orig,Nvecwig,mat_orig,mat_R),&
+      !$OMP PRIVATE(ir,ik,i1,i2,i3,kR,cfac)
+      !$OMP DO
+      do ir=1,Nwig
+         do i1=1,Nsize1
+            do i2=1,Nsize2
+               do i3=1,Nsize3
+                  !
+                  do ik=1,Nkpt_orig
+                     !
+                     kR = 2*pi * dot_product(kpt_orig(:,ik),Nvecwig(:,ir))
+                     cfac = dcmplx(cos(kR),-sin(kR))
+                     !
+                     mat_R(i1,i2,i3,ir) = mat_R(i1,i2,i3,ir) + mat_orig(i1,i2,i3,ik)*cfac
+                     !
+                  enddo ! ik
+                  !
+               enddo ! i3
+            enddo ! i2
+         enddo ! i1
+      enddo ! ir
+      !$OMP END DO
+      !$OMP END PARALLEL
+      mat_R = mat_R/Nkpt_orig
+      !
+      ! M(k_{intp})=\sum_{R} M(R)*exp[+ik_{intp}*R]
+      mat_intp(:,:,:,:)=0d0
+      !$OMP PARALLEL DEFAULT(NONE),&
+      !$OMP SHARED(Nwig,Nkpt_intp,Nsize1,Nsize2,Nsize3,kpt_intp,Nvecwig,mat_intp,mat_R,nrdegwig),&
+      !$OMP PRIVATE(ir,ik,i1,i2,i3,kR,cfac)
+      !$OMP DO
+      do ik=1,Nkpt_intp
+         do i1=1,Nsize1
+            do i2=1,Nsize2
+               do i3=1,Nsize3
+                  !
+                  do ir=1,Nwig
+                     !
+                     kR = 2*pi * dot_product(kpt_intp(:,ik),Nvecwig(:,ir))
+                     cfac = dcmplx(cos(kR),+sin(kR))/nrdegwig(ir)
+                     !
+                     mat_intp(i1,i2,i3,ik) = mat_intp(i1,i2,i3,ik) + mat_R(i1,i2,i3,ir)*cfac
+                     !
+                  enddo ! ir
+                  !
+               enddo ! i3
+            enddo ! i2
+         enddo ! i1
+      enddo ! ik
+      !$OMP END DO
+      !$OMP END PARALLEL
+      deallocate(mat_R)
+      !
+   end subroutine wannierinterpolation_D3_d
+   !
+   subroutine wannierinterpolation_D3_z(nkpt3_orig,kpt_orig,kpt_intp,mat_orig,mat_intp)
       !
       use utils_misc
       implicit none
@@ -1194,26 +1822,26 @@ contains
       complex(8),allocatable                :: mat_R(:,:,:,:)
       !
       !
-      if(verbose)write(*,"(A)") "---- wannierinterpolation_d3"
+      if(verbose)write(*,"(A)") "---- wannierinterpolation_D3_z"
       if(.not.Wig_stored)then
          if(verbose)write(*,"(A)") "     Calculating Wigner Seiz."
-         call assert_shape(nkpt3_orig,[3],"wannierinterpolation_d3","nkpt3_orig")
+         call assert_shape(nkpt3_orig,[3],"wannierinterpolation_D3_z","nkpt3_orig")
          call calc_wignerseiz(nkpt3_orig)
       endif
       !
       !
       ! Size checks on Kpoint vectors
-      if(size(kpt_orig,dim=1).ne.3) stop "wannierinterpolation_d3: size(kpt_orig,dim=1).ne.3"
-      if(size(kpt_intp,dim=1).ne.3) stop "wannierinterpolation_d3: size(kpt_intp,dim=1).ne.3"
+      if(size(kpt_orig,dim=1).ne.3) stop "wannierinterpolation_D3_z: size(kpt_orig,dim=1).ne.3"
+      if(size(kpt_intp,dim=1).ne.3) stop "wannierinterpolation_D3_z: size(kpt_intp,dim=1).ne.3"
       Nkpt_orig = size(kpt_orig,dim=2)
       Nkpt_intp = size(kpt_intp,dim=2)
-      !if (Nkpt_orig.ne.size(nrdegwig)/2) stop 'nkpt'
+      !if (Nkpt_orig.ne.size(nrdegwig)/2) stop "nkpt"
       !
       ! Size checks on Matrices
       Nsize1 = size(mat_orig,dim=1)
       Nsize2 = size(mat_orig,dim=2)
       Nsize3 = size(mat_orig,dim=3)
-      call assert_shape(mat_intp,[Nsize1,Nsize2,Nsize3,Nkpt_intp],"wannierinterpolation_d3","mat_intp")
+      call assert_shape(mat_intp,[Nsize1,Nsize2,Nsize3,Nkpt_intp],"wannierinterpolation_D3_z","mat_intp")
       !
       ! M(R)=\sum_{k} M(k)*exp[-ik*R]
       allocate(mat_R(Nsize1,Nsize2,Nsize3,Nwig));mat_R=czero
@@ -1244,7 +1872,7 @@ contains
       mat_R = mat_R/Nkpt_orig
       !
       ! M(k_{intp})=\sum_{R} M(R)*exp[+ik_{intp}*R]
-      mat_intp(:,:,:,:)=0
+      mat_intp(:,:,:,:)=czero
       !$OMP PARALLEL DEFAULT(NONE),&
       !$OMP SHARED(Nwig,Nkpt_intp,Nsize1,Nsize2,Nsize3,kpt_intp,Nvecwig,mat_intp,mat_R,nrdegwig),&
       !$OMP PRIVATE(ir,ik,i1,i2,i3,kR,cfac)
@@ -1271,7 +1899,7 @@ contains
       !$OMP END PARALLEL
       deallocate(mat_R)
       !
-   end subroutine wannierinterpolation_d3
+   end subroutine wannierinterpolation_D3_z
 
 
    !---------------------------------------------------------------------------!
@@ -1305,7 +1933,7 @@ contains
       ! Size checks on Kpoint vectors
       if(size(kpt_orig,dim=1).ne.3) stop "wannier_K2R_NN: size(kpt_orig,dim=1).ne.3"
       Nkpt_orig = size(kpt_orig,dim=2)
-      !if (Nkpt_orig.ne.size(nrdegwig)/2) stop 'nkpt'
+      !if (Nkpt_orig.ne.size(nrdegwig)/2) stop "nkpt"
       !
       ! Size checks on Matrices
       Npoints = size(mat_K,dim=3)
@@ -1359,7 +1987,7 @@ contains
    !---------------------------------------------------------------------------!
    !PURPOSE: Transforms a K-dependent matrix into Wannier basis
    !Nwig might not be already available in the main program
-   !so I'm allocating here the mat_R which does not need to be allocated in
+   !so I"m allocating here the mat_R which does not need to be allocated in
    !the calling routine.
    !TEST ON: 16-10-2020(mat)
    !---------------------------------------------------------------------------!
@@ -1392,7 +2020,7 @@ contains
       ! Size checks on Kpoint vectors
       if(size(kpt_orig,dim=1).ne.3) stop "wannier_K2R_d1: size(kpt_orig,dim=1).ne.3"
       Nkpt_orig = size(kpt_orig,dim=2)
-      !if (Nkpt_orig.ne.size(nrdegwig)/2) stop 'nkpt'
+      !if (Nkpt_orig.ne.size(nrdegwig)/2) stop "nkpt"
       !
       ! Size checks on Matrices
       Nsize1 = size(mat_K,dim=1)
@@ -1454,7 +2082,7 @@ contains
       ! Size checks on Kpoint vectors
       if(size(kpt_orig,dim=1).ne.3) stop "wannier_K2R_d2: size(kpt_orig,dim=1).ne.3"
       Nkpt_orig = size(kpt_orig,dim=2)
-      !if (Nkpt_orig.ne.size(nrdegwig)/2) stop 'nkpt'
+      !if (Nkpt_orig.ne.size(nrdegwig)/2) stop "nkpt"
       !
       ! Size checks on Matrices
       Nsize1 = size(mat_K,dim=1)
@@ -1519,7 +2147,7 @@ contains
       ! Size checks on Kpoint vectors
       if(size(kpt_orig,dim=1).ne.3) stop "wannier_K2R_d3: size(kpt_orig,dim=1).ne.3"
       Nkpt_orig = size(kpt_orig,dim=2)
-      !if (Nkpt_orig.ne.size(nrdegwig)/2) stop 'nkpt'
+      !if (Nkpt_orig.ne.size(nrdegwig)/2) stop "nkpt"
       !
       ! Size checks on Matrices
       Nsize1 = size(mat_K,dim=1)
@@ -1592,7 +2220,7 @@ contains
       ! Size checks on Kpoint vectors
       if(size(kpt_intp,dim=1).ne.3) stop "wannier_R2K_d1: size(kpt_intp,dim=1).ne.3"
       Nkpt_intp = size(kpt_intp,dim=2)
-      !if (Nkpt_orig.ne.size(nrdegwig)/2) stop 'nkpt'
+      !if (Nkpt_orig.ne.size(nrdegwig)/2) stop "nkpt"
       !
       ! Size checks on Matrices
       Nsize1 = size(mat_R,dim=1)
@@ -1652,7 +2280,7 @@ contains
       ! Size checks on Kpoint vectors
       if(size(kpt_intp,dim=1).ne.3) stop "wannier_R2K_d2: size(kpt_intp,dim=1).ne.3"
       Nkpt_intp = size(kpt_intp,dim=2)
-      !if (Nkpt_orig.ne.size(nrdegwig)/2) stop 'nkpt'
+      !if (Nkpt_orig.ne.size(nrdegwig)/2) stop "nkpt"
       !
       ! Size checks on Matrices
       Nsize1 = size(mat_R,dim=1)
@@ -1715,7 +2343,7 @@ contains
       ! Size checks on Kpoint vectors
       if(size(kpt_intp,dim=1).ne.3) stop "wannier_R2K_d3: size(kpt_intp,dim=1).ne.3"
       Nkpt_intp = size(kpt_intp,dim=2)
-      !if (Nkpt_orig.ne.size(nrdegwig)/2) stop 'nkpt'
+      !if (Nkpt_orig.ne.size(nrdegwig)/2) stop "nkpt"
       !
       ! Size checks on Matrices
       Nsize1 = size(mat_R,dim=1)
@@ -2293,5 +2921,288 @@ contains
       !
    end subroutine calc_Ewald
 
+
+   !---------------------------------------------------------------------------!
+   !PURPOSE: computes weights for integrations over the reciprocal space
+   !         using the tetrahedron method. In this method "reciprocal cubes"
+   !         defined by 8 k points as cube edges are decomposed into six
+   !         tetrahedra inside which the electron bands are linearized.
+   !
+   ! Symmetry considerations:
+   ! Unfortunately, the definition of the tetrahedra
+   ! is not unique. Any group of six tetrahedra out of the 24 tetrahedra
+   ! ( 1,2,3,6, 5,7,3,6, 1,5,3,6, 2,4,3,6, 4,8,3,6, 7,8,3,6,
+   !   5,6,2,7, 1,5,2,7, 1,3,2,7, 8,6,2,7, 4,3,2,7, 8,4,2,7,
+   !   2,6,1,8, 2,4,1,8, 3,4,1,8, 3,7,1,8, 5,7,1,8, 5,6,1,8,
+   !   2,6,4,5, 1,2,4,5, 1,3,4,5, 3,7,4,5, 7,8,4,5, 6,8,4,5 )
+   ! that fills up a given cube completely can be chosen. This non-uniqueness
+   ! breaks the symmetry of the system. As a result, quantities of symmetry-equivalent
+   ! k points might not be identical (but similar). However, even if we sum the
+   ! contribution of all 24 tetrahedra and divide by 4, there can still be
+   ! symmetry-equivalent k points (e.g. (0,0,1/4) and (1/4,1/4,1/4) in fcc)
+   ! where quantities are not identical. This comes from the definition of the
+   ! cubes which also break the symmetry.
+   ! (For testing, the Gauss method should be used. It is not as accurate but does
+   ! not suffer from these symmetry-related problems.)
+   !
+   ! --------------------------------------------------------------------------!
+   !
+   !     Initializes the tetrahedron integration on the Fermi surface,
+   !     i.e. calculates (for any f) the weights wintgr4 in the sum
+   !
+   !                                   occ                     2
+   !     SUM  wintgr4(n,k) * f(n,k) = SUM     INT     f(n,k) d k
+   !      k,n                           n   e (k) = E
+   !                                         n       F
+   !---------------------------------------------------------------------------!
+   subroutine tetrahedron_integration(pathINPUT,Ek_orig,nkpt3,kpt,Egrid,weight_out,fact_intp)
+      !
+      use utils_misc
+      implicit none
+      !
+      character(len=*),intent(in)           :: pathINPUT
+      real(8),intent(in)                    :: Ek_orig(:,:)
+      integer,intent(in)                    :: nkpt3(3)
+      real(8),intent(in)                    :: kpt(:,:)
+      real(8),intent(in)                    :: Egrid(:)
+      integer,intent(in),optional           :: fact_intp
+      real(8),intent(out),optional          :: weight_out(:,:,:)
+      !
+      integer                               :: igrid,Ngrid
+      integer                               :: iorb,Norb
+      integer                               :: Nkpt,Nkpti,ik,ik0
+      integer,allocatable                   :: kptp(:),pkpt(:,:,:)
+      real(8),allocatable                   :: Ek(:,:),Ek_intp(:,:)
+      real(8),allocatable                   :: nkstar(:),DoS(:,:)
+      real(8),allocatable                   :: kpt_intp(:,:)
+      real(8),allocatable                   :: weight(:,:,:)
+      integer                               :: k1,k2,k3,i,kk
+      integer                               :: itria,ntria,itetra,unit
+      integer                               :: pnt(4),kindx(8),Nkpt3_used(3)
+      real(8)                               :: rdum,dE,Ecube(8),Etetra(4)
+      real(8)                               :: f(4),atria(2),wtria(4,2)
+      integer,parameter                     :: tetra(4,6)=reshape( (/ 1,2,3,6, 5,3,6,7, 1,5,3,6, 8,6,7,2, 4,7,2,3, 8,4,7,2 /),(/ 4,6 /) )
+      !
+      !
+      if(verbose)write(*,"(A)") "---- tetrahedron_integration"
+      !
+      !
+      Norb = size(Ek_orig,dim=1)
+      Ngrid = size(Egrid)
+      dE = abs(Egrid(10)-Egrid(9))
+      !
+      if(present(fact_intp))then
+         !
+         Nkpt3_used = Nkpt3*fact_intp
+         Nkpt = product(Nkpt3_used)
+         !
+         !Generate K-points in the irreducible BZ (finer K-mesh)
+         call calc_irredBZ(reg(pathINPUT),Nkpt3_used,Nkpti,kptp,pkpt,nkstar,kpt_out=kpt_intp)
+         !
+         !Interpolate Ek to the new K mesh
+         allocate(Ek_intp(Norb,Nkpt));Ek_intp=0d0
+         call wannierinterpolation(Nkpt3,kpt,kpt_intp,Ek_orig,Ek_intp)
+         !
+         !The irreducible K-points are always the first Nkpti found by kptp
+         allocate(Ek(Norb,Nkpt));Ek=0d0
+         do ik=1,Nkpt
+            do iorb=1,Norb
+               Ek(iorb,ik) = Ek_intp(iorb,kptp(ik))
+            enddo
+         enddo
+         deallocate(Ek_intp)
+         !
+      else
+         !
+         !
+         Nkpt3_used = Nkpt3
+         Nkpt = product(Nkpt3_used)
+         !
+         !Generate K-points in the irreducible BZ
+         call calc_irredBZ(reg(pathINPUT),Nkpt3_used,Nkpti,kptp,pkpt,nkstar)
+         !
+         !allocate dispersion
+         allocate(Ek(Norb,Nkpt));Ek=0d0
+         do ik=1,Nkpt
+            do iorb=1,Norb
+               Ek(iorb,ik) = Ek_orig(iorb,kptp(ik))
+            enddo
+         enddo
+         !
+      endif
+      !
+      allocate(weight(Ngrid,Norb,Nkpt));weight=0d0
+      !$OMP PARALLEL DEFAULT(PRIVATE),&
+      !$OMP SHARED(weight,Ek,Egrid,Nkpt3_used,Nkpti,kptp,pkpt,nkstar,Ngrid,Norb,tetra)
+      !$OMP DO
+      do igrid=1,Ngrid
+         do iorb=1,Norb
+            !
+            !boundaries of the energy grid
+            if(minval(Ek(iorb,:)).ge.Egrid(igrid)) cycle
+            if(maxval(Ek(iorb,:)).le.Egrid(igrid)) cycle
+            !
+            !Loop over cubes in BZ
+            do k3 = 1,Nkpt3_used(3)
+               do k2 = 1,Nkpt3_used(2)
+                  do k1 = 1,Nkpt3_used(1)
+                     !
+                     !Definition of the cube corners
+                     kindx(1) = pkpt(k1  ,k2  ,k3  )
+                     kindx(2) = pkpt(k1+1,k2  ,k3  )
+                     kindx(3) = pkpt(k1  ,k2+1,k3  )
+                     kindx(4) = pkpt(k1+1,k2+1,k3  )
+                     kindx(5) = pkpt(k1  ,k2  ,k3+1)
+                     kindx(6) = pkpt(k1+1,k2  ,k3+1)
+                     kindx(7) = pkpt(k1  ,k2+1,k3+1)
+                     kindx(8) = pkpt(k1+1,k2+1,k3+1)
+                     !
+                     !Get energies at cube corners
+                     Ecube = Ek(iorb,kindx)
+                     !
+                     do itetra=1,6
+                        !
+                        !Get energies at tetrahedron corners
+                        Etetra = Ecube(tetra(:,itetra))
+                        !
+                        !Nothing to be done if tetrahedron-corner energies larger/smaller than Egrid(igrid)
+                        if(all(Etetra.ge.Egrid(igrid))) cycle
+                        if(all(Etetra.le.Egrid(igrid))) cycle
+                        !
+                        !size-ordered Etetra
+                        call rorderp(pnt,Etetra,4)
+                        Etetra = Etetra(pnt)
+                        !
+                        !Intersecting plane is a triangle (ntria=1) or a quadrangle (ntria=2).
+                        !tria contains the triangle points and atria the triangle area(s).
+                        if(Egrid(igrid).gt.Etetra(3))then
+                           ntria       = 1
+                           f(1:3)      = (Egrid(igrid)-Etetra(1:3))/(Etetra(4)-Etetra(1:3))
+                           atria(1)    = 3 * (Egrid(igrid)-Etetra(4))**2 / ( (Etetra(4)-Etetra(1)) * (Etetra(4)-Etetra(2)) * (Etetra(4)-Etetra(3)) )
+                           wtria(:3,1) = 1-f(:3)
+                           wtria(4,1)  = f(1)+f(2)+f(3)
+                        elseif(Egrid(igrid).gt.Etetra(2))then
+                           ntria       = 2
+                           f(1:2)      = (Egrid(igrid)-Etetra(1))/(Etetra(3:4)-Etetra(1))
+                           f(3:4)      = (Egrid(igrid)-Etetra(2))/(Etetra(3:4)-Etetra(2))
+                           rdum        = (Etetra(4)-Etetra(2)) * (Etetra(3)-Etetra(1))
+                           atria(1)    = 3*f(3) * (Etetra(3)-Egrid(igrid)) / rdum
+                           atria(2)    = 3*f(2) * (Etetra(4)-Egrid(igrid)) / rdum
+                           wtria(1,1)  = 1-f(1)      ; wtria(1,2) = 2-f(1)-f(2)
+                           wtria(2,1)  = 2-f(3)-f(4) ; wtria(2,2) = 1-f(4)
+                           wtria(3,1)  = f(1)+f(3)   ; wtria(3,2) = f(1)
+                           wtria(4,1)  = f(4)        ; wtria(4,2) = f(2)+f(4)
+                        else ! if(h0.gt.htetra(1)) then
+                           ntria       = 1
+                           f(1:3)      = (Egrid(igrid)-Etetra(1))/(Etetra(2:4)-Etetra(1))
+                           atria(1)    = 3*f(1)*f(2) / (Etetra(4)-Etetra(1))
+                           wtria(1,1)  = 3-f(1)-f(2)-f(3)
+                           wtria(2:,1) = f(:3)
+                        endif
+                        wtria(pnt,:) = wtria
+                        !
+                        do itria=1,ntria
+                           do i=1,4
+                              kk = kindx(tetra(i,itetra))
+                              weight(igrid,iorb,kk) = weight(igrid,iorb,kk) + atria(itria) * wtria(i,itria)
+                           enddo
+                        enddo
+                        !
+                     enddo ! itetra
+                     !
+                  enddo ! k1
+               enddo ! k2
+            enddo ! k3
+         enddo ! iorb
+      enddo ! igrid
+      !$OMP END DO
+      !$OMP END PARALLEL
+      !
+      !take average over three triangle edges, six tetrahedra per cube, nkpt cubes
+      do igrid=1,Ngrid
+         !
+         weight(igrid,:,:) = weight(igrid,:,:)/3d0/6d0/dble(nkpt)
+         !
+         !Average over symmetry-equivalent k-points
+         do iorb=1,Norb
+            do ik=nkpti+1,nkpt
+               ik0=kptp(ik)
+               weight(igrid,iorb,ik0)=weight(igrid,iorb,ik0)+weight(igrid,iorb,ik)
+            enddo
+            do ik0=1,nkpti
+               weight(igrid,iorb,ik0)=weight(igrid,iorb,ik0)/nkstar(ik0)
+            enddo
+            do ik=nkpti+1,nkpt
+               ik0=kptp(ik)
+               weight(igrid,iorb,ik)=weight(igrid,iorb,ik0)
+            enddo
+         enddo
+         !
+      enddo
+      deallocate(kptp,pkpt,nkstar,Ek)
+      !
+      !Compute the DoS
+      allocate(DoS(Ngrid,Norb));DoS=0d0
+      do iorb=1,Norb
+         do igrid=1,Ngrid
+            DoS(igrid,iorb) = sum(weight(igrid,iorb,:))
+         enddo
+         write(*,"(A,F)") "     Normalization DoS_"//str(iorb)//":", sum(DoS(:,iorb))*dE
+      enddo
+      !
+      unit = free_unit()
+      open(unit,file=reg(pathINPUT)//"Weights_BZ.DAT",form="formatted",status="unknown",position="rewind",action="write")
+      do igrid=1,Ngrid
+         do ik=1,Nkpt
+            write(unit,"(1F20.10,1I8,200F20.10)")Egrid(igrid),ik,(weight(igrid,iorb,ik),iorb=1,Norb)
+         enddo
+      enddo
+      close(unit)
+      !
+      unit = free_unit()
+      open(unit,file=reg(pathINPUT)//"DoS.DAT",form="formatted",status="unknown",position="rewind",action="write")
+      do igrid=1,Ngrid
+         write(unit,"(200F20.10)")Egrid(igrid),(DoS(igrid,iorb),iorb=1,Norb)
+      enddo
+      close(unit)
+      deallocate(DoS)
+      !
+      if(present(weight_out))then
+         call assert_shape(weight_out,[Ngrid,Norb,Nkpt],"tetrahedron_integration","weight_out")
+         weight_out = weight
+      endif
+      deallocate(weight)
+      !
+      !
+   contains
+      !
+      !
+      !
+      !Orders rarr(1:n) according to size and returns a correspondingly defined pointer in pnt.
+      subroutine rorderp(pnt,rarr,n)
+          implicit none
+          integer,intent(in)                :: n
+          integer,intent(out)               :: pnt(n)
+          real(8),intent(in)                :: rarr(n)
+          integer                           :: i,j,k
+          !
+          do i=1,n
+             pnt(i) = i
+             do j=1,i-1
+                if(rarr(pnt(j)).gt.rarr(i)) then
+                   do k=i,j+1,-1
+                      pnt(k) = pnt(k-1)
+                   enddo
+                   pnt(j) = i
+                   exit
+                endif
+             enddo
+          enddo
+          !
+      end subroutine rorderp
+      !
+      !
+      !
+   end subroutine tetrahedron_integration
 
 end module crystal

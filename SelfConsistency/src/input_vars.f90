@@ -189,6 +189,8 @@ module input_vars
    integer,public                           :: LOGfile
    logical,public                           :: dump_Gk
    logical,public                           :: dump_Sigmak
+   !
+   !Post-processing variables
    character(len=256),public                :: structure
    character(len=256),public                :: path_funct
    integer,public                           :: Nkpt_path
@@ -484,6 +486,9 @@ contains
       if(reg(CalculationType).eq."scGW")dump_Gk=.true.
       if(reg(CalculationType).eq."GW+EDMFT")dump_Gk=.true.
       call parse_input_variable(dump_Sigmak,"PRINT_SIGMAK",InputFile,default=.false.,comment="Print the full k-dependent self-energy (binfmt) at each iteration (always optional).")
+      !
+      !Post-processing variables
+      call add_separator()
       call parse_input_variable(structure,"STRUCTURE",InputFile,default="cubic",comment="Available structures: triangular, cubic_[2,3], fcc, bcc, hex, tetragonal, orthorhombic_[1,2], None to avoid.")
       call parse_input_variable(path_funct,"PATH_FUNCT",InputFile,default="None",comment="Print interacting fields on high-symmetry points. Available fields: G=Green's function, S=self-energy, GS=both. None to avoid.")
       call parse_input_variable(Nkpt_path,"NK_PATH",InputFile,default=50,comment="Number of segments between two hig-symmetry Kpoints.")
