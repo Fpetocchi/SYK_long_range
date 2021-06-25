@@ -67,6 +67,15 @@ module utils_misc
       module procedure get_pattern_z
    end interface get_pattern
 
+   interface fermidirac
+      module procedure fermidirac_shifted
+      module procedure fermidirac_centered
+   end interface fermidirac
+   interface boseeinstein
+      module procedure boseeinstein_shifted
+      module procedure boseeinstein_centered
+   end interface boseeinstein
+
    !---------------------------------------------------------------------------!
    !PURPOSE: Module variables
    !---------------------------------------------------------------------------!
@@ -154,27 +163,65 @@ contains
    !PURPOSE: Calculates the fermi-dirac distribution f(e)
    !TEST ON: 14-10-2020
    !---------------------------------------------------------------------------!
-   double precision function fermidirac(e,efermi,beta)
+   double precision function fermidirac_shifted(e,mu,beta)
       implicit none
-      real(8),intent(in)                    :: e,efermi,beta
+      real(8),intent(in)                    :: e,mu,beta
       real(8)                               :: temp
       real(8)                               :: fermicut
       !
       fermicut=log(huge(1.0d0)-1e2)/2.d0 !fermicut=600.d0
-      temp=(e-efermi)*beta
-      if (temp.ge.fermicut) then
-         fermidirac=0.d0
-      elseif (temp.le.-fermicut) then
-         fermidirac=1.d0
-      elseif (temp.lt.0.d0.and.temp.gt.-fermicut) then
-         fermidirac=1.d0/(dexp(temp)+1.d0)
-      elseif (temp.ge.0.d0.and.temp.lt.fermicut) then
-         fermidirac=dexp(-temp)/(dexp(-temp)+1.d0)
+      temp=(e-mu)*beta
+      if(temp.ge.fermicut) then
+         fermidirac_shifted=0.d0
+      elseif(temp.le.-fermicut) then
+         fermidirac_shifted=1.d0
+      elseif(temp.lt.0.d0.and.temp.gt.-fermicut) then
+         fermidirac_shifted=1.d0/(dexp(temp)+1.d0)
+      elseif(temp.ge.0.d0.and.temp.lt.fermicut) then
+         fermidirac_shifted=dexp(-temp)/(dexp(-temp)+1.d0)
       endif
       !
-   end function fermidirac
+   end function fermidirac_shifted
+   double precision function fermidirac_centered(e,beta)
+      implicit none
+      real(8),intent(in)                    :: e,beta
+      real(8)                               :: temp
+      real(8)                               :: fermicut
+      !
+      fermicut=log(huge(1.0d0)-1e2)/2.d0 !fermicut=600.d0
+      temp=e*beta
+      if(temp.ge.fermicut) then
+         fermidirac_centered=0.d0
+      elseif(temp.le.-fermicut) then
+         fermidirac_centered=1.d0
+      elseif(temp.lt.0.d0.and.temp.gt.-fermicut) then
+         fermidirac_centered=1.d0/(dexp(temp)+1.d0)
+      elseif(temp.ge.0.d0.and.temp.lt.fermicut) then
+         fermidirac_centered=dexp(-temp)/(dexp(-temp)+1.d0)
+      endif
+      !
+   end function fermidirac_centered
    !
-   double precision function boseeinstein(e,beta)
+   double precision function boseeinstein_shifted(e,mu,beta)
+      implicit none
+      real(8),intent(in)                    :: e,mu,beta
+      real(8)                               :: temp
+      real(8)                               :: bosecut
+      !
+      bosecut=log(huge(1.0d0)-1e2)/2.d0 !bosecut=600.d0
+      temp=(e-mu)*beta
+      if(temp.ge.bosecut) then
+         boseeinstein_shifted=0.d0
+      elseif(temp.le.-bosecut) then
+         boseeinstein_shifted=-1.d0
+      elseif(abs(temp).lt.1d-6) then
+         stop "boseeinstein_shifted: abs(beta*e).lt.1d-6 in Bose-Einstein distribution"
+      else
+         boseeinstein_shifted=1.d0/(dexp(temp)-1.d0)
+      endif
+      !
+   end function boseeinstein_shifted
+   double precision function boseeinstein_centered(e,beta)
       implicit none
       real(8),intent(in)                    :: e,beta
       real(8)                               :: temp
@@ -182,17 +229,17 @@ contains
       !
       bosecut=log(huge(1.0d0)-1e2)/2.d0 !bosecut=600.d0
       temp=e*beta
-      if (temp.ge.bosecut) then
-         boseeinstein=0.d0
-      elseif (temp.le.-bosecut) then
-         boseeinstein=-1.d0
-      elseif (abs(temp).lt.1d-6) then
-         stop "boseeinstein: abs(beta*e).lt.1d-6 in Bose-Einstein distribution"
+      if(temp.ge.bosecut) then
+         boseeinstein_centered=0.d0
+      elseif(temp.le.-bosecut) then
+         boseeinstein_centered=-1.d0
+      elseif(abs(temp).lt.1d-6) then
+         stop "boseeinstein_centered: abs(beta*e).lt.1d-6 in Bose-Einstein distribution"
       else
-         boseeinstein=1.d0/(dexp(temp)-1.d0)
+         boseeinstein_centered=1.d0/(dexp(temp)-1.d0)
       endif
       !
-   end function boseeinstein
+   end function boseeinstein_centered
 
 
    !---------------------------------------------------------------------------!

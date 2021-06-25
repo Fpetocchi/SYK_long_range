@@ -159,4 +159,9 @@ module module_container
    !calc_OptCond,calc_HallCond
 
 
+   !------------------------ Modules Obscured to User -------------------------!
+   !gap_equation container. Depends only on (a),(b),(e).
+   !Interface with main inside post_processing module.
+
+
 end module module_container

@@ -19,10 +19,10 @@ TSTSDIR = tests
 # Main code
 SRCS = linalg.f90 parameters.f90 input_vars.f90 utils_misc.f90 fit.f90 utils_fields.f90 file_io.f90 interactions.f90 crystal.f90 \
        fourier_transforms.f90 bubbles.f90 post_processing.f90 self_energy.f90 greens_function.f90 utils_main.f90 module_container.f90
-OBJS = $(SRCS:.f90=.o) minimize.o main.o
+OBJS = $(SRCS:.f90=.o) minimize.o gap_equation.o main.o
 EXE  = SelfConsistency
 # Post-processing
-OBJS_PP = $(SRCS:.f90=.o) minimize.o Akf_builder.o
+OBJS_PP = $(SRCS:.f90=.o) minimize.o gap_equation.o Akf_builder.o
 EXE_PP  = Akw_builder
 
 
@@ -134,7 +134,10 @@ $(DBGDIR)/greens_function.o: $(SRCDIR)/greens_function.f90 $(DBGDIR)/linalg.o $(
 $(DBGDIR)/self_energy.o: $(SRCDIR)/self_energy.f90 $(DBGDIR)/linalg.o $(DBGDIR)/utils_misc.o $(DBGDIR)/crystal.o $(DBGDIR)/parameters.o $(DBGDIR)/input_vars.o $(DBGDIR)/utils_fields.o $(DBGDIR)/file_io.o $(DBGDIR)/fourier_transforms.o $(DBGDIR)/greens_function.o
 	$(FC) -c $(FFLAGS) $(DBGFFLAGS) -o $@ $<
 
-$(DBGDIR)/post_processing.o: $(SRCDIR)/post_processing.f90 $(DBGDIR)/linalg.o $(DBGDIR)/utils_misc.o $(DBGDIR)/crystal.o $(DBGDIR)/parameters.o $(DBGDIR)/input_vars.o $(DBGDIR)/utils_fields.o $(DBGDIR)/file_io.o $(DBGDIR)/fourier_transforms.o $(DBGDIR)/greens_function.o
+$(DBGDIR)/gap_equation.o: $(SRCDIR)/gap_equation.f90 $(DBGDIR)/parameters.o $(DBGDIR)/linalg.o $(DBGDIR)/utils_misc.o
+	$(FC) -c $(FFLAGS) $(DBGFFLAGS) -o $@ $<
+
+$(DBGDIR)/post_processing.o: $(SRCDIR)/post_processing.f90 $(DBGDIR)/linalg.o $(DBGDIR)/utils_misc.o $(DBGDIR)/crystal.o $(DBGDIR)/parameters.o $(DBGDIR)/input_vars.o $(DBGDIR)/utils_fields.o $(DBGDIR)/file_io.o $(DBGDIR)/fourier_transforms.o $(DBGDIR)/greens_function.o $(DBGDIR)/gap_equation.o
 	$(FC) -c $(FFLAGS) $(DBGFFLAGS) -o $@ $<
 
 # Module contaier, main and post-processing
@@ -205,7 +208,10 @@ $(RELDIR)/greens_function.o: $(SRCDIR)/greens_function.f90 $(RELDIR)/linalg.o $(
 $(RELDIR)/self_energy.o: $(SRCDIR)/self_energy.f90 $(RELDIR)/linalg.o $(RELDIR)/utils_misc.o $(RELDIR)/crystal.o $(RELDIR)/parameters.o $(RELDIR)/input_vars.o $(RELDIR)/utils_fields.o $(RELDIR)/file_io.o $(RELDIR)/fourier_transforms.o $(RELDIR)/greens_function.o
 	$(FC) -c $(FFLAGS) $(RELFFLAGS) -o $@ $<
 
-$(RELDIR)/post_processing.o: $(SRCDIR)/post_processing.f90 $(RELDIR)/linalg.o $(RELDIR)/utils_misc.o $(RELDIR)/crystal.o $(RELDIR)/parameters.o $(RELDIR)/input_vars.o $(RELDIR)/utils_fields.o $(RELDIR)/file_io.o $(RELDIR)/fourier_transforms.o $(RELDIR)/greens_function.o
+$(RELDIR)/gap_equation.o: $(SRCDIR)/gap_equation.f90 $(RELDIR)/parameters.o $(RELDIR)/linalg.o $(RELDIR)/utils_misc.o
+	$(FC) -c $(FFLAGS) $(RELFFLAGS) -o $@ $<
+
+$(RELDIR)/post_processing.o: $(SRCDIR)/post_processing.f90 $(RELDIR)/linalg.o $(RELDIR)/utils_misc.o $(RELDIR)/crystal.o $(RELDIR)/parameters.o $(RELDIR)/input_vars.o $(RELDIR)/utils_fields.o $(RELDIR)/file_io.o $(RELDIR)/fourier_transforms.o $(RELDIR)/greens_function.o $(RELDIR)/gap_equation.o
 	$(FC) -c $(FFLAGS) $(RELFFLAGS) -o $@ $<
 
 # Module contaier, main and post-processing
