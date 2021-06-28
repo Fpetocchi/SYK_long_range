@@ -31,8 +31,26 @@ module gap_equation
    !---------------------------------------------------------------------------!
    real(8),allocatable,private              :: omega(:)                         ! Phonon energy on logarithmic grid
    real(8),allocatable,private              :: a2F(:)                           ! alpha^2*F(\Omega) function
-   logical,private                          :: Phonons_stored=.false.
    character(len=12),private                :: Phonons_grid="logarithmic"
+   logical,private                          :: Phonons_stored=.false.
+   logical,private                          :: calc_Phonons=.false.
+   !
+   logical,private                          :: initialized=.false.
+   !
+   logical,private                          :: calc_Int_static=.false.
+   logical,private                          :: calc_Int_full=.false.
+   !
+   integer,private                          :: Nkpt3_orig(3)
+   real(8),allocatable,private              :: kpt_orig(:,:)
+   complex(8),allocatable,private           :: Hk_orig(:,:,:)
+   !
+   logical,private                          :: interpolate_Hk=.false.
+   logical,private                          :: interpolate_Wk=.false.
+   integer,private                          :: Nkpt3_Hk(3),Nkpt3_Wk(3)
+   real(8),allocatable,private              :: kpt_Hk(:,:),kpt_Wk(:,:)
+   !
+   real(8),allocatable,private              :: Egrid(:)
+   complex(8),allocatable,private           :: Zk(:,:,:)
    !
 #ifdef _verb
    logical,private                          :: verbose=.true.
@@ -50,6 +68,220 @@ module gap_equation
    !===========================================================================!
 
 contains
+
+
+   !---------------------------------------------------------------------------!
+   !PURPOSE: Read phonons and initialize only mesh and energy grids
+   !---------------------------------------------------------------------------!
+   subroutine Initialize_inputs(pathINPUT,mode_ph,mode_el,Nreal,wrealMax,Nkpt3_intp_Hk,Nkpt3_intp_Wk)
+      !
+      use parameters
+      use utils_misc
+      use crystal, only : calc_irredBZ
+      implicit none
+      !
+      character(len=*),intent(in)           :: pathINPUT
+      character(len=*),intent(in)           :: mode_ph
+      character(len=*),intent(in)           :: mode_el
+      integer,intent(in)                    :: Nreal
+      real(8),intent(in)                    :: wrealMax
+      integer,intent(in),optional           :: Nkpt3_intp_Hk(3)
+      integer,intent(in),optional           :: Nkpt3_intp_Wk(3)
+      !
+      integer                               :: Ngrid,Nkpti_dum
+      integer,allocatable                   :: kptp_dum(:)
+      integer,allocatable                   :: pkpt_dum(:,:,:)
+      real(8),allocatable                   :: nkstar_dum(:)
+      !
+      !
+      if(verbose)write(*,"(A)") "---- Initialize_inputs"
+      !
+      !
+      !setting up global flags
+      select case(reg(mode_ph))
+         case default
+            !
+            stop "Available phonon modes in gap equation: Elk, QEspresso."
+            !
+         case("None")
+            !
+            write(*,"(A)")"     Phononic Kernel and renormalization not included in the gap equation."
+            !
+         case("Elk","QEspresso")
+            !
+            calc_phonons=.true.
+            call read_a2F(reg(pathINPUT),reg(mode_ph))
+            !
+      end select
+      !
+      select case(reg(mode_el))
+         case default
+            !
+            stop "Available electronic modes in gap equation: static, static+dynamic."
+            !
+         case("None")
+            !
+            write(*,"(A)")"     Electronic Kernel not included in the gap equation."
+            !
+         case("static")
+            !
+            calc_Int_static=.true.
+            !
+         case("static+dynamic")
+            !
+            calc_Int_full=.true.
+            !
+      end select
+      !
+      !compute the interpolated K-grid for Hk
+      Nkpt3_Hk = Nkpt3_orig
+      if(present(Nkpt3_intp_Hk))then
+         !
+         if(any(Nkpt3_intp_Hk.eq.0))then
+            !
+            write(*,"(A)")"     Interpolation grid for Hk provided but one dimension has Nk=0. Interpolation skipped."
+            Nkpt3_Hk = Nkpt3_orig
+            kpt_Hk = kpt_orig
+            !
+         elseif(all(Nkpt3_intp_Hk.eq.Nkpt3_orig))then
+            !
+            write(*,"(A)")"     Interpolation grid for Hk provided but equal to the original. Interpolation skipped."
+            Nkpt3_Hk = Nkpt3_orig
+            kpt_Hk = kpt_orig
+            !
+         else
+            !
+            !compute interpolated kpt for Hk
+            Nkpt3_Hk = Nkpt3_intp_Hk
+            call calc_irredBZ(reg(pathINPUT),Nkpt3_Hk,Nkpti_dum,kptp_dum,pkpt_dum,nkstar_dum,kpt_out=kpt_Hk)
+            deallocate(kptp_dum,pkpt_dum,nkstar_dum)
+            interpolate_Hk=.true.
+            !
+         endif
+         !
+      else
+         !
+         Nkpt3_Hk = Nkpt3_orig
+         kpt_Hk = kpt_orig
+         !
+      endif
+      !
+      !compute the interpolated K-grid for Wk
+      Nkpt3_Wk = Nkpt3_orig
+      if(present(Nkpt3_intp_Wk))then
+         !
+         if(any(Nkpt3_intp_Wk.eq.0))then
+            !
+            write(*,"(A)")"     Interpolation grid for Wk provided but one dimension has Nk=0. Interpolation skipped."
+            Nkpt3_Wk = Nkpt3_orig
+            kpt_Wk = kpt_orig
+            !
+         elseif(all(Nkpt3_intp_Wk.eq.Nkpt3_orig))then
+            !
+            write(*,"(A)")"     Interpolation grid for Wk provided but equal to the original. Interpolation skipped."
+            Nkpt3_Wk = Nkpt3_orig
+            kpt_Wk = kpt_orig
+            !
+         else
+            !
+            !compute interpolated kpt for Wk
+            Nkpt3_Wk = Nkpt3_intp_Wk
+            call calc_irredBZ(reg(pathINPUT),Nkpt3_Wk,Nkpti_dum,kptp_dum,pkpt_dum,nkstar_dum,kpt_out=kpt_Wk)
+            deallocate(kptp_dum,pkpt_dum,nkstar_dum)
+            interpolate_Wk=.true.
+            !
+         endif
+         !
+      else
+         !
+         Nkpt3_Hk = Nkpt3_orig
+         kpt_Wk = kpt_orig
+         !
+      endif
+      !
+      !compute the energy axis on a logarithmic grid
+      Ngrid=Nreal
+      if(mod(Ngrid,2).eq.0)Ngrid=Ngrid+1
+      if(mod(Ngrid-1,4).ne.0)Ngrid=Ngrid+mod(Ngrid-1,4)
+      allocate(Egrid(Ngrid));Egrid=0d0
+      Egrid = denspace(2d0*wrealMax,Ngrid,center=.true.)
+      !
+      initialized=.true.
+      !
+   end subroutine Initialize_inputs
+
+
+   !---------------------------------------------------------------------------!
+   !PURPOSE: Interpolate the Hk and produce the DoS
+   !---------------------------------------------------------------------------!
+   subroutine calc_DoS(pathOUTPUT,Egrid,DoS,weights)
+      !
+      use parameters
+      use utils_misc
+      use linalg, only : eigh
+      use crystal, only : wannierinterpolation, tetrahedron_integration
+      implicit none
+      !
+      character(len=*),intent(in)           :: pathOUTPUT
+      real(8),intent(in)                    :: Egrid(:)
+      real(8),intent(out)                   :: DoS(:)
+      real(8),intent(out)                   :: weights(:,:,:)
+      !
+      integer                               :: ik
+      integer                               :: Ngrid,Norb,Nkpt_orig,Nkpt
+      complex(8),allocatable                :: Hk(:,:,:)
+      real(8),allocatable                   :: Ek(:,:)
+      real                                  :: start,finish
+      !
+      !
+      if(verbose)write(*,"(A)") "---- calc_DoS"
+      !
+      !
+      if(.not.initialized)stop "calc_DoS: input meshes not initialized. call Initialize_inputs."
+      !
+      !Various checks
+      Ngrid = size(Egrid)
+      Norb = size(Hk_orig,dim=1)
+      Nkpt_orig = product(Nkpt3_orig)
+      Nkpt = product(Nkpt3_Hk)
+      call assert_shape(DoS,[Ngrid],"calc_DoS","DoS")
+      call assert_shape(Hk_orig,[Norb,Norb,Nkpt_orig],"calc_DoS","Hk_orig")
+      call assert_shape(kpt_orig,[3,Nkpt_orig],"calc_DoS","kpt_orig")
+      call assert_shape(kpt_Hk,[3,Nkpt],"calc_DoS","kpt_Hk")
+      call assert_shape(weights,[Ngrid,Norb,Nkpt],"calc_DoS","weights")
+      !
+      !Interpolate Hk to new K-grid
+      if(interpolate_Hk)then
+         if(Nkpt.eq.Nkpt_orig)stop "calc_DoS: something is wrong with the K-point dimension (interpolation)."
+         allocate(Hk(Norb,Norb,Nkpt));Hk=czero
+         call cpu_time(start)
+         call wannierinterpolation(Nkpt3_orig,kpt_orig,kpt_Hk,Hk_orig,Hk)
+         call cpu_time(finish)
+         write(*,"(A,F)") "     Gap equation: H(fullBZ) --> H(fullBZ_new) cpu timing:", finish-start
+      else
+         if(Nkpt.ne.Nkpt_orig)stop "calc_DoS: something is wrong with the K-point dimension."
+         Hk = Hk_orig
+      endif
+      !
+      !Diagonalize Hk to the LDA basis
+      allocate(Ek(Norb,Nkpt));Ek=0d0
+      allocate(Zk(Norb,Norb,Nkpt));Zk=czero
+      !
+      Zk = Hk
+      do ik=1,Nkpt
+         call eigh(Zk(:,:,ik),Ek(:,ik))
+      enddo
+      deallocate(Hk)
+      !
+      !Compute the DoS from with tetrahedron integration
+      call cpu_time(start)
+      call tetrahedron_integration(reg(pathOUTPUT),Ek,Nkpt3_Hk,kpt_Hk,Egrid,weights_out=weights,DoS_out=DoS)
+      call cpu_time(finish)
+      write(*,"(A,F)") "     Gap equation: tetrahedron integration cpu timing:", finish-start
+      deallocate(Ek)
+      !
+   end subroutine calc_DoS
+
 
 
    !---------------------------------------------------------------------------!
@@ -144,7 +376,9 @@ contains
 
 
    !---------------------------------------------------------------------------!
-   !PURPOSE: Compute the phononic renormalization factor averaged on an energy grid
+   !PURPOSE: Compute the phononic renormalization factor averaged on an energy
+   !         grid. Minimal use of shared variables in order to be able to try
+   !         different grid/meshes.
    !---------------------------------------------------------------------------!
    subroutine calc_Zph_e(beta,Egrid,DoS,Zph_e,mode,printZpath)
       !
@@ -280,7 +514,8 @@ contains
 
 
    !---------------------------------------------------------------------------!
-   !PURPOSE: Compute the phononic kernel averaged on an energy grid
+   !PURPOSE: Compute the phononic kernel averaged on an energy grid. Minimal use
+   !         of shared variables in order to be able to try different grid/meshes.
    !---------------------------------------------------------------------------!
    subroutine calc_Kph_e(beta,Egrid,DoS,Kph_e,printKpath,printmode)
       !
@@ -575,8 +810,6 @@ contains
       Iprime = term1 + term2 - term3 - term4
       !
    end function Iprime
-
-
 
 
 end module gap_equation

@@ -134,7 +134,7 @@ $(DBGDIR)/greens_function.o: $(SRCDIR)/greens_function.f90 $(DBGDIR)/linalg.o $(
 $(DBGDIR)/self_energy.o: $(SRCDIR)/self_energy.f90 $(DBGDIR)/linalg.o $(DBGDIR)/utils_misc.o $(DBGDIR)/crystal.o $(DBGDIR)/parameters.o $(DBGDIR)/input_vars.o $(DBGDIR)/utils_fields.o $(DBGDIR)/file_io.o $(DBGDIR)/fourier_transforms.o $(DBGDIR)/greens_function.o
 	$(FC) -c $(FFLAGS) $(DBGFFLAGS) -o $@ $<
 
-$(DBGDIR)/gap_equation.o: $(SRCDIR)/gap_equation.f90 $(DBGDIR)/parameters.o $(DBGDIR)/linalg.o $(DBGDIR)/utils_misc.o
+$(DBGDIR)/gap_equation.o: $(SRCDIR)/gap_equation.f90 $(DBGDIR)/parameters.o $(DBGDIR)/linalg.o $(DBGDIR)/utils_misc.o $(DBGDIR)/crystal.o
 	$(FC) -c $(FFLAGS) $(DBGFFLAGS) -o $@ $<
 
 $(DBGDIR)/post_processing.o: $(SRCDIR)/post_processing.f90 $(DBGDIR)/linalg.o $(DBGDIR)/utils_misc.o $(DBGDIR)/crystal.o $(DBGDIR)/parameters.o $(DBGDIR)/input_vars.o $(DBGDIR)/utils_fields.o $(DBGDIR)/file_io.o $(DBGDIR)/fourier_transforms.o $(DBGDIR)/greens_function.o $(DBGDIR)/gap_equation.o
@@ -208,7 +208,7 @@ $(RELDIR)/greens_function.o: $(SRCDIR)/greens_function.f90 $(RELDIR)/linalg.o $(
 $(RELDIR)/self_energy.o: $(SRCDIR)/self_energy.f90 $(RELDIR)/linalg.o $(RELDIR)/utils_misc.o $(RELDIR)/crystal.o $(RELDIR)/parameters.o $(RELDIR)/input_vars.o $(RELDIR)/utils_fields.o $(RELDIR)/file_io.o $(RELDIR)/fourier_transforms.o $(RELDIR)/greens_function.o
 	$(FC) -c $(FFLAGS) $(RELFFLAGS) -o $@ $<
 
-$(RELDIR)/gap_equation.o: $(SRCDIR)/gap_equation.f90 $(RELDIR)/parameters.o $(RELDIR)/linalg.o $(RELDIR)/utils_misc.o
+$(RELDIR)/gap_equation.o: $(SRCDIR)/gap_equation.f90 $(RELDIR)/parameters.o $(RELDIR)/linalg.o $(RELDIR)/utils_misc.o $(RELDIR)/crystal.o
 	$(FC) -c $(FFLAGS) $(RELFFLAGS) -o $@ $<
 
 $(RELDIR)/post_processing.o: $(SRCDIR)/post_processing.f90 $(RELDIR)/linalg.o $(RELDIR)/utils_misc.o $(RELDIR)/crystal.o $(RELDIR)/parameters.o $(RELDIR)/input_vars.o $(RELDIR)/utils_fields.o $(RELDIR)/file_io.o $(RELDIR)/fourier_transforms.o $(RELDIR)/greens_function.o $(RELDIR)/gap_equation.o

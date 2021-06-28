@@ -160,7 +160,7 @@ module module_container
 
 
    !------------------------ Modules Obscured to User -------------------------!
-   !gap_equation container. Depends only on (a),(b),(e).
+   !gap_equation container. Depends only on (a),(b),(c),(e).
    !Interface with main inside post_processing module.
 
 

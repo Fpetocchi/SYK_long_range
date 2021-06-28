@@ -393,16 +393,18 @@ contains
    ! nsimp fixed to 2
    !TEST ON: 14-10-2020
    !---------------------------------------------------------------------------!
-   function denspace(end,num) result(array)
+   function denspace(end,num,center) result(array)
       implicit none
       real(8),intent(in)                    :: end
       integer,intent(in)                    :: num
+      logical,intent(in),optional           :: center
       real(8)                               :: array(num)
       !
       integer                               :: nsimp=2
       integer                               :: nseg
       integer                               :: i,n,n2,nseg2
       real(8)                               :: mesh,de,a,b
+      logical                               :: center_
       data de /1.0d0/
       !
       nseg=(num-1)/nsimp
@@ -424,7 +426,17 @@ contains
       do n=nseg2*nsimp+2,nsimp*nseg+1
          array(n) = end-array(nsimp*nseg+1-n+1)
       enddo
-      if ( dabs(array(nsimp*nseg+1)-end).gt.1.d-9) stop "denspace: wrong endpoint"
+      if( dabs(array(nsimp*nseg+1)-end).gt.1.d-9) stop "denspace: wrong endpoint"
+      !
+      center_=.false.
+      if(present(center))center_=center
+      if(center_)then
+         n = (num+1)/2
+         array(n:num) = array(1:n)
+         do i=1,num/2
+            array(n-i) = -array(n+i)
+         enddo
+      endif
       !
    end function denspace
 

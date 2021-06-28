@@ -2955,7 +2955,7 @@ contains
    !      k,n                           n   e (k) = E
    !                                         n       F
    !---------------------------------------------------------------------------!
-   subroutine tetrahedron_integration(pathINPUT,Ek_orig,nkpt3,kpt,Egrid,weight_out,fact_intp)
+   subroutine tetrahedron_integration(pathINPUT,Ek_orig,nkpt3,kpt,Egrid,weights_out,DoS_out,fact_intp)
       !
       use utils_misc
       implicit none
@@ -2966,7 +2966,8 @@ contains
       real(8),intent(in)                    :: kpt(:,:)
       real(8),intent(in)                    :: Egrid(:)
       integer,intent(in),optional           :: fact_intp
-      real(8),intent(out),optional          :: weight_out(:,:,:)
+      real(8),intent(out),optional          :: weights_out(:,:,:)
+      real(8),intent(out),optional          :: DoS_out(:)
       !
       integer                               :: igrid,Ngrid
       integer                               :: iorb,Norb
@@ -2975,7 +2976,7 @@ contains
       real(8),allocatable                   :: Ek(:,:),Ek_intp(:,:)
       real(8),allocatable                   :: nkstar(:),DoS(:,:)
       real(8),allocatable                   :: kpt_intp(:,:)
-      real(8),allocatable                   :: weight(:,:,:)
+      real(8),allocatable                   :: weights(:,:,:)
       integer                               :: k1,k2,k3,i,kk
       integer                               :: itria,ntria,itetra,unit
       integer                               :: pnt(4),kindx(8),Nkpt3_used(3)
@@ -3031,9 +3032,9 @@ contains
          !
       endif
       !
-      allocate(weight(Ngrid,Norb,Nkpt));weight=0d0
+      allocate(weights(Ngrid,Norb,Nkpt));weights=0d0
       !$OMP PARALLEL DEFAULT(PRIVATE),&
-      !$OMP SHARED(weight,Ek,Egrid,Nkpt3_used,Nkpti,kptp,pkpt,nkstar,Ngrid,Norb,tetra)
+      !$OMP SHARED(weights,Ek,Egrid,Nkpt3_used,Nkpti,kptp,pkpt,nkstar,Ngrid,Norb,tetra)
       !$OMP DO
       do igrid=1,Ngrid
          do iorb=1,Norb
@@ -3104,7 +3105,7 @@ contains
                         do itria=1,ntria
                            do i=1,4
                               kk = kindx(tetra(i,itetra))
-                              weight(igrid,iorb,kk) = weight(igrid,iorb,kk) + atria(itria) * wtria(i,itria)
+                              weights(igrid,iorb,kk) = weights(igrid,iorb,kk) + atria(itria) * wtria(i,itria)
                            enddo
                         enddo
                         !
@@ -3121,20 +3122,20 @@ contains
       !take average over three triangle edges, six tetrahedra per cube, nkpt cubes
       do igrid=1,Ngrid
          !
-         weight(igrid,:,:) = weight(igrid,:,:)/3d0/6d0/dble(nkpt)
+         weights(igrid,:,:) = weights(igrid,:,:)/3d0/6d0/dble(nkpt)
          !
          !Average over symmetry-equivalent k-points
          do iorb=1,Norb
             do ik=nkpti+1,nkpt
                ik0=kptp(ik)
-               weight(igrid,iorb,ik0)=weight(igrid,iorb,ik0)+weight(igrid,iorb,ik)
+               weights(igrid,iorb,ik0)=weights(igrid,iorb,ik0)+weights(igrid,iorb,ik)
             enddo
             do ik0=1,nkpti
-               weight(igrid,iorb,ik0)=weight(igrid,iorb,ik0)/nkstar(ik0)
+               weights(igrid,iorb,ik0)=weights(igrid,iorb,ik0)/nkstar(ik0)
             enddo
             do ik=nkpti+1,nkpt
                ik0=kptp(ik)
-               weight(igrid,iorb,ik)=weight(igrid,iorb,ik0)
+               weights(igrid,iorb,ik)=weights(igrid,iorb,ik0)
             enddo
          enddo
          !
@@ -3145,7 +3146,7 @@ contains
       allocate(DoS(Ngrid,Norb));DoS=0d0
       do iorb=1,Norb
          do igrid=1,Ngrid
-            DoS(igrid,iorb) = sum(weight(igrid,iorb,:))
+            DoS(igrid,iorb) = sum(weights(igrid,iorb,:))
          enddo
          write(*,"(A,F)") "     Normalization DoS_"//str(iorb)//":", sum(DoS(:,iorb))*dE
       enddo
@@ -3154,7 +3155,7 @@ contains
       open(unit,file=reg(pathINPUT)//"Weights_BZ.DAT",form="formatted",status="unknown",position="rewind",action="write")
       do igrid=1,Ngrid
          do ik=1,Nkpt
-            write(unit,"(1F20.10,1I8,200F20.10)")Egrid(igrid),ik,(weight(igrid,iorb,ik),iorb=1,Norb)
+            write(unit,"(1F20.10,1I8,200F20.10)")Egrid(igrid),ik,(weights(igrid,iorb,ik),iorb=1,Norb)
          enddo
       enddo
       close(unit)
@@ -3165,13 +3166,18 @@ contains
          write(unit,"(200F20.10)")Egrid(igrid),(DoS(igrid,iorb),iorb=1,Norb)
       enddo
       close(unit)
-      deallocate(DoS)
       !
-      if(present(weight_out))then
-         call assert_shape(weight_out,[Ngrid,Norb,Nkpt],"tetrahedron_integration","weight_out")
-         weight_out = weight
+      if(present(weights_out))then
+         call assert_shape(weights_out,[Ngrid,Norb,Nkpt],"tetrahedron_integration","weights_out")
+         weights_out = weights
       endif
-      deallocate(weight)
+      deallocate(weights)
+      !
+      if(present(DoS_out))then
+         call assert_shape(DoS_out,[Ngrid],"tetrahedron_integration","DoS_out")
+         DoS_out = sum(DoS,dim=2)
+      endif
+      deallocate(weights,DoS)
       !
       !
    contains

@@ -1,11 +1,12 @@
 !------------------------------------------------------------------------------!
 !PURPOSE: Rotate a tensor diven by the kroenecker product of square matrices
 !------------------------------------------------------------------------------!
-subroutine tensor_transform_NNNN_d(Utensor,rot)
+subroutine tensor_transform_NNNN_d(Utensor,rot,onlyNaNb)
    !
    implicit none
    real(8),intent(inout)                    :: Utensor(:,:,:,:)
    complex(8),intent(in)                    :: rot(:,:)
+   logical,intent(in),optional              :: onlyNaNb
    !
    real(8),allocatable                      :: Umatrix(:,:)
    complex(8),allocatable                   :: Nab(:,:,:)
@@ -14,10 +15,14 @@ subroutine tensor_transform_NNNN_d(Utensor,rot)
    integer                                  :: Norb
    integer                                  :: iorb,jorb,korb,lorb
    integer                                  :: io,jo,count
+   logical                                  :: onlyNaNb_
    !
    Norb = size(Utensor,dim=1)
    call assert_shape(Utensor,[Norb,Norb,Norb,Norb],"tensor_transform_NNNN_d","Utensor")
    if(size(rot,1).ne.Norb) stop "tensor_transform_NNNN_d: Rotation has a wrong dimension."
+   !
+   onlyNaNb_=.false.
+   if(present(onlyNaNb))onlyNaNb_=onlyNaNb
    !
    allocate(Umatrix(Norb*Norb,Norb*Norb));Umatrix=0d0
    allocate(Nab(Norb,Norb,Norb*Norb));Nab=zero
@@ -52,8 +57,10 @@ subroutine tensor_transform_NNNN_d(Utensor,rot)
    !
    do iorb=1,Norb !row of external submatrix
       do jorb=1,Norb !col of external submatrix
+         if(onlyNaNb_.and.(iorb.ne.iorb))cycle
          do korb=1,Norb !row of internal submatrix
             do lorb=1,Norb !col of internal submatrix
+               if(onlyNaNb_.and.(korb.ne.lorb))cycle
                !
                io = korb + (iorb-1)*Norb
                jo = lorb + (jorb-1)*Norb
@@ -83,11 +90,12 @@ subroutine tensor_transform_NNNN_d(Utensor,rot)
       !
 end subroutine tensor_transform_NNNN_d
 !
-subroutine tensor_transform_NNNN_c(Utensor,rot)
+subroutine tensor_transform_NNNN_c(Utensor,rot,onlyNaNb)
    !
    implicit none
    complex(8),intent(inout)                 :: Utensor(:,:,:,:)
    complex(8),intent(in)                    :: rot(:,:)
+   logical,intent(in),optional              :: onlyNaNb
    !
    real(8),allocatable                      :: Umatrix(:,:)
    complex(8),allocatable                   :: Nab(:,:,:)
@@ -96,10 +104,14 @@ subroutine tensor_transform_NNNN_c(Utensor,rot)
    integer                                  :: Norb
    integer                                  :: iorb,jorb,korb,lorb
    integer                                  :: io,jo,count
+   logical                                  :: onlyNaNb_
    !
    Norb = size(Utensor,dim=1)
    call assert_shape(Utensor,[Norb,Norb,Norb,Norb],"tensor_transform_NNNN_c","Utensor")
    if(size(rot,1).ne.Norb) stop "tensor_transform_NNNN_c: Rotation has a wrong dimension."
+   !
+   onlyNaNb_=.false.
+   if(present(onlyNaNb))onlyNaNb_=onlyNaNb
    !
    allocate(Umatrix(Norb*Norb,Norb*Norb));Umatrix=zero
    allocate(Nab(Norb,Norb,Norb*Norb));Nab=zero
@@ -134,8 +146,10 @@ subroutine tensor_transform_NNNN_c(Utensor,rot)
    !
    do iorb=1,Norb !row of external submatrix
       do jorb=1,Norb !col of external submatrix
+         if(onlyNaNb_.and.(iorb.ne.iorb))cycle
          do korb=1,Norb !row of internal submatrix
             do lorb=1,Norb !col of internal submatrix
+               if(onlyNaNb_.and.(korb.ne.lorb))cycle
                !
                io = korb + (iorb-1)*Norb
                jo = lorb + (jorb-1)*Norb
@@ -175,17 +189,19 @@ end subroutine tensor_transform_NNNN_c
 !         - Map(io,jo,3) --> korb
 !         - Map(io,jo,4) --> lorb
 !------------------------------------------------------------------------------!
-subroutine tensor_transform_NN_d(Umatrix,Map,rot)
+subroutine tensor_transform_NN_d(Umatrix,Map,rot,onlyNaNb)
    !
    implicit none
    real(8),intent(inout)                    :: Umatrix(:,:)
    integer,intent(in)                       :: Map(:,:,:)
    complex(8),intent(in)                    :: rot(:,:)
+   logical,intent(in),optional              :: onlyNaNb
    !
    real(8),allocatable                      :: Utensor(:,:,:,:)
    integer                                  :: Norb,Nbp
    integer                                  :: iorb,jorb,korb,lorb
    integer                                  :: io,jo
+   logical                                  :: onlyNaNb_
    !
    Nbp = size(Umatrix,dim=1)
    call assert_shape(Umatrix,[Nbp,Nbp],"tensor_transform_NN_d","Umatrix")
@@ -193,6 +209,9 @@ subroutine tensor_transform_NN_d(Umatrix,Map,rot)
    !
    Norb = int(sqrt(dble(Nbp)))
    if(size(rot,1).ne.Norb) stop "tensor_transform_NN_d: Rotation has a wrong dimension."
+   !
+   onlyNaNb_=.false.
+   if(present(onlyNaNb))onlyNaNb_=onlyNaNb
    !
    allocate(Utensor(Norb,Norb,Norb,Norb));Utensor=0d0
    do io=1,Nbp
@@ -208,7 +227,7 @@ subroutine tensor_transform_NN_d(Umatrix,Map,rot)
       enddo
    enddo
    !
-   call tensor_transform(Utensor,rot)
+   call tensor_transform(Utensor,rot,onlyNaNb=onlyNaNb_)
    !
    Umatrix=0d0
    do io=1,Nbp
@@ -227,17 +246,19 @@ subroutine tensor_transform_NN_d(Umatrix,Map,rot)
    !
 end subroutine tensor_transform_NN_d
 !
-subroutine tensor_transform_NN_c(Umatrix,Map,rot)
+subroutine tensor_transform_NN_c(Umatrix,Map,rot,onlyNaNb)
    !
    implicit none
    complex(8),intent(inout)                 :: Umatrix(:,:)
    integer,intent(in)                       :: Map(:,:,:)
    complex(8),intent(in)                    :: rot(:,:)
+   logical,intent(in),optional              :: onlyNaNb
    !
    complex(8),allocatable                   :: Utensor(:,:,:,:)
    integer                                  :: Norb,Nbp
    integer                                  :: iorb,jorb,korb,lorb
    integer                                  :: io,jo
+   logical                                  :: onlyNaNb_
    !
    Nbp = size(Umatrix,dim=1)
    call assert_shape(Umatrix,[Nbp,Nbp],"tensor_transform_NN_c","Umatrix")
@@ -245,6 +266,9 @@ subroutine tensor_transform_NN_c(Umatrix,Map,rot)
    !
    Norb = int(sqrt(dble(Nbp)))
    if(size(rot,1).ne.Norb) stop "tensor_transform_NN_c: Rotation has a wrong dimension."
+   !
+   onlyNaNb_=.false.
+   if(present(onlyNaNb))onlyNaNb_=onlyNaNb
    !
    allocate(Utensor(Norb,Norb,Norb,Norb));Utensor=zero
    do io=1,Nbp
@@ -260,7 +284,7 @@ subroutine tensor_transform_NN_c(Umatrix,Map,rot)
       enddo
    enddo
    !
-   call tensor_transform(Utensor,rot)
+   call tensor_transform(Utensor,rot,onlyNaNb=onlyNaNb_)
    !
    Umatrix=0d0
    do io=1,Nbp

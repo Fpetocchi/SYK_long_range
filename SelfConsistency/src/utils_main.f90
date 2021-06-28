@@ -664,7 +664,6 @@ contains
          if(reg(structure).ne."None")call interpolateHk2Path(Lttc,reg(structure),Nkpt_path,reg(pathINPUT),doplane=.true.)
          !
       endif
-      stop
       !
       !
    end subroutine initialize_Lattice
@@ -2409,11 +2408,12 @@ contains
          !Insert or Expand to the Lattice basis
          if(RotateHloc)then
             if(sym_mode.gt.1)call symmetrize_imp(densityQMC(:,:,:,isite),OlocEig(:,isite))
-            call imp2loc(densityDMFT,dcmplx(densityQMC(:,:,:,isite),0d0),isite,Orbs,ExpandImpurity,AFMselfcons,U=OlocRotDag)
+            call imp2loc(densityDMFT,dcmplx(densityQMC(1:Norb,1:Norb,:,isite),0d0),isite,Orbs,ExpandImpurity,AFMselfcons,U=OlocRotDag)
          else
-            call imp2loc(densityDMFT,dcmplx(densityQMC(:,:,:,isite),0d0),isite,Orbs,ExpandImpurity,AFMselfcons)
+            call imp2loc(densityDMFT,dcmplx(densityQMC(1:Norb,1:Norb,:,isite),0d0),isite,Orbs,ExpandImpurity,AFMselfcons)
          endif
          !
+         deallocate(Orbs)
          if(ExpandImpurity.or.AFMselfcons)exit
          !
       enddo
@@ -2476,8 +2476,9 @@ contains
          enddo
          !
          call dump_MaxEnt(Gitau,"itau",reg(PrevItFolder)//"Convergence/","Gqmc_"//reg(SiteName(isite)))
-         deallocate(Gitau,Orbs)
+         deallocate(Gitau)
          !
+         deallocate(Orbs)
          if(ExpandImpurity.or.AFMselfcons)exit
          !
       enddo
@@ -2552,8 +2553,9 @@ contains
             enddo
          enddo
          call DeallocateFermionicField(G0imp)
-         deallocate(Orbs,Gmats)
+         deallocate(Gmats)
          !
+         deallocate(Orbs)
          if(ExpandImpurity.or.AFMselfcons)exit
          !
       enddo
@@ -2598,8 +2600,9 @@ contains
                   Smats(iorb,wndx:Nmats,ispin,isite) = SmatsTail(wndx:Nmats)
                enddo
             enddo
-            deallocate(Orbs,wmats,Moments,SmatsTail)
+            deallocate(wmats,Moments,SmatsTail)
             !
+            deallocate(Orbs)
             if(ExpandImpurity.or.AFMselfcons)exit
             !
          enddo
