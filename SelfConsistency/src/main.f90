@@ -26,8 +26,8 @@ program SelfConsistency
    !---------------------------------------------------------------------------!
    call tick(TimeStart)
    call read_InputFile("input.in")
-   write(*,"(A,1I4)") "Setting Nthread:",Nthread
-   call omp_set_num_threads(Nthread)
+   !write(*,"(A,1I4)") "Setting Nthread:",Nthread
+   !call omp_set_num_threads(Nthread)
    call printHeader()
    call initialize_DataStructure(ItStart,Itend)
    call initialize_Lattice(Crystal,ItStart)
