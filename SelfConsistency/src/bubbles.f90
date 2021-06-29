@@ -186,7 +186,6 @@ contains
       use crystal
       use fourier_transforms
       use file_io
-      use interactions, only: init_Uelements
       use input_vars, only : NtauB, tau_uniform, cmplxWann, UfullStructure, paramagnet
       implicit none
       !

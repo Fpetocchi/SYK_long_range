@@ -15,20 +15,18 @@ module module_container
    !(b) Standalone module. Can be used as generic library.
    use utils_misc, only:                     &
    find_kpt, keq                            ,&
+   init_Uelements                           ,&
    FermionicFreqMesh,BosonicFreqMesh        ,&
    fermidirac,diff_fermidirac               ,&
    linspace,denspace                        ,&
    FermionicFilon,BosonicFilon              ,&
    get_Tier_occupation                      ,&
-   reg,str                                  ,&
-   free_unit                                ,&
+   reg,str,free_unit                        ,&
    tick,tock                                ,&
    inquireFile,inquireDir,createDir         ,&
-   check_Hermiticity                        ,&
-   check_Symmetry                           ,&
+   check_Hermiticity,check_Symmetry         ,&
    KK_Im2Re,KK_Re2Im                        ,&
-   halfbeta_symm                            ,&
-   halfbeta_antisymm                        ,&
+   halfbeta_symm,halfbeta_antisymm          ,&
    assert_shape                             ,&
    splint,nspline,cubic_interp              ,&
    get_pattern,sort_array
@@ -113,7 +111,6 @@ module module_container
 
    !(l) Interactions container. Depends on (b),(c),(e),(f),(g),(h)
    use interactions, only:                   &
-   init_Uelements                           ,&
    read_U_spex                              ,&
    calc_W_full                              ,&
    calc_W_edmft                             ,&
@@ -126,7 +123,7 @@ module module_container
    calc_QMCinteractions
 
 
-   !(m) Bubble diagram container. Depends on (a),(b),(c),(d),(e),(f),(g),(h),(l)
+   !(m) Bubble diagram container. Depends on (a),(b),(c),(d),(e),(f),(g),(h)
    use bubbles, only:                        &
    calc_Pi                                  ,&
    calc_Pimp

@@ -2955,7 +2955,7 @@ contains
    !      k,n                           n   e (k) = E
    !                                         n       F
    !---------------------------------------------------------------------------!
-   subroutine tetrahedron_integration(pathINPUT,Ek_orig,nkpt3,kpt,Egrid,weights_out,DoS_out,fact_intp)
+   subroutine tetrahedron_integration(pathINPUT,Ek_orig,nkpt3,kpt,Egrid,weights_out,DoS_out,fact_intp,store_weights)
       !
       use utils_misc
       implicit none
@@ -2966,6 +2966,7 @@ contains
       real(8),intent(in)                    :: kpt(:,:)
       real(8),intent(in)                    :: Egrid(:)
       integer,intent(in),optional           :: fact_intp
+      logical,intent(in),optional           :: store_weights
       real(8),intent(out),optional          :: weights_out(:,:,:)
       real(8),intent(out),optional          :: DoS_out(:)
       !
@@ -2982,6 +2983,7 @@ contains
       integer                               :: pnt(4),kindx(8),Nkpt3_used(3)
       real(8)                               :: rdum,dE,Ecube(8),Etetra(4)
       real(8)                               :: f(4),atria(2),wtria(4,2)
+      logical                               :: store_weights_
       integer,parameter                     :: tetra(4,6)=reshape( (/ 1,2,3,6, 5,3,6,7, 1,5,3,6, 8,6,7,2, 4,7,2,3, 8,4,7,2 /),(/ 4,6 /) )
       !
       !
@@ -3167,7 +3169,9 @@ contains
       enddo
       close(unit)
       !
-      if(present(weights_out))then
+      store_weights_=.false.
+      if(present(store_weights))store_weights_=store_weights
+      if(present(weights_out).and.store_weights_)then
          call assert_shape(weights_out,[Ngrid,Norb,Nkpt],"tetrahedron_integration","weights_out")
          weights_out = weights
       endif
@@ -3177,7 +3181,7 @@ contains
          call assert_shape(DoS_out,[Ngrid],"tetrahedron_integration","DoS_out")
          DoS_out = sum(DoS,dim=2)
       endif
-      deallocate(weights,DoS)
+      deallocate(DoS)
       !
       !
    contains

@@ -19,7 +19,8 @@ subroutine tensor_transform_NNNN_d(Utensor,rot,onlyNaNb)
    !
    Norb = size(Utensor,dim=1)
    call assert_shape(Utensor,[Norb,Norb,Norb,Norb],"tensor_transform_NNNN_d","Utensor")
-   if(size(rot,1).ne.Norb) stop "tensor_transform_NNNN_d: Rotation has a wrong dimension."
+   if(size(rot,dim=1).ne.Norb) stop "tensor_transform_NNNN_d: Rotation has a wrong 1st dimension."
+   if(size(rot,dim=2).ne.Norb) stop "tensor_transform_NNNN_d: Rotation has a wrong 2nd dimension."
    !
    onlyNaNb_=.false.
    if(present(onlyNaNb))onlyNaNb_=onlyNaNb
@@ -108,7 +109,8 @@ subroutine tensor_transform_NNNN_c(Utensor,rot,onlyNaNb)
    !
    Norb = size(Utensor,dim=1)
    call assert_shape(Utensor,[Norb,Norb,Norb,Norb],"tensor_transform_NNNN_c","Utensor")
-   if(size(rot,1).ne.Norb) stop "tensor_transform_NNNN_c: Rotation has a wrong dimension."
+   if(size(rot,dim=1).ne.Norb) stop "tensor_transform_NNNN_c: Rotation has a wrong 1st dimension."
+   if(size(rot,dim=2).ne.Norb) stop "tensor_transform_NNNN_c: Rotation has a wrong 2nd dimension."
    !
    onlyNaNb_=.false.
    if(present(onlyNaNb))onlyNaNb_=onlyNaNb
@@ -208,7 +210,8 @@ subroutine tensor_transform_NN_d(Umatrix,Map,rot,onlyNaNb)
    call assert_shape(Map,[Nbp,Nbp,4],"tensor_transform_NN_d","Map")
    !
    Norb = int(sqrt(dble(Nbp)))
-   if(size(rot,1).ne.Norb) stop "tensor_transform_NN_d: Rotation has a wrong dimension."
+   if(size(rot,dim=1).ne.Norb) stop "tensor_transform_NN_d: Rotation has a wrong 1st dimension."
+   if(size(rot,dim=2).ne.Norb) stop "tensor_transform_NN_d: Rotation has a wrong 2nd dimension."
    !
    onlyNaNb_=.false.
    if(present(onlyNaNb))onlyNaNb_=onlyNaNb
@@ -265,7 +268,8 @@ subroutine tensor_transform_NN_c(Umatrix,Map,rot,onlyNaNb)
    call assert_shape(Map,[Nbp,Nbp,4],"tensor_transform_NN_c","Map")
    !
    Norb = int(sqrt(dble(Nbp)))
-   if(size(rot,1).ne.Norb) stop "tensor_transform_NN_c: Rotation has a wrong dimension."
+   if(size(rot,dim=1).ne.Norb) stop "tensor_transform_NN_c: Rotation has a wrong 1st dimension."
+   if(size(rot,dim=2).ne.Norb) stop "tensor_transform_NN_c: Rotation has a wrong 2nd dimension."
    !
    onlyNaNb_=.false.
    if(present(onlyNaNb))onlyNaNb_=onlyNaNb

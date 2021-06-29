@@ -243,10 +243,10 @@ contains
       use parameters
       implicit none
       character(len=*)                      :: InputFile
-      integer                               :: unit
       integer                               :: isite,iset,iph,iorb,NtauFguess
       integer,allocatable                   :: tmpOrbs(:)
       real(8),allocatable                   :: tmpCF(:)
+      !integer                               :: unit
       !
       write(LOGfile,"(A)") new_line("A")//"Reading InputFile"//new_line("A")
       !

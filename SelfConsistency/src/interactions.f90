@@ -43,7 +43,6 @@ module interactions
    !PURPOSE: Rutines available for the user. Description only for interfaces.
    !---------------------------------------------------------------------------!
    !subroutines
-   public :: init_Uelements
    public :: calc_W_full
    public :: calc_W_edmft
    public :: calc_chi_full
@@ -62,116 +61,7 @@ contains
 
 
    !---------------------------------------------------------------------------!
-   !PURPOSE: Indentify the Tensor indexes which correspond to physical (number
-   !         and spin conserving) interaction elements
-   !TEST ON:
-   !---------------------------------------------------------------------------!
-   subroutine init_Uelements(Norb,Uelements)
-      !
-      use parameters
-      implicit none
-      !
-      integer,intent(in)                    :: Norb
-      type(physicalU),intent(inout)         :: Uelements
-      !
-      integer                               :: Nflavor
-      integer                               :: ib1,ib2
-      integer                               :: iorb,jorb,korb,lorb
-      integer                               :: ispin,jspin
-      !
-      !
-      if(verbose)write(*,"(A)") "---- init_Uelements"
-      !
-      !
-      if(Uelements%status) write(*,"(A)") "Warning: the Physical interaction elements container is being reinitialized."
-      Nflavor = Norb*Nspin
-      !
-      ! Elements when the interaction is in the Norb*Nspin form
-      Uelements%Flav_Size = Norb
-      if(allocated(Uelements%Flav_Uloc))deallocate(Uelements%Flav_Uloc)
-      if(allocated(Uelements%Flav_U1st))deallocate(Uelements%Flav_U1st)
-      if(allocated(Uelements%Flav_U2nd))deallocate(Uelements%Flav_U2nd)
-      if(allocated(Uelements%Flav_All)) deallocate(Uelements%Flav_All)
-      if(allocated(Uelements%Flav_Map)) deallocate(Uelements%Flav_Map)
-      allocate(Uelements%Flav_Uloc(Nflavor,Nflavor)) ;Uelements%Flav_Uloc=.false.
-      allocate(Uelements%Flav_U1st(Nflavor,Nflavor)) ;Uelements%Flav_U1st=.false.
-      allocate(Uelements%Flav_U2nd(Nflavor,Nflavor)) ;Uelements%Flav_U2nd=.false.
-      allocate(Uelements%Flav_All(Nflavor,Nflavor))  ;Uelements%Flav_All =.false.
-      allocate(Uelements%Flav_Map(Nflavor,Nflavor,4));Uelements%Flav_Map=0
-      !
-      do ib1=1,Nflavor
-         do ib2=1,Nflavor
-            !
-            iorb = (ib1+mod(ib1,2))/2
-            jorb = (ib2+mod(ib2,2))/2
-            ispin = abs(mod(ib1,2)-2)
-            jspin = abs(mod(ib2,2)-2)
-            !
-            Uelements%Flav_Uloc(ib1,ib2) = (iorb.eq.jorb).and.(ispin.ne.jspin)
-            Uelements%Flav_U1st(ib1,ib2) = (iorb.ne.jorb).and.(ispin.ne.jspin)
-            Uelements%Flav_U2nd(ib1,ib2) = (iorb.ne.jorb).and.(ispin.eq.jspin)
-            !
-            Uelements%Flav_All(ib1,ib2) = Uelements%Flav_Uloc(ib1,ib2) .or.  &
-                                          Uelements%Flav_U1st(ib1,ib2) .or.  &
-                                          Uelements%Flav_U2nd(ib1,ib2)
-            !
-            Uelements%Flav_Map(ib1,ib2,1) = iorb
-            Uelements%Flav_Map(ib1,ib2,2) = jorb
-            Uelements%Flav_Map(ib1,ib2,3) = ispin
-            Uelements%Flav_Map(ib1,ib2,4) = jspin
-            !
-         enddo
-      enddo
-      !
-      ! Elements when the interaction is in the Norb^2 form
-      Uelements%Flav_Size = Norb*Norb
-      if(allocated(Uelements%Full_Uaa))deallocate(Uelements%Full_Uaa)
-      if(allocated(Uelements%Full_Uab))deallocate(Uelements%Full_Uab)
-      if(allocated(Uelements%Full_Jsf))deallocate(Uelements%Full_Jsf)
-      if(allocated(Uelements%Full_Jph))deallocate(Uelements%Full_Jph)
-      if(allocated(Uelements%Full_All))deallocate(Uelements%Full_All)
-      if(allocated(Uelements%Full_Map))deallocate(Uelements%Full_Map)
-      allocate(Uelements%Full_Uaa(Norb*Norb,Norb*Norb))  ;Uelements%Full_Uaa=.false.
-      allocate(Uelements%Full_Uab(Norb*Norb,Norb*Norb))  ;Uelements%Full_Uab=.false.
-      allocate(Uelements%Full_Jsf(Norb*Norb,Norb*Norb))  ;Uelements%Full_Jsf=.false.
-      allocate(Uelements%Full_Jph(Norb*Norb,Norb*Norb))  ;Uelements%Full_Jph=.false.
-      allocate(Uelements%Full_All(Norb*Norb,Norb*Norb))  ;Uelements%Full_All=.false.
-      allocate(Uelements%Full_Map(Norb*Norb,Norb*Norb,4));Uelements%Full_Map=0
-      !
-      do iorb=1,Norb
-         do jorb=1,Norb
-            do korb=1,Norb
-               do lorb=1,Norb
-                  !
-                  ib1 = iorb + Norb*(jorb-1)
-                  ib2 = korb + Norb*(lorb-1)
-                  !
-                  Uelements%Full_Uaa(ib1,ib2) = (iorb.eq.jorb).and.(korb.eq.lorb).and.(iorb.eq.korb)
-                  Uelements%Full_Uab(ib1,ib2) = (iorb.eq.jorb).and.(korb.eq.lorb).and.(iorb.ne.korb)
-                  Uelements%Full_Jsf(ib1,ib2) = (iorb.eq.lorb).and.(jorb.eq.korb).and.(iorb.ne.jorb)
-                  Uelements%Full_Jph(ib1,ib2) = (iorb.eq.korb).and.(jorb.eq.lorb).and.(iorb.ne.jorb)
-                  !
-                  Uelements%Full_All(ib1,ib2) = Uelements%Full_Uaa(ib1,ib2) .or.  &
-                                                Uelements%Full_Uab(ib1,ib2) .or.  &
-                                                Uelements%Full_Jsf(ib1,ib2) .or.  &
-                                                Uelements%Full_Jph(ib1,ib2)
-                  !
-                  Uelements%Full_Map(ib1,ib2,1) = iorb
-                  Uelements%Full_Map(ib1,ib2,2) = jorb
-                  Uelements%Full_Map(ib1,ib2,3) = korb
-                  Uelements%Full_Map(ib1,ib2,4) = lorb
-                  !
-               enddo
-            enddo
-         enddo
-      enddo
-      !
-   end subroutine init_Uelements
-
-
-   !---------------------------------------------------------------------------!
    !PURPOSE: Lattice inversion to get fully screened interaction - GW+EDMFT
-   !TEST ON: 21-10-2020
    !---------------------------------------------------------------------------!
    subroutine calc_W_full(Wmats,Umats,Pmats,Lttc,symQ)
       !
@@ -667,7 +557,6 @@ contains
 
    !---------------------------------------------------------------------------!
    !PURPOSE: Read frequancy dependent interactions from SPEX files.
-   !TEST ON: 20-10-2020 (both doAC)
    !---------------------------------------------------------------------------!
    subroutine read_U_spex_full(Umats,save2readable,LocalOnly,pathOUTPUT,doAC)
       !
@@ -1198,7 +1087,6 @@ contains
 
    !---------------------------------------------------------------------------!
    !PURPOSE: Check if the AC alters the bare and screened values
-   !TEST ON: 21-10-2020
    !---------------------------------------------------------------------------!
    subroutine checkAnalyticContinuation(Umats,Ureal)
       !
@@ -2266,7 +2154,6 @@ contains
 
    !---------------------------------------------------------------------------!
    !PURPOSE: Computes the local effective interaction
-   !TEST ON:
    !---------------------------------------------------------------------------!
    subroutine calc_curlyU(curlyU,Wimp,Pimp,sym,curlyUcorr)
       !
@@ -2361,7 +2248,6 @@ contains
 
    !---------------------------------------------------------------------------!
    !PURPOSE: Computes the fully screened local interaction
-   !TEST ON:
    !---------------------------------------------------------------------------!
    subroutine calc_Wimp(Wimp,curlyU,ChiC,sym)
       !
@@ -2439,7 +2325,6 @@ contains
 
    !---------------------------------------------------------------------------!
    !PURPOSE: Correct the polarization at gamma
-   !TEST ON:
    !---------------------------------------------------------------------------!
    subroutine correct_Ugamma(Ulat)
       !
