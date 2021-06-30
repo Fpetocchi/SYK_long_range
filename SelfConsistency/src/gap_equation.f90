@@ -610,7 +610,7 @@ contains
       call cpu_time(finish)
       write(*,"(A,F)") "     Calculation of static electronic Kernel cpu timing:", finish-start
       !
-      if(present(printKpath))then
+      if(present(printKpath).and.(reg(printmode).ne.'None'))then
          printmode_used="E0"
          if(present(printmode))printmode_used=reg(printmode)
          select case(reg(printmode_used))
@@ -911,7 +911,7 @@ contains
       call cpu_time(finish)
       write(*,"(A,F)") "     Calculation of static electronic Kernel cpu timing:", finish-start
       !
-      if(present(printKpath))then
+      if(present(printKpath).and.(reg(printmode).ne.'None'))then
          printmode_used="E0"
          if(present(printmode))printmode_used=reg(printmode)
          select case(reg(printmode_used))
@@ -1223,7 +1223,7 @@ contains
       !$OMP END PARALLEL
       deallocate(a2F_tmp)
       !
-      if(present(printKpath))then
+      if(present(printKpath).and.(reg(printmode).ne.'None'))then
          printmode_used="E0"
          if(present(printmode))printmode_used=reg(printmode)
          select case(reg(printmode_used))

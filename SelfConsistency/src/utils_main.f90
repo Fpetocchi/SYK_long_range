@@ -2440,6 +2440,7 @@ contains
       !
       !
       ! COLLECT IMPURITY GF AND FERMIONIC DYSON --------------------------------
+      allocate(Gmats(maxval(SiteNorb),Nmats,Nspin,Nsite));Gmats=czero
       do isite=1,Nsite
          !
          write(*,"(A)") new_line("A")//"     Collecting the impurity Green's function of site: "//reg(SiteName(isite))
@@ -2473,9 +2474,8 @@ contains
          deallocate(ReadLine,tauF)
          !
          !FT to the matsubara axis
-         allocate(Gmats(Norb,Nmats,Nspin,Nsite));Gmats=czero
          do ispin=1,Nspin
-            call Fitau2mats_vec(Beta,Gitau(:,:,ispin),Gmats(:,:,ispin,isite),tau_uniform=.true.)
+            call Fitau2mats_vec(Beta,Gitau(:,:,ispin),Gmats(1:Norb,:,ispin,isite),tau_uniform=.true.)
          enddo
          !
          call dump_MaxEnt(Gitau,"itau",reg(PrevItFolder)//"Convergence/","Gqmc_"//reg(SiteName(isite)))
@@ -2488,12 +2488,12 @@ contains
       !
       !Save to file in standard format Gimp
       call AllocateFermionicField(G_DMFT,Crystal%Norb,Nmats,Nsite=Nsite,Beta=Beta)
-      call AllocateFermionicField(Gimp,Norb,Nmats,Beta=Beta)
       do isite=1,Nsite
          !
          Norb = SiteNorb(isite)
          allocate(Orbs(Norb))
          Orbs = SiteOrbs(isite,1:Norb)
+         call AllocateFermionicField(Gimp,Norb,Nmats,Beta=Beta)
          !
          !Push Gimp to a Local fermionic field
          call clear_attributes(Gimp)
@@ -2510,10 +2510,10 @@ contains
          endif
          !
          deallocate(Orbs)
+         call DeallocateFermionicField(Gimp)
          if(ExpandImpurity.or.AFMselfcons)exit
          !
       enddo
-      call DeallocateFermionicField(Gimp)
       !
       call dump_FermionicField(G_DMFT,reg(PrevItFolder),"Gimp_w")
       call dump_MaxEnt(G_DMFT,"mats",reg(PrevItFolder)//"Convergence/","Gimp",EqvGWndx%SetOrbs,WmaxPade=PadeWlimit)
@@ -2521,6 +2521,7 @@ contains
       call DeallocateFermionicField(G_DMFT)
       !
       !Fermionic Dyson equation
+      allocate(Smats(maxval(SiteNorb),Nmats,Nspin,Nsite));Smats=czero
       do isite=1,Nsite
          !
          Norb = SiteNorb(isite)
@@ -2549,24 +2550,23 @@ contains
          !
          !Fermionic Dyson equation in the solver basis (always diagonal)
          write(*,"(A)") new_line("A")//"     Solving fermionic Dyson of site: "//reg(SiteName(isite))
-         allocate(Smats(Norb,Nmats,Nspin,Nsite));Smats=czero
          do ispin=1,Nspin
             do iorb=1,Norb
                Smats(iorb,:,ispin,isite) = 1d0/G0imp%ws(iorb,iorb,:,ispin) - 1d0/Gmats(iorb,:,ispin,isite)
             enddo
          enddo
          call DeallocateFermionicField(G0imp)
-         deallocate(Gmats)
          !
          deallocate(Orbs)
          if(ExpandImpurity.or.AFMselfcons)exit
          !
       enddo
+      deallocate(Gmats)
       !
       !Replace the tail with the fitted self-energy - I'm doing another loop over sites because I want to store all the SmatsNoFit
       if((ReplaceTail_Simp.ne.0d0).and.(ReplaceTail_Simp.lt.wmatsMax))then
          !
-         allocate(SmatsNoFit(Norb,Nmats,Nspin,Nsite))
+         allocate(SmatsNoFit(maxval(SiteNorb),Nmats,Nspin,Nsite))
          SmatsNoFit=Smats
          !
          do isite=1,Nsite
@@ -2614,12 +2614,12 @@ contains
       !
       !Save to file in standard format the eventually fitted self-energy
       call AllocateFermionicField(S_DMFT,Crystal%Norb,Nmats,Nsite=Nsite,Beta=Beta)
-      call AllocateFermionicField(Simp,Norb,Nmats,Beta=Beta)
       do isite=1,Nsite
          !
          Norb = SiteNorb(isite)
          allocate(Orbs(Norb))
          Orbs = SiteOrbs(isite,1:Norb)
+         call AllocateFermionicField(Simp,Norb,Nmats,Beta=Beta)
          !
          !Push Simp to a Local fermionic field
          call clear_attributes(Simp)
@@ -2664,11 +2664,11 @@ contains
             call imp2loc(S_DMFT,Simp,isite,Orbs,ExpandImpurity,AFMselfcons)
          endif
          !
+         call DeallocateFermionicField(Simp)
          deallocate(Orbs)
          if(ExpandImpurity.or.AFMselfcons)exit
          !
       enddo
-      call DeallocateFermionicField(Simp)
       !
       !symmetrize GW indexes and print
       if(EqvGWndx%O.or.EqvGWndx%S)then
@@ -2682,6 +2682,8 @@ contains
          call symmetrize_GW(S_DMFT,EqvGWndx)
          !
       endif
+      deallocate(Smats)
+      !
       call dump_FermionicField(S_DMFT,reg(PrevItFolder),"Simp_w")
       call dump_MaxEnt(S_DMFT,"mats",reg(PrevItFolder)//"Convergence/","Simp",EqvGWndx%SetOrbs,WmaxPade=PadeWlimit)
       call dump_Matrix(S_DMFT%N_s(:,:,1),reg(PrevItFolder)//"HartreeU_s1.DAT")
@@ -2693,12 +2695,12 @@ contains
          !
          if(.not.allocated(SmatsNoFit)) stop "SmatsNoFit is not allocated."
          call AllocateFermionicField(S_DMFT,Crystal%Norb,Nmats,Nsite=Nsite,Beta=Beta)
-         call AllocateFermionicField(Simp,Norb,Nmats,Beta=Beta)
          do isite=1,Nsite
             !
             Norb = SiteNorb(isite)
             allocate(Orbs(Norb))
             Orbs = SiteOrbs(isite,1:Norb)
+            call AllocateFermionicField(Simp,Norb,Nmats,Beta=Beta)
             !
             !Push Simp to a Local fermionic field
             call clear_attributes(Simp)
@@ -2713,12 +2715,12 @@ contains
                call imp2loc(S_DMFT,Simp,isite,Orbs,ExpandImpurity,AFMselfcons)
             endif
             !
+            call DeallocateFermionicField(Simp)
             deallocate(Orbs)
             if(ExpandImpurity.or.AFMselfcons)exit
             !
          enddo
          deallocate(SmatsNoFit)
-         call DeallocateFermionicField(Simp)
          call dump_FermionicField(S_DMFT,reg(PrevItFolder),"Simp_noFit_w")
          call DeallocateFermionicField(S_DMFT)
          !
@@ -2834,7 +2836,7 @@ contains
                   !
                enddo
             enddo
-            deallocate(densityQMC,NNitau)
+            deallocate(NNitau)
             call isReal(ChiCitau)
             !
             !User-defined modification of local charge susceptibility
@@ -2912,6 +2914,7 @@ contains
             if(ExpandImpurity.or.AFMselfcons)exit
             !
          enddo
+         deallocate(densityQMC)
          !
          !symmetrize GW indexes
          if(EqvGWndx%O)then

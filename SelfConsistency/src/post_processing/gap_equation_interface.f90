@@ -77,6 +77,7 @@ subroutine calc_Tc(pathOUTPUT,Inputs,Lttc,Wlat,Sfull)
    Ngrid = size(Egrid)
    if(.not.associated(DoS_Hk))stop"calc_Tc: DoS_Hk pointer not associated."
    call dump_Field_component(DoS_Hk,reg(pathOUTPUT)//"Gap_Equation","DoS_Hk.DAT",Egrid)
+   if (calc_Int_static.or.calc_Int_full) call dump_Field_component(DoS_Wk,reg(pathOUTPUT)//"Gap_Equation","DoS_Wk.DAT",Egrid)
    !
    !Allocating delta here so as to imply annealing between temperatures
    allocate(Delta(Ngrid));Delta = Inputs%DeltaInit
@@ -180,6 +181,7 @@ subroutine calc_Tc(pathOUTPUT,Inputs,Lttc,Wlat,Sfull)
          errDelta = maxval(abs(Delta-newDelta))
          if(errDelta.lt.Inputs%DeltaErr)then
             write(*,"(A,1E20.10,A3,1E20.10)")"     error on Delta:",errDelta," < ",Inputs%DeltaErr
+            write(*,"(A,1E20.10)")           "     Delta         :",maxval(abs(dble(Delta)),abs(Egrid).lt.1d-2)
             write(*,"(A)")"     Delta is converged moving to next Temperature."
             converged=.true.
             exit SCloop
