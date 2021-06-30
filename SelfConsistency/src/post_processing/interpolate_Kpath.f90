@@ -380,7 +380,7 @@ subroutine interpolateG2Path(Sfull,Lttc,structure,Nkpt_path,pathOUTPUT)
             !
             !
             !
-      end  select
+      end select
       !
       !
       !Quasiparticle self-consistency to get the Fermi surface

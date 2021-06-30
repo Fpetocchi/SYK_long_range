@@ -152,7 +152,8 @@ module module_container
    pade                                     ,&
    remove_CDW                               ,&
    interpolate2Beta                         ,&
-   interpolateG2Path
+   interpolateG2Path                        ,&
+   calc_Tc
    !calc_OptCond,calc_HallCond
 
 

@@ -1,7 +1,6 @@
 module post_processing
 
    implicit none
-   !use gap_equation, only : calc_Tc
    private
 
    !===========================================================================!
@@ -44,12 +43,11 @@ module post_processing
    public :: remove_CDW
    public :: interpolate2Beta
    public :: interpolateG2Path
-   !public :: calc_Tc
+   public :: calc_Tc
 
    !===========================================================================!
 
 contains
-
 
 
    !---------------------------------------------------------------------------!
@@ -84,6 +82,12 @@ contains
    !PURPOSE: Interpolate to a user provided K-point path a Fermionic field
    !---------------------------------------------------------------------------!
    include "post_processing/interpolate_Kpath.f90"
+
+
+   !---------------------------------------------------------------------------!
+   !PURPOSE: Estimate Tc by solving a gap equation
+   !---------------------------------------------------------------------------!
+   include "post_processing/gap_equation_interface.f90"
 
 
 end module post_processing

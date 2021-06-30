@@ -10,34 +10,12 @@ module gap_equation
    !
 
    !---------------------------------------------------------------------------!
-   !PURPOSE: Module interfaces
-   !---------------------------------------------------------------------------!
-   !interface name
-   !   module procedure name_a                                                  ! Description
-   !   module procedure name_b                                                  ! Description
-   !end interface name
-
-   !---------------------------------------------------------------------------!
-   !PURPOSE: Module custom types
-   !---------------------------------------------------------------------------!
-   !type mytype
-   !   integer                               :: var1
-   !   real(8),allocatable                   :: var2
-   !   logical                               :: var3
-   !end type mytype
-
-   !---------------------------------------------------------------------------!
    !PURPOSE: Module variables
    !---------------------------------------------------------------------------!
-   real(8),allocatable,private              :: omega(:)                         ! Phonon energy on logarithmic grid
-   real(8),allocatable,private              :: a2F(:)                           ! alpha^2*F(\Omega) function
+   real(8),allocatable,private              :: omega(:)                         !Phonon energy on logarithmic grid
+   real(8),allocatable,private              :: a2F(:)                           !alpha^2*F(\Omega) function
    character(len=12),private                :: Phonons_grid="logarithmic"
    !
-   logical,private                          :: calc_Phonons=.false.
-   logical,private                          :: calc_Int_static=.false.
-   logical,private                          :: calc_Int_full=.false.
-   logical,private                          :: interpolate_Hk=.false.
-   logical,private                          :: interpolate_Wk=.false.
    !
    integer,private                          :: Nkpt3_orig(3)
    real(8),allocatable,private              :: kpt_orig(:,:)
@@ -46,14 +24,25 @@ module gap_equation
    integer,private                          :: Nkpt3_Hk(3),Nkpt3_Wk(3)
    real(8),allocatable,private              :: kpt_Hk(:,:),kpt_Wk(:,:)
    !
-   real(8),allocatable,private              :: Egrid(:)
+   logical,private                          :: interpolate_Wk=.false.
    complex(8),allocatable,private           :: Zk(:,:,:)
+   !
+   real(8),allocatable,target,private       :: weights_1(:,:,:),DoS_1(:)
+   real(8),allocatable,target,private       :: weights_2(:,:,:),DoS_2(:)
+   !
    complex(8),allocatable,private           :: Wk(:,:,:,:)
    !
    logical,private                          :: initialized=.false.
    logical,private                          :: Phonons_stored=.false.
-   logical,private                          :: rotation_stored=.false.
    logical,private                          :: Wk_stored=.false.
+   !
+   !public
+   real(8),allocatable,public,protected     :: Egrid(:)
+   real(8),pointer,public,protected         :: weights_Hk(:,:,:),DoS_Hk(:)
+   real(8),pointer,public,protected         :: weights_Wk(:,:,:),DoS_Wk(:)
+   logical,public,protected                 :: calc_phonons=.false.
+   logical,public,protected                 :: calc_Int_static=.false.
+   logical,public,protected                 :: calc_Int_full=.false.
    !
 #ifdef _verb
    logical,private                          :: verbose=.true.
@@ -65,11 +54,9 @@ module gap_equation
    !PURPOSE: Rutines available for the user. Description only for interfaces.
    !---------------------------------------------------------------------------!
    public :: Initialize_inputs
-   public :: read_a2F
-   public :: calc_weights
    public :: store_Wk
    public :: calc_Kel_stat_e
-   !public :: calc_Kel_full_e
+   public :: calc_Kel_dyn_e
    public :: calc_Zph_e
    public :: calc_Kph_e
 
@@ -88,7 +75,7 @@ contains
       !
       use parameters
       use utils_misc
-      use crystal, only : calc_irredBZ
+      use crystal, only : calc_irredBZ, wannierinterpolation, tetrahedron_integration
       implicit none
       !
       character(len=*),intent(in)           :: pathINPUT
@@ -102,10 +89,13 @@ contains
       integer,intent(in),optional           :: Nkpt3_intp_Hk(3)
       integer,intent(in),optional           :: Nkpt3_intp_Wk(3)
       !
-      integer                               :: Ngrid,Nkpti_dum
+      integer                               :: Norb,Ngrid,Nkpti_dum
       integer,allocatable                   :: kptp_dum(:)
       integer,allocatable                   :: pkpt_dum(:,:,:)
       real(8),allocatable                   :: nkstar_dum(:)
+      real(8),allocatable                   :: Ek(:,:)
+      complex(8),allocatable                :: Hk_intp(:,:,:)
+      real                                  :: start,finish
       !
       !
       if(verbose)write(*,"(A)") "---- Initialize_inputs"
@@ -116,11 +106,20 @@ contains
       kpt_orig = kpt
       Hk_orig = Hk
       !
+      Norb = size(Hk,dim=1)
+      !
+      !compute the energy axis on a logarithmic grid
+      Ngrid=Nreal
+      if(mod(Ngrid,2).eq.0)Ngrid=Ngrid+1
+      if(mod(Ngrid-1,4).ne.0)Ngrid=Ngrid+mod(Ngrid-1,4)
+      allocate(Egrid(Ngrid));Egrid=0d0
+      Egrid = denspace(2d0*wrealMax,Ngrid,center=.true.)
+      !
       !setting up global flags
       select case(reg(mode_ph))
          case default
             !
-            stop "Available phonon modes in gap equation: Elk, QEspresso."
+            stop "Available phonon modes in gap equation: None, Elk, QEspresso."
             !
          case("None")
             !
@@ -152,7 +151,9 @@ contains
             !
       end select
       !
-      !compute the interpolated K-grid for Hk
+      !
+      !compute the interpolated K-grid for Hk and the corresponding weights
+      write(*,"(A)")"     Weights calculation for electronic energy integrals."
       Nkpt3_Hk = Nkpt3_orig
       if(present(Nkpt3_intp_Hk))then
          !
@@ -161,12 +162,14 @@ contains
             write(*,"(A)")"     Interpolation grid for Hk provided but one dimension has Nk=0. Interpolation skipped."
             Nkpt3_Hk = Nkpt3_orig
             kpt_Hk = kpt_orig
+            call calc_dispersion(Hk_orig,Ek)
             !
          elseif(all(Nkpt3_intp_Hk.eq.Nkpt3_orig))then
             !
             write(*,"(A)")"     Interpolation grid for Hk provided but equal to the original. Interpolation skipped."
             Nkpt3_Hk = Nkpt3_orig
             kpt_Hk = kpt_orig
+            call calc_dispersion(Hk_orig,Ek)
             !
          else
             !
@@ -174,7 +177,14 @@ contains
             Nkpt3_Hk = Nkpt3_intp_Hk
             call calc_irredBZ(reg(pathINPUT),Nkpt3_Hk,Nkpti_dum,kptp_dum,pkpt_dum,nkstar_dum,kpt_out=kpt_Hk)
             deallocate(kptp_dum,pkpt_dum,nkstar_dum)
-            interpolate_Hk=.true.
+            !
+            allocate(Hk_intp(Norb,Norb,product(Nkpt3_Hk)));Hk_intp=czero
+            call cpu_time(start)
+            call wannierinterpolation(Nkpt3_orig,kpt_orig,kpt_Hk,Hk_orig,Hk_intp)
+            call cpu_time(finish)
+            write(*,"(A,F)") "     interpolation to ["//str(Nkpt3_Hk(1))//","//str(Nkpt3_Hk(2))//","//str(Nkpt3_Hk(3))//"] K-grid cpu timing:", finish-start
+            call calc_dispersion(Hk_intp,Ek)
+            deallocate(Hk_intp)
             !
          endif
          !
@@ -182,50 +192,124 @@ contains
          !
          Nkpt3_Hk = Nkpt3_orig
          kpt_Hk = kpt_orig
+         call calc_dispersion(Hk_orig,Ek)
          !
       endif
       !
-      !compute the interpolated K-grid for Wk
-      Nkpt3_Wk = Nkpt3_orig
-      if(present(Nkpt3_intp_Wk))then
+      allocate(weights_1(Ngrid,Norb,product(Nkpt3_Hk)));weights_1=0d0
+      allocate(DoS_1(Ngrid));DoS_1=0d0
+      !
+      call cpu_time(start)
+      call tetrahedron_integration(reg(pathINPUT),Ek,Nkpt3_Hk,kpt_Hk,Egrid,weights_out=weights_1,DoS_out=DoS_1)
+      call cpu_time(finish)
+      write(*,"(A,F)") "     tetrahedron integration cpu timing:", finish-start
+      deallocate(Ek)
+      !
+      DoS_Hk => DoS_1
+      weights_Hk => weights_1
+      !
+      !
+      !compute the interpolated K-grid for Wk and the corresponding weights
+      if(calc_Int_static.or.calc_Int_full)then
          !
-         if(any(Nkpt3_intp_Wk.eq.0))then
+         write(*,"(A)")"     Weights calculation for bosonic energy integrals."
+         Nkpt3_Wk = Nkpt3_orig
+         if(present(Nkpt3_intp_Wk))then
             !
-            write(*,"(A)")"     Interpolation grid for Wk provided but one dimension has Nk=0. Interpolation skipped."
-            Nkpt3_Wk = Nkpt3_orig
-            kpt_Wk = kpt_orig
-            !
-         elseif(all(Nkpt3_intp_Wk.eq.Nkpt3_orig))then
-            !
-            write(*,"(A)")"     Interpolation grid for Wk provided but equal to the original. Interpolation skipped."
-            Nkpt3_Wk = Nkpt3_orig
-            kpt_Wk = kpt_orig
+            if(any(Nkpt3_intp_Wk.eq.0))then
+               !
+               write(*,"(A)")"     Interpolation grid for Wk provided but one dimension has Nk=0. Interpolation skipped."
+               Nkpt3_Wk = Nkpt3_orig
+               kpt_Wk = kpt_orig
+               call calc_dispersion(Hk_orig,Ek,Z=Zk)
+               !
+            elseif(all(Nkpt3_intp_Wk.eq.Nkpt3_orig))then
+               !
+               write(*,"(A)")"     Interpolation grid for Wk provided but equal to the original. Interpolation skipped."
+               Nkpt3_Wk = Nkpt3_orig
+               kpt_Wk = kpt_orig
+               call calc_dispersion(Hk_orig,Ek,Z=Zk)
+               !
+            else
+               !
+               !compute interpolated kpt for Hk
+               Nkpt3_Wk = Nkpt3_intp_Wk
+               call calc_irredBZ(reg(pathINPUT),Nkpt3_Wk,Nkpti_dum,kptp_dum,pkpt_dum,nkstar_dum,kpt_out=kpt_Wk)
+               deallocate(kptp_dum,pkpt_dum,nkstar_dum)
+               !
+               allocate(Hk_intp(Norb,Norb,product(Nkpt3_Wk)));Hk_intp=czero
+               call cpu_time(start)
+               call wannierinterpolation(Nkpt3_orig,kpt_orig,kpt_Wk,Hk_orig,Hk_intp)
+               call cpu_time(finish)
+               write(*,"(A,F)") "     interpolation to ["//str(Nkpt3_Wk(1))//","//str(Nkpt3_Wk(2))//","//str(Nkpt3_Wk(3))//"] K-grid cpu timing:", finish-start
+               call calc_dispersion(Hk_intp,Ek,Z=Zk)
+               deallocate(Hk_intp)
+               !
+            endif
             !
          else
             !
-            !compute interpolated kpt for Wk
-            Nkpt3_Wk = Nkpt3_intp_Wk
-            call calc_irredBZ(reg(pathINPUT),Nkpt3_Wk,Nkpti_dum,kptp_dum,pkpt_dum,nkstar_dum,kpt_out=kpt_Wk)
-            deallocate(kptp_dum,pkpt_dum,nkstar_dum)
-            interpolate_Wk=.true.
+            Nkpt3_Wk = Nkpt3_orig
+            kpt_Wk = kpt_orig
+            call calc_dispersion(Hk_orig,Ek,Z=Zk)
             !
          endif
          !
-      else
-         !
-         Nkpt3_Hk = Nkpt3_orig
-         kpt_Wk = kpt_orig
+         if(all(Nkpt3_Hk.eq.Nkpt3_Wk))then
+            !
+            write(*,"(A)") "     tetrahedron integration skipped:"
+            deallocate(Ek)
+            !
+            DoS_Wk => DoS_1
+            weights_Wk => weights_1
+            !
+         else
+            !
+            allocate(weights_2(Ngrid,Norb,product(Nkpt3_Wk)));weights_2=0d0
+            allocate(DoS_2(Ngrid));DoS_2=0d0
+            !
+            call cpu_time(start)
+            call tetrahedron_integration(reg(pathINPUT),Ek,Nkpt3_Wk,kpt_Wk,Egrid,weights_out=weights_2,DoS_out=DoS_2)
+            call cpu_time(finish)
+            write(*,"(A,F)") "     tetrahedron integration cpu timing:", finish-start
+            deallocate(Ek)
+            !
+            DoS_Wk => DoS_2
+            weights_Wk => weights_2
+            !
+         endif
          !
       endif
       !
-      !compute the energy axis on a logarithmic grid
-      Ngrid=Nreal
-      if(mod(Ngrid,2).eq.0)Ngrid=Ngrid+1
-      if(mod(Ngrid-1,4).ne.0)Ngrid=Ngrid+mod(Ngrid-1,4)
-      allocate(Egrid(Ngrid));Egrid=0d0
-      Egrid = denspace(2d0*wrealMax,Ngrid,center=.true.)
-      !
       initialized=.true.
+      !
+      !
+      contains
+      !
+      subroutine calc_dispersion(H,E,Z)
+         use linalg, only : eigh
+         implicit none
+         complex(8),intent(in)              :: H(:,:,:)
+         real(8),allocatable,intent(out)    :: E(:,:)
+         complex(8),allocatable,intent(out),optional :: Z(:,:,:)
+         integer                            :: ik
+         complex(8),allocatable             :: Z_(:,:,:)
+         !
+         if(allocated(E))deallocate(E)
+         allocate(E(size(H,dim=1),size(H,dim=3))); E=0d0
+         !
+         Z_ = H
+         do ik=1,size(H,dim=3)
+            call eigh(Z_(:,:,ik),Ek(:,ik))
+         enddo
+         !
+         if(present(Z))then
+            if(allocated(Z))deallocate(Z)
+            Z = Z_
+         endif
+         !
+      end subroutine calc_dispersion
+      !
       !
    end subroutine Initialize_inputs
 
@@ -322,79 +406,6 @@ contains
 
 
    !---------------------------------------------------------------------------!
-   !PURPOSE: Interpolate the Hk and produce the DoS
-   !---------------------------------------------------------------------------!
-   subroutine calc_weights(pathOUTPUT,weights,DoS)
-      !
-      use parameters
-      use utils_misc
-      use linalg, only : eigh
-      use crystal, only : wannierinterpolation, tetrahedron_integration
-      implicit none
-      !
-      character(len=*),intent(in)           :: pathOUTPUT
-      real(8),intent(out)                   :: weights(:,:,:)
-      real(8),intent(out)                   :: DoS(:)
-      !
-      integer                               :: Ngrid,Norb
-      integer                               :: ik,Nkpt_orig,Nkpt
-      complex(8),allocatable                :: Hk(:,:,:)
-      real(8),allocatable                   :: Ek(:,:)
-      real                                  :: start,finish
-      !
-      !
-      write(*,"(A)") "---- calc_weights"
-      !
-      !
-      if(.not.initialized)stop "calc_weights: input meshes not initialized. call Initialize_inputs."
-      !
-      !Various checks
-      Ngrid = size(Egrid)
-      Norb = size(Hk_orig,dim=1)
-      Nkpt_orig = product(Nkpt3_orig)
-      Nkpt = product(Nkpt3_Hk)
-      call assert_shape(DoS,[Ngrid],"calc_weights","DoS")
-      call assert_shape(Hk_orig,[Norb,Norb,Nkpt_orig],"calc_weights","Hk_orig")
-      call assert_shape(kpt_orig,[3,Nkpt_orig],"calc_weights","kpt_orig")
-      call assert_shape(kpt_Hk,[3,Nkpt],"calc_weights","kpt_Hk")
-      call assert_shape(weights,[Ngrid,Norb,Nkpt],"calc_weights","weights")
-      !
-      !Interpolate Hk to new K-grid
-      if(interpolate_Hk)then
-         if(Nkpt.eq.Nkpt_orig)stop "calc_weights: something is wrong with the K-point dimension (interpolation)."
-         allocate(Hk(Norb,Norb,Nkpt));Hk=czero
-         call cpu_time(start)
-         call wannierinterpolation(Nkpt3_orig,kpt_orig,kpt_Hk,Hk_orig,Hk)
-         call cpu_time(finish)
-         write(*,"(A,F)") "     calc_weights: H(fullBZ) --> H(fullBZ_new) cpu timing:", finish-start
-      else
-         if(Nkpt.ne.Nkpt_orig)stop "calc_weights: something is wrong with the K-point dimension."
-         Hk = Hk_orig
-      endif
-      !
-      !Diagonalize Hk to the LDA basis
-      allocate(Ek(Norb,Nkpt));Ek=0d0
-      allocate(Zk(Norb,Norb,Nkpt));Zk=czero
-      !
-      Zk = Hk
-      do ik=1,Nkpt
-         call eigh(Zk(:,:,ik),Ek(:,ik))
-      enddo
-      deallocate(Hk)
-      !
-      !Compute the DoS from with tetrahedron integration
-      call cpu_time(start)
-      call tetrahedron_integration(reg(pathOUTPUT),Ek,Nkpt3_Hk,kpt_Hk,Egrid,weights_out=weights,DoS_out=DoS)
-      call cpu_time(finish)
-      write(*,"(A,F)") "     tetrahedron integration cpu timing:", finish-start
-      deallocate(Ek)
-      !
-      rotation_stored=.true.
-      !
-   end subroutine calc_weights
-
-
-   !---------------------------------------------------------------------------!
    !PURPOSE: Store the interpolated and rotated NaNb components of the fully
    !         screened interaction
    !---------------------------------------------------------------------------!
@@ -420,11 +431,10 @@ contains
       real                                  :: start,finish
       !
       !
-      write(*,"(A)") "---- store_Wk"
+      if(verbose)write(*,"(A)") "---- store_Wk"
       !
       !
       if(.not.initialized)stop "store_Wk: input meshes not initialized. call Initialize_inputs."
-      if(.not.rotation_stored)stop "store_Wk: rotation to LDA basis not initialized. call calc_weights."
       !
       !Various checks
       Ngrid = size(Egrid)
@@ -517,7 +527,7 @@ contains
       !
       real(8),intent(in)                    :: Egrid(:)
       real(8),intent(in)                    :: weights(:,:,:)
-      real(8),intent(out)                   :: Kel_stat_e(:,:)
+      complex(8),intent(out)                :: Kel_stat_e(:,:)
       character(len=*),intent(in),optional  :: printKpath
       character(len=*),intent(in),optional  :: printmode
       !
@@ -533,7 +543,7 @@ contains
       real                                  :: start,finish
       !
       !
-      write(*,"(A)") "---- calc_Kel_stat_e"
+      write(*,"(A)") new_line("A")//"---- calc_Kel_stat_e"
       !
       !
       if(.not.Wk_stored)stop "calc_Kel_stat_e: fully screened interaction not stored. call store_Wk."
@@ -546,7 +556,7 @@ contains
       call assert_shape(Wk,[Norb,Norb,Nmats,Nkpt],"calc_Kel_stat_e","Wk")
       call assert_shape(weights,[Ngrid,Norb,Nkpt],"calc_weights","weights")
       call assert_shape(Kel_stat_e,[Ngrid,Ngrid],"calc_Kph_e","Kel_stat_e")
-      Kel_stat_e=0d0
+      Kel_stat_e=czero
       !
       Efermi_ndx = minloc(abs(Egrid),dim=1)
       if(Egrid(Efermi_ndx).ne.0d0) stop "calc_Kel_dyn_e: the energy grid requires the E=0 point."
@@ -613,7 +623,7 @@ contains
                unit = free_unit()
                open(unit,file=reg(printKpath)//"Kel_stat_e_E0.DAT",form="formatted",status="unknown",position="rewind",action="write")
                do iE=1,Ngrid
-                  write(unit,"(2F20.10)")Egrid(iE),Kel_stat_e(iE,Efermi_ndx)
+                  write(unit,"(2F20.10)")Egrid(iE),dreal(Kel_stat_e(iE,Efermi_ndx)),dimag(Kel_stat_e(iE,Efermi_ndx))
                enddo
                close(unit)
                !
@@ -622,7 +632,7 @@ contains
                unit = free_unit()
                open(unit,file=reg(printKpath)//"Kel_stat_e_0E.DAT",form="formatted",status="unknown",position="rewind",action="write")
                do iE=1,Ngrid
-                  write(unit,"(2F20.10)")Egrid(iE),Kel_stat_e(Efermi_ndx,iE)
+                  write(unit,"(2F20.10)")Egrid(iE),dreal(Kel_stat_e(Efermi_ndx,iE)),dimag(Kel_stat_e(Efermi_ndx,iE))
                enddo
                close(unit)
                !
@@ -631,17 +641,26 @@ contains
                unit = free_unit()
                open(unit,file=reg(printKpath)//"Kel_stat_e_diag.DAT",form="formatted",status="unknown",position="rewind",action="write")
                do iE=1,Ngrid
-                  write(unit,"(2F20.10)")Egrid(iE),Kel_stat_e(iE,iE)
+                  write(unit,"(2F20.10)")Egrid(iE),dreal(Kel_stat_e(iE,iE)),dimag(Kel_stat_e(iE,iE))
                enddo
                close(unit)
                !
             case("surf")
                !
                unit = free_unit()
-               open(unit,file=reg(printKpath)//"Kel_stat_e_surf.DAT",form="formatted",status="unknown",position="rewind",action="write")
+               open(unit,file=reg(printKpath)//"Kel_stat_e_surf_R.DAT",form="formatted",status="unknown",position="rewind",action="write")
                do iE1=1,Ngrid
                   do iE2=1,Ngrid
-                     write(unit,"(2F20.10)")Egrid(iE1),Egrid(iE2),Kel_stat_e(iE1,iE2)
+                     write(unit,"(2F20.10)")Egrid(iE1),Egrid(iE2),dreal(Kel_stat_e(iE1,iE2))
+                  enddo
+                  write(unit,*)
+               enddo
+               close(unit)
+               unit = free_unit()
+               open(unit,file=reg(printKpath)//"Kel_stat_e_surf_I.DAT",form="formatted",status="unknown",position="rewind",action="write")
+               do iE1=1,Ngrid
+                  do iE2=1,Ngrid
+                     write(unit,"(2F20.10)")Egrid(iE1),Egrid(iE2),dimag(Kel_stat_e(iE1,iE2))
                   enddo
                   write(unit,*)
                enddo
@@ -652,26 +671,35 @@ contains
                unit = free_unit()
                open(unit,file=reg(printKpath)//"Kel_stat_e_E0.DAT",form="formatted",status="unknown",position="rewind",action="write")
                do iE=1,Ngrid
-                  write(unit,"(2F20.10)")Egrid(iE),Kel_stat_e(iE,Efermi_ndx)
+                  write(unit,"(2F20.10)")Egrid(iE),dreal(Kel_stat_e(iE,Efermi_ndx)),dimag(Kel_stat_e(iE,Efermi_ndx))
                enddo
                close(unit)
                unit = free_unit()
                open(unit,file=reg(printKpath)//"Kel_stat_e_0E.DAT",form="formatted",status="unknown",position="rewind",action="write")
                do iE=1,Ngrid
-                  write(unit,"(2F20.10)")Egrid(iE),Kel_stat_e(Efermi_ndx,iE)
+                  write(unit,"(2F20.10)")Egrid(iE),dreal(Kel_stat_e(Efermi_ndx,iE)),dimag(Kel_stat_e(Efermi_ndx,iE))
                enddo
                close(unit)
                unit = free_unit()
                open(unit,file=reg(printKpath)//"Kel_stat_e_diag.DAT",form="formatted",status="unknown",position="rewind",action="write")
                do iE=1,Ngrid
-                  write(unit,"(2F20.10)")Egrid(iE),Kel_stat_e(iE,iE)
+                  write(unit,"(2F20.10)")Egrid(iE),dreal(Kel_stat_e(iE,iE)),dimag(Kel_stat_e(iE,iE))
                enddo
                close(unit)
                unit = free_unit()
-               open(unit,file=reg(printKpath)//"Kel_stat_e_surf.DAT",form="formatted",status="unknown",position="rewind",action="write")
+               open(unit,file=reg(printKpath)//"Kel_stat_e_surf_R.DAT",form="formatted",status="unknown",position="rewind",action="write")
                do iE1=1,Ngrid
                   do iE2=1,Ngrid
-                     write(unit,"(2F20.10)")Egrid(iE1),Egrid(iE2),Kel_stat_e(iE1,iE2)
+                     write(unit,"(2F20.10)")Egrid(iE1),Egrid(iE2),dreal(Kel_stat_e(iE1,iE2))
+                  enddo
+                  write(unit,*)
+               enddo
+               close(unit)
+               unit = free_unit()
+               open(unit,file=reg(printKpath)//"Kel_stat_e_surf_I.DAT",form="formatted",status="unknown",position="rewind",action="write")
+               do iE1=1,Ngrid
+                  do iE2=1,Ngrid
+                     write(unit,"(2F20.10)")Egrid(iE1),Egrid(iE2),dimag(Kel_stat_e(iE1,iE2))
                   enddo
                   write(unit,*)
                enddo
@@ -690,7 +718,7 @@ contains
    !         only the static limit of the fully screened interaction. Minimal use
    !         of shared variables in order to be able to try different grid/meshes.
    !---------------------------------------------------------------------------!
-   subroutine calc_Kel_dyn_e(Beta,Egrid,weights,Kel_dyn_e,MatsStep,printKpath,printmode)
+   subroutine calc_Kel_dyn_e(Beta,Egrid,weights,MatsStep,Kel_dyn_e,printKpath,printmode)
       !
       use parameters
       use utils_misc
@@ -699,8 +727,8 @@ contains
       real(8),intent(in)                    :: Beta
       real(8),intent(in)                    :: Egrid(:)
       real(8),intent(in)                    :: weights(:,:,:)
-      real(8),intent(out)                   :: Kel_dyn_e(:,:)
-      real(8),intent(in),optional           :: MatsStep
+      real(8),intent(in)                    :: MatsStep
+      complex(8),intent(out)                :: Kel_dyn_e(:,:)
       character(len=*),intent(in),optional  :: printKpath
       character(len=*),intent(in),optional  :: printmode
       !
@@ -710,8 +738,7 @@ contains
       integer                               :: iorb,jorb,Norb
       integer                               :: ik,Nkpt,Nmats
       integer                               :: wndx_a,wndx_b
-      real(8)                               :: DoSnorm,dE,E1,E2,dx
-      real(8)                               :: MatsStep_,fact
+      real(8)                               :: DoSnorm,dE,E1,E2,dx,fact
       real(8)                               :: s_p,s_m,w_p,w_m
       complex(8)                            :: m,q
       complex(8)                            :: Kel_dyn_x,Kel_dyn_e_p,Kel_dyn_e_m
@@ -723,7 +750,7 @@ contains
       real                                  :: start,finish
       !
       !
-      write(*,"(A)") "---- calc_Kel_dyn_e"
+      write(*,"(A)") new_line("A")//"---- calc_Kel_dyn_e"
       !
       !
       if(.not.Wk_stored)stop "calc_Kel_dyn_e: fully screened interaction not stored. call store_Wk."
@@ -736,10 +763,13 @@ contains
       call assert_shape(Wk,[Norb,Norb,Nmats,Nkpt],"calc_Kel_dyn_e","Wk")
       call assert_shape(weights,[Ngrid,Norb,Nkpt],"calc_weights","weights")
       call assert_shape(Kel_dyn_e,[Ngrid,Ngrid],"calc_Kph_e","Kel_dyn_e")
-      Kel_dyn_e=0d0
+      Kel_dyn_e=czero
       !
       Efermi_ndx = minloc(abs(Egrid),dim=1)
       if(Egrid(Efermi_ndx).ne.0d0) stop "calc_Kel_dyn_e: the energy grid requires the E=0 point."
+      !
+      if(MatsStep.le.0d0) stop "calc_Kel_dyn_e: MatsStep must be >0."
+      write(*,"(A,F)") "     Bosonic frequency step:",MatsStep
       !
       DoSnorm=0
       allocate(DoS(Ngrid));DoS=0d0
@@ -762,11 +792,9 @@ contains
       dx=abs(xgrid(2)-xgrid(1))
       allocate(wmats(Nmats));wmats=BosonicFreqMesh(Beta,Nmats)
       !
-      MatsStep_ = 2*pi/Beta
-      if(present(MatsStep))MatsStep_=MatsStep
       call cpu_time(start)
       !$OMP PARALLEL DEFAULT(PRIVATE),&
-      !$OMP SHARED(Wk,Ngrid,DoS,Norb,Nmats,Nkpt,weights,wmats,xgrid,dx,MatsStep_,Kel_dyn_e)
+      !$OMP SHARED(Wk,Ngrid,DoS,Norb,Nmats,Nkpt,weights,wmats,xgrid,dx,MatsStep,Kel_dyn_e)
       !
       allocate(Kel_dyn_w(Nmats));Kel_dyn_w=czero
       allocate(Wk_pvt(Norb,Norb,Nmats,Nkpt));Wk_pvt=czero
@@ -786,7 +814,7 @@ contains
                do jorb=1,Norb
                   do ik=1,Nkpt
                      !
-                     Kel_dyn_w = Kel_dyn_w + (weights(iE1,iorb,ik)/DoS(iE1)) * (weights(iE2,jorb,ik)/DoS(iE2)) * (Wk_pvt(iorb,jorb,:,ik)-Wk_pvt(iorb,jorb,Nmats,ik))
+                     Kel_dyn_w = Kel_dyn_w + (weights(iE1,iorb,ik)/DoS(iE1)) * (weights(iE2,jorb,ik)/DoS(iE2)) * (Wk_pvt(iorb,jorb,:,ik)-Wk_pvt(iorb,jorb,1,ik))
                      !
                   enddo
                enddo
@@ -804,8 +832,8 @@ contains
                   exit
                endif
                !
-               wndx_a = floor(w_p/MatsStep_)+1
-               wndx_b = ceiling(w_p/MatsStep_)+1
+               wndx_a = floor(w_p/MatsStep)+1
+               wndx_b = ceiling(w_p/MatsStep)+1
                !
                Kel_dyn_x = Kel_dyn_w(wndx_a) * ( 1d0 - (w_p-wmats(wndx_a))/(wmats(wndx_b)-wmats(wndx_a)) ) + &
                            Kel_dyn_w(wndx_b) * (w_p-wmats(wndx_a))/(wmats(wndx_b)-wmats(wndx_a))
@@ -857,7 +885,7 @@ contains
             cond1 = .not.((E1.eq.0d0).and.(E2.ne.0d0))
             cond2 = .not.((E1.ne.0d0).and.(E2.eq.0d0))
             if(cond1.and.cond2)then
-               Kel_dyn_e(iE1,iE2) = dreal( ( Kel_dyn_e_m + Kel_dyn_e_p ) * (1d0/(tanh(Beta/2d0*E1)*tanh(Beta/2d0*E2))) )
+               Kel_dyn_e(iE1,iE2) = ( Kel_dyn_e_m + Kel_dyn_e_p ) * (1d0/(tanh(Beta/2d0*E1)*tanh(Beta/2d0*E2)))
             endif
             !
          enddo
@@ -872,11 +900,11 @@ contains
          !
          m = ( Kel_dyn_e(iE,Efermi_ndx-1)-Kel_dyn_e(iE,Efermi_ndx-2) ) / ( Egrid(Efermi_ndx-1)-Egrid(Efermi_ndx-2) )
          q = Kel_dyn_e(iE,Efermi_ndx-2)
-         Kel_dyn_e(iE,Efermi_ndx) = dreal( m * ( 0d0-Egrid(Efermi_ndx-2) ) + q )
+         Kel_dyn_e(iE,Efermi_ndx) = m * ( 0d0-Egrid(Efermi_ndx-2) ) + q
          !
          m = ( Kel_dyn_e(Efermi_ndx-1,iE)-Kel_dyn_e(Efermi_ndx-2,iE) ) / ( Egrid(Efermi_ndx-1)-Egrid(Efermi_ndx-2) )
          q = Kel_dyn_e(Efermi_ndx-2,iE)
-         Kel_dyn_e(Efermi_ndx,iE) = dreal( m * ( 0d0-Egrid(Efermi_ndx-2) ) + q )
+         Kel_dyn_e(Efermi_ndx,iE) = m * ( 0d0-Egrid(Efermi_ndx-2) ) + q
          !
       enddo
       !
@@ -896,7 +924,7 @@ contains
                unit = free_unit()
                open(unit,file=reg(printKpath)//"Kel_dyn_e_E0.DAT",form="formatted",status="unknown",position="rewind",action="write")
                do iE=1,Ngrid
-                  write(unit,"(2F20.10)")Egrid(iE),Kel_dyn_e(iE,Efermi_ndx)
+                  write(unit,"(2F20.10)")Egrid(iE),dreal(Kel_dyn_e(iE,Efermi_ndx)),dimag(Kel_dyn_e(iE,Efermi_ndx))
                enddo
                close(unit)
                !
@@ -905,7 +933,7 @@ contains
                unit = free_unit()
                open(unit,file=reg(printKpath)//"Kel_dyn_e_0E.DAT",form="formatted",status="unknown",position="rewind",action="write")
                do iE=1,Ngrid
-                  write(unit,"(2F20.10)")Egrid(iE),Kel_dyn_e(Efermi_ndx,iE)
+                  write(unit,"(2F20.10)")Egrid(iE),dreal(Kel_dyn_e(Efermi_ndx,iE)),dimag(Kel_dyn_e(Efermi_ndx,iE))
                enddo
                close(unit)
                !
@@ -914,17 +942,26 @@ contains
                unit = free_unit()
                open(unit,file=reg(printKpath)//"Kel_dyn_e_diag.DAT",form="formatted",status="unknown",position="rewind",action="write")
                do iE=1,Ngrid
-                  write(unit,"(2F20.10)")Egrid(iE),Kel_dyn_e(iE,iE)
+                  write(unit,"(2F20.10)")Egrid(iE),dreal(Kel_dyn_e(iE,iE)),dimag(Kel_dyn_e(iE,iE))
                enddo
                close(unit)
                !
             case("surf")
                !
                unit = free_unit()
-               open(unit,file=reg(printKpath)//"Kel_dyn_e_surf.DAT",form="formatted",status="unknown",position="rewind",action="write")
+               open(unit,file=reg(printKpath)//"Kel_dyn_e_surf_R.DAT",form="formatted",status="unknown",position="rewind",action="write")
                do iE1=1,Ngrid
                   do iE2=1,Ngrid
-                     write(unit,"(2F20.10)")Egrid(iE1),Egrid(iE2),Kel_dyn_e(iE1,iE2)
+                     write(unit,"(2F20.10)")Egrid(iE1),Egrid(iE2),dreal(Kel_dyn_e(iE1,iE2))
+                  enddo
+                  write(unit,*)
+               enddo
+               close(unit)
+               unit = free_unit()
+               open(unit,file=reg(printKpath)//"Kel_dyn_e_surf_I.DAT",form="formatted",status="unknown",position="rewind",action="write")
+               do iE1=1,Ngrid
+                  do iE2=1,Ngrid
+                     write(unit,"(2F20.10)")Egrid(iE1),Egrid(iE2),dimag(Kel_dyn_e(iE1,iE2))
                   enddo
                   write(unit,*)
                enddo
@@ -935,26 +972,35 @@ contains
                unit = free_unit()
                open(unit,file=reg(printKpath)//"Kel_dyn_e_E0.DAT",form="formatted",status="unknown",position="rewind",action="write")
                do iE=1,Ngrid
-                  write(unit,"(2F20.10)")Egrid(iE),Kel_dyn_e(iE,Efermi_ndx)
+                  write(unit,"(2F20.10)")Egrid(iE),dreal(Kel_dyn_e(iE,Efermi_ndx)),dimag(Kel_dyn_e(iE,Efermi_ndx))
                enddo
                close(unit)
                unit = free_unit()
                open(unit,file=reg(printKpath)//"Kel_dyn_e_0E.DAT",form="formatted",status="unknown",position="rewind",action="write")
                do iE=1,Ngrid
-                  write(unit,"(2F20.10)")Egrid(iE),Kel_dyn_e(Efermi_ndx,iE)
+                  write(unit,"(2F20.10)")Egrid(iE),dreal(Kel_dyn_e(Efermi_ndx,iE)),dimag(Kel_dyn_e(Efermi_ndx,iE))
                enddo
                close(unit)
                unit = free_unit()
                open(unit,file=reg(printKpath)//"Kel_dyn_e_diag.DAT",form="formatted",status="unknown",position="rewind",action="write")
                do iE=1,Ngrid
-                  write(unit,"(2F20.10)")Egrid(iE),Kel_dyn_e(iE,iE)
+                  write(unit,"(2F20.10)")Egrid(iE),dreal(Kel_dyn_e(iE,iE)),dimag(Kel_dyn_e(iE,iE))
                enddo
                close(unit)
                unit = free_unit()
-               open(unit,file=reg(printKpath)//"Kel_dyn_e_surf.DAT",form="formatted",status="unknown",position="rewind",action="write")
+               open(unit,file=reg(printKpath)//"Kel_dyn_e_surf_R.DAT",form="formatted",status="unknown",position="rewind",action="write")
                do iE1=1,Ngrid
                   do iE2=1,Ngrid
-                     write(unit,"(2F20.10)")Egrid(iE1),Egrid(iE2),Kel_dyn_e(iE1,iE2)
+                     write(unit,"(2F20.10)")Egrid(iE1),Egrid(iE2),dreal(Kel_dyn_e(iE1,iE2))
+                  enddo
+                  write(unit,*)
+               enddo
+               close(unit)
+               unit = free_unit()
+               open(unit,file=reg(printKpath)//"Kel_dyn_e_surf_I.DAT",form="formatted",status="unknown",position="rewind",action="write")
+               do iE1=1,Ngrid
+                  do iE2=1,Ngrid
+                     write(unit,"(2F20.10)")Egrid(iE1),Egrid(iE2),dimag(Kel_dyn_e(iE1,iE2))
                   enddo
                   write(unit,*)
                enddo

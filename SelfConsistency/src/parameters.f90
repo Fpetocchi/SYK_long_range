@@ -17,6 +17,7 @@ module parameters
    complex(8),parameter                     :: cone=dcmplx(1.d0,0.d0)
    complex(8),parameter                     :: czero=dcmplx(0.d0,0.d0)
    !
+   real(8),parameter                        :: K2eV=8.617333262d-5
    real(8),parameter                        :: H2eV=27.2113831243217d0
    real(8),parameter                        :: Ry2H=0.5d0
    real(8),parameter                        :: bohr=0.5291772108d0
@@ -203,6 +204,27 @@ module parameters
       integer                               :: Nmats_old
       integer                               :: Nmats_new
    end type OldBeta
+
+   !---------------------------------------------------------------------------!
+   !PURPOSE: container for the gap equation variables
+   !---------------------------------------------------------------------------!
+   type SCDFT
+      real(8)                               :: Tbounds(2)=0d0
+      integer                               :: Tsteps=0
+      integer                               :: loops=0
+      real(8)                               :: DeltaErr=0d0
+      real(8)                               :: DeltaInit=0d0
+      character(len=255)                    :: mode_ph                          !Elk or QEspresso
+      character(len=255)                    :: mode_Zph="symrenorm"
+      character(len=255)                    :: mode_el                          !static or static+dynamic
+      integer                               :: Nkpt3_intp_Hk(3)=0
+      integer                               :: Nkpt3_intp_Wk(3)=0
+      real(8)                               :: wstep=0d0
+      real(8)                               :: Wk_cutoff=0d0
+      character(len=255)                    :: printmode_ph
+      character(len=255)                    :: printmode_el
+      logical                               :: status=.false.
+   end type SCDFT
 
 
 end module parameters

@@ -564,7 +564,7 @@ contains
       use file_io
       use utils_misc
       use utils_fields
-      use input_vars, only :  pathINPUT, UfullStructure, Uthresh
+      use input_vars, only : pathINPUT, UfullStructure, Uthresh
       implicit none
       !
       type(BosonicField),intent(inout)      :: Umats
@@ -991,7 +991,7 @@ contains
       use file_io
       use utils_misc
       use utils_fields
-      use input_vars, only :  pathINPUT
+      use input_vars, only : pathINPUT
       implicit none
       !
       real(8),allocatable,intent(inout)     :: Umat(:,:)
@@ -1092,7 +1092,7 @@ contains
       !
       use parameters
       use utils_misc
-      use input_vars, only :  pathINPUTtr
+      use input_vars, only : pathINPUTtr
       implicit none
       !
       type(BosonicField),intent(in)         :: Umats

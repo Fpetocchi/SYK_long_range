@@ -516,6 +516,9 @@ contains
       if(Lttc%Nkpt.ne.(Nkpt3(1)*Nkpt3(2)*Nkpt3(3)))stop "Total number of K-points does not match with number of K-points per dimension."
       !
       !
+      wrealMax = abs(maxval(Lttc%Ek)) + 0.1*abs(maxval(Lttc%Ek))
+      !
+      !
       !Store the local Hamiltonian
       call dump_Matrix(Lttc%Hloc,reg(pathINPUT)//"Hloc.DAT")
       !
@@ -658,7 +661,7 @@ contains
          !
          allocate(Egrid(Nreal));Egrid=0d0
          Egrid = linspace(-wrealMax,+wrealMax,Nreal)
-         call tetrahedron_integration(reg(pathINPUT),Lttc%Ek,Lttc%Nkpt3,Lttc%kpt,Egrid,fact_intp=2)
+         call tetrahedron_integration(reg(pathINPUT),Lttc%Ek,Lttc%Nkpt3,Lttc%kpt,Egrid,fact_intp=2,pathOUTPUT=reg(pathINPUT))
          deallocate(Egrid)
          !
          if(reg(structure).ne."None")call interpolateHk2Path(Lttc,reg(structure),Nkpt_path,reg(pathINPUT),doplane=.true.)
@@ -2431,7 +2434,7 @@ contains
       endif
       call dump_Matrix(densityDMFT(:,:,1),reg(PrevItFolder)//"Nimp_s1.DAT")
       call dump_Matrix(densityDMFT(:,:,2),reg(PrevItFolder)//"Nimp_s2.DAT")
-      deallocate(densityDMFT,Orbs)
+      deallocate(densityDMFT)
       !
       !
       !

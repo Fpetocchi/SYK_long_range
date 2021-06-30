@@ -571,7 +571,7 @@ contains
       unit = free_unit()
       open(unit,file=reg(printpath),form="formatted",status="unknown",position="rewind",action="write")
       do iaxis=1,size(axis)
-         write(unit,"(3E20.12)") axis(iaxis), real(Fcomp(iaxis)), dimag(Fcomp(iaxis))
+         write(unit,"(3E20.12)") axis(iaxis), dreal(Fcomp(iaxis)), dimag(Fcomp(iaxis))
       enddo
       close(unit)
       !

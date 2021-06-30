@@ -2955,7 +2955,7 @@ contains
    !      k,n                           n   e (k) = E
    !                                         n       F
    !---------------------------------------------------------------------------!
-   subroutine tetrahedron_integration(pathINPUT,Ek_orig,nkpt3,kpt,Egrid,weights_out,DoS_out,fact_intp,store_weights)
+   subroutine tetrahedron_integration(pathINPUT,Ek_orig,nkpt3,kpt,Egrid,weights_out,DoS_out,fact_intp,pathOUTPUT,store_weights)
       !
       use utils_misc
       implicit none
@@ -2966,6 +2966,7 @@ contains
       real(8),intent(in)                    :: kpt(:,:)
       real(8),intent(in)                    :: Egrid(:)
       integer,intent(in),optional           :: fact_intp
+      character(len=*),intent(in),optional  :: pathOUTPUT
       logical,intent(in),optional           :: store_weights
       real(8),intent(out),optional          :: weights_out(:,:,:)
       real(8),intent(out),optional          :: DoS_out(:)
@@ -3144,6 +3145,19 @@ contains
       enddo
       deallocate(kptp,pkpt,nkstar,Ek)
       !
+      store_weights_=.false.
+      if(present(store_weights))store_weights_=store_weights
+      if(present(pathOUTPUT).and.store_weights_)then
+         unit = free_unit()
+         open(unit,file=reg(pathOUTPUT)//"Weights_BZ.DAT",form="formatted",status="unknown",position="rewind",action="write")
+         do igrid=1,Ngrid
+            do ik=1,Nkpt
+               write(unit,"(1F20.10,1I8,200F20.10)")Egrid(igrid),ik,(weights(igrid,iorb,ik),iorb=1,Norb)
+            enddo
+         enddo
+         close(unit)
+      endif
+      !
       !Compute the DoS
       allocate(DoS(Ngrid,Norb));DoS=0d0
       do iorb=1,Norb
@@ -3152,26 +3166,16 @@ contains
          enddo
          write(*,"(A,F)") "     Normalization DoS_"//str(iorb)//":", sum(DoS(:,iorb))*dE
       enddo
-      !
-      unit = free_unit()
-      open(unit,file=reg(pathINPUT)//"Weights_BZ.DAT",form="formatted",status="unknown",position="rewind",action="write")
-      do igrid=1,Ngrid
-         do ik=1,Nkpt
-            write(unit,"(1F20.10,1I8,200F20.10)")Egrid(igrid),ik,(weights(igrid,iorb,ik),iorb=1,Norb)
+      if(present(pathOUTPUT))then
+         unit = free_unit()
+         open(unit,file=reg(pathOUTPUT)//"DoS.DAT",form="formatted",status="unknown",position="rewind",action="write")
+         do igrid=1,Ngrid
+            write(unit,"(200F20.10)")Egrid(igrid),(DoS(igrid,iorb),iorb=1,Norb)
          enddo
-      enddo
-      close(unit)
+         close(unit)
+      endif
       !
-      unit = free_unit()
-      open(unit,file=reg(pathINPUT)//"DoS.DAT",form="formatted",status="unknown",position="rewind",action="write")
-      do igrid=1,Ngrid
-         write(unit,"(200F20.10)")Egrid(igrid),(DoS(igrid,iorb),iorb=1,Norb)
-      enddo
-      close(unit)
-      !
-      store_weights_=.false.
-      if(present(store_weights))store_weights_=store_weights
-      if(present(weights_out).and.store_weights_)then
+      if(present(weights_out))then
          call assert_shape(weights_out,[Ngrid,Norb,Nkpt],"tetrahedron_integration","weights_out")
          weights_out = weights
       endif

@@ -461,8 +461,8 @@ contains
       use utils_misc
       use utils_fields
       use greens_function, only : calc_density
-      use input_vars, only :  Nsite, SiteNorb
-      use input_vars, only :  pathINPUT, VH_type, Nsite
+      use input_vars, only : Nsite, SiteNorb
+      use input_vars, only : pathINPUT, VH_type, Nsite
       implicit none
       !
       complex(8),intent(inout)              :: VH(:,:)
@@ -689,8 +689,8 @@ contains
       use utils_misc
       use utils_fields
       use greens_function, only : calc_density
-      use input_vars, only :  Nsite, SiteNorb
-      use input_vars, only :  pathINPUT, VH_type, Nsite
+      use input_vars, only : Nsite, SiteNorb
+      use input_vars, only : pathINPUT, VH_type, Nsite
       implicit none
       !
       complex(8),intent(inout)              :: VH(:,:)

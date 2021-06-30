@@ -209,11 +209,15 @@ program SelfConsistency
       !
       !Initial Guess for the impurity self-energy only in the 0th iteration
       if(calc_Sguess) call calc_SigmaGuess()
-      call DeallocateBosonicField(Wlat)
       !
       !
       !Put together all the contributions to the full self-energy and deallocate all the components
       if(.not.S_Full_exists) call join_SigmaFull(Iteration)
+      !
+      !
+      !Solve the Gap equation
+      if(gap_equation%status)call calc_Tc(reg(ItFolder),gap_equation,Crystal,Wlat,Sfull=S_Full)
+      call DeallocateBosonicField(Wlat)
       !
       !
       !Compute the Full Green's function and set the density

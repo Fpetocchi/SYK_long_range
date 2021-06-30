@@ -197,6 +197,12 @@ module input_vars
    logical,public                           :: FermiSurf
    real(8),public                           :: KKcutoff
    !
+   !Variables for the matching beta
+   type(OldBeta),public                     :: Beta_Match
+   !
+   !Variables for the gap equation
+   type(SCDFT),public                       :: gap_equation
+   !
    !Variables related to the impurity solver
    type(QMC),public                         :: Solver
    !
@@ -212,13 +218,9 @@ module input_vars
    complex(8),allocatable,public            :: OlocRot(:,:,:)
    complex(8),allocatable,public            :: OlocRotDag(:,:,:)
    real(8),allocatable,public               :: OlocEig(:,:)
-   !
-   !Variables for the matching beta
-   type(OldBeta),public                     :: Beta_Match
-
 
    !---------------------------------------------------------------------------!
-   !PURPOSE: Internal Rutines available for the user. Description only for interfaces.
+   !PURPOSE: Rutines available for the user. Description only for interfaces.
    !---------------------------------------------------------------------------!
    !subroutines
    public :: save_InputFile
@@ -371,7 +373,7 @@ contains
       call append_to_input_list(NtauB,"NTAU_B_LAT","Number of points on the imaginary time axis for Bosonic lattice fields. User cannot set this as its equal to NTAU_F.")
       call parse_input_variable(tau_uniform,"TAU_UNIF",InputFile,default=.false.,comment="Flag to use a uniform mesh on the imaginary time axis. Only internal for GW.")
       call parse_input_variable(Nreal,"NREAL",InputFile,default=2000,comment="Number of points on the real frequency axis.")
-      call parse_input_variable(wrealMax,"MAX_WREAL",InputFile,default=10.d0,comment="Maximum absolute value of the real frequency mesh.")
+      call append_to_input_list(wrealMax,"MAX_WREAL","Maximum absolute value of the real frequency mesh. User cannot set this as its derived from Hk.")
       call parse_input_variable(eta,"ETA",InputFile,default=0.04d0,comment="Real frequency broadening.")
       call parse_input_variable(PadeWlimit,"WPADE",InputFile,default=10,comment="Number of Matsubara frequencies used in pade' analytic continuation. If its =0 Pade will not be performed.")
       !
@@ -513,6 +515,27 @@ contains
          Mixing_Delta=0d0
          Mixing_curlyU=0d0
          !
+      endif
+      !
+      !Variables for the gap equation
+      call add_separator()
+      call parse_input_variable(gap_equation%status,"CALC_TC",InputFile,default=.false.,comment="Solve the gap equation to compute the critical Temperature.")
+      if(gap_equation%status)then
+         call parse_input_variable(gap_equation%Tbounds,"T_BOUNDS",InputFile,default=[0.1d0,10d0],comment="Lower and upper boundaries (Kelvin) of the temperature scan.")
+         call parse_input_variable(gap_equation%Tsteps,"T_STEPS",InputFile,default=10,comment="Number of points in the temperature scan.")
+         call parse_input_variable(gap_equation%loops,"LOOPS",InputFile,default=100,comment="Maximum number of iteration per each Temperature point.")
+         call parse_input_variable(gap_equation%DeltaErr,"DELTA_ERR",InputFile,default=1d-5,comment="Convergence threshold on Delta.")
+         call parse_input_variable(gap_equation%DeltaInit,"DELTA_INIT",InputFile,default=0.1d0,comment="Initial guess for Delta[eV].")
+         call parse_input_variable(gap_equation%mode_ph,"MODE_PH",InputFile,default="None",comment="Whether to include phononic Kernel. Available modes: Elk, QEspresso. None to avoid.")
+         call parse_input_variable(gap_equation%mode_Zph,"MODE_ZPH",InputFile,default="symrenorm",comment="Low energy limit of Zph. Available modes: symrenorm, sym, asym.")
+         call parse_input_variable(gap_equation%mode_el,"MODE_EL",InputFile,default="None",comment="Whether to include electronic Kernel. Available modes: static, static+dynamic. None to avoid.")
+         if((reg(gap_equation%mode_ph).eq."None").and.(reg(gap_equation%mode_el).eq."None"))stop "read_InputFile: Tc requested but no mode is choosen."
+         call parse_input_variable(gap_equation%Nkpt3_intp_Hk,"NKPT3_HK",InputFile,default=Nkpt3,comment="New interpolation grid for Hk.")
+         call parse_input_variable(gap_equation%Nkpt3_intp_Wk,"NKPT3_WK",InputFile,default=Nkpt3,comment="New interpolation grid for Wk.")
+         call parse_input_variable(gap_equation%wstep,"WSTEP",InputFile,default=(2*pi/Beta),comment="Bosonic frequency step of Wk (Different from 2pi/BETA only for T=0 inputs).")
+         call parse_input_variable(gap_equation%Wk_cutoff,"WK_CUTOFF",InputFile,default=wmatsMax,comment="Bosonic frequency cutoff for MODE_EL=static+dynamic calculations.")
+         call parse_input_variable(gap_equation%printmode_ph,"PRINT_KPH",InputFile,default="None",comment="Printing mode of the phononic Kernel. Available modes: E0, diag, surf, all. None to avoid.")
+         call parse_input_variable(gap_equation%printmode_el,"PRINT_KEL",InputFile,default="None",comment="Printing mode of the electronic Kernel. Available modes: E0, 0E, diag, surf, all. None to avoid.")
       endif
       !
       !Variables related to the impurity solver
