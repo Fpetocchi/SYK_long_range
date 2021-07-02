@@ -563,6 +563,12 @@ contains
          endif
          !
          deallocate(ParamVec)
+         if(AndPram%status.eq..true.) then
+           if(allocated(AndPram%Eloc))deallocate(AndPram%Eloc)
+           if(allocated(AndPram%Epsk))deallocate(AndPram%Epsk)
+           if(allocated(AndPram%Vk))deallocate(AndPram%Vk)
+           AndPram%status=.false.
+         endif
          !
       end subroutine fit_Delta
 
@@ -1123,6 +1129,8 @@ contains
          deallocate(funct_print,wmats)
          !
       endif
+      !
+      if (allocated(Moments)) deallocate(Moments)
       !
    end subroutine fit_moments
 

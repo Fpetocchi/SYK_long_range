@@ -643,7 +643,7 @@ contains
    !         kptsym(1:nkpt,nsym): k-point indices after performing a symmetry operation
    !         to each k: R(isym)*kpt(ik) = kpt(kptsym(ik,isym)) + gkptsym(1:3,ik,isym)
    !---------------------------------------------------------------------------!
-   subroutine calc_irredBZ(pathINPUT,nkpt3,nkpti,kptp,pkpt,nkstar,kpt_out)
+   subroutine calc_irredBZ(pathINPUT,nkpt3,nkpti,kptp,pkpt,nkstar,kpt_out,store)
       !
       use utils_misc
       implicit none
@@ -655,6 +655,7 @@ contains
       integer,allocatable,intent(out)       :: pkpt(:,:,:)
       real(8),allocatable,intent(out)       :: nkstar(:)
       real(8),allocatable,intent(out),optional :: kpt_out(:,:)
+      logical,intent(in),optional           :: store
       !
       type(symtype),allocatable             :: sym(:)
       integer                               :: Nsym,Nkpt,ik,k1,k2,k3
@@ -664,11 +665,14 @@ contains
       real(8),allocatable                   :: kpt(:,:),kptw(:)
       integer,allocatable                   :: symkpt(:),iarr(:),kptsym(:,:)!,gkptsym(:,:,:)
       integer                               :: unit
-      logical                               :: filexists,cond1,cond2,err
+      logical                               :: store_,filexists,cond1,cond2,err
       !
       !
       if(verbose)write(*,"(A)") "---- calc_irredBZ"
       !
+      !
+      store_=.false.
+      if(present(store))store_=store
       !
       !reading symmetry file from SPEX
       call inquireFile(reg(pathINPUT)//"sym.DAT",filexists)
@@ -852,20 +856,21 @@ contains
         nkstar(ik) = kptw(ik)*Nkpt
       enddo
       !
-      unit = free_unit()
-      open(unit,file=reg(pathINPUT)//"Kpoints_BZirred.DAT",form="formatted",status="unknown",position="rewind",action="write")
-      write(unit,"(I5,F20.10)") Nkpti,scale
-      do ik=1,Nkpti
-         write(unit,"(1I8,6F20.10)")ik,kpt(:,ik)*scale,count(iarr.eq.1)*1d0,kptw(ik),nkstar(ik)
-      enddo
-      close(unit)
+      write(*,"(A,I6)") "     Total number of k-points: ",Nkpt
+      write(*,"(A,I6)") "     Number of k-points in IBZ: ",Nkpti
+      if(store_)then
+         unit = free_unit()
+         open(unit,file=reg(pathINPUT)//"Kpoints_BZirred.DAT",form="formatted",status="unknown",position="rewind",action="write")
+         write(unit,"(I5,F20.10)") Nkpti,scale
+         do ik=1,Nkpti
+            write(unit,"(1I8,6F20.10)")ik,kpt(:,ik)*scale,count(iarr.eq.1)*1d0,kptw(ik),nkstar(ik)
+         enddo
+         close(unit)
+         write(*,"(A)") "     Written to file: "//reg(pathINPUT)//"Kpoints_BZirred.DAT"
+      endif
       !
       if(present(kpt_out))kpt_out=kpt
       deallocate(sym,kpt,symkpt,iarr,kptw)
-      !
-      write(*,"(A,I6)") "     Total number of k-points: ",Nkpt
-      write(*,"(A,I6)") "     Number of k-points in IBZ: ",Nkpti
-      write(*,"(A)") "     Written to file: "//reg(pathINPUT)//"Kpoints_BZirred.DAT"
       !
       !
    contains
@@ -2982,7 +2987,8 @@ contains
       integer                               :: k1,k2,k3,i,kk
       integer                               :: itria,ntria,itetra,unit
       integer                               :: pnt(4),kindx(8),Nkpt3_used(3)
-      real(8)                               :: rdum,dE,Ecube(8),Etetra(4)
+      real(8)                               :: rdum,dE,DoSnorm
+      real(8)                               :: Ecube(8),Etetra(4)
       real(8)                               :: f(4),atria(2),wtria(4,2)
       logical                               :: store_weights_
       integer,parameter                     :: tetra(4,6)=reshape( (/ 1,2,3,6, 5,3,6,7, 1,5,3,6, 8,6,7,2, 4,7,2,3, 8,4,7,2 /),(/ 4,6 /) )
@@ -2994,6 +3000,9 @@ contains
       Norb = size(Ek_orig,dim=1)
       Ngrid = size(Egrid)
       dE = abs(Egrid(10)-Egrid(9))
+      !
+      store_weights_=.false.
+      if(present(store_weights))store_weights_=store_weights
       !
       if(present(fact_intp))then
          !
@@ -3023,7 +3032,7 @@ contains
          Nkpt = product(Nkpt3_used)
          !
          !Generate K-points in the irreducible BZ
-         call calc_irredBZ(reg(pathINPUT),Nkpt3_used,Nkpti,kptp,pkpt,nkstar)
+         call calc_irredBZ(reg(pathINPUT),Nkpt3_used,Nkpti,kptp,pkpt,nkstar,store=store_weights_)
          !
          !allocate dispersion
          allocate(Ek(Norb,Nkpt));Ek=0d0
@@ -3145,8 +3154,6 @@ contains
       enddo
       deallocate(kptp,pkpt,nkstar,Ek)
       !
-      store_weights_=.false.
-      if(present(store_weights))store_weights_=store_weights
       if(present(pathOUTPUT).and.store_weights_)then
          unit = free_unit()
          open(unit,file=reg(pathOUTPUT)//"Weights_BZ.DAT",form="formatted",status="unknown",position="rewind",action="write")
@@ -3158,13 +3165,18 @@ contains
          close(unit)
       endif
       !
-      !Compute the DoS
+      !Compute the DoS - the grid might not be uniform
       allocate(DoS(Ngrid,Norb));DoS=0d0
       do iorb=1,Norb
+         DoSnorm=0d0
          do igrid=1,Ngrid
             DoS(igrid,iorb) = sum(weights(igrid,iorb,:))
+            if(igrid.ge.2)then
+               dE = abs(Egrid(igrid)-Egrid(igrid-1))
+               DoSnorm = DoSnorm + ( DoS(igrid-1,iorb)+DoS(igrid,iorb) ) * (dE/2d0)
+            endif
          enddo
-         write(*,"(A,F)") "     Normalization DoS_"//str(iorb)//":", sum(DoS(:,iorb))*dE
+         write(*,"(A,F)") "     Normalization DoS_"//str(iorb)//":", DoSnorm
       enddo
       if(present(pathOUTPUT))then
          unit = free_unit()

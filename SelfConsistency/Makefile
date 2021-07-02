@@ -5,8 +5,13 @@ SHELL := /bin/bash
 # Default vars------------------------------------------------------------------
 # Set ifort as a default if F90 is not set
 FC = ifort
-# Set compilation of the Group theory lib true by default
+# Set compilation of the Group theory lib. false by default
 GT = F
+# Add a suffix for the main executable. NULL by default
+SUFFIX =
+ifdef PAD
+  SUFFIX = $(PAD)
+endif
 
 
 #
@@ -46,7 +51,7 @@ endif
 DBGDIR = debug
 DBGFFLAGS += -module $(DBGDIR)
 # Main code
-DBGEXE = $(EXECDIR)/$(EXE)_debug
+DBGEXE = $(EXECDIR)/$(EXE)_debug$(SUFFIX)
 DBGOBJS = $(addprefix $(DBGDIR)/, $(OBJS))
 # Post-processing
 DBGEXE_PP = $(EXECDIR)/$(EXE_PP)_debug
@@ -64,7 +69,7 @@ endif
 RELDIR = release
 RELFFLAGS += -module $(RELDIR)
 # Main code
-RELEXE = $(EXECDIR)/$(EXE)
+RELEXE = $(EXECDIR)/$(EXE)$(SUFFIX)
 RELOBJS = $(addprefix $(RELDIR)/, $(OBJS))
 # Post-processing
 RELEXE_PP = $(EXECDIR)/$(EXE_PP)

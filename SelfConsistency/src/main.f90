@@ -17,6 +17,7 @@ program SelfConsistency
    integer                                  :: TimeStart
    integer                                  :: isite
    integer                                  :: Iteration,ItStart,Itend
+   character(len=20)                        :: InputFile="input.in.gap"
    !
    !
    !
@@ -25,9 +26,8 @@ program SelfConsistency
    !     READING INPUT FILE, INITIALIZING OMP, AND CHECK FOLDER STRUCTURE      !
    !---------------------------------------------------------------------------!
    call tick(TimeStart)
-   call read_InputFile("input.in")
-   !write(*,"(A,1I4)") "Setting Nthread:",Nthread
-   !call omp_set_num_threads(Nthread)
+   call read_InputFile(reg(InputFile))
+   write(*,"(A,1I4)") "Setting Nthread:",Nthread
    call printHeader()
    call initialize_DataStructure(ItStart,Itend)
    call initialize_Lattice(Crystal,ItStart)
@@ -37,6 +37,10 @@ program SelfConsistency
    !call read_FermionicField(S_Full,reg(ItFolder),"Sfull_w",Crystal%kpt)
    !call interpolateG2Path(S_Full,Crystal,reg(structure),Nkpt_path,reg(ItFolder))
    !stop
+
+   call calc_Tc(reg(ItFolder),gap_equation,Crystal)
+   stop
+
    !
    !
    !---------------------------------------------------------------------------!
@@ -69,18 +73,21 @@ program SelfConsistency
       call inquireFile(reg(ItFolder)//"Wlat_w.DAT",Wlat_exists,hardstop=.false.,verb=verbose)
       call inquireFile(reg(ItFolder)//"Sfull_w_k_s1.DAT",S_Full_exists,hardstop=.false.,verb=verbose) !add spin2 ?
       !
-      if(Wlat_exists.and.S_Full_exists)then !(*)
-         write(*,"(A)") new_line("A")//new_line("A")//"---- skipping Plat and Wlat calculations."
-         calc_Pk=.false.
-         calc_W=.false.
-         call read_BosonicField(Wlat,reg(ItFolder),"Wlat_w.DAT")
-      endif
       if(S_Full_exists)then
+         !
          write(*,"(A)") new_line("A")//new_line("A")//"---- skipping S_Full calculation."
          calc_Sigmak=.false.
          call AllocateFermionicField(S_Full,Crystal%Norb,Nmats,Nkpt=Crystal%Nkpt,Nsite=Nsite,Beta=Beta)
          call read_FermionicField(S_Full,reg(ItFolder),"Sfull_w",Crystal%kpt)
          if(print_path) call interpolateG2Path(S_Full,Crystal,reg(structure),Nkpt_path,reg(ItFolder))
+         !
+         if(Wlat_exists.and.(.not.gap_equation%status))then !(*)
+            write(*,"(A)") new_line("A")//new_line("A")//"---- skipping Plat and Wlat calculations."
+            calc_Pk=.false.
+            calc_W=.false.
+            call read_BosonicField(Wlat,reg(ItFolder),"Wlat_w.DAT")
+         endif
+         !
       endif
       !
       !
@@ -216,7 +223,13 @@ program SelfConsistency
       !
       !
       !Solve the Gap equation
-      if(gap_equation%status)call calc_Tc(reg(ItFolder),gap_equation,Crystal,Wlat,Sfull=S_Full)
+      if(gap_equation%status)then
+         if(gap_equation%HkRenorm)then
+            call calc_Tc(reg(ItFolder),gap_equation,Crystal,Wlat=Wlat,Sfull=S_Full)
+         else
+            call calc_Tc(reg(ItFolder),gap_equation,Crystal,Wlat=Wlat)
+         endif
+      endif
       call DeallocateBosonicField(Wlat)
       !
       !
@@ -258,7 +271,7 @@ program SelfConsistency
          write(*,*)
          write(*,"(A,1I3)") "     N_READ_IMP updated from "//str(Solver%TargetDensity,4)//" to "//str(get_Tier_occupation(densityGW,SiteOrbs),4)
          Solver%TargetDensity = get_Tier_occupation(densityGW,SiteOrbs)
-         call save_InputFile("input.in")
+         call save_InputFile(reg(InputFile))
       endif
       !
       !
@@ -284,7 +297,7 @@ program SelfConsistency
    write(*,"(A,F)") new_line("A")//new_line("A")//"Self-Consistency finished. Total timing (s): ",tock(TimeStart)
    !
    if(ItStart.ne.LastIteration)then
-      call execute_command_line(" cp used.input.in "//reg(ItFolder))
+      call execute_command_line(" cp used."//reg(InputFile)//" "//reg(ItFolder))
       if(solve_DMFT)call execute_command_line(" touch doSolver ")
    endif
    !
@@ -299,7 +312,9 @@ end program SelfConsistency
 !                                   COMMENTS                                   !
 !------------------------------------------------------------------------------!
 !
-!(*): the S_Full_exists flag is present because I need the full K dependent Wlat, which is never stored, in ordeer to compute S_Full
+!(*): the S_Full_exists flag is present because I need the full K dependent Wlat,
+!which is never stored, in ordeer to compute S_Full. If the gap equation is solved
+!then the calculation of the full k-dependent Wlat is required.
 !
 !(**): a bit redundant since there is no merge wihtout DMFT
 !

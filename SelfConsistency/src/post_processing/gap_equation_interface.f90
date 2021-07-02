@@ -13,7 +13,7 @@ subroutine calc_Tc(pathOUTPUT,Inputs,Lttc,Wlat,Sfull)
    character(len=*),intent(in)           :: pathOUTPUT
    type(SCDFT),intent(in)                :: Inputs
    type(Lattice),intent(in)              :: Lttc
-   type(BosonicField),intent(in)         :: Wlat
+   type(BosonicField),intent(in),optional   :: Wlat
    type(FermionicField),intent(in),optional :: Sfull
    !
    real(8)                               :: Beta_input,dE
@@ -24,50 +24,65 @@ subroutine calc_Tc(pathOUTPUT,Inputs,Lttc,Wlat,Sfull)
    complex(8),allocatable                :: Kel_stat(:,:),Kel_dyn(:,:)
    complex(8),allocatable                :: Z(:),K(:,:)
    complex(8),allocatable                :: Hk_used(:,:,:),SfullCorr(:,:,:)
+   character(len=255)                    :: printpath
    !
    integer                               :: iloop,iT
    real(8)                               :: Temp,Beta,errDelta
+   real(8)                               :: tanh_b,tanh_f
    real(8),allocatable                   :: ED(:)
    complex(8),allocatable                :: Delta(:),newDelta(:)
    logical                               :: converged
    !
    write(*,"(A)") new_line("A")//new_line("A")//"---- calc_Tc"
    !
+   wrealMax = 17d0
+   print *,"wrealMax",wrealMax
    !
-   call createDir(reg(pathOUTPUT)//"Gap_Equation",verb=verbose)
+   printpath=reg(pathOUTPUT)//"Gap_Equation/"
+   call createDir(reg(printpath),verb=verbose)
    !
    !Dimensionla checks
-   Beta_input = Wlat%Beta
    Norb = Lttc%Norb
    Nkpt = Lttc%Nkpt
-   if(.not.Wlat%status) stop "calc_Tc: Wlat not properly initialized."
-   if(Wlat%Nkpt.eq.Nkpt) stop "calc_Tc: Wlat has different number of k-points with respect to Lttc."
-   if(Wlat%Nbp.ne.(Norb**2)) stop "calc_Tc: Wlat has different orbital dimension with respect to Lttc."
    !
    allocate(Hk_used(Norb,Norb,Nkpt));Hk_used=czero
    Hk_used = Lttc%Hk
    !
-   !Adding the renormalization from the Self-energy at iw=0
-   if(present(Sfull))then
+   !Only needed if one wants to include electronic Kernels
+   if(present(Wlat))then
       !
-      if(.not.Sfull%status) stop "calc_Tc: Sfull not properly initialized."
-      if(Sfull%Nkpt.eq.Nkpt) stop "calc_Tc: Sfull has different number of k-points with respect to Lttc."
-      if(Sfull%Norb.ne.Norb) stop "calc_Tc: Sfull has different orbital dimension with respect to Lttc."
-      if(Sfull%Beta.ne.Beta_input) stop "calc_Tc: Sfull has different orbital dimension with respect to Wlat."
+      Beta_input = Wlat%Beta
       !
-      allocate(SfullCorr(Norb,Norb,Nkpt));SfullCorr=czero
-      SfullCorr = Sfull%wks(:,:,1,:,1)
-      do iorb=1,Norb
-         SfullCorr(iorb,iorb,:) = dcmplx(dreal(SfullCorr(iorb,iorb,:)),0d0)
-      enddo
+      if(.not.Wlat%status) stop "calc_Tc: Wlat not properly initialized."
+      if(Wlat%Nkpt.eq.Nkpt) stop "calc_Tc: Wlat has different number of k-points with respect to Lttc."
+      if(Wlat%Nbp.ne.(Norb**2)) stop "calc_Tc: Wlat has different orbital dimension with respect to Lttc."
       !
-      do ik=1,Nkpt
-         Hk_used(:,:,ik) = Lttc%Hk(:,:,ik) + SfullCorr(:,:,ik) - Sfull%mu*zeye(Norb)
-      enddo
-      deallocate(SfullCorr)
+      !Adding the renormalization from the Self-energy at iw=0
+      if(present(Sfull))then
+         !
+         if(.not.Sfull%status) stop "calc_Tc: Sfull not properly initialized."
+         if(Sfull%Nkpt.eq.Nkpt) stop "calc_Tc: Sfull has different number of k-points with respect to Lttc."
+         if(Sfull%Norb.ne.Norb) stop "calc_Tc: Sfull has different orbital dimension with respect to Lttc."
+         if(Sfull%Beta.ne.Beta_input) stop "calc_Tc: Sfull has different orbital dimension with respect to Wlat."
+         !
+         allocate(SfullCorr(Norb,Norb,Nkpt));SfullCorr=czero
+         SfullCorr = Sfull%wks(:,:,1,:,1)
+         do iorb=1,Norb
+            SfullCorr(iorb,iorb,:) = dcmplx(dreal(SfullCorr(iorb,iorb,:)),0d0)
+         enddo
+         !
+         do ik=1,Nkpt
+            Hk_used(:,:,ik) = Lttc%Hk(:,:,ik) + SfullCorr(:,:,ik) - Sfull%mu*zeye(Norb)
+         enddo
+         deallocate(SfullCorr)
+         !
+      endif
+      !
+   else
+      !
+      if (calc_Int_static.or.calc_Int_full) stop "calc_Tc: electronic Kernels requested but Wlat not provided."
       !
    endif
-   !
    !
    call Initialize_inputs(reg(pathINPUT),reg(Inputs%mode_ph),reg(Inputs%mode_el), &
                           Lttc%Nkpt3,Lttc%kpt,Hk_used,Nreal,wrealMax,             &
@@ -76,7 +91,7 @@ subroutine calc_Tc(pathOUTPUT,Inputs,Lttc,Wlat,Sfull)
    !
    Ngrid = size(Egrid)
    if(.not.associated(DoS_Hk))stop"calc_Tc: DoS_Hk pointer not associated."
-   call dump_Field_component(DoS_Hk,reg(pathOUTPUT)//"Gap_Equation","DoS_Hk.DAT",Egrid)
+   call dump_Field_component(DoS_Hk,reg(printpath),"DoS_Hk.DAT",Egrid)
    if (calc_Int_static.or.calc_Int_full) call dump_Field_component(DoS_Wk,reg(pathOUTPUT)//"Gap_Equation","DoS_Wk.DAT",Egrid)
    !
    !Allocating delta here so as to imply annealing between temperatures
@@ -90,8 +105,8 @@ subroutine calc_Tc(pathOUTPUT,Inputs,Lttc,Wlat,Sfull)
       Beta = 1d0 / (Temp*K2eV)
       !
       write(*,"(A)") new_line("A")//"     ...................................."//new_line("A")
-      write(*,"(A,1F12.5)") "        T:",Temp
-      write(*,"(A,1F12.5)") "     Beta:",Beta
+      write(*,"(A,1F15.3)") "     T:   ",Temp
+      write(*,"(A,1F15.3)") "     Beta:",Beta
       !
       write(*,"(A)") new_line("A")//"     Computing Kernels."
       allocate(Z(Ngrid));Z=0d0
@@ -102,8 +117,8 @@ subroutine calc_Tc(pathOUTPUT,Inputs,Lttc,Wlat,Sfull)
          allocate(Zph(Ngrid));Zph=0d0
          allocate(Kph(Ngrid,Ngrid));Kph=0d0
          !
-         call calc_Zph_e(Beta,Egrid,DoS_Hk,Zph,mode=reg(Inputs%mode_Zph),printZpath=reg(pathOUTPUT))
-         call calc_Kph_e(Beta,Egrid,DoS_Hk,Kph,printKpath=reg(pathOUTPUT),printmode=reg(Inputs%printmode_ph))
+         call calc_Zph_e(Beta,Egrid,DoS_Hk,Zph,mode=reg(Inputs%mode_Zph),printZpath=reg(printpath))
+         call calc_Kph_e(Beta,Egrid,DoS_Hk,Kph,printKpath=reg(printpath),printmode=reg(Inputs%printmode_ph))
          !
          Z = Z + Zph
          K = K + Kph
@@ -112,13 +127,15 @@ subroutine calc_Tc(pathOUTPUT,Inputs,Lttc,Wlat,Sfull)
          !
       endif
       !
+      !stop
+      !
       if(calc_Int_static)then
          !
          if(.not.associated(weights_Wk))stop"calc_Tc: weights_Wk pointer not associated."
          allocate(Kel_stat(Ngrid,Ngrid));Kel_stat=0d0
          !
          call store_Wk(Wlat%screened,Beta,eps)
-         call calc_Kel_stat_e(Egrid,weights_Wk,Kel_stat,printKpath=reg(pathOUTPUT),printmode=reg(Inputs%printmode_el))
+         call calc_Kel_stat_e(Beta,Egrid,weights_Wk,Kel_stat,printKpath=reg(printpath),printmode=reg(Inputs%printmode_el))
          !
          K = K + Kel_stat
          !
@@ -131,8 +148,8 @@ subroutine calc_Tc(pathOUTPUT,Inputs,Lttc,Wlat,Sfull)
          allocate(Kel_dyn(Ngrid,Ngrid));Kel_dyn=0d0
          !
          call store_Wk(Wlat%screened,Beta,Inputs%Wk_cutoff)
-         call calc_Kel_stat_e(Egrid,weights_Wk,Kel_stat,printKpath=reg(pathOUTPUT),printmode=reg(Inputs%printmode_el))
-         call calc_Kel_dyn_e(Beta,Egrid,weights_Wk,Inputs%wstep,Kel_dyn,printKpath=reg(pathOUTPUT),printmode=reg(Inputs%printmode_el))
+         call calc_Kel_stat_e(Beta,Egrid,weights_Wk,Kel_stat,printKpath=reg(printpath),printmode=reg(Inputs%printmode_el))
+         call calc_Kel_dyn_e(Beta,Egrid,weights_Wk,Inputs%wstep,Kel_dyn,printKpath=reg(printpath),printmode=reg(Inputs%printmode_el))
          !
          K = K + Kel_stat + Kel_dyn
          !
@@ -165,8 +182,13 @@ subroutine calc_Tc(pathOUTPUT,Inputs,Lttc,Wlat,Sfull)
               !
               dE=Egrid(iE2)-Egrid(iE2-1)
               !
-              Kint = Kint - dE * ( DoS_Hk(iE2-1) * K(iE1,iE2-1) * (tanh(Beta/2d0*ED(iE2-1))/ED(iE2-1)) * Delta(iE2-1) + &
-                                   DoS_Hk(iE2)   * K(iE1,iE2)   * (tanh(Beta/2d0*ED(iE2))  /ED(iE2)  ) * Delta(iE2)   )
+              tanh_b = Beta/2d0
+              tanh_f = Beta/2d0
+              if(ED(iE2-1).ne.0d0) tanh_b = (tanh(Beta/2d0*ED(iE2-1))/ED(iE2-1))
+              if(ED(iE2-1).ne.0d0) tanh_f = (tanh(Beta/2d0*ED(iE2))  /ED(iE2)  )
+              !
+              Kint = Kint - dE * ( DoS_Hk(iE2-1) * K(iE1,iE2-1) * tanh_b * Delta(iE2-1) + &
+                                   DoS_Hk(iE2)   * K(iE1,iE2)   * tanh_f * Delta(iE2)   )
               !
             enddo
             Kint = Kint/2d0 !From Trapezoid integration
@@ -178,15 +200,16 @@ subroutine calc_Tc(pathOUTPUT,Inputs,Lttc,Wlat,Sfull)
          !$OMP BARRIER
          !$OMP END PARALLEL
          !
+         write(*,"(A,1E20.10)")"     Delta: ",maxval(abs(dble(Delta)),abs(Egrid).lt.1d-2)
+         !
          errDelta = maxval(abs(Delta-newDelta))
          if(errDelta.lt.Inputs%DeltaErr)then
-            write(*,"(A,1E20.10,A3,1E20.10)")"     error on Delta:",errDelta," < ",Inputs%DeltaErr
-            write(*,"(A,1E20.10)")           "     Delta         :",maxval(abs(dble(Delta)),abs(Egrid).lt.1d-2)
+            write(*,"(A,1E20.10,A3,1E20.10)")"     error on Delta: ",errDelta," < ",Inputs%DeltaErr
             write(*,"(A)")"     Delta is converged moving to next Temperature."
             converged=.true.
             exit SCloop
          else
-            write(*,"(A,1E20.10,A3,1E20.10)")"     error on Delta:",errDelta," > ",Inputs%DeltaErr
+            write(*,"(A,1E20.10,A3,1E20.10)")"     error on Delta: ",errDelta," > ",Inputs%DeltaErr
          endif
          !
       enddo SCloop !iloop

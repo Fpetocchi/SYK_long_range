@@ -241,6 +241,7 @@ contains
    !PURPOSE: Read the Inputfile
    !---------------------------------------------------------------------------!
    subroutine read_InputFile(InputFile)
+      use omp_lib
       use utils_misc
       use parameters
       implicit none
@@ -260,13 +261,17 @@ contains
       endif
       if(reg(CalculationType).eq."DMFT+dynU")Solver%retarded=1!.true.
       !
-      !OMP parallelization. Done in the submit file via export OMP_NUM_THREADS.
+      !OMP parallelization.
       !call execute_command_line(" lscpu | grep 'CPU(s):       ' | awk '{print $2}' > Nthread.used ")
       !call execute_command_line(" grep '#$ -pe' submit          | awk '{print $4}' > Nthread.used ")
       !unit=free_unit()
       !open(unit,file=reg("Nthread.used"),form="formatted",action="read",status="old")
       !read(unit,*)Nthread
       !close(unit)
+      !call omp_set_num_threads(Nthread) this was called in the main.
+      !
+      !Done in the submit file via " export OMP_NUM_THREADS= # "
+      Nthread = omp_get_max_threads()
       !
       !K-points
       call add_separator()
@@ -526,6 +531,7 @@ contains
          call parse_input_variable(gap_equation%loops,"LOOPS",InputFile,default=100,comment="Maximum number of iteration per each Temperature point.")
          call parse_input_variable(gap_equation%DeltaErr,"DELTA_ERR",InputFile,default=1d-5,comment="Convergence threshold on Delta.")
          call parse_input_variable(gap_equation%DeltaInit,"DELTA_INIT",InputFile,default=0.1d0,comment="Initial guess for Delta[eV].")
+         call parse_input_variable(gap_equation%HkRenorm,"HK_RENORM",InputFile,default=.true.,comment="Correct the LDA DoS with the self-energy matrix at zero frequency.")
          call parse_input_variable(gap_equation%mode_ph,"MODE_PH",InputFile,default="None",comment="Whether to include phononic Kernel. Available modes: Elk, QEspresso. None to avoid.")
          call parse_input_variable(gap_equation%mode_Zph,"MODE_ZPH",InputFile,default="symrenorm",comment="Low energy limit of Zph. Available modes: symrenorm, sym, asym.")
          call parse_input_variable(gap_equation%mode_el,"MODE_EL",InputFile,default="None",comment="Whether to include electronic Kernel. Available modes: static, static+dynamic. None to avoid.")
