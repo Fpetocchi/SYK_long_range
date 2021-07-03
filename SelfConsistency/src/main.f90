@@ -17,7 +17,7 @@ program SelfConsistency
    integer                                  :: TimeStart
    integer                                  :: isite
    integer                                  :: Iteration,ItStart,Itend
-   character(len=20)                        :: InputFile="input.in.gap"
+   character(len=20)                        :: InputFile="input.in" ! "input.in.gap"
    !
    !
    !
@@ -38,8 +38,8 @@ program SelfConsistency
    !call interpolateG2Path(S_Full,Crystal,reg(structure),Nkpt_path,reg(ItFolder))
    !stop
 
-   call calc_Tc(reg(ItFolder),gap_equation,Crystal)
-   stop
+   !call calc_Tc(reg(ItFolder),gap_equation,Crystal)
+   !stop
 
    !
    !
@@ -143,7 +143,7 @@ program SelfConsistency
          !
          !Hartree shift between G0W0 and LDA
          allocate(VH(Crystal%Norb,Crystal%Norb));VH=czero
-         if(.not.Hmodel)call calc_VH(VH,densityLDA,densityDMFT,Ulat) !call calc_VH(VH,densityLDA,Glat,Ulat)
+         if(.not.Hmodel) call calc_VH(VH,densityLDA,Glat,Ulat) !call calc_VH(VH,densityLDA,densityDMFT,Ulat) !call calc_VH(VH,densityLDA,Glat,Ulat)
          call dump_Matrix(VH,reg(ItFolder)//"VH.DAT")
          if(.not.VH_use)then
             VH=czero

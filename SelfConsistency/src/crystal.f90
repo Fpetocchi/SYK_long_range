@@ -2990,12 +2990,18 @@ contains
       real(8)                               :: rdum,dE,DoSnorm
       real(8)                               :: Ecube(8),Etetra(4)
       real(8)                               :: f(4),atria(2),wtria(4,2)
-      logical                               :: store_weights_
+      logical                               :: filexists,store_weights_
       integer,parameter                     :: tetra(4,6)=reshape( (/ 1,2,3,6, 5,3,6,7, 1,5,3,6, 8,6,7,2, 4,7,2,3, 8,4,7,2 /),(/ 4,6 /) )
       !
       !
       if(verbose)write(*,"(A)") "---- tetrahedron_integration"
       !
+      !
+      call inquireFile(reg(pathINPUT)//"sym.DAT",filexists,hardstop=.false.)
+      if(.not.filexists)then
+         write(*,"(A)") "     Tetrahedron integration skipped because "//reg(pathINPUT)//"sym.DAT was not found."
+         return
+      endif
       !
       Norb = size(Ek_orig,dim=1)
       Ngrid = size(Egrid)
