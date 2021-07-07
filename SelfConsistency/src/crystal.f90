@@ -856,8 +856,8 @@ contains
         nkstar(ik) = kptw(ik)*Nkpt
       enddo
       !
-      write(*,"(A,I6)") "     Total number of k-points: ",Nkpt
-      write(*,"(A,I6)") "     Number of k-points in IBZ: ",Nkpti
+      write(*,"(A,I)") "     Total number of k-points: ",Nkpt
+      write(*,"(A,I)") "     Number of k-points in IBZ: ",Nkpti
       if(store_)then
          unit = free_unit()
          open(unit,file=reg(pathINPUT)//"Kpoints_BZirred.DAT",form="formatted",status="unknown",position="rewind",action="write")
@@ -2999,7 +2999,7 @@ contains
       !
       call inquireFile(reg(pathINPUT)//"sym.DAT",filexists,hardstop=.false.)
       if(.not.filexists)then
-         write(*,"(A)") "     Tetrahedron integration skipped because "//reg(pathINPUT)//"sym.DAT was not found."
+         write(*,"(A)") "     Tetrahedron integration skipped."
          return
       endif
       !

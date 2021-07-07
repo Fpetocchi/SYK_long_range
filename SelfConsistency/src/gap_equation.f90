@@ -10,6 +10,16 @@ module gap_equation
    !
 
    !---------------------------------------------------------------------------!
+   !PURPOSE: Module interfaces
+   !---------------------------------------------------------------------------!
+   interface interpFermi
+      module procedure interpFermi_Z_d
+      module procedure interpFermi_Z_z
+      module procedure interpFermi_K_d
+      module procedure interpFermi_K_z
+   end interface interpFermi
+
+   !---------------------------------------------------------------------------!
    !PURPOSE: Module variables
    !---------------------------------------------------------------------------!
    real(8),allocatable,private              :: omega(:)                         !Phonon energy on logarithmic grid
@@ -626,7 +636,7 @@ contains
             case("E0")
                !
                unit = free_unit()
-               open(unit,file=reg(printKpath)//"Kel_stat_e_E0_T"//str(Temp)//".DAT",form="formatted",status="unknown",position="rewind",action="write")
+               open(unit,file=reg(printKpath)//"Kel_stat_e_E0_T"//str(Temp,2)//".DAT",form="formatted",status="unknown",position="rewind",action="write")
                do iE=1,Ngrid
                   write(unit,"(3F20.10)")Egrid(iE),dreal(Kel_stat_e(iE,Efermi_ndx)),dimag(Kel_stat_e(iE,Efermi_ndx))
                enddo
@@ -635,7 +645,7 @@ contains
             case("0E")
                !
                unit = free_unit()
-               open(unit,file=reg(printKpath)//"Kel_stat_e_0E_T"//str(Temp)//".DAT",form="formatted",status="unknown",position="rewind",action="write")
+               open(unit,file=reg(printKpath)//"Kel_stat_e_0E_T"//str(Temp,2)//".DAT",form="formatted",status="unknown",position="rewind",action="write")
                do iE=1,Ngrid
                   write(unit,"(3F20.10)")Egrid(iE),dreal(Kel_stat_e(Efermi_ndx,iE)),dimag(Kel_stat_e(Efermi_ndx,iE))
                enddo
@@ -644,7 +654,7 @@ contains
             case("diag")
                !
                unit = free_unit()
-               open(unit,file=reg(printKpath)//"Kel_stat_e_diag_T"//str(Temp)//".DAT",form="formatted",status="unknown",position="rewind",action="write")
+               open(unit,file=reg(printKpath)//"Kel_stat_e_diag_T"//str(Temp,2)//".DAT",form="formatted",status="unknown",position="rewind",action="write")
                do iE=1,Ngrid
                   write(unit,"(3F20.10)")Egrid(iE),dreal(Kel_stat_e(iE,iE)),dimag(Kel_stat_e(iE,iE))
                enddo
@@ -653,7 +663,7 @@ contains
             case("surf")
                !
                unit = free_unit()
-               open(unit,file=reg(printKpath)//"Kel_stat_e_surf_R_T"//str(Temp)//".DAT",form="formatted",status="unknown",position="rewind",action="write")
+               open(unit,file=reg(printKpath)//"Kel_stat_e_surf_R_T"//str(Temp,2)//".DAT",form="formatted",status="unknown",position="rewind",action="write")
                do iE1=1,Ngrid
                   do iE2=1,Ngrid
                      write(unit,"(3F20.10)")Egrid(iE1),Egrid(iE2),dreal(Kel_stat_e(iE1,iE2))
@@ -662,7 +672,7 @@ contains
                enddo
                close(unit)
                unit = free_unit()
-               open(unit,file=reg(printKpath)//"Kel_stat_e_surf_I_T"//str(Temp)//".DAT",form="formatted",status="unknown",position="rewind",action="write")
+               open(unit,file=reg(printKpath)//"Kel_stat_e_surf_I_T"//str(Temp,2)//".DAT",form="formatted",status="unknown",position="rewind",action="write")
                do iE1=1,Ngrid
                   do iE2=1,Ngrid
                      write(unit,"(3F20.10)")Egrid(iE1),Egrid(iE2),dimag(Kel_stat_e(iE1,iE2))
@@ -674,25 +684,25 @@ contains
             case("all")
                !
                unit = free_unit()
-               open(unit,file=reg(printKpath)//"Kel_stat_e_E0_T"//str(Temp)//".DAT",form="formatted",status="unknown",position="rewind",action="write")
+               open(unit,file=reg(printKpath)//"Kel_stat_e_E0_T"//str(Temp,2)//".DAT",form="formatted",status="unknown",position="rewind",action="write")
                do iE=1,Ngrid
                   write(unit,"(3F20.10)")Egrid(iE),dreal(Kel_stat_e(iE,Efermi_ndx)),dimag(Kel_stat_e(iE,Efermi_ndx))
                enddo
                close(unit)
                unit = free_unit()
-               open(unit,file=reg(printKpath)//"Kel_stat_e_0E_T"//str(Temp)//".DAT",form="formatted",status="unknown",position="rewind",action="write")
+               open(unit,file=reg(printKpath)//"Kel_stat_e_0E_T"//str(Temp,2)//".DAT",form="formatted",status="unknown",position="rewind",action="write")
                do iE=1,Ngrid
                   write(unit,"(3F20.10)")Egrid(iE),dreal(Kel_stat_e(Efermi_ndx,iE)),dimag(Kel_stat_e(Efermi_ndx,iE))
                enddo
                close(unit)
                unit = free_unit()
-               open(unit,file=reg(printKpath)//"Kel_stat_e_diag_T"//str(Temp)//".DAT",form="formatted",status="unknown",position="rewind",action="write")
+               open(unit,file=reg(printKpath)//"Kel_stat_e_diag_T"//str(Temp,2)//".DAT",form="formatted",status="unknown",position="rewind",action="write")
                do iE=1,Ngrid
                   write(unit,"(3F20.10)")Egrid(iE),dreal(Kel_stat_e(iE,iE)),dimag(Kel_stat_e(iE,iE))
                enddo
                close(unit)
                unit = free_unit()
-               open(unit,file=reg(printKpath)//"Kel_stat_e_surf_R_T"//str(Temp)//".DAT",form="formatted",status="unknown",position="rewind",action="write")
+               open(unit,file=reg(printKpath)//"Kel_stat_e_surf_R_T"//str(Temp,2)//".DAT",form="formatted",status="unknown",position="rewind",action="write")
                do iE1=1,Ngrid
                   do iE2=1,Ngrid
                      write(unit,"(3F20.10)")Egrid(iE1),Egrid(iE2),dreal(Kel_stat_e(iE1,iE2))
@@ -701,7 +711,7 @@ contains
                enddo
                close(unit)
                unit = free_unit()
-               open(unit,file=reg(printKpath)//"Kel_stat_e_surf_I_T"//str(Temp)//".DAT",form="formatted",status="unknown",position="rewind",action="write")
+               open(unit,file=reg(printKpath)//"Kel_stat_e_surf_I_T"//str(Temp,2)//".DAT",form="formatted",status="unknown",position="rewind",action="write")
                do iE1=1,Ngrid
                   do iE2=1,Ngrid
                      write(unit,"(3F20.10)")Egrid(iE1),Egrid(iE2),dimag(Kel_stat_e(iE1,iE2))
@@ -739,13 +749,11 @@ contains
       !
       integer                               :: Efermi_ndx,unit
       integer                               :: iE,iE1,iE2,ix,Ngrid
-
       integer                               :: iorb,jorb,Norb
       integer                               :: ik,Nkpt,Nmats
       integer                               :: wndx_a,wndx_b
       real(8)                               :: DoSnorm,dE,E1,E2,dx,fact,Temp
       real(8)                               :: s_p,s_m,w_p,w_m
-      complex(8)                            :: m,q
       complex(8)                            :: Kel_dyn_x,Kel_dyn_e_p,Kel_dyn_e_m
       real(8),allocatable                   :: DoS(:),wmats(:),xgrid(:)
       complex(8),allocatable                :: Wk_pvt(:,:,:,:)
@@ -902,18 +910,8 @@ contains
       !$OMP END PARALLEL
       deallocate(DoS,wmats,xgrid)
       !
-      !Filling the lines
-      do iE=1,Ngrid
-         !
-         m = ( Kel_dyn_e(iE,Efermi_ndx-1)-Kel_dyn_e(iE,Efermi_ndx-2) ) / ( Egrid(Efermi_ndx-1)-Egrid(Efermi_ndx-2) )
-         q = Kel_dyn_e(iE,Efermi_ndx-2)
-         Kel_dyn_e(iE,Efermi_ndx) = m * ( 0d0-Egrid(Efermi_ndx-2) ) + q
-         !
-         m = ( Kel_dyn_e(Efermi_ndx-1,iE)-Kel_dyn_e(Efermi_ndx-2,iE) ) / ( Egrid(Efermi_ndx-1)-Egrid(Efermi_ndx-2) )
-         q = Kel_dyn_e(Efermi_ndx-2,iE)
-         Kel_dyn_e(Efermi_ndx,iE) = m * ( 0d0-Egrid(Efermi_ndx-2) ) + q
-         !
-      enddo
+      !Filling the Fermi lines
+      call interpFermi(Kel_dyn_e,Egrid,Efermi_ndx)
       !
       call cpu_time(finish)
       write(*,"(A,F)") "     Calculation of static electronic Kernel cpu timing:", finish-start
@@ -929,7 +927,7 @@ contains
             case("E0")
                !
                unit = free_unit()
-               open(unit,file=reg(printKpath)//"Kel_dyn_e_E0_T"//str(Temp)//".DAT",form="formatted",status="unknown",position="rewind",action="write")
+               open(unit,file=reg(printKpath)//"Kel_dyn_e_E0_T"//str(Temp,2)//".DAT",form="formatted",status="unknown",position="rewind",action="write")
                do iE=1,Ngrid
                   write(unit,"(3F20.10)")Egrid(iE),dreal(Kel_dyn_e(iE,Efermi_ndx)),dimag(Kel_dyn_e(iE,Efermi_ndx))
                enddo
@@ -938,7 +936,7 @@ contains
             case("0E")
                !
                unit = free_unit()
-               open(unit,file=reg(printKpath)//"Kel_dyn_e_0E_T"//str(Temp)//".DAT",form="formatted",status="unknown",position="rewind",action="write")
+               open(unit,file=reg(printKpath)//"Kel_dyn_e_0E_T"//str(Temp,2)//".DAT",form="formatted",status="unknown",position="rewind",action="write")
                do iE=1,Ngrid
                   write(unit,"(3F20.10)")Egrid(iE),dreal(Kel_dyn_e(Efermi_ndx,iE)),dimag(Kel_dyn_e(Efermi_ndx,iE))
                enddo
@@ -947,7 +945,7 @@ contains
             case("diag")
                !
                unit = free_unit()
-               open(unit,file=reg(printKpath)//"Kel_dyn_e_diag_T"//str(Temp)//".DAT",form="formatted",status="unknown",position="rewind",action="write")
+               open(unit,file=reg(printKpath)//"Kel_dyn_e_diag_T"//str(Temp,2)//".DAT",form="formatted",status="unknown",position="rewind",action="write")
                do iE=1,Ngrid
                   write(unit,"(3F20.10)")Egrid(iE),dreal(Kel_dyn_e(iE,iE)),dimag(Kel_dyn_e(iE,iE))
                enddo
@@ -956,7 +954,7 @@ contains
             case("surf")
                !
                unit = free_unit()
-               open(unit,file=reg(printKpath)//"Kel_dyn_e_surf_R_T"//str(Temp)//".DAT",form="formatted",status="unknown",position="rewind",action="write")
+               open(unit,file=reg(printKpath)//"Kel_dyn_e_surf_R_T"//str(Temp,2)//".DAT",form="formatted",status="unknown",position="rewind",action="write")
                do iE1=1,Ngrid
                   do iE2=1,Ngrid
                      write(unit,"(3F20.10)")Egrid(iE1),Egrid(iE2),dreal(Kel_dyn_e(iE1,iE2))
@@ -965,7 +963,7 @@ contains
                enddo
                close(unit)
                unit = free_unit()
-               open(unit,file=reg(printKpath)//"Kel_dyn_e_surf_I_T"//str(Temp)//".DAT",form="formatted",status="unknown",position="rewind",action="write")
+               open(unit,file=reg(printKpath)//"Kel_dyn_e_surf_I_T"//str(Temp,2)//".DAT",form="formatted",status="unknown",position="rewind",action="write")
                do iE1=1,Ngrid
                   do iE2=1,Ngrid
                      write(unit,"(3F20.10)")Egrid(iE1),Egrid(iE2),dimag(Kel_dyn_e(iE1,iE2))
@@ -977,25 +975,25 @@ contains
             case("all")
                !
                unit = free_unit()
-               open(unit,file=reg(printKpath)//"Kel_dyn_e_E0_T"//str(Temp)//".DAT",form="formatted",status="unknown",position="rewind",action="write")
+               open(unit,file=reg(printKpath)//"Kel_dyn_e_E0_T"//str(Temp,2)//".DAT",form="formatted",status="unknown",position="rewind",action="write")
                do iE=1,Ngrid
                   write(unit,"(3F20.10)")Egrid(iE),dreal(Kel_dyn_e(iE,Efermi_ndx)),dimag(Kel_dyn_e(iE,Efermi_ndx))
                enddo
                close(unit)
                unit = free_unit()
-               open(unit,file=reg(printKpath)//"Kel_dyn_e_0E_T"//str(Temp)//".DAT",form="formatted",status="unknown",position="rewind",action="write")
+               open(unit,file=reg(printKpath)//"Kel_dyn_e_0E_T"//str(Temp,2)//".DAT",form="formatted",status="unknown",position="rewind",action="write")
                do iE=1,Ngrid
                   write(unit,"(3F20.10)")Egrid(iE),dreal(Kel_dyn_e(Efermi_ndx,iE)),dimag(Kel_dyn_e(Efermi_ndx,iE))
                enddo
                close(unit)
                unit = free_unit()
-               open(unit,file=reg(printKpath)//"Kel_dyn_e_diag_T"//str(Temp)//".DAT",form="formatted",status="unknown",position="rewind",action="write")
+               open(unit,file=reg(printKpath)//"Kel_dyn_e_diag_T"//str(Temp,2)//".DAT",form="formatted",status="unknown",position="rewind",action="write")
                do iE=1,Ngrid
                   write(unit,"(3F20.10)")Egrid(iE),dreal(Kel_dyn_e(iE,iE)),dimag(Kel_dyn_e(iE,iE))
                enddo
                close(unit)
                unit = free_unit()
-               open(unit,file=reg(printKpath)//"Kel_dyn_e_surf_R_T"//str(Temp)//".DAT",form="formatted",status="unknown",position="rewind",action="write")
+               open(unit,file=reg(printKpath)//"Kel_dyn_e_surf_R_T"//str(Temp,2)//".DAT",form="formatted",status="unknown",position="rewind",action="write")
                do iE1=1,Ngrid
                   do iE2=1,Ngrid
                      write(unit,"(3F20.10)")Egrid(iE1),Egrid(iE2),dreal(Kel_dyn_e(iE1,iE2))
@@ -1004,7 +1002,7 @@ contains
                enddo
                close(unit)
                unit = free_unit()
-               open(unit,file=reg(printKpath)//"Kel_dyn_e_surf_I_T"//str(Temp)//".DAT",form="formatted",status="unknown",position="rewind",action="write")
+               open(unit,file=reg(printKpath)//"Kel_dyn_e_surf_I_T"//str(Temp,2)//".DAT",form="formatted",status="unknown",position="rewind",action="write")
                do iE1=1,Ngrid
                   do iE2=1,Ngrid
                      write(unit,"(3F20.10)")Egrid(iE1),Egrid(iE2),dimag(Kel_dyn_e(iE1,iE2))
@@ -1147,11 +1145,14 @@ contains
       !$OMP END PARALLEL
       deallocate(a2F_tmp,a2F_int)
       !
+      !Filling the Fermi line
+      call interpFermi(Zph_e,Egrid,Efermi_ndx)
+      !
       write(*,"(A,1E20.10)")"     lambda(Zph): ",Zph_e(Efermi_ndx)
       !
       if(present(printZpath))then
          unit = free_unit()
-         open(unit,file=reg(printZpath)//"Zph_e_T"//str(Temp)//".DAT",form="formatted",status="unknown",position="rewind",action="write")
+         open(unit,file=reg(printZpath)//"Zph_e_T"//str(Temp,2)//".DAT",form="formatted",status="unknown",position="rewind",action="write")
          do iE=1,Ngrid
             write(unit,"(2F20.10)")Egrid(iE),Zph_e(iE)
          enddo
@@ -1236,6 +1237,9 @@ contains
       !$OMP END PARALLEL
       deallocate(a2F_tmp)
       !
+      !Filling the Fermi lines
+      call interpFermi(Kph_e,Egrid,Efermi_ndx)
+      !
       write(*,"(2(A,1E20.10))")"     lambda(Kph): ",-Kph_e(Efermi_ndx,Efermi_ndx)*DoS_Fermi,"    DoS(E=0): ",DoS_Fermi
       !
       if(present(printKpath).and.(reg(printmode).ne."None"))then
@@ -1249,7 +1253,7 @@ contains
             case("E0")
                !
                unit = free_unit()
-               open(unit,file=reg(printKpath)//"Kph_e_E0_T"//str(Temp)//".DAT",form="formatted",status="unknown",position="rewind",action="write")
+               open(unit,file=reg(printKpath)//"Kph_e_E0_T"//str(Temp,2)//".DAT",form="formatted",status="unknown",position="rewind",action="write")
                do iE=1,Ngrid
                   write(unit,"(2F20.10)")Egrid(iE),Kph_e(iE,Efermi_ndx)
                enddo
@@ -1258,16 +1262,16 @@ contains
             case("diag")
                !
                unit = free_unit()
-               open(unit,file=reg(printKpath)//"Kph_e_diag_T"//str(Temp)//".DAT",form="formatted",status="unknown",position="rewind",action="write")
+               open(unit,file=reg(printKpath)//"Kph_e_diag_T"//str(Temp,2)//".DAT",form="formatted",status="unknown",position="rewind",action="write")
                do iE=1,Ngrid
-                  write(unit,"(2F20.10)")Egrid(iE),Kph_e(iE,iE)*(-DoS_Fermi)  !TEST
+                  write(unit,"(2F20.10)")Egrid(iE),Kph_e(iE,iE)
                enddo
                close(unit)
                !
             case("surf")
                !
                unit = free_unit()
-               open(unit,file=reg(printKpath)//"Kph_e_surf_T"//str(Temp)//".DAT",form="formatted",status="unknown",position="rewind",action="write")
+               open(unit,file=reg(printKpath)//"Kph_e_surf_T"//str(Temp,2)//".DAT",form="formatted",status="unknown",position="rewind",action="write")
                do iE1=1,Ngrid
                   do iE2=1,Ngrid
                      write(unit,"(3F20.10)")Egrid(iE1),Egrid(iE2),Kph_e(iE1,iE2)
@@ -1279,19 +1283,19 @@ contains
             case("all")
                !
                unit = free_unit()
-               open(unit,file=reg(printKpath)//"Kph_e_E0_T"//str(Temp)//".DAT",form="formatted",status="unknown",position="rewind",action="write")
+               open(unit,file=reg(printKpath)//"Kph_e_E0_T"//str(Temp,2)//".DAT",form="formatted",status="unknown",position="rewind",action="write")
                do iE=1,Ngrid
                   write(unit,"(2F20.10)")Egrid(iE),Kph_e(iE,Efermi_ndx)
                enddo
                close(unit)
                unit = free_unit()
-               open(unit,file=reg(printKpath)//"Kph_e_diag_T"//str(Temp)//".DAT",form="formatted",status="unknown",position="rewind",action="write")
+               open(unit,file=reg(printKpath)//"Kph_e_diag_T"//str(Temp,2)//".DAT",form="formatted",status="unknown",position="rewind",action="write")
                do iE=1,Ngrid
                   write(unit,"(2F20.10)")Egrid(iE),Kph_e(iE,iE)
                enddo
                close(unit)
                unit = free_unit()
-               open(unit,file=reg(printKpath)//"Kph_e_surf_T"//str(Temp)//".DAT",form="formatted",status="unknown",position="rewind",action="write")
+               open(unit,file=reg(printKpath)//"Kph_e_surf_T"//str(Temp,2)//".DAT",form="formatted",status="unknown",position="rewind",action="write")
                do iE1=1,Ngrid
                   do iE2=1,Ngrid
                      write(unit,"(3F20.10)")Egrid(iE1),Egrid(iE2),Kph_e(iE1,iE2)
@@ -1312,8 +1316,8 @@ contains
    !PURPOSE: Compute the smoothing function for asymmetric DoS
    !---------------------------------------------------------------------------!
    double precision function psmooth(E,Beta)
-       double precision,intent(in) :: E,Beta
-       psmooth = tanh(5d2*Beta*E)**4
+      double precision,intent(in) :: E,Beta
+      psmooth = tanh(5d2*Beta*E)**4
    end function psmooth
 
 
@@ -1465,5 +1469,244 @@ contains
       !
    end function Iprime
 
+
+   !---------------------------------------------------------------------------!
+   !PURPOSE: linear fit of the energy dependent Kernel along Fermi levels lines
+   !---------------------------------------------------------------------------!
+   subroutine interpFermi_Z_d(Z,E,iE0,shift)
+      use utils_misc
+      implicit none
+      real(8),intent(inout)           :: Z(:)
+      real(8),intent(in)              :: E(:)
+      integer,intent(in)              :: iE0
+      integer,intent(in),optional     :: shift
+      !
+      integer                         :: iE,NE,shift_
+      complex(8)                      :: yA,yB,xA,xB
+      complex(8)                      :: y_N,y_S
+      !
+      !
+      if(verbose)write(*,"(A)") "---- interpFermi_Z_d"
+      !
+      !
+      NE = size(E)
+      if(E(iE0).ne.0d0) stop "interpFermi_Z_d: provided index does not correspond to Fermi level."
+      call assert_shape(Z,[NE],"interpFermi_Z_d","Z")
+      !
+      shift_=0
+      if(present(shift))shift_=shift
+      do iE=1,NE
+         !
+         !linear fit of the (E,0) line - south
+         yA = Z(iE0-1-shift_) ; xA = Egrid(iE0-1-shift_)
+         yB = Z(iE0-2-shift_) ; xB = Egrid(iE0-2-shift_)
+         y_S = ( yA - yB )/( xA - xB ) * ( 0d0 - xB ) + yB
+         !
+         !linear fit of the (E,0) line - north
+         yA = Z(iE0+1+shift_) ; xA = Egrid(iE0+1+shift_)
+         yB = Z(iE0+2+shift_) ; xB = Egrid(iE0+2+shift_)
+         y_N = ( yA - yB )/( xA - xB ) * ( 0d0 - xB ) + yB
+         !
+         Z(iE0) = ( y_S + y_N )/2d0
+         !
+      enddo
+      !
+   end subroutine interpFermi_Z_d
+   !
+   subroutine interpFermi_Z_z(Z,E,iE0,shift)
+      use utils_misc
+      implicit none
+      complex(8),intent(inout)        :: Z(:)
+      real(8),intent(in)              :: E(:)
+      integer,intent(in)              :: iE0
+      integer,intent(in),optional     :: shift
+      !
+      integer                         :: iE,NE,shift_
+      complex(8)                      :: yA,yB,xA,xB
+      complex(8)                      :: y_N,y_S
+      !
+      !
+      if(verbose)write(*,"(A)") "---- interpFermi_Z_z"
+      !
+      !
+      NE = size(E)
+      if(E(iE0).ne.0d0) stop "interpFermi_Z_z: provided index does not correspond to Fermi level."
+      call assert_shape(Z,[NE],"interpFermi_Z_z","Z")
+      !
+      shift_=0
+      if(present(shift))shift_=shift
+      do iE=1,NE
+         !
+         !linear fit of the (E,0) line - south
+         yA = Z(iE0-1-shift_) ; xA = Egrid(iE0-1-shift_)
+         yB = Z(iE0-2-shift_) ; xB = Egrid(iE0-2-shift_)
+         y_S = ( yA - yB )/( xA - xB ) * ( 0d0 - xB ) + yB
+         !
+         !linear fit of the (E,0) line - north
+         yA = Z(iE0+1+shift_) ; xA = Egrid(iE0+1+shift_)
+         yB = Z(iE0+2+shift_) ; xB = Egrid(iE0+2+shift_)
+         y_N = ( yA - yB )/( xA - xB ) * ( 0d0 - xB ) + yB
+         !
+         Z(iE0) = ( y_S + y_N )/2d0
+         !
+      enddo
+      !
+   end subroutine interpFermi_Z_z
+   !
+   subroutine interpFermi_K_d(K,E,iE0,shift)
+      use utils_misc
+      implicit none
+      real(8),intent(inout)           :: K(:,:)
+      real(8),intent(in)              :: E(:)
+      integer,intent(in)              :: iE0
+      integer,intent(in),optional     :: shift
+      !
+      integer                         :: iE,NE,shift_
+      complex(8)                      :: yA,yB,xA,xB
+      complex(8)                      :: y_N,y_S,y_E,y_W
+      !
+      !
+      if(verbose)write(*,"(A)") "---- interpFermi_K_d"
+      !
+      !
+      NE = size(E)
+      if(E(iE0).ne.0d0) stop "interpFermi_K_d: provided index does not correspond to Fermi level."
+      call assert_shape(K,[NE,NE],"interpFermi_K_d","K")
+      !
+      shift_=0
+      if(present(shift))shift_=shift
+      do iE=1,NE
+         !
+         if(iE.eq.iE0)cycle
+         !
+         !linear fit of the (E,0) line - south
+         yA = K(iE,iE0-1-shift_) ; xA = Egrid(iE0-1-shift_)
+         yB = K(iE,iE0-2-shift_) ; xB = Egrid(iE0-2-shift_)
+         y_S = ( yA - yB )/( xA - xB ) * ( 0d0 - xB ) + yB
+         !
+         !linear fit of the (E,0) line - north
+         yA = K(iE,iE0+1+shift_) ; xA = Egrid(iE0+1+shift_)
+         yB = K(iE,iE0+2+shift_) ; xB = Egrid(iE0+2+shift_)
+         y_N = ( yA - yB )/( xA - xB ) * ( 0d0 - xB ) + yB
+         !
+         K(iE,iE0) = ( y_S + y_N )/2d0
+         !
+         !
+         !linear fit of the (0,E) line - west
+         yA = K(iE0-1-shift_,iE) ; xA = Egrid(iE0-1-shift_)
+         yB = K(iE0-2-shift_,iE) ; xB = Egrid(iE0-2-shift_)
+         y_W = ( yA - yB )/( xA - xB ) * ( 0d0 - xB ) + yB
+         !
+         !linear fit of the (0,E) line - east
+         yA = K(iE0+1+shift_,iE) ; xA = Egrid(iE0+1+shift_)
+         yB = K(iE0+2+shift_,iE) ; xB = Egrid(iE0+2+shift_)
+         y_E = ( yA - yB )/( xA - xB ) * ( 0d0 - xB ) + yB
+         !
+         K(iE0,iE) = ( y_W + y_E )/2d0
+         !
+         !
+      enddo
+      !
+      !linear fit of the (0,0) point - south
+      yA = K(iE0,iE0-1-shift_) ; xA = Egrid(iE0-1-shift_)
+      yB = K(iE0,iE0-2-shift_) ; xB = Egrid(iE0-2-shift_)
+      y_S = ( yA - yB )/( xA - xB ) * ( 0d0 - xB ) + yB
+      !
+      !linear fit of the (0,0) point - north
+      yA = K(iE0,iE0+1+shift_) ; xA = Egrid(iE0+1+shift_)
+      yB = K(iE0,iE0+2+shift_) ; xB = Egrid(iE0+2+shift_)
+      y_N = ( yA - yB )/( xA - xB ) * ( 0d0 - xB ) + yB
+      !
+      !linear fit of the (0,0) point - west
+      yA = K(iE0-1-shift_,iE0) ; xA = Egrid(iE0-1-shift_)
+      yB = K(iE0-2-shift_,iE0) ; xB = Egrid(iE0-2-shift_)
+      y_W = ( yA - yB )/( xA - xB ) * ( 0d0 - xB ) + yB
+      !
+      !linear fit of the (0,0) point - east
+      yA = K(iE0+1+shift_,iE0) ; xA = Egrid(iE0+1+shift_)
+      yB = K(iE0+2+shift_,iE0) ; xB = Egrid(iE0+2+shift_)
+      y_E = ( yA - yB )/( xA - xB ) * ( 0d0 - xB ) + yB
+      !
+      K(iE0,iE0) = ( y_S + y_N + y_W + y_E )/4d0
+      !
+   end subroutine interpFermi_K_d
+   !
+   subroutine interpFermi_K_z(K,E,iE0,shift)
+      use utils_misc
+      implicit none
+      complex(8),intent(inout)        :: K(:,:)
+      real(8),intent(in)              :: E(:)
+      integer,intent(in)              :: iE0
+      integer,intent(in),optional     :: shift
+      !
+      integer                         :: iE,NE,shift_
+      complex(8)                      :: yA,yB,xA,xB
+      complex(8)                      :: y_N,y_S,y_E,y_W
+      !
+      !
+      if(verbose)write(*,"(A)") "---- interpFermi_K_z"
+      !
+      !
+      NE = size(E)
+      if(E(iE0).ne.0d0) stop "interpFermi_K_z: provided index does not correspond to Fermi level."
+      call assert_shape(K,[NE,NE],"interpFermi_K_z","K")
+      !
+      shift_=0
+      if(present(shift))shift_=shift
+      do iE=1,NE
+         !
+         if(iE.eq.iE0)cycle
+         !
+         !linear fit of the (E,0) line - south
+         yA = K(iE,iE0-1-shift_) ; xA = Egrid(iE0-1-shift_)
+         yB = K(iE,iE0-2-shift_) ; xB = Egrid(iE0-2-shift_)
+         y_S = ( yA - yB )/( xA - xB ) * ( 0d0 - xB ) + yB
+         !
+         !linear fit of the (E,0) line - north
+         yA = K(iE,iE0+1+shift_) ; xA = Egrid(iE0+1+shift_)
+         yB = K(iE,iE0+2+shift_) ; xB = Egrid(iE0+2+shift_)
+         y_N = ( yA - yB )/( xA - xB ) * ( 0d0 - xB ) + yB
+         !
+         K(iE,iE0) = ( y_S + y_N )/2d0
+         !
+         !
+         !linear fit of the (0,E) line - west
+         yA = K(iE0-1-shift_,iE) ; xA = Egrid(iE0-1-shift_)
+         yB = K(iE0-2-shift_,iE) ; xB = Egrid(iE0-2-shift_)
+         y_W = ( yA - yB )/( xA - xB ) * ( 0d0 - xB ) + yB
+         !
+         !linear fit of the (0,E) line - east
+         yA = K(iE0+1+shift_,iE) ; xA = Egrid(iE0+1+shift_)
+         yB = K(iE0+2+shift_,iE) ; xB = Egrid(iE0+2+shift_)
+         y_E = ( yA - yB )/( xA - xB ) * ( 0d0 - xB ) + yB
+         !
+         K(iE0,iE) = ( y_W + y_E )/2d0
+         !
+         !
+      enddo
+      !
+      !linear fit of the (0,0) point - south
+      yA = K(iE0,iE0-1-shift_) ; xA = Egrid(iE0-1-shift_)
+      yB = K(iE0,iE0-2-shift_) ; xB = Egrid(iE0-2-shift_)
+      y_S = ( yA - yB )/( xA - xB ) * ( 0d0 - xB ) + yB
+      !
+      !linear fit of the (0,0) point - north
+      yA = K(iE0,iE0+1+shift_) ; xA = Egrid(iE0+1+shift_)
+      yB = K(iE0,iE0+2+shift_) ; xB = Egrid(iE0+2+shift_)
+      y_N = ( yA - yB )/( xA - xB ) * ( 0d0 - xB ) + yB
+      !
+      !linear fit of the (0,0) point - west
+      yA = K(iE0-1-shift_,iE0) ; xA = Egrid(iE0-1-shift_)
+      yB = K(iE0-2-shift_,iE0) ; xB = Egrid(iE0-2-shift_)
+      y_W = ( yA - yB )/( xA - xB ) * ( 0d0 - xB ) + yB
+      !
+      !linear fit of the (0,0) point - east
+      yA = K(iE0+1+shift_,iE0) ; xA = Egrid(iE0+1+shift_)
+      yB = K(iE0+2+shift_,iE0) ; xB = Egrid(iE0+2+shift_)
+      y_E = ( yA - yB )/( xA - xB ) * ( 0d0 - xB ) + yB
+      !
+      K(iE0,iE0) = ( y_S + y_N + y_W + y_E )/4d0
+      !
+   end subroutine interpFermi_K_z
 
 end module gap_equation

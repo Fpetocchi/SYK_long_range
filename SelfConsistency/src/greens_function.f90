@@ -814,7 +814,7 @@ contains
       !
       !print G(w) in diagonal and Wannier basis---------------------------------
       allocate(axis(Nreal));axis=0d0
-      axis = linspace(-wrealMax,+wrealMax,Nreal)
+      axis = linspace(-wrealMax*1.5d0,+wrealMax*1.5d0,Nreal)
       allocate(zeta(Norb,Norb,Nreal));zeta=czero
       do iwan1=1,Norb
          do iw=1,Nreal

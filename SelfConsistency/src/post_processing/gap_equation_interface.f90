@@ -30,13 +30,11 @@ subroutine calc_Tc(pathOUTPUT,Inputs,Lttc,Wlat,Sfull)
    real(8)                               :: Temp,Beta,errDelta
    real(8)                               :: tanh_b,tanh_f
    real(8),allocatable                   :: ED(:)
-   complex(8),allocatable                :: Delta(:),newDelta(:)
+   complex(8),allocatable                :: Delta(:),oldDelta(:),newDelta(:)
    logical                               :: converged
    !
    write(*,"(A)") new_line("A")//new_line("A")//"---- calc_Tc"
    !
-   wrealMax = 17d0
-   print *,"wrealMax",wrealMax
    !
    printpath=reg(pathOUTPUT)//"Gap_Equation/"
    call createDir(reg(printpath),verb=verbose)
@@ -44,6 +42,7 @@ subroutine calc_Tc(pathOUTPUT,Inputs,Lttc,Wlat,Sfull)
    !Dimensionla checks
    Norb = Lttc%Norb
    Nkpt = Lttc%Nkpt
+   write(*,"(A,1F15.3)") "     W:   ",wrealMax
    !
    allocate(Hk_used(Norb,Norb,Nkpt));Hk_used=czero
    Hk_used = Lttc%Hk
@@ -96,6 +95,9 @@ subroutine calc_Tc(pathOUTPUT,Inputs,Lttc,Wlat,Sfull)
    !
    !Allocating delta here so as to imply annealing between temperatures
    allocate(Delta(Ngrid));Delta = Inputs%DeltaInit
+   do iE=1,Ngrid
+      if(abs(Egrid(iE)).gt.(0.1d0*wrealMax))Delta(iE)=czero
+   enddo
    !
    !TEMPERATURE LOOP
    write(*,"(A)") new_line("A")//"---- Starting temperature scan"
@@ -109,8 +111,8 @@ subroutine calc_Tc(pathOUTPUT,Inputs,Lttc,Wlat,Sfull)
       write(*,"(A,1F15.3)") "     Beta:",Beta
       !
       write(*,"(A)") new_line("A")//"     Computing Kernels."
-      allocate(Z(Ngrid));Z=0d0
-      allocate(K(Ngrid,Ngrid));K=0d0
+      allocate(Z(Ngrid));Z=czero
+      allocate(K(Ngrid,Ngrid));K=czero
       !
       if(calc_phonons)then
          !
@@ -126,8 +128,6 @@ subroutine calc_Tc(pathOUTPUT,Inputs,Lttc,Wlat,Sfull)
          deallocate(Zph,Kph)
          !
       endif
-      !
-      !stop
       !
       if(calc_Int_static)then
          !
@@ -159,10 +159,10 @@ subroutine calc_Tc(pathOUTPUT,Inputs,Lttc,Wlat,Sfull)
       !
       write(*,"(A)") new_line("A")//"     Solving gap equation."
       allocate(ED(Ngrid));ED = czero
+      allocate(newDelta(Ngrid));newDelta = czero
+      allocate(oldDelta(Ngrid));oldDelta = Delta
       converged=.false.
       SCloop: do iloop=1,Inputs%loops
-         !
-         write(*,"(A)")"     self-consistency loop #"//str(iloop)//" starting parallel."
          !
          !$OMP PARALLEL DEFAULT(PRIVATE),&
          !$OMP SHARED(Ngrid,Egrid,Beta,DoS_Hk,Z,K,ED,Delta,newDelta)
@@ -173,6 +173,7 @@ subroutine calc_Tc(pathOUTPUT,Inputs,Lttc,Wlat,Sfull)
          enddo
          !$OMP END DO
          !
+         newDelta = czero
          !$OMP DO SCHEDULE(DYNAMIC)
          do iE1=1,Ngrid
             !
@@ -185,13 +186,12 @@ subroutine calc_Tc(pathOUTPUT,Inputs,Lttc,Wlat,Sfull)
               tanh_b = Beta/2d0
               tanh_f = Beta/2d0
               if(ED(iE2-1).ne.0d0) tanh_b = (tanh(Beta/2d0*ED(iE2-1))/ED(iE2-1))
-              if(ED(iE2-1).ne.0d0) tanh_f = (tanh(Beta/2d0*ED(iE2))  /ED(iE2)  )
+              if(ED(iE2).ne.0d0)   tanh_f = (tanh(Beta/2d0*ED(iE2))  /ED(iE2)  )
               !
-              Kint = Kint - dE * ( DoS_Hk(iE2-1) * K(iE1,iE2-1) * tanh_b * Delta(iE2-1) + &
-                                   DoS_Hk(iE2)   * K(iE1,iE2)   * tanh_f * Delta(iE2)   )
+              Kint = Kint + ( DoS_Hk(iE2-1) * K(iE1,iE2-1) * tanh_b * Delta(iE2-1) + &
+                              DoS_Hk(iE2)   * K(iE1,iE2)   * tanh_f * Delta(iE2)   ) * (dE/2d0)
               !
             enddo
-            Kint = Kint/2d0 !From Trapezoid integration
             !
             newDelta(iE1) = -Z(iE1)*Delta(iE1) - 0.5d0*Kint
             !
@@ -200,23 +200,27 @@ subroutine calc_Tc(pathOUTPUT,Inputs,Lttc,Wlat,Sfull)
          !$OMP BARRIER
          !$OMP END PARALLEL
          !
-         write(*,"(A,1E20.10)")"     Delta: ",maxval(abs(dble(Delta)),abs(Egrid).lt.1d-2)
-         !
+         !Convergence check
          errDelta = maxval(abs(Delta-newDelta))
          if(errDelta.lt.Inputs%DeltaErr)then
-            write(*,"(A,1E20.10,A3,1E20.10)")"     error on Delta: ",errDelta," < ",Inputs%DeltaErr
+            write(*,"(2(A,1E20.10),A3,1E20.10)")"     loop #"//str(iloop)//" Delta: ",maxval(abs(dble(newDelta)),abs(Egrid).lt.1d-2),"   error: ",errDelta," < ",Inputs%DeltaErr
             write(*,"(A)")"     Delta is converged moving to next Temperature."
             converged=.true.
+            Delta = (1d0-Inputs%DeltaMix)*newDelta + Inputs%DeltaMix*oldDelta
+            oldDelta = Delta
             exit SCloop
          else
-            write(*,"(A,1E20.10,A3,1E20.10)")"     error on Delta: ",errDelta," > ",Inputs%DeltaErr
+            write(*,"(2(A,1E20.10),A3,1E20.10)")"     loop #"//str(iloop)//" Delta: ",maxval(abs(dble(newDelta)),abs(Egrid).lt.1d-2),"   error: ",errDelta," > ",Inputs%DeltaErr
          endif
          !
+         Delta = (1d0-Inputs%DeltaMix)*newDelta + Inputs%DeltaMix*oldDelta
+         oldDelta = Delta
+         !
       enddo SCloop !iloop
-      deallocate(ED,Z,K)
+      deallocate(ED,Z,K,newDelta,oldDelta)
       !
       if(.not.converged)write(*,"(A)")"     Warning: Delta is not converged."
-      call dump_Field_component(newDelta,reg(pathOUTPUT)//"Gap_Equation","Delta_T"//str(Temp)//".DAT",Egrid)
+      call dump_Field_component(Delta,reg(pathOUTPUT)//"Gap_Equation/","Delta_T"//str(Temp,2)//".DAT",Egrid)
       !
    enddo !iT
    !

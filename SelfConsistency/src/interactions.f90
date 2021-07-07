@@ -70,7 +70,7 @@ contains
       use utils_misc
       use utils_fields
       use linalg, only : zeye, inv
-      use input_vars, only : HandleGammaPoint, Umodel, look4dens
+      use input_vars, only : HandleGammaPoint, Umodel !, look4dens
       implicit none
       !
       type(BosonicField),intent(inout)      :: Wmats

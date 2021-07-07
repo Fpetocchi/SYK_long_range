@@ -531,6 +531,7 @@ contains
          call parse_input_variable(gap_equation%loops,"LOOPS",InputFile,default=100,comment="Maximum number of iteration per each Temperature point.")
          call parse_input_variable(gap_equation%DeltaErr,"DELTA_ERR",InputFile,default=1d-5,comment="Convergence threshold on Delta.")
          call parse_input_variable(gap_equation%DeltaInit,"DELTA_INIT",InputFile,default=0.1d0,comment="Initial guess for Delta[eV].")
+         call parse_input_variable(gap_equation%DeltaMix,"DELTA_MIX",InputFile,default=0.5d0,comment="Fraction of the old iteration Delta.")
          call parse_input_variable(gap_equation%HkRenorm,"HK_RENORM",InputFile,default=.true.,comment="Correct the LDA DoS with the self-energy matrix at zero frequency.")
          call parse_input_variable(gap_equation%mode_ph,"MODE_PH",InputFile,default="None",comment="Whether to include phononic Kernel. Available modes: Elk, QEspresso. None to avoid.")
          call parse_input_variable(gap_equation%mode_Zph,"MODE_ZPH",InputFile,default="symrenorm",comment="Low energy limit of Zph. Available modes: symrenorm, sym, asym.")
