@@ -17,7 +17,7 @@ program SelfConsistency
    integer                                  :: TimeStart
    integer                                  :: isite
    integer                                  :: Iteration,ItStart,Itend
-   character(len=20)                        :: InputFile="input.in.gap" ! "input.in.gap"
+   character(len=20)                        :: InputFile="input.in" ! "input.in.gap"
    !
    !
    !
