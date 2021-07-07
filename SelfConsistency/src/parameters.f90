@@ -228,5 +228,18 @@ module parameters
       logical                               :: status=.false.
    end type SCDFT
 
+   !---------------------------------------------------------------------------!
+   !PURPOSE: container for the heterostructure variables
+   !---------------------------------------------------------------------------!
+   type Heterostructures
+      integer                               :: Nslab=1
+      integer                               :: Norb=0
+      integer                               :: Explicit(2)=[1,1]
+      real(8)                               :: GlobalTzRatio
+      integer,allocatable                   :: ExplicitTzPos(:)
+      real(8),allocatable                   :: ExplicitTzRatios(:)
+      logical                               :: status=.false.
+   end type Heterostructures
+
 
 end module parameters

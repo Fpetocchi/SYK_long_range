@@ -82,7 +82,7 @@ module module_container
    clear_MatrixElements                     ,&
    isReal                                   ,&
    duplicate                                ,&
-   loc2imp,imp2loc                          ,&
+   loc2imp,imp2loc,Expand2Nsite             ,&
    symmetrize_GW                            ,&
    symmetrize_imp                           ,&
    MergeFields                              ,&

@@ -70,6 +70,11 @@ module input_vars
       character(len=20),allocatable         :: args(:)
    end type input_variable
 
+   type input_comment
+      integer                               :: Pos
+      character(:),allocatable              :: descriptor
+   end type input_comment
+
    type MpiEnv
       integer                               :: MpiComm
       integer                               :: MpiErr
@@ -82,11 +87,11 @@ module input_vars
    !PURPOSE: Module variables
    !---------------------------------------------------------------------------!
    type(input_list),private                 :: default_list
+   type(input_comment),allocatable,private  :: comments(:)
    character(len=255),private               :: p_buffer
    character(len=7),private                 :: file_status
-   integer,parameter,private                :: pos_comment=46
+   integer,parameter,private                :: pos_comment=60
    logical,private                          :: IOinput=.true.
-   integer,allocatable,private              :: commentPos(:)
    !
    character(len=256),public                :: CalculationType
    !
@@ -102,6 +107,7 @@ module input_vars
    real(8),public                           :: LatticeVec(3,3)
    integer,public                           :: Norb_model
    real(8),public,allocatable               :: hopping(:)
+   type(Heterostructures),public            :: Hetero
    !
    !Site and Orbital space
    integer,public                           :: Nsite
@@ -246,13 +252,15 @@ contains
       use parameters
       implicit none
       character(len=*)                      :: InputFile
-      integer                               :: isite,iset,iph,iorb,NtauFguess
+      integer                               :: isite,iset,iph,iorb,NtauFguess,NtzExplicit
       integer,allocatable                   :: tmpOrbs(:)
       real(8),allocatable                   :: tmpCF(:)
+
       !integer                               :: unit
       !
       write(LOGfile,"(A)") new_line("A")//"Reading InputFile"//new_line("A")
       !
+      call add_separator("Calculation type")
       call parse_input_variable(CalculationType,"CALC_TYPE",InputFile,default="GW+EDMFT",comment="Calculation type. Avalibale: G0W0, scGW, DMFT+statU, DMFT+dynU, EDMFT, GW+EDMFT.")
       if((reg(CalculationType).eq."G0W0").or.(reg(CalculationType).eq."scGW")) solve_DMFT=.false.
       if((reg(CalculationType).eq."EDMFT").or.(reg(CalculationType).eq."GW+EDMFT")) then
@@ -274,7 +282,7 @@ contains
       Nthread = omp_get_max_threads()
       !
       !K-points
-      call add_separator()
+      call add_separator("K-points and hopping")
       call parse_input_variable(Nkpt3,"NKPT3",InputFile,default=[8,8,8],comment="Number of K-points per dimension.")
       call parse_input_variable(UseXepsKorder,"XEPS_KORDER",InputFile,default=.true.,comment="Flag to use the K-point ordering of XEPS.DAT if present.")
       !
@@ -287,12 +295,31 @@ contains
          call parse_input_variable(Norb_model,"NORB_MODEL",InputFile,default=1,comment="Orbtilas in the model H(k).")
          allocate(hopping(Norb_model))
          call parse_input_variable(hopping,"HOPPING",InputFile,comment="Magnitude of the nearest neighbor hopping integral for each orbital in the model H(k).")
+         !
+         !Heterostructured setup
+         call parse_input_variable(Hetero%status,"HETERO",InputFile,default=.false.,comment="Flag to build an heterostructured setup from model H(k).")
+         if(Hetero%status)then
+            Hetero%Norb = Norb_model
+            call parse_input_variable(Hetero%Nslab,"NSLAB",InputFile,default=20,comment="Global dimension fo the slab.")
+            call parse_input_variable(Hetero%Explicit,"EXPLICIT",InputFile,default=[1,10],comment="Index boundaries of the impurities explicitly solved.")
+            call parse_input_variable(Hetero%GlobalTzRatio,"GLOB_TZ_RATIO",InputFile,default=0.1d0,comment="Ratio between the in-plane and out-of-plane hopping for all the slabs. Orbital structure is mantained.")
+            call parse_input_variable(NtzExplicit,"EXPLICIT_TZ",InputFile,default=0,comment="Number of slabs with out-of-plane hopping ratio different from the global one.")
+            if(NtzExplicit.gt.0)then
+               allocate(Hetero%ExplicitTzPos(NtzExplicit));Hetero%ExplicitTzPos=0
+               allocate(Hetero%ExplicitTzRatios(NtzExplicit));Hetero%ExplicitTzRatios=0d0
+               call parse_input_variable(Hetero%ExplicitTzPos,"EXPLICIT_TZ_POS",InputFile,comment="Indexes of the slabs with out-of-plane hopping ratio different from the global one.")
+               call parse_input_variable(Hetero%ExplicitTzRatios,"EXPLICIT_TZ_RATIOS",InputFile,comment="Values of the out-of-plane hopping ratios different from the global one.")
+            endif
+         endif
       endif
       !
       !Site and Orbital space
-      call add_separator()
+      call add_separator("Sites and orbitals")
       call append_to_input_list(Nspin,"NSPIN","Number of spins. User cannot set this as its fixed to 2.")
       call parse_input_variable(Nsite,"NSITE",InputFile,default=1,comment="Number of inequivalent sites in the lattice.")
+      if(Hetero%status)then
+         if(Nsite.ne.(Hetero%Explicit(2)-Hetero%Explicit(1)+1)) stop "read_InputFile: The number of explitit slabs does not match with NSITE."
+      endif
       call parse_input_variable(ExpandImpurity,"EXPAND",InputFile,default=.false.,comment="Flag to use a single impurity solution for all the sites of the lattice. Only indexes for site 1 readed.")
       call parse_input_variable(RotateHloc,"ROTATE_F",InputFile,default=.false.,comment="Solve the Fermionic impurity problem in the basis where H(R=0) is diagonal.")
       call parse_input_variable(RotateUloc,"ROTATE_B",InputFile,default=RotateHloc,comment="Solve the Bosonic impurity problem in the basis where H(R=0) is diagonal.")
@@ -343,7 +370,7 @@ contains
       endif
       !
       !Equivalent lattice indexes
-      call add_separator()
+      call add_separator("Symmetrizations")
       call parse_input_variable(EqvGWndx%para,"PARAMAGNET",InputFile,default=1,comment="If =1 spin symmetry is enforced if =0 spin is left free.")
       call parse_input_variable(EqvGWndx%hseed,"H_SEED",InputFile,default=0d0,comment="Seed to break spin symmetry (persistent if non zero).")
       call parse_input_variable(sym_mode,"SYM_MODE",InputFile,default=2,comment="If =1 only the lattice orbitals will be symmetrized, if =2 also the corresponding n(tau) inside the solver, if =3 only n(tau). Ineffective if =0 or if EQV_SETS=0.")
@@ -364,7 +391,7 @@ contains
       if(EqvGWndx%para.gt.0)EqvGWndx%S=.true.
       !
       !Imaginary time and frequency meshes
-      call add_separator()
+      call add_separator("Temperature and frequency meshes")
       call parse_input_variable(Beta,"BETA",InputFile,default=10.d0,comment="Inverse temperature in 1/eV.")
       call parse_input_variable(wmatsMax,"MAX_WMATS",InputFile,default=100.d0,comment="Maximum value of the Matsubara frequency mesh.")
       Nmats = int(Beta*wmatsMax/(2d0*pi))
@@ -383,7 +410,7 @@ contains
       call parse_input_variable(PadeWlimit,"WPADE",InputFile,default=10,comment="Number of Matsubara frequencies used in pade' analytic continuation. If its =0 Pade will not be performed.")
       !
       !Density lookup
-      call add_separator()
+      call add_separator("Density lookup")
       call parse_input_variable(look4dens%mu,"MU",InputFile,default=0d0,comment="Chemical potential.")
       call parse_input_variable(look4dens%TargetDensity,"N_READ_LAT",InputFile,default=0d0,comment="Target density on the lattice. Lookup is switched on to this value if its >0d0. Otherwise mu will be kept fixed.")
       if(ExpandImpurity)then
@@ -400,7 +427,7 @@ contains
       call parse_input_variable(look4dens%muTime,"MU_TIME",InputFile,default=0.5d0,comment="Minutes of solver runtime in the density lookup.")
       !
       !Interaction variables
-      call add_separator()
+      call add_separator("Interaction")
       call parse_input_variable(UfullStructure,"U_FULL",InputFile,default=.true.,comment="Flag to use all the off-diagonal components of SPEX Ucrpa or only the physical ones.")
       call parse_input_variable(Umodel,"U_MODEL",InputFile,default=.false.,comment="Flag to build a model interaction.")
       call parse_input_variable(Uspex,"U_SPEX",InputFile,default=.true.,comment="Flag to read SPEX Ucrpa.")
@@ -412,6 +439,7 @@ contains
       if(Umodel)then
          call parse_input_variable(Uaa,"UAA",InputFile,default=5d0,comment="Interaction between same orbital and opposite spin electrons (orbital independent).")
          if(Norb_model.gt.1)then
+            !cahnge this if you want to have them orbital dependent
             call parse_input_variable(Uab,"UAB",InputFile,default=4d0,comment="Interaction between different orbital and opposite spin electrons (orbital independent).")
             call parse_input_variable(J,"JH",InputFile,default=0.5d0,comment="Hund's coupling (orbital independent).")
          endif
@@ -446,7 +474,7 @@ contains
       endif
       !
       !Double counting types, divergencies, scaling coefficients
-      call add_separator()
+      call add_separator("Double counting and rescaling coeff")
       call parse_input_variable(VH_type,"VH_TYPE",InputFile,default="Ustatic_SPEX",comment="Hartree term mismatch between GoWo and scGW. Available: Ubare, Ustatic, Ubare_SPEX(V_nodiv.DAT required), Ustatic_SPEX(V_nodiv.DAT required).")
       if(Umodel)VH_type="Ustatic"
       call parse_input_variable(VH_use,"VH_USE",InputFile,default=.true.,comment="Flag to use the Hartree term correction between Tier-III and Tier-II, which is printed in PATH_INPUT even if not used.")
@@ -481,7 +509,7 @@ contains
       call parse_input_variable(ReplaceTail_Simp,"WTAIL_SIMP",InputFile,default=80d0,comment="Frequency value above which the tail of Simp is replaced. If =0d0 the tail is not replaced. Only via moments (automatic limit to NFIT=5).")
       !
       !Paths and loop variables
-      call add_separator()
+      call add_separator("Paths")
       call parse_input_variable(pathINPUT,"PATH_INPUT",InputFile,default="InputFiles",comment="Folder within cwd where to look for input files.")
       call parse_input_variable(pathINPUTtr,"PATH_INPUT_TR",InputFile,default="Iterations",comment="Folder within cwd where to save input files after analytic continuation to the Matsubara axis.")
       call parse_input_variable(pathDATA,"PATH_DATA",InputFile,default="Iterations",comment="Folder within cwd where to store calculation data.")
@@ -495,7 +523,7 @@ contains
       call parse_input_variable(dump_Sigmak,"PRINT_SIGMAK",InputFile,default=.false.,comment="Print the full k-dependent self-energy (binfmt) at each iteration (always optional).")
       !
       !Post-processing variables
-      call add_separator()
+      call add_separator("Post processing")
       call parse_input_variable(structure,"STRUCTURE",InputFile,default="cubic",comment="Available structures: triangular, cubic_[2,3], fcc, bcc, hex, tetragonal, orthorhombic_[1,2], None to avoid.")
       call parse_input_variable(path_funct,"PATH_FUNCT",InputFile,default="None",comment="Print interacting fields on high-symmetry points. Available fields: G=Green's function, S=self-energy, GS=both. None to avoid.")
       call parse_input_variable(Nkpt_path,"NK_PATH",InputFile,default=50,comment="Number of segments between two hig-symmetry Kpoints.")
@@ -504,7 +532,7 @@ contains
       KKcutoff=abs(KKcutoff)
       !
       !Variables for the matching beta
-      call add_separator()
+      call add_separator("Matching beta")
       call parse_input_variable(Beta_Match%status,"MATCH_BETA",InputFile,default=.false.,comment="Interpolate to new Beta.")
       if(Beta_Match%status)then
          !
@@ -523,7 +551,7 @@ contains
       endif
       !
       !Variables for the gap equation
-      call add_separator()
+      call add_separator("Gap equation")
       call parse_input_variable(gap_equation%status,"CALC_TC",InputFile,default=.false.,comment="Solve the gap equation to compute the critical Temperature.")
       if(gap_equation%status)then
          call parse_input_variable(gap_equation%Tbounds,"T_BOUNDS",InputFile,default=[0.1d0,10d0],comment="Lower and upper boundaries (Kelvin) of the temperature scan.")
@@ -546,7 +574,7 @@ contains
       endif
       !
       !Variables related to the impurity solver
-      call add_separator()
+      call add_separator("Impurity solver")
       Solver%Nimp = Nsite
       if(ExpandImpurity) Solver%Nimp = 1
       call append_to_input_list(Solver%Nimp,"NIMP","Number of impurities solved. User cannot set this as its deduced from NSITE and EXPAND.")
@@ -643,23 +671,33 @@ contains
    !---------------------------------------------------------------------------!
    !PURPOSE: Field Separator
    !---------------------------------------------------------------------------!
-   subroutine add_separator()
+   subroutine add_separator(descriptor)
       implicit none
-      integer             :: sizeOld,sizeNew
-      integer,allocatable :: prvPos(:)
+      character(len=*)                :: descriptor
+      integer                         :: sizeOld,sizeNew
+      type(input_comment),allocatable :: prv(:)
       !
-      if(allocated(commentPos))then
-         sizeOld=size(commentPos)
+      if(allocated(comments))then
+         !
+         sizeOld=size(comments)
          sizeNew=sizeOld+1
-         allocate(prvPos(sizeOld))
-         prvPos=commentPos
-         deallocate(commentPos)
-         allocate(commentPos(sizeNew))
-         commentPos(1:sizeOld) = prvPos
-         commentPos(sizeNew) = default_list%size
+         allocate(prv(sizeOld))
+         prv=comments
+         deallocate(comments)
+         allocate(comments(sizeNew))
+         !
+         comments(1:sizeOld) = prv
+         deallocate(prv)
+         !
+         comments(sizeNew)%Pos = default_list%size
+         comments(sizeNew)%descriptor = trim(descriptor)
+         !
       else
-         allocate(commentPos(1))
-         commentPos(1) = default_list%size
+         !
+         allocate(comments(1))
+         comments(1)%Pos = 1
+         comments(1)%descriptor = trim(descriptor)
+         !
       endif
    end subroutine add_separator
 
@@ -687,7 +725,7 @@ contains
       implicit none
       character(len=*),optional              :: file
       type(input_list),optional              :: list
-      integer                                :: counter,size
+      integer                                :: counter,counterCom,size
       type(input_node),pointer               :: c
       if(present(list))then
          c => list%root%next
@@ -698,16 +736,30 @@ contains
       file_status='replace'
       size=default_list%size
       if(present(list))size=list%size
+      !
+      counterCom = 1
+      if(present(file))then
+         call print_separator(comments(1)%descriptor,file)
+      else
+         call print_separator(comments(counterCom)%descriptor)
+      endif
+      !
       if(size>0)then
          do
             if(.not.associated(c))exit
             counter=counter+1
             if(present(file))then
                call print_input_node(c,file)
-               if(any(commentPos.eq.counter))call print_separator(file)
+               if(any(comments(:)%Pos.eq.counter))then
+                  counterCom=counterCom+1
+                  call print_separator(comments(counterCom)%descriptor,file)
+               endif
             else
                call print_input_node(c)
-               if(any(commentPos.eq.counter))call print_separator()
+               if(any(comments(:)%Pos.eq.counter))then
+                  counterCom=counterCom+1
+                  call print_separator(comments(counterCom)%descriptor)
+               endif
             endif
             c => c%next
          enddo
@@ -1679,29 +1731,29 @@ contains
      p_buffer=""
    end subroutine print_input_node
    !
-   subroutine print_separator(file)
+   subroutine print_separator(descriptor,file)
      use utils_misc
      implicit none
+     character(len=*)                       :: descriptor
      character(len=*),optional              :: file
      integer                                :: unit,i
-     character(len=pos_comment+1)           :: line
-     line="#"
-     do i=1,pos_comment-1
+     character(len=pos_comment+2)           :: line
+     line="# "//descriptor//" -"
+     do i=1,pos_comment-1-len(descriptor)-2-1
         line = trim(line)//"-"
      enddo
      line = trim(line)//"#"
      if(present(file))then
         unit=free_unit()
         open(unit,file="used."//file,position='append',status=trim(file_status));file_status='old'
-        write(unit,"(1x,A)")
-        write(unit,"(1x,A)")trim(line)
-        write(unit,"(1x,A)")
-        close(unit)
      else
-        write(unit,"(1x,A)")
-        write(unit,"(1x,A)")trim(line)
-        write(unit,"(1x,A)")
+        unit=6
      endif
+     write(unit,"(1x,A)")
+     write(unit,"(1x,A)")
+     write(unit,"(1x,A)")trim(line)
+     write(unit,"(1x,A)")
+     if(present(file))close(unit)
   end subroutine print_separator
 
 

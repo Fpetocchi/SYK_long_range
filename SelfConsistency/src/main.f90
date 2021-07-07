@@ -180,6 +180,7 @@ program SelfConsistency
             endif
             !
             call dump_FermionicField(S_G0W0,reg(ItFolder),"Slat_w")
+            call dump_MaxEnt(S_G0W0,"mats",reg(ItFolder)//"Convergence/","Slat",EqvGWndx%SetOrbs,WmaxPade=PadeWlimit)
             !
          elseif(Iteration.gt.0)then
             !

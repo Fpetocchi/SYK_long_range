@@ -81,6 +81,7 @@ module utils_main
    !
    real(8)                                  :: HartreeFact=1d0
    logical                                  :: update_curlyG=.true.
+   integer                                  :: SigmaMaxMom=4
    !
    logical                                  :: sym_constrained=.false.
    logical                                  :: MultiTier=.false.
@@ -419,8 +420,8 @@ contains
             !
             if(Hmodel)then
                !
-               call build_Hk(LatticeVec,Norb_model,hopping,Nkpt3,alphaHk, &
-                             Lttc%Hk,Lttc%kpt,Lttc%Ek,Lttc%Zk,Lttc%Hloc,  &
+               call build_Hk(LatticeVec,Norb_model,hopping,Nkpt3,alphaHk,Hetero,&
+                             Lttc%Hk,Lttc%kpt,Lttc%Ek,Lttc%Zk,Lttc%Hloc,        &
                              iq_gamma=Lttc%iq_gamma,pathOUTPUT=reg(pathINPUT))
                Lttc%Norb = size(Lttc%Hk,dim=1)
                Lttc%Nkpt = size(Lttc%Hk,dim=3)
@@ -457,8 +458,8 @@ contains
             !
             if(Hmodel)then
                !
-               call build_Hk(LatticeVec,Norb_model,hopping,Nkpt3,alphaHk, &
-                             Lttc%Hk,Lttc%kpt,Lttc%Ek,Lttc%Zk,Lttc%Hloc,  &
+               call build_Hk(LatticeVec,Norb_model,hopping,Nkpt3,alphaHk,Hetero,&
+                             Lttc%Hk,Lttc%kpt,Lttc%Ek,Lttc%Zk,Lttc%Hloc,        &
                              pathOUTPUT=reg(pathINPUT))
                Lttc%Norb = size(Lttc%Hk,dim=1)
                Lttc%Nkpt = size(Lttc%Hk,dim=3)
@@ -478,8 +479,8 @@ contains
             !
             if(Hmodel)then
                !
-               call build_Hk(LatticeVec,Norb_model,hopping,Nkpt3,alphaHk, &
-                             Lttc%Hk,Lttc%kpt,Lttc%Ek,Lttc%Zk,Lttc%Hloc,  &
+               call build_Hk(LatticeVec,Norb_model,hopping,Nkpt3,alphaHk,Hetero,&
+                             Lttc%Hk,Lttc%kpt,Lttc%Ek,Lttc%Zk,Lttc%Hloc,        &
                              iq_gamma=Lttc%iq_gamma,pathOUTPUT=reg(pathINPUT))
                Lttc%Norb = size(Lttc%Hk,dim=1)
                Lttc%Nkpt = size(Lttc%Hk,dim=3)
@@ -533,7 +534,8 @@ contains
       if(sum(SiteNorb).ne.Lttc%Norb)then
          !
          MultiTier = .true.
-         if(RotateHloc.or.RotateUloc) stop "MultiTier construction and Rotations of the local space are not allowed."
+         if(Hetero%status) stop "MultiTier construction and Heterostructured setup are not allowed together."
+         if(RotateHloc.or.RotateUloc) stop "MultiTier construction and Rotations of the local space are not allowed together."
          if(reg(DC_type).eq."GlocWloc")then
             DC_type="Sloc"
             write(*,"(A,1I3)") "     DC_TYPE updated from GlocWloc to "//reg(DC_type)
@@ -1001,7 +1003,7 @@ contains
             enddo
          endif
          !
-         call add_separator()
+         call add_separator("Solver symmetrizations")
          do isite=1,Nsite
             call append_to_input_list(EqvImpndx(isite)%Nset,"EQV_"//str(isite)//"_SETS","Number of sets of locally equivalent orbitals in site number "//str(isite)) !User cannot set the EQV_IMP_* fields as they are deduced from EQV_*, EXPAND and ROTATE_F.
             if(EqvImpndx(isite)%Nset.gt.0)then
@@ -2591,7 +2593,7 @@ contains
                enddo
             enddo
             !
-            allocate(Moments(Norb,Nspin,0:min(4,Nfit)));Moments=0d0
+            allocate(Moments(Norb,Nspin,0:min(SigmaMaxMom,Nfit)));Moments=0d0
             call fit_moments(Smats(:,:,:,isite),Beta,reg(MomDir),reg(file),"Sigma",Moments,filename="Simp",Wlimit=wndx)
             !
             allocate(SmatsTail(Nmats));SmatsTail=czero

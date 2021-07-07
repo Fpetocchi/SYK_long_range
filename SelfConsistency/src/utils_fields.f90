@@ -36,6 +36,13 @@ module utils_fields
       module procedure imp2loc_Bosonic
    end interface imp2loc
 
+   interface Expand2Nsite
+      module procedure Expand2Nsite_Matrix
+      module procedure Expand2Nsite_Matrix_s
+      module procedure Expand2Nsite_Fermionic
+      module procedure Expand2Nsite_Bosonic
+   end interface Expand2Nsite
+
    interface symmetrize_GW
       module procedure symmetrize_GW_Matrix_d
       module procedure symmetrize_GW_Matrix_z
@@ -99,6 +106,7 @@ module utils_fields
    public :: isReal
    public :: loc2imp
    public :: imp2loc
+   public :: Expand2Nsite
    public :: symmetrize_GW
    public :: symmetrize_imp
    public :: join_SigmaCX
@@ -1342,6 +1350,226 @@ contains
       deallocate(Wstmp)
       !
    end subroutine imp2loc_Bosonic
+
+
+   !---------------------------------------------------------------------------!
+   !PURPOSE: Expand an impurity matrix/field to a given number of sites
+   !---------------------------------------------------------------------------!
+   subroutine Expand2Nsite_Fermionic(G,Gsite,Nsite)
+      !
+      use parameters
+      use utils_misc
+      implicit none
+      !
+      type(FermionicField),intent(inout)    :: G
+      type(FermionicField),intent(in)       :: Gsite
+      integer,intent(in)                    :: Nsite
+      !
+      integer                               :: isite,shift
+      integer                               :: Norb_site,Norb
+      logical                               :: condGsite,condG
+      !
+      !
+      if(verbose)write(*,"(A)") "---- Expand2Nsite_Fermionic"
+      !
+      !
+      if(.not.G%status) stop "Expand2Nsite_Fermionic: G not properly initialized."
+      if(.not.Gsite%status) stop "Expand2Nsite_Fermionic: Gsite not properly initialized."
+      if(G%Norb.eq.0) stop "Expand2Nsite_Fermionic: Norb of G not defined."
+      if(Gsite%Norb.eq.0) stop "Expand2Nsite_Fermionic: Norb of Gsite not defined."
+      if(G%Npoints.eq.0) stop "Expand2Nsite_Fermionic: Npoints of G not defined."
+      if(Gsite%Npoints.eq.0) stop "Expand2Nsite_Fermionic: Npoints of Gsite not defined."
+      if(G%Beta.ne.Gsite%Beta) stop "Expand2Nsite_Fermionic: Gsite and G have different beta."
+      if(G%Npoints.ne.Gsite%Npoints) stop "Expand2Nsite_Fermionic: Gsite and G have different number of Matsubara points."
+      !
+      Norb = G%Norb
+      Norb_site = Gsite%Norb
+      !
+      if(Norb.ne.(Norb_site*Nsite)) stop "Expand2Nsite_Fermionic: output G dimension does not match Nsite times Gsite orbitals."
+      !
+      call clear_attributes(G)
+      do isite=1,Nsite
+         !
+         shift = (isite-1)*Norb_site
+         !
+         condG = allocated(G%wks)
+         condGsite = allocated(Gsite%wks)
+         if(condG.and.condGsite) G%wks(1+shift:Norb_site+shift,1+shift:Norb_site+shift,:,:,:) = Gsite%wks
+         !
+         condG = allocated(G%ws)
+         condGsite = allocated(Gsite%ws)
+         if(condG.and.condGsite) G%ws(1+shift:Norb_site+shift,1+shift:Norb_site+shift,:,:) = Gsite%ws
+         !
+         condG = allocated(G%N_ks)
+         condGsite = allocated(Gsite%N_ks)
+         if(condG.and.condGsite) G%N_ks(1+shift:Norb_site+shift,1+shift:Norb_site+shift,:,:) = Gsite%N_ks
+         !
+         condG = allocated(G%N_s)
+         condGsite = allocated(Gsite%N_s)
+         if(condG.and.condGsite) G%N_s(1+shift:Norb_site+shift,1+shift:Norb_site+shift,:) = Gsite%N_s
+         !
+      enddo
+      !
+   end subroutine Expand2Nsite_Fermionic
+   !
+   subroutine Expand2Nsite_Matrix(O,Osite,Nsite)
+      !
+      use parameters
+      use utils_misc
+      implicit none
+      !
+      complex(8),intent(inout)              :: O(:,:)
+      complex(8),intent(in)                 :: Osite(:,:)
+      integer,intent(in)                    :: Nsite
+      !
+      integer                               :: isite,shift
+      integer                               :: Norb_site,Norb
+      !
+      !
+      if(verbose)write(*,"(A)") "---- Expand2Nsite_Matrix"
+      !
+      !
+      if(size(O,dim=1).ne.size(O,dim=2)) stop "Expand2Nsite_Matrix: O not square."
+      if(size(Osite,dim=1).ne.size(Osite,dim=2)) stop "Expand2Nsite_Matrix: Osite not square."
+      !
+      Norb = size(O,dim=1)
+      Norb_site = size(Osite,dim=1)
+      !
+      if(Norb.ne.(Norb_site*Nsite)) stop "Expand2Nsite_Matrix: output Matrix dimension does not match Nsite times site Matrix orbitals."
+      !
+      O=czero
+      do isite=1,Nsite
+         !
+         shift = (isite-1)*Norb_site
+         !
+         O(1+shift:Norb_site+shift,1+shift:Norb_site+shift) = Osite
+         !
+      enddo
+      !
+   end subroutine Expand2Nsite_Matrix
+   !
+   subroutine Expand2Nsite_Matrix_s(O,Osite,Nsite)
+      !
+      use parameters
+      use utils_misc
+      implicit none
+      !
+      complex(8),intent(inout)              :: O(:,:,:)
+      complex(8),intent(in)                 :: Osite(:,:,:)
+      integer,intent(in)                    :: Nsite
+      !
+      integer                               :: isite,shift
+      integer                               :: Norb_site,Norb
+      !
+      !
+      if(verbose)write(*,"(A)") "---- Expand2Nsite_Matrix_s"
+      !
+      !
+      if(size(O,dim=1).ne.size(O,dim=2)) stop "Expand2Nsite_Matrix_s: O not square."
+      if(size(Osite,dim=1).ne.size(Osite,dim=2)) stop "Expand2Nsite_Matrix_s: Osite not square."
+      if(size(O,dim=3).ne.size(Osite,dim=3)) stop "Expand2Nsite_Matrix_s: third dimension is different between O and Osite."
+      !
+      Norb = size(O,dim=1)
+      Norb_site = size(Osite,dim=1)
+      !
+      if(Norb.ne.(Norb_site*Nsite)) stop "Expand2Nsite_Matrix_s: output Matrix dimension does not match Nsite times site Matrix orbitals."
+      !
+      O=czero
+      do isite=1,Nsite
+         !
+         shift = (isite-1)*Norb_site
+         !
+         O(1+shift:Norb_site+shift,1+shift:Norb_site+shift,:) = Osite
+         !
+      enddo
+      !
+   end subroutine Expand2Nsite_Matrix_s
+   !
+   subroutine Expand2Nsite_Bosonic(W,Wsite,Nsite)
+      !
+      use parameters
+      use utils_misc
+      use linalg, only : tensor_transform
+      implicit none
+      !
+      type(BosonicField),intent(inout)      :: W
+      type(BosonicField),intent(in)         :: Wsite
+      integer,intent(in)                    :: Nsite
+      !
+      integer                               :: isite,shift
+      integer                               :: Norb_site,Norb
+      integer                               :: i_site,j_site,k_site,l_site
+      integer                               :: ib_site,jb_site
+      integer                               :: i,j,k,l
+      integer                               :: ib,jb
+      logical                               :: condWsite,condW
+      !
+      !
+      if(verbose)write(*,"(A)") "---- Expand2Nsite_Bosonic"
+      !
+      !
+      if(.not.W%status) stop "Expand2Nsite_Bosonic: W not properly initialized."
+      if(.not.Wsite%status) stop "Expand2Nsite_Bosonic: Wsite not properly initialized."
+      if(W%Nbp.eq.0) stop "Expand2Nsite_Bosonic: Norb of W not defined."
+      if(Wsite%Nbp.eq.0) stop "Expand2Nsite_Bosonic: Norb of Wsite not defined."
+      if(W%Npoints.eq.0) stop "Expand2Nsite_Bosonic: Npoints of W not defined."
+      if(Wsite%Npoints.eq.0) stop "Expand2Nsite_Bosonic: Npoints of Wsite not defined."
+      if(W%Beta.ne.Wsite%Beta) stop "Expand2Nsite_Bosonic: Wsite and W have different beta."
+      if(W%Npoints.ne.Wsite%Npoints) stop "Expand2Nsite_Bosonic: Wsite and W have different number of Matsubara points."
+      !
+      Norb = int(sqrt(dble(W%Nbp)))
+      Norb_site = int(sqrt(dble(Wsite%Nbp)))
+      !
+      if(Norb.ne.(Norb_site*Nsite)) stop "Expand2Nsite_Bosonic: output W dimension does not match Nsite times Wsite orbitals."
+      !
+      call clear_attributes(W)
+      do isite=1,Nsite
+         !
+         shift = (isite-1)*Norb_site
+         !
+         do i_site=1,Norb_site
+            do j_site=1,Norb_site
+               do k_site=1,Norb_site
+                  do l_site=1,Norb_site
+                     !
+                     ! bosonic indexes of the impurity
+                     ib_site = k_site + Norb_site*(i_site-1)
+                     jb_site = l_site + Norb_site*(j_site-1)
+                     !
+                     ! mapping
+                     i = i_site + shift
+                     j = j_site + shift
+                     k = k_site + shift
+                     l = l_site + shift
+                     !
+                     ! corresponding bosonic indexes on the lattice
+                     ib = k + Norb*(i-1)
+                     jb = l + Norb*(j-1)
+                     !
+                     condW = allocated(W%screened)
+                     condWsite = allocated(Wsite%screened)
+                     if(condW.and.condWsite) W%screened(ib,jb,:,:) = Wsite%screened(ib_site,jb_site,:,:)
+                     !
+                     condW = allocated(W%bare)
+                     condWsite = allocated(Wsite%bare)
+                     if(condW.and.condWsite) W%bare(ib,jb,:) = Wsite%bare(ib_site,jb_site,:)
+                     !
+                     condW = allocated(W%screened_local)
+                     condWsite = allocated(Wsite%screened_local)
+                     if(condW.and.condWsite) W%screened_local(ib,jb,:) = Wsite%screened_local(ib_site,jb_site,:)
+                     !
+                     condW = allocated(W%bare_local)
+                     condWsite = allocated(Wsite%bare_local)
+                     if(condW.and.condWsite) W%bare_local(ib,jb) = Wsite%bare_local(ib_site,jb_site)
+                     !
+                  enddo
+               enddo
+            enddo
+         enddo
+         !
+      enddo
+      !
+   end subroutine Expand2Nsite_Bosonic
 
 
    !---------------------------------------------------------------------------!

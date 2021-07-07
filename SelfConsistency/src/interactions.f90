@@ -1284,6 +1284,7 @@ contains
       use file_io
       use utils_misc
       use utils_fields
+      use input_vars, only : Hetero
       implicit none
       !
       real(8),intent(inout)                 :: Umat(:,:)
@@ -1291,6 +1292,7 @@ contains
       !
       integer                               :: Nbp,Norb,Nflavor
       integer                               :: ib1,ib2
+      integer                               :: shift,isite,Nsite
       type(physicalU)                       :: PhysicalUelements
       !
       !
@@ -1299,11 +1301,14 @@ contains
       !
       ! Check on the input matrices
       Nbp = size(Umat,dim=1)
-      Norb = Nbp/Nspin
-      Nflavor = Norb*Nspin
       if((Nspin.eq.2).and.(mod(Nbp,2).ne.0.0)) stop "build_Umat_singlParam: Wrong matrix dimension."
-      call init_Uelements(Norb,PhysicalUelements)
       call assert_shape(Umat,[Nbp,Nbp],"build_Umat_singlParam","Umat")
+      !
+      Norb = Nbp/Nspin
+      if(Hetero%status) Norb = Hetero%Norb
+      call init_Uelements(Norb,PhysicalUelements)
+      !
+      Nflavor = Norb*Nspin
       !
       do ib1=1,Nflavor
          do ib2=1,Nflavor
@@ -1315,8 +1320,16 @@ contains
          enddo
       enddo
       !
+      !In-plane Interaction
+      if(Hetero%status)then
+         Nsite = Hetero%Explicit(2)-Hetero%Explicit(1)+1
+         do isite=2,Nsite
+            shift = (isite-1)*Nflavor
+            Umat(1+shift:Nflavor+shift,1+shift:Nflavor+shift) = Umat(1:Nflavor,1:Nflavor)
+         enddo
+      endif
+      !
    end subroutine build_Umat_singlParam
-   !
    !
    subroutine build_Umat_multiParam(Umat,Uaa,Uab,J)
       !
@@ -1324,6 +1337,7 @@ contains
       use file_io
       use utils_misc
       use utils_fields
+      use input_vars, only : Hetero
       implicit none
       !
       real(8),intent(inout)                 :: Umat(:,:)
@@ -1331,6 +1345,7 @@ contains
       !
       integer                               :: Nbp,Norb,Nflavor
       integer                               :: ib1,ib2,iorb,jorb
+      integer                               :: shift,isite,Nsite
       type(physicalU)                       :: PhysicalUelements
       !
       !
@@ -1339,14 +1354,17 @@ contains
       !
       ! Check on the input matrices
       Nbp = size(Umat,dim=1)
-      Norb = Nbp/Nspin
-      Nflavor = Norb*Nspin
       if((Nspin.eq.2).and.(mod(Nbp,2).ne.0.0)) stop "build_Umat_multiParam: Wrong matrix dimension."
-      call init_Uelements(Norb,PhysicalUelements)
       call assert_shape(Umat,[Nbp,Nbp],"build_Umat_multiParam","Umat")
+      !
+      Norb = Nbp/Nspin
+      if(Hetero%status) Norb = Hetero%Norb
+      call init_Uelements(Norb,PhysicalUelements)
       call assert_shape(Uaa,[Norb],"build_Umat_multiParam","Uaa")
       call assert_shape(Uab,[Norb,Norb],"build_Umat_multiParam","Uab")
       call assert_shape(J,[Norb,Norb],"build_Umat_multiParam","J")
+      !
+      Nflavor = Norb*Nspin
       !
       do ib1=1,Nflavor
          do ib2=1,Nflavor
@@ -1360,6 +1378,15 @@ contains
             !
          enddo
       enddo
+      !
+      !In-plane Interaction
+      if(Hetero%status)then
+         Nsite = Hetero%Explicit(2)-Hetero%Explicit(1)+1
+         do isite=2,Nsite
+            shift = (isite-1)*Nflavor
+            Umat(1+shift:Nflavor+shift,1+shift:Nflavor+shift) = Umat(1:Nflavor,1:Nflavor)
+         enddo
+      endif
       !
    end subroutine build_Umat_multiParam
 
@@ -1376,9 +1403,10 @@ contains
       use utils_misc
       use utils_fields
       use input_vars, only : Nreal, wrealMax, pathINPUTtr
+      use input_vars, only : Hetero
       implicit none
       !
-      type(BosonicField),intent(inout)      :: Umats
+      type(BosonicField),intent(inout),target :: Umats
       real(8),intent(in)                    :: Uaa,Uab,J
       real(8),intent(in)                    :: g_eph(:),wo_eph(:)
       logical,intent(in),optional           :: LocalOnly
@@ -1386,11 +1414,14 @@ contains
       integer                               :: Nbp,Norb,Nph
       integer                               :: ib1,ib2,ik
       integer                               :: iw,iw1,iw2,iph,iwp
+      integer                               :: Nsite
       real(8)                               :: RealU,ImagU
       real(8),allocatable                   :: wreal(:),wmats(:)
       complex(8),allocatable                :: D1(:,:),D2(:,:),D3(:,:)
       complex(8),allocatable                :: Utmp(:,:)
       type(BosonicField)                    :: Ureal
+      type(BosonicField),target             :: Umats_imp
+      type(BosonicField),pointer            :: Umats_ptr
       type(physicalU)                       :: PhysicalUelements
       logical                               :: LocalOnly_
       real                                  :: start,finish
@@ -1406,11 +1437,7 @@ contains
       if(present(LocalOnly))LocalOnly_=LocalOnly
       if(LocalOnly_.and.(Umats%Nkpt.ne.0)) stop "build_Uret_singlParam_ph: Umats k dependent attributes are supposed to be unallocated."
       !
-      Nbp = Umats%Nbp
-      Norb = int(sqrt(dble(Nbp)))
       Nph = size(g_eph)
-      !
-      call init_Uelements(Norb,PhysicalUelements)
       if(size(g_eph).ne.size(wo_eph)) stop "build_Uret_singlParam_ph: Phonon sizes does not match."
       !
       allocate(wmats(Umats%Npoints));wmats=0d0
@@ -1419,16 +1446,29 @@ contains
       wreal = linspace(0d0,+wrealMax,Nreal)
       !
       call clear_attributes(Umats)
-      call AllocateBosonicField(Ureal,Nbp,Nreal,0)
+      !
+      Nbp = Umats%Nbp
+      Norb = int(sqrt(dble(Nbp)))
+      if(Hetero%status)then
+         Norb = Hetero%Norb
+         Nbp = Norb**2
+         call AllocateBosonicField(Umats_imp,Norb,Umats%Npoints,0)
+         Umats_ptr => Umats_imp
+      else
+         Umats_ptr => Umats
+      endif
+      call AllocateBosonicField(Ureal,Norb,Nreal,0)
+      !
+      call init_Uelements(Norb,PhysicalUelements)
       !
       !setting the bare values
       do ib1=1,Nbp
          do ib2=1,Nbp
             !
-            if(PhysicalUelements%Full_Uaa(ib1,ib2)) Umats%bare_local(ib1,ib2) = dcmplx(Uaa,0d0)
-            if(PhysicalUelements%Full_Uab(ib1,ib2)) Umats%bare_local(ib1,ib2) = dcmplx(Uab,0d0)
-            if(PhysicalUelements%Full_Jsf(ib1,ib2)) Umats%bare_local(ib1,ib2) = dcmplx(J,0d0)
-            if(PhysicalUelements%Full_Jph(ib1,ib2)) Umats%bare_local(ib1,ib2) = dcmplx(J,0d0)
+            if(PhysicalUelements%Full_Uaa(ib1,ib2)) Umats_ptr%bare_local(ib1,ib2) = dcmplx(Uaa,0d0)
+            if(PhysicalUelements%Full_Uab(ib1,ib2)) Umats_ptr%bare_local(ib1,ib2) = dcmplx(Uab,0d0)
+            if(PhysicalUelements%Full_Jsf(ib1,ib2)) Umats_ptr%bare_local(ib1,ib2) = dcmplx(J,0d0)
+            if(PhysicalUelements%Full_Jph(ib1,ib2)) Umats_ptr%bare_local(ib1,ib2) = dcmplx(J,0d0)
             !
          enddo
       enddo
@@ -1444,7 +1484,7 @@ contains
                   ImagU=0d0
                   if(iw.eq.iwp) ImagU = -pi*(g_eph(iph)**2)
                   !
-                  Ureal%screened_local(ib1,ib2,iw) = Umats%bare_local(ib1,ib2) + dcmplx(RealU,ImagU)
+                  Ureal%screened_local(ib1,ib2,iw) = Umats_ptr%bare_local(ib1,ib2) + dcmplx(RealU,ImagU)
                   !
                enddo
             enddo
@@ -1460,10 +1500,10 @@ contains
       ! Analytical continuation of the local component to imag axis using spectral rep
       call cpu_time(start)
       !$OMP PARALLEL DEFAULT(NONE),&
-      !$OMP SHARED(Nbp,wmats,wreal,Nreal,Ureal,Umats),&
+      !$OMP SHARED(Nbp,wmats,wreal,Nreal,Ureal,Umats_ptr),&
       !$OMP PRIVATE(ib1,ib2,iw1,iw2,D1,D2,D3,Utmp)
       !$OMP DO
-      do iw1=1,Umats%Npoints
+      do iw1=1,Umats_ptr%Npoints
          Utmp=czero
          do iw2=1,Nreal-2,2
             !
@@ -1488,7 +1528,7 @@ contains
          !
          do ib1=1,Nbp
             do ib2=1,Nbp
-               Umats%screened_local(ib1,ib2,iw1) = Utmp(ib1,ib2) + Umats%bare_local(ib1,ib2)
+               Umats_ptr%screened_local(ib1,ib2,iw1) = Utmp(ib1,ib2) + Umats_ptr%bare_local(ib1,ib2)
             enddo
          enddo
          !
@@ -1504,10 +1544,18 @@ contains
       if(.not.LocalOnly_)then
          write(*,"(A)") "     Filling the K-dependent attributes."
          do ik=1,Umats%Nkpt
-            Umats%bare(:,:,ik) = Umats%bare_local
-            Umats%screened(:,:,:,ik) = Umats%screened_local
+            Umats_ptr%bare(:,:,ik) = Umats_ptr%bare_local
+            Umats_ptr%screened(:,:,:,ik) = Umats_ptr%screened_local
          enddo
       endif
+      !
+      if(Hetero%status)then
+         Nsite = Hetero%Explicit(2)-Hetero%Explicit(1)+1
+         call Expand2Nsite(Umats,Umats_ptr,Nsite)
+         call DeallocateBosonicField(Umats_imp)
+         nullify(Umats_ptr)
+      endif
+      !
       call dump_BosonicField(Umats,reg(pathINPUTtr),"Uloc_mats.DAT")
       !
    end subroutine build_Uret_singlParam_ph
@@ -1519,21 +1567,25 @@ contains
       use utils_misc
       use utils_fields
       use input_vars, only : Nreal, wrealMax, pathINPUTtr
+      use input_vars, only : Hetero
       implicit none
       !
-      type(BosonicField),intent(inout)      :: Umats
+      type(BosonicField),intent(inout),target :: Umats
       real(8),intent(in)                    :: Uaa(:),Uab(:,:),J(:,:)
       real(8),intent(in)                    :: g_eph(:),wo_eph(:)
       logical,intent(in),optional           :: LocalOnly
       !
       integer                               :: Nbp,Norb,Nph
-      integer                               :: iorb,jorb,ib1,ib2,ik
+      integer                               :: ib1,ib2,iorb,jorb,ik
       integer                               :: iw,iw1,iw2,iph,iwp
+      integer                               :: Nsite
       real(8)                               :: RealU,ImagU
       real(8),allocatable                   :: wreal(:),wmats(:)
       complex(8),allocatable                :: D1(:,:),D2(:,:),D3(:,:)
       complex(8),allocatable                :: Utmp(:,:)
       type(BosonicField)                    :: Ureal
+      type(BosonicField),target             :: Umats_imp
+      type(BosonicField),pointer            :: Umats_ptr
       type(physicalU)                       :: PhysicalUelements
       logical                               :: LocalOnly_
       real                                  :: start,finish
@@ -1549,16 +1601,8 @@ contains
       if(present(LocalOnly))LocalOnly_=LocalOnly
       if(LocalOnly_.and.(Umats%Nkpt.ne.0)) stop "build_Uret_multiParam_ph: Umats k dependent attributes are supposed to be unallocated."
       !
-      Nbp = Umats%Nbp
-      Norb = int(sqrt(dble(Nbp)))
       Nph = size(g_eph)
-      !
-      call init_Uelements(Norb,PhysicalUelements)
       if(size(g_eph).ne.size(wo_eph)) stop "build_Uret_multiParam_ph: Phonon sizes does not match."
-      !
-      call assert_shape(Uaa,[Norb],"build_Uret_multiParam_ph","Uaa")
-      call assert_shape(Uab,[Norb,Norb],"build_Uret_multiParam_ph","Uab")
-      call assert_shape(J,[Norb,Norb],"build_Uret_multiParam_ph","J")
       !
       allocate(wmats(Umats%Npoints));wmats=0d0
       wmats = BosonicFreqMesh(Umats%Beta,Umats%Npoints)
@@ -1566,7 +1610,24 @@ contains
       wreal = linspace(0d0,+wrealMax,Nreal)
       !
       call clear_attributes(Umats)
-      call AllocateBosonicField(Ureal,Nbp,Nreal,0)
+      !
+      Nbp = Umats%Nbp
+      Norb = int(sqrt(dble(Nbp)))
+      if(Hetero%status)then
+         Norb = Hetero%Norb
+         Nbp = Norb**2
+         call AllocateBosonicField(Umats_imp,Norb,Umats%Npoints,0)
+         Umats_ptr => Umats_imp
+      else
+         Umats_ptr => Umats
+      endif
+      call AllocateBosonicField(Ureal,Norb,Nreal,0)
+      !
+      call assert_shape(Uaa,[Norb],"build_Uret_multiParam_ph","Uaa")
+      call assert_shape(Uab,[Norb,Norb],"build_Uret_multiParam_ph","Uab")
+      call assert_shape(J,[Norb,Norb],"build_Uret_multiParam_ph","J")
+      !
+      call init_Uelements(Norb,PhysicalUelements)
       !
       !setting the bare values
       do ib1=1,Nbp
@@ -1575,10 +1636,10 @@ contains
             iorb = PhysicalUelements%Full_Map(ib1,ib2,1)
             jorb = PhysicalUelements%Full_Map(ib1,ib2,2)
             !
-            if(PhysicalUelements%Full_Uaa(ib1,ib2)) Umats%bare_local(ib1,ib2) = dcmplx(Uaa(iorb),0d0)
-            if(PhysicalUelements%Full_Uab(ib1,ib2)) Umats%bare_local(ib1,ib2) = dcmplx(Uab(iorb,jorb),0d0)
-            if(PhysicalUelements%Full_Jsf(ib1,ib2)) Umats%bare_local(ib1,ib2) = dcmplx(J(iorb,jorb),0d0)
-            if(PhysicalUelements%Full_Jph(ib1,ib2)) Umats%bare_local(ib1,ib2) = dcmplx(J(iorb,jorb),0d0)
+            if(PhysicalUelements%Full_Uaa(ib1,ib2)) Umats_ptr%bare_local(ib1,ib2) = dcmplx(Uaa(iorb),0d0)
+            if(PhysicalUelements%Full_Uab(ib1,ib2)) Umats_ptr%bare_local(ib1,ib2) = dcmplx(Uab(iorb,jorb),0d0)
+            if(PhysicalUelements%Full_Jsf(ib1,ib2)) Umats_ptr%bare_local(ib1,ib2) = dcmplx(J(iorb,jorb),0d0)
+            if(PhysicalUelements%Full_Jph(ib1,ib2)) Umats_ptr%bare_local(ib1,ib2) = dcmplx(J(iorb,jorb),0d0)
             !
          enddo
       enddo
@@ -1594,7 +1655,7 @@ contains
                   ImagU=0d0
                   if(iw.eq.iwp) ImagU = -pi*(g_eph(iph)**2)
                   !
-                  Ureal%screened_local(ib1,ib2,iw) = Umats%bare_local(ib1,ib2) + dcmplx(RealU,ImagU)
+                  Ureal%screened_local(ib1,ib2,iw) = Umats_ptr%bare_local(ib1,ib2) + dcmplx(RealU,ImagU)
                   !
                enddo
             enddo
@@ -1610,10 +1671,10 @@ contains
       ! Analytical continuation of the local component to imag axis using spectral rep
       call cpu_time(start)
       !$OMP PARALLEL DEFAULT(NONE),&
-      !$OMP SHARED(Nbp,wmats,wreal,Nreal,Ureal,Umats),&
+      !$OMP SHARED(Nbp,wmats,wreal,Nreal,Ureal,Umats_ptr),&
       !$OMP PRIVATE(ib1,ib2,iw1,iw2,D1,D2,D3,Utmp)
       !$OMP DO
-      do iw1=1,Umats%Npoints
+      do iw1=1,Umats_ptr%Npoints
          Utmp=czero
          do iw2=1,Nreal-2,2
             !
@@ -1638,7 +1699,7 @@ contains
          !
          do ib1=1,Nbp
             do ib2=1,Nbp
-               Umats%screened_local(ib1,ib2,iw1) = Utmp(ib1,ib2) + Umats%bare_local(ib1,ib2)
+               Umats_ptr%screened_local(ib1,ib2,iw1) = Utmp(ib1,ib2) + Umats_ptr%bare_local(ib1,ib2)
             enddo
          enddo
          !
@@ -1654,10 +1715,18 @@ contains
       if(.not.LocalOnly_)then
          write(*,"(A)") "     Filling the K-dependent attributes."
          do ik=1,Umats%Nkpt
-            Umats%bare(:,:,ik) = Umats%bare_local
-            Umats%screened(:,:,:,ik) = Umats%screened_local
+            Umats_ptr%bare(:,:,ik) = Umats_ptr%bare_local
+            Umats_ptr%screened(:,:,:,ik) = Umats_ptr%screened_local
          enddo
       endif
+      !
+      if(Hetero%status)then
+         Nsite = Hetero%Explicit(2)-Hetero%Explicit(1)+1
+         call Expand2Nsite(Umats,Umats_ptr,Nsite)
+         call DeallocateBosonicField(Umats_imp)
+         nullify(Umats_ptr)
+      endif
+      !
       call dump_BosonicField(Umats,reg(pathINPUTtr),"Uloc_mats.DAT")
       !
    end subroutine build_Uret_multiParam_ph
@@ -1677,9 +1746,10 @@ contains
       use crystal
       use input_vars, only : pathINPUTtr, pathINPUT
       use input_vars, only : long_range, structure, Nkpt_path
+      use input_vars, only : Hetero
       implicit none
       !
-      type(BosonicField),intent(inout)      :: Umats
+      type(BosonicField),intent(inout),target :: Umats
       real(8),intent(in)                    :: Uaa,Uab,J
       real(8),intent(in)                    :: Vnn(:,:)
       type(Lattice),intent(inout)           :: Lttc
@@ -1689,10 +1759,12 @@ contains
       complex(8),allocatable                :: U_R(:,:,:)
       integer                               :: Nbp,Norb,Vrange
       integer                               :: ib1,ib2,iorb
-      integer                               :: iwig,idist
+      integer                               :: iwig,idist,Nsite
       real(8),allocatable                   :: Rsorted(:)
       integer,allocatable                   :: Rorder(:)
       type(physicalU)                       :: PhysicalUelements
+      type(BosonicField),target             :: Umats_imp
+      type(BosonicField),pointer            :: Umats_ptr
       complex(8),allocatable                :: EwaldShift(:)
       real(8),allocatable                   :: V(:)
       real(8)                               :: eta,den
@@ -1714,8 +1786,15 @@ contains
       !
       Nbp = Umats%Nbp
       Norb = int(sqrt(dble(Nbp)))
+      if(Hetero%status)then
+         Norb = Hetero%Norb
+         Nbp = Norb**2
+         call AllocateBosonicField(Umats_imp,Norb,Umats%Npoints,0)
+         Umats_ptr => Umats_imp
+      else
+         Umats_ptr => Umats
+      endif
       Vrange = size(Vnn)
-      !
       call assert_shape(Vnn,[Norb,Vrange],"build_Uret_singlParam_Vn","Vnn")
       !
       call init_Uelements(Norb,PhysicalUelements)
@@ -1812,30 +1891,37 @@ contains
       do ib1=1,Nbp
          do ib2=1,Nbp
             !
-            if(PhysicalUelements%Full_Uaa(ib1,ib2)) Umats%screened_local(ib1,ib2,1) = dcmplx(Uaa,0d0)
-            if(PhysicalUelements%Full_Uab(ib1,ib2)) Umats%screened_local(ib1,ib2,1) = dcmplx(Uab,0d0)
-            if(PhysicalUelements%Full_Jsf(ib1,ib2)) Umats%screened_local(ib1,ib2,1) = dcmplx(J,0d0)
-            if(PhysicalUelements%Full_Jph(ib1,ib2)) Umats%screened_local(ib1,ib2,1) = dcmplx(J,0d0)
+            if(PhysicalUelements%Full_Uaa(ib1,ib2)) Umats_ptr%screened_local(ib1,ib2,1) = dcmplx(Uaa,0d0)
+            if(PhysicalUelements%Full_Uab(ib1,ib2)) Umats_ptr%screened_local(ib1,ib2,1) = dcmplx(Uab,0d0)
+            if(PhysicalUelements%Full_Jsf(ib1,ib2)) Umats_ptr%screened_local(ib1,ib2,1) = dcmplx(J,0d0)
+            if(PhysicalUelements%Full_Jph(ib1,ib2)) Umats_ptr%screened_local(ib1,ib2,1) = dcmplx(J,0d0)
             !
-            if(allocated(Umats%bare_local))then
-               if(PhysicalUelements%Full_Uaa(ib1,ib2)) Umats%bare_local(ib1,ib2) = dcmplx(Uaa,0d0)
-               if(PhysicalUelements%Full_Uab(ib1,ib2)) Umats%bare_local(ib1,ib2) = dcmplx(Uab,0d0)
-               if(PhysicalUelements%Full_Jsf(ib1,ib2)) Umats%bare_local(ib1,ib2) = dcmplx(J,0d0)
-               if(PhysicalUelements%Full_Jph(ib1,ib2)) Umats%bare_local(ib1,ib2) = dcmplx(J,0d0)
+            if(allocated(Umats_ptr%bare_local))then
+               if(PhysicalUelements%Full_Uaa(ib1,ib2)) Umats_ptr%bare_local(ib1,ib2) = dcmplx(Uaa,0d0)
+               if(PhysicalUelements%Full_Uab(ib1,ib2)) Umats_ptr%bare_local(ib1,ib2) = dcmplx(Uab,0d0)
+               if(PhysicalUelements%Full_Jsf(ib1,ib2)) Umats_ptr%bare_local(ib1,ib2) = dcmplx(J,0d0)
+               if(PhysicalUelements%Full_Jph(ib1,ib2)) Umats_ptr%bare_local(ib1,ib2) = dcmplx(J,0d0)
             endif
             !
          enddo
       enddo
       if(.not.LocalOnly_)then
          !
-         Umats%screened(:,:,1,:) = U_K
+         Umats_ptr%screened(:,:,1,:) = U_K
          !
-         if(allocated(Umats%bare))then
-            Umats%bare = U_K
+         if(allocated(Umats_ptr%bare))then
+            Umats_ptr%bare = U_K
          endif
          !
       endif
       deallocate(U_K)
+      !
+      if(Hetero%status)then
+         Nsite = Hetero%Explicit(2)-Hetero%Explicit(1)+1
+         call Expand2Nsite(Umats,Umats_ptr,Nsite)
+         call DeallocateBosonicField(Umats_imp)
+         nullify(Umats_ptr)
+      endif
       !
       call dump_BosonicField(Umats,reg(pathINPUTtr),"Uloc_mats_nosum.DAT")
       call BosonicKsum(Umats)
@@ -1852,9 +1938,10 @@ contains
       use crystal
       use input_vars, only : pathINPUTtr, pathINPUT
       use input_vars, only : long_range, structure, Nkpt_path
+      use input_vars, only : Hetero
       implicit none
       !
-      type(BosonicField),intent(inout)      :: Umats
+      type(BosonicField),intent(inout),target :: Umats
       real(8),intent(in)                    :: Uaa(:),Uab(:,:),J(:,:)
       real(8),intent(in)                    :: Vnn(:,:)
       type(Lattice),intent(inout)           :: Lttc
@@ -1864,10 +1951,12 @@ contains
       complex(8),allocatable                :: U_R(:,:,:)
       integer                               :: Nbp,Norb,Vrange
       integer                               :: ib1,ib2,iorb,jorb
-      integer                               :: iwig,idist
+      integer                               :: iwig,idist,Nsite
       real(8),allocatable                   :: Rsorted(:)
       integer,allocatable                   :: Rorder(:)
       type(physicalU)                       :: PhysicalUelements
+      type(BosonicField),target             :: Umats_imp
+      type(BosonicField),pointer            :: Umats_ptr
       complex(8),allocatable                :: EwaldShift(:)
       real(8),allocatable                   :: V(:)
       real(8)                               :: eta,den
@@ -1889,11 +1978,18 @@ contains
       !
       Nbp = Umats%Nbp
       Norb = int(sqrt(dble(Nbp)))
-      Vrange = size(Vnn)
-      !
+      if(Hetero%status)then
+         Norb = Hetero%Norb
+         Nbp = Norb**2
+         call AllocateBosonicField(Umats_imp,Norb,Umats%Npoints,0)
+         Umats_ptr => Umats_imp
+      else
+         Umats_ptr => Umats
+      endif
       call assert_shape(Uaa,[Norb],"build_Uret_multiParam_Vn","Uaa")
       call assert_shape(Uab,[Norb,Norb],"build_Uret_multiParam_Vn","Uab")
       call assert_shape(J,[Norb,Norb],"build_Uret_multiParam_Vn","J")
+      Vrange = size(Vnn)
       call assert_shape(Vnn,[Norb,Vrange],"build_Uret_multiParam_Vn","Vnn")
       !
       call init_Uelements(Norb,PhysicalUelements)
@@ -1996,30 +2092,37 @@ contains
             iorb = PhysicalUelements%Full_Map(ib1,ib2,1)
             jorb = PhysicalUelements%Full_Map(ib1,ib2,2)
             !
-            if(PhysicalUelements%Full_Uaa(ib1,ib2)) Umats%screened_local(ib1,ib2,1) = dcmplx(Uaa(iorb),0d0)
-            if(PhysicalUelements%Full_Uab(ib1,ib2)) Umats%screened_local(ib1,ib2,1) = dcmplx(Uab(iorb,jorb),0d0)
-            if(PhysicalUelements%Full_Jsf(ib1,ib2)) Umats%screened_local(ib1,ib2,1) = dcmplx(J(iorb,jorb),0d0)
-            if(PhysicalUelements%Full_Jph(ib1,ib2)) Umats%screened_local(ib1,ib2,1) = dcmplx(J(iorb,jorb),0d0)
+            if(PhysicalUelements%Full_Uaa(ib1,ib2)) Umats_ptr%screened_local(ib1,ib2,1) = dcmplx(Uaa(iorb),0d0)
+            if(PhysicalUelements%Full_Uab(ib1,ib2)) Umats_ptr%screened_local(ib1,ib2,1) = dcmplx(Uab(iorb,jorb),0d0)
+            if(PhysicalUelements%Full_Jsf(ib1,ib2)) Umats_ptr%screened_local(ib1,ib2,1) = dcmplx(J(iorb,jorb),0d0)
+            if(PhysicalUelements%Full_Jph(ib1,ib2)) Umats_ptr%screened_local(ib1,ib2,1) = dcmplx(J(iorb,jorb),0d0)
             !
-            if(allocated(Umats%bare_local))then
-               if(PhysicalUelements%Full_Uaa(ib1,ib2)) Umats%bare_local(ib1,ib2) = dcmplx(Uaa(iorb),0d0)
-               if(PhysicalUelements%Full_Uab(ib1,ib2)) Umats%bare_local(ib1,ib2) = dcmplx(Uab(iorb,jorb),0d0)
-               if(PhysicalUelements%Full_Jsf(ib1,ib2)) Umats%bare_local(ib1,ib2) = dcmplx(J(iorb,jorb),0d0)
-               if(PhysicalUelements%Full_Jph(ib1,ib2)) Umats%bare_local(ib1,ib2) = dcmplx(J(iorb,jorb),0d0)
+            if(allocated(Umats_ptr%bare_local))then
+               if(PhysicalUelements%Full_Uaa(ib1,ib2)) Umats_ptr%bare_local(ib1,ib2) = dcmplx(Uaa(iorb),0d0)
+               if(PhysicalUelements%Full_Uab(ib1,ib2)) Umats_ptr%bare_local(ib1,ib2) = dcmplx(Uab(iorb,jorb),0d0)
+               if(PhysicalUelements%Full_Jsf(ib1,ib2)) Umats_ptr%bare_local(ib1,ib2) = dcmplx(J(iorb,jorb),0d0)
+               if(PhysicalUelements%Full_Jph(ib1,ib2)) Umats_ptr%bare_local(ib1,ib2) = dcmplx(J(iorb,jorb),0d0)
             endif
             !
          enddo
       enddo
       if(.not.LocalOnly_)then
          !
-         Umats%screened(:,:,1,:) = U_K
+         Umats_ptr%screened(:,:,1,:) = U_K
          !
-         if(allocated(Umats%bare))then
-            Umats%bare = U_K
+         if(allocated(Umats_ptr%bare))then
+            Umats_ptr%bare = U_K
          endif
          !
       endif
       deallocate(U_K)
+      !
+      if(Hetero%status)then
+         Nsite = Hetero%Explicit(2)-Hetero%Explicit(1)+1
+         call Expand2Nsite(Umats,Umats_ptr,Nsite)
+         call DeallocateBosonicField(Umats_imp)
+         nullify(Umats_ptr)
+      endif
       !
       call dump_BosonicField(Umats,reg(pathINPUTtr),"Uloc_mats.DAT")
       !

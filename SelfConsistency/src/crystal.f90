@@ -513,10 +513,11 @@ contains
    !---------------------------------------------------------------------------!
    !PURPOSE: Build the Hamiltonian and kpoints from user-given parameters
    !---------------------------------------------------------------------------!
-   subroutine build_Hk(Rinput,Norb,hopping,Nkpt3,alphaHk,Hk,kpt,Ek,Zk,Hloc,iq_gamma,pathOUTPUT)
+   subroutine build_Hk(Rinput,Norb,hopping,Nkpt3,alphaHk,Hetero,Hk,kpt,Ek,Zk,Hloc,iq_gamma,pathOUTPUT)
       !
       use utils_misc
-      use linalg, only : zeye, diagonal
+      use parameters, only : Heterostructures !WHY IS THIS WORKING?
+      use linalg, only : zeye, diagonal, diag
       implicit none
       !
       real(8),intent(in)                    :: Rinput(3,3)
@@ -524,6 +525,7 @@ contains
       real(8),intent(in)                    :: hopping(:)
       integer,intent(in)                    :: Nkpt3(3)
       real(8),intent(in)                    :: alphaHk
+      type(Heterostructures),intent(in)     :: Hetero
       complex(8),allocatable,intent(out)    :: Hk(:,:,:)
       real(8),allocatable,intent(out)       :: kpt(:,:)
       real(8),allocatable,intent(out)       :: Ek(:,:)
@@ -535,9 +537,10 @@ contains
       integer                               :: unit,Nkpt
       integer                               :: iwan1,iwan2,ik
       integer                               :: Trange,idist,iwig
+      integer                               :: isite,Nsite,shift
       real(8),allocatable                   :: Rsorted(:)
       integer,allocatable                   :: Rorder(:)
-      complex(8),allocatable                :: Hr(:,:,:)
+      complex(8),allocatable                :: Hr(:,:,:),Hk_single(:,:,:)
       !
       !
       if(verbose)write(*,"(A)") "---- build_Hk"
@@ -547,16 +550,10 @@ contains
       call assert_shape(hopping,[Norb],"build_Hk","hopping")
       !
       if(allocated(Hk))deallocate(Hk)
-      if(allocated(kpt))deallocate(kpt)
-      if(allocated(Ek))deallocate(Ek)
-      if(allocated(Zk))deallocate(Zk)
-      if(allocated(Hloc))deallocate(Hloc)
-      !
       allocate(Hk(Norb,Norb,Nkpt));Hk=czero
+      !
+      if(allocated(kpt))deallocate(kpt)
       allocate(kpt(3,Nkpt));kpt=0d0
-      allocate(Ek(Norb,Nkpt));Ek=0d0
-      allocate(Zk(Norb,Norb,Nkpt));Zk=czero
-      allocate(Hloc(Norb,Norb));Hloc=czero
       !
       call set_lattice(Rinput)
       call build_kpt(Nkpt3,kpt,pathOUTPUT=reg(pathOUTPUT))
@@ -608,6 +605,42 @@ contains
       !
       Hk = Hk*alphaHk
       !
+      !Build up the Heterostructure Hamiltonian
+      Nsite = 1
+      if(Hetero%status)then
+         !
+         Nsite = Hetero%Explicit(2)-Hetero%Explicit(1)+1
+         !
+         allocate(Hk_single(Norb,Norb,Nkpt));Hk_single=czero
+         Hk_single = Hk
+         deallocate(Hk)
+         allocate(Hk(Norb*Nsite,Norb*Nsite,Nkpt));Hk=czero
+         !
+         do isite=1,Nsite
+            !
+            shift = (isite-1)*Norb
+            !In-plane Hk
+            Hk(1+shift:Norb+shift,1+shift:Norb+shift,:) = Hk_single
+            !Out-of-plane hopping
+            if(isite.ne.Nsite)then
+               do ik=1,Nkpt
+                  Hk(1+shift:Norb+shift,1+Norb+shift:2*Norb+shift,ik) = diag(hopping)
+                  Hk(1+Norb+shift:2*Norb+shift,1+shift:Norb+shift,ik) = diag(hopping)
+               enddo
+            endif
+            !
+         enddo
+         deallocate(Hk_single)
+         !
+      endif
+      !
+      if(allocated(Ek))deallocate(Ek)
+      if(allocated(Zk))deallocate(Zk)
+      if(allocated(Hloc))deallocate(Hloc)
+      allocate(Ek(Norb*Nsite,Nkpt));Ek=0d0
+      allocate(Zk(Norb*Nsite,Norb*Nsite,Nkpt));Zk=czero
+      allocate(Hloc(Norb*Nsite,Norb*Nsite));Hloc=czero
+      !
       do ik=1,Nkpt
          Ek(:,ik) = diagonal(Hk(:,:,ik))
          Zk(:,:,ik) = zeye(Norb)
@@ -624,8 +657,8 @@ contains
          write(unit,("(3I10)")) 1,Nkpt,Norb
          do ik=1,Nkpt
             write(unit,("(3F14.8)")) kpt(:,ik)
-            do iwan1=1,Norb
-               do iwan2=1,Norb
+            do iwan1=1,Norb*Nsite
+               do iwan2=1,Norb*Nsite
                   write(unit,("(2I4,2E20.12)")) iwan1,iwan2,dreal(Hk(iwan1,iwan2,ik)),dimag(Hk(iwan1,iwan2,ik))
                enddo
             enddo
@@ -2704,7 +2737,7 @@ contains
    !---------------------------------------------------------------------------!
    subroutine interpolateHk2Path(Lttc,structure,Nkpt_path,pathOUTPUT,filename,data,doplane)
       !
-      use parameters
+      use parameters !WHY IS THIS WORKING?
       use utils_misc
       use linalg, only : eigh, inv, zeye
       implicit none
@@ -2877,7 +2910,7 @@ contains
    !---------------------------------------------------------------------------!
    subroutine calc_Ewald(EwaldShift,kpt,eta,mode)
       !
-      use parameters
+      use parameters !WHY IS THIS WORKING?
       use utils_misc
       implicit none
       !

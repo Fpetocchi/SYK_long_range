@@ -965,7 +965,7 @@ contains
       !
       !
       Nfit = size(MomentsOut,dim=3)
-      if(Nfit.lt.5) stop "fit_moments: the fit will not work with less than five moments (min order is 4)."
+      !if(Nfit.lt.5) stop "fit_moments: the fit will not work with less than five moments (min order is 4)."
       if(.not.allocated(MomentsOut)) stop "fit_moments: output moment container not allocated."
       MaxMom = Nfit - 1
       !
