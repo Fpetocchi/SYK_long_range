@@ -2227,8 +2227,7 @@ contains
       call dump_BosonicField(curlyU,reg(ItFolder)//"Solver_"//reg(SiteName(isite))//"/","curlyU_"//reg(SiteName(isite))//"_w.DAT")
       !
       !Istantaneous interaction
-      file = reg(ItFolder)//"Solver_"//reg(SiteName(isite))//"/Umat.DAT"
-      call dump_Matrix(Uinst,reg(file))
+      call dump_Matrix(Uinst,reg(ItFolder)//"Solver_"//reg(SiteName(isite))//"/","Umat.DAT")
       !
       !Print data for retarded interactions
       if(allocated(Kfunct))then
@@ -2296,10 +2295,10 @@ contains
             !
             if(isitecheck.eq.1)then
                call calc_QMCinteractions(curlyU,Uinst,sym=.false.)
-               call dump_Matrix(Uinst,reg(ItFolder)//"Solver_"//reg(SiteName(isitecheck))//"/Umat_notSym_"//str(isitecheck)//".DAT")
+               call dump_Matrix(Uinst,reg(ItFolder)//"Solver_"//reg(SiteName(isitecheck))//"/","Umat_noSym_"//str(isitecheck)//".DAT")
             else
                call calc_QMCinteractions(curlyU,Ucheck,sym=.false.)
-               call dump_Matrix(Ucheck,reg(ItFolder)//"Solver_"//reg(SiteName(isitecheck))//"/Umat_notSym_"//str(isitecheck)//".DAT")
+               call dump_Matrix(Ucheck,reg(ItFolder)//"Solver_"//reg(SiteName(isitecheck))//"/","Umat_noSym_"//str(isitecheck)//".DAT")
                !
                do ib1=1,Nflavor
                   do ib2=1,Nflavor
@@ -2856,7 +2855,7 @@ contains
                CDW = real(ChiCmats%screened_local(:,:,1))
                call remove_CDW(ChiCmats,"diag")
                CDW = CDW - real(ChiCmats%screened_local(:,:,1))
-               call dump_Matrix(CDW,reg(PrevItFolder)//"Solver_"//reg(SiteName(isite))//"/CDW_"//reg(SiteName(isite))//".DAT")
+               call dump_Matrix(CDW,reg(PrevItFolder)//"Solver_"//reg(SiteName(isite))//"/","CDW_"//reg(SiteName(isite))//".DAT")
                deallocate(CDW)
             endif
             !
@@ -3086,7 +3085,6 @@ contains
       implicit none
       !
       complex(8),allocatable                :: HartreeU(:,:,:),Nimp(:,:,:)
-      integer                               :: ispin
       !
       !
       write(*,"(A)") new_line("A")//new_line("A")//"---- interpolate_from_oldBeta"

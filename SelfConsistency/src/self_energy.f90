@@ -1519,8 +1519,8 @@ contains
       deallocate(vxc_diag,Uwan)
       !
       do ispin=1,Nspin_Uwan
-         call dump_matrix(Vxc(:,:,:,ispin),reg(pathINPUT),"Vxc",.true.,ispin=ispin)
-         if(save2readable)call dump_matrix(Vxc(:,:,:,ispin),reg(pathINPUT)//"Vxc/","Vxc",.false.,ispin=ispin)
+         call dump_matrix(Vxc(:,:,:,ispin),.true.,reg(pathINPUT),"Vxc",ispin=ispin)
+         if(save2readable)call dump_matrix(Vxc(:,:,:,ispin),.false.,reg(pathINPUT)//"Vxc/","Vxc",ispin=ispin)
       enddo
       !
       allocate(Vxc_loc(Norb,Norb,Nspin));Vxc_loc=czero

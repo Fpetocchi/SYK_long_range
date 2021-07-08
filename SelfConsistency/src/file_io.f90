@@ -21,8 +21,8 @@ module file_io
       module procedure :: dump_Matrix_local_spin_d                              ![Umat(Norb,Norb,Nspin),dirpath,filename,paramagnet.....................( Writes only to formatted output )
       module procedure :: dump_Matrix_local_z                                   ![Umat(Norb,Norb),dirpath,filename].....................................( Writes only to formatted output )
       module procedure :: dump_Matrix_local_spin_z                              ![Umat(Norb,Norb,Nspin),dirpath,filename,paramagnet.....................( Writes only to formatted output )
-      module procedure :: dump_Matrix_Kdep_d                                    ![Umat(Norb,Norb,Nkpt),dirpath,filename,binfmt].........................( Writes output depending on binfmt )
-      module procedure :: dump_Matrix_Kdep_z                                    ![Umat(Norb,Norb,Nkpt),dirpath,filename,binfmt].........................( Writes output depending on binfmt )
+      module procedure :: dump_Matrix_Kdep_d                                    ![Umat(Norb,Norb,Nkpt),binfmt,dirpath,filename].........................( Writes output depending on binfmt )
+      module procedure :: dump_Matrix_Kdep_z                                    ![Umat(Norb,Norb,Nkpt),binfmt,dirpath,filename].........................( Writes output depending on binfmt )
    end interface dump_Matrix
 
    interface read_Matrix
@@ -105,7 +105,7 @@ contains
       character(len=*),intent(in)           :: dirpath
       character(len=*),intent(in)           :: filename
       !
-      character(len=*),intent(in)           :: printpath
+      character(len=255)                    :: printpath
       integer                               :: unit
       integer                               :: i,j
       !
@@ -138,7 +138,7 @@ contains
       integer                               :: ispin,Nspin
       !
       if(verbose)write(*,"(A)") "---- dump_Matrix_local_spin_d"
-      Nspin = size(U,dim=3)
+      Nspin = size(Umat,dim=3)
       !
       if(paramagnet)then
          call dump_Matrix_local_d(Umat(:,:,1),reg(dirpath),reg(filename)//"_s1.DAT")
@@ -159,7 +159,7 @@ contains
       character(len=*),intent(in)           :: dirpath
       character(len=*),intent(in)           :: filename
       !
-      character(len=*),intent(in)           :: printpath
+      character(len=255)                    :: printpath
       integer                               :: unit
       integer                               :: i,j
       !
@@ -196,7 +196,7 @@ contains
       integer                               :: ispin,Nspin
       !
       if(verbose)write(*,"(A)") "---- dump_Matrix_local_spin_z"
-      Nspin = size(U,dim=3)
+      Nspin = size(Umat,dim=3)
       !
       if(paramagnet)then
          call dump_Matrix_local_z(Umat(:,:,1),reg(dirpath),reg(filename)//"_s1.DAT")
@@ -208,7 +208,7 @@ contains
       !
    end subroutine dump_Matrix_local_spin_z
    !
-   subroutine dump_Matrix_Kdep_d(Umat,dirpath,filename,binfmt,ispin)
+   subroutine dump_Matrix_Kdep_d(Umat,binfmt,dirpath,filename,ispin)
       !
       use utils_misc
       use utils_fields
@@ -288,7 +288,7 @@ contains
       !
    end subroutine dump_Matrix_Kdep_d
    !
-   subroutine dump_Matrix_Kdep_z(Umat,dirpath,filename,binfmt,ispin)
+   subroutine dump_Matrix_Kdep_z(Umat,binfmt,dirpath,filename,ispin)
       !
       use utils_misc
       use utils_fields
@@ -409,13 +409,13 @@ contains
       use utils_misc
       implicit none
       !
-      real(8),intent(in)                    :: Umat(:,:,:)
+      real(8),intent(inout)                 :: Umat(:,:,:)
       character(len=*),intent(in)           :: readpath
       logical,intent(in)                    :: paramagnet
       integer                               :: ispin,Nspin
       !
       if(verbose)write(*,"(A)") "---- read_Matrix_local_spin_d"
-      Nspin = size(U,dim=3)
+      Nspin = size(Umat,dim=3)
       !
       if(paramagnet)then
          call read_Matrix_local_d(Umat(:,:,1),reg(readpath)//"_s1.DAT")
@@ -473,16 +473,16 @@ contains
       use utils_misc
       implicit none
       !
-      complex(8),intent(in)                 :: Umat(:,:,:)
+      complex(8),intent(inout)              :: Umat(:,:,:)
       character(len=*),intent(in)           :: readpath
       logical,intent(in)                    :: paramagnet
       integer                               :: ispin,Nspin
       !
       if(verbose)write(*,"(A)") "---- read_Matrix_local_spin_z"
-      Nspin = size(U,dim=3)
+      Nspin = size(Umat,dim=3)
       !
       if(paramagnet)then
-         call read_Matrix_local_d(Umat(:,:,1),reg(readpath)//"_s1.DAT")
+         call read_Matrix_local_z(Umat(:,:,1),reg(readpath)//"_s1.DAT")
          do ispin=2,Nspin
             Umat(:,:,ispin) = Umat(:,:,1)
          enddo

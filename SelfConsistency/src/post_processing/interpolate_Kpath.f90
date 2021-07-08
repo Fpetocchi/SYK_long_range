@@ -879,8 +879,8 @@ contains
          !
          !rotation
          do ispin=1,Nspin
-            path = reg(pathOUTPUT)//"K_resolved/Sigma_vars/S"//reg(mode)//"_Rot_k"//str(ik)//"_s"//str(ispin)//".DAT"
-            call dump_Matrix(RotN(:,:,ik,ispin),reg(path))
+            path = reg(pathOUTPUT)//"K_resolved/Sigma_vars/"
+            call dump_Matrix(RotN(:,:,ik,ispin),reg(path),"S"//reg(mode)//"_Rot_k"//str(ik)//"_s"//str(ispin)//".DAT")
             if(paramagnet)exit
          enddo
          !

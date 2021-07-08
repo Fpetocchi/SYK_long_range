@@ -1025,7 +1025,7 @@ contains
          !
          call read_BosonicField(Uread,reg(pathINPUT),"Uloc_mats.DAT")
          Umat = Uread%screened_local(:,:,1)
-         call dump_matrix(Umat,reg(pathINPUT//"Umat.DAT"))
+         call dump_matrix(Umat,reg(pathINPUT),"Umat.DAT")
          call DeallocateBosonicField(Uread)
          return
          !
@@ -1035,7 +1035,7 @@ contains
          !
          call read_BosonicField(Uread,reg(pathINPUT),"Uloc_real.DAT")
          Umat = Uread%screened_local(:,:,1)
-         call dump_matrix(Umat,reg(pathINPUT//"Umat.DAT"))
+         call dump_matrix(Umat,reg(pathINPUT),"Umat.DAT")
          call DeallocateBosonicField(Uread)
          return
          !
@@ -1075,7 +1075,7 @@ contains
             !
          enddo !iq
          Umat = Umat/(Nkpt**3)
-         call dump_matrix(Umat,reg(reg(pathOUTPUT_)//"Umat.DAT"))
+         call dump_matrix(Umat,reg(pathOUTPUT_),"Umat.DAT")
          return
          !
       else
