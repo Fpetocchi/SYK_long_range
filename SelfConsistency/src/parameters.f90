@@ -238,6 +238,7 @@ module parameters
       real(8)                               :: GlobalTzRatio
       integer,allocatable                   :: ExplicitTzPos(:)
       real(8),allocatable                   :: ExplicitTzRatios(:)
+      complex(8),allocatable                :: tz(:,:,:)
       logical                               :: status=.false.
    end type Heterostructures
 

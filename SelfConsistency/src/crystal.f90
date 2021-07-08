@@ -525,7 +525,7 @@ contains
       real(8),intent(in)                    :: hopping(:)
       integer,intent(in)                    :: Nkpt3(3)
       real(8),intent(in)                    :: alphaHk
-      type(Heterostructures),intent(in)     :: Hetero
+      type(Heterostructures),intent(inout)  :: Hetero
       complex(8),allocatable,intent(out)    :: Hk(:,:,:)
       real(8),allocatable,intent(out)       :: kpt(:,:)
       real(8),allocatable,intent(out)       :: Ek(:,:)
@@ -537,7 +537,7 @@ contains
       integer                               :: unit,Nkpt
       integer                               :: iwan1,iwan2,ik
       integer                               :: Trange,idist,iwig
-      integer                               :: isite,Nsite,shift
+      integer                               :: isite,Nsite,shift,na,nb,ipos
       real(8),allocatable                   :: Rsorted(:)
       integer,allocatable                   :: Rorder(:)
       complex(8),allocatable                :: Hr(:,:,:),Hk_single(:,:,:)
@@ -611,12 +611,16 @@ contains
          !
          Nsite = Hetero%Explicit(2)-Hetero%Explicit(1)+1
          !
+         allocate(Hetero%tz(Norb,Norb,Nsite));Hetero%tz=czero
          allocate(Hk_single(Norb,Norb,Nkpt));Hk_single=czero
          Hk_single = Hk
          deallocate(Hk)
          allocate(Hk(Norb*Nsite,Norb*Nsite,Nkpt));Hk=czero
          !
+         !Setting up the uniform out-of-plane hopping
          do isite=1,Nsite
+            !
+            Hetero%tz(:,:,isite) = diag(hopping)*Hetero%GlobalTzRatio
             !
             shift = (isite-1)*Norb
             !In-plane Hk
@@ -624,13 +628,43 @@ contains
             !Out-of-plane hopping
             if(isite.ne.Nsite)then
                do ik=1,Nkpt
-                  Hk(1+shift:Norb+shift,1+Norb+shift:2*Norb+shift,ik) = diag(hopping)
-                  Hk(1+Norb+shift:2*Norb+shift,1+shift:Norb+shift,ik) = diag(hopping)
+                  Hk(1+shift:Norb+shift,1+Norb+shift:2*Norb+shift,ik) = diag(hopping)*Hetero%GlobalTzRatio
+                  Hk(1+Norb+shift:2*Norb+shift,1+shift:Norb+shift,ik) = diag(hopping)*Hetero%GlobalTzRatio
                enddo
             endif
             !
          enddo
          deallocate(Hk_single)
+         !
+         !Adding up the deviations from the uniform out-of-plane hopping
+         if(allocated(Hetero%ExplicitTzPos))then
+            do ipos=1,size(Hetero%ExplicitTzPos)
+               !
+               isite = Hetero%ExplicitTzPos(ipos)
+               na = 1+(isite-1)*Norb
+               nb = isite*Norb
+               !
+               Hetero%tz(:,:,isite) = diag(hopping)*Hetero%ExplicitTzRatios(ipos)
+               !
+               do ik=1,Nkpt
+                  if(isite.eq.1)then
+                     !forward: col+=Norb
+                     Hk(na:nb,na+Norb:nb+Norb,ik) = Hetero%tz(:,:,isite)
+                     Hk(na+Norb:nb+Norb,na:nb,ik) = Hetero%tz(:,:,isite)
+                  elseif(isite.eq.Nsite)then
+                     !backward: row-=Norb
+                     Hk(na-Norb:nb-Norb,na:nb,ik) = Hetero%tz(:,:,isite)
+                     Hk(na:nb,na-Norb:nb-Norb,ik) = Hetero%tz(:,:,isite)
+                  else
+                     !forward & backward
+                     Hk(na:nb,na+Norb:nb+Norb,ik) = Hetero%tz(:,:,isite)
+                     Hk(na+Norb:nb+Norb,na:nb,ik) = Hetero%tz(:,:,isite)
+                     Hk(na-Norb:nb-Norb,na:nb,ik) = Hetero%tz(:,:,isite)
+                     Hk(na:nb,na-Norb:nb-Norb,ik) = Hetero%tz(:,:,isite)
+                  endif
+               enddo !ik
+            enddo !ipos
+         endif
          !
       endif
       !

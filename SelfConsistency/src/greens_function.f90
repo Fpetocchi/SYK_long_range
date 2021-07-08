@@ -53,7 +53,6 @@ contains
 
    !---------------------------------------------------------------------------!
    !PURPOSE: Compute the density given the Green's function
-   !TEST ON: 16-10-2020(Kdep)
    !---------------------------------------------------------------------------!
    subroutine calc_density_loc(Gmats,n_loc)
       !
@@ -181,7 +180,6 @@ contains
    !---------------------------------------------------------------------------!
    !PURPOSE: analytically compute the G0(\tau) in the diagonal basis.
    !by now only for paramagnetic G
-   !TEST ON: 14-10-2020
    !---------------------------------------------------------------------------!
    subroutine calc_G0_tau(Gitau,mu,Beta,Ek,atBeta)
       !
@@ -253,7 +251,6 @@ contains
 
    !---------------------------------------------------------------------------!
    !PURPOSE: Compute the Matsubara Green's Function
-   !TEST ON: 16-10-2020
    !---------------------------------------------------------------------------!
    subroutine calc_Gmats_Full(Gmats,Lttc,Smats,along_path,along_plane)
       !
@@ -261,24 +258,27 @@ contains
       use linalg
       use utils_misc
       use utils_fields
-      use input_vars, only : paramagnet
+      use input_vars, only : paramagnet, Hetero
       implicit none
       !
       type(FermionicField),intent(inout)    :: Gmats
       type(Lattice),intent(in),target       :: Lttc
-      type(FermionicField),intent(in),optional,target :: Smats
+      type(FermionicField),intent(in),optional :: Smats !target
       logical,intent(in),optional           :: along_path
       logical,intent(in),optional           :: along_plane
       !
       complex(8),allocatable                :: invGf(:,:)
-      complex(8),pointer                    :: Swks(:,:,:,:,:)
+      !complex(8),pointer                    :: Swks(:,:,:,:,:)
       complex(8),pointer                    :: Hk(:,:,:)
       complex(8),allocatable                :: zeta(:,:,:)
       complex(8),allocatable                :: n_k(:,:,:,:)
+      complex(8),allocatable                :: Potential_L(:,:,:,:,:)
+      complex(8),allocatable                :: Potential_R(:,:,:,:,:)
       real(8),allocatable                   :: wmats(:)
       real(8)                               :: Beta,mu
       integer                               :: Norb,Nmats,Nkpt
       integer                               :: iw,ik,iwan,ispin
+      integer                               :: Ln(2),Rn(2),NbulkL,NbulkR
       logical                               :: along_path_,along_plane_
       !
       !
@@ -338,8 +338,43 @@ contains
          if(.not.Smats%status) stop "calc_Gmats_Full: Smats not properly initialized."
          if(Smats%Npoints.ne.Nmats) stop "calc_Gmats_Full: Smats has different number of Matsubara points with respect to Gmats."
          if(Smats%Nkpt.ne.Nkpt) stop "calc_Gmats_Full: Smats has different number of k-points with respect to Gmats."
-         Swks => Smats%wks
          if(verbose)write(*,"(A)") "     Interacting Green's function."
+         !
+         Ln=0;Rn=0
+         if(Hetero%status)then
+            if(Hetero%Explicit(1).ne.1)then
+               !
+               Ln(1) = 1
+               Ln(2) = Hetero%Norb
+               NbulkL = Hetero%Explicit(1)-1
+               !
+               allocate(Potential_L(Hetero%Norb,Hetero%Norb,Nmats,Nkpt,Nspin));Potential_L=czero
+               call build_Potential(Potential_L,Hetero%tz(:,:,Hetero%Explicit(1)),NbulkL &
+                                               ,zeta(Ln(1):Ln(2),Ln(1):Ln(2),:)          &
+                                               ,Hk(Ln(1):Ln(2),Ln(1):Ln(2),:)            &
+                                               ,Smats%wks(Ln(1):Ln(2),Ln(1):Ln(2),:,:,:) )
+               write(*,"(A,2I4)") "     Left potential orbital indexes: ",Ln(1),Ln(2)
+               write(*,"(A,1I5)") "     Left bulk thickness: ",NbulkL
+               !
+            endif
+            if(Hetero%Explicit(2).ne.Hetero%Nslab)then
+               !
+               Rn(1) = Norb - Hetero%Norb
+               Rn(2) = Norb
+               NbulkR = Hetero%Nslab-Hetero%Explicit(2)
+               !
+               allocate(Potential_R(Hetero%Norb,Hetero%Norb,Nmats,Nkpt,Nspin));Potential_R=czero
+               call build_Potential(Potential_R,Hetero%tz(:,:,Hetero%Explicit(2)),NbulkR &
+                                               ,zeta(Rn(1):Rn(2),Rn(1):Rn(2),:)          &
+                                               ,Hk(Rn(1):Rn(2),Rn(1):Rn(2),:)            &
+                                               ,Smats%wks(Rn(1):Rn(2),Rn(1):Rn(2),:,:,:) )
+               write(*,"(A,2I4)") "     Right potential orbital indexes: ",Rn(1),Rn(2)
+               write(*,"(A,1I5)") "     Right bulk thickness: ",NbulkR
+               !
+            endif
+            !
+         endif
+         !
       else
          if(verbose)write(*,"(A)") "     LDA Green's function."
       endif
@@ -348,7 +383,7 @@ contains
       allocate(invGf(Norb,Norb));invGf=czero
       spinloop: do ispin=1,Nspin
          !$OMP PARALLEL DEFAULT(NONE),&
-         !$OMP SHARED(ispin,zeta,Gmats,Swks,Hk),&
+         !$OMP SHARED(ispin,zeta,Gmats,Smats,Hk,Ln,Potential_L,Rn,Potential_R),&
          !$OMP PRIVATE(ik,iw,invGf)
          !$OMP DO
          do iw=1,Gmats%Npoints
@@ -356,7 +391,9 @@ contains
                !
                invGf = zeta(:,:,iw) - Hk(:,:,ik)
                !
-               if(associated(Swks)) invGf = invGf - Swks(:,:,iw,ik,ispin)
+               if(present(Smats)) invGf = invGf - Smats%wks(:,:,iw,ik,ispin)
+               if(allocated(Potential_L)) invGf(Ln(1):Ln(2),Ln(1):Ln(2)) = invGf(Ln(1):Ln(2),Ln(1):Ln(2)) - Potential_L(:,:,iw,ik,ispin)
+               if(allocated(Potential_R)) invGf(Rn(1):Rn(2),Rn(1):Rn(2)) = invGf(Rn(1):Rn(2),Rn(1):Rn(2)) - Potential_R(:,:,iw,ik,ispin)
                !
                call inv(invGf)
                Gmats%wks(:,:,iw,ik,ispin) = invGf
@@ -371,7 +408,7 @@ contains
          endif
       enddo spinloop
       deallocate(zeta,invGf)
-      if(associated(Swks))nullify(Swks)
+      !if(associated(Swks))nullify(Swks)
       if(associated(Hk))nullify(Hk)
       !
       ! In the N_ks attribute is stored the k-dep occupation
@@ -628,7 +665,6 @@ contains
    !---------------------------------------------------------------------------!
    !PURPOSE: Returns the chemical potential shift in order to have the wanted
    !         LDA density
-   !TEST ON: 06-11-2020
    !---------------------------------------------------------------------------!
    subroutine set_density_NonInt(mu,Beta,Lttc,mu_param)
       !
@@ -769,7 +805,6 @@ contains
 
    !---------------------------------------------------------------------------!
    !PURPOSE: Prints lda Gf on different axis.
-   !TEST ON: 14-10-2020
    !---------------------------------------------------------------------------!
    subroutine calc_Glda(mu,Beta,Lttc,pathOUTPUT)
       !
@@ -934,5 +969,80 @@ contains
    end subroutine calc_Glda
 
 
+   !---------------------------------------------------------------------------!
+   !PURPOSE: Prints lda Gf on different axis.
+   !TEST ON: 14-10-2020
+   !---------------------------------------------------------------------------!
+   subroutine build_Potential(Potential,tz,Npot,zeta,Hk,Smats)
+      !
+      use parameters
+      use linalg, only : inv, rotate
+      use utils_misc
+      use input_vars, only : paramagnet
+      implicit none
+      !
+      complex(8),intent(inout)              :: Potential(:,:,:,:,:)
+      complex(8),intent(in)                 :: tz(:,:)
+      integer,intent(in)                    :: Npot
+      complex(8),intent(in)                 :: zeta(:,:,:)
+      complex(8),intent(in)                 :: Hk(:,:,:)
+      complex(8),intent(in)                 :: Smats(:,:,:,:,:)
+      !
+      complex(8),allocatable                :: invGbulk(:,:)
+      complex(8),allocatable                :: Gbulk(:,:)
+      complex(8),allocatable                :: Ptmp(:,:)
+      integer                               :: Norb,Nmats,Nkpt
+      integer                               :: iw,ik,ispin,ibulk
+      !
+      !
+      if(verbose)write(*,"(A)") "---- build_Potential"
+      !
+      !
+      Norb = size(Potential,dim=1)
+      Nmats = size(zeta,dim=3)
+      Nkpt = size(Hk,dim=3)
+      !
+      call assert_shape(Potential,[Norb,Norb,Nmats,Nkpt,Nspin],"build_Potential","Potential")
+      call assert_shape(tz,[Norb,Norb],"build_Potential","tz")
+      call assert_shape(zeta,[Norb,Norb,Nmats],"build_Potential","zeta")
+      call assert_shape(Hk,[Norb,Norb,Nkpt],"build_Potential","Hk")
+      call assert_shape(Smats,[Norb,Norb,Nmats,Nkpt,Nspin],"build_Smats","Potential")
+      !
+      !G and invG of each layer are constant
+      allocate(invGbulk(Norb,Norb));invGbulk=czero
+      allocate(Gbulk(Norb,Norb));Gbulk=czero
+      allocate(Ptmp(Norb,Norb));Ptmp=czero
+      spinPloop: do ispin=1,Nspin
+         !$OMP PARALLEL DEFAULT(NONE),&
+         !$OMP SHARED(ispin,Nmats,Nkpt,zeta,Hk,Smats,Npot,tz,Potential),&
+         !$OMP PRIVATE(ik,iw,ibulk,invGbulk,Gbulk,Ptmp)
+         !$OMP DO
+         do iw=1,Nmats
+            do ik=1,Nkpt
+               !
+               invGbulk = zeta(:,:,iw) - Hk(:,:,ik) - Smats(:,:,iw,ik,ispin)
+               Gbulk = invGbulk
+               call inv(Gbulk)
+               !
+               !first t*G*t
+               Potential(:,:,iw,ik,ispin) = rotate(Gbulk,tz)
+               do ibulk=2,Npot
+                  Ptmp = invGbulk - Potential(:,:,iw,ik,ispin)
+                  call inv(Ptmp)
+                  Potential(:,:,iw,ik,ispin) = rotate(Ptmp,tz)
+               enddo
+               !
+            enddo
+         enddo
+         !$OMP END DO
+         !$OMP END PARALLEL
+         if(paramagnet)then
+            Potential(:,:,:,:,Nspin) = Potential(:,:,:,:,1)
+            exit spinPloop
+         endif
+      enddo spinPloop
+      deallocate(Gbulk,invGbulk,Ptmp)
+      !
+   end subroutine build_Potential
 
 end module greens_function

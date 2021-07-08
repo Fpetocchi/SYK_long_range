@@ -1323,8 +1323,11 @@ contains
       !
       if(look4dens%TargetDensity.eq.0d0)then
          Glat%mu = look4dens%mu
-      elseif(ItStart.eq.0)then
-         call set_density(Glat%mu,Beta,Crystal,look4dens)
+      else
+         if(ItStart.eq.0)then
+            Glat%mu = look4dens%mu
+            call set_density(Glat%mu,Beta,Crystal,look4dens)
+         endif
       endif
       !
       write(*,"(A,F)") new_line("A")//"     Lattice chemical potential:  ",Glat%mu
