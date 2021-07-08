@@ -144,7 +144,7 @@ program SelfConsistency
          !Hartree shift between G0W0 and LDA
          allocate(VH(Crystal%Norb,Crystal%Norb));VH=czero
          if(.not.Hmodel) call calc_VH(VH,densityLDA,Glat,Ulat) !call calc_VH(VH,densityLDA,densityDMFT,Ulat) !call calc_VH(VH,densityLDA,Glat,Ulat)
-         call dump_Matrix(VH,reg(ItFolder)//"VH.DAT")
+         call dump_Matrix(VH,reg(ItFolder),"VH.DAT")
          if(.not.VH_use)then
             VH=czero
             write(*,"(A)")"     VH not used."
@@ -262,9 +262,8 @@ program SelfConsistency
       !
       !
       !Print lattice density
-      call dump_Matrix(Glat%N_s(:,:,1),reg(ItFolder)//"Nlat_s1.DAT")
-      call dump_Matrix(Glat%N_s(:,:,2),reg(ItFolder)//"Nlat_s2.DAT")
-      densityGW=Glat%N_s
+      call dump_Matrix(Glat%N_s,reg(ItFolder),"Nlat",paramagnet)
+      densityGW = Glat%N_s
       !
       !
       !The local problem must give the same density in the same subset

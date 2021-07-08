@@ -17,17 +17,21 @@ module file_io
    !PURPOSE: Module interfaces
    !---------------------------------------------------------------------------!
    interface dump_Matrix
-      module procedure :: dump_Matrix_local_d                                   ![Umat(Norb,Norb),printpath]............................................( Writes only to formatted output )
-      module procedure :: dump_Matrix_local_z                                   ![Umat(Norb,Norb),printpath]............................................( Writes only to formatted output )
+      module procedure :: dump_Matrix_local_d                                   ![Umat(Norb,Norb),dirpath,filename].....................................( Writes only to formatted output )
+      module procedure :: dump_Matrix_local_spin_d                              ![Umat(Norb,Norb,Nspin),dirpath,filename,paramagnet.....................( Writes only to formatted output )
+      module procedure :: dump_Matrix_local_z                                   ![Umat(Norb,Norb),dirpath,filename].....................................( Writes only to formatted output )
+      module procedure :: dump_Matrix_local_spin_z                              ![Umat(Norb,Norb,Nspin),dirpath,filename,paramagnet.....................( Writes only to formatted output )
       module procedure :: dump_Matrix_Kdep_d                                    ![Umat(Norb,Norb,Nkpt),dirpath,filename,binfmt].........................( Writes output depending on binfmt )
       module procedure :: dump_Matrix_Kdep_z                                    ![Umat(Norb,Norb,Nkpt),dirpath,filename,binfmt].........................( Writes output depending on binfmt )
    end interface dump_Matrix
 
    interface read_Matrix
       module procedure :: read_Matrix_local_d                                   ![Umat(Norb,Norb),readpath].............................................( Reads only from formatted input )
+      module procedure :: read_Matrix_local_spin_d                              ![Umat(Norb,Norb,Nspin),readpath,paramagnet.............................( Writes only to formatted output )
       module procedure :: read_Matrix_local_z                                   ![Umat(Norb,Norb),readpath].............................................( Reads only from formatted input )
-      module procedure :: read_Matrix_Kdep_d                                    ![Umat(Norb,Norb,Nkpt),dirpath,filename]................................( Reads only from unformatted input )
-      module procedure :: read_Matrix_Kdep_z                                    ![Umat(Norb,Norb,Nkpt),dirpath,filename]................................( Reads only from unformatted input )
+      module procedure :: read_Matrix_local_spin_z                              ![Umat(Norb,Norb,Nspin),readpath,paramagnet.............................( Writes only to formatted output )
+      module procedure :: read_Matrix_Kdep_d                                    ![Umat(Norb,Norb,Nkpt),readpath]........................................( Reads only from unformatted input )
+      module procedure :: read_Matrix_Kdep_z                                    ![Umat(Norb,Norb,Nkpt),readpath]........................................( Reads only from unformatted input )
    end interface read_Matrix
 
    interface dump_Field_component
@@ -91,23 +95,81 @@ contains
 
    !---------------------------------------------------------------------------!
    !PURPOSE: Write square matrices to file
-   !TEST ON: 17-11-2020
    !---------------------------------------------------------------------------!
-   subroutine dump_Matrix_local_z(Umat,printpath)
+   subroutine dump_Matrix_local_d(Umat,dirpath,filename)
+      !
+      use utils_misc
+      implicit none
+      !
+      real(8),intent(in)                    :: Umat(:,:)
+      character(len=*),intent(in)           :: dirpath
+      character(len=*),intent(in)           :: filename
+      !
+      character(len=*),intent(in)           :: printpath
+      integer                               :: unit
+      integer                               :: i,j
+      !
+      !
+      if(verbose)write(*,"(A)") "---- dump_Matrix_local_d"
+      !
+      printpath = reg(dirpath)//reg(filename)
+      write(*,"(A)") "     Dump "//reg(printpath)//" (readable)"
+      !
+      call createDir(reg(dirpath),verb=verbose)
+      !
+      unit = free_unit()
+      open(unit,file=reg(printpath),form="formatted",status="unknown",position="rewind",action="write")
+      do i=1,size(Umat,dim=1)
+         write(unit,"(999E20.12)") (real(Umat(i,j)),j=1,size(Umat,dim=2))
+      enddo
+      close(unit)
+      !
+   end subroutine dump_Matrix_local_d
+   !
+   subroutine dump_Matrix_local_spin_d(Umat,dirpath,filename,paramagnet)
+      !
+      use utils_misc
+      implicit none
+      !
+      real(8),intent(in)                    :: Umat(:,:,:)
+      character(len=*),intent(in)           :: dirpath
+      character(len=*),intent(in)           :: filename
+      logical,intent(in)                    :: paramagnet
+      integer                               :: ispin,Nspin
+      !
+      if(verbose)write(*,"(A)") "---- dump_Matrix_local_spin_d"
+      Nspin = size(U,dim=3)
+      !
+      if(paramagnet)then
+         call dump_Matrix_local_d(Umat(:,:,1),reg(dirpath),reg(filename)//"_s1.DAT")
+      else
+         do ispin=1,Nspin
+            call dump_Matrix_local_d(Umat(:,:,ispin),reg(dirpath),reg(filename)//"_s"//str(ispin)//".DAT")
+         enddo
+      endif
+      !
+   end subroutine dump_Matrix_local_spin_d
+   !
+   subroutine dump_Matrix_local_z(Umat,dirpath,filename)
       !
       use utils_misc
       implicit none
       !
       complex(8),intent(in)                 :: Umat(:,:)
-      character(len=*),intent(in)           :: printpath
+      character(len=*),intent(in)           :: dirpath
+      character(len=*),intent(in)           :: filename
       !
+      character(len=*),intent(in)           :: printpath
       integer                               :: unit
       integer                               :: i,j
       !
       !
       if(verbose)write(*,"(A)") "---- dump_Matrix_local_z"
+      !
+      printpath = reg(dirpath)//reg(filename)
       write(*,"(A)") "     Dump "//reg(printpath)//" (readable)"
       !
+      call createDir(reg(dirpath),verb=verbose)
       !
       unit = free_unit()
       open(unit,file=reg(printpath),form="formatted",status="unknown",position="rewind",action="write")
@@ -122,110 +184,29 @@ contains
       !
    end subroutine dump_Matrix_local_z
    !
-   subroutine dump_Matrix_local_d(Umat,printpath)
+   subroutine dump_Matrix_local_spin_z(Umat,dirpath,filename,paramagnet)
       !
       use utils_misc
-      implicit none
-      !
-      real(8),intent(in)                    :: Umat(:,:)
-      character(len=*),intent(in)           :: printpath
-      !
-      integer                               :: unit
-      integer                               :: i,j
-      !
-      !
-      if(verbose)write(*,"(A)") "---- dump_Matrix_local_d"
-      write(*,"(A)") "     Dump "//reg(printpath)//" (readable)"
-      !
-      !
-      unit = free_unit()
-      open(unit,file=reg(printpath),form="formatted",status="unknown",position="rewind",action="write")
-      do i=1,size(Umat,dim=1)
-         write(unit,"(999E20.12)") (real(Umat(i,j)),j=1,size(Umat,dim=2))
-      enddo
-      close(unit)
-      !
-   end subroutine dump_Matrix_local_d
-   !
-   subroutine dump_Matrix_Kdep_z(Umat,dirpath,filename,binfmt,ispin)
-      !
-      use utils_misc
-      use utils_fields
       implicit none
       !
       complex(8),intent(in)                 :: Umat(:,:,:)
       character(len=*),intent(in)           :: dirpath
       character(len=*),intent(in)           :: filename
-      logical,intent(in)                    :: binfmt
-      integer,intent(in),optional           :: ispin
+      logical,intent(in)                    :: paramagnet
+      integer                               :: ispin,Nspin
       !
-      integer                               :: unit,ik,Norb,Nkpt
-      integer                               :: iwan1,iwan2
-      character(len=256)                    :: printpath
+      if(verbose)write(*,"(A)") "---- dump_Matrix_local_spin_z"
+      Nspin = size(U,dim=3)
       !
-      !
-      if(verbose)write(*,"(A)") "---- dump_Matrix_Kdep_z"
-      !
-      !
-      ! Check on the input matrix
-      Nkpt = size(Umat,dim=3)
-      Norb = size(Umat,dim=1)
-      if(Norb.ne.size(Umat,dim=2)) stop "dump_Matrix_Kdep_z: The provided matrix is not square."
-      !
-      ! Create directory
-      call createDir(reg(dirpath),verb=verbose)
-      !
-      ! Write to file
-      if(binfmt) then
-         !
-         if(present(ispin))then
-            printpath = reg(dirpath)//reg(filename)//"_k_s"//str(ispin)//".DAT"
-         else
-            printpath = reg(dirpath)//reg(filename)//"_k.DAT."
-         endif
-         write(*,"(A)") "     Dump "//reg(printpath)//" (binary)"
-         !
-         unit = free_unit()
-         open(unit,file=reg(printpath),form="unformatted",status="unknown",position="rewind",action="write")
-         !
-         write(unit) Nkpt,Norb
-         do ik=1,Nkpt
-            write(unit) ik
-            do iwan1=1,Norb
-               do iwan2=1,Norb
-                  write(unit) iwan1,iwan2,dreal(Umat(iwan1,iwan2,ik)),dimag(Umat(iwan1,iwan2,ik))
-               enddo
-            enddo
-         enddo !ik
-         close(unit)
-         !
+      if(paramagnet)then
+         call dump_Matrix_local_z(Umat(:,:,1),reg(dirpath),reg(filename)//"_s1.DAT")
       else
-         !
-         do ik=1,Nkpt
-            !
-            if(present(ispin))then
-               printpath = reg(dirpath)//reg(filename)//"_ik"//str(ik)//"_s"//str(ispin)//".DAT"
-            else
-               printpath = reg(dirpath)//reg(filename)//"_ik"//str(ik)//".DAT"
-            endif
-            write(*,"(A)") "     Dump "//reg(printpath)//" (readable)"
-            unit = free_unit()
-            open(unit,file=reg(printpath),form="formatted",status="unknown",position="rewind",action="write")
-            !
-            write(unit,"(2(A,1I7))") "ik",ik,"Norb",Norb
-            do iwan1=1,Norb
-               do iwan2=1,Norb
-                  write(unit,"(2I4,2E20.12)") iwan1,iwan2,dreal(Umat(iwan1,iwan2,ik)),dimag(Umat(iwan1,iwan2,ik))
-               enddo
-            enddo
-            !
-            close(unit)
-            !
-         enddo !ik
-         !
+         do ispin=1,Nspin
+            call dump_Matrix_local_z(Umat(:,:,ispin),reg(dirpath),reg(filename)//"_s"//str(ispin)//".DAT")
+         enddo
       endif
       !
-   end subroutine dump_Matrix_Kdep_z
+   end subroutine dump_Matrix_local_spin_z
    !
    subroutine dump_Matrix_Kdep_d(Umat,dirpath,filename,binfmt,ispin)
       !
@@ -306,12 +287,149 @@ contains
       endif
       !
    end subroutine dump_Matrix_Kdep_d
+   !
+   subroutine dump_Matrix_Kdep_z(Umat,dirpath,filename,binfmt,ispin)
+      !
+      use utils_misc
+      use utils_fields
+      implicit none
+      !
+      complex(8),intent(in)                 :: Umat(:,:,:)
+      character(len=*),intent(in)           :: dirpath
+      character(len=*),intent(in)           :: filename
+      logical,intent(in)                    :: binfmt
+      integer,intent(in),optional           :: ispin
+      !
+      integer                               :: unit,ik,Norb,Nkpt
+      integer                               :: iwan1,iwan2
+      character(len=256)                    :: printpath
+      !
+      !
+      if(verbose)write(*,"(A)") "---- dump_Matrix_Kdep_z"
+      !
+      !
+      ! Check on the input matrix
+      Nkpt = size(Umat,dim=3)
+      Norb = size(Umat,dim=1)
+      if(Norb.ne.size(Umat,dim=2)) stop "dump_Matrix_Kdep_z: The provided matrix is not square."
+      !
+      ! Create directory
+      call createDir(reg(dirpath),verb=verbose)
+      !
+      ! Write to file
+      if(binfmt) then
+         !
+         if(present(ispin))then
+            printpath = reg(dirpath)//reg(filename)//"_k_s"//str(ispin)//".DAT"
+         else
+            printpath = reg(dirpath)//reg(filename)//"_k.DAT."
+         endif
+         write(*,"(A)") "     Dump "//reg(printpath)//" (binary)"
+         !
+         unit = free_unit()
+         open(unit,file=reg(printpath),form="unformatted",status="unknown",position="rewind",action="write")
+         !
+         write(unit) Nkpt,Norb
+         do ik=1,Nkpt
+            write(unit) ik
+            do iwan1=1,Norb
+               do iwan2=1,Norb
+                  write(unit) iwan1,iwan2,dreal(Umat(iwan1,iwan2,ik)),dimag(Umat(iwan1,iwan2,ik))
+               enddo
+            enddo
+         enddo !ik
+         close(unit)
+         !
+      else
+         !
+         do ik=1,Nkpt
+            !
+            if(present(ispin))then
+               printpath = reg(dirpath)//reg(filename)//"_ik"//str(ik)//"_s"//str(ispin)//".DAT"
+            else
+               printpath = reg(dirpath)//reg(filename)//"_ik"//str(ik)//".DAT"
+            endif
+            write(*,"(A)") "     Dump "//reg(printpath)//" (readable)"
+            unit = free_unit()
+            open(unit,file=reg(printpath),form="formatted",status="unknown",position="rewind",action="write")
+            !
+            write(unit,"(2(A,1I7))") "ik",ik,"Norb",Norb
+            do iwan1=1,Norb
+               do iwan2=1,Norb
+                  write(unit,"(2I4,2E20.12)") iwan1,iwan2,dreal(Umat(iwan1,iwan2,ik)),dimag(Umat(iwan1,iwan2,ik))
+               enddo
+            enddo
+            !
+            close(unit)
+            !
+         enddo !ik
+         !
+      endif
+      !
+   end subroutine dump_Matrix_Kdep_z
 
 
    !---------------------------------------------------------------------------!
-   !PURPOSE: Read square matrices from file
-   !TEST ON: 17-11-2020
+   !PURPOSE: Read generic matrices from file
    !---------------------------------------------------------------------------!
+   subroutine read_Matrix_local_d(Umat,readpath)
+      !
+      use utils_misc
+      implicit none
+      !
+      real(8),intent(inout)                 :: Umat(:,:)
+      character(len=*),intent(in)           :: readpath
+      !
+      logical                               :: filexists
+      real(8),allocatable                   :: RealM(:,:)
+      integer                               :: unit
+      integer                               :: i,j
+      !
+      !
+      if(verbose)write(*,"(A)") "---- read_Matrix_local_d"
+      write(*,"(A)") "     Read "//reg(readpath)
+      !
+      call inquireFile(reg(readpath),filexists,verb=verbose)
+      allocate(RealM(size(Umat,dim=1),size(Umat,dim=2)));RealM=0d0
+      !
+      unit = free_unit()
+      open(unit,file=reg(readpath),form="formatted",status="old",position="rewind",action="read")
+      do i=1,size(Umat,dim=1)
+         read(unit,"(999E20.12)") (RealM(i,j),j=1,size(Umat,dim=2))
+      enddo
+      close(unit)
+      !
+      Umat = 0d0
+      Umat = RealM
+      !
+   end subroutine read_Matrix_local_d
+   !
+   subroutine read_Matrix_local_spin_d(Umat,readpath,paramagnet)
+      !
+      use utils_misc
+      implicit none
+      !
+      real(8),intent(in)                    :: Umat(:,:,:)
+      character(len=*),intent(in)           :: readpath
+      logical,intent(in)                    :: paramagnet
+      integer                               :: ispin,Nspin
+      !
+      if(verbose)write(*,"(A)") "---- read_Matrix_local_spin_d"
+      Nspin = size(U,dim=3)
+      !
+      if(paramagnet)then
+         call read_Matrix_local_d(Umat(:,:,1),reg(readpath)//"_s1.DAT")
+         do ispin=2,Nspin
+            Umat(:,:,ispin) = Umat(:,:,1)
+         enddo
+      else
+         do ispin=1,Nspin
+            call read_Matrix_local_d(Umat(:,:,ispin),reg(readpath)//"_s"//str(ispin)//".DAT")
+         enddo
+      endif
+      !
+   end subroutine read_Matrix_local_spin_d
+   !
    subroutine read_Matrix_local_z(Umat,readpath)
       !
       use utils_misc
@@ -350,102 +468,33 @@ contains
       !
    end subroutine read_Matrix_local_z
    !
-   subroutine read_Matrix_local_d(Umat,readpath)
+   subroutine read_Matrix_local_spin_z(Umat,readpath,paramagnet)
       !
       use utils_misc
       implicit none
       !
-      real(8),intent(inout)                 :: Umat(:,:)
+      complex(8),intent(in)                 :: Umat(:,:,:)
       character(len=*),intent(in)           :: readpath
+      logical,intent(in)                    :: paramagnet
+      integer                               :: ispin,Nspin
       !
-      logical                               :: filexists
-      real(8),allocatable                   :: RealM(:,:)
-      integer                               :: unit
-      integer                               :: i,j
+      if(verbose)write(*,"(A)") "---- read_Matrix_local_spin_z"
+      Nspin = size(U,dim=3)
       !
-      !
-      if(verbose)write(*,"(A)") "---- read_Matrix_local_d"
-      write(*,"(A)") "     Read "//reg(readpath)
-      !
-      call inquireFile(reg(readpath),filexists,verb=verbose)
-      allocate(RealM(size(Umat,dim=1),size(Umat,dim=2)));RealM=0d0
-      !
-      unit = free_unit()
-      open(unit,file=reg(readpath),form="formatted",status="old",position="rewind",action="read")
-      do i=1,size(Umat,dim=1)
-         read(unit,"(999E20.12)") (RealM(i,j),j=1,size(Umat,dim=2))
-      enddo
-      close(unit)
-      !
-      Umat = 0d0
-      Umat = RealM
-      !
-   end subroutine read_Matrix_local_d
-   !
-   subroutine read_Matrix_Kdep_z(Umat,dirpath,filename)
-      !
-      use parameters
-      use utils_misc
-      use utils_fields
-      implicit none
-      !
-      complex(8),intent(inout)              :: Umat(:,:,:)
-      character(len=*),intent(in)           :: dirpath
-      character(len=*),intent(in)           :: filename
-      !
-      integer                               :: unit
-      integer                               :: Norb,ik,Nkpt
-      integer                               :: iwan1,iwan2
-      integer                               :: idum1,idum2
-      integer                               :: Nkpt_read,Norb_read
-      real(8)                               :: RealM,ImagM
-      logical                               :: filexists
-      character(len=256)                    :: readpath
-      !
-      !
-      if(verbose)write(*,"(A)") "---- read_Matrix_Kdep_z"
-      readpath = reg(dirpath)//filename
-      write(*,"(A)") "     Read "//reg(readpath)
-      !
-      ! Check on the input Matrix
-      Nkpt = size(Umat,dim=3)
-      Norb = size(Umat,dim=1)
-      if(Norb.ne.size(Umat,dim=2)) stop "read_Matrix_Kdep_z:The provided matrix is not square."
-      !
-      ! Check file existence
-      call inquireFile(reg(readpath),filexists,verb=verbose)
-      !
-      !
-      unit = free_unit()
-      open(unit,file=reg(readpath),form="unformatted",status="old",position="rewind",action="read")
-      !
-      read(unit) Nkpt_read,Norb_read
-      !
-      if(Nkpt_read.ne.Nkpt) stop "read_Matrix_Kdep_z: File with wrong number of K-points."
-      if(Norb_read.ne.Norb) stop "read_Matrix_Kdep_z: File with wrong number of Wannier functions."
-      !
-      do ik=1,Nkpt
-         !
-         read(unit) idum1
-         if (idum1.ne.ik) stop "read_Matrix_Kdep_z: ik does not match."
-         !
-         do iwan1=1,Norb
-            do iwan2=1,Norb
-               !
-               read(unit) idum1,idum2,RealM,ImagM
-               if (idum1.ne.iwan1) stop "read_Matrix_Kdep_z: iwan1 does not match."
-               if (idum2.ne.iwan2) stop "read_Matrix_Kdep_z: iwan2 does not match."
-               Umat(iwan1,iwan2,ik) = dcmplx(RealM,ImagM)
-               !
-            enddo
+      if(paramagnet)then
+         call read_Matrix_local_d(Umat(:,:,1),reg(readpath)//"_s1.DAT")
+         do ispin=2,Nspin
+            Umat(:,:,ispin) = Umat(:,:,1)
          enddo
-         !
-      enddo !ik
-      close(unit)
+      else
+         do ispin=1,Nspin
+            call read_Matrix_local_z(Umat(:,:,ispin),reg(readpath)//"_s"//str(ispin)//".DAT")
+         enddo
+      endif
       !
-   end subroutine read_Matrix_Kdep_z
+   end subroutine read_Matrix_local_spin_z
    !
-   subroutine read_Matrix_Kdep_d(Umat,dirpath,filename)
+   subroutine read_Matrix_Kdep_d(Umat,readpath)
       !
       use parameters
       use utils_misc
@@ -453,8 +502,7 @@ contains
       implicit none
       !
       real(8),intent(inout)                 :: Umat(:,:,:)
-      character(len=*),intent(in)           :: dirpath
-      character(len=*),intent(in)           :: filename
+      character(len=*),intent(in)           :: readpath
       !
       integer                               :: unit
       integer                               :: Norb,ik,Nkpt
@@ -463,21 +511,17 @@ contains
       integer                               :: Nkpt_read,Norb_read
       real(8)                               :: RealM
       logical                               :: filexists
-      character(len=256)                    :: readpath
       !
       !
       if(verbose)write(*,"(A)") "---- read_Matrix_Kdep_d"
-      readpath = reg(dirpath)//filename
       write(*,"(A)") "     Read "//reg(readpath)
+      !
+      call inquireFile(reg(readpath),filexists,verb=verbose)
       !
       ! Check on the input Matrix
       Nkpt = size(Umat,dim=3)
       Norb = size(Umat,dim=1)
       if(Norb.ne.size(Umat,dim=2)) stop "read_Matrix_Kdep_d: The provided matrix is not square."
-      !
-      ! Check file existence
-      call inquireFile(reg(readpath),filexists,verb=verbose)
-      !
       !
       unit = free_unit()
       open(unit,file=reg(readpath),form="unformatted",status="old",position="rewind",action="read")
@@ -507,11 +551,68 @@ contains
       close(unit)
       !
    end subroutine read_Matrix_Kdep_d
+   !
+   subroutine read_Matrix_Kdep_z(Umat,readpath)
+      !
+      use parameters
+      use utils_misc
+      use utils_fields
+      implicit none
+      !
+      complex(8),intent(inout)              :: Umat(:,:,:)
+      character(len=*),intent(in)           :: readpath
+      !
+      integer                               :: unit
+      integer                               :: Norb,ik,Nkpt
+      integer                               :: iwan1,iwan2
+      integer                               :: idum1,idum2
+      integer                               :: Nkpt_read,Norb_read
+      real(8)                               :: RealM,ImagM
+      logical                               :: filexists
+      !
+      !
+      if(verbose)write(*,"(A)") "---- read_Matrix_Kdep_z"
+      write(*,"(A)") "     Read "//reg(readpath)
+      !
+      call inquireFile(reg(readpath),filexists,verb=verbose)
+      !
+      ! Check on the input Matrix
+      Nkpt = size(Umat,dim=3)
+      Norb = size(Umat,dim=1)
+      if(Norb.ne.size(Umat,dim=2)) stop "read_Matrix_Kdep_z:The provided matrix is not square."
+      !
+      unit = free_unit()
+      open(unit,file=reg(readpath),form="unformatted",status="old",position="rewind",action="read")
+      !
+      read(unit) Nkpt_read,Norb_read
+      !
+      if(Nkpt_read.ne.Nkpt) stop "read_Matrix_Kdep_z: File with wrong number of K-points."
+      if(Norb_read.ne.Norb) stop "read_Matrix_Kdep_z: File with wrong number of Wannier functions."
+      !
+      do ik=1,Nkpt
+         !
+         read(unit) idum1
+         if (idum1.ne.ik) stop "read_Matrix_Kdep_z: ik does not match."
+         !
+         do iwan1=1,Norb
+            do iwan2=1,Norb
+               !
+               read(unit) idum1,idum2,RealM,ImagM
+               if (idum1.ne.iwan1) stop "read_Matrix_Kdep_z: iwan1 does not match."
+               if (idum2.ne.iwan2) stop "read_Matrix_Kdep_z: iwan2 does not match."
+               Umat(iwan1,iwan2,ik) = dcmplx(RealM,ImagM)
+               !
+            enddo
+         enddo
+         !
+      enddo !ik
+      close(unit)
+      !
+   end subroutine read_Matrix_Kdep_z
 
 
    !---------------------------------------------------------------------------!
    !PURPOSE: Write to file a single Fermionic/Bosonic component
-   !TEST ON: 14-10-2020
    !---------------------------------------------------------------------------!
    subroutine dump_Field_component_d(Fcomp,dirpath,filename,axis)
       !
@@ -580,7 +681,6 @@ contains
 
    !---------------------------------------------------------------------------!
    !PURPOSE: Write to file Fermionic fields
-   !TEST ON: 16-10-2020
    !---------------------------------------------------------------------------!
    subroutine dump_FermionicField_local(G,dirpath,filename,axis)
       !
@@ -748,7 +848,6 @@ contains
 
    !---------------------------------------------------------------------------!
    !PURPOSE: Read from file Fermionic fields
-   !TEST ON: 16-10-2020
    !---------------------------------------------------------------------------!
    subroutine read_FermionicField_local(G,dirpath,filename,axis)
       !
@@ -952,7 +1051,6 @@ contains
 
    !---------------------------------------------------------------------------!
    !PURPOSE: Write to file Bosonic fields
-   !TEST ON: 20-10-2020(with and without axis)
    !---------------------------------------------------------------------------!
    subroutine dump_BosonicField_local(U,dirpath,filename,axis)
       !
@@ -1170,7 +1268,6 @@ contains
 
    !---------------------------------------------------------------------------!
    !PURPOSE: Read from file the local attributes of a Bosonic field
-   !TEST ON: 23-10-2020
    !---------------------------------------------------------------------------!
    subroutine read_BosonicField_local(U,dirpath,filename,axis)
       !

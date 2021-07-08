@@ -573,7 +573,7 @@ contains
             !
       end select
       !
-      call dump_matrix(Vgamma,reg(pathINPUT)//"Vgamma_"//reg(VH_type)//".DAT")
+      call dump_matrix(Vgamma,reg(pathINPUT),"Vgamma_"//reg(VH_type)//".DAT")
       !
       VH=czero
       if(sym_constrained_)then
@@ -797,7 +797,7 @@ contains
             !
       end select
       !
-      call dump_matrix(Vgamma,reg(pathINPUT)//"Vgamma_"//reg(VH_type)//".DAT")
+      call dump_matrix(Vgamma,reg(pathINPUT),"Vgamma_"//reg(VH_type)//".DAT")
       !
       allocate(orbs(SiteNorb(1)));orbs=0
       if(sym_constrained_)then
@@ -1257,11 +1257,11 @@ contains
             call read_Vxc(Vxc,Lttc,ib_sigma1,ib_sigma2,save2readable)
          else
             write(*,"(A)")"     Reading Vxc(k) from "//reg(pathINPUT)
-            call read_matrix(Vxc(:,:,:,1),reg(pathINPUT),"Vxc_k_s1.DAT")
+            call read_matrix(Vxc(:,:,:,1),reg(pathINPUT)//"Vxc_k_s1.DAT")
             if(paramagneticSPEX)then
                Vxc(:,:,:,2) = Vxc(:,:,:,1)
             else
-               call read_matrix(Vxc(:,:,:,2),reg(pathINPUT),"Vxc_k_s2.DAT")
+               call read_matrix(Vxc(:,:,:,2),reg(pathINPUT)//"Vxc_k_s2.DAT")
             endif
          endif
          !
@@ -1278,11 +1278,11 @@ contains
          call FermionicKsum(Smats_GoWo)
          !
          write(*,"(A)")"     Reading Vxc(k) from "//reg(pathINPUT)
-         call read_matrix(Vxc(:,:,:,1),reg(pathINPUT),"Vxc_k_s1.DAT")
+         call read_matrix(Vxc(:,:,:,1),reg(pathINPUT)//"Vxc_k_s1.DAT")
          if(paramagneticSPEX)then
             Vxc(:,:,:,2) = Vxc(:,:,:,1)
          else
-            call read_matrix(Vxc(:,:,:,2),reg(pathINPUT),"Vxc_k_s2.DAT")
+            call read_matrix(Vxc(:,:,:,2),reg(pathINPUT)//"Vxc_k_s2.DAT")
          endif
          !
          !
@@ -1527,8 +1527,7 @@ contains
       do ik=1,Nkpt
          Vxc_loc = Vxc_loc + Vxc(:,:,ik,:)/Nkpt
       enddo
-      call dump_matrix(Vxc_loc(:,:,1),reg(pathINPUT)//"Vxc_s1.DAT")
-      if(Nspin_Uwan.eq.2)call dump_matrix(Vxc_loc(:,:,2),reg(pathINPUT)//"Vxc_s2.DAT")
+      call dump_matrix(Vxc_loc,reg(pathINPUT),"Vxc",(Nspin_Uwan.eq.2))
       deallocate(Vxc_loc)
       !
    end subroutine read_vxc

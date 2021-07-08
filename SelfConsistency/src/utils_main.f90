@@ -521,7 +521,7 @@ contains
       !
       !
       !Store the local Hamiltonian
-      call dump_Matrix(Lttc%Hloc,reg(pathINPUT)//"Hloc.DAT")
+      call dump_Matrix(Lttc%Hloc,reg(pathINPUT),"Hloc.DAT")
       !
       !
       !print some info
@@ -756,9 +756,9 @@ contains
                call eigh(Rot,Eig)
                !
                !Save
-               call dump_Matrix(Oloc,reg(Folder)//reg(Opname)//"Site_"//reg(SiteName(1))//"_"//str(isite)//".DAT")
-               call dump_Matrix(diag(Eig),reg(Folder)//reg(Opname)//"Eig_"//reg(SiteName(1))//"_"//str(isite)//".DAT")
-               call dump_Matrix(Rot,reg(Folder)//reg(Opname)//"Rot_"//reg(SiteName(1))//"_"//str(isite)//".DAT")
+               call dump_Matrix(Oloc,reg(Folder),reg(Opname)//"Site_"//reg(SiteName(1))//"_"//str(isite)//".DAT")
+               call dump_Matrix(diag(Eig),reg(Folder),reg(Opname)//"Eig_"//reg(SiteName(1))//"_"//str(isite)//".DAT")
+               call dump_Matrix(Rot,reg(Folder),reg(Opname)//"Rot_"//reg(SiteName(1))//"_"//str(isite)//".DAT")
                !
                !SO(3)check
                write(*,"(A,"//str(Norb)//"I3)") "     Orbs: ",Orbs
@@ -801,9 +801,9 @@ contains
                call eigh(Rot,Eig)
                !
                !Save
-               call dump_Matrix(Oloc,reg(Folder)//reg(Opname)//"Site_"//reg(SiteName(isite))//".DAT")
-               call dump_Matrix(diag(Eig),reg(Folder)//reg(Opname)//"Eig_"//reg(SiteName(isite))//".DAT")
-               call dump_Matrix(Rot,reg(Folder)//reg(Opname)//"Rot_"//reg(SiteName(isite))//".DAT")
+               call dump_Matrix(Oloc,reg(Folder),reg(Opname)//"Site_"//reg(SiteName(isite))//".DAT")
+               call dump_Matrix(diag(Eig),reg(Folder),reg(Opname)//"Eig_"//reg(SiteName(isite))//".DAT")
+               call dump_Matrix(Rot,reg(Folder),reg(Opname)//"Rot_"//reg(SiteName(isite))//".DAT")
                !
                !SO(3)check
                write(*,"(A,"//str(Norb)//"I3)") "     Orbs: ",Orbs
@@ -1103,7 +1103,7 @@ contains
                   call read_Matrix(Umat,reg(pathINPUT)//"Umat_model.DAT")
                else
                   call build_Umat(Umat,Uaa,Uab,J)
-                  call dump_Matrix(Umat,reg(pathINPUT)//"Umat_model.DAT")
+                  call dump_Matrix(Umat,reg(pathINPUT),"Umat_model.DAT")
                endif
             endif
             !
@@ -1194,8 +1194,7 @@ contains
             call AllocateFermionicField(S_DMFT,Crystal%Norb,Nmats,Nsite=Nsite,Beta=Beta)
             if(ItStart.ne.0)then
                call read_FermionicField(S_DMFT,reg(PrevItFolder),"Simp_w")
-               call read_Matrix(S_DMFT%N_s(:,:,1),reg(PrevItFolder)//"HartreeU_s1.DAT")
-               call read_Matrix(S_DMFT%N_s(:,:,2),reg(PrevItFolder)//"HartreeU_s2.DAT")
+               call read_Matrix(S_DMFT%N_s,reg(PrevItFolder)//"HartreeU",paramagnet)
             endif
             !
             !Lattice local Gf
@@ -1249,8 +1248,7 @@ contains
             call AllocateFermionicField(S_DMFT,Crystal%Norb,Nmats,Nsite=Nsite,Beta=Beta)
             if(ItStart.ne.0)then
                call read_FermionicField(S_DMFT,reg(PrevItFolder),"Simp_w")
-               call read_Matrix(S_DMFT%N_s(:,:,1),reg(PrevItFolder)//"HartreeU_s1.DAT")
-               call read_Matrix(S_DMFT%N_s(:,:,2),reg(PrevItFolder)//"HartreeU_s2.DAT")
+               call read_Matrix(S_DMFT%N_s,reg(PrevItFolder)//"HartreeU",paramagnet)
             endif
             !
             !Lattice Gf
@@ -1293,20 +1291,17 @@ contains
       allocate(densityQMC(maxval(SiteNorb),maxval(SiteNorb),Nspin,Nsite));densityQMC=0d0
       if(ItStart.eq.0)then
          !
-         do ispin=1,Nspin
-            densityLDA(:,:,ispin) = Glat%N_s(:,:,ispin)
-            call dump_Matrix(densityLDA(:,:,ispin),reg(pathINPUT)//"Nlda_s"//str(ispin)//".DAT")
-         enddo
+         densityLDA = Glat%N_s
          densityGW=czero
          densityDMFT=czero
          densityQMC=0d0
          !
+         call dump_Matrix(densityLDA,reg(pathINPUT),"Nlda",paramagnet)
+         !
       else
          !
-         do ispin=1,Nspin
-            call read_Matrix(densityLDA(:,:,ispin),reg(pathINPUT)//"Nlda_s"//str(ispin)//".DAT")
-            call read_Matrix(densityDMFT(:,:,ispin),reg(PrevItFolder)//"Nimp_s"//str(ispin)//".DAT")
-         enddo
+         call read_Matrix(densityLDA,reg(pathINPUT)//"Nlda",paramagnet)
+         call read_Matrix(densityDMFT,reg(PrevItFolder)//"Nimp",paramagnet)
          densityGW=Glat%N_s
          !
          do isite=1,Nsite
@@ -1390,8 +1385,8 @@ contains
               enddo
             enddo
          enddo
-         call dump_Matrix(S_DMFT%N_s(:,:,ispin),reg(ItFolder)//"Hartree0_s"//str(ispin)//".DAT")
       enddo
+      call dump_Matrix(S_DMFT%N_s,reg(ItFolder),"Hartree0",paramagnet)
       deallocate(Uinst_0th)
       !
       !local projection of G0W0 self-energy otherwise just Hartree
@@ -1808,9 +1803,7 @@ contains
       endif
       !
       !Print what's used to compute delta
-      do ispin=1,Nspin
-         call dump_Matrix(Nloc(:,:,ispin),reg(ItFolder)//"Solver_"//reg(SiteName(isite))//"/N_"//reg(SiteName(isite))//"_s"//str(ispin)//".DAT")
-      enddo
+      call dump_Matrix(Nloc,reg(ItFolder),"Solver_"//reg(SiteName(isite))//"/N_"//reg(SiteName(isite)),paramagnet)
       deallocate(Nloc)
       call dump_FermionicField(Gloc,reg(ItFolder)//"Solver_"//reg(SiteName(isite))//"/","G_"//reg(SiteName(isite))//"_w")
       call dump_FermionicField(SigmaImp,reg(ItFolder)//"Solver_"//reg(SiteName(isite))//"/","S_"//reg(SiteName(isite))//"_w")
@@ -2426,16 +2419,12 @@ contains
       !symmetrize GW indexes and print
       if(EqvGWndx%O.or.EqvGWndx%S)then
          !
-         if(verbose)then
-            call dump_Matrix(densityDMFT(:,:,1),reg(PrevItFolder)//"Nimp_up_notsymm.DAT")
-            call dump_Matrix(densityDMFT(:,:,2),reg(PrevItFolder)//"Nimp_dw_notsymm.DAT")
-         endif
+         if(verbose)call dump_Matrix(densityDMFT,reg(PrevItFolder),"Nimp_noSym",paramagnet)
          !
          call symmetrize_GW(densityDMFT,EqvGWndx)
          !
       endif
-      call dump_Matrix(densityDMFT(:,:,1),reg(PrevItFolder)//"Nimp_s1.DAT")
-      call dump_Matrix(densityDMFT(:,:,2),reg(PrevItFolder)//"Nimp_s2.DAT")
+      call dump_Matrix(densityDMFT,reg(PrevItFolder),"Nimp",paramagnet)
       deallocate(densityDMFT)
       !
       !
@@ -2655,8 +2644,7 @@ contains
          Simp%N_s(:,:,1) = (Simp%N_s(:,:,1)+Simp%N_s(:,:,2))/2d0
          Simp%N_s(:,:,2) = Simp%N_s(:,:,1)
          !
-         call dump_Matrix(Simp%N_s(:,:,1),reg(PrevItFolder)//"Solver_"//reg(SiteName(isite))//"/HartreeU_"//reg(SiteName(isite))//"_s1.DAT")
-         call dump_Matrix(Simp%N_s(:,:,2),reg(PrevItFolder)//"Solver_"//reg(SiteName(isite))//"/HartreeU_"//reg(SiteName(isite))//"_s2.DAT")
+         call dump_Matrix(Simp%N_s,reg(PrevItFolder),"Solver_"//reg(SiteName(isite))//"/HartreeU",paramagnet)
          !
          !Expand to the Lattice basis
          if(RotateHloc)then
@@ -2677,8 +2665,7 @@ contains
          !
          if(verbose)then
             call dump_FermionicField(S_DMFT,reg(PrevItFolder),"Simp_noSym_w")
-            call dump_Matrix(S_DMFT%N_s(:,:,1),reg(PrevItFolder)//"HartreeU_noSym_s1.DAT")
-            call dump_Matrix(S_DMFT%N_s(:,:,2),reg(PrevItFolder)//"HartreeU_noSym_s2.DAT")
+            call dump_Matrix(S_DMFT%N_s,reg(PrevItFolder),"HartreeU_noSym",paramagnet)
          endif
          !
          call symmetrize_GW(S_DMFT,EqvGWndx)
@@ -2688,8 +2675,7 @@ contains
       !
       call dump_FermionicField(S_DMFT,reg(PrevItFolder),"Simp_w")
       call dump_MaxEnt(S_DMFT,"mats",reg(PrevItFolder)//"Convergence/","Simp",EqvGWndx%SetOrbs,WmaxPade=PadeWlimit)
-      call dump_Matrix(S_DMFT%N_s(:,:,1),reg(PrevItFolder)//"HartreeU_s1.DAT")
-      call dump_Matrix(S_DMFT%N_s(:,:,2),reg(PrevItFolder)//"HartreeU_s2.DAT")
+      call dump_Matrix(S_DMFT%N_s,reg(PrevItFolder),"HartreeU",paramagnet)
       call DeallocateFermionicField(S_DMFT)
       !
       !Save the non-Fitted non-symmetrized self-energy if present
@@ -3099,7 +3085,7 @@ contains
       !
       implicit none
       !
-      complex(8),allocatable                :: HartreeU(:,:),Nimp(:,:)
+      complex(8),allocatable                :: HartreeU(:,:,:),Nimp(:,:,:)
       integer                               :: ispin
       !
       !
@@ -3156,20 +3142,14 @@ contains
             call DeallocateFermionicField(S_DMFT)
             !
             !Read&write instead of execute_command
-            allocate(HartreeU(Crystal%Norb,Crystal%Norb))
-            allocate(Nimp(Crystal%Norb,Crystal%Norb))
-            do ispin=1,Nspin
-               !
-               HartreeU=czero
-               call read_Matrix(HartreeU,reg(Beta_Match%Path)//"HartreeU_s"//str(ispin)//".DAT")
-               call dump_Matrix(HartreeU,reg(PrevItFolder)//"HartreeU_s"//str(ispin)//".DAT")
-               !
-               Nimp=czero
-               call read_Matrix(Nimp,reg(Beta_Match%Path)//"Nimp_s"//str(ispin)//".DAT")
-               call dump_Matrix(Nimp,reg(PrevItFolder)//"Nimp_s"//str(ispin)//".DAT")
-               !
-            enddo
-            deallocate(HartreeU,Nimp)
+            allocate(HartreeU(Crystal%Norb,Crystal%Norb,Nspin));HartreeU=czero
+            call read_Matrix(HartreeU,reg(Beta_Match%Path)//"HartreeU",paramagnet)
+            call dump_Matrix(HartreeU,reg(PrevItFolder),"HartreeU",paramagnet)
+            deallocate(HartreeU)
+            allocate(Nimp(Crystal%Norb,Crystal%Norb,Nspin));Nimp=czero
+            call read_Matrix(Nimp,reg(Beta_Match%Path)//"Nimp",paramagnet)
+            call dump_Matrix(Nimp,reg(PrevItFolder),"Nimp",paramagnet)
+            deallocate(Nimp)
             !
          case("GW+EDMFT")
             !
@@ -3204,20 +3184,14 @@ contains
             call DeallocateFermionicField(Glat)
             !
             !Read&write instead of execute_command
-            allocate(HartreeU(Crystal%Norb,Crystal%Norb))
-            allocate(Nimp(Crystal%Norb,Crystal%Norb))
-            do ispin=1,Nspin
-               !
-               HartreeU=czero
-               call read_Matrix(HartreeU,reg(Beta_Match%Path)//"HartreeU_s"//str(ispin)//".DAT")
-               call dump_Matrix(HartreeU,reg(PrevItFolder)//"HartreeU_s"//str(ispin)//".DAT")
-               !
-               Nimp=czero
-               call read_Matrix(Nimp,reg(Beta_Match%Path)//"Nimp_s"//str(ispin)//".DAT")
-               call dump_Matrix(Nimp,reg(PrevItFolder)//"Nimp_s"//str(ispin)//".DAT")
-               !
-            enddo
-            deallocate(HartreeU,Nimp)
+            allocate(HartreeU(Crystal%Norb,Crystal%Norb,Nspin));HartreeU=czero
+            call read_Matrix(HartreeU,reg(Beta_Match%Path)//"HartreeU",paramagnet)
+            call dump_Matrix(HartreeU,reg(PrevItFolder),"HartreeU",paramagnet)
+            deallocate(HartreeU)
+            allocate(Nimp(Crystal%Norb,Crystal%Norb,Nspin));Nimp=czero
+            call read_Matrix(Nimp,reg(Beta_Match%Path)//"Nimp",paramagnet)
+            call dump_Matrix(Nimp,reg(PrevItFolder),"Nimp",paramagnet)
+            deallocate(Nimp)
             !
       end select
 
