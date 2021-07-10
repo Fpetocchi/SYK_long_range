@@ -178,6 +178,8 @@ module parameters
       integer                               :: Nimp
       integer                               :: NtauF
       integer                               :: NtauB
+      integer                               :: NtauF_in
+      integer                               :: NtauB_in
       integer                               :: Norder=0
       integer                               :: Nmeas=0
       integer                               :: Ntherm=0
@@ -236,6 +238,7 @@ module parameters
       integer                               :: Norb=0
       integer                               :: Explicit(2)=[1,1]
       real(8)                               :: GlobalTzRatio
+      integer                               :: NtzExplicit
       integer,allocatable                   :: ExplicitTzPos(:)
       real(8),allocatable                   :: ExplicitTzRatios(:)
       complex(8),allocatable                :: tz(:,:,:)

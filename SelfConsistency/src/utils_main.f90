@@ -2443,14 +2443,14 @@ contains
          Orbs = SiteOrbs(isite,1:Norb)
          !
          !Read the impurity Green's function
-         allocate(tauF(Solver%NtauF));tauF = linspace(0d0,Beta,Solver%NtauF)
-         allocate(Gitau(Norb,Solver%NtauF,Nspin));Gitau=czero
+         allocate(tauF(Solver%NtauF_in));tauF = linspace(0d0,Beta,Solver%NtauF_in)
+         allocate(Gitau(Norb,Solver%NtauF_in,Nspin));Gitau=czero
          allocate(ReadLine(Nspin*Norb))
          file = reg(PrevItFolder)//"Solver_"//reg(SiteName(isite))//"/resultsQMC/Gimp_t.DAT"
          call inquireFile(reg(file),filexists,verb=verbose)
          unit = free_unit()
          open(unit,file=reg(file),form="formatted",status="old",position="rewind",action="read")
-         do itau=1,Solver%NtauF
+         do itau=1,Solver%NtauF_in
             ReadLine=0d0
             read(unit,*) taup,ReadLine
             if(abs(taup-tauF(itau)).gt.eps) stop "Impurity fermionic tau mesh does not coincide."
@@ -2739,15 +2739,15 @@ contains
             allocate(wmats(Nmats));wmats=BosonicFreqMesh(Beta,Nmats)
             !
             !Read the impurity N(tau)N(0)
-            allocate(tauB(Solver%NtauB));tauB=0d0
-            tauB = linspace(0d0,Beta,Solver%NtauB)
-            allocate(nnt(Nflavor,Nflavor,Solver%NtauB));nnt=0d0
+            allocate(tauB(Solver%NtauB_in));tauB=0d0
+            tauB = linspace(0d0,Beta,Solver%NtauB_in)
+            allocate(nnt(Nflavor,Nflavor,Solver%NtauB_in));nnt=0d0
             allocate(ReadLine(Nflavor*(Nflavor+1)/2))
             file = reg(PrevItFolder)//"Solver_"//reg(SiteName(isite))//"/resultsQMC/nn_t.DAT"
             call inquireFile(reg(file),filexists,verb=verbose)
             unit = free_unit()
             open(unit,file=reg(file),form="formatted",status="old",position="rewind",action="read")
-            do itau=1,Solver%NtauB
+            do itau=1,Solver%NtauB_in
                ReadLine=0d0
                read(unit,*) taup,ReadLine
                if(abs(taup-tauB(itau)).gt.eps) stop "Impurity bosonic tau mesh does not coincide."
@@ -2765,7 +2765,7 @@ contains
             deallocate(ReadLine)
             !
             !Reshape N(tau)N(0)for easier handling
-            allocate(NNitau(Norb,Norb,Nspin,Nspin,Solver%NtauB));NNitau=czero
+            allocate(NNitau(Norb,Norb,Nspin,Nspin,Solver%NtauB_in));NNitau=czero
             do ib1=1,Nflavor
                do ib2=1,Nflavor
                   !
@@ -2784,7 +2784,7 @@ contains
             !
             !Spin susceptibility------------------------------------------------
             !ChiM(tau) = Sum_ab <S(tau)S(0)> in the solver basis
-            allocate(ChiMitau(Solver%NtauB));ChiMitau=czero
+            allocate(ChiMitau(Solver%NtauB_in));ChiMitau=czero
             do ispin=1,Nspin
                do jspin=1,Nspin
                   do iorb=1,Norb
@@ -2808,7 +2808,7 @@ contains
             !Charge susceptibility----------------------------------------------
             !ChiC(tau) = Sum_s1s2 <Na(tau)Nb(0)> - <Na><Nb> in the solver basis
             !here I have to use the non-symmetrized Nqmc because <Na><Nb> is not symmetrized
-            call AllocateBosonicField(ChiCitau,Norb,Solver%NtauB,Crystal%iq_gamma,no_bare=.true.,Beta=Beta)
+            call AllocateBosonicField(ChiCitau,Norb,Solver%NtauB_in,Crystal%iq_gamma,no_bare=.true.,Beta=Beta)
             do iorb=1,Norb
                do jorb=1,Norb
                   !

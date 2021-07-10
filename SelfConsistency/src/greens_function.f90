@@ -359,7 +359,7 @@ contains
             endif
             if(Hetero%Explicit(2).ne.Hetero%Nslab)then
                !
-               Rn(1) = Norb - Hetero%Norb
+               Rn(1) = 1+ Norb - Hetero%Norb
                Rn(2) = Norb
                NbulkR = Hetero%Nslab-Hetero%Explicit(2)
                !
@@ -717,7 +717,7 @@ contains
       !
       do iter=1,mu_param%muIter
          !
-         mu = mu_start + iter * 0.05 * mu_sign;
+         mu = mu_start + iter * mu_param%muStep * mu_sign;
          !
          call calc_G0_tau(Gitau,mu,Beta,Lttc%Ek,atBeta=.true.)
          n_iter = get_dens()

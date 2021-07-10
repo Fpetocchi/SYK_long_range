@@ -517,7 +517,7 @@ contains
       !
       use utils_misc
       use parameters, only : Heterostructures !WHY IS THIS WORKING?
-      use linalg, only : zeye, diagonal, diag
+      use linalg, only : zeye, diagonal, diag, eigh
       implicit none
       !
       real(8),intent(in)                    :: Rinput(3,3)
@@ -637,8 +637,8 @@ contains
          deallocate(Hk_single)
          !
          !Adding up the deviations from the uniform out-of-plane hopping
-         if(allocated(Hetero%ExplicitTzPos))then
-            do ipos=1,size(Hetero%ExplicitTzPos)
+         if(Hetero%NtzExplicit.gt.0)then
+            do ipos=1,Hetero%NtzExplicit
                !
                isite = Hetero%ExplicitTzPos(ipos)
                na = 1+(isite-1)*Norb
@@ -676,8 +676,13 @@ contains
       allocate(Hloc(Norb*Nsite,Norb*Nsite));Hloc=czero
       !
       do ik=1,Nkpt
-         Ek(:,ik) = diagonal(Hk(:,:,ik))
-         Zk(:,:,ik) = zeye(Norb)
+         !
+         call check_Hermiticity(Hk(:,:,ik),eps)
+         !
+         Ek(:,ik) = 0d0
+         Zk(:,:,ik) = Hk(:,:,ik)
+         call eigh(Zk(:,:,ik),Ek(:,ik))
+         !
       enddo
       Hloc = sum(Hk,dim=3)/Nkpt
       !

@@ -252,7 +252,7 @@ contains
       use parameters
       implicit none
       character(len=*)                      :: InputFile
-      integer                               :: isite,iset,iph,iorb,NtauFguess,NtzExplicit
+      integer                               :: isite,iset,iph,iorb,NtauFguess
       integer,allocatable                   :: tmpOrbs(:)
       real(8),allocatable                   :: tmpCF(:)
 
@@ -303,10 +303,10 @@ contains
             call parse_input_variable(Hetero%Nslab,"NSLAB",InputFile,default=20,comment="Global dimension fo the slab.")
             call parse_input_variable(Hetero%Explicit,"EXPLICIT",InputFile,default=[1,10],comment="Index boundaries of the impurities explicitly solved.")
             call parse_input_variable(Hetero%GlobalTzRatio,"GLOB_TZ_RATIO",InputFile,default=0.1d0,comment="Ratio between the in-plane and out-of-plane hopping for all the slabs. Orbital structure is mantained.")
-            call parse_input_variable(NtzExplicit,"EXPLICIT_TZ",InputFile,default=0,comment="Number of slabs with out-of-plane hopping ratio different from the global one.")
-            if(NtzExplicit.gt.0)then
-               allocate(Hetero%ExplicitTzPos(NtzExplicit));Hetero%ExplicitTzPos=0
-               allocate(Hetero%ExplicitTzRatios(NtzExplicit));Hetero%ExplicitTzRatios=0d0
+            call parse_input_variable(Hetero%NtzExplicit,"EXPLICIT_TZ",InputFile,default=0,comment="Number of slabs with out-of-plane hopping ratio different from the global one.")
+            if(Hetero%NtzExplicit.gt.0)then
+               allocate(Hetero%ExplicitTzPos(Hetero%NtzExplicit));Hetero%ExplicitTzPos=0
+               allocate(Hetero%ExplicitTzRatios(Hetero%NtzExplicit));Hetero%ExplicitTzRatios=0d0
                call parse_input_variable(Hetero%ExplicitTzPos,"EXPLICIT_TZ_POS",InputFile,comment="Indexes of the slabs with out-of-plane hopping ratio different from the global one.")
                call parse_input_variable(Hetero%ExplicitTzRatios,"EXPLICIT_TZ_RATIOS",InputFile,comment="Values of the out-of-plane hopping ratios different from the global one.")
             endif
@@ -396,13 +396,13 @@ contains
       call parse_input_variable(wmatsMax,"MAX_WMATS",InputFile,default=100.d0,comment="Maximum value of the Matsubara frequency mesh.")
       Nmats = int(Beta*wmatsMax/(2d0*pi))
       call append_to_input_list(Nmats,"NMATS","Number of points on the imaginary frequency axis. User cannot set this as its computed from MAX_WMATS and BETA.")
-      NtauFguess=Nmats
-      if(Nmats.lt.200)NtauFguess=200
+      NtauFguess=int(2d0*pi*Nmats)!Nmats
+      !if(Nmats.lt.200)NtauFguess=200
       call parse_input_variable(NtauF,"NTAU_F_LAT",InputFile,default=NtauFguess,comment="Number of points on the imaginary time axis for Fermionic lattice fields. Its gonna be made odd.")
       if(mod(NtauF,2).eq.0)NtauF=NtauF+1
       if(mod(NtauF-1,4).ne.0)NtauF=NtauF+mod(NtauF-1,4)
       NtauB = NtauF
-      call append_to_input_list(NtauB,"NTAU_B_LAT","Number of points on the imaginary time axis for Bosonic lattice fields. User cannot set this as its equal to NTAU_F.")
+      call append_to_input_list(NtauB,"NTAU_B_LAT","Number of points on the imaginary time axis for Bosonic lattice fields. User cannot set this as its equal to NTAU_F_LAT.")
       call parse_input_variable(tau_uniform,"TAU_UNIF",InputFile,default=.false.,comment="Flag to use a uniform mesh on the imaginary time axis. Only internal for GW.")
       call parse_input_variable(Nreal,"NREAL",InputFile,default=2000,comment="Number of points on the real frequency axis.")
       call append_to_input_list(wrealMax,"MAX_WREAL","Maximum absolute value of the real frequency mesh. User cannot set this as its derived from Hk.")
@@ -582,6 +582,8 @@ contains
       if(mod(Solver%NtauF,2).eq.0)Solver%NtauF=Solver%NtauF+1
       call parse_input_variable(Solver%NtauB,"NTAU_B_IMP",InputFile,default=int(2d0*pi*Nmats),comment="Number of points on the imaginary time axis for Bosonic impurity fields. Its gonna be made odd.")
       if(mod(Solver%NtauB,2).eq.0)Solver%NtauB=Solver%NtauB+1
+      call parse_input_variable(Solver%NtauF_in,"NTAU_F_IMP_IN",InputFile,default=Solver%NtauF,comment="Number of points on the fermionic imaginary time axis used in the previous iteration.")
+      call parse_input_variable(Solver%NtauB_in,"NTAU_B_IMP_IN",InputFile,default=Solver%NtauB,comment="Number of points on the bosonic imaginary time axis used in the previous iteration.")
       Solver%TargetDensity = look4dens%TargetDensity
       if(ExpandImpurity.and.(.not.look4dens%local))Solver%TargetDensity = look4dens%TargetDensity/Nsite
       call append_to_input_list(Solver%TargetDensity,"N_READ_IMP","Target density in the impurity list. User cannot set this as its the the same density on within the impurity orbitals if EXPAND=F otherwise its N_READ_LAT/NSITE.")
@@ -1749,7 +1751,6 @@ contains
      else
         unit=6
      endif
-     write(unit,"(1x,A)")
      write(unit,"(1x,A)")
      write(unit,"(1x,A)")trim(line)
      write(unit,"(1x,A)")

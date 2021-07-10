@@ -1452,7 +1452,7 @@ contains
       if(Hetero%status)then
          Norb = Hetero%Norb
          Nbp = Norb**2
-         call AllocateBosonicField(Umats_imp,Norb,Umats%Npoints,0)
+         call AllocateBosonicField(Umats_imp,Norb,Umats%Npoints,Umats%iq_gamma,Nkpt=Umats%Nkpt,Beta=Umats%Beta)
          Umats_ptr => Umats_imp
       else
          Umats_ptr => Umats
@@ -1616,7 +1616,7 @@ contains
       if(Hetero%status)then
          Norb = Hetero%Norb
          Nbp = Norb**2
-         call AllocateBosonicField(Umats_imp,Norb,Umats%Npoints,0)
+         call AllocateBosonicField(Umats_imp,Norb,Umats%Npoints,Umats%iq_gamma,Nkpt=Umats%Nkpt,Beta=Umats%Beta)
          Umats_ptr => Umats_imp
       else
          Umats_ptr => Umats
@@ -1789,7 +1789,7 @@ contains
       if(Hetero%status)then
          Norb = Hetero%Norb
          Nbp = Norb**2
-         call AllocateBosonicField(Umats_imp,Norb,Umats%Npoints,0)
+         call AllocateBosonicField(Umats_imp,Norb,Umats%Npoints,Umats%iq_gamma,Nkpt=Umats%Nkpt,Beta=Umats%Beta)
          Umats_ptr => Umats_imp
       else
          Umats_ptr => Umats
@@ -1981,7 +1981,7 @@ contains
       if(Hetero%status)then
          Norb = Hetero%Norb
          Nbp = Norb**2
-         call AllocateBosonicField(Umats_imp,Norb,Umats%Npoints,0)
+         call AllocateBosonicField(Umats_imp,Norb,Umats%Npoints,Umats%iq_gamma,Nkpt=Umats%Nkpt,Beta=Umats%Beta)
          Umats_ptr => Umats_imp
       else
          Umats_ptr => Umats
