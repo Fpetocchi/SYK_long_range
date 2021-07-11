@@ -958,6 +958,8 @@ contains
             elseif(abs(orbs(2)-orbs(1)).eq.Nsite)then
                shift = isite-1
             endif
+         else
+            shift = 1*(isite-1)
          endif
          !
          do i_imp=1,size(orbs)
@@ -1064,6 +1066,8 @@ contains
             elseif(abs(orbs(2)-orbs(1)).eq.Nsite)then
                shift = isite-1
             endif
+         else
+            shift = 1*(isite-1)
          endif
          !
          do i_imp=1,Norb_imp
@@ -1173,6 +1177,8 @@ contains
             elseif(abs(orbs(2)-orbs(1)).eq.Nsite)then
                shift = isite-1
             endif
+         else
+            shift = 1*(isite-1)
          endif
          !
          do i_imp=1,Norb_imp
@@ -1314,6 +1320,8 @@ contains
             elseif(abs(orbs(2)-orbs(1)).eq.Nsite)then
                shift = isite-1
             endif
+         else
+            shift = 1*(isite-1)
          endif
          !
          do i_imp=1,Norb_imp

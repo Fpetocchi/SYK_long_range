@@ -353,8 +353,7 @@ contains
                                                ,zeta(Ln(1):Ln(2),Ln(1):Ln(2),:)          &
                                                ,Hk(Ln(1):Ln(2),Ln(1):Ln(2),:)            &
                                                ,Smats%wks(Ln(1):Ln(2),Ln(1):Ln(2),:,:,:) )
-               write(*,"(A,2I4)") "     Left potential orbital indexes: ",Ln(1),Ln(2)
-               write(*,"(A,1I5)") "     Left bulk thickness: ",NbulkL
+               write(*,"(2(A,2I4))") "     Left potential orbital indexes: ",Ln(1),Ln(2)," thickness: ",NbulkL
                !
             endif
             if(Hetero%Explicit(2).ne.Hetero%Nslab)then
@@ -368,8 +367,7 @@ contains
                                                ,zeta(Rn(1):Rn(2),Rn(1):Rn(2),:)          &
                                                ,Hk(Rn(1):Rn(2),Rn(1):Rn(2),:)            &
                                                ,Smats%wks(Rn(1):Rn(2),Rn(1):Rn(2),:,:,:) )
-               write(*,"(A,2I4)") "     Right potential orbital indexes: ",Rn(1),Rn(2)
-               write(*,"(A,1I5)") "     Right bulk thickness: ",NbulkR
+               write(*,"(2(A,2I4))") "     Right potential orbital indexes: ",Rn(1),Rn(2)," thickness: ",NbulkR
                !
             endif
             !
