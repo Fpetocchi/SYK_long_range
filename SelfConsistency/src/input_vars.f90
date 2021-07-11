@@ -348,10 +348,14 @@ contains
             if(isite.eq.1)then
                call parse_input_variable(SiteOrbs(1,1:SiteNorb(1)),"ORBS_1",InputFile,default=tmpOrbs,comment="Lattice orbital indexes of site number 1")
             else
-               if(abs(SiteOrbs(1,2)-SiteOrbs(1,1)).eq.1)then
-                  SiteOrbs(isite,:) = SiteOrbs(1,:) + SiteNorb(1)*(isite-1)
-               elseif(abs(SiteOrbs(1,2)-SiteOrbs(1,1)).eq.Nsite)then
-                  SiteOrbs(isite,:) = SiteOrbs(1,:) + isite-1
+               if(SiteNorb(1).gt.1)then
+                  if(abs(SiteOrbs(1,2)-SiteOrbs(1,1)).eq.1)then
+                     SiteOrbs(isite,:) = SiteOrbs(1,:) + SiteNorb(1)*(isite-1)
+                  elseif(abs(SiteOrbs(1,2)-SiteOrbs(1,1)).eq.Nsite)then
+                     SiteOrbs(isite,:) = SiteOrbs(1,:) + isite-1
+                  endif
+               else
+                  SiteOrbs(isite,:) = SiteOrbs(1,:) + 1*(isite-1)
                endif
             endif
          else
