@@ -4,8 +4,6 @@
 ################################################################################
 #                                USER SETTINGS                                 #
 ################################################################################
-GENMAT=/home/petocchif/1_GW_EDMFT/nobackup/1_production/c_Ca2RuO4               # Replace last field with project name
-
 G_model=" " #  -M 0.5,1"
 W_model=" " #  -m "$SRC"/Wmodel.dat"
 U_model=" " #  -m ../../2_Wt2g/t2_new/Wt2g.dat_dos.dat"  #  -m "$SRC"/Wmodel.dat"
@@ -24,6 +22,7 @@ width="200"                    # -W
 JOR="1"                        # -j
 SPIN="1"                       # -s Available: "1" "2"
 #SOURCE=   MUST BE PROVIDED    # -i Available: "lat", "imp", "qmc_El"
+BINPATH=/home/petocchif/1_GW_EDMFT/nobackup/1_production/Calculation_template
 
 
 
@@ -31,21 +30,21 @@ SPIN="1"                       # -s Available: "1" "2"
 ################################################################################
 #                             PROVIDED ARGUMENTS                               #
 ################################################################################
-while getopts ":e:w:W:f:o:s:i:m:p:" o; do
+while getopts ":e:w:W:f:o:j:s:i:p:" o; do
    case ${o} in
-      e)
+      e) #ERROR
          #echo ${OPTARG}
          err="${OPTARG}"
          ;;
-      w)
+      w) #NUMBER OF REAL FREQUENCY POINTS
          #echo ${OPTARG}
          mesh="${OPTARG}"
          ;;
-      W)
+      W) #WIDTH OF THE REAL FREQUENCY MESH
          #echo ${OPTARG}
          width="${OPTARG}"
          ;;
-      f)
+      f) #INPUT FIELD
          #echo ${OPTARG}
          FIELD="${OPTARG}"
          if [ "$FIELD"  == "G" ];      then RUNOPTIONS=" -s      "$err" -w "$mesh" -W "$width$G_model ; fi
@@ -57,25 +56,28 @@ while getopts ":e:w:W:f:o:s:i:m:p:" o; do
          if [ "$FIELD"  == "P" ];      then RUNOPTIONS=" -S X -s "$err" -w "$mesh" -W "$width$W_model ; fi
          if [[ "$FIELD"  = *PiJ* ]];   then RUNOPTIONS=" -S X -s "$err" -w "$mesh" -W "$width$U_model ; fi
          ;;
-      o)
+      o) #DIAGONAL ORBITAL INDEX
          #echo ${OPTARG}
          ORB="${OPTARG}"
          JOR="${OPTARG}"
          #if [ "$ORB"  != "t2g" ] && [ "$ORB"  != "eg" ]; then echo "Option Error - o" ; exit 1 ; fi
          ;;
-      j)
+      j) #OFF-DIAGONAL ORBITAL INDEX
          #echo ${OPTARG}
          JOR="${OPTARG}"
          ;;
-      s)
+      s) #SPIN INDEX
          #echo ${OPTARG}
          SPIN="${OPTARG}"
          if [ "$SPIN"  != "1" ] && [ "$SPIN"  != "2" ]; then echo "Option Error - s" ; exit 1 ; fi
          ;;
-      i)
+      i) #INPUT FIELD SUFFIX
          #echo ${OPTARG}
          SOURCE="${OPTARG}"
-         #if [ "$SOURCE"  != "imp" ] && [ "$SOURCE"  != "lat" ]; then echo "Option Error - i" ; exit 1 ; fi
+         ;;
+      p) #PATH TO MAXENT FOLDER
+         #echo ${OPTARG}
+         BINPATH="${OPTARG}"
          ;;
       \? )
          echo "Invalid option: $OPTARG" 1>&2
@@ -135,7 +137,7 @@ fi
 ################################################################################
 #                                  PRINT INFOS                                 #
 ################################################################################
-BIN=${GENMAT}/MaxEnt
+BIN=${BINPATH}/MaxEnt
 echo
 echo "Binary from: " ${BIN}
 echo "Run options: "${RUNOPTIONS}
@@ -163,7 +165,7 @@ echo \$RUNOPTIONS
 export PYTHONPATH=\${PYTHONPATH}:${BIN}/docopt/
 export OMP_NUM_THREADS=1
 
-mpiexec -np 1 python3.6  $BIN/bryan.py $RUNOPTIONS $DATA_ > job.out
+mpiexec -np 1 python3.6  $BIN/bryan.py $RUNOPTIONS $DATA_ > job.out 2> err.out
 
 EOF
 
