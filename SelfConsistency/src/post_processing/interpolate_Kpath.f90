@@ -8,7 +8,7 @@ subroutine interpolateG2Path(Sfull,Lttc,structure,Nkpt_path,pathOUTPUT)
    use file_io
    use greens_function, only : calc_Gmats
    use fourier_transforms
-   use input_vars, only : Nreal, wrealMax, eta, path_funct, FermiSurf
+   use input_vars, only : Nreal, wrealMax, eta, path_funct, FermiSurf, Nkpt_Fermi
    use input_vars, only : paramagnet, CalculationType
    implicit none
    !
@@ -169,7 +169,7 @@ subroutine interpolateG2Path(Sfull,Lttc,structure,Nkpt_path,pathOUTPUT)
    !
    if(FermiSurf)then
       !
-      Nkpt_Kside = int(Nkpt_path/2)
+      Nkpt_Kside = Nkpt_Fermi !int(Nkpt_path/2)
       !
       if(.not.Lttc%planeStored)then
          !
@@ -495,7 +495,7 @@ contains
    !
    subroutine calc_MaxEnt_on_G_K(Gmats_in,mode)
       !
-      use input_vars, only : Solver
+      use input_vars, only : NtauF
       implicit none
       !
       type(FermionicField),intent(in)       :: Gmats_in
@@ -504,7 +504,7 @@ contains
       complex(8),allocatable                :: Gmats_diag(:,:,:,:),Gitau_diag(:,:,:,:)
       real(8),allocatable                   :: Ak(:,:)
       real(8),allocatable                   :: tau(:)
-      integer                               :: Ntau,Nkpt
+      integer                               :: Ntau,Nkpt!,Nmats_cutoff
       integer                               :: ikx,iky
       !
       !
@@ -542,12 +542,19 @@ contains
       enddo
       !
       !Fourier transform the diagonal of the Green's function
-      Ntau = Solver%NtauF
+      Ntau = NtauF
       call cpu_time(start)
       allocate(Gitau_diag(Norb,Ntau,Nkpt,Nspin));Gitau_diag=czero
       spinloopGftP: do ispin=1,Nspin
+         !
+         !TEST>>> TOTALLY USELESS
+         !Nmats_cutoff = int(0.75*Nmats)
+         !call Fmats2itau_vec(Sfull%Beta,Gmats_diag(:,1:Nmats_cutoff,:,ispin),Gitau_diag(:,:,:,ispin), &
+         !asympt_corr=.true.,tau_uniform=.true.)
          call Fmats2itau_vec(Sfull%Beta,Gmats_diag(:,:,:,ispin),Gitau_diag(:,:,:,ispin), &
          asympt_corr=.true.,tau_uniform=.true.)
+         !>>>TEST
+         !
          if(paramagnet)then
             Gitau_diag(:,:,:,Nspin) = Gitau_diag(:,:,:,1)
             exit spinloopGftP
@@ -561,6 +568,18 @@ contains
       allocate(tau(Ntau));tau = linspace(0d0,Sfull%Beta,Ntau)
       do ispin=1,Nspin
         do ik=1,Nkpt
+            !
+            !TEST>>>
+            path = reg(pathOUTPUT)//"K_resolved/MaxEnt_Gk_"//reg(mode)//"_t_s"//str(ispin)//"/Gk_t_k"//str(ik)//"_Tr.DAT"
+            unit = free_unit()
+            open(unit,file=reg(path),form="formatted",status="unknown",position="rewind",action="write")
+            do itau=1,Ntau
+                write(unit,"(200E20.12)") tau(itau),dreal(sum(Gitau_diag(:,itau,ik,ispin)))/Norb
+            enddo
+            close(unit)
+            !
+            where(dreal(Gitau_diag(:,:,ik,ispin)).gt.0d0)Gitau_diag(:,:,ik,ispin)=czero
+            !>>>TEST
             !
             path = reg(pathOUTPUT)//"K_resolved/MaxEnt_Gk_"//reg(mode)//"_t_s"//str(ispin)//"/Gk_t_k"//str(ik)//".DAT"
             unit = free_unit()
@@ -614,7 +633,7 @@ contains
    subroutine calc_MaxEnt_on_Sigma_K(Gmats_in,mode)
       !
       use linalg, only : diagonal, rotate
-      use input_vars, only : Solver, ReplaceTail_Simp
+      use input_vars, only : ReplaceTail_Simp
       implicit none
       !
       type(FermionicField),intent(in)       :: Gmats_in
@@ -898,7 +917,7 @@ contains
    !
    subroutine calc_MaxEnt_on_Sigma_imp(Smats_in)
       !
-      use input_vars, only : ReplaceTail_Simp, PadeWlimit, Solver
+      use input_vars, only : ReplaceTail_Simp, PadeWlimit
       use input_vars, only : SiteNorb, SiteOrbs, SiteName, Nsite, EqvGWndx
       use input_vars, only : OlocSite, OlocRot, OlocRotDag, OlocEig
       use input_vars, only : RotateHloc, ExpandImpurity, AFMselfcons

@@ -517,7 +517,7 @@ contains
       if(Lttc%Nkpt.ne.(Nkpt3(1)*Nkpt3(2)*Nkpt3(3)))stop "Total number of K-points does not match with number of K-points per dimension."
       !
       !
-      wrealMax = abs(maxval(Lttc%Ek)) + 0.1*abs(maxval(Lttc%Ek))
+      wrealMax = maxval(abs(Lttc%Ek)) + 0.1*maxval(abs(Lttc%Ek))
       !
       !
       !Store the local Hamiltonian
@@ -1074,7 +1074,7 @@ contains
             call AllocateBosonicField(Wlat,Crystal%Norb,Nmats,Crystal%iq_gamma,Nkpt=Crystal%Nkpt,Nsite=Nsite,Beta=Beta)
             !
             !Polarization
-            call AllocateBosonicField(Plat,Crystal%Norb,Nmats,Crystal%iq_gamma,Nsite=Nsite,no_bare=.true.,Beta=Beta)
+            call AllocateBosonicField(Plat,Crystal%Norb,Nmats,Crystal%iq_gamma,Nkpt=Crystal%Nkpt,Nsite=Nsite,no_bare=.true.,Beta=Beta)
             !
             !Lattice Gf
             call AllocateFermionicField(Glat,Crystal%Norb,Nmats,Nkpt=Crystal%Nkpt,Nsite=Nsite,Beta=Beta)
@@ -1542,7 +1542,8 @@ contains
             !
             !Deallocate K-dependent self-energy if not needed
             if(.not.causal_D) call DeallocateFermionicField(S_GW)
-            if(((Iteration.eq.0).and.(.not.RotateHloc)).or.(Iteration.gt.0)) call DeallocateFermionicField(S_G0W0) !I need this for the rotations
+            !if(((Iteration.eq.0).and.(.not.RotateHloc)).or.(Iteration.gt.0)) call DeallocateFermionicField(S_G0W0) !I need this for the rotations
+            call DeallocateFermionicField(S_G0W0)
             call DeallocateFermionicField(S_G0W0dc)
             !
             !

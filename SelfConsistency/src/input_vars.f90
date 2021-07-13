@@ -200,6 +200,7 @@ module input_vars
    character(len=256),public                :: structure
    character(len=256),public                :: path_funct
    integer,public                           :: Nkpt_path
+   integer,public                           :: Nkpt_Fermi
    logical,public                           :: FermiSurf
    real(8),public                           :: KKcutoff
    !
@@ -378,6 +379,7 @@ contains
       call parse_input_variable(EqvGWndx%para,"PARAMAGNET",InputFile,default=1,comment="If =1 spin symmetry is enforced if =0 spin is left free.")
       call parse_input_variable(EqvGWndx%hseed,"H_SEED",InputFile,default=0d0,comment="Seed to break spin symmetry (persistent if non zero).")
       call parse_input_variable(sym_mode,"SYM_MODE",InputFile,default=2,comment="If =1 only the lattice orbitals will be symmetrized, if =2 also the corresponding n(tau) inside the solver, if =3 only n(tau). Ineffective if =0 or if EQV_SETS=0.")
+      if((reg(CalculationType).eq."scGW").or.(reg(CalculationType).eq."G0W0"))sym_mode=0
       call parse_input_variable(EqvGWndx%Nset,"EQV_SETS",InputFile,default=1,comment="Number of sets of locally equivalent lattice orbitals.")
       paramagnet = EqvGWndx%para.gt.0
       if(EqvGWndx%Nset.gt.0)then
@@ -530,8 +532,9 @@ contains
       call add_separator("Post processing")
       call parse_input_variable(structure,"STRUCTURE",InputFile,default="cubic",comment="Available structures: triangular, cubic_[2,3], fcc, bcc, hex, tetragonal, orthorhombic_[1,2], None to avoid.")
       call parse_input_variable(path_funct,"PATH_FUNCT",InputFile,default="None",comment="Print interacting fields on high-symmetry points. Available fields: G=Green's function, S=self-energy, GS=both. None to avoid.")
-      call parse_input_variable(Nkpt_path,"NK_PATH",InputFile,default=50,comment="Number of segments between two hig-symmetry Kpoints.")
+      call parse_input_variable(Nkpt_path,"NK_PATH",InputFile,default=50,comment="Number of K-points between two hig-symmetry Kpoints.")
       call parse_input_variable(FermiSurf,"FERMI_SURF",InputFile,default=.false.,comment="Flag to compute the Green's function on the planar {kx,ky} sheet. The mesh is set by NK_PATH/2. Ignored if PATH_FUNCT=None.")
+      call parse_input_variable(Nkpt_Fermi,"NK_FERMI",InputFile,default=50,comment="Number of K-points in the side of the planar {kx,ky} sheet.")
       call parse_input_variable(KKcutoff,"KK_CUTOFF",InputFile,default=50d0,comment="Real frequency cutoff for Kramers Kronig integrals, should be twice the region of interest.")
       KKcutoff=abs(KKcutoff)
       !

@@ -17,7 +17,7 @@ program SelfConsistency
    integer                                  :: TimeStart
    integer                                  :: isite
    integer                                  :: Iteration,ItStart,Itend
-   character(len=20)                        :: InputFile="input.in" ! "input.in.gap"
+   character(len=20)                        :: InputFile="input.in" ! "input.in.gap" "input.in.Akw"
    !
    !
    !
@@ -121,7 +121,7 @@ program SelfConsistency
       !
       ! Causality correction on curlyU
       if(causal_U) call calc_causality_curlyU_correction()
-      call DeallocateBosonicField(Plat)
+      if(solve_DMFT) call DeallocateBosonicField(Plat)
       !
       !
       !Matching the lattice and impurity problems: Bosons
@@ -142,7 +142,7 @@ program SelfConsistency
       if(calc_Sigmak)then
          !
          !Hartree shift between G0W0 and LDA
-         allocate(VH(Crystal%Norb,Crystal%Norb));VH=czero
+         if(.not.allocated(VH))allocate(VH(Crystal%Norb,Crystal%Norb));VH=czero
          if(.not.Hmodel) call calc_VH(VH,densityLDA,Glat,Ulat) !call calc_VH(VH,densityLDA,densityDMFT,Ulat) !call calc_VH(VH,densityLDA,Glat,Ulat)
          call dump_Matrix(VH,reg(ItFolder),"VH.DAT")
          if(.not.VH_use)then
@@ -152,7 +152,7 @@ program SelfConsistency
          if(solve_DMFT.and.bosonicSC.and.(.not.Ustart))call DeallocateBosonicField(Ulat)
          !
          !read from SPEX G0W0 self-energy and Vexchange
-         allocate(Vxc(Crystal%Norb,Crystal%Norb,Crystal%Nkpt,Nspin));Vxc=czero
+         if(.not.allocated(Vxc))allocate(Vxc(Crystal%Norb,Crystal%Norb,Crystal%Nkpt,Nspin));Vxc=czero
          call AllocateFermionicField(S_G0W0,Crystal%Norb,Nmats,Nkpt=Crystal%Nkpt,Nsite=Nsite,Beta=Beta)
          if(.not.Hmodel)then
             if(Vxc_in)then
@@ -231,7 +231,7 @@ program SelfConsistency
             call calc_Tc(reg(ItFolder),gap_equation,Crystal,Wlat=Wlat)
          endif
       endif
-      call DeallocateBosonicField(Wlat)
+      if(solve_DMFT) call DeallocateBosonicField(Wlat)
       !
       !
       !Compute the Full Green's function and set the density

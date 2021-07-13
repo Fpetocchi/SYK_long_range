@@ -18,7 +18,7 @@ program Akw_builder
    !     READING INPUT FILE, INITIALIZING OMP, AND CHECK FOLDER STRUCTURE      !
    !---------------------------------------------------------------------------!
    call tick(TimeStart)
-   call read_InputFile("input.in")
+   call read_InputFile("input.in.Akw")
    write(*,"(A,1I4)") "Setting Nthread:",Nthread
    call omp_set_num_threads(Nthread)
    call printHeader()
@@ -125,7 +125,7 @@ program Akw_builder
                if(FermiSurf)call rebuild_Sigma_imp("plane")
                !
          end  select
-
+         !
       endif
       !
       !
@@ -181,7 +181,11 @@ contains
       !First check that all the files contains the same number fo real frequecies
       do ik=1,Nkpt
          !
-         path = reg(MaxEnt_K)//"MaxEnt_Gk_"//reg(mode)//"_t_s"//str(ispin)//"/Gk_t_k"//str(ik)//".DAT_dos.dat"
+         !TEST>>>
+         !path = reg(MaxEnt_K)//"MaxEnt_Gk_"//reg(mode)//"_t_s"//str(ispin)//"/Gk_t_k"//str(ik)//".DAT_dos.dat"
+         path = reg(MaxEnt_K)//"MaxEnt_Gk_"//reg(mode)//"_t_s"//str(ispin)//"/Gk_t_k"//str(ik)//"_Tr.DAT_dos.dat"
+         !>>>TEST
+         !
          call inquireFile(reg(path),Kmask(ik),hardstop=.false.,verb=.true.)
          if(.not.Kmask(ik)) cycle
          !
@@ -219,13 +223,24 @@ contains
          !
          if(.not.Kmask(ik)) cycle
          !
-         path = reg(MaxEnt_K)//"MaxEnt_Gk_"//reg(mode)//"_t_s"//str(ispin)//"/Gk_t_k"//str(ik)//".DAT_dos.dat"
+         !TEST>>>
+         !path = reg(MaxEnt_K)//"MaxEnt_Gk_"//reg(mode)//"_t_s"//str(ispin)//"/Gk_t_k"//str(ik)//".DAT_dos.dat"
+         !unit = free_unit()
+         !open(unit,file=reg(path),form="formatted",status="unknown",position="rewind",action="read")
+         !do iw=1,Nreal_read
+         !   read(unit,*) wreal_read(iw),(ImG_read(iorb,iw,ik),iorb=1,Crystal%Norb)
+         !enddo
+         !close(unit)
+         !
+         path = reg(MaxEnt_K)//"MaxEnt_Gk_"//reg(mode)//"_t_s"//str(ispin)//"/Gk_t_k"//str(ik)//"_Tr.DAT_dos.dat"
          unit = free_unit()
          open(unit,file=reg(path),form="formatted",status="unknown",position="rewind",action="read")
          do iw=1,Nreal_read
-            read(unit,*) wreal_read(iw),(ImG_read(iorb,iw,ik),iorb=1,Crystal%Norb)
+            read(unit,*) wreal_read(iw),ImG_read(1,iw,ik)
+            ImG_read(2:Crystal%Norb,iw,ik) = ImG_read(1,iw,ik)
          enddo
          close(unit)
+         !>>>TEST
          !
       enddo
       dw = abs(wreal_read(10)-wreal_read(9))
@@ -708,7 +723,10 @@ contains
             !
             path = reg(ItFolder)//"Convergence/MaxEnt_Sqmc_"//reg(SiteName(isite))//"_o"//str(iorb)//"_s1/Sqmc_"//reg(SiteName(isite))//"_t_o"//str(iorb)//"_s"//str(ispin)//".DAT_dos.dat"
             call inquireFile(reg(path),Kmask(iorb),hardstop=.false.,verb=.true.)
-            if(.not.Kmask(iorb)) cycle
+            if(.not.Kmask(iorb)) then
+               write(*,"(A)") "     Warning: the MaxEnt_Sqmc_"//reg(SiteName(isite))//"_o"//str(iorb)//"_s"//str(ispin)//" folder is missing one orbital."
+               return
+            endif
             !
             unit = free_unit()
             open(unit,file=reg(path),form="formatted",status="unknown",position="rewind",action="read")
@@ -732,11 +750,6 @@ contains
             Nreal_old=Nreal_read
             !
          enddo
-         !
-         if(any(Kmask.eq..false.)) then
-            write(*,"(A)") "     Warning: the MaxEnt_Sqmc_"//reg(SiteName(isite))//"_o"//str(iorb)//"_s"//str(ispin)//" folder is missing one orbital."
-            return
-         endif
          !
          allocate(wreal_read(Nreal_read));wreal_read=0d0
          allocate(ImSigma_read(SiteNorb(isite),Nreal_read));ImSigma_read=0d0
