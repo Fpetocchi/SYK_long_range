@@ -546,15 +546,8 @@ contains
       call cpu_time(start)
       allocate(Gitau_diag(Norb,Ntau,Nkpt,Nspin));Gitau_diag=czero
       spinloopGftP: do ispin=1,Nspin
-         !
-         !TEST>>> TOTALLY USELESS
-         !Nmats_cutoff = int(0.75*Nmats)
-         !call Fmats2itau_vec(Sfull%Beta,Gmats_diag(:,1:Nmats_cutoff,:,ispin),Gitau_diag(:,:,:,ispin), &
-         !asympt_corr=.true.,tau_uniform=.true.)
          call Fmats2itau_vec(Sfull%Beta,Gmats_diag(:,:,:,ispin),Gitau_diag(:,:,:,ispin), &
          asympt_corr=.true.,tau_uniform=.true.)
-         !>>>TEST
-         !
          if(paramagnet)then
             Gitau_diag(:,:,:,Nspin) = Gitau_diag(:,:,:,1)
             exit spinloopGftP
@@ -570,6 +563,9 @@ contains
         do ik=1,Nkpt
             !
             !TEST>>>
+            !
+            !Perform some sort of fit here
+            !
             path = reg(pathOUTPUT)//"K_resolved/MaxEnt_Gk_"//reg(mode)//"_t_s"//str(ispin)//"/Gk_t_k"//str(ik)//"_Tr.DAT"
             unit = free_unit()
             open(unit,file=reg(path),form="formatted",status="unknown",position="rewind",action="write")

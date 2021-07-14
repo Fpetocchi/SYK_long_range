@@ -950,7 +950,7 @@ contains
             if (iq.ne.iqread) stop "read_U_spex_full: iqread.ne.iq"
             !
             read(unit) wread
-            !wread = H2eV*wread
+            wread = H2eV*wread
             do iw=1,Nfreq
                if(dabs(wread(iw)-wmats(iw)).gt.eps) Then
                   write(*,"(F)")dabs(wread(iw)-wmats(iw)),iw,iq

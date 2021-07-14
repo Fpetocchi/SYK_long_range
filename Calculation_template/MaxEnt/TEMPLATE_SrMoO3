@@ -14,14 +14,15 @@ GENMAT=/home/petocchif/1_GW_EDMFT/nobackup/1_production/Calculation_template
 #------------------------------------------------------------------------------#
 
 
-for it in `seq 34 1 38` ; do
+for it in `seq 39 1 45` ; do
    ## LATTICE----------------------------------------
    cd $it/Convergence
    cp ${GENMAT}/${MATERIAL}/MaxEnt/MaxEnt.sh .
 
    chmod 700 MaxEnt.sh
    #
-   P="-e 0.007 -w 15001 -W 150"
+   #P="-e 0.007 -w 15001 -W 150"
+   P="-e 0.007 -w 9001 -W 150"
    #
    PARAM=${P}
    ./MaxEnt.sh ${PARAM} -f G -o 1 -i lat -p ${GENMAT}
@@ -29,7 +30,7 @@ for it in `seq 34 1 38` ; do
    P="-e 0.06 -w 10000 -W 600"
    #
    PARAM=${P}
-   ./MaxEnt.sh ${PARAM} -f W -o 1 -i lat -p ${GENMAT}
+#   ./MaxEnt.sh ${PARAM} -f W -o 1 -i lat -p ${GENMAT}
    #
    cd ../../
 
@@ -67,6 +68,7 @@ done
 ./MaxEnt_Kresolved.sh -e 0.05 -w 6000 -W 350 -F G -N 350 -B 35 -m path -i 1 -f 351 -t T
 
 
+./MaxEnt_Kresolved.sh -e 0.005 -w 10000 -W 350 -F G -N 350 -B 35 -m path -i 1 -f 351 -t T #aumenta ancora
 
 
 
