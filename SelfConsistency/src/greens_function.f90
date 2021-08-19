@@ -59,7 +59,7 @@ contains
       use parameters
       use utils_misc
       use fourier_transforms
-      use input_vars, only : NtauF, tau_uniform, paramagnet
+      use input_vars, only : Ntau, tau_uniform, paramagnet
       implicit none
       !
       type(FermionicField),intent(in)       :: Gmats
@@ -83,13 +83,13 @@ contains
       call assert_shape(n_loc,[Norb,Norb,Nspin],"calc_density_loc","n_loc")
       !
       n_loc=czero
-      allocate(Gitau(Norb,Norb,NtauF));Gitau=czero
+      allocate(Gitau(Norb,Norb,Ntau));Gitau=czero
       spinloop: do ispin=1,Nspin
          !
          call Fmats2itau_mat(Beta,Gmats%ws(:,:,:,ispin),Gitau, &
          asympt_corr=.true.,tau_uniform=tau_uniform,atBeta=.true.)
          !
-         n_loc(:,:,ispin) = -Gitau(:,:,NtauF)
+         n_loc(:,:,ispin) = -Gitau(:,:,Ntau)
          if(paramagnet)then
             n_loc(:,:,Nspin) = n_loc(:,:,1)
             exit spinloop
@@ -105,7 +105,7 @@ contains
       use parameters
       use utils_misc
       use fourier_transforms
-      use input_vars, only : NtauF, tau_uniform, cmplxWann, paramagnet
+      use input_vars, only : Ntau, tau_uniform, cmplxWann, paramagnet
       implicit none
       !
       type(FermionicField),intent(in)       :: Gmats
@@ -154,7 +154,7 @@ contains
       call assert_shape(n_k,[Norb,Norb,Nkpt,Nspin],"calc_density_Kdep","n_k")
       !
       n_k=czero
-      allocate(Gitau(Norb,Norb,NtauF,Nkpt));Gitau=czero
+      allocate(Gitau(Norb,Norb,Ntau,Nkpt));Gitau=czero
       spinloop: do ispin=1,Nspin
          !
          if(cmplxWann.or.along_path_.or.along_plane_)then
@@ -165,7 +165,7 @@ contains
             asympt_corr=.true.,tau_uniform=tau_uniform,Nkpt3=Lttc%Nkpt3,kpt=Lttc%kpt,atBeta=.true.)
          endif
          !
-         n_k(:,:,:,ispin) = -Gitau(:,:,NtauF,:)
+         n_k(:,:,:,ispin) = -Gitau(:,:,Ntau,:)
          if(paramagnet)then
             n_k(:,:,:,Nspin) = n_k(:,:,:,1)
             exit spinloop
@@ -670,7 +670,7 @@ contains
       use linalg
       use utils_misc
       use utils_fields
-      use input_vars, only : NtauF
+      use input_vars, only : Ntau
       implicit none
       !
       real(8),intent(inout)                 :: mu
@@ -699,7 +699,7 @@ contains
       mu_start = mu
       !
       !Everything is paramagnetic
-      allocate(Gitau(Norb,NtauF,Nkpt));Gitau=czero
+      allocate(Gitau(Norb,Ntau,Nkpt));Gitau=czero
       call calc_G0_tau(Gitau,mu_start,Beta,Lttc%Ek,atBeta=.true.)
       n_iter = get_dens()
       write(*,"(2(A,F12.5))") "     Starting density: ",n_iter,", starting mu: ",mu_start
@@ -770,7 +770,7 @@ contains
          allocate(n_k(Norb,Norb,Nkpt));n_k=czero
          do ik=1,Nkpt
             !paramagnetic
-            n_k(:,:,ik) = -2.d0*diag(dreal(Gitau(:,NtauF,ik)))
+            n_k(:,:,ik) = -2.d0*diag(dreal(Gitau(:,Ntau,ik)))
             !if present, the restriction is on the orbitals in Wannier basis
             n_k(:,:,ik) = rotate(n_k(:,:,ik),transpose(conjg(Lttc%Zk(:,:,ik))))
          enddo
@@ -814,7 +814,7 @@ contains
       use input_vars, only : pathINPUT
       use input_vars, only : Nreal, wrealMax, eta
       use input_vars, only : wmatsMax
-      use input_vars, only : NtauF, tau_uniform
+      use input_vars, only : Ntau, tau_uniform
       implicit none
       !
       real(8),intent(in)                    :: mu
@@ -899,24 +899,24 @@ contains
       !
       !
       !print G(tau) in diagonal and Wannier basis-------------------------------
-      allocate(axis(NtauF));axis=0d0
+      allocate(axis(Ntau));axis=0d0
       if(tau_uniform)then
-         axis = linspace(0d0,Beta,NtauF)
+         axis = linspace(0d0,Beta,Ntau)
       else
-         axis = denspace(Beta,NtauF)
+         axis = denspace(Beta,Ntau)
       endif
       !
-      allocate(Gitau(Norb,NtauF,Nkpt));Gitau=czero
+      allocate(Gitau(Norb,Ntau,Nkpt));Gitau=czero
       call calc_G0_tau(Gitau,mu,Beta,Lttc%Ek)
       !
-      allocate(Gprint_Ek(Norb,NtauF));Gprint_Ek=czero
-      allocate(Gprint_Hk(Norb,Norb,NtauF));Gprint_Hk=czero
+      allocate(Gprint_Ek(Norb,Ntau));Gprint_Ek=czero
+      allocate(Gprint_Hk(Norb,Norb,Ntau));Gprint_Hk=czero
       allocate(Gftmp(Norb,Norb));Gftmp=czero
       !$OMP PARALLEL DEFAULT(NONE),&
-      !$OMP SHARED(Norb,NtauF,Nkpt,Lttc,Gitau,Gprint_Ek,Gprint_Hk),&
+      !$OMP SHARED(Norb,Ntau,Nkpt,Lttc,Gitau,Gprint_Ek,Gprint_Hk),&
       !$OMP PRIVATE(iwan1,ik,iw,Gftmp)
       !$OMP DO
-      do itau=1,NtauF
+      do itau=1,Ntau
          do ik=1,Nkpt
             !
             do iwan1=1,Norb

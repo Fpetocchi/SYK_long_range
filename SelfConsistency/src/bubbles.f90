@@ -186,7 +186,7 @@ contains
       use crystal
       use fourier_transforms
       use file_io
-      use input_vars, only : NtauB, tau_uniform, cmplxWann, UfullStructure, paramagnet
+      use input_vars, only : Ntau, tau_uniform, cmplxWann, UfullStructure, paramagnet
       implicit none
       !
       type(BosonicField),intent(inout)      :: Pout
@@ -232,7 +232,7 @@ contains
       !
       tau_output_=.false.
       if(present(tau_output)) tau_output_ = tau_output
-      Ntau_ = NtauB
+      Ntau_ = Ntau
       if(tau_output_) Ntau_ = NaxisB
       !
       call init_Uelements(Norb,PhysicalUelements)

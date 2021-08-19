@@ -53,7 +53,7 @@ contains
       use utils_fields
       use crystal
       use fourier_transforms
-      use input_vars, only : NtauB, tau_uniform, cmplxWann, paramagnet
+      use input_vars, only : Ntau, tau_uniform, cmplxWann, paramagnet
       implicit none
       !
       type(FermionicField),intent(inout)    :: Smats
@@ -109,7 +109,7 @@ contains
       !
       ! Compute Glat(k,tau)
       call cpu_time(start)
-      allocate(Gitau(Norb,Norb,NtauB,Nkpt,Nspin));Gitau=czero
+      allocate(Gitau(Norb,Norb,Ntau,Nkpt,Nspin));Gitau=czero
       if(cmplxWann)then
          spinloopGWc: do ispin=1,Nspin
             call Fmats2itau_mat(Beta,Gmats%wks(:,:,:,:,ispin),Gitau(:,:,:,:,ispin), &
@@ -134,7 +134,7 @@ contains
       !
       ! Compute Wlat(q,tau)
       call cpu_time(start)
-      allocate(Witau(Nbp,Nbp,NtauB,Nkpt));Witau=czero
+      allocate(Witau(Nbp,Nbp,Ntau,Nkpt));Witau=czero
       call Bmats2itau(Beta,Wmats%screened,Witau,asympt_corr=.true.,tau_uniform=tau_uniform,Umats_bare=Wmats%bare)
       call cpu_time(finish)
       write(*,"(A,F)") "     Wlat(q,iw) --> Wlat(q,tau) cpu timing:", finish-start
@@ -142,17 +142,17 @@ contains
       !Sigma_{m,n}(q,tau) = -Sum_{k,mp,np} W_{(m,mp);(n,np)}(q-k;tau)G_{mp,np}(k,tau)
       call cpu_time(start)
       call clear_attributes(Smats_C_)
-      allocate(Sitau(Norb,Norb,NtauB))
+      allocate(Sitau(Norb,Norb,Ntau))
       spinloopGW: do ispin=1,Nspin
          do iq=1,Lttc%Nkpt_irred
             !
             Sitau=czero
             !
             !$OMP PARALLEL DEFAULT(NONE),&
-            !$OMP SHARED(Norb,iq,ispin,NtauB,Lttc,Nkpt,Sitau,Gitau,Witau),&
+            !$OMP SHARED(Norb,iq,ispin,Ntau,Lttc,Nkpt,Sitau,Gitau,Witau),&
             !$OMP PRIVATE(itau,ik1,ik2,i,j,k,l,ib1,ib2)
             !$OMP DO
-            do itau=1,NtauB
+            do itau=1,Ntau
                do k=1,Norb
                   do i=1,Norb
                      !
@@ -192,7 +192,7 @@ contains
       call cpu_time(start)
       call clear_attributes(Smats_X_)
       !$OMP PARALLEL DEFAULT(NONE),&
-      !$OMP SHARED(Norb,NtauB,Lttc,Nkpt,Smats_X_,Gitau,Wmats),&
+      !$OMP SHARED(Norb,Ntau,Lttc,Nkpt,Smats_X_,Gitau,Wmats),&
       !$OMP PRIVATE(iq,ispin,ik1,ik2,i,j,k,l,ib1,ib2)
       !$OMP DO
       do iq=1,Lttc%Nkpt_irred
@@ -209,7 +209,7 @@ contains
                            ib1 = i + Norb*(j-1)
                            ib2 = k + Norb*(l-1)
                            !
-                           Smats_X_%N_ks(i,k,iq,ispin) = Smats_X_%N_ks(i,k,iq,ispin) + Gitau(j,l,NtauB,ik1,ispin)*Wmats%bare(ib1,ib2,ik2)/Nkpt
+                           Smats_X_%N_ks(i,k,iq,ispin) = Smats_X_%N_ks(i,k,iq,ispin) + Gitau(j,l,Ntau,ik1,ispin)*Wmats%bare(ib1,ib2,ik2)/Nkpt
                            !Smats_X_%N_ks(i,k,iq,ispin) = Smats_X_%N_ks(i,k,iq,ispin) - Gitau(j,l,1,ik1,ispin)*Wmats%bare(ib1,ib2,ik2)/Nkpt
                            !
                         enddo
@@ -304,7 +304,7 @@ contains
       use utils_fields
       use crystal
       use fourier_transforms
-      use input_vars, only : NtauB, tau_uniform, paramagnet
+      use input_vars, only : Ntau, tau_uniform, paramagnet
       implicit none
       !
       type(FermionicField),intent(inout)    :: Smats_dc
@@ -350,7 +350,7 @@ contains
       !
       ! Compute Glat(tau) - FT all components
       call cpu_time(start)
-      allocate(Gitau_loc(Norb,Norb,NtauB,Nspin));Gitau_loc=czero
+      allocate(Gitau_loc(Norb,Norb,Ntau,Nspin));Gitau_loc=czero
       do ispin=1,Nspin
          call Fmats2itau_mat(Beta,Gmats%ws(:,:,:,ispin),Gitau_loc(:,:,:,ispin),asympt_corr=.true.,tau_uniform=tau_uniform)
       enddo
@@ -359,20 +359,20 @@ contains
       !
       ! Compute Wlat(tau)
       call cpu_time(start)
-      allocate(Witau_loc(Nbp,Nbp,NtauB));Witau_loc=czero
+      allocate(Witau_loc(Nbp,Nbp,Ntau));Witau_loc=czero
       call Bmats2itau(Beta,Wmats%screened_local,Witau_loc,asympt_corr=.true.,tau_uniform=tau_uniform,Umats_bare=Wmats%bare_local)
       call cpu_time(finish)
       write(*,"(A,F)") "     Wlat(iw) --> Wlat(tau) cpu timing:", finish-start
       !
       !Sigma_{m,n}(q,tau) = -Sum_{k,mp,np} W_{(m,mp);(n,np)}(q-k;tau)G_{mp,np}(k,tau)
       call cpu_time(start)
-      allocate(Sitau_loc(Norb,Norb,NtauB,Nspin));Sitau_loc=czero
+      allocate(Sitau_loc(Norb,Norb,Ntau,Nspin));Sitau_loc=czero
       spinloopGWdc: do ispin=1,Nspin
          !$OMP PARALLEL DEFAULT(NONE),&
-         !$OMP SHARED(Norb,NtauB,ispin,Sitau_loc,Gitau_loc,Witau_loc),&
+         !$OMP SHARED(Norb,Ntau,ispin,Sitau_loc,Gitau_loc,Witau_loc),&
          !$OMP PRIVATE(itau,i,j,k,l,ib1,ib2)
          !$OMP DO
-         do itau=1,NtauB
+         do itau=1,Ntau
             do k=1,Norb
                do i=1,Norb
                   !
@@ -412,7 +412,7 @@ contains
       call clear_attributes(Smats_Xdc_)
       do ispin=1,Nspin
          !$OMP PARALLEL DEFAULT(NONE),&
-         !$OMP SHARED(Norb,NtauB,ispin,Smats_Xdc_,Gitau_loc,Wmats),&
+         !$OMP SHARED(Norb,Ntau,ispin,Smats_Xdc_,Gitau_loc,Wmats),&
          !$OMP PRIVATE(i,j,k,l,ib1,ib2)
          !$OMP DO
          do k=1,Norb
@@ -424,7 +424,7 @@ contains
                      ib1 = i + Norb*(j-1)
                      ib2 = k + Norb*(l-1)
                      !
-                     Smats_Xdc_%N_s(i,k,ispin) = Smats_Xdc_%N_s(i,k,ispin) + Gitau_loc(j,l,NtauB,ispin)*Wmats%bare_local(ib1,ib2)
+                     Smats_Xdc_%N_s(i,k,ispin) = Smats_Xdc_%N_s(i,k,ispin) + Gitau_loc(j,l,Ntau,ispin)*Wmats%bare_local(ib1,ib2)
                      !
                   enddo
                enddo
@@ -1249,8 +1249,8 @@ contains
          write(*,"(A,F)") "     Sigma_GoWo(k,w) --> Sigma_GoWo(k,iw) cpu timing:", finish-start
          !
          ! Print out the transformed stuff
-         call dump_FermionicField(Smats_GoWo,reg(pathOUTPUT_),"SGoWo_w",.true.,Lttc%kpt)
-         if(save2readable)call dump_FermionicField(Smats_GoWo,reg(pathOUTPUT_)//"Sigma_imag/","SGoWo_w",.false.,Lttc%kpt)
+         call dump_FermionicField(Smats_GoWo,reg(pathOUTPUT_),"SGoWo_w",.true.,Lttc%kpt,paramagneticSPEX)
+         if(save2readable)call dump_FermionicField(Smats_GoWo,reg(pathOUTPUT_)//"Sigma_imag/","SGoWo_w",.false.,Lttc%kpt,paramagneticSPEX)
          !
          ! Read the Vxc and print it out
          if(doVxc)then

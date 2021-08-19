@@ -337,7 +337,7 @@ void measure_G( Vec &G, segment_container_t &segment, Mat &M, double &Beta, doub
    int Ntau = G.size();
 
    //
-   for (int i=0; i<M.rows(); i++)
+   for (int i=0; i<M.cols(); i++)
    {
       //
       (i==0 ? it1 = segment.begin() : it1++);
@@ -364,6 +364,18 @@ void measure_G( Vec &G, segment_container_t &segment, Mat &M, double &Beta, doub
             //
             int index = argument/Beta*(Ntau-1)+0.5;
             G[index] -= M(k,i)*bubble_sign/(Beta*Beta);
+            //safety checks
+            bool nanCond = std::isnan(G[index]);
+            bool infCond = std::isinf(G[index]);
+            if( nanCond || infCond )
+            { 
+               if( nanCond ) printf(" NaN G[%d] \n",index);
+               if( infCond ) printf(" Inf G[%d] \n",index);
+               printf(" M[%d,%d]= %f \n",k,i,M(k,i));
+               printf(" bubble_sign= %f \n",bubble_sign);
+               printf(" Beta= %f \n\n\n",Beta);
+            }
+            //
          }
       }
    }

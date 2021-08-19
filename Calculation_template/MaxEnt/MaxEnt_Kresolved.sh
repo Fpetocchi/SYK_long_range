@@ -1,6 +1,7 @@
 #!/bin/bash
 #
-
+QUEUES="big.q,new.q"
+#
 ################################################################################
 #                              DEFAULT ARGUMENTS                               #
 ################################################################################
@@ -24,9 +25,10 @@ PAD="K"
 Nspin=1
 SPIN_DW="F"
 SINGSUB="F"
-MODEL="F"
+MODEL="0"
+MOMENTS=" -M 0,1"
 #
-TRACE="F"
+SUFFIX=""
 #
 BINPATH=/home/petocchif/1_GW_EDMFT/nobackup/1_production/Calculation_template
 
@@ -37,7 +39,7 @@ BINPATH=/home/petocchif/1_GW_EDMFT/nobackup/1_production/Calculation_template
 ################################################################################
 #                             PROVIDED ARGUMENTS                               #
 ################################################################################
-while getopts ":e:w:W:F:N:B:i:f:m:d:t:p:M:" o; do
+while getopts ":e:w:W:F:N:B:i:f:m:d:s:p:M:" o; do
    case ${o} in
       e)
          err="${OPTARG}"
@@ -77,15 +79,15 @@ while getopts ":e:w:W:F:N:B:i:f:m:d:t:p:M:" o; do
          SPIN_DW="${OPTARG}"
          #if [ "$SPIN_DW"  != "T" ] && [ "$SPIN_DW"  != "F" ]; then echo "Option Error - s" ; exit 1 ; fi
          ;;
-      t)
-         TRACE="${OPTARG}"
+      s)
+         SUFFIX="${OPTARG}"
          ;;
       p)
          BINPATH="${OPTARG}"
          ;;
       M)
          MODEL="${OPTARG}"
-         if [ "$MODEL"  != "T" ] && [ "$MODEL"  != "F" ]; then echo "Option Error - M" ; exit 1 ; fi
+         if [ "$MODEL"  != "0" ] && [ "$MODEL"  != "1" ] && [ "$MODEL"  != "2" ]; then echo "Option Error - M" ; exit 1 ; fi
          ;;
       \? )
          echo "Invalid option: $OPTARG" 1>&2
@@ -102,9 +104,6 @@ NAME=${FIELD}${PAD}
 #
 if [ "$SPIN_DW"  == "T" ]; then Nspin=2 ; fi
 RUNOPTIONS=" -s "$err" -w "$mesh" -W "$width
-#
-TRPAD=""
-if [ "${TRACE}"  == "T" ]; then TRPAD="_Tr" ; fi
 
 
 
@@ -168,11 +167,11 @@ for ispin in `seq 1 1 ${Nspin}` ; do
 #!/bin/bash
 #$ -S /bin/bash
 #$ -cwd
-#$ -N ${NAME}_s${ispin}_B${btndx}${TRPAD}
+#$ -N ${NAME}_s${ispin}_B${btndx}${SUFFIX}
 #$ -e error${NAME}_bt${btndx}.out
 #$ -o log${NAME}_bt${btndx}.out
-#$ -pe  smp 1
-#$ -q   big.q,new.q
+#$ -pe smp 1
+#$ -q ${QUEUES}
 
 export PYTHONPATH=\${PYTHONPATH}:${BIN}/docopt/
 export OMP_NUM_THREADS=1
@@ -181,13 +180,16 @@ for i in \`seq  ${startk} ${stopk}\`; do
    #
    echo K_\${i} > job_Kb_\${i}.out
    #
-   if [ "$MODEL"  == "T" ] && [ -f ../${Gsource}/${FIELD}k_t_k\${i}.DAT_dos.dat ]; then
+   if [ "$MODEL"  != "0" ]; then
       #
-      mpiexec -np 1 python3.6  ${BIN}/bryan.py ${RUNOPTIONS} -m  ../${Gsource}/${FIELD}k_t_k\${i}.DAT_dos.dat ../${Gsource}/${FIELD}k_t_k\${i}${TRPAD}.DAT >> job_Kb_\${i}.out
+      echo model > job_Kb_\${i}.out
+      if [ "$MODEL"  == "1" ] ; then MODELOPTIONS=${MOMENTS} ; fi
+      if [ "$MODEL"  == "2" ] ; then MODELOPTIONS= -m ../${Gsource}/${FIELD}k_t_k\${i}${SUFFIX}.DAT ; fi
+      mpiexec -np 1 python3.6  ${BIN}/bryan.py ${RUNOPTIONS} \${MODELOPTIONS} ../${Gsource}/${FIELD}k_t_k\${i}${SUFFIX}.DAT >> job_Kb_\${i}.out
       #
    else
       #
-      mpiexec -np 1 python3.6  ${BIN}/bryan.py ${RUNOPTIONS} ../${Gsource}/${FIELD}k_t_k\${i}${TRPAD}.DAT >> job_Kb_\${i}.out
+      mpiexec -np 1 python3.6  ${BIN}/bryan.py ${RUNOPTIONS} ../${Gsource}/${FIELD}k_t_k\${i}${SUFFIX}.DAT >> job_Kb_\${i}.out
       #
    fi
    #
@@ -218,11 +220,11 @@ EOF
 #!/bin/bash
 #$ -S /bin/bash
 #$ -cwd
-#$ -N ${NAME}_s${ispin}_K${kp}${TRPAD}
+#$ -N ${NAME}_s${ispin}_K${kp}${SUFFIX}
 #$ -e error${NAME}_K${kp}.out
 #$ -o log${NAME}_K${kp}.out
-#$ -pe  smp 1
-#$ -q   big.q,new.q
+#$ -pe smp 1
+#$ -q ${QUEUES}
 
 export PYTHONPATH=\${PYTHONPATH}:${BIN}/docopt/
 export OMP_NUM_THREADS=1
@@ -230,13 +232,16 @@ export OMP_NUM_THREADS=1
 #
 echo K_${kp} > job_K_${kp}.out
 #
-if [ "$MODEL"  == "T" ] && [ -f ../${Gsource}/${FIELD}k_t_k${kp}.DAT_dos.dat ]; then
+if [ "$MODEL"  != "0" ]; then
    #
-   mpiexec -np 1 python3.6  ${BIN}/bryan.py ${RUNOPTIONS} -m ../${Gsource}/${FIELD}k_t_k${kp}.DAT_dos.dat ../${Gsource}/${FIELD}k_t_k${kp}${TRPAD}.DAT >> job_K_${kp}.out
+   echo model > job_K_${kp}.out
+   if [ "$MODEL"  == "1" ] ; then MODELOPTIONS=${MOMENTS} ; fi
+   if [ "$MODEL"  == "2" ] ; then MODELOPTIONS= -m ../${Gsource}/${FIELD}k_t_k${kp}${SUFFIX}.DAT ; fi
+   mpiexec -np 1 python3.6  ${BIN}/bryan.py ${RUNOPTIONS} \${MODELOPTIONS} ../${Gsource}/${FIELD}k_t_k${kp}${SUFFIX}.DAT >> job_K_${kp}.out
    #
 else
    #
-   mpiexec -np 1 python3.6  ${BIN}/bryan.py ${RUNOPTIONS} ../${Gsource}/${FIELD}k_t_k${kp}${TRPAD}.DAT >> job_K_${kp}.out
+   mpiexec -np 1 python3.6  ${BIN}/bryan.py ${RUNOPTIONS} ../${Gsource}/${FIELD}k_t_k${kp}${SUFFIX}.DAT >> job_K_${kp}.out
    #
 fi
 #

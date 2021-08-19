@@ -81,7 +81,7 @@ module utils_main
    !
    real(8)                                  :: HartreeFact=1d0
    logical                                  :: update_curlyG=.true.
-   integer                                  :: SigmaMaxMom=4
+   integer                                  :: SigmaMaxMom=3
    !
    logical                                  :: sym_constrained=.false.
    logical                                  :: MultiTier=.false.
@@ -1306,16 +1306,18 @@ contains
          !
          do isite=1,Nsite
             file = reg(PrevItFolder)//"Solver_"//reg(SiteName(isite))//"/resultsQMC/Nqmc.DAT"
-            call inquireFile(reg(file),filexists,verb=verbose)
-            unit = free_unit()
-            open(unit,file=reg(file),form="formatted",status="old",position="rewind",action="read")
-            read(unit,*) muQMC
-            do ib1=1,Nspin*SiteNorb(isite)
-               iorb = (ib1+mod(ib1,2))/2
-               ispin = abs(mod(ib1,2)-2)
-               read(unit,*) idum,densityQMC(iorb,iorb,ispin,isite)
-            enddo
-            close(unit)
+            call inquireFile(reg(file),filexists,hardstop=.false.,verb=verbose)
+            if(filexists)then
+               unit = free_unit()
+               open(unit,file=reg(file),form="formatted",status="old",position="rewind",action="read")
+               read(unit,*) muQMC
+               do ib1=1,Nspin*SiteNorb(isite)
+                  iorb = (ib1+mod(ib1,2))/2
+                  ispin = abs(mod(ib1,2)-2)
+                  read(unit,*) idum,densityQMC(iorb,iorb,ispin,isite)
+               enddo
+               close(unit)
+            endif
             if(ExpandImpurity.or.AFMselfcons)exit
          enddo
          !
@@ -1647,7 +1649,7 @@ contains
       deallocate(GS,SG,SGS,invG)
       !
       call symmetrize_GW(D_correction,EqvGWndx)
-      call dump_FermionicField(D_correction,reg(ItFolder),"D_correction_w")
+      call dump_FermionicField(D_correction,reg(ItFolder),"D_correction_w",paramagnet)
       !
       call DeallocateFermionicField(S_GW)
       !
@@ -1809,9 +1811,9 @@ contains
       !Print what's used to compute delta
       call dump_Matrix(Nloc,reg(ItFolder),"Solver_"//reg(SiteName(isite))//"/N_"//reg(SiteName(isite)),paramagnet)
       deallocate(Nloc)
-      call dump_FermionicField(Gloc,reg(ItFolder)//"Solver_"//reg(SiteName(isite))//"/","G_"//reg(SiteName(isite))//"_w")
-      call dump_FermionicField(SigmaImp,reg(ItFolder)//"Solver_"//reg(SiteName(isite))//"/","S_"//reg(SiteName(isite))//"_w")
-      if(causal_D)call dump_FermionicField(DeltaCorr,reg(ItFolder)//"Solver_"//reg(SiteName(isite))//"/","D_correction_"//reg(SiteName(isite))//"_w")
+      call dump_FermionicField(Gloc,reg(ItFolder)//"Solver_"//reg(SiteName(isite))//"/","G_"//reg(SiteName(isite))//"_w",paramagnet)
+      call dump_FermionicField(SigmaImp,reg(ItFolder)//"Solver_"//reg(SiteName(isite))//"/","S_"//reg(SiteName(isite))//"_w",paramagnet)
+      if(causal_D)call dump_FermionicField(DeltaCorr,reg(ItFolder)//"Solver_"//reg(SiteName(isite))//"/","D_correction_"//reg(SiteName(isite))//"_w",paramagnet)
       !
       !Compute the fermionic Weiss field aka the inverse of CurlyG
       allocate(invG(Norb,Norb));invG=czero
@@ -2008,7 +2010,7 @@ contains
          enddo
       enddo
       FermiPrint%mu=Glat%mu
-      call dump_FermionicField(FermiPrint,reg(ItFolder)//"Solver_"//reg(SiteName(isite))//"/","G0_"//reg(SiteName(isite))//"_w")
+      call dump_FermionicField(FermiPrint,reg(ItFolder)//"Solver_"//reg(SiteName(isite))//"/","G0_"//reg(SiteName(isite))//"_w",paramagnet)
       !
       !Delta(iw)
       call clear_attributes(FermiPrint)
@@ -2016,7 +2018,7 @@ contains
          FermiPrint%ws(iwan,iwan,:,:) = Dmats(iwan,:,:)
       enddo
       FermiPrint%mu=Glat%mu
-      call dump_FermionicField(FermiPrint,reg(ItFolder)//"Solver_"//reg(SiteName(isite))//"/","D_"//reg(SiteName(isite))//"_w")
+      call dump_FermionicField(FermiPrint,reg(ItFolder)//"Solver_"//reg(SiteName(isite))//"/","D_"//reg(SiteName(isite))//"_w",paramagnet)
       !
       !Delta(iw) without causality correction
       if(causal_D)then
@@ -2026,7 +2028,7 @@ contains
                FermiPrint%ws(iwan,iwan,:,ispin) = Dmats(iwan,:,ispin) - DeltaCorr%ws(iwan,iwan,:,ispin)
             enddo
          enddo
-         call dump_FermionicField(FermiPrint,reg(ItFolder)//"Solver_"//reg(SiteName(isite))//"/","D_notCorr_"//reg(SiteName(isite))//"_w")
+         call dump_FermionicField(FermiPrint,reg(ItFolder)//"Solver_"//reg(SiteName(isite))//"/","D_notCorr_"//reg(SiteName(isite))//"_w",paramagnet)
          call DeallocateFermionicField(DeltaCorr)
       endif
       !
@@ -2044,7 +2046,7 @@ contains
                FermiPrint%ws(iwan,iwan,:,ispin) = Dmats(iwan,:,ispin)
             enddo
          enddo
-         call dump_FermionicField(FermiPrint,reg(ItFolder)//"Solver_"//reg(SiteName(isite))//"/","testFT_D_"//reg(SiteName(isite))//"_w")
+         call dump_FermionicField(FermiPrint,reg(ItFolder)//"Solver_"//reg(SiteName(isite))//"/","testFT_D_"//reg(SiteName(isite))//"_w",paramagnet)
          !
          call clear_attributes(FermiPrint)
          do ispin=1,Nspin
@@ -2052,7 +2054,7 @@ contains
                FermiPrint%ws(iwan,iwan,:,ispin) = Eloc(iwan,ispin) + Dmats(iwan,:,ispin)
             enddo
          enddo
-         call dump_FermionicField(FermiPrint,reg(ItFolder)//"Solver_"//reg(SiteName(isite))//"/fits/","test_Eo+D_"//reg(SiteName(isite))//"_w")
+         call dump_FermionicField(FermiPrint,reg(ItFolder)//"Solver_"//reg(SiteName(isite))//"/fits/","test_Eo+D_"//reg(SiteName(isite))//"_w",paramagnet)
          !
       endif
       call DeallocateFermionicField(FermiPrint)
@@ -2509,7 +2511,7 @@ contains
          !
       enddo
       !
-      call dump_FermionicField(G_DMFT,reg(PrevItFolder),"Gimp_w")
+      call dump_FermionicField(G_DMFT,reg(PrevItFolder),"Gimp_w",paramagnet)
       call dump_MaxEnt(G_DMFT,"mats",reg(PrevItFolder)//"Convergence/","Gimp",EqvGWndx%SetOrbs,WmaxPade=PadeWlimit)
       call dump_MaxEnt(G_DMFT,"mats2itau",reg(PrevItFolder)//"Convergence/","Gimp",EqvGWndx%SetOrbs)
       call DeallocateFermionicField(G_DMFT)
@@ -2539,7 +2541,7 @@ contains
                enddo
             enddo
             G0imp%mu=muQMC
-            call dump_FermionicField(G0imp,reg(PrevItFolder)//"Solver_"//reg(SiteName(isite))//"/","G0_"//reg(SiteName(isite))//"_w")
+            call dump_FermionicField(G0imp,reg(PrevItFolder)//"Solver_"//reg(SiteName(isite))//"/","G0_"//reg(SiteName(isite))//"_w",paramagnet)
          endif
          !
          !Fermionic Dyson equation in the solver basis (always diagonal)
@@ -2667,7 +2669,7 @@ contains
       if(EqvGWndx%O.or.EqvGWndx%S)then
          !
          if(verbose)then
-            call dump_FermionicField(S_DMFT,reg(PrevItFolder),"Simp_noSym_w")
+            call dump_FermionicField(S_DMFT,reg(PrevItFolder),"Simp_noSym_w",paramagnet)
             call dump_Matrix(S_DMFT%N_s,reg(PrevItFolder),"HartreeU_noSym",paramagnet)
          endif
          !
@@ -2676,7 +2678,7 @@ contains
       endif
       deallocate(Smats)
       !
-      call dump_FermionicField(S_DMFT,reg(PrevItFolder),"Simp_w")
+      call dump_FermionicField(S_DMFT,reg(PrevItFolder),"Simp_w",paramagnet)
       call dump_MaxEnt(S_DMFT,"mats",reg(PrevItFolder)//"Convergence/","Simp",EqvGWndx%SetOrbs,WmaxPade=PadeWlimit)
       call dump_Matrix(S_DMFT%N_s,reg(PrevItFolder),"HartreeU",paramagnet)
       call DeallocateFermionicField(S_DMFT)
@@ -2712,7 +2714,7 @@ contains
             !
          enddo
          deallocate(SmatsNoFit)
-         call dump_FermionicField(S_DMFT,reg(PrevItFolder),"Simp_noFit_w")
+         call dump_FermionicField(S_DMFT,reg(PrevItFolder),"Simp_noFit_w",paramagnet)
          call DeallocateFermionicField(S_DMFT)
          !
       endif
@@ -3106,7 +3108,7 @@ contains
             call AllocateFermionicField(Glat,Crystal%Norb,Beta_Match%Nmats_old,Nkpt=Crystal%Nkpt,Nsite=Nsite,Beta=Beta_Match%Beta_old)
             call read_FermionicField(Glat,reg(Beta_Match%Path),"Glat_w",Crystal%kpt)
             call interpolate2Beta(Glat,Beta_Match,"lat",.true.)
-            call dump_FermionicField(Glat,reg(PrevItFolder),"Glat_w",.true.,Crystal%kpt)
+            call dump_FermionicField(Glat,reg(PrevItFolder),"Glat_w",.true.,Crystal%kpt,paramagnet)
             call DeallocateFermionicField(Glat)
             !
          case("DMFT+statU","DMFT+dynU")
@@ -3116,7 +3118,7 @@ contains
             call AllocateFermionicField(S_DMFT,Crystal%Norb,Beta_Match%Nmats_old,Nsite=Nsite,Beta=Beta_Match%Beta_old)
             call read_FermionicField(S_DMFT,reg(Beta_Match%Path),"Simp_w")
             call interpolate2Beta(S_DMFT,Beta_Match,"imp",ExpandImpurity)
-            call dump_FermionicField(S_DMFT,reg(PrevItFolder),"Simp_w")
+            call dump_FermionicField(S_DMFT,reg(PrevItFolder),"Simp_w",paramagnet)
             call DeallocateFermionicField(S_DMFT)
             !
          case("EDMFT")
@@ -3140,7 +3142,7 @@ contains
             call AllocateFermionicField(S_DMFT,Crystal%Norb,Beta_Match%Nmats_old,Nsite=Nsite,Beta=Beta_Match%Beta_old)
             call read_FermionicField(S_DMFT,reg(Beta_Match%Path),"Simp_w")
             call interpolate2Beta(S_DMFT,Beta_Match,"imp",ExpandImpurity)
-            call dump_FermionicField(S_DMFT,reg(PrevItFolder),"Simp_w")
+            call dump_FermionicField(S_DMFT,reg(PrevItFolder),"Simp_w",paramagnet)
             call DeallocateFermionicField(S_DMFT)
             !
             !Read&write instead of execute_command
@@ -3174,7 +3176,7 @@ contains
             call AllocateFermionicField(S_DMFT,Crystal%Norb,Beta_Match%Nmats_old,Nsite=Nsite,Beta=Beta_Match%Beta_old)
             call read_FermionicField(S_DMFT,reg(Beta_Match%Path),"Simp_w")
             call interpolate2Beta(S_DMFT,Beta_Match,"imp",ExpandImpurity)
-            call dump_FermionicField(S_DMFT,reg(PrevItFolder),"Simp_w")
+            call dump_FermionicField(S_DMFT,reg(PrevItFolder),"Simp_w",paramagnet)
             call DeallocateFermionicField(S_DMFT)
             !
             !Lattice Gf
@@ -3182,7 +3184,7 @@ contains
             call AllocateFermionicField(Glat,Crystal%Norb,Beta_Match%Nmats_old,Nkpt=Crystal%Nkpt,Nsite=Nsite,Beta=Beta_Match%Beta_old)
             call read_FermionicField(Glat,reg(Beta_Match%Path),"Glat_w",Crystal%kpt)
             call interpolate2Beta(Glat,Beta_Match,"lat",.true.)
-            call dump_FermionicField(Glat,reg(PrevItFolder),"Glat_w",.true.,Crystal%kpt)
+            call dump_FermionicField(Glat,reg(PrevItFolder),"Glat_w",.true.,Crystal%kpt,paramagnet)
             call DeallocateFermionicField(Glat)
             !
             !Read&write instead of execute_command

@@ -14,6 +14,7 @@ import itertools
 import os
 import sys
 import time
+from scipy.interpolate import interp1d
 
 class Bryan:
     def __init__(self, tauMesh, omegaMesh, Beta, model, kernel='fermionic',norm=1.0):
@@ -229,23 +230,23 @@ if __name__=="__main__":
             sigmapm2=[[] for i in range(Ns)]
             sigmaFromFile=True
         G=Gtau[:,1::(2 if sigmaFromFile else 1)]
+        G[G>0.0]=-1e-6
         if sigmaFromFile:
             sigmapm2=1./Gtau[:,2::2]**2
         else:
             sigmapm2=G*0.0+1.0/float(arguments['--sigma'])**2
 
-        #if arguments['--modelfile']:
-        #    origomegaMesh=np.loadtxt(arguments['--modelfile'])[:,0]
-        #    with warnings.catch_warnings():
-        #        warnings.simplefilter("ignore")
-        #    origmodel=-np.loadtxt(arguments['--modelfile'])[0:,-1]
-        #    f=interpolate.interp1d(origomegaMesh,origmodel,kind='linear',fill_value=1e-15,bounds_error=False)
-        #    with warnings.catch_warnings():
-        #        warnings.simplefilter("ignore")
-        #        oneoveromegaMesh=np.where(omegaMesh==0.0,0.0,1/omegaMesh)
-        #    model=f(omegaMesh)+1e-6
-        #el
-        if arguments['--moments']:
+        if arguments['--modelfile']:
+            origomegaMesh=np.loadtxt(arguments['--modelfile'])[:,0]
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore")
+                origmodel=-np.loadtxt(arguments['--modelfile'])[0:,-1]
+            f=interp1d(origomegaMesh,origmodel,kind='linear',fill_value=1e-15,bounds_error=False)
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore")
+                oneoveromegaMesh=np.where(omegaMesh==0.0,0.0,1/omegaMesh)
+            model=f(omegaMesh)+1e-6
+        elif arguments['--moments']:
             model=0.0*omegaMesh
             for momentset in arguments['--moments']:
                 m=np.array(momentset.split(','),np.float)
@@ -256,7 +257,7 @@ if __name__=="__main__":
         else:
             model=np.ones(omegaMesh.shape, np.float64)
         model*=float(arguments["--modelnorm"])/np.trapz(model,omegaMesh)
-        print("Done")
+        print("Done Pre bryan")
 
         ######### MAXENTING #############
 

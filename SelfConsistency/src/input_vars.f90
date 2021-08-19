@@ -90,7 +90,7 @@ module input_vars
    type(input_comment),allocatable,private  :: comments(:)
    character(len=255),private               :: p_buffer
    character(len=7),private                 :: file_status
-   integer,parameter,private                :: pos_comment=60
+   integer,parameter,private                :: pos_comment=45
    logical,private                          :: IOinput=.true.
    !
    character(len=256),public                :: CalculationType
@@ -128,8 +128,7 @@ module input_vars
    !
    !Imaginary time and frequency meshes
    real(8),public                           :: Beta
-   integer,public                           :: NtauF
-   integer,public                           :: NtauB
+   integer,public                           :: Ntau
    logical,public                           :: tau_uniform
    real(8),public                           :: wmatsMax
    integer,public                           :: Nmats
@@ -253,7 +252,7 @@ contains
       use parameters
       implicit none
       character(len=*)                      :: InputFile
-      integer                               :: isite,iset,iph,iorb,NtauFguess
+      integer                               :: isite,iset,iph,iorb
       integer,allocatable                   :: tmpOrbs(:)
       real(8),allocatable                   :: tmpCF(:)
 
@@ -402,13 +401,9 @@ contains
       call parse_input_variable(wmatsMax,"MAX_WMATS",InputFile,default=100.d0,comment="Maximum value of the Matsubara frequency mesh.")
       Nmats = int(Beta*wmatsMax/(2d0*pi))
       call append_to_input_list(Nmats,"NMATS","Number of points on the imaginary frequency axis. User cannot set this as its computed from MAX_WMATS and BETA.")
-      NtauFguess=int(2d0*pi*Nmats)!Nmats
-      !if(Nmats.lt.200)NtauFguess=200
-      call parse_input_variable(NtauF,"NTAU_F_LAT",InputFile,default=NtauFguess,comment="Number of points on the imaginary time axis for Fermionic lattice fields. Its gonna be made odd.")
-      if(mod(NtauF,2).eq.0)NtauF=NtauF+1
-      if(mod(NtauF-1,4).ne.0)NtauF=NtauF+mod(NtauF-1,4)
-      NtauB = NtauF
-      call append_to_input_list(NtauB,"NTAU_B_LAT","Number of points on the imaginary time axis for Bosonic lattice fields. User cannot set this as its equal to NTAU_F_LAT.")
+      call parse_input_variable(Ntau,"NTAU_LAT",InputFile,default=int(2d0*pi*Nmats),comment="Number of points on the imaginary time axis for Fermionic and Bosonic lattice fields. Its gonna be made odd.")
+      if(mod(Ntau,2).eq.0)Ntau=Ntau+1
+      if(mod(Ntau-1,4).ne.0)Ntau=Ntau+mod(Ntau-1,4)
       call parse_input_variable(tau_uniform,"TAU_UNIF",InputFile,default=.false.,comment="Flag to use a uniform mesh on the imaginary time axis. Only internal for GW.")
       call parse_input_variable(Nreal,"NREAL",InputFile,default=2000,comment="Number of points on the real frequency axis.")
       call append_to_input_list(wrealMax,"MAX_WREAL","Maximum absolute value of the real frequency mesh. User cannot set this as its derived from Hk.")
@@ -594,7 +589,7 @@ contains
       Solver%TargetDensity = look4dens%TargetDensity
       if(ExpandImpurity.and.(.not.look4dens%local))Solver%TargetDensity = look4dens%TargetDensity/Nsite
       call append_to_input_list(Solver%TargetDensity,"N_READ_IMP","Target density in the impurity list. User cannot set this as its the the same density on within the impurity orbitals if EXPAND=F otherwise its N_READ_LAT/NSITE.")
-      !call parse_input_variable(Solver%TargetDensity,"N_READ_IMP",InputFile,default=look4dens%TargetDensity,comment="Target density in the impurity list.")
+     !call parse_input_variable(Solver%TargetDensity,"N_READ_IMP",InputFile,default=look4dens%TargetDensity,comment="Target density in the impurity list.")
       call parse_input_variable(Solver%Norder,"NORDER",InputFile,default=10,comment="Maximum perturbation order measured. Not yet implemented.")
       call parse_input_variable(Solver%Nmeas,"NMEAS",InputFile,default=1000,comment="Sweeps where expensive measurments are not performed.")
       call parse_input_variable(Solver%Ntherm,"NTHERM",InputFile,default=100,comment="Thermalization cycles. Each cycle performs NMEAS sweeps.")

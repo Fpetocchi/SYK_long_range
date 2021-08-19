@@ -17,49 +17,49 @@ module file_io
    !PURPOSE: Module interfaces
    !---------------------------------------------------------------------------!
    interface dump_Matrix
-      module procedure :: dump_Matrix_local_d                                   ![Umat(Norb,Norb),dirpath,filename].....................................( Writes only to formatted output )
-      module procedure :: dump_Matrix_local_spin_d                              ![Umat(Norb,Norb,Nspin),dirpath,filename,paramagnet.....................( Writes only to formatted output )
-      module procedure :: dump_Matrix_local_z                                   ![Umat(Norb,Norb),dirpath,filename].....................................( Writes only to formatted output )
-      module procedure :: dump_Matrix_local_spin_z                              ![Umat(Norb,Norb,Nspin),dirpath,filename,paramagnet.....................( Writes only to formatted output )
-      module procedure :: dump_Matrix_Kdep_d                                    ![Umat(Norb,Norb,Nkpt),binfmt,dirpath,filename].........................( Writes output depending on binfmt )
-      module procedure :: dump_Matrix_Kdep_z                                    ![Umat(Norb,Norb,Nkpt),binfmt,dirpath,filename].........................( Writes output depending on binfmt )
+      module procedure :: dump_Matrix_local_d                                   ![Mat(Norb,Norb),dirpath,filename].....................................( Writes only to formatted output )
+      module procedure :: dump_Matrix_local_spin_d                              ![Mat(Norb,Norb,Nspin),dirpath,filename,paramagnet.....................( Writes only to formatted output )
+      module procedure :: dump_Matrix_local_z                                   ![Mat(Norb,Norb),dirpath,filename].....................................( Writes only to formatted output )
+      module procedure :: dump_Matrix_local_spin_z                              ![Mat(Norb,Norb,Nspin),dirpath,filename,paramagnet.....................( Writes only to formatted output )
+      module procedure :: dump_Matrix_Kdep_d                                    ![Mat(Norb,Norb,Nkpt),binfmt,dirpath,filename].........................( Writes output depending on binfmt )
+      module procedure :: dump_Matrix_Kdep_z                                    ![Mat(Norb,Norb,Nkpt),binfmt,dirpath,filename].........................( Writes output depending on binfmt )
    end interface dump_Matrix
 
    interface read_Matrix
-      module procedure :: read_Matrix_local_d                                   ![Umat(Norb,Norb),readpath].............................................( Reads only from formatted input )
-      module procedure :: read_Matrix_local_spin_d                              ![Umat(Norb,Norb,Nspin),readpath,paramagnet.............................( Writes only to formatted output )
-      module procedure :: read_Matrix_local_z                                   ![Umat(Norb,Norb),readpath].............................................( Reads only from formatted input )
-      module procedure :: read_Matrix_local_spin_z                              ![Umat(Norb,Norb,Nspin),readpath,paramagnet.............................( Writes only to formatted output )
-      module procedure :: read_Matrix_Kdep_d                                    ![Umat(Norb,Norb,Nkpt),readpath]........................................( Reads only from unformatted input )
-      module procedure :: read_Matrix_Kdep_z                                    ![Umat(Norb,Norb,Nkpt),readpath]........................................( Reads only from unformatted input )
+      module procedure :: read_Matrix_local_d                                   ![Mat(Norb,Norb),readpath].............................................( Reads only from formatted input )
+      module procedure :: read_Matrix_local_spin_d                              ![Mat(Norb,Norb,Nspin),readpath,paramagnet.............................( Writes only to formatted output )
+      module procedure :: read_Matrix_local_z                                   ![Mat(Norb,Norb),readpath].............................................( Reads only from formatted input )
+      module procedure :: read_Matrix_local_spin_z                              ![Mat(Norb,Norb,Nspin),readpath,paramagnet.............................( Writes only to formatted output )
+      module procedure :: read_Matrix_Kdep_d                                    ![Mat(Norb,Norb,Nkpt),readpath]........................................( Reads only from unformatted input )
+      module procedure :: read_Matrix_Kdep_z                                    ![Mat(Norb,Norb,Nkpt),readpath]........................................( Reads only from unformatted input )
    end interface read_Matrix
 
    interface dump_Field_component
-      module procedure :: dump_Field_component_d                                ![Array(Nfreq),dirpath,filename,axis]...................................( Writes only to formatted output )
-      module procedure :: dump_Field_component_z                                ![Array(Nfreq),dirpath,filename,axis]...................................( Writes only to formatted output )
+      module procedure :: dump_Field_component_d                                ![Array(Nfreq),dirpath,filename,axis]..................................( Writes only to formatted output )
+      module procedure :: dump_Field_component_z                                ![Array(Nfreq),dirpath,filename,axis]..................................( Writes only to formatted output )
    end interface dump_Field_component
 
    interface dump_FermionicField
-      module procedure :: dump_Field_component_d                                ![Array(Nfreq),dirpath,filename,axis]...................................( Writes only to formatted output )
-      module procedure :: dump_Field_component_z                                ![Array(Nfreq),dirpath,filename,axis]...................................( Writes only to formatted output )
-      module procedure :: dump_FermionicField_local                             ![FermionicField,dirpath,filename,axis(optional)].......................( Writes only to formatted output )
-      module procedure :: dump_FermionicField_Kdep                              ![FermionicField,dirpath,filename,binfmt,kpt(3,Nkpt),axis(optional)]....( Writes output depending on binfmt )
+      module procedure :: dump_Field_component_d                                ![Array(Nfreq),dirpath,filename,axis]..................................( Writes only to formatted output )
+      module procedure :: dump_Field_component_z                                ![Array(Nfreq),dirpath,filename,axis]..................................( Writes only to formatted output )
+      module procedure :: dump_FermionicField_local                             ![Field,dirpath,filename,paramagnet,axis(opt)].........................( Writes only to formatted output )
+      module procedure :: dump_FermionicField_Kdep                              ![Field,dirpath,filename,binfmt,kpt(3,Nkpt),paramagnet,axis(opt)]......( Writes output depending on binfmt )
    end interface dump_FermionicField
 
    interface read_FermionicField
-      module procedure :: read_FermionicField_local                             ![FermionicField,dirpath,filename,axis(optional)].......................( Reads only from formatted input )
-      module procedure :: read_FermionicField_Kdep                              ![FermionicField,dirpath,filename,kpt(3,Nkpt),axis(optional)]...........( Reads only from unformatted input )
+      module procedure :: read_FermionicField_local                             ![Field,dirpath,filename,axis(opt)]....................................( Reads only from formatted input )
+      module procedure :: read_FermionicField_Kdep                              ![Field,dirpath,filename,kpt(3,Nkpt),axis(opt)]........................( Reads only from unformatted input )
    end interface read_FermionicField
 
    interface dump_BosonicField
-      module procedure :: dump_Field_component_d                                ![Array(Nfreq),dirpath,filename,axis]...................................( Writes only to formatted output )
-      module procedure :: dump_Field_component_z                                ![Array(Nfreq),dirpath,filename,axis]...................................( Writes only to formatted output )v
-      module procedure :: dump_BosonicField_local                               ![BosonicField,dirpath,filename,axis(optional)].........................( Writes only to formatted output )
-      module procedure :: dump_BosonicField_Kdep_SPEXlike                       ![BosonicField,dirpath,binfmt,axis(optional)]...........................( Writes output depending on binfmt )
+      module procedure :: dump_Field_component_d                                ![Array(Nfreq),dirpath,filename,axis]..................................( Writes only to formatted output )
+      module procedure :: dump_Field_component_z                                ![Array(Nfreq),dirpath,filename,axis]..................................( Writes only to formatted output )v
+      module procedure :: dump_BosonicField_local                               ![Field,dirpath,filename,axis(opt)]....................................( Writes only to formatted output )
+      module procedure :: dump_BosonicField_Kdep_SPEXlike                       ![Field,dirpath,binfmt,axis(opt)]......................................( Writes output depending on binfmt )
    end interface dump_BosonicField
 
    interface read_BosonicField
-      module procedure :: read_BosonicField_local                               ![BosonicField,dirpath,filename,axis(optional)].........................( Reads only from unformatted input )
+      module procedure :: read_BosonicField_local                               ![Field,dirpath,filename,axis(optional)]...............................( Reads only from unformatted input )
    end interface read_BosonicField
 
 
@@ -682,7 +682,7 @@ contains
    !---------------------------------------------------------------------------!
    !PURPOSE: Write to file Fermionic fields
    !---------------------------------------------------------------------------!
-   subroutine dump_FermionicField_local(G,dirpath,filename,axis)
+   subroutine dump_FermionicField_local(G,dirpath,filename,paramagnet,axis)
       !
       use parameters
       use utils_misc
@@ -692,6 +692,7 @@ contains
       type(FermionicField),intent(in)       :: G
       character(len=*),intent(in)           :: dirpath
       character(len=*),intent(in)           :: filename
+      logical,intent(in)                    :: paramagnet
       real(8),intent(in),optional           :: axis(:)
       !
       integer                               :: unit
@@ -725,6 +726,8 @@ contains
       ! Write to file
       do ispin=1,Nspin
          !
+         if(paramagnet.and.(ispin.ne.1))cycle
+         !
          printpath = reg(dirpath)//filename//"_s"//str(ispin)//".DAT"
          write(*,"(A)") "     Dump "//reg(printpath)//" (readable)"
          !
@@ -747,7 +750,7 @@ contains
       !
    end subroutine dump_FermionicField_local
    !
-   subroutine dump_FermionicField_Kdep(G,dirpath,filename,binfmt,kpt,axis)
+   subroutine dump_FermionicField_Kdep(G,dirpath,filename,binfmt,kpt,paramagnet,axis)
       !
       use parameters
       use utils_misc
@@ -759,6 +762,7 @@ contains
       character(len=*),intent(in)           :: filename
       logical,intent(in)                    :: binfmt
       real(8),intent(in)                    :: kpt(:,:)
+      logical,intent(in)                    :: paramagnet
       real(8),intent(in),optional           :: axis(:)
       !
       integer                               :: unit,ik,iaxis,Norb
@@ -793,11 +797,12 @@ contains
       ! Write to file
       do ispin=1,Nspin
          !
+         if(paramagnet.and.(ispin.ne.1))cycle
+         !
          if(binfmt) then
             !
             printpath = reg(dirpath)//reg(filename)//"_k_s"//str(ispin)//".DAT"
             write(*,"(A)") "     Dump "//reg(printpath)//" (binary)"
-            !
             unit = free_unit()
             open(unit,file=reg(printpath),form="unformatted",status="unknown",position="rewind",action="write")
             !
@@ -821,7 +826,6 @@ contains
                !
                printpath = reg(dirpath)//reg(filename)//"_ik"//str(ik)//"_s"//str(ispin)//".DAT"
                write(*,"(A)") "     Dump "//reg(printpath)//" (readable)"
-               !
                unit = free_unit()
                open(unit,file=reg(printpath),form="formatted",status="unknown",position="rewind",action="write")
                !
@@ -881,11 +885,12 @@ contains
       !
       do ispin=1,Nspin
          !
-         readpath = reg(dirpath)//filename//"_s"//str(ispin)//".DAT"
-         write(*,"(A)") "     Read "//reg(readpath)
-         call inquireFile(reg(readpath),filexists,verb=verbose)
+         readpath = reg(dirpath)//reg(filename)//"_s"//str(ispin)//".DAT"
+         call inquireFile(reg(readpath),filexists,hardstop=(ispin.eq.1),verb=verbose)
          !
-         ! Read file
+         if(.not.filexists)cycle
+         !
+         write(*,"(A)") "     Read "//reg(readpath)
          unit = free_unit()
          open(unit,file=reg(readpath),form="formatted",status="old",position="rewind",action="read")
          !
@@ -928,9 +933,19 @@ contains
          !
       enddo
       !
-      if((Nspin.eq.2).and.(mu_read(1).ne.mu_read(2))) stop "read_FermionicField_local: Chemical potential is different between up and down."
-      G%mu=mu_read(1)
       if(present(axis)) axis(1:Naxis)=axis_
+      !
+      if(Nspin.eq.2)then
+         if(filexists.and.(mu_read(1).ne.mu_read(2))) stop "read_FermionicField_local: Chemical potential is different between up and down."
+         if(.not.filexists)then
+            readpath = reg(dirpath)//reg(filename)//"_s2.DAT"
+            write(*,"(A)") "     File "//reg(readpath)//" not found."
+            readpath = reg(dirpath)//reg(filename)//"_s1.DAT"
+            write(*,"(A)") "     Copying from "//reg(readpath)
+            G%ws(:,:,:,Nspin) = G%ws(:,:,:,1)
+         endif
+         G%mu=mu_read(1)
+      endif
       !
    end subroutine read_FermionicField_local
    !
@@ -973,9 +988,11 @@ contains
       do ispin=1,Nspin
          !
          readpath = reg(dirpath)//reg(filename)//"_k_s"//str(ispin)//".DAT"
-         write(*,"(A)") "     Read "//reg(readpath)
-         call inquireFile(reg(readpath),filexists,verb=verbose)
+         call inquireFile(reg(readpath),filexists,hardstop=(ispin.eq.1),verb=verbose)
          !
+         if(.not.filexists)cycle
+         !
+         write(*,"(A)") "     Read "//reg(readpath)
          unit = free_unit()
          open(unit,file=reg(readpath),form="unformatted",status="old",position="rewind",action="read")
          !
@@ -1042,9 +1059,19 @@ contains
          !
       enddo !ispin
       !
+      if(Nspin.eq.2)then
+         if(filexists.and.(mu_read(1).ne.mu_read(2))) stop "read_FermionicField_Kdep: Chemical potential is different between up and down."
+         if(.not.filexists)then
+            readpath = reg(dirpath)//reg(filename)//"_k_s2.DAT"
+            write(*,"(A)") "     File "//reg(readpath)//" not found."
+            readpath = reg(dirpath)//reg(filename)//"_k_s1.DAT"
+            write(*,"(A)") "     Copying from "//reg(readpath)
+            G%wks(:,:,:,:,Nspin) = G%wks(:,:,:,:,1)
+         endif
+         G%mu=mu_read(1)
+      endif
+      !
       call FermionicKsum(G)
-      if((Nspin.eq.2).and.(mu_read(1).ne.mu_read(2))) stop "read_FermionicField_Kdep: Chemical potential is different between up and down."
-      G%mu=mu_read(1)
       !
    end subroutine read_FermionicField_Kdep
 

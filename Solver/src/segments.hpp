@@ -115,15 +115,6 @@ template <class G> inline double interpolate_F(double t, double Beta, G &F)
 //------------------------------------------------------------------------------
 
 
-template <class S, class G> double det_inverse( Mat &M, S &segments, double Beta,  G&F)
-{
-    construct_matrix(M, segments, Beta, F);
-    Mat invM = M.inverse();
-    swap(M,invM);
-    double det = invM.determinant();
-    return det;
-}
-
 template <class S, class G> void construct_matrix( Mat &M, S &segments, double Beta,  G &F)
 {
    //
@@ -157,6 +148,35 @@ template <class S, class G> void construct_matrix( Mat &M, S &segments, double B
       //
       col = -1;
    }
+}
+
+
+template <class S, class G> double det_inverse_small( Mat &M, S &segments, double Beta,  G&F)
+{
+    construct_matrix(M, segments, Beta, F);
+    Mat invM = M.inverse();
+    swap(M,invM);
+    double det = invM.determinant();
+    return det;
+}
+
+
+template <class S, class G> double det_inverse( Mat &M, S &segments, double Beta,  G&F)
+{
+    construct_matrix(M, segments, Beta, F);
+    Eigen::FullPivLU<Mat> lu(M);
+    if(lu.isInvertible())
+    {
+       Mat invM = lu.inverse();
+       swap(M,invM);
+       double det = lu.determinant();
+       return det;
+    }
+    else
+    {
+       std::cerr<<"Hybridization matrix is not invertible."<<std::endl;
+       exit(1);
+    }
 }
 
 

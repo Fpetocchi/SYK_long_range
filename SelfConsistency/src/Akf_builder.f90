@@ -181,10 +181,7 @@ contains
       !First check that all the files contains the same number fo real frequecies
       do ik=1,Nkpt
          !
-         !TEST>>>
-         !path = reg(MaxEnt_K)//"MaxEnt_Gk_"//reg(mode)//"_t_s"//str(ispin)//"/Gk_t_k"//str(ik)//".DAT_dos.dat"
-         path = reg(MaxEnt_K)//"MaxEnt_Gk_"//reg(mode)//"_t_s"//str(ispin)//"/Gk_t_k"//str(ik)//"_Tr.DAT_dos.dat"
-         !>>>TEST
+         path = reg(MaxEnt_K)//"MaxEnt_Gk_"//reg(mode)//"_t_s"//str(ispin)//"/Gk_t_k"//str(ik)//".DAT_dos.dat"
          !
          call inquireFile(reg(path),Kmask(ik),hardstop=.false.,verb=.true.)
          if(.not.Kmask(ik)) cycle
@@ -223,24 +220,13 @@ contains
          !
          if(.not.Kmask(ik)) cycle
          !
-         !TEST>>>
-         !path = reg(MaxEnt_K)//"MaxEnt_Gk_"//reg(mode)//"_t_s"//str(ispin)//"/Gk_t_k"//str(ik)//".DAT_dos.dat"
-         !unit = free_unit()
-         !open(unit,file=reg(path),form="formatted",status="unknown",position="rewind",action="read")
-         !do iw=1,Nreal_read
-         !   read(unit,*) wreal_read(iw),(ImG_read(iorb,iw,ik),iorb=1,Crystal%Norb)
-         !enddo
-         !close(unit)
-         !
-         path = reg(MaxEnt_K)//"MaxEnt_Gk_"//reg(mode)//"_t_s"//str(ispin)//"/Gk_t_k"//str(ik)//"_Tr.DAT_dos.dat"
+         path = reg(MaxEnt_K)//"MaxEnt_Gk_"//reg(mode)//"_t_s"//str(ispin)//"/Gk_t_k"//str(ik)//".DAT_dos.dat"
          unit = free_unit()
          open(unit,file=reg(path),form="formatted",status="unknown",position="rewind",action="read")
          do iw=1,Nreal_read
-            read(unit,*) wreal_read(iw),ImG_read(1,iw,ik)
-            ImG_read(2:Crystal%Norb,iw,ik) = ImG_read(1,iw,ik)
+            read(unit,*) wreal_read(iw),(ImG_read(iorb,iw,ik),iorb=1,Crystal%Norb)
          enddo
          close(unit)
-         !>>>TEST
          !
       enddo
       dw = abs(wreal_read(10)-wreal_read(9))

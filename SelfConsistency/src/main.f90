@@ -33,6 +33,7 @@ program SelfConsistency
    call initialize_Lattice(Crystal,ItStart)
    !
    !
+
    !call AllocateFermionicField(S_Full,Crystal%Norb,Nmats,Nkpt=Crystal%Nkpt,Nsite=Nsite,Beta=Beta)
    !call read_FermionicField(S_Full,reg(ItFolder),"Sfull_w",Crystal%kpt)
    !call interpolateG2Path(S_Full,Crystal,reg(structure),Nkpt_path,reg(ItFolder))
@@ -174,12 +175,12 @@ program SelfConsistency
                call duplicate(S_G0W0,S_G0W0dc)
             else
                !Store the Dc between G0W0 and scGW self-energies and use G0W0 as self-energy for the first iteration because the DC is equal to scGW
-               call dump_FermionicField(S_G0W0dc,reg(ItFolder),"SGoWo_dc_w",.true.,Crystal%kpt)
-               call dump_FermionicField(S_G0W0dc,reg(ItFolder),"SGoWo_dc_w")
+               call dump_FermionicField(S_G0W0dc,reg(ItFolder),"SGoWo_dc_w",.true.,Crystal%kpt,paramagnet)
+               call dump_FermionicField(S_G0W0dc,reg(ItFolder),"SGoWo_dc_w",paramagnet)
                call DeallocateFermionicField(S_G0W0dc)
             endif
             !
-            call dump_FermionicField(S_G0W0,reg(ItFolder),"Slat_w")
+            call dump_FermionicField(S_G0W0,reg(ItFolder),"Slat_w",paramagnet)
             call dump_MaxEnt(S_G0W0,"mats",reg(ItFolder)//"Convergence/","Slat",EqvGWndx%SetOrbs,WmaxPade=PadeWlimit)
             !
          elseif(Iteration.gt.0)then
@@ -191,7 +192,7 @@ program SelfConsistency
             !Compute the scGW self-energy
             call AllocateFermionicField(S_GW,Crystal%Norb,Nmats,Nkpt=Crystal%Nkpt,Nsite=Nsite,Beta=Beta)
             call calc_sigmaGW(S_GW,Glat,Wlat,Crystal)
-            call dump_FermionicField(S_GW,reg(ItFolder),"Slat_w")
+            call dump_FermionicField(S_GW,reg(ItFolder),"Slat_w",paramagnet)
             call dump_MaxEnt(S_GW,"mats",reg(ItFolder)//"Convergence/","Slat",EqvGWndx%SetOrbs,WmaxPade=PadeWlimit)
             !
          endif
@@ -208,7 +209,7 @@ program SelfConsistency
             !Then replace local projection of scGW with EDMFT, S_GWdc is empty for DC_type=Sloc or for model calculations
             call MergeFields(S_GW,S_GWdc,S_DMFT,[alphaSigma,HartreeFact],SiteOrbs,DC_type,RotateHloc)
             call DeallocateFermionicField(S_GWdc)
-            call dump_FermionicField(S_GW,reg(ItFolder),"Slat_merged_w")
+            call dump_FermionicField(S_GW,reg(ItFolder),"Slat_merged_w",paramagnet)
             !
          endif
          !
@@ -249,7 +250,7 @@ program SelfConsistency
       !
       !Update the full self-energy, print and compute Glat along the path
       S_Full%mu = Glat%mu
-      if(dump_Sigmak)call dump_FermionicField(S_Full,reg(ItFolder),"Sfull_w",.true.,Crystal%kpt)
+      if(dump_Sigmak)call dump_FermionicField(S_Full,reg(ItFolder),"Sfull_w",.true.,Crystal%kpt,paramagnet)
       if(print_path)call interpolateG2Path(S_Full,Crystal,reg(structure),Nkpt_path,reg(ItFolder))
       call DeallocateFermionicField(S_Full)
       !
@@ -259,8 +260,8 @@ program SelfConsistency
       !
       !
       !Print Gf: local readable and k-dep binfmt
-      if(dump_Gk)call dump_FermionicField(Glat,reg(ItFolder),"Glat_w",.true.,Crystal%kpt)
-      call dump_FermionicField(Glat,reg(ItFolder),"Glat_w")
+      if(dump_Gk)call dump_FermionicField(Glat,reg(ItFolder),"Glat_w",.true.,Crystal%kpt,paramagnet)
+      call dump_FermionicField(Glat,reg(ItFolder),"Glat_w",paramagnet)
       call dump_MaxEnt(Glat,"mats",reg(ItFolder)//"Convergence/","Glat",EqvGWndx%SetOrbs,WmaxPade=PadeWlimit)
       call dump_MaxEnt(Glat,"mats2itau",reg(ItFolder)//"Convergence/","Glat",EqvGWndx%SetOrbs)
       !

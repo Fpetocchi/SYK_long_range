@@ -29,7 +29,7 @@ subroutine interpolateG2Path(Sfull,Lttc,structure,Nkpt_path,pathOUTPUT)
    real(8),allocatable                   :: Akw(:,:,:,:),Fk(:,:)
    real(8),allocatable                   :: Zk(:,:)
    complex(8),allocatable                :: SigmaFermi(:,:,:,:)
-   integer                               :: Norb,Nmats,Ntau,unit
+   integer                               :: Norb,Nmats,unit!,Ntau
    integer                               :: ik,iw,itau,ispin,iorb
    integer                               :: ikx,iky
    integer                               :: Nkpt_Kside,wndx_cut
@@ -103,7 +103,7 @@ subroutine interpolateG2Path(Sfull,Lttc,structure,Nkpt_path,pathOUTPUT)
    close(unit)
    write(*,"(A,I)") "     Total number of High symmetry points:",size(Lttc%KpathaxisPoints,dim=1)
    !
-   !Compute non-interacting spectral function in the Wannier basis
+   !Compute non-interacting k-resolved spectral function in the Wannier basis
    allocate(wreal(Nreal));wreal=0d0
    wreal = linspace(-wrealMax,+wrealMax,Nreal)
    wndx_cut = minloc(abs(wreal-EcutSheet),dim=1)
@@ -138,7 +138,7 @@ subroutine interpolateG2Path(Sfull,Lttc,structure,Nkpt_path,pathOUTPUT)
    enddo
    deallocate(zeta,invGf)
    !
-   !Normalize spectral function
+   !Normalize k-resolved spectral function
    do ispin=1,Nspin
       do ik=1,Lttc%Nkpt_path
          do iorb=1,Norb
@@ -147,7 +147,7 @@ subroutine interpolateG2Path(Sfull,Lttc,structure,Nkpt_path,pathOUTPUT)
       enddo
    enddo
    !
-   !Print spectral function
+   !Print k-resolved spectral function
    do ispin=1,Nspin
       path = reg(pathOUTPUT)//"K_resolved/Akw_nonInt_s"//str(ispin)//".DAT"
       unit = free_unit()
@@ -164,9 +164,7 @@ subroutine interpolateG2Path(Sfull,Lttc,structure,Nkpt_path,pathOUTPUT)
    deallocate(Akw,wreal)
    !
    !
-   !------------------- path along planar sheet on kx,ky -------------------!
-   !
-   !
+   !Path along planar sheet on kx,ky
    if(FermiSurf)then
       !
       Nkpt_Kside = Nkpt_Fermi !int(Nkpt_path/2)
@@ -495,7 +493,7 @@ contains
    !
    subroutine calc_MaxEnt_on_G_K(Gmats_in,mode)
       !
-      use input_vars, only : NtauF
+      use input_vars, only : Ntau
       implicit none
       !
       type(FermionicField),intent(in)       :: Gmats_in
@@ -504,7 +502,7 @@ contains
       complex(8),allocatable                :: Gmats_diag(:,:,:,:),Gitau_diag(:,:,:,:)
       real(8),allocatable                   :: Ak(:,:)
       real(8),allocatable                   :: tau(:)
-      integer                               :: Ntau,Nkpt!,Nmats_cutoff
+      integer                               :: Nkpt!Ntau,Nmats_cutoff
       integer                               :: ikx,iky
       !
       !
@@ -542,7 +540,7 @@ contains
       enddo
       !
       !Fourier transform the diagonal of the Green's function
-      Ntau = NtauF
+     !Ntau = NtauF  <-- should I decrease this guy to ease MaxEnt?
       call cpu_time(start)
       allocate(Gitau_diag(Norb,Ntau,Nkpt,Nspin));Gitau_diag=czero
       spinloopGftP: do ispin=1,Nspin
@@ -562,26 +560,12 @@ contains
       do ispin=1,Nspin
         do ik=1,Nkpt
             !
-            !TEST>>>
-            !
-            !Perform some sort of fit here
-            !
-            path = reg(pathOUTPUT)//"K_resolved/MaxEnt_Gk_"//reg(mode)//"_t_s"//str(ispin)//"/Gk_t_k"//str(ik)//"_Tr.DAT"
-            unit = free_unit()
-            open(unit,file=reg(path),form="formatted",status="unknown",position="rewind",action="write")
-            do itau=1,Ntau
-                write(unit,"(200E20.12)") tau(itau),dreal(sum(Gitau_diag(:,itau,ik,ispin)))/Norb
-            enddo
-            close(unit)
-            !
-            where(dreal(Gitau_diag(:,:,ik,ispin)).gt.0d0)Gitau_diag(:,:,ik,ispin)=czero
-            !>>>TEST
-            !
             path = reg(pathOUTPUT)//"K_resolved/MaxEnt_Gk_"//reg(mode)//"_t_s"//str(ispin)//"/Gk_t_k"//str(ik)//".DAT"
             unit = free_unit()
             open(unit,file=reg(path),form="formatted",status="unknown",position="rewind",action="write")
             do itau=1,Ntau
-                write(unit,"(200E20.12)") tau(itau),(dreal(Gitau_diag(iorb,itau,ik,ispin)),iorb=1,Norb)
+                !write(unit,"(200E20.12)") tau(itau),(dreal(Gitau_diag(iorb,itau,ik,ispin)),iorb=1,Norb)
+                write(unit,"(200E20.12)") tau(itau),(-abs(Gitau_diag(iorb,itau,ik,ispin)),iorb=1,Norb)
             enddo
             close(unit)
             !
@@ -630,6 +614,7 @@ contains
       !
       use linalg, only : diagonal, rotate
       use input_vars, only : ReplaceTail_Simp
+      use input_vars, only : Ntau
       implicit none
       !
       type(FermionicField),intent(in)       :: Gmats_in
@@ -837,7 +822,7 @@ contains
       deallocate(wmats)
       !
       !Fourier transform
-      Ntau = 300
+      !Ntau = 300
       call cpu_time(start)
       allocate(Sitau_diag(Norb,Ntau,Nkpt,Nspin));Sitau_diag=czero
       spinloopSft: do ispin=1,Nspin
@@ -917,6 +902,7 @@ contains
       use input_vars, only : SiteNorb, SiteOrbs, SiteName, Nsite, EqvGWndx
       use input_vars, only : OlocSite, OlocRot, OlocRotDag, OlocEig
       use input_vars, only : RotateHloc, ExpandImpurity, AFMselfcons
+      use input_vars, only : Ntau
       implicit none
       !
       type(FermionicField),intent(in)       :: Smats_in
@@ -1034,13 +1020,13 @@ contains
             enddo
          enddo
          !
-         !Check Print - This is to check the self-energy in the diagonal basis afer the removal of M0 and rescaling
+         !Check Print - This is to check the self-energy in the diagonal basis after the removal of M0 and rescaling of M1
          call dump_MaxEnt(Smats_diag,"mats",reg(pathOUTPUT)//"Convergence/","Sqmc_rescaled_"//reg(SiteName(isite)))
          !
          deallocate(wmats)
          !
          !Fourier transform
-         Ntau = 300
+         !Ntau = 300
          call cpu_time(start)
          allocate(Sitau_diag(SiteNorb(isite),Ntau,Nspin));Sitau_diag=czero
          spinloopSft: do ispin=1,Nspin

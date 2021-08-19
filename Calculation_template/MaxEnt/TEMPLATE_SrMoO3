@@ -13,21 +13,20 @@ GENMAT=/home/petocchif/1_GW_EDMFT/nobackup/1_production/Calculation_template
 
 #------------------------------------------------------------------------------#
 
-
-for it in `seq 39 1 45` ; do
+GENMAT=/home/petocchif/1_GW_EDMFT/nobackup/1_production/Calculation_template
+for it in `seq 48 1 49` ; do
    ## LATTICE----------------------------------------
    cd $it/Convergence
    cp ${GENMAT}/${MATERIAL}/MaxEnt/MaxEnt.sh .
 
    chmod 700 MaxEnt.sh
    #
-   #P="-e 0.007 -w 15001 -W 150"
-   P="-e 0.007 -w 9001 -W 150"
+   P="-e 0.001 -w 6001 -W 250"
    #
    PARAM=${P}
    ./MaxEnt.sh ${PARAM} -f G -o 1 -i lat -p ${GENMAT}
    #
-   P="-e 0.06 -w 10000 -W 600"
+   P="-e 0.05 -w 5000 -W 300"
    #
    PARAM=${P}
 #   ./MaxEnt.sh ${PARAM} -f W -o 1 -i lat -p ${GENMAT}
@@ -40,7 +39,7 @@ for it in `seq 39 1 45` ; do
    cp ${GENMAT}/${MATERIAL}/MaxEnt/MaxEnt.sh .
    chmod 700 MaxEnt.sh
    #
-   P="-e 0.005 -w 10000 -W 200"
+   P="-e 0.004 -w 6001 -W 250"
    #
    PARAM=${P}
 #   ./MaxEnt.sh ${PARAM} -f G -o 1 -i qmc_Mo -p ${GENMAT}
@@ -60,15 +59,8 @@ done
 ################################################################################
 #                   PASTE THE FOLLOWING WITHIN IT/K_resolved                   #
 ################################################################################
+./MaxEnt_Kresolved.sh -e 0.0005 -w 6001 -W 200 -F G -N 350 -B 70 -m path -i 1 -f 1
 
-./MaxEnt_Kresolved.sh -e 0.005 -w 6000 -W 350 -F G -N 350 -B 35 -m path -i 1 -f 351
-
-./MaxEnt_Kresolved.sh -e 0.005 -w 6000 -W 350 -F G -N 350 -B 35 -m path -i 1 -f 351 -t T
-
-./MaxEnt_Kresolved.sh -e 0.05 -w 6000 -W 350 -F G -N 350 -B 35 -m path -i 1 -f 351 -t T
-
-
-./MaxEnt_Kresolved.sh -e 0.005 -w 10000 -W 350 -F G -N 350 -B 35 -m path -i 1 -f 351 -t T #aumenta ancora
 
 
 
@@ -77,7 +69,7 @@ done
 #                                  PLOT DATA                                   #
 ################################################################################
 set grid ; set xtics 0.5
-Loc='51'
+Loc=5
 
 set xrange [-2:4]
 p for [i=1:1] Loc.'/Convergence/MaxEnt_Glat_o'.i.'_s1/Glat_t_o'.i.'_s1.DAT_dos.dat' u 1:2 w l lw 3 t ' orb-'.i
@@ -98,5 +90,6 @@ p for [i=1:3] Loc.'/Convergence/MaxEnt_Cimp_o'.i.i.'/Cimp_w_'.i.i.i.i.'.DAT_dos.
 
 
 
+GENMAT=/home/petocchif/1_GW_EDMFT/nobackup/1_production/Calculation_template
 
 #

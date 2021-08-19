@@ -47,8 +47,8 @@ while getopts ":e:w:W:f:o:j:s:i:p:" o; do
       f) #INPUT FIELD
          #echo ${OPTARG}
          FIELD="${OPTARG}"
-         if [ "$FIELD"  == "G" ];      then RUNOPTIONS=" -s      "$err" -w "$mesh" -W "$width$G_model ; fi
-         if [ "$FIELD"  == "S" ];      then RUNOPTIONS=" -s      "$err" -w "$mesh" -W "$width$G_model ; fi
+         if [ "$FIELD"  == "G" ];      then RUNOPTIONS=" -S F -s "$err" -w "$mesh" -W "$width$G_model ; fi
+         if [ "$FIELD"  == "S" ];      then RUNOPTIONS=" -S F -s "$err" -w "$mesh" -W "$width$G_model ; fi
          if [ "$FIELD"  == "W" ];      then RUNOPTIONS=" -S X -s "$err" -w "$mesh" -W "$width$W_model ; fi
          if [ "$FIELD"  == "curlyU" ]; then RUNOPTIONS=" -S X -s "$err" -w "$mesh" -W "$width$U_model ; fi
          if [ "$FIELD"  == "C" ];      then RUNOPTIONS=" -S X -s "$err" -w "$mesh" -W "$width$W_model ; fi
