@@ -86,7 +86,8 @@ module module_container
    symmetrize_GW                            ,&
    symmetrize_imp                           ,&
    MergeFields                              ,&
-   join_SigmaCX
+   join_SigmaCX                             ,&
+   calc_Ek,calc_Ep
 
 
    !(h) Input/Output routines. Depends on (b),(e),(g)

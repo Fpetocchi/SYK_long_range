@@ -56,6 +56,8 @@ module utils_main
    type(FermionicField)                     :: D_correction
    type(BosonicField)                       :: curlyU_correction
    !
+   real(8)                                  :: Ek,Ep
+   !
    real(8)                                  :: density2set
    complex(8),allocatable                   :: densityLDA(:,:,:)
    complex(8),allocatable                   :: densityGW(:,:,:)
@@ -1420,11 +1422,7 @@ contains
       !
       implicit none
       integer,intent(in)                    :: Iteration
-      integer                               :: isite,Norb
       integer                               :: iorb,jorb,ik,iw,ispin
-      integer,allocatable                   :: Orbs(:)
-      type(FermionicField)                  :: S_G0W0_imp
-      type(FermionicField)                  :: S_G0W0_EDMFT
       !
       !
       write(*,"(A)") new_line("A")//new_line("A")//"---- join_SigmaFull"
@@ -1473,40 +1471,11 @@ contains
                if(.not.S_G0W0%status) stop "join_SigmaFull: S_G0W0 not properly initialized."
                !
                !Remove Dc between G0W0 and scGW self-energies
+               !S_G0W0dc contains only diagonal elements in the LDA basis as the S_G0W0 computed from SPEX
                S_G0W0%wks = S_G0W0%wks - S_G0W0dc%wks
                call FermionicKsum(S_G0W0)
                !
-               !If the DC is not properly computed meaning that the Dc computed here
-               !yielding non causal S_G0W0 - S_G0W0dc
-               if(Nsite.gt.1)then
-                  call AllocateFermionicField(S_G0W0_EDMFT,Crystal%Norb,Nmats,Nkpt=Crystal%Nkpt,Nsite=Nsite,Beta=Beta,mu=Glat%mu)
-                  do isite=1,Nsite
-                     !
-                     Norb = SiteNorb(isite)
-                     allocate(Orbs(Norb))
-                     Orbs = SiteOrbs(isite,1:Norb)
-                     !
-                     call AllocateFermionicField(S_G0W0_imp,Norb,Nmats,Beta=Beta)
-                     !
-                     !Extract the local G0W0 self-energy for each site
-                     call loc2imp(S_G0W0_imp,S_G0W0,Orbs)
-                     !
-                     !Put it into an-object that contains only the site indexes
-                     call imp2loc(S_G0W0_EDMFT,S_G0W0_imp,isite,Orbs,.false.,.false.)
-                     !
-                     call DeallocateField(S_G0W0_imp)
-                     deallocate(Orbs)
-                     !
-                  enddo
-                  !
-                  !here, if Vxc is inside S_G0W0, also the local contribution from Vxc is removed
-                  do ik=1,S_G0W0%Nkpt
-                     S_G0W0%wks(:,:,:,ik,:) = S_G0W0%wks(:,:,:,ik,:) - S_G0W0_EDMFT%ws
-                  enddo
-                  call DeallocateField(S_G0W0_EDMFT)
-               endif
-               !
-               !Add non local S_G0W0 to S_GW. thge latter already contains Simp
+               !Add non local S_G0W0 to S_GW. the latter already contains Simp
                S_GW%wks = S_GW%wks + S_G0W0%wks
                !
                !Put together all the terms
@@ -3212,86 +3181,38 @@ end module utils_main
 
 
 
-
-!allocate(HartreeU(Crystal%Norb,Crystal%Norb,2));HartreeU=czero
-!call read_Matrix(HartreeU(:,:,1),reg(Beta_Match%Path)//"HartreeU_s1.DAT")
-!call read_Matrix(HartreeU(:,:,2),reg(Beta_Match%Path)//"HartreeU_s2.DAT")
-!call dump_Matrix(HartreeU(:,:,1),reg(PrevItFolder)//"HartreeU_s1.DAT")
-!call dump_Matrix(HartreeU(:,:,2),reg(PrevItFolder)//"HartreeU_s2.DAT")
-!deallocate(HartreeU)
-!---------------------------------------------------------------------------!
-!PURPOSE: Compute the density matrix for the bare propagator. Not used.
-!---------------------------------------------------------------------------!
-!function calc_rot_Op(mode,ispin_out) result(RotOp)
-!   implicit none
-!   character(len=*),intent(in)           :: mode
-!   integer,intent(in)                    :: ispin_out
-!   complex(8),allocatable                :: RotOp(:,:)
-!   complex(8),allocatable                :: Vxc_loc(:,:)
-!   type(FermionicField)                  :: Gbare
-!   complex(8),allocatable                :: invGf(:,:)
-!   integer                               :: ik,iw,ispin
-!   logical                               :: Vxcexists
+!TEST>>> !inside join_SigmaFull
+!integer                               :: isite,Norb
+!integer,allocatable                   :: Orbs(:)
+!type(FermionicField)                  :: S_G0W0_imp
+!type(FermionicField)                  :: S_G0W0_EDMFT
+!If the DC is not properly computed meaning that the Dc computed here
+!yielding non causal S_G0W0 - S_G0W0dc
+!if(Nsite.gt.1)then
+!   call AllocateFermionicField(S_G0W0_EDMFT,Crystal%Norb,Nmats,Nkpt=Crystal%Nkpt,Nsite=Nsite,Beta=Beta,mu=Glat%mu)
+!   do isite=1,Nsite
+!      !
+!      Norb = SiteNorb(isite)
+!      allocate(Orbs(Norb))
+!      Orbs = SiteOrbs(isite,1:Norb)
+!      !
+!      call AllocateFermionicField(S_G0W0_imp,Norb,Nmats,Beta=Beta)
+!      !
+!      !Extract the local G0W0 self-energy for each site
+!      call loc2imp(S_G0W0_imp,S_G0W0,Orbs)
+!      !
+!      !Put it into an-object that contains only the site indexes
+!      call imp2loc(S_G0W0_EDMFT,S_G0W0_imp,isite,Orbs,.false.,.false.)
+!      !
+!      call DeallocateField(S_G0W0_imp)
+!      deallocate(Orbs)
+!      !
+!   enddo
 !   !
-!   if(reg(CalculationType).ne."GW+EDMFT")  stop "calc_rot_Op: this function can be called only during GW+EDMFT."
-!   if(ispin_out.gt.Nspin)  stop "calc_rot_Op: requested ispin is bigger than Nspin."
-!   !
-!   select case(reg(mode))
-!      case default
-!         !
-!         stop "calc_rot_Op: Available modes are: Hren, Nbare, Nloc."
-!         !
-!      case("Hren")
-!         !
-!         if(.not.Crystal%status) stop "calc_rot_Op: Crystal not properly initialized."
-!         allocate(Vxc_loc(Crystal%Norb,Crystal%Norb));Vxc_loc=czero
-!         if(.not.allocated(Vxc))then
-!            write(*,"(A)")"     calc_rot_Op: Vxc not allocated, trying to read from pathINPUT."
-!            call inquireFile(reg(pathINPUT)//"Vxc_s"//str(ispin_out)//".DAT",Vxcexists,hardstop=.true.)
-!            call read_Matrix(Vxc_loc,reg(pathINPUT)//"Vxc_s"//str(ispin_out)//".DAT")
-!         else
-!            Vxc_loc = sum(Vxc(:,:,:,ispin_out),dim=3)/Crystal%Nkpt
-!         endif
-!         !
-!         RotOp = Crystal%Hloc - Vxc_loc
-!         !
-!      case("Nbare")
-!         !
-!         if(.not.Glat%status) stop "calc_rot_Op: Glat not properly initialized."
-!         if(.not.S_DMFT%status) stop "calc_rot_Op: S_DMFT not properly initialized."
-!         if(.not.Crystal%status) stop "calc_rot_Op: Crystal not properly initialized."
-!         !
-!         call AllocateFermionicField(Gbare,Glat%Norb,Nmats,Nkpt=Glat%Nkpt,Nsite=Nsite,Beta=Beta,mu=Glat%mu)
-!         allocate(invGf(Glat%Norb,Glat%Norb));invGf=czero
-!         !
-!         do ispin=1,Nspin
-!            do ik=1,Glat%Nkpt
-!               do iw=1,Glat%Npoints
-!                  !get invG
-!                  invGf = Glat%wks(:,:,iw,ik,ispin)
-!                  call inv(invGf)
-!                  !remove initial guess
-!                  invGf = invGf + S_DMFT%ws(:,:,iw,ispin)
-!                  !recompute G
-!                  call inv(invGf)
-!                  Gbare%wks(:,:,iw,ik,ispin) = invGf
-!               enddo
-!            enddo
-!         enddo
-!         deallocate(invGf)
-!         call calc_density(Gbare,Crystal,Gbare%N_ks)
-!         call FermionicKsum(Gbare)
-!         if(look4dens%TargetDensity.ne.0d0)call set_density(Gbare,Crystal,look4dens)
-!         !
-!         RotOp = Gbare%N_s(:,:,ispin_out)
-!         !
-!         call DeallocateFermionicField(Gbare)
-!         !
-!      case("Nloc")
-!         !
-!         if(.not.Glat%status) stop "calc_rot_Op: Glat not properly initialized."
-!         RotOp = Glat%N_s(:,:,ispin_out)
-!         !
-!   end select
-!   !
-!end function calc_rot_Op
+!   !here, if Vxc is inside S_G0W0, also the local contribution from Vxc is removed
+!   do ik=1,S_G0W0%Nkpt
+!      S_G0W0%wks(:,:,:,ik,:) = S_G0W0%wks(:,:,:,ik,:) - S_G0W0_EDMFT%ws
+!   enddo
+!   call DeallocateField(S_G0W0_EDMFT)
+!endif
+!>>>TEST

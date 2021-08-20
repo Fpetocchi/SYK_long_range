@@ -168,7 +168,7 @@ program SelfConsistency
             !
             !Compute the Dc between G0W0 and scGW self-energies
             call AllocateFermionicField(S_G0W0dc,Crystal%Norb,Nmats,Nkpt=Crystal%Nkpt,Nsite=Nsite,Beta=Beta)
-            call calc_sigmaGW(S_G0W0dc,Glat,Wlat,Crystal)
+            call calc_sigmaGW(S_G0W0dc,Glat,Wlat,Crystal,LDAoffdiag=.false.)
             !
             if(Hmodel)then
                !Use directly the DC since G0W0 is absent for model calculations
@@ -246,6 +246,10 @@ program SelfConsistency
       else
          write(*,"(A,F)")"     Lattice density:",trace(Glat%N_s(:,:,1)+Glat%N_s(:,:,2))
       endif
+      Ek = calc_Ek(Glat,Crystal)
+      Ep = calc_Ep(Glat,S_Full)
+      write(*,"(A,F)")"     Kinetic energy [eV]:",Ek
+      write(*,"(A,F)")"     Potential energy [eV]:",Ep
       !
       !
       !Update the full self-energy, print and compute Glat along the path

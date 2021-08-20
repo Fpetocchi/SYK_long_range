@@ -111,6 +111,9 @@ module utils_fields
    public :: symmetrize_imp
    public :: join_SigmaCX
    public :: MergeFields
+   !functions
+   public :: calc_Ek
+   public :: calc_Ep
 
    !===========================================================================!
 
@@ -2805,6 +2808,75 @@ contains
       call BosonicKsum(PiGW)
       !
    end subroutine MergePolarization
+
+
+   !---------------------------------------------------------------------------!
+   !PURPOSE: compute the kinetic and potential energy
+   !---------------------------------------------------------------------------!
+   function calc_Ek(Gmats,Lttc) result(Ek)
+      use parameters
+      use linalg, only : trace
+      implicit none
+      type(FermionicField),intent(in)       :: Gmats
+      type(Lattice),intent(in)              :: Lttc
+      real(8)                               :: Ek,Ek_T
+      integer                               :: ik,iw,ispin
+      !
+      if(.not.Gmats%status) stop "calc_Ek: Gmats not properly initialized."
+      if(.not.Lttc%status) stop "calc_Ek: Lttc not properly initialized."
+      if(Lttc%Nkpt.ne.Gmats%Nkpt) stop "calc_Ek: number of K-points does not match between Lttc and Gmats."
+      !
+      Ek=0d0
+      !$OMP PARALLEL DEFAULT(NONE),&
+      !$OMP SHARED(Gmats,Lttc,Ek),&
+      !$OMP PRIVATE(iw,ik,ispin,Ek_T)
+      !$OMP DO
+      do iw=1,Gmats%Npoints
+         Ek_T=0d0
+         do ik=1,Gmats%Nkpt
+            do ispin=1,Nspin
+               Ek_T = Ek_T + 0.5d0 * trace(matmul(Lttc%Hk(:,:,ik),Gmats%wks(:,:,iw,ik,ispin))) / Gmats%Nkpt
+            enddo
+         enddo
+         Ek = Ek + Ek_T / Gmats%Beta
+      enddo
+      !$OMP END DO
+      !$OMP END PARALLEL
+      !
+   end function calc_Ek
+   !
+   function calc_Ep(Gmats,Smats) result(Ep)
+      use parameters
+      use linalg, only : trace
+      implicit none
+      type(FermionicField),intent(in)       :: Gmats
+      type(FermionicField),intent(in)       :: Smats
+      real(8)                               :: Ep,Ep_T
+      integer                               :: ik,iw,ispin
+      !
+      if(.not.Gmats%status) stop "calc_Ep: Gmats not properly initialized."
+      if(.not.Smats%status) stop "calc_Ep: Smats not properly initialized."
+      if(Smats%Nkpt.ne.Gmats%Nkpt) stop "calc_Ep: number of K-points does not match between Smats and Gmats."
+      if(Smats%Beta.ne.Gmats%Beta) stop "calc_Ep: Beta does not match between Smats and Gmats."
+      !
+      Ep=0d0
+      !$OMP PARALLEL DEFAULT(NONE),&
+      !$OMP SHARED(Gmats,Smats,Ep),&
+      !$OMP PRIVATE(iw,ik,ispin,Ep_T)
+      !$OMP DO
+      do iw=1,Gmats%Npoints
+         Ep_T=0d0
+         do ik=1,Gmats%Nkpt
+            do ispin=1,Nspin
+               Ep_T = Ep_T + 0.5d0 * trace(matmul(Smats%wks(:,:,iw,ik,ispin),Gmats%wks(:,:,iw,ik,ispin))) / Gmats%Nkpt
+            enddo
+         enddo
+         Ep = Ep + Ep_T / Gmats%Beta
+      enddo
+      !$OMP END DO
+      !$OMP END PARALLEL
+      !
+   end function calc_Ep
 
 
 end module utils_fields
