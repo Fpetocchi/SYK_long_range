@@ -1423,6 +1423,10 @@ contains
       implicit none
       integer,intent(in)                    :: Iteration
       integer                               :: iorb,jorb,ik,iw,ispin
+      integer                               :: isite,Norb
+      integer,allocatable                   :: Orbs(:)
+      type(FermionicField)                  :: S_G0W0_imp
+      type(FermionicField)                  :: S_G0W0_EDMFT
       !
       !
       write(*,"(A)") new_line("A")//new_line("A")//"---- join_SigmaFull"
@@ -1475,7 +1479,37 @@ contains
                S_G0W0%wks = S_G0W0%wks - S_G0W0dc%wks
                call FermionicKsum(S_G0W0)
                !
-               !Add non local S_G0W0 to S_GW. the latter already contains Simp
+               !I want to enclose in the EDMFT *ALL* the local contributions to the self-energy
+               !therefore I have to remove all the local terms not removed by S_G0W0dc.
+               !From the S_G0W0^{SPEX}_{ij} + S_G0W0^{SPEX}_{i} - S_G0W0^{DC}_{ij} - S_G0W0^{DC}_{i}
+               !computed in the above line I'm removing [ S_G0W0^{SPEX}_{i} - S_G0W0^{DC}_{i} ]
+               !If I'm not doing this Delta always have serious causality issues.
+               call AllocateFermionicField(S_G0W0_EDMFT,Crystal%Norb,Nmats,Nkpt=Crystal%Nkpt,Nsite=Nsite,Beta=Beta,mu=Glat%mu)
+               do isite=1,Nsite
+                  !
+                  Norb = SiteNorb(isite)
+                  allocate(Orbs(Norb))
+                  Orbs = SiteOrbs(isite,1:Norb)
+                  !
+                  call AllocateFermionicField(S_G0W0_imp,Norb,Nmats,Beta=Beta)
+                  !
+                  !Extract the local G0W0 self-energy for each site
+                  call loc2imp(S_G0W0_imp,S_G0W0,Orbs)
+                  !
+                  !Put it into an-object that contains only the site indexes
+                  call imp2loc(S_G0W0_EDMFT,S_G0W0_imp,isite,Orbs,.false.,.false.)
+                  !
+                  call DeallocateField(S_G0W0_imp)
+                  deallocate(Orbs)
+                  !
+               enddo
+               !here, if Vxc is inside S_G0W0, also the local contribution from Vxc is removed
+               do ik=1,S_G0W0%Nkpt
+                  S_G0W0%wks(:,:,:,ik,:) = S_G0W0%wks(:,:,:,ik,:) - S_G0W0_EDMFT%ws
+               enddo
+               call DeallocateField(S_G0W0_EDMFT)
+               !
+               !Add non local S_G0W0 to S_GW, the latter already contains Simp
                S_GW%wks = S_GW%wks + S_G0W0%wks
                !
                !Put together all the terms
@@ -3172,47 +3206,3 @@ contains
 
 
 end module utils_main
-
-
-
-
-
-
-
-
-
-!TEST>>> !inside join_SigmaFull
-!integer                               :: isite,Norb
-!integer,allocatable                   :: Orbs(:)
-!type(FermionicField)                  :: S_G0W0_imp
-!type(FermionicField)                  :: S_G0W0_EDMFT
-!If the DC is not properly computed meaning that the Dc computed here
-!yielding non causal S_G0W0 - S_G0W0dc
-!if(Nsite.gt.1)then
-!   call AllocateFermionicField(S_G0W0_EDMFT,Crystal%Norb,Nmats,Nkpt=Crystal%Nkpt,Nsite=Nsite,Beta=Beta,mu=Glat%mu)
-!   do isite=1,Nsite
-!      !
-!      Norb = SiteNorb(isite)
-!      allocate(Orbs(Norb))
-!      Orbs = SiteOrbs(isite,1:Norb)
-!      !
-!      call AllocateFermionicField(S_G0W0_imp,Norb,Nmats,Beta=Beta)
-!      !
-!      !Extract the local G0W0 self-energy for each site
-!      call loc2imp(S_G0W0_imp,S_G0W0,Orbs)
-!      !
-!      !Put it into an-object that contains only the site indexes
-!      call imp2loc(S_G0W0_EDMFT,S_G0W0_imp,isite,Orbs,.false.,.false.)
-!      !
-!      call DeallocateField(S_G0W0_imp)
-!      deallocate(Orbs)
-!      !
-!   enddo
-!   !
-!   !here, if Vxc is inside S_G0W0, also the local contribution from Vxc is removed
-!   do ik=1,S_G0W0%Nkpt
-!      S_G0W0%wks(:,:,:,ik,:) = S_G0W0%wks(:,:,:,ik,:) - S_G0W0_EDMFT%ws
-!   enddo
-!   call DeallocateField(S_G0W0_EDMFT)
-!endif
-!>>>TEST

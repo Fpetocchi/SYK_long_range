@@ -2835,7 +2835,7 @@ contains
          Ek_T=0d0
          do ik=1,Gmats%Nkpt
             do ispin=1,Nspin
-               Ek_T = Ek_T + 0.5d0 * trace(matmul(Lttc%Hk(:,:,ik),Gmats%wks(:,:,iw,ik,ispin))) / Gmats%Nkpt
+               Ek_T = Ek_T + trace(matmul(Lttc%Hk(:,:,ik),Gmats%wks(:,:,iw,ik,ispin))) / (Gmats%Nkpt*Nspin)
             enddo
          enddo
          Ek = Ek + Ek_T / Gmats%Beta
@@ -2868,7 +2868,7 @@ contains
          Ep_T=0d0
          do ik=1,Gmats%Nkpt
             do ispin=1,Nspin
-               Ep_T = Ep_T + 0.5d0 * trace(matmul(Smats%wks(:,:,iw,ik,ispin),Gmats%wks(:,:,iw,ik,ispin))) / Gmats%Nkpt
+               Ep_T = Ep_T + trace(matmul(Smats%wks(:,:,iw,ik,ispin),Gmats%wks(:,:,iw,ik,ispin))) / (Gmats%Nkpt*Nspin)
             enddo
          enddo
          Ep = Ep + Ep_T / Gmats%Beta
