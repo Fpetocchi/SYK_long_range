@@ -37,7 +37,7 @@ class ct_hyb
       //----------------------------------------------------------------------//
 
       ct_hyb( path SiteName, double beta, int Nspin, int Norb, int NtauF, int NtauB,
-              int Norder, int Nmeas, int Ntherm, int NsegShift, int NspinSwap, int NnntMeas,
+              int Norder, bool Gexp, int Nmeas, int Ntherm, int NsegShift, int NspinSwap, int NnntMeas,
               bool paramagnet, bool retarded, std::vector<int> SetsNorb,
               int printTime, std::vector<int> bins, CustomMPI &mpi):
       SiteName(SiteName),
@@ -47,6 +47,7 @@ class ct_hyb
       NtauF(NtauF),
       NtauB(NtauB),
       Norder(Norder),
+      Gexp(Gexp),
       Nmeas(Nmeas),
       Ntherm(Ntherm),
       NsegShift(NsegShift),
@@ -361,6 +362,7 @@ class ct_hyb
       int                                 NtauF;                                // Number of POINTS in Fermionic tau grid
       int                                 NtauB;                                // Number of POINTS in Bosonic tau grid
       int                                 Norder;                               // Max perturbation order
+      bool                                Gexp;
       int                                 Nmeas;                                // Number of sweeps between expensive measurments
       int                                 Ntherm;
       int                                 NsegShift;
@@ -493,7 +495,7 @@ class ct_hyb
                N_tmp[ifl] += compute_overlap(full_segment, segments[ifl], full_line[ifl], Beta)/(Beta*Nmeas_);
                //
                // Green's functions - measurment averaged
-               // TEST if (segments[ifl].size()>0) measure_G( G_tmp[ifl], segments[ifl], M[ifl], Beta, (double)(NtauF_m1/Nmeas_) );
+               if( !Gexp && segments[ifl].size()>0) measure_G( G_tmp[ifl], segments[ifl], M[ifl], Beta, (double)(NtauF_m1/Nmeas_) );
                //...............................................................
             }
             //
@@ -519,12 +521,14 @@ class ct_hyb
          accumulate_Vec( Nloc, N_tmp );
          //
          // Green's functions - symmetrization - step sum
-         //TEST>>>
-         for (int ifl=0; ifl<Nflavor; ifl++)
+         if(Gexp)
          {
-            if (segments[ifl].size()>0) measure_G( G_tmp[ifl], segments[ifl], M[ifl], Beta, (double)(NtauF_m1) );
+            for (int ifl=0; ifl<Nflavor; ifl++)
+            {
+               if (segments[ifl].size()>0) measure_G( G_tmp[ifl], segments[ifl], M[ifl], Beta, (double)(NtauF_m1) );
+            }
+
          }
-         //>>>TEST
          if(paramagnet) spin_symm( G_tmp );
          if(OrbSym) orb_symm( G_tmp, SetsOrbs );
          accumulate_VecVec( G, G_tmp );

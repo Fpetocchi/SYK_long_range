@@ -182,6 +182,7 @@ module parameters
       integer                               :: NtauB_in
       integer                               :: Norder=0
       integer                               :: Nmeas=0
+      integer                               :: Gexp=0
       integer                               :: Ntherm=0
       integer                               :: Nshift=0
       integer                               :: Nswap=0

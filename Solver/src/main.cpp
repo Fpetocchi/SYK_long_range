@@ -38,8 +38,8 @@ int main(int argc, char *argv[])
    int Nspin,NtauF,NtauB,Norder;
    int Nmeas,Ntherm,Nshift,Nswap,Nnnt,printTime;
    //logical flags and compatibility typo fix
-   bool paramagnet,retarded,quickloops,dichotomy;
-   int para_read,ret_read,quick_read;
+   bool Gexp,paramagnet,retarded,quickloops,dichotomy;
+   int Gexp_read,para_read,ret_read,quick_read;
    // Post-processing of the Green's function
    int binlength,binstart;
    //Symmetrization type
@@ -88,6 +88,7 @@ int main(int argc, char *argv[])
       find_param(argv[1], "NORDER"     , Norder    );
       // Measurments
       find_param(argv[1], "NMEAS"      , Nmeas     );
+      find_param(argv[1], "GEXPENSIVE" , Gexp_read ); Gexp = (Gexp_read == 1) ? true : false;
       find_param(argv[1], "NTHERM"     , Ntherm    );
       find_param(argv[1], "NSHIFT"     , Nshift    );
       find_param(argv[1], "NSWAP"      , Nswap     );
@@ -240,7 +241,7 @@ int main(int argc, char *argv[])
          {
             mpi.report(" Folder = "+SiteDir[isite]+" (Found).");
             ImpurityList.push_back(ct_hyb( SiteName[isite], Beta, Nspin, SiteNorb[isite], NtauF, NtauB,
-                                           Norder, Nmeas, Ntherm, Nshift, Nswap, Nnnt,
+                                           Norder, Gexp, Nmeas, Ntherm, Nshift, Nswap, Nnnt,
                                            paramagnet, retarded, SiteSetsNorb[isite],
                                            printTime, std::vector<int> { binlength,binstart }, mpi ));
             ImpurityList[isite].init( SiteDir[isite]);

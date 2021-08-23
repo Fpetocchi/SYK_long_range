@@ -2847,7 +2847,7 @@ contains
    !
    function calc_Ep(Gmats,Smats) result(Ep)
       use parameters
-      use linalg, only : trace
+      use linalg, only : trace, deye
       implicit none
       type(FermionicField),intent(in)       :: Gmats
       type(FermionicField),intent(in)       :: Smats
@@ -2868,7 +2868,7 @@ contains
          Ep_T=0d0
          do ik=1,Gmats%Nkpt
             do ispin=1,Nspin
-               Ep_T = Ep_T + trace(matmul(Smats%wks(:,:,iw,ik,ispin),Gmats%wks(:,:,iw,ik,ispin))) / (Gmats%Nkpt*Nspin)
+               Ep_T = Ep_T + trace(matmul(Smats%wks(:,:,iw,ik,ispin)-deye(Smats%Norb)*Smats%mu,Gmats%wks(:,:,iw,ik,ispin))) / (Gmats%Nkpt*Nspin)
             enddo
          enddo
          Ep = Ep + Ep_T / Gmats%Beta

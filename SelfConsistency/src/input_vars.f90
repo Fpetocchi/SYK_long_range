@@ -591,6 +591,7 @@ contains
       call append_to_input_list(Solver%TargetDensity,"N_READ_IMP","Target density in the impurity list. User cannot set this as its the the same density on within the impurity orbitals if EXPAND=F otherwise its N_READ_LAT/NSITE.")
      !call parse_input_variable(Solver%TargetDensity,"N_READ_IMP",InputFile,default=look4dens%TargetDensity,comment="Target density in the impurity list.")
       call parse_input_variable(Solver%Norder,"NORDER",InputFile,default=10,comment="Maximum perturbation order measured. Not yet implemented.")
+      call parse_input_variable(Solver%Gexp,"GEXPENSIVE",InputFile,default=0,comment="If =1 the impurity Green's function measurment is considered expensive (Needed at high Beta*Bandwidth).")
       call parse_input_variable(Solver%Nmeas,"NMEAS",InputFile,default=1000,comment="Sweeps where expensive measurments are not performed.")
       call parse_input_variable(Solver%Ntherm,"NTHERM",InputFile,default=100,comment="Thermalization cycles. Each cycle performs NMEAS sweeps.")
       call parse_input_variable(Solver%Nshift,"NSHIFT",InputFile,default=1,comment="Proposed segment shifts at each sweep.")
