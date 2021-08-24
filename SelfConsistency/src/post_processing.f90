@@ -73,7 +73,6 @@ contains
 
    !---------------------------------------------------------------------------!
    !PURPOSE: Interpolate to a new frequency mesh a Fermionic field
-   !TEST ON:
    !---------------------------------------------------------------------------!
    include "post_processing/interpolate_beta.f90"
 

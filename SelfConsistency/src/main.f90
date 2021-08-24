@@ -157,9 +157,9 @@ program SelfConsistency
          call AllocateFermionicField(S_G0W0,Crystal%Norb,Nmats,Nkpt=Crystal%Nkpt,Nsite=Nsite,Beta=Beta)
          if(.not.Hmodel)then
             if(Vxc_in)then
-               call read_Sigma_spex(S_G0W0,Crystal,verbose,doAC=Sigma_AC,pathOUTPUT=reg(pathINPUTtr))
+               call read_Sigma_spex(SpexVersion,S_G0W0,Crystal,verbose,recompute=RecomputeG0W0,pathOUTPUT=reg(pathINPUTtr))
             else
-               call read_Sigma_spex(S_G0W0,Crystal,verbose,doAC=Sigma_AC,pathOUTPUT=reg(pathINPUTtr),Vxc_out=Vxc)
+               call read_Sigma_spex(SpexVersion,S_G0W0,Crystal,verbose,recompute=RecomputeG0W0,pathOUTPUT=reg(pathINPUTtr),Vxc_out=Vxc)
             endif
          endif
          !

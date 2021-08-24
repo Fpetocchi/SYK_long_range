@@ -1362,7 +1362,7 @@ contains
       if(FirstIteration.ne.0) stop "calc_SigmaGuess: this subroutine works only in the 0th iteration."
       if((reg(CalculationType).eq."GW+EDMFT").and.(.not.S_G0W0%status))then
          call AllocateFermionicField(S_G0W0,Crystal%Norb,Nmats,Nkpt=Crystal%Nkpt,Nsite=Nsite,Beta=Beta)
-         call read_Sigma_spex(S_G0W0,Crystal,verbose,doAC=Sigma_AC,pathOUTPUT=reg(pathINPUTtr))
+         call read_Sigma_spex(SpexVersion,S_G0W0,Crystal,verbose,recompute=RecomputeG0W0,pathOUTPUT=reg(pathINPUTtr))
       endif
       !
       !
@@ -1425,6 +1425,7 @@ contains
       integer                               :: iorb,jorb,ik,iw,ispin
       integer                               :: isite,Norb
       integer,allocatable                   :: Orbs(:)
+      logical                               :: causal_G0W0_loc
       type(FermionicField)                  :: S_G0W0_imp
       type(FermionicField)                  :: S_G0W0_EDMFT
       !
@@ -1479,11 +1480,7 @@ contains
                S_G0W0%wks = S_G0W0%wks - S_G0W0dc%wks
                call FermionicKsum(S_G0W0)
                !
-               !I want to enclose in the EDMFT *ALL* the local contributions to the self-energy
-               !therefore I have to remove all the local terms not removed by S_G0W0dc.
-               !From the S_G0W0^{SPEX}_{ij} + S_G0W0^{SPEX}_{i} - S_G0W0^{DC}_{ij} - S_G0W0^{DC}_{i}
-               !computed in the above line I'm removing [ S_G0W0^{SPEX}_{i} - S_G0W0^{DC}_{i} ]
-               !If I'm not doing this Delta always have serious causality issues.
+               !Compute the G0W0 contribution to the local self-energy
                call AllocateFermionicField(S_G0W0_EDMFT,Crystal%Norb,Nmats,Nkpt=Crystal%Nkpt,Nsite=Nsite,Beta=Beta,mu=Glat%mu)
                do isite=1,Nsite
                   !
@@ -1496,17 +1493,38 @@ contains
                   !Extract the local G0W0 self-energy for each site
                   call loc2imp(S_G0W0_imp,S_G0W0,Orbs)
                   !
-                  !Put it into an-object that contains only the site indexes
+                  !Put it into an object that contains only the site indexes
                   call imp2loc(S_G0W0_EDMFT,S_G0W0_imp,isite,Orbs,.false.,.false.)
                   !
                   call DeallocateField(S_G0W0_imp)
                   deallocate(Orbs)
                   !
                enddo
+               !
+               !Check for the causality in the G0W0 contribution to the local self-energy
+               causal_G0W0_loc=.true.
+               causaloop: do ispin=1,Nspin
+                  do iorb=1,S_G0W0_EDMFT%Norb
+                     do iw=1,S_G0W0_EDMFT%Npoints
+                        if(dimag(S_G0W0_EDMFT%ws(iorb,iorb,iw,ispin)).gt.0d0)then
+                           write(*,"(A)")"     Warning: the local G0W0 self-energy has been found non-causal at iw="//str(iw)//" iorb="//str(iorb)//" ispin="//str(ispin)
+                           write(*,"(A)")"              therefore it will not be considered."
+                           causal_G0W0_loc=.false.
+                           exit causaloop
+                        endif
+                     enddo
+                  enddo
+               enddo causaloop
+               !
+               !Enclose in the EDMFT *ALL* the local contributions to the self-energy
+               !From the S_G0W0^{SPEX}_{ij} + S_G0W0^{SPEX}_{i} - S_G0W0^{DC}_{ij} - S_G0W0^{DC}_{i}
+               !we remove [ S_G0W0^{SPEX}_{i} - S_G0W0^{DC}_{i} ]
                !here, if Vxc is inside S_G0W0, also the local contribution from Vxc is removed
-               do ik=1,S_G0W0%Nkpt
-                  S_G0W0%wks(:,:,:,ik,:) = S_G0W0%wks(:,:,:,ik,:) - S_G0W0_EDMFT%ws
-               enddo
+               if((.not.GoWoDC_loc).or.(.not.causal_G0W0_loc))then
+                  do ik=1,S_G0W0%Nkpt
+                     S_G0W0%wks(:,:,:,ik,:) = S_G0W0%wks(:,:,:,ik,:) - S_G0W0_EDMFT%ws
+                  enddo
+               endif
                call DeallocateField(S_G0W0_EDMFT)
                !
                !Add non local S_G0W0 to S_GW, the latter already contains Simp

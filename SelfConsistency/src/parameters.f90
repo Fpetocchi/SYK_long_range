@@ -200,12 +200,12 @@ module parameters
    !---------------------------------------------------------------------------!
    type OldBeta
       logical                               :: status=.false.
-      real(8)                               :: Beta_old
-      real(8)                               :: Beta_new
+      real(8)                               :: Beta_old=0d0
+      real(8)                               :: Beta_new=0d0
       character(len=256)                    :: Path
-      real(8)                               :: wmatsMax
-      integer                               :: Nmats_old
-      integer                               :: Nmats_new
+      real(8)                               :: wmatsMax=0d0
+      integer                               :: Nmats_old=0
+      integer                               :: Nmats_new=0
    end type OldBeta
 
    !---------------------------------------------------------------------------!
@@ -238,8 +238,8 @@ module parameters
       integer                               :: Nslab=1
       integer                               :: Norb=0
       integer                               :: Explicit(2)=[1,1]
-      real(8)                               :: GlobalTzRatio
-      integer                               :: NtzExplicit
+      real(8)                               :: GlobalTzRatio=0d0
+      integer                               :: NtzExplicit=0
       integer,allocatable                   :: ExplicitTzPos(:)
       real(8),allocatable                   :: ExplicitTzRatios(:)
       complex(8),allocatable                :: tz(:,:,:)

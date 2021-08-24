@@ -43,7 +43,6 @@ contains
 
    !---------------------------------------------------------------------------!
    !PURPOSE: Compute the two GW self-energy components.
-   !TEST ON: 27-10-2020
    !---------------------------------------------------------------------------!
    subroutine calc_sigmaGW(Smats,Gmats,Wmats,Lttc,LDAoffdiag,Smats_C,Smats_X)
       !
@@ -294,7 +293,6 @@ contains
 
    !---------------------------------------------------------------------------!
    !PURPOSE: Compute the two local GW self-energy components as Gloc*Wloc.
-   !TEST ON: 27-10-2020
    !---------------------------------------------------------------------------!
    subroutine calc_sigmaGWdc(Smats_dc,Gmats,Wmats,Smats_Cdc,Smats_Xdc)
       !
@@ -451,7 +449,6 @@ contains
 
    !---------------------------------------------------------------------------!
    !PURPOSE: Compute Hartree difference with G0W0
-   !TEST ON: 27-10-2020
    !---------------------------------------------------------------------------!
    subroutine calc_VH_G(VH,density_LDA_spin,Gmats,Umats,sym_constrained)
       !
@@ -896,9 +893,37 @@ contains
 
    !---------------------------------------------------------------------------!
    !PURPOSE: Read self-energy from SPEX files.
-   !TEST ON: 27-10-2020(both write and read)
    !---------------------------------------------------------------------------!
-   subroutine read_Sigma_spex(Smats_GoWo,Lttc,save2readable,Vxc_out,pathOUTPUT,doAC)
+   subroutine read_Sigma_spex(mode,Smats_GoWo,Lttc,save2readable,Vxc_out,pathOUTPUT,recompute)
+      !
+      use parameters
+      use utils_misc
+      implicit none
+      !
+      character(len=*),intent(in)           :: mode
+      type(FermionicField),intent(inout)    :: Smats_GoWo
+      type(Lattice),intent(inout)           :: Lttc
+      logical,intent(in)                    :: save2readable
+      complex(8),intent(inout),optional     :: Vxc_out(:,:,:,:)
+      character(len=*),intent(in),optional  :: pathOUTPUT
+      logical,intent(in),optional           :: recompute
+      !
+      select case(reg(mode))
+         case default
+            stop "read_Sigma_spex: Available modes are: Julich, Lund."
+         case("Julich")
+            !
+            call read_Sigma_spex_Julich(Smats_GoWo,Lttc,save2readable,Vxc_out,pathOUTPUT,recompute)
+            !
+         case("Lund")
+            !
+            call read_Sigma_spex_Lund(Smats_GoWo,Lttc,save2readable,Vxc_out,pathOUTPUT,recompute)
+            !
+      end select
+      !
+   end subroutine read_Sigma_spex
+   !
+   subroutine read_Sigma_spex_Lund(Smats_GoWo,Lttc,save2readable,Vxc_out,pathOUTPUT,recompute)
       !
       use linalg
       use parameters
@@ -914,9 +939,9 @@ contains
       logical,intent(in)                    :: save2readable
       complex(8),intent(inout),optional     :: Vxc_out(:,:,:,:)
       character(len=*),intent(in),optional  :: pathOUTPUT
-      logical,intent(in),optional           :: doAC
+      logical,intent(in),optional           :: recompute
       !
-      logical                               :: filexists,ACdone,doAC_,Vxcdone,doVxc
+      logical                               :: filexists,ACdone,recompute_,Vxcdone,doVxc
       character(len=256)                    :: path,pathOUTPUT_
       integer                               :: iseg,SigmaSegments
       integer                               :: iq,ik,iw,iw2,ispin,iwan1,iwan2,unit
@@ -944,15 +969,15 @@ contains
       complex(8),allocatable                :: Vxc(:,:,:,:)
       !
       !
-      write(*,"(A)") new_line("A")//new_line("A")//"---- read_Sigma_spex"
+      write(*,"(A)") new_line("A")//new_line("A")//"---- read_Sigma_spex_Lund"
       pathOUTPUT_ = pathINPUT
       if(present(pathOUTPUT)) pathOUTPUT_ = pathOUTPUT
       !
       !
       ! Check on the input Fields
-      if(.not.Smats_GoWo%status) stop "read_Sigma_spex: FermionicField not properly initialized."
-      if(.not.Lttc%status) stop "read_Sigma_spex: Lattice container not properly initialized."
-      if(Lttc%Nkpt.ne.Smats_GoWo%Nkpt) stop "read_Sigma_spex: Lattice has different number of k-points with respect to Smats_GoWo."
+      if(.not.Smats_GoWo%status) stop "read_Sigma_spex_Lund: FermionicField not properly initialized."
+      if(.not.Lttc%status) stop "read_Sigma_spex_Lund: Lattice container not properly initialized."
+      if(Lttc%Nkpt.ne.Smats_GoWo%Nkpt) stop "read_Sigma_spex_Lund: Lattice has different number of k-points with respect to Smats_GoWo."
       !
       Norb = Smats_GoWo%Norb
       Nkpt = Smats_GoWo%Nkpt
@@ -974,25 +999,24 @@ contains
       ! Check if the data on the Matsubara axis are present if(.not.paramagneticSPEX) look also for spin2
       path = reg(pathOUTPUT_)//"SGoWo_w_k_s1.DAT"
       call inquireFile(reg(path),ACdone,hardstop=.false.,verb=verbose)
-      doAC_ = .not.ACdone
-      if(present(doAC)) doAC_ = doAC .or. doAC_
+      recompute_ = .not.ACdone
+      if(present(recompute)) recompute_ = recompute .or. recompute_
       !
       ! Check if the Vxc_wann is present
       path = reg(pathINPUT)//"Vxc_k_s1.DAT"
       call inquireFile(reg(path),Vxcdone,hardstop=.false.,verb=verbose)
-      doVxc = .not.Vxcdone! .or. present(Vxc_out)
+      doVxc = .not.Vxcdone
       !
       !
-      if(doVxc.and.(.not.doAC_))then
-         !call assert_shape(Vxc,[Norb,Norb,Nkpt,Nspin],"read_Sigma_spex","Vxc")
-         write(*,"(A)")"     Sorry but I can't produce Vxc_wann without reading the self-energy."
+      if(doVxc.and.(.not.recompute_))then
+         write(*,"(A)")"     Sorry but I can't produce Vxc_wann without reading the self-energy (internal band indexes needed)."
          write(*,"(A)")"     Analytic continuation will be perforemd anyway."
-         doAC_ = .true.
+         recompute_ = .true.
       endif
       !
       !
       ! Perform cnalytical continuation on the self-energy on the real axis
-      if(doAC_)then
+      if(recompute_)then
          !
          !---------------------------------------------------------------------!
          !
@@ -1009,9 +1033,9 @@ contains
          unit = free_unit()
          open(unit,file=reg(path),form="unformatted",action="read",position="rewind")
          read(unit) Nspin_Uwan,Nkpt_Uwan,ib_Uwan1,ib_Uwan2,Norb_Uwan
-         if(paramagneticSPEX.and.(Nspin_Uwan.ne.1)) stop "read_Sigma_spex: UWAN file is not paramagnetic."
-         if(Nkpt_Uwan.ne.Nkpt) stop "read_Sigma_spex: UWAN file has wrong number of k-points (not irreducible)."
-         if(Norb_Uwan.ne.Norb) stop "read_Sigma_spex: UWAN file has wrong orbital dimension."
+         if(paramagneticSPEX.and.(Nspin_Uwan.ne.1)) stop "read_Sigma_spex_Lund: UWAN file is not paramagnetic."
+         if(Nkpt_Uwan.ne.Nkpt) stop "read_Sigma_spex_Lund: UWAN file has wrong number of k-points (not irreducible)."
+         if(Norb_Uwan.ne.Norb) stop "read_Sigma_spex_Lund: UWAN file has wrong orbital dimension."
          write(*,"(A,2I4)") "     The band indexes in the "//reg(path)//" rotation are: ",ib_Uwan1,ib_Uwan2
          allocate(Uwan(ib_Uwan1:ib_Uwan2,Norb,Nkpt,Nspin_Uwan))
          do ispin=1,Nspin_Uwan
@@ -1046,8 +1070,8 @@ contains
             enddo
             write(*,"(A,1I4,A,1I6)") "     The number k-points in the segment number: ",iseg," is: ",Nkpt_file
             Nkpt_file_old = Nkpt_file
-            if((iseg.gt.1).and.(Nkpt_file.ne.Nkpt_file_old)) stop "read_Sigma_spex: Number of K-points does not match among segments."
-            if(Nkpt_file.ne.Lttc%Nkpt_irred) stop "read_Sigma_spex: Number of K-points does not match with Nkpt_irred readed from XEPS."
+            if((iseg.gt.1).and.(Nkpt_file.ne.Nkpt_file_old)) stop "read_Sigma_spex_Lund: Number of K-points does not match among segments."
+            if(Nkpt_file.ne.Lttc%Nkpt_irred) stop "read_Sigma_spex_Lund: Number of K-points does not match with Nkpt_irred readed from XEPS."
          enddo
          !
          ! Check that all the Sigma parameters are cosistent and that the segments match
@@ -1055,7 +1079,7 @@ contains
             do ik=1,Lttc%Nkpt_irred
                !
                path = reg(pathINPUT)//"Sigma_real_"//str(iseg,2)//"/SIGMA.Q"//str(ik,4)//".DAT"
-               if(verbose)write(*,"(A)") "Checking "//reg(path)
+               if(verbose)write(*,"(A)") "     Checking "//reg(path)
                call inquireFile(reg(path),filexists,verb=verbose)!redundant control
                !
                unit = free_unit()
@@ -1064,7 +1088,7 @@ contains
                allocate(wread(Nfreq));wread=0d0
                read(unit) wread
                close(unit)
-               if(lexonly) stop "read_Sigma_spex: lexonly"
+               if(lexonly) stop "read_Sigma_spex_Lund: lexonly"
                !
                iseg_old = iseg
                Nspin_spex_old = Nspin_spex
@@ -1076,24 +1100,24 @@ contains
                wE_old = wread(Nfreq)
                !
                ! Each k-point controls
-               if(ib_sigma1.gt.ib_Uwan1) stop "read_Sigma_spex: ib_sigma1>ib_Uwan1"
-               if(ib_sigma2.lt.ib_Uwan2) stop "read_Sigma_spex: ib_sigma2<ib_Uwan2"
-               if(paramagneticSPEX.and.(Nspin_spex.ne.1)) stop "read_Sigma_spex: Spex self-energy file is not paramagnetic."
-               if(ik.ne.ik_spex) stop "read_Sigma_spex: K-point index in SPEX not match the expected index."
+               if(ib_sigma1.gt.ib_Uwan1) stop "read_Sigma_spex_Lund: ib_sigma1>ib_Uwan1"
+               if(ib_sigma2.lt.ib_Uwan2) stop "read_Sigma_spex_Lund: ib_sigma2<ib_Uwan2"
+               if(paramagneticSPEX.and.(Nspin_spex.ne.1)) stop "read_Sigma_spex_Lund: Spex self-energy file is not paramagnetic."
+               if(ik.ne.ik_spex) stop "read_Sigma_spex_Lund: K-point index in SPEX not match the expected index."
                if(ik.gt.1)then
-                  if(ib_sigma1_old.ne.ib_sigma1) stop "read_Sigma_spex: ib_sigma1 does not match with previous file."
-                  if(Nspin_spex_old.ne.Nspin_spex) stop "read_Sigma_spex: Nspin_spex does not match with previous file."
-                  if(Nkpt_irred_spex_old.ne.Nkpt_irred_spex) stop "read_Sigma_spex: Nkpt_irred_spex does not match with previous file."
-                  if(ib_sigma2_old.ne.ib_sigma2) stop "read_Sigma_spex: ib_sigma2 does not match with previous file."
+                  if(ib_sigma1_old.ne.ib_sigma1) stop "read_Sigma_spex_Lund: ib_sigma1 does not match with previous file."
+                  if(Nspin_spex_old.ne.Nspin_spex) stop "read_Sigma_spex_Lund: Nspin_spex does not match with previous file."
+                  if(Nkpt_irred_spex_old.ne.Nkpt_irred_spex) stop "read_Sigma_spex_Lund: Nkpt_irred_spex does not match with previous file."
+                  if(ib_sigma2_old.ne.ib_sigma2) stop "read_Sigma_spex_Lund: ib_sigma2 does not match with previous file."
                   if(iseg.eq.iseg_old)then
-                     if(Nfreq_old.ne.Nfreq) stop "read_Sigma_spex: Nfreq does not match among different k-points same segment."
-                     if(wS_old.ne.wread(1)) stop "read_Sigma_spex: First freq does not match among different k-points same segment."
-                     if(wE_old.ne.wread(Nfreq)) stop "read_Sigma_spex: Last freq does not match among different k-points same segment."
+                     if(Nfreq_old.ne.Nfreq) stop "read_Sigma_spex_Lund: Nfreq does not match among different k-points same segment."
+                     if(wS_old.ne.wread(1)) stop "read_Sigma_spex_Lund: First freq does not match among different k-points same segment."
+                     if(wE_old.ne.wread(Nfreq)) stop "read_Sigma_spex_Lund: Last freq does not match among different k-points same segment."
                   else
                      if(dabs(wread(1)-wE_old).gt.eps)then
                         write(*,"(A,2F10.5)") "w_old, w(1):",wE_old,wread(1)
                         write(*,"(A,2I5)") "iq,iseg:",ik,iseg
-                        stop "read_Sigma_spex: Segments in sigma do not match."
+                        stop "read_Sigma_spex_Lund: Segments in sigma do not match."
                      endif
                   endif
                endif
@@ -1175,9 +1199,9 @@ contains
                   !$OMP SHARED(Nspin_spex,ib,ik,iseg,Nmats,NfreqSeg,wread,wmats,SigmaC_seg,SigmaC_diag),&
                   !$OMP PRIVATE(ispin,iw,iw2,gamma1,gamma2,trap)
                   !$OMP DO
-                  do ispin=1,Nspin_spex
-                     do iw=1,Nmats
-                        do iw2=1,NfreqSeg(iseg)-1
+                  do iw=1,Nmats
+                     do iw2=1,NfreqSeg(iseg)-1
+                        do ispin=1,Nspin_spex
                            !
                            !try trapetziodal method
                            if(wread(iw2).lt.0.d0) then
@@ -1196,9 +1220,9 @@ contains
                            !trap=(-dcmplx(gamma*w(iw2),gamma*w_F(iw))/(w_F(iw)**2 + w(iw2)**2) - dcmplx(gamma*w(iw2+1),gamma*w_F(iw))/(w_F(iw)**2 + w(iw2+1)**2))/2.d0
                            SigmaC_diag(ib,iw,ik,ispin) = SigmaC_diag(ib,iw,ik,ispin) + dcmplx(wread(iw2+1)-wread(iw2),0.d0)*trap
                            !
-                        enddo !iw2
-                     enddo !iw
-                  enddo !ispin
+                        enddo !ispin
+                     enddo !iw2
+                  enddo !iw
                   !$OMP END DO
                   !$OMP END PARALLEL
                enddo !ib
@@ -1212,33 +1236,29 @@ contains
          !
          !
          call clear_attributes(Smats_GoWo)
-         !Sigma=sigmax+sigmac and transform to wannier basis
-         !$OMP PARALLEL DEFAULT(NONE),&
-         !$OMP SHARED(paramagneticSPEX,Nkpt,Norb,ib_Uwan1,ib_Uwan2,Nmats,Lttc,Uwan,SigmaC_diag,SigmaX_seg,Smats_GoWo),&
-         !$OMP PRIVATE(ispin,ispin_spex,ik,iwan1,iwan2,iw)
-         !$OMP DO
-         do ispin=1,Nspin
+         !Sigma=sigmax+sigmac and transform to Wannier basis
+         do ispin_spex=1,Nspin_spex
+            !$OMP PARALLEL DEFAULT(NONE),&
+            !$OMP SHARED(ispin_spex,Nkpt,Norb,ib_Uwan1,ib_Uwan2,Nmats,Lttc,Uwan,SigmaC_diag,SigmaX_seg,Smats_GoWo),&
+            !$OMP PRIVATE(ik,iwan1,iwan2,iw)
+            !$OMP DO
             do ik=1,Nkpt
                do iwan2=1,Norb
                   do iwan1=1,Norb
                      do iw=1,Nmats
                         !
-                        ispin_spex=1
-                        if(.not.paramagneticSPEX)ispin_spex=ispin
-                        !
-                        Smats_GoWo%wks(iwan1,iwan2,iw,ik,ispin) = &
+                        Smats_GoWo%wks(iwan1,iwan2,iw,ik,ispin_spex) = &
                         + sum(conjg(Uwan(ib_Uwan1:ib_Uwan2,iwan1,ik,ispin_spex)) * SigmaC_diag(ib_Uwan1:ib_Uwan2,iw,Lttc%kptPos(ik),ispin_spex) * Uwan(ib_Uwan1:ib_Uwan2,iwan2,ik,ispin_spex))  &
                         + sum(conjg(Uwan(ib_Uwan1:ib_Uwan2,iwan1,ik,ispin_spex)) * SigmaX_seg(ib_Uwan1:ib_Uwan2,Lttc%kptPos(ik),ispin_spex) * Uwan(ib_Uwan1:ib_Uwan2,iwan2,ik,ispin_spex))
-                        !
-                        !Smats_GoWo%wks(iwan1,iwan2,iw,ik,ispin) = Smats_GoWo%wks(iwan1,iwan2,iw,ik,ispin) !* H2eV
                         !
                      enddo
                   enddo
                enddo
             enddo
+            !$OMP END DO
+            !$OMP END PARALLEL
          enddo
-         !$OMP END DO
-         !$OMP END PARALLEL
+         if(paramagneticSPEX) Smats_GoWo%wks(:,:,:,:,Nspin) = Smats_GoWo%wks(:,:,:,:,1)
          deallocate(Uwan,SigmaC_diag,SigmaX_seg)
          !
          Smats_GoWo%wks = Smats_GoWo%wks * H2eV
@@ -1304,12 +1324,301 @@ contains
          !
       endif
       !
-   end subroutine read_Sigma_spex
+   end subroutine read_Sigma_spex_Lund
+   !
+   subroutine read_Sigma_spex_Julich(Smats_GoWo,Lttc,save2readable,Vxc_out,pathOUTPUT,recompute)
+      !
+      use linalg
+      use parameters
+      use file_io
+      use utils_misc
+      use crystal
+      use utils_fields
+      use input_vars, only : pathINPUT,UseXepsKorder,paramagneticSPEX,XEPSisread
+      implicit none
+      !
+      type(FermionicField),intent(inout)    :: Smats_GoWo
+      type(Lattice),intent(inout)           :: Lttc
+      logical,intent(in)                    :: save2readable
+      complex(8),intent(inout),optional     :: Vxc_out(:,:,:,:)
+      character(len=*),intent(in),optional  :: pathOUTPUT
+      logical,intent(in),optional           :: recompute
+      !
+      logical                               :: filexists,interpdone,recompute_,Vxcdone,doVxc
+      character(len=256)                    :: path,pathOUTPUT_
+      integer                               :: ifile,ierr
+      integer                               :: ik,iw,ispin,iwan1,unit
+      integer                               :: Nkpt,Norb,Nmats,Nfreq
+      real(8),allocatable                   :: wread(:),wmats(:)
+
+      !Uwan
+      integer                               :: Nspin_Uwan,Nkpt_Uwan
+      integer                               :: ib_Uwan1,ib_Uwan2,Norb_Uwan
+      complex(8),allocatable                :: Uwan(:,:,:,:)
+      !spex
+      type(FermionicField)                  :: Smats_GoWo_read
+      real(8)                               :: axispoint,RealS,ImagS
+      real(8)                               :: axispoint_prev
+      integer                               :: ik_spex,Nspin_spex
+      integer                               :: ib_sigma1,ib_sigma2,ispin_spex
+      integer                               :: Nfreq_old,ib_read
+      character(len=10)                     :: comment
+      type(OldBeta)                         :: Beta_Match
+      complex(8),allocatable                :: Vxc(:,:,:,:)
+      !
+      !
+      write(*,"(A)") new_line("A")//new_line("A")//"---- read_Sigma_spex_Julich"
+      pathOUTPUT_ = pathINPUT
+      if(present(pathOUTPUT)) pathOUTPUT_ = pathOUTPUT
+      !
+      !
+      ! Check on the input Fields
+      if(.not.Smats_GoWo%status) stop "read_Sigma_spex_Julich: FermionicField not properly initialized."
+      if(.not.Lttc%status) stop "read_Sigma_spex_Julich: Lattice container not properly initialized."
+      if(Lttc%Nkpt.ne.Smats_GoWo%Nkpt) stop "read_Sigma_spex_Julich: Lattice has different number of k-points with respect to Smats_GoWo."
+      !
+      Norb = Smats_GoWo%Norb
+      Nkpt = Smats_GoWo%Nkpt
+      Nmats = Smats_GoWo%Npoints
+      !
+      allocate(Vxc(Norb,Norb,Nkpt,Nspin));Vxc=czero
+      !
+      allocate(wmats(Smats_GoWo%Npoints));wmats=0d0
+      wmats = FermionicFreqMesh(Smats_GoWo%Beta,Smats_GoWo%Npoints)
+      !
+      ! Read XEPS data
+      if(.not.XEPSisread)then
+         path = reg(pathINPUT)//"XEPS.DAT"
+         call inquireFile(reg(path),filexists,verb=verbose)
+         call read_xeps(reg(path),Lttc%kpt,Lttc%Nkpt3,UseXepsKorder, &
+         Lttc%kptPos,Lttc%Nkpt_irred,Lttc%UseDisentangledBS,Lttc%iq_gamma,paramagneticSPEX)
+      endif
+      !
+      ! Check if the data on the Matsubara axis are present if(.not.paramagneticSPEX) look also for spin2
+      path = reg(pathOUTPUT_)//"SGoWo_w_k_s1.DAT"
+      call inquireFile(reg(path),interpdone,hardstop=.false.,verb=verbose)
+      recompute_ = .not.interpdone
+      if(present(recompute)) recompute_ = recompute .or. recompute_
+      !
+      ! Check if the Vxc_wann is present
+      path = reg(pathINPUT)//"Vxc_k_s1.DAT"
+      call inquireFile(reg(path),Vxcdone,hardstop=.false.,verb=verbose)
+      doVxc = .not.Vxcdone
+      !
+      !
+      if(doVxc.and.(.not.recompute_))then
+         write(*,"(A)")"     Sorry but I can't produce Vxc_wann without reading the self-energy (internal band indexes needed)."
+         write(*,"(A)")"     Analytic continuation will be perforemd anyway."
+         recompute_ = .true.
+      endif
+      !
+      !
+      ! Perform cnalytical continuation on the self-energy on the real axis
+      if(recompute_)then
+         !
+         !---------------------------------------------------------------------!
+         !
+         write(*,"(A)")"     Reading SPEX self-energy on the imaginary axis."
+         !
+         ! Read UWAN file
+         if(Lttc%UseDisentangledBS)then
+            path = reg(pathINPUT)//"UWAN_NEW.DAT"
+         else
+            path = reg(pathINPUT)//"UWAN.DAT"
+         endif
+         call inquireFile(reg(path),filexists,verb=verbose)
+         write(*,"(A)") "     Opening "//reg(path)
+         unit = free_unit()
+         open(unit,file=reg(path),form="unformatted",action="read",position="rewind")
+         read(unit) Nspin_Uwan,Nkpt_Uwan,ib_Uwan1,ib_Uwan2,Norb_Uwan
+         if(paramagneticSPEX.and.(Nspin_Uwan.ne.1)) stop "read_Sigma_spex_Julich: UWAN file is not paramagnetic."
+         if(Nkpt_Uwan.ne.Nkpt) stop "read_Sigma_spex_Julich: UWAN file has wrong number of k-points (not irreducible)."
+         if(Norb_Uwan.ne.Norb) stop "read_Sigma_spex_Julich: UWAN file has wrong orbital dimension."
+         write(*,"(A,2I4)") "     The band indexes in the "//reg(path)//" rotation are: ",ib_Uwan1,ib_Uwan2
+         allocate(Uwan(ib_Uwan1:ib_Uwan2,Norb,Nkpt,Nspin_Uwan))
+         do ispin=1,Nspin_Uwan
+            do ik=1,Nkpt
+               read(unit) Uwan(:,:,ik,ispin)
+            enddo
+         enddo
+         close(unit)
+         !
+         !In disentangled case only UWAN_NEW(ib_wan1:ib_wan1+nbasis-1,ibwan1:ibwan1+nbasis-1) is non-zero
+         if(Lttc%UseDisentangledBS) ib_Uwan2 = ib_Uwan1 + Norb-1
+         !
+         ! Look for the Number of Sigma files and internal consistency.
+         Nspin_spex = Nspin
+         if(paramagneticSPEX) Nspin_spex = 1
+         do ifile=1,Norb*Nkpt*Nspin_spex
+            !
+            path = reg(pathINPUT)//"Sigma_imag/spex.sew."//str(ifile-1,3)
+            if(verbose)write(*,"(A)") "     Checking "//reg(path)
+            call inquireFile(reg(path),filexists,verb=verbose)
+            !
+            unit = free_unit()
+            open(unit,file=reg(path),form="formatted",action="read",position="rewind")
+            call skip_header(unit,5)
+            !
+            ierr=0
+            Nfreq=1
+            do while (ierr.eq.0)
+               read(unit,*,iostat=ierr) axispoint,RealS,ImagS
+               if((Nfreq.gt.1).and.(axispoint.ge.0d0).and.(axispoint.ne.axispoint_prev)) Nfreq = Nfreq + 1
+               axispoint_prev = axispoint
+            enddo
+            close(unit)
+            !
+            if(verbose.or.(ifile.eq.1))then
+               write(*,"(A,1I6)") "     The number frequency points in the file number "//str(ifile-1,3)//" is: ",Nfreq
+            endif
+            !
+            if(Nfreq.ne.Nfreq_old) stop "read_Sigma_spex_Julich: Nfreq does not match among different files."
+            Nfreq_old = Nfreq
+            !
+         enddo
+         write(*,"(A)")"     All the SPEX self-energy files have been found."
+         !
+         !reading the self-energy
+         allocate(wread(Nfreq));wread=0d0
+         call AllocateFermionicField(Smats_GoWo_read,Norb,Nfreq,Nkpt=Nkpt)
+         ifile=0
+         do ispin=1,Nspin_spex
+            do ik=1,Nkpt
+               do iwan1=1,Norb
+                  !
+                  path = reg(pathINPUT)//"Sigma_imag/spex.sew."//str(ifile,3)
+                  if(verbose)write(*,"(A)") "     Reading "//reg(path)
+                  call inquireFile(reg(path),filexists,verb=verbose)
+                  !
+                  unit = free_unit()
+                  open(unit,file=reg(path),form="formatted",action="read",position="rewind")
+                  read(unit,*) !# Expectation value of the self-energy on the imaginary frequency axis.
+                  read(unit,*) !#
+                  read(unit,"(1A10,2I)") comment,ik_spex,ispin_spex
+                  read(unit,"(1A10,2I)") comment,ib_read
+                  read(unit,*)
+                  !
+                  if(ifile.eq.0) ib_sigma1 = ib_read
+                  if(ifile.eq.(Nkpt*Norb-1)) ib_sigma2 = ib_read
+                  if(ik.ne.ik_spex) stop "read_Sigma_spex_Julich: K-point index in SPEX not match the expected index."
+                  if(ispin.ne.ispin_spex) stop "read_Sigma_spex_Julich: spin index in SPEX not match the expected index."
+                  if(paramagneticSPEX.and.(ispin_spex.gt.1)) stop "read_Sigma_spex_Julich: Spex self-energy file is not paramagnetic."
+                  !
+                  ierr=0
+                  iw=1
+                  do while (ierr.eq.0)
+                     read(unit,*,iostat=ierr) axispoint,RealS,ImagS
+                     if((iw.gt.1).and.(axispoint.ge.0d0).and.(axispoint.ne.axispoint_prev))then
+                        wread(iw) = axispoint * H2eV
+                        Smats_GoWo_read%wks(iwan1,iwan1,iw,ik,ispin) = dcmplx(RealS,ImagS) * H2eV
+                        iw = iw + 1
+                     endif
+                     axispoint_prev = axispoint
+                  enddo
+                  close(unit)
+                  !
+                  ifile = ifile + 1
+                  !
+               enddo
+            enddo
+            if(ib_sigma1.gt.ib_Uwan1) stop "read_Sigma_spex_Julich: ib_sigma1>ib_Uwan1"
+            if(ib_sigma2.lt.ib_Uwan2) stop "read_Sigma_spex_Julich: ib_sigma2<ib_Uwan2"
+            if(abs(ib_sigma2-ib_sigma1).ne.Norb) stop "read_Sigma_spex_Julich: orbital indexes in SPEX does not match the orbital space."
+            write(*,"(A,2I4)") "     The band indexes in the SPEX self-energy are: ",ib_sigma1,ib_sigma2
+         enddo
+         if(paramagneticSPEX) Smats_GoWo_read%wks(:,:,:,:,Nspin) = Smats_GoWo_read%wks(:,:,:,:,1)
+         !
+         !Interpolate to the target beta
+         write(*,"(A)")"     Interpolating to current beta."
+         Beta_Match%Nmats_old = Nfreq
+         Beta_Match%Nmats_new = Nmats
+         Beta_Match%Beta_new = Smats_GoWo%Beta
+         call interpolate2Beta_Fermionic(Smats_GoWo_read,Beta_Match,"lat",.false.,wmats_in=wread)
+         deallocate(wread)
+         !
+         !Transform to Wannier basis
+         call clear_attributes(Smats_GoWo)
+         !Sigma=sigmax+sigmac and transform to Wannier basis
+         do ispin_spex=1,Nspin_spex
+            !$OMP PARALLEL DEFAULT(NONE),&
+            !$OMP SHARED(ispin_spex,Nkpt,Nmats,Uwan,Smats_GoWo_read,Smats_GoWo),&
+            !$OMP PRIVATE(ik,iw)
+            !$OMP DO
+            do ik=1,Nkpt
+               do iw=1,Nmats
+                  Smats_GoWo%wks(:,:,iw,ik,ispin_spex) = rotate(Smats_GoWo_read%wks(:,:,iw,ik,ispin_spex),Uwan(:,:,ik,ispin_spex))
+               enddo
+            enddo
+            !$OMP END DO
+            !$OMP END PARALLEL
+         enddo
+         deallocate(Uwan)
+         call DeallocateFermionicField(Smats_GoWo_read)
+         if(paramagneticSPEX) Smats_GoWo%wks(:,:,:,:,Nspin) = Smats_GoWo%wks(:,:,:,:,1)
+         !
+         call FermionicKsum(Smats_GoWo)
+         !
+         ! Print out the transformed stuff
+         call dump_FermionicField(Smats_GoWo,reg(pathOUTPUT_),"SGoWo_w",.true.,Lttc%kpt,paramagneticSPEX)
+         if(save2readable)call dump_FermionicField(Smats_GoWo,reg(pathOUTPUT_)//"Sigma_imag/","SGoWo_w",.false.,Lttc%kpt,paramagneticSPEX)
+         !
+         ! Read the Vxc and print it out
+         if(doVxc)then
+            call read_Vxc(Vxc,Lttc,ib_sigma1,ib_sigma2,save2readable)
+         else
+            write(*,"(A)")"     Reading Vxc(k) from "//reg(pathINPUT)
+            call read_matrix(Vxc(:,:,:,1),reg(pathINPUT)//"Vxc_k_s1.DAT")
+            if(paramagneticSPEX)then
+               Vxc(:,:,:,2) = Vxc(:,:,:,1)
+            else
+               call read_matrix(Vxc(:,:,:,2),reg(pathINPUT)//"Vxc_k_s2.DAT")
+            endif
+         endif
+         !
+         !---------------------------------------------------------------------!
+         !
+      else
+         !
+         !---------------------------------------------------------------------!
+         !
+         ! Just read all
+         write(*,"(A)")"     Reading SigmaGoWo(k,iw) from "//reg(pathOUTPUT_)//"SGoWo_w_k_s[1,2].DAT"
+         call clear_attributes(Smats_GoWo)
+         call read_FermionicField(Smats_GoWo,reg(pathOUTPUT_),"SGoWo_w",Lttc%kpt)
+         call FermionicKsum(Smats_GoWo)
+         !
+         write(*,"(A)")"     Reading Vxc(k) from "//reg(pathINPUT)
+         call read_matrix(Vxc(:,:,:,1),reg(pathINPUT)//"Vxc_k_s1.DAT")
+         if(paramagneticSPEX)then
+            Vxc(:,:,:,2) = Vxc(:,:,:,1)
+         else
+            call read_matrix(Vxc(:,:,:,2),reg(pathINPUT)//"Vxc_k_s2.DAT")
+         endif
+         !
+         !
+      endif
+      !
+      ! Provide output
+      if(present(Vxc_out))then
+         !
+         write(*,"(A)")"     SigmaGoWo(k,iw) and  Vxc(k) are provided separately."
+         Vxc_out = Vxc
+         !
+      else
+         !
+         write(*,"(A)")"     SigmaGoWo(k,iw)-Vxc(k) is provided in the Fermionic Field."
+         do iw=1,Nmats
+            Smats_GoWo%wks(:,:,iw,:,:) = Smats_GoWo%wks(:,:,iw,:,:) - Vxc
+         enddo
+         call FermionicKsum(Smats_GoWo)
+         !
+      endif
+      !
+   end subroutine read_Sigma_spex_Julich
 
 
    !---------------------------------------------------------------------------!
    !PURPOSE: Read the exchange potential from gwa file.
-   !TEST ON: 27-10-2020
    !---------------------------------------------------------------------------!
    subroutine read_Vxc(Vxc,Lttc,ib_sigma1,ib_sigma2,save2readable)
       !
@@ -1492,8 +1801,8 @@ contains
       !
       !
       Vxc=czero
-      ! Transform to wannier basis
-      !Sigma=sigmax+sigmac and transform to wannier basis
+      ! Transform to Wannier basis
+      !Sigma=sigmax+sigmac and transform to Wannier basis
       !$OMP PARALLEL DEFAULT(NONE),&
       !$OMP SHARED(paramagneticSPEX,Norb,Nkpt,ib_Uwan1,ib_Uwan2,Lttc,Uwan,vxc_diag,Vxc),&
       !$OMP PRIVATE(ispin,ispin_spex,iwan1,iwan2)
@@ -1531,5 +1840,175 @@ contains
       deallocate(Vxc_loc)
       !
    end subroutine read_vxc
+
+
+   !---------------------------------------------------------------------------!
+   !PURPOSE: Interpolate to a new frequency mesh a Fermionic field
+   !         copied from post_processing.f90
+   !---------------------------------------------------------------------------!
+   subroutine interpolate2Beta_Fermionic(G,Beta_Match,mode,offDiag,wmats_in)
+      !
+      use parameters
+      use utils_misc
+      use utils_fields
+      use interactions
+      use input_vars, only: Nsite, SiteNorb, SiteOrbs
+      implicit none
+      !
+      type(FermionicField),intent(inout)    :: G
+      type(OldBeta),intent(in)              :: Beta_Match
+      character(len=*),intent(in)           :: mode
+      logical,intent(in)                    :: offDiag
+      real(8),intent(in),optional           :: wmats_in(:)
+      !
+      type(FermionicField)                  :: G_old
+      integer                               :: isite,ik,iw
+      integer                               :: i,j,ispin
+      integer                               :: i_lat,j_lat
+      logical                               :: LocalOnly,replace
+      real(8),allocatable                   :: wmats_new(:),wmats_old(:)
+      real(8),allocatable                   :: ReGf(:),ImGf(:)
+      real(8),allocatable                   :: ReD(:),ImD(:)
+      !
+      !
+      if(verbose)write(*,"(A)") "---- interpolate2Beta_Fermionic"
+      !
+      !
+      if(.not.G%status) stop "interpolate2Beta_Fermionic: FermionicField not properly initialized."
+      if(G%Beta.ne.Beta_Match%Beta_old) stop "interpolate2Beta_Fermionic: Fermionic field Beta is different from the expected one."
+      if(G%Npoints.ne.Beta_Match%Nmats_old) stop "interpolate2Beta_Fermionic: Fermionic field Npoints is different from the expected one."
+      !
+      LocalOnly=.true.
+      if(G%Nkpt.ne.0)LocalOnly=.false.
+      !
+      allocate(wmats_new(Beta_Match%Nmats_new)); wmats_new=BosonicFreqMesh(Beta_Match%Beta_new,Beta_Match%Nmats_new)
+      if(present(wmats_in))then
+         wmats_old = wmats_in
+      else
+         allocate(wmats_old(Beta_Match%Nmats_old)); wmats_old=BosonicFreqMesh(Beta_Match%Beta_old,Beta_Match%Nmats_old)
+      endif
+      !
+      call duplicate(G_old,G)
+      call DeallocateFermionicField(G)
+      call AllocateFermionicField(G,G_old%Norb,Beta_Match%Nmats_new,Nkpt=G_old%Nkpt,Nsite=G_old%Nsite,Beta=Beta_Match%Beta_new,mu=G_old%mu)
+      !
+      select case(reg(mode))
+         case default
+            !
+            stop "interpolate2Beta_Fermionic: Available Modes are: imp, lat."
+            !
+         case("imp")
+            !
+            allocate(ReD(Beta_Match%Nmats_old)) ;allocate(ImD(Beta_Match%Nmats_old))
+            allocate(ReGf(Beta_Match%Nmats_new));allocate(ImGf(Beta_Match%Nmats_new))
+            !
+            !$OMP PARALLEL DEFAULT(NONE),&
+            !$OMP SHARED(G,G_old,Nsite,SiteNorb,SiteOrbs),&
+            !$OMP SHARED(Beta_Match,offDiag,wmats_new,wmats_old),&
+            !$OMP PRIVATE(ispin,isite,i,j,i_lat,j_lat,replace,iw,ReD,ReGf,ImD,ImGf)
+            !$OMP DO
+            do isite=1,Nsite
+               !
+               do i=1,SiteNorb(isite)
+                  do j=1,SiteNorb(isite)
+                     !
+                     i_lat = SiteOrbs(isite,i)
+                     j_lat = SiteOrbs(isite,j)
+                     !
+                     replace = i_lat.eq.j_lat
+                     if(offDiag) replace = .true.
+                     !
+                     if(replace)then
+                        !
+                        do ispin=1,Nspin
+                           ReD=0d0;ImD=0d0;ReGf=0d0;ImGf=0d0
+                           call nspline(wmats_old, real(G_old%ws(i_lat,j_lat,:,ispin)),ReD)
+                           call nspline(wmats_old,aimag(G_old%ws(i_lat,j_lat,:,ispin)),ImD)
+                           do iw=1,Beta_Match%Nmats_new
+                              call splint(wmats_old, real(G_old%ws(i_lat,j_lat,:,ispin)),ReD,wmats_new(iw),ReGf(iw))
+                              call splint(wmats_old,aimag(G_old%ws(i_lat,j_lat,:,ispin)),ImD,wmats_new(iw),ImGf(iw))
+                           enddo
+                           do iw=1,Beta_Match%Nmats_new
+                              G%ws(i_lat,j_lat,iw,ispin) = dcmplx(ReGf(iw),ImGf(iw))
+                           enddo
+                        enddo
+                        !
+                     endif
+                     !
+                  enddo
+               enddo
+               !
+            enddo
+            !$OMP END DO
+            !$OMP END PARALLEL
+            deallocate(ReD,ImD,ReGf,ImGf)
+            call DeallocateFermionicField(G_old)
+            !
+         case("lat")
+            !
+            allocate(ReD(Beta_Match%Nmats_old)) ;allocate(ImD(Beta_Match%Nmats_old))
+            allocate(ReGf(Beta_Match%Nmats_new));allocate(ImGf(Beta_Match%Nmats_new))
+            !
+            !
+            !$OMP PARALLEL DEFAULT(NONE),&
+            !$OMP SHARED(G,G_old,LocalOnly),&
+            !$OMP SHARED(Beta_Match,offDiag,wmats_new,wmats_old),&
+            !$OMP PRIVATE(ispin,i,j,i_lat,j_lat,replace,iw,ik,ReD,ReGf,ImD,ImGf)
+            !$OMP DO
+            do i_lat=1,G%Norb
+               do j_lat=1,G%Norb
+                  !
+                  replace = i_lat.eq.j_lat
+                  if(offDiag) replace = .true.
+                  !
+                  if(replace)then
+                     !
+                     do ispin=1,Nspin
+                        !
+                        if(LocalOnly)then
+                           !
+                           ReD=0d0;ImD=0d0;ReGf=0d0;ImGf=0d0
+                           call nspline(wmats_old, real(G_old%ws(i_lat,j_lat,:,ispin)),ReD)
+                           call nspline(wmats_old,aimag(G_old%ws(i_lat,j_lat,:,ispin)),ImD)
+                           do iw=1,Beta_Match%Nmats_new
+                              call splint(wmats_old, real(G_old%ws(i_lat,j_lat,:,ispin)),ReD,wmats_new(iw),ReGf(iw))
+                              call splint(wmats_old,aimag(G_old%ws(i_lat,j_lat,:,ispin)),ImD,wmats_new(iw),ImGf(iw))
+                           enddo
+                           do iw=1,Beta_Match%Nmats_new
+                              G%ws(i_lat,j_lat,iw,ispin) = dcmplx(ReGf(iw),ImGf(iw))
+                           enddo
+                           !
+                        else
+                           !
+                           do ik=1,G%Nkpt
+                              ReD=0d0;ImD=0d0;ReGf=0d0;ImGf=0d0
+                              call nspline(wmats_old, real(G_old%wks(i_lat,j_lat,:,ik,ispin)),ReD)
+                              call nspline(wmats_old,aimag(G_old%wks(i_lat,j_lat,:,ik,ispin)),ImD)
+                              do iw=1,Beta_Match%Nmats_new
+                                 call splint(wmats_old, real(G_old%wks(i_lat,j_lat,:,ik,ispin)),ReD,wmats_new(iw),ReGf(iw))
+                                 call splint(wmats_old,aimag(G_old%wks(i_lat,j_lat,:,ik,ispin)),ImD,wmats_new(iw),ImGf(iw))
+                              enddo
+                              do iw=1,Beta_Match%Nmats_new
+                                 G%wks(i_lat,j_lat,iw,ik,ispin) = dcmplx(ReGf(iw),ImGf(iw))
+                              enddo
+                           enddo
+                           !
+                        endif
+                        !
+                     enddo
+                     !
+                  endif
+                  !
+               enddo
+            enddo
+            !$OMP END DO
+            !$OMP END PARALLEL
+            deallocate(ReD,ImD,ReGf,ImGf)
+            call DeallocateFermionicField(G_old)
+            if(.not.LocalOnly) call FermionicKsum(G)
+            !
+      end select
+      !
+   end subroutine interpolate2Beta_Fermionic
 
 end module self_energy

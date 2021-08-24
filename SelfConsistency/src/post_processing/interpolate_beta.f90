@@ -1,4 +1,4 @@
-subroutine interpolate2Beta_Fermionic(G,Beta_Match,mode,offDiag)
+subroutine interpolate2Beta_Fermionic(G,Beta_Match,mode,offDiag,wmats_in)
    !
    use parameters
    use utils_misc
@@ -11,6 +11,7 @@ subroutine interpolate2Beta_Fermionic(G,Beta_Match,mode,offDiag)
    type(OldBeta),intent(in)              :: Beta_Match
    character(len=*),intent(in)           :: mode
    logical,intent(in)                    :: offDiag
+   real(8),intent(in),optional           :: wmats_in(:)
    !
    type(FermionicField)                  :: G_old
    integer                               :: isite,ik,iw
@@ -33,7 +34,11 @@ subroutine interpolate2Beta_Fermionic(G,Beta_Match,mode,offDiag)
    if(G%Nkpt.ne.0)LocalOnly=.false.
    !
    allocate(wmats_new(Beta_Match%Nmats_new)); wmats_new=BosonicFreqMesh(Beta_Match%Beta_new,Beta_Match%Nmats_new)
-   allocate(wmats_old(Beta_Match%Nmats_old)); wmats_old=BosonicFreqMesh(Beta_Match%Beta_old,Beta_Match%Nmats_old)
+   if(present(wmats_in))then
+      wmats_old = wmats_in
+   else
+      allocate(wmats_old(Beta_Match%Nmats_old)); wmats_old=BosonicFreqMesh(Beta_Match%Beta_old,Beta_Match%Nmats_old)
+   endif
    !
    call duplicate(G_old,G)
    call DeallocateFermionicField(G)
@@ -158,7 +163,7 @@ subroutine interpolate2Beta_Fermionic(G,Beta_Match,mode,offDiag)
    !
 end subroutine interpolate2Beta_Fermionic
 
-subroutine interpolate2Beta_Bosonic(W,Beta_Match,mode,offDiag)
+subroutine interpolate2Beta_Bosonic(W,Beta_Match,mode,offDiag,wmats_in)
    !
    use parameters
    use utils_misc
@@ -171,6 +176,7 @@ subroutine interpolate2Beta_Bosonic(W,Beta_Match,mode,offDiag)
    type(OldBeta),intent(in)              :: Beta_Match
    character(len=*),intent(in)           :: mode
    logical,intent(in)                    :: offDiag
+   real(8),intent(in),optional           :: wmats_in(:)
    !
    type(BosonicField)                    :: W_old
    integer                               :: Norb
@@ -197,7 +203,11 @@ subroutine interpolate2Beta_Bosonic(W,Beta_Match,mode,offDiag)
    if(W%Nkpt.ne.0)LocalOnly=.false.
    !
    allocate(wmats_new(Beta_Match%Nmats_new)); wmats_new=BosonicFreqMesh(Beta_Match%Beta_new,Beta_Match%Nmats_new)
-   allocate(wmats_old(Beta_Match%Nmats_old)); wmats_old=BosonicFreqMesh(Beta_Match%Beta_old,Beta_Match%Nmats_old)
+   if(present(wmats_in))then
+      wmats_old = wmats_in
+   else
+      allocate(wmats_old(Beta_Match%Nmats_old)); wmats_old=BosonicFreqMesh(Beta_Match%Beta_old,Beta_Match%Nmats_old)
+   endif
    !
    call duplicate(W_old,W)
    call DeallocateBosonicField(W)

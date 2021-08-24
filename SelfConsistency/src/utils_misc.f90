@@ -96,6 +96,7 @@ module utils_misc
    public :: inquireFile
    public :: inquireDir
    public :: createDir
+   public :: skip_header
    public :: check_Hermiticity
    public :: check_Symmetry
    public :: assert_shape
@@ -162,7 +163,6 @@ contains
 
    !---------------------------------------------------------------------------!
    !PURPOSE: Calculates the fermi-dirac distribution f(e)
-   !TEST ON: 14-10-2020
    !---------------------------------------------------------------------------!
    double precision function fermidirac_shifted(e,mu,beta)
       implicit none
@@ -245,7 +245,6 @@ contains
 
    !---------------------------------------------------------------------------!
    !PURPOSE: Energy derivative of fermi-dirac dist
-   !TEST ON: 14-10-2020
    !---------------------------------------------------------------------------!
    double precision function diff_fermidirac(e,efermi,beta)
       implicit none
@@ -338,7 +337,6 @@ contains
 
    !---------------------------------------------------------------------------!
    !PURPOSE: analogous of python numpy.linspace
-   !TEST ON: 14-10-2020
    !---------------------------------------------------------------------------!
    function linspace(start,stop,num,istart,iend,mesh) result(array)
       implicit none
@@ -392,7 +390,6 @@ contains
    ! beta and tau are in atomic unit.
    ! nseg = number of segments, must be even.
    ! nsimp fixed to 2
-   !TEST ON: 14-10-2020
    !---------------------------------------------------------------------------!
    function denspace(end,num,center) result(array)
       implicit none
@@ -444,7 +441,6 @@ contains
 
    !---------------------------------------------------------------------------!
    !PURPOSE: Regularize string
-   !TEST ON: 14-10-2020
    !---------------------------------------------------------------------------!
    function reg(string_in) result(string_out)
       implicit none
@@ -456,7 +452,6 @@ contains
 
    !---------------------------------------------------------------------------!
    !PURPOSE: Looks for a free unit
-   !TEST ON: 14-10-2020
    !---------------------------------------------------------------------------!
    function free_unit(n) result(unit_)
       implicit none
@@ -476,7 +471,6 @@ contains
 
    !---------------------------------------------------------------------------!
    !PURPOSE: Returns time in seconds from now to time described by t
-   !TEST ON: 14-10-2020
    !---------------------------------------------------------------------------!
    subroutine tick(t)
       integer, intent(out)                  :: t
@@ -492,7 +486,6 @@ contains
 
    !---------------------------------------------------------------------------!
    !PURPOSE: Returns true if a file/directory exists
-   !TEST ON: 14-10-2020
    !---------------------------------------------------------------------------!
    subroutine inquireFile(file,exists,hardstop,verb)
       implicit none
@@ -539,7 +532,6 @@ contains
 
    !---------------------------------------------------------------------------!
    !PURPOSE: Creat directory in path
-   !TEST ON: 14-10-2020
    !---------------------------------------------------------------------------!
    subroutine createDir(dirpath,verb)
       implicit none
@@ -564,8 +556,26 @@ contains
 
 
    !---------------------------------------------------------------------------!
+   !PURPOSE: advance the read record of file
+   !---------------------------------------------------------------------------!
+   subroutine skip_header(unit,skips)
+      implicit none
+      integer,intent(in)                    :: unit,skips
+      integer                               :: iskip
+      logical                               :: itsopen=.false.
+      inquire(unit=unit, opened=itsopen)
+      if(itsopen)then
+         do iskip=1,skips
+            read(unit,*)
+         enddo
+      else
+         stop "skip_header: requested unit does not correspond to file."
+      endif
+   end subroutine skip_header
+
+
+   !---------------------------------------------------------------------------!
    !PURPOSE: Check if matrix is Hermitian
-   !TEST ON: 21-10-2020
    !---------------------------------------------------------------------------!
    subroutine check_Hermiticity(A,tol,enforce,hardstop,name,verb)
       implicit none
@@ -1443,7 +1453,6 @@ contains
    !    q = k, x = mesh with x(i) = [x(i-1) + x(i+1)]/2
    ! 2) Make sure that each segment is divided into two EQUAL segments.
    ! 3) The weights for cos and sin integration are in wcos and wsin.
-   !TEST ON: 16-10-2020
    !---------------------------------------------------------------------------!
    subroutine FermionicFilon(q,x,fx,wcos,wsin)
       implicit none
@@ -1622,7 +1631,6 @@ contains
    !    q = k, x = mesh with x(i) = [x(i-1) + x(i+1)]/2
    ! 2) Make sure that each segment is divided into two EQUAL segments.
    ! 3) The weights for cos and sin integration are in wcos and wsin.
-   !TEST ON: 21-10-2020
    !---------------------------------------------------------------------------!
    subroutine BosonicFilon(q,x,wcos,wsin)
       implicit none
@@ -1642,8 +1650,7 @@ contains
       !
       wcos=0d0;wsin=0d0
       !
-      if(dabs(q).lt.1.d-2) then
-      !if(dabs(q).lt.1.d-4) then
+      if(dabs(q).lt.1.d-2) then!if(dabs(q).lt.1.d-4) then
          !
          !Small q
          do n=1,nseg
@@ -1873,7 +1880,6 @@ contains
 
    !---------------------------------------------------------------------------!
    !PURPOSE: Routines for the str interface
-   !TEST ON: 14-10-2020
    !---------------------------------------------------------------------------!
    function str_i_to_ch(i4) result(string)
      integer                      :: i4
