@@ -493,7 +493,7 @@ contains
          calc_Sguess=.false.
          calc_Pguess=.false.
       endif
-      call parse_input_variable(GoWoDC_loc,"G0W0DC_LOC",InputFile,default=.true.,comment="Keep the local contribution of tier 3. Automatically removed if non-causal.")
+      call parse_input_variable(GoWoDC_loc,"G0W0DC_LOC",InputFile,default=.true.,comment="Keep the local contribution of Tier-III. Automatically removed if non-causal.")
       call parse_input_variable(alphaChi,"ALPHA_CHI",InputFile,default=1d0,comment="Rescaling factor for the local charge susceptibility.")
       call parse_input_variable(alphaPi,"ALPHA_PI",InputFile,default=1d0,comment="Fraction of the EDMFT polarization substituted within the lattice one.")
       call parse_input_variable(alphaSigma,"ALPHA_SIGMA",InputFile,default=1d0,comment="Fraction of the EDMFT self-energy substituted within the lattice one.")
