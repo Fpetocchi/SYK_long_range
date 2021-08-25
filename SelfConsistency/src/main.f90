@@ -175,6 +175,7 @@ program SelfConsistency
                call duplicate(S_G0W0,S_G0W0dc)
             else
                !Store the Dc between G0W0 and scGW self-energies and use G0W0 as self-energy for the first iteration because the DC is equal to scGW
+               !Add corrected DC
                call dump_FermionicField(S_G0W0dc,reg(ItFolder),"SGoWo_dc_w",.true.,Crystal%kpt,paramagnet)
                call dump_FermionicField(S_G0W0dc,reg(ItFolder),"SGoWo_dc_w",paramagnet)
                call DeallocateFermionicField(S_G0W0dc)

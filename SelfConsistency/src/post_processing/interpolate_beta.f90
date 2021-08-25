@@ -33,11 +33,11 @@ subroutine interpolate2Beta_Fermionic(G,Beta_Match,mode,offDiag,wmats_in)
    LocalOnly=.true.
    if(G%Nkpt.ne.0)LocalOnly=.false.
    !
-   allocate(wmats_new(Beta_Match%Nmats_new)); wmats_new=BosonicFreqMesh(Beta_Match%Beta_new,Beta_Match%Nmats_new)
+   allocate(wmats_new(Beta_Match%Nmats_new)); wmats_new=FermionicFreqMesh(Beta_Match%Beta_new,Beta_Match%Nmats_new)
    if(present(wmats_in))then
       wmats_old = wmats_in
    else
-      allocate(wmats_old(Beta_Match%Nmats_old)); wmats_old=BosonicFreqMesh(Beta_Match%Beta_old,Beta_Match%Nmats_old)
+      allocate(wmats_old(Beta_Match%Nmats_old)); wmats_old=FermionicFreqMesh(Beta_Match%Beta_old,Beta_Match%Nmats_old)
    endif
    !
    call duplicate(G_old,G)

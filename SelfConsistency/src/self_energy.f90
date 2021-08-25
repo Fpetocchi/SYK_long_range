@@ -1462,7 +1462,7 @@ contains
             Nfreq=0
             do while (ierr.eq.0)
                read(unit,*,iostat=ierr) axispoint,RealS,ImagS
-               if((axispoint.ge.0d0).and.(axispoint.ne.axispoint_prev)) Nfreq = Nfreq + 1
+               if((axispoint.gt.0d0).and.(axispoint.ne.axispoint_prev)) Nfreq = Nfreq + 1
                axispoint_prev = axispoint
             enddo
             close(unit)
@@ -1507,7 +1507,7 @@ contains
                   iw=1
                   do while (ierr.eq.0)
                      read(unit,*,iostat=ierr) axispoint,RealS,ImagS
-                     if((axispoint.ge.0d0).and.(axispoint.ne.axispoint_prev))then
+                     if((axispoint.gt.0d0).and.(axispoint.ne.axispoint_prev))then
                         wread(iw) = axispoint * H2eV
                         Smats_GoWo_C%wks(iwan1,iwan1,iw,ik,ispin) = dcmplx(RealS,ImagS) * H2eV
                         iw = iw + 1
@@ -1935,11 +1935,11 @@ contains
       LocalOnly=.true.
       if(G%Nkpt.ne.0)LocalOnly=.false.
       !
-      allocate(wmats_new(Beta_Match%Nmats_new)); wmats_new=BosonicFreqMesh(Beta_Match%Beta_new,Beta_Match%Nmats_new)
+      allocate(wmats_new(Beta_Match%Nmats_new)); wmats_new=FermionicFreqMesh(Beta_Match%Beta_new,Beta_Match%Nmats_new)
       if(present(wmats_in))then
          wmats_old = wmats_in
       else
-         allocate(wmats_old(Beta_Match%Nmats_old)); wmats_old=BosonicFreqMesh(Beta_Match%Beta_old,Beta_Match%Nmats_old)
+         allocate(wmats_old(Beta_Match%Nmats_old)); wmats_old=FermionicFreqMesh(Beta_Match%Beta_old,Beta_Match%Nmats_old)
       endif
       !
       call duplicate(G_old,G)
