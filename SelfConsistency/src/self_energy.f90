@@ -1459,7 +1459,7 @@ contains
             call skip_header(unit,5)
             !
             ierr=0
-            Nfreq=1
+            Nfreq=0
             do while (ierr.eq.0)
                read(unit,*,iostat=ierr) axispoint,RealS,ImagS
                if((axispoint.ge.0d0).and.(axispoint.ne.axispoint_prev)) Nfreq = Nfreq + 1
@@ -1471,7 +1471,7 @@ contains
                write(*,"(A,1I6)") "     The number frequency points in the file number "//str(ifile-1,3)//" is: ",Nfreq
             endif
             !
-            if(Nfreq.ne.Nfreq_old) stop "read_Sigma_spex_Julich: Nfreq does not match among different files."
+            if(ifile.gt.1.and.Nfreq.ne.Nfreq_old) stop "read_Sigma_spex_Julich: Nfreq does not match among different files."
             Nfreq_old = Nfreq
             !
          enddo
@@ -1493,8 +1493,8 @@ contains
                   open(unit,file=reg(path),form="formatted",action="read",position="rewind")
                   read(unit,*) !# Expectation value of the self-energy on the imaginary frequency axis.
                   read(unit,*) !#
-                  read(unit,"(1A10,2I)") commentS,ik_spex,ispin_spex
-                  read(unit,"(1A10,2I)") commentS,ib_read
+                  read(unit,"(A,2I5)") commentS,ik_spex,ispin_spex
+                  read(unit,"(A,I)") commentS,ib_read
                   read(unit,*)
                   !
                   if(ifile.eq.0) ib_sigma1 = ib_read
