@@ -1274,7 +1274,7 @@ contains
          !
          ! Read the Vxc and print it out
          if(doVxc)then
-            call read_Vxc(Vxc,Lttc,ib_sigma1,ib_sigma2,save2readable)
+            call read_Vxc_Lund(Vxc,Lttc,ib_sigma1,ib_sigma2,save2readable)
          else
             write(*,"(A)")"     Reading Vxc(k) from "//reg(pathINPUT)
             call read_matrix(Vxc(:,:,:,1),reg(pathINPUT)//"Vxc_k_s1.DAT")
@@ -1347,24 +1347,27 @@ contains
       logical                               :: filexists,interpdone,recompute_,Vxcdone,doVxc
       character(len=256)                    :: path,pathOUTPUT_
       integer                               :: ifile,ierr
-      integer                               :: ik,iw,ispin,iwan1,unit
+      integer                               :: ik,iw,ispin,iwan1,iwan2,unit
       integer                               :: Nkpt,Norb,Nmats,Nfreq
       real(8),allocatable                   :: wread(:),wmats(:)
 
       !Uwan
-      integer                               :: Nspin_Uwan,Nkpt_Uwan
+      integer                               :: Nspin_Uwan,Nkpt_Uwan,Nwan
       integer                               :: ib_Uwan1,ib_Uwan2,Norb_Uwan
       complex(8),allocatable                :: Uwan(:,:,:,:)
       !spex
-      type(FermionicField)                  :: Smats_GoWo_read
+      type(FermionicField)                  :: Smats_GoWo_C
       real(8)                               :: axispoint,RealS,ImagS
       real(8)                               :: axispoint_prev
       integer                               :: ik_spex,Nspin_spex
       integer                               :: ib_sigma1,ib_sigma2,ispin_spex
-      integer                               :: Nfreq_old,ib_read
-      character(len=10)                     :: comment
+      integer                               :: Nfreq_old,ib_read,ik_read
+      character(len=10)                     :: commentS
+      character(len=12)                     :: commentV
       type(OldBeta)                         :: Beta_Match
-      complex(8),allocatable                :: Vxc(:,:,:,:)
+      real(8),allocatable                   :: Vxc_read(:,:,:)
+      real(8),allocatable                   :: Smats_GoWo_X(:,:,:)
+      complex(8),allocatable                :: Vxc(:,:,:,:),Vxc_loc(:,:,:)
       !
       !
       write(*,"(A)") new_line("A")//new_line("A")//"---- read_Sigma_spex_Julich"
@@ -1421,11 +1424,7 @@ contains
          write(*,"(A)")"     Reading SPEX self-energy on the imaginary axis."
          !
          ! Read UWAN file
-         if(Lttc%UseDisentangledBS)then
-            path = reg(pathINPUT)//"UWAN_NEW.DAT"
-         else
-            path = reg(pathINPUT)//"UWAN.DAT"
-         endif
+         path = reg(pathINPUT)//"UWAN.DAT"
          call inquireFile(reg(path),filexists,verb=verbose)
          write(*,"(A)") "     Opening "//reg(path)
          unit = free_unit()
@@ -1443,13 +1442,13 @@ contains
          enddo
          close(unit)
          !
-         !In disentangled case only UWAN_NEW(ib_wan1:ib_wan1+nbasis-1,ibwan1:ibwan1+nbasis-1) is non-zero
-         if(Lttc%UseDisentangledBS) ib_Uwan2 = ib_Uwan1 + Norb-1
+         ! Bands in the energy window used for the disentangling procedure
+         Nwan = abs(ib_Uwan2-ib_Uwan1+1)
          !
          ! Look for the Number of Sigma files and internal consistency.
          Nspin_spex = Nspin
          if(paramagneticSPEX) Nspin_spex = 1
-         do ifile=1,Norb*Nkpt*Nspin_spex
+         do ifile=1,Nwan*Lttc%Nkpt_irred*Nspin_spex
             !
             path = reg(pathINPUT)//"Sigma_imag/spex.sew."//str(ifile-1,3)
             if(verbose)write(*,"(A)") "     Checking "//reg(path)
@@ -1463,7 +1462,7 @@ contains
             Nfreq=1
             do while (ierr.eq.0)
                read(unit,*,iostat=ierr) axispoint,RealS,ImagS
-               if((Nfreq.gt.1).and.(axispoint.ge.0d0).and.(axispoint.ne.axispoint_prev)) Nfreq = Nfreq + 1
+               if((axispoint.ge.0d0).and.(axispoint.ne.axispoint_prev)) Nfreq = Nfreq + 1
                axispoint_prev = axispoint
             enddo
             close(unit)
@@ -1480,11 +1479,11 @@ contains
          !
          !reading the self-energy
          allocate(wread(Nfreq));wread=0d0
-         call AllocateFermionicField(Smats_GoWo_read,Norb,Nfreq,Nkpt=Nkpt)
+         call AllocateFermionicField(Smats_GoWo_C,Nwan,Nfreq,Nkpt=Lttc%Nkpt_irred)
          ifile=0
          do ispin=1,Nspin_spex
-            do ik=1,Nkpt
-               do iwan1=1,Norb
+            do ik=1,Lttc%Nkpt_irred
+               do iwan1=1,Nwan
                   !
                   path = reg(pathINPUT)//"Sigma_imag/spex.sew."//str(ifile,3)
                   if(verbose)write(*,"(A)") "     Reading "//reg(path)
@@ -1494,12 +1493,12 @@ contains
                   open(unit,file=reg(path),form="formatted",action="read",position="rewind")
                   read(unit,*) !# Expectation value of the self-energy on the imaginary frequency axis.
                   read(unit,*) !#
-                  read(unit,"(1A10,2I)") comment,ik_spex,ispin_spex
-                  read(unit,"(1A10,2I)") comment,ib_read
+                  read(unit,"(1A10,2I)") commentS,ik_spex,ispin_spex
+                  read(unit,"(1A10,2I)") commentS,ib_read
                   read(unit,*)
                   !
                   if(ifile.eq.0) ib_sigma1 = ib_read
-                  if(ifile.eq.(Nkpt*Norb-1)) ib_sigma2 = ib_read
+                  if(ifile.eq.(Lttc%Nkpt_irred*Nwan-1)) ib_sigma2 = ib_read
                   if(ik.ne.ik_spex) stop "read_Sigma_spex_Julich: K-point index in SPEX not match the expected index."
                   if(ispin.ne.ispin_spex) stop "read_Sigma_spex_Julich: spin index in SPEX not match the expected index."
                   if(paramagneticSPEX.and.(ispin_spex.gt.1)) stop "read_Sigma_spex_Julich: Spex self-energy file is not paramagnetic."
@@ -1508,9 +1507,9 @@ contains
                   iw=1
                   do while (ierr.eq.0)
                      read(unit,*,iostat=ierr) axispoint,RealS,ImagS
-                     if((iw.gt.1).and.(axispoint.ge.0d0).and.(axispoint.ne.axispoint_prev))then
+                     if((axispoint.ge.0d0).and.(axispoint.ne.axispoint_prev))then
                         wread(iw) = axispoint * H2eV
-                        Smats_GoWo_read%wks(iwan1,iwan1,iw,ik,ispin) = dcmplx(RealS,ImagS) * H2eV
+                        Smats_GoWo_C%wks(iwan1,iwan1,iw,ik,ispin) = dcmplx(RealS,ImagS) * H2eV
                         iw = iw + 1
                      endif
                      axispoint_prev = axispoint
@@ -1523,38 +1522,83 @@ contains
             enddo
             if(ib_sigma1.gt.ib_Uwan1) stop "read_Sigma_spex_Julich: ib_sigma1>ib_Uwan1"
             if(ib_sigma2.lt.ib_Uwan2) stop "read_Sigma_spex_Julich: ib_sigma2<ib_Uwan2"
-            if(abs(ib_sigma2-ib_sigma1).ne.Norb) stop "read_Sigma_spex_Julich: orbital indexes in SPEX does not match the orbital space."
+            if(abs(ib_sigma2-ib_sigma1+1).ne.Nwan) stop "read_Sigma_spex_Julich: wannier dimension in SPEX not match the expected one from UWAN.DAT."
             write(*,"(A,2I4)") "     The band indexes in the SPEX self-energy are: ",ib_sigma1,ib_sigma2
          enddo
-         if(paramagneticSPEX) Smats_GoWo_read%wks(:,:,:,:,Nspin) = Smats_GoWo_read%wks(:,:,:,:,1)
+         if(paramagneticSPEX) Smats_GoWo_C%wks(:,:,:,:,Nspin) = Smats_GoWo_C%wks(:,:,:,:,1)
          !
          !Interpolate to the target beta
          write(*,"(A)")"     Interpolating to current beta."
          Beta_Match%Nmats_old = Nfreq
          Beta_Match%Nmats_new = Nmats
          Beta_Match%Beta_new = Smats_GoWo%Beta
-         call interpolate2Beta_Fermionic(Smats_GoWo_read,Beta_Match,"lat",.false.,wmats_in=wread)
+         call interpolate2Beta_Fermionic(Smats_GoWo_C,Beta_Match,"lat",.false.,wmats_in=wread)
          deallocate(wread)
+         !
+         !read Smats_GoWo_X and Vxc
+         allocate(Vxc_read(Nwan,Lttc%Nkpt_irred,Nspin_spex));Vxc_read=0d0
+         allocate(Smats_GoWo_X(Nwan,Lttc%Nkpt_irred,Nspin_spex));Smats_GoWo_X=0d0
+         !
+         path = reg(pathINPUT)//"Sigma_imag/spex.out"
+         if(verbose)write(*,"(A)") "     Reading "//reg(path)
+         call inquireFile(reg(path),filexists,verb=verbose)
+         !
+         unit = free_unit()
+         open(unit,file=reg(path),form="formatted",action="read",position="rewind")
+         ik=0
+         do while (ierr.eq.0)
+            read(unit,"(1A12,1I,1A10)",iostat=ierr) commentV,ik_read,commentS
+            if(reg(commentV).eq."### K POINT:")then
+               ik = ik + 1
+               if(ik.ne.ik_read) stop "read_Sigma_spex_Julich: K-point index in spex.out not match the expected index."
+               call skip_header(unit,6)
+               do iwan1=1,Nwan
+                  read(unit,*) ib_read, Vxc_read(iwan1,ik,1), Smats_GoWo_X(iwan1,ik,1)
+                  read(unit,*)
+                  if(ib_read.ne.ib_sigma1+(iwan1-1)) stop "read_Sigma_spex_Julich:orbital index in spex.out not match the expected index."
+               enddo
+            endif
+         enddo
+         close(unit)
+         !
+         !It should be already in eV
+         !Vxc_read = Vxc_read * H2eV
+         !Smats_GoWo_X = Smats_GoWo_X * H2eV
          !
          !Transform to Wannier basis
          call clear_attributes(Smats_GoWo)
          !Sigma=sigmax+sigmac and transform to Wannier basis
          do ispin_spex=1,Nspin_spex
             !$OMP PARALLEL DEFAULT(NONE),&
-            !$OMP SHARED(ispin_spex,Nkpt,Nmats,Uwan,Smats_GoWo_read,Smats_GoWo),&
-            !$OMP PRIVATE(ik,iw)
+            !$OMP SHARED(ispin_spex,Nkpt,Norb,ib_Uwan1,ib_Uwan2,Nmats,Lttc,Uwan,Smats_GoWo_C,Smats_GoWo_X,Smats_GoWo,&
+            !$OMP doVxc,Vxc,Vxc_read),&
+            !$OMP PRIVATE(ik,iwan1,iwan2,iw)
             !$OMP DO
             do ik=1,Nkpt
-               do iw=1,Nmats
-                  Smats_GoWo%wks(:,:,iw,ik,ispin_spex) = rotate(Smats_GoWo_read%wks(:,:,iw,ik,ispin_spex),Uwan(:,:,ik,ispin_spex))
+               do iwan2=1,Norb
+                  do iwan1=1,Norb
+                     do iw=1,Nmats
+                        !
+                        Smats_GoWo%wks(iwan1,iwan2,iw,ik,ispin_spex) = &
+                        + sum(conjg(Uwan(ib_Uwan1:ib_Uwan2,iwan1,ik,ispin_spex)) * diagonal(Smats_GoWo_C%wks(:,:,iw,Lttc%kptPos(ik),ispin_spex)) * Uwan(ib_Uwan1:ib_Uwan2,iwan2,ik,ispin_spex))  &
+                        + sum(conjg(Uwan(ib_Uwan1:ib_Uwan2,iwan1,ik,ispin_spex)) * Smats_GoWo_X(:,Lttc%kptPos(ik),ispin_spex) * Uwan(ib_Uwan1:ib_Uwan2,iwan2,ik,ispin_spex))
+                        !
+                     enddo
+                     !
+                     if(doVxc) Vxc(iwan1,iwan2,ik,ispin_spex) = sum(conjg(Uwan(ib_Uwan1:ib_Uwan2,iwan1,ik,ispin_spex)) * Vxc_read(ib_Uwan1:ib_Uwan2,Lttc%kptPos(ik),ispin_spex) * Uwan(ib_Uwan1:ib_Uwan2,iwan2,ik,ispin_spex))
+                     !
+                  enddo
                enddo
             enddo
             !$OMP END DO
             !$OMP END PARALLEL
          enddo
-         deallocate(Uwan)
-         call DeallocateFermionicField(Smats_GoWo_read)
-         if(paramagneticSPEX) Smats_GoWo%wks(:,:,:,:,Nspin) = Smats_GoWo%wks(:,:,:,:,1)
+         deallocate(Uwan,Vxc_read,Smats_GoWo_X)
+         call DeallocateFermionicField(Smats_GoWo_C)
+         if(paramagneticSPEX)then
+            Smats_GoWo%wks(:,:,:,:,Nspin) = Smats_GoWo%wks(:,:,:,:,1)
+            Vxc(:,:,:,Nspin) = Vxc(:,:,:,1)
+         endif
          !
          call FermionicKsum(Smats_GoWo)
          !
@@ -1562,9 +1606,19 @@ contains
          call dump_FermionicField(Smats_GoWo,reg(pathOUTPUT_),"SGoWo_w",.true.,Lttc%kpt,paramagneticSPEX)
          if(save2readable)call dump_FermionicField(Smats_GoWo,reg(pathOUTPUT_)//"Sigma_imag/","SGoWo_w",.false.,Lttc%kpt,paramagneticSPEX)
          !
-         ! Read the Vxc and print it out
+         ! Read or print print Vxc out
          if(doVxc)then
-            call read_Vxc(Vxc,Lttc,ib_sigma1,ib_sigma2,save2readable)
+            do ispin=1,Nspin_Uwan
+               call dump_matrix(Vxc(:,:,:,ispin),.true.,reg(pathINPUT),"Vxc",ispin=ispin)
+               if(save2readable)call dump_matrix(Vxc(:,:,:,ispin),.false.,reg(pathINPUT)//"Vxc/","Vxc",ispin=ispin)
+            enddo
+            !
+            allocate(Vxc_loc(Norb,Norb,Nspin));Vxc_loc=czero
+            do ik=1,Nkpt
+               Vxc_loc = Vxc_loc + Vxc(:,:,ik,:)/Nkpt
+            enddo
+            call dump_matrix(Vxc_loc,reg(pathINPUT),"Vxc",(Nspin_Uwan.eq.2))
+            deallocate(Vxc_loc)
          else
             write(*,"(A)")"     Reading Vxc(k) from "//reg(pathINPUT)
             call read_matrix(Vxc(:,:,:,1),reg(pathINPUT)//"Vxc_k_s1.DAT")
@@ -1620,7 +1674,7 @@ contains
    !---------------------------------------------------------------------------!
    !PURPOSE: Read the exchange potential from gwa file.
    !---------------------------------------------------------------------------!
-   subroutine read_Vxc(Vxc,Lttc,ib_sigma1,ib_sigma2,save2readable)
+   subroutine read_Vxc_Lund(Vxc,Lttc,ib_sigma1,ib_sigma2,save2readable)
       !
       use linalg
       use parameters
@@ -1663,15 +1717,15 @@ contains
       complex(8),allocatable                :: Vxc_loc(:,:,:)
       !
       !
-      if(verbose)write(*,"(A)") "---- read_Vxc"
+      if(verbose)write(*,"(A)") "---- read_Vxc_Lund"
       !
       !
       ! Check on the input Vxc matrix
       Norb = size(Vxc,dim=1)
-      if(Norb.ne.size(Vxc,dim=2)) stop "read_Vxc: Vxc is not a square matrix."
+      if(Norb.ne.size(Vxc,dim=2)) stop "read_Vxc_Lund: Vxc is not a square matrix."
       Nkpt = size(Vxc,dim=3)
-      if(.not.Lttc%status) stop "read_Vxc: Lattice container not properly initialized."
-      if(Lttc%Nkpt.ne.Nkpt) stop "read_Vxc: Lattice has different number of k-points with respect to Vxc."
+      if(.not.Lttc%status) stop "read_Vxc_Lund: Lattice container not properly initialized."
+      if(Lttc%Nkpt.ne.Nkpt) stop "read_Vxc_Lund: Lattice has different number of k-points with respect to Vxc."
       !
       ! Read XEPS data
       if(.not.XEPSisread)then
@@ -1692,9 +1746,9 @@ contains
       unit = free_unit()
       open(unit,file=reg(path),form="unformatted",action="read",position="rewind")
       read(unit) Nspin_Uwan,Nkpt_Uwan,ib_Uwan1,ib_Uwan2,Norb_Uwan
-      if(paramagneticSPEX.and.(Nspin_Uwan.ne.1)) stop "read_Vxc: UWAN file is not paramagnetic."
-      if(Nkpt_Uwan.ne.Nkpt) stop "read_Vxc: UWAN file has wrong number of k-points (not irreducible)."
-      if(Norb_Uwan.ne.Norb) stop "read_Vxc: UWAN file has wrong orbital dimension."
+      if(paramagneticSPEX.and.(Nspin_Uwan.ne.1)) stop "read_Vxc_Lund: UWAN file is not paramagnetic."
+      if(Nkpt_Uwan.ne.Nkpt) stop "read_Vxc_Lund: UWAN file has wrong number of k-points (not irreducible)."
+      if(Norb_Uwan.ne.Norb) stop "read_Vxc_Lund: UWAN file has wrong orbital dimension."
       write(*,"(A,2I4)") "     The band indexes in the "//reg(path)//" rotation are: ",ib_Uwan1,ib_Uwan2
       allocate(Uwan(ib_Uwan1:ib_Uwan2,Norb,Nkpt,Nspin_Uwan))
       do ispin=1,Nspin_Uwan
@@ -1731,9 +1785,9 @@ contains
          open(unit_dis,file=reg(path),form="unformatted",action="read",position="rewind")
          read(unit_dis) Nspin_disent,Nkpt_irred_disent,Norb_disent,ib_Dwan1,ib_Dwan2
          if (Nspin_disent.ne.Nspin_Uwan) stop "DISENT_EVEC.DAT: wrong index nspin."
-         if (Nkpt_irred_disent.ne.Lttc%Nkpt_irred) stop "read_Vxc: DISENT_EVEC.DAT: wrong index nkpt1."
-         if (Norb_disent.ne.Norb) stop "read_Vxc: DISENT_EVEC.DAT: wrong index nwan."
-         if (ib_Dwan1.ne.ib_Uwan1) stop "read_Vxc: DISENT_EVEC.DAT: wrong index ib_wan1."
+         if (Nkpt_irred_disent.ne.Lttc%Nkpt_irred) stop "read_Vxc_Lund: DISENT_EVEC.DAT: wrong index nkpt1."
+         if (Norb_disent.ne.Norb) stop "read_Vxc_Lund: DISENT_EVEC.DAT: wrong index nwan."
+         if (ib_Dwan1.ne.ib_Uwan1) stop "read_Vxc_Lund: DISENT_EVEC.DAT: wrong index ib_wan1."
          if (ib_Dwan2.ne.ib_Uwan2) then
             write(*,"(A,2I4)") "     ib_Uwan2,ib_Dwan2: ",ib_Uwan2, ib_Dwan2
          endif
@@ -1765,7 +1819,7 @@ contains
             !write(*,*) 'ispin,ik,neigd,nband=',ispin,ik,neigd,nband
             if (nband.lt.1.or.nband.gt.neigd) then
                write(*,"(A,4I5)") "ispin,ik,neigd,nband: ",ispin,ik,neigd,nband
-               stop "read_Vxc: nband is out of bound."
+               stop "read_Vxc_Lund: nband is out of bound."
             endif
             read(unit_vxc) ((vxcmat(i,j),i=1,j),j=1,nband)
             do j=1,nband
@@ -1839,7 +1893,7 @@ contains
       call dump_matrix(Vxc_loc,reg(pathINPUT),"Vxc",(Nspin_Uwan.eq.2))
       deallocate(Vxc_loc)
       !
-   end subroutine read_vxc
+   end subroutine read_Vxc_Lund
 
 
    !---------------------------------------------------------------------------!

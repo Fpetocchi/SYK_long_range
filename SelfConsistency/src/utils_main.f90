@@ -1508,7 +1508,6 @@ contains
                      do iw=1,S_G0W0_EDMFT%Npoints
                         if(dimag(S_G0W0_EDMFT%ws(iorb,iorb,iw,ispin)).gt.0d0)then
                            write(*,"(A)")"     Warning: the local G0W0 self-energy has been found non-causal at iw="//str(iw)//" iorb="//str(iorb)//" ispin="//str(ispin)
-                           write(*,"(A)")"              therefore it will not be considered."
                            causal_G0W0_loc=.false.
                            exit causaloop
                         endif
@@ -1521,6 +1520,7 @@ contains
                !we remove [ S_G0W0^{SPEX}_{i} - S_G0W0^{DC}_{i} ]
                !here, if Vxc is inside S_G0W0, also the local contribution from Vxc is removed
                if((.not.GoWoDC_loc).or.(.not.causal_G0W0_loc))then
+                  write(*,"(A)")"     local G0W0 self-energy removed."
                   do ik=1,S_G0W0%Nkpt
                      S_G0W0%wks(:,:,:,ik,:) = S_G0W0%wks(:,:,:,ik,:) - S_G0W0_EDMFT%ws
                   enddo
