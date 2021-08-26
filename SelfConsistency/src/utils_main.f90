@@ -1441,7 +1441,7 @@ contains
             !
             !this rescaling brings ImG0W0dc to be half of ImG0W0
             if(ImG0W0.ge.ImG0W0dc)then
-               factors(iorb,ispin) = (0.5d0*ImG0W0) / ImG0W0dc
+               factors(iorb,ispin) = (ImG0W0+abs(ImG0W0-ImG0W0dc)/2d0) / ImG0W0dc
             endif
             !
          enddo
