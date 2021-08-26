@@ -1409,14 +1409,78 @@ contains
 
 
    !---------------------------------------------------------------------------!
-   !PURPOSE: Join the all the component of the self-energy. This subroutine
-   !         will correct the K dependent self-energy by removing from G0W0 the
-   !         dc and local part. So that the local proj. of the self-energyexactly
-   !         matches the DMFT one.
-   !         In order to get a better estimate of Silke's caussality correction
-   !         the S_GW field in output is modified so as to contain all the K-dependent
-   !         contributions so also those coming from G0W0.
-   !TEST ON: 27-10-2020
+   !PURPOSE: Check that the double counting between G0W0 and scGW at the
+   !         0th iteration yeld a causal local self-energy. Usually that's the case,
+   !         but, given that SPEX is a zero T calculation, some very small numeircal
+   !         errors might be present at low freq.
+   !         This subroutine, if needed, correct the 0th iteration GW self-energy
+   !         by a small rescaling factor computed just from the first matsubara
+   !         frequency. If a non-causal difference between the local SPEX G0W0
+   !         and local scGW is still present it will be removed in join_SigmaFull
+   !         This information is present already at the 0th iteration but the
+   !         input value of GoWoDC_loc cannot be changed between iterations
+   !         therefore the check in join_SigmaFull is required each time the
+   !         total self-energy is computed.
+   !---------------------------------------------------------------------------!
+   subroutine check_S_G0W0dc()
+      !
+      implicit none
+      integer                               :: iorb,ispin
+      real(8)                               :: fact,ImG0W0,ImG0W0dc
+      real(8),allocatable                   :: factors(:,:)
+      !
+      if(.not.S_G0W0dc%status) stop "check_S_G0W0dc: S_G0W0dc not properly initialized."
+      if(.not.S_G0W0%status) stop "check_S_G0W0dc: S_G0W0 not properly initialized."
+      !
+      allocate(factors(S_G0W0%Norb,Nspin));factors=0d0
+      do ispin=1,Nspin
+         do iorb=1,S_G0W0%Norb
+            !
+            ImG0W0 = dimag(S_G0W0%ws(iorb,iorb,1,ispin))
+            ImG0W0dc = dimag(S_G0W0dc%ws(iorb,iorb,1,ispin))
+            !
+            !this rescaling brings ImG0W0dc to be half of ImG0W0
+            if(ImG0W0.ge.ImG0W0dc)then
+               factors(iorb,ispin) = (0.5d0*ImG0W0) / ImG0W0dc
+            endif
+            !
+         enddo
+         if(paramagnet)then
+            factors(:,Nspin) = factors(:,1)
+            cycle
+         endif
+      enddo
+      !
+      !Use the highest factor as a global rescaling for S_G0W0dc
+      fact = maxval(factors)
+      deallocate(factors)
+      !
+      if(fact.gt.0d0)then
+         !
+         !Rescale DC
+         S_G0W0dc%wks = S_G0W0dc%wks * fact
+         call FermionicKsum(S_G0W0dc)
+         write(*,"(A,F)")"     scGW DC rescaling: ",fact
+         if((ImG0W0-ImG0W0dc).gt.(0.5d0*ImG0W0)) write(*,"(A)")"     Warning: this number might be too large. Consider setting G0W0DC_LOC=F."
+         !
+      elseif(fact.eq.0d0)then
+         !
+         write(*,"(A)")"     No DC rescaling needed."
+         !
+      elseif(fact.lt.0d0)then
+         !
+         write(*,"(A,F)")"     scGW DC rescaling: ",fact
+         call dump_FermionicField(S_G0W0dc,reg(ItFolder),"SGoWo_dc_w",paramagnet)
+         call dump_FermionicField(S_G0W0,reg(ItFolder),"Slat_w",paramagnet)
+         stop "check_S_G0W0dc: either SPEX or GW self-energy is non-causal."
+         !
+      endif
+      !
+   end subroutine check_S_G0W0dc
+
+
+   !---------------------------------------------------------------------------!
+   !PURPOSE: Join the all the component of the self-energy.
    !---------------------------------------------------------------------------!
    subroutine join_SigmaFull(Iteration)
       !
@@ -1488,9 +1552,8 @@ contains
                   allocate(Orbs(Norb))
                   Orbs = SiteOrbs(isite,1:Norb)
                   !
-                  call AllocateFermionicField(S_G0W0_imp,Norb,Nmats,Beta=Beta)
-                  !
                   !Extract the local G0W0 self-energy for each site
+                  call AllocateFermionicField(S_G0W0_imp,Norb,Nmats,Beta=Beta)
                   call loc2imp(S_G0W0_imp,S_G0W0,Orbs)
                   !
                   !Put it into an object that contains only the site indexes
