@@ -1423,73 +1423,56 @@ contains
    !         therefore the check in join_SigmaFull is required each time the
    !         total self-energy is computed.
    !---------------------------------------------------------------------------!
-   subroutine check_S_G0W0dc()
+   subroutine check_S_G0W0()
       !
       implicit none
       integer                               :: iorb,ispin
-      real(8)                               :: fact
-      real(8)                               :: ImG0W0,ImG0W0dc
-      real(8),allocatable                   :: factors(:,:)
-      logical                               :: nonCausal
+      real(8)                               :: y1,y2,x1,x2,m,q
+      real(8),allocatable                   :: wmats_orig(:)
+      type(OldBeta)                         :: Beta_Match
+      logical                               :: shift
       !
-      if(.not.S_G0W0dc%status) stop "check_S_G0W0dc: S_G0W0dc not properly initialized."
-      if(.not.S_G0W0%status) stop "check_S_G0W0dc: S_G0W0 not properly initialized."
+      if(.not.S_G0W0dc%status) stop "check_S_G0W0: S_G0W0dc not properly initialized."
+      if(.not.S_G0W0%status) stop "check_S_G0W0: S_G0W0 not properly initialized."
       !
-      allocate(factors(S_G0W0%Norb,Nspin));factors=1d0
-      do ispin=1,Nspin
+      allocate(wmats_orig(S_G0W0%Npoints));wmats_orig=0d0
+      wmats_orig = FermionicFreqMesh(S_G0W0%Beta,S_G0W0%Npoints)
+      !
+      !check for any component that does not extrapolate to iw=0 in the imagnary part
+      shift=.false.
+      checkloop: do ispin=1,Nspin
          do iorb=1,S_G0W0%Norb
             !
-            ImG0W0 = dimag(S_G0W0%ws(iorb,iorb,1,ispin))
-            ImG0W0dc = dimag(S_G0W0dc%ws(iorb,iorb,1,ispin))
+            y1 = dimag(S_G0W0%ws(iorb,iorb,1,ispin)) ; x1 = wmats_orig(1)
+            y2 = dimag(S_G0W0%ws(iorb,iorb,2,ispin)) ; x2 = wmats_orig(2)
+            m = (y2 - y1)/(x2 - x1)
+            q = y1 - m*x1
             !
-            nonCausal=.false.
-            if(ImG0W0.gt.0d0) nonCausal=.true.
-            if(ImG0W0dc.gt.0d0) nonCausal=.true.
-            if(nonCausal)then
-               call dump_FermionicField(S_G0W0dc,reg(ItFolder),"SGoWo_dc_w",paramagnet)
-               call dump_FermionicField(S_G0W0,reg(ItFolder),"Slat_w",paramagnet)
-               stop "check_S_G0W0dc: either SPEX or GW self-energy is non-causal."
-            endif
-            !
-            !this rescaling increases S_G0W0 so as to have a linear S_G0W0 - S_G0W0dc = -eps
-            if(ImG0W0.ge.ImG0W0dc)then
-               factors(iorb,ispin) = (ImG0W0dc-eps)/ImG0W0
-               write(*,*) factors(iorb,ispin)
+            !shift the S_G0W0 axis in order to have the imaginary part extrapolating to zero
+            if(dimag(S_G0W0%ws(iorb,iorb,1,ispin)).ge.dimag(S_G0W0dc%ws(iorb,iorb,1,ispin)))then
+               shift=.true.
+               wmats_orig = wmats_orig - q/abs(m)
+               exit checkloop
             endif
             !
          enddo
-         if(paramagnet)then
-            factors(:,Nspin) = factors(:,1)
-            cycle
-         endif
-      enddo
+      enddo checkloop
       !
-      !Use the highest factor as a global rescaling for S_G0W0dc
-      fact = maxval(factors)
-      deallocate(factors)
-      !
-      if(fact.gt.1d0)then
+      if(shift)then
          !
-         !Rescale SPEX self-energy and overwrite the existing one
-         S_G0W0%wks = S_G0W0%wks * fact
-         call FermionicKsum(S_G0W0)
-         write(*,"(A,F)")"     G0W0 correction: ",fact
+         write(*,"(A,F)")"     Correcting G0W0 self-energy. Axis shift: ",q/m
+         Beta_Match%Nmats_old = S_G0W0%Npoints
+         Beta_Match%Nmats_new = S_G0W0%Npoints
+         Beta_Match%Beta_old = S_G0W0%Beta
+         Beta_Match%Beta_new = S_G0W0%Beta
+         call interpolate2Beta(S_G0W0,Beta_Match,"lat",.true.,wmats_in=wmats_orig)
+         deallocate(wmats_orig)
+         !
          call dump_FermionicField(S_G0W0,reg(pathINPUTtr),"SGoWo_w",.true.,Crystal%kpt,.true.)
-         !
-      elseif(fact.eq.1d0)then
-         !
-         write(*,"(A)")"     No DC rescaling needed."
-         !
-      elseif(fact.le.1d0)then
-         !
-         write(*,"(A,F)")"     G0W0 correction: ",fact
-         call dump_FermionicField(S_G0W0dc,reg(ItFolder),"SGoWo_dc_w",paramagnet)
-         call dump_FermionicField(S_GW,reg(ItFolder),"Slat_w",paramagnet)
-         stop "check_S_G0W0dc: the rescaling factor cannot be less than 1."
          !
       endif
       !
-   end subroutine check_S_G0W0dc
+   end subroutine check_S_G0W0
 
 
    !---------------------------------------------------------------------------!
@@ -1578,7 +1561,7 @@ contains
                enddo
                !
                !Check for the causality in the G0W0 contribution to the local self-energy
-               !at all frequencies, not only the first checked by check_S_G0W0dc
+               !at all frequencies since it's not done in check_S_G0W0
                causal_G0W0_loc = GoWoDC_loc
                if(causal_G0W0_loc)then
                   causaloop: do ispin=1,Nspin
