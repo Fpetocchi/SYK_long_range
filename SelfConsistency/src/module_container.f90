@@ -69,6 +69,7 @@ module module_container
 
    !(g) Container attributes manipulations. Depends on (a),(b) and (e)
    use utils_fields, only:                   &
+   FieldKsum                                ,&
    FermionicKsum                            ,&
    BosonicKsum                              ,&
    AllocateLattice                          ,&

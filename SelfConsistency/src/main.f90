@@ -202,16 +202,15 @@ program SelfConsistency
          !Merge GW and EDMFT
          if(merge_Sigma)then
             !
-            !Compute the local Dc if Tier1 = Tier2
             if(reg(DC_type).eq."GlocWloc")then
                call AllocateFermionicField(S_GWdc,Crystal%Norb,Nmats,Nsite=Nsite,Beta=Beta)
                call calc_sigmaGWdc(S_GWdc,Glat,Wlat)
+               call MergeFields(S_GW,S_DMFT,[alphaSigma,HartreeFact],SiteOrbs,RotateHloc,SigmaGW_DC=S_GWdc)
+               call DeallocateFermionicField(S_GWdc)
+            elseif(reg(DC_type).eq."Sloc")then
+               call MergeFields(S_GW,S_DMFT,[alphaSigma,HartreeFact],SiteOrbs,RotateHloc)
             endif
-            !
-            !Then replace local projection of scGW with EDMFT, S_GWdc is empty for DC_type=Sloc or for model calculations
-            call MergeFields(S_GW,S_GWdc,S_DMFT,[alphaSigma,HartreeFact],SiteOrbs,DC_type,RotateHloc)
-            call DeallocateFermionicField(S_GWdc)
-            call dump_FermionicField(S_GW,reg(ItFolder),"Slat_merged_w",paramagnet)
+            if(verbose)call dump_FermionicField(S_GW,reg(ItFolder),"Slat_merged_w",paramagnet)
             !
          endif
          !
@@ -222,7 +221,8 @@ program SelfConsistency
       if(calc_Sguess) call calc_SigmaGuess()
       !
       !
-      !Put together all the contributions to the full self-energy and deallocate all the components
+      !Put together all the contributions to the full self-energy
+      !and deallocate all the components: S_G0W0, S_G0W0dc, S_GW, S_DMFT
       if(.not.S_Full_exists) call join_SigmaFull(Iteration)
       !
       !
@@ -248,46 +248,45 @@ program SelfConsistency
       else
          write(*,"(A,F)")"     Lattice density:",trace(Glat%N_s(:,:,1)+Glat%N_s(:,:,2))
       endif
+      call dump_Matrix(Glat%N_s,reg(ItFolder),"Nlat",paramagnet)
+      !
+      densityGW = Glat%N_s
+      S_Full%mu = Glat%mu
+      !
+      !
+      !Total energy calculation
       Ek = calc_Ek(Glat,Crystal)
       Ep = calc_Ep(Glat,S_Full)
       write(*,"(A,F)")"     Kinetic energy [eV]:",Ek
       write(*,"(A,F)")"     Potential energy [eV]:",Ep
       !
       !
-      !Update the full self-energy, print and compute Glat along the path
-      S_Full%mu = Glat%mu
-      if(dump_Sigmak)call dump_FermionicField(S_Full,reg(ItFolder),"Sfull_w",.true.,Crystal%kpt,paramagnet)
-      if(print_path)call interpolateG2Path(S_Full,Crystal,reg(structure),Nkpt_path,reg(ItFolder))
-      call DeallocateFermionicField(S_Full)
-      !
-      !
-      ! Causality correction on Delta
-      if(causal_D) call calc_causality_Delta_correction()
-      !
-      !
       !Print Gf: local readable and k-dep binfmt
-      if(dump_Gk)call dump_FermionicField(Glat,reg(ItFolder),"Glat_w",.true.,Crystal%kpt,paramagnet)
       call dump_FermionicField(Glat,reg(ItFolder),"Glat_w",paramagnet)
+      if(dump_Gk)call dump_FermionicField(Glat,reg(ItFolder),"Glat_w",.true.,Crystal%kpt,paramagnet)
       call dump_MaxEnt(Glat,"mats",reg(ItFolder)//"Convergence/","Glat",EqvGWndx%SetOrbs,WmaxPade=PadeWlimit)
       call dump_MaxEnt(Glat,"mats2itau",reg(ItFolder)//"Convergence/","Glat",EqvGWndx%SetOrbs)
       !
       !
-      !Print lattice density
-      call dump_Matrix(Glat%N_s,reg(ItFolder),"Nlat",paramagnet)
-      densityGW = Glat%N_s
-      !
-      !
-      !The local problem must give the same density in the same subset
-      if(MultiTier)then
-         write(*,*)
-         write(*,"(A,1I3)") "     N_READ_IMP updated from "//str(Solver%TargetDensity,4)//" to "//str(get_Tier_occupation(densityGW,SiteOrbs),4)
-         Solver%TargetDensity = get_Tier_occupation(densityGW,SiteOrbs)
-         call save_InputFile(reg(InputFile))
-      endif
+      !Print full self-energy: local readable, k-dep binfmt (optional) and along path
+      call dump_FermionicField(S_GW,reg(ItFolder),"Sfull_w",paramagnet)
+      if(dump_Sigmak)call dump_FermionicField(S_Full,reg(ItFolder),"Sfull_w",.true.,Crystal%kpt,paramagnet)
+      if(print_path)call interpolateG2Path(S_Full,Crystal,reg(structure),Nkpt_path,reg(ItFolder))
       !
       !
       !Matching the lattice and impurity problems: Fermions
       if(solve_DMFT)then
+         !
+         !The local problem must give the same density in the same subset
+         if(MultiTier)then
+            write(*,*)
+            write(*,"(A,1I3)") "     N_READ_IMP updated from "//str(Solver%TargetDensity,4)//" to "//str(get_Tier_occupation(densityGW,SiteOrbs),4)
+            Solver%TargetDensity = get_Tier_occupation(densityGW,SiteOrbs)
+            call save_InputFile(reg(InputFile))
+         endif
+         !
+         ! Causality correction on Delta
+         if(causal_D) call calc_causality_Delta_correction()
          !
          do isite=1,Nsite
             !
@@ -300,6 +299,7 @@ program SelfConsistency
       endif
       !
       if(.not.solve_DMFT)call show_Densities(Iteration)
+      !
       !
    enddo !Iteration
    !

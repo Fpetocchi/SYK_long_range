@@ -12,6 +12,11 @@ module utils_fields
    !---------------------------------------------------------------------------!
    !PURPOSE: Module interfaces
    !---------------------------------------------------------------------------!
+   interface FieldKsum
+      module procedure FermionicKsum
+      module procedure BosonicKsum
+   end interface FieldKsum
+
    interface clear_attributes
       module procedure clear_attributes_Fermion
       module procedure clear_attributes_Boson
@@ -57,7 +62,8 @@ module utils_fields
    end interface symmetrize_imp
 
    interface MergeFields
-      module procedure MergeSelfEnergy
+      module procedure MergeSelfEnergy_v1
+      module procedure MergeSelfEnergy_v2
       module procedure MergePolarization
    end interface MergeFields
 
@@ -90,6 +96,7 @@ module utils_fields
    !PURPOSE: Rutines available for the user. Description only for interfaces.
    !---------------------------------------------------------------------------!
    !subroutines
+   public :: FieldKsum
    public :: FermionicKsum
    public :: BosonicKsum
    public :: AllocateLattice
@@ -121,8 +128,7 @@ contains
 
 
    !---------------------------------------------------------------------------!
-   !PURPOSE: Fill the local attributes of a Fermionic Field
-   !TEST ON: 16-10-2020
+   !PURPOSE: Fill the local attributes of a Field
    !---------------------------------------------------------------------------!
    subroutine FermionicKsum(G)
       use parameters
@@ -154,12 +160,7 @@ contains
       G%local_filled=.true.
       !
    end subroutine FermionicKsum
-
-
-   !---------------------------------------------------------------------------!
-   !PURPOSE: Fill the local attributes of a Bosonic Field
-   !TEST ON: 21-10-2020
-   !---------------------------------------------------------------------------!
+   !
    subroutine BosonicKsum(W)
       use parameters
       implicit none
@@ -190,7 +191,6 @@ contains
 
    !---------------------------------------------------------------------------!
    !PURPOSE: Allocate/deallocate Lattice attributes in a consistent way
-   !TEST ON: 14-10-2020(both)
    !---------------------------------------------------------------------------!
    subroutine AllocateLattice(lttc,Norb,Nkpt,name)
       use parameters
@@ -262,7 +262,6 @@ contains
 
    !---------------------------------------------------------------------------!
    !PURPOSE: Allocate/deallocate Fermionic attributes in a consistent way
-   !TEST ON: 16-10-2020(both)
    !---------------------------------------------------------------------------!
    subroutine AllocateFermionicField(G,Norb,Npoints,Nkpt,Nsite,name,Beta,mu)
       use parameters
@@ -338,7 +337,6 @@ contains
 
    !---------------------------------------------------------------------------!
    !PURPOSE: Allocate/deallocate Bosonic attributes in a consistent way
-   !TEST ON: 21-10-2020(both)
    !---------------------------------------------------------------------------!
    subroutine AllocateBosonicField(W,Norb,Npoints,iq_gamma,Nkpt,Nsite,name,no_bare,Beta)
       use parameters
@@ -465,7 +463,6 @@ contains
 
    !---------------------------------------------------------------------------!
    !PURPOSE: Clear the internal attributes of a Fermionic/Bosonic field
-   !TEST ON: 16-10-2020(both)
    !---------------------------------------------------------------------------!
    subroutine clear_attributes_Fermion(G)
       use parameters
@@ -564,7 +561,6 @@ contains
 
    !---------------------------------------------------------------------------!
    !PURPOSE: Duplicate a Fermionic/Bosonic field
-   !TEST ON:
    !---------------------------------------------------------------------------!
    subroutine duplicate_Fermionic(Gnew,Gold)
       use parameters
@@ -597,7 +593,6 @@ contains
 
    !---------------------------------------------------------------------------!
    !PURPOSE: Remove the complex part of the allocated attributes
-   !TEST ON:
    !---------------------------------------------------------------------------!
    subroutine isReal_Matrix(A)
       use parameters
@@ -2495,7 +2490,6 @@ contains
 
    !---------------------------------------------------------------------------!
    !PURPOSE: Join the C and X component of the self-energy
-   !TEST ON: 27-10-2020
    !---------------------------------------------------------------------------!
    subroutine join_SigmaCX(SigmaFull,Sigma_C,Sigma_X)
       !
@@ -2590,12 +2584,12 @@ contains
 
 
    !---------------------------------------------------------------------------!
-   !PURPOSE: Replace SigmaImp in SigmaGW at the indexes contained in orbs.
-   !         The Hartee contribution computed as N*curlyU is stored in the
-   !         SigmaImp%N_s attribute and it is removed during the merge.
-   !TEST ON: 27-10-2020
+   !PURPOSE: + Replace SigmaImp in SigmaGW at the indexes contained in orbs.
+   !           The Hartee contribution computed as N*curlyU is stored in the
+   !           SigmaImp%N_s attribute and it is removed during the merge.
+   !         + Replace PiImp in PiGW at the indexes contained in orbs
    !---------------------------------------------------------------------------!
-   subroutine MergeSelfEnergy(SigmaGW,SigmaGW_DC,SigmaImp,coeff,orbs,DC_type,OffDiag)
+   subroutine MergeSelfEnergy_v1(SigmaGW,SigmaGW_DC,SigmaImp,coeff,orbs,DC_type,OffDiag)
       !
       use parameters
       use utils_misc
@@ -2621,10 +2615,10 @@ contains
       !
       !
       ! Check on the input Fields
-      if(.not.SigmaGW%status) stop "MergeSelfEnergy: SigmaGW not properly initialized."
-      if(.not.SigmaImp%status) stop "MergeSelfEnergy: SigmaImp not properly initialized."
-      if(SigmaGW%Nkpt.eq.0) stop "MergeSelfEnergy: SigmaGW k dependent attributes not properly initialized."
-      if(SigmaImp%Nkpt.ne.0) stop "MergeSelfEnergy: SigmaImp k dependent attributes are supposed to be unallocated."
+      if(.not.SigmaGW%status) stop "MergeSelfEnergy_v1: SigmaGW not properly initialized."
+      if(.not.SigmaImp%status) stop "MergeSelfEnergy_v1: SigmaImp not properly initialized."
+      if(SigmaGW%Nkpt.eq.0) stop "MergeSelfEnergy_v1: SigmaGW k dependent attributes not properly initialized."
+      if(SigmaImp%Nkpt.ne.0) stop "MergeSelfEnergy_v1: SigmaImp k dependent attributes are supposed to be unallocated."
       !
       Norb = SigmaGW%Norb
       Nkpt = SigmaGW%Nkpt
@@ -2632,30 +2626,29 @@ contains
       Nmats = SigmaGW%Npoints
       Nsite = SigmaGW%Nsite
       !
-      if(SigmaImp%Norb.ne.Norb) stop "MergeSelfEnergy: SigmaImp has different orbital dimension with respect to SigmaGW."
-      if(SigmaImp%Beta.ne.Beta) stop "MergeSelfEnergy: SigmaImp has different Beta with respect to SigmaGW."
-      if(SigmaImp%Npoints.ne.Nmats) stop "MergeSelfEnergy: SigmaImp has different number of Matsubara points with respect to SigmaGW."
-
-      if(size(orbs,dim=1).ne.Nsite) stop "MergeSelfEnergy: Number of orbital lists does not match the number of sites."
+      if(SigmaImp%Norb.ne.Norb) stop "MergeSelfEnergy_v1: SigmaImp has different orbital dimension with respect to SigmaGW."
+      if(SigmaImp%Beta.ne.Beta) stop "MergeSelfEnergy_v1: SigmaImp has different Beta with respect to SigmaGW."
+      if(SigmaImp%Npoints.ne.Nmats) stop "MergeSelfEnergy_v1: SigmaImp has different number of Matsubara points with respect to SigmaGW."
+      if(size(orbs,dim=1).ne.Nsite) stop "MergeSelfEnergy_v1: Number of orbital lists does not match the number of sites."
       Norb_imp=0
       do isite=1,Nsite
          do iorb=1,size(orbs(isite,:))
             if(orbs(isite,iorb).ne.0) Norb_imp=Norb_imp+1
          enddo
       enddo
-      if(Norb_imp.gt.Norb) stop "MergeSelfEnergy: Number of orbital to be inserted is bigger than the total lattice orbital space."
+      if(Norb_imp.gt.Norb) stop "MergeSelfEnergy_v1: Number of orbital to be inserted is bigger than the total lattice orbital space."
       !
       select case(DC_type)
          case default
-            stop "MergeSelfEnergy: Available DC types for the self-energy: Sloc or GlocWloc."
+            stop "MergeSelfEnergy_v1: Available DC types for the self-energy: Sloc or GlocWloc."
          case("Sloc")
             localDC = .true.
          case("GlocWloc")
-            if(.not.SigmaGW_DC%status) stop "MergeSelfEnergy: SigmaGW_DC not properly initialized."
-            if(SigmaGW_DC%Nkpt.ne.0) stop "MergeSelfEnergy: SigmaGW_DC k dependent attributes are supposed to be unallocated."
-            if(SigmaGW_DC%Norb.ne.Norb) stop "MergeSelfEnergy: SigmaGW_DC has different orbital dimension with respect to SigmaGW."
-            if(SigmaGW_DC%Beta.ne.Beta) stop "MergeSelfEnergy: SigmaGW_DC has different Beta with respect to SigmaGW."
-            if(SigmaGW_DC%Npoints.ne.Nmats) stop "MergeSelfEnergy: SigmaGW_DC has different number of Matsubara points with respect to SigmaGW."
+            if(.not.SigmaGW_DC%status) stop "MergeSelfEnergy_v1: SigmaGW_DC not properly initialized."
+            if(SigmaGW_DC%Nkpt.ne.0) stop "MergeSelfEnergy_v1: SigmaGW_DC k dependent attributes are supposed to be unallocated."
+            if(SigmaGW_DC%Norb.ne.Norb) stop "MergeSelfEnergy_v1: SigmaGW_DC has different orbital dimension with respect to SigmaGW."
+            if(SigmaGW_DC%Beta.ne.Beta) stop "MergeSelfEnergy_v1: SigmaGW_DC has different Beta with respect to SigmaGW."
+            if(SigmaGW_DC%Npoints.ne.Nmats) stop "MergeSelfEnergy_v1: SigmaGW_DC has different number of Matsubara points with respect to SigmaGW."
             localDC = .false.
       end select
       !
@@ -2704,13 +2697,121 @@ contains
       !Put SigmaImp in the local attribute
       call FermionicKsum(SigmaGW)
       !
-   end subroutine MergeSelfEnergy
-
-
-   !---------------------------------------------------------------------------!
-   !PURPOSE: Replace PiImp in PiGW at the indexes contained in orbs
-   !TEST ON: 23-10-2020
-   !---------------------------------------------------------------------------!
+   end subroutine MergeSelfEnergy_v1
+   !
+   subroutine MergeSelfEnergy_v2(SigmaGW,SigmaImp,coeff,orbs,OffDiag,SigmaGW_DC)
+      !
+      use parameters
+      use utils_misc
+      implicit none
+      !
+      type(FermionicField),intent(inout)    :: SigmaGW
+      type(FermionicField),intent(in)       :: SigmaImp
+      real(8),intent(in)                    :: coeff(2)
+      integer,allocatable,intent(in)        :: orbs(:,:)
+      logical,intent(in)                    :: OffDiag
+      type(FermionicField),intent(in),optional :: SigmaGW_DC
+      !
+      real(8)                               :: Beta
+      integer                               :: iw,ik,isite,iorb,jorb
+      integer                               :: ispin,Norb_imp
+      integer                               :: i_loc,j_loc
+      integer                               :: Nkpt,Norb,Nmats,Nsite
+      character(len=12)                     :: DC_type
+      logical                               :: localDC
+      !
+      !
+      write(*,"(A)") new_line("A")//new_line("A")//"---- Merge SelfEnergy"
+      !
+      !
+      ! Check on the input Fields
+      if(.not.SigmaGW%status) stop "MergeSelfEnergy_v2: SigmaGW not properly initialized."
+      if(.not.SigmaImp%status) stop "MergeSelfEnergy_v2: SigmaImp not properly initialized."
+      if(SigmaGW%Nkpt.eq.0) stop "MergeSelfEnergy_v2: SigmaGW k dependent attributes not properly initialized."
+      if(SigmaImp%Nkpt.ne.0) stop "MergeSelfEnergy_v2: SigmaImp k dependent attributes are supposed to be unallocated."
+      !
+      Norb = SigmaGW%Norb
+      Nkpt = SigmaGW%Nkpt
+      Beta = SigmaGW%Beta
+      Nmats = SigmaGW%Npoints
+      Nsite = SigmaGW%Nsite
+      !
+      if(SigmaImp%Norb.ne.Norb) stop "MergeSelfEnergy_v2: SigmaImp has different orbital dimension with respect to SigmaGW."
+      if(SigmaImp%Beta.ne.Beta) stop "MergeSelfEnergy_v2: SigmaImp has different Beta with respect to SigmaGW."
+      if(SigmaImp%Npoints.ne.Nmats) stop "MergeSelfEnergy_v2: SigmaImp has different number of Matsubara points with respect to SigmaGW."
+      if(size(orbs,dim=1).ne.Nsite) stop "MergeSelfEnergy_v2: Number of orbital lists does not match the number of sites."
+      Norb_imp=0
+      do isite=1,Nsite
+         do iorb=1,size(orbs(isite,:))
+            if(orbs(isite,iorb).ne.0) Norb_imp=Norb_imp+1
+         enddo
+      enddo
+      if(Norb_imp.gt.Norb) stop "MergeSelfEnergy_v2: Number of orbital to be inserted is bigger than the total lattice orbital space."
+      !
+      DC_type="Sloc"
+      if(present(SigmaGW_DC)) DC_type="GlocWloc"
+      !
+      select case(reg(DC_type))
+         case default
+            stop "MergeSelfEnergy_v2: Available DC types for the self-energy: Sloc or GlocWloc."
+         case("Sloc")
+            localDC = .true.
+         case("GlocWloc")
+            if(.not.SigmaGW_DC%status) stop "MergeSelfEnergy_v2: SigmaGW_DC not properly initialized."
+            if(SigmaGW_DC%Nkpt.ne.0) stop "MergeSelfEnergy_v2: SigmaGW_DC k dependent attributes are supposed to be unallocated."
+            if(SigmaGW_DC%Norb.ne.Norb) stop "MergeSelfEnergy_v2: SigmaGW_DC has different orbital dimension with respect to SigmaGW."
+            if(SigmaGW_DC%Beta.ne.Beta) stop "MergeSelfEnergy_v2: SigmaGW_DC has different Beta with respect to SigmaGW."
+            if(SigmaGW_DC%Npoints.ne.Nmats) stop "MergeSelfEnergy_v2: SigmaGW_DC has different number of Matsubara points with respect to SigmaGW."
+            localDC = .false.
+      end select
+      !
+      !Fill the local attributes so as to fully replace the local GW contibution
+      call FermionicKsum(SigmaGW)
+      !
+      !all sites if(expand.or.AFM) otherwise only one site and the orbitals within orbs
+      !$OMP PARALLEL DEFAULT(NONE),&
+      !$OMP SHARED(Nsite,Nmats,Nkpt,orbs,coeff,SigmaGW,SigmaGW_DC,SigmaImp,localDC,OffDiag),&
+      !$OMP PRIVATE(isite,ispin,iorb,jorb,i_loc,j_loc,iw,ik)
+      !$OMP DO
+      do isite=1,Nsite
+         do iorb=1,size(orbs(isite,:))
+            do jorb=1,size(orbs(isite,:))
+               !
+               if((.not.OffDiag).and.(iorb.ne.jorb))cycle
+               !
+               !SigmaImp and SigmaGW have the same arrangements
+               i_loc = orbs(isite,iorb)
+               j_loc = orbs(isite,jorb)
+               !
+               do ispin=1,Nspin
+                  do iw=1,Nmats
+                     do ik=1,Nkpt
+                        !
+                        if(localDC)then
+                           SigmaGW%wks(i_loc,j_loc,iw,ik,ispin) = SigmaGW%wks(i_loc,j_loc,iw,ik,ispin)              &
+                                                                - coeff(1)*SigmaGW%ws(i_loc,j_loc,iw,ispin)            &
+                                                                + coeff(1)*(SigmaImp%ws(i_loc,j_loc,iw,ispin)-coeff(2)*SigmaImp%N_s(i_loc,j_loc,ispin))
+                        else
+                           SigmaGW%wks(i_loc,j_loc,iw,ik,ispin) = SigmaGW%wks(i_loc,j_loc,iw,ik,ispin)              &
+                                                                - coeff(1)*SigmaGW_DC%ws(i_loc,j_loc,iw,ispin)         &
+                                                                + coeff(1)*(SigmaImp%ws(i_loc,j_loc,iw,ispin)-coeff(2)*SigmaImp%N_s(i_loc,j_loc,ispin))
+                        endif
+                        !
+                     enddo
+                  enddo
+               enddo
+               !
+            enddo
+         enddo
+      enddo
+      !$OMP END DO
+      !$OMP END PARALLEL
+      !
+      !Put SigmaImp in the local attribute
+      call FermionicKsum(SigmaGW)
+      !
+   end subroutine MergeSelfEnergy_v2
+   !
    subroutine MergePolarization(PiGW,PiImp,coeff,orbs,OffDiag)
       !
       use parameters
@@ -2868,7 +2969,7 @@ contains
          Ep_T=0d0
          do ik=1,Gmats%Nkpt
             do ispin=1,Nspin
-               Ep_T = Ep_T + trace(matmul(Smats%wks(:,:,iw,ik,ispin)-deye(Smats%Norb)*Smats%mu,Gmats%wks(:,:,iw,ik,ispin))) / (Gmats%Nkpt*Nspin)
+               Ep_T = Ep_T + trace(matmul(Smats%wks(:,:,iw,ik,ispin)-deye(Smats%Norb)*Gmats%mu,Gmats%wks(:,:,iw,ik,ispin))) / (Gmats%Nkpt*Nspin)
             enddo
          enddo
          Ep = Ep + Ep_T / Gmats%Beta
