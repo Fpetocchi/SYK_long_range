@@ -108,7 +108,6 @@ contains
 
    !---------------------------------------------------------------------------!
    !PURPOSE: prints the header
-   !TEST ON: 14-10-2020
    !---------------------------------------------------------------------------!
    subroutine printHeader(Iteration)
       !
@@ -167,7 +166,6 @@ contains
 
    !---------------------------------------------------------------------------!
    !PURPOSE: looks for the current iteration number
-   !TEST ON: 14-10-2020
    !---------------------------------------------------------------------------!
    subroutine initialize_DataStructure(ItStart,Itend)
       !
@@ -391,7 +389,6 @@ contains
    !---------------------------------------------------------------------------!
    !PURPOSE: Initialize Lattice. I could have used the AllocateLattice in
    !         utils_fields but then als useless attributes would have been allocated
-   !TEST ON: 14-10-2020
    !---------------------------------------------------------------------------!
    subroutine initialize_Lattice(Lttc,ItStart)
       !
@@ -1029,7 +1026,6 @@ contains
 
    !---------------------------------------------------------------------------!
    !PURPOSE: Initialize the Fields depending on the starting iteration
-   !TEST ON: 16-10-2020
    !---------------------------------------------------------------------------!
    subroutine initialize_Fields(ItStart)
       !
@@ -1079,11 +1075,13 @@ contains
             call AllocateBosonicField(Plat,Crystal%Norb,Nmats,Crystal%iq_gamma,Nkpt=Crystal%Nkpt,Nsite=Nsite,no_bare=.true.,Beta=Beta)
             !
             !Lattice Gf
-            call AllocateFermionicField(Glat,Crystal%Norb,Nmats,Nkpt=Crystal%Nkpt,Nsite=Nsite,Beta=Beta)
-            if(ItStart.eq.0)then
-               call calc_Gmats(Glat,Crystal)
-            else
+            if(ItStart.ne.0)then
                call read_FermionicField(Glat,reg(PrevItFolder),"Glat_w",Crystal%kpt)
+               if(look4dens%TargetDensity.eq.0d0) Glat%mu = look4dens%mu
+            else
+               Glat%mu = look4dens%mu
+               if((look4dens%TargetDensity.ne.0d0).and.Hmodel) call set_density(Glat%mu,Beta,Crystal,look4dens)
+               call calc_Gmats(Glat,Crystal)
             endif
             call calc_density(Glat,Crystal,Glat%N_ks)
             call calc_density(Glat,Glat%N_s)
@@ -1115,10 +1113,13 @@ contains
             !
             !Lattice local Gf
             call AllocateFermionicField(Glat,Crystal%Norb,Nmats,Nkpt=Crystal%Nkpt,Nsite=Nsite,Beta=Beta)
-            if(ItStart.eq.0)then
-               call calc_Gmats(Glat,Crystal)
-            else
+            if(ItStart.ne.0)then
                call read_FermionicField(Glat,reg(PrevItFolder),"Glat_w")
+               if(look4dens%TargetDensity.eq.0d0) Glat%mu = look4dens%mu
+            else
+               Glat%mu = look4dens%mu
+               if((look4dens%TargetDensity.ne.0d0).and.Hmodel) call set_density(Glat%mu,Beta,Crystal,look4dens)
+               call calc_Gmats(Glat,Crystal)
             endif
             call calc_density(Glat,Glat%N_s)
             !
@@ -1153,10 +1154,13 @@ contains
             !
             !Lattice local Gf
             call AllocateFermionicField(Glat,Crystal%Norb,Nmats,Nkpt=Crystal%Nkpt,Nsite=Nsite,Beta=Beta)
-            if(ItStart.eq.0)then
-               call calc_Gmats(Glat,Crystal)
-            else
+            if(ItStart.ne.0)then
                call read_FermionicField(Glat,reg(PrevItFolder),"Glat_w")
+               if(look4dens%TargetDensity.eq.0d0) Glat%mu = look4dens%mu
+            else
+               Glat%mu = look4dens%mu
+               if((look4dens%TargetDensity.ne.0d0).and.Hmodel) call set_density(Glat%mu,Beta,Crystal,look4dens)
+               call calc_Gmats(Glat,Crystal)
             endif
             call calc_density(Glat,Glat%N_s)
             !
@@ -1201,10 +1205,13 @@ contains
             !
             !Lattice local Gf
             call AllocateFermionicField(Glat,Crystal%Norb,Nmats,Nkpt=Crystal%Nkpt,Nsite=Nsite,Beta=Beta)
-            if(ItStart.eq.0)then
-               call calc_Gmats(Glat,Crystal)
-            else
+            if(ItStart.ne.0)then
                call read_FermionicField(Glat,reg(PrevItFolder),"Glat_w")
+               if(look4dens%TargetDensity.eq.0d0) Glat%mu = look4dens%mu
+            else
+               Glat%mu = look4dens%mu
+               if((look4dens%TargetDensity.ne.0d0).and.Hmodel) call set_density(Glat%mu,Beta,Crystal,look4dens)
+               call calc_Gmats(Glat,Crystal)
             endif
             call calc_density(Glat,Glat%N_s)
             !
@@ -1257,7 +1264,10 @@ contains
             call AllocateFermionicField(Glat,Crystal%Norb,Nmats,Nkpt=Crystal%Nkpt,Nsite=Nsite,Beta=Beta)
             if(ItStart.ne.0)then
                call read_FermionicField(Glat,reg(PrevItFolder),"Glat_w",Crystal%kpt)
+               if(look4dens%TargetDensity.eq.0d0) Glat%mu = look4dens%mu
             else
+               Glat%mu = look4dens%mu
+               if((look4dens%TargetDensity.ne.0d0).and.Hmodel) call set_density(Glat%mu,Beta,Crystal,look4dens)
                call calc_Gmats(Glat,Crystal)
             endif
             call calc_density(Glat,Crystal,Glat%N_ks)
@@ -1267,7 +1277,7 @@ contains
             !just a sanity check
             do ik=1,Glat%Nkpt
                call check_Hermiticity(Glat%N_ks(:,:,ik,1),eps,enforce=.false.,hardstop=.false.,name="Nlat_k"//str(ik)//"_s1",verb=.true.)
-               if(.not.paramagnet)call check_Hermiticity(Glat%N_ks(:,:,ik,2),eps,enforce=.false.,hardstop=.false.,name="Nlat_k"//str(ik)//"_s2",verb=.true.)
+               if(.not.paramagnet)call check_Hermiticity(Glat%N_ks(:,:,ik,Nspin),eps,enforce=.false.,hardstop=.false.,name="Nlat_k"//str(ik)//"_s"//str(Nspin),verb=.true.)
             enddo
             !
             !
@@ -1323,15 +1333,6 @@ contains
             if(ExpandImpurity.or.AFMselfcons)exit
          enddo
          !
-      endif
-      !
-      if(look4dens%TargetDensity.eq.0d0)then
-         Glat%mu = look4dens%mu
-      else
-         if(ItStart.eq.0)then
-            Glat%mu = look4dens%mu
-            call set_density(Glat%mu,Beta,Crystal,look4dens)
-         endif
       endif
       !
       write(*,"(A,F)") new_line("A")//"     Lattice chemical potential:  ",Glat%mu
@@ -1413,8 +1414,8 @@ contains
    !         0th iteration yeld a causal local self-energy. Usually that's the case,
    !         but, given that SPEX is a zero T calculation, some very small numeircal
    !         errors might be present at low freq.
-   !         This subroutine, if needed, correct the 0th iteration GW self-energy
-   !         by a small rescaling factor computed just from the first matsubara
+   !         This subroutine, if needed, correct the SPEX self-energy by a
+   !         small rescaling factor computed just from the first matsubara
    !         frequency. If a non-causal difference between the local SPEX G0W0
    !         and local scGW is still present it will be removed in join_SigmaFull
    !         This information is present already at the 0th iteration but the
@@ -1426,22 +1427,34 @@ contains
       !
       implicit none
       integer                               :: iorb,ispin
-      real(8)                               :: fact,ImG0W0,ImG0W0dc
+      real(8)                               :: fact
+      real(8)                               :: ImG0W0,ImG0W0dc
       real(8),allocatable                   :: factors(:,:)
+      logical                               :: nonCausal
       !
       if(.not.S_G0W0dc%status) stop "check_S_G0W0dc: S_G0W0dc not properly initialized."
       if(.not.S_G0W0%status) stop "check_S_G0W0dc: S_G0W0 not properly initialized."
       !
-      allocate(factors(S_G0W0%Norb,Nspin));factors=0d0
+      allocate(factors(S_G0W0%Norb,Nspin));factors=1d0
       do ispin=1,Nspin
          do iorb=1,S_G0W0%Norb
             !
             ImG0W0 = dimag(S_G0W0%ws(iorb,iorb,1,ispin))
             ImG0W0dc = dimag(S_G0W0dc%ws(iorb,iorb,1,ispin))
             !
-            !this rescaling brings ImG0W0dc to be half of ImG0W0
+            nonCausal=.false.
+            if(ImG0W0.gt.0d0) nonCausal=.true.
+            if(ImG0W0dc.gt.0d0) nonCausal=.true.
+            if(nonCausal)then
+               call dump_FermionicField(S_G0W0dc,reg(ItFolder),"SGoWo_dc_w",paramagnet)
+               call dump_FermionicField(S_G0W0,reg(ItFolder),"Slat_w",paramagnet)
+               stop "check_S_G0W0dc: either SPEX or GW self-energy is non-causal."
+            endif
+            !
+            !this rescaling increases S_G0W0 so as to have a linear S_G0W0 - S_G0W0dc = -eps
             if(ImG0W0.ge.ImG0W0dc)then
-               factors(iorb,ispin) = (ImG0W0+abs(ImG0W0-ImG0W0dc)/2d0) / ImG0W0dc
+               factors(iorb,ispin) = (ImG0W0dc-eps)/ImG0W0
+               write(*,*) factors(iorb,ispin)
             endif
             !
          enddo
@@ -1455,24 +1468,24 @@ contains
       fact = maxval(factors)
       deallocate(factors)
       !
-      if(fact.gt.0d0)then
+      if(fact.gt.1d0)then
          !
-         !Rescale DC
-         S_G0W0dc%wks = S_G0W0dc%wks * fact
-         call FermionicKsum(S_G0W0dc)
-         write(*,"(A,F)")"     scGW DC rescaling: ",fact
-         if((ImG0W0-ImG0W0dc).gt.(0.5d0*ImG0W0)) write(*,"(A)")"     Warning: this number might be too large. Consider setting G0W0DC_LOC=F."
+         !Rescale SPEX self-energy and overwrite the existing one
+         S_G0W0%wks = S_G0W0%wks * fact
+         call FermionicKsum(S_G0W0)
+         write(*,"(A,F)")"     G0W0 correction: ",fact
+         call dump_FermionicField(S_G0W0,reg(pathINPUTtr),"SGoWo_w",.true.,Crystal%kpt,.true.)
          !
-      elseif(fact.eq.0d0)then
+      elseif(fact.eq.1d0)then
          !
          write(*,"(A)")"     No DC rescaling needed."
          !
-      elseif(fact.lt.0d0)then
+      elseif(fact.le.1d0)then
          !
-         write(*,"(A,F)")"     scGW DC rescaling: ",fact
+         write(*,"(A,F)")"     G0W0 correction: ",fact
          call dump_FermionicField(S_G0W0dc,reg(ItFolder),"SGoWo_dc_w",paramagnet)
-         call dump_FermionicField(S_G0W0,reg(ItFolder),"Slat_w",paramagnet)
-         stop "check_S_G0W0dc: either SPEX or GW self-energy is non-causal."
+         call dump_FermionicField(S_GW,reg(ItFolder),"Slat_w",paramagnet)
+         stop "check_S_G0W0dc: the rescaling factor cannot be less than 1."
          !
       endif
       !
@@ -1565,18 +1578,21 @@ contains
                enddo
                !
                !Check for the causality in the G0W0 contribution to the local self-energy
-               causal_G0W0_loc=.true.
-               causaloop: do ispin=1,Nspin
-                  do iorb=1,S_G0W0_EDMFT%Norb
-                     do iw=1,S_G0W0_EDMFT%Npoints
-                        if(dimag(S_G0W0_EDMFT%ws(iorb,iorb,iw,ispin)).gt.0d0)then
-                           write(*,"(A)")"     Warning: the local G0W0 self-energy has been found non-causal at iw="//str(iw)//" iorb="//str(iorb)//" ispin="//str(ispin)
-                           causal_G0W0_loc=.false.
-                           exit causaloop
-                        endif
+               !at all frequencies, not only the first checked by check_S_G0W0dc
+               causal_G0W0_loc = GoWoDC_loc
+               if(causal_G0W0_loc)then
+                  causaloop: do ispin=1,Nspin
+                     do iorb=1,S_G0W0_EDMFT%Norb
+                        do iw=1,S_G0W0_EDMFT%Npoints
+                           if(dimag(S_G0W0_EDMFT%ws(iorb,iorb,iw,ispin)).gt.0d0)then
+                              write(*,"(A)")"     Warning: the local G0W0 self-energy has been found non-causal at iw="//str(iw)//" iorb="//str(iorb)//" ispin="//str(ispin)
+                              causal_G0W0_loc=.false.
+                              exit causaloop
+                           endif
+                        enddo
                      enddo
-                  enddo
-               enddo causaloop
+                  enddo causaloop
+               endif
                !
                !Enclose in the EDMFT *ALL* the local contributions to the self-energy
                !From the S_G0W0^{SPEX}_{ij} + S_G0W0^{SPEX}_{i} - S_G0W0^{DC}_{ij} - S_G0W0^{DC}_{i}

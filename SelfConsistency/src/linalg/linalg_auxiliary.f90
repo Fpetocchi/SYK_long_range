@@ -254,7 +254,7 @@ pure function deye(n) result(A)
      A(i,i) = 1d0
   end do
 end function deye
-
+!
 pure function zeye(n) result(A)
   integer, intent(in) :: n
   complex(8)          :: A(n, n)
@@ -264,6 +264,93 @@ pure function zeye(n) result(A)
      A(i,i) = one
   end do
 end function zeye
+
+
+
+
+
+!-------------------------------------------------------------------------------
+!PURPOSE: Cramer
+!-------------------------------------------------------------------------------
+function Cramer_3_d(x,y,z,b) result(M)
+   implicit none
+   real(8),intent(in)      :: x(3),y(3),z(3),b(3)
+   real(8)                 :: M(3)
+   integer                 :: i
+   real(8)                 :: num(3,3),den(3,3)
+   !
+   den(:,1) = x
+   den(:,2) = y
+   den(:,3) = z
+   if(ddet3(den).eq.0d0)stop"Cramer_3_d: denominator"
+   !
+   do i=1,3
+      num = den
+      num(:,i) = b
+      M(i) = ddet3(num) / ddet3(den)
+   enddo
+   !
+end function Cramer_3_d
+!
+function Cramer_3_z(x,y,z,b) result(M)
+   implicit none
+   complex(8),intent(in)   :: x(3),y(3),z(3),b(3)
+   complex(8)              :: M(3)
+   integer                 :: i
+   complex(8)              :: num(3,3),den(3,3)
+   !
+   den(:,1) = x
+   den(:,2) = y
+   den(:,3) = z
+   if(zdet3(den).eq.0d0)stop"Cramer_3_z: denominator"
+   !
+   do i=1,3
+      num = den
+      num(:,i) = b
+      M(i) = zdet3(num) / zdet3(den)
+   enddo
+   !
+end function Cramer_3_z
+!
+function Cramer_2_d(x,y,b) result(M)
+   implicit none
+   real(8),intent(in)      :: x(2),y(2),b(2)
+   real(8)                 :: M(2)
+   integer                 :: i
+   real(8)                 :: num(2,2),den(2,2),detden
+   !
+   den(:,1) = x
+   den(:,2) = y
+   detden = den(1,1)*den(2,2) - den(1,2)*den(2,1)
+   if(detden.eq.0d0)stop"Cramer_2_d: denominator"
+   !
+   do i=1,2
+      num = den
+      num(:,i) = b
+      M(i) = (num(1,1)*num(2,2) - num(1,2)*num(2,1)) / detden
+   enddo
+   !
+end function Cramer_2_d
+!
+function Cramer_2_z(x,y,b) result(M)
+   implicit none
+   complex(8),intent(in)   :: x(2),y(2),b(2)
+   complex(8)              :: M(2)
+   integer                 :: i
+   complex(8)              :: num(2,2),den(2,2),detden
+   !
+   den(:,1) = x
+   den(:,2) = y
+   detden = den(1,1)*den(2,2) - den(1,2)*den(2,1)
+   if(detden.eq.0d0)stop"Cramer_2_z: denominator"
+   !
+   do i=1,2
+      num = den
+      num(:,i) = b
+      M(i) = (num(1,1)*num(2,2) - num(1,2)*num(2,1)) / detden
+   enddo
+   !
+end function Cramer_2_z
 
 
 

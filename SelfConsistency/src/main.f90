@@ -174,7 +174,7 @@ program SelfConsistency
                !Use directly the DC since G0W0 is absent for model calculations
                call duplicate(S_G0W0,S_G0W0dc)
             else
-               !Store the Dc between G0W0 and scGW self-energies and use G0W0 as self-energy for the first iteration because the DC is equal to scGW
+               !Store the Dc between G0W0 and scGW self-energies and use G0W0 as self-energy for the first iteration
                call check_S_G0W0dc()
                call dump_FermionicField(S_G0W0dc,reg(ItFolder),"SGoWo_dc_w",.true.,Crystal%kpt,paramagnet)
                call dump_FermionicField(S_G0W0dc,reg(ItFolder),"SGoWo_dc_w",paramagnet)
@@ -189,6 +189,7 @@ program SelfConsistency
             !Read the Dc between G0W0 and scGW if present
             call AllocateFermionicField(S_G0W0dc,Crystal%Norb,Nmats,Nkpt=Crystal%Nkpt,Nsite=Nsite,Beta=Beta)
             if(.not.Hmodel)call read_FermionicField(S_G0W0dc,reg(pathDATA)//"0/","SGoWo_dc_w",kpt=Crystal%kpt)
+            if(RecomputeG0W0)call check_S_G0W0dc()
             !
             !Compute the scGW self-energy
             call AllocateFermionicField(S_GW,Crystal%Norb,Nmats,Nkpt=Crystal%Nkpt,Nsite=Nsite,Beta=Beta)

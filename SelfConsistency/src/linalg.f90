@@ -16,6 +16,7 @@ module linalg
       module procedure deig
       module procedure zeig
    end interface eig
+
    interface eigh
       module procedure deigh
       module procedure zeigh
@@ -25,10 +26,12 @@ module linalg
       module procedure dinv
       module procedure zinv
    end interface inv
+
    interface inv_sym
       module procedure dinv_sym
       module procedure zinv_sym
    end interface inv_sym
+
    interface inv_her
       module procedure zinv_her
    end interface inv_her
@@ -37,18 +40,22 @@ module linalg
       module procedure ddet
       module procedure zdet
    end interface det
+
    interface det3
       module procedure ddet3
       module procedure zdet3
    end interface det3
+
    interface diag
       module procedure ddiag
       module procedure zdiag
    end interface diag
+
    interface diagonal
       module procedure d_diagonal
       module procedure z_diagonal
    end interface diagonal
+
    interface trace
       module procedure dtrace
       module procedure ztrace
@@ -59,6 +66,13 @@ module linalg
       module procedure rotate_z
    end interface rotate
 
+   interface Cramer
+      module procedure Cramer_2_d
+      module procedure Cramer_2_z
+      module procedure Cramer_3_d
+      module procedure Cramer_3_z
+   end interface Cramer
+
    interface zeros
       module procedure zzeros_1
       module procedure zzeros_2
@@ -68,6 +82,7 @@ module linalg
       module procedure zzeros_6
       module procedure zzeros_7
    end interface zeros
+
    interface ones
       module procedure zones_1
       module procedure zones_2
@@ -148,6 +163,7 @@ module linalg
    public :: tensor_transform                                                   ![Tensor, either (Norb,Norb,Norb,Norb) or (Norb**2,Norb**2), Rotation(Norb,Norb)]
    !functions
    public :: det, det3, trace                                                   !numpy-like. Takes matrix returns scalar.
+   public :: Cramer                                                             !numpy-like. Takes matrix returns solution array.
    public :: deye, zeye, zeros, ones                                            !numpy-like. Takes integer returns square matrix.
    public :: diag                                                               !numpy-like. Takes vector returns diagonal square matrix.
    public :: diagonal                                                           !numpy-like. Takes square matrix returns diagonal vector.
