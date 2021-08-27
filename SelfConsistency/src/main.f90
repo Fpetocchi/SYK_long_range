@@ -269,7 +269,7 @@ program SelfConsistency
       !
       !
       !Print full self-energy: local readable, k-dep binfmt (optional) and along path
-      call dump_FermionicField(S_GW,reg(ItFolder),"Sfull_w",paramagnet)
+      call dump_FermionicField(S_Full,reg(ItFolder),"Sfull_w",paramagnet)
       if(dump_Sigmak)call dump_FermionicField(S_Full,reg(ItFolder),"Sfull_w",.true.,Crystal%kpt,paramagnet)
       if(print_path)call interpolateG2Path(S_Full,Crystal,reg(structure),Nkpt_path,reg(ItFolder))
       !
