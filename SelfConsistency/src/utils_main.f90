@@ -401,7 +401,6 @@ contains
       logical                               :: present
       integer,allocatable                   :: oldSetNorb(:),oldSetOrbs(:,:)
       real(8),allocatable                   :: Egrid(:)
-      !complex(8),allocatable                :: Vxc_loc(:,:)
       !
       !
       write(*,"(A)") new_line("A")//new_line("A")//"---- initialize_Lattice"
@@ -1485,6 +1484,8 @@ contains
       integer                               :: iorb,ik,iw,ispin
       integer                               :: isite,Norb
       integer,allocatable                   :: Orbs(:)
+      complex(8),allocatable                :: Vxc_loc(:,:,:)
+      real(8)                               :: ImS_1,ImS_2
       logical                               :: causal_G0W0_loc
       type(FermionicField)                  :: S_G0W0_imp
       type(FermionicField)                  :: S_G0W0_DMFT
@@ -1505,9 +1506,16 @@ contains
          case("G0W0","scGW","GW+EDMFT")
             !
             !
+            if(.not.allocated(VH)) stop "join_SigmaFull: VH not allocated."
+            if(.not.allocated(Vxc)) stop "join_SigmaFull: Vxc not allocated."
+            allocate(Vxc_loc(S_Full%Norb,S_Full%Norb,Nspin));Vxc_loc=czero
+            do ik=1,S_Full%Nkpt
+               Vxc_loc = Vxc_loc + Vxc(:,:,ik,:)/S_Full%Nkpt
+            enddo
+            !
+            if(.not.S_G0W0%status) stop "join_SigmaFull: S_G0W0 not properly initialized."
+            !
             if(Iteration.eq.0)then
-               !
-               if(.not.S_G0W0%status) stop "join_SigmaFull: S_G0W0 not properly initialized."
                !
                !Keep only single-shot GW
                do ispin=1,Nspin
@@ -1517,7 +1525,7 @@ contains
                   !$OMP DO
                   do ik=1,S_Full%Nkpt
                      do iw=1,S_Full%Npoints
-                        S_Full%wks(:,:,iw,ik,ispin) = + S_G0W0%wks(:,:,iw,ik,ispin) + VH(:,:) - Vxc(:,:,ik,ispin)
+                        S_Full%wks(:,:,iw,ik,ispin) = + S_G0W0%wks(:,:,iw,ik,ispin) - Vxc(:,:,ik,ispin) + VH(:,:)
                      enddo
                   enddo
                   !$OMP END DO
@@ -1530,9 +1538,8 @@ contains
                !
             elseif(Iteration.gt.0)then
                !
-               if(.not.S_GW%status) stop "join_SigmaFull: S_GW not properly initialized."
                if(.not.S_G0W0dc%status) stop "join_SigmaFull: S_G0W0dc not properly initialized."
-               if(.not.S_G0W0%status) stop "join_SigmaFull: S_G0W0 not properly initialized."
+               if(.not.S_GW%status) stop "join_SigmaFull: S_GW not properly initialized."
                !
                !Remove Dc between G0W0 and scGW self-energies
                !S_G0W0dc contains only diagonal elements in the LDA basis as the S_G0W0 computed from SPEX
@@ -1566,10 +1573,15 @@ contains
                   causaloop: do ispin=1,Nspin
                      do iorb=1,S_G0W0_DMFT%Norb
                         do iw=1,S_G0W0_DMFT%Npoints
-                           if(dimag(S_G0W0_DMFT%ws(iorb,iorb,iw,ispin)).gt.0d0)then
+                           ImS_1 = dimag(S_G0W0_DMFT%ws(iorb,iorb,iw,ispin))
+                           if(ImS_1.gt.0d0)then
                               write(*,"(A)")"     Warning: the local G0W0 self-energy has been found non-causal at iw="//str(iw)//" iorb="//str(iorb)//" ispin="//str(ispin)
                               causal_G0W0_loc=.false.
                               exit causaloop
+                           endif
+                           if(iw.le.10)then
+                              ImS_2 = dimag(S_G0W0_DMFT%ws(iorb,iorb,iw+1,ispin))
+                              if(ImS_2.gt.ImS_1) write(*,"(A)")"     Warning: the local G0W0 self-energy seems not to scale as a Fermi-liquid. If Delta(tau) is non-causal try to set G0W0DC_LOC=F."
                            endif
                         enddo
                      enddo
@@ -1581,25 +1593,25 @@ contains
                !we remove [ S_G0W0^{SPEX}_{i} - S_G0W0^{DC}_{i} ]
                !here, if Vxc is inside S_G0W0, also the local contribution from Vxc is removed
                if((.not.GoWoDC_loc).or.(.not.causal_G0W0_loc))then
-                  write(*,"(A)")"     local G0W0 self-energy removed."
+                  write(*,"(A)")"     Local G0W0 self-energy removed."
                   do ik=1,S_G0W0%Nkpt
                      S_G0W0%wks(:,:,:,ik,:) = S_G0W0%wks(:,:,:,ik,:) - S_G0W0_DMFT%ws
                   enddo
                endif
                call DeallocateField(S_G0W0_DMFT)
                !
-               !Add non local S_G0W0 to S_GW, the latter already contains Simp
+               !Add S_G0W0 to S_GW (already containing Simp)
                S_GW%wks = S_GW%wks + S_G0W0%wks
                !
                !Put together all the terms
                do ispin=1,Nspin
                   !$OMP PARALLEL DEFAULT(NONE),&
-                  !$OMP SHARED(S_Full,S_GW,VH,Vxc,ispin),&
+                  !$OMP SHARED(S_Full,S_GW,Glat,VH,Vxc,ispin),&
                   !$OMP PRIVATE(ik,iw)
                   !$OMP DO
                   do ik=1,S_Full%Nkpt
                      do iw=1,S_Full%Npoints
-                        S_Full%wks(:,:,iw,ik,ispin) = + S_GW%wks(:,:,iw,ik,ispin) + VH(:,:) - Vxc(:,:,ik,ispin)
+                        S_Full%wks(:,:,iw,ik,ispin) = + S_GW%wks(:,:,iw,ik,ispin) - Vxc(:,:,ik,ispin) + VH(:,:)! + 12d0*(Glat%wks(:,:,iw,ik,ispin)+1d0*deye(S_Full%Norb))
                      enddo
                   enddo
                   !$OMP END DO
@@ -1613,10 +1625,14 @@ contains
             endif
             call FermionicKsum(S_Full)
             !
+            do ispin=1,Nspin
+               S_Full%N_s(:,:,ispin) = Vxc_loc(:,:,ispin) - VH
+            enddo
+            !
+            deallocate(VH,Vxc,Vxc_loc)
             call DeallocateFermionicField(S_G0W0)
             call DeallocateFermionicField(S_G0W0dc)
-            call DeallocateFermionicField(S_GW)
-            call DeallocateFermionicField(S_DMFT)
+            if(.not.causal_D)call DeallocateFermionicField(S_GW)
             !
             !
          case("DMFT+statU","DMFT+dynU","EDMFT")
@@ -1632,19 +1648,18 @@ contains
                !$OMP DO
                do ik=1,S_Full%Nkpt
                   do iw=1,S_Full%Npoints
-                     S_Full%wks(:,:,iw,ik,ispin) = S_DMFT%ws(:,:,iw,ispin)-HartreeFact*S_DMFT%N_s(:,:,int(Nspin/ispin))
+                     S_Full%wks(:,:,iw,ik,ispin) = S_DMFT%ws(:,:,iw,ispin) - HartreeFact*S_DMFT%N_s(:,:,int(Nspin/ispin))
                   enddo
                enddo
                !$OMP END DO
                !$OMP END PARALLEL
+               S_Full%N_s(:,:,ispin) = HartreeFact*S_DMFT%N_s(:,:,int(Nspin/ispin))
                if(paramagnet)then
                   S_Full%wks(:,:,:,:,Nspin) = S_Full%wks(:,:,:,:,1)
                   exit
                endif
             enddo
             call FermionicKsum(S_Full)
-            !
-            call DeallocateFermionicField(S_DMFT)
             !
       end select
       !
@@ -1666,29 +1681,29 @@ contains
       write(*,"(A)") new_line("A")//new_line("A")//"---- calc_causality_Delta_correction"
       !
       !
-      if(.not.S_Full%status) stop "calc_causality_Delta_correction: S_Full not properly initialized."
+      if(.not.S_GW%status) stop "calc_causality_Delta_correction: S_GW not properly initialized."
       if(.not.Glat%status) stop "calc_causality_Delta_correction: Glat not properly initialized."
       !
       call AllocateFermionicField(D_correction,Crystal%Norb,Nmats,Nsite=Nsite,Beta=Beta)
-      allocate(GS(S_Full%Norb,S_Full%Norb));GS=czero
-      allocate(SG(S_Full%Norb,S_Full%Norb));SG=czero
-      allocate(SGS(S_Full%Norb,S_Full%Norb));SGS=czero
-      allocate(invG(S_Full%Norb,S_Full%Norb));invG=czero
+      allocate(GS(S_GW%Norb,S_GW%Norb));GS=czero
+      allocate(SG(S_GW%Norb,S_GW%Norb));SG=czero
+      allocate(SGS(S_GW%Norb,S_GW%Norb));SGS=czero
+      allocate(invG(S_GW%Norb,S_GW%Norb));invG=czero
       !
       !$OMP PARALLEL DEFAULT(NONE),&
-      !$OMP SHARED(S_Full,Glat,D_correction),&
+      !$OMP SHARED(S_GW,Glat,D_correction),&
       !$OMP PRIVATE(ispin,iw,ik,GS,SG,SGS,invG)
       !$OMP DO
       do ispin=1,Nspin
-         do iw=1,S_Full%Npoints
+         do iw=1,S_GW%Npoints
             !
             GS=czero;SG=czero;SGS=czero
             !
-            do ik=1,S_Full%Nkpt
+            do ik=1,S_GW%Nkpt
                !
-               GS = GS + matmul(Glat%wks(:,:,iw,ik,ispin),S_Full%wks(:,:,iw,ik,ispin))/S_Full%Nkpt
-               SG = SG + matmul(S_Full%wks(:,:,iw,ik,ispin),Glat%wks(:,:,iw,ik,ispin))/S_Full%Nkpt
-               SGS = SGS + matmul(S_Full%wks(:,:,iw,ik,ispin),matmul(Glat%wks(:,:,iw,ik,ispin),S_Full%wks(:,:,iw,ik,ispin)))/S_Full%Nkpt
+               GS = GS + matmul(Glat%wks(:,:,iw,ik,ispin),S_GW%wks(:,:,iw,ik,ispin))/S_GW%Nkpt
+               SG = SG + matmul(S_GW%wks(:,:,iw,ik,ispin),Glat%wks(:,:,iw,ik,ispin))/S_GW%Nkpt
+               SGS = SGS + matmul(S_GW%wks(:,:,iw,ik,ispin),matmul(Glat%wks(:,:,iw,ik,ispin),S_GW%wks(:,:,iw,ik,ispin)))/S_GW%Nkpt
                !
             enddo
             !
@@ -1699,7 +1714,7 @@ contains
             ! Put toghether all the pieces. arxiv:2011.05311 Eq.7
             D_correction%ws(:,:,iw,ispin) = + SGS                             &
                                             - matmul(SG,matmul(invG,GS))      &
-                                            + 2d0*S_Full%ws(:,:,iw,ispin)     & !<-- this is S_DMFT + all the local shifts
+                                            + 2d0*S_GW%ws(:,:,iw,ispin)       & !<-- this is S_DMFT + all the local shifts
                                             - matmul(SG,invG)                 &
                                             - matmul(invG,GS)
             !
@@ -1708,6 +1723,8 @@ contains
       !$OMP END DO
       !$OMP END PARALLEL
       deallocate(GS,SG,SGS,invG)
+      !
+      call DeallocateFermionicField(S_GW)
       !
       call symmetrize_GW(D_correction,EqvGWndx)
       call dump_FermionicField(D_correction,reg(ItFolder),"D_correction_w",paramagnet)
@@ -1811,7 +1828,7 @@ contains
       write(*,"(A)") new_line("A")//new_line("A")//"---- calc_Delta of "//reg(SiteName(isite))
       !
       !
-      if(.not.S_Full%status) stop "calc_Delta: S_Full not properly initialized."
+      if(.not.S_DMFT%status) stop "calc_Delta: S_DMFT not properly initialized."
       if(.not.Glat%status) stop "calc_Delta: Glat not properly initialized."
       if(causal_D.and.(.not.D_correction%status)) stop "calc_Delta: requested causality correction but D_correction not properly initialized."
       !
@@ -1837,7 +1854,9 @@ contains
          enddo
       enddo
       !
-      ! Extract and rotate from local (non-diagonal) to imp (diagonal) the given sites
+      !Extract and rotate from local (non-diagonal) to imp (diagonal) the given sites
+      !similar result could be obtained with S_Full%ws(:,:,iw,:) + S_Full%N_s
+      !defined in join_SigmaFull but using directly S_DMFT is more precise
       allocate(Nloc(Norb,Norb,Nspin));Nloc=czero
       call clear_attributes(Gloc)
       call clear_attributes(SigmaImp)
@@ -1847,7 +1866,7 @@ contains
          allocate(Rot(Norb,Norb)); Rot=OlocRot(1:Norb,1:Norb,isite)
          call loc2imp(Gloc,Glat,Orbs,U=Rot)
          call calc_density(Gloc,Nloc)
-         call loc2imp(SigmaImp,S_Full,Orbs,U=Rot)
+         call loc2imp(SigmaImp,S_DMFT,Orbs,U=Rot)
          if(causal_D)call loc2imp(DeltaCorr,D_correction,Orbs,U=Rot)
          deallocate(Rot)
          !
@@ -1861,7 +1880,7 @@ contains
          !
          call loc2imp(Gloc,Glat,Orbs)
          call calc_density(Gloc,Nloc)
-         call loc2imp(SigmaImp,S_Full,Orbs)
+         call loc2imp(SigmaImp,S_DMFT,Orbs)
          if(causal_D)call loc2imp(DeltaCorr,D_correction,Orbs)
          !
       endif
@@ -2384,8 +2403,6 @@ contains
       call DeallocateBosonicField(curlyU)
       !
    end subroutine calc_Interaction
-
-
 
 
    !---------------------------------------------------------------------------!

@@ -135,6 +135,7 @@ program SelfConsistency
             if(ExpandImpurity.or.AFMselfcons)exit
             !
          enddo
+         call DeallocateBosonicField(P_EDMFT)
          !
       endif
       !
@@ -222,7 +223,7 @@ program SelfConsistency
       !
       !
       !Put together all the contributions to the full self-energy
-      !and deallocate all the components: S_G0W0, S_G0W0dc, S_GW, S_DMFT
+      !and deallocate all non-local components: S_G0W0, S_G0W0dc, S_GW
       if(.not.S_Full_exists) call join_SigmaFull(Iteration)
       !
       !
@@ -271,7 +272,9 @@ program SelfConsistency
       !Print full self-energy: local readable, k-dep binfmt (optional) and along path
       call dump_FermionicField(S_Full,reg(ItFolder),"Sfull_w",paramagnet)
       if(dump_Sigmak)call dump_FermionicField(S_Full,reg(ItFolder),"Sfull_w",.true.,Crystal%kpt,paramagnet)
+      call dump_MaxEnt(S_Full,"mats",reg(ItFolder)//"Convergence/","Sful",EqvGWndx%SetOrbs,WmaxPade=PadeWlimit)
       if(print_path)call interpolateG2Path(S_Full,Crystal,reg(structure),Nkpt_path,reg(ItFolder))
+      call DeallocateFermionicField(S_Full)
       !
       !
       !Matching the lattice and impurity problems: Fermions
