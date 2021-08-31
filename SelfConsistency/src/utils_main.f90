@@ -232,7 +232,7 @@ contains
                   write(*,"(A)") "     Previous iteration: "//str(FirstIteration-1)//". Not found, exiting."
                   stop
                endif
-               if(.not.ZeroItexist)stop "G0W0 0th iteration not found, exiting."
+               if((.not.ZeroItexist).and.(.not.Hmodel))stop "G0W0 0th iteration not found, exiting."
             endif
             !
             if(Uspex)then
@@ -254,7 +254,7 @@ contains
                   write(*,"(A)") "     Previous iteration: "//str(FirstIteration-1)//". Not found, exiting."
                   stop
                endif
-               if((reg(CalculationType).eq."GW+EDMFT").and.(.not.ZeroItexist)) stop "G0W0 0th iteration not found, exiting."
+               if((reg(CalculationType).eq."GW+EDMFT").and.(.not.ZeroItexist).and.(.not.Hmodel)) stop "G0W0 0th iteration not found, exiting."
             endif
             !
             if(Uspex)then

@@ -1,7 +1,6 @@
 ################################################################################
 #                                USER SETTINGS                                 #
 ################################################################################
-GENMAT=/home/petocchif/1_GW_EDMFT/nobackup/1_production/Calculation_template
 
 
 
@@ -18,27 +17,30 @@ GENMAT=/home/petocchif/1_GW_EDMFT/nobackup/1_production/Calculation_template
 #declare -a dirindex=( "67_BKP_USED" ) # i_n_0.8
 #declare -a dirindex=( "79_BKP_USED" ) # l_n_0.9
 
-#for it in `seq 95 1 99` ; do
+#
 
 #------------------------------------------------------------------------------#
 
 
 for it in "${dirindex[@]}" ; do
+
+GENMAT=/home/petocchif/1_GW_EDMFT/nobackup/1_production/Calculation_template
+for it in `seq 82 1 86` ; do
    ## LATTICE----------------------------------------
    cd $it/Convergence
    cp ${GENMAT}/${MATERIAL}/MaxEnt/MaxEnt.sh .
-
+   #
    chmod 700 MaxEnt.sh
    #
-   P="-e 0.0005 -w 18001 -W 300"
+   PARAM="-e 0.0005 -w 18001 -W 300"
+   ./MaxEnt.sh ${PARAM} -f G -o 1 -i lat -p ${GENMAT}
+   ./MaxEnt.sh ${PARAM} -f G -o 2 -i lat -p ${GENMAT}
+   ./MaxEnt.sh ${PARAM} -f G -o 3 -i lat -p ${GENMAT}
    #
-   PARAM=${P}
-   ./MaxEnt.sh ${PARAM} -f G -o 1 -i lat
-   #
-   P="-e 0.02   -w 10000 -W 400"
-   #
-   PARAM=${P}
-   ./MaxEnt.sh ${PARAM} -f W -o 1 -i lat
+   PARAM="-e 0.02   -w 10000 -W 400"
+   ./MaxEnt.sh ${PARAM} -f W -o 1 -i lat -p ${GENMAT}
+   ./MaxEnt.sh ${PARAM} -f W -o 2 -i lat -p ${GENMAT}
+   ./MaxEnt.sh ${PARAM} -f W -o 3 -i lat -p ${GENMAT}
    #
    cd ../../
 
@@ -48,21 +50,17 @@ for it in "${dirindex[@]}" ; do
    cp ${GENMAT}/${MATERIAL}/MaxEnt/MaxEnt.sh .
    chmod 700 MaxEnt.sh
    #
-   P="-e 0.001 -w 10000 -W 400"
+   PARAM="-e 0.001 -w 10000 -W 400"
+   ./MaxEnt.sh ${PARAM} -f G -o 1 -i qmc_Ti -p ${GENMAT}
+   ./MaxEnt.sh ${PARAM} -f G -o 2 -i qmc_Ti -p ${GENMAT}
+   ./MaxEnt.sh ${PARAM} -f G -o 3 -i qmc_Ti -p ${GENMAT}
    #
-   PARAM=${P}
-   ./MaxEnt.sh ${PARAM} -f G -o 1 -i qmc_Ti
-   ./MaxEnt.sh ${PARAM} -f G -o 2 -i qmc_Ti
-   ./MaxEnt.sh ${PARAM} -f G -o 3 -i qmc_Ti
-   #
-   P="-e 0.01 -w 2000 -W 50"
-   #
-   PARAM=${P}
-   ./MaxEnt.sh ${PARAM} -f C -o 1 -i imp
+   PARAM="-e 0.01 -w 2000 -W 50"
+   ./MaxEnt.sh ${PARAM} -f C -o 1 -i imp -p ${GENMAT}
 
    cd ../../
 
-   done
+done
 
 
 
