@@ -349,9 +349,9 @@ contains
                NbulkL = Hetero%Explicit(1)-1
                !
                allocate(Potential_L(Hetero%Norb,Hetero%Norb,Nmats,Nkpt,Nspin));Potential_L=czero
-               call build_Potential(Potential_L,Hetero%tz(:,:,Hetero%Explicit(1)),NbulkL &
-                                               ,zeta(Ln(1):Ln(2),Ln(1):Ln(2),:)          &
-                                               ,Hk(Ln(1):Ln(2),Ln(1):Ln(2),:)            &
+               call build_Potential(Potential_L,Hetero%tz(:,:,Hetero%Explicit(1)-1),NbulkL &
+                                               ,zeta(Ln(1):Ln(2),Ln(1):Ln(2),:)            &
+                                               ,Hk(Ln(1):Ln(2),Ln(1):Ln(2),:)              &
                                                ,Smats%wks(Ln(1):Ln(2),Ln(1):Ln(2),:,:,:) )
                write(*,"(2(A,2I4))") "     Left potential orbital indexes: ",Ln(1),Ln(2)," thickness: ",NbulkL
                !
@@ -363,9 +363,9 @@ contains
                NbulkR = Hetero%Nslab-Hetero%Explicit(2)
                !
                allocate(Potential_R(Hetero%Norb,Hetero%Norb,Nmats,Nkpt,Nspin));Potential_R=czero
-               call build_Potential(Potential_R,Hetero%tz(:,:,Hetero%Explicit(2)),NbulkR &
-                                               ,zeta(Rn(1):Rn(2),Rn(1):Rn(2),:)          &
-                                               ,Hk(Rn(1):Rn(2),Rn(1):Rn(2),:)            &
+               call build_Potential(Potential_R,Hetero%tz(:,:,Hetero%Explicit(2)),NbulkR   &
+                                               ,zeta(Rn(1):Rn(2),Rn(1):Rn(2),:)            &
+                                               ,Hk(Rn(1):Rn(2),Rn(1):Rn(2),:)              &
                                                ,Smats%wks(Rn(1):Rn(2),Rn(1):Rn(2),:,:,:) )
                write(*,"(2(A,2I4))") "     Right potential orbital indexes: ",Rn(1),Rn(2)," thickness: ",NbulkR
                !
@@ -969,7 +969,6 @@ contains
 
    !---------------------------------------------------------------------------!
    !PURPOSE: Prints lda Gf on different axis.
-   !TEST ON: 14-10-2020
    !---------------------------------------------------------------------------!
    subroutine build_Potential(Potential,tz,Npot,zeta,Hk,Smats)
       !
@@ -1042,5 +1041,6 @@ contains
       deallocate(Gbulk,invGbulk,Ptmp)
       !
    end subroutine build_Potential
+
 
 end module greens_function

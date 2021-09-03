@@ -15,25 +15,24 @@ GENMAT=/home/petocchif/1_GW_EDMFT/nobackup/1_production/Calculation_template
 
 
 GENMAT=/home/petocchif/1_GW_EDMFT/nobackup/1_production/Calculation_template
-for it in `seq 26 1 40`
-do
+for it in `seq 44 1 53`;do
 
    ## LATTICE
    cd $it/Convergence
    cp ${GENMAT}/${MATERIAL}/MaxEnt/MaxEnt.sh .
    chmod 700 MaxEnt.sh
    #
-   ./MaxEnt.sh -e 0.01 -w 4000 -W  15 -f G -o 1 -i lat
-   ./MaxEnt.sh -e 0.01 -w 4000 -W  15 -f G -o 2 -i lat
-   ./MaxEnt.sh -e 0.01 -w 4000 -W  15 -f G -o 3 -i lat
-   ./MaxEnt.sh -e 0.01 -w 4000 -W  15 -f G -o 4 -i lat
-   ./MaxEnt.sh -e 0.01 -w 4000 -W  15 -f G -o 5 -i lat
-   #
-   ./MaxEnt.sh -e 0.001  -w 4000 -W 20 -f W -o 1 -i lat
-   ./MaxEnt.sh -e 0.001  -w 4000 -W 20 -f W -o 2 -i lat
-   ./MaxEnt.sh -e 0.001  -w 4000 -W 20 -f W -o 3 -i lat
-   ./MaxEnt.sh -e 0.001  -w 4000 -W 20 -f W -o 4 -i lat
-   ./MaxEnt.sh -e 0.001  -w 4000 -W 20 -f W -o 5 -i lat
+   ./MaxEnt.sh -e 0.01  -w 4000 -W  5 -f G -o 1 -i lat -p ${GENMAT}
+  #./MaxEnt.sh -e 0.01  -w 4000 -W 15 -f G -o 2 -i lat
+  #./MaxEnt.sh -e 0.01  -w 4000 -W 15 -f G -o 3 -i lat
+  #./MaxEnt.sh -e 0.01  -w 4000 -W 15 -f G -o 4 -i lat
+  #./MaxEnt.sh -e 0.01  -w 4000 -W 15 -f G -o 5 -i lat
+  #
+  #./MaxEnt.sh -e 0.01  -w 2000 -W 10 -f W -o 1 -i lat -p ${GENMAT}
+  #./MaxEnt.sh -e 0.001 -w 4000 -W 20 -f W -o 2 -i lat
+  #./MaxEnt.sh -e 0.001 -w 4000 -W 20 -f W -o 3 -i lat
+  #./MaxEnt.sh -e 0.001 -w 4000 -W 20 -f W -o 4 -i lat
+  #./MaxEnt.sh -e 0.001 -w 4000 -W 20 -f W -o 5 -i lat
    #
    cd ../../
 
@@ -43,7 +42,8 @@ do
    cp ${GENMAT}/${MATERIAL}/MaxEnt/MaxEnt.sh .
    chmod 700 MaxEnt.sh
    #
- #TODO./MaxEnt.sh -e 0.0005 -w 3000 -W  6 -f G -o 1 -i qmc_Tr
+   ./MaxEnt.sh -e 0.01  -w 4000 -W  5 -f G -o 1 -i qmc_S1 -p ${GENMAT}
+   ./MaxEnt.sh -e 0.01  -w 4000 -W  5 -f G -o 1 -i imp    -p ${GENMAT}
    #
  #TODO./MaxEnt.sh -e 0.01   -w 4000 -W 20 -f C -o 1 -i imp
    #

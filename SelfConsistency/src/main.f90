@@ -167,19 +167,23 @@ program SelfConsistency
          !scGW
          if(Iteration.eq.0)then
             !
-            !Compute the Dc between G0W0 and scGW self-energies
-            call AllocateFermionicField(S_G0W0dc,Crystal%Norb,Nmats,Nkpt=Crystal%Nkpt,Nsite=Nsite,Beta=Beta)
-            call calc_sigmaGW(S_G0W0dc,Glat,Wlat,Crystal,LDAoffdiag=.false.)
-            !
-            if(Hmodel)then
-               !Use directly the DC since G0W0 is absent for model calculations
-               call duplicate(S_G0W0,S_G0W0dc)
-            else
+            if(.not.Hmodel)then
+               !
+               !Compute the Dc between G0W0 and scGW self-energies
+               call AllocateFermionicField(S_G0W0dc,Crystal%Norb,Nmats,Nkpt=Crystal%Nkpt,Nsite=Nsite,Beta=Beta)
+               call calc_sigmaGW(S_G0W0dc,Glat,Wlat,Crystal,LDAoffdiag=.false.)
+               !
                !Store the Dc between G0W0 and scGW self-energies and use G0W0 as self-energy for the first iteration
                call check_S_G0W0()
                call dump_FermionicField(S_G0W0dc,reg(ItFolder),"SGoWo_dc_w",.true.,Crystal%kpt,paramagnet)
                call dump_FermionicField(S_G0W0dc,reg(ItFolder),"SGoWo_dc_w",paramagnet)
                call DeallocateFermionicField(S_G0W0dc)
+               !
+            else
+               !
+               !Use directly the GW formula since G0W0 is absent for model calculations
+               call calc_sigmaGW(S_G0W0,Glat,Wlat,Crystal,LDAoffdiag=.false.)
+               !
             endif
             !
             call dump_FermionicField(S_G0W0,reg(ItFolder),"Slat_w",paramagnet)
@@ -188,9 +192,11 @@ program SelfConsistency
          elseif(Iteration.gt.0)then
             !
             !Read the Dc between G0W0 and scGW if present
-            call AllocateFermionicField(S_G0W0dc,Crystal%Norb,Nmats,Nkpt=Crystal%Nkpt,Nsite=Nsite,Beta=Beta)
-            if(.not.Hmodel)call read_FermionicField(S_G0W0dc,reg(pathDATA)//"0/","SGoWo_dc_w",kpt=Crystal%kpt)
-            if(RecomputeG0W0)call check_S_G0W0()
+            if(.not.Hmodel)then
+               call AllocateFermionicField(S_G0W0dc,Crystal%Norb,Nmats,Nkpt=Crystal%Nkpt,Nsite=Nsite,Beta=Beta)
+               call read_FermionicField(S_G0W0dc,reg(pathDATA)//"0/","SGoWo_dc_w",kpt=Crystal%kpt)
+               if(RecomputeG0W0)call check_S_G0W0()
+            endif
             !
             !Compute the scGW self-energy
             call AllocateFermionicField(S_GW,Crystal%Norb,Nmats,Nkpt=Crystal%Nkpt,Nsite=Nsite,Beta=Beta)

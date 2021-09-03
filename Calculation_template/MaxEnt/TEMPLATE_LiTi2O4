@@ -25,7 +25,7 @@
 for it in "${dirindex[@]}" ; do
 
 GENMAT=/home/petocchif/1_GW_EDMFT/nobackup/1_production/Calculation_template
-for it in `seq 82 1 86` ; do
+for it in `seq 83 1 88` ; do
    ## LATTICE----------------------------------------
    cd $it/Convergence
    cp ${GENMAT}/${MATERIAL}/MaxEnt/MaxEnt.sh .

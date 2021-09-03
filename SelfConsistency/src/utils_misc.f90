@@ -57,6 +57,11 @@ module utils_misc
       module procedure sort_array_d
    end interface sort_array
 
+   interface find_vec
+      module procedure find_vec_i
+      module procedure find_vec_d
+   end interface find_vec
+
    interface check_Symmetry
       module procedure check_Symmetry_d
       module procedure check_Symmetry_z
@@ -71,6 +76,7 @@ module utils_misc
       module procedure fermidirac_shifted
       module procedure fermidirac_centered
    end interface fermidirac
+
    interface boseeinstein
       module procedure boseeinstein_shifted
       module procedure boseeinstein_centered
@@ -118,7 +124,7 @@ module utils_misc
    public :: fermidirac
    public :: boseeinstein
    public :: diff_fermidirac
-   public :: find_kpt
+   public :: find_vec
    public :: keq
    public :: linspace
    public :: denspace
@@ -262,30 +268,54 @@ contains
 
 
    !---------------------------------------------------------------------------!
-   !PURPOSE: Find index of K-point in list
+   !PURPOSE: Find index of vector in list
    !---------------------------------------------------------------------------!
-   function find_kpt(kvec,klist,tol) result(ikvec)
+   function find_vec_i(vec,list) result(ivec)
       implicit none
-      real(8),intent(in)                    :: kvec(:)
-      real(8),intent(in)                    :: klist(:,:)
-      real(8),intent(in)                    :: tol
-      integer                               :: ikvec
-      integer                               :: ik,Nkpt
-      Nkpt=size(klist,dim=2)
-      do ik=1,Nkpt
-         if((dabs(kvec(1)-klist(1,ik)).le.tol).and. &
-            (dabs(kvec(2)-klist(2,ik)).le.tol).and. &
-            (dabs(kvec(3)-klist(3,ik)).le.tol)) then
-            ikvec=ik
+      integer,intent(in)                    :: vec(:)
+      integer,intent(in)                    :: list(:,:)
+      logical                               :: l1,l2,l3
+      integer                               :: i,ivec
+      !
+      do i=1,size(list,dim=2)
+         l1 = vec(1) .eq. list(1,i)
+         l2 = vec(2) .eq. list(2,i)
+         l3 = vec(3) .eq. list(3,i)
+         if(l1.and.l2.and.l3) then
+            ivec = i
             exit
          endif
       enddo
-      if(ik.eq.Nkpt) then
-          write(*,"(A)")"find_kpt: requested k-point not found in k-point set"
-          write(*,"(A,300F)")"find_kpt: kvec=",kvec
-          stop "find_kpt: k-point for chiplot not found in k-point set"
+      if(i.eq.size(list,dim=2)) then
+          write(*,"(A,300F)")"find_vec_i: vec=",vec
+          stop "find_vec_i: requested vector not found in list."
       endif
-   end function find_kpt
+      !
+   end function find_vec_i
+   !
+   function find_vec_d(vec,list,tol) result(ivec)
+      implicit none
+      real(8),intent(in)                    :: vec(:)
+      real(8),intent(in)                    :: list(:,:)
+      real(8),intent(in)                    :: tol
+      logical                               :: l1,l2,l3
+      integer                               :: i,ivec
+      !
+      do i=1,size(list,dim=2)
+         l1 = dabs(vec(1)-list(1,i)) .le. tol
+         l2 = dabs(vec(2)-list(2,i)) .le. tol
+         l3 = dabs(vec(3)-list(3,i)) .le. tol
+         if(l1.and.l2.and.l3) then
+            ivec = i
+            exit
+         endif
+      enddo
+      if(i.eq.size(list,dim=2)) then
+          write(*,"(A,300F)")"find_vec_d: vec=",vec
+          stop "find_vec_d: requested vector not found in list."
+      endif
+      !
+   end function find_vec_d
 
 
    !---------------------------------------------------------------------------!

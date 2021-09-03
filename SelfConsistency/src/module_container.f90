@@ -14,7 +14,7 @@ module module_container
 
    !(b) Standalone module. Can be used as generic library.
    use utils_misc, only:                     &
-   find_kpt, keq                            ,&
+   find_vec, keq                            ,&
    init_Uelements                           ,&
    FermionicFreqMesh,BosonicFreqMesh        ,&
    fermidirac,diff_fermidirac               ,&
@@ -48,6 +48,8 @@ module module_container
    calc_Kpath                               ,&
    calc_Kplane                              ,&
    calc_Ewald                               ,&
+   set_UserPath                             ,&
+   get_Rlat,get_Blat                        ,&
    interpolateHk2Path                       ,&
    tetrahedron_integration
 

@@ -101,7 +101,7 @@ if [ "$FIELD"  == "G" ] || [ "$FIELD"  == "S" ]; then
    WORKDIR="MaxEnt_"${FIELD}${SOURCE}"_o"${ORB}"_s"${SPIN}
    mkdir $WORKDIR
    cd $WORKDIR
-   JOBNAME=${FIELD}${ORB}"s"${SPIN}
+   JOBNAME=${FIELD}${SOURCE}"_"${ORB}"s"${SPIN}
    #
    DATA=${FIELD}${SOURCE}"_t_o"${ORB}"_s"${SPIN}".DAT"
    DATA_=$DATA
@@ -109,10 +109,10 @@ if [ "$FIELD"  == "G" ] || [ "$FIELD"  == "S" ]; then
    #
 elif [ "$FIELD"  == "M" ]; then
    #
-   WORKDIR="MaxEnt_"$FIELD$SOURCE
+   WORKDIR="MaxEnt_"${FIELD}${SOURCE}
    mkdir $WORKDIR
    cd $WORKDIR
-   JOBNAME=$FIELD$ORB$JOR
+   JOBNAME=${FIELD}${SOURCE}"_"${ORB}${JOR}
    #
    DATA=${FIELD}${SOURCE}"_w.DAT"
    DATA_=$DATA
@@ -120,10 +120,10 @@ elif [ "$FIELD"  == "M" ]; then
    #
 else
    #
-   WORKDIR="MaxEnt_"$FIELD$SOURCE"_o"$ORB$JOR
+   WORKDIR="MaxEnt_"${FIELD}${SOURCE}"_o"${ORB}${JOR}
    mkdir $WORKDIR
    cd $WORKDIR
-   JOBNAME=$FIELD$ORB$JOR
+   JOBNAME=${FIELD}${SOURCE}"_"${ORB}${JOR}
    #
    DATA=${FIELD}${SOURCE}"_w_("${ORB}","${JOR}")("${JOR}","${ORB}").DAT"
    DATA_=${FIELD}${SOURCE}"_w_"${ORB}${JOR}${JOR}${ORB}".DAT"
@@ -155,7 +155,7 @@ cat << EOF > submit_MaxEnt
 #!/bin/bash
 #$ -S /bin/bash
 #$ -cwd
-#$ -N   $JOBNAME
+#$ -N   ${JOBNAME}
 #$ -e   error.out
 #$ -o   log.out
 #$ -pe  smp 1
@@ -165,7 +165,7 @@ echo \$RUNOPTIONS
 export PYTHONPATH=\${PYTHONPATH}:${BIN}/docopt/
 export OMP_NUM_THREADS=1
 
-mpiexec -np 1 python3.6  $BIN/bryan.py $RUNOPTIONS $DATA_ > job.out 2> err.out
+mpiexec -np 1 python3.6  ${BIN}/bryan.py ${RUNOPTIONS} ${DATA_} > job.out 2> err.out
 
 EOF
 

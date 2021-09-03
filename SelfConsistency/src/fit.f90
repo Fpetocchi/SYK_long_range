@@ -155,7 +155,6 @@ contains
 
    !---------------------------------------------------------------------------!
    !PURPOSE: Setup/initilize the Anderson parameters.
-   !TEST ON:
    !---------------------------------------------------------------------------!
    subroutine setupAndPrams(Norb,dirpath,paramFile)
       !
@@ -274,7 +273,6 @@ contains
 
    !---------------------------------------------------------------------------!
    !PURPOSE: Write to file the Delta Anderson parameters.
-   !TEST ON:
    !---------------------------------------------------------------------------!
    subroutine dump_AndPrams(dirpath,paramFile)
       !
@@ -318,7 +316,6 @@ contains
    !         (iorb) from the parameters list [Epsk,Vk,Eo].
    !         The frequency mesh is not global as the routines are made available
    !         in the main.
-   !TEST ON:
    !---------------------------------------------------------------------------!
    function DeltaAnderson(AndParaVec,wm) result(Delta)
       use parameters
@@ -388,7 +385,6 @@ contains
    !---------------------------------------------------------------------------!
    !PURPOSE: Distance between input/output functions minimized by the module.
    !         Here Nfreq is global and defined in the callable fit subroutine.
-   !TEST ON:
    !---------------------------------------------------------------------------!
    subroutine chi2_Delta(Npara,AndParaVec,chi2)
       use parameters
@@ -422,7 +418,6 @@ contains
    !---------------------------------------------------------------------------!
    !PURPOSE: Fit a given function [Norn,Nfreq,Nspin] assuming an hybridization
    !         like functional form with an addtional shift.
-   !TEST ON:
    !---------------------------------------------------------------------------!
    subroutine fit_Delta(funct,Beta,Nb,dirpath,paramFile,FitMode,Eloc,filename,Wlimit,coef01)
       !
@@ -580,7 +575,6 @@ contains
 
    !---------------------------------------------------------------------------!
    !PURPOSE: Setup/initilize the Green's function moments.
-   !TEST ON:
    !---------------------------------------------------------------------------!
    subroutine setupMoments(Norb,dirpath,paramFile,refresh)
       !
@@ -665,7 +659,6 @@ contains
 
    !---------------------------------------------------------------------------!
    !PURPOSE: Write to file the Moment list.
-   !TEST ON:
    !---------------------------------------------------------------------------!
    subroutine dump_Moments(dirpath,paramFile)
       !
@@ -705,7 +698,6 @@ contains
    !PURPOSE: Creates the generic functional form via a moment representation.
    !         Global module variables are not used as the routines are available
    !         in the main.
-   !TEST ON:
    !---------------------------------------------------------------------------!
    function G_Moments(ParamVec,wm,Gconstr) result(Gf)
       use parameters
@@ -884,8 +876,7 @@ contains
 
    !---------------------------------------------------------------------------!
    !PURPOSE: Distance between input/output functions minimized by the module.
-   !         Here Nfreq is global and defined in  the callable fit subroutine.
-   !TEST ON:
+   !         Here Nfreq is global and defined in the callable fit subroutine.
    !---------------------------------------------------------------------------!
    subroutine chi2_G_Moments(Npara,MomentVec,chi2)
       use parameters
@@ -933,7 +924,6 @@ contains
    !---------------------------------------------------------------------------!
    !PURPOSE: Fit a given function [Norn,Nfreq,Nspin] assuming a generic
    !         functional moment formulation.
-   !TEST ON:
    !---------------------------------------------------------------------------!
    subroutine fit_moments(funct,Beta,dirpath,paramFile,FitMode,MomentsOut,filename,Wlimit,verb,refresh)
       !
@@ -1142,7 +1132,6 @@ contains
 
    !---------------------------------------------------------------------------!
    !PURPOSE: Wrapper around the specific minimization routine used
-   !TEST ON:
    !---------------------------------------------------------------------------!
    subroutine fit_wrapper(funct,param,err,outit)
       !

@@ -104,9 +104,10 @@ module input_vars
    !
    !model H(k)
    logical,public                           :: Hmodel
+   logical,public                           :: readHr
    real(8),public                           :: LatticeVec(3,3)
    integer,public                           :: Norb_model
-   real(8),public,allocatable               :: hopping(:)
+   real(8),allocatable,public               :: hopping(:)
    type(Heterostructures),public            :: Hetero
    !
    !Site and Orbital space
@@ -116,10 +117,10 @@ module input_vars
    logical,public                           :: RotateUloc
    logical,public                           :: AFMselfcons
    logical,public                           :: cmplxWann
-   integer,public,allocatable               :: SiteNorb(:)
-   character(len=255),public,allocatable    :: SiteName(:)
-   integer,public,allocatable               :: SiteOrbs(:,:)
-   real(8),public,allocatable               :: SiteCF(:,:)
+   integer,allocatable,public               :: SiteNorb(:)
+   character(len=255),allocatable,public    :: SiteName(:)
+   integer,allocatable,public               :: SiteOrbs(:,:)
+   real(8),allocatable,public               :: SiteCF(:,:)
    !
    !Equivalent lattice indexes
    integer,public                           :: sym_mode
@@ -151,10 +152,10 @@ module input_vars
    real(8),public                           :: Uab
    real(8),public                           :: J
    integer,public                           :: Nphonons
-   real(8),public,allocatable               :: g_eph(:)
-   real(8),public,allocatable               :: wo_eph(:)
+   real(8),allocatable,public               :: g_eph(:)
+   real(8),allocatable,public               :: wo_eph(:)
    integer,public                           :: N_Vnn
-   real(8),public,allocatable               :: Vnn(:,:)
+   real(8),allocatable,public               :: Vnn(:,:)
    character(len=256),public                :: long_range
    logical,public                           :: Kdiag
    !
@@ -200,6 +201,8 @@ module input_vars
    !Post-processing variables
    character(len=256),public                :: structure
    character(len=256),public                :: path_funct
+   integer,private                          :: Nsym_user
+   real(8),allocatable,public               :: UserPath(:,:)
    integer,public                           :: Nkpt_path
    integer,public                           :: Nkpt_Fermi
    logical,public                           :: FermiSurf
@@ -255,6 +258,7 @@ contains
       implicit none
       character(len=*)                      :: InputFile
       integer                               :: isite,iset,iph,iorb
+      integer                               :: isym_user
       integer,allocatable                   :: tmpOrbs(:)
       real(8),allocatable                   :: tmpCF(:)
 
@@ -295,21 +299,23 @@ contains
          call parse_input_variable(LatticeVec(:,2),"LAT_VEC_2",InputFile,default=[0d0,1d0,0d0],comment="Unit cell vector #2 of the model lattice.")
          call parse_input_variable(LatticeVec(:,3),"LAT_VEC_3",InputFile,default=[0d0,0d0,1d0],comment="Unit cell vector #3 of the model lattice.")
          call parse_input_variable(Norb_model,"NORB_MODEL",InputFile,default=1,comment="Orbtilas in the model H(k).")
+         call parse_input_variable(readHr,"READ_HR",InputFile,default=.false.,comment="Read W90 real space Hamiltonian (Hr.DAT) from PATH_INPUT.")
          allocate(hopping(Norb_model))
-         call parse_input_variable(hopping,"HOPPING",InputFile,comment="Magnitude of the nearest neighbor hopping integral for each orbital in the model H(k).")
-         !
+         call parse_input_variable(hopping,"HOPPING",InputFile,comment="NN hopping for each orbital if READ_HR=F. Longitudinal hopping if READ_HR=T and HETERO=T.")
          !Heterostructured setup
          call parse_input_variable(Hetero%status,"HETERO",InputFile,default=.false.,comment="Flag to build an heterostructured setup from model H(k).")
          if(Hetero%status)then
             Hetero%Norb = Norb_model
             call parse_input_variable(Hetero%Nslab,"NSLAB",InputFile,default=20,comment="Global dimension fo the slab.")
             call parse_input_variable(Hetero%Explicit,"EXPLICIT",InputFile,default=[1,10],comment="Index boundaries of the impurities explicitly solved.")
-            call parse_input_variable(Hetero%GlobalTzRatio,"GLOB_TZ_RATIO",InputFile,default=0.1d0,comment="Ratio between the in-plane and out-of-plane hopping for all the slabs. Orbital structure is mantained.")
-            call parse_input_variable(Hetero%NtzExplicit,"EXPLICIT_TZ",InputFile,default=0,comment="Number of slabs with out-of-plane hopping ratio different from the global one.")
+            call parse_input_variable(Hetero%GlobalTzRatio,"GLOB_TZ_RATIO",InputFile,default=0.1d0,comment="Ratio between the in-plane and all the out-of-plane hoppings. Orbital structure is mantained.")
+            call parse_input_variable(Hetero%NtzExplicit,"EXPLICIT_TZ",InputFile,default=0,comment="Number of out-of-plane hopping ratio different from the global one.")
             if(Hetero%NtzExplicit.gt.0)then
                allocate(Hetero%ExplicitTzPos(Hetero%NtzExplicit));Hetero%ExplicitTzPos=0
                allocate(Hetero%ExplicitTzRatios(Hetero%NtzExplicit));Hetero%ExplicitTzRatios=0d0
-               call parse_input_variable(Hetero%ExplicitTzPos,"EXPLICIT_TZ_POS",InputFile,comment="Indexes of the slabs with out-of-plane hopping ratio different from the global one.")
+               call parse_input_variable(Hetero%ExplicitTzPos,"EXPLICIT_TZ_POS",InputFile,comment="Indexes of the out-of-plane hopping ratio different from the global one.")
+               if(any(Hetero%ExplicitTzPos.lt.1)) stop "read_InputFile: illegal value (<1) in EXPLICIT_TZ_POS."
+               if(any(Hetero%ExplicitTzPos.ge.Hetero%Nslab)) stop "read_InputFile: illegal value (<=NSLAB) in EXPLICIT_TZ_POS."
                call parse_input_variable(Hetero%ExplicitTzRatios,"EXPLICIT_TZ_RATIOS",InputFile,comment="Values of the out-of-plane hopping ratios different from the global one.")
             endif
          endif
@@ -510,8 +516,8 @@ contains
       if(reg(CalculationType).ne."GW+EDMFT")causal_U=.false.
       !
       !Variables for the fit
-      call parse_input_variable(DeltaFit,"DELTA_FIT",InputFile,default="Analytic",comment="Fit to extract the local energy in GW+EDMFT calculations. Available: Inf, Analytic, Moments.")
-      call parse_input_variable(Nfit,"NFIT",InputFile,default=8,comment="Number of bath levels (Analytic) or coefficient (Moments-automatic limit to NFIT=5).")
+      call parse_input_variable(DeltaFit,"DELTA_FIT",InputFile,default="Inf",comment="Fit to extract the local energy in GW+EDMFT calculations. Available: Inf, Analytic, Moments.")
+      call parse_input_variable(Nfit,"NFIT",InputFile,default=8,comment="Number of bath levels (Analytic) or coefficient (automatic limit to NFIT=4).")
       call parse_input_variable(ReplaceTail_Simp,"WTAIL_SIMP",InputFile,default=80d0,comment="Frequency value above which the tail of Simp is replaced. If =0d0 the tail is not replaced. Only via moments (automatic limit to NFIT=4).")
       !
       !Paths and loop variables
@@ -530,7 +536,14 @@ contains
       !
       !Post-processing variables
       call add_separator("Post processing")
-      call parse_input_variable(structure,"STRUCTURE",InputFile,default="cubic",comment="Available structures: triangular, cubic_[2,3], fcc, bcc, hex, tetragonal, orthorhombic_[1,2], None to avoid.")
+      call parse_input_variable(structure,"STRUCTURE",InputFile,default="cubic",comment="Available structures: triangular, cubic_[2,3], fcc, bcc, hex, tetragonal, orthorhombic_[1,2], User, None to avoid.")
+      if(reg(structure).eq."User")then
+         call parse_input_variable(Nsym_user,"NSYM_USER",InputFile,default=4,comment="Number of high-symmetry points provided by the user.")
+         allocate(UserPath(3,Nsym_user));UserPath=0d0
+         do isym_user=1,Nsym_user
+            call parse_input_variable(UserPath(:,isym_user),"KP_"//str(isym_user),InputFile,default=[0d0,0d0,0d0],comment="User=provided high symmetry K-point #"//str(isym_user))
+         enddo
+      endif
       call parse_input_variable(path_funct,"PATH_FUNCT",InputFile,default="None",comment="Print interacting fields on high-symmetry points. Available fields: G=Green's function, S=self-energy, GS=both. None to avoid.")
       call parse_input_variable(Nkpt_path,"NK_PATH",InputFile,default=50,comment="Number of K-points between two hig-symmetry Kpoints.")
       call parse_input_variable(FermiSurf,"FERMI_SURF",InputFile,default=.false.,comment="Flag to compute the Green's function on the planar {kx,ky} sheet. The mesh is set by NK_PATH/2. Ignored if PATH_FUNCT=None.")

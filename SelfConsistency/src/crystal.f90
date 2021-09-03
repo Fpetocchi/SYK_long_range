@@ -72,6 +72,8 @@ module crystal
    real(8),allocatable,public,protected     :: Rvecwig(:,:)
    integer,allocatable,public,protected     :: nrdegwig(:)
    !
+   real(8),allocatable,public,protected     :: UserPath(:,:)
+   !
    logical,public,protected                 :: Hk_stored=.false.
    logical,public,protected                 :: Ruc_stored=.false.               !Global flag for routines that need positions within the u.c.
    logical,public,protected                 :: Lat_stored=.false.               !Internal flag for routines that need rlat
@@ -106,6 +108,8 @@ module crystal
    public :: wannier_K2R_NN                                                     ![Nkpt3_orig(3),Kpt_orig(3,Nkpt_orig),Mat_orig(n,n,Npoins,Nkpt_orig),mat_R_nn(n,n,Npoins,3)]
    public :: wannier_K2R
    public :: wannier_R2K
+   public :: set_UserPath
+   public :: get_Rlat,get_Blat
    public :: interpolateHk2Path
    public :: calc_Kpath
    public :: calc_Kplane
@@ -119,7 +123,6 @@ contains
 
    !---------------------------------------------------------------------------!
    !PURPOSE: Read the Lattice vectors
-   !TEST ON: 14-10-2020
    !---------------------------------------------------------------------------!
    subroutine read_lattice(pathINPUT)
       !
@@ -207,6 +210,30 @@ contains
 
 
    !---------------------------------------------------------------------------!
+   !PURPOSE: Access private-protected variables
+   !---------------------------------------------------------------------------!
+   subroutine get_Rlat(Rlat_out)
+      implicit none
+      real(8),intent(out)                   :: Rlat_out(3,3)
+      if(Lat_stored)then
+         Rlat_out = Rlat
+      else
+         write(*,"(A)")"     Warning: requested lattice vetors but lattice is not stored."
+      endif
+   end subroutine get_Rlat
+   !
+   subroutine get_Blat(Blat_out)
+      implicit none
+      real(8),intent(out)                   :: Blat_out(3,3)
+      if(Lat_stored)then
+         Blat_out = Blat
+      else
+         write(*,"(A)")"     Warning: requested reciprocal lattice vetors but lattice is not stored."
+      endif
+   end subroutine get_Blat
+
+
+   !---------------------------------------------------------------------------!
    !PURPOSE: Build the k-point mesh
    !---------------------------------------------------------------------------!
    subroutine build_kpt(Nkpt3,kpt,pathOUTPUT)
@@ -219,9 +246,6 @@ contains
       character(len=*),intent(in),optional  :: pathOUTPUT
       integer                               :: ik,Nkpt,unit
       integer                               :: k1,k2,k3
-      !integer                               :: ikx,iky,ikz
-      !real(8)                               :: Dkx,Dky,Dkz
-      !real(8)                               :: kx,ky,kz
       !
       !
       if(verbose)write(*,"(A)") "---- build_kpt"
@@ -234,20 +258,10 @@ contains
       if(allocated(kpt))deallocate(kpt)
       allocate(kpt(3,Nkpt));kpt=0d0
       !
-      !Dkx=0d0;Dky=0d0;Dkz=0d0
-      !if(Nkpt3(1).ne.1) Dkx = 1d0/dble(Nkpt3(1))
-      !if(Nkpt3(2).ne.1) Dky = 1d0/dble(Nkpt3(2))
-      !if(Nkpt3(3).ne.1) Dkz = 1d0/dble(Nkpt3(3))
-      !
       ik=0
       do k1=1,Nkpt3(1)
          do k2=1,Nkpt3(2)
             do k3=1,Nkpt3(3)
-               !
-               !kx = (ikx-1)*Dkx
-               !ky = (iky-1)*Dky
-               !kz = (ikz-1)*Dkz
-               !kpt(:,ik) = [kx,ky,kz]
                !
                ik=ik+1
                kpt(:,ik) = [ dble(k1-1)/nkpt3(1), dble(k2-1)/nkpt3(2), dble(k3-1)/nkpt3(3) ]
@@ -329,7 +343,6 @@ contains
 
    !---------------------------------------------------------------------------!
    !PURPOSE: Read XEPS.DAT file
-   !TEST ON: 14-10-2020
    !---------------------------------------------------------------------------!
    subroutine read_xeps(pathINPUT,kpt,Nkpt3,UseXepsKorder,kptPos,Nkpt_irred,UseDisentangledBS,iq_gamma,spex_para)
       !
@@ -386,7 +399,7 @@ contains
       Nkpt = size(kpt,dim=2)
       Nkpt_irred = Nkpt
       if(UseXepsKorder) Nkpt_irred = Nkpt_xeps_irred
-      iq_gamma = find_kpt([0d0,0d0,0d0],kpt_xeps,eps)
+      iq_gamma = find_vec([0d0,0d0,0d0],kpt_xeps,eps)
       !
       spex_para_=.true.
       if(present(spex_para))spex_para_=spex_para
@@ -423,7 +436,6 @@ contains
    !---------------------------------------------------------------------------!
    !PURPOSE: Read the Hamiltonian and kpoints providing Eigen-values/vectors
    !by now only for paramagnetic Hk
-   !TEST ON: 14-10-2020
    !---------------------------------------------------------------------------!
    subroutine read_Hk(pathINPUT,alphaHk,Hk,kpt,Ek,Zk,Hloc,iq_gamma)
       !
@@ -485,6 +497,7 @@ contains
                if (idum2.ne.iwan2) stop "read_Hk: wrong index iwan2."
                Hk(iwan1,iwan2,ik) = dcmplx(ReHk,ImHk)*H2eV*alphaHk
             enddo
+            !Hk(iwan1,iwan1,ik) = dcmplx(dreal(Hk(iwan1,iwan1,ik)),0d0)
          enddo
          Hloc = Hloc + Hk(:,:,ik)/nkpt
          !
@@ -496,7 +509,7 @@ contains
          !
       enddo
       !
-      if(present(iq_gamma))iq_gamma = find_kpt([0d0,0d0,0d0],kpt,eps)
+      if(present(iq_gamma))iq_gamma = find_vec([0d0,0d0,0d0],kpt,eps)
       Hk_stored=.true.
       call read_lattice(reg(pathINPUT))
       !
@@ -513,7 +526,7 @@ contains
    !---------------------------------------------------------------------------!
    !PURPOSE: Build the Hamiltonian and kpoints from user-given parameters
    !---------------------------------------------------------------------------!
-   subroutine build_Hk(Rinput,Norb,hopping,Nkpt3,alphaHk,Hetero,Hk,kpt,Ek,Zk,Hloc,iq_gamma,pathOUTPUT)
+   subroutine build_Hk(Rinput,Norb,hopping,Nkpt3,alphaHk,readHr,Hetero,Hk,kpt,Ek,Zk,Hloc,iq_gamma,pathOUTPUT)
       !
       use utils_misc
       use parameters, only : Heterostructures !WHY IS THIS WORKING?
@@ -525,6 +538,7 @@ contains
       real(8),intent(in)                    :: hopping(:)
       integer,intent(in)                    :: Nkpt3(3)
       real(8),intent(in)                    :: alphaHk
+      logical,intent(in)                    :: readHr
       type(Heterostructures),intent(inout)  :: Hetero
       complex(8),allocatable,intent(out)    :: Hk(:,:,:)
       real(8),allocatable,intent(out)       :: kpt(:,:)
@@ -534,17 +548,30 @@ contains
       integer,intent(out),optional          :: iq_gamma
       character(len=*),intent(in),optional  :: pathOUTPUT
       !
+      !User
       integer                               :: unit,Nkpt
       integer                               :: iwan1,iwan2,ik
       integer                               :: Trange,idist,iwig
-      integer                               :: isite,Nsite,shift,na,nb,ipos
+      !W90
+      integer,parameter                     :: W90NumCol=15
+      integer                               :: Num_wann,Nrpts
+      integer                               :: Qst,Rst,i,j,ir
+      integer                               :: nx,ny,nz
+      integer,allocatable                   :: Ndegen(:)
+      real(8)                               :: ReHr,ImHr
+      !Hetero
+      integer                               :: isite,Nsite,na,nb
+      integer                               :: tzl,tzr,ilayer
+      logical                               :: inHomo
       real(8),allocatable                   :: Rsorted(:)
-      integer,allocatable                   :: Rorder(:)
+      integer,allocatable                   :: Rorder(:),itz(:)
       complex(8),allocatable                :: Hr(:,:,:),Hk_single(:,:,:)
       !
       !
       if(verbose)write(*,"(A)") "---- build_Hk"
       !
+      !
+      if(readHr.and.(.not.present(pathOUTPUT))) stop "build_Hk: reading of Hr.DAT requested but missing path."
       !
       Nkpt = Nkpt3(1)*Nkpt3(2)*Nkpt3(3)
       call assert_shape(hopping,[Norb],"build_Hk","hopping")
@@ -565,43 +592,98 @@ contains
       call sort_array(Rsorted,Rorder)
       allocate(Hr(Norb,Norb,Nwig));Hr=czero
       !
-      !Hopping is only nearest neighbor by now
-      Trange=1
-      !
-      !loop over the sorted Wigner Seiz positions
-      idist=1
-      loopwig:do iwig=1,Nwig
+      if(readHr)then
          !
-         !setting the local energy
-         if(Rsorted(Rorder(iwig)).eq.0d0)then
-            if(Rorder(iwig).ne.wig0)stop "build_Hk: wrong index of R=0 vector."
-            cycle
-         endif
+         unit = free_unit()
+         open(unit,file=reg(pathOUTPUT)//"Hr.DAT",form="formatted",status="unknown",position="rewind",action="read")
+         read(unit,*)                      !skip first line
+         read(unit,*) Num_wann !Number of Wannier orbitals
+         read(unit,*) Nrpts    !Number of Wigner-Seitz vectors
          !
-         !increasing range
-         if(iwig.gt.2)then
-            !if(Rsorted(Rorder(iwig)).gt.Rsorted(Rorder(iwig-1))) idist=idist+1
-            if((Rsorted(Rorder(iwig))-Rsorted(Rorder(iwig-1))).gt.1e-5) idist=idist+1
-            if(idist.gt.Trange) exit loopwig
-         endif
+         if(Num_wann.ne.Norb) stop "build_Hk: number of Wannier orbital in Hr.DAT and model orbital space does not coincide."
          !
-         !setting matrix element
-         do iwan1=1,Norb
-            Hr(iwan1,iwan1,Rorder(iwig)) = -dcmplx(hopping(iwan1),0d0)
+         Qst = int(Nrpts/W90NumCol)
+         Rst = mod(Nrpts,W90NumCol)
+         !
+         allocate(Ndegen(Nrpts));Ndegen=0
+         do i=1,Qst
+            read(unit,*)(Ndegen(j+(i-1)*W90NumCol),j=1,W90NumCol)
          enddo
+         if(Rst.ne.0)read(unit,*)(Ndegen(j+Qst*W90NumCol),j=1,Rst)
          !
-      enddo loopwig
+         !Read W90 TB hoppings in real space. Assumed paramagnetic
+         do ir=1,Nrpts
+            do i=1,Num_wann
+               do j=1,Num_wann
+                  !
+                  read(unit,*) nx, ny, nz, iwan1, iwan2, ReHr, ImHr
+                  !
+                  iwig = find_vec([nx,ny,nz],Nvecwig)
+                  !
+                  Hr(iwan1,iwan2,iwig) = dcmplx(ReHr,ImHr)/Ndegen(ir)
+                  !nrdegwig(iwig) = Ndegen(ir) <-- this would mess-up things in the FT
+                  !
+               enddo
+            enddo
+         enddo
+         close(unit)
+         deallocate(Ndegen)
+         !
+      else
+         !
+         !User-provided hopping is only nearest neighbor by now
+         Trange=1
+         !
+         !loop over the sorted Wigner Seiz positions
+         idist=1
+         loopwig:do iwig=1,Nwig
+            !
+            !setting the local energy
+            if(Rsorted(Rorder(iwig)).eq.0d0)then
+               if(Rorder(iwig).ne.wig0)stop "build_Hk: wrong index of R=0 vector."
+               cycle
+            endif
+            !
+            !increasing range
+            if(iwig.gt.2)then
+               !if(Rsorted(Rorder(iwig)).gt.Rsorted(Rorder(iwig-1))) idist=idist+1
+               if((Rsorted(Rorder(iwig))-Rsorted(Rorder(iwig-1))).gt.1e-5) idist=idist+1
+               if(idist.gt.Trange) exit loopwig
+            endif
+            !
+            !setting matrix element
+            do iwan1=1,Norb
+               Hr(iwan1,iwan1,Rorder(iwig)) = -dcmplx(hopping(iwan1),0d0)
+            enddo
+            !
+         enddo loopwig
+         !
+      endif
       !
       if(verbose)then
-         write(*,*)"     Real-space hopping elements:"
-         write(*,"(A6,3A12)") "  i  ","  Ri  ","  H(Ri)  "," [n1,n2,n3] "
+         if(readHr)then
+            write(*,'(1A)')        "     H_W90:"
+            write(*,'(A,I6)')      "     Number of Wannier functions:   ",Num_wann
+            write(*,'(A,I6)')      "     Number of Wigner-Seitz vectors:",Nrpts
+            write(*,'(A,I6,A,I6)') "     Deg rows:",Qst," N last row   :",Rst
+         endif
+         write(*,'(1A)')"     Real-space hopping elements:"
+         write(*,"(A6,3A12,1A4)") "  i  ","  Ri  ","  H(Ri)  "," [n1,n2,n3] "," Ndeg "
          do iwig=1,Nwig
-            write(*,"(1I6,2F12.4,3I4)")Rorder(iwig),Rsorted(Rorder(iwig)),real(Hr(1,1,Rorder(iwig))),Nvecwig(:,Rorder(iwig))
+            write(*,"(1I6,2F12.4,5I4)")Rorder(iwig),Rsorted(Rorder(iwig)),real(Hr(1,1,Rorder(iwig))),Nvecwig(:,Rorder(iwig)),nrdegwig(Rorder(iwig))
          enddo
       endif
       !
+      !FT Hr-->Hk
       call wannier_R2K(Nkpt3,kpt,Hr,Hk)
       deallocate(Hr,Rorder,Rsorted)
+      !
+      do ik=1,nkpt
+         do iwan1=1,Norb
+            Hk(iwan1,iwan1,ik) = dcmplx(dreal(Hk(iwan1,iwan1,ik)),0d0)
+         enddo
+         if(Norb.gt.1)call check_Hermiticity(Hk(:,:,ik),eps)
+      enddo
       !
       Hk = Hk*alphaHk
       !
@@ -609,62 +691,60 @@ contains
       Nsite = 1
       if(Hetero%status)then
          !
+         !this should be already been checked in input_vars
          Nsite = Hetero%Explicit(2)-Hetero%Explicit(1)+1
          !
-         allocate(Hetero%tz(Norb,Norb,Nsite));Hetero%tz=czero
+         !Setting up the out-of-plane hopping array
+         tzl = 0 ; tzr = 0
+         if(Hetero%Explicit(1).ne.1) tzl = 1              ! hopping to the left potential
+         if(Hetero%Explicit(2).ne.Hetero%Nslab) tzr = 1   ! hopping to the right potential
+         allocate(Hetero%tz(Norb,Norb,(Hetero%Explicit(1)-tzl):(Hetero%Explicit(2)-1+tzr)));Hetero%tz=czero
+         do ilayer = Hetero%Explicit(1)-tzl,Hetero%Explicit(2)-1+tzr
+            !
+            inHomo = (Hetero%NtzExplicit.gt.0) .and. any(Hetero%ExplicitTzPos.eq.ilayer)
+            !
+            if(inHomo)then
+               allocate(itz(Hetero%NtzExplicit));itz=0
+               itz = findloc(Hetero%ExplicitTzPos,value=ilayer)
+               if(itz(1).eq.0) stop "build_Hk: something wrong with the Hetero%ExplicitTzPos"
+               Hetero%tz(:,:,ilayer) = diag(hopping)*Hetero%ExplicitTzRatios(itz(1))
+               deallocate(itz)
+            else
+               Hetero%tz(:,:,ilayer) = diag(hopping)*Hetero%GlobalTzRatio
+            endif
+            !
+         enddo
+         !
+         !Setting up multi-site H(k)
          allocate(Hk_single(Norb,Norb,Nkpt));Hk_single=czero
          Hk_single = Hk
          deallocate(Hk)
          allocate(Hk(Norb*Nsite,Norb*Nsite,Nkpt));Hk=czero
          !
-         !Setting up the uniform out-of-plane hopping
          do isite=1,Nsite
             !
-            Hetero%tz(:,:,isite) = diag(hopping)*Hetero%GlobalTzRatio
+            !Index of the layer inside the slab - Needed because Hetero%tz has a different indexing
+            ilayer = Hetero%Explicit(1) + (isite-1)
             !
-            shift = (isite-1)*Norb
+            !In-plane orbital block
+            na = 1+(isite-1)*Norb
+            nb = isite*Norb
+            !
             !In-plane Hk
-            Hk(1+shift:Norb+shift,1+shift:Norb+shift,:) = Hk_single
+            Hk(na:nb,na:nb,:) = Hk_single
+            !
             !Out-of-plane hopping
             if(isite.ne.Nsite)then
+               !
                do ik=1,Nkpt
-                  Hk(1+shift:Norb+shift,1+Norb+shift:2*Norb+shift,ik) = diag(hopping)*Hetero%GlobalTzRatio
-                  Hk(1+Norb+shift:2*Norb+shift,1+shift:Norb+shift,ik) = diag(hopping)*Hetero%GlobalTzRatio
+                  Hk(na:nb,na+Norb:nb+Norb,ik) = Hetero%tz(:,:,ilayer)
+                  Hk(na+Norb:nb+Norb,na:nb,ik) = Hetero%tz(:,:,ilayer)
                enddo
+               !
             endif
             !
          enddo
          deallocate(Hk_single)
-         !
-         !Adding up the deviations from the uniform out-of-plane hopping
-         if(Hetero%NtzExplicit.gt.0)then
-            do ipos=1,Hetero%NtzExplicit
-               !
-               isite = Hetero%ExplicitTzPos(ipos)
-               na = 1+(isite-1)*Norb
-               nb = isite*Norb
-               !
-               Hetero%tz(:,:,isite) = diag(hopping)*Hetero%ExplicitTzRatios(ipos)
-               !
-               do ik=1,Nkpt
-                  if(isite.eq.1)then
-                     !forward: col+=Norb
-                     Hk(na:nb,na+Norb:nb+Norb,ik) = Hetero%tz(:,:,isite)
-                     Hk(na+Norb:nb+Norb,na:nb,ik) = Hetero%tz(:,:,isite)
-                  elseif(isite.eq.Nsite)then
-                     !backward: row-=Norb
-                     Hk(na-Norb:nb-Norb,na:nb,ik) = Hetero%tz(:,:,isite)
-                     Hk(na:nb,na-Norb:nb-Norb,ik) = Hetero%tz(:,:,isite)
-                  else
-                     !forward & backward
-                     Hk(na:nb,na+Norb:nb+Norb,ik) = Hetero%tz(:,:,isite)
-                     Hk(na+Norb:nb+Norb,na:nb,ik) = Hetero%tz(:,:,isite)
-                     Hk(na-Norb:nb-Norb,na:nb,ik) = Hetero%tz(:,:,isite)
-                     Hk(na:nb,na-Norb:nb-Norb,ik) = Hetero%tz(:,:,isite)
-                  endif
-               enddo !ik
-            enddo !ipos
-         endif
          !
       endif
       !
@@ -1218,7 +1298,6 @@ contains
 
    !---------------------------------------------------------------------------!
    !PURPOSE: find the smallest k vectors for interaction interpolation
-   !TEST ON: 14-10-2020
    !---------------------------------------------------------------------------!
    subroutine fill_smallk(kpt,small_ik)
       !
@@ -1290,7 +1369,6 @@ contains
    ! nwig : number of points inside wigner-seitz supercell
    ! rvec(3,2*nkpt) : (INTEGER) lattice vectors
    ! nrdeg(2*nkpt) : degeneracy
-   !TEST ON: 16-10-2020
    !---------------------------------------------------------------------------!
    subroutine calc_wignerseiz(nkpt3)
       !
@@ -1375,6 +1453,11 @@ contains
          write(*,"(A,F)") "Error: sum(1/nrdeg(:))=",sum(1d0/nrdegwig_tmp(1:iwig))
          stop "calc_wignerseiz: nrdeg failed."
       endif
+      !
+      if(allocated(radiuswig))deallocate(radiuswig)
+      if(allocated(Nvecwig))  deallocate(Nvecwig)
+      if(allocated(Rvecwig))  deallocate(Rvecwig)
+      if(allocated(nrdegwig)) deallocate(nrdegwig)
       !
       !public,protected
       Nwig = iwig
@@ -2066,7 +2149,6 @@ contains
    !Nwig might not be already available in the main program
    !so I"m allocating here the mat_R which does not need to be allocated in
    !the calling routine.
-   !TEST ON: 16-10-2020(mat)
    !---------------------------------------------------------------------------!
    subroutine wannier_K2R_d1(nkpt3_orig,kpt_orig,mat_K,mat_R)
       !
@@ -2266,7 +2348,6 @@ contains
 
    !---------------------------------------------------------------------------!
    !PURPOSE: Transforms matrix in Wannier basis into K-space
-   !TEST ON: 16-10-2020(mat)
    !---------------------------------------------------------------------------!
    subroutine wannier_R2K_d1(nkpt3_orig,kpt_intp,mat_R,mat_intp)
       !
@@ -2459,6 +2540,17 @@ contains
 
 
    !---------------------------------------------------------------------------!
+   !PURPOSE: Save in the module variables the user-defined high symmetry points
+   !---------------------------------------------------------------------------!
+   subroutine set_UserPath(UserPath_input)
+      implicit none
+      real(8),allocatable,intent(in)        :: UserPath_input(:,:)
+      if(allocated(UserPath))deallocate(UserPath)
+      UserPath = UserPath_input
+   end subroutine set_UserPath
+
+
+   !---------------------------------------------------------------------------!
    !PURPOSE: generates thew K-points along some pre-stored high-symmetry points.
    !         taken from http://lamp.tu-graz.ac.at/~hadley/ss1/bzones/
    !         and https://wiki.fysik.dtu.dk/ase/ase/dft/kpoints.html#high-symmetry-pathsv
@@ -2471,8 +2563,8 @@ contains
       real(8),allocatable,intent(out)       :: kpt_path(:,:)
       character(len=*),intent(in)           :: structure
       integer,intent(in)                    :: Nkpt_path
-      real(8),allocatable,intent(out),optional :: Kaxis(:)
-      real(8),allocatable,intent(out),optional :: KaxisPoints(:)
+      real(8),allocatable,intent(out)       :: Kaxis(:)
+      real(8),allocatable,intent(out)       :: KaxisPoints(:)
       !
       real(8),dimension(3)                  :: Gamma,M,R,X,K,L,U,W,H,N,P,A,Z,S,T,Y
       real(8),dimension(3)                  :: Kdiff
@@ -2489,7 +2581,7 @@ contains
       select case(reg(structure))
          case default
             !
-            stop "Available structures: triangular, cubic_[2,3], fcc, bcc, hex, tetragonal, orthorhombic_[1,2]."
+            stop "Available structures: triangular, cubic_[2,3], fcc, bcc, hex, tetragonal, orthorhombic_[1,2], User."
             !
          case("triangular")
             !
@@ -2686,6 +2778,13 @@ contains
             write(*,"(A)") "     structure: orthorhombic - version 2."
             write(*,"(A)") "     path: GXSGYTGZ"
             !
+         case("User")
+            !
+            if(.not.allocated(UserPath)) stop "calc_Kpath: UserPath not defined."
+            Kpoints = UserPath
+            write(*,"(A)") "     structure: User provided."
+            write(*,"(A)") "     path: "//str(size(Kpoints,dim=2))//" high-symmetry points."
+            !
       end select
       !
       !
@@ -2724,8 +2823,11 @@ contains
       enddo
       Kdist = Kdist/Kdist((Ndir-1)*Nkpt_path+1)
       Kturn = Kturn/Kturn(Ndir)
-      if(present(Kaxis))Kaxis=Kdist
-      if(present(KaxisPoints))KaxisPoints=Kturn
+      !
+      if(allocated(Kaxis))deallocate(Kaxis)
+      Kaxis=Kdist
+      if(allocated(KaxisPoints))deallocate(KaxisPoints)
+      KaxisPoints=Kturn
       !
    end subroutine calc_Kpath
 
@@ -2792,6 +2894,7 @@ contains
       character(len=256)                    :: path,filename_
       integer                               :: ik,iorb,unit
       integer                               :: Norb,Nkpt_Kside,ikx,iky
+      real(8)                               :: kx,ky,Bvec(3)
       complex(8),allocatable                :: data_intp(:,:,:),invGf(:,:)
       real(8),allocatable                   :: dataEk(:,:),Fk(:,:)
       logical                               :: doplane_
@@ -2813,7 +2916,7 @@ contains
       !Create K-points along high-symmetry points
       if(allocated(Lttc%kptpath))deallocate(Lttc%kptpath)
       if(allocated(Lttc%Kpathaxis))deallocate(Lttc%Kpathaxis)
-      call calc_Kpath(Lttc%kptpath,reg(structure),Nkpt_path,Kaxis=Lttc%Kpathaxis,KaxisPoints=Lttc%KpathaxisPoints)
+      call calc_Kpath(Lttc%kptpath,reg(structure),Nkpt_path,Lttc%Kpathaxis,Lttc%KpathaxisPoints)
       Lttc%Nkpt_path = size(Lttc%kptpath,dim=2)
       !
       if(present(data))then
@@ -2883,7 +2986,7 @@ contains
          !
          if(doplane_)then
             !
-            Nkpt_Kside = int(Nkpt_path/2)
+            Nkpt_Kside = 201 !int(Nkpt_path/2)
             !
             !Create K-points along high-symmetry points
             if(allocated(Lttc%kptPlane))deallocate(Lttc%kptPlane)
@@ -2917,9 +3020,10 @@ contains
             unit = free_unit()
             open(unit,file=reg(path),form="formatted",status="unknown",position="rewind",action="write")
             do ik=1,Lttc%Nkpt_Plane
-               ikx = int(ik/(Nkpt_Kside+0.001))+1
-               iky = ik - (ikx-1)*Nkpt_Kside
-               write(unit,"(3I5,200E20.12)") ik,ikx,iky,(Fk(iorb,ik),iorb=1,Norb)
+               ikx = int(ik/(Nkpt_Kside+0.001))+1 ; kx = (ikx-1)/dble(Nkpt_Kside-1) - 0.5d0
+               iky = ik - (ikx-1)*Nkpt_Kside      ; ky = (iky-1)/dble(Nkpt_Kside-1) - 0.5d0
+               Bvec = kx*Blat(:,1) + ky*Blat(:,2)
+               write(unit,"(3I5,200E20.12)") ik,ikx,iky,Bvec(1),Bvec(2),(Fk(iorb,ik),iorb=1,Norb)
                if(iky.eq.Nkpt_Kside)write(unit,*)
             enddo
             close(unit)

@@ -32,6 +32,7 @@ subroutine interpolateG2Path(Sfull,Lttc,structure,Nkpt_path,pathOUTPUT)
    integer                               :: Norb,Nmats,unit!,Ntau
    integer                               :: ik,iw,itau,ispin,iorb
    integer                               :: ikx,iky
+   real(8)                               :: kx,ky,Bvec(3),Blat(3,3)
    integer                               :: Nkpt_Kside,wndx_cut
    character(len=256)                    :: path
    logical                               :: Kdependence
@@ -60,7 +61,7 @@ subroutine interpolateG2Path(Sfull,Lttc,structure,Nkpt_path,pathOUTPUT)
       !
       !Create K-points along high-symmetry points
       if(allocated(Lttc%kptpath))deallocate(Lttc%kptpath)
-      call calc_Kpath(Lttc%kptpath,reg(structure),Nkpt_path,Kaxis=Lttc%Kpathaxis,KaxisPoints=Lttc%KpathaxisPoints)
+      call calc_Kpath(Lttc%kptpath,reg(structure),Nkpt_path,Lttc%Kpathaxis,Lttc%KpathaxisPoints)
       Lttc%Nkpt_path = size(Lttc%kptpath,dim=2)
       !
       !Fill in Hk along points
@@ -167,6 +168,7 @@ subroutine interpolateG2Path(Sfull,Lttc,structure,Nkpt_path,pathOUTPUT)
    !Path along planar sheet on kx,ky
    if(FermiSurf)then
       !
+      call get_Blat(Blat)
       Nkpt_Kside = Nkpt_Fermi !int(Nkpt_path/2)
       !
       if(.not.Lttc%planeStored)then
@@ -204,9 +206,10 @@ subroutine interpolateG2Path(Sfull,Lttc,structure,Nkpt_path,pathOUTPUT)
          unit = free_unit()
          open(unit,file=reg(path),form="formatted",status="unknown",position="rewind",action="write")
          do ik=1,Lttc%Nkpt_Plane
-            ikx = int(ik/(Nkpt_Kside+0.001))+1
-            iky = ik - (ikx-1)*Nkpt_Kside
-            write(unit,"(3I5,200E20.12)") ik,ikx,iky,(Fk(iorb,ik),iorb=1,Lttc%Norb)
+            ikx = int(ik/(Nkpt_Kside+0.001))+1 ; kx = (ikx-1)/dble(Nkpt_Kside-1) - 0.5d0
+            iky = ik - (ikx-1)*Nkpt_Kside      ; ky = (iky-1)/dble(Nkpt_Kside-1) - 0.5d0
+            Bvec = kx*Blat(:,1) + ky*Blat(:,2)
+            write(unit,"(3I5,200E20.12)") ik,ikx,iky,Bvec(1),Bvec(2),(Fk(iorb,ik),iorb=1,Lttc%Norb)
             if(iky.eq.Nkpt_Kside)write(unit,*)
          enddo
          close(unit)
@@ -315,9 +318,10 @@ subroutine interpolateG2Path(Sfull,Lttc,structure,Nkpt_path,pathOUTPUT)
                   unit = free_unit()
                   open(unit,file=reg(path),form="formatted",status="unknown",position="rewind",action="write")
                   do ik=1,Lttc%Nkpt_Plane
-                     ikx = int(ik/(Nkpt_Kside+0.001))+1
-                     iky = ik - (ikx-1)*Nkpt_Kside
-                     write(unit,"(3I5,200E20.12)") ik,ikx,iky,(Zk(ik,iorb),iorb=1,Norb)
+                     ikx = int(ik/(Nkpt_Kside+0.001))+1 ; kx = (ikx-1)/dble(Nkpt_Kside-1) - 0.5d0
+                     iky = ik - (ikx-1)*Nkpt_Kside      ; ky = (iky-1)/dble(Nkpt_Kside-1) - 0.5d0
+                     Bvec = kx*Blat(:,1) + ky*Blat(:,2)
+                     write(unit,"(3I5,200E20.12)") ik,ikx,iky,Bvec(1),Bvec(2),(Zk(ik,iorb),iorb=1,Norb)
                      if(iky.eq.Nkpt_Kside)write(unit,*)
                   enddo
                   close(unit)
@@ -407,9 +411,10 @@ subroutine interpolateG2Path(Sfull,Lttc,structure,Nkpt_path,pathOUTPUT)
             unit = free_unit()
             open(unit,file=reg(path),form="formatted",status="unknown",position="rewind",action="write")
             do ik=1,Lttc%Nkpt_Plane
-               ikx = int(ik/(Nkpt_Kside+0.001))+1
-               iky = ik - (ikx-1)*Nkpt_Kside
-               write(unit,"(3I5,200E20.12)") ik,ikx,iky,(Fk(iorb,ik),iorb=1,Lttc%Norb)
+               ikx = int(ik/(Nkpt_Kside+0.001))+1 ; kx = (ikx-1)/dble(Nkpt_Kside-1) - 0.5d0
+               iky = ik - (ikx-1)*Nkpt_Kside      ; ky = (iky-1)/dble(Nkpt_Kside-1) - 0.5d0
+               Bvec = kx*Blat(:,1) + ky*Blat(:,2)
+               write(unit,"(3I5,200E20.12)") ik,ikx,iky,Bvec(1),Bvec(2),(Fk(iorb,ik),iorb=1,Lttc%Norb)
                if(iky.eq.Nkpt_Kside)write(unit,*)
             enddo
             close(unit)
@@ -435,9 +440,10 @@ subroutine interpolateG2Path(Sfull,Lttc,structure,Nkpt_path,pathOUTPUT)
                unit = free_unit()
                open(unit,file=reg(path),form="formatted",status="unknown",position="rewind",action="write")
                do ik=1,Lttc%Nkpt_Plane
-                  ikx = int(ik/(Nkpt_Kside+0.001))+1
-                  iky = ik - (ikx-1)*Nkpt_Kside
-                  write(unit,"(3I5,200E20.12)") ik,ikx,iky,(Fk(iorb,ik),iorb=1,Lttc%Norb)
+                  ikx = int(ik/(Nkpt_Kside+0.001))+1 ; kx = (ikx-1)/dble(Nkpt_Kside-1) - 0.5d0
+                  iky = ik - (ikx-1)*Nkpt_Kside      ; ky = (iky-1)/dble(Nkpt_Kside-1) - 0.5d0
+                  Bvec = kx*Blat(:,1) + ky*Blat(:,2)
+                  write(unit,"(3I5,200E20.12)") ik,ikx,iky,Bvec(1),Bvec(2),(Fk(iorb,ik),iorb=1,Lttc%Norb)
                   if(iky.eq.Nkpt_Kside)write(unit,*)
                enddo
                close(unit)
@@ -593,9 +599,10 @@ contains
             enddo
          elseif(reg(mode).eq."plane")then
             do ik=1,Nkpt
-               ikx = int(ik/(Nkpt_Kside+0.001))+1
-               iky = ik - (ikx-1)*Nkpt_Kside
-               write(unit,"(3I5,200E20.12)") ik,ikx,iky,(Ak(ik,iorb),iorb=1,Norb)
+               ikx = int(ik/(Nkpt_Kside+0.001))+1 ; kx = (ikx-1)/dble(Nkpt_Kside-1) - 0.5d0
+               iky = ik - (ikx-1)*Nkpt_Kside      ; ky = (iky-1)/dble(Nkpt_Kside-1) - 0.5d0
+               Bvec = kx*Blat(:,1) + ky*Blat(:,2)
+               write(unit,"(3I5,200E20.12)") ik,ikx,iky,Bvec(1),Bvec(2),(Ak(ik,iorb),iorb=1,Norb)
                if(iky.eq.Nkpt_Kside)write(unit,*)
             enddo
          endif

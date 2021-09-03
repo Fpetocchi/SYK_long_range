@@ -418,8 +418,8 @@ contains
             !
             if(Hmodel)then
                !
-               call build_Hk(LatticeVec,Norb_model,hopping,Nkpt3,alphaHk,Hetero,&
-                             Lttc%Hk,Lttc%kpt,Lttc%Ek,Lttc%Zk,Lttc%Hloc,        &
+               call build_Hk(LatticeVec,Norb_model,hopping,Nkpt3,alphaHk,readHr,Hetero,&
+                             Lttc%Hk,Lttc%kpt,Lttc%Ek,Lttc%Zk,Lttc%Hloc,               &
                              iq_gamma=Lttc%iq_gamma,pathOUTPUT=reg(pathINPUT))
                Lttc%Norb = size(Lttc%Hk,dim=1)
                Lttc%Nkpt = size(Lttc%Hk,dim=3)
@@ -456,8 +456,8 @@ contains
             !
             if(Hmodel)then
                !
-               call build_Hk(LatticeVec,Norb_model,hopping,Nkpt3,alphaHk,Hetero,&
-                             Lttc%Hk,Lttc%kpt,Lttc%Ek,Lttc%Zk,Lttc%Hloc,        &
+               call build_Hk(LatticeVec,Norb_model,hopping,Nkpt3,alphaHk,readHr,Hetero,&
+                             Lttc%Hk,Lttc%kpt,Lttc%Ek,Lttc%Zk,Lttc%Hloc,               &
                              pathOUTPUT=reg(pathINPUT))
                Lttc%Norb = size(Lttc%Hk,dim=1)
                Lttc%Nkpt = size(Lttc%Hk,dim=3)
@@ -477,8 +477,8 @@ contains
             !
             if(Hmodel)then
                !
-               call build_Hk(LatticeVec,Norb_model,hopping,Nkpt3,alphaHk,Hetero,&
-                             Lttc%Hk,Lttc%kpt,Lttc%Ek,Lttc%Zk,Lttc%Hloc,        &
+               call build_Hk(LatticeVec,Norb_model,hopping,Nkpt3,alphaHk,readHr,Hetero,&
+                             Lttc%Hk,Lttc%kpt,Lttc%Ek,Lttc%Zk,Lttc%Hloc,               &
                              iq_gamma=Lttc%iq_gamma,pathOUTPUT=reg(pathINPUT))
                Lttc%Norb = size(Lttc%Hk,dim=1)
                Lttc%Nkpt = size(Lttc%Hk,dim=3)
@@ -655,6 +655,7 @@ contains
       !
       !
       !Dump some LDA results
+      if(reg(structure).eq."User") call set_UserPath(UserPath)
       if(ItStart.eq.0)then
          !
          call calc_Glda(0d0,Beta,Lttc)
@@ -1360,7 +1361,7 @@ contains
       !
       if(.not.solve_DMFT) stop "calc_SigmaGuess: no guess needed if DMFT is not performed."
       if(FirstIteration.ne.0) stop "calc_SigmaGuess: this subroutine works only in the 0th iteration."
-      if((reg(CalculationType).eq."GW+EDMFT").and.(.not.S_G0W0%status))then
+      if((reg(CalculationType).eq."GW+EDMFT").and.(.not.S_G0W0%status).and.(.not.Hmodel))then
          call AllocateFermionicField(S_G0W0,Crystal%Norb,Nmats,Nkpt=Crystal%Nkpt,Nsite=Nsite,Beta=Beta)
          call read_Sigma_spex(SpexVersion,S_G0W0,Crystal,verbose,recompute=RecomputeG0W0,pathOUTPUT=reg(pathINPUTtr))
       endif
@@ -1538,70 +1539,75 @@ contains
                !
             elseif(Iteration.gt.0)then
                !
-               if(.not.S_G0W0dc%status) stop "join_SigmaFull: S_G0W0dc not properly initialized."
                if(.not.S_GW%status) stop "join_SigmaFull: S_GW not properly initialized."
                !
-               !Remove Dc between G0W0 and scGW self-energies
-               !S_G0W0dc contains only diagonal elements in the LDA basis as the S_G0W0 computed from SPEX
-               S_G0W0%wks = S_G0W0%wks - S_G0W0dc%wks
-               call FermionicKsum(S_G0W0)
-               !
-               !Compute the G0W0 contribution to the local self-energy
-               call AllocateFermionicField(S_G0W0_DMFT,Crystal%Norb,Nmats,Nkpt=Crystal%Nkpt,Nsite=Nsite,Beta=Beta,mu=Glat%mu)
-               do isite=1,Nsite
+               if(.not.Hmodel)then
                   !
-                  Norb = SiteNorb(isite)
-                  allocate(Orbs(Norb))
-                  Orbs = SiteOrbs(isite,1:Norb)
+                  if(.not.S_G0W0dc%status) stop "join_SigmaFull: S_G0W0dc not properly initialized."
                   !
-                  !Extract the local G0W0 self-energy for each site
-                  call AllocateFermionicField(S_G0W0_imp,Norb,Nmats,Beta=Beta)
-                  call loc2imp(S_G0W0_imp,S_G0W0,Orbs)
+                  !Remove Dc between G0W0 and scGW self-energies
+                  !S_G0W0dc contains only diagonal elements in the LDA basis as the S_G0W0 computed from SPEX
+                  S_G0W0%wks = S_G0W0%wks - S_G0W0dc%wks
+                  call FermionicKsum(S_G0W0)
                   !
-                  !Put it into an object that contains only the site indexes
-                  call imp2loc(S_G0W0_DMFT,S_G0W0_imp,isite,Orbs,.false.,.false.)
-                  !
-                  call DeallocateField(S_G0W0_imp)
-                  deallocate(Orbs)
-                  !
-               enddo
-               !
-               !Check for the causality in the G0W0 contribution to the local self-energy
-               !at all frequencies since it's not done in check_S_G0W0
-               causal_G0W0_loc = GoWoDC_loc
-               if(causal_G0W0_loc)then
-                  causaloop: do ispin=1,Nspin
-                     do iorb=1,S_G0W0_DMFT%Norb
-                        do iw=1,S_G0W0_DMFT%Npoints
-                           ImS_1 = dimag(S_G0W0_DMFT%ws(iorb,iorb,iw,ispin))
-                           if(ImS_1.gt.0d0)then
-                              write(*,"(A)")"     Warning: the local G0W0 self-energy has been found non-causal at iw="//str(iw)//" iorb="//str(iorb)//" ispin="//str(ispin)
-                              causal_G0W0_loc=.false.
-                              exit causaloop
-                           endif
-                           if(iw.le.10)then
-                              ImS_2 = dimag(S_G0W0_DMFT%ws(iorb,iorb,iw+1,ispin))
-                              if(ImS_2.gt.ImS_1) write(*,"(A)")"     Warning: the local G0W0 self-energy seems not to scale as a Fermi-liquid. If Delta(tau) is non-causal try to set G0W0DC_LOC=F."
-                           endif
-                        enddo
-                     enddo
-                  enddo causaloop
-               endif
-               !
-               !Enclose in the EDMFT *ALL* the local contributions to the self-energy
-               !From the S_G0W0^{SPEX}_{ij} + S_G0W0^{SPEX}_{i} - S_G0W0^{DC}_{ij} - S_G0W0^{DC}_{i}
-               !we remove [ S_G0W0^{SPEX}_{i} - S_G0W0^{DC}_{i} ]
-               !here, if Vxc is inside S_G0W0, also the local contribution from Vxc is removed
-               if((.not.GoWoDC_loc).or.(.not.causal_G0W0_loc))then
-                  write(*,"(A)")"     Local G0W0 self-energy removed."
-                  do ik=1,S_G0W0%Nkpt
-                     S_G0W0%wks(:,:,:,ik,:) = S_G0W0%wks(:,:,:,ik,:) - S_G0W0_DMFT%ws
+                  !Compute the G0W0 contribution to the local self-energy with removed DC
+                  call AllocateFermionicField(S_G0W0_DMFT,Crystal%Norb,Nmats,Nkpt=Crystal%Nkpt,Nsite=Nsite,Beta=Beta,mu=Glat%mu)
+                  do isite=1,Nsite
+                     !
+                     Norb = SiteNorb(isite)
+                     allocate(Orbs(Norb))
+                     Orbs = SiteOrbs(isite,1:Norb)
+                     !
+                     !Extract the local G0W0 self-energy for each site
+                     call AllocateFermionicField(S_G0W0_imp,Norb,Nmats,Beta=Beta)
+                     call loc2imp(S_G0W0_imp,S_G0W0,Orbs)
+                     !
+                     !Put it into an object that contains only the site indexes
+                     call imp2loc(S_G0W0_DMFT,S_G0W0_imp,isite,Orbs,.false.,.false.)
+                     !
+                     call DeallocateField(S_G0W0_imp)
+                     deallocate(Orbs)
+                     !
                   enddo
+                  !
+                  !Check for the causality in the G0W0 contribution to the local self-energy
+                  !at all frequencies since it's not done in check_S_G0W0
+                  causal_G0W0_loc = GoWoDC_loc
+                  if(causal_G0W0_loc)then
+                     causaloop: do ispin=1,Nspin
+                        do iorb=1,S_G0W0_DMFT%Norb
+                           do iw=1,S_G0W0_DMFT%Npoints
+                              ImS_1 = dimag(S_G0W0_DMFT%ws(iorb,iorb,iw,ispin))
+                              if(ImS_1.gt.0d0)then
+                                 write(*,"(A)")"     Warning: the local G0W0 self-energy has been found non-causal at iw="//str(iw)//" iorb="//str(iorb)//" ispin="//str(ispin)
+                                 causal_G0W0_loc=.false.
+                                 exit causaloop
+                              endif
+                              if(iw.le.10)then
+                                 ImS_2 = dimag(S_G0W0_DMFT%ws(iorb,iorb,iw+1,ispin))
+                                 if(ImS_2.gt.ImS_1) write(*,"(A)")"     Warning: the local G0W0 self-energy seems not to scale as a Fermi-liquid. If Delta(tau) is non-causal try to set G0W0DC_LOC=F."
+                              endif
+                           enddo
+                        enddo
+                     enddo causaloop
+                  endif
+                  !
+                  !Enclose in the EDMFT *ALL* the local contributions to the self-energy
+                  !From the S_G0W0^{SPEX}_{ij} + S_G0W0^{SPEX}_{i} - S_G0W0^{DC}_{ij} - S_G0W0^{DC}_{i}
+                  !we remove [ S_G0W0^{SPEX}_{i} - S_G0W0^{DC}_{i} ]
+                  !here, if Vxc is inside S_G0W0, also the local contribution from Vxc is removed
+                  if((.not.GoWoDC_loc).or.(.not.causal_G0W0_loc))then
+                     write(*,"(A)")"     Local G0W0 self-energy removed."
+                     do ik=1,S_G0W0%Nkpt
+                        S_G0W0%wks(:,:,:,ik,:) = S_G0W0%wks(:,:,:,ik,:) - S_G0W0_DMFT%ws
+                     enddo
+                  endif
+                  call DeallocateField(S_G0W0_DMFT)
+                  !
+                  !Add S_G0W0 to S_GW (already containing Simp)
+                  S_GW%wks = S_GW%wks + S_G0W0%wks
+                  !
                endif
-               call DeallocateField(S_G0W0_DMFT)
-               !
-               !Add S_G0W0 to S_GW (already containing Simp)
-               S_GW%wks = S_GW%wks + S_G0W0%wks
                !
                !Put together all the terms
                do ispin=1,Nspin
@@ -1611,7 +1617,7 @@ contains
                   !$OMP DO
                   do ik=1,S_Full%Nkpt
                      do iw=1,S_Full%Npoints
-                        S_Full%wks(:,:,iw,ik,ispin) = + S_GW%wks(:,:,iw,ik,ispin) - Vxc(:,:,ik,ispin) + VH(:,:)! + 12d0*(Glat%wks(:,:,iw,ik,ispin)+1d0*deye(S_Full%Norb))
+                        S_Full%wks(:,:,iw,ik,ispin) = + S_GW%wks(:,:,iw,ik,ispin) - Vxc(:,:,ik,ispin) + VH(:,:)
                      enddo
                   enddo
                   !$OMP END DO
@@ -1925,10 +1931,6 @@ contains
             !
             stop "Available modes for Delta fitting: Inf, Analytic, Moments."
             !
-         case("Inf")
-            !
-            Eloc = real(Dfit(:,Nmats,:))
-            !
          case("Analytic")
             !
             file = "DeltaPara_"//reg(SiteName(isite))//".DAT"
@@ -1936,17 +1938,18 @@ contains
             wndx = minloc(abs(wmats-0.85*wmatsMax),dim=1)
             call fit_Delta(Dfit,Beta,Nfit,reg(MomDir),reg(file),"Shifted",Eloc,filename="DeltaAnd",Wlimit=wndx,coef01=coef01)
             !
-         case("Moments")
+         case("Moments","Inf")
             !
             file = "DeltaMom_"//reg(SiteName(isite))//".DAT"
             MomDir = reg(ItFolder)//"Solver_"//reg(SiteName(isite))//"/"
             !
-            allocate(Moments(Norb,Nspin,0:4));Moments=0d0
+            allocate(Moments(Norb,Nspin,0:min(SigmaMaxMom,Nfit)));Moments=0d0
             wndx = minloc(abs(wmats-0.85*wmatsMax),dim=1)
             call fit_moments(Dfit,Beta,reg(MomDir),reg(file),"Sigma",Moments,filename="DeltaMom",Wlimit=wndx)
             !
-            Eloc=Moments(:,0,:)
-            coef01=Moments(:,1,:)
+            if(reg(reg(DeltaFit)).eq."Inf") Eloc = real(Dfit(:,Nmats,:))
+            if(reg(reg(DeltaFit)).eq."Moments") Eloc = Moments(:,:,0)
+            coef01 = Moments(:,:,1)
             !
             deallocate(Moments)
             !
