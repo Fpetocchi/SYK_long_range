@@ -559,10 +559,13 @@ contains
       integer                               :: nx,ny,nz
       integer,allocatable                   :: Ndegen(:)
       real(8)                               :: ReHr,ImHr
+      character(len=256)                    :: path
+      logical                               :: filexists
       !Hetero
       integer                               :: isite,Nsite,na,nb
       integer                               :: tzl,tzr,ilayer
       logical                               :: inHomo
+      real(8)                               :: tzRatio
       real(8),allocatable                   :: Rsorted(:)
       integer,allocatable                   :: Rorder(:),itz(:)
       complex(8),allocatable                :: Hr(:,:,:),Hk_single(:,:,:)
@@ -594,8 +597,12 @@ contains
       !
       if(readHr)then
          !
+         ! Look for Hk.DAT
+         path=reg(pathOUTPUT)//"Hr.DAT"
+         call inquireFile(reg(path),filexists)
+         !
          unit = free_unit()
-         open(unit,file=reg(pathOUTPUT)//"Hr.DAT",form="formatted",status="unknown",position="rewind",action="read")
+         open(unit,file=reg(path),form="formatted",status="unknown",position="rewind",action="read")
          read(unit,*)                      !skip first line
          read(unit,*) Num_wann !Number of Wannier orbitals
          read(unit,*) Nrpts    !Number of Wigner-Seitz vectors
@@ -699,19 +706,24 @@ contains
          if(Hetero%Explicit(1).ne.1) tzl = 1              ! hopping to the left potential
          if(Hetero%Explicit(2).ne.Hetero%Nslab) tzr = 1   ! hopping to the right potential
          allocate(Hetero%tz(Norb,Norb,(Hetero%Explicit(1)-tzl):(Hetero%Explicit(2)-1+tzr)));Hetero%tz=czero
+         write(*,"(A)")new_line("A")//"     Hetero:"
          do ilayer = Hetero%Explicit(1)-tzl,Hetero%Explicit(2)-1+tzr
             !
             inHomo = (Hetero%NtzExplicit.gt.0) .and. any(Hetero%ExplicitTzPos.eq.ilayer)
             !
+            tzRatio = 1d0
             if(inHomo)then
                allocate(itz(Hetero%NtzExplicit));itz=0
                itz = findloc(Hetero%ExplicitTzPos,value=ilayer)
                if(itz(1).eq.0) stop "build_Hk: something wrong with the Hetero%ExplicitTzPos"
-               Hetero%tz(:,:,ilayer) = diag(hopping)*Hetero%ExplicitTzRatios(itz(1))
+               tzRatio = Hetero%ExplicitTzRatios(itz(1))
                deallocate(itz)
             else
-               Hetero%tz(:,:,ilayer) = diag(hopping)*Hetero%GlobalTzRatio
+               tzRatio = Hetero%GlobalTzRatio
             endif
+            !
+            Hetero%tz(:,:,ilayer) = diag(hopping)*tzRatio
+            write(*,"(A,F)")"     tz/tplane ["//str(ilayer)//"-"//str(ilayer+1)//"]:",tzRatio
             !
          enddo
          !

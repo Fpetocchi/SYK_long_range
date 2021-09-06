@@ -308,15 +308,24 @@ contains
             Hetero%Norb = Norb_model
             call parse_input_variable(Hetero%Nslab,"NSLAB",InputFile,default=20,comment="Global dimension fo the slab.")
             call parse_input_variable(Hetero%Explicit,"EXPLICIT",InputFile,default=[1,10],comment="Index boundaries of the impurities explicitly solved.")
-            call parse_input_variable(Hetero%GlobalTzRatio,"GLOB_TZ_RATIO",InputFile,default=0.1d0,comment="Ratio between the in-plane and all the out-of-plane hoppings. Orbital structure is mantained.")
-            call parse_input_variable(Hetero%NtzExplicit,"EXPLICIT_TZ",InputFile,default=0,comment="Number of out-of-plane hopping ratio different from the global one.")
+            if(readHr)then
+               Hetero%GlobalTzRatio=1d0
+               call parse_input_variable(Hetero%NtzExplicit,"EXPLICIT_TZ",InputFile,default=0,comment="Number of out-of-plane hoppings different from the global one (HOPPING).")
+            else
+               call parse_input_variable(Hetero%GlobalTzRatio,"GLOB_TZ_RATIO",InputFile,default=0.1d0,comment="Ratio between all the out-of-plane hoppings and the in-plane (HOPPING). Orbital structure is mantained.")
+               call parse_input_variable(Hetero%NtzExplicit,"EXPLICIT_TZ",InputFile,default=0,comment="Number of out-of-plane hopping ratios different from the global one (GLOB_TZ_RATIO).")
+            endif
             if(Hetero%NtzExplicit.gt.0)then
                allocate(Hetero%ExplicitTzPos(Hetero%NtzExplicit));Hetero%ExplicitTzPos=0
                allocate(Hetero%ExplicitTzRatios(Hetero%NtzExplicit));Hetero%ExplicitTzRatios=0d0
-               call parse_input_variable(Hetero%ExplicitTzPos,"EXPLICIT_TZ_POS",InputFile,comment="Indexes of the out-of-plane hopping ratio different from the global one.")
+               call parse_input_variable(Hetero%ExplicitTzPos,"EXPLICIT_TZ_POS",InputFile,comment="Indexes of the out-of-plane hoppings different from the global one.")
                if(any(Hetero%ExplicitTzPos.lt.1)) stop "read_InputFile: illegal value (<1) in EXPLICIT_TZ_POS."
                if(any(Hetero%ExplicitTzPos.ge.Hetero%Nslab)) stop "read_InputFile: illegal value (<=NSLAB) in EXPLICIT_TZ_POS."
-               call parse_input_variable(Hetero%ExplicitTzRatios,"EXPLICIT_TZ_RATIOS",InputFile,comment="Values of the out-of-plane hopping ratios different from the global one.")
+               if(readHr)then
+                  call parse_input_variable(Hetero%ExplicitTzRatios,"EXPLICIT_TZ_RATIOS",InputFile,comment="Values of the explicit factors multiplying the global out-of-plane hopping (HOPPING).")
+               else
+                  call parse_input_variable(Hetero%ExplicitTzRatios,"EXPLICIT_TZ_RATIOS",InputFile,comment="Values of the out-of-plane hopping ratios different from the global one.")
+               endif
             endif
          endif
       endif

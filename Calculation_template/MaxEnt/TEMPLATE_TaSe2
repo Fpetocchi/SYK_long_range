@@ -8,14 +8,15 @@ GENMAT=/home/petocchif/1_GW_EDMFT/nobackup/1_production/Calculation_template
 ################################################################################
 #                     PASTE THE FOLLOWING WITHIN PATH_DATA                     #
 ################################################################################
-#declare -a dirindex=( "21_BKP" "22_BKP" )
+declare -a dirindex=( "86" "87" "78" "79" )
 #for it in "${dirindex[@]}" ; do
+#for it in `seq 13 1 16`;do
 
 #------------------------------------------------------------------------------#
 
 
 GENMAT=/home/petocchif/1_GW_EDMFT/nobackup/1_production/Calculation_template
-for it in `seq 44 1 53`;do
+for it in `seq 13 1 16`; do
 
    ## LATTICE
    cd $it/Convergence
@@ -55,7 +56,18 @@ done
 
 
 
+for it in `seq 2 1 8`; do
 
+cd Solver_S${it}
+mv G0_S1_w_s1.DAT G0_S${it}_w_s1.DAT
+mv G_S1_w_s1.DAT G_S${it}_w_s1.DAT
+mv D_S1_w_s1.DAT D_S${it}_w_s1.DAT
+mv S_S1_w_s1.DAT S_S${it}_w_s1.DAT
+mv N_S1_s1.DAT N_S${it}_s1.DAT
+mv curlyU_S1_w.DAT curlyU_S${it}_w.DAT
+cd ../
+
+done
 
 ################################################################################
 #                                  PLOT DATA                                   #
