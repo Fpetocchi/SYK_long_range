@@ -208,7 +208,7 @@ subroutine interpolateG2Path(Sfull,Lttc,pathOUTPUT)
       do ik=1,Sfull%Nkpt
          correction(:,:,ik) = zeye(Norb)*Sfull%mu - dreal(Sfull%ws(:,:,1,ispin))
       enddo
-      call interpolateHk2Path(Lttc,structure,Nkpt_path,reg(pathOUTPUT),corrname="dmft_s"//str(ispin),correction=correction,doplane=FermiSurf,hetero=Hetero%status)
+      call interpolateHk2Path(Lttc,structure,Nkpt_path,reg(pathOUTPUT)//"K_resolved/",corrname="dmft_s"//str(ispin),correction=correction,doplane=FermiSurf,hetero=Hetero%status)
       if(paramagnet) exit
       !
    enddo
@@ -225,7 +225,7 @@ subroutine interpolateG2Path(Sfull,Lttc,pathOUTPUT)
          do iorb=1,Norb
             correction(iorb,iorb,:) = dcmplx(dreal(correction(iorb,iorb,:)),0d0)
          enddo
-         call interpolateHk2Path(Lttc,structure,Nkpt_path,reg(pathOUTPUT),corrname="qpsc_s"//str(ispin),correction=correction,doplane=FermiSurf,hetero=Hetero%status)
+         call interpolateHk2Path(Lttc,structure,Nkpt_path,reg(pathOUTPUT)//"K_resolved/",corrname="qpsc_s"//str(ispin),correction=correction,doplane=FermiSurf,hetero=Hetero%status)
          if(paramagnet) exit
          !
       enddo
