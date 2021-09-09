@@ -118,7 +118,7 @@ echo "Binary from: " ${BIN}
 echo "Run options: "${RUNOPTIONS}
 echo "Name: "${NAME}
 echo "Nspin: "${Nspin}
-echo "orbital Trace: "${TRACE}
+echo "File suffix: "${SUFFIX}
 if [ "$SINGSUB"  == "T" ]; then
    echo "startK: "${STARTK}
    echo "stopK: "${STOPK}

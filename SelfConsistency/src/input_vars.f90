@@ -264,7 +264,7 @@ contains
 
       !integer                               :: unit
       !
-      write(LOGfile,"(A)") new_line("A")//"Reading InputFile"//new_line("A")
+      write(LOGfile,"(A)") new_line("A")//"Reading InputFile: "//reg(InputFile)//new_line("A")
       !
       call add_separator("Calculation type")
       call parse_input_variable(CalculationType,"CALC_TYPE",InputFile,default="GW+EDMFT",comment="Calculation type. Avalibale: G0W0, scGW, DMFT+statU, DMFT+dynU, EDMFT, GW+EDMFT.")
@@ -308,6 +308,7 @@ contains
             Hetero%Norb = Norb_model
             call parse_input_variable(Hetero%Nslab,"NSLAB",InputFile,default=20,comment="Global dimension fo the slab.")
             call parse_input_variable(Hetero%Explicit,"EXPLICIT",InputFile,default=[1,10],comment="Index boundaries of the impurities explicitly solved.")
+            if((Hetero%Explicit(2)-Hetero%Explicit(1)+1).eq.1) stop "read_InputFile: a single layer heterostructure does not make sense."
             if(readHr)then
                Hetero%GlobalTzRatio=1d0
                call parse_input_variable(Hetero%NtzExplicit,"EXPLICIT_TZ",InputFile,default=0,comment="Number of out-of-plane hoppings different from the global one (HOPPING).")

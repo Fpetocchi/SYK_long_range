@@ -10,7 +10,7 @@ GT = F
 # Add a suffix for the main executable. NULL by default
 SUFFIX =
 ifdef PAD
-  SUFFIX = $(PAD)
+  SUFFIX = _$(PAD)
 endif
 
 
@@ -34,13 +34,13 @@ EXE_PP  = Akw_builder
 #
 # Compiler flags----------------------------------------------------------------
 ifeq ($(FC),ifort)
-  FFLAGS = -assume byterecl -qopenmp -liomp5 -mkl=sequential -fpp -mcmodel=large -llapack -I$(INCLDIR)
+  FFLAGS = -assume byterecl -qopenmp -liomp5 -mkl=sequential -fpp -mcmodel=large -llapack -I$(INCLDIR) -D$(SUFFIX)
   DBGFFLAGS = -O0 -check bounds -traceback -fpe3 -check all -fp-model precise -fp-stack-check -p -g -warn -debug extended -warn interface --heap-arrays -check all -check noarg_temp_created -qdiag-enable:sc3 -qdiag-enable:sc-parallel3 -C -D_verb
   RELFFLAGS = -O3 -ftz
   # -xAVX -xHost  -axCORE-AVX2
 endif
 ifeq ($(FC),gfortran)
-  FFLAGS = -openmp -cpp -ffree-line-length-none -ffast-math -march=native -funroll-all-loops -fno-protect-parens -flto -llapack -I$(INCLDIR)
+  FFLAGS = -openmp -cpp -ffree-line-length-none -ffast-math -march=native -funroll-all-loops -fno-protect-parens -flto -llapack -I$(INCLDIR) -D$(SUFFIX)
   DBGFFLAGS = -O0 -p -g -fbacktrace -Wline-truncation -Wsurprising -Waliasing -Wimplicit-interface -Wunused-parameter -fwhole-file -fcheck=all -pedantic -fbacktrace -fcheck=bounds -Wall  -D_verb #-Wcharacter-truncation
   RELFFLAGS = -cpp -ffree-line-length-none -O3 -ffast-math -march=native -funroll-all-loops -fno-protect-parens -flto -mcmodel=medium
 endif

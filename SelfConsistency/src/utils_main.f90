@@ -407,6 +407,7 @@ contains
       !
       !
       Lttc%Nkpt3 = Nkpt3
+      Lttc%Nsite = Nsite
       !
       !
       select case(reg(CalculationType))
@@ -515,7 +516,7 @@ contains
       if(Lttc%Nkpt.ne.(Nkpt3(1)*Nkpt3(2)*Nkpt3(3)))stop "Total number of K-points does not match with number of K-points per dimension."
       !
       !
-      wrealMax = maxval(abs(Lttc%Ek)) + 0.1*maxval(abs(Lttc%Ek))
+      wrealMax = 1.2*maxval(abs(Lttc%Ek))
       !
       !
       !Store the local Hamiltonian
@@ -665,7 +666,7 @@ contains
          call tetrahedron_integration(reg(pathINPUT),Lttc%Ek,Lttc%Nkpt3,Lttc%kpt,Egrid,fact_intp=2,pathOUTPUT=reg(pathINPUT))
          deallocate(Egrid)
          !
-         if(reg(structure).ne."None")call interpolateHk2Path(Lttc,reg(structure),Nkpt_path,reg(pathINPUT),doplane=.true.)
+         if(reg(structure).ne."None")call interpolateHk2Path(Lttc,reg(structure),Nkpt_path,reg(pathINPUT),doplane=.true.,hetero=Hetero%status)
          !
       endif
       !

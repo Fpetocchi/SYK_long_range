@@ -1,4 +1,4 @@
-subroutine interpolateG2Path(Sfull,Lttc,structure,Nkpt_path,pathOUTPUT)
+subroutine interpolateG2Path(Sfull,Lttc,pathOUTPUT)
    !
    use parameters
    use utils_misc
@@ -8,32 +8,27 @@ subroutine interpolateG2Path(Sfull,Lttc,structure,Nkpt_path,pathOUTPUT)
    use file_io
    use greens_function, only : calc_Gmats
    use fourier_transforms
-   use input_vars, only : Nreal, wrealMax, eta, path_funct, FermiSurf, Nkpt_Fermi
-   use input_vars, only : paramagnet, CalculationType
+   use input_vars, only : structure, path_funct, Nkpt_path, FermiSurf, Nkpt_Fermi
+   use input_vars, only : paramagnet, CalculationType, Hetero
    implicit none
    !
    type(FermionicField),intent(inout)    :: Sfull
    type(Lattice),intent(inout)           :: Lttc
-   character(len=*),intent(in)           :: structure
-   integer,intent(in)                    :: Nkpt_path
    character(len=*),intent(in)           :: pathOUTPUT
    !
    type(FermionicField)                  :: Spath
    type(FermionicField)                  :: Sfermi
+   type(FermionicField)                  :: Sloc
    type(FermionicField)                  :: Gpath
    type(FermionicField)                  :: Gfull
    type(FermionicField)                  :: Gfermi
    !
-   real(8),allocatable                   :: wreal(:)
-   complex(8),allocatable                :: zeta(:,:,:),invGf(:,:)
-   real(8),allocatable                   :: Akw(:,:,:,:),Fk(:,:)
    real(8),allocatable                   :: Zk(:,:)
-   complex(8),allocatable                :: SigmaFermi(:,:,:,:)
+   complex(8),allocatable                :: correction(:,:,:)
    integer                               :: Norb,Nmats,unit!,Ntau
    integer                               :: ik,iw,itau,ispin,iorb
    integer                               :: ikx,iky
    real(8)                               :: kx,ky,Bvec(3),Blat(3,3)
-   integer                               :: Nkpt_Kside,wndx_cut
    character(len=256)                    :: path
    logical                               :: Kdependence
    real                                  :: start,finish
@@ -42,455 +37,233 @@ subroutine interpolateG2Path(Sfull,Lttc,structure,Nkpt_path,pathOUTPUT)
    write(*,"(A)") new_line("A")//new_line("A")//"---- interpolateG2Path"
    !
    !
-   ! Check on the input Fields
    if(.not.Lttc%status) stop "interpolateG2Path: Lttc not properly initialized."
-   if(Sfull%status)then
-      if(Sfull%Norb.ne.Lttc%Norb) stop "interpolateG2Path: Lttc has different number of orbitals with respect to Sfull."
-      if(Sfull%Nkpt.ne.Lttc%Nkpt) stop "interpolateG2Path: Lttc has different number of k-points with respect to Sfull."
-      Norb = Sfull%Norb
-      Nmats = Sfull%Npoints
-   else
-      Norb = Lttc%Norb
-   endif
+   if(.not.Sfull%status) stop "interpolateG2Path: Sfull not properly initialized."
+   !
+   if(Sfull%Norb.ne.Lttc%Norb) stop "interpolateG2Path: Lttc has different number of orbitals with respect to Sfull."
+   if(Sfull%Nkpt.ne.Lttc%Nkpt) stop "interpolateG2Path: Lttc has different number of k-points with respect to Sfull."
+   Norb = Sfull%Norb
+   Nmats = Sfull%Npoints
+   !
+   if(FermiSurf)call get_Blat(Blat)
    !
    !
-   !-------------------- path along high-symmetry points -------------------!
+   !---------------------- path along high-symmetry points --------------------!
    !
    !
-   if(.not.Lttc%pathStored)then
-      !
-      !Create K-points along high-symmetry points
-      if(allocated(Lttc%kptpath))deallocate(Lttc%kptpath)
-      call calc_Kpath(Lttc%kptpath,reg(structure),Nkpt_path,Lttc%Kpathaxis,Lttc%KpathaxisPoints)
-      Lttc%Nkpt_path = size(Lttc%kptpath,dim=2)
-      !
-      !Fill in Hk along points
-      if(allocated(Lttc%Hk_path))deallocate(Lttc%Hk_path)
-      allocate(Lttc%Hk_path(Norb,Norb,Lttc%Nkpt_path));Lttc%Hk_path=czero
-      call cpu_time(start)
-      call wannierinterpolation(Lttc%Nkpt3,Lttc%kpt,Lttc%kptpath,Lttc%Hk,Lttc%Hk_path)
-      call cpu_time(finish)
-      write(*,"(A,F)") "     H(fullBZ) --> H(Kpath) cpu timing:", finish-start
-      !
-      !Fill in Ek along points
-      if(allocated(Lttc%Ek_path))deallocate(Lttc%Ek_path)
-      allocate(Lttc%Ek_path(Norb,Lttc%Nkpt_path));Lttc%Ek_path=0d0
-      if(allocated(Lttc%Zk_path))deallocate(Lttc%Zk_path)
-      allocate(Lttc%Zk_path(Norb,Norb,Lttc%Nkpt_path));Lttc%Zk_path=czero
-      do ik=1,Lttc%Nkpt_path
-         Lttc%Zk_path(:,:,ik) = Lttc%Hk_path(:,:,ik)
-         call eigh(Lttc%Zk_path(:,:,ik),Lttc%Ek_path(:,ik))
-      enddo
-      !
-   endif
+   !non-interacting data (Bands, spectral function, Fermi-surface)
+   call interpolateHk2Path(Lttc,structure,Nkpt_path,reg(pathOUTPUT)//"K_resolved/",doplane=FermiSurf,hetero=Hetero%status)
    !
-   !Re-Print bands in the same folder where the function is
-   path = reg(pathOUTPUT)//"K_resolved/Bands.DAT"
-   unit = free_unit()
-   open(unit,file=reg(path),form="formatted",status="unknown",position="rewind",action="write")
-   do ik=1,Lttc%Nkpt_path
-      write(unit,"(1I5,200E20.12)") ik,Lttc%Kpathaxis(ik),(Lttc%Ek_path(:,ik),iorb=1,Norb)
-   enddo
-   close(unit)
-   write(*,"(A,I)") "     Total number of K-points along path:",Lttc%Nkpt_path
-   !
-   !Re-Print position of High-symmetry points in the same folder where the function is
-   path = reg(pathOUTPUT)//"K_resolved/Kpoints_path.DAT"
-   unit = free_unit()
-   open(unit,file=reg(path),form="formatted",status="unknown",position="rewind",action="write")
-   do ik=1,size(Lttc%KpathaxisPoints,dim=1)
-      write(unit,"(1I5,200E20.12)") ik,Lttc%KpathaxisPoints(ik)
-   enddo
-   close(unit)
-   write(*,"(A,I)") "     Total number of High symmetry points:",size(Lttc%KpathaxisPoints,dim=1)
-   !
-   !Compute non-interacting k-resolved spectral function in the Wannier basis
-   allocate(wreal(Nreal));wreal=0d0
-   wreal = linspace(-wrealMax,+wrealMax,Nreal)
-   wndx_cut = minloc(abs(wreal-EcutSheet),dim=1)
-   !
-   allocate(zeta(Norb,Norb,Nreal));zeta=czero
-   do iorb=1,Norb
-      do iw=1,Nreal
-         zeta(iorb,iorb,iw) = dcmplx(wreal(iw),eta)
-      enddo
-   enddo
-   !
-   allocate(Akw(Norb,Nreal,Lttc%Nkpt_path,Nspin));Akw=0d0
-   allocate(invGf(Norb,Norb));invGf=czero
-   do ispin=1,Nspin
-      !$OMP PARALLEL DEFAULT(NONE),&
-      !$OMP SHARED(ispin,Nreal,Norb,zeta,Lttc,Akw),&
-      !$OMP PRIVATE(ik,iw,iorb,invGf)
-      !$OMP DO
-      do ik=1,Lttc%Nkpt_path
-         do iw=1,Nreal
-            !
-            invGf = zeta(:,:,iw) - Lttc%Hk_path(:,:,ik)
-            call inv(invGf)
-            do iorb=1,Norb
-               Akw(iorb,iw,ik,ispin) = dimag(invGf(iorb,iorb))
-            enddo
-            !
-         enddo
-      enddo
-      !$OMP END DO
-      !$OMP END PARALLEL
-   enddo
-   deallocate(zeta,invGf)
-   !
-   !Normalize k-resolved spectral function
-   do ispin=1,Nspin
-      do ik=1,Lttc%Nkpt_path
-         do iorb=1,Norb
-            Akw(iorb,:,ik,ispin) = Akw(iorb,:,ik,ispin)/(sum(Akw(iorb,:,ik,ispin))*abs(wreal(2)-wreal(1)))
-         enddo
-      enddo
-   enddo
-   !
-   !Print k-resolved spectral function
-   do ispin=1,Nspin
-      path = reg(pathOUTPUT)//"K_resolved/Akw_nonInt_s"//str(ispin)//".DAT"
-      unit = free_unit()
-      open(unit,file=reg(path),form="formatted",status="unknown",position="rewind",action="write")
-      do ik=1,Lttc%Nkpt_path
-         do iw=1,Nreal
-             write(unit,"(1I5,200E20.12)") ik,Lttc%Kpathaxis(ik),wreal(iw),(Akw(iorb,iw,ik,ispin),iorb=1,Norb)
-         enddo
-         write(unit,*)
-      enddo
-      close(unit)
-      if(paramagnet)exit
-   enddo
-   deallocate(Akw,wreal)
+   !Dump MaxEnt data for the local self-energy (always done for every setup)
+   call calc_MaxEnt_on_Sigma_imp(Sfull)
    !
    !
-   !Path along planar sheet on kx,ky
-   if(FermiSurf)then
-      !
-      call get_Blat(Blat)
-      Nkpt_Kside = Nkpt_Fermi !int(Nkpt_path/2)
-      !
-      if(.not.Lttc%planeStored)then
+   !Interpolate the slef-energy along the path if its K-dependent otherwise duplicate the local one
+   select case(reg(CalculationType))
+      case default
          !
-         !Create K-points along high-symmetry points
-         if(allocated(Lttc%kptPlane))deallocate(Lttc%kptPlane)
-         call calc_Kplane(Lttc%kptPlane,Nkpt_Kside)
-         Lttc%Nkpt_Plane = size(Lttc%kptPlane,dim=2)
+         stop "Available Calculation types are: G0W0, scGW, DMFT+statU, DMFT+dynU, EDMFT, GW+EDMFT."
          !
-         !Fill in Hk in the points on the kx,ky plane - stored row-wise
-         if(allocated(Lttc%Hk_Plane))deallocate(Lttc%Hk_Plane)
-         allocate(Lttc%Hk_Plane(Norb,Norb,Lttc%Nkpt_Plane));Lttc%Hk_Plane=czero
-         call cpu_time(start)
-         call wannierinterpolation(Lttc%Nkpt3,Lttc%kpt,Lttc%kptPlane,Lttc%Hk,Lttc%Hk_Plane)
-         call cpu_time(finish)
-         write(*,"(A,F)") "     H(fullBZ) --> H(kx,ky) cpu timing:", finish-start
+      case("G0W0","scGW","GW+EDMFT")
          !
-         Lttc%planeStored=.true.
          !
-         !Compute non-interacting Fermi surface
-         !well defined orbital character
-         allocate(Fk(Lttc%Norb,Lttc%Nkpt_Plane));Fk=0d0
-         allocate(invGf(Norb,Norb));invGf=czero
-         do ik=1,Lttc%Nkpt_Plane
-            invGf = zeye(Lttc%Norb)*dcmplx(EcutSheet,eta) - Lttc%Hk_Plane(:,:,ik)
-            call inv(invGf)
-            do iorb=1,Lttc%Norb
-               Fk(iorb,ik) = -dimag(invGf(iorb,iorb))
-            enddo
-         enddo
-         deallocate(invGf)
          !
-         !Print Fermi surface
-         path = reg(pathOUTPUT)//"K_resolved/Fk_nonInt.DAT"
-         unit = free_unit()
-         open(unit,file=reg(path),form="formatted",status="unknown",position="rewind",action="write")
-         do ik=1,Lttc%Nkpt_Plane
-            ikx = int(ik/(Nkpt_Kside+0.001))+1 ; kx = (ikx-1)/dble(Nkpt_Kside-1) - 0.5d0
-            iky = ik - (ikx-1)*Nkpt_Kside      ; ky = (iky-1)/dble(Nkpt_Kside-1) - 0.5d0
-            Bvec = kx*Blat(:,1) + ky*Blat(:,2)
-            write(unit,"(3I5,200E20.12)") ik,ikx,iky,Bvec(1),Bvec(2),(Fk(iorb,ik),iorb=1,Lttc%Norb)
-            if(iky.eq.Nkpt_Kside)write(unit,*)
-         enddo
-         close(unit)
-         deallocate(Fk)
+         Kdependence = .true.
          !
-      endif
-      write(*,"(A,I)") "     Total number of K-points along {kx,ky} plane:",Lttc%Nkpt_Plane
-      !
-   endif
-   !
-   !
-   if(Sfull%status)then
-      !
-      !Dump MaxEnt data for the local self-energy (always done for every setup)
-      call calc_MaxEnt_on_Sigma_imp(Sfull)
-      !
-      !Interpolate the slef-energy along the path if its K-dependent otherwise duplicate the local one
-      select case(reg(CalculationType))
-         case default
-            !
-            stop "Available Calculation types are: G0W0, scGW, DMFT+statU, DMFT+dynU, EDMFT, GW+EDMFT."
-            !
-         case("G0W0","scGW","GW+EDMFT")
-            !
-            Kdependence = .true.
-            !
-            !
-            !
-            !--------------- Green's function in the full BZ ---------------!
+         !
+         !
+         !--------------- Green's function in the full BZ ---------------!
+         if(scan(reg(path_funct),"S").gt.0)then
             call AllocateFermionicField(Gfull,Norb,Nmats,Nkpt=Lttc%Nkpt,Nsite=Sfull%Nsite,Beta=Sfull%Beta,mu=Sfull%mu)
             call calc_Gmats(Gfull,Lttc,Smats=Sfull,along_path=.false.)
+         endif
+         !
+         !
+         !
+         !--------------- Green's function along the path ---------------!
+         !
+         !Interpolate the self-energy along the path
+         call cpu_time(start)
+         call AllocateFermionicField(Spath,Norb,Nmats,Nkpt=Lttc%Nkpt_path,Nsite=Sfull%Nsite,Beta=Sfull%Beta,mu=Sfull%mu)
+         do ispin=1,Nspin
+            call wannierinterpolation(Lttc%Nkpt3,Lttc%kpt,Lttc%kptpath(:,1:Lttc%Nkpt_path),Sfull%wks(:,:,:,:,ispin),Spath%wks(:,:,:,:,ispin))
+            if(paramagnet)then
+               Spath%wks(:,:,:,:,Nspin) = Spath%wks(:,:,:,:,1)
+               exit
+            endif
+         enddo
+         call cpu_time(finish)
+         write(*,"(A,F)") new_line("A")//new_line("A")//"     Sigma(fullBZ,iw) --> Sigma(Kpath,iw) cpu timing:", finish-start
+         !
+         !Compute the quasiparticle weight along the path
+         do ispin=1,Nspin
+            allocate(Zk(Lttc%Nkpt_path,Norb));Zk=0d0
+            do ik=1,Lttc%Nkpt_path
+               do iorb=1,Norb
+                  Zk(ik,iorb) = 1d0 / (1d0 + abs(dimag(Spath%wks(iorb,iorb,1,ik,ispin)))*Spath%Beta/pi)
+               enddo
+            enddo
+            path = reg(pathOUTPUT)//"K_resolved/Zk_path_s"//str(ispin)//".DAT"
+            unit = free_unit()
+            open(unit,file=reg(path),form="formatted",status="unknown",position="rewind",action="write")
+            do ik=1,Lttc%Nkpt_path
+               write(unit,"(1I5,200E20.12)") ik,Lttc%Kpathaxis(ik)/Lttc%Kpathaxis(Lttc%Nkpt_path),(Zk(ik,iorb),iorb=1,Norb)
+            enddo
+            close(unit)
+            deallocate(Zk)
+            if(paramagnet)exit
+         enddo
+         !
+         !Recompute the Green's function
+         call AllocateFermionicField(Gpath,Norb,Nmats,Nkpt=Lttc%Nkpt_path,Nsite=Sfull%Nsite,Beta=Sfull%Beta,mu=Sfull%mu)
+         call calc_Gmats(Gpath,Lttc,Smats=Spath,along_path=.true.)
+         call DeallocateFermionicField(Spath)
+         !
+         !
+         !
+         !---------- Green's function along the {kx,ky} plane -----------!
+         if(FermiSurf)then
             !
             !
-            !
-            !--------------- Green's function along the path ---------------!
-            !
-            !Interpolate the self-energy along the path
+            !Interpolate the self-energy along the plane
             call cpu_time(start)
-            call AllocateFermionicField(Spath,Norb,Nmats,Nkpt=Lttc%Nkpt_path,Nsite=Sfull%Nsite,Beta=Sfull%Beta,mu=Sfull%mu)
-            spinloopSpath: do ispin=1,Nspin
-               call wannierinterpolation(Lttc%Nkpt3,Lttc%kpt,Lttc%kptpath,Sfull%wks(:,:,:,:,ispin),Spath%wks(:,:,:,:,ispin))
-               if(paramagnet)then
-                  Spath%wks(:,:,:,:,Nspin) = Spath%wks(:,:,:,:,1)
-                  exit spinloopSpath
-               endif
-            enddo spinloopSpath
-            call cpu_time(finish)
-            write(*,"(A,F)") new_line("A")//new_line("A")//"     Sigma(fullBZ,iw) --> Sigma(Kpath,iw) cpu timing:", finish-start
-            !
-            !Compute the quasiparticle weight along the path
+            call AllocateFermionicField(Sfermi,Norb,Nmats,Nkpt=Lttc%Nkpt_Plane,Nsite=Sfull%Nsite,Beta=Sfull%Beta,mu=Sfull%mu)
             do ispin=1,Nspin
-               !
-               allocate(Zk(Lttc%Nkpt_path,Norb));Zk=0d0
-               do ik=1,Lttc%Nkpt_path
+               call wannierinterpolation(Lttc%Nkpt3,Lttc%kpt,Lttc%kptPlane,Sfull%wks(:,:,:,:,ispin),Sfermi%wks(:,:,:,:,ispin))
+               if(paramagnet)then
+                  Sfermi%wks(:,:,:,:,Nspin) = Sfermi%wks(:,:,:,:,1)
+                  exit
+               endif
+            enddo
+            call cpu_time(finish)
+            write(*,"(A,F)") "     Sigma(fullBZ,iw) --> Sigma(kx,ky,iw) cpu timing:", finish-start
+            !
+            !Compute the quasiparticle weight along the plane - this part can be optimized by avoiding to interpolate the full frequency range of S_Full
+            do ispin=1,Nspin
+               allocate(Zk(Lttc%Nkpt_Plane,Norb));Zk=0d0
+               do ik=1,Lttc%Nkpt_Plane
                   do iorb=1,Norb
-                     Zk(ik,iorb) = 1d0 / (1d0 + abs(dimag(Spath%wks(iorb,iorb,1,ik,ispin)))*Spath%Beta/pi)
+                     Zk(ik,iorb) = 1d0 / (1d0 + abs(dimag(Sfermi%wks(iorb,iorb,1,ik,ispin)))*Sfermi%Beta/pi)
                   enddo
                enddo
-               !
-               path = reg(pathOUTPUT)//"K_resolved/Zk_path_s"//str(ispin)//".DAT"
+               path = reg(pathOUTPUT)//"K_resolved/Zk_plane_s"//str(ispin)//".DAT"
                unit = free_unit()
                open(unit,file=reg(path),form="formatted",status="unknown",position="rewind",action="write")
-               do ik=1,Lttc%Nkpt_path
-                  write(unit,"(1I5,200E20.12)") ik,Lttc%Kpathaxis(ik),(Zk(ik,iorb),iorb=1,Norb)
+               do ik=1,Lttc%Nkpt_Plane
+                  ikx = int(ik/(Nkpt_Fermi+0.001))+1 ; kx = (ikx-1)/dble(Nkpt_Fermi-1) - 0.5d0
+                  iky = ik - (ikx-1)*Nkpt_Fermi      ; ky = (iky-1)/dble(Nkpt_Fermi-1) - 0.5d0
+                  Bvec = kx*Blat(:,1) + ky*Blat(:,2)
+                  write(unit,"(3I5,200E20.12)") ik,ikx,iky,Bvec(1),Bvec(2),(Zk(ik,iorb),iorb=1,Norb)
+                  if(iky.eq.Nkpt_Fermi)write(unit,*)
                enddo
                close(unit)
                deallocate(Zk)
-               !
                if(paramagnet)exit
             enddo
             !
             !Recompute the Green's function
-            call AllocateFermionicField(Gpath,Norb,Nmats,Nkpt=Lttc%Nkpt_path,Nsite=Sfull%Nsite,Beta=Sfull%Beta,mu=Sfull%mu)
-            call calc_Gmats(Gpath,Lttc,Smats=Spath,along_path=.true.)
-            call DeallocateFermionicField(Spath)
-            !
-            !
-            !
-            !---------- Green's function along the {kx,ky} plane -----------!
-            if(FermiSurf)then
-               !
-               !Interpolate the self-energy along the plane
-               call cpu_time(start)
-               call AllocateFermionicField(Sfermi,Norb,Nmats,Nkpt=Lttc%Nkpt_Plane,Nsite=Sfull%Nsite,Beta=Sfull%Beta,mu=Sfull%mu)
-               spinloopSplane: do ispin=1,Nspin
-                  call wannierinterpolation(Lttc%Nkpt3,Lttc%kpt,Lttc%kptPlane,Sfull%wks(:,:,:,:,ispin),Sfermi%wks(:,:,:,:,ispin))
-                  if(paramagnet)then
-                     Sfermi%wks(:,:,:,:,Nspin) = Sfermi%wks(:,:,:,:,1)
-                     exit spinloopSplane
-                  endif
-               enddo spinloopSplane
-               call cpu_time(finish)
-               write(*,"(A,F)") "     Sigma(fullBZ,iw) --> Sigma(kx,ky,iw) cpu timing:", finish-start
-               !
-               !Compute the quasiparticle weight along the plane
-               do ispin=1,Nspin
-                  !
-                  allocate(Zk(Lttc%Nkpt_Plane,Norb));Zk=0d0
-                  do ik=1,Lttc%Nkpt_Plane
-                     do iorb=1,Norb
-                        Zk(ik,iorb) = 1d0 / (1d0 + abs(dimag(Sfermi%wks(iorb,iorb,1,ik,ispin)))*Sfermi%Beta/pi)
-                     enddo
-                  enddo
-                  !
-                  path = reg(pathOUTPUT)//"K_resolved/Zk_plane_s"//str(ispin)//".DAT"
-                  unit = free_unit()
-                  open(unit,file=reg(path),form="formatted",status="unknown",position="rewind",action="write")
-                  do ik=1,Lttc%Nkpt_Plane
-                     ikx = int(ik/(Nkpt_Kside+0.001))+1 ; kx = (ikx-1)/dble(Nkpt_Kside-1) - 0.5d0
-                     iky = ik - (ikx-1)*Nkpt_Kside      ; ky = (iky-1)/dble(Nkpt_Kside-1) - 0.5d0
-                     Bvec = kx*Blat(:,1) + ky*Blat(:,2)
-                     write(unit,"(3I5,200E20.12)") ik,ikx,iky,Bvec(1),Bvec(2),(Zk(ik,iorb),iorb=1,Norb)
-                     if(iky.eq.Nkpt_Kside)write(unit,*)
-                  enddo
-                  close(unit)
-                  deallocate(Zk)
-                  !
-                  if(paramagnet)exit
-               enddo
-               !
-               !Recompute the Green's function
-               call AllocateFermionicField(Gfermi,Norb,Nmats,Nkpt=Lttc%Nkpt_Plane,Nsite=Sfull%Nsite,Beta=Sfull%Beta,mu=Sfull%mu)
-               call calc_Gmats(Gfermi,Lttc,Smats=Sfermi,along_plane=.true.)
-               !
-               !Sigma for qpsc - removing ImSigma on the diagonal
-               allocate(SigmaFermi(Norb,Norb,Lttc%Nkpt_Plane,Nspin));SigmaFermi=czero
-               SigmaFermi = Sfermi%wks(:,:,1,:,:)
-               do iorb=1,Norb
-                  SigmaFermi(iorb,iorb,:,:) = dcmplx(dreal(SigmaFermi(iorb,iorb,:,:)),0d0)
-               enddo
-               !
-               call DeallocateFermionicField(Sfermi)
-            endif
-            !
-            !
-            !
-         case("DMFT+statU","DMFT+dynU","EDMFT")
-            !
-            Kdependence = .false.
-            !
-            !
-            !
-            !--------------- Green's function in the full BZ ---------------!
-            call AllocateFermionicField(Gfull,Norb,Nmats,Nkpt=Lttc%Nkpt,Nsite=Sfull%Nsite,Beta=Sfull%Beta,mu=Sfull%mu)
-            call calc_Gmats(Gfull,Lttc,Smats=Sfull,along_path=.false.)
-            !
-            !
-            !
-            !--------------- Green's function along the path ---------------!
-            call AllocateFermionicField(Spath,Norb,Nmats,Nkpt=Lttc%Nkpt_path,Nsite=Sfull%Nsite,Beta=Sfull%Beta,mu=Sfull%mu)
-            call AllocateFermionicField(Gpath,Norb,Nmats,Nkpt=Lttc%Nkpt_path,Nsite=Sfull%Nsite,Beta=Sfull%Beta,mu=Sfull%mu)
-            do ik=1,Lttc%Nkpt_path
-               Spath%wks(:,:,:,ik,:) = Sfull%ws
-            enddo
-            call calc_Gmats(Gpath,Lttc,Smats=Spath,along_path=.true.)
-            call DeallocateFermionicField(Spath)
-            !
-            !
-            !
-            !---------- Green's function along the {kx,ky} plane -----------!
-            if(FermiSurf)then
-               call AllocateFermionicField(Sfermi,Norb,Nmats,Nkpt=Lttc%Nkpt_Plane,Nsite=Sfull%Nsite,Beta=Sfull%Beta,mu=Sfull%mu)
-               call AllocateFermionicField(Gfermi,Norb,Nmats,Nkpt=Lttc%Nkpt_Plane,Nsite=Sfull%Nsite,Beta=Sfull%Beta,mu=Sfull%mu)
-               do ik=1,Lttc%Nkpt_Plane
-                  Sfermi%wks(:,:,:,ik,:) = Sfull%ws
-               enddo
-               call calc_Gmats(Gfermi,Lttc,Smats=Sfermi,along_plane=.true.)
-               call DeallocateFermionicField(Sfermi)
-            endif
-            !
-            !
-            !
-      end select
-      !
-      !
-      !Quasiparticle self-consistency to get the Fermi surface
-      !no need to get to the real axis since we care only about w=0
-      if(FermiSurf)then
-         !
-         write(*,"(A,F)") new_line("A")//new_line("A")//"     Computing QPSC Fermi surface."
-         !
-         do ispin=1,Nspin
-            !
-            !correct bandstructure with ReSigma_DMFT
-            allocate(Fk(Lttc%Norb,Lttc%Nkpt_Plane));Fk=0d0
-            allocate(invGf(Norb,Norb));invGf=czero
-            do ik=1,Lttc%Nkpt_Plane
-               invGf = zeye(Lttc%Norb)*dcmplx(EcutSheet+Sfull%mu,eta) - Lttc%Hk_Plane(:,:,ik) - dreal(Sfull%ws(:,:,1,ispin))
-               call inv(invGf)
-               !extract FS
-               do iorb=1,Norb
-                  Fk(iorb,ik) = -dimag(invGf(iorb,iorb))
-               enddo
-            enddo
-            deallocate(invGf)
-            !
-            !Print Fermi surface
-            path = reg(pathOUTPUT)//"K_resolved/Fk_dmft_s"//str(ispin)//".DAT"
-            unit = free_unit()
-            open(unit,file=reg(path),form="formatted",status="unknown",position="rewind",action="write")
-            do ik=1,Lttc%Nkpt_Plane
-               ikx = int(ik/(Nkpt_Kside+0.001))+1 ; kx = (ikx-1)/dble(Nkpt_Kside-1) - 0.5d0
-               iky = ik - (ikx-1)*Nkpt_Kside      ; ky = (iky-1)/dble(Nkpt_Kside-1) - 0.5d0
-               Bvec = kx*Blat(:,1) + ky*Blat(:,2)
-               write(unit,"(3I5,200E20.12)") ik,ikx,iky,Bvec(1),Bvec(2),(Fk(iorb,ik),iorb=1,Lttc%Norb)
-               if(iky.eq.Nkpt_Kside)write(unit,*)
-            enddo
-            close(unit)
-            deallocate(Fk)
-            !
-            !correct bandstructure with ReSigma_GW
-            if(Kdependence)then
-               !
-               allocate(Fk(Lttc%Norb,Lttc%Nkpt_Plane));Fk=0d0
-               allocate(invGf(Norb,Norb));invGf=czero
-               do ik=1,Lttc%Nkpt_Plane
-                  invGf = zeye(Lttc%Norb)*dcmplx(EcutSheet+Sfull%mu,10*eta) - Lttc%Hk_Plane(:,:,ik) - SigmaFermi(:,:,ik,ispin)
-                  call inv(invGf)
-                  !extract FS
-                  do iorb=1,Norb
-                     Fk(iorb,ik) = -dimag(invGf(iorb,iorb))
-                  enddo
-               enddo
-               deallocate(invGf)
-               !
-               !Print Fermi surface
-               path = reg(pathOUTPUT)//"K_resolved/Fk_qpsc_s"//str(ispin)//".DAT"
-               unit = free_unit()
-               open(unit,file=reg(path),form="formatted",status="unknown",position="rewind",action="write")
-               do ik=1,Lttc%Nkpt_Plane
-                  ikx = int(ik/(Nkpt_Kside+0.001))+1 ; kx = (ikx-1)/dble(Nkpt_Kside-1) - 0.5d0
-                  iky = ik - (ikx-1)*Nkpt_Kside      ; ky = (iky-1)/dble(Nkpt_Kside-1) - 0.5d0
-                  Bvec = kx*Blat(:,1) + ky*Blat(:,2)
-                  write(unit,"(3I5,200E20.12)") ik,ikx,iky,Bvec(1),Bvec(2),(Fk(iorb,ik),iorb=1,Lttc%Norb)
-                  if(iky.eq.Nkpt_Kside)write(unit,*)
-               enddo
-               close(unit)
-               deallocate(Fk)
-               !
-            endif
-            !
-            if(paramagnet)exit
-         enddo
-         if(Kdependence)deallocate(SigmaFermi)
-         !
-      endif
-      !
-      !
-      if(scan(reg(path_funct),"G").gt.0)then
-         !
-         !Dump K-resolved MaxEnt data along the path
-         call calc_MaxEnt_on_G_K(Gpath,"path")
-         !
-         !Dump K-resolved MaxEnt data along the {kx,ky} plane
-         if(FermiSurf)call calc_MaxEnt_on_G_K(Gfermi,"plane")
-         !
-      endif
-      !
-      !
-      if(scan(reg(path_funct),"S").gt.0)then
-         !
-         if(Kdependence)then
-            !
-            !Dump K-resolved MaxEnt data in the full BZ
-            call calc_MaxEnt_on_Sigma_K(Gfull,"full")
-            !
-            !Dump K-resolved MaxEnt data along the path
-            call calc_MaxEnt_on_Sigma_K(Gpath,"path")
-            !
-            !Dump K-resolved MaxEnt data along the {kx,ky} plane
-            call calc_MaxEnt_on_Sigma_K(Gfermi,"plane")
+            call AllocateFermionicField(Gfermi,Norb,Nmats,Nkpt=Lttc%Nkpt_Plane,Nsite=Sfull%Nsite,Beta=Sfull%Beta,mu=Sfull%mu)
+            call calc_Gmats(Gfermi,Lttc,Smats=Sfermi,along_plane=.true.)
+            call DeallocateFermionicField(Sfermi)
             !
          endif
          !
-      endif
+         !
+         !
+      case("DMFT+statU","DMFT+dynU","EDMFT")
+         !
+         !
+         Kdependence = .false.
+         !
+         !
+         !
+         call AllocateFermionicField(Sloc,Norb,Nmats,Nkpt=Lttc%Nkpt_path,Nsite=Sfull%Nsite,Beta=Sfull%Beta,mu=Sfull%mu)
+         do ik=1,Lttc%Nkpt_path
+            Sloc%wks(:,:,:,ik,:) = Sfull%ws
+         enddo
+         !
+         !
+         !
+         !--------------- Green's function along the path ---------------!
+         call AllocateFermionicField(Gpath,Norb,Nmats,Nkpt=Lttc%Nkpt_path,Nsite=Sfull%Nsite,Beta=Sfull%Beta,mu=Sfull%mu)
+         call calc_Gmats(Gpath,Lttc,Smats=Sloc,along_path=.true.)
+         !
+         !
+         !
+         !---------- Green's function along the {kx,ky} plane -----------!
+         if(FermiSurf)then
+            call AllocateFermionicField(Gfermi,Norb,Nmats,Nkpt=Lttc%Nkpt_Plane,Nsite=Sfull%Nsite,Beta=Sfull%Beta,mu=Sfull%mu)
+            call calc_Gmats(Gfermi,Lttc,Smats=Sloc,along_plane=.true.)
+         endif
+         call DeallocateFermionicField(Sloc)
+         !
+         !
+         !
+   end select
+   !
+   !correction to LDA given by the real part of the local self-energy in iw=0
+   allocate(correction(Norb,Norb,Sfull%Nkpt));correction=czero
+   do ispin=1,Nspin
       !
-      call DeallocateFermionicField(Gpath)
-      call DeallocateFermionicField(Gfull)
-      call DeallocateFermionicField(Gfermi)
+      do ik=1,Sfull%Nkpt
+         correction(:,:,ik) = zeye(Norb)*Sfull%mu - dreal(Sfull%ws(:,:,1,ispin))
+      enddo
+      call interpolateHk2Path(Lttc,structure,Nkpt_path,reg(pathOUTPUT),corrname="dmft_s"//str(ispin),correction=correction,doplane=FermiSurf,hetero=Hetero%status)
+      if(paramagnet) exit
       !
+   enddo
+   deallocate(correction)
+   !
+   !correction to LDA given by the non-local self-energy in iw=0 with scattering rates removed
+   if(Kdependence)then
+      allocate(correction(Norb,Norb,Sfull%Nkpt));correction=czero
+      do ispin=1,Nspin
+         !
+         do ik=1,Sfull%Nkpt
+            correction(:,:,ik) = zeye(Norb)*Sfull%mu - Sfull%wks(:,:,1,ik,ispin)
+         enddo
+         do iorb=1,Norb
+            correction(iorb,iorb,:) = dcmplx(dreal(correction(iorb,iorb,:)),0d0)
+         enddo
+         call interpolateHk2Path(Lttc,structure,Nkpt_path,reg(pathOUTPUT),corrname="qpsc_s"//str(ispin),correction=correction,doplane=FermiSurf,hetero=Hetero%status)
+         if(paramagnet) exit
+         !
+      enddo
+      deallocate(correction)
    endif
+   !
+   !
+   if(scan(reg(path_funct),"G").gt.0)then
+     !
+     !Dump K-resolved MaxEnt data along the path
+     call calc_MaxEnt_on_G_K(Gpath,"path")
+     !
+     !Dump K-resolved MaxEnt data along the {kx,ky} plane
+     if(FermiSurf)call calc_MaxEnt_on_G_K(Gfermi,"plane")
+     !
+   endif
+   !
+   !
+   if(scan(reg(path_funct),"S").gt.0)then
+     !
+     if(Kdependence)then
+         !
+         !Dump K-resolved MaxEnt data in the full BZ
+         call calc_MaxEnt_on_Sigma_K(Gfull,"full")
+         !
+         !Dump K-resolved MaxEnt data along the path
+         call calc_MaxEnt_on_Sigma_K(Gpath,"path")
+         !
+         !Dump K-resolved MaxEnt data along the {kx,ky} plane
+         call calc_MaxEnt_on_Sigma_K(Gfermi,"plane")
+         !
+     endif
+     !
+   endif
+   !
+   call DeallocateFermionicField(Gpath)
+   call DeallocateFermionicField(Gfull)
+   call DeallocateFermionicField(Gfermi)
    !
    !
 contains
@@ -546,17 +319,16 @@ contains
       enddo
       !
       !Fourier transform the diagonal of the Green's function
-     !Ntau = NtauF  <-- should I decrease this guy to ease MaxEnt?
+      !Ntau = NtauF  <-- should I decrease this guy to ease MaxEnt?
       call cpu_time(start)
       allocate(Gitau_diag(Norb,Ntau,Nkpt,Nspin));Gitau_diag=czero
-      spinloopGftP: do ispin=1,Nspin
-         call Fmats2itau_vec(Sfull%Beta,Gmats_diag(:,:,:,ispin),Gitau_diag(:,:,:,ispin), &
-         asympt_corr=.true.,tau_uniform=.true.)
+      do ispin=1,Nspin
+         call Fmats2itau_vec(Sfull%Beta,Gmats_diag(:,:,:,ispin),Gitau_diag(:,:,:,ispin),asympt_corr=.true.,tau_uniform=.true.)
          if(paramagnet)then
             Gitau_diag(:,:,:,Nspin) = Gitau_diag(:,:,:,1)
-            exit spinloopGftP
+            exit
          endif
-      enddo spinloopGftP
+      enddo
       deallocate(Gmats_diag)
       call cpu_time(finish)
       write(*,"(A,F)") "     Glat(K"//reg(mode)//",iw) --> Glat(K"//reg(mode)//",tau) cpu timing:", finish-start
@@ -595,15 +367,15 @@ contains
          open(unit,file=reg(path),form="formatted",status="unknown",position="rewind",action="write")
          if(reg(mode).eq."path")then
             do ik=1,Nkpt
-               write(unit,"(1I5,200E20.12)") ik,Lttc%Kpathaxis(ik),(Ak(ik,iorb),iorb=1,Norb)
+               write(unit,"(1I5,200E20.12)") ik,Lttc%Kpathaxis(ik)/Lttc%Kpathaxis(Lttc%Nkpt_path),(Ak(ik,iorb),iorb=1,Norb)
             enddo
          elseif(reg(mode).eq."plane")then
             do ik=1,Nkpt
-               ikx = int(ik/(Nkpt_Kside+0.001))+1 ; kx = (ikx-1)/dble(Nkpt_Kside-1) - 0.5d0
-               iky = ik - (ikx-1)*Nkpt_Kside      ; ky = (iky-1)/dble(Nkpt_Kside-1) - 0.5d0
+               ikx = int(ik/(Nkpt_Fermi+0.001))+1 ; kx = (ikx-1)/dble(Nkpt_Fermi-1) - 0.5d0
+               iky = ik - (ikx-1)*Nkpt_Fermi      ; ky = (iky-1)/dble(Nkpt_Fermi-1) - 0.5d0
                Bvec = kx*Blat(:,1) + ky*Blat(:,2)
                write(unit,"(3I5,200E20.12)") ik,ikx,iky,Bvec(1),Bvec(2),(Ak(ik,iorb),iorb=1,Norb)
-               if(iky.eq.Nkpt_Kside)write(unit,*)
+               if(iky.eq.Nkpt_Fermi)write(unit,*)
             enddo
          endif
          close(unit)
@@ -613,7 +385,76 @@ contains
       enddo
       deallocate(Gitau_diag)
       !
+
+
+
+
+
+      if(Hetero%status)then
+         !
+ !        Norb_layer = Hetero%Norb
+ !        if(Norb_layer.ne.int(Lttc%Norb/Lttc%Nsite)) stop "calc_MaxEnt_on_G_K: wrong hetero orbital dimension."
+ !        !
+ !        allocate(Gmats_kpkz(Norb_layer,Norb_layer,Nmats,Nkpt,Nkpt_path,Nspin));Gmats_kpkz=czero
+ !        do ispin=1,Nspin
+ !           do iw=1,Nmats
+ !              call fill_Gamma_A(Gmats_in%wks(:,:,iw,:,ispin),Gmats_kpkz(:,:,iw,:,:,ispin))
+ !           enddo
+ !           if(paramagnet)then
+ !              Gmats_kpkz(:,:,:,:,:,Nspin) = Gmats_kpkz(:,:,:,:,:,1)
+ !              exit
+ !           endif
+ !        enddo
+ !        !
+
+
+
+      endif
+      !
    end subroutine calc_MaxEnt_on_G_K
+   !
+   !
+   !
+   subroutine fill_Gamma_A(data_in,data_out)
+      !
+      implicit none
+      !
+      complex(8),intent(in)              :: data_in(:,:,:)
+      complex(8),intent(out)             :: data_out(:,:,:,:)
+      !
+      integer                            :: ra,rb,ca,cb,ikz
+      integer                            :: isite,jsite
+      integer                            :: Nkpt_layer,Norb_layer
+      real(8)                            :: kR
+      complex(8)                         :: cfac
+      !
+      Nkpt_layer = size(data_in,dim=3)
+      Norb_layer = size(data_out,dim=1)
+      !
+      !$OMP PARALLEL DEFAULT(PRIVATE),&
+      !$OMP SHARED(Lttc,Nkpt_layer,Nkpt_path,Norb_layer,data_out,data_in)
+      !$OMP DO
+      do ik=1,Nkpt_layer
+         do ikz=1,Nkpt_path
+            do isite=1,Lttc%Nsite
+               do jsite=1,Lttc%Nsite
+                  !
+                  ra = 1+(isite-1)*Norb_layer ; rb = ra + Norb_layer-1
+                  ca = 1+(jsite-1)*Norb_layer ; cb = ca + Norb_layer-1
+                  !
+                  kR = 2*pi * Lttc%kptpath(3,Lttc%Nkpt_path+ikz) * (isite-jsite)
+                  cfac = dcmplx(cos(kR),+sin(kR))
+                  !
+                  data_out(:,:,ik,ikz) = data_out(:,:,ik,ikz) + data_in(ra:rb,ca:cb,ik)*cfac / Lttc%Nsite
+                  !
+               enddo
+            enddo
+         enddo
+      enddo
+      !$OMP END DO
+      !$OMP END PARALLEL
+      !
+   end subroutine fill_Gamma_A
    !
    !
    !
@@ -832,14 +673,13 @@ contains
       !Ntau = 300
       call cpu_time(start)
       allocate(Sitau_diag(Norb,Ntau,Nkpt,Nspin));Sitau_diag=czero
-      spinloopSft: do ispin=1,Nspin
-         call Fmats2itau_vec(Sfull%Beta,Smats_diag(:,:,:,ispin),Sitau_diag(:,:,:,ispin), &
-         asympt_corr=.true.,tau_uniform=.true.)
+      do ispin=1,Nspin
+         call Fmats2itau_vec(Sfull%Beta,Smats_diag(:,:,:,ispin),Sitau_diag(:,:,:,ispin),asympt_corr=.true.,tau_uniform=.true.)
          if(paramagnet)then
             Sitau_diag(:,:,:,Nspin) = Sitau_diag(:,:,:,1)
-            exit spinloopSft
+            exit
          endif
-      enddo spinloopSft
+      enddo
       deallocate(Smats_diag)
       call cpu_time(finish)
       write(*,"(A,F)") "     Slat(K"//reg(mode)//",iw) --> Slat(K"//reg(mode)//",tau) cpu timing:", finish-start
@@ -908,7 +748,7 @@ contains
       use input_vars, only : ReplaceTail_Simp, PadeWlimit
       use input_vars, only : SiteNorb, SiteOrbs, SiteName, Nsite, EqvGWndx
       use input_vars, only : OlocSite, OlocRot, OlocRotDag, OlocEig
-      use input_vars, only : RotateHloc, ExpandImpurity, AFMselfcons
+      use input_vars, only : RotateHloc, ExpandImpurity, AFMselfcons, wrealMax
       use input_vars, only : Ntau
       implicit none
       !
@@ -933,7 +773,11 @@ contains
       if(.not.Smats_in%status) stop "calc_MaxEnt_on_Sigma_imp: Smats_in not properly allocated."
       !
       allocate(wmats(Nmats));wmats=FermionicFreqMesh(Smats_in%Beta,Nmats)
-      wndx = minloc(abs(wmats-ReplaceTail_Simp),dim=1)
+      if(ReplaceTail_Simp.gt.0d0)then
+         wndx = minloc(abs(wmats-ReplaceTail_Simp),dim=1)
+      else
+         wndx = minloc(abs(wmats-wrealMax),dim=1)
+      endif
       !
       !Operations at each site
       do isite=1,Nsite
@@ -969,7 +813,12 @@ contains
          call dump_MaxEnt(Smats_diag,"mats",reg(pathOUTPUT)//"Convergence/","Sqmc_"//reg(SiteName(isite)))
          !
          !Reference frequencies
-         iw1 = wndx-30   ; x1 = wmats(iw1)
+         if(wndx.gt.4)  iw1 = wndx-1
+         if(wndx.gt.10) iw1 = wndx-5
+         if(wndx.gt.20) iw1 = wndx-10
+         if(wndx.gt.40) iw1 = wndx-20
+         if(wndx.gt.60) iw1 = wndx-30
+                         ; x1 = wmats(iw1)
          iw2 = wndx-1    ; x2 = wmats(iw2)
          iw3 = Nmats     ; x3 = wmats(iw3) !Never really used
          !
@@ -1030,20 +879,17 @@ contains
          !Check Print - This is to check the self-energy in the diagonal basis after the removal of M0 and rescaling of M1
          call dump_MaxEnt(Smats_diag,"mats",reg(pathOUTPUT)//"Convergence/","Sqmc_rescaled_"//reg(SiteName(isite)))
          !
-         deallocate(wmats)
-         !
          !Fourier transform
          !Ntau = 300
          call cpu_time(start)
          allocate(Sitau_diag(SiteNorb(isite),Ntau,Nspin));Sitau_diag=czero
-         spinloopSft: do ispin=1,Nspin
-            call Fmats2itau_vec(Sfull%Beta,Smats_diag(:,:,ispin),Sitau_diag(:,:,ispin), &
-            asympt_corr=.true.,tau_uniform=.true.)
+         do ispin=1,Nspin
+            call Fmats2itau_vec(Sfull%Beta,Smats_diag(:,:,ispin),Sitau_diag(:,:,ispin),asympt_corr=.true.,tau_uniform=.true.)
             if(paramagnet)then
                Sitau_diag(:,:,Nspin) = Sitau_diag(:,:,1)
-               exit spinloopSft
+               exit
             endif
-         enddo spinloopSft
+         enddo
          deallocate(Smats_diag)
          call cpu_time(finish)
          write(*,"(A,F)") "     Sqmc_"//reg(SiteName(isite))//"(iw) --> Sqmc_"//reg(SiteName(isite))//"(tau) cpu timing:", finish-start
@@ -1074,13 +920,14 @@ contains
          open(unit,file=reg(ParaFile),form="formatted",status="unknown",position="rewind",action="write")
          write(unit,"(200E20.12)") (Sparams(iorb,1,1),iorb=1,SiteNorb(isite)),(Sparams(iorb,1,2),iorb=1,SiteNorb(isite)),         & !spin=1
                                    (Sparams(iorb,Nspin,1),iorb=1,SiteNorb(isite)),(Sparams(iorb,Nspin,2),iorb=1,SiteNorb(isite))    !spin=2
-         deallocate(Sparams)
          close(unit)
          !
-         deallocate(Orbs)
+         deallocate(Orbs,Sparams)
+         call DeallocateFermionicField(Simp)
          if(ExpandImpurity.or.AFMselfcons)exit
          !
       enddo
+      deallocate(wmats)
       !
    end subroutine calc_MaxEnt_on_Sigma_imp
    !

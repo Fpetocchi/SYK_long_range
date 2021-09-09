@@ -17,7 +17,16 @@ program SelfConsistency
    integer                                  :: TimeStart
    integer                                  :: isite
    integer                                  :: Iteration,ItStart,Itend
-   character(len=20)                        :: InputFile="input.in" ! "input.in.gap" "input.in.Akw"
+
+#ifdef _akw
+   character(len=20)                        :: InputFile="input.in.akw"
+#else
+   character(len=20)                        :: InputFile="input.in"
+#endif
+
+#ifdef _gap
+   character(len=20)                        :: InputFile="input.in.gap"
+#endif
    !
    !
    !
@@ -34,13 +43,20 @@ program SelfConsistency
    !
    !
 
-   !call AllocateFermionicField(S_Full,Crystal%Norb,Nmats,Nkpt=Crystal%Nkpt,Nsite=Nsite,Beta=Beta)
-   !call read_FermionicField(S_Full,reg(ItFolder),"Sfull_w",Crystal%kpt)
-   !call interpolateG2Path(S_Full,Crystal,reg(structure),Nkpt_path,reg(ItFolder))
-   !stop
 
-   !call calc_Tc(reg(ItFolder),gap_equation,Crystal)
-   !stop
+#ifdef _akw
+   call AllocateFermionicField(S_Full,Crystal%Norb,Nmats,Nkpt=Crystal%Nkpt,Nsite=Nsite,Beta=Beta)
+   call read_FermionicField(S_Full,reg(ItFolder),"Sfull_w",Crystal%kpt)
+   call interpolateG2Path(S_Full,Crystal,reg(ItFolder))
+   stop
+#elif defined _gap
+   call calc_Tc(reg(ItFolder),gap_equation,Crystal)
+   stop
+#endif
+
+
+   stop
+
 
    !
    !
@@ -80,7 +96,7 @@ program SelfConsistency
          calc_Sigmak=.false.
          call AllocateFermionicField(S_Full,Crystal%Norb,Nmats,Nkpt=Crystal%Nkpt,Nsite=Nsite,Beta=Beta)
          call read_FermionicField(S_Full,reg(ItFolder),"Sfull_w",Crystal%kpt)
-         if(print_path) call interpolateG2Path(S_Full,Crystal,reg(structure),Nkpt_path,reg(ItFolder))
+         if(print_path) call interpolateG2Path(S_Full,Crystal,reg(ItFolder))
          !
          if(Wlat_exists.and.(.not.gap_equation%status))then !(*)
             write(*,"(A)") new_line("A")//new_line("A")//"---- skipping Plat and Wlat calculations."
@@ -279,7 +295,7 @@ program SelfConsistency
       call dump_FermionicField(S_Full,reg(ItFolder),"Sfull_w",paramagnet)
       if(dump_Sigmak)call dump_FermionicField(S_Full,reg(ItFolder),"Sfull_w",.true.,Crystal%kpt,paramagnet)
       call dump_MaxEnt(S_Full,"mats",reg(ItFolder)//"Convergence/","Sful",EqvGWndx%SetOrbs,WmaxPade=PadeWlimit)
-      if(print_path)call interpolateG2Path(S_Full,Crystal,reg(structure),Nkpt_path,reg(ItFolder))
+      if(print_path)call interpolateG2Path(S_Full,Crystal,reg(ItFolder))
       call DeallocateFermionicField(S_Full)
       !
       !

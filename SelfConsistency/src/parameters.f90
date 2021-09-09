@@ -28,6 +28,7 @@ module parameters
    real(8),parameter                        :: eps=1e-9
    !
    real(8),parameter                        :: EcutSheet=0d0
+   real(8),parameter                        :: kz_cut=0.5d0
 
 
    !---------------------------------------------------------------------------!
@@ -35,6 +36,7 @@ module parameters
    !---------------------------------------------------------------------------!
    type Lattice
       !generic
+      integer                               :: Nsite
       integer                               :: Nkpt3(3)
       integer                               :: Nkpt_irred=0
       integer                               :: iq_gamma=-1
