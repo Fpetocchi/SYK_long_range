@@ -5,7 +5,7 @@ module module_container
    eig, eigh                                ,&
    inv, inv_sym, inv_her                    ,&
    det, det3, trace, Cramer                 ,&
-   deye, zeye, zeros, ones                  ,&
+   deye, zeye, zeros, ones, dag             ,&
    diag, diagonal, rotate, diag_factor      ,&
    kronecker_product, outerprod             ,&
    cross_product, s3_product                ,&

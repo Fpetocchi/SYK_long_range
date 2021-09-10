@@ -61,6 +61,11 @@ module linalg
       module procedure ztrace
    end interface trace
 
+   interface dag
+      module procedure dag_d
+      module procedure dag_z
+   end interface dag
+
    interface rotate
       module procedure rotate_d
       module procedure rotate_z
@@ -167,6 +172,7 @@ module linalg
    public :: deye, zeye, zeros, ones                                            !numpy-like. Takes integer returns square matrix.
    public :: diag                                                               !numpy-like. Takes vector returns diagonal square matrix.
    public :: diagonal                                                           !numpy-like. Takes square matrix returns diagonal vector.
+   public :: dag                                                                !numpy-like. Takes square matrix returns square matrix.
    public :: rotate                                                             !numpy-like. Takes two square matrix returns square matrix.
    public :: diag_factor                                                        !numpy-like. Takes square matrix and real factor returns square matrix.
    public :: kronecker_product                                                  !Takes two square matrix (size Norb) returns square matrix (size Norb**2).

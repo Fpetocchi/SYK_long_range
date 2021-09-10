@@ -18,9 +18,7 @@ program Akw_builder
    !     READING INPUT FILE, INITIALIZING OMP, AND CHECK FOLDER STRUCTURE      !
    !---------------------------------------------------------------------------!
    call tick(TimeStart)
-   call read_InputFile("input.in.Akw")
-   write(*,"(A,1I4)") "Setting Nthread:",Nthread
-   call omp_set_num_threads(Nthread)
+   call read_InputFile("input.in.akw")
    call printHeader()
    call initialize_DataStructure(ItStart,Itend)
    call initialize_Lattice(Crystal,ItStart)
@@ -33,8 +31,8 @@ program Akw_builder
    do ispin=1,Nspin
       if(reg(path_funct).eq."G")then
          !
-         call createDir(reg(MaxEnt_K)//"Akw_G_path_s"//str(ispin))  ! Spectral functions from MaxEnt on G along the K-path
-         if(FermiSurf)call createDir(reg(MaxEnt_K)//"Akw_G_plane_s"//str(ispin)) ! Spectral functions from MaxEnt on G in the full BZ to get Fermi surface
+         call createDir(reg(MaxEnt_K)//"Akw_Gk_path_s"//str(ispin))  ! Spectral functions from MaxEnt on G along the K-path
+         if(FermiSurf)call createDir(reg(MaxEnt_K)//"Akw_Gk_plane_s"//str(ispin)) ! Spectral functions from MaxEnt on G in the full BZ to get Fermi surface
          !
       elseif(reg(path_funct).eq."S")then
          !
@@ -44,14 +42,14 @@ program Akw_builder
             if(FermiSurf)call createDir(reg(MaxEnt_K)//"Sk_plane_wr_s"//str(ispin)) ! Rebuilt self-energy from MaxEnt on S in the full BZ to get Fermi surface
          endif
          !
-         call createDir(reg(MaxEnt_K)//"Akw_S_path_s"//str(ispin)) ! Spectral functions from MaxEnt on S along the K-path
-         call createDir(reg(MaxEnt_K)//"Akw_S_full_s"//str(ispin)) ! Spectral functions from MaxEnt on S in the full BZ to get Gloc
-         if(FermiSurf)call createDir(reg(MaxEnt_K)//"Akw_S_plane_s"//str(ispin)) ! Spectral functions from MaxEnt on S in the full BZ to get Fermi surface
+         call createDir(reg(MaxEnt_K)//"Akw_Sk_path_s"//str(ispin)) ! Spectral functions from MaxEnt on S along the K-path
+         call createDir(reg(MaxEnt_K)//"Akw_Sk_full_s"//str(ispin)) ! Spectral functions from MaxEnt on S in the full BZ to get Gloc
+         if(FermiSurf)call createDir(reg(MaxEnt_K)//"Akw_Sk_plane_s"//str(ispin)) ! Spectral functions from MaxEnt on S in the full BZ to get Fermi surface
          !
       elseif(reg(path_funct).eq."GS")then
          !
-         call createDir(reg(MaxEnt_K)//"Akw_G_path_s"//str(ispin)) ! Spectral functions from MaxEnt on G along the K-path
-         if(FermiSurf)call createDir(reg(MaxEnt_K)//"Akw_G_plane_s"//str(ispin)) ! Spectral functions from MaxEnt on G in the full BZ to get Fermi surface
+         call createDir(reg(MaxEnt_K)//"Akw_Gk_path_s"//str(ispin)) ! Spectral functions from MaxEnt on G along the K-path
+         if(FermiSurf)call createDir(reg(MaxEnt_K)//"Akw_Gk_plane_s"//str(ispin)) ! Spectral functions from MaxEnt on G in the full BZ to get Fermi surface
          !
          if((reg(CalculationType).eq."G0W0").or.(reg(CalculationType).eq."scGW").or.(reg(CalculationType).eq."GW+EDMFT"))then
             call createDir(reg(MaxEnt_K)//"Sk_path_wr_s"//str(ispin)) ! Rebuilt self-energy from MaxEnt on S along the K-path
@@ -59,9 +57,9 @@ program Akw_builder
             if(FermiSurf)call createDir(reg(MaxEnt_K)//"Sk_plane_wr_s"//str(ispin)) ! Rebuilt self-energy from MaxEnt on S in the full BZ to get Fermi surface
          endif
          !
-         call createDir(reg(MaxEnt_K)//"Akw_S_path_s"//str(ispin)) ! Spectral functions from MaxEnt on S along the K-path
-         call createDir(reg(MaxEnt_K)//"Akw_S_full_s"//str(ispin)) ! Spectral functions from MaxEnt on S in the full BZ to get Gloc
-         if(FermiSurf)call createDir(reg(MaxEnt_K)//"Akw_S_plane_s"//str(ispin)) ! Spectral functions from MaxEnt on S in the full BZ to get Fermi surface
+         call createDir(reg(MaxEnt_K)//"Akw_Sk_path_s"//str(ispin)) ! Spectral functions from MaxEnt on S along the K-path
+         call createDir(reg(MaxEnt_K)//"Akw_Sk_full_s"//str(ispin)) ! Spectral functions from MaxEnt on S in the full BZ to get Gloc
+         if(FermiSurf)call createDir(reg(MaxEnt_K)//"Akw_Sk_plane_s"//str(ispin)) ! Spectral functions from MaxEnt on S in the full BZ to get Fermi surface
          !
       endif
       if(paramagnet)exit
@@ -74,7 +72,7 @@ program Akw_builder
    !---------------------------------------------------------------------------!
    !
    !
-   call interpolateHk2Path(Crystal,reg(structure),Nkpt_path,reg(pathINPUT),doplane=FermiSurf)
+   call interpolateHk2Path(Crystal,reg(structure),Nkpt_path,doplane=FermiSurf,Nkpt_Kside=Nkpt_Fermi,hetero=Hetero%status)
    Crystal%Nkpt_path = Crystal%Nkpt_path-1
    !
    !
@@ -91,6 +89,7 @@ program Akw_builder
          !Collect the spectral function from MaxEnt on G
          call rebuild_G("path")
          if(FermiSurf)call rebuild_G("plane")
+         if(Hetero%status)call rebuild_G("path",suffix="Hetero")
          !
       endif
       !
@@ -141,10 +140,11 @@ contains
    !
    !
    !
-   subroutine rebuild_G(mode)
+   subroutine rebuild_G(mode,suffix)
       implicit none
       character(len=*),intent(in)           :: mode
-      integer                               :: ik,Nkpt,Nkpt_Kside
+      character(len=*),intent(in),optional  :: suffix
+      integer                               :: ik,Nkpt,Nkpt_Kside,Norb
       integer                               :: iw,iorb,ikx,iky,wndx_cut
       integer                               :: unit,ierr
       integer                               :: Nreal_min,Nreal_max,Nreal_read,Nreal_old
@@ -152,7 +152,7 @@ contains
       real(8),allocatable                   :: wreal(:),wreal_read(:)
       real(8),allocatable                   :: Akw_orb(:,:,:)
       real(8)                               :: dw
-      character(len=256)                    :: path
+      character(len=256)                    :: path,suffix_
       !
       real(8),allocatable                   :: ImG_read(:,:,:)
       !
@@ -164,12 +164,23 @@ contains
          case("path")
             !
             Nkpt = Crystal%Nkpt_path
+            Norb = Crystal%Norb
+            suffix_=" "
+            if(present(suffix))then
+               suffix_="_"//reg(suffix)
+               if(reg(suffix_).eq."_Hetero")then
+                  Nkpt = Crystal%Nkpt_path + Nkpt_path
+                  Norb = Hetero%Norb
+               endif
+            endif
             write(*,"(A,I)") new_line("A")//new_line("A")//"     Gpath. Total number of K-points along path:",Nkpt
             !
          case("plane")
             !
             Nkpt = Crystal%Nkpt_Plane
             Nkpt_Kside = int(sqrt(dble(Nkpt)))
+            Norb = Crystal%Norb
+            suffix_=" "
             write(*,"(2(A,I))") "     G plane. Total number of K-points in the {kx,ky} sheet:",Nkpt," number of K-points per dimension:",Nkpt_Kside
             !
       end select
@@ -181,7 +192,7 @@ contains
       !First check that all the files contains the same number fo real frequecies
       do ik=1,Nkpt
          !
-         path = reg(MaxEnt_K)//"MaxEnt_Gk_"//reg(mode)//"_t_s"//str(ispin)//"/Gk_t_k"//str(ik)//".DAT_dos.dat"
+         path = reg(MaxEnt_K)//"MaxEnt_Gk_"//reg(mode)//"_t_s"//str(ispin)//"/Gk_t_k"//str(ik)//reg(suffix_)//".DAT_dos.dat"
          !
          call inquireFile(reg(path),Kmask(ik),hardstop=.false.,verb=.true.)
          if(.not.Kmask(ik)) cycle
@@ -215,16 +226,16 @@ contains
       endif
       !
       allocate(wreal_read(Nreal_read));wreal=0d0
-      allocate(ImG_read(Crystal%Norb,Nreal_read,Nkpt));ImG_read=0d0
+      allocate(ImG_read(Norb,Nreal_read,Nkpt));ImG_read=0d0
       do ik=1,Nkpt
          !
          if(.not.Kmask(ik)) cycle
          !
-         path = reg(MaxEnt_K)//"MaxEnt_Gk_"//reg(mode)//"_t_s"//str(ispin)//"/Gk_t_k"//str(ik)//".DAT_dos.dat"
+         path = reg(MaxEnt_K)//"MaxEnt_Gk_"//reg(mode)//"_t_s"//str(ispin)//"/Gk_t_k"//str(ik)//reg(suffix_)//".DAT_dos.dat"
          unit = free_unit()
          open(unit,file=reg(path),form="formatted",status="unknown",position="rewind",action="read")
          do iw=1,Nreal_read
-            read(unit,*) wreal_read(iw),(ImG_read(iorb,iw,ik),iorb=1,Crystal%Norb)
+            read(unit,*) wreal_read(iw),(ImG_read(iorb,iw,ik),iorb=1,Norb)
          enddo
          close(unit)
          !
@@ -253,13 +264,13 @@ contains
       deallocate(wreal_read)
       !
       !Manipulate MaxEnt output
-      allocate(Akw_orb(Crystal%Norb,Nreal,Nkpt));Akw_orb=0d0
+      allocate(Akw_orb(Norb,Nreal,Nkpt));Akw_orb=0d0
       !$OMP PARALLEL DEFAULT(NONE),&
-      !$OMP SHARED(Nkpt,Crystal,wreal,Nreal,Nreal_max,Nreal_min,dw,ispin,KKcutoff,Akw_orb,ImG_read),&
+      !$OMP SHARED(Nkpt,Crystal,Norb,wreal,Nreal,Nreal_max,Nreal_min,dw,ispin,KKcutoff,Akw_orb,ImG_read),&
       !$OMP PRIVATE(ik,iorb,iw)
       !$OMP DO
       do ik=1,Nkpt
-         do iorb=1,Crystal%Norb
+         do iorb=1,Norb
             !
             !Chunk the data to the smaller frequency array and revert the poles
             do iw=1,Nreal
@@ -281,11 +292,11 @@ contains
       !
       !Print
       do ik=1,Nkpt
-         path = reg(MaxEnt_K)//"Akw_G_"//reg(mode)//"_s"//str(ispin)//"/Akw_orb_k"//str(ik)//".DAT"
+         path = reg(MaxEnt_K)//"Akw_Gk_"//reg(mode)//"_s"//str(ispin)//"/Akw"//reg(suffix_)//"_k"//str(ik)//".DAT"
          unit = free_unit()
          open(unit,file=reg(path),form="formatted",status="unknown",position="rewind",action="write")
          do iw=1,Nreal
-            write(unit,"(200E20.12)") wreal(iw),(Akw_orb(iorb,iw,ik),iorb=1,Crystal%Norb)
+            write(unit,"(200E20.12)") wreal(iw),(Akw_orb(iorb,iw,ik),iorb=1,Norb)
          enddo
          close(unit)
       enddo
@@ -295,13 +306,13 @@ contains
       if(reg(mode).eq."path")then
          !
          !Write down spectral function on the path in usual format - orbital basis
-         path = reg(MaxEnt_K)//"Akw_G_orb_s"//str(ispin)//".DAT"
+         path = reg(MaxEnt_K)//"Akw_Gk"//reg(suffix_)//"_s"//str(ispin)//".DAT"
          unit = free_unit()
          open(unit,file=reg(path),form="formatted",status="unknown",position="rewind",action="write")
          do ik=1,Nkpt
             do iw=1,Nreal
                if(abs(wreal(iw)).gt.0.5*KKcutoff)cycle
-               write(unit,"(1I5,200E20.12)") ik,Crystal%Kpathaxis(ik),wreal(iw),(Akw_orb(iorb,iw,ik),iorb=1,Crystal%Norb)
+               write(unit,"(1I5,200E20.12)") ik,Crystal%Kpathaxis(ik),wreal(iw),(Akw_orb(iorb,iw,ik),iorb=1,Norb)
             enddo
             write(unit,*)
          enddo
@@ -311,13 +322,13 @@ contains
          !
          !Print cut at energy EcutSheet in the {kx,ky} plane
          wndx_cut = minloc(abs(wreal-EcutSheet),dim=1)
-         path = reg(MaxEnt_K)//"Fk_G_s"//str(ispin)//".DAT"
+         path = reg(MaxEnt_K)//"Fk_Gk"//reg(suffix_)//"_s"//str(ispin)//".DAT"
          unit = free_unit()
          open(unit,file=reg(path),form="formatted",status="unknown",position="rewind",action="write")
          do ik=1,Nkpt
             ikx = int(ik/(Nkpt_Kside+0.001))+1
             iky = ik - (ikx-1)*Nkpt_Kside
-            write(unit,"(3I5,200E20.12)") ik,ikx,iky,(Akw_orb(iorb,wndx_cut,ik),iorb=1,Crystal%Norb)
+            write(unit,"(3I5,200E20.12)") ik,ikx,iky,(Akw_orb(iorb,wndx_cut,ik),iorb=1,Norb)
             if(iky.eq.Nkpt_Kside)write(unit,*)
          enddo
          close(unit)

@@ -331,10 +331,12 @@ prep:
 	#@echo $(DBGOBJS)
 
 prepREL:
+	@touch $(SRCDIR)/main.f90
 	@paste <( echo "character(len=256),parameter :: revision = \"" ) <( git rev-parse HEAD  ) <( echo "\"") > $(SRCDIR)/revision_SelfCons.inc
 	@mkdir -p $(RELDIR_GT) $(RELDIR) $(INCLDIR) $(EXECDIR)
 
 prepDBG:
+	@touch $(SRCDIR)/main.f90
 	@paste <( echo "character(len=256),parameter :: revision = \"" ) <( git rev-parse HEAD  ) <( echo "\"") > $(SRCDIR)/revision_SelfCons.inc
 	@mkdir -p $(DBGDIR_GT) $(DBGDIR) $(INCLDIR) $(EXECDIR)
 

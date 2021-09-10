@@ -130,6 +130,29 @@ end function zdiag
 
 
 !-------------------------------------------------------------------------------
+!PURPOSE:  Create the hermitian conjugate of a matrix
+!-------------------------------------------------------------------------------
+function dag_d(A) result(Adag)
+  real(8),intent(in)           :: A(:,:)
+  real(8),allocatable          :: Adag(:,:)
+  integer                      :: NA
+  NA = size(A,dim=1) ; if(size(A,dim=2).ne.NA) stop "dag_d: input matrix not square."
+  allocate(Adag(NA,NA));Adag=0d0
+  Adag = transpose(A)
+end function dag_d
+function dag_z(A) result(Adag)
+  complex(8),intent(in)        :: A(:,:)
+  complex(8),allocatable       :: Adag(:,:)
+  integer                      :: NA
+  NA = size(A,dim=1) ; if(size(A,dim=2).ne.NA) stop "dag_z: input matrix not square."
+  allocate(Adag(NA,NA));Adag=dcmplx(0d0,0d0)
+  Adag = transpose(conjg(A))
+end function dag_z
+
+
+
+
+!-------------------------------------------------------------------------------
 !PURPOSE:  Rotate matrix with a given rotation
 !-------------------------------------------------------------------------------
 function rotate_d(A,U) result(Arot)

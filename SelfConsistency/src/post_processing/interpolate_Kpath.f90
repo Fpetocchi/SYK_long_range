@@ -45,14 +45,56 @@ subroutine interpolateG2Path(Sfull,Lttc,pathOUTPUT)
    Norb = Sfull%Norb
    Nmats = Sfull%Npoints
    !
+   Kdependence=.false.
+   if(scan(reg(CalculationType),"W").gt.0)Kdependence=.true.
+   !
    if(FermiSurf)call get_Blat(Blat)
    !
    !
-   !---------------------- path along high-symmetry points --------------------!
    !
+   !---------------------- LDA Hamiltonian and corrections --------------------!
    !
    !non-interacting data (Bands, spectral function, Fermi-surface)
-   call interpolateHk2Path(Lttc,structure,Nkpt_path,reg(pathOUTPUT)//"K_resolved/",doplane=FermiSurf,hetero=Hetero%status)
+   call interpolateHk2Path(Lttc,structure,Nkpt_path,pathOUTPUT=reg(pathOUTPUT)//"K_resolved/",doplane=FermiSurf,hetero=Hetero%status)
+   !
+   !correction to LDA given by the real part of the local self-energy in iw=0
+   allocate(correction(Norb,Norb,Sfull%Nkpt));correction=czero
+   do ispin=1,Nspin
+      !
+      do ik=1,Sfull%Nkpt
+         correction(:,:,ik) = zeye(Norb)*Sfull%mu - dreal(Sfull%ws(:,:,1,ispin))
+      enddo
+      call interpolateHk2Path(Lttc,structure,Nkpt_path,pathOUTPUT=reg(pathOUTPUT)//"K_resolved/",corrname="dmft_s"//str(ispin),correction=correction,doplane=FermiSurf,hetero=Hetero%status)
+      if(paramagnet) exit
+      !
+   enddo
+   deallocate(correction)
+   !
+   !correction to LDA given by the non-local self-energy in iw=0 with scattering rates removed
+   if(Kdependence)then
+      allocate(correction(Norb,Norb,Sfull%Nkpt));correction=czero
+      do ispin=1,Nspin
+         !
+         do ik=1,Sfull%Nkpt
+            correction(:,:,ik) = zeye(Norb)*Sfull%mu - Sfull%wks(:,:,1,ik,ispin)
+         enddo
+         do iorb=1,Norb
+            correction(iorb,iorb,:) = dcmplx(dreal(correction(iorb,iorb,:)),0d0)
+         enddo
+         call interpolateHk2Path(Lttc,structure,Nkpt_path,pathOUTPUT=reg(pathOUTPUT)//"K_resolved/",corrname="qpsc_s"//str(ispin),correction=correction,doplane=FermiSurf,hetero=Hetero%status)
+         if(paramagnet) exit
+         !
+      enddo
+      deallocate(correction)
+   endif
+   !
+   !
+   !
+   !------------------- Interpolation of interacting solutuon -----------------!
+   !
+   !
+   !recalculate the internal K-meshes
+   call interpolateHk2Path(Lttc,structure,Nkpt_path,doplane=FermiSurf,Nkpt_Kside=Nkpt_Fermi,hetero=Hetero%status)
    !
    !Dump MaxEnt data for the local self-energy (always done for every setup)
    call calc_MaxEnt_on_Sigma_imp(Sfull)
@@ -65,10 +107,6 @@ subroutine interpolateG2Path(Sfull,Lttc,pathOUTPUT)
          stop "Available Calculation types are: G0W0, scGW, DMFT+statU, DMFT+dynU, EDMFT, GW+EDMFT."
          !
       case("G0W0","scGW","GW+EDMFT")
-         !
-         !
-         !
-         Kdependence = .true.
          !
          !
          !
@@ -124,7 +162,6 @@ subroutine interpolateG2Path(Sfull,Lttc,pathOUTPUT)
          !---------- Green's function along the {kx,ky} plane -----------!
          if(FermiSurf)then
             !
-            !
             !Interpolate the self-energy along the plane
             call cpu_time(start)
             call AllocateFermionicField(Sfermi,Norb,Nmats,Nkpt=Lttc%Nkpt_Plane,Nsite=Sfull%Nsite,Beta=Sfull%Beta,mu=Sfull%mu)
@@ -173,9 +210,6 @@ subroutine interpolateG2Path(Sfull,Lttc,pathOUTPUT)
       case("DMFT+statU","DMFT+dynU","EDMFT")
          !
          !
-         Kdependence = .false.
-         !
-         !
          !
          call AllocateFermionicField(Sloc,Norb,Nmats,Nkpt=Lttc%Nkpt_path,Nsite=Sfull%Nsite,Beta=Sfull%Beta,mu=Sfull%mu)
          do ik=1,Lttc%Nkpt_path
@@ -201,36 +235,6 @@ subroutine interpolateG2Path(Sfull,Lttc,pathOUTPUT)
          !
    end select
    !
-   !correction to LDA given by the real part of the local self-energy in iw=0
-   allocate(correction(Norb,Norb,Sfull%Nkpt));correction=czero
-   do ispin=1,Nspin
-      !
-      do ik=1,Sfull%Nkpt
-         correction(:,:,ik) = zeye(Norb)*Sfull%mu - dreal(Sfull%ws(:,:,1,ispin))
-      enddo
-      call interpolateHk2Path(Lttc,structure,Nkpt_path,reg(pathOUTPUT)//"K_resolved/",corrname="dmft_s"//str(ispin),correction=correction,doplane=FermiSurf,hetero=Hetero%status)
-      if(paramagnet) exit
-      !
-   enddo
-   deallocate(correction)
-   !
-   !correction to LDA given by the non-local self-energy in iw=0 with scattering rates removed
-   if(Kdependence)then
-      allocate(correction(Norb,Norb,Sfull%Nkpt));correction=czero
-      do ispin=1,Nspin
-         !
-         do ik=1,Sfull%Nkpt
-            correction(:,:,ik) = zeye(Norb)*Sfull%mu - Sfull%wks(:,:,1,ik,ispin)
-         enddo
-         do iorb=1,Norb
-            correction(iorb,iorb,:) = dcmplx(dreal(correction(iorb,iorb,:)),0d0)
-         enddo
-         call interpolateHk2Path(Lttc,structure,Nkpt_path,reg(pathOUTPUT)//"K_resolved/",corrname="qpsc_s"//str(ispin),correction=correction,doplane=FermiSurf,hetero=Hetero%status)
-         if(paramagnet) exit
-         !
-      enddo
-      deallocate(correction)
-   endif
    !
    !
    if(scan(reg(path_funct),"G").gt.0)then
@@ -281,11 +285,17 @@ contains
       complex(8),allocatable                :: Gmats_diag(:,:,:,:),Gitau_diag(:,:,:,:)
       real(8),allocatable                   :: Ak(:,:)
       real(8),allocatable                   :: tau(:)
-      integer                               :: Nkpt!Ntau,Nmats_cutoff
+      integer                               :: Nkpt,NtauFT
       integer                               :: ikx,iky
+      !Hetero
+      integer                               :: Norb_layer,ikz
+      complex(8),allocatable                :: Gmats_kpkz(:,:,:,:,:,:),Gmats_kpkz_diag(:,:,:,:,:)
+      complex(8),allocatable                :: Gitau_kpkz_diag(:,:,:,:,:)
       !
       !
       if(verbose) write(*,"(A)") new_line("A")//new_line("A")//"---- calc_MaxEnt_on_G_K"
+      !
+      NtauFT = Ntau ! <-- should I decrease this guy to ease MaxEnt? Now it's the lattice one
       !
       !
       if(.not.Gmats_in%status) stop "calc_MaxEnt_on_G_K: Gmats_in not properly allocated."
@@ -308,20 +318,13 @@ contains
       !
       !Extract the diagonal of the Green's function
       allocate(Gmats_diag(Norb,Nmats,Nkpt,Nspin));Gmats_diag=czero
-      do ispin=1,Nspin
-         do ik=1,Nkpt
-            do iw=1,Nmats
-               do iorb=1,Norb
-                  Gmats_diag(iorb,iw,ik,ispin) = Gmats_in%wks(iorb,iorb,iw,ik,ispin)
-               enddo
-            enddo
-         enddo
+      do iorb=1,Norb
+         Gmats_diag(iorb,:,:,:) = Gmats_in%wks(iorb,iorb,:,:,:)
       enddo
       !
       !Fourier transform the diagonal of the Green's function
-      !Ntau = NtauF  <-- should I decrease this guy to ease MaxEnt?
       call cpu_time(start)
-      allocate(Gitau_diag(Norb,Ntau,Nkpt,Nspin));Gitau_diag=czero
+      allocate(Gitau_diag(Norb,NtauFT,Nkpt,Nspin));Gitau_diag=czero
       do ispin=1,Nspin
          call Fmats2itau_vec(Sfull%Beta,Gmats_diag(:,:,:,ispin),Gitau_diag(:,:,:,ispin),asympt_corr=.true.,tau_uniform=.true.)
          if(paramagnet)then
@@ -334,14 +337,14 @@ contains
       write(*,"(A,F)") "     Glat(K"//reg(mode)//",iw) --> Glat(K"//reg(mode)//",tau) cpu timing:", finish-start
       !
       !Print data for K-resolved MaxEnt
-      allocate(tau(Ntau));tau = linspace(0d0,Sfull%Beta,Ntau)
+      allocate(tau(NtauFT));tau = linspace(0d0,Sfull%Beta,NtauFT)
       do ispin=1,Nspin
         do ik=1,Nkpt
             !
             path = reg(pathOUTPUT)//"K_resolved/MaxEnt_Gk_"//reg(mode)//"_t_s"//str(ispin)//"/Gk_t_k"//str(ik)//".DAT"
             unit = free_unit()
             open(unit,file=reg(path),form="formatted",status="unknown",position="rewind",action="write")
-            do itau=1,Ntau
+            do itau=1,NtauFT
                 !write(unit,"(200E20.12)") tau(itau),(dreal(Gitau_diag(iorb,itau,ik,ispin)),iorb=1,Norb)
                 write(unit,"(200E20.12)") tau(itau),(-abs(Gitau_diag(iorb,itau,ik,ispin)),iorb=1,Norb)
             enddo
@@ -358,7 +361,7 @@ contains
          allocate(Ak(Nkpt,Norb));Ak=0d0
          do ik=1,Nkpt
             do iorb=1,Norb
-               Ak(ik,iorb) = -dreal(Gitau_diag(iorb,int(Ntau/2),ik,ispin))*Gmats_in%Beta
+               Ak(ik,iorb) = -dreal(Gitau_diag(iorb,int(NtauFT/2),ik,ispin))*Gmats_in%Beta
             enddo
          enddo
          !
@@ -385,30 +388,74 @@ contains
       enddo
       deallocate(Gitau_diag)
       !
-
-
-
-
-
       if(Hetero%status)then
          !
- !        Norb_layer = Hetero%Norb
- !        if(Norb_layer.ne.int(Lttc%Norb/Lttc%Nsite)) stop "calc_MaxEnt_on_G_K: wrong hetero orbital dimension."
- !        !
- !        allocate(Gmats_kpkz(Norb_layer,Norb_layer,Nmats,Nkpt,Nkpt_path,Nspin));Gmats_kpkz=czero
- !        do ispin=1,Nspin
- !           do iw=1,Nmats
- !              call fill_Gamma_A(Gmats_in%wks(:,:,iw,:,ispin),Gmats_kpkz(:,:,iw,:,:,ispin))
- !           enddo
- !           if(paramagnet)then
- !              Gmats_kpkz(:,:,:,:,:,Nspin) = Gmats_kpkz(:,:,:,:,:,1)
- !              exit
- !           endif
- !        enddo
- !        !
-
-
-
+         Norb_layer = Hetero%Norb
+         if(Norb_layer.ne.int(Lttc%Norb/Lttc%Nsite)) stop "calc_MaxEnt_on_G_K: wrong hetero orbital dimension."
+         !
+         !Fill in Gamma-A direction
+         allocate(Gmats_kpkz(Norb_layer,Norb_layer,Nmats,Nkpt,0:Nkpt_path,Nspin));Gmats_kpkz=czero
+         do ispin=1,Nspin
+            do iw=1,Nmats
+               call fill_Gamma_A(Gmats_in%wks(:,:,iw,:,ispin),Gmats_kpkz(:,:,iw,:,:,ispin))
+            enddo
+            if(paramagnet)then
+               Gmats_kpkz(:,:,:,:,:,Nspin) = Gmats_kpkz(:,:,:,:,:,1)
+               exit
+            endif
+         enddo
+         !
+         !Extract the diagonal of the Green's function
+         allocate(Gmats_kpkz_diag(Norb_layer,Nmats,Nkpt,0:Nkpt_path,Nspin));Gmats_kpkz_diag=czero
+         do iorb=1,Norb
+            Gmats_kpkz_diag(iorb,:,:,:,:) = Gmats_kpkz(iorb,iorb,:,:,:,:)
+         enddo
+         deallocate(Gmats_kpkz)
+         !
+         !Fourier transform the diagonal of the Green's function
+         call cpu_time(start)
+         allocate(Gitau_kpkz_diag(Norb_layer,NtauFT,Nkpt,0:Nkpt_path,Nspin));Gitau_kpkz_diag=czero
+         do ispin=1,Nspin
+            do ikz=0,Nkpt_path
+               call Fmats2itau_vec(Sfull%Beta,Gmats_kpkz_diag(:,:,:,ikz,ispin),Gitau_kpkz_diag(:,:,:,ikz,ispin),asympt_corr=.true.,tau_uniform=.true.)
+            enddo
+            if(paramagnet)then
+               Gitau_kpkz_diag(:,:,:,:,Nspin) = Gitau_kpkz_diag(:,:,:,:,1)
+               exit
+            endif
+         enddo
+         deallocate(Gmats_kpkz_diag)
+         call cpu_time(finish)
+         write(*,"(A,F)") "     Glat(K"//reg(mode)//",kz,iw) --> Glat(K"//reg(mode)//",kz,tau) cpu timing:", finish-start
+         !
+         !Print data for K-resolved MaxEnt
+         allocate(tau(NtauFT));tau = linspace(0d0,Sfull%Beta,NtauFT)
+         do ispin=1,Nspin
+            do ik=1,Nkpt
+                !
+                path = reg(pathOUTPUT)//"K_resolved/MaxEnt_Gk_"//reg(mode)//"_t_s"//str(ispin)//"/Gk_t_k"//str(ik)//"_Hetero.DAT"
+                unit = free_unit()
+                open(unit,file=reg(path),form="formatted",status="unknown",position="rewind",action="write")
+                do itau=1,NtauFT
+                    write(unit,"(200E20.12)") tau(itau),(-abs(Gitau_kpkz_diag(iorb,itau,ik,0,ispin)),iorb=1,Norb_layer)
+                enddo
+                close(unit)
+                !
+            enddo
+            do ik=Nkpt+1,Nkpt+Nkpt_path
+                !
+                path = reg(pathOUTPUT)//"K_resolved/MaxEnt_Gk_"//reg(mode)//"_t_s"//str(ispin)//"/Gk_t_k"//str(ik)//"_Hetero.DAT"
+                unit = free_unit()
+                open(unit,file=reg(path),form="formatted",status="unknown",position="rewind",action="write")
+                do itau=1,NtauFT
+                    write(unit,"(200E20.12)") tau(itau),(-abs(Gitau_kpkz_diag(iorb,itau,Lttc%iq_gamma,ik-Nkpt,ispin)),iorb=1,Norb_layer)
+                enddo
+                close(unit)
+                !
+            enddo
+           if(paramagnet)exit
+         enddo
+         deallocate(tau,Gitau_kpkz_diag)
       endif
       !
    end subroutine calc_MaxEnt_on_G_K
@@ -420,7 +467,7 @@ contains
       implicit none
       !
       complex(8),intent(in)              :: data_in(:,:,:)
-      complex(8),intent(out)             :: data_out(:,:,:,:)
+      complex(8),intent(out)             :: data_out(:,:,:,0:)
       !
       integer                            :: ra,rb,ca,cb,ikz
       integer                            :: isite,jsite
@@ -435,7 +482,7 @@ contains
       !$OMP SHARED(Lttc,Nkpt_layer,Nkpt_path,Norb_layer,data_out,data_in)
       !$OMP DO
       do ik=1,Nkpt_layer
-         do ikz=1,Nkpt_path
+         do ikz=0,Nkpt_path
             do isite=1,Lttc%Nsite
                do jsite=1,Lttc%Nsite
                   !

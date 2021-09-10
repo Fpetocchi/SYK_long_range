@@ -229,6 +229,12 @@ module input_vars
    complex(8),allocatable,public            :: OlocRot(:,:,:)
    complex(8),allocatable,public            :: OlocRotDag(:,:,:)
    real(8),allocatable,public               :: OlocEig(:,:)
+   !
+#ifdef _verb
+   logical,private                          :: verbose=.true.
+#else
+   logical,private                          :: verbose=.false.
+#endif
 
    !---------------------------------------------------------------------------!
    !PURPOSE: Rutines available for the user. Description only for interfaces.
@@ -261,19 +267,6 @@ contains
       integer                               :: isym_user
       integer,allocatable                   :: tmpOrbs(:)
       real(8),allocatable                   :: tmpCF(:)
-
-      !integer                               :: unit
-      !
-      write(LOGfile,"(A)") new_line("A")//"Reading InputFile: "//reg(InputFile)//new_line("A")
-      !
-      call add_separator("Calculation type")
-      call parse_input_variable(CalculationType,"CALC_TYPE",InputFile,default="GW+EDMFT",comment="Calculation type. Avalibale: G0W0, scGW, DMFT+statU, DMFT+dynU, EDMFT, GW+EDMFT.")
-      if((reg(CalculationType).eq."G0W0").or.(reg(CalculationType).eq."scGW")) solve_DMFT=.false.
-      if((reg(CalculationType).eq."EDMFT").or.(reg(CalculationType).eq."GW+EDMFT")) then
-         bosonicSC=.true.
-         Solver%retarded=1!.true.
-      endif
-      if(reg(CalculationType).eq."DMFT+dynU")Solver%retarded=1!.true.
       !
       !OMP parallelization.
       !call execute_command_line(" lscpu | grep 'CPU(s):       ' | awk '{print $2}' > Nthread.used ")
@@ -286,6 +279,18 @@ contains
       !
       !Done in the submit file via " export OMP_NUM_THREADS= # "
       Nthread = omp_get_max_threads()
+      !
+      write(*,"(A,1I4)") new_line("A")//"Setting Nthread:",Nthread
+      write(*,"(A)") "Reading InputFile: "//reg(InputFile)//new_line("A")
+      !
+      call add_separator("Calculation type")
+      call parse_input_variable(CalculationType,"CALC_TYPE",InputFile,default="GW+EDMFT",comment="Calculation type. Avalibale: G0W0, scGW, DMFT+statU, DMFT+dynU, EDMFT, GW+EDMFT.")
+      if((reg(CalculationType).eq."G0W0").or.(reg(CalculationType).eq."scGW")) solve_DMFT=.false.
+      if((reg(CalculationType).eq."EDMFT").or.(reg(CalculationType).eq."GW+EDMFT")) then
+         bosonicSC=.true.
+         Solver%retarded=1!.true.
+      endif
+      if(reg(CalculationType).eq."DMFT+dynU")Solver%retarded=1!.true.
       !
       !K-points
       call add_separator("K-points and hopping")
@@ -308,6 +313,7 @@ contains
             Hetero%Norb = Norb_model
             call parse_input_variable(Hetero%Nslab,"NSLAB",InputFile,default=20,comment="Global dimension fo the slab.")
             call parse_input_variable(Hetero%Explicit,"EXPLICIT",InputFile,default=[1,10],comment="Index boundaries of the impurities explicitly solved.")
+            call parse_input_variable(Hetero%offDiagEk,"OD_DISPERSION",InputFile,default=.false.,comment="Flag to assume a NN off-diagonal dispersion with the same geometry of the layer.")
             if((Hetero%Explicit(2)-Hetero%Explicit(1)+1).eq.1) stop "read_InputFile: a single layer heterostructure does not make sense."
             if(readHr)then
                Hetero%GlobalTzRatio=1d0
@@ -675,7 +681,7 @@ contains
       integer(4)                               :: m
       integer(4)                               :: s
       integer(4)                               :: ms
-      character(len=9),parameter,dimension(12) :: month = (/ &
+      character(len=9),parameter,dimension(12) :: month = (/   &
            'January  ', 'February ', 'March    ', 'April    ', &
            'May      ', 'June     ', 'July     ', 'August   ', &
            'September', 'October  ', 'November ', 'December ' /)
@@ -689,15 +695,15 @@ contains
       m    = dummy(6)
       s    = dummy(7)
       ms   = dummy(8)
-      write(*,"(A,i2,1x,a,1x,i4,2x,i2,a1,i2.2,a1,i2.2,a1,i3.3)")&
-           "Timestamp: +",day,trim(month(mese)),year, h,':',m,':',s,'.',ms
+      write(*,"(A,i2,1x,a,1x,i4,2x,i2,a1,i2.2,a1,i2.2,a1,i3.3)") "Timestamp: ",day,trim(month(mese)),year, h,':',m,':',s,'.',ms
       write(*,*)""
-      open(10,file="code_version.inc")
-      write(10,"(A)")"CODE VERSION: "//trim(adjustl(trim(revision)))
-      write(10,"(A,i2,1x,a,1x,i4,2x,i2,a1,i2.2,a1,i2.2,a1,i3.3)")&
-           "Timestamp: +",day,trim(month(mese)),year, h,':',m,':',s,'.',ms
-      write(10,*)""
-      close(10)
+      if(verbose)then
+         open(10,file="code_version.inc")
+         write(10,"(A)")"CODE VERSION: "//trim(adjustl(trim(revision)))
+         write(10,"(A,i2,1x,a,1x,i4,2x,i2,a1,i2.2,a1,i2.2,a1,i3.3)")"Timestamp: ",day,trim(month(mese)),year, h,':',m,':',s,'.',ms
+         write(10,*)""
+         close(10)
+      endif
    end subroutine code_version
 
 

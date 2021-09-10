@@ -36,14 +36,11 @@ program SelfConsistency
    !---------------------------------------------------------------------------!
    call tick(TimeStart)
    call read_InputFile(reg(InputFile))
-   write(*,"(A,1I4)") "Setting Nthread:",Nthread
    call printHeader()
    call initialize_DataStructure(ItStart,Itend)
    call initialize_Lattice(Crystal,ItStart)
    !
    !
-
-
 #ifdef _akw
    call AllocateFermionicField(S_Full,Crystal%Norb,Nmats,Nkpt=Crystal%Nkpt,Nsite=Nsite,Beta=Beta)
    call read_FermionicField(S_Full,reg(ItFolder),"Sfull_w",Crystal%kpt)
@@ -53,11 +50,8 @@ program SelfConsistency
    call calc_Tc(reg(ItFolder),gap_equation,Crystal)
    stop
 #endif
-
-
-   stop
-
-
+   !
+   !
    !
    !
    !---------------------------------------------------------------------------!

@@ -1884,7 +1884,7 @@ contains
       write(*,"(A,F)") "     Unn(R) --> Unn(K) cpu timing:", finish-start
       !
       if(reg(structure).ne."None")then
-         call interpolateHk2Path(Lttc,reg(structure),Nkpt_path,reg(pathINPUT),filename="Uk",data_in=U_K)
+         call interpolateHk2Path(Lttc,reg(structure),Nkpt_path,pathOUTPUT=reg(pathINPUT),filename="Uk",data_in=U_K)
       endif
       !
       !fill in the output
@@ -2082,7 +2082,7 @@ contains
       write(*,"(A,F)") "     Unn(R) --> Unn(K) cpu timing:", finish-start
       !
       if(reg(structure).ne."None")then
-         call interpolateHk2Path(Lttc,reg(structure),Nkpt_path,reg(pathINPUT),filename="Uk",data_in=U_K)
+         call interpolateHk2Path(Lttc,reg(structure),Nkpt_path,pathOUTPUT=reg(pathINPUT),filename="Uk",data_in=U_K)
       endif
       !
       !fill in the output
