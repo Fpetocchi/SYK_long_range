@@ -66,7 +66,14 @@ done
 ################################################################################
 #                   PASTE THE FOLLOWING WITHIN IT/K_resolved                   #
 ################################################################################
-./MaxEnt_Kresolved.sh -e 0.005 -w 9001 -W 100 -F G -N 550 -B 70 -m path -i 1 -f 1
-./MaxEnt_Kresolved.sh -e 0.005 -w 9001 -W 100 -F G -N 550 -B 70 -m path -i 551 -f 551
-./MaxEnt_Kresolved.sh -e 0.005 -w 9001 -W 100 -F G -N 550 -B 70 -m path -i 123 -f 123
-./MaxEnt_Kresolved.sh -e 0.005 -w 9001 -W 100 -F G -N 550 -B 70 -m path -i 312 -f 312
+./MaxEnt_Kresolved.sh -e 0.01 -w 9001 -W 100 -F G -N 550 -B 70 -m path -i   1 -f  10 #
+./MaxEnt_Kresolved.sh -e 0.01 -w 9001 -W 100 -F G -N 550 -B 70 -m path -i  11 -f  89 R
+./MaxEnt_Kresolved.sh -e 0.01 -w 9001 -W 100 -F G -N 550 -B 70 -m path -i  90 -f 110 #
+./MaxEnt_Kresolved.sh -e 0.01 -w 9001 -W 100 -F G -N 550 -B 70 -m path -i 111 -f 189 R
+./MaxEnt_Kresolved.sh -e 0.01 -w 9001 -W 100 -F G -N 550 -B 70 -m path -i 190 -f 210 #
+./MaxEnt_Kresolved.sh -e 0.01 -w 9001 -W 100 -F G -N 550 -B 70 -m path -i 211 -f 289 R
+./MaxEnt_Kresolved.sh -e 0.01 -w 9001 -W 100 -F G -N 550 -B 70 -m path -i 290 -f 310 #
+./MaxEnt_Kresolved.sh -e 0.01 -w 9001 -W 100 -F G -N 550 -B 70 -m path -i 311 -f 389 R
+./MaxEnt_Kresolved.sh -e 0.01 -w 9001 -W 100 -F G -N 550 -B 70 -m path -i 390 -f 410 #
+./MaxEnt_Kresolved.sh -e 0.01 -w 9001 -W 100 -F G -N 550 -B 70 -m path -i 411 -f 489
+./MaxEnt_Kresolved.sh -e 0.01 -w 9001 -W 100 -F G -N 550 -B 70 -m path -i 490 -f 511 #

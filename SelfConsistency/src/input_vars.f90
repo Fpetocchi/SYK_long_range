@@ -165,6 +165,7 @@ module input_vars
    character(len=256),public                :: SpexVersion
    character(len=256),public                :: VH_type
    character(len=256),public                :: DC_type
+   logical,public                           :: addTierIII
    logical,public                           :: RecomputeG0W0
    logical,public                           :: HandleGammaPoint
    logical,public                           :: calc_Sguess
@@ -506,6 +507,8 @@ contains
       call parse_input_variable(VH_use,"VH_USE",InputFile,default=.true.,comment="Flag to use the Hartree term correction between Tier-III and Tier-II, which is printed in PATH_INPUT even if not used.")
       call parse_input_variable(Vxc_in,"VXC_IN",InputFile,default=.true.,comment="Flag to include the Vxc potential inside the SigmaG0W0.")
       call parse_input_variable(DC_type,"DC_TYPE",InputFile,default="GlocWloc",comment="Local GW self-energy which is replaced by DMFT self-energy. Avalibale: GlocWloc, Sloc.")
+      call parse_input_variable(addTierIII,"TIER_III",InputFile,default=.true.,comment="Flag to include the Tier-III contribution for ab-initio calculations.")
+      if(Hmodel.or.Umodel)addTierIII=.false.
       call parse_input_variable(RecomputeG0W0,"RECOMP_G0W0",InputFile,default=.false.,comment="Flag to recompute the G0W0 self-energy from the SPEX input.")
       if(Hmodel)RecomputeG0W0=.false.
       call parse_input_variable(HandleGammaPoint,"SMEAR_GAMMA",InputFile,default=.true.,comment="Remove the interaction divergence at the Gamma point.")

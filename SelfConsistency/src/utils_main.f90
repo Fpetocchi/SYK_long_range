@@ -193,6 +193,8 @@ contains
       sym_constrained = ExpandImpurity .and. (reg(VH_type).ne."Ustatic")
       sym_constrained = ExpandImpurity .and. (reg(VH_type).ne."Ubare")
       !
+      if(Hmodel.or.Umodel)addTierIII=.false.
+      !
       print_path = (reg(path_funct).ne."None") .and. (reg(structure).ne."None")
       !
       call inquireDir(reg(pathDATA)//str(FirstIteration-1),PrvItexist,hardstop=.false.,verb=.false.)
@@ -232,7 +234,7 @@ contains
                   write(*,"(A)") "     Previous iteration: "//str(FirstIteration-1)//". Not found, exiting."
                   stop
                endif
-               if((.not.ZeroItexist).and.(.not.Hmodel))stop "G0W0 0th iteration not found, exiting."
+               if((.not.ZeroItexist).and.addTierIII)stop "G0W0 0th iteration not found, exiting."
             endif
             !
             if(Uspex)then
@@ -254,7 +256,7 @@ contains
                   write(*,"(A)") "     Previous iteration: "//str(FirstIteration-1)//". Not found, exiting."
                   stop
                endif
-               if((reg(CalculationType).eq."GW+EDMFT").and.(.not.ZeroItexist).and.(.not.Hmodel)) stop "G0W0 0th iteration not found, exiting."
+               if((reg(CalculationType).eq."GW+EDMFT").and.(.not.ZeroItexist).and.addTierIII) stop "G0W0 0th iteration not found, exiting."
             endif
             !
             if(Uspex)then
@@ -1362,7 +1364,7 @@ contains
       !
       if(.not.solve_DMFT) stop "calc_SigmaGuess: no guess needed if DMFT is not performed."
       if(FirstIteration.ne.0) stop "calc_SigmaGuess: this subroutine works only in the 0th iteration."
-      if((reg(CalculationType).eq."GW+EDMFT").and.(.not.S_G0W0%status).and.(.not.Hmodel))then
+      if((reg(CalculationType).eq."GW+EDMFT").and.(.not.S_G0W0%status).and.addTierIII)then
          call AllocateFermionicField(S_G0W0,Crystal%Norb,Nmats,Nkpt=Crystal%Nkpt,Nsite=Nsite,Beta=Beta)
          call read_Sigma_spex(SpexVersion,S_G0W0,Crystal,verbose,recompute=RecomputeG0W0,pathOUTPUT=reg(pathINPUTtr))
       endif
@@ -1542,7 +1544,7 @@ contains
                !
                if(.not.S_GW%status) stop "join_SigmaFull: S_GW not properly initialized."
                !
-               if(.not.Hmodel)then
+               if(addTierIII)then
                   !
                   if(.not.S_G0W0dc%status) stop "join_SigmaFull: S_G0W0dc not properly initialized."
                   !
@@ -1823,7 +1825,7 @@ contains
       integer                               :: ispin,iw,iwan,itau,ndx,wndx
       integer,allocatable                   :: Orbs(:)
       real(8),allocatable                   :: wmats(:),tau(:),Moments(:,:,:)
-      real(8),allocatable                   :: Eloc(:,:),PrintLine(:),coef01(:,:)
+      real(8),allocatable                   :: Eloc(:,:),ElocOld(:,:),PrintLine(:),coef01(:,:)
       complex(8),allocatable                :: Nloc(:,:,:)
       real(8)                               :: tailShift,CrystalField
       complex(8),allocatable                :: zeta(:,:,:),invG(:,:),Rot(:,:)
@@ -1978,9 +1980,10 @@ contains
       enddo
       deallocate(invCurlyG)
       !
-      !Mixing Delta
+      !Mixing Delta and local energy
       if((Mixing_Delta.gt.0d0).and.(Iteration.gt.0))then
-         write(*,"(A)")"     Mixing Delta with "//str(Mixing_Delta,3)//" of old solution."
+         !
+         write(*,"(A)")"     Mixing Delta and Eo with "//str(Mixing_Delta,3)//" of old solution."
          call AllocateFermionicField(DeltaOld,Norb,Nmats,Beta=Beta)
          call read_FermionicField(DeltaOld,reg(PrevItFolder)//"Solver_"//reg(SiteName(isite))//"/","D_"//reg(SiteName(isite))//"_w")
          do ispin=1,Nspin
@@ -1991,6 +1994,19 @@ contains
             enddo
          enddo
          call DeallocateFermionicField(DeltaOld)
+         !
+         allocate(ElocOld(Norb,Nspin));ElocOld=0d0
+         file = reg(PrevItFolder)//"Solver_"//reg(SiteName(isite))//"/Eloc.DAT"
+         unit = free_unit()
+         open(unit,file=reg(file),form="formatted",status="unknown",position="rewind",action="read")
+         read(unit,*)
+         do iwan=1,Norb
+            read(unit,"(2E20.12)") (ElocOld(iwan,ispin),ispin=1,Nspin)
+         enddo
+         close(unit)
+         Eloc = (1d0-Mixing_Delta)*Eloc + Mixing_Delta*ElocOld
+         deallocate(ElocOld)
+         !
       endif
       !
       !Spin symmetrization for paramagnetic calculations
@@ -2042,7 +2058,7 @@ contains
          open(unit,file=reg(file),form="formatted",status="unknown",position="rewind",action="write")
          write(unit,"(1E20.12)") Glat%mu
          do iwan=1,Norb
-            write(unit,"(2E20.12)") Eloc(iwan,1)+EqvGWndx%hseed,Eloc(iwan,2)-EqvGWndx%hseed
+            write(unit,"(2E20.12)") ((Eloc(iwan,ispin)+(-1d0**mod(ispin,2))*EqvGWndx%hseed),ispin=1,Nspin)!,Eloc(iwan,2)-EqvGWndx%hseed
          enddo
          close(unit)
       endif
@@ -2053,7 +2069,7 @@ contains
       CrystalField=0d0
       do iwan=1,Norb
          if(iwan.gt.1)CrystalField=SiteCF(isite,iwan-1)
-         write(unit,"(2E20.12)") Eloc(iwan,1)+EqvGWndx%hseed+CrystalField,Eloc(iwan,2)-EqvGWndx%hseed+CrystalField
+         write(unit,"(2E20.12)") ((Eloc(iwan,ispin)+(-1d0**mod(ispin,2))*EqvGWndx%hseed+CrystalField),ispin=1,Nspin)!,Eloc(iwan,2)-EqvGWndx%hseed+CrystalField
       enddo
       close(unit)
       !

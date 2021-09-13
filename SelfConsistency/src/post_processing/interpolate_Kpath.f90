@@ -96,8 +96,8 @@ subroutine interpolateG2Path(Sfull,Lttc,pathOUTPUT)
    !recalculate the internal K-meshes
    call interpolateHk2Path(Lttc,structure,Nkpt_path,doplane=FermiSurf,Nkpt_Kside=Nkpt_Fermi,hetero=Hetero%status)
    !
-   !Dump MaxEnt data for the local self-energy (always done for every setup)
-   call calc_MaxEnt_on_Sigma_imp(Sfull)
+   !Dump MaxEnt data for the local self-energy (done for every CalculationType)
+   if(scan(reg(path_funct),"S").gt.0)call calc_MaxEnt_on_Sigma_imp(Sfull)
    !
    !
    !Interpolate the slef-energy along the path if its K-dependent otherwise duplicate the local one

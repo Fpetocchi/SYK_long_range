@@ -3101,6 +3101,7 @@ contains
          data = data + correction
          corrname_="Corrected"
          if(present(corrname))corrname_=reg(corrname)
+         write(*,"(A)")"     Correction: "//reg(corrname_)
       endif
       !
       !Interpolate along path---------------------------------------------------

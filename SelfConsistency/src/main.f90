@@ -155,18 +155,20 @@ program SelfConsistency
          !
          !Hartree shift between G0W0 and LDA
          if(.not.allocated(VH))allocate(VH(Crystal%Norb,Crystal%Norb));VH=czero
-         if(.not.Hmodel) call calc_VH(VH,densityLDA,Glat,Ulat) !call calc_VH(VH,densityLDA,densityDMFT,Ulat) !call calc_VH(VH,densityLDA,Glat,Ulat)
-         call dump_Matrix(VH,reg(ItFolder),"VH.DAT")
-         if(.not.VH_use)then
-            VH=czero
-            write(*,"(A)")"     VH not used."
+         if(addTierIII)then
+            call calc_VH(VH,densityLDA,Glat,Ulat) !call calc_VH(VH,densityLDA,densityDMFT,Ulat) !call calc_VH(VH,densityLDA,Glat,Ulat)
+            call dump_Matrix(VH,reg(ItFolder),"VH.DAT")
+            if(.not.VH_use)then
+               VH=czero
+               write(*,"(A)")"     VH not used."
+            endif
          endif
          if(solve_DMFT.and.bosonicSC.and.(.not.Ustart))call DeallocateBosonicField(Ulat)
          !
          !read from SPEX G0W0 self-energy and Vexchange
          if(.not.allocated(Vxc))allocate(Vxc(Crystal%Norb,Crystal%Norb,Crystal%Nkpt,Nspin));Vxc=czero
          call AllocateFermionicField(S_G0W0,Crystal%Norb,Nmats,Nkpt=Crystal%Nkpt,Nsite=Nsite,Beta=Beta)
-         if(.not.Hmodel)then
+         if(addTierIII)then
             if(Vxc_in)then
                call read_Sigma_spex(SpexVersion,S_G0W0,Crystal,verbose,recompute=RecomputeG0W0,pathOUTPUT=reg(pathINPUTtr))
             else
@@ -177,7 +179,7 @@ program SelfConsistency
          !scGW
          if(Iteration.eq.0)then
             !
-            if(.not.Hmodel)then
+            if(addTierIII)then
                !
                !Compute the Dc between G0W0 and scGW self-energies
                call AllocateFermionicField(S_G0W0dc,Crystal%Norb,Nmats,Nkpt=Crystal%Nkpt,Nsite=Nsite,Beta=Beta)
@@ -202,7 +204,7 @@ program SelfConsistency
          elseif(Iteration.gt.0)then
             !
             !Read the Dc between G0W0 and scGW if present
-            if(.not.Hmodel)then
+            if(addTierIII)then
                call AllocateFermionicField(S_G0W0dc,Crystal%Norb,Nmats,Nkpt=Crystal%Nkpt,Nsite=Nsite,Beta=Beta)
                call read_FermionicField(S_G0W0dc,reg(pathDATA)//"0/","SGoWo_dc_w",kpt=Crystal%kpt)
                if(RecomputeG0W0)call check_S_G0W0()
@@ -263,6 +265,7 @@ program SelfConsistency
             call set_density(Glat,Crystal,look4dens)
          endif
       else
+         write(*,"(A,F)")"     Chemical potential:",Glat%mu
          write(*,"(A,F)")"     Lattice density:",trace(Glat%N_s(:,:,1)+Glat%N_s(:,:,2))
       endif
       call dump_Matrix(Glat%N_s,reg(ItFolder),"Nlat",paramagnet)
