@@ -163,6 +163,7 @@ module parameters
       logical,allocatable                   :: Full_Uab(:,:)
       logical,allocatable                   :: Full_Jsf(:,:)
       logical,allocatable                   :: Full_Jph(:,:)
+      logical,allocatable                   :: Full_Imp(:,:)
       logical,allocatable                   :: Full_All(:,:)
       integer,allocatable                   :: Full_Map(:,:,:)
       integer                               :: Full_Size

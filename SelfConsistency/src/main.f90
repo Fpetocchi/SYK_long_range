@@ -114,6 +114,7 @@ program SelfConsistency
             call dump_BosonicField(Plat,reg(ItFolder),"Plat_merged_w.DAT")
          elseif(calc_Pguess)then
             P_EDMFT%screened_local = Plat%screened_local*alphaPi
+            call MergeFields(Plat,P_EDMFT,alphaPi,SiteOrbs,RotateHloc)
          endif
          !
       endif
@@ -131,7 +132,7 @@ program SelfConsistency
       !
       !
       ! Causality correction on curlyU
-      if(causal_U) call calc_causality_curlyU_correction()
+      if(causal_U) call calc_causality_curlyU_correction(reg(causal_U_type))
       if(solve_DMFT) call DeallocateBosonicField(Plat)
       !
       !

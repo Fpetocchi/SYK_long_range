@@ -120,6 +120,7 @@ module input_vars
    integer,allocatable,public               :: SiteNorb(:)
    character(len=255),allocatable,public    :: SiteName(:)
    integer,allocatable,public               :: SiteOrbs(:,:)
+   logical,public                           :: addCF
    real(8),allocatable,public               :: SiteCF(:,:)
    !
    !Equivalent lattice indexes
@@ -182,6 +183,7 @@ module input_vars
    real(8),public                           :: Mixing_curlyU
    logical,public                           :: causal_D
    logical,public                           :: causal_U
+   character(len=256),public                :: causal_U_type
    !
    !Variables for the fit on Delta, Gimp, Simp
    character(len=256),public                :: DeltaFit
@@ -348,7 +350,7 @@ contains
       call parse_input_variable(ExpandImpurity,"EXPAND",InputFile,default=.false.,comment="Flag to use a single impurity solution for all the sites of the lattice. Only indexes for site 1 readed.")
       call parse_input_variable(RotateHloc,"ROTATE_F",InputFile,default=.false.,comment="Solve the Fermionic impurity problem in the basis where H(R=0) is diagonal.")
       call parse_input_variable(RotateUloc,"ROTATE_B",InputFile,default=RotateHloc,comment="Solve the Bosonic impurity problem in the basis where H(R=0) is diagonal.")
-      call parse_input_variable(AFMselfcons,"AFM",InputFile,default=.false.,comment="Flag to use  the AFM self-consistency by flipping the spin. Requires input with doubled unit cell.")
+      call parse_input_variable(AFMselfcons,"AFM",InputFile,default=.false.,comment="Flag to use the AFM self-consistency by flipping the spin. Requires input with doubled unit cell.")
       call parse_input_variable(cmplxWann,"GTAU_K",InputFile,default=.true.,comment="Flag to perform the iw->tau FT of the Green's function in K space.")
       allocate(SiteNorb(Nsite));SiteNorb=0
       allocate(SiteName(Nsite))
@@ -388,13 +390,14 @@ contains
          endif
          deallocate(tmpOrbs)
       enddo
-      allocate(SiteCF(Nsite,maxval(SiteNorb)-1));SiteCF=0d0
-      if(RotateHloc)then
+      call parse_input_variable(addCF,"ADD_CF",InputFile,default=.false.,comment="Flag to include additional crystal-fields.")
+      if(addCF)then
+         allocate(SiteCF(Nsite,maxval(SiteNorb)));SiteCF=0d0
          do isite=1,Nsite
-            allocate(tmpCF(1:SiteNorb(isite)-1));tmpCF=0d0
-            call parse_input_variable(SiteCF(isite,1:SiteNorb(isite)-1),"CF_"//str(isite),InputFile,default=tmpCF,comment="Additional crystal-fields on diagonal orbitals of site number "//str(isite))
-            if(ExpandImpurity.or.AFMselfcons)exit
+            allocate(tmpCF(1:SiteNorb(isite)));tmpCF=0d0
+            call parse_input_variable(SiteCF(isite,1:SiteNorb(isite)),"CF_"//str(isite),InputFile,default=tmpCF,comment="Additional crystal-fields on diagonal orbitals of site number "//str(isite))
             deallocate(tmpCF)
+            if(ExpandImpurity)exit
          enddo
       endif
       !
@@ -402,8 +405,6 @@ contains
       call add_separator("Symmetrizations")
       call parse_input_variable(EqvGWndx%para,"PARAMAGNET",InputFile,default=1,comment="If =1 spin symmetry is enforced if =0 spin is left free.")
       call parse_input_variable(EqvGWndx%hseed,"H_SEED",InputFile,default=0d0,comment="Seed to break spin symmetry (persistent if non zero).")
-      call parse_input_variable(sym_mode,"SYM_MODE",InputFile,default=2,comment="If =1 only the lattice orbitals will be symmetrized, if =2 also the corresponding n(tau) inside the solver, if =3 only n(tau). Ineffective if =0 or if EQV_SETS=0.")
-      if((reg(CalculationType).eq."scGW").or.(reg(CalculationType).eq."G0W0"))sym_mode=0
       call parse_input_variable(EqvGWndx%Nset,"EQV_SETS",InputFile,default=1,comment="Number of sets of locally equivalent lattice orbitals.")
       paramagnet = EqvGWndx%para.gt.0
       if(EqvGWndx%Nset.gt.0)then
@@ -418,7 +419,13 @@ contains
             deallocate(tmpOrbs)
          enddo
       endif
-      if(EqvGWndx%para.gt.0)EqvGWndx%S=.true.
+      if(EqvGWndx%para.gt.0)EqvGWndx%S=.true. !generic spin symmetrization
+      if(EqvGWndx%Nset.gt.0)then
+         call parse_input_variable(sym_mode,"SYM_MODE",InputFile,default=3,comment="If =1 only the lattice orbitals will be symmetrized, if =2 also the corresponding n(tau) inside the solver, if =3 only n(tau).")
+      else
+         sym_mode=0
+         call append_to_input_list(sym_mode,"SYM_MODE","No orbital symmetrizations.")
+      endif
       !
       !Imaginary time and frequency meshes
       call add_separator("Temperature and frequency meshes")
@@ -501,25 +508,27 @@ contains
       !
       !Double counting types, divergencies, scaling coefficients
       call add_separator("Double counting and rescaling coeff")
-      call parse_input_variable(SpexVersion,"SPEX_VERSION",InputFile,default="Julich",comment="Version of SPEX with which the G0W0 self-energy is computed. Available: Julich, Lund.")
-      call parse_input_variable(VH_type,"VH_TYPE",InputFile,default="Ustatic_SPEX",comment="Hartree term mismatch between GoWo and scGW. Available: Ubare, Ustatic, Ubare_SPEX(V_nodiv.DAT required), Ustatic_SPEX(V_nodiv.DAT required).")
-      if(Umodel)VH_type="Ustatic"
-      call parse_input_variable(VH_use,"VH_USE",InputFile,default=.true.,comment="Flag to use the Hartree term correction between Tier-III and Tier-II, which is printed in PATH_INPUT even if not used.")
-      call parse_input_variable(Vxc_in,"VXC_IN",InputFile,default=.true.,comment="Flag to include the Vxc potential inside the SigmaG0W0.")
-      call parse_input_variable(DC_type,"DC_TYPE",InputFile,default="GlocWloc",comment="Local GW self-energy which is replaced by DMFT self-energy. Avalibale: GlocWloc, Sloc.")
       call parse_input_variable(addTierIII,"TIER_III",InputFile,default=.true.,comment="Flag to include the Tier-III contribution for ab-initio calculations.")
+      if(addTierIII)then
+         call parse_input_variable(SpexVersion,"SPEX_VERSION",InputFile,default="Julich",comment="Version of SPEX with which the G0W0 self-energy is computed. Available: Julich, Lund.")
+         call parse_input_variable(VH_type,"VH_TYPE",InputFile,default="Ustatic_SPEX",comment="Hartree term mismatch between GoWo and scGW. Available: Ubare, Ustatic, Ubare_SPEX(V_nodiv.DAT required), Ustatic_SPEX(V_nodiv.DAT required).")
+         if(Umodel)VH_type="Ustatic"
+         call parse_input_variable(VH_use,"VH_USE",InputFile,default=.true.,comment="Flag to use the Hartree term correction between Tier-III and Tier-II, which is printed in PATH_INPUT even if not used.")
+         call parse_input_variable(Vxc_in,"VXC_IN",InputFile,default=.true.,comment="Flag to include the Vxc potential inside the SigmaG0W0.")
+         call parse_input_variable(RecomputeG0W0,"RECOMP_G0W0",InputFile,default=.false.,comment="Flag to recompute the G0W0 self-energy from the SPEX input.")
+         if(Hmodel)RecomputeG0W0=.false.
+         call parse_input_variable(GoWoDC_loc,"G0W0DC_LOC",InputFile,default=.true.,comment="Keep the local contribution of Tier-III. Automatically removed if non-causal.")
+      endif
+      call parse_input_variable(DC_type,"DC_TYPE",InputFile,default="GlocWloc",comment="Local GW self-energy which is replaced by DMFT self-energy. Avalibale: GlocWloc, Sloc.")
       if(Hmodel.or.Umodel)addTierIII=.false.
-      call parse_input_variable(RecomputeG0W0,"RECOMP_G0W0",InputFile,default=.false.,comment="Flag to recompute the G0W0 self-energy from the SPEX input.")
-      if(Hmodel)RecomputeG0W0=.false.
       call parse_input_variable(HandleGammaPoint,"SMEAR_GAMMA",InputFile,default=.true.,comment="Remove the interaction divergence at the Gamma point.")
       if(Umodel)HandleGammaPoint=.false.
       call parse_input_variable(calc_Sguess,"S_GUESS",InputFile,default=.true.,comment="Use G0W0_loc as a first guess for the DMFT self-energy.")
-      call parse_input_variable(calc_Pguess,"P_GUESS",InputFile,default=.false.,comment="Use GG_loc as a first guess for the DMFT polarization.")
+      call parse_input_variable(calc_Pguess,"P_GUESS",InputFile,default=.false.,comment="Use GG_loc as a first guess for the DMFT polarization. If =T it sets U_START=T.")
       if(.not.solve_DMFT)then
          calc_Sguess=.false.
          calc_Pguess=.false.
       endif
-      call parse_input_variable(GoWoDC_loc,"G0W0DC_LOC",InputFile,default=.true.,comment="Keep the local contribution of Tier-III. Automatically removed if non-causal.")
       call parse_input_variable(alphaChi,"ALPHA_CHI",InputFile,default=1d0,comment="Rescaling factor for the local charge susceptibility.")
       call parse_input_variable(alphaPi,"ALPHA_PI",InputFile,default=1d0,comment="Fraction of the EDMFT polarization substituted within the lattice one.")
       call parse_input_variable(alphaSigma,"ALPHA_SIGMA",InputFile,default=1d0,comment="Fraction of the EDMFT self-energy substituted within the lattice one.")
@@ -529,10 +538,14 @@ contains
       call parse_input_variable(removeCDW_P,"CDW_PI",InputFile,default=.false.,comment="Flag to remove the iw=0 divergence in the local polarization.")
       call parse_input_variable(Mixing_Delta,"MIX_D",InputFile,default=0.5d0,comment="Fraction of the old iteration Delta.")
       call parse_input_variable(Mixing_curlyU,"MIX_U",InputFile,default=0.5d0,comment="Fraction of the old iteration curlyU.")
-      call parse_input_variable(causal_D,"CAUSAL_D",InputFile,default=.false.,comment="Flag to employ generalized cavity equation for Delta. Active only for GW+EDMFT calculation.")
+      call parse_input_variable(causal_D,"CAUSAL_D",InputFile,default=.false.,comment="Flag to employ generalized fermionic cavity construction. Active only for GW+EDMFT calculation.")
       if(reg(CalculationType).ne."GW+EDMFT")causal_D=.false.
-      call parse_input_variable(causal_U,"CAUSAL_U",InputFile,default=.false.,comment="Flag to employ generalized cavity equation for curlyU. Active only for GW+EDMFT calculation.")
+      call parse_input_variable(causal_U,"CAUSAL_U",InputFile,default=.false.,comment="Flag to employ generalized bosonic cavity construction. Active only for GW+EDMFT calculation.")
       if(reg(CalculationType).ne."GW+EDMFT")causal_U=.false.
+      if(causal_U)then
+         call parse_input_variable(causal_U_type,"CAUSAL_U_TYPE",InputFile,default="curlyU",comment="Correction mode for generalized bosonic cavity construction. Available: curlyU, Ploc.")
+         if((reg(causal_U_type).eq."Ploc").and.((Nsite.gt.1).or.(maxval(SiteNorb).gt.1)))causal_U_type="curlyU"
+      endif
       !
       !Variables for the fit
       call parse_input_variable(DeltaFit,"DELTA_FIT",InputFile,default="Inf",comment="Fit to extract the local energy in GW+EDMFT calculations. Available: Inf, Analytic, Moments.")

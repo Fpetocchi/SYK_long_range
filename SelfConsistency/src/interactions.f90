@@ -2258,7 +2258,7 @@ contains
    !---------------------------------------------------------------------------!
    !PURPOSE: Computes the local effective interaction
    !---------------------------------------------------------------------------!
-   subroutine calc_curlyU(curlyU,Wimp,Pimp,sym,curlyUcorr)
+   subroutine calc_curlyU(curlyU,Wimp,Pimp,sym,curlyUcorr,mode)
       !
       use parameters
       use utils_fields
@@ -2271,12 +2271,14 @@ contains
       type(BosonicField),intent(in)         :: Pimp
       logical,intent(in),optional           :: sym
       type(BosonicField),intent(in),optional:: curlyUcorr
+      character(len=*),intent(in),optional  :: mode
       !
       complex(8),allocatable                :: invW(:,:)
       real(8)                               :: Beta
       integer                               :: Nbp,Nmats
       integer                               :: iw
-      logical                               :: sym_
+      logical                               :: sym_,correctU,correctP
+      character(len=10)                     :: mode_
       !
       !
       if(verbose)write(*,"(A)") "---- calc_curlyU"
@@ -2289,7 +2291,6 @@ contains
       if(curlyU%Nkpt.ne.0) stop "calc_curlyU: curlyU k dependent attributes are supposed to be unallocated."
       if(Wimp%Nkpt.ne.0) stop "calc_curlyU: Wimp k dependent attributes are supposed to be unallocated."
       if(Pimp%Nkpt.ne.0) stop "calc_curlyU: Pimp k dependent attributes are supposed to be unallocated."
-      if(present(curlyUcorr).and.(.not.curlyUcorr%status)) stop "calc_curlyU: Requested causality correction but curlyUcorr not properly initialized."
       !
       sym_=.true.
       if(present(sym))sym_=sym
@@ -2301,11 +2302,27 @@ contains
       if(all([Wimp%Nbp-Nbp,Pimp%Nbp-Nbp].ne.[0,0])) stop "calc_curlyU: Either Wimp and/or Pimp have different orbital dimension with respect to curlyU."
       if(all([Wimp%Beta-Beta,Pimp%Beta-Beta].ne.[0d0,0d0])) stop "calc_curlyU: Either Wimp and/or Pimp have different Beta with respect to curlyU."
       if(all([Wimp%Npoints-Nmats,Pimp%Npoints-Nmats].ne.[0,0])) stop "calc_curlyU: Either Wimp and/or Pimp have different number of Matsubara points with respect to curlyU."
+      !
+      correctU=.false.
+      correctP=.false.
       if(present(curlyUcorr))then
+         if(.not.curlyUcorr%status) stop "calc_curlyU: Requested causality correction but curlyUcorr not properly initialized."
          if(Nbp.ne.curlyUcorr%Nbp) stop "calc_curlyU: curlyUcorr has different orbital dimension with respect to curlyU."
          if(Beta.ne.curlyUcorr%Beta) stop "calc_curlyU: curlyUcorr has different Beta with respect to curlyU."
          if(Nmats.ne.curlyUcorr%Npoints) stop "calc_curlyU: curlyUcorr has different number of Matsubara points with respect to curlyU."
          if(curlyUcorr%Nkpt.ne.0) stop "calc_curlyU: curlyUcorr k dependent attributes are supposed to be unallocated."
+         mode_="curlyU"
+         if(present(mode))mode_=reg(mode)
+         select case(reg(mode_))
+            case default
+               stop "calc_curlyU: Available types are: curlyU, Ploc."
+            case("curlyU")
+               write(*,"(A)")"     Causality correction on curlyU."
+               correctU=.true.
+            case("Ploc")
+               write(*,"(A)")"     Causality correction on Ploc."
+               correctP=.true.
+         end select
       endif
       !
       call clear_attributes(curlyU)
@@ -2314,12 +2331,17 @@ contains
       !
       allocate(invW(Nbp,Nbp));invW=czero
       !$OMP PARALLEL DEFAULT(NONE),&
-      !$OMP SHARED(Wimp,Pimp,curlyU),&
+      !$OMP SHARED(Wimp,Pimp,curlyU,correctP,curlyUcorr),&
       !$OMP PRIVATE(iw,invW)
       !$OMP DO
       do iw=1,curlyU%Npoints
          !
-         invW = zeye(curlyU%Nbp) + matmul(Pimp%screened_local(:,:,iw),dreal(Wimp%screened_local(:,:,iw)))
+         if(correctP)then
+            invW = zeye(curlyU%Nbp) + matmul((Pimp%screened_local(:,:,iw) - dreal(curlyUcorr%screened_local(:,:,iw))),dreal(Wimp%screened_local(:,:,iw)))
+         else
+            invW = zeye(curlyU%Nbp) + matmul(Pimp%screened_local(:,:,iw),dreal(Wimp%screened_local(:,:,iw)))
+         endif
+         !
          call inv(invW)
          curlyU%screened_local(:,:,iw) = matmul(dreal(Wimp%screened_local(:,:,iw)),invW)
          !
@@ -2328,12 +2350,10 @@ contains
       !$OMP END PARALLEL
       deallocate(invW)
       !
-      !Causality correction
-      if(present(curlyUcorr))then
+      !Causality correction on curlyU
+      if(correctU)then
          do iw=1,curlyU%Npoints
-            !
             curlyU%screened_local(:,:,iw) = curlyU%screened_local(:,:,iw) - dreal(curlyUcorr%screened_local(:,:,iw))
-            !
          enddo
       endif
       !

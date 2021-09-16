@@ -38,6 +38,7 @@ module module_container
    read_lattice                             ,&
    read_xeps                                ,&
    read_Hk                                  ,&
+   build_kpt                                ,&
    build_Hk                                 ,&
    fill_ksumkdiff                           ,&
    fill_smallk                              ,&
@@ -91,6 +92,7 @@ module module_container
    symmetrize_imp                           ,&
    MergeFields                              ,&
    join_SigmaCX                             ,&
+   product2NN,NN2product                    ,&
    calc_Ek,calc_Ep
 
 

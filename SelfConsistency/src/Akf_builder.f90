@@ -147,12 +147,13 @@ contains
       integer                               :: ik,Nkpt,Nkpt_Kside,Norb
       integer                               :: iw,iorb,ikx,iky,wndx_cut
       integer                               :: unit,ierr
-      integer                               :: Nreal_min,Nreal_max,Nreal_read,Nreal_old
+      integer                               :: Nreal_min,Nreal_max,Nreal_read,Nreal_old,ik1st
       logical,allocatable                   :: Kmask(:)
       real(8),allocatable                   :: wreal(:),wreal_read(:)
       real(8),allocatable                   :: Akw_orb(:,:,:)
       real(8)                               :: dw
       character(len=256)                    :: path,suffix_
+      logical                               :: ik1st_read
       !
       real(8),allocatable                   :: ImG_read(:,:,:)
       !
@@ -190,12 +191,18 @@ contains
       allocate(Kmask(Nkpt));Kmask=.false.
       !
       !First check that all the files contains the same number fo real frequecies
+      ik1st_read=.false.
       do ik=1,Nkpt
          !
          path = reg(MaxEnt_K)//"MaxEnt_Gk_"//reg(mode)//"_t_s"//str(ispin)//"/Gk_t_k"//str(ik)//reg(suffix_)//".DAT_dos.dat"
          !
          call inquireFile(reg(path),Kmask(ik),hardstop=.false.,verb=.true.)
-         if(.not.Kmask(ik)) cycle
+         if(.not.Kmask(ik))then
+            cycle
+         elseif(.not.ik1st_read)then
+            ik1st_read=.true.
+            ik1st = ik
+         endif
          !
          unit = free_unit()
          open(unit,file=reg(path),form="formatted",status="unknown",position="rewind",action="read")
@@ -212,7 +219,7 @@ contains
          Nreal_read = Nreal_read - 2
          !
          write(*,"(A,1I5)") "     The file "//reg(path)//" contains "//str(Nreal_read)//" real frequencies."
-         if(Kmask(ik).and.(ik.gt.1).and.(Nreal_read.ne.Nreal_old))then
+         if(Kmask(ik).and.(ik.gt.ik1st).and.(Nreal_read.ne.Nreal_old))then
             write(*,"(A,1I5)") "     Aborting. Real frequency mesh is not consistent among K-points."
             return
          endif

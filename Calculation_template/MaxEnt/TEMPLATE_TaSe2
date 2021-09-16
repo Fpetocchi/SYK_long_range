@@ -16,7 +16,7 @@ declare -a dirindex=( "86" "87" "78" "79" )
 
 
 GENMAT=/home/petocchif/1_GW_EDMFT/nobackup/1_production/Calculation_template
-for it in `seq 53 1 54`; do
+for it in `seq 67 1 68`; do
    ## LATTICE
    cd $it/Convergence
    cp ${GENMAT}/${MATERIAL}/MaxEnt/MaxEnt.sh .
@@ -99,18 +99,16 @@ p for [i=1:8] '3_beta_400_L_stack_INS_GS1/Results_beta400/'.it.'/Convergence/Max
 
 
 
-
+ -s 0.0008 -w 5001 -W 15
 
 
 ################################################################################
 #                   PASTE THE FOLLOWING WITHIN IT/K_resolved                   #
 ################################################################################
-./MaxEnt_Kresolved.sh -e 0.005 -w 5001 -W 15 -F G -N 280 -B 70 -m path -s _Hetero #ok
-
-./MaxEnt_Kresolved.sh -e 0.001 -w 5001 -W 15 -F G -N 280 -B 70 -m path -s _Hetero  #ok
-
 ./MaxEnt_Kresolved.sh -e 0.0008 -w 5001 -W 15 -F G -N 280 -B 70 -m path -s _Hetero
 ./MaxEnt_Kresolved.sh -e 0.0008 -w 5001 -W 15 -F G -N 280 -B 70 -m path -i 281 -f 281 -s _Hetero
+
+./MaxEnt_Kresolved.sh -e 0.0008 -w 5001 -W 15 -F G -N 280 -B 70 -m path -i 1 -f 281 -s _Hetero
 
 
 

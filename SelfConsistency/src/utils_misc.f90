@@ -849,12 +849,14 @@ contains
       if(allocated(Uelements%Full_Uab))deallocate(Uelements%Full_Uab)
       if(allocated(Uelements%Full_Jsf))deallocate(Uelements%Full_Jsf)
       if(allocated(Uelements%Full_Jph))deallocate(Uelements%Full_Jph)
+      if(allocated(Uelements%Full_Imp))deallocate(Uelements%Full_Imp)
       if(allocated(Uelements%Full_All))deallocate(Uelements%Full_All)
       if(allocated(Uelements%Full_Map))deallocate(Uelements%Full_Map)
       allocate(Uelements%Full_Uaa(Norb*Norb,Norb*Norb))  ;Uelements%Full_Uaa=.false.
       allocate(Uelements%Full_Uab(Norb*Norb,Norb*Norb))  ;Uelements%Full_Uab=.false.
       allocate(Uelements%Full_Jsf(Norb*Norb,Norb*Norb))  ;Uelements%Full_Jsf=.false.
       allocate(Uelements%Full_Jph(Norb*Norb,Norb*Norb))  ;Uelements%Full_Jph=.false.
+      allocate(Uelements%Full_Imp(Norb*Norb,Norb*Norb))  ;Uelements%Full_Imp=.false.
       allocate(Uelements%Full_All(Norb*Norb,Norb*Norb))  ;Uelements%Full_All=.false.
       allocate(Uelements%Full_Map(Norb*Norb,Norb*Norb,4));Uelements%Full_Map=0
       !
@@ -870,6 +872,8 @@ contains
                   Uelements%Full_Uab(ib1,ib2) = (iorb.eq.jorb).and.(korb.eq.lorb).and.(iorb.ne.korb)
                   Uelements%Full_Jsf(ib1,ib2) = (iorb.eq.lorb).and.(jorb.eq.korb).and.(iorb.ne.jorb)
                   Uelements%Full_Jph(ib1,ib2) = (iorb.eq.korb).and.(jorb.eq.lorb).and.(iorb.ne.jorb)
+                  !
+                  Uelements%Full_Imp(ib1,ib2) = Uelements%Full_Uaa(ib1,ib2) .or. Uelements%Full_Uab(ib1,ib2)
                   !
                   Uelements%Full_All(ib1,ib2) = Uelements%Full_Uaa(ib1,ib2) .or.  &
                                                 Uelements%Full_Uab(ib1,ib2) .or.  &

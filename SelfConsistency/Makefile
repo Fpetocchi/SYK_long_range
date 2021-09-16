@@ -34,13 +34,13 @@ EXE_PP  = Akw_builder
 #
 # Compiler flags----------------------------------------------------------------
 ifeq ($(FC),ifort)
-  FFLAGS = -assume byterecl -qopenmp -liomp5 -mkl=sequential -fpp -mcmodel=large -llapack -I$(INCLDIR) -D$(SUFFIX)
+  FFLAGS = -assume byterecl -qopenmp -liomp5 -mkl=sequential -fpp -mcmodel=large -llapack -I$(INCLDIR)
   DBGFFLAGS = -O0 -check bounds -traceback -fpe3 -check all -fp-model precise -fp-stack-check -p -g -warn -debug extended -warn interface --heap-arrays -check all -check noarg_temp_created -qdiag-enable:sc3 -qdiag-enable:sc-parallel3 -C -D_verb
   RELFFLAGS = -O3 -ftz
   # -xAVX -xHost  -axCORE-AVX2
 endif
 ifeq ($(FC),gfortran)
-  FFLAGS = -openmp -cpp -ffree-line-length-none -ffast-math -march=native -funroll-all-loops -fno-protect-parens -flto -llapack -I$(INCLDIR) -D$(SUFFIX)
+  FFLAGS = -openmp -cpp -ffree-line-length-none -ffast-math -march=native -funroll-all-loops -fno-protect-parens -flto -llapack -I$(INCLDIR)
   DBGFFLAGS = -O0 -p -g -fbacktrace -Wline-truncation -Wsurprising -Waliasing -Wimplicit-interface -Wunused-parameter -fwhole-file -fcheck=all -pedantic -fbacktrace -fcheck=bounds -Wall  -D_verb #-Wcharacter-truncation
   RELFFLAGS = -cpp -ffree-line-length-none -O3 -ffast-math -march=native -funroll-all-loops -fno-protect-parens -flto -mcmodel=medium
 endif
@@ -153,7 +153,7 @@ $(DBGDIR)/utils_main.o: $(SRCDIR)/utils_main.f90 $(DBGDIR)/parameters.o $(DBGDIR
 	$(FC) -c $(FFLAGS) $(DBGFFLAGS) -o $@ $<
 
 $(DBGDIR)/main.o: $(SRCDIR)/main.f90
-	$(FC) -c $(FFLAGS) $(DBGFFLAGS) -o $@ $<
+	$(FC) -c $(FFLAGS) -D$(SUFFIX) $(DBGFFLAGS) -o $@ $<
 
 $(DBGDIR)/Akf_builder.o: $(SRCDIR)/Akf_builder.f90
 	$(FC) -c $(FFLAGS) $(DBGFFLAGS) -o $@ $<
@@ -227,7 +227,7 @@ $(RELDIR)/utils_main.o: $(SRCDIR)/utils_main.f90 $(RELDIR)/parameters.o $(RELDIR
 	$(FC) -c $(FFLAGS) $(RELFFLAGS) -o $@ $<
 
 $(RELDIR)/main.o: $(SRCDIR)/main.f90
-	$(FC) -c $(FFLAGS) $(RELFFLAGS) -o $@ $<
+	$(FC) -c $(FFLAGS) -D$(SUFFIX) $(RELFFLAGS) -o $@ $<
 
 $(RELDIR)/Akf_builder.o: $(SRCDIR)/Akf_builder.f90
 	$(FC) -c $(FFLAGS) $(RELFFLAGS) -o $@ $<

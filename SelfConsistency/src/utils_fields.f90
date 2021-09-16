@@ -119,6 +119,8 @@ module utils_fields
    public :: join_SigmaCX
    public :: MergeFields
    !functions
+   public :: product2NN
+   public :: NN2product
    public :: calc_Ek
    public :: calc_Ep
 
@@ -1583,18 +1585,20 @@ contains
    !         The Fermionic simmetrization is done only on the local attributes
    !         The Bosonic simmetrization is done only on the physical elements
    !---------------------------------------------------------------------------!
-   subroutine symmetrize_GW_Matrix_d(Mat,Eqv)
+   subroutine symmetrize_GW_Matrix_d(Mat,Eqv,override)
       !
       use parameters
       implicit none
       !
       real(8),intent(inout)                 :: Mat(:,:,:)
-      type(Equivalent)                      :: Eqv
+      type(Equivalent),intent(in)           :: Eqv
+      logical,intent(in),optional           :: override
       !
       real(8)                               :: dimdiag,dimoffdiag
       real(8)                               :: Delem,Uelem,Lelem
       integer                               :: iset,jset,iorb,jorb,ispin
       integer                               :: i,j
+      logical                               :: orbsym
       !
       !
       if(verbose)write(*,"(A)") "---- symmetrize_GW_Matrix_d"
@@ -1602,13 +1606,15 @@ contains
       !
       ! Check on the input Fields
       if(size(Mat,dim=1).ne.size(Mat,dim=2)) stop "symmetrize_GW_Matrix_d: Matix not square."
+      orbsym = Eqv%O
+      if(present(override))orbsym = override
       !
       if(Eqv%para.eq.1)then
          Mat(:,:,1) = (Mat(:,:,1) + Mat(:,:,2))/2d0
          Mat(:,:,2) = Mat(:,:,1)
       endif
       !
-      if(Eqv%O)then
+      if(orbsym)then
          !
          do ispin=1,Nspin
             !
@@ -1695,18 +1701,20 @@ contains
       !
    end subroutine symmetrize_GW_Matrix_d
    !
-   subroutine symmetrize_GW_Matrix_z(Mat,Eqv)
+   subroutine symmetrize_GW_Matrix_z(Mat,Eqv,override)
       !
       use parameters
       implicit none
       !
       complex(8),intent(inout)              :: Mat(:,:,:)
-      type(Equivalent)                      :: Eqv
+      type(Equivalent),intent(in)           :: Eqv
+      logical,intent(in),optional           :: override
       !
       real(8)                               :: dimdiag,dimoffdiag
       complex(8)                            :: Delem,Uelem,Lelem
       integer                               :: iset,jset,iorb,jorb,ispin
       integer                               :: i,j
+      logical                               :: orbsym
       !
       !
       if(verbose)write(*,"(A)") "---- symmetrize_GW_Matrix_z"
@@ -1714,13 +1722,15 @@ contains
       !
       ! Check on the input Fields
       if(size(Mat,dim=1).ne.size(Mat,dim=2)) stop "symmetrize_GW_Matrix_z: Matix not square."
+      orbsym = Eqv%O
+      if(present(override))orbsym = override
       !
       if(Eqv%para.eq.1)then
          Mat(:,:,1) = (Mat(:,:,1) + Mat(:,:,2))/2d0
          Mat(:,:,2) = Mat(:,:,1)
       endif
       !
-      if(Eqv%O)then
+      if(orbsym)then
          !
          do ispin=1,Nspin
             !
@@ -1807,18 +1817,20 @@ contains
       !
    end subroutine symmetrize_GW_Matrix_z
    !
-   subroutine symmetrize_GW_Fermionic(G,Eqv)
+   subroutine symmetrize_GW_Fermionic(G,Eqv,override)
       !
       use parameters
       implicit none
       !
       type(FermionicField),intent(inout)    :: G
-      type(Equivalent)                      :: Eqv
+      type(Equivalent),intent(in)           :: Eqv
+      logical,intent(in),optional           :: override
       !
       real(8)                               :: dimdiag,dimoffdiag
       complex(8)                            :: Delem,Uelem,Lelem
       integer                               :: iset,jset,iorb,jorb,ispin
       integer                               :: i,j,ip
+      logical                               :: orbsym
       !
       !
       if(verbose)write(*,"(A)") "---- symmetrize_GW_Fermionic"
@@ -1826,6 +1838,8 @@ contains
       !
       ! Check on the input Fields
       if(.not.G%status) stop "symmetrize_GW_Fermionic: field not properly initialized."
+      orbsym = Eqv%O
+      if(present(override))orbsym = override
       !
       if(Eqv%para.eq.1)then
          !
@@ -1839,7 +1853,7 @@ contains
          !
       endif
       !
-      if(Eqv%O)then
+      if(orbsym)then
          !
          do ispin=1,Nspin
             !
@@ -1989,13 +2003,14 @@ contains
    end subroutine symmetrize_GW_Fermionic
    !
    !
-   subroutine symmetrize_GW_Bosonic(W,Eqv)
+   subroutine symmetrize_GW_Bosonic(W,Eqv,override)
       !
       use parameters
       implicit none
       !
       type(BosonicField),intent(inout)      :: W
-      type(Equivalent)                      :: Eqv
+      type(Equivalent),intent(in)           :: Eqv
+      logical,intent(in),optional           :: override
       !
       real(8)                               :: dimdiag,dimoffdiag
       complex(8)                            :: Waaaa,Waabb
@@ -2004,7 +2019,7 @@ contains
       integer                               :: iorb,jorb,i,j,ib1_aa
       integer                               :: ib1_ab,ib2_ab,ib1_sf,ib2_sf
       integer                               :: ib1_pa,ib2_pa,ib1_pb,ib2_pb
-      logical                               :: doBare
+      logical                               :: doBare,orbsym
       !
       !
       if(verbose)write(*,"(A)") "---- symmetrize_GW_Bosonic"
@@ -2014,8 +2029,10 @@ contains
       if(.not.W%status) stop "symmetrize_GW_Bosonic: field not properly initialized."
       Norb = sqrt(dble(W%Nbp))
       doBare = allocated(W%bare_local)
+      orbsym = Eqv%O
+      if(present(override))orbsym = override
       !
-      if(Eqv%O)then
+      if(orbsym)then
          !
          !symmetrization of the diagonal sets
          do iset=1,Eqv%Ntotset
@@ -2909,6 +2926,63 @@ contains
       call BosonicKsum(PiGW)
       !
    end subroutine MergePolarization
+
+
+   !---------------------------------------------------------------------------!
+   !PURPOSE: Resize matrix between full product basis and just NaNb components
+   !---------------------------------------------------------------------------!
+   function product2NN(Mfull) result(Mnanb)
+      use parameters
+      implicit none
+      complex(8),intent(in)                 :: Mfull(:,:)
+      complex(8),allocatable                :: Mnanb(:,:)
+      integer                               :: Nbp,Norb
+      integer                               :: iorb,jorb,ib1,ib2
+      !
+      if(size(Mfull,dim=1).ne.size(Mfull,dim=2)) stop "product2NN: input matrix not square."
+      !
+      Nbp = size(Mfull,dim=1)
+      Norb = int(sqrt(dble(Nbp)))
+      allocate(Mnanb(Norb,Norb));Mnanb=czero
+      !
+      do iorb=1,Norb
+         do jorb=1,Norb
+            !
+            ib1 = iorb + Norb*(iorb-1)
+            ib2 = jorb + Norb*(jorb-1)
+            !
+            Mnanb(iorb,jorb) = Mfull(ib1,ib2)
+            !
+         enddo
+      enddo
+      !
+   end function product2NN
+   !
+   function NN2product(Mnanb) result(Mfull)
+      use parameters
+      implicit none
+      complex(8),intent(in)                 :: Mnanb(:,:)
+      complex(8),allocatable                :: Mfull(:,:)
+      integer                               :: Nbp,Norb
+      integer                               :: iorb,jorb,ib1,ib2
+      !
+      if(size(Mnanb,dim=1).ne.size(Mnanb,dim=2)) stop "NN2product: input matrix not square."
+      Norb = size(Mnanb,dim=1)
+      Nbp = Norb**2
+      allocate(Mfull(Nbp,Nbp));Mfull=czero
+      !
+      do iorb=1,Norb
+         do jorb=1,Norb
+            !
+            ib1 = iorb + Norb*(iorb-1)
+            ib2 = jorb + Norb*(jorb-1)
+            !
+            Mfull(ib1,ib2) = Mnanb(iorb,jorb)
+            !
+         enddo
+      enddo
+      !
+   end function NN2product
 
 
    !---------------------------------------------------------------------------!

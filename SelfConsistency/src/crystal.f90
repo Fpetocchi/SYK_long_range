@@ -3417,6 +3417,7 @@ contains
          endif
          !
       endif
+      if(associated(data))nullify(data)
       !
       !Print position of High-symmetry points in the same folder where the function is
       if(printout)then

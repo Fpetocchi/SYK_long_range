@@ -184,11 +184,13 @@ contains
       !
       if(Hmodel)HartreeFact=0d0
       !
-      causal_D = causal_D .and. (FirstIteration.ne.0)
-      causal_U = causal_U .and. (FirstIteration.ne.0)
-      !
       calc_Sguess = calc_Sguess .and. (FirstIteration.eq.0) .and. solve_DMFT
       calc_Pguess = calc_Pguess .and. (FirstIteration.eq.0) .and. solve_DMFT
+      !
+      Ustart = Ustart .and. (ItStart.eq.0) .and. (.not.calc_Pguess)
+      !
+      causal_D = causal_D .and. ((FirstIteration.ne.0).or.calc_Sguess)
+      causal_U = causal_U .and. ((FirstIteration.ne.0).or.calc_Pguess)
       !
       sym_constrained = ExpandImpurity .and. (reg(VH_type).ne."Ustatic")
       sym_constrained = ExpandImpurity .and. (reg(VH_type).ne."Ubare")
@@ -368,10 +370,6 @@ contains
             if(paramagnet)exit
          enddo
       endif
-      !
-      !Just to be sure
-      Ustart = Ustart .and. (ItStart.eq.0)
-      calc_Pguess = calc_Pguess .and. (.not.Ustart)
       !
       if((reg(path_funct).ne."G") .and. (reg(path_funct).ne."S") .and. (reg(path_funct).ne."GS") .and. (reg(path_funct).ne."None"))then
          write(*,"(A)")"     Invalid content of PATH_FUNCT. The calculation on the path will be avoided."
@@ -1369,9 +1367,8 @@ contains
          call read_Sigma_spex(SpexVersion,S_G0W0,Crystal,verbose,recompute=RecomputeG0W0,pathOUTPUT=reg(pathINPUTtr))
       endif
       !
-      !
+      !This has to be fixed because it works only for calculations with Wlat stored
       allocate(Uinst_0th(Crystal%Norb**2,Crystal%Norb**2));Uinst_0th=0d0
-      !
       if(Ustart)then
          Uinst_0th = dreal(Ulat%screened_local(:,:,1))
       else
@@ -1740,13 +1737,16 @@ contains
       !
    end subroutine calc_causality_Delta_correction
    !
-   subroutine calc_causality_curlyU_correction()
+   subroutine calc_causality_curlyU_correction(mode)
       !
       implicit none
-      integer                               :: iq,iw
+      character(len=*),intent(in)           :: mode
+      integer                               :: iq,iw,Norb
+      complex(8),allocatable                :: P(:,:),W(:,:)
       complex(8),allocatable                :: WP(:,:),PW(:,:),PWP(:,:)
       complex(8),allocatable                :: W_P(:,:),P_W(:,:)
       complex(8),allocatable                :: invWa(:,:),invWb(:,:)
+      complex(8),allocatable                :: Ucorr(:,:)
       !
       !
       write(*,"(A)") new_line("A")//new_line("A")//"---- calc_causality_curlyU_correction"
@@ -1756,6 +1756,135 @@ contains
       if(.not.Wlat%status) stop "calc_causality_curlyU_correction: Wlat not properly initialized."
       !
       call AllocateBosonicField(curlyU_correction,Crystal%Norb,Nmats,Crystal%iq_gamma,Beta=Beta,no_bare=.true.)
+      !
+      select case(reg(mode))
+         case default
+            !
+            stop "calc_causality_curlyU_correction: Available types are: curlyU, Ploc."
+            !
+         case("curlyU")
+            !
+            Norb = int(sqrt(dble(Plat%Nbp)))
+            allocate(P(Plat%Nbp,Plat%Nbp));P=czero
+            allocate(W(Plat%Nbp,Plat%Nbp));W=czero
+            allocate(WP(Plat%Nbp,Plat%Nbp));WP=czero
+            allocate(PW(Plat%Nbp,Plat%Nbp));PW=czero
+            allocate(PWP(Plat%Nbp,Plat%Nbp));PWP=czero
+            allocate(W_P(Plat%Nbp,Plat%Nbp));W_P=czero
+            allocate(P_W(Plat%Nbp,Plat%Nbp));P_W=czero
+            allocate(invWa(Plat%Nbp,Plat%Nbp));invWa=czero
+            allocate(invWb(Plat%Nbp,Plat%Nbp));invWb=czero
+            allocate(Ucorr(Plat%Nbp,Plat%Nbp));Ucorr=czero
+            !
+            !$OMP PARALLEL DEFAULT(PRIVATE),&
+            !$OMP SHARED(Plat,Wlat,curlyU_correction)
+            !$OMP DO
+            do iw=1,Plat%Npoints
+               !
+               WP=czero;PW=czero;PWP=czero
+               W_P=czero;P_W=czero
+               invWa=czero;invWb=czero;Ucorr=czero
+               !
+               do iq=1,Plat%Nkpt
+                  !
+                  P = Plat%screened(:,:,iw,iq)
+                  W = Wlat%screened(:,:,iw,iq)
+                  !
+                  WP = WP + matmul(W,P)/Plat%Nkpt
+                  PW = PW + matmul(P,W)/Plat%Nkpt
+                  PWP = PWP + matmul(P,matmul(W,P))/Plat%Nkpt
+                  !
+               enddo
+               !
+               P = Plat%screened_local(:,:,iw)
+               W = Wlat%screened_local(:,:,iw)
+               !
+               W_P = matmul(W,P)
+               P_W = matmul(P,W)
+               !
+               invWa = P + PWP
+               call inv(invWa)
+               !
+               invWb = P + matmul(P,matmul(W,P))
+               call inv(invWb)
+               !
+               ! Put toghether all the pieces. arxiv:2011.05311 Eq.22
+               Ucorr = matmul(PW,matmul(invWa,WP)) - matmul(P_W,matmul(invWb,W_P))
+               !
+               curlyU_correction%screened_local(:,:,iw) = Ucorr
+               !
+            enddo
+            !$OMP END DO
+            !$OMP END PARALLEL
+            deallocate(P,W,WP,PW,PWP,W_P,P_W,invWa,invWb,Ucorr)
+            !
+            call isReal(curlyU_correction)
+            do iw=1,curlyU_correction%Npoints
+               call check_Symmetry(curlyU_correction%screened_local(:,:,iw),1e7*eps,enforce=.true.,hardstop=.false.,name="curlyU_correction_w"//str(iw),verb=.true.)
+            enddo
+            !
+         case("Ploc")
+            !
+            allocate(WP(Plat%Nbp,Plat%Nbp));WP=czero
+            allocate(PW(Plat%Nbp,Plat%Nbp));PW=czero
+            allocate(PWP(Plat%Nbp,Plat%Nbp));PWP=czero
+            allocate(invWa(Plat%Nbp,Plat%Nbp));invWa=czero
+            !
+            !$OMP PARALLEL DEFAULT(PRIVATE),&
+            !$OMP SHARED(Plat,Wlat,curlyU_correction)
+            !$OMP DO
+            do iw=1,Plat%Npoints
+               !
+               WP=czero;PW=czero;PWP=czero;invWa=czero
+               !
+               do iq=1,Plat%Nkpt
+                  !
+                  WP = WP + matmul(Wlat%screened(:,:,iw,iq),Plat%screened(:,:,iw,iq))/Plat%Nkpt
+                  PW = PW + matmul(dag(Plat%screened(:,:,iw,iq)),Wlat%screened(:,:,iw,iq))/Plat%Nkpt
+                  PWP = PWP + matmul(dag(Plat%screened(:,:,iw,iq)),matmul(Wlat%screened(:,:,iw,iq),Plat%screened(:,:,iw,iq)))/Plat%Nkpt
+                  !
+               enddo
+               !
+               !This inversion is not possible for multi-orbital systems
+               invWa = Wlat%screened_local(:,:,iw)
+               call inv(invWa)
+               !
+               ! Put toghether all the pieces. Jiyu equation.
+               curlyU_correction%screened_local(:,:,iw) = + PWP - matmul(PW,matmul(invWa,WP))   &
+                                                          - matmul(PW,invWa) - matmul(invWa,WP) &
+                                                          + dag(Plat%screened_local(:,:,iw)) + Plat%screened_local(:,:,iw)
+               !
+            enddo
+            !$OMP END DO
+            !$OMP END PARALLEL
+            deallocate(WP,PW,PWP,invWa)
+            !
+      end select
+      !
+      call symmetrize_GW(curlyU_correction,EqvGWndx)
+      call dump_BosonicField(curlyU_correction,reg(ItFolder),"curlyU_correction_w.DAT")
+      !
+   end subroutine calc_causality_curlyU_correction
+   !
+   subroutine calc_causality_curlyU_correction_v1(mode)
+      !
+      implicit none
+      character(len=*),intent(in)           :: mode
+      integer                               :: iq,iw
+      complex(8),allocatable                :: P(:,:),WP(:,:),PW(:,:),PWP(:,:)
+      complex(8),allocatable                :: W_P(:,:),P_W(:,:)
+      complex(8),allocatable                :: invWa(:,:),invWb(:,:)
+      !type(physicalU)                       :: PhysicalUelements
+      !
+      !
+      write(*,"(A)") new_line("A")//new_line("A")//"---- calc_causality_curlyU_correction"
+      !
+      !
+      if(.not.Plat%status) stop "calc_causality_curlyU_correction: Plat not properly initialized."
+      if(.not.Wlat%status) stop "calc_causality_curlyU_correction: Wlat not properly initialized."
+      !
+      call AllocateBosonicField(curlyU_correction,Crystal%Norb,Nmats,Crystal%iq_gamma,Beta=Beta,no_bare=.true.)
+      allocate(P(Plat%Nbp,Plat%Nbp));P=czero
       allocate(WP(Plat%Nbp,Plat%Nbp));WP=czero
       allocate(PW(Plat%Nbp,Plat%Nbp));PW=czero
       allocate(PWP(Plat%Nbp,Plat%Nbp));PWP=czero
@@ -1764,46 +1893,96 @@ contains
       allocate(invWa(Plat%Nbp,Plat%Nbp));invWa=czero
       allocate(invWb(Plat%Nbp,Plat%Nbp));invWb=czero
       !
-      !$OMP PARALLEL DEFAULT(NONE),&
-      !$OMP SHARED(Plat,Wlat,curlyU_correction),&
-      !$OMP PRIVATE(iw,iq,WP,PW,PWP,W_P,P_W,invWa,invWb)
-      !$OMP DO
-      do iw=1,Plat%Npoints
-         !
-         WP=czero;PW=czero;PWP=czero
-         !
-         do iq=1,Plat%Nkpt
+      !call init_Uelements(int(sqrt(dble(Plat%Nbp))),PhysicalUelements)
+      !
+      select case(reg(mode))
+         case default
             !
-            WP = WP + matmul(Wlat%screened(:,:,iw,iq),Plat%screened(:,:,iw,iq))/Plat%Nkpt
-            PW = PW + matmul(Plat%screened(:,:,iw,iq),Wlat%screened(:,:,iw,iq))/Plat%Nkpt
-            PWP = PWP + matmul(Plat%screened(:,:,iw,iq),matmul(Wlat%screened(:,:,iw,iq),Plat%screened(:,:,iw,iq)))/Plat%Nkpt
+            stop "calc_causality_curlyU_correction: Available types are: curlyU, Ploc."
             !
-         enddo
-         !
-         W_P=czero;P_W=czero
-         W_P = matmul(Wlat%screened_local(:,:,iw),Plat%screened_local(:,:,iw))
-         P_W = matmul(Plat%screened_local(:,:,iw),Wlat%screened_local(:,:,iw))
-         !
-         invWa=czero
-         invWa = Plat%screened_local(:,:,iw) + PWP
-         call inv(invWa)
-         !
-         invWb=czero
-         invWb = Plat%screened_local(:,:,iw) + matmul(Plat%screened_local(:,:,iw),matmul(Wlat%screened_local(:,:,iw),Plat%screened_local(:,:,iw)))
-         call inv(invWb)
-         !
-         ! Put toghether all the pieces. arxiv:2011.05311 Eq.22
-         curlyU_correction%screened_local(:,:,iw) = + matmul(PW,matmul(invWa,WP)) - matmul(P_W,matmul(invWb,W_P))
-         !
-      enddo
-      !$OMP END DO
-      !$OMP END PARALLEL
-      deallocate(WP,PW,PWP,W_P,P_W,invWa,invWb)
+         case("curlyU")
+            !
+            !$OMP PARALLEL DEFAULT(NONE),&
+            !$OMP SHARED(Plat,Wlat,curlyU_correction),&
+            !$OMP PRIVATE(iw,iq,P,WP,PW,PWP,W_P,P_W,invWa,invWb)
+            !$OMP DO
+            do iw=1,Plat%Npoints
+               !
+               WP=czero;PW=czero;PWP=czero;invWa=czero
+               W_P=czero;P_W=czero;invWb=czero;P=czero
+               !
+               do iq=1,Plat%Nkpt
+                  !
+                  P = Plat%screened(:,:,iw,iq)
+                  !call clear_MatrixElements(P,PhysicalUelements%Full_Imp)
+                  !
+                  WP = WP + matmul(Wlat%screened(:,:,iw,iq),Plat%screened(:,:,iw,iq))/Plat%Nkpt
+                  PW = PW + matmul(Plat%screened(:,:,iw,iq),Wlat%screened(:,:,iw,iq))/Plat%Nkpt
+                  PWP = PWP + matmul(Plat%screened(:,:,iw,iq),matmul(Wlat%screened(:,:,iw,iq),Plat%screened(:,:,iw,iq)))/Plat%Nkpt
+                  !
+               enddo
+               !
+               P = Plat%screened_local(:,:,iw)
+               !call clear_MatrixElements(P,PhysicalUelements%Full_Imp)
+               !
+               W_P = matmul(Wlat%screened_local(:,:,iw),P)
+               P_W = matmul(P,Wlat%screened_local(:,:,iw))
+               !
+               invWa = P + PWP
+               call inv(invWa)
+               !
+               invWb = P + matmul(P,matmul(Wlat%screened_local(:,:,iw),P))
+               call inv(invWb)
+               !
+               ! Put toghether all the pieces. arxiv:2011.05311 Eq.22
+               curlyU_correction%screened_local(:,:,iw) = + matmul(PW,matmul(invWa,WP)) - matmul(P_W,matmul(invWb,W_P))
+               !
+            enddo
+            !$OMP END DO
+            !$OMP END PARALLEL
+            !
+            call isReal(curlyU_correction)
+            do iw=1,curlyU_correction%Npoints
+               call check_Symmetry(curlyU_correction%screened_local(:,:,iw),1e7*eps,enforce=.true.,hardstop=.false.,name="curlyU_correction_w"//str(iw),verb=.true.)
+            enddo
+            !
+         case("Ploc")
+            !
+            !$OMP PARALLEL DEFAULT(NONE),&
+            !$OMP SHARED(Plat,Wlat,curlyU_correction),&
+            !$OMP PRIVATE(iw,iq,WP,PW,PWP,W_P,P_W,invWa,invWb)
+            !$OMP DO
+            do iw=1,Plat%Npoints
+               !
+               WP=czero;PW=czero;PWP=czero;invWa=czero
+               !
+               do iq=1,Plat%Nkpt
+                  !
+                  WP = WP + matmul(Wlat%screened(:,:,iw,iq),Plat%screened(:,:,iw,iq))/Plat%Nkpt
+                  PW = PW + matmul(dag(Plat%screened(:,:,iw,iq)),Wlat%screened(:,:,iw,iq))/Plat%Nkpt
+                  PWP = PWP + matmul(dag(Plat%screened(:,:,iw,iq)),matmul(Wlat%screened(:,:,iw,iq),Plat%screened(:,:,iw,iq)))/Plat%Nkpt
+                  !
+               enddo
+               !
+               invWa = Wlat%screened_local(:,:,iw)
+               call inv(invWa)
+               !
+               ! Put toghether all the pieces. Jiyu equation.
+               curlyU_correction%screened_local(:,:,iw) = + PWP - matmul(PW,matmul(invWa,WP))   &
+                                                          - matmul(PW,invWa) - matmul(invWa,WP) &
+                                                          + dag(Plat%screened_local(:,:,iw)) + Plat%screened_local(:,:,iw)
+               !
+            enddo
+            !$OMP END DO
+            !$OMP END PARALLEL
+            !
+      end select
+      deallocate(P,WP,PW,PWP,W_P,P_W,invWa,invWb)
       !
       call symmetrize_GW(curlyU_correction,EqvGWndx)
       call dump_BosonicField(curlyU_correction,reg(ItFolder),"curlyU_correction_w.DAT")
       !
-   end subroutine calc_causality_curlyU_correction
+   end subroutine calc_causality_curlyU_correction_v1
 
 
    !---------------------------------------------------------------------------!
@@ -1820,7 +1999,7 @@ contains
       type(FermionicField)                  :: SigmaImp
       type(FermionicField)                  :: DeltaCorr
       type(FermionicField)                  :: FermiPrint
-      type(FermionicField)                  :: DeltaOld
+      type(FermionicField)                  :: DeltaOld,DeltaSym
       integer                               :: Norb,Nflavor,unit
       integer                               :: ispin,iw,iwan,itau,ndx,wndx
       integer,allocatable                   :: Orbs(:)
@@ -1879,12 +2058,6 @@ contains
          if(causal_D)call loc2imp(DeltaCorr,D_correction,Orbs,U=Rot)
          deallocate(Rot)
          !
-         if(sym_mode.gt.1)then
-            call symmetrize_imp(Gloc,OlocEig(:,isite))
-            call symmetrize_imp(SigmaImp,OlocEig(:,isite))
-            if(causal_D)call symmetrize_imp(DeltaCorr,OlocEig(:,isite))
-         endif
-         !
       else
          !
          call loc2imp(Gloc,Glat,Orbs)
@@ -1901,7 +2074,7 @@ contains
       call dump_FermionicField(SigmaImp,reg(ItFolder)//"Solver_"//reg(SiteName(isite))//"/","S_"//reg(SiteName(isite))//"_w",paramagnet)
       if(causal_D)call dump_FermionicField(DeltaCorr,reg(ItFolder)//"Solver_"//reg(SiteName(isite))//"/","D_correction_"//reg(SiteName(isite))//"_w",paramagnet)
       !
-      !Compute the fermionic Weiss field aka the inverse of CurlyG
+      !Compute the fermionic Weiss field invCurlyG
       allocate(invG(Norb,Norb));invG=czero
       do ispin=1,Nspin
          do iw=1,Nmats
@@ -1959,6 +2132,11 @@ contains
       end select
       deallocate(Dfit)
       !
+      if(EqvGWndx%para.eq.1)then
+         Eloc(:,1) = (Eloc(:,1) + Eloc(:,2))/2d0
+         Eloc(:,2) = Eloc(:,1)
+      endif
+      !
       !Compute Delta on matsubara
       allocate(Dmats(Norb,Nmats,Nspin));Dmats=czero
       do ispin=1,Nspin
@@ -1968,7 +2146,7 @@ contains
                Dmats(iwan,iw,ispin) = dcmplx( Glat%mu , wmats(iw) ) - Eloc(iwan,ispin) - invCurlyG(iwan,iw,ispin)
             enddo
             !
-            !Additional correction
+            !Additional correction - maybe useless
             if(dreal(Dmats(iwan,Nmats,ispin))*real(Dmats(iwan,Nmats-1,ispin)).lt.0d0)then
                tailShift = real(Dmats(iwan,Nmats,ispin)) + (Dmats(iwan,Nmats,ispin)-Dmats(iwan,Nmats-1,ispin))*2d0
                write(*,"(A,E13.3)")"     Additional Eloc shift orb: "//str(iwan)//" spin: "//str(ispin),tailShift
@@ -2009,12 +2187,26 @@ contains
          !
       endif
       !
-      !Spin symmetrization for paramagnetic calculations
-      if(EqvGWndx%S)then
+      !Symmetrizations - If sets are defined Delta is always symmetrized
+      if(sym_mode.gt.0)then
+         call AllocateFermionicField(DeltaSym,Norb,Nmats,Beta=Beta)
+         do iwan=1,Norb
+            DeltaSym%ws(iwan,iwan,:,:) = Dmats(iwan,:,:)
+         enddo
+         if(RotateHloc)then
+            call symmetrize_imp(DeltaSym,OlocEig(:,isite))
+            if(causal_D)call symmetrize_imp(DeltaCorr,OlocEig(:,isite))
+         else
+            call symmetrize_GW(DeltaSym,EqvGWndx,override=.true.)
+            if(causal_D)call symmetrize_GW(DeltaCorr,EqvGWndx,override=.true.)
+         endif
+         do iwan=1,Norb
+            Dmats(iwan,:,:) = DeltaSym%ws(iwan,iwan,:,:)
+         enddo
+         call DeallocateFermionicField(DeltaSym)
+      elseif(EqvGWndx%para.eq.1)then
          Dmats(:,:,1) = (Dmats(:,:,1) + Dmats(:,:,2))/2d0
          Dmats(:,:,2) = Dmats(:,:,1)
-         Eloc(:,1) = (Eloc(:,1) + Eloc(:,2))/2d0
-         Eloc(:,2) = Eloc(:,1)
       endif
       !
       !Fourier transform to the tau axis
@@ -2051,8 +2243,8 @@ contains
          enddo
       enddo
       !
-      !Eloc and chemical potential
-      if(any(SiteCF(isite,:).ne.0d0))then
+      !Write Eloc and chemical potential
+      if(addCF)then
          file = reg(ItFolder)//"Solver_"//reg(SiteName(isite))//"/Eloc_noCF.DAT"
          unit = free_unit()
          open(unit,file=reg(file),form="formatted",status="unknown",position="rewind",action="write")
@@ -2068,12 +2260,12 @@ contains
       write(unit,"(1E20.12)") Glat%mu
       CrystalField=0d0
       do iwan=1,Norb
-         if(iwan.gt.1)CrystalField=SiteCF(isite,iwan-1)
+         if(addCF)CrystalField=SiteCF(isite,iwan)
          write(unit,"(2E20.12)") ((Eloc(iwan,ispin)+(-1d0**mod(ispin,2))*EqvGWndx%hseed+CrystalField),ispin=1,Nspin)!,Eloc(iwan,2)-EqvGWndx%hseed+CrystalField
       enddo
       close(unit)
       !
-      !Delta(tau)
+      !Write Delta(tau)
       allocate(tau(Solver%NtauF));tau=0d0
       tau = linspace(0d0,Beta,Solver%NtauF)
       allocate(PrintLine(Nflavor))
@@ -2279,7 +2471,7 @@ contains
                !
                if(causal_U)then
                   call loc2imp(curlyUcorr,curlyU_correction,Orbs)
-                  call calc_curlyU(curlyU,Wloc,Pimp,curlyUcorr=curlyUcorr)
+                  call calc_curlyU(curlyU,Wloc,Pimp,curlyUcorr=curlyUcorr,mode=reg(causal_U_type))
                else
                   call calc_curlyU(curlyU,Wloc,Pimp)
                endif
@@ -3350,3 +3542,89 @@ contains
 
 
 end module utils_main
+
+
+
+
+
+
+!subroutine calc_causality_curlyU_correction_test()
+!   !
+!   implicit none
+!   integer                               :: iq,iw
+!   complex(8),allocatable                :: WP(:,:),PW(:,:),PWP(:,:)
+!   complex(8),allocatable                :: W_P(:,:),P_W(:,:)
+!   complex(8),allocatable                :: invWa(:,:),invWb(:,:)
+!   integer                               :: Nkpt3_dense(3)
+!   real(8),allocatable                   :: kpt_dense(:,:)
+!   complex(8),allocatable                :: Plat_intp(:,:,:),Wlat_intp(:,:,:)
+!   !
+!   !
+!   write(*,"(A)") new_line("A")//new_line("A")//"---- calc_causality_curlyU_correction"
+!   !
+!   !
+!   if(.not.Plat%status) stop "calc_causality_curlyU_correction: Plat not properly initialized."
+!   if(.not.Wlat%status) stop "calc_causality_curlyU_correction: Wlat not properly initialized."
+!   !
+!   call AllocateBosonicField(curlyU_correction,Crystal%Norb,Nmats,Crystal%iq_gamma,Beta=Beta,no_bare=.true.)
+!   allocate(WP(Plat%Nbp,Plat%Nbp));WP=czero
+!   allocate(PW(Plat%Nbp,Plat%Nbp));PW=czero
+!   allocate(PWP(Plat%Nbp,Plat%Nbp));PWP=czero
+!   allocate(W_P(Plat%Nbp,Plat%Nbp));W_P=czero
+!   allocate(P_W(Plat%Nbp,Plat%Nbp));P_W=czero
+!   allocate(invWa(Plat%Nbp,Plat%Nbp));invWa=czero
+!   allocate(invWb(Plat%Nbp,Plat%Nbp));invWb=czero
+!   !
+!   Nkpt3_dense = 2*Crystal%Nkpt3
+!   call build_kpt(Nkpt3_dense,kpt_dense)
+!   allocate(Plat_intp(Plat%Nbp,Plat%Nbp,product(Nkpt3_dense)));Plat_intp=czero
+!   allocate(Wlat_intp(Wlat%Nbp,Wlat%Nbp,product(Nkpt3_dense)));Wlat_intp=czero
+!   !
+!   do iw=1,Plat%Npoints
+!      !
+!      write(*,*)iw,Plat%Npoints
+!      call wannierinterpolation(Crystal%Nkpt3,Crystal%kpt,kpt_dense,Plat%screened(:,:,iw,:),Plat_intp)
+!      call wannierinterpolation(Crystal%Nkpt3,Crystal%kpt,kpt_dense,Wlat%screened(:,:,iw,:),Wlat_intp)
+!      !
+!      !$OMP PARALLEL DEFAULT(NONE),&
+!      !$OMP SHARED(iw,Plat,Wlat,curlyU_correction,Plat_intp,Wlat_intp,Nkpt3_dense),&
+!      !$OMP PRIVATE(iq,WP,PW,PWP,W_P,P_W,invWa,invWb)
+!      !
+!      WP=czero;PW=czero;PWP=czero
+!      !
+!      !$OMP DO
+!      do iq=1,product(Nkpt3_dense)
+!         !
+!         WP = WP + matmul(Wlat_intp(:,:,iq),Plat_intp(:,:,iq))/product(Nkpt3_dense)
+!         PW = PW + matmul(Plat_intp(:,:,iq),Wlat_intp(:,:,iq))/product(Nkpt3_dense)
+!         PWP = PWP + matmul(Plat_intp(:,:,iq),matmul(Wlat_intp(:,:,iq),Plat_intp(:,:,iq)))/product(Nkpt3_dense)
+!         !
+!      enddo
+!      !$OMP END DO
+!      !
+!      W_P=czero;P_W=czero
+!      W_P = matmul(Wlat%screened_local(:,:,iw),Plat%screened_local(:,:,iw))
+!      P_W = matmul(Plat%screened_local(:,:,iw),Wlat%screened_local(:,:,iw))
+!      !
+!      invWa=czero
+!      invWa = Plat%screened_local(:,:,iw) + PWP
+!      call inv(invWa)
+!      !
+!      invWb=czero
+!      invWb = Plat%screened_local(:,:,iw) + matmul(Plat%screened_local(:,:,iw),matmul(Wlat%screened_local(:,:,iw),Plat%screened_local(:,:,iw)))
+!      call inv(invWb)
+!      !
+!      ! Put toghether all the pieces. arxiv:2011.05311 Eq.22
+!      curlyU_correction%screened_local(:,:,iw) = + matmul(PW,matmul(invWa,WP)) - matmul(P_W,matmul(invWb,W_P))
+!      !
+!      !$OMP END PARALLEL
+!      !
+!   enddo
+!   !
+!   deallocate(Plat_intp,Wlat_intp,kpt_dense)
+!   deallocate(WP,PW,PWP,W_P,P_W,invWa,invWb)
+!   !
+!   call symmetrize_GW(curlyU_correction,EqvGWndx)
+!   call dump_BosonicField(curlyU_correction,reg(ItFolder),"curlyU_correction_w.DAT")
+!   !
+!end subroutine calc_causality_curlyU_correction_test

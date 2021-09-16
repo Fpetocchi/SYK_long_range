@@ -104,7 +104,7 @@ subroutine interpolateG2Path(Sfull,Lttc,pathOUTPUT)
    select case(reg(CalculationType))
       case default
          !
-         stop "Available Calculation types are: G0W0, scGW, DMFT+statU, DMFT+dynU, EDMFT, GW+EDMFT."
+         stop "interpolateG2Path: Available Calculation types are: G0W0, scGW, DMFT+statU, DMFT+dynU, EDMFT, GW+EDMFT."
          !
       case("G0W0","scGW","GW+EDMFT")
          !

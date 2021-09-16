@@ -419,8 +419,12 @@ contains
       Gmats%N_ks = n_k
       deallocate(n_k)
       !
-      ! In the N_s the local density
-      if(.not.(along_path_.or.along_plane_))call FermionicKsum(Gmats)
+      ! Fill the local attributes
+      if(.not.(along_path_.or.along_plane_))then
+         call FermionicKsum(Gmats)
+         !this is more accurate than summing G(beta) at each k-point
+         call calc_density_loc(Gmats,Gmats%N_s)
+      endif
       !
    end subroutine calc_Gmats_Full
 
@@ -504,8 +508,10 @@ contains
       Gmats%N_ks = n_k
       deallocate(n_k)
       !
-      ! In the N_s the local density
+      ! Fill the local attributes
       call FermionicKsum(Gmats)
+      !this is more accurate than summing G(beta) at each k-point
+      call calc_density_loc(Gmats,Gmats%N_s)
       !
    end subroutine calc_Gmats_Shift
 
