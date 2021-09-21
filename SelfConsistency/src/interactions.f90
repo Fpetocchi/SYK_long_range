@@ -816,7 +816,7 @@ contains
             !
             write(*,"(A,F)") "     UcRPA(q,w) --> UcRPA(q,iw) cpu timing: ", finish-start
             !
-            ! Remove unwanted components
+            !Remove unwanted components
             if(.not.UfullStructure)then
                do ib1=1,Nbp_spex
                   do ib2=1,Nbp_spex
@@ -1875,7 +1875,7 @@ contains
          enddo
       endif
       !
-      ! go to K-space
+      !FT to K-space
       allocate(U_K(Nbp,Nbp,Lttc%Nkpt));U_K=czero
       call wannier_R2K(Lttc%Nkpt3,Lttc%kpt,U_R,U_K)
       deallocate(U_R,Rorder,Rsorted)
@@ -2073,7 +2073,7 @@ contains
          enddo
       endif
       !
-      ! go to K-space
+      !FT to K-space
       allocate(U_K(Nbp,Nbp,Lttc%Nkpt));U_K=czero
       call wannier_R2K(Lttc%Nkpt3,Lttc%kpt,U_R,U_K)
       deallocate(U_R,Rorder,Rsorted)

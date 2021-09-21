@@ -834,7 +834,7 @@ contains
                   write(unit,"(1I7,1E20.12)") iaxis,axis_(iaxis)
                   do iwan1=1,Norb
                      do iwan2=1,Norb
-                        write(unit,"(2I4,2E20.12)") iwan1,iwan2,dreal(G%wks(iwan1,iwan2,iaxis,ik,ispin)),dimag(G%wks(iwan1,iwan2,iaxis,ik,ispin))
+                        write(unit,"(1E20.12,2I4,2E20.12)") axis_(iaxis),iwan1,iwan2,dreal(G%wks(iwan1,iwan2,iaxis,ik,ispin)),dimag(G%wks(iwan1,iwan2,iaxis,ik,ispin))
                      enddo
                   enddo
                enddo !iaxis
@@ -1238,8 +1238,6 @@ contains
             close(unit)
             !
          else
-            !
-            if((iq.gt.1).and.mod(iq,251).ne.0)cycle
             !
             printpath = reg(dirpath)//"VW.Q"//str(iq,4)//".DAT"
             write(*,"(A)") "     Dump "//reg(printpath)//" (readable)"

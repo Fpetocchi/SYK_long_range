@@ -141,28 +141,56 @@ contains
    !---------------------------------------------------------------------------!
    !PURPOSE: Creates the bosonic/fermionic Matsubara frequancy mesh
    !---------------------------------------------------------------------------!
-   function FermionicFreqMesh(Beta,Nfreq) result(wmats)
+   function FermionicFreqMesh(Beta,Nfreq,full) result(wmats)
       implicit none
       real(8),intent(in)                    :: Beta
       integer,intent(in)                    :: Nfreq
+      logical,intent(in),optional           :: full
       real(8),dimension(Nfreq)              :: wmats
-      integer                               :: iw
+      integer                               :: iw,Npos
+      logical                               :: full_
       !
-      do iw=1,Nfreq
-         wmats(iw)=(2d0*dble(iw-1)+1d0)*pi/Beta
-      enddo
+      full_=.false.
+      if(present(full))full_=full
+      !
+      wmats=0d0
+      if(full_)then
+         Npos = (Nfreq-1)/2
+         do iw=1,Npos
+            wmats(iw+Npos+1)=(2d0*dble(iw-1)+1d0)*pi/Beta
+            wmats(Npos+1-iw)=-wmats(iw+Npos+1)
+         enddo
+      else
+         do iw=1,Nfreq
+            wmats(iw)=(2d0*dble(iw-1)+1d0)*pi/Beta
+         enddo
+      endif
       !
    end function FermionicFreqMesh
-   function BosonicFreqMesh(Beta,Nfreq) result(wmats)
+   function BosonicFreqMesh(Beta,Nfreq,full) result(wmats)
       implicit none
       real(8),intent(in)                    :: Beta
       integer,intent(in)                    :: Nfreq
+      logical,intent(in),optional           :: full
       real(8),dimension(Nfreq)              :: wmats
-      integer                               :: iw
+      integer                               :: iw,Npos
+      logical                               :: full_
       !
-      do iw=1,Nfreq
-         wmats(iw)=2d0*dble(iw-1)*pi/Beta
-      enddo
+      full_=.false.
+      if(present(full))full_=full
+      !
+      wmats=0d0
+      if(full_)then
+         Npos = (Nfreq-1)/2
+         do iw=1,Npos
+            wmats(iw+Npos+1)=2d0*dble(iw)*pi/Beta
+            wmats(Npos+1-iw)=-wmats(iw+Npos+1)
+         enddo
+      else
+         do iw=1,Nfreq
+            wmats(iw)=2d0*dble(iw-1)*pi/Beta
+         enddo
+      endif
       !
    end function BosonicFreqMesh
 

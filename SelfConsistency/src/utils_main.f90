@@ -1076,6 +1076,7 @@ contains
             call AllocateBosonicField(Plat,Crystal%Norb,Nmats,Crystal%iq_gamma,Nkpt=Crystal%Nkpt,Nsite=Nsite,no_bare=.true.,Beta=Beta)
             !
             !Lattice Gf
+            call AllocateFermionicField(Glat,Crystal%Norb,Nmats,Nkpt=Crystal%Nkpt,Nsite=Nsite,Beta=Beta)
             if(ItStart.ne.0)then
                call read_FermionicField(Glat,reg(PrevItFolder),"Glat_w",Crystal%kpt)
                if(look4dens%TargetDensity.eq.0d0) Glat%mu = look4dens%mu
@@ -2411,32 +2412,26 @@ contains
          case("DMFT+statU")
             !
             call loc2imp(curlyU,Ulat,Orbs)
-            call isReal(curlyU)
-            call clear_MatrixElements(curlyU,PhysicalUelements%Full_All)
             !
             if(RotateUloc)then
                allocate(Rot(Norb,Norb)); Rot=OlocRot(1:Norb,1:Norb,isite)
                call TransformBosonicField(curlyU,Rot,PhysicalUelements%Full_Map)
                deallocate(Rot)
-               call isReal(curlyU)
-               call clear_MatrixElements(curlyU,PhysicalUelements%Full_All)
             endif
+            call isReal(curlyU)
             !
             call calc_QMCinteractions(curlyU,Uinst)
             !
          case("DMFT+dynU")
             !
             call loc2imp(curlyU,Ulat,Orbs)
-            call isReal(curlyU)
-            call clear_MatrixElements(curlyU,PhysicalUelements%Full_All)
             !
             if(RotateUloc)then
                allocate(Rot(Norb,Norb)); Rot=OlocRot(1:Norb,1:Norb,isite)
                call TransformBosonicField(curlyU,Rot,PhysicalUelements%Full_Map)
                deallocate(Rot)
-               call isReal(curlyU)
-               call clear_MatrixElements(curlyU,PhysicalUelements%Full_All)
             endif
+            call isReal(curlyU)
             !
             allocate(Kfunct(Nflavor,Nflavor,Solver%NtauB));Kfunct=0d0
             call calc_QMCinteractions(curlyU,Uinst,Kfunct)
@@ -2447,57 +2442,47 @@ contains
                !
                write(*,"(A)") "     Using local Ucrpa as effective interaction."
                call loc2imp(curlyU,Ulat,Orbs)
-               call isReal(curlyU)
-               call clear_MatrixElements(curlyU,PhysicalUelements%Full_All)
                !
                if(RotateUloc)then
-                  call dump_BosonicField(curlyU,reg(ItFolder)//"Solver_"//reg(SiteName(isite))//"/","curlyU_notRot_"//reg(SiteName(isite))//"_w.DAT") !remove is the same of curlyU_EDMFT
                   allocate(Rot(Norb,Norb)); Rot=OlocRot(1:Norb,1:Norb,isite)
                   call TransformBosonicField(curlyU,Rot,PhysicalUelements%Full_Map)
                   deallocate(Rot)
-                  call isReal(curlyU)
-                  call clear_MatrixElements(curlyU,PhysicalUelements%Full_All)
                endif
+               call isReal(curlyU)
                !
             else
                !
                write(*,"(A)") "     Computing the local effective interaction."
                call AllocateBosonicField(Pimp,Norb,Nmats,Crystal%iq_gamma,no_bare=.true.,Beta=Beta)
                call AllocateBosonicField(Wloc,Norb,Nmats,Crystal%iq_gamma,Beta=Beta)
-               if(causal_U)call AllocateBosonicField(curlyUcorr,Norb,Nmats,Crystal%iq_gamma,Beta=Beta,no_bare=.true.)
                !
                call loc2imp(Pimp,P_EDMFT,Orbs)
                call loc2imp(Wloc,Wlat,Orbs)
                !
                if(causal_U)then
+                  call AllocateBosonicField(curlyUcorr,Norb,Nmats,Crystal%iq_gamma,Beta=Beta,no_bare=.true.)
                   call loc2imp(curlyUcorr,curlyU_correction,Orbs)
                   call calc_curlyU(curlyU,Wloc,Pimp,curlyUcorr=curlyUcorr,mode=reg(causal_U_type))
                else
                   call calc_curlyU(curlyU,Wloc,Pimp)
                endif
-               call isReal(curlyU)
-               call clear_MatrixElements(curlyU,PhysicalUelements%Full_All)
-               if(causal_U)call clear_MatrixElements(curlyUcorr,PhysicalUelements%Full_All)
                !
                if(RotateUloc)then
-                  call dump_BosonicField(curlyU,reg(ItFolder)//"Solver_"//reg(SiteName(isite))//"/","curlyU_notRot_"//reg(SiteName(isite))//"_w.DAT") !remove is the same of curlyU_EDMFT
                   allocate(Rot(Norb,Norb)); Rot=OlocRot(1:Norb,1:Norb,isite)
                   call TransformBosonicField(curlyU,Rot,PhysicalUelements%Full_Map)
-                  if(causal_U)call TransformBosonicField(curlyUcorr,Rot,PhysicalUelements%Full_Map)
+                  if(causal_U)then
+                     call TransformBosonicField(curlyUcorr,Rot,PhysicalUelements%Full_Map)
+                     call dump_BosonicField(curlyUcorr,reg(ItFolder)//"Solver_"//reg(SiteName(isite))//"/","curlyU_correction_"//reg(SiteName(isite))//"_w.DAT")
+                  endif
                   deallocate(Rot)
-                  call isReal(curlyU)
-                  call clear_MatrixElements(curlyU,PhysicalUelements%Full_All)
                endif
                !
-               if(causal_U)then
-                  call dump_BosonicField(curlyUcorr,reg(ItFolder)//"Solver_"//reg(SiteName(isite))//"/","curlyU_correction_"//reg(SiteName(isite))//"_w.DAT")
-                  call DeallocateBosonicField(curlyUcorr)
-               endif
-               !
+               call DeallocateBosonicField(curlyUcorr)
                call DeallocateBosonicField(Pimp)
                call DeallocateBosonicField(Wloc)
                !
             endif
+            call isReal(curlyU)
             !
             !Mixing curlyU
             if((Mixing_curlyU.gt.0d0).and.(Iteration.gt.0))then

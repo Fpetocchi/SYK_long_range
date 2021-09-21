@@ -403,7 +403,7 @@ contains
          if(atBeta_.and.(itau.ne.Ntau))cycle
          do iw=1,Nmats
             !
-            ! Gab(iw) = Gba*(-iwn) --> Gab(iw) = Gba*(-iwn)
+            !Gab(-iw) = Gba*(iwn)
             Ge = Gmats(:,:,iw) + transpose(conjg(Gmats(:,:,iw)))
             Go = Gmats(:,:,iw) - transpose(conjg(Gmats(:,:,iw)))
             !
@@ -508,7 +508,7 @@ contains
       allocate(Ge(Norb,Norb));Ge=czero
       allocate(Go(Norb,Norb));Go=czero
       !$OMP PARALLEL DEFAULT(NONE),&
-      !$OMP SHARED(atBeta_,Ndat,Ntau,Nmats,coswt,sinwt,Gft_in,Gft_out),&
+      !$OMP SHARED(atBeta_,Ndat,Ntau,Nmats,coswt,sinwt,Gft_in,Gft_out,real_space),&
       !$OMP PRIVATE(idat,itau,iw,Ge,Go)
       !$OMP DO
       do itau=1,Ntau
@@ -516,9 +516,15 @@ contains
          do idat=1,Ndat
             do iw=1,Nmats
                !
-               ! Gab(iw) = Gba*(-iwn) --> Gab(iw) = Gba*(-iwn)
-               Ge = Gft_in(:,:,iw,idat) + transpose(conjg(Gft_in(:,:,iw,idat)))
-               Go = Gft_in(:,:,iw,idat) - transpose(conjg(Gft_in(:,:,iw,idat)))
+               if(real_space)then
+                  !Gab(-iw) = Gab*(iwn)
+                  Ge = Gft_in(:,:,iw,idat) + conjg(Gft_in(:,:,iw,idat))
+                  Go = Gft_in(:,:,iw,idat) - conjg(Gft_in(:,:,iw,idat))
+               else
+                  !Gab(-iw) = Gba*(iwn)
+                  Ge = Gft_in(:,:,iw,idat) + transpose(conjg(Gft_in(:,:,iw,idat)))
+                  Go = Gft_in(:,:,iw,idat) - transpose(conjg(Gft_in(:,:,iw,idat)))
+               endif
                !
                Gft_out(:,:,itau,idat) = Gft_out(:,:,itau,idat) + coswt(iw,itau)*Ge -dcmplx(0d0,1d0)*sinwt(iw,itau)*Go
                !
@@ -603,7 +609,7 @@ contains
          if(atBeta_.and.(itau.ne.Ntau))cycle
          do iw=1,Nmats
             !
-            ! Gab(iw) = Gba*(-iwn) --> Gab(-iw) = Gba*(iwn)
+            !Gaa(-iw) = Gaa*(iwn)
             Ge = Gmats(:,iw) + conjg(Gmats(:,iw))
             Go = Gmats(:,iw) - conjg(Gmats(:,iw))
             !
@@ -715,7 +721,7 @@ contains
          do idat=1,Ndat
             do iw=1,Nmats
                !
-               ! Gab(iw) = Gba*(-iwn) --> Gab(-iw) = Gba*(iwn)
+               !Gaa(-iw) = Gaa*(iwn)
                Ge = Gft_in(:,iw,idat) + conjg(Gft_in(:,iw,idat))
                Go = Gft_in(:,iw,idat) - conjg(Gft_in(:,iw,idat))
                !

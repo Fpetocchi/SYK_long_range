@@ -186,7 +186,8 @@ contains
       use crystal
       use fourier_transforms
       use file_io
-      use input_vars, only : Ntau, tau_uniform, cmplxWann, UfullStructure, paramagnet
+      use input_vars, only : Ntau, tau_uniform, cmplxWann
+      use input_vars, only : wmatsMax, paramagnet
       implicit none
       !
       type(BosonicField),intent(inout)      :: Pout
@@ -195,7 +196,6 @@ contains
       logical,intent(in),optional           :: tau_output
       logical,intent(in),optional           :: sym
       !
-      type(physicalU)                       :: PhysicalUelements
       complex(8),allocatable                :: Gitau(:,:,:,:,:)
       complex(8),allocatable                :: Pq_tau(:,:,:)
       real(8),allocatable                   :: tau(:)
@@ -205,6 +205,7 @@ contains
       integer                               :: i,j,k,l,ib1,ib2
       logical                               :: tau_output_,sym_
       real                                  :: start,finish
+      !type(FermionicField)                 :: Gitau                            !For testing
       !
       !
       write(*,"(A)") new_line("A")//new_line("A")//"---- calc_Pi_scGG"
@@ -293,13 +294,13 @@ contains
          !
          Pq_tau=czero
          !$OMP PARALLEL DEFAULT(NONE),&
-         !$OMP SHARED(iq,Ntau_,Nkpt,Norb,tau,Lttc,Gitau,Pq_tau,UfullStructure,PhysicalUelements),&
+         !$OMP SHARED(iq,Ntau_,Nkpt,Norb,tau,Lttc,Gitau,Pq_tau),&
          !$OMP PRIVATE(itau,tau2,ispin,ik1,ik2,i,j,k,l,ib1,ib2)
          !$OMP DO
          do itau=1,Ntau_
             !
             tau2=tau(Ntau_)-tau(itau)
-            if (dabs(tau2-tau(Ntau_-itau+1)).gt.eps) stop "calc_Pi_scGG: itau2"
+            if (dabs(tau2-tau(Ntau_-itau+1)).gt.eps) stop "calc_Pi_scGG: itau2 not found."
             !
             do ik1=1,Nkpt
                ik2=Lttc%kptdif(ik1,iq)
@@ -309,11 +310,9 @@ contains
                      do j=1,Norb
                         do i=1,Norb
                            !
-                           ib1 = i + Norb*(j-1)
-                           ib2 = k + Norb*(l-1)
-                           !
-                           !Avoid the unwanted bubble components
-                           if((.not.UfullStructure).and.(.not.PhysicalUelements%Full_All(ib1,ib2)))cycle
+                           !(i,j)(k,l). Second index varying faster: (1,1),(1,2),(1,3),...
+                           ib1 = j + Norb*(i-1)
+                           ib2 = l + Norb*(k-1)
                            !
                            do ispin=1,Nspin
                               Pq_tau(ib1,ib2,itau) = Pq_tau(ib1,ib2,itau) - ( Gitau(i,k,itau,ik1,ispin) * Gitau(l,j,Ntau_-itau+1,ik2,ispin) )/Nkpt
@@ -437,3 +436,12 @@ contains
 
 
 end module bubbles
+
+
+
+!
+!TEST>>>
+!call AllocateFermionicField(Gt,Lttc%Norb,Ntau_,Nkpt=Lttc%Nkpt,Nsite=Gmats%Nsite,Beta=Gmats%Beta)
+!Gt%wks = Gitau
+!call dump_FermionicField(Gt,"./Results_beta06/0/G0t/","G0lat_t",.false.,Lttc%kpt,paramagnet,axis=tau)
+!>>>TEST

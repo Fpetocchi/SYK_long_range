@@ -829,13 +829,21 @@ contains
       character(len=*),intent(in),optional  :: pathOUTPUT
       !
       character(len=256)                    :: pathOUTPUT_
-      real(8),allocatable                   :: axis(:),Akw(:)
-      complex(8),allocatable                :: zeta(:,:,:),invGf(:,:)
-      complex(8),allocatable                :: Gitau(:,:,:),Gftmp(:,:)
-      complex(8),allocatable                :: Gprint_Hk(:,:,:)
-      complex(8),allocatable                :: Gprint_Ek(:,:)
       integer                               :: iwan1,iwan2,ik,iw,itau
       integer                               :: Norb,Nkpt,Nmats
+      real(8),allocatable                   :: axis(:)
+      complex(8),allocatable                :: zeta(:,:,:),invGf(:,:)
+      complex(8),allocatable                :: Gk_print_H(:,:,:,:),Gk_print_E(:,:,:)
+      complex(8),allocatable                :: Gk_itau_H(:,:,:,:),Gk_itau_E(:,:,:)
+      !deafults
+      logical                               :: print_G0real=.true.
+      logical                               :: print_G0itau=.true.
+      logical                               :: print_G0mats=.true.
+      !change before compiling
+      logical                               :: printAllK_G0real=.false.
+      logical                               :: printAllK_G0iatu=.false.
+      logical                               :: printAllK_G0mats=.false.
+      logical                               :: fullFreq_G0mats=.false.
       !
       !
       if(verbose)write(*,"(A)") "---- calc_Glda"
@@ -851,124 +859,206 @@ contains
       Nkpt = Lttc%Nkpt
       !
       !
+      !
       !print G(w) in diagonal and Wannier basis---------------------------------
-      allocate(axis(Nreal));axis=0d0
-      axis = linspace(-wrealMax*1.5d0,+wrealMax*1.5d0,Nreal)
-      allocate(zeta(Norb,Norb,Nreal));zeta=czero
-      do iwan1=1,Norb
-         do iw=1,Nreal
-            zeta(iwan1,iwan1,iw) = dcmplx(  axis(iw) + mu , eta )
-         enddo
-      enddo
-      !
-      allocate(Gprint_Ek(Norb,Nreal));Gprint_Ek=czero
-      allocate(Gprint_Hk(Norb,Norb,Nreal));Gprint_Hk=czero
-      !
-      allocate(invGf(Norb,Norb));invGf=czero
-      !$OMP PARALLEL DEFAULT(NONE),&
-      !$OMP SHARED(Norb,Nreal,Nkpt,mu,zeta,eta,axis,Lttc,Gprint_Ek,Gprint_Hk),&
-      !$OMP PRIVATE(iwan1,ik,iw,invGf)
-      !$OMP DO
-      do ik=1,Nkpt
-         do iw=1,Nreal
-            !
-            do iwan1=1,Norb
-               Gprint_Ek(iwan1,iw) = Gprint_Ek(iwan1,iw) + 1d0/( dcmplx(  axis(iw) + mu , eta ) - Lttc%Ek(iwan1,ik) )/Nkpt
+      if(print_G0real)then
+         !
+         allocate(axis(Nreal));axis=0d0
+         axis = linspace(-wrealMax*1.5d0,+wrealMax*1.5d0,Nreal)
+         allocate(zeta(Norb,Norb,Nreal));zeta=czero
+         do iwan1=1,Norb
+            do iw=1,Nreal
+               zeta(iwan1,iwan1,iw) = dcmplx(  axis(iw) + mu , eta )
             enddo
-            !
-            invGf = zeta(:,:,iw) - Lttc%Hk(:,:,ik)
-            !
-            call inv(invGf)
-            Gprint_Hk(:,:,iw) = Gprint_Hk(:,:,iw) + invGf/Nkpt
-            !
          enddo
-      enddo
-      !$OMP END DO
-      !$OMP END PARALLEL
-      deallocate(zeta,invGf)
+         !
+         allocate(Gk_print_E(Norb,Nreal,Nkpt));Gk_print_E=czero
+         allocate(Gk_print_H(Norb,Norb,Nreal,Nkpt));Gk_print_H=czero
+         allocate(invGf(Norb,Norb));invGf=czero
+         !$OMP PARALLEL DEFAULT(SHARED),&
+         !$OMP PRIVATE(iwan1,iw,ik,invGf)
+         !$OMP DO
+         do ik=1,Nkpt
+            do iw=1,Nreal
+               !
+               do iwan1=1,Norb
+                  Gk_print_E(iwan1,iw,ik) = 1d0/( dcmplx(  axis(iw) + mu , eta ) - Lttc%Ek(iwan1,ik) )
+               enddo
+               !
+               invGf = zeta(:,:,iw) - Lttc%Hk(:,:,ik)
+               call inv(invGf)
+               Gk_print_H(:,:,iw,ik) = invGf
+               !
+            enddo
+         enddo
+         !$OMP END DO
+         !$OMP END PARALLEL
+         deallocate(zeta,invGf)
+         !
+         ! Print
+         call print_G("Greal",Nreal,printAllK_G0real,.true.)
+         deallocate(axis,Gk_print_H,Gk_print_E)
+         !
+      endif
       !
-      ! Print
-      allocate(Akw(Nreal));Akw=0d0
-      do iwan1=1,Norb
-         call dump_FermionicField(Gprint_Ek(iwan1,:),reg(pathOUTPUT_),"Greal_Ek_"//str(iwan1)//".lda",axis)
-         Akw = dimag(Gprint_Ek(iwan1,:))
-         Akw = Akw/(sum(Akw)*abs(axis(2)-axis(1)))
-         call dump_FermionicField(Akw,reg(pathOUTPUT_),"Akw_Ek_"//str(iwan1)//".lda",axis)
-         do iwan2=1,Norb
-            call dump_FermionicField(Gprint_Hk(iwan1,iwan2,:),reg(pathOUTPUT_),"Greal_Hk_"//str(iwan1)//"_"//str(iwan2)//".lda",axis)
-            Akw = dimag(Gprint_Hk(iwan1,iwan2,:))
-            Akw = Akw/(sum(Akw)*abs(axis(2)-axis(1)))
-            call dump_FermionicField(Akw,reg(pathOUTPUT_),"Akw_Hk_"//str(iwan1)//"_"//str(iwan2)//".lda",axis)
-         enddo
-      enddo
-      deallocate(axis,Gprint_Hk,Gprint_Ek,Akw)
       !
       !
       !print G(tau) in diagonal and Wannier basis-------------------------------
-      allocate(axis(Ntau));axis=0d0
-      if(tau_uniform)then
-         axis = linspace(0d0,Beta,Ntau)
-      else
-         axis = denspace(Beta,Ntau)
+      if(print_G0itau)then
+         !
+         allocate(axis(Ntau));axis=0d0
+         if(tau_uniform)then
+            axis = linspace(0d0,Beta,Ntau)
+         else
+            axis = denspace(Beta,Ntau)
+         endif
+         !
+         allocate(Gk_print_E(Norb,Ntau,Nkpt));Gk_print_E=czero
+         allocate(Gk_print_H(Norb,Norb,Ntau,Nkpt));Gk_print_H=czero
+         call calc_G0_tau(Gk_print_E,mu,Beta,Lttc%Ek)
+         !$OMP PARALLEL DEFAULT(SHARED),&
+         !$OMP PRIVATE(iwan1,iw,ik)
+         !$OMP DO
+         do ik=1,Nkpt
+            do itau=1,Ntau
+               Gk_print_H(:,:,itau,ik) = rotate(diag(Gk_print_E(:,itau,ik)),conjg(transpose(Lttc%Zk(:,:,ik))))
+            enddo
+         enddo
+         !$OMP END DO
+         !$OMP END PARALLEL
+         !
+         ! Print
+         call print_G("Gitau",Ntau,printAllK_G0iatu,.false.)
+         if(print_G0mats)then
+            Gk_itau_H = Gk_print_H
+            Gk_itau_E = Gk_print_E
+         endif
+         deallocate(axis,Gk_print_H,Gk_print_E)
+         !
       endif
       !
-      allocate(Gitau(Norb,Ntau,Nkpt));Gitau=czero
-      call calc_G0_tau(Gitau,mu,Beta,Lttc%Ek)
-      !
-      allocate(Gprint_Ek(Norb,Ntau));Gprint_Ek=czero
-      allocate(Gprint_Hk(Norb,Norb,Ntau));Gprint_Hk=czero
-      allocate(Gftmp(Norb,Norb));Gftmp=czero
-      !$OMP PARALLEL DEFAULT(NONE),&
-      !$OMP SHARED(Norb,Ntau,Nkpt,Lttc,Gitau,Gprint_Ek,Gprint_Hk),&
-      !$OMP PRIVATE(iwan1,ik,iw,Gftmp)
-      !$OMP DO
-      do itau=1,Ntau
-         do ik=1,Nkpt
-            !
-            do iwan1=1,Norb
-               Gprint_Ek(iwan1,itau) = Gprint_Ek(iwan1,itau) + Gitau(iwan1,itau,ik)/Nkpt
-            enddo
-            !
-            Gftmp = diag( Gitau(:,itau,ik) )/Nkpt
-            !
-            Gprint_Hk(:,:,itau) = Gprint_Hk(:,:,itau) + rotate(Gftmp,conjg(transpose(Lttc%Zk(:,:,ik))))
-            !
-         enddo
-      enddo
-      !$OMP END DO
-      !$OMP END PARALLEL
-      deallocate(Gitau,Gftmp)
-      !
-      ! Print
-      do iwan1=1,Norb
-         call dump_FermionicField(Gprint_Ek(iwan1,:),reg(pathOUTPUT_),"Gitau_Ek_"//str(iwan1)//".lda",axis)
-         do iwan2=1,Norb
-            call dump_FermionicField(Gprint_Hk(iwan1,iwan2,:),reg(pathOUTPUT_),"Gitau_Hk_"//str(iwan1)//"_"//str(iwan2)//".lda",axis)
-         enddo
-      enddo
-      deallocate(axis)!,Gprint_Hk,Gprint_Ek)
       !
       !
       !print G(iw) in diagonal and Wannier basis--------------------------------
-      Nmats = int(Beta*wmatsMax/(2d0*pi))
-      allocate(axis(Nmats));axis=0d0
-      axis = FermionicFreqMesh(Beta,Nmats)
-      allocate(zeta(Norb,Norb,Nmats)) !Temporaty for Gmats
+      if(print_G0mats)then
+         !
+         Nmats = int(Beta*wmatsMax/(2d0*pi))
+         allocate(axis(Nmats));axis=0d0
+         axis = FermionicFreqMesh(Beta,Nmats)
+         !
+         allocate(Gk_print_E(Norb,Nmats,Nkpt));Gk_print_E=czero
+         allocate(Gk_print_H(Norb,Norb,Nmats,Nkpt));Gk_print_H=czero
+         !
+         call Fitau2mats_vec(Beta,Gk_itau_E,Gk_print_E,tau_uniform=tau_uniform)
+         call Fitau2mats_mat(Beta,Gk_itau_H,Gk_print_H,tau_uniform=tau_uniform)
+         deallocate(Gk_itau_E,Gk_itau_H)
+         !
+         ! Print
+         call print_G("Gmats",Nmats,printAllK_G0mats,.false.)
+         deallocate(axis,Gk_print_H,Gk_print_E)
+         !
+         if(fullFreq_G0mats)then
+            !
+            allocate(axis(2*Nmats+1));axis=0d0
+            axis = FermionicFreqMesh(Beta,2*Nmats+1,full=.true.)
+            allocate(zeta(Norb,Norb,2*Nmats+1));zeta=czero
+            do iwan1=1,Norb
+               do iw=1,2*Nmats+1
+                  zeta(iwan1,iwan1,iw) = dcmplx(  mu , axis(iw) )
+               enddo
+            enddo
+            !
+            allocate(Gk_print_E(Norb,2*Nmats+1,Nkpt));Gk_print_E=czero
+            allocate(Gk_print_H(Norb,Norb,2*Nmats+1,Nkpt));Gk_print_H=czero
+            allocate(invGf(Norb,Norb));invGf=czero
+            !$OMP PARALLEL DEFAULT(SHARED),&
+            !$OMP PRIVATE(iwan1,iw,ik,invGf)
+            !$OMP DO
+            do ik=1,Nkpt
+               do iw=1,2*Nmats+1
+                  !
+                  do iwan1=1,Norb
+                     Gk_print_E(iwan1,iw,ik) = 1d0/( dcmplx(  mu , axis(iw) ) - Lttc%Ek(iwan1,ik) )
+                  enddo
+                  !
+                  invGf = zeta(:,:,iw) - Lttc%Hk(:,:,ik)
+                  call inv(invGf)
+                  Gk_print_H(:,:,iw,ik) = invGf
+                  !
+               enddo
+            enddo
+            !$OMP END DO
+            !$OMP END PARALLEL
+            deallocate(zeta,invGf)
+            !
+            ! Print
+            call print_G("Gmats_fullw",(2*Nmats+1),printAllK_G0mats,.false.)
+            deallocate(axis,Gk_print_H,Gk_print_E)
+            !
+         endif
+         !
+      endif
       !
-      zeta=czero
-      call Fitau2mats_mat(Beta,Gprint_Hk,zeta,tau_uniform=tau_uniform)
-      do iwan1=1,Norb
-         do iwan2=1,Norb
-            call dump_FermionicField(zeta(iwan1,iwan2,:),reg(pathOUTPUT_),"Gmats_Hk_"//str(iwan1)//"_"//str(iwan2)//".lda",axis)
+      !
+   contains
+      !
+      !
+      !
+      subroutine print_G(name,Naxis,allK,printAkw)
+         implicit none
+         character(len=*),intent(in)        :: name
+         integer,intent(in)                 :: Naxis
+         logical,intent(in)                 :: allK
+         logical,intent(in)                 :: printAkw
+         real(8),allocatable                :: Akw(:)
+         complex(8),allocatable             :: G_print_H(:,:,:),G_print_E(:,:)
+         !
+         if(printAkw)allocate(Akw(Naxis));Akw=0d0
+         !
+         if(allK)then
+            do ik=1,Nkpt
+               do iwan1=1,Norb
+                  call dump_FermionicField(Gk_print_E(iwan1,:,ik),reg(pathOUTPUT_),reg(name)//"_Ek_"//str(iwan1)//"_k"//str(ik)//".lda",axis)
+                  if(printAkw)then
+                     Akw = dimag(G_print_E(iwan1,:))
+                     Akw = Akw/(sum(Akw)*abs(axis(2)-axis(1)))
+                     call dump_FermionicField(Akw,reg(pathOUTPUT_),"Akw_Ek_"//str(iwan1)//"_k"//str(ik)//".lda",axis)
+                  endif
+                  do iwan2=1,Norb
+                     call dump_FermionicField(Gk_print_H(iwan1,iwan2,:,ik),reg(pathOUTPUT_),reg(name)//"_Hk_"//str(iwan1)//str(iwan2)//"_k"//str(ik)//".lda",axis)
+                     if(printAkw)then
+                        Akw = dimag(G_print_H(iwan1,iwan2,:))
+                        Akw = Akw/(sum(Akw)*abs(axis(2)-axis(1)))
+                        call dump_FermionicField(Akw,reg(pathOUTPUT_),"Akw_Hk_"//str(iwan1)//str(iwan2)//"_k"//str(ik)//".lda",axis)
+                     endif
+                  enddo
+               enddo
+            enddo
+         endif
+         !
+         allocate(G_print_E(Norb,Naxis))      ; G_print_E = sum(Gk_print_E,dim=3)/Nkpt
+         allocate(G_print_H(Norb,Norb,Naxis)) ; G_print_H = sum(Gk_print_H,dim=4)/Nkpt
+         do iwan1=1,Norb
+            call dump_FermionicField(G_print_E(iwan1,:),reg(pathOUTPUT_),reg(name)//"_Ek_"//str(iwan1)//".lda",axis)
+            if(printAkw)then
+               Akw = dimag(G_print_E(iwan1,:))
+               Akw = Akw/(sum(Akw)*abs(axis(2)-axis(1)))
+               call dump_FermionicField(Akw,reg(pathOUTPUT_),"Akw_Ek_"//str(iwan1)//".lda",axis)
+            endif
+            do iwan2=1,Norb
+               call dump_FermionicField(G_print_H(iwan1,iwan2,:),reg(pathOUTPUT_),reg(name)//"_Hk_"//str(iwan1)//str(iwan2)//".lda",axis)
+               if(printAkw)then
+                  Akw = dimag(G_print_H(iwan1,iwan2,:))
+                  Akw = Akw/(sum(Akw)*abs(axis(2)-axis(1)))
+                  call dump_FermionicField(Akw,reg(pathOUTPUT_),"Akw_Hk_"//str(iwan1)//str(iwan2)//".lda",axis)
+               endif
+            enddo
          enddo
-      enddo
+         deallocate(G_print_E,G_print_H)
+         if(printAkw)deallocate(Akw)
+         !
+      end subroutine print_G
       !
-      zeta=czero
-      call Fitau2mats_vec(Beta,Gprint_Ek,zeta(1,:,:),tau_uniform=tau_uniform)
-      do iwan1=1,Norb
-         call dump_FermionicField(zeta(1,iwan1,:),reg(pathOUTPUT_),"Gmats_Ek_"//str(iwan1)//".lda",axis)
-      enddo
-      deallocate(axis,Gprint_Hk,Gprint_Ek,zeta)
       !
    end subroutine calc_Glda
 

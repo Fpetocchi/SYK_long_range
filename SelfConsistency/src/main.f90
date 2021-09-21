@@ -114,7 +114,7 @@ program SelfConsistency
             call dump_BosonicField(Plat,reg(ItFolder),"Plat_merged_w.DAT")
          elseif(calc_Pguess)then
             P_EDMFT%screened_local = Plat%screened_local*alphaPi
-            call MergeFields(Plat,P_EDMFT,alphaPi,SiteOrbs,RotateHloc)
+            if(alphaPi.ne.0d0)call MergeFields(Plat,P_EDMFT,alphaPi,SiteOrbs,RotateHloc)
          endif
          !
       endif
