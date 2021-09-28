@@ -444,11 +444,7 @@ contains
                !
             endif
             !
-            allocate(Lttc%kptsum(Lttc%Nkpt,Lttc%Nkpt));Lttc%kptsum=0
-            allocate(Lttc%kptdif(Lttc%Nkpt,Lttc%Nkpt));Lttc%kptdif=0
             call fill_ksumkdiff(Lttc%kpt,Lttc%kptsum,Lttc%kptdif,Nkpt3)
-            !
-            allocate(Lttc%small_ik(12,2));Lttc%small_ik=0
             call fill_smallk(Lttc%kpt,Lttc%small_ik)
             !
             Lttc%status=.true.
@@ -503,17 +499,14 @@ contains
                !
             endif
             !
-            allocate(Lttc%kptsum(Lttc%Nkpt,Lttc%Nkpt));Lttc%kptsum=0
-            allocate(Lttc%kptdif(Lttc%Nkpt,Lttc%Nkpt));Lttc%kptdif=0
             call fill_ksumkdiff(Lttc%kpt,Lttc%kptsum,Lttc%kptdif,Nkpt3)
-            !
-            allocate(Lttc%small_ik(12,2));Lttc%small_ik=0
             call fill_smallk(Lttc%kpt,Lttc%small_ik)
             !
             Lttc%status=.true.
             !
       end select
       if(Lttc%Nkpt.ne.(Nkpt3(1)*Nkpt3(2)*Nkpt3(3)))stop "Total number of K-points does not match with number of K-points per dimension."
+      if(XEPSisread)write(*,"(A,1I4)")"     Number of irreducible K-points: ",Lttc%Nkpt_irred
       !
       !
       wrealMax = 1.2*maxval(abs(Lttc%Ek))
@@ -1385,8 +1378,7 @@ contains
                do korb=1,S_DMFT%Norb
                   do lorb=1,S_DMFT%Norb
                      !
-                     ib1 = iorb + S_DMFT%Norb*(jorb-1)
-                     ib2 = korb + S_DMFT%Norb*(lorb-1)
+                     call F2Bindex(S_DMFT%Norb,[iorb,jorb],[korb,lorb],ib1,ib2)
                      !
                      S_DMFT%N_s(iorb,jorb,ispin) = S_DMFT%N_s(iorb,jorb,ispin) + Uinst_0th(ib1,ib2)*dreal(Glat%N_s(korb,lorb,ispin))
                      !
@@ -1819,7 +1811,7 @@ contains
             !$OMP END PARALLEL
             deallocate(P,W,WP,PW,PWP,W_P,P_W,invWa,invWb,Ucorr)
             !
-            call isReal(curlyU_correction)
+            !call isReal(curlyU_correction)
             do iw=1,curlyU_correction%Npoints
                call check_Symmetry(curlyU_correction%screened_local(:,:,iw),1e7*eps,enforce=.true.,hardstop=.false.,name="curlyU_correction_w"//str(iw),verb=.true.)
             enddo
@@ -1942,7 +1934,7 @@ contains
             !$OMP END DO
             !$OMP END PARALLEL
             !
-            call isReal(curlyU_correction)
+            !call isReal(curlyU_correction)
             do iw=1,curlyU_correction%Npoints
                call check_Symmetry(curlyU_correction%screened_local(:,:,iw),1e7*eps,enforce=.true.,hardstop=.false.,name="curlyU_correction_w"//str(iw),verb=.true.)
             enddo
@@ -2418,7 +2410,7 @@ contains
                call TransformBosonicField(curlyU,Rot,PhysicalUelements%Full_Map)
                deallocate(Rot)
             endif
-            call isReal(curlyU)
+           !call isReal(curlyU)
             !
             call calc_QMCinteractions(curlyU,Uinst)
             !
@@ -2431,7 +2423,7 @@ contains
                call TransformBosonicField(curlyU,Rot,PhysicalUelements%Full_Map)
                deallocate(Rot)
             endif
-            call isReal(curlyU)
+           !call isReal(curlyU)
             !
             allocate(Kfunct(Nflavor,Nflavor,Solver%NtauB));Kfunct=0d0
             call calc_QMCinteractions(curlyU,Uinst,Kfunct)
@@ -2448,7 +2440,7 @@ contains
                   call TransformBosonicField(curlyU,Rot,PhysicalUelements%Full_Map)
                   deallocate(Rot)
                endif
-               call isReal(curlyU)
+              !call isReal(curlyU)
                !
             else
                !
@@ -2482,7 +2474,7 @@ contains
                call DeallocateBosonicField(Wloc)
                !
             endif
-            call isReal(curlyU)
+           !call isReal(curlyU)
             !
             !Mixing curlyU
             if((Mixing_curlyU.gt.0d0).and.(Iteration.gt.0))then
@@ -2558,7 +2550,7 @@ contains
             !
             if(Ustart)then
                call loc2imp(curlyU,Ulat,Orbs)
-               call isReal(curlyU)
+              !call isReal(curlyU)
             else
                call AllocateBosonicField(Pimp,Norb,Nmats,Crystal%iq_gamma,no_bare=.true.,Beta=Beta)
                call AllocateBosonicField(Wloc,Norb,Nmats,Crystal%iq_gamma,Beta=Beta)
@@ -2905,8 +2897,7 @@ contains
             do iorb=1,Norb
                do jorb=1,Norb
                   !
-                  ib1 = iorb + Norb*(iorb-1)
-                  ib2 = jorb + Norb*(jorb-1)
+                  call F2Bindex(Norb,[iorb,iorb],[jorb,jorb],ib1,ib2)
                   !
                   Simp%N_s(iorb,iorb,ispin) = Simp%N_s(iorb,iorb,ispin) + real(curlyU%screened_local(ib1,ib2,1))*densityQMC(jorb,jorb,ispin,isite)
                   !
@@ -3085,8 +3076,7 @@ contains
             do iorb=1,Norb
                do jorb=1,Norb
                   !
-                  ib1 = iorb + Norb*(iorb-1)
-                  ib2 = jorb + Norb*(jorb-1)
+                  call F2Bindex(Norb,[iorb,iorb],[jorb,jorb],ib1,ib2)
                   !
                   do ispin=1,Nspin
                      do jspin=1,Nspin
@@ -3527,89 +3517,3 @@ contains
 
 
 end module utils_main
-
-
-
-
-
-
-!subroutine calc_causality_curlyU_correction_test()
-!   !
-!   implicit none
-!   integer                               :: iq,iw
-!   complex(8),allocatable                :: WP(:,:),PW(:,:),PWP(:,:)
-!   complex(8),allocatable                :: W_P(:,:),P_W(:,:)
-!   complex(8),allocatable                :: invWa(:,:),invWb(:,:)
-!   integer                               :: Nkpt3_dense(3)
-!   real(8),allocatable                   :: kpt_dense(:,:)
-!   complex(8),allocatable                :: Plat_intp(:,:,:),Wlat_intp(:,:,:)
-!   !
-!   !
-!   write(*,"(A)") new_line("A")//new_line("A")//"---- calc_causality_curlyU_correction"
-!   !
-!   !
-!   if(.not.Plat%status) stop "calc_causality_curlyU_correction: Plat not properly initialized."
-!   if(.not.Wlat%status) stop "calc_causality_curlyU_correction: Wlat not properly initialized."
-!   !
-!   call AllocateBosonicField(curlyU_correction,Crystal%Norb,Nmats,Crystal%iq_gamma,Beta=Beta,no_bare=.true.)
-!   allocate(WP(Plat%Nbp,Plat%Nbp));WP=czero
-!   allocate(PW(Plat%Nbp,Plat%Nbp));PW=czero
-!   allocate(PWP(Plat%Nbp,Plat%Nbp));PWP=czero
-!   allocate(W_P(Plat%Nbp,Plat%Nbp));W_P=czero
-!   allocate(P_W(Plat%Nbp,Plat%Nbp));P_W=czero
-!   allocate(invWa(Plat%Nbp,Plat%Nbp));invWa=czero
-!   allocate(invWb(Plat%Nbp,Plat%Nbp));invWb=czero
-!   !
-!   Nkpt3_dense = 2*Crystal%Nkpt3
-!   call build_kpt(Nkpt3_dense,kpt_dense)
-!   allocate(Plat_intp(Plat%Nbp,Plat%Nbp,product(Nkpt3_dense)));Plat_intp=czero
-!   allocate(Wlat_intp(Wlat%Nbp,Wlat%Nbp,product(Nkpt3_dense)));Wlat_intp=czero
-!   !
-!   do iw=1,Plat%Npoints
-!      !
-!      write(*,*)iw,Plat%Npoints
-!      call wannierinterpolation(Crystal%Nkpt3,Crystal%kpt,kpt_dense,Plat%screened(:,:,iw,:),Plat_intp)
-!      call wannierinterpolation(Crystal%Nkpt3,Crystal%kpt,kpt_dense,Wlat%screened(:,:,iw,:),Wlat_intp)
-!      !
-!      !$OMP PARALLEL DEFAULT(NONE),&
-!      !$OMP SHARED(iw,Plat,Wlat,curlyU_correction,Plat_intp,Wlat_intp,Nkpt3_dense),&
-!      !$OMP PRIVATE(iq,WP,PW,PWP,W_P,P_W,invWa,invWb)
-!      !
-!      WP=czero;PW=czero;PWP=czero
-!      !
-!      !$OMP DO
-!      do iq=1,product(Nkpt3_dense)
-!         !
-!         WP = WP + matmul(Wlat_intp(:,:,iq),Plat_intp(:,:,iq))/product(Nkpt3_dense)
-!         PW = PW + matmul(Plat_intp(:,:,iq),Wlat_intp(:,:,iq))/product(Nkpt3_dense)
-!         PWP = PWP + matmul(Plat_intp(:,:,iq),matmul(Wlat_intp(:,:,iq),Plat_intp(:,:,iq)))/product(Nkpt3_dense)
-!         !
-!      enddo
-!      !$OMP END DO
-!      !
-!      W_P=czero;P_W=czero
-!      W_P = matmul(Wlat%screened_local(:,:,iw),Plat%screened_local(:,:,iw))
-!      P_W = matmul(Plat%screened_local(:,:,iw),Wlat%screened_local(:,:,iw))
-!      !
-!      invWa=czero
-!      invWa = Plat%screened_local(:,:,iw) + PWP
-!      call inv(invWa)
-!      !
-!      invWb=czero
-!      invWb = Plat%screened_local(:,:,iw) + matmul(Plat%screened_local(:,:,iw),matmul(Wlat%screened_local(:,:,iw),Plat%screened_local(:,:,iw)))
-!      call inv(invWb)
-!      !
-!      ! Put toghether all the pieces. arxiv:2011.05311 Eq.22
-!      curlyU_correction%screened_local(:,:,iw) = + matmul(PW,matmul(invWa,WP)) - matmul(P_W,matmul(invWb,W_P))
-!      !
-!      !$OMP END PARALLEL
-!      !
-!   enddo
-!   !
-!   deallocate(Plat_intp,Wlat_intp,kpt_dense)
-!   deallocate(WP,PW,PWP,W_P,P_W,invWa,invWb)
-!   !
-!   call symmetrize_GW(curlyU_correction,EqvGWndx)
-!   call dump_BosonicField(curlyU_correction,reg(ItFolder),"curlyU_correction_w.DAT")
-!   !
-!end subroutine calc_causality_curlyU_correction_test

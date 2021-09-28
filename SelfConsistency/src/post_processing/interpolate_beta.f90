@@ -244,8 +244,7 @@ subroutine interpolate2Beta_Bosonic(W,Beta_Match,mode,offDiag,wmats_in)
                         l_lat = SiteOrbs(isite,l)
                         !
                         ! bosonic indexes on the lattice
-                        ib1 = i_lat + Norb*(j_lat-1)
-                        ib2 = k_lat + Norb*(l_lat-1)
+                        call F2Bindex(Norb,[i_lat,j_lat],[k_lat,l_lat],ib1,ib2)
                         !
                         replace = PhysicalUelements%Full_Uaa(ib1,ib2) .or. PhysicalUelements%Full_Uab(ib1,ib2)
                         if(offDiag)then

@@ -415,9 +415,9 @@ contains
       ! Check of the K-point ordering
       do ik=1,Nkpt
          if (.not.keq(kpt_xeps(:,ik),kpt(:,ik))) then
-            write(*,"(A)")"ik=",ik,"kpt(:,ik)=",kpt(:,ik),"kpt_loc(:,ik=)",kpt_xeps(:,ik)
+            write(*,"(A,1I4,2(A,3I3))")"     ik= ",ik," kpt(:,ik)= ",kpt(:,ik)," kpt_xeps(:,ik)= ",kpt_xeps(:,ik)
             !write(*,"(A)") "kptp(ik)=",kptPos(ik),"kptp_loc(ik)=",kptPos_xeps(ik)
-            stop "read_xeps: K-points grid does not match"
+            stop "read_xeps: K-points grid does not match."
          endif
       enddo
       !
@@ -463,6 +463,9 @@ contains
       !
       if(verbose)write(*,"(A)") "---- read_Hk"
       !
+      !
+      !Read the lattice vectors
+      call read_lattice(reg(pathINPUT))
       !
       ! Look for Hk.DAT
       path=reg(pathINPUT)//"Hk.DAT"
@@ -513,7 +516,6 @@ contains
       if(present(iq_gamma))iq_gamma = find_vec([0d0,0d0,0d0],kpt,eps)
       write(*,"(A,I4)")"     Gamma point index: ",iq_gamma
       Hk_stored=.true.
-      call read_lattice(reg(pathINPUT))
       !
       unit = free_unit()
       open(unit,file=reg(pathINPUT)//"Kpoints_BZ.DAT",form="formatted",status="unknown",position="rewind",action="write")
@@ -1202,8 +1204,8 @@ contains
       implicit none
       !
       real(8),intent(in)                    :: kpt(:,:)
-      integer,intent(inout)                 :: kptsum(:,:)
-      integer,intent(inout)                 :: kptdif(:,:)
+      integer,allocatable,intent(inout)     :: kptsum(:,:)
+      integer,allocatable,intent(inout)     :: kptdif(:,:)
       integer,intent(in),optional           :: nkpt3(:)
       integer,intent(inout),optional        :: pkpt(:,:,:)
       !
@@ -1219,8 +1221,11 @@ contains
       !
       !
       Nkpt = size(kpt,dim=2)
-      call assert_shape(kptsum,[Nkpt,Nkpt],"fill_ksumkdiff","kptsum")
-      call assert_shape(kptdif,[Nkpt,Nkpt],"fill_ksumkdiff","kptdif")
+      !
+      if(allocated(kptsum))deallocate(kptsum)
+      if(allocated(kptdif))deallocate(kptdif)
+      allocate(kptsum(Nkpt,Nkpt));kptsum=0
+      allocate(kptdif(Nkpt,Nkpt));kptdif=0
       !
       !k1 + q = k2
       kptsum=0
@@ -1384,56 +1389,62 @@ contains
       implicit none
       !
       real(8),intent(in)                    :: kpt(:,:)
-      integer,intent(inout)                 :: small_ik(:,:)
+      integer,allocatable,intent(inout)     :: small_ik(:,:)
       !
-      integer                               :: Nkpt,ik,i,j
-      real(8)                               :: kreal1(3),kreal(3,12)
+      integer                               :: Nkpt,ik,idist,ismall
+      real(8)                               :: Bvec(3),kvec(3)
+      real(8),allocatable                   :: Ksorted(:)
+      integer,allocatable                   :: Korder(:)
       !
       !
       if(verbose)write(*,"(A)") "---- fill_smallk"
       if(.not.Lat_stored)stop "Lattice positions not stored. Either call read_lattice(path) or read_Hk(path,Hk,kpt)"
       !
       !
+      if(.not.Lat_stored) stop "fill_smallk: Lattice vectors not stored."
+      !
       Nkpt = size(kpt,dim=2)
-      call assert_shape(small_ik,[12,2],"fill_smallk","small_ik")
       !
-      small_ik(:,1)=nkpt
-      do ik=1,nkpt
-         !
-         !avoid the gamma point
-         if(all(kpt(:,ik).eq.[0d0,0d0,0d0]))cycle
-         !
-         kreal1 = kpt(1,ik)*rlat(:,1) + kpt(2,ik)*rlat(:,2) + kpt(3,ik)*rlat(:,3)
-         do i=1,12
-            kreal(:,i) = kpt(1,small_ik(i,1))*rlat(:,1) + kpt(2,small_ik(i,1))*rlat(:,2) + kpt(3,small_ik(i,1))*rlat(:,3)
-            if ((kreal1(1)**2+kreal1(2)**2+kreal1(3)**2).lt.(kreal(1,i)**2+kreal(2,i)**2+kreal(3,i)**2)) then
-               do j=12,i+1,-1
-                  small_ik(j,1)=small_ik(j-1,1)
-               enddo
-               small_ik(i,1)=ik
-               exit
-            endif
-         enddo
-         !
+      if(allocated(small_ik))deallocate(small_ik)
+      allocate(small_ik(Nkpt-1,2));small_ik=0
+      !
+      allocate(Ksorted(Nkpt));Ksorted=0d0
+      allocate(Korder(Nkpt));Korder=0
+      do ik=1,Nkpt
+         kvec = kpt(:,ik) - nint(kpt(:,ik))
+         Bvec = kvec(1)*Blat(:,1) + kvec(2)*Blat(:,2) + kvec(3)*Blat(:,3)
+         Ksorted(ik) = sqrt(dble(dot_product(Bvec,Bvec)))
       enddo
       !
-      !find kpoints that are equally far from the origin
-      small_ik(1,2)=1
-      do i=2,12
-         if (abs((kreal(1,i-1)**2+kreal(2,i-1)**2+kreal(3,i-1)**2)-(kreal(1,i)**2+kreal(2,i)**2+kreal(3,i)**2)).lt.eps) then
-            small_ik(i,2)=small_ik(i-1,2)
-         else
-            small_ik(i,2)=small_ik(i-1,2)+1
+      call sort_array(Ksorted,Korder)
+      !
+      idist=0
+      ismall=0
+      do ik=1,Nkpt
+         !
+         !skip the gamma point
+         if(Ksorted(Korder(ik)).ne.0d0)then
+            ismall = ismall + 1
+            if((Ksorted(Korder(ik))-Ksorted(Korder(ik-1))).gt.1e-5) idist=idist+1
+            small_ik(ismall,1) = Korder(ik)
+            small_ik(ismall,2) = idist
          endif
+         !
       enddo
-      if(verbose)then
-         write(*,"(A)")"     12 smallest k vectors are:"
-         do i=1,12
-            write(*,"(5X,12(3F6.3,1X))")kpt(:,small_ik(i,1))
-            write(*,"(5X,3F5.2,1X)")kreal(:,i)
-            write(*,"(5X,1I5)")small_ik(i,2)
+      !
+      !if(verbose)then
+         write(*,"(A)")"     Smallest k vectors:"
+         do ik=1,Nkpt
+            kvec = kpt(:,small_ik(ik,1)) - nint(kpt(:,small_ik(ik,1)))
+            if(small_ik(ik,2).ge.5)exit
+            write(*,"(A,I5,A,3F12.6,A,I3,A,1F12.6,A,3F12.6)")"     ik: ",small_ik(ik,1)                &
+                                                            ,"   kpt: ",kpt(:,small_ik(ik,1))          &
+                                                            ,"   radius: ",small_ik(ik,2)              &
+                                                            ,"   distance: ",Ksorted(small_ik(ik,1))   &
+                                                            ,"   Kvec: ",(kvec(1)*Blat(:,1) + kvec(2)*Blat(:,2) + kvec(3)*Blat(:,3))
          enddo
-      endif
+      !endif
+      deallocate(Ksorted,Korder)
       !
    end subroutine fill_smallk
 
@@ -1509,10 +1520,10 @@ contains
                   iwig=iwig+1
                   if (iwig.gt.100*nkpt) stop "calc_wignerseiz: iwig>100*nkpt."
                   !
-                  Nvecwig_tmp(:,iwig)=(/ir1,ir2,ir3/)
-                  Rvecwig_tmp(:,iwig)=matmul(Rlat,(/ir1,ir2,ir3/))
-                  nrdegwig_tmp(iwig)=count(abs(distmin-dist(:)).le.epsWig)
-                  radiuswig_tmp(iwig)=sqrt(dble(dot_product(rtmp,rtmp)))
+                  Nvecwig_tmp(:,iwig) = (/ir1,ir2,ir3/)
+                  Rvecwig_tmp(:,iwig) = matmul(Rlat,(/ir1,ir2,ir3/))
+                  nrdegwig_tmp(iwig) = count(abs(distmin-dist(:)).le.epsWig)
+                  radiuswig_tmp(iwig) = sqrt(dble(dot_product(rtmp,rtmp)))
                   if(all([ir1,ir2,ir3].eq.[0,0,0]))wig0=iwig
                   !
                   !if(verbose)then
@@ -2250,7 +2261,7 @@ contains
       integer,intent(in)                    :: nkpt3_orig(:)
       real(8),intent(in)                    :: kpt_orig(:,:)
       complex(8),intent(in)                 :: mat_K(:,:)
-      complex(8),allocatable,intent(out)    :: mat_R(:,:)
+      complex(8),intent(inout)              :: mat_R(:,:)
       !
       integer                               :: Nkpt_orig
       integer                               :: Nsize1
@@ -2276,9 +2287,9 @@ contains
       ! Size checks on Matrices
       Nsize1 = size(mat_K,dim=1)
       !
-      if(allocated(mat_R))deallocate(mat_R)
-      allocate(mat_R(Nsize1,Nwig));mat_R=czero
+      call assert_shape(mat_R,[Nsize1,Nwig],"wannier_K2R_d1","mat_R")
       !
+      mat_R=czero
       ! M(R)=\sum_{k} M(k)*exp[-ik*R]
       !$OMP PARALLEL DEFAULT(NONE),&
       !$OMP SHARED(Nwig,Nkpt_orig,Nsize1,kpt_orig,Nvecwig,mat_K,mat_R),&
@@ -2312,7 +2323,7 @@ contains
       integer,intent(in)                    :: nkpt3_orig(:)
       real(8),intent(in)                    :: kpt_orig(:,:)
       complex(8),intent(in)                 :: mat_K(:,:,:)
-      complex(8),allocatable,intent(out)    :: mat_R(:,:,:)
+      complex(8),intent(inout)              :: mat_R(:,:,:)
       !
       integer                               :: Nkpt_orig
       integer                               :: Nsize1,Nsize2
@@ -2339,9 +2350,9 @@ contains
       Nsize1 = size(mat_K,dim=1)
       Nsize2 = size(mat_K,dim=2)
       !
-      if(allocated(mat_R))deallocate(mat_R)
-      allocate(mat_R(Nsize1,Nsize2,Nwig));mat_R=czero
+      call assert_shape(mat_R,[Nsize1,Nsize2,Nwig],"wannier_K2R_d2","mat_R")
       !
+      mat_R=czero
       ! M(R)=\sum_{k} M(k)*exp[-ik*R]
       !$OMP PARALLEL DEFAULT(NONE),&
       !$OMP SHARED(Nwig,Nkpt_orig,Nsize1,Nsize2,kpt_orig,Nvecwig,mat_K,mat_R),&
@@ -2377,7 +2388,7 @@ contains
       integer,intent(in)                    :: nkpt3_orig(:)
       real(8),intent(in)                    :: kpt_orig(:,:)
       complex(8),intent(in)                 :: mat_K(:,:,:,:)
-      complex(8),allocatable,intent(out)    :: mat_R(:,:,:,:)
+      complex(8),intent(inout)              :: mat_R(:,:,:,:)
       !
       integer                               :: Nkpt_orig
       integer                               :: Nsize1,Nsize2,Nsize3
@@ -2405,9 +2416,9 @@ contains
       Nsize2 = size(mat_K,dim=2)
       Nsize3 = size(mat_K,dim=3)
       !
-      if(allocated(mat_R))deallocate(mat_R)
-      allocate(mat_R(Nsize1,Nsize2,Nsize3,Nwig));mat_R=czero
+      call assert_shape(mat_R,[Nsize1,Nsize2,Nsize3,Nwig],"wannier_K2R_d3","mat_R")
       !
+      mat_R=czero
       ! M(R)=\sum_{k} M(k)*exp[-ik*R]
       !$OMP PARALLEL DEFAULT(NONE),&
       !$OMP SHARED(Nwig,Nkpt_orig,Nsize1,Nsize2,Nsize3,kpt_orig,Nvecwig,mat_K,mat_R),&
@@ -2441,7 +2452,7 @@ contains
    !---------------------------------------------------------------------------!
    !PURPOSE: Transforms matrix in Wannier basis into K-space
    !---------------------------------------------------------------------------!
-   subroutine wannier_R2K_d1(nkpt3_orig,kpt_intp,mat_R,mat_intp)
+   subroutine wannier_R2K_d1(nkpt3_orig,kpt_intp,mat_R,mat_K)
       !
       use utils_misc
       implicit none
@@ -2449,7 +2460,7 @@ contains
       integer,intent(in)                    :: nkpt3_orig(:)
       real(8),intent(in)                    :: kpt_intp(:,:)
       complex(8),intent(in)                 :: mat_R(:,:)
-      complex(8),intent(inout)              :: mat_intp(:,:)
+      complex(8),intent(inout)              :: mat_K(:,:)
       !
       integer                               :: Nkpt_intp
       integer                               :: Nsize1
@@ -2474,12 +2485,12 @@ contains
       !
       ! Size checks on Matrices
       Nsize1 = size(mat_R,dim=1)
-      call assert_shape(mat_intp,[Nsize1,Nkpt_intp],"wannierinterpolation","mat_intp")
+      call assert_shape(mat_K,[Nsize1,Nkpt_intp],"wannierinterpolation","mat_K")
       !
       ! M(k_{intp})=\sum_{R} M(R)*exp[+ik_{intp}*R]
-      mat_intp=czero
+      mat_K=czero
       !$OMP PARALLEL DEFAULT(NONE),&
-      !$OMP SHARED(Nwig,Nkpt_intp,Nsize1,kpt_intp,Nvecwig,mat_intp,mat_R,nrdegwig),&
+      !$OMP SHARED(Nwig,Nkpt_intp,Nsize1,kpt_intp,Nvecwig,mat_K,mat_R,nrdegwig),&
       !$OMP PRIVATE(ir,ik,i1,kR,cfac)
       !$OMP DO
       do ik=1,Nkpt_intp
@@ -2490,7 +2501,7 @@ contains
                kR = 2*pi * dot_product(kpt_intp(:,ik),Nvecwig(:,ir))
                cfac = dcmplx(cos(kR),+sin(kR))/nrdegwig(ir)
                !
-               mat_intp(i1,ik) = mat_intp(i1,ik) + mat_R(i1,ir)*cfac
+               mat_K(i1,ik) = mat_K(i1,ik) + mat_R(i1,ir)*cfac
                !
             enddo ! ir
             !
@@ -2501,7 +2512,7 @@ contains
       !
    end subroutine wannier_R2K_d1
    !
-   subroutine wannier_R2K_d2(nkpt3_orig,kpt_intp,mat_R,mat_intp)
+   subroutine wannier_R2K_d2(nkpt3_orig,kpt_intp,mat_R,mat_K)
       !
       use utils_misc
       implicit none
@@ -2509,7 +2520,7 @@ contains
       integer,intent(in)                    :: nkpt3_orig(:)
       real(8),intent(in)                    :: kpt_intp(:,:)
       complex(8),intent(in)                 :: mat_R(:,:,:)
-      complex(8),intent(inout)              :: mat_intp(:,:,:)
+      complex(8),intent(inout)              :: mat_K(:,:,:)
       !
       integer                               :: Nkpt_intp
       integer                               :: Nsize1,Nsize2
@@ -2535,12 +2546,12 @@ contains
       ! Size checks on Matrices
       Nsize1 = size(mat_R,dim=1)
       Nsize2 = size(mat_R,dim=2)
-      call assert_shape(mat_intp,[Nsize1,Nsize2,Nkpt_intp],"wannierinterpolation","mat_intp")
+      call assert_shape(mat_K,[Nsize1,Nsize2,Nkpt_intp],"wannierinterpolation","mat_K")
       !
       ! M(k_{intp})=\sum_{R} M(R)*exp[+ik_{intp}*R]
-      mat_intp=czero
+      mat_K=czero
       !$OMP PARALLEL DEFAULT(NONE),&
-      !$OMP SHARED(Nwig,Nkpt_intp,Nsize1,Nsize2,kpt_intp,Nvecwig,mat_intp,mat_R,nrdegwig),&
+      !$OMP SHARED(Nwig,Nkpt_intp,Nsize1,Nsize2,kpt_intp,Nvecwig,mat_K,mat_R,nrdegwig),&
       !$OMP PRIVATE(ir,ik,i1,i2,kR,cfac)
       !$OMP DO
       do ik=1,Nkpt_intp
@@ -2552,7 +2563,7 @@ contains
                   kR = 2*pi * dot_product(kpt_intp(:,ik),Nvecwig(:,ir))
                   cfac = dcmplx(cos(kR),+sin(kR))/nrdegwig(ir)
                   !
-                  mat_intp(i1,i2,ik) = mat_intp(i1,i2,ik) + mat_R(i1,i2,ir)*cfac
+                  mat_K(i1,i2,ik) = mat_K(i1,i2,ik) + mat_R(i1,i2,ir)*cfac
                   !
                enddo ! ir
                !
@@ -2564,7 +2575,7 @@ contains
       !
    end subroutine wannier_R2K_d2
    !
-   subroutine wannier_R2K_d3(nkpt3_orig,kpt_intp,mat_R,mat_intp)
+   subroutine wannier_R2K_d3(nkpt3_orig,kpt_intp,mat_R,mat_K)
       !
       use utils_misc
       implicit none
@@ -2572,7 +2583,7 @@ contains
       integer,intent(in)                    :: nkpt3_orig(:)
       real(8),intent(in)                    :: kpt_intp(:,:)
       complex(8),intent(in)                 :: mat_R(:,:,:,:)
-      complex(8),intent(inout)              :: mat_intp(:,:,:,:)
+      complex(8),intent(inout)              :: mat_K(:,:,:,:)
       !
       integer                               :: Nkpt_intp
       integer                               :: Nsize1,Nsize2,Nsize3
@@ -2599,12 +2610,12 @@ contains
       Nsize1 = size(mat_R,dim=1)
       Nsize2 = size(mat_R,dim=2)
       Nsize3 = size(mat_R,dim=3)
-      call assert_shape(mat_intp,[Nsize1,Nsize2,Nsize3,Nkpt_intp],"wannierinterpolation","mat_intp")
+      call assert_shape(mat_K,[Nsize1,Nsize2,Nsize3,Nkpt_intp],"wannierinterpolation","mat_K")
       !
       ! M(k_{intp})=\sum_{R} M(R)*exp[+ik_{intp}*R]
-      mat_intp=czero
+      mat_K=czero
       !$OMP PARALLEL DEFAULT(NONE),&
-      !$OMP SHARED(Nwig,Nkpt_intp,Nsize1,Nsize2,Nsize3,kpt_intp,Nvecwig,mat_intp,mat_R,nrdegwig),&
+      !$OMP SHARED(Nwig,Nkpt_intp,Nsize1,Nsize2,Nsize3,kpt_intp,Nvecwig,mat_K,mat_R,nrdegwig),&
       !$OMP PRIVATE(ir,ik,i1,i2,i3,kR,cfac)
       !$OMP DO
       do ik=1,Nkpt_intp
@@ -2617,7 +2628,7 @@ contains
                      kR = 2*pi * dot_product(kpt_intp(:,ik),Nvecwig(:,ir))
                      cfac = dcmplx(cos(kR),+sin(kR))/nrdegwig(ir)
                      !
-                     mat_intp(i1,i2,i3,ik) = mat_intp(i1,i2,i3,ik) + mat_R(i1,i2,i3,ir)*cfac
+                     mat_K(i1,i2,i3,ik) = mat_K(i1,i2,i3,ik) + mat_R(i1,i2,i3,ir)*cfac
                      !
                   enddo ! ir
                   !

@@ -105,7 +105,7 @@ contains
       use parameters
       use utils_misc
       use fourier_transforms
-      use input_vars, only : Ntau, tau_uniform, cmplxWann, paramagnet
+      use input_vars, only : Ntau, tau_uniform, paramagnet
       implicit none
       !
       type(FermionicField),intent(in)       :: Gmats
@@ -155,23 +155,18 @@ contains
       !
       n_k=czero
       allocate(Gitau(Norb,Norb,Ntau,Nkpt));Gitau=czero
-      spinloop: do ispin=1,Nspin
+      do ispin=1,Nspin
          !
-         if(cmplxWann.or.along_path_.or.along_plane_)then
-            call Fmats2itau_mat(Beta,Gmats%wks(:,:,:,:,ispin),Gitau, &
-            asympt_corr=.true.,tau_uniform=tau_uniform,atBeta=.true.)
-         else
-            call Fmats2itau_mat(Beta,Gmats%wks(:,:,:,:,ispin),Gitau, &
-            asympt_corr=.true.,tau_uniform=tau_uniform,Nkpt3=Lttc%Nkpt3,kpt=Lttc%kpt,atBeta=.true.)
-         endif
+         call Fmats2itau_mat(Beta,Gmats%wks(:,:,:,:,ispin),Gitau,asympt_corr=.true.,tau_uniform=tau_uniform,atBeta=.true.)
+        !if(.not.(Gtau_K.or.along_path_.or.along_plane_))call Fmats2itau_mat(Beta,Gmats%wks(:,:,:,:,ispin),Gitau,asympt_corr=.true.,tau_uniform=tau_uniform,Nkpt3=Lttc%Nkpt3,kpt=Lttc%kpt,atBeta=.true.)
          !
          n_k(:,:,:,ispin) = -Gitau(:,:,Ntau,:)
          if(paramagnet)then
             n_k(:,:,:,Nspin) = n_k(:,:,:,1)
-            exit spinloop
+            exit
          endif
          !
-      enddo spinloop
+      enddo
       deallocate(Gitau)
       !
    end subroutine calc_density_Kdep

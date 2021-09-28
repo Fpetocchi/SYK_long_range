@@ -52,7 +52,7 @@ contains
       use utils_fields
       use crystal
       use fourier_transforms
-      use input_vars, only : Ntau, tau_uniform, cmplxWann, paramagnet
+      use input_vars, only : Ntau, tau_uniform, paramagnet
       implicit none
       !
       type(FermionicField),intent(inout)    :: Smats
@@ -109,25 +109,14 @@ contains
       ! Compute Glat(k,tau)
       call cpu_time(start)
       allocate(Gitau(Norb,Norb,Ntau,Nkpt,Nspin));Gitau=czero
-      if(cmplxWann)then
-         spinloopGWc: do ispin=1,Nspin
-            call Fmats2itau_mat(Beta,Gmats%wks(:,:,:,:,ispin),Gitau(:,:,:,:,ispin), &
-            asympt_corr=.true.,tau_uniform=tau_uniform)
-            if(paramagnet)then
-               Gitau(:,:,:,:,Nspin) = Gitau(:,:,:,:,1)
-               exit spinloopGWc
-            endif
-         enddo spinloopGWc
-      else
-         spinloopGWr: do ispin=1,Nspin
-            call Fmats2itau_mat(Beta,Gmats%wks(:,:,:,:,ispin),Gitau(:,:,:,:,ispin), &
-            asympt_corr=.true.,tau_uniform=tau_uniform,nkpt3=Lttc%Nkpt3,kpt=Lttc%kpt)
-            if(paramagnet)then
-               Gitau(:,:,:,:,Nspin) = Gitau(:,:,:,:,1)
-               exit spinloopGWr
-            endif
-         enddo spinloopGWr
-      endif
+      do ispin=1,Nspin
+         call Fmats2itau_mat(Beta,Gmats%wks(:,:,:,:,ispin),Gitau(:,:,:,:,ispin),asympt_corr=.true.,tau_uniform=tau_uniform)
+        !if(.not.Gtau_K) call Fmats2itau_mat(Beta,Gmats%wks(:,:,:,:,ispin),Gitau(:,:,:,:,ispin),asympt_corr=.true.,tau_uniform=tau_uniform,nkpt3=Lttc%Nkpt3,kpt=Lttc%kpt)
+         if(paramagnet)then
+            Gitau(:,:,:,:,Nspin) = Gitau(:,:,:,:,1)
+            exit
+         endif
+      enddo
       call cpu_time(finish)
       write(*,"(A,F)") "     Glat(k,iw) --> Glat(k,tau) cpu timing:", finish-start
       !
@@ -160,8 +149,7 @@ contains
                         do l=1,Norb
                            do j=1,Norb
                               !
-                              ib1 = i + Norb*(j-1)
-                              ib2 = k + Norb*(l-1)
+                              call F2Bindex(Norb,[i,j],[k,l],ib1,ib2)
                               !
                               Sitau(i,k,itau) = Sitau(i,k,itau) - Gitau(j,l,itau,ik1,ispin)*Witau(ib1,ib2,itau,ik2)/Nkpt
                               !
@@ -205,11 +193,9 @@ contains
                      do l=1,Norb
                         do j=1,Norb
                            !
-                           ib1 = i + Norb*(j-1)
-                           ib2 = k + Norb*(l-1)
+                           call F2Bindex(Norb,[i,j],[k,l],ib1,ib2)
                            !
                            Smats_X_%N_ks(i,k,iq,ispin) = Smats_X_%N_ks(i,k,iq,ispin) + Gitau(j,l,Ntau,ik1,ispin)*Wmats%bare(ib1,ib2,ik2)/Nkpt
-                           !Smats_X_%N_ks(i,k,iq,ispin) = Smats_X_%N_ks(i,k,iq,ispin) - Gitau(j,l,1,ik1,ispin)*Wmats%bare(ib1,ib2,ik2)/Nkpt
                            !
                         enddo
                      enddo
@@ -377,8 +363,7 @@ contains
                   do l=1,Norb
                      do j=1,Norb
                         !
-                        ib1 = i + Norb*(j-1)
-                        ib2 = k + Norb*(l-1)
+                        call F2Bindex(Norb,[i,j],[k,l],ib1,ib2)
                         !
                         Sitau_loc(i,k,itau,ispin) = Sitau_loc(i,k,itau,ispin) - Gitau_loc(j,l,itau,ispin)*Witau_loc(ib1,ib2,itau)
                         !
@@ -419,8 +404,7 @@ contains
                do l=1,Norb
                   do j=1,Norb
                      !
-                     ib1 = i + Norb*(j-1)
-                     ib2 = k + Norb*(l-1)
+                     call F2Bindex(Norb,[i,j],[k,l],ib1,ib2)
                      !
                      Smats_Xdc_%N_s(i,k,ispin) = Smats_Xdc_%N_s(i,k,ispin) + Gitau_loc(j,l,Ntau,ispin)*Wmats%bare_local(ib1,ib2)
                      !
@@ -606,8 +590,7 @@ contains
                         k_V = orbs(k) + shift_V
                         l_V = orbs(l) + shift_V
                         !
-                        ib1 = i_V + Norb*(j_V-1)
-                        ib2 = k_V + Norb*(l_V-1)
+                        call F2Bindex(Norb,[i_V,j_V],[k_V,l_V],ib1,ib2)
                         !
                         VH(i_N,j_N) = VH(i_N,j_N) + dreal(density(k_N,l_N)-density_LDA(k_N,l_N)) * dreal(Vgamma(ib1,ib2))
                         !
@@ -626,8 +609,7 @@ contains
                do k=1,Norb
                   do l=1,Norb
                      !
-                     ib1 = i + Norb*(j-1)
-                     ib2 = k + Norb*(l-1)
+                     call F2Bindex(Norb,[i,j],[k,l],ib1,ib2)
                      !
                      VH(i,j) = VH(i,j) + dreal(density(k,l)-density_LDA(k,l)) * dreal(Vgamma(ib1,ib2))
                      !
@@ -659,14 +641,13 @@ contains
                   do iwan2=1,Norb
                      do iwan3=1,Norb
                        do iwan4=1,Norb
-                           indx1=iwan1+Norb*(iwan2-1)
-                           indx2=iwan3+Norb*(iwan4-1)
-                           read(unit,*) rdum1,rdum2,idum1,idum2,idum3,idum4,rdum3,rdum4
-                           if (idum1.ne.iwan1) stop "read_Vgamma(calc_VH_G): wrong index iwan1."
-                           if (idum2.ne.iwan2) stop "read_Vgamma(calc_VH_G): wrong index iwan2."
-                           if (idum3.ne.iwan3) stop "read_Vgamma(calc_VH_G): wrong index iwan3."
-                           if (idum4.ne.iwan4) stop "read_Vgamma(calc_VH_G): wrong index iwan4."
-                           if(dble(Vtype).eq.rdum1) Vgamma(indx1,indx2) = dcmplx(rdum3,rdum4) * H2eV
+                          call F2Bindex(Norb,[iwan1,iwan2],[iwan3,iwan4],indx1,indx2)
+                          read(unit,*) rdum1,rdum2,idum1,idum2,idum3,idum4,rdum3,rdum4
+                          if (idum1.ne.iwan1) stop "read_Vgamma(calc_VH_G): wrong index iwan1."
+                          if (idum2.ne.iwan2) stop "read_Vgamma(calc_VH_G): wrong index iwan2."
+                          if (idum3.ne.iwan3) stop "read_Vgamma(calc_VH_G): wrong index iwan3."
+                          if (idum4.ne.iwan4) stop "read_Vgamma(calc_VH_G): wrong index iwan4."
+                          if(dble(Vtype).eq.rdum1) Vgamma(indx1,indx2) = dcmplx(rdum3,rdum4) * H2eV
                        enddo
                      enddo
                   enddo
@@ -838,8 +819,7 @@ contains
                      k_V = orbs(k) + shift_V
                      l_V = orbs(l) + shift_V
                      !
-                     ib1 = i_V + Norb*(j_V-1)
-                     ib2 = k_V + Norb*(l_V-1)
+                     call F2Bindex(Norb,[i_V,j_V],[k_V,l_V],ib1,ib2)
                      !
                      VH(i_N,j_N) = VH(i_N,j_N) + dreal(density(k_N,l_N)-density_LDA(k_N,l_N)) * dreal(Vgamma(ib1,ib2))
                      !
@@ -871,14 +851,13 @@ contains
                   do iwan2=1,Norb
                      do iwan3=1,Norb
                        do iwan4=1,Norb
-                           indx1=iwan1+Norb*(iwan2-1)
-                           indx2=iwan3+Norb*(iwan4-1)
-                           read(unit,*) rdum1,rdum2,idum1,idum2,idum3,idum4,rdum3,rdum4
-                           if (idum1.ne.iwan1) stop "read_Vgamma(calc_VH_N): wrong index iwan1."
-                           if (idum2.ne.iwan2) stop "read_Vgamma(calc_VH_N): wrong index iwan2."
-                           if (idum3.ne.iwan3) stop "read_Vgamma(calc_VH_N): wrong index iwan3."
-                           if (idum4.ne.iwan4) stop "read_Vgamma(calc_VH_N): wrong index iwan4."
-                           if(dble(Vtype).eq.rdum1) Vgamma(indx1,indx2) = dcmplx(rdum3,rdum4) * H2eV
+                          call F2Bindex(Norb,[iwan1,iwan2],[iwan3,iwan4],indx1,indx2)
+                          read(unit,*) rdum1,rdum2,idum1,idum2,idum3,idum4,rdum3,rdum4
+                          if (idum1.ne.iwan1) stop "read_Vgamma(calc_VH_N): wrong index iwan1."
+                          if (idum2.ne.iwan2) stop "read_Vgamma(calc_VH_N): wrong index iwan2."
+                          if (idum3.ne.iwan3) stop "read_Vgamma(calc_VH_N): wrong index iwan3."
+                          if (idum4.ne.iwan4) stop "read_Vgamma(calc_VH_N): wrong index iwan4."
+                          if(dble(Vtype).eq.rdum1) Vgamma(indx1,indx2) = dcmplx(rdum3,rdum4) * H2eV
                        enddo
                      enddo
                   enddo

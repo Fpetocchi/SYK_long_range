@@ -1133,8 +1133,7 @@ contains
             do iwan3=1,Norb
                do iwan4=1,Norb
                   !
-                  ib1 = iwan1+Norb*(iwan2-1)
-                  ib2 = iwan3+Norb*(iwan4-1)
+                  call F2Bindex(Norb,[iwan1,iwan2],[iwan3,iwan4],ib1,ib2)
                   !
                   if(allocated(U%bare_local))then
                      write(unit,"(4I4,2E20.12)") iwan1,iwan2,iwan3,iwan4,dreal(U%bare_local(ib1,ib2)),dimag(U%bare_local(ib1,ib2))
@@ -1153,8 +1152,7 @@ contains
                do iwan3=1,Norb
                   do iwan4=1,Norb
                      !
-                     ib1 = iwan1+Norb*(iwan2-1)
-                     ib2 = iwan3+Norb*(iwan4-1)
+                     call F2Bindex(Norb,[iwan1,iwan2],[iwan3,iwan4],ib1,ib2)
                      !
                      write(unit,"(1E20.12,4I4,2E20.12)") axis_(iaxis),iwan1,iwan2,iwan3,iwan4,dreal(U%screened_local(ib1,ib2,iaxis)),dimag(U%screened_local(ib1,ib2,iaxis))
                   enddo
@@ -1252,8 +1250,7 @@ contains
                   do iwan3=1,Norb
                      do iwan4=1,Norb
                         !
-                        ib1 = iwan1+Norb*(iwan2-1)
-                        ib2 = iwan3+Norb*(iwan4-1)
+                        call F2Bindex(Norb,[iwan1,iwan2],[iwan3,iwan4],ib1,ib2)
                         !
                         if(allocated(U%bare_local))then
                            write(unit,"(4I4,2E20.12)") iwan1,iwan2,iwan3,iwan4,dreal(U%bare(ib1,ib2,iq)),dimag(U%bare(ib1,ib2,iq))
@@ -1272,8 +1269,7 @@ contains
                      do iwan3=1,Norb
                         do iwan4=1,Norb
                            !
-                           ib1 = iwan1+Norb*(iwan2-1)
-                           ib2 = iwan3+Norb*(iwan4-1)
+                           call F2Bindex(Norb,[iwan1,iwan2],[iwan3,iwan4],ib1,ib2)
                            !
                            write(unit,"(1E20.12,4I4,2E20.12)") axis_(iaxis),iwan1,iwan2,iwan3,iwan4,dreal(U%screened(ib1,ib2,iaxis,iq)),dimag(U%screened(ib1,ib2,iaxis,iq))
                         enddo
@@ -1357,8 +1353,7 @@ contains
             do iwan3=1,Norb
                do iwan4=1,Norb
                   !
-                  ib1 = iwan1+Norb*(iwan2-1)
-                  ib2 = iwan3+Norb*(iwan4-1)
+                  call F2Bindex(Norb,[iwan1,iwan2],[iwan3,iwan4],ib1,ib2)
                   !
                   read(unit,"(4I4,2E20.12)") idum1,idum2,idum3,idum4,RealU,ImagU
                   if (idum1.ne.iwan1) stop "read_BosonicField_local: iwan1 (bare) does not match."
@@ -1378,8 +1373,7 @@ contains
                do iwan3=1,Norb
                   do iwan4=1,Norb
                      !
-                     ib1 = iwan1+Norb*(iwan2-1)
-                     ib2 = iwan3+Norb*(iwan4-1)
+                     call F2Bindex(Norb,[iwan1,iwan2],[iwan3,iwan4],ib1,ib2)
                      !
                      read(unit,"(1F20.10,4I4,2E20.12)") axispoint,idum1,idum2,idum3,idum4,RealU,ImagU
                      if (idum1.ne.iwan1) stop "read_BosonicField_local: iwan1 (screened) does not match."

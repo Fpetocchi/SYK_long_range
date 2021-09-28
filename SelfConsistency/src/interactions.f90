@@ -70,23 +70,22 @@ contains
       use utils_misc
       use utils_fields
       use linalg, only : zeye, inv
-      use input_vars, only : HandleGammaPoint, Umodel !, look4dens
+      use input_vars, only : HandleGammaPoint, Umodel
       implicit none
       !
       type(BosonicField),intent(inout)      :: Wmats
       type(BosonicField),intent(in)         :: Umats
-      type(BosonicField),intent(in)         :: Pmats
+      type(BosonicField),intent(inout)         :: Pmats
       type(Lattice),intent(in)              :: Lttc
       logical,intent(in),optional           :: symQ
       !
       complex(8),allocatable                :: invW(:,:)
-      complex(8),allocatable                :: den_smallk(:,:,:,:)
-      complex(8),allocatable                :: den_smallk_avrg(:,:,:)
+      complex(8),allocatable                :: epsGamma(:,:,:)
       real(8)                               :: Beta
-      integer                               :: Nbp,Nkpt,Nmats
+      integer                               :: Nbp,Norb,Nkpt,Nmats
       integer                               :: iq,iw,iwU
-      integer                               :: ismall,num_k
-      logical                               :: Ustatic,symQ_
+      integer                               :: iavg,Navg
+      logical                               :: Ustatic,symQ_,smear,add_iq
       !
       !
       if(verbose)write(*,"(A)") "---- calc_W_full"
@@ -100,9 +99,10 @@ contains
       if(Umats%Nkpt.eq.0) stop "calc_W_full: Umats k dependent attributes not properly initialized."
       if(Pmats%Nkpt.eq.0) stop "calc_W_full: Pmats k dependent attributes not properly initialized."
       if(Umats%iq_gamma.lt.0) stop "calc_W_full: Umats iq_gamma not defined."
-      if(.not.allocated(Lttc%small_ik)) stop "calc_W_full: Kpoints near Gamma not stored. W divergence cannot be cured."
+      smear = HandleGammaPoint.gt.0
+      if(smear.and.(.not.allocated(Lttc%small_ik))) stop "calc_W_full: Kpoints near Gamma not stored. W divergence cannot be cured."
       !
-      symQ_=.false.
+      symQ_=.true.
       if(present(symQ))symQ_=symQ
       Ustatic=.false.
       if(Umodel.and.(Umats%Npoints.eq.1))Ustatic=.true.
@@ -112,6 +112,7 @@ contains
       Nkpt = Wmats%Nkpt
       Beta = Wmats%Beta
       Nmats = Wmats%Npoints
+      Norb = int(sqrt(dble(Nbp)))
       !
       if(all([Umats%Nbp-Nbp,Pmats%Nbp-Nbp].ne.[0,0])) stop "calc_W_full: Either Umats and/or Pmats have different orbital dimension with respect to Wmats."
       if(all([Umats%Nkpt-Nkpt,Pmats%Nkpt-Nkpt].ne.[0,0])) stop "calc_W_full: Either Umats and/or Pmats have different number of k-points with respect to Wmats."
@@ -121,85 +122,88 @@ contains
       allocate(invW(Nbp,Nbp));invW=czero
       call clear_attributes(Wmats)
       !
-      if(HandleGammaPoint)then
-         allocate(den_smallk(Nbp,Nbp,Nmats,12));den_smallk=czero
-         allocate(den_smallk_avrg(Nbp,Nbp,Nmats));den_smallk_avrg=czero
+      if(smear)then
+         allocate(epsGamma(Nbp,Nbp,Nmats));epsGamma=czero
+         Navg=size(pack(Lttc%small_ik(:,1),(Lttc%small_ik(:,2).le.HandleGammaPoint)))
       endif
       !
       ! Assuming that the Polarization vanishes at iw-->inf
       Wmats%bare = Umats%bare
       !
       !$OMP PARALLEL DEFAULT(NONE),&
-      !$OMP SHARED(Pmats,Umats,Wmats,den_smallk,Lttc,HandleGammaPoint,Ustatic,verbose,symQ_),&
-      !$OMP PRIVATE(iw,iwU,iq,invW,ismall)
+      !$OMP SHARED(Pmats,Umats,Wmats,Lttc,epsGamma,HandleGammaPoint,smear,Ustatic,verbose,symQ_,Navg),&
+      !$OMP PRIVATE(iw,iwU,iq,invW,iavg,add_iq)
       !$OMP DO
       do iw=1,Wmats%Npoints
          !
          iwU = iw
          if(Ustatic)iwU = 1
          !
+         iavg=0
          do iq=1,Wmats%Nkpt
             !
             !avoid the gamma point
-            if((iq.eq.Umats%iq_gamma).and.HandleGammaPoint)cycle
+            if((iq.eq.Umats%iq_gamma).and.smear)cycle
             !
-            ! [ 1 - U*Pi ]
-            invW = zeye(Wmats%Nbp) - matmul(Umats%screened(:,:,iwU,iq),Pmats%screened(:,:,iw,iq))
+            ! [ 1 - Pi*U ]
+            invW = zeye(Wmats%Nbp) - matmul(Pmats%screened(:,:,iw,iq),Umats%screened(:,:,iwU,iq))
             !
-            ! [ 1 - U*Pi ]^-1
+            ! [ 1 - Pi*U ]^-1
             call inv(invW)
             !
-            ! [ 1 - U*Pi ]^-1 * U
-            Wmats%screened(:,:,iw,iq) = matmul(invW,Umats%screened(:,:,iwU,iq))
+            ! U*[ 1 - Pi*U ]^-1
+            Wmats%screened(:,:,iw,iq) = matmul(Umats%screened(:,:,iwU,iq),invW)
             !
             !Hermiticity check - print if error is bigger than 1e-3
-            if(symQ_) call check_Hermiticity(Wmats%screened(:,:,iw,iq),1e7*eps,enforce=.true.,hardstop=.false.,name="Wlat_w"//str(iw)//"_q"//str(iq),verb=.true.)
+            if(symQ_) call check_Hermiticity(Wmats%screened(:,:,iw,iq),1e7*eps,enforce=.false.,hardstop=.false.,name="Wlat_w"//str(iw)//"_q"//str(iq),verb=.true.)
             !
-            !store the dielectric function around the Gamma point
-            if(HandleGammaPoint)then
-               do ismall=1,12
-                  if (Lttc%small_ik(ismall,1).eq.iq) den_smallk(:,:,iw,ismall) = invW
-               enddo
+            !average the dielectric function around the Gamma point
+            if(smear)then
+               add_iq = any( pack(Lttc%small_ik(:,1),(Lttc%small_ik(:,2).le.HandleGammaPoint)) .eq. iq )
+               if(add_iq)then
+                  epsGamma(:,:,iw) = epsGamma(:,:,iw) + invW
+                  iavg = iavg + 1
+               endif
             endif
             !
-         enddo
-      enddo
+         enddo !iq
+         !
+         !Control on the number of averaged K-points close to Gamma
+         if(smear.and.(iavg.ne.Navg)) stop "calc_W_full: error in the number of avergaged K-points around Gamma."
+         !
+      enddo !iw
       !$OMP END DO
       !$OMP END PARALLEL
       !
       ! Gamma point handling
-      if(HandleGammaPoint)then
+      if(smear)then
          !
-         num_k=1
-         do ismall=2,12
-            if (Lttc%small_ik(ismall,2).eq.1) num_k=num_k+1
-         enddo
-         !
-         !if num_k only is one include also next nearset points
-         if(num_k.eq.1)then
-            num_k=1
-            do ismall=2,12
-               if (Lttc%small_ik(ismall,2).le.2) num_k=num_k+1
-            enddo
-         endif
-         !
-         !calc average epsinv for small k
-         do ismall=1,num_k
-            den_smallk_avrg = den_smallk_avrg + den_smallk(:,:,:,ismall)/num_k
-         enddo
+         write(*,"(A)")"     Smearing Gamma point."
          !
          !W at gamma point should be real
-         den_smallk_avrg = dreal(den_smallk_avrg)
+         epsGamma = dreal(epsGamma)/Navg
          !
-         !Fill the Gamma point value - element not included in the iq loop - print if error is bigger than 1e-3
+         !TEST>>>
+         !epsGamma = czero
+         !do iq=1,Wmats%Nkpt
+         !   add_iq = any( pack(Lttc%small_ik(:,1),(Lttc%small_ik(:,2).eq.1)) .eq. iq )
+         !   if(add_iq)then
+         !      Wmats%screened(:,:,:,iq) = czero
+         !      Pmats%screened(:,:,:,iq) = czero
+         !   endif
+         !enddo
+         !Pmats%screened(:,:,:,Umats%iq_gamma) = czero
+         !>>>TEST
+         !
+         !Fill the Gamma point value - element not included in the iq loop
          do iw=1,Nmats
             iwU = iw
             if(Ustatic)iwU = 1
-            Wmats%screened(:,:,iw,Umats%iq_gamma) = dreal(matmul(den_smallk_avrg(:,:,iw),Umats%screened(:,:,iwU,Umats%iq_gamma)))
+            Wmats%screened(:,:,iw,Umats%iq_gamma) = dreal(matmul(Umats%screened(:,:,iwU,Umats%iq_gamma),epsGamma(:,:,iw)))
             call check_Symmetry(Wmats%screened(:,:,iw,Umats%iq_gamma),eps,enforce=.true.,hardstop=.false.,name="Wlat_w"//str(iw)//"_q"//str(Umats%iq_gamma),verb=.false.)
          enddo
          !
-         deallocate(den_smallk,den_smallk_avrg)
+         deallocate(epsGamma)
          !
       endif
       deallocate(invW)
@@ -207,23 +211,14 @@ contains
       ! Fill the local attributes
       call BosonicKsum(Wmats)
       !
-      ! Check if the screened limit is locally symmetric - print if error is bigger than 1e-3
-      if(Wmats%Nsite.eq.1)then
-         write(*,"(A)") "     Enforcing symmetry of local Wlat."
-         call isReal(Wmats%bare_local)
-         do iw=1,Nmats
-            call isReal(Wmats%screened_local(:,:,iw))
-            call check_Symmetry(Wmats%screened_local(:,:,iw),1e7*eps,enforce=.true.,hardstop=.false.,name="Wlat_loc_w"//str(iw),verb=.true.)
-         enddo
-      else
-         write(*,"(A)") "     Enforcing hermiticity of local Wlat."
-         do iw=1,Nmats
-            call check_Hermiticity(Wmats%screened_local(:,:,iw),1e7*eps,enforce=.true.,hardstop=.false.,name="Wlat_loc_w"//str(iw),verb=.true.)
-         enddo
-      endif
+      !Check if the screened limit is locally symmetric - print if relative error is bigger than 1e-3
+      write(*,"(A)") "     Checking hermiticity of local Wlat (enforced)."
+      do iw=1,Nmats
+         call check_Hermiticity(Wmats%screened_local(:,:,iw),1e7*eps,enforce=.true.,hardstop=.false.,name="Wlat_loc_w"//str(iw),verb=.true.)
+      enddo
       !
-      !call dump_BosonicField(Wmats,"/flash/Wk_for_Viktor/N_"//str(look4dens%TargetDensity,3)//"/",.true.)
-      !stop
+      !call dump_BosonicField(Umats,"./Ulat_readable/",.false.)
+      !call dump_BosonicField(Wmats,"./Wlat_readable/",.false.)
       !
    end subroutine calc_W_full
 
@@ -248,13 +243,12 @@ contains
       logical,intent(in),optional           :: symQ
       !
       complex(8),allocatable                :: invW(:,:),W_q(:,:)
-      complex(8),allocatable                :: den_smallk(:,:,:,:)
-      complex(8),allocatable                :: den_smallk_avrg(:,:,:)
+      complex(8),allocatable                :: epsGamma(:,:,:)
       real(8)                               :: Beta
       integer                               :: Nbp,Nkpt,Nmats
       integer                               :: iq,iw,iwU
-      integer                               :: ismall,num_k
-      logical                               :: Ustatic,symQ_
+      integer                               :: iavg,Navg
+      logical                               :: Ustatic,symQ_,smear,add_iq
       !
       !
       if(verbose)write(*,"(A)") "---- calc_W_edmft"
@@ -268,9 +262,10 @@ contains
       if(Wmats%Nkpt.ne.0) stop "calc_W_edmft: Wmats k dependent attributes are supposed to be unallocated."
       if(Pmats%Nkpt.ne.0) stop "calc_W_edmft: Pmats k dependent attributes are supposed to be unallocated."
       if(Umats%iq_gamma.lt.0) stop "calc_W_edmft: Umats iq_gamma not defined."
-      if(.not.allocated(Lttc%small_ik)) stop "calc_W_edmft: Kpoints near Gamma not stored. W divergence cannot be cured."
+      smear = HandleGammaPoint.gt.0
+      if(smear.and.(.not.allocated(Lttc%small_ik))) stop "calc_W_edmft: Kpoints near Gamma not stored. W divergence cannot be cured."
       !
-      symQ_=.true.
+      symQ_=.false.
       if(present(symQ))symQ_=symQ
       Ustatic=.false.
       if(Umodel.and.(Umats%Npoints.eq.1))Ustatic=.true.
@@ -289,17 +284,18 @@ contains
       allocate(W_q(Nbp,Nbp));W_q=czero
       call clear_attributes(Wmats)
       !
-      if(HandleGammaPoint)then
-         allocate(den_smallk(Nbp,Nbp,Nmats,12));den_smallk=czero
-         allocate(den_smallk_avrg(Nbp,Nbp,Nmats));den_smallk_avrg=czero
+      if(smear)then
+         allocate(epsGamma(Nbp,Nbp,Nmats));epsGamma=czero
+         Navg=size(pack(Lttc%small_ik(:,1),(Lttc%small_ik(:,2).le.HandleGammaPoint)))
+         iavg=0
       endif
       !
       ! Assuming that the Polarization vanishes at iw-->inf
       Wmats%bare_local = Umats%bare_local
       !
       !$OMP PARALLEL DEFAULT(NONE),&
-      !$OMP SHARED(Pmats,Umats,Wmats,den_smallk,Lttc,HandleGammaPoint,Ustatic,verbose,symQ_),&
-      !$OMP PRIVATE(iw,iwU,iq,invW,W_q,ismall)
+      !$OMP SHARED(Pmats,Umats,Wmats,Lttc,epsGamma,HandleGammaPoint,smear,Ustatic,verbose,symQ_,Navg),&
+      !$OMP PRIVATE(iw,iwU,iq,invW,W_q,iavg,add_iq)
       !$OMP DO
       do iw=1,Wmats%Npoints
          !
@@ -311,14 +307,14 @@ contains
             !avoid the gamma point
             if((iq.eq.Umats%iq_gamma).and.HandleGammaPoint)cycle
             !
-            ! [ 1 - U*Pi ]
-            invW = zeye(Umats%Nbp) - matmul(Umats%screened(:,:,iwU,iq),Pmats%screened_local(:,:,iw))
+            ! [ 1 - Pi*U ]
+            invW = zeye(Umats%Nbp) - matmul(Pmats%screened_local(:,:,iw),Umats%screened(:,:,iwU,iq))
             !
             ! [ 1 - U*Pi ]^-1
             call inv(invW)
             !
-            ! [ 1 - U*Pi ]^-1 * U
-            W_q = matmul(invW,Umats%screened(:,:,iwU,iq))
+            !  U*[ 1 - U*Pi ]^-1
+            W_q = matmul(Umats%screened(:,:,iwU,iq),invW)
             !
             !Hermiticity check - print if error is bigger than 1e-3
             if(symQ_) call check_Hermiticity(W_q,1e7*eps,enforce=.true.,hardstop=.false.,name="Wlat_w"//str(iw)//"_q"//str(iq),verb=.true.)
@@ -326,70 +322,51 @@ contains
             !Sum to local attribute
             Wmats%screened_local(:,:,iw) = Wmats%screened_local(:,:,iw) + W_q/Umats%Nkpt
             !
-            !store the dielectric function around the Gamma point
-            if(HandleGammaPoint)then
-               do ismall=1,12
-                  if (Lttc%small_ik(ismall,1).eq.iq) den_smallk(:,:,iw,ismall) = invW
-               enddo
+            !average the dielectric function around the Gamma point
+            if(smear)then
+               add_iq = any( pack(Lttc%small_ik(:,1),(Lttc%small_ik(:,2).le.HandleGammaPoint)) .eq. iq )
+               if(add_iq)then
+                  epsGamma(:,:,iw) = epsGamma(:,:,iw) + invW
+                  iavg = iavg + 1
+               endif
             endif
             !
-         enddo
-      enddo
+         enddo !iq
+         !
+         !Control on the number of averaged K-points close to Gamma
+         if(smear.and.(iavg.ne.Navg)) stop "calc_W_full: error in the number of avergaged K-points around Gamma."
+         !
+      enddo !iw
       !$OMP END DO
       !$OMP END PARALLEL
       !
       ! Gamma point handling
-      if(HandleGammaPoint)then
+      if(smear)then
          !
-         num_k=1
-         do ismall=2,12
-            if (Lttc%small_ik(ismall,2).eq.1) num_k=num_k+1
-         enddo
-         !
-         !if num_k only is one include also next nearset points
-         if(num_k.eq.1)then
-            num_k=1
-            do ismall=2,12
-               if (Lttc%small_ik(ismall,2).le.2) num_k=num_k+1
-            enddo
-         endif
-         !
-         !calc average epsinv for small k
-         do ismall=1,num_k
-            den_smallk_avrg = den_smallk_avrg + den_smallk(:,:,:,ismall)/num_k
-         enddo
+         write(*,"(A)")"     Smearing Gamma point."
          !
          !W at gamma point should be real
-         den_smallk_avrg = dreal(den_smallk_avrg)
+         epsGamma = dreal(epsGamma)/Navg
          !
          !Add the Gamma point value - element not summed in the iq loop - print if error is bigger than 1e-3
          do iw=1,Nmats
             iwU = iw
             if(Ustatic)iwU = 1
-            W_q = dreal(matmul(den_smallk_avrg(:,:,iw),Umats%screened(:,:,iwU,Umats%iq_gamma)))
+            W_q = dreal(matmul(Umats%screened(:,:,iwU,Umats%iq_gamma),epsGamma(:,:,iw)))
             call check_Symmetry(W_q,eps,enforce=.true.,hardstop=.false.,name="Wlat_w"//str(iw)//"_q"//str(Umats%iq_gamma),verb=.false.)
             Wmats%screened_local(:,:,iw) = Wmats%screened_local(:,:,iw) + W_q/Nkpt
          enddo
          !
-         deallocate(den_smallk,den_smallk_avrg)
+         deallocate(epsGamma)
          !
       endif
       deallocate(invW,W_q)
       !
-      ! Check if the screened limit is locally symmetric - print if error is bigger than 1e-3
-      if(Wmats%Nsite.eq.1)then
-         write(*,"(A)") "     Enforcing symmetry of local Wlat."
-         call isReal(Wmats%bare_local)
-         do iw=1,Nmats
-            call isReal(Wmats%screened_local(:,:,iw))
-            call check_Symmetry(Wmats%screened_local(:,:,iw),1e7*eps,enforce=.true.,hardstop=.false.,name="Wlat_loc_w"//str(iw),verb=.true.)
-         enddo
-      else
-         write(*,"(A)") "     Enforcing hermiticity of local Wlat."
-         do iw=1,Nmats
-            call check_Hermiticity(Wmats%screened_local(:,:,iw),1e7*eps,enforce=.true.,hardstop=.false.,name="Wlat_loc_w"//str(iw),verb=.true.)
-         enddo
-      endif
+      !Check if the screened limit is locally symmetric - print if error is bigger than 1e-3
+      write(*,"(A)") "     Checking hermiticity of local Wlat (enforced)."
+      do iw=1,Nmats
+         call check_Hermiticity(Wmats%screened_local(:,:,iw),1e7*eps,enforce=.true.,hardstop=.false.,name="Wlat_loc_w"//str(iw),verb=.true.)
+      enddo
       !
    end subroutine calc_W_edmft
 
@@ -1086,7 +1063,7 @@ contains
 
 
    !---------------------------------------------------------------------------!
-   !PURPOSE: Check if the AC alters the bare and screened values
+   !PURPOSE: Check how the AC alters the bare and screened values
    !---------------------------------------------------------------------------!
    subroutine checkAnalyticContinuation(Umats,Ureal)
       !
@@ -2203,17 +2180,14 @@ contains
             !indexes specifially for that representation. The matching between
             !the two is not done, so I have to do it here.
             !
-            ! (aa)(bb) indexes in the Norb^2 representaion
-            iu1 = iorb + Norb*(iorb-1)
-            iu2 = jorb + Norb*(jorb-1)
+            ! (iorb,iorb)(jorb,jorb) indexes in the Norb^2 representaion
+            call F2Bindex(Norb,[iorb,iorb],[jorb,jorb],iu1,iu2)
             !
-            ! (ab)(ba) indexes
-            ix1 = iorb + Norb*(jorb-1)
-            ix2 = jorb + Norb*(iorb-1)
+            ! (iorb,jorb)(jorb,iorb) indexes
+            call F2Bindex(Norb,[iorb,jorb],[jorb,iorb],ix1,ix2)
             !
-            ! (ab)(ab) indexes
-            ip1 = iorb + Norb*(jorb-1)
-            ip2 = iorb + Norb*(jorb-1)
+            ! (iorb,jorb)(iorb,jorb) indexes
+            call F2Bindex(Norb,[iorb,jorb],[iorb,jorb],ip1,ip2)
             !
             if(Uloc) Uinst(ib1,ib2) = Umats%screened_local(iu1,iu2,1)
             if(U1st) Uinst(ib1,ib2) = Umats%screened_local(iu1,iu2,1)
@@ -2263,7 +2237,7 @@ contains
       use parameters
       use utils_fields
       use utils_misc
-      use linalg, only : zeye, inv, inv_sym
+      use linalg, only : zeye, inv, inv_sym, diag, diagonal
       implicit none
       !
       type(BosonicField),intent(inout)      :: curlyU
@@ -2292,7 +2266,7 @@ contains
       if(Wimp%Nkpt.ne.0) stop "calc_curlyU: Wimp k dependent attributes are supposed to be unallocated."
       if(Pimp%Nkpt.ne.0) stop "calc_curlyU: Pimp k dependent attributes are supposed to be unallocated."
       !
-      sym_=.true.
+      sym_=.false.
       if(present(sym))sym_=sym
       !
       Nbp = curlyU%Nbp
@@ -2337,13 +2311,13 @@ contains
       do iw=1,curlyU%Npoints
          !
          if(correctP)then
-            invW = zeye(curlyU%Nbp) + matmul((Pimp%screened_local(:,:,iw) - dreal(curlyUcorr%screened_local(:,:,iw))),dreal(Wimp%screened_local(:,:,iw)))
+            invW = zeye(curlyU%Nbp) + matmul((Pimp%screened_local(:,:,iw) - curlyUcorr%screened_local(:,:,iw)),Wimp%screened_local(:,:,iw))
          else
-            invW = zeye(curlyU%Nbp) + matmul(Pimp%screened_local(:,:,iw),dreal(Wimp%screened_local(:,:,iw)))
+            invW = zeye(curlyU%Nbp) + matmul(Pimp%screened_local(:,:,iw),Wimp%screened_local(:,:,iw))
          endif
          !
          call inv(invW)
-         curlyU%screened_local(:,:,iw) = matmul(dreal(Wimp%screened_local(:,:,iw)),invW)
+         curlyU%screened_local(:,:,iw) = matmul(Wimp%screened_local(:,:,iw),invW)
          !
       enddo
       !$OMP END DO
@@ -2353,16 +2327,16 @@ contains
       !Causality correction on curlyU
       if(correctU)then
          do iw=1,curlyU%Npoints
-            curlyU%screened_local(:,:,iw) = curlyU%screened_local(:,:,iw) - dreal(curlyUcorr%screened_local(:,:,iw))
+            curlyU%screened_local(:,:,iw) = curlyU%screened_local(:,:,iw) - curlyUcorr%screened_local(:,:,iw)
          enddo
       endif
+      !call isReal(curlyU)
       !
-      call isReal(curlyU)
-      !
+      !Check if the screened limit is locally symmetric - print if error is bigger than 1e-3
       if(sym_)then
-         write(*,"(A)") "     Checking symmetry of curlyU (enforced)"
+         write(*,"(A)") "     Checking hermiticity of curlyU (enforced)."
          do iw=1,Nmats
-            call check_Symmetry(curlyU%screened_local(:,:,iw),eps,enforce=.true.,hardstop=.false.,name="curlyU_w"//str(iw))
+            call check_Hermiticity(curlyU%screened_local(:,:,iw),1e7*eps,enforce=.true.,hardstop=.false.,name="curlyU_w"//str(iw),verb=.true.)
          enddo
       endif
       !
@@ -2405,7 +2379,7 @@ contains
       if(allocated(ChiC%bare_local))  stop "calc_Wimp: ChiC bare_local attribute is supposed to be unallocated."
       if(allocated(ChiC%bare))  stop "calc_Wimp: ChiC bare attribute is supposed to be unallocated."
       !
-      sym_=.true.
+      sym_=.false.
       if(present(sym))sym_=sym
       !
       Nbp = Wimp%Nbp
@@ -2434,12 +2408,13 @@ contains
       !$OMP END DO
       !$OMP END PARALLEL
       deallocate(Wtmp)
-      call isReal(Wimp)
+      !call isReal(Wimp)
       !
+      !Check if the screened limit is locally symmetric - print if error is bigger than 1e-4
       if(sym_)then
-         write(*,"(A)") "     Checking symmetry of Wimp (enforced)"
+         write(*,"(A)") "     Checking hermiticity of Wimp (enforced)."
          do iw=1,Nmats
-            call check_Symmetry(Wimp%screened_local(:,:,iw),eps,enforce=.true.,hardstop=.false.,name="Wimp_w"//str(iw))
+            call check_Hermiticity(Wimp%screened_local(:,:,iw),1e6*eps,enforce=.true.,hardstop=.false.,name="Wimp_w"//str(iw),verb=.true.)
          enddo
       endif
       !
@@ -2447,7 +2422,7 @@ contains
 
 
    !---------------------------------------------------------------------------!
-   !PURPOSE: Correct the polarization at gamma
+   !PURPOSE: Correct the RPA interaction at gamma (not used)
    !---------------------------------------------------------------------------!
    subroutine correct_Ugamma(Ulat)
       !

@@ -124,7 +124,6 @@ contains
    ! How to use the weights:
    ! ReG(tau)= S[n=0,inf] [ coswt(n) * ReGe(ivn) + sinwt(n) * ImGo(ivn) ]
    ! ImG(tau)= S[n=0,inf] [ coswt(n) * ImGe(ivn) - sinwt(n) * ReGo(ivn) ]
-   !TEST ON: 16-10-2020
    !---------------------------------------------------------------------------!
    subroutine mats2itau_FermionicCoeff(tau,coswt,sinwt,correct)
       !
@@ -279,7 +278,6 @@ contains
    ! iopt=30=> only b1
    ! Numerical test on Cu suggests that iopt=10 with b3=0 is the best
    ! (simple is best) which is used in this routine.
-   !TEST ON: 27-10-2020
    !---------------------------------------------------------------------------!
    subroutine mats2itau_BosonicCoeff(tau,coswt,correct)
       !
@@ -340,7 +338,6 @@ contains
 
    !---------------------------------------------------------------------------!
    !PURPOSE: Perform the Fourier transform from mats to tau of a matrix Gf
-   !TEST ON: 27-10-2020(both)
    !---------------------------------------------------------------------------!
    subroutine Fmats2itau_mat_Gw(beta,Gmats,Gitau,asympt_corr,tau_uniform,atBeta)
       !
@@ -508,7 +505,7 @@ contains
       allocate(Ge(Norb,Norb));Ge=czero
       allocate(Go(Norb,Norb));Go=czero
       !$OMP PARALLEL DEFAULT(NONE),&
-      !$OMP SHARED(atBeta_,Ndat,Ntau,Nmats,coswt,sinwt,Gft_in,Gft_out,real_space),&
+      !$OMP SHARED(atBeta_,Ndat,Ntau,Nmats,coswt,sinwt,Gft_in,Gft_out),&
       !$OMP PRIVATE(idat,itau,iw,Ge,Go)
       !$OMP DO
       do itau=1,Ntau
@@ -516,15 +513,9 @@ contains
          do idat=1,Ndat
             do iw=1,Nmats
                !
-               if(real_space)then
-                  !Gab(-iw) = Gab*(iwn)
-                  Ge = Gft_in(:,:,iw,idat) + conjg(Gft_in(:,:,iw,idat))
-                  Go = Gft_in(:,:,iw,idat) - conjg(Gft_in(:,:,iw,idat))
-               else
-                  !Gab(-iw) = Gba*(iwn)
-                  Ge = Gft_in(:,:,iw,idat) + transpose(conjg(Gft_in(:,:,iw,idat)))
-                  Go = Gft_in(:,:,iw,idat) - transpose(conjg(Gft_in(:,:,iw,idat)))
-               endif
+               !Universal Gf paroty: Gab(-iw) = Gba*(iwn)
+               Ge = Gft_in(:,:,iw,idat) + transpose(conjg(Gft_in(:,:,iw,idat)))
+               Go = Gft_in(:,:,iw,idat) - transpose(conjg(Gft_in(:,:,iw,idat)))
                !
                Gft_out(:,:,itau,idat) = Gft_out(:,:,itau,idat) + coswt(iw,itau)*Ge -dcmplx(0d0,1d0)*sinwt(iw,itau)*Go
                !
@@ -547,7 +538,6 @@ contains
 
    !---------------------------------------------------------------------------!
    !PURPOSE: Perform the Fourier transform from mats to tau of a vector Gf
-   !TEST ON: 16-10-2020(Gwk)
    !---------------------------------------------------------------------------!
    subroutine Fmats2itau_vec_Gw(beta,Gmats,Gitau,asympt_corr,tau_uniform,atBeta)
       !
@@ -823,7 +813,6 @@ contains
 
    !---------------------------------------------------------------------------!
    !PURPOSE: Perform the Fourier transform from tau to mats of a matrix Gf
-   !TEST ON: 27-10-2020(Gwk)
    !---------------------------------------------------------------------------!
    subroutine Fitau2mats_mat_Gw(beta,Gitau,Gmats,tau_uniform)
       !
@@ -967,7 +956,6 @@ contains
 
    !---------------------------------------------------------------------------!
    !PURPOSE: Perform the Fourier transform from tau to mats of a vector Gf
-   !TEST ON: 16-10-2020(mat&vec)
    !---------------------------------------------------------------------------!
    subroutine Fitau2mats_vec_Gw(beta,Gitau,Gmats,tau_uniform)
       !
@@ -1171,7 +1159,6 @@ contains
 
    !---------------------------------------------------------------------------!
    !PURPOSE: Perform the Fourier transform from mats to tau of a bosonic tensor
-   !TEST ON: 27-10-2020(both)
    !---------------------------------------------------------------------------!
    subroutine Bmats2itau_Uw_component(beta,Umats,Uitau,asympt_corr,tau_uniform,Umats_bare)
       !
@@ -1407,7 +1394,6 @@ contains
 
    !---------------------------------------------------------------------------!
    !PURPOSE: Perform the Fourier transform from tau to mats of a bosonic tensor
-   !TEST ON: 21-10-2020
    !---------------------------------------------------------------------------!
    subroutine Bitau2mats_Uw_component(beta,Uitau,Umats,tau_uniform)
       !

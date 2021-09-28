@@ -97,6 +97,7 @@ module utils_misc
    !PURPOSE: Rutines available for the user. Description only for interfaces.
    !---------------------------------------------------------------------------!
    !subroutines
+   public :: F2Bindex
    public :: tick
    public :: tock
    public :: inquireFile
@@ -167,6 +168,7 @@ contains
       endif
       !
    end function FermionicFreqMesh
+   !
    function BosonicFreqMesh(Beta,Nfreq,full) result(wmats)
       implicit none
       real(8),intent(in)                    :: Beta
@@ -196,6 +198,28 @@ contains
 
 
    !---------------------------------------------------------------------------!
+   !PURPOSE: Universal map/ordering between Fermionic and Bosonic Wannier basis
+   !---------------------------------------------------------------------------!
+   subroutine F2Bindex(Norb,Lorbs,Rorbs,ib1,ib2)
+      implicit none
+      integer,intent(in)                    :: Lorbs(2)
+      integer,intent(in)                    :: Rorbs(2)
+      integer,intent(in)                    :: Norb
+      integer,intent(out)                   :: ib1,ib2
+      integer                               :: i,j,k,l
+      !
+      i = Lorbs(1)
+      j = Lorbs(2)
+      k = Rorbs(1)
+      l = Rorbs(2)
+      !
+      ib1 = j + Norb*(i-1)
+      ib2 = l + Norb*(k-1)
+      !
+   end subroutine F2Bindex
+
+
+   !---------------------------------------------------------------------------!
    !PURPOSE: Calculates the fermi-dirac distribution f(e)
    !---------------------------------------------------------------------------!
    double precision function fermidirac_shifted(e,mu,beta)
@@ -217,6 +241,7 @@ contains
       endif
       !
    end function fermidirac_shifted
+   !
    double precision function fermidirac_centered(e,beta)
       implicit none
       real(8),intent(in)                    :: e,beta
@@ -256,6 +281,7 @@ contains
       endif
       !
    end function boseeinstein_shifted
+   !
    double precision function boseeinstein_centered(e,beta)
       implicit none
       real(8),intent(in)                    :: e,beta
@@ -298,12 +324,16 @@ contains
    !---------------------------------------------------------------------------!
    !PURPOSE: Find index of vector in list
    !---------------------------------------------------------------------------!
-   function find_vec_i(vec,list) result(ivec)
+   function find_vec_i(vec,list,hardstop) result(ivec)
       implicit none
       integer,intent(in)                    :: vec(:)
       integer,intent(in)                    :: list(:,:)
-      logical                               :: l1,l2,l3
+      logical,intent(in),optional           :: hardstop
+      logical                               :: l1,l2,l3,hardstop_
       integer                               :: i,ivec
+      !
+      hardstop_=.true.
+      if(present(hardstop))hardstop_=hardstop
       !
       do i=1,size(list,dim=2)
          l1 = vec(1) .eq. list(1,i)
@@ -314,20 +344,27 @@ contains
             exit
          endif
       enddo
-      if(i.eq.size(list,dim=2)) then
-          write(*,"(A,300F)")"find_vec_i: vec=",vec
-          stop "find_vec_i: requested vector not found in list."
+      if(i.eq.size(list,dim=2))then
+         ivec=0
+         if(hardstop_)then
+            write(*,"(A,3I)")"find_vec_i: vec=",vec
+            stop "find_vec_i: requested vector not found in list."
+         endif
       endif
       !
    end function find_vec_i
    !
-   function find_vec_d(vec,list,tol) result(ivec)
+   function find_vec_d(vec,list,tol,hardstop) result(ivec)
       implicit none
       real(8),intent(in)                    :: vec(:)
       real(8),intent(in)                    :: list(:,:)
       real(8),intent(in)                    :: tol
-      logical                               :: l1,l2,l3
+      logical,intent(in),optional           :: hardstop
+      logical                               :: l1,l2,l3,hardstop_
       integer                               :: i,ivec
+      !
+      hardstop_=.true.
+      if(present(hardstop))hardstop_=hardstop
       !
       do i=1,size(list,dim=2)
          l1 = dabs(vec(1)-list(1,i)) .le. tol
@@ -338,9 +375,12 @@ contains
             exit
          endif
       enddo
-      if(i.eq.size(list,dim=2)) then
-          write(*,"(A,300F)")"find_vec_d: vec=",vec
-          stop "find_vec_d: requested vector not found in list."
+      if(i.eq.size(list,dim=2))then
+         ivec=0
+         if(hardstop_)then
+            write(*,"(A,3F20.12)")"find_vec_d: vec=",vec
+            stop "find_vec_d: requested vector not found in list."
+         endif
       endif
       !
    end function find_vec_d
@@ -519,7 +559,7 @@ contains
       unit_=100
       do
          unit_=unit_+1
-         INQUIRE(unit=unit_,OPENED=opened,iostat=ios)
+         inquire(unit=unit_,OPENED=opened,iostat=ios)
          if(.not.opened.AND.ios==0)exit
          if(unit_>900) stop "free_unit: no unit free smaller than 900. Possible BUG"
       enddo
@@ -534,6 +574,7 @@ contains
       integer, intent(out)                  :: t
       call system_clock(t)
    end subroutine tick
+   !
    real function tock(t)
       integer, intent(in)                   :: t
       integer                               :: now, clock_rate
@@ -565,6 +606,7 @@ contains
       endif
       !
    end subroutine inquireFile
+   !
    subroutine inquireDir(dir,exists,hardstop,verb)
       implicit none
       character(len=*),intent(in)           :: dir
@@ -635,7 +677,7 @@ contains
    !---------------------------------------------------------------------------!
    !PURPOSE: Check if matrix is Hermitian
    !---------------------------------------------------------------------------!
-   subroutine check_Hermiticity(A,tol,enforce,hardstop,name,verb)
+   subroutine check_Hermiticity(A,tol,enforce,hardstop,name,verb,isHerm)
       implicit none
       complex(8),intent(inout)              :: A(:,:)
       real(8),intent(in)                    :: tol
@@ -643,10 +685,11 @@ contains
       logical,intent(in),optional           :: hardstop
       character(len=*),intent(in),optional  :: name
       logical,intent(in),optional           :: verb
+      logical,intent(out),optional          :: isHerm
       !
       real(8)                               :: ReErr,ImErr
       real(8)                               :: percReErr=0d0,percImErr=0d0
-      logical                               :: hardstop_,enforce_,verb_
+      logical                               :: hardstop_,enforce_,verb_,isHerm_
       integer                               :: N,i,j
       !
       if(size(A,dim=1).ne.size(A,dim=2))stop "check_Hermiticity: Matrix not square."
@@ -681,6 +724,7 @@ contains
                endif
                !
                if(hardstop_)stop  "check_Hermiticity: Matrix not Hermitian."
+               isHerm_=.false.
                !
             endif
             !
@@ -691,6 +735,7 @@ contains
             !
          enddo
       enddo
+      if(present(isHerm))isHerm=isHerm_
       !
    end subroutine check_Hermiticity
 
@@ -698,7 +743,7 @@ contains
    !---------------------------------------------------------------------------!
    !PURPOSE: Check if matrix is Symmetric
    !---------------------------------------------------------------------------!
-   subroutine check_Symmetry_d(A,tol,enforce,hardstop,name,verb)
+   subroutine check_Symmetry_d(A,tol,enforce,hardstop,name,verb,isSym)
       implicit none
       real(8),intent(inout)                 :: A(:,:)
       real(8),intent(in)                    :: tol
@@ -706,9 +751,10 @@ contains
       logical,intent(in),optional           :: hardstop
       character(len=*),intent(in),optional  :: name
       logical,intent(in),optional           :: verb
+      logical,intent(out),optional          :: isSym
       !
       real(8)                               :: ReErr,percReErr=0d0
-      logical                               :: hardstop_,enforce_,verb_
+      logical                               :: hardstop_,enforce_,verb_,isSym_
       integer                               :: N,i,j
       !
       if(size(A,dim=1).ne.size(A,dim=2))stop "check_Symmetry_d: Matrix not square."
@@ -737,6 +783,7 @@ contains
                endif
                !
                if(hardstop_)stop "check_Symmetry_d: Matrix not symmatric."
+               isSym_=.false.
                !
             endif
             !
@@ -747,10 +794,11 @@ contains
             !
          enddo
       enddo
+      if(present(isSym))isSym=isSym_
       !
    end subroutine check_Symmetry_d
    !
-   subroutine check_Symmetry_z(A,tol,enforce,hardstop,name,verb)
+   subroutine check_Symmetry_z(A,tol,enforce,hardstop,name,verb,isSym)
       implicit none
       complex(8),intent(inout)              :: A(:,:)
       real(8),intent(in)                    :: tol
@@ -758,10 +806,11 @@ contains
       logical,intent(in),optional           :: hardstop
       character(len=*),intent(in),optional  :: name
       logical,intent(in),optional           :: verb
+      logical,intent(out),optional          :: isSym
       !
       real(8)                               :: ReErr,ImErr
       real(8)                               :: percReErr=0d0,percImErr=0d0
-      logical                               :: hardstop_,enforce_,verb_
+      logical                               :: hardstop_,enforce_,verb_,isSym_
       integer                               :: N,i,j
       !
       if(size(A,dim=1).ne.size(A,dim=2))stop "check_Symmetry_z: Matrix not square."
@@ -796,6 +845,7 @@ contains
                endif
                !
                if(hardstop_)stop "check_Symmetry_z: Matrix not symmatric."
+               isSym_=.false.
                !
             endif
             !
@@ -806,6 +856,7 @@ contains
             !
          enddo
       enddo
+      if(present(isSym))isSym=isSym_
       !
    end subroutine check_Symmetry_z
 
@@ -893,8 +944,7 @@ contains
             do korb=1,Norb
                do lorb=1,Norb
                   !
-                  ib1 = iorb + Norb*(jorb-1)
-                  ib2 = korb + Norb*(lorb-1)
+                  call F2Bindex(Norb,[iorb,jorb],[korb,lorb],ib1,ib2)
                   !
                   Uelements%Full_Uaa(ib1,ib2) = (iorb.eq.jorb).and.(korb.eq.lorb).and.(iorb.eq.korb)
                   Uelements%Full_Uab(ib1,ib2) = (iorb.eq.jorb).and.(korb.eq.lorb).and.(iorb.ne.korb)
@@ -1069,16 +1119,13 @@ contains
       real(8),intent(inout)                 :: funct(:)
       integer                               :: itau,Ntau
       real(8)                               :: sign=+1d0
-      !
       Ntau=size(funct)
-      !
       do itau=1,int(Ntau/2)
          funct(itau) = 0.5 * (funct(itau) + sign*funct(ntau-itau+1))
       enddo
       do itau=1,int(Ntau/2)
          funct(ntau-itau+1) = sign*funct(itau)
       enddo
-      !
    end subroutine halfbeta_symm
    !
    subroutine halfbeta_antisymm(funct)
@@ -1086,16 +1133,13 @@ contains
       real(8),intent(inout)                 :: funct(:)
       integer                               :: itau,Ntau
       real(8)                               :: sign=-1d0
-      !
       Ntau=size(funct)
-      !
       do itau=1,int(Ntau/2)
          funct(itau) = 0.5 * (funct(itau) + sign*funct(ntau-itau+1))
       enddo
       do itau=1,int(Ntau/2)
          funct(ntau-itau+1) = sign*funct(itau)
       enddo
-      !
    end subroutine halfbeta_antisymm
 
 

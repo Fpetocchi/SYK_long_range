@@ -471,10 +471,10 @@ contains
       implicit none
       type(FermionicField),intent(inout)    :: G
       if(.not.G%status) stop "clear_attributes_Fermion: field not properly initialized."
-      if(allocated(G%N_s))G%N_s=czero
-      if(allocated(G%ws))G%ws=czero
-      if(allocated(G%N_ks))G%N_ks=czero
-      if(allocated(G%wks))G%wks=czero
+      if(allocated(G%N_s)) G%N_s=czero
+      if(allocated(G%ws)) G%ws=czero
+      if(allocated(G%N_ks)) G%N_ks=czero
+      if(allocated(G%wks)) G%wks=czero
    end subroutine clear_attributes_Fermion
    !
    subroutine clear_attributes_Boson(W)
@@ -482,10 +482,10 @@ contains
       implicit none
       type(BosonicField),intent(inout)      :: W
       if(.not.W%status) stop "clear_attributes_Boson: field not properly initialized."
-      if(allocated(W%bare_local))W%bare_local=czero
-      if(allocated(W%screened_local))W%screened_local=czero
-      if(allocated(W%bare))W%bare=czero
-      if(allocated(W%screened))W%screened=czero
+      if(allocated(W%bare_local)) W%bare_local=czero
+      if(allocated(W%screened_local)) W%screened_local=czero
+      if(allocated(W%bare)) W%bare=czero
+      if(allocated(W%screened)) W%screened=czero
    end subroutine clear_attributes_Boson
 
 
@@ -525,10 +525,10 @@ contains
          do iorb=1,G%Norb
             do jorb=1,G%Norb
                if(allocated(G%N_s).and.(.not.Map(iorb,jorb))) G%N_s(iorb,jorb,ispin)=czero
-               if(allocated(G%ws).and.(.not.Map(iorb,jorb)))  G%ws(iorb,jorb,:,ispin)=czero
+               if(allocated(G%ws).and.(.not.Map(iorb,jorb))) G%ws(iorb,jorb,:,ispin)=czero
                if(.not.LocalOnly_)then
                   if(allocated(G%N_ks).and.(.not.Map(iorb,jorb))) G%N_ks(iorb,jorb,:,ispin)=czero
-                  if(allocated(G%wks).and.(.not.Map(iorb,jorb)))  G%wks(iorb,jorb,:,:,ispin)=czero
+                  if(allocated(G%wks).and.(.not.Map(iorb,jorb))) G%wks(iorb,jorb,:,:,ispin)=czero
                endif
             enddo
          enddo
@@ -551,10 +551,10 @@ contains
       do ib1=1,W%Nbp
          do ib2=1,W%Nbp
             if(allocated(W%bare_local).and.(.not.Map(ib1,ib2))) W%bare_local(ib1,ib2)=czero
-            if(allocated(W%screened_local).and.(.not.Map(ib1,ib2)))  W%screened_local(ib1,ib2,:)=czero
+            if(allocated(W%screened_local).and.(.not.Map(ib1,ib2))) W%screened_local(ib1,ib2,:)=czero
             if(.not.LocalOnly_)then
                if(allocated(W%bare).and.(.not.Map(ib1,ib2))) W%bare(ib1,ib2,:)=czero
-               if(allocated(W%screened).and.(.not.Map(ib1,ib2)))  W%screened(ib1,ib2,:,:)=czero
+               if(allocated(W%screened).and.(.not.Map(ib1,ib2))) W%screened(ib1,ib2,:,:)=czero
             endif
          enddo
       enddo
@@ -573,8 +573,8 @@ contains
       call DeallocateFermionicField(Gnew)
       call AllocateFermionicField(Gnew,Gold%Norb,Gold%Npoints,Nkpt=Gold%Nkpt,Nsite=Gold%Nsite,Beta=Gold%Beta,mu=Gold%mu)
       if(allocated(Gold%N_s)) Gnew%N_s = Gold%N_s
-      if(allocated(Gold%ws))  Gnew%ws  = Gold%ws
-      if(allocated(Gold%N_ks))Gnew%N_ks= Gold%N_ks
+      if(allocated(Gold%ws)) Gnew%ws = Gold%ws
+      if(allocated(Gold%N_ks)) Gnew%N_ks= Gold%N_ks
       if(allocated(Gold%wks)) Gnew%wks = Gold%wks
    end subroutine duplicate_Fermionic
    !
@@ -596,31 +596,31 @@ contains
    !---------------------------------------------------------------------------!
    !PURPOSE: Remove the complex part of the allocated attributes
    !---------------------------------------------------------------------------!
-   subroutine isReal_Matrix(A)
+   subroutine isReal_Matrix(O)
       use parameters
       implicit none
-      complex(8),intent(inout)              :: A(:,:)
-      A=dcmplx(dreal(A),0d0)
+      complex(8),intent(inout)              :: O(:,:)
+      O=dcmplx(dreal(O),0d0)
    end subroutine isReal_Matrix
    !
    subroutine isReal_Fermionic(G)
       use parameters
       implicit none
       type(FermionicField),intent(inout)    :: G
-      if(allocated(G%N_s))   G%N_s  = dcmplx(dreal(G%N_s),0d0)
-      if(allocated(G%ws))    G%ws   = dcmplx(dreal(G%ws),0d0)
-      if(allocated(G%N_ks))  G%N_ks = dcmplx(dreal(G%N_ks),0d0)
-      if(allocated(G%wks))   G%wks  = dcmplx(dreal(G%wks),0d0)
+      if(allocated(G%N_s)) G%N_s = dcmplx(dreal(G%N_s),0d0)
+      if(allocated(G%ws)) G%ws = dcmplx(dreal(G%ws),0d0)
+      if(allocated(G%N_ks)) G%N_ks = dcmplx(dreal(G%N_ks),0d0)
+      if(allocated(G%wks)) G%wks = dcmplx(dreal(G%wks),0d0)
    end subroutine isReal_Fermionic
    !
    subroutine isReal_Bosonic(W)
       use parameters
       implicit none
       type(BosonicField),intent(inout)      :: W
-      if(allocated(W%bare_local))     W%bare_local     = dcmplx(dreal(W%bare_local),0d0)
+      if(allocated(W%bare_local)) W%bare_local = dcmplx(dreal(W%bare_local),0d0)
       if(allocated(W%screened_local)) W%screened_local = dcmplx(dreal(W%screened_local),0d0)
-      if(allocated(W%bare))           W%bare           = dcmplx(dreal(W%bare),0d0)
-      if(allocated(W%screened))       W%screened       = dcmplx(dreal(W%screened),0d0)
+      if(allocated(W%bare)) W%bare = dcmplx(dreal(W%bare),0d0)
+      if(allocated(W%screened)) W%screened = dcmplx(dreal(W%screened),0d0)
    end subroutine isReal_Bosonic
 
 
@@ -815,8 +815,8 @@ contains
                do l_imp=1,Norb_imp
                   !
                   ! bosonic indexes of the impurity
-                  ib_imp = k_imp + Norb_imp*(i_imp-1)
-                  jb_imp = l_imp + Norb_imp*(j_imp-1)
+                  ib_imp = j_imp + Norb_imp*(i_imp-1)
+                  jb_imp = l_imp + Norb_imp*(k_imp-1)
                   !
                   ! mapping
                   i_loc = orbs(i_imp)
@@ -825,8 +825,7 @@ contains
                   l_loc = orbs(l_imp)
                   !
                   ! corresponding bosonic indexes on the lattice
-                  ib_loc = k_loc + Norb_loc*(i_loc-1)
-                  jb_loc = l_loc + Norb_loc*(j_loc-1)
+                  call F2Bindex(Norb_loc,[i_loc,j_loc],[k_loc,l_loc],ib_loc,jb_loc)
                   !
                   if(doBare)Wimp%bare_local(ib_imp,jb_imp) =  Wloc%bare_local(ib_loc,jb_loc)
                   do ip=1,Wimp%Npoints
@@ -1330,8 +1329,8 @@ contains
                   do l_imp=1,Norb_imp
                      !
                      ! bosonic indexes of the impurity
-                     ib_imp = k_imp + Norb_imp*(i_imp-1)
-                     jb_imp = l_imp + Norb_imp*(j_imp-1)
+                     ib_imp = j_imp + Norb_imp*(i_imp-1)
+                     jb_imp = l_imp + Norb_imp*(k_imp-1)
                      !
                      ! mapping
                      i_loc = orbs(i_imp) + shift
@@ -1340,8 +1339,7 @@ contains
                      l_loc = orbs(l_imp) + shift
                      !
                      ! corresponding bosonic indexes on the lattice
-                     ib_loc = k_loc + Norb_loc*(i_loc-1)
-                     jb_loc = l_loc + Norb_loc*(j_loc-1)
+                     call F2Bindex(Norb_loc,[i_loc,j_loc],[k_loc,l_loc],ib_loc,jb_loc)
                      !
                      if(doBare)Wloc%bare_local(ib_loc,jb_loc) = Wbtmp(ib_imp,jb_imp,isite)
                      do ip=1,Wimp%Npoints
@@ -1541,8 +1539,8 @@ contains
                   do l_site=1,Norb_site
                      !
                      ! bosonic indexes of the impurity
-                     ib_site = k_site + Norb_site*(i_site-1)
-                     jb_site = l_site + Norb_site*(j_site-1)
+                     ib_site = j_site + Norb_site*(i_site-1)
+                     jb_site = l_site + Norb_site*(k_site-1)
                      !
                      ! mapping
                      i = i_site + shift
@@ -1551,8 +1549,7 @@ contains
                      l = l_site + shift
                      !
                      ! corresponding bosonic indexes on the lattice
-                     ib = k + Norb*(i-1)
-                     jb = l + Norb*(j-1)
+                     call F2Bindex(Norb,[i,j],[k,l],ib,jb)
                      !
                      condW = allocated(W%screened)
                      condWsite = allocated(Wsite%screened)
@@ -2006,6 +2003,7 @@ contains
    subroutine symmetrize_GW_Bosonic(W,Eqv,override)
       !
       use parameters
+      use utils_misc
       implicit none
       !
       type(BosonicField),intent(inout)      :: W
@@ -2057,19 +2055,15 @@ contains
                   do jorb=1+iorb,Eqv%SetNorb(iset)
                      j = Eqv%SetOrbs(iset,jorb)
                      !
-                     ib1_ab = i + Norb*(i-1)
-                     ib2_ab = j + Norb*(j-1)
+                     call F2Bindex(Norb,[i,i],[j,j],ib1_ab,ib2_ab)
                      if(verbose)write(*,"(2(A,2I3),2(A,I4),A)")    "     W(aa)(bb): (",i,i,"),(",j,j,") = [",ib1_ab,",",ib2_ab,"]"
                      !
-                     ib1_sf = i + Norb*(j-1)
-                     ib2_sf = j + Norb*(i-1)
+                     call F2Bindex(Norb,[i,j],[j,i],ib1_sf,ib2_sf)
                      if(verbose)write(*,"(2(A,2I3),2(A,I4),A)")    "     W(ab)(ba): (",i,j,"),(",j,i,") = [",ib1_sf,",",ib2_sf,"]"
                      !
-                     ib1_pa = i + Norb*(j-1)
-                     ib2_pa = i + Norb*(j-1)
+                     call F2Bindex(Norb,[i,j],[i,j],ib1_pa,ib2_pa)
                      if(verbose)write(*,"(2(A,2I3),2(A,I4),A)")    "     W(ab)(ab): (",i,j,"),(",i,j,") = [",ib1_pa,",",ib2_pa,"]"
-                     ib1_pb = j + Norb*(i-1)
-                     ib2_pb = j + Norb*(i-1)
+                     call F2Bindex(Norb,[j,i],[j,i],ib1_pb,ib2_pb)
                      if(verbose)write(*,"(2(A,2I3),2(A,I4),A)")    "     W(ba)(ba): (",j,i,"),(",j,i,") = [",ib1_pb,",",ib2_pb,"]"
                      !
                      Waabb = Waabb + (W%bare_local(ib1_ab,ib2_ab)+W%bare_local(ib2_ab,ib1_ab)) / dimoffdiag
@@ -2088,16 +2082,10 @@ contains
                   do jorb=1+iorb,Eqv%SetNorb(iset)
                      j = Eqv%SetOrbs(iset,jorb)
                      !
-                     ib1_ab = i + Norb*(i-1)
-                     ib2_ab = j + Norb*(j-1)
-                     !
-                     ib1_sf = i + Norb*(j-1)
-                     ib2_sf = j + Norb*(i-1)
-                     !
-                     ib1_pa = i + Norb*(j-1)
-                     ib2_pa = i + Norb*(j-1)
-                     ib1_pb = j + Norb*(i-1)
-                     ib2_pb = j + Norb*(i-1)
+                     call F2Bindex(Norb,[i,i],[j,j],ib1_ab,ib2_ab)
+                     call F2Bindex(Norb,[i,j],[j,i],ib1_sf,ib2_sf)
+                     call F2Bindex(Norb,[i,j],[i,j],ib1_pa,ib2_pa)
+                     call F2Bindex(Norb,[j,i],[j,i],ib1_pb,ib2_pb)
                      !
                      W%bare_local(ib1_ab,ib2_ab) = Waabb
                      W%bare_local(ib2_ab,ib1_ab) = Waabb
@@ -2125,16 +2113,10 @@ contains
                   do jorb=1+iorb,Eqv%SetNorb(iset)
                      j = Eqv%SetOrbs(iset,jorb)
                      !
-                     ib1_ab = i + Norb*(i-1)
-                     ib2_ab = j + Norb*(j-1)
-                     !
-                     ib1_sf = i + Norb*(j-1)
-                     ib2_sf = j + Norb*(i-1)
-                     !
-                     ib1_pa = i + Norb*(j-1)
-                     ib2_pa = i + Norb*(j-1)
-                     ib1_pb = j + Norb*(i-1)
-                     ib2_pb = j + Norb*(i-1)
+                     call F2Bindex(Norb,[i,i],[j,j],ib1_ab,ib2_ab)
+                     call F2Bindex(Norb,[i,j],[j,i],ib1_sf,ib2_sf)
+                     call F2Bindex(Norb,[i,j],[i,j],ib1_pa,ib2_pa)
+                     call F2Bindex(Norb,[j,i],[j,i],ib1_pb,ib2_pb)
                      !
                      Waabb = Waabb + (W%screened_local(ib1_ab,ib2_ab,ip)+W%screened_local(ib2_ab,ib1_ab,ip)) / dimoffdiag
                      Wabba = Wabba + (W%screened_local(ib1_sf,ib2_sf,ip)+W%screened_local(ib2_sf,ib1_sf,ip)) / dimoffdiag
@@ -2152,16 +2134,10 @@ contains
                   do jorb=1+iorb,Eqv%SetNorb(iset)
                      j = Eqv%SetOrbs(iset,jorb)
                      !
-                     ib1_ab = i + Norb*(i-1)
-                     ib2_ab = j + Norb*(j-1)
-                     !
-                     ib1_sf = i + Norb*(j-1)
-                     ib2_sf = j + Norb*(i-1)
-                     !
-                     ib1_pa = i + Norb*(j-1)
-                     ib2_pa = i + Norb*(j-1)
-                     ib1_pb = j + Norb*(i-1)
-                     ib2_pb = j + Norb*(i-1)
+                     call F2Bindex(Norb,[i,i],[j,j],ib1_ab,ib2_ab)
+                     call F2Bindex(Norb,[i,j],[j,i],ib1_sf,ib2_sf)
+                     call F2Bindex(Norb,[i,j],[i,j],ib1_pa,ib2_pa)
+                     call F2Bindex(Norb,[j,i],[j,i],ib1_pb,ib2_pb)
                      !
                      W%screened_local(ib1_ab,ib2_ab,ip) = Waabb
                      W%screened_local(ib2_ab,ib1_ab,ip) = Waabb
@@ -2197,19 +2173,15 @@ contains
                         j = Eqv%SetOrbs(jset,jorb)
                         if(i.eq.j) stop "symmetrize_GW_Bosonic: different sets cannot contain the same orbital index."
                         !
-                        ib1_ab = i + Norb*(i-1)
-                        ib2_ab = j + Norb*(j-1)
+                        call F2Bindex(Norb,[i,i],[j,j],ib1_ab,ib2_ab)
                         if(verbose)write(*,"(2(A,2I3),2(A,I4),A)")    "     W(aa)(bb): (",i,i,"),(",j,j,") = [",ib1_ab,",",ib2_ab,"]"
                         !
-                        ib1_sf = i + Norb*(j-1)
-                        ib2_sf = j + Norb*(i-1)
+                        call F2Bindex(Norb,[i,j],[j,i],ib1_sf,ib2_sf)
                         if(verbose)write(*,"(2(A,2I3),2(A,I4),A)")    "     W(ab)(ba): (",i,j,"),(",j,i,") = [",ib1_sf,",",ib2_sf,"]"
                         !
-                        ib1_pa = i + Norb*(j-1)
-                        ib2_pa = i + Norb*(j-1)
+                        call F2Bindex(Norb,[i,j],[i,j],ib1_pa,ib2_pa)
                         if(verbose)write(*,"(2(A,2I3),2(A,I4),A)")    "     W(ab)(ab): (",i,j,"),(",i,j,") = [",ib1_pa,",",ib2_pa,"]"
-                        ib1_pb = j + Norb*(i-1)
-                        ib2_pb = j + Norb*(i-1)
+                        call F2Bindex(Norb,[j,i],[j,i],ib1_pb,ib2_pb)
                         if(verbose)write(*,"(2(A,2I3),2(A,I4),A)")    "     W(ba)(ba): (",j,i,"),(",j,i,") = [",ib1_pb,",",ib2_pb,"]"
                         !
                         Waabb = Waabb + (W%bare_local(ib1_ab,ib2_ab)+W%bare_local(ib2_ab,ib1_ab)) / dimoffdiag
@@ -2225,16 +2197,10 @@ contains
                         i = Eqv%SetOrbs(iset,iorb)
                         j = Eqv%SetOrbs(jset,jorb)
                         !
-                        ib1_ab = i + Norb*(i-1)
-                        ib2_ab = j + Norb*(j-1)
-                        !
-                        ib1_sf = i + Norb*(j-1)
-                        ib2_sf = j + Norb*(i-1)
-                        !
-                        ib1_pa = i + Norb*(j-1)
-                        ib2_pa = i + Norb*(j-1)
-                        ib1_pb = j + Norb*(i-1)
-                        ib2_pb = j + Norb*(i-1)
+                        call F2Bindex(Norb,[i,i],[j,j],ib1_ab,ib2_ab)
+                        call F2Bindex(Norb,[i,j],[j,i],ib1_sf,ib2_sf)
+                        call F2Bindex(Norb,[i,j],[i,j],ib1_pa,ib2_pa)
+                        call F2Bindex(Norb,[j,i],[j,i],ib1_pb,ib2_pb)
                         !
                         W%bare_local(ib1_ab,ib2_ab) = Waabb
                         W%bare_local(ib2_ab,ib1_ab) = Waabb
@@ -2260,16 +2226,10 @@ contains
                         j = Eqv%SetOrbs(jset,jorb)
                         if(i.eq.j) stop "symmetrize_GW_Bosonic: different sets cannot contain the same orbital index."
                         !
-                        ib1_ab = i + Norb*(i-1)
-                        ib2_ab = j + Norb*(j-1)
-                        !
-                        ib1_sf = i + Norb*(j-1)
-                        ib2_sf = j + Norb*(i-1)
-                        !
-                        ib1_pa = i + Norb*(j-1)
-                        ib2_pa = i + Norb*(j-1)
-                        ib1_pb = j + Norb*(i-1)
-                        ib2_pb = j + Norb*(i-1)
+                        call F2Bindex(Norb,[i,i],[j,j],ib1_ab,ib2_ab)
+                        call F2Bindex(Norb,[i,j],[j,i],ib1_sf,ib2_sf)
+                        call F2Bindex(Norb,[i,j],[i,j],ib1_pa,ib2_pa)
+                        call F2Bindex(Norb,[j,i],[j,i],ib1_pb,ib2_pb)
                         !
                         Waabb = Waabb + (W%screened_local(ib1_ab,ib2_ab,ip)+W%screened_local(ib2_ab,ib1_ab,ip)) / dimoffdiag
                         Wabba = Wabba + (W%screened_local(ib1_sf,ib2_sf,ip)+W%screened_local(ib2_sf,ib1_sf,ip)) / dimoffdiag
@@ -2284,16 +2244,10 @@ contains
                         i = Eqv%SetOrbs(iset,iorb)
                         j = Eqv%SetOrbs(jset,jorb)
                         !
-                        ib1_ab = i + Norb*(i-1)
-                        ib2_ab = j + Norb*(j-1)
-                        !
-                        ib1_sf = i + Norb*(j-1)
-                        ib2_sf = j + Norb*(i-1)
-                        !
-                        ib1_pa = i + Norb*(j-1)
-                        ib2_pa = i + Norb*(j-1)
-                        ib1_pb = j + Norb*(i-1)
-                        ib2_pb = j + Norb*(i-1)
+                        call F2Bindex(Norb,[i,i],[j,j],ib1_ab,ib2_ab)
+                        call F2Bindex(Norb,[i,j],[j,i],ib1_sf,ib2_sf)
+                        call F2Bindex(Norb,[i,j],[i,j],ib1_pa,ib2_pa)
+                        call F2Bindex(Norb,[j,i],[j,i],ib1_pb,ib2_pb)
                         !
                         W%screened_local(ib1_ab,ib2_ab,ip) = Waabb
                         W%screened_local(ib2_ab,ib1_ab,ip) = Waabb
@@ -2313,7 +2267,6 @@ contains
       endif
       !
    end subroutine symmetrize_GW_Bosonic
-
 
 
    !---------------------------------------------------------------------------!
@@ -2502,7 +2455,6 @@ contains
       endif
       !
    end subroutine symmetrize_imp_Fermionic
-
 
 
    !---------------------------------------------------------------------------!
@@ -2832,6 +2784,7 @@ contains
    subroutine MergePolarization(PiGW,PiImp,coeff,orbs,OffDiag)
       !
       use parameters
+      use utils_misc
       implicit none
       !
       type(BosonicField),intent(inout)      :: PiGW
@@ -2897,10 +2850,9 @@ contains
                      k_loc = orbs(isite,korb)
                      l_loc = orbs(isite,lorb)
                      !
-                     ib_loc = k_loc + Norb*(i_loc-1)
-                     jb_loc = l_loc + Norb*(j_loc-1)
+                     call F2Bindex(Norb,[i_loc,j_loc],[k_loc,l_loc],ib_loc,jb_loc)
                      !
-                     if((.not.OffDiag).and.(.not.((i_loc.eq.k_loc).and.(l_loc.eq.j_loc))))cycle
+                     if((.not.OffDiag).and.(.not.((i_loc.eq.j_loc).and.(k_loc.eq.l_loc))))cycle
                      !if(.not.((i_loc.eq.k_loc).and.(l_loc.eq.j_loc)))cycle
                      !
                      do iw=1,Nmats
@@ -2933,11 +2885,12 @@ contains
    !---------------------------------------------------------------------------!
    function product2NN(Mfull) result(Mnanb)
       use parameters
+      use utils_misc
       implicit none
       complex(8),intent(in)                 :: Mfull(:,:)
       complex(8),allocatable                :: Mnanb(:,:)
       integer                               :: Nbp,Norb
-      integer                               :: iorb,jorb,ib1,ib2
+      integer                               :: i,j,ib,jb
       !
       if(size(Mfull,dim=1).ne.size(Mfull,dim=2)) stop "product2NN: input matrix not square."
       !
@@ -2945,13 +2898,12 @@ contains
       Norb = int(sqrt(dble(Nbp)))
       allocate(Mnanb(Norb,Norb));Mnanb=czero
       !
-      do iorb=1,Norb
-         do jorb=1,Norb
+      do i=1,Norb
+         do j=1,Norb
             !
-            ib1 = iorb + Norb*(iorb-1)
-            ib2 = jorb + Norb*(jorb-1)
+            call F2Bindex(Norb,[i,i],[j,j],ib,jb)
             !
-            Mnanb(iorb,jorb) = Mfull(ib1,ib2)
+            Mnanb(i,j) = Mfull(ib,jb)
             !
          enddo
       enddo
@@ -2960,24 +2912,24 @@ contains
    !
    function NN2product(Mnanb) result(Mfull)
       use parameters
+      use utils_misc
       implicit none
       complex(8),intent(in)                 :: Mnanb(:,:)
       complex(8),allocatable                :: Mfull(:,:)
       integer                               :: Nbp,Norb
-      integer                               :: iorb,jorb,ib1,ib2
+      integer                               :: i,j,ib,jb
       !
       if(size(Mnanb,dim=1).ne.size(Mnanb,dim=2)) stop "NN2product: input matrix not square."
       Norb = size(Mnanb,dim=1)
       Nbp = Norb**2
       allocate(Mfull(Nbp,Nbp));Mfull=czero
       !
-      do iorb=1,Norb
-         do jorb=1,Norb
+      do i=1,Norb
+         do j=1,Norb
             !
-            ib1 = iorb + Norb*(iorb-1)
-            ib2 = jorb + Norb*(jorb-1)
+            call F2Bindex(Norb,[i,i],[j,j],ib,jb)
             !
-            Mfull(ib1,ib2) = Mnanb(iorb,jorb)
+            Mfull(ib,jb) = Mnanb(i,j)
             !
          enddo
       enddo

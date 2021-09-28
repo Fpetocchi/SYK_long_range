@@ -14,6 +14,7 @@ module module_container
 
    !(b) Standalone module. Can be used as generic library.
    use utils_misc, only:                     &
+   F2Bindex                                 ,&
    find_vec, keq                            ,&
    init_Uelements                           ,&
    FermionicFreqMesh,BosonicFreqMesh        ,&

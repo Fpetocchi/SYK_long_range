@@ -116,7 +116,8 @@ module input_vars
    logical,public                           :: RotateHloc
    logical,public                           :: RotateUloc
    logical,public                           :: AFMselfcons
-   logical,public                           :: cmplxWann
+  !logical,public                           :: Gtau_K
+  !logical,public                           :: cmplxHyb
    integer,allocatable,public               :: SiteNorb(:)
    character(len=255),allocatable,public    :: SiteName(:)
    integer,allocatable,public               :: SiteOrbs(:,:)
@@ -168,7 +169,7 @@ module input_vars
    character(len=256),public                :: DC_type
    logical,public                           :: addTierIII
    logical,public                           :: RecomputeG0W0
-   logical,public                           :: HandleGammaPoint
+   integer,public                           :: HandleGammaPoint
    logical,public                           :: calc_Sguess
    logical,public                           :: calc_Pguess
    logical,public                           :: GoWoDC_loc
@@ -351,7 +352,8 @@ contains
       call parse_input_variable(RotateHloc,"ROTATE_F",InputFile,default=.false.,comment="Solve the Fermionic impurity problem in the basis where H(R=0) is diagonal.")
       call parse_input_variable(RotateUloc,"ROTATE_B",InputFile,default=RotateHloc,comment="Solve the Bosonic impurity problem in the basis where H(R=0) is diagonal.")
       call parse_input_variable(AFMselfcons,"AFM",InputFile,default=.false.,comment="Flag to use the AFM self-consistency by flipping the spin. Requires input with doubled unit cell.")
-      call parse_input_variable(cmplxWann,"GTAU_K",InputFile,default=.true.,comment="Flag to perform the iw->tau FT of the Green's function in K space.")
+     !call parse_input_variable(Gtau_K,"GTAU_K",InputFile,default=.true.,comment="Flag to perform the iw->tau FT of the Green's function in K space.")
+     !call parse_input_variable(cmplxHyb,"CMPLX_HYB",InputFile,default=.true.,comment="Flag to indicate the presence of complex hybridizations in H(k).")
       allocate(SiteNorb(Nsite));SiteNorb=0
       allocate(SiteName(Nsite))
       do isite=1,Nsite
@@ -521,8 +523,8 @@ contains
       endif
       call parse_input_variable(DC_type,"DC_TYPE",InputFile,default="GlocWloc",comment="Local GW self-energy which is replaced by DMFT self-energy. Avalibale: GlocWloc, Sloc.")
       if(Hmodel.or.Umodel)addTierIII=.false.
-      call parse_input_variable(HandleGammaPoint,"SMEAR_GAMMA",InputFile,default=.true.,comment="Remove the interaction divergence at the Gamma point.")
-      if(Umodel)HandleGammaPoint=.false.
+      call parse_input_variable(HandleGammaPoint,"SMEAR_GAMMA",InputFile,default=1,comment="Remove the interaction divergence at the Gamma point by averaging over the first 1,2,3,... neighbor k-points. Inactive if =0.")
+      if(Umodel)HandleGammaPoint=0
       call parse_input_variable(calc_Sguess,"S_GUESS",InputFile,default=.true.,comment="Use G0W0_loc as a first guess for the DMFT self-energy.")
       call parse_input_variable(calc_Pguess,"P_GUESS",InputFile,default=.false.,comment="Use GG_loc as a first guess for the DMFT polarization. If =T it sets U_START=T.")
       if(.not.solve_DMFT)then

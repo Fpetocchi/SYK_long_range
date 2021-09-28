@@ -130,6 +130,9 @@ program SelfConsistency
          !
       endif
       !
+      !TEST>>>
+      !if(calc_Pguess)P_EDMFT%screened_local = Plat%screened_local*alphaPi
+      !>>>TEST
       !
       ! Causality correction on curlyU
       if(causal_U) call calc_causality_curlyU_correction(reg(causal_U_type))
