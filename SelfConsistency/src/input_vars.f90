@@ -523,7 +523,7 @@ contains
       endif
       call parse_input_variable(DC_type,"DC_TYPE",InputFile,default="GlocWloc",comment="Local GW self-energy which is replaced by DMFT self-energy. Avalibale: GlocWloc, Sloc.")
       if(Hmodel.or.Umodel)addTierIII=.false.
-      call parse_input_variable(HandleGammaPoint,"SMEAR_GAMMA",InputFile,default=1,comment="Remove the interaction divergence at the Gamma point by averaging over the first 1,2,3,... neighbor k-points. Inactive if =0.")
+      call parse_input_variable(HandleGammaPoint,"SMEAR_GAMMA",InputFile,default=1,comment="If >0 the dielectric function will be averaged on the SMEAR_GAMMA nearest K-points close to Gamma. If <0 the UcRPA will be rescaled like a Lorentzian in the SMEAR_GAMMA nearest K-points close to Gamma. Inactive if =0.")
       if(Umodel)HandleGammaPoint=0
       call parse_input_variable(calc_Sguess,"S_GUESS",InputFile,default=.true.,comment="Use G0W0_loc as a first guess for the DMFT self-energy.")
       call parse_input_variable(calc_Pguess,"P_GUESS",InputFile,default=.false.,comment="Use GG_loc as a first guess for the DMFT polarization. If =T it sets U_START=T.")

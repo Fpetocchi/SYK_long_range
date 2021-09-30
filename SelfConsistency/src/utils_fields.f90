@@ -225,9 +225,6 @@ contains
       if(allocated(lttc%kptdif))deallocate(lttc%kptdif)
       allocate(lttc%kptdif(Nkpt,Nkpt));lttc%kptdif=0
       !
-      if(allocated(lttc%small_ik))deallocate(lttc%small_ik)
-      allocate(lttc%small_ik(12,2));lttc%small_ik=0
-      !
       lttc%status=.true.
       !
    end subroutine AllocateLattice
@@ -249,7 +246,6 @@ contains
       if(allocated(lttc%kptsum))deallocate(lttc%kptsum)
       if(allocated(lttc%kptdif))deallocate(lttc%kptdif)
       if(allocated(lttc%kprint))deallocate(lttc%kprint)
-      if(allocated(lttc%small_ik))deallocate(lttc%small_ik)
       lttc%Nkpt3=0
       lttc%Nkpt=0
       lttc%Nkpt_irred=0
@@ -613,14 +609,18 @@ contains
       if(allocated(G%wks)) G%wks = dcmplx(dreal(G%wks),0d0)
    end subroutine isReal_Fermionic
    !
-   subroutine isReal_Bosonic(W)
+   subroutine isReal_Bosonic(W,LocalOnly)
       use parameters
       implicit none
       type(BosonicField),intent(inout)      :: W
+      integer,intent(in),optional           :: LocalOnly
+      integer                               :: LocalOnly_
+      LocalOnly_=.true.
+      if(present(LocalOnly))LocalOnly_=LocalOnly
       if(allocated(W%bare_local)) W%bare_local = dcmplx(dreal(W%bare_local),0d0)
       if(allocated(W%screened_local)) W%screened_local = dcmplx(dreal(W%screened_local),0d0)
-      if(allocated(W%bare)) W%bare = dcmplx(dreal(W%bare),0d0)
-      if(allocated(W%screened)) W%screened = dcmplx(dreal(W%screened),0d0)
+      if(allocated(W%bare).and.(.not.LocalOnly_)) W%bare = dcmplx(dreal(W%bare),0d0)
+      if(allocated(W%screened).and.(.not.LocalOnly_)) W%screened = dcmplx(dreal(W%screened),0d0)
    end subroutine isReal_Bosonic
 
 
@@ -2285,7 +2285,7 @@ contains
       real(8),intent(in)                    :: Pattern(:)
       !
       type(Equivalent)                      :: Eqv_diag
-      integer                               :: ispin,iset,Norb
+      integer                               :: ispin,Norb!,iset
       !
       !
       if(verbose)write(*,"(A)") "---- symmetrize_imp_Matrix_d"
@@ -2309,7 +2309,7 @@ contains
       Eqv_diag%Gfoffdiag = .false.
       !
       !get the equivalent sets from the input pattern
-      call get_pattern(Eqv_diag%SetOrbs,Pattern,1e4*eps)
+      call get_pattern(Eqv_diag%SetOrbs,Pattern,1e4*eps,listDim=Eqv_diag%SetNorb)
       !
       !fill in other stuff
       if(allocated(Eqv_diag%SetOrbs))then
@@ -2318,10 +2318,10 @@ contains
          Eqv_diag%Ntotset = Eqv_diag%Nset
          Eqv_diag%O = .true.
          !
-         allocate(Eqv_diag%SetNorb(Eqv_diag%Nset))
-         do iset=1,Eqv_diag%Nset
-            Eqv_diag%SetNorb(iset) = size( pack( Eqv_diag%SetOrbs(iset,:), Eqv_diag%SetOrbs(iset,:).gt.0 ) )
-         enddo
+         !allocate(Eqv_diag%SetNorb(Eqv_diag%Nset))
+         !do iset=1,Eqv_diag%Nset
+         !   Eqv_diag%SetNorb(iset) = size( pack( Eqv_diag%SetOrbs(iset,:), Eqv_diag%SetOrbs(iset,:).gt.0 ) )
+         !enddo
          !
          !call the GW subroutine
          call symmetrize_GW(Mat,Eqv_diag)
@@ -2345,7 +2345,7 @@ contains
       real(8),intent(in)                    :: Pattern(:)
       !
       type(Equivalent)                      :: Eqv_diag
-      integer                               :: ispin,iset,Norb
+      integer                               :: ispin,Norb!,iset
       !
       !
       if(verbose)write(*,"(A)") "---- symmetrize_imp_Matrix_z"
@@ -2369,7 +2369,7 @@ contains
       Eqv_diag%Gfoffdiag = .false.
       !
       !get the equivalent sets from the input pattern
-      call get_pattern(Eqv_diag%SetOrbs,Pattern,1e4*eps)
+      call get_pattern(Eqv_diag%SetOrbs,Pattern,1e4*eps,listDim=Eqv_diag%SetNorb)
       !
       !fill in other stuff
       if(allocated(Eqv_diag%SetOrbs))then
@@ -2378,10 +2378,10 @@ contains
          Eqv_diag%Ntotset = Eqv_diag%Nset
          Eqv_diag%O = .true.
          !
-         allocate(Eqv_diag%SetNorb(Eqv_diag%Nset))
-         do iset=1,Eqv_diag%Nset
-            Eqv_diag%SetNorb(iset) = size( pack( Eqv_diag%SetOrbs(iset,:), Eqv_diag%SetOrbs(iset,:).gt.0 ) )
-         enddo
+         !allocate(Eqv_diag%SetNorb(Eqv_diag%Nset))
+         !do iset=1,Eqv_diag%Nset
+         !   Eqv_diag%SetNorb(iset) = size( pack( Eqv_diag%SetOrbs(iset,:), Eqv_diag%SetOrbs(iset,:).gt.0 ) )
+         !enddo
          !
          !call the GW subroutine
          call symmetrize_GW(Mat,Eqv_diag)

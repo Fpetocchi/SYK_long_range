@@ -113,8 +113,7 @@ program SelfConsistency
             call MergeFields(Plat,P_EDMFT,alphaPi,SiteOrbs,RotateHloc)
             call dump_BosonicField(Plat,reg(ItFolder),"Plat_merged_w.DAT")
          elseif(calc_Pguess)then
-            P_EDMFT%screened_local = Plat%screened_local*alphaPi
-            if(alphaPi.ne.0d0)call MergeFields(Plat,P_EDMFT,alphaPi,SiteOrbs,RotateHloc)
+            P_EDMFT%screened_local = dreal(Plat%screened_local)*alphaPi
          endif
          !
       endif
@@ -129,10 +128,6 @@ program SelfConsistency
          call dump_MaxEnt(Wlat,"mats",reg(ItFolder)//"Convergence/","Wlat",EqvGWndx%SetOrbs)
          !
       endif
-      !
-      !TEST>>>
-      !if(calc_Pguess)P_EDMFT%screened_local = Plat%screened_local*alphaPi
-      !>>>TEST
       !
       ! Causality correction on curlyU
       if(causal_U) call calc_causality_curlyU_correction(reg(causal_U_type))

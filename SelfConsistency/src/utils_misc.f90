@@ -68,9 +68,15 @@ module utils_misc
    end interface check_Symmetry
 
    interface get_pattern
+      module procedure get_pattern_i
       module procedure get_pattern_d
       module procedure get_pattern_z
    end interface get_pattern
+
+   interface linspace
+      module procedure linspace_i
+      module procedure linspace_d
+   end interface linspace
 
    interface fermidirac
       module procedure fermidirac_shifted
@@ -436,7 +442,20 @@ contains
    !---------------------------------------------------------------------------!
    !PURPOSE: analogous of python numpy.linspace
    !---------------------------------------------------------------------------!
-   function linspace(start,stop,num,istart,iend,mesh) result(array)
+   function linspace_i(start,stop) result(array)
+      implicit none
+      integer,intent(in)                    :: start,stop
+      integer                               :: array(stop-start+1)
+      !
+      integer                               :: i,num
+      !
+      num = stop-start+1
+      if(num<0)stop "linspace_i: N<0, abort."
+      forall(i=1:num)array(i)=start + (i-1)
+      !
+   end function linspace_i
+   !
+   function linspace_d(start,stop,num,istart,iend,mesh) result(array)
       implicit none
       real(8),intent(in)                    :: start,stop
       integer,intent(in)                    :: num
@@ -448,13 +467,13 @@ contains
       real(8)                               :: step
       logical                               :: startpoint_,endpoint_
       !
-      if(num<0)stop "linspace: N<0, abort."
+      if(num<0)stop "linspace_d: N<0, abort."
       !
       startpoint_=.true.;if(present(istart))startpoint_=istart
       endpoint_=.true.;if(present(iend))endpoint_=iend
       !
       if(startpoint_.AND.endpoint_)then
-         if(num<2)stop "linspace: N<2 with both start and end points"
+         if(num<2)stop "linspace_d: N<2 with both start and end points"
          step = (stop-start)/(dble(num)-1d0)
          forall(i=1:num)array(i)=start + (dble(i)-1d0)*step
       elseif(startpoint_.AND.(.not.endpoint_))then
@@ -468,7 +487,7 @@ contains
          forall(i=1:num)array(i)=start + dble(i)*step
       endif
        if(present(mesh))mesh=step
-   end function linspace
+   end function linspace_d
 
 
    !---------------------------------------------------------------------------!
@@ -974,139 +993,269 @@ contains
    !---------------------------------------------------------------------------!
    !PURPOSE: Deduce simmetrical indexes in a vector.
    !---------------------------------------------------------------------------!
-   subroutine get_pattern_d(list,pattern,tol)
+   subroutine get_pattern_i(list,pattern,listDim)
+      implicit none
+      integer,allocatable,intent(out)       :: list(:,:)
+      integer,intent(in)                    :: pattern(:)
+      integer,allocatable,intent(out),optional :: listDim(:)
+      integer                               :: Nelements,iel,jel,iset,jset
+      integer                               :: maxLen,Neqv
+      integer,allocatable                   :: actRow(:),listDim_(:)
+      integer,allocatable                   :: listOld(:,:),listDimOld(:)
+      logical                               :: addSet
+      !
+      Nelements = size(pattern)
+      !
+      !this is just to get the maximum row length
+      maxLen = 1
+      allocate(actRow(Nelements));actRow=0
+      do iel=1,Nelements
+         !
+         actRow=0
+         do jel=1,Nelements
+            if(pattern(iel).eq.pattern(jel)) actRow(jel) = jel
+         enddo
+         Neqv = size( pack( actRow, actRow.gt.0 ) )
+         if(Neqv.gt.maxLen) maxLen = Neqv
+         !
+      enddo
+      !
+      if(allocated(list)) deallocate(list)
+      !
+      iset=0
+      do iel=1,Nelements
+         !
+         actRow=0
+         do jel=1,Nelements
+            if(pattern(iel).eq.pattern(jel)) actRow(jel) = jel
+         enddo
+         Neqv = size( pack( actRow, actRow.gt.0 ) )
+         !
+         if(Neqv.gt.1)then
+            !
+            if(iset.eq.0)then
+               !
+               iset = iset + 1
+               !
+               allocate(list(iset,maxLen));list=0
+               allocate(listDim_(iset));listDim_=0
+               !
+               list(iset,1:Neqv) = pack( actRow, actRow.gt.0 )
+               listDim_(iset) = Neqv
+               !
+            else
+               !
+               addSet=.true.
+               do jset=1,iset
+                  addSet = addSet .and. all( pack( actRow, actRow.gt.0 ) .ne. list(jset,1:listDim_(jset)) )
+               enddo
+               !
+               if(addSet)then
+                  !
+                  listOld = list
+                  listDimOld = listDim_
+                  deallocate(list,listDim_)
+                  allocate(list(iset+1,maxLen));list(1:iset,:)=listOld
+                  allocate(listDim_(iset+1));listDim_(1:iset)=listDimOld
+                  deallocate(listOld,listDimOld)
+                  !
+                  iset = iset + 1
+                  !
+                  list(iset,1:Neqv) = pack( actRow, actRow.gt.0 )
+                  listDim_(iset) = Neqv
+                  !
+               endif
+               !
+            endif
+            !
+         endif
+         !
+      enddo
+      deallocate(actRow)
+      !
+      if(present(listDim).and.allocated(list))then
+         if(allocated(listDim))deallocate(listDim)
+         listDim = listDim_
+         deallocate(listDim_)
+      endif
+      !
+   end subroutine get_pattern_i
+   !
+   subroutine get_pattern_d(list,pattern,tol,listDim)
       implicit none
       integer,allocatable,intent(out)       :: list(:,:)
       real(8),intent(in)                    :: pattern(:)
       real(8),intent(in)                    :: tol
-      integer                               :: Nel,iel,jel,iset
-      integer                               :: maxLen,Nset,Neqv
-      integer,allocatable                   :: actRow(:),prvRow(:)
+      integer,allocatable,intent(out),optional :: listDim(:)
+      integer                               :: Nelements,iel,jel,iset,jset
+      integer                               :: maxLen,Neqv
+      integer,allocatable                   :: actRow(:),listDim_(:)
+      integer,allocatable                   :: listOld(:,:),listDimOld(:)
+      logical                               :: addSet
       !
-      Nel = size(pattern)
+      Nelements = size(pattern)
       !
+      !this is just to get the maximum row length
       maxLen = 1
-      Nset = Nel
-      allocate(actRow(Nel));actRow=0
-      allocate(prvRow(Nel));prvRow=0
-      do iel=1,Nel
+      allocate(actRow(Nelements));actRow=0
+      do iel=1,Nelements
          !
-         !previous row
-         if(iel.gt.1) prvRow = actRow
-         !
-         !actual row
          actRow=0
-         do jel=1,Nel
+         do jel=1,Nelements
             if(abs(pattern(iel)-pattern(jel)).lt.tol) actRow(jel) = jel
          enddo
-         !
          Neqv = size( pack( actRow, actRow.gt.0 ) )
-         !
          if(Neqv.gt.maxLen) maxLen = Neqv
-         if(Neqv.eq.1) Nset = Nset - 1
-         if((iel.gt.1).and.all(actRow.eq.prvRow)) Nset = Nset - 1
          !
       enddo
       !
-      if(Nset.eq.0) return
-      !
       if(allocated(list)) deallocate(list)
-      allocate(list(Nset,maxLen));list=0
       !
       iset=0
-      do iel=1,Nel
+      do iel=1,Nelements
          !
-         !previous row
-         if(iel.gt.1) prvRow = actRow
-         !
-         !actual row
          actRow=0
-         do jel=1,Nel
+         do jel=1,Nelements
             if(abs(pattern(iel)-pattern(jel)).lt.tol) actRow(jel) = jel
          enddo
-         !
          Neqv = size( pack( actRow, actRow.gt.0 ) )
          !
          if(Neqv.gt.1)then
+            !
             if(iset.eq.0)then
+               !
                iset = iset + 1
+               !
+               allocate(list(iset,maxLen));list=0
+               allocate(listDim_(iset));listDim_=0
+               !
                list(iset,1:Neqv) = pack( actRow, actRow.gt.0 )
-            elseif((iset.ge.1).and.all(actRow.ne.prvRow))then
-               iset = iset + 1
-               list(iset,1:Neqv) = pack( actRow, actRow.gt.0 )
+               listDim_(iset) = Neqv
+               !
+            else
+               !
+               addSet=.true.
+               do jset=1,iset
+                  addSet = addSet .and. all( pack( actRow, actRow.gt.0 ) .ne. list(jset,1:listDim_(jset)) )
+               enddo
+               !
+               if(addSet)then
+                  !
+                  listOld = list
+                  listDimOld = listDim_
+                  deallocate(list,listDim_)
+                  allocate(list(iset+1,maxLen));list(1:iset,:)=listOld
+                  allocate(listDim_(iset+1));listDim_(1:iset)=listDimOld
+                  deallocate(listOld,listDimOld)
+                  !
+                  iset = iset + 1
+                  !
+                  list(iset,1:Neqv) = pack( actRow, actRow.gt.0 )
+                  listDim_(iset) = Neqv
+                  !
+               endif
+               !
             endif
+            !
          endif
          !
       enddo
-      deallocate(actRow,prvRow)
+      deallocate(actRow)
+      !
+      if(present(listDim).and.allocated(list))then
+         if(allocated(listDim))deallocate(listDim)
+         listDim = listDim_
+         deallocate(listDim_)
+      endif
       !
    end subroutine get_pattern_d
    !
-   subroutine get_pattern_z(list,pattern,tol)
+   subroutine get_pattern_z(list,pattern,tol,listDim)
       implicit none
       integer,allocatable,intent(out)       :: list(:,:)
       complex(8),intent(in)                 :: pattern(:)
       real(8),intent(in)                    :: tol
-      integer                               :: Nel,iel,jel,iset
-      integer                               :: maxLen,Nset,Neqv
-      integer,allocatable                   :: actRow(:),prvRow(:)
+      integer,allocatable,intent(out),optional :: listDim(:)
+      integer                               :: Nelements,iel,jel,iset,jset
+      integer                               :: maxLen,Neqv
+      integer,allocatable                   :: actRow(:),listDim_(:)
+      integer,allocatable                   :: listOld(:,:),listDimOld(:)
+      logical                               :: addSet
       !
-      Nel = size(pattern)
+      Nelements = size(pattern)
       !
+      !this is just to get the maximum row length
       maxLen = 1
-      Nset = Nel
-      allocate(actRow(Nel));actRow=0
-      allocate(prvRow(Nel));prvRow=0
-      do iel=1,Nel
+      allocate(actRow(Nelements));actRow=0
+      do iel=1,Nelements
          !
-         !previous row
-         if(iel.gt.1) prvRow = actRow
-         !
-         !actual row
          actRow=0
-         do jel=1,Nel
+         do jel=1,Nelements
             if(abs(pattern(iel)-pattern(jel)).lt.tol) actRow(jel) = jel
          enddo
-         !
          Neqv = size( pack( actRow, actRow.gt.0 ) )
-         !
          if(Neqv.gt.maxLen) maxLen = Neqv
-         if(Neqv.eq.1) Nset = Nset - 1
-         if((iel.gt.1).and.all(actRow.eq.prvRow)) Nset = Nset - 1
          !
       enddo
       !
-      if(Nset.eq.0) return
-      !
       if(allocated(list)) deallocate(list)
-      allocate(list(Nset,maxLen));list=0
       !
       iset=0
-      do iel=1,Nel
+      do iel=1,Nelements
          !
-         !previous row
-         if(iel.gt.1) prvRow = actRow
-         !
-         !actual row
          actRow=0
-         do jel=1,Nel
+         do jel=1,Nelements
             if(abs(pattern(iel)-pattern(jel)).lt.tol) actRow(jel) = jel
          enddo
-         !
          Neqv = size( pack( actRow, actRow.gt.0 ) )
          !
          if(Neqv.gt.1)then
+            !
             if(iset.eq.0)then
+               !
                iset = iset + 1
+               !
+               allocate(list(iset,maxLen));list=0
+               allocate(listDim_(iset));listDim_=0
+               !
                list(iset,1:Neqv) = pack( actRow, actRow.gt.0 )
-            elseif((iset.ge.1).and.all(actRow.ne.prvRow))then
-               iset = iset + 1
-               list(iset,1:Neqv) = pack( actRow, actRow.gt.0 )
+               listDim_(iset) = Neqv
+               !
+            else
+               !
+               addSet=.true.
+               do jset=1,iset
+                  addSet = addSet .and. all( pack( actRow, actRow.gt.0 ) .ne. list(jset,1:listDim_(jset)) )
+               enddo
+               !
+               if(addSet)then
+                  !
+                  listOld = list
+                  listDimOld = listDim_
+                  deallocate(list,listDim_)
+                  allocate(list(iset+1,maxLen));list(1:iset,:)=listOld
+                  allocate(listDim_(iset+1));listDim_(1:iset)=listDimOld
+                  deallocate(listOld,listDimOld)
+                  !
+                  iset = iset + 1
+                  !
+                  list(iset,1:Neqv) = pack( actRow, actRow.gt.0 )
+                  listDim_(iset) = Neqv
+                  !
+               endif
+               !
             endif
+            !
          endif
          !
       enddo
-      deallocate(actRow,prvRow)
+      deallocate(actRow)
+      !
+      if(present(listDim).and.allocated(list))then
+         if(allocated(listDim))deallocate(listDim)
+         listDim = listDim_
+         deallocate(listDim_)
+      endif
       !
    end subroutine get_pattern_z
 
@@ -2256,7 +2405,6 @@ contains
 
    !---------------------------------------------------------------------------!
    !PURPOSE: Routines for the assert_shape interface
-   !TEST ON: 14-10-2020
    !---------------------------------------------------------------------------!
    subroutine i_assert_shape_N1(A,Ndim,routine,matname)
      integer,dimension(:),intent(in)          :: A

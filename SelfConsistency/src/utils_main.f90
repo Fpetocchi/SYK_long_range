@@ -445,7 +445,6 @@ contains
             endif
             !
             call fill_ksumkdiff(Lttc%kpt,Lttc%kptsum,Lttc%kptdif,Nkpt3)
-            call fill_smallk(Lttc%kpt,Lttc%small_ik)
             !
             Lttc%status=.true.
             !
@@ -500,7 +499,6 @@ contains
             endif
             !
             call fill_ksumkdiff(Lttc%kpt,Lttc%kptsum,Lttc%kptdif,Nkpt3)
-            call fill_smallk(Lttc%kpt,Lttc%small_ik)
             !
             Lttc%status=.true.
             !
@@ -508,9 +506,8 @@ contains
       if(Lttc%Nkpt.ne.(Nkpt3(1)*Nkpt3(2)*Nkpt3(3)))stop "Total number of K-points does not match with number of K-points per dimension."
       if(XEPSisread)write(*,"(A,1I4)")"     Number of irreducible K-points: ",Lttc%Nkpt_irred
       !
-      !
+      !Estimate of the bandwidth plus
       wrealMax = 1.2*maxval(abs(Lttc%Ek))
-      !
       !
       !Store the local Hamiltonian
       call dump_Matrix(Lttc%Hloc,reg(pathINPUT),"Hloc.DAT")
@@ -743,6 +740,8 @@ contains
                !
                !Extract then local Hamiltonian for each site
                call loc2imp(Oloc,LatticeOp,Orbs)
+               !
+               !Always real rotations assumed for now
                Rot = dreal(Oloc)
                !
                !Rotate
@@ -788,6 +787,8 @@ contains
                !
                !Extract then local Hamiltonian for each site
                call loc2imp(Oloc,LatticeOp,Orbs)
+               !
+               !Always real rotations assumed for now
                Rot = dreal(Oloc)
                !
                !Rotate
@@ -1047,7 +1048,7 @@ contains
             !Unscreened interaction
             if(Uspex)then
                call AllocateBosonicField(Ulat,Crystal%Norb,Nmats,Crystal%iq_gamma,Nkpt=Crystal%Nkpt,Nsite=Nsite,Beta=Beta)
-               call read_U_spex(Ulat,save2readable=verbose,LocalOnly=.false.,doAC=U_AC,pathOUTPUT=reg(pathINPUTtr))
+               call read_U_spex(Ulat,save2readable=verbose,kpt=Crystal%kpt,doAC=U_AC,pathOUTPUT=reg(pathINPUTtr))
                call dump_MaxEnt(Ulat,"mats",reg(ItFolder)//"Convergence/","Ulat",EqvGWndx%SetOrbs)
             elseif(Umodel)then
                if(Nphonons.eq.0)then
@@ -1123,7 +1124,7 @@ contains
             !Unscreened interaction
             if(Uspex)then
                call AllocateBosonicField(Ulat,Crystal%Norb,Nmats,Crystal%iq_gamma,Nsite=Nsite,Beta=Beta)
-               call read_U_spex(Ulat,save2readable=verbose,LocalOnly=.true.,doAC=U_AC,pathOUTPUT=reg(pathINPUTtr))
+               call read_U_spex(Ulat,save2readable=verbose,doAC=U_AC,pathOUTPUT=reg(pathINPUTtr))
                call dump_MaxEnt(Ulat,"mats",reg(ItFolder)//"Convergence/","Ulat",EqvGWndx%SetOrbs)
             elseif(Umodel)then
                if(Nphonons.eq.0)then
@@ -1164,7 +1165,7 @@ contains
             !Unscreened interaction
             if(Uspex)then
                call AllocateBosonicField(Ulat,Crystal%Norb,Nmats,Crystal%iq_gamma,Nkpt=Crystal%Nkpt,Nsite=Nsite,Beta=Beta)
-               call read_U_spex(Ulat,save2readable=verbose,LocalOnly=.false.,doAC=U_AC,pathOUTPUT=reg(pathINPUTtr))
+               call read_U_spex(Ulat,save2readable=verbose,kpt=Crystal%kpt,doAC=U_AC,pathOUTPUT=reg(pathINPUTtr))
                call dump_MaxEnt(Ulat,"mats",reg(ItFolder)//"Convergence/","Ulat",EqvGWndx%SetOrbs)
             elseif(Umodel)then
                if(Nphonons.eq.0)then
@@ -1225,7 +1226,7 @@ contains
             !Unscreened interaction
             if(Uspex)then
                call AllocateBosonicField(Ulat,Crystal%Norb,Nmats,Crystal%iq_gamma,Nkpt=Crystal%Nkpt,Nsite=Nsite,Beta=Beta)
-               call read_U_spex(Ulat,save2readable=verbose,LocalOnly=.false.,doAC=U_AC,pathOUTPUT=reg(pathINPUTtr))
+               call read_U_spex(Ulat,save2readable=verbose,kpt=Crystal%kpt,doAC=U_AC,pathOUTPUT=reg(pathINPUTtr))
                call dump_MaxEnt(Ulat,"mats",reg(ItFolder)//"Convergence/","Ulat",EqvGWndx%SetOrbs)
             elseif(Umodel)then
                if(Nphonons.eq.0)then

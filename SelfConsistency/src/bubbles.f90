@@ -627,7 +627,7 @@ contains
       if(allocated(ChiC%bare_local))  stop "calc_Pimp: ChiC bare_local attribute is supposed to be unallocated."
       if(allocated(ChiC%bare))  stop "calc_Pimp: ChiC bare attribute is supposed to be unallocated."
       !
-      sym_=.false.
+      sym_=.true.
       if(present(sym))sym_=sym
       !
       Nbp = Pimp%Nbp
@@ -660,13 +660,13 @@ contains
       !$OMP END DO
       !$OMP END PARALLEL
       deallocate(invP)
-      !call isReal(Pimp)
+      call isReal(Pimp)
       !
-      !Hermiticity check - print if error is bigger than 1e-3
+      !Check if Pimp is locally symmetric - print if relative error is bigger than 1e-3
       if(sym_)then
-         write(*,"(A)") "     Checking hermiticity of Pimp (enforced)."
+         write(*,"(A)") "     Checking symmetry of Pimp (enforced)."
          do iw=1,Nmats
-            call check_Hermiticity(Pimp%screened_local(:,:,iw),1e7*eps,enforce=.true.,hardstop=.false.,name="Pimp_w"//str(iw),verb=.true.)
+            call check_Symmetry(Pimp%screened_local(:,:,iw),1e7*eps,enforce=.true.,hardstop=.false.,name="Pimp_w"//str(iw),verb=.true.)
          enddo
       endif
       !

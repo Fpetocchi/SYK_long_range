@@ -37,7 +37,6 @@ module interactions
 #else
    logical,private                          :: verbose=.false.
 #endif
-   complex(8),allocatable,private           :: Ugamma(:,:,:)
 
    !---------------------------------------------------------------------------!
    !PURPOSE: Rutines available for the user. Description only for interfaces.
@@ -65,24 +64,26 @@ contains
    !---------------------------------------------------------------------------!
    subroutine calc_W_full(Wmats,Umats,Pmats,Lttc,symQ)
       !
-      use file_io
       use parameters
+      use linalg, only : zeye, inv
       use utils_misc
       use utils_fields
-      use linalg, only : zeye, inv
+      use file_io
+      use crystal
       use input_vars, only : HandleGammaPoint, Umodel
       implicit none
       !
       type(BosonicField),intent(inout)      :: Wmats
       type(BosonicField),intent(in)         :: Umats
-      type(BosonicField),intent(inout)         :: Pmats
+      type(BosonicField),intent(in)         :: Pmats
       type(Lattice),intent(in)              :: Lttc
       logical,intent(in),optional           :: symQ
       !
       complex(8),allocatable                :: invW(:,:)
       complex(8),allocatable                :: epsGamma(:,:,:)
+      integer,allocatable                   :: AverageList(:)
       real(8)                               :: Beta
-      integer                               :: Nbp,Norb,Nkpt,Nmats
+      integer                               :: Nbp,Nkpt,Nmats
       integer                               :: iq,iw,iwU
       integer                               :: iavg,Navg
       logical                               :: Ustatic,symQ_,smear,add_iq
@@ -99,20 +100,20 @@ contains
       if(Umats%Nkpt.eq.0) stop "calc_W_full: Umats k dependent attributes not properly initialized."
       if(Pmats%Nkpt.eq.0) stop "calc_W_full: Pmats k dependent attributes not properly initialized."
       if(Umats%iq_gamma.lt.0) stop "calc_W_full: Umats iq_gamma not defined."
-      smear = HandleGammaPoint.gt.0
-      if(smear.and.(.not.allocated(Lttc%small_ik))) stop "calc_W_full: Kpoints near Gamma not stored. W divergence cannot be cured."
       !
-      symQ_=.true.
+      !TEST>>>
+      symQ_=.false.
+      !>>>TEST
       if(present(symQ))symQ_=symQ
       Ustatic=.false.
       if(Umodel.and.(Umats%Npoints.eq.1))Ustatic=.true.
       if(Ustatic)write(*,"(A)")"     Static U bare."
+      smear = HandleGammaPoint.gt.0
       !
       Nbp = Wmats%Nbp
       Nkpt = Wmats%Nkpt
       Beta = Wmats%Beta
       Nmats = Wmats%Npoints
-      Norb = int(sqrt(dble(Nbp)))
       !
       if(all([Umats%Nbp-Nbp,Pmats%Nbp-Nbp].ne.[0,0])) stop "calc_W_full: Either Umats and/or Pmats have different orbital dimension with respect to Wmats."
       if(all([Umats%Nkpt-Nkpt,Pmats%Nkpt-Nkpt].ne.[0,0])) stop "calc_W_full: Either Umats and/or Pmats have different number of k-points with respect to Wmats."
@@ -123,15 +124,19 @@ contains
       call clear_attributes(Wmats)
       !
       if(smear)then
+         if(.not.small_ik_stored)call fill_smallk(Lttc%kpt)
          allocate(epsGamma(Nbp,Nbp,Nmats));epsGamma=czero
-         Navg=size(pack(Lttc%small_ik(:,1),(Lttc%small_ik(:,2).le.HandleGammaPoint)))
+         AverageList = pack(small_ik(:,1),(small_ik(:,2).le.HandleGammaPoint))
+         Navg = size(AverageList)
+         if(verbose) write(*,"(A,100I4)")"     Averaging dielectric function over "//str(Navg)//" K-points: ",AverageList
       endif
       !
       ! Assuming that the Polarization vanishes at iw-->inf
       Wmats%bare = Umats%bare
       !
       !$OMP PARALLEL DEFAULT(NONE),&
-      !$OMP SHARED(Pmats,Umats,Wmats,Lttc,epsGamma,HandleGammaPoint,smear,Ustatic,verbose,symQ_,Navg),&
+      !$OMP SHARED(Pmats,Umats,Wmats,Lttc,Ustatic,symQ_),&
+      !$OMP SHARED(small_ik,epsGamma,HandleGammaPoint,smear,AverageList,Navg),&
       !$OMP PRIVATE(iw,iwU,iq,invW,iavg,add_iq)
       !$OMP DO
       do iw=1,Wmats%Npoints
@@ -159,7 +164,7 @@ contains
             !
             !average the dielectric function around the Gamma point
             if(smear)then
-               add_iq = any( pack(Lttc%small_ik(:,1),(Lttc%small_ik(:,2).le.HandleGammaPoint)) .eq. iq )
+               add_iq = any( AverageList .eq. iq )
                if(add_iq)then
                   epsGamma(:,:,iw) = epsGamma(:,:,iw) + invW
                   iavg = iavg + 1
@@ -183,19 +188,7 @@ contains
          !W at gamma point should be real
          epsGamma = dreal(epsGamma)/Navg
          !
-         !TEST>>>
-         !epsGamma = czero
-         !do iq=1,Wmats%Nkpt
-         !   add_iq = any( pack(Lttc%small_ik(:,1),(Lttc%small_ik(:,2).eq.1)) .eq. iq )
-         !   if(add_iq)then
-         !      Wmats%screened(:,:,:,iq) = czero
-         !      Pmats%screened(:,:,:,iq) = czero
-         !   endif
-         !enddo
-         !Pmats%screened(:,:,:,Umats%iq_gamma) = czero
-         !>>>TEST
-         !
-         !Fill the Gamma point value - element not included in the iq loop
+         !Fill the Gamma point value - element not included in the iq loop - print if error is bigger than 1e-3
          do iw=1,Nmats
             iwU = iw
             if(Ustatic)iwU = 1
@@ -203,7 +196,7 @@ contains
             call check_Symmetry(Wmats%screened(:,:,iw,Umats%iq_gamma),eps,enforce=.true.,hardstop=.false.,name="Wlat_w"//str(iw)//"_q"//str(Umats%iq_gamma),verb=.false.)
          enddo
          !
-         deallocate(epsGamma)
+         deallocate(epsGamma,AverageList)
          !
       endif
       deallocate(invW)
@@ -211,14 +204,15 @@ contains
       ! Fill the local attributes
       call BosonicKsum(Wmats)
       !
-      !Check if the screened limit is locally symmetric - print if relative error is bigger than 1e-3
+      !Check if Wlat is locally hermitian - print if relative error is bigger than 1e-3
       write(*,"(A)") "     Checking hermiticity of local Wlat (enforced)."
       do iw=1,Nmats
          call check_Hermiticity(Wmats%screened_local(:,:,iw),1e7*eps,enforce=.true.,hardstop=.false.,name="Wlat_loc_w"//str(iw),verb=.true.)
       enddo
       !
       !call dump_BosonicField(Umats,"./Ulat_readable/",.false.)
-      !call dump_BosonicField(Wmats,"./Wlat_readable/",.false.)
+      !call dump_BosonicField(Wmats,"./Wlat_readable_"//str(HandleGammaPoint)//"/",.false.)
+      !call dump_BosonicField(Umats,"./Ulat_readable_"//str(HandleGammaPoint)//"/",.false.)
       !
    end subroutine calc_W_full
 
@@ -228,11 +222,12 @@ contains
    !---------------------------------------------------------------------------!
    subroutine calc_W_edmft(Wmats,Umats,Pmats,Lttc,symQ)
       !
-      use file_io
       use parameters
+      use linalg, only : zeye, inv
       use utils_misc
       use utils_fields
-      use linalg, only : zeye, inv
+      use file_io
+      use crystal
       use input_vars, only : HandleGammaPoint, Umodel
       implicit none
       !
@@ -244,6 +239,7 @@ contains
       !
       complex(8),allocatable                :: invW(:,:),W_q(:,:)
       complex(8),allocatable                :: epsGamma(:,:,:)
+      integer,allocatable                   :: AverageList(:)
       real(8)                               :: Beta
       integer                               :: Nbp,Nkpt,Nmats
       integer                               :: iq,iw,iwU
@@ -262,14 +258,13 @@ contains
       if(Wmats%Nkpt.ne.0) stop "calc_W_edmft: Wmats k dependent attributes are supposed to be unallocated."
       if(Pmats%Nkpt.ne.0) stop "calc_W_edmft: Pmats k dependent attributes are supposed to be unallocated."
       if(Umats%iq_gamma.lt.0) stop "calc_W_edmft: Umats iq_gamma not defined."
-      smear = HandleGammaPoint.gt.0
-      if(smear.and.(.not.allocated(Lttc%small_ik))) stop "calc_W_edmft: Kpoints near Gamma not stored. W divergence cannot be cured."
       !
       symQ_=.false.
       if(present(symQ))symQ_=symQ
       Ustatic=.false.
       if(Umodel.and.(Umats%Npoints.eq.1))Ustatic=.true.
       if(Ustatic)write(*,"(A)")"     Static U bare."
+      smear = HandleGammaPoint.gt.0
       !
       Nbp = Wmats%Nbp
       Nkpt = Umats%Nkpt
@@ -285,16 +280,19 @@ contains
       call clear_attributes(Wmats)
       !
       if(smear)then
+         if(.not.small_ik_stored)call fill_smallk(Lttc%kpt)
          allocate(epsGamma(Nbp,Nbp,Nmats));epsGamma=czero
-         Navg=size(pack(Lttc%small_ik(:,1),(Lttc%small_ik(:,2).le.HandleGammaPoint)))
-         iavg=0
+         AverageList = pack(small_ik(:,1),(small_ik(:,2).le.HandleGammaPoint))
+         Navg = size(AverageList)
+         if(verbose) write(*,"(A,100I4)")"     Averaging dielectric function over "//str(Navg)//" K-points: ",AverageList
       endif
       !
       ! Assuming that the Polarization vanishes at iw-->inf
       Wmats%bare_local = Umats%bare_local
       !
       !$OMP PARALLEL DEFAULT(NONE),&
-      !$OMP SHARED(Pmats,Umats,Wmats,Lttc,epsGamma,HandleGammaPoint,smear,Ustatic,verbose,symQ_,Navg),&
+      !$OMP SHARED(Pmats,Umats,Wmats,Lttc,Ustatic,symQ_),&
+      !$OMP SHARED(small_ik,epsGamma,HandleGammaPoint,AverageList,smear,Navg),&
       !$OMP PRIVATE(iw,iwU,iq,invW,W_q,iavg,add_iq)
       !$OMP DO
       do iw=1,Wmats%Npoints
@@ -305,7 +303,7 @@ contains
          do iq=1,Umats%Nkpt
             !
             !avoid the gamma point
-            if((iq.eq.Umats%iq_gamma).and.HandleGammaPoint)cycle
+            if((iq.eq.Umats%iq_gamma).and.smear)cycle
             !
             ! [ 1 - Pi*U ]
             invW = zeye(Umats%Nbp) - matmul(Pmats%screened_local(:,:,iw),Umats%screened(:,:,iwU,iq))
@@ -324,7 +322,7 @@ contains
             !
             !average the dielectric function around the Gamma point
             if(smear)then
-               add_iq = any( pack(Lttc%small_ik(:,1),(Lttc%small_ik(:,2).le.HandleGammaPoint)) .eq. iq )
+               add_iq = any( AverageList .eq. iq )
                if(add_iq)then
                   epsGamma(:,:,iw) = epsGamma(:,:,iw) + invW
                   iavg = iavg + 1
@@ -334,7 +332,7 @@ contains
          enddo !iq
          !
          !Control on the number of averaged K-points close to Gamma
-         if(smear.and.(iavg.ne.Navg)) stop "calc_W_full: error in the number of avergaged K-points around Gamma."
+         if(smear.and.(iavg.ne.Navg)) stop "calc_W_edmft: error in the number of avergaged K-points around Gamma."
          !
       enddo !iw
       !$OMP END DO
@@ -357,12 +355,12 @@ contains
             Wmats%screened_local(:,:,iw) = Wmats%screened_local(:,:,iw) + W_q/Nkpt
          enddo
          !
-         deallocate(epsGamma)
+         deallocate(epsGamma,AverageList)
          !
       endif
       deallocate(invW,W_q)
       !
-      !Check if the screened limit is locally symmetric - print if error is bigger than 1e-3
+      !Check if Wlat is locally hermitian - print if relative error is bigger than 1e-3
       write(*,"(A)") "     Checking hermiticity of local Wlat (enforced)."
       do iw=1,Nmats
          call check_Hermiticity(Wmats%screened_local(:,:,iw),1e7*eps,enforce=.true.,hardstop=.false.,name="Wlat_loc_w"//str(iw),verb=.true.)
@@ -535,22 +533,23 @@ contains
    !---------------------------------------------------------------------------!
    !PURPOSE: Read frequancy dependent interactions from SPEX files.
    !---------------------------------------------------------------------------!
-   subroutine read_U_spex_full(Umats,save2readable,LocalOnly,pathOUTPUT,doAC)
+   subroutine read_U_spex_full(Umats,save2readable,kpt,pathOUTPUT,doAC)
       !
       use parameters
       use file_io
       use utils_misc
       use utils_fields
-      use input_vars, only : pathINPUT, UfullStructure, Uthresh
+      use crystal
+      use input_vars, only : pathINPUT, UfullStructure, Uthresh, HandleGammaPoint
       implicit none
       !
       type(BosonicField),intent(inout)      :: Umats
       logical,intent(in)                    :: save2readable
-      logical,intent(in)                    :: LocalOnly
+      real(8),intent(in),optional           :: kpt(:,:)
       character(len=*),intent(in),optional  :: pathOUTPUT
       logical,intent(in),optional           :: doAC
       !
-      logical                               :: filexists,ACdone,doAC_,warn
+      logical                               :: LocalOnly,filexists,ACdone,doAC_,warn,smear
       character(len=256)                    :: file_spex,path,pathOUTPUT_
       integer                               :: unit,Nkpt
       integer                               :: iq,iw,iqread,Nbp_spex
@@ -567,14 +566,16 @@ contains
       write(*,"(A)") new_line("A")//new_line("A")//"---- read_U_spex_full"
       pathOUTPUT_ = pathINPUT
       if(present(pathOUTPUT)) pathOUTPUT_ = pathOUTPUT
-      !
+      LocalOnly = .not.present(kpt)
+      smear = HandleGammaPoint.lt.0
       !
       ! Check on the input Boson
       if(.not.Umats%status) stop "read_U_spex_full: BosonicField not properly initialized."
-      if((.not.LocalOnly).and.(.not.allocated(Umats%bare))) stop "read_U_spex_full: Requested k-dependence but bare attribute not allocated."
-      if((.not.LocalOnly).and.(.not.allocated(Umats%screened))) stop "read_U_spex_full: Requested k-dependence but screened attribute not allocated."
+      if((.not.LocalOnly).and.(.not.allocated(Umats%bare))) stop "read_U_spex_full: Requested k-dependence but bare non-local attribute not allocated."
+      if((.not.LocalOnly).and.(.not.allocated(Umats%screened))) stop "read_U_spex_full: Requested k-dependence but screened non-local attribute not allocated."
       if(LocalOnly.and.allocated(Umats%bare)) stop "read_U_spex_full: Bare K-dependent attributes is present but not used."
       if(LocalOnly.and.allocated(Umats%screened)) stop "read_U_spex_full: Screened K-dependent attributes is present but not used."
+      !
       allocate(wmats(Umats%Npoints));wmats=0d0
       wmats = BosonicFreqMesh(Umats%Beta,Umats%Npoints)
       !
@@ -608,6 +609,12 @@ contains
       !
       ! Perform cnalytical continuation on real interaction or load existing files
       if(doAC_) then
+         !
+         if(smear.and.LocalOnly)then
+            write(*,"(A)") "     read_U_spex_full: smearing requested with LocalOnly interaction. Smearing ignored."
+            smear=.false.
+         endif
+         if(smear.and.(size(kpt,dim=2).ne.Umats%Nkpt))stop "read_U_spex_full: K-point mesh does not correspond to Umats one."
          !
          !---------------------------------------------------------------------!
          !
@@ -805,9 +812,6 @@ contains
                enddo
             endif
             !
-            !Update the local attributes
-            call BosonicKsum(Umats)
-            !
          endif !LocalOnly
          deallocate(Utmp)
          !
@@ -826,6 +830,12 @@ contains
                   call check_Hermiticity(Umats%screened(:,:,iw,iq),eps,enforce=.true.,hardstop=.false.,name="Urpa_screened_w"//str(iw)//"_q"//str(iq))
                enddo
             enddo
+            !
+            !Removal of the divergence at Gamma
+            if(smear)then
+               if(.not.small_ik_stored)call fill_smallk(kpt)
+               call correct_Gamma(Umats,abs(HandleGammaPoint))
+            endif
             !
             call BosonicKsum(Umats)
             !
@@ -852,6 +862,7 @@ contains
                   Umats%bare_local(ib1,ib2)=czero
                   Umats%screened_local(ib1,ib2,:)=czero
                endif
+               !
                if(abs(dreal(Umats%bare_local(ib1,ib2))).lt.abs(dimag(Umats%bare_local(ib1,ib2))))then
                   if(warn) write(*,"(A)")new_line("A")//"     Warning: inverted Re/Im parity in local UcRPA. Check that orbital indexes belong to different sites."
                   warn=.false.
@@ -2266,7 +2277,7 @@ contains
       if(Wimp%Nkpt.ne.0) stop "calc_curlyU: Wimp k dependent attributes are supposed to be unallocated."
       if(Pimp%Nkpt.ne.0) stop "calc_curlyU: Pimp k dependent attributes are supposed to be unallocated."
       !
-      sym_=.false.
+      sym_=.true.
       if(present(sym))sym_=sym
       !
       Nbp = curlyU%Nbp
@@ -2330,13 +2341,13 @@ contains
             curlyU%screened_local(:,:,iw) = curlyU%screened_local(:,:,iw) - curlyUcorr%screened_local(:,:,iw)
          enddo
       endif
-      !call isReal(curlyU)
+      call isReal(curlyU)
       !
-      !Check if the screened limit is locally symmetric - print if error is bigger than 1e-3
+      !Check if curlyU is locally symmetric - print if relative error is bigger than 1e-3
       if(sym_)then
-         write(*,"(A)") "     Checking hermiticity of curlyU (enforced)."
+         write(*,"(A)") "     Checking symmetry of curlyU (enforced)."
          do iw=1,Nmats
-            call check_Hermiticity(curlyU%screened_local(:,:,iw),1e7*eps,enforce=.true.,hardstop=.false.,name="curlyU_w"//str(iw),verb=.true.)
+            call check_Symmetry(curlyU%screened_local(:,:,iw),1e7*eps,enforce=.true.,hardstop=.false.,name="curlyU_w"//str(iw),verb=.true.)
          enddo
       endif
       !
@@ -2379,7 +2390,7 @@ contains
       if(allocated(ChiC%bare_local))  stop "calc_Wimp: ChiC bare_local attribute is supposed to be unallocated."
       if(allocated(ChiC%bare))  stop "calc_Wimp: ChiC bare attribute is supposed to be unallocated."
       !
-      sym_=.false.
+      sym_=.true.
       if(present(sym))sym_=sym
       !
       Nbp = Wimp%Nbp
@@ -2408,13 +2419,13 @@ contains
       !$OMP END DO
       !$OMP END PARALLEL
       deallocate(Wtmp)
-      !call isReal(Wimp)
+      call isReal(Wimp)
       !
-      !Check if the screened limit is locally symmetric - print if error is bigger than 1e-4
+      !Check if Wimp is locally symmetric - print if relative error is bigger than 1e-3
       if(sym_)then
-         write(*,"(A)") "     Checking hermiticity of Wimp (enforced)."
+         write(*,"(A)") "     Checking symmetry of Wimp (enforced)."
          do iw=1,Nmats
-            call check_Hermiticity(Wimp%screened_local(:,:,iw),1e6*eps,enforce=.true.,hardstop=.false.,name="Wimp_w"//str(iw),verb=.true.)
+            call check_Symmetry(Wimp%screened_local(:,:,iw),1e7*eps,enforce=.true.,hardstop=.false.,name="Wimp_w"//str(iw),verb=.true.)
          enddo
       endif
       !
@@ -2424,31 +2435,223 @@ contains
    !---------------------------------------------------------------------------!
    !PURPOSE: Correct the RPA interaction at gamma (not used)
    !---------------------------------------------------------------------------!
-   subroutine correct_Ugamma(Ulat)
+   subroutine correct_Gamma(U,mode)
       !
       use parameters
       use utils_misc
-      use utils_fields
+      use crystal
       implicit none
       !
-      type(BosonicField),intent(inout)      :: Ulat
+      type(BosonicField),intent(inout)      :: U
+      integer,intent(in)                    :: mode
+      !
+      integer                               :: Nkpt,Nbp,ib1,ib2
+      integer                               :: iangle,Nangles,DimK,Navg,ik0,ik1,ik2
+      integer                               :: shift,cycleCondition,idist,DistLoop
+      real(8)                               :: k0,k1,k2,W1,W2
+      real(8)                               :: U_ik_fact,U_gamma_fact
+      logical,allocatable                   :: condition(:)
+      integer,allocatable                   :: ListN(:),Korder(:)
+      real(8),allocatable                   :: ListK(:),ListTheta(:),ListPhi(:)
+      real(8),allocatable                   :: U_Gamma(:,:)
+      type(physicalU)                       :: PhysicalUelements
       !
       !
-      if(verbose)write(*,"(A)") "---- correct_Ugamma"
+      !TEST>>>
+      verbose=.true.
+      !>>>TEST
+      if(verbose)write(*,"(A)") "---- correct_Gamma"
       !
       !
       ! Check on the input Fields
-      if(.not.Ulat%status) stop "Plat not properly initialized."
-      if(Ulat%Nkpt.eq.0) stop "Plat k dependent attributes are supposed to be allocated."
-      if(.not.allocated(Ugamma)) stop "Ugamma is not allocated."
+      if(.not.U%status) stop "correct_Gamma: U not properly initialized."
+      if(U%Nkpt.eq.0) stop "correct_Gamma: U k dependent attributes are supposed to be allocated."
+      if(U%iq_gamma.lt.0) stop "correct_Gamma: U iq_gamma not defined."
+      if(.not.small_ik_stored) stop "correct_Gamma: Small k-vectors not stored."
+      if(size(small_ik,dim=1)+1.ne.U%Nkpt) stop "correct_Gamma: Provided K mesh does not match the U one."
       !
-      call assert_shape(Ugamma,[Ulat%Nbp,Ulat%Nbp,Ulat%Npoints],"correct_Ugamma","Ugamma")
+      Nkpt = U%Nkpt
+      Nbp = U%Nbp
       !
-      Ulat%screened(:,:,:,Ulat%iq_gamma) = Ugamma
+      call init_Uelements(int(sqrt(dble(Nbp))),PhysicalUelements)
       !
-      call BosonicKsum(Ulat)
+      select case(mode)
+         case default
+            !
+            stop "correct_Gamma: Available smearing modes: 1 2 3."
+            !
+         case(1)
+            !
+            write(*,"(A)") "     Gaussian interpolation of Gamma."
+            shift = 0            !points used to fit Gamma = [D1,D2]
+            cycleCondition = 2   !list of agular dependend distances from Gamma must contain at least 2 elements
+            DistLoop = 1         !loop over the nearest neighbors
+            !
+         case(2)
+            !
+            write(*,"(A)") "     Gaussian interpolation of Gamma and Gamma_NN."
+            shift = 1            !points used to fit Gamma and D1 = [D2,D3]
+            cycleCondition = 3   !list of agular dependend distances from Gamma must contain at least 3 elements
+            DistLoop = 1         !loop over the nearest neighbors
+            !
+         case(3)
+            !
+            write(*,"(A)") "     Gaussian interpolation of Gamma, Gamma_NN and Gamma_NNN."
+            shift = 1            !points used to fit Gamma and D1 = [D2,D3]
+            cycleCondition = 3   !list of agular dependend distances from Gamma must contain at least 3 elements
+            DistLoop = 2         !loop over the nearest and next-nearest neighbors
+            !
+      end select
       !
-   end subroutine correct_Ugamma
+      U%screened(:,:,:,U%iq_gamma) = czero
+      !
+      Navg=0
+      allocate(U_Gamma(Nbp,Nbp));U_Gamma=0d0
+      allocate(condition(Nkpt-1));condition=.false.
+      do idist=1,DistLoop
+         !
+         if(verbose) write(*,"(A)") new_line("A")//new_line("A")//"     Scanning the K points at distance "//str(idist)//" from Gamma."
+         !
+         !find the K-vectors closest to Gamma and for each of them the {theta,phi} pair
+         condition = small_ik(:,2) .eq. idist
+         Nangles = size( pack(KvecPolar(:,1) , condition) )
+         ListTheta = pack( KvecPolar(:,2) , condition )
+         ListPhi = pack( KvecPolar(:,3) , condition )
+         !
+         !Gaussian interpolation of the Gamma and closest K-points
+         condition=.false.
+         do iangle=1,Nangles
+            !
+            !for each of the K-vectors closest to Gamma find all the others with the same {theta,phi} pair
+            condition = ( KvecPolar(:,2).eq.ListTheta(iangle) ) .and. ( KvecPolar(:,3).eq.ListPhi(iangle) )
+            ListK = pack( KvecPolar(:,1) , condition )
+            ListN = pack( small_ik(:,1)  , condition )
+            if(size(ListK).ne.size(ListN)) stop "correct_Gamma: length of K mesh for interpolation does not correspond to length of indexes array."
+            DimK = size(ListK)
+            !
+            !I need al least two points to interpolate a gaussian
+            if(DimK.lt.cycleCondition)cycle
+            Navg = Navg + 1
+            !
+            if(verbose)then
+               write(*,"(2(A,I4))") "     => iangle: ",iangle,"   iavg: ",Navg
+               write(*,"(2(A,1F6.2),A,"//str(DimK)//"I6)") "        theta: ", ListTheta(iangle), "   phi: ", ListPhi(iangle),"   ik: ",ListN
+               write(*,"(A,"//str(DimK)//"F8.4)") "        unsorted K: ",ListK
+            endif
+            !
+            !Sort the K coordinate
+            allocate(Korder(DimK));Korder=0
+            call sort_array(ListK,Korder)
+            !
+            !Interpolate a Gaussian from the two K-points [D1,D2] or [D2,D3] depending on "shift" and always average the Gamma point
+            k1 = ListK(Korder(1+shift)); ik1 = ListN(Korder(1+shift))
+            k2 = ListK(Korder(2+shift)); ik2 = ListN(Korder(2+shift))
+            if(shift.ne.0)then
+               k0 = ListK(Korder(1))
+               ik0 = ListN(Korder(1))
+               if((k0.eq.k1).or.(k0.eq.k2)) stop "correct_Gamma: interpolated K-point correspond to interpolation one."
+               if((ik0.eq.ik1).or.(ik0.eq.ik2)) stop "correct_Gamma: interpolated K-point index correspond to interpolation one."
+            endif
+            !
+            if(verbose)then
+               write(*,"(A,"//str(DimK)//"F8.4)") "        sorted K: ",ListK(Korder)
+               write(*,"(2(A,I4),2(A,F8.4))") "        ik1_fit: ",ik1,"   ik2_fit: ",ik2,"   k1_fit: ",k1,"   k2_fit: ",k2
+               if(shift.eq.0)then
+                  write(*,"(A)") "        Adding only Gamma."
+               else
+                  write(*,"(A,I)") "        Adding Gamma replacing ik:",ik0
+               endif
+            endif
+            !
+            do ib1=1,Nbp
+               do ib2=1,Nbp
+                  !
+                  if(.not.PhysicalUelements%Full_All(ib1,ib2)) cycle
+                  !
+                  W1 = dreal(U%bare(ib1,ib2,ik1))
+                  W2 = dreal(U%bare(ib1,ib2,ik2))
+                  !
+                  U_Gamma(ib1,ib2) = U_Gamma(ib1,ib2) + interp_Lorentzian([k1,W1],[k2,W2],0d0)
+                  if(shift.ne.0)then
+                     !
+                     U_ik_fact = interp_Lorentzian([k1,W1],[k2,W2],k0) / dreal(U%bare(ib1,ib2,ik0))
+                     !
+                     U%bare(ib1,ib2,ik0) = U%bare(ib1,ib2,ik0) * U_ik_fact
+                     U%screened(ib1,ib2,:,ik0) = U%screened(ib1,ib2,:,ik0) * U_ik_fact
+                     !
+                  endif
+                  !
+               enddo
+            enddo
+            !
+            deallocate(condition,ListK,ListN,Korder)
+            !
+         enddo !iangle
+      enddo !idist
+      U_Gamma = U_Gamma / Navg
+      !
+      if(verbose) write(*,"(A,I)")new_line("A")//"     Navg: ",Navg
+      do ib1=1,Nbp
+         do ib2=1,Nbp
+            !
+            if(.not.PhysicalUelements%Full_All(ib1,ib2)) cycle
+            !
+            U_gamma_fact = U_Gamma(ib1,ib2) / dreal(U%bare(ib1,ib2,U%iq_gamma))
+            !
+            U%bare(ib1,ib2,U%iq_gamma) = U%bare(ib1,ib2,U%iq_gamma) * U_gamma_fact
+            U%screened(ib1,ib2,:,U%iq_gamma) = U%screened(ib1,ib2,:,U%iq_gamma) * U_gamma_fact
+            !
+         enddo
+      enddo
+      deallocate(U_Gamma)
+      !
+      !
+      !
+      contains
+      !
+      !
+      !
+      function interp_Gaussian(P1,P2,x) result(y)
+         implicit none
+         real(8),intent(in)                 :: P1(2)
+         real(8),intent(in)                 :: P2(2)
+         real(8),intent(in)                 :: x
+         real(8)                            :: y
+         real(8)                            :: A,B
+         real(8)                            :: x1,y1,x2,y2
+         !
+         x1 = P1(1); y1 = P1(2)
+         x2 = P2(1); y2 = P2(2)
+         !
+         B = (x1**2 - x2**2) / log(y2/y1)
+         A = y1*exp((x1**2)/B)
+         !
+         y = A* exp(-(x**2)/B)
+         !
+      end function interp_Gaussian
+      !
+      function interp_Lorentzian(P1,P2,x) result(y)
+         implicit none
+         real(8),intent(in)                 :: P1(2)
+         real(8),intent(in)                 :: P2(2)
+         real(8),intent(in)                 :: x
+         real(8)                            :: y
+         real(8)                            :: A,B
+         real(8)                            :: x1,y1,x2,y2
+         !
+         x1 = P1(1); y1 = P1(2)
+         x2 = P2(1); y2 = P2(2)
+         !
+         B = abs( ( y2*(x2**2) - y1*(x1**2) ) / ( y1 - y2 ) )
+         A = y1 * ( (x1**2) + B ) / B
+         !
+         y = A*B / ( x**2 + B )
+         !
+      end function interp_Lorentzian
+      !
+      !
+      !
+   end subroutine correct_Gamma
 
 
 end module interactions

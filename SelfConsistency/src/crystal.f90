@@ -65,6 +65,8 @@ module crystal
    real(8),private                          :: Blat(3,3)
    real(8),private                          :: vol
    !
+   !Available outside the module
+   !
    integer,public,protected                 :: Nwig=0
    integer,public,protected                 :: wig0=0
    real(8),allocatable,public,protected     :: radiuswig(:)
@@ -72,12 +74,16 @@ module crystal
    real(8),allocatable,public,protected     :: Rvecwig(:,:)
    integer,allocatable,public,protected     :: nrdegwig(:)
    !
+   real(8),allocatable,public,protected     :: KvecPolar(:,:)
+   integer,allocatable,public,protected     :: small_ik(:,:)
+   !
    real(8),allocatable,public,protected     :: UserPath(:,:)
    !
    logical,public,protected                 :: Hk_stored=.false.
    logical,public,protected                 :: Ruc_stored=.false.               !Global flag for routines that need positions within the u.c.
-   logical,public,protected                 :: Lat_stored=.false.               !Internal flag for routines that need rlat
-   logical,public,protected                 :: Wig_stored=.false.               !Internal flag for routines performing Wannier interpolation
+   logical,public,protected                 :: Lat_stored=.false.               !Global flag for routines that need rlat
+   logical,public,protected                 :: Wig_stored=.false.               !Global flag for routines performing Wannier interpolation
+   logical,public,protected                 :: small_ik_stored=.false.          !Global flag for routines that need sorted k-points
    !
 #ifdef _verb
    logical,private                          :: verbose=.true.
@@ -330,7 +336,7 @@ contains
       call matrix_inverse(real(H,dp), Hinv, eps_=aeps)
       K = matmul(Blat,Hinv)
       !
-      ! create the kpt list
+      ! create the kpt List
       call generateFullKpointList(K, B, real(shift,dp), klist, reps_=reps,aeps_=aeps)
       do ik = 1,determinant(H)
          kpt(:,ik) = klist(ik,:)
@@ -1191,7 +1197,7 @@ contains
 
 
    !---------------------------------------------------------------------------!
-   !PURPOSE: Fill up the list likning indexes of the sum and diff of K-points
+   !PURPOSE: Fill up the List likning indexes of the sum and diff of K-points
    !         that was originally meant for cubic systems and the points external
    !         to the 1st BZ recovered by just removing nint(dk) to dk.
    !         For generic lattice the BZ vector is not simply the versor as implied
@@ -1379,72 +1385,117 @@ contains
    end subroutine fill_ksumkdiff
 
 
-
    !---------------------------------------------------------------------------!
    !PURPOSE: find the smallest k vectors for interaction interpolation
    !---------------------------------------------------------------------------!
-   subroutine fill_smallk(kpt,small_ik)
+   subroutine fill_smallk(kpt)
       !
       use utils_misc
       implicit none
       !
       real(8),intent(in)                    :: kpt(:,:)
-      integer,allocatable,intent(inout)     :: small_ik(:,:)
       !
       integer                               :: Nkpt,ik,idist,ismall
       real(8)                               :: Bvec(3),kvec(3)
-      real(8),allocatable                   :: Ksorted(:)
+      real(8),allocatable                   :: Kradius(:)
       integer,allocatable                   :: Korder(:)
       !
       !
       if(verbose)write(*,"(A)") "---- fill_smallk"
-      if(.not.Lat_stored)stop "Lattice positions not stored. Either call read_lattice(path) or read_Hk(path,Hk,kpt)"
-      !
-      !
-      if(.not.Lat_stored) stop "fill_smallk: Lattice vectors not stored."
+      if(.not.Lat_stored)stop "fill_smallk: Lattice positions not stored."
       !
       Nkpt = size(kpt,dim=2)
       !
       if(allocated(small_ik))deallocate(small_ik)
+      if(allocated(KvecPolar))deallocate(KvecPolar)
       allocate(small_ik(Nkpt-1,2));small_ik=0
+      allocate(KvecPolar(Nkpt-1,3));KvecPolar=0d0
       !
-      allocate(Ksorted(Nkpt));Ksorted=0d0
       allocate(Korder(Nkpt));Korder=0
+      allocate(Kradius(Nkpt));Kradius=0d0
       do ik=1,Nkpt
+         !
          kvec = kpt(:,ik) - nint(kpt(:,ik))
          Bvec = kvec(1)*Blat(:,1) + kvec(2)*Blat(:,2) + kvec(3)*Blat(:,3)
-         Ksorted(ik) = sqrt(dble(dot_product(Bvec,Bvec)))
+         !
+         Kradius(ik) = sqrt(dble(dot_product(Bvec,Bvec)))
+         !
       enddo
       !
-      call sort_array(Ksorted,Korder)
+      call sort_array(Kradius,Korder)
       !
       idist=0
       ismall=0
+      if(verbose)write(*,"(A)")"     Smallest k vectors:"
       do ik=1,Nkpt
          !
          !skip the gamma point
-         if(Ksorted(Korder(ik)).ne.0d0)then
+         if(Kradius(Korder(ik)).ne.0d0)then
+            !
             ismall = ismall + 1
-            if((Ksorted(Korder(ik))-Ksorted(Korder(ik-1))).gt.1e-5) idist=idist+1
+            if((Kradius(Korder(ik))-Kradius(Korder(ik-1))).gt.eps) idist=idist+1
+            !
+            kvec = kpt(:,Korder(ik)) - nint(kpt(:,Korder(ik)))
+            Bvec = kvec(1)*Blat(:,1) + kvec(2)*Blat(:,2) + kvec(3)*Blat(:,3)
+            !
             small_ik(ismall,1) = Korder(ik)
             small_ik(ismall,2) = idist
+            !
+            !Polar coordinates sorted according to |k|
+            KvecPolar(ismall,1) = sqrt(dble(dot_product(Bvec,Bvec)))                !r = sqrt( x^2 + y^2 + z^2 )
+            KvecPolar(ismall,2) = atan2(Bvec(2),Bvec(1))                            !theta = atan( y/x )
+            KvecPolar(ismall,3) = acos(Bvec(3)/sqrt(dble(dot_product(Bvec,Bvec))))  !phi = acos( z/r )
+            !
+            if(verbose.and.(small_ik(ismall,2).le.5)) write(*,"(A,I5,A,3F12.6,A,I3,A,3F12.6,3(A,1F20.10))") "     ikpt: ",small_ik(ismall,1)       &
+                                                                         ,"   kpt: ",kpt(:,Korder(ik))         &
+                                                                         ,"   dist: ",small_ik(ismall,2)       &
+                                                                         ,"   Kvec: ",Bvec                     &
+                                                                         ,"   r: ",KvecPolar(ismall,1)         &
+                                                                         ,"   theta: ",KvecPolar(ismall,2)     &
+                                                                         ,"   phi: ",KvecPolar(ismall,3)
+            !
          endif
          !
       enddo
+      deallocate(Kradius,Korder)
       !
-      !if(verbose)then
-         write(*,"(A)")"     Smallest k vectors:"
-         do ik=1,Nkpt
-            kvec = kpt(:,small_ik(ik,1)) - nint(kpt(:,small_ik(ik,1)))
-            if(small_ik(ik,2).ge.5)exit
-            write(*,"(A,I5,A,3F12.6,A,I3,A,1F12.6,A,3F12.6)")"     ik: ",small_ik(ik,1)                &
-                                                            ,"   kpt: ",kpt(:,small_ik(ik,1))          &
-                                                            ,"   radius: ",small_ik(ik,2)              &
-                                                            ,"   distance: ",Ksorted(small_ik(ik,1))   &
-                                                            ,"   Kvec: ",(kvec(1)*Blat(:,1) + kvec(2)*Blat(:,2) + kvec(3)*Blat(:,3))
-         enddo
-      !endif
-      deallocate(Ksorted,Korder)
+      small_ik_stored=.true.
+      !
+     !if(verbose)then
+     !   !
+     !   !sorting dist
+     !   call get_pattern(List,small_ik(:,2),listDim=DimList)
+     !   write(*,*)new_line("A")//new_line("A")//"Lists: ",size(List,dim=1),size(DimList,dim=1)
+     !   do ilist=1,size(List,dim=1)
+     !      write(*,"(A,1F12.5,A,1I3,A,100I4)")"D:",dble(small_ik(List(ilist,1),2)),"Dim:", DimList(ilist)," List["//str(ilist)//",:] ",List(ilist,1:DimList(ilist))
+     !   enddo
+     !   deallocate(List,DimList)
+     !   !
+     !   !sorting R
+     !   call get_pattern(List,Polar(:,1),eps,listDim=DimList)
+     !   write(*,*)new_line("A")//new_line("A")//"Lists: ",size(List,dim=1),size(DimList,dim=1)
+     !   do ilist=1,size(List,dim=1)
+     !      write(*,"(A,1F12.5,A,1I3,A,100I4)")"R:",Polar(List(ilist,1),1),"Dim:", DimList(ilist)," List["//str(ilist)//",:] ",List(ilist,1:DimList(ilist))
+     !   enddo
+     !   deallocate(List,DimList)
+     !   !
+     !   !sorting theta
+     !   call get_pattern(List,Polar(:,2),eps,listDim=DimList)
+     !   write(*,*)new_line("A")//new_line("A")//"Lists: ",size(List,dim=1),size(DimList,dim=1)
+     !   do ilist=1,size(List,dim=1)
+     !      write(*,"(A,1F12.5,A,1I3,A,100I4)")"T:",Polar(List(ilist,1),2),"Dim:", DimList(ilist)," List["//str(ilist)//",:] ",List(ilist,1:DimList(ilist))
+     !   enddo
+     !   deallocate(List,DimList)
+     !   !
+     !   !sorting phi
+     !   call get_pattern(List,Polar(:,3),eps,listDim=DimList)
+     !   write(*,*)new_line("A")//new_line("A")//"Lists: ",size(List,dim=1),size(DimList,dim=1)
+     !   do ilist=1,size(List,dim=1)
+     !      write(*,"(A,1F12.5,A,1I3,A,100I4)")"P:",Polar(List(ilist,1),3),"Dim:", DimList(ilist)," List["//str(ilist)//",:] ",List(ilist,1:DimList(ilist))
+     !   enddo
+     !   deallocate(List,DimList)
+     !   !
+     !endif
       !
    end subroutine fill_smallk
 
@@ -1526,11 +1577,12 @@ contains
                   radiuswig_tmp(iwig) = sqrt(dble(dot_product(rtmp,rtmp)))
                   if(all([ir1,ir2,ir3].eq.[0,0,0]))wig0=iwig
                   !
-                  !if(verbose)then
-                  !   write(*,"(A12,I10,A5,I4)") "     iwig:",iwig,"deg:",nrdegwig_tmp(iwig)
-                  !   write(*,"(A,3I8)") "     Nvecwig:",Nvecwig_tmp(:,iwig)
-                  !   write(*,"(A,3F8.2)") "     Rvecwig:",Rvecwig_tmp(:,iwig)
-                  !endif
+                  if(verbose)then
+                     write(*,"(A,I10,A,I4)") "     iwig: ",iwig,"   deg:",nrdegwig_tmp(iwig)
+                     write(*,"(A,3I8)") "     Nvecwig: ",Nvecwig_tmp(:,iwig)
+                     write(*,"(A,3F)") "     Rvecwig: ",Rvecwig_tmp(:,iwig)
+                     write(*,"(A,F)") "     R: ",radiuswig_tmp(iwig)
+                  endif
                   !
                endif
                !
@@ -1776,7 +1828,6 @@ contains
       !
    end subroutine wannierinterpolation_D1_z
    !
-   !
    subroutine wannierinterpolation_D2_d(nkpt3_orig,kpt_orig,kpt_intp,mat_orig,mat_intp)
       !
       use utils_misc
@@ -1964,7 +2015,6 @@ contains
       deallocate(mat_R)
       !
    end subroutine wannierinterpolation_D2_z
-   !
    !
    subroutine wannierinterpolation_D3_d(nkpt3_orig,kpt_orig,kpt_intp,mat_orig,mat_intp)
       !

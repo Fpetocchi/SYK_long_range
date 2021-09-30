@@ -44,7 +44,6 @@ module parameters
       integer,allocatable                   :: kptPos(:)                        ![Nkpt]
       integer,allocatable                   :: kptsum(:,:)                      ![Nkpt,Nkpt]
       integer,allocatable                   :: kptdif(:,:)                      ![Nkpt,Nkpt]
-      integer,allocatable                   :: small_ik(:,:)                    ![12,2]
       integer                               :: Norb=0
       real(8)                               :: mu=0d0
       real(8)                               :: density=0d0
