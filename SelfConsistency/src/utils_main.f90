@@ -1740,7 +1740,6 @@ contains
       complex(8),allocatable                :: WP(:,:),PW(:,:),PWP(:,:)
       complex(8),allocatable                :: W_P(:,:),P_W(:,:)
       complex(8),allocatable                :: invWa(:,:),invWb(:,:)
-      complex(8),allocatable                :: Ucorr(:,:)
       !
       !
       write(*,"(A)") new_line("A")//new_line("A")//"---- calc_causality_curlyU_correction"
@@ -1768,7 +1767,6 @@ contains
             allocate(P_W(Plat%Nbp,Plat%Nbp));P_W=czero
             allocate(invWa(Plat%Nbp,Plat%Nbp));invWa=czero
             allocate(invWb(Plat%Nbp,Plat%Nbp));invWb=czero
-            allocate(Ucorr(Plat%Nbp,Plat%Nbp));Ucorr=czero
             !
             !$OMP PARALLEL DEFAULT(PRIVATE),&
             !$OMP SHARED(Plat,Wlat,curlyU_correction)
@@ -1777,7 +1775,7 @@ contains
                !
                WP=czero;PW=czero;PWP=czero
                W_P=czero;P_W=czero
-               invWa=czero;invWb=czero;Ucorr=czero
+               invWa=czero;invWb=czero
                !
                do iq=1,Plat%Nkpt
                   !
@@ -1803,16 +1801,15 @@ contains
                call inv(invWb)
                !
                ! Put toghether all the pieces. arxiv:2011.05311 Eq.22
-               Ucorr = matmul(PW,matmul(invWa,WP)) - matmul(P_W,matmul(invWb,W_P))
-               !
-               curlyU_correction%screened_local(:,:,iw) = Ucorr
+               curlyU_correction%screened_local(:,:,iw) = matmul(PW,matmul(invWa,WP)) - matmul(P_W,matmul(invWb,W_P))
                !
             enddo
             !$OMP END DO
             !$OMP END PARALLEL
-            deallocate(P,W,WP,PW,PWP,W_P,P_W,invWa,invWb,Ucorr)
+            deallocate(P,W,WP,PW,PWP,W_P,P_W,invWa,invWb)
             !
-            !call isReal(curlyU_correction)
+            call isReal(curlyU_correction)
+            !
             do iw=1,curlyU_correction%Npoints
                call check_Symmetry(curlyU_correction%screened_local(:,:,iw),1e7*eps,enforce=.true.,hardstop=.false.,name="curlyU_correction_w"//str(iw),verb=.true.)
             enddo
@@ -1859,124 +1856,6 @@ contains
       call dump_BosonicField(curlyU_correction,reg(ItFolder),"curlyU_correction_w.DAT")
       !
    end subroutine calc_causality_curlyU_correction
-   !
-   subroutine calc_causality_curlyU_correction_v1(mode)
-      !
-      implicit none
-      character(len=*),intent(in)           :: mode
-      integer                               :: iq,iw
-      complex(8),allocatable                :: P(:,:),WP(:,:),PW(:,:),PWP(:,:)
-      complex(8),allocatable                :: W_P(:,:),P_W(:,:)
-      complex(8),allocatable                :: invWa(:,:),invWb(:,:)
-      !type(physicalU)                       :: PhysicalUelements
-      !
-      !
-      write(*,"(A)") new_line("A")//new_line("A")//"---- calc_causality_curlyU_correction"
-      !
-      !
-      if(.not.Plat%status) stop "calc_causality_curlyU_correction: Plat not properly initialized."
-      if(.not.Wlat%status) stop "calc_causality_curlyU_correction: Wlat not properly initialized."
-      !
-      call AllocateBosonicField(curlyU_correction,Crystal%Norb,Nmats,Crystal%iq_gamma,Beta=Beta,no_bare=.true.)
-      allocate(P(Plat%Nbp,Plat%Nbp));P=czero
-      allocate(WP(Plat%Nbp,Plat%Nbp));WP=czero
-      allocate(PW(Plat%Nbp,Plat%Nbp));PW=czero
-      allocate(PWP(Plat%Nbp,Plat%Nbp));PWP=czero
-      allocate(W_P(Plat%Nbp,Plat%Nbp));W_P=czero
-      allocate(P_W(Plat%Nbp,Plat%Nbp));P_W=czero
-      allocate(invWa(Plat%Nbp,Plat%Nbp));invWa=czero
-      allocate(invWb(Plat%Nbp,Plat%Nbp));invWb=czero
-      !
-      !call init_Uelements(int(sqrt(dble(Plat%Nbp))),PhysicalUelements)
-      !
-      select case(reg(mode))
-         case default
-            !
-            stop "calc_causality_curlyU_correction: Available types are: curlyU, Ploc."
-            !
-         case("curlyU")
-            !
-            !$OMP PARALLEL DEFAULT(NONE),&
-            !$OMP SHARED(Plat,Wlat,curlyU_correction),&
-            !$OMP PRIVATE(iw,iq,P,WP,PW,PWP,W_P,P_W,invWa,invWb)
-            !$OMP DO
-            do iw=1,Plat%Npoints
-               !
-               WP=czero;PW=czero;PWP=czero;invWa=czero
-               W_P=czero;P_W=czero;invWb=czero;P=czero
-               !
-               do iq=1,Plat%Nkpt
-                  !
-                  P = Plat%screened(:,:,iw,iq)
-                  !call clear_MatrixElements(P,PhysicalUelements%Full_Imp)
-                  !
-                  WP = WP + matmul(Wlat%screened(:,:,iw,iq),Plat%screened(:,:,iw,iq))/Plat%Nkpt
-                  PW = PW + matmul(Plat%screened(:,:,iw,iq),Wlat%screened(:,:,iw,iq))/Plat%Nkpt
-                  PWP = PWP + matmul(Plat%screened(:,:,iw,iq),matmul(Wlat%screened(:,:,iw,iq),Plat%screened(:,:,iw,iq)))/Plat%Nkpt
-                  !
-               enddo
-               !
-               P = Plat%screened_local(:,:,iw)
-               !call clear_MatrixElements(P,PhysicalUelements%Full_Imp)
-               !
-               W_P = matmul(Wlat%screened_local(:,:,iw),P)
-               P_W = matmul(P,Wlat%screened_local(:,:,iw))
-               !
-               invWa = P + PWP
-               call inv(invWa)
-               !
-               invWb = P + matmul(P,matmul(Wlat%screened_local(:,:,iw),P))
-               call inv(invWb)
-               !
-               ! Put toghether all the pieces. arxiv:2011.05311 Eq.22
-               curlyU_correction%screened_local(:,:,iw) = + matmul(PW,matmul(invWa,WP)) - matmul(P_W,matmul(invWb,W_P))
-               !
-            enddo
-            !$OMP END DO
-            !$OMP END PARALLEL
-            !
-            !call isReal(curlyU_correction)
-            do iw=1,curlyU_correction%Npoints
-               call check_Symmetry(curlyU_correction%screened_local(:,:,iw),1e7*eps,enforce=.true.,hardstop=.false.,name="curlyU_correction_w"//str(iw),verb=.true.)
-            enddo
-            !
-         case("Ploc")
-            !
-            !$OMP PARALLEL DEFAULT(NONE),&
-            !$OMP SHARED(Plat,Wlat,curlyU_correction),&
-            !$OMP PRIVATE(iw,iq,WP,PW,PWP,W_P,P_W,invWa,invWb)
-            !$OMP DO
-            do iw=1,Plat%Npoints
-               !
-               WP=czero;PW=czero;PWP=czero;invWa=czero
-               !
-               do iq=1,Plat%Nkpt
-                  !
-                  WP = WP + matmul(Wlat%screened(:,:,iw,iq),Plat%screened(:,:,iw,iq))/Plat%Nkpt
-                  PW = PW + matmul(dag(Plat%screened(:,:,iw,iq)),Wlat%screened(:,:,iw,iq))/Plat%Nkpt
-                  PWP = PWP + matmul(dag(Plat%screened(:,:,iw,iq)),matmul(Wlat%screened(:,:,iw,iq),Plat%screened(:,:,iw,iq)))/Plat%Nkpt
-                  !
-               enddo
-               !
-               invWa = Wlat%screened_local(:,:,iw)
-               call inv(invWa)
-               !
-               ! Put toghether all the pieces. Jiyu equation.
-               curlyU_correction%screened_local(:,:,iw) = + PWP - matmul(PW,matmul(invWa,WP))   &
-                                                          - matmul(PW,invWa) - matmul(invWa,WP) &
-                                                          + dag(Plat%screened_local(:,:,iw)) + Plat%screened_local(:,:,iw)
-               !
-            enddo
-            !$OMP END DO
-            !$OMP END PARALLEL
-            !
-      end select
-      deallocate(P,WP,PW,PWP,W_P,P_W,invWa,invWb)
-      !
-      call symmetrize_GW(curlyU_correction,EqvGWndx)
-      call dump_BosonicField(curlyU_correction,reg(ItFolder),"curlyU_correction_w.DAT")
-      !
-   end subroutine calc_causality_curlyU_correction_v1
 
 
    !---------------------------------------------------------------------------!
@@ -2627,6 +2506,7 @@ contains
       type(BosonicField)                    :: curlyU
       complex(8),allocatable                :: Smats(:,:,:,:)
       complex(8),allocatable                :: SmatsTail(:),SmatsNoFit(:,:,:,:)
+      real(8),allocatable                   :: Uinst(:,:),rhoQMC(:),HartreeQMC(:)
       !Impurity susceptibilities
       real(8),allocatable                   :: nnt(:,:,:)
       complex(8),allocatable                :: NNitau(:,:,:,:,:)
@@ -2886,28 +2766,34 @@ contains
             Simp%ws(iorb,iorb,:,:) = Smats(iorb,:,:,isite)
          enddo
          !
-         !Fill up the N_s attribute that correspond to the Hartree term
-         !since the impurity interaction contains only the physical interaction elements
-         !(particle and spin conserving) I'm neglecting here elements in principle present
-         !Because both Simp and densityQMC are diagonal
-         !like Hartree_{ab} = Sum_c curlyU_{ab}{cc} * n_{cc}.
+         !Fill up the N_s attribute that correspond to the Hartree term of the
+         !self-energy always diagonal in the solver basis
          call AllocateBosonicField(curlyU,Norb,Nmats,Crystal%iq_gamma,Beta=Beta)
          call read_BosonicField(curlyU,reg(PrevItFolder)//"Solver_"//reg(SiteName(isite))//"/","curlyU_"//reg(SiteName(isite))//"_w.DAT")
-         Simp%N_s=czero
-         do ispin=1,Nspin
-            do iorb=1,Norb
-               do jorb=1,Norb
-                  !
-                  call F2Bindex(Norb,[iorb,iorb],[jorb,jorb],ib1,ib2)
-                  !
-                  Simp%N_s(iorb,iorb,ispin) = Simp%N_s(iorb,iorb,ispin) + real(curlyU%screened_local(ib1,ib2,1))*densityQMC(jorb,jorb,ispin,isite)
-                  !
-               enddo
-            enddo
+         !
+         allocate(Uinst(Norb*Nspin,Norb*Nspin));Uinst=0d0
+         call calc_QMCinteractions(curlyU,Uinst)
+         !
+         allocate(rhoQMC(Norb*Nspin));rhoQMC=0d0
+         do ib1=1,Nflavor
+            iorb = (ib1+mod(ib1,2))/2
+            ispin = abs(mod(ib1,2)-2)
+            rhoQMC(ib1) = densityQMC(iorb,iorb,ispin,isite)
          enddo
+         !
+         allocate(HartreeQMC(Norb*Nspin));HartreeQMC=0d0
+         HartreeQMC = matmul(Uinst,rhoQMC)
+         deallocate(Uinst,rhoQMC)
+         !
+         do ib1=1,Nflavor
+            iorb = (ib1+mod(ib1,2))/2
+            ispin = abs(mod(ib1,2)-2)
+            Simp%N_s(iorb,iorb,ispin) = HartreeQMC(ib1)
+         enddo
+         deallocate(HartreeQMC)
          call DeallocateBosonicField(curlyU)
          !
-         !The magnetization will be given only by the self-energy
+         !The magnetization will be given only by the self-energy beyond Hartree
          Simp%N_s(:,:,1) = (Simp%N_s(:,:,1)+Simp%N_s(:,:,2))/2d0
          Simp%N_s(:,:,2) = Simp%N_s(:,:,1)
          !
