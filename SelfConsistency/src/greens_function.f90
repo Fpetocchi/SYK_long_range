@@ -344,9 +344,9 @@ contains
                NbulkL = Hetero%Explicit(1)-1
                !
                allocate(Potential_L(Hetero%Norb,Hetero%Norb,Nmats,Nkpt,Nspin));Potential_L=czero
-               call build_Potential(Potential_L,Hetero%tz(:,:,Hetero%Explicit(1)-1),NbulkL &
-                                               ,zeta(Ln(1):Ln(2),Ln(1):Ln(2),:)            &
-                                               ,Hk(Ln(1):Ln(2),Ln(1):Ln(2),:)              &
+               call build_Potential(Potential_L,Hetero%tz(:,:,:,Hetero%Explicit(1)-1),NbulkL &
+                                               ,zeta(Ln(1):Ln(2),Ln(1):Ln(2),:)              &
+                                               ,Hk(Ln(1):Ln(2),Ln(1):Ln(2),:)                &
                                                ,Smats%wks(Ln(1):Ln(2),Ln(1):Ln(2),:,:,:) )
                write(*,"(2(A,2I4))") "     Left potential orbital indexes: ",Ln(1),Ln(2)," thickness: ",NbulkL
                !
@@ -358,9 +358,9 @@ contains
                NbulkR = Hetero%Nslab-Hetero%Explicit(2)
                !
                allocate(Potential_R(Hetero%Norb,Hetero%Norb,Nmats,Nkpt,Nspin));Potential_R=czero
-               call build_Potential(Potential_R,Hetero%tz(:,:,Hetero%Explicit(2)),NbulkR   &
-                                               ,zeta(Rn(1):Rn(2),Rn(1):Rn(2),:)            &
-                                               ,Hk(Rn(1):Rn(2),Rn(1):Rn(2),:)              &
+               call build_Potential(Potential_R,Hetero%tz(:,:,:,Hetero%Explicit(2)),NbulkR   &
+                                               ,zeta(Rn(1):Rn(2),Rn(1):Rn(2),:)              &
+                                               ,Hk(Rn(1):Rn(2),Rn(1):Rn(2),:)                &
                                                ,Smats%wks(Rn(1):Rn(2),Rn(1):Rn(2),:,:,:) )
                write(*,"(2(A,2I4))") "     Right potential orbital indexes: ",Rn(1),Rn(2)," thickness: ",NbulkR
                !
@@ -626,6 +626,8 @@ contains
          !
       enddo !iter
       !
+      !
+      !
    contains
       !
       !
@@ -755,6 +757,8 @@ contains
          !
       enddo !iter
       deallocate(Gitau)
+      !
+      !
       !
    contains
       !
@@ -995,6 +999,7 @@ contains
       endif
       !
       !
+      !
    contains
       !
       !
@@ -1055,6 +1060,7 @@ contains
       end subroutine print_G
       !
       !
+      !
    end subroutine calc_Glda
 
 
@@ -1070,7 +1076,7 @@ contains
       implicit none
       !
       complex(8),intent(inout)              :: Potential(:,:,:,:,:)
-      complex(8),intent(in)                 :: tz(:,:)
+      complex(8),intent(in)                 :: tz(:,:,:)
       integer,intent(in)                    :: Npot
       complex(8),intent(in)                 :: zeta(:,:,:)
       complex(8),intent(in)                 :: Hk(:,:,:)
@@ -1091,7 +1097,7 @@ contains
       Nkpt = size(Hk,dim=3)
       !
       call assert_shape(Potential,[Norb,Norb,Nmats,Nkpt,Nspin],"build_Potential","Potential")
-      call assert_shape(tz,[Norb,Norb],"build_Potential","tz")
+      call assert_shape(tz,[Norb,Norb,Nkpt],"build_Potential","tz")
       call assert_shape(zeta,[Norb,Norb,Nmats],"build_Potential","zeta")
       call assert_shape(Hk,[Norb,Norb,Nkpt],"build_Potential","Hk")
       call assert_shape(Smats,[Norb,Norb,Nmats,Nkpt,Nspin],"build_Smats","Potential")
@@ -1113,11 +1119,11 @@ contains
                call inv(Gbulk)
                !
                !first t*G*t
-               Potential(:,:,iw,ik,ispin) = rotate(Gbulk,tz)
+               Potential(:,:,iw,ik,ispin) = rotate(Gbulk,tz(:,:,ik))
                do ibulk=2,Npot
                   Ptmp = invGbulk - Potential(:,:,iw,ik,ispin)
                   call inv(Ptmp)
-                  Potential(:,:,iw,ik,ispin) = rotate(Ptmp,tz)
+                  Potential(:,:,iw,ik,ispin) = rotate(Ptmp,tz(:,:,ik))
                enddo
                !
             enddo

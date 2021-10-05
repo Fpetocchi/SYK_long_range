@@ -244,7 +244,7 @@ module parameters
       integer                               :: NtzExplicit=0
       integer,allocatable                   :: ExplicitTzPos(:)
       real(8),allocatable                   :: ExplicitTzRatios(:)
-      complex(8),allocatable                :: tz(:,:,:)
+      complex(8),allocatable                :: tz(:,:,:,:)
       logical                               :: status=.false.
       logical                               :: offDiagEk=.false.
    end type Heterostructures

@@ -734,7 +734,7 @@ contains
                endif
                !
                !setting matrix element
-               !PROJECT SPECIFIC (TaS2)>>>
+               !PROJECT SPECIFIC (TaS2)>>> The vertical hopping has only three next neighbor
                !do iwan1=1,Norb
                !   Hr(iwan1,iwan1,Rorder(iwig)) = dcmplx(1d0,0d0)
                !enddo
@@ -762,7 +762,7 @@ contains
          tzl = 0 ; tzr = 0
          if(Hetero%Explicit(1).ne.1) tzl = 1              ! hopping to the left potential
          if(Hetero%Explicit(2).ne.Hetero%Nslab) tzr = 1   ! hopping to the right potential
-         allocate(Hetero%tz(Norb,Norb,(Hetero%Explicit(1)-tzl):(Hetero%Explicit(2)-1+tzr)));Hetero%tz=czero
+         allocate(Hetero%tz(Norb,Norb,Nkpt,(Hetero%Explicit(1)-tzl):(Hetero%Explicit(2)-1+tzr)));Hetero%tz=czero
          allocate(inHomo((Hetero%Explicit(1)-tzl):(Hetero%Explicit(2)-1+tzr)));inHomo=.false.
          write(*,"(A)")new_line("A")//"     Hetero:"
          do ilayer = Hetero%Explicit(1)-tzl,Hetero%Explicit(2)-1+tzr
@@ -781,7 +781,17 @@ contains
                tzRatio = Hetero%GlobalTzRatio
             endif
             !
-            Hetero%tz(:,:,ilayer) = diag(hopping)*tzRatio
+            do ik=1,Nkpt
+               !PROJECT SPECIFIC (TaS2)>>> The ihomogeneous vertical hopping is also without dispersion
+               !if(Hetero%offDiagEk)then
+               if(Hetero%offDiagEk.and.(.not.inHomo(ilayer)))then
+               !>>>PROJECT SPECIFIC (TaS2)
+                  Hetero%tz(:,:,ik,ilayer) = matmul(diag(hopping)*tzRatio,Hk_single_offdiag(:,:,ik))
+               else
+                  Hetero%tz(:,:,ik,ilayer) = diag(hopping)*tzRatio
+               endif
+            enddo
+            !
             write(*,"(A,F)")"     tz/tplane ["//str(ilayer)//"-"//str(ilayer+1)//"]:",tzRatio
             !
          enddo
@@ -807,22 +817,10 @@ contains
             !
             !Out-of-plane hopping
             if(isite.ne.Nsite)then
-               !
-               !PROJECT SPECIFIC (TaS2)>>>
-               !if(Hetero%offDiagEk)then
-               if(Hetero%offDiagEk.and.(.not.inHomo(ilayer)))then
-               !>>>PROJECT SPECIFIC (TaS2)
-                  do ik=1,Nkpt
-                     Hk(na:nb,na+Norb:nb+Norb,ik) = matmul(Hetero%tz(:,:,ilayer),Hk_single_offdiag(:,:,ik))
-                     Hk(na+Norb:nb+Norb,na:nb,ik) = dag(Hk(na:nb,na+Norb:nb+Norb,ik))
-                  enddo
-               else
-                  do ik=1,Nkpt
-                     Hk(na:nb,na+Norb:nb+Norb,ik) = Hetero%tz(:,:,ilayer)
-                     Hk(na+Norb:nb+Norb,na:nb,ik) = dag(Hk(na:nb,na+Norb:nb+Norb,ik))
-                  enddo
-               endif
-               !
+               do ik=1,Nkpt
+                  Hk(na:nb,na+Norb:nb+Norb,ik) = Hetero%tz(:,:,ik,ilayer)
+                  Hk(na+Norb:nb+Norb,na:nb,ik) = dag(Hk(na:nb,na+Norb:nb+Norb,ik))
+               enddo
             endif
             !
          enddo
