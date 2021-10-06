@@ -56,7 +56,8 @@ module utils_main
    type(FermionicField)                     :: D_correction
    type(BosonicField)                       :: curlyU_correction
    !
-   real(8)                                  :: Ek,Ep
+   real(8),allocatable                      :: Ek(:,:)
+   real(8),allocatable                      :: Ep(:,:)
    !
    real(8)                                  :: density2set
    complex(8),allocatable                   :: densityLDA(:,:,:)
@@ -512,6 +513,9 @@ contains
       !Store the local Hamiltonian
       call dump_Matrix(Lttc%Hloc,reg(pathINPUT),"Hloc.DAT")
       !
+      !allocate Ek and Ep matrices
+      allocate(Ek(Lttc%Norb,Lttc%Norb));Ek=0d0
+      allocate(Ep(Lttc%Norb,Lttc%Norb));Ep=0d0
       !
       !print some info
       write(*,"(A)") new_line("A")//new_line("A")//"---- site and orbital structure"

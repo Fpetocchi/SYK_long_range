@@ -2942,66 +2942,88 @@ contains
    !---------------------------------------------------------------------------!
    function calc_Ek(Gmats,Lttc) result(Ek)
       use parameters
-      use linalg, only : trace
+      use linalg, only : dag
       implicit none
       type(FermionicField),intent(in)       :: Gmats
       type(Lattice),intent(in)              :: Lttc
-      real(8)                               :: Ek,Ek_T
+      real(8)                               :: Ek(Gmats%Norb,Gmats%Norb)
+      real(8)                               :: Ek_T(Gmats%Norb,Gmats%Norb)
       integer                               :: ik,iw,ispin
+      complex(8),allocatable                :: E(:,:),G(:,:)
       !
       if(.not.Gmats%status) stop "calc_Ek: Gmats not properly initialized."
       if(.not.Lttc%status) stop "calc_Ek: Lttc not properly initialized."
       if(Lttc%Nkpt.ne.Gmats%Nkpt) stop "calc_Ek: number of K-points does not match between Lttc and Gmats."
+      if(Lttc%Norb.ne.Gmats%Norb) stop "calc_Ek: orbital dimension does not match between Lttc and Gmats."
       !
       Ek=0d0
+      allocate(E(Gmats%Norb,Gmats%Norb));E=czero
+      allocate(G(Gmats%Norb,Gmats%Norb));G=czero
       !$OMP PARALLEL DEFAULT(NONE),&
       !$OMP SHARED(Gmats,Lttc,Ek),&
-      !$OMP PRIVATE(iw,ik,ispin,Ek_T)
+      !$OMP PRIVATE(iw,ik,ispin,E,G,Ek_T)
       !$OMP DO
       do iw=1,Gmats%Npoints
          Ek_T=0d0
          do ik=1,Gmats%Nkpt
             do ispin=1,Nspin
-               Ek_T = Ek_T + trace(matmul(Lttc%Hk(:,:,ik),Gmats%wks(:,:,iw,ik,ispin))) / (Gmats%Nkpt*Nspin)
+               !
+               E = Lttc%Hk(:,:,ik)
+               G = Gmats%wks(:,:,iw,ik,ispin)
+               !
+               Ek_T = Ek_T + ( matmul(E,G) + matmul(dag(G),E) ) / (Gmats%Nkpt*Nspin)
+               !
             enddo
          enddo
          Ek = Ek + Ek_T / Gmats%Beta
       enddo
       !$OMP END DO
       !$OMP END PARALLEL
+      deallocate(E,G)
       !
    end function calc_Ek
    !
    function calc_Ep(Gmats,Smats) result(Ep)
       use parameters
-      use linalg, only : trace, deye
+      use linalg, only : dag, deye
       implicit none
       type(FermionicField),intent(in)       :: Gmats
       type(FermionicField),intent(in)       :: Smats
-      real(8)                               :: Ep,Ep_T
+      real(8)                               :: Ep(Gmats%Norb,Gmats%Norb)
+      real(8)                               :: Ep_T(Gmats%Norb,Gmats%Norb)
       integer                               :: ik,iw,ispin
+      complex(8),allocatable                :: U(:,:),G(:,:)
       !
       if(.not.Gmats%status) stop "calc_Ep: Gmats not properly initialized."
       if(.not.Smats%status) stop "calc_Ep: Smats not properly initialized."
       if(Smats%Nkpt.ne.Gmats%Nkpt) stop "calc_Ep: number of K-points does not match between Smats and Gmats."
       if(Smats%Beta.ne.Gmats%Beta) stop "calc_Ep: Beta does not match between Smats and Gmats."
+      if(Smats%Norb.ne.Gmats%Norb) stop "calc_Ep: orbital dimension does not match between Smats and Gmats."
       !
       Ep=0d0
+      allocate(U(Gmats%Norb,Gmats%Norb));U=czero
+      allocate(G(Gmats%Norb,Gmats%Norb));G=czero
       !$OMP PARALLEL DEFAULT(NONE),&
       !$OMP SHARED(Gmats,Smats,Ep),&
-      !$OMP PRIVATE(iw,ik,ispin,Ep_T)
+      !$OMP PRIVATE(iw,ik,ispin,U,G,Ep_T)
       !$OMP DO
       do iw=1,Gmats%Npoints
          Ep_T=0d0
          do ik=1,Gmats%Nkpt
             do ispin=1,Nspin
-               Ep_T = Ep_T + trace(matmul(Smats%wks(:,:,iw,ik,ispin)-deye(Smats%Norb)*Gmats%mu,Gmats%wks(:,:,iw,ik,ispin))) / (Gmats%Nkpt*Nspin)
+               !
+               U = Smats%wks(:,:,iw,ik,ispin)-deye(Smats%Norb)*Gmats%mu
+               G = Gmats%wks(:,:,iw,ik,ispin)
+               !
+               Ep_T = Ep_T + ( matmul(U,G) + matmul(dag(G),dag(U)) ) / (Gmats%Nkpt*Nspin)
+               !
             enddo
          enddo
          Ep = Ep + Ep_T / Gmats%Beta
       enddo
       !$OMP END DO
       !$OMP END PARALLEL
+      deallocate(U,G)
       !
    end function calc_Ep
 

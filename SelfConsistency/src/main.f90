@@ -276,8 +276,10 @@ program SelfConsistency
       !Total energy calculation
       Ek = calc_Ek(Glat,Crystal)
       Ep = calc_Ep(Glat,S_Full)
-      write(*,"(A,F)")"     Kinetic energy [eV]:",Ek
-      write(*,"(A,F)")"     Potential energy [eV]:",Ep
+      write(*,"(A,F)")"     Kinetic energy [eV]:",trace(Ek)
+      write(*,"(A,F)")"     Potential energy [eV]:",trace(Ep)
+      call dump_Matrix(Ek,reg(ItFolder),"Ek.DAT")
+      call dump_Matrix(Ep,reg(ItFolder),"Ep.DAT")
       !
       !
       !Print Gf: local readable and k-dep binfmt
