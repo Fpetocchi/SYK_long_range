@@ -1,9 +1,9 @@
 #!/bin/bash
 #$ -S /bin/bash
-#$ -N .....                     # job name
-#$ -cwd                         # run script in current directory
+#$ -N Fe06_W                   # job name
+#$ -cwd                        # run script in current directory
 #$ -pe smp 128                  # MPI cores
-#$ -q amd.q
+#$ -q amd.q,amd16.q
 
 
 export OMP_NUM_THREADS=128
@@ -18,11 +18,11 @@ ulimit -c 0
 #----------------------------------COMPULSORY----------------------------------#
 GENMAT=/home/petocchif/1_GW_EDMFT/nobackup/1_production
 
-PATH_INPUT=GWinput_SPEX_.......
-PATH_DATA=Results_beta..
+PATH_INPUT=GWinput_SPEX_bccFe
+PATH_DATA=Results_beta06
 
-START_IT=...
-END_IT=...
+START_IT=29
+END_IT=101
 
 EXE_SC=SelfConsistency
 EXE_QMC=ct_hyb
@@ -30,8 +30,8 @@ EXE_AKW=Akw_builder
 
 #-----------------------------------OPTIONAL-----------------------------------#
 PATH_INPUT_TR=GWinput_mats
-####SKIP_FIRST_SC="T"
-####SKIP_ALL_QMC="T"
+###SKIP_FIRST_SC="T"
+###SKIP_ALL_QMC="T"
 ####CHANGE_BETA_IT=1
 ####COLLECT_AKW="T"
 
@@ -76,7 +76,7 @@ do
    # Input update
    IT_DATA=${LOCAL}/${PATH_DATA}/${IT}/
    sed -i ${l3}'s/'"START_IT=.*!"'/'"START_IT=${IT}         !"'/' input.in
-   sed -i ${l5}'s/'"MATCH_BETA=.*!"'/'"MATCH_BETA=F                                  !"'/' input.in
+   sed -i ${l5}'s/'"MATCH_BETA=.*!"'/'"MATCH_BETA=F                                 !"'/' input.in
    if [ ! -z ${CHANGE_BETA_IT+x} ] && [ ${CHANGE_BETA_IT} == ${IT} ] ; then
       sed -i ${l5}'s/'"MATCH_BETA=.*!"'/'"MATCH_BETA=T                                 !"'/' input.in
    fi
@@ -123,5 +123,8 @@ do
       fi
    fi
    sleep 2
+   #
+   sed -i  '/NTAU_F_IMP_IN/d' input.in
+   sed -i  '/NTAU_B_IMP_IN/d' input.in
 
 done
