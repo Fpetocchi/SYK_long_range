@@ -1200,7 +1200,7 @@ contains
             call AllocateFermionicField(S_DMFT,Crystal%Norb,Nmats,Nsite=Nsite,Beta=Beta)
             if(ItStart.ne.0)then
                call read_FermionicField(S_DMFT,reg(PrevItFolder),"Simp_w")
-               call read_Matrix(S_DMFT%N_s,reg(PrevItFolder)//"HartreeU",paramagnet)
+               call read_Matrix(S_DMFT%N_s,reg(PrevItFolder)//"Hartree_UNimp",paramagnet)
             endif
             !
             !Lattice local Gf
@@ -1257,7 +1257,7 @@ contains
             call AllocateFermionicField(S_DMFT,Crystal%Norb,Nmats,Nsite=Nsite,Beta=Beta)
             if(ItStart.ne.0)then
                call read_FermionicField(S_DMFT,reg(PrevItFolder),"Simp_w")
-               call read_Matrix(S_DMFT%N_s,reg(PrevItFolder)//"HartreeU",paramagnet)
+               call read_Matrix(S_DMFT%N_s,reg(PrevItFolder)//"Hartree_UNimp",paramagnet)
             endif
             !
             !Lattice Gf
@@ -1877,12 +1877,13 @@ contains
       type(FermionicField)                  :: DeltaCorr
       type(FermionicField)                  :: FermiPrint
       type(FermionicField)                  :: DeltaOld,DeltaSym
+      type(BosonicField)                    :: curlyU
       integer                               :: Norb,Nflavor,unit
-      integer                               :: ispin,iw,iwan,itau,ndx,wndx
+      integer                               :: ispin,iorb,iw,ib1,itau,ndx,wndx
       integer,allocatable                   :: Orbs(:)
       real(8),allocatable                   :: wmats(:),tau(:),Moments(:,:,:)
+      real(8),allocatable                   :: Uinst(:,:),rhoLAT(:),HartreeLAT(:),N_s(:,:,:)
       real(8),allocatable                   :: Eloc(:,:),ElocOld(:,:),PrintLine(:),coef01(:,:)
-      complex(8),allocatable                :: Nloc(:,:,:)
       real(8)                               :: tailShift,CrystalField
       complex(8),allocatable                :: zeta(:,:,:),invG(:,:),Rot(:,:)
       complex(8),allocatable                :: Dfit(:,:,:),Dmats(:,:,:),Ditau(:,:,:)
@@ -1913,16 +1914,15 @@ contains
       allocate(wmats(Nmats));wmats=0d0
       wmats = FermionicFreqMesh(Beta,Nmats)
       allocate(zeta(Norb,Nmats,Nspin))
-      do iwan=1,Norb
+      do iorb=1,Norb
          do iw=1,Nmats
-            zeta(iwan,iw,:) = dcmplx( Glat%mu , wmats(iw) )
+            zeta(iorb,iw,:) = dcmplx( Glat%mu , wmats(iw) )
          enddo
       enddo
       !
       !Extract and rotate from local (non-diagonal) to imp (diagonal) the given sites
       !similar result could be obtained with S_Full%ws(:,:,iw,:) + S_Full%N_s
       !defined in join_SigmaFull but using directly S_DMFT is more precise
-      allocate(Nloc(Norb,Norb,Nspin));Nloc=czero
       call clear_attributes(Gloc)
       call clear_attributes(SigmaImp)
       if(causal_D)call clear_attributes(DeltaCorr)
@@ -1930,7 +1930,6 @@ contains
          !
          allocate(Rot(Norb,Norb)); Rot=OlocRot(1:Norb,1:Norb,isite)
          call loc2imp(Gloc,Glat,Orbs,U=Rot)
-         call calc_density(Gloc,Nloc)
          call loc2imp(SigmaImp,S_DMFT,Orbs,U=Rot)
          if(causal_D)call loc2imp(DeltaCorr,D_correction,Orbs,U=Rot)
          deallocate(Rot)
@@ -1938,15 +1937,53 @@ contains
       else
          !
          call loc2imp(Gloc,Glat,Orbs)
-         call calc_density(Gloc,Nloc)
          call loc2imp(SigmaImp,S_DMFT,Orbs)
          if(causal_D)call loc2imp(DeltaCorr,D_correction,Orbs)
          !
       endif
       !
+      !Recalculate and replace the Hartree term with the lattice densities
+      if(recalc_Hartree)then
+         !
+         call AllocateBosonicField(curlyU,Norb,Nmats,Crystal%iq_gamma,Beta=Beta)
+         call read_BosonicField(curlyU,reg(ItFolder)//"Solver_"//reg(SiteName(isite))//"/","curlyU_"//reg(SiteName(isite))//"_w.DAT")
+         allocate(Uinst(Norb*Nspin,Norb*Nspin));Uinst=0d0
+         call calc_QMCinteractions(curlyU,Uinst)
+         call DeallocateBosonicField(curlyU)
+         !
+         allocate(rhoLAT(Norb*Nspin));rhoLAT=0d0
+         do ib1=1,Nflavor
+            iorb = (ib1+mod(ib1,2))/2
+            ispin = abs(mod(ib1,2)-2)
+            rhoLAT(ib1) = Gloc%N_s(iorb,iorb,ispin)
+         enddo
+         !
+         allocate(HartreeLAT(Norb*Nspin));HartreeLAT=0d0
+         HartreeLAT = matmul(Uinst,rhoLAT)
+         deallocate(Uinst,rhoLAT)
+         !
+         allocate(N_s(Norb,Norb,Nspin));N_s=czero
+         do ib1=1,Nflavor
+            iorb = (ib1+mod(ib1,2))/2
+            ispin = abs(mod(ib1,2)-2)
+            N_s(iorb,iorb,ispin) = HartreeLAT(ib1)
+         enddo
+         deallocate(HartreeLAT)
+         N_s(:,:,1) = (N_s(:,:,1)+N_s(:,:,2))/2d0
+         N_s(:,:,2) = N_s(:,:,1)
+         !
+         do iw=1,Nmats
+            SigmaImp%ws(:,:,iw,:) = SigmaImp%ws(:,:,iw,:) - SigmaImp%N_s + N_s
+         enddo
+         SigmaImp%N_s = N_s
+         deallocate(N_s)
+         !
+         call dump_Matrix(SigmaImp%N_s,reg(ItFolder),"Solver_"//reg(SiteName(isite))//"/Hartree_UNlat"//reg(SiteName(isite)),paramagnet)
+         !
+      endif
+      !
       !Print what's used to compute delta
-      call dump_Matrix(Nloc,reg(ItFolder),"Solver_"//reg(SiteName(isite))//"/N_"//reg(SiteName(isite)),paramagnet)
-      deallocate(Nloc)
+      call dump_Matrix(Gloc%N_s,reg(ItFolder),"Solver_"//reg(SiteName(isite))//"/N_"//reg(SiteName(isite)),paramagnet)
       call dump_FermionicField(Gloc,reg(ItFolder)//"Solver_"//reg(SiteName(isite))//"/","G_"//reg(SiteName(isite))//"_w",paramagnet)
       call dump_FermionicField(SigmaImp,reg(ItFolder)//"Solver_"//reg(SiteName(isite))//"/","S_"//reg(SiteName(isite))//"_w",paramagnet)
       if(causal_D)call dump_FermionicField(DeltaCorr,reg(ItFolder)//"Solver_"//reg(SiteName(isite))//"/","D_correction_"//reg(SiteName(isite))//"_w",paramagnet)
@@ -1960,12 +1997,12 @@ contains
             call inv(invG)
             !
             if(causal_D)then
-               do iwan=1,Norb
-                  invCurlyG(iwan,iw,ispin) = invG(iwan,iwan) + SigmaImp%ws(iwan,iwan,iw,ispin) - DeltaCorr%ws(iwan,iwan,iw,ispin)
+               do iorb=1,Norb
+                  invCurlyG(iorb,iw,ispin) = invG(iorb,iorb) + SigmaImp%ws(iorb,iorb,iw,ispin) - DeltaCorr%ws(iorb,iorb,iw,ispin)
                enddo
             else
-               do iwan=1,Norb
-                  invCurlyG(iwan,iw,ispin) = invG(iwan,iwan) + SigmaImp%ws(iwan,iwan,iw,ispin)
+               do iorb=1,Norb
+                  invCurlyG(iorb,iw,ispin) = invG(iorb,iorb) + SigmaImp%ws(iorb,iorb,iw,ispin)
                enddo
             endif
             !
@@ -2017,18 +2054,18 @@ contains
       !Compute Delta on matsubara
       allocate(Dmats(Norb,Nmats,Nspin));Dmats=czero
       do ispin=1,Nspin
-         do iwan=1,Norb
+         do iorb=1,Norb
             !
             do iw=1,Nmats
-               Dmats(iwan,iw,ispin) = dcmplx( Glat%mu , wmats(iw) ) - Eloc(iwan,ispin) - invCurlyG(iwan,iw,ispin)
+               Dmats(iorb,iw,ispin) = dcmplx( Glat%mu , wmats(iw) ) - Eloc(iorb,ispin) - invCurlyG(iorb,iw,ispin)
             enddo
             !
             !Additional correction - maybe useless
-            if(dreal(Dmats(iwan,Nmats,ispin))*real(Dmats(iwan,Nmats-1,ispin)).lt.0d0)then
-               tailShift = real(Dmats(iwan,Nmats,ispin)) + (Dmats(iwan,Nmats,ispin)-Dmats(iwan,Nmats-1,ispin))*2d0
-               write(*,"(A,E13.3)")"     Additional Eloc shift orb: "//str(iwan)//" spin: "//str(ispin),tailShift
-               Eloc(iwan,ispin) = Eloc(iwan,ispin) + tailShift
-               Dmats(iwan,:,ispin) = Dmats(iwan,:,ispin) - tailShift
+            if(dreal(Dmats(iorb,Nmats,ispin))*real(Dmats(iorb,Nmats-1,ispin)).lt.0d0)then
+               tailShift = real(Dmats(iorb,Nmats,ispin)) + (Dmats(iorb,Nmats,ispin)-Dmats(iorb,Nmats-1,ispin))*2d0
+               write(*,"(A,E13.3)")"     Additional Eloc shift orb: "//str(iorb)//" spin: "//str(ispin),tailShift
+               Eloc(iorb,ispin) = Eloc(iorb,ispin) + tailShift
+               Dmats(iorb,:,ispin) = Dmats(iorb,:,ispin) - tailShift
             endif
             !
          enddo
@@ -2043,8 +2080,8 @@ contains
          call read_FermionicField(DeltaOld,reg(PrevItFolder)//"Solver_"//reg(SiteName(isite))//"/","D_"//reg(SiteName(isite))//"_w")
          do ispin=1,Nspin
             do iw=1,Nmats
-               do iwan=1,Norb
-                  Dmats(iwan,iw,ispin) = (1d0-Mixing_Delta)*Dmats(iwan,iw,ispin) + Mixing_Delta*DeltaOld%ws(iwan,iwan,iw,ispin)
+               do iorb=1,Norb
+                  Dmats(iorb,iw,ispin) = (1d0-Mixing_Delta)*Dmats(iorb,iw,ispin) + Mixing_Delta*DeltaOld%ws(iorb,iorb,iw,ispin)
                enddo
             enddo
          enddo
@@ -2055,8 +2092,8 @@ contains
          unit = free_unit()
          open(unit,file=reg(file),form="formatted",status="unknown",position="rewind",action="read")
          read(unit,*)
-         do iwan=1,Norb
-            read(unit,"(2E20.12)") (ElocOld(iwan,ispin),ispin=1,Nspin)
+         do iorb=1,Norb
+            read(unit,"(2E20.12)") (ElocOld(iorb,ispin),ispin=1,Nspin)
          enddo
          close(unit)
          Eloc = (1d0-Mixing_Delta)*Eloc + Mixing_Delta*ElocOld
@@ -2067,8 +2104,8 @@ contains
       !Symmetrizations - If sets are defined Delta is always symmetrized
       if(sym_mode.gt.0)then
          call AllocateFermionicField(DeltaSym,Norb,Nmats,Beta=Beta)
-         do iwan=1,Norb
-            DeltaSym%ws(iwan,iwan,:,:) = Dmats(iwan,:,:)
+         do iorb=1,Norb
+            DeltaSym%ws(iorb,iorb,:,:) = Dmats(iorb,:,:)
          enddo
          if(RotateHloc)then
             call symmetrize_imp(DeltaSym,OlocEig(:,isite))
@@ -2077,8 +2114,8 @@ contains
             call symmetrize_GW(DeltaSym,EqvGWndx,override=.true.)
             if(causal_D)call symmetrize_GW(DeltaCorr,EqvGWndx,override=.true.)
          endif
-         do iwan=1,Norb
-            Dmats(iwan,:,:) = DeltaSym%ws(iwan,iwan,:,:)
+         do iorb=1,Norb
+            Dmats(iorb,:,:) = DeltaSym%ws(iorb,iorb,:,:)
          enddo
          call DeallocateFermionicField(DeltaSym)
       elseif(EqvGWndx%para.eq.1)then
@@ -2090,30 +2127,30 @@ contains
       allocate(Ditau(Norb,Solver%NtauF,Nspin));Ditau=0d0
       do ispin=1,Nspin
          !add correction that allows to use the tail correction in the FT
-         do iwan=1,Norb
-            if(reg(CalculationType).ne."GW+EDMFT") coef01(iwan,ispin) = abs(dimag(Dmats(iwan,Nmats,ispin)))*wmats(Nmats)
-            write(*,"(A,E10.3)")"     First coeff orb: "//str(iwan)//" spin: "//str(ispin),coef01(iwan,ispin)
-            Dmats(iwan,:,ispin) = Dmats(iwan,:,ispin)/coef01(iwan,ispin)
+         do iorb=1,Norb
+            if(reg(CalculationType).ne."GW+EDMFT") coef01(iorb,ispin) = abs(dimag(Dmats(iorb,Nmats,ispin)))*wmats(Nmats)
+            write(*,"(A,E10.3)")"     First coeff orb: "//str(iorb)//" spin: "//str(ispin),coef01(iorb,ispin)
+            Dmats(iorb,:,ispin) = Dmats(iorb,:,ispin)/coef01(iorb,ispin)
          enddo
          !FT
          call Fmats2itau_vec(Beta,Dmats(:,:,ispin),Ditau(:,:,ispin),asympt_corr=.true.,tau_uniform=.true.)
          !remove correction
-         do iwan=1,Norb
-            Dmats(iwan,:,ispin) = Dmats(iwan,:,ispin)*coef01(iwan,ispin)
-            Ditau(iwan,:,ispin) = Ditau(iwan,:,ispin)*coef01(iwan,ispin)
+         do iorb=1,Norb
+            Dmats(iorb,:,ispin) = Dmats(iorb,:,ispin)*coef01(iorb,ispin)
+            Ditau(iorb,:,ispin) = Ditau(iorb,:,ispin)*coef01(iorb,ispin)
          enddo
       enddo
       !
       !Check on Delta(tau) causality
       do ispin=1,Nspin
-         do iwan=1,Norb
+         do iorb=1,Norb
             do itau=1,Solver%NtauF
-               if(dreal(Ditau(iwan,itau,ispin)).gt.0d0)then
-                  write(*,"(A,E10.3)")"     Warning: Removing non-causality from Delta(tau) at orb: "//str(iwan)//" spin: "//str(ispin)//" itau: "//str(itau)
-                  if(dreal(Ditau(iwan,int(Solver%NtauF/2),ispin)).lt.0d0)then
-                     Ditau(iwan,itau,ispin) = Ditau(iwan,int(Solver%NtauF/2),ispin)
+               if(dreal(Ditau(iorb,itau,ispin)).gt.0d0)then
+                  write(*,"(A,E10.3)")"     Warning: Removing non-causality from Delta(tau) at orb: "//str(iorb)//" spin: "//str(ispin)//" itau: "//str(itau)
+                  if(dreal(Ditau(iorb,int(Solver%NtauF/2),ispin)).lt.0d0)then
+                     Ditau(iorb,itau,ispin) = Ditau(iorb,int(Solver%NtauF/2),ispin)
                   else
-                     Ditau(iwan,itau,ispin) = czero
+                     Ditau(iorb,itau,ispin) = czero
                   endif
                endif
             enddo
@@ -2126,8 +2163,8 @@ contains
          unit = free_unit()
          open(unit,file=reg(file),form="formatted",status="unknown",position="rewind",action="write")
          write(unit,"(1E20.12)") Glat%mu
-         do iwan=1,Norb
-            write(unit,"(2E20.12)") ((Eloc(iwan,ispin)+(-1d0**mod(ispin,2))*EqvGWndx%hseed),ispin=1,Nspin)!,Eloc(iwan,2)-EqvGWndx%hseed
+         do iorb=1,Norb
+            write(unit,"(2E20.12)") ((Eloc(iorb,ispin)+(-1d0**mod(ispin,2))*EqvGWndx%hseed),ispin=1,Nspin)!,Eloc(iorb,2)-EqvGWndx%hseed
          enddo
          close(unit)
       endif
@@ -2136,9 +2173,9 @@ contains
       open(unit,file=reg(file),form="formatted",status="unknown",position="rewind",action="write")
       write(unit,"(1E20.12)") Glat%mu
       CrystalField=0d0
-      do iwan=1,Norb
-         if(addCF)CrystalField=SiteCF(isite,iwan)
-         write(unit,"(2E20.12)") ((Eloc(iwan,ispin)+(-1d0**mod(ispin,2))*EqvGWndx%hseed+CrystalField),ispin=1,Nspin)!,Eloc(iwan,2)-EqvGWndx%hseed+CrystalField
+      do iorb=1,Norb
+         if(addCF)CrystalField=SiteCF(isite,iorb)
+         write(unit,"(2E20.12)") ((Eloc(iorb,ispin)+(-1d0**mod(ispin,2))*EqvGWndx%hseed+CrystalField),ispin=1,Nspin)!,Eloc(iorb,2)-EqvGWndx%hseed+CrystalField
       enddo
       close(unit)
       !
@@ -2152,9 +2189,9 @@ contains
       do itau=1,Solver%NtauF
          ndx=1
          PrintLine=0d0
-         do iwan=1,Norb
+         do iorb=1,Norb
             do ispin=1,Nspin
-               PrintLine(ndx) = real(Ditau(iwan,itau,ispin))
+               PrintLine(ndx) = real(Ditau(iorb,itau,ispin))
                ndx=ndx+1
             enddo
          enddo
@@ -2170,8 +2207,8 @@ contains
       call clear_attributes(FermiPrint)
       do ispin=1,Nspin
          do iw=1,Nmats
-            do iwan=1,Norb
-               FermiPrint%ws(iwan,iwan,iw,ispin) = 1d0/(dcmplx( Glat%mu , wmats(iw) ) - Eloc(iwan,ispin) - Dmats(iwan,iw,ispin))
+            do iorb=1,Norb
+               FermiPrint%ws(iorb,iorb,iw,ispin) = 1d0/(dcmplx( Glat%mu , wmats(iw) ) - Eloc(iorb,ispin) - Dmats(iorb,iw,ispin))
             enddo
          enddo
       enddo
@@ -2180,8 +2217,8 @@ contains
       !
       !Delta(iw)
       call clear_attributes(FermiPrint)
-      do iwan=1,Norb
-         FermiPrint%ws(iwan,iwan,:,:) = Dmats(iwan,:,:)
+      do iorb=1,Norb
+         FermiPrint%ws(iorb,iorb,:,:) = Dmats(iorb,:,:)
       enddo
       FermiPrint%mu=Glat%mu
       call dump_FermionicField(FermiPrint,reg(ItFolder)//"Solver_"//reg(SiteName(isite))//"/","D_"//reg(SiteName(isite))//"_w",paramagnet)
@@ -2190,8 +2227,8 @@ contains
       if(causal_D)then
          call clear_attributes(FermiPrint)
          do ispin=1,Nspin
-            do iwan=1,Norb
-               FermiPrint%ws(iwan,iwan,:,ispin) = Dmats(iwan,:,ispin) - DeltaCorr%ws(iwan,iwan,:,ispin)
+            do iorb=1,Norb
+               FermiPrint%ws(iorb,iorb,:,ispin) = Dmats(iorb,:,ispin) - DeltaCorr%ws(iorb,iorb,:,ispin)
             enddo
          enddo
          call dump_FermionicField(FermiPrint,reg(ItFolder)//"Solver_"//reg(SiteName(isite))//"/","D_notCorr_"//reg(SiteName(isite))//"_w",paramagnet)
@@ -2208,16 +2245,16 @@ contains
          !
          call clear_attributes(FermiPrint)
          do ispin=1,Nspin
-            do iwan=1,Norb
-               FermiPrint%ws(iwan,iwan,:,ispin) = Dmats(iwan,:,ispin)
+            do iorb=1,Norb
+               FermiPrint%ws(iorb,iorb,:,ispin) = Dmats(iorb,:,ispin)
             enddo
          enddo
          call dump_FermionicField(FermiPrint,reg(ItFolder)//"Solver_"//reg(SiteName(isite))//"/","testFT_D_"//reg(SiteName(isite))//"_w",paramagnet)
          !
          call clear_attributes(FermiPrint)
          do ispin=1,Nspin
-            do iwan=1,Norb
-               FermiPrint%ws(iwan,iwan,:,ispin) = Eloc(iwan,ispin) + Dmats(iwan,:,ispin)
+            do iorb=1,Norb
+               FermiPrint%ws(iorb,iorb,:,ispin) = Eloc(iorb,ispin) + Dmats(iorb,:,ispin)
             enddo
          enddo
          call dump_FermionicField(FermiPrint,reg(ItFolder)//"Solver_"//reg(SiteName(isite))//"/fits/","test_Eo+D_"//reg(SiteName(isite))//"_w",paramagnet)
@@ -2774,9 +2811,9 @@ contains
          !self-energy always diagonal in the solver basis
          call AllocateBosonicField(curlyU,Norb,Nmats,Crystal%iq_gamma,Beta=Beta)
          call read_BosonicField(curlyU,reg(PrevItFolder)//"Solver_"//reg(SiteName(isite))//"/","curlyU_"//reg(SiteName(isite))//"_w.DAT")
-         !
          allocate(Uinst(Norb*Nspin,Norb*Nspin));Uinst=0d0
          call calc_QMCinteractions(curlyU,Uinst)
+         call DeallocateBosonicField(curlyU)
          !
          allocate(rhoQMC(Norb*Nspin));rhoQMC=0d0
          do ib1=1,Nflavor
@@ -2795,13 +2832,14 @@ contains
             Simp%N_s(iorb,iorb,ispin) = HartreeQMC(ib1)
          enddo
          deallocate(HartreeQMC)
-         call DeallocateBosonicField(curlyU)
+
          !
          !The magnetization will be given only by the self-energy beyond Hartree
          Simp%N_s(:,:,1) = (Simp%N_s(:,:,1)+Simp%N_s(:,:,2))/2d0
          Simp%N_s(:,:,2) = Simp%N_s(:,:,1)
          !
-         call dump_Matrix(Simp%N_s,reg(PrevItFolder),"Solver_"//reg(SiteName(isite))//"/HartreeU",paramagnet)
+         !Hartree term in the Solver basis
+         call dump_Matrix(Simp%N_s,reg(PrevItFolder),"Solver_"//reg(SiteName(isite))//"/Hartree_UNimp_"//reg(SiteName(isite)),paramagnet)
          !
          !Expand to the Lattice basis
          if(RotateHloc)then
@@ -2822,7 +2860,7 @@ contains
          !
          if(verbose)then
             call dump_FermionicField(S_DMFT,reg(PrevItFolder),"Simp_noSym_w",paramagnet)
-            call dump_Matrix(S_DMFT%N_s,reg(PrevItFolder),"HartreeU_noSym",paramagnet)
+            call dump_Matrix(S_DMFT%N_s,reg(PrevItFolder),"Hartree_UNimp_noSym",paramagnet)
          endif
          !
          call symmetrize_GW(S_DMFT,EqvGWndx)
@@ -2832,7 +2870,7 @@ contains
       !
       call dump_FermionicField(S_DMFT,reg(PrevItFolder),"Simp_w",paramagnet)
       call dump_MaxEnt(S_DMFT,"mats",reg(PrevItFolder)//"Convergence/","Simp",EqvGWndx%SetOrbs,WmaxPade=PadeWlimit)
-      call dump_Matrix(S_DMFT%N_s,reg(PrevItFolder),"HartreeU",paramagnet)
+      call dump_Matrix(S_DMFT%N_s,reg(PrevItFolder),"Hartree_UNimp",paramagnet)
       call DeallocateFermionicField(S_DMFT)
       !
       !Save the non-Fitted non-symmetrized self-energy if present
@@ -3352,8 +3390,8 @@ contains
             !
             !Read&write instead of execute_command
             allocate(HartreeU(Crystal%Norb,Crystal%Norb,Nspin));HartreeU=czero
-            call read_Matrix(HartreeU,reg(Beta_Match%Path)//"HartreeU",paramagnet)
-            call dump_Matrix(HartreeU,reg(PrevItFolder),"HartreeU",paramagnet)
+            call read_Matrix(HartreeU,reg(Beta_Match%Path)//"Hartree_UNimp",paramagnet)
+            call dump_Matrix(HartreeU,reg(PrevItFolder),"Hartree_UNimp",paramagnet)
             deallocate(HartreeU)
             allocate(Nimp(Crystal%Norb,Crystal%Norb,Nspin));Nimp=czero
             call read_Matrix(Nimp,reg(Beta_Match%Path)//"Nimp",paramagnet)
@@ -3394,8 +3432,8 @@ contains
             !
             !Read&write instead of execute_command
             allocate(HartreeU(Crystal%Norb,Crystal%Norb,Nspin));HartreeU=czero
-            call read_Matrix(HartreeU,reg(Beta_Match%Path)//"HartreeU",paramagnet)
-            call dump_Matrix(HartreeU,reg(PrevItFolder),"HartreeU",paramagnet)
+            call read_Matrix(HartreeU,reg(Beta_Match%Path)//"Hartree_UNimp",paramagnet)
+            call dump_Matrix(HartreeU,reg(PrevItFolder),"Hartree_UNimp",paramagnet)
             deallocate(HartreeU)
             allocate(Nimp(Crystal%Norb,Crystal%Norb,Nspin));Nimp=czero
             call read_Matrix(Nimp,reg(Beta_Match%Path)//"Nimp",paramagnet)

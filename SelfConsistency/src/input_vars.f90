@@ -189,8 +189,8 @@ module input_vars
    !Variables for the fit on Delta, Gimp, Simp
    character(len=256),public                :: DeltaFit
    integer,public                           :: Nfit
-   real(8),public                           :: ReplaceTail_Gimp=0d0  !TO BE REMOVED IN THE NEXT FUTURE
    real(8),public                           :: ReplaceTail_Simp
+   logical,public                           :: recalc_Hartree
    !
    !Paths (directories must end with "/") and loop variables
    integer,public                           :: FirstIteration
@@ -553,6 +553,7 @@ contains
       call parse_input_variable(DeltaFit,"DELTA_FIT",InputFile,default="Inf",comment="Fit to extract the local energy in GW+EDMFT calculations. Available: Inf, Analytic, Moments.")
       call parse_input_variable(Nfit,"NFIT",InputFile,default=8,comment="Number of bath levels (Analytic) or coefficient (automatic limit to NFIT=4).")
       call parse_input_variable(ReplaceTail_Simp,"WTAIL_SIMP",InputFile,default=80d0,comment="Frequency value above which the tail of Simp is replaced. If =0d0 the tail is not replaced. Only via moments (automatic limit to NFIT=4).")
+      call parse_input_variable(recalc_Hartree,"RECALC_HARTREE",InputFile,default=.false.,comment="Testing Flag.")
       !
       !Paths and loop variables
       call add_separator("Paths")

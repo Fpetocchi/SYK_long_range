@@ -2557,6 +2557,7 @@ contains
    !           The Hartee contribution computed as N*curlyU is stored in the
    !           SigmaImp%N_s attribute and it is removed during the merge.
    !         + Replace PiImp in PiGW at the indexes contained in orbs
+   !         + The only difference between v1 and v2 is the optional SigmaGW_DC
    !---------------------------------------------------------------------------!
    subroutine MergeSelfEnergy_v1(SigmaGW,SigmaGW_DC,SigmaImp,coeff,orbs,DC_type,OffDiag)
       !
@@ -2644,11 +2645,11 @@ contains
                      do ik=1,Nkpt
                         !
                         if(localDC)then
-                           SigmaGW%wks(i_loc,j_loc,iw,ik,ispin) = SigmaGW%wks(i_loc,j_loc,iw,ik,ispin)              &
+                           SigmaGW%wks(i_loc,j_loc,iw,ik,ispin) = SigmaGW%wks(i_loc,j_loc,iw,ik,ispin)                 &
                                                                 - coeff(1)*SigmaGW%ws(i_loc,j_loc,iw,ispin)            &
                                                                 + coeff(1)*(SigmaImp%ws(i_loc,j_loc,iw,ispin)-coeff(2)*SigmaImp%N_s(i_loc,j_loc,ispin))
                         else
-                           SigmaGW%wks(i_loc,j_loc,iw,ik,ispin) = SigmaGW%wks(i_loc,j_loc,iw,ik,ispin)              &
+                           SigmaGW%wks(i_loc,j_loc,iw,ik,ispin) = SigmaGW%wks(i_loc,j_loc,iw,ik,ispin)                 &
                                                                 - coeff(1)*SigmaGW_DC%ws(i_loc,j_loc,iw,ispin)         &
                                                                 + coeff(1)*(SigmaImp%ws(i_loc,j_loc,iw,ispin)-coeff(2)*SigmaImp%N_s(i_loc,j_loc,ispin))
                         endif
@@ -2757,11 +2758,11 @@ contains
                      do ik=1,Nkpt
                         !
                         if(localDC)then
-                           SigmaGW%wks(i_loc,j_loc,iw,ik,ispin) = SigmaGW%wks(i_loc,j_loc,iw,ik,ispin)              &
+                           SigmaGW%wks(i_loc,j_loc,iw,ik,ispin) = SigmaGW%wks(i_loc,j_loc,iw,ik,ispin)                 &
                                                                 - coeff(1)*SigmaGW%ws(i_loc,j_loc,iw,ispin)            &
                                                                 + coeff(1)*(SigmaImp%ws(i_loc,j_loc,iw,ispin)-coeff(2)*SigmaImp%N_s(i_loc,j_loc,ispin))
                         else
-                           SigmaGW%wks(i_loc,j_loc,iw,ik,ispin) = SigmaGW%wks(i_loc,j_loc,iw,ik,ispin)              &
+                           SigmaGW%wks(i_loc,j_loc,iw,ik,ispin) = SigmaGW%wks(i_loc,j_loc,iw,ik,ispin)                 &
                                                                 - coeff(1)*SigmaGW_DC%ws(i_loc,j_loc,iw,ispin)         &
                                                                 + coeff(1)*(SigmaImp%ws(i_loc,j_loc,iw,ispin)-coeff(2)*SigmaImp%N_s(i_loc,j_loc,ispin))
                         endif
@@ -2971,7 +2972,7 @@ contains
                E = Lttc%Hk(:,:,ik)
                G = Gmats%wks(:,:,iw,ik,ispin)
                !
-               Ek_T = Ek_T + ( matmul(E,G) + matmul(dag(G),E) ) / (Gmats%Nkpt*Nspin)
+               Ek_T = Ek_T + ( matmul(E,G) + matmul(dag(G),dag(E)) ) / (Gmats%Nkpt*Nspin)
                !
             enddo
          enddo
