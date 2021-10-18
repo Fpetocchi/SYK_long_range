@@ -258,23 +258,28 @@ contains
       !
       type(FermionicField),intent(inout)    :: Gmats
       type(Lattice),intent(in),target       :: Lttc
-      type(FermionicField),intent(in),optional :: Smats !target
+      type(FermionicField),intent(in),optional :: Smats
       logical,intent(in),optional           :: along_path
       logical,intent(in),optional           :: along_plane
       !
       complex(8),allocatable                :: invGf(:,:)
-      !complex(8),pointer                    :: Swks(:,:,:,:,:)
       complex(8),pointer                    :: Hk(:,:,:)
+      complex(8),allocatable                :: tz(:,:,:,:)
       complex(8),allocatable                :: zeta(:,:,:)
       complex(8),allocatable                :: n_k(:,:,:,:)
-      complex(8),allocatable                :: Potential_L(:,:,:,:,:)
-      complex(8),allocatable                :: Potential_R(:,:,:,:,:)
+
       real(8),allocatable                   :: wmats(:)
       real(8)                               :: Beta,mu
       integer                               :: Norb,Nmats,Nkpt
       integer                               :: iw,ik,iwan,ispin
-      integer                               :: Ln(2),Rn(2),NbulkL,NbulkR
       logical                               :: along_path_,along_plane_
+      !potentials
+      complex(8),allocatable                :: zeta_(:,:,:),Hk_(:,:,:)
+      complex(8),allocatable                :: ta(:,:,:),tb(:,:,:)
+      complex(8),allocatable                :: Sa(:,:,:,:,:),Sb(:,:,:,:,:)
+      type(FermionicField)                  :: Potential_L
+      type(FermionicField)                  :: Potential_R
+      integer                               :: Ln(2),Rn(2),NbulkL,NbulkR
       !
       !
       if(verbose)write(*,"(A)") "---- calc_Gmats_Full"
@@ -294,18 +299,21 @@ contains
       !
       if(along_path_)then
          Hk => Lttc%Hk_path
+         if(Hetero%status) tz = Hetero%tz_path
          if(Gmats%Nkpt.ne.Lttc%Nkpt_path) stop "calc_Gmats_Full: Lttc Kpath has different number of path k-points with respect to Gmats."
          if(Gmats%Nkpt.ne.size(Hk,dim=3)) stop "calc_Gmats_Full: Lttc Hk_path has different number of path k-points with respect to Gmats."
          if(.not.allocated(Lttc%Hk_path)) stop "calc_Gmats_Full: H(k) along path not allocated."
          if(verbose)write(*,"(A)") "     H(k) is along a path."
       elseif(along_plane_)then
          Hk => Lttc%Hk_Plane
+         if(Hetero%status) tz = Hetero%tz_Plane
          if(Gmats%Nkpt.ne.Lttc%Nkpt_Plane) stop "calc_Gmats_Full: Lttc Kplane has different number of path k-points with respect to Gmats."
          if(Gmats%Nkpt.ne.size(Hk,dim=3)) stop "calc_Gmats_Full: Lttc Hk_Plane has different number of path k-points with respect to Gmats."
          if(.not.allocated(Lttc%Hk_Plane)) stop "calc_Gmats_Full: H(k) in plane not allocated."
          if(verbose)write(*,"(A)") "     H(k) is within a plane."
       else
          Hk => Lttc%Hk
+         if(Hetero%status) tz = Hetero%tz
          if(Gmats%Nkpt.ne.Lttc%Nkpt) stop "calc_Gmats_Full: Lttc has different number of k-points with respect to Gmats."
          if(Gmats%Nkpt.ne.size(Hk,dim=3)) stop "calc_Gmats_Full: Lttc Hk has different number of path k-points with respect to Gmats."
          if(verbose)write(*,"(A)") "     H(k) is within the full BZ."
@@ -330,6 +338,7 @@ contains
       deallocate(wmats)
       !
       if(present(Smats))then
+         !
          if(.not.Smats%status) stop "calc_Gmats_Full: Smats not properly initialized."
          if(Smats%Npoints.ne.Nmats) stop "calc_Gmats_Full: Smats has different number of Matsubara points with respect to Gmats."
          if(Smats%Nkpt.ne.Nkpt) stop "calc_Gmats_Full: Smats has different number of k-points with respect to Gmats."
@@ -337,32 +346,60 @@ contains
          !
          Ln=0;Rn=0
          if(Hetero%status)then
+            !
+            !Potential to the left/upper side of the Heterostructure
             if(Hetero%Explicit(1).ne.1)then
                !
                Ln(1) = 1
                Ln(2) = Hetero%Norb
                NbulkL = Hetero%Explicit(1)-1
                !
-               allocate(Potential_L(Hetero%Norb,Hetero%Norb,Nmats,Nkpt,Nspin));Potential_L=czero
-               call build_Potential(Potential_L,Hetero%tz(:,:,:,Hetero%Explicit(1)-1),NbulkL &
-                                               ,zeta(Ln(1):Ln(2),Ln(1):Ln(2),:)              &
-                                               ,Hk(Ln(1):Ln(2),Ln(1):Ln(2),:)                &
-                                               ,Smats%wks(Ln(1):Ln(2),Ln(1):Ln(2),:,:,:) )
-               write(*,"(2(A,2I4))") "     Left potential orbital indexes: ",Ln(1),Ln(2)," thickness: ",NbulkL
+               !Diagonal arrays of the first layer explicitly solved
+               zeta_ = zeta(Ln(1):Ln(2),Ln(1):Ln(2),:)
+               Hk_ = Hk(Ln(1):Ln(2),Ln(1):Ln(2),:)
+               !
+               !Connection-to and self-energy-of the first layer explicitly solved
+               ta = tz(:,:,:,Hetero%Explicit(1)-1); Sa = Smats%wks(Ln(1):Ln(2),Ln(1):Ln(2),:,:,:)
+               !
+               !Connection-to and self-energy-of the second layer explicitly solved
+               tb = tz(:,:,:,Hetero%Explicit(1))  ; Sb = Smats%wks(Ln(1)+Hetero%Norb:Ln(2)+Hetero%Norb,Ln(1)+Hetero%Norb:Ln(2)+Hetero%Norb,:,:,:)
+               !
+               write(*,"(2(A,2I4))") "     Left potential orbital lattice indexes: ",Ln(1),Ln(2)," thickness: ",NbulkL
+               call AllocateFermionicField(Potential_L,Norb,Nmats,Nkpt=Nkpt,Nsite=Gmats%Nsite,Beta=Beta)
+               call build_Potential(Potential_L,NbulkL,zeta_,Hk_,ta,tb,Sa,Sb)
+               deallocate(zeta_,Hk_,ta,tb,Sa,Sb)
+               !
+               !this is to be able to print it form main
+               if(allocated(Hetero%P_L))deallocate(Hetero%P_L)
+               Hetero%P_L = Potential_L%ws
                !
             endif
+            !
+            !Potential to the right/lower side of the Heterostructure
             if(Hetero%Explicit(2).ne.Hetero%Nslab)then
                !
                Rn(1) = 1+ Norb - Hetero%Norb
                Rn(2) = Norb
                NbulkR = Hetero%Nslab-Hetero%Explicit(2)
                !
-               allocate(Potential_R(Hetero%Norb,Hetero%Norb,Nmats,Nkpt,Nspin));Potential_R=czero
-               call build_Potential(Potential_R,Hetero%tz(:,:,:,Hetero%Explicit(2)),NbulkR   &
-                                               ,zeta(Rn(1):Rn(2),Rn(1):Rn(2),:)              &
-                                               ,Hk(Rn(1):Rn(2),Rn(1):Rn(2),:)                &
-                                               ,Smats%wks(Rn(1):Rn(2),Rn(1):Rn(2),:,:,:) )
-               write(*,"(2(A,2I4))") "     Right potential orbital indexes: ",Rn(1),Rn(2)," thickness: ",NbulkR
+               !Diagonal arrays of the last layer explicitly solved
+               zeta_ = zeta(Rn(1):Rn(2),Rn(1):Rn(2),:)
+               Hk_ = Hk(Rn(1):Rn(2),Rn(1):Rn(2),:)
+               !
+               !Connection-to and self-energy-of the last layer explicitly solved
+               ta = tz(:,:,:,Hetero%Explicit(2))  ; Sa = Smats%wks(Rn(1):Rn(2),Rn(1):Rn(2),:,:,:)
+               !
+               !Connection-to and self-energy-of the semi-last layer explicitly solved
+               tb = tz(:,:,:,Hetero%Explicit(2)-1); Sb = Smats%wks(Rn(1)-Hetero%Norb:Rn(2)-Hetero%Norb,Rn(1)-Hetero%Norb:Rn(2)-Hetero%Norb,:,:,:)
+               !
+               write(*,"(2(A,2I4))") "     Right potential orbital lattice indexes: ",Rn(1),Rn(2)," thickness: ",NbulkR
+               call AllocateFermionicField(Potential_R,Norb,Nmats,Nkpt=Nkpt,Nsite=Gmats%Nsite,Beta=Beta)
+               call build_Potential(Potential_R,NbulkR,zeta_,Hk_,ta,tb,Sa,Sb)
+               deallocate(zeta_,Hk_,ta,tb,Sa,Sb)
+               !
+               !this is to be able to print it form main
+               if(allocated(Hetero%P_R))deallocate(Hetero%P_R)
+               Hetero%P_R = Potential_R%ws
                !
             endif
             !
@@ -385,8 +422,8 @@ contains
                invGf = zeta(:,:,iw) - Hk(:,:,ik)
                !
                if(present(Smats)) invGf = invGf - Smats%wks(:,:,iw,ik,ispin)
-               if(allocated(Potential_L)) invGf(Ln(1):Ln(2),Ln(1):Ln(2)) = invGf(Ln(1):Ln(2),Ln(1):Ln(2)) - Potential_L(:,:,iw,ik,ispin)
-               if(allocated(Potential_R)) invGf(Rn(1):Rn(2),Rn(1):Rn(2)) = invGf(Rn(1):Rn(2),Rn(1):Rn(2)) - Potential_R(:,:,iw,ik,ispin)
+               if(Potential_L%status) invGf(Ln(1):Ln(2),Ln(1):Ln(2)) = invGf(Ln(1):Ln(2),Ln(1):Ln(2)) - Potential_L%wks(:,:,iw,ik,ispin)
+               if(Potential_R%status) invGf(Rn(1):Rn(2),Rn(1):Rn(2)) = invGf(Rn(1):Rn(2),Rn(1):Rn(2)) - Potential_R%wks(:,:,iw,ik,ispin)
                !
                call inv(invGf)
                Gmats%wks(:,:,iw,ik,ispin) = invGf
@@ -401,8 +438,10 @@ contains
          endif
       enddo spinloop
       deallocate(zeta,invGf)
-      !if(associated(Swks))nullify(Swks)
       if(associated(Hk))nullify(Hk)
+      if(allocated(tz))deallocate(tz)
+      if(Potential_L%status) call DeallocateField(Potential_L)
+      if(Potential_R%status) call DeallocateField(Potential_R)
       !
       ! In the N_ks attribute is stored the k-dep occupation
       allocate(n_k(Norb,Norb,Nkpt,Nspin));n_k=czero
@@ -1067,63 +1106,94 @@ contains
    !---------------------------------------------------------------------------!
    !PURPOSE: Prints lda Gf on different axis.
    !---------------------------------------------------------------------------!
-   subroutine build_Potential(Potential,tz,Npot,zeta,Hk,Smats)
+   subroutine build_Potential(Potential,Npot,zeta,Hk,tz_a,tz_b,Smats_a,Smats_b)
       !
       use parameters
       use linalg, only : inv, rotate
       use utils_misc
+      use utils_fields
       use input_vars, only : paramagnet
       implicit none
       !
-      complex(8),intent(inout)              :: Potential(:,:,:,:,:)
-      complex(8),intent(in)                 :: tz(:,:,:)
+      type(FermionicField),intent(inout)    :: Potential
       integer,intent(in)                    :: Npot
       complex(8),intent(in)                 :: zeta(:,:,:)
       complex(8),intent(in)                 :: Hk(:,:,:)
-      complex(8),intent(in)                 :: Smats(:,:,:,:,:)
+      complex(8),intent(in)                 :: tz_a(:,:,:)
+      complex(8),intent(in)                 :: tz_b(:,:,:)
+      complex(8),intent(in)                 :: Smats_a(:,:,:,:,:)
+      complex(8),intent(in)                 :: Smats_b(:,:,:,:,:)
       !
       complex(8),allocatable                :: invGbulk(:,:)
       complex(8),allocatable                :: Gbulk(:,:)
       complex(8),allocatable                :: Ptmp(:,:)
+      complex(8),allocatable                :: tkz(:,:,:)
+      complex(8),allocatable                :: Swks(:,:,:)
       integer                               :: Norb,Nmats,Nkpt
-      integer                               :: iw,ik,ispin,ibulk
+      integer                               :: iw,ik,ispin,ibulk,Pndx
       !
       !
       if(verbose)write(*,"(A)") "---- build_Potential"
       !
       !
-      Norb = size(Potential,dim=1)
-      Nmats = size(zeta,dim=3)
-      Nkpt = size(Hk,dim=3)
+      Norb = Potential%Norb
+      Nmats = Potential%Npoints
+      Nkpt = Potential%Nkpt
       !
-      call assert_shape(Potential,[Norb,Norb,Nmats,Nkpt,Nspin],"build_Potential","Potential")
-      call assert_shape(tz,[Norb,Norb,Nkpt],"build_Potential","tz")
       call assert_shape(zeta,[Norb,Norb,Nmats],"build_Potential","zeta")
       call assert_shape(Hk,[Norb,Norb,Nkpt],"build_Potential","Hk")
-      call assert_shape(Smats,[Norb,Norb,Nmats,Nkpt,Nspin],"build_Smats","Potential")
+      call assert_shape(tz_a,[Norb,Norb,Nkpt],"build_Potential","tz_a")
+      call assert_shape(tz_b,[Norb,Norb,Nkpt],"build_Potential","tz_b")
+      call assert_shape(Smats_a,[Norb,Norb,Nmats,Nkpt,Nspin],"build_Smats","Smats_a")
+      call assert_shape(Smats_b,[Norb,Norb,Nmats,Nkpt,Nspin],"build_Smats","Smats_b")
+      !
+      call clear_attributes(Potential)
       !
       !G and invG of each layer are constant
       allocate(invGbulk(Norb,Norb));invGbulk=czero
       allocate(Gbulk(Norb,Norb));Gbulk=czero
       allocate(Ptmp(Norb,Norb));Ptmp=czero
+      allocate(tkz(Norb,Norb,0:1));tkz=czero
+      allocate(Swks(Norb,Norb,0:1));Swks=czero
       spinPloop: do ispin=1,Nspin
          !$OMP PARALLEL DEFAULT(NONE),&
-         !$OMP SHARED(ispin,Nmats,Nkpt,zeta,Hk,Smats,Npot,tz,Potential),&
-         !$OMP PRIVATE(ik,iw,ibulk,invGbulk,Gbulk,Ptmp)
+         !$OMP SHARED(ispin,Nmats,Nkpt,zeta,Hk,Smats_b,Smats_a,Npot,tz_a,tz_b,Potential),&
+         !$OMP PRIVATE(ik,iw,ibulk,invGbulk,Gbulk,Ptmp,tkz,Swks,Pndx)
          !$OMP DO
          do iw=1,Nmats
             do ik=1,Nkpt
                !
-               invGbulk = zeta(:,:,iw) - Hk(:,:,ik) - Smats(:,:,iw,ik,ispin)
+               !connecting hopping: even Nbulk--> ta...tb odd Nbulk--> ta...ta
+               tkz(:,:,1) = tz_a(:,:,ik)
+               tkz(:,:,0) = tz_b(:,:,ik)
+               !
+               !self-energy repetition: even Nbulk--> Sb...Sa odd Nbulk--> Sb...Sb
+               Swks(:,:,1) = Smats_b(:,:,iw,ik,ispin)
+               Swks(:,:,0) = Smats_a(:,:,iw,ik,ispin)
+               !
+               !first t*G*t is the farthest layer
+               Pndx = mod(Npot,2)
+               invGbulk = zeta(:,:,iw) - Hk(:,:,ik) - Swks(:,:,Pndx)
                Gbulk = invGbulk
                call inv(Gbulk)
+               Potential%wks(:,:,iw,ik,ispin) = rotate(Gbulk,tkz(:,:,Pndx))
                !
-               !first t*G*t
-               Potential(:,:,iw,ik,ispin) = rotate(Gbulk,tz(:,:,ik))
+               !TEST>>>
+               if(iw.eq.1.and.ik.eq.1)print *, " ibulk ",1,Npot,Pndx
+               !>>>TEST
+               !
+               !all the other
                do ibulk=2,Npot
-                  Ptmp = invGbulk - Potential(:,:,iw,ik,ispin)
+                  !
+                  Pndx = mod(Npot-ibulk+1,2)
+                  Ptmp = zeta(:,:,iw) - Hk(:,:,ik) - Swks(:,:,Pndx) - Potential%wks(:,:,iw,ik,ispin)
                   call inv(Ptmp)
-                  Potential(:,:,iw,ik,ispin) = rotate(Ptmp,tz(:,:,ik))
+                  Potential%wks(:,:,iw,ik,ispin) = rotate(Ptmp,tkz(:,:,Pndx))
+                  !
+                  !TEST>>>
+                  if(iw.eq.1.and.ik.eq.1)print *, " ibulk ",ibulk,Npot-ibulk+1,mod(Npot-ibulk+1,2)
+                  !>>>TEST
+                  !
                enddo
                !
             enddo
@@ -1131,11 +1201,13 @@ contains
          !$OMP END DO
          !$OMP END PARALLEL
          if(paramagnet)then
-            Potential(:,:,:,:,Nspin) = Potential(:,:,:,:,1)
+            Potential%wks(:,:,:,:,Nspin) = Potential%wks(:,:,:,:,1)
             exit spinPloop
          endif
       enddo spinPloop
-      deallocate(Gbulk,invGbulk,Ptmp)
+      deallocate(Gbulk,invGbulk,Ptmp,tkz,Swks)
+      !
+      call FermionicKsum(Potential)
       !
    end subroutine build_Potential
 

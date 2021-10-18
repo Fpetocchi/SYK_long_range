@@ -289,6 +289,10 @@ program SelfConsistency
       call dump_MaxEnt(Glat,"mats2itau",reg(ItFolder)//"Convergence/","Glat",EqvGWndx%SetOrbs)
       !
       !
+      !Print Potentials if present
+      if(Hetero%status)call print_potentials()
+      !
+      !
       !Print full self-energy: local readable, k-dep binfmt (optional) and along path
       call dump_FermionicField(S_Full,reg(ItFolder),"Sfull_w",paramagnet)
       if(dump_Sigmak)call dump_FermionicField(S_Full,reg(ItFolder),"Sfull_w",.true.,Crystal%kpt,paramagnet)

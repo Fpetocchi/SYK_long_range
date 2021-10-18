@@ -28,6 +28,7 @@ subroutine interpolateG2Path(Sfull,Lttc,pathOUTPUT)
    integer                               :: Norb,Nmats,unit!,Ntau
    integer                               :: ik,iw,itau,ispin,iorb
    integer                               :: ikx,iky
+   integer                               :: tzl,tzr,ilayer
    real(8)                               :: kx,ky,Bvec(3),Blat(3,3)
    character(len=256)                    :: path
    logical                               :: Kdependence
@@ -86,6 +87,26 @@ subroutine interpolateG2Path(Sfull,Lttc,pathOUTPUT)
          !
       enddo
       deallocate(correction)
+   endif
+   !
+   if(Hetero%status)then
+      !
+      tzl = 0 ; tzr = 0
+      if(Hetero%Explicit(1).ne.1) tzl = 1
+      if(Hetero%Explicit(2).ne.Hetero%Nslab) tzr = 1
+      !
+      allocate(Hetero%tz_path(Norb,Norb,Lttc%Nkpt_path,(Hetero%Explicit(1)-tzl):(Hetero%Explicit(2)-1+tzr)));Hetero%tz_path=czero
+      do ilayer = Hetero%Explicit(1)-tzl,Hetero%Explicit(2)-1+tzr
+         call wannierinterpolation(Lttc%Nkpt3,Lttc%kpt,Lttc%kptpath(:,1:Lttc%Nkpt_path),Hetero%tz(:,:,:,ilayer),Hetero%tz_path(:,:,:,ilayer))
+      enddo
+      !
+      if(FermiSurf)then
+         allocate(Hetero%tz_Plane(Norb,Norb,Lttc%Nkpt_Plane,(Hetero%Explicit(1)-tzl):(Hetero%Explicit(2)-1+tzr)));Hetero%tz_Plane=czero
+         do ilayer = Hetero%Explicit(1)-tzl,Hetero%Explicit(2)-1+tzr
+            call wannierinterpolation(Lttc%Nkpt3,Lttc%kpt,Lttc%kptPlane,Hetero%tz(:,:,:,ilayer),Hetero%tz_Plane(:,:,:,ilayer))
+         enddo
+      endif
+      !
    endif
    !
    !

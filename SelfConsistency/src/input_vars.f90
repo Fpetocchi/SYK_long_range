@@ -184,13 +184,13 @@ module input_vars
    real(8),public                           :: Mixing_curlyU
    logical,public                           :: causal_D
    logical,public                           :: causal_U
+   logical,public                           :: recalc_Hartree
    character(len=256),public                :: causal_U_type
    !
    !Variables for the fit on Delta, Gimp, Simp
    character(len=256),public                :: DeltaFit
    integer,public                           :: Nfit
    real(8),public                           :: ReplaceTail_Simp
-   logical,public                           :: recalc_Hartree
    !
    !Paths (directories must end with "/") and loop variables
    integer,public                           :: FirstIteration
@@ -221,12 +221,17 @@ module input_vars
    !Variables related to the impurity solver
    type(QMC),public                         :: Solver
    !
-   !Variables not to be readed
+   !Variables not to be readed but used in utils_main
    logical,public                           :: paramagnet=.true.
    logical,public                           :: paramagneticSPEX=.true.
    logical,public                           :: XEPSisread=.false.
    logical,public                           :: solve_DMFT=.true.
    logical,public                           :: bosonicSC=.false.
+   !
+   !Testing flags
+   logical,public                           :: Test_flag_1
+   logical,public                           :: Test_flag_2
+   logical,public                           :: Test_flag_3
    !
    !Variables that are needed in post_processing
    complex(8),allocatable,public            :: OlocSite(:,:,:)
@@ -446,7 +451,7 @@ contains
       !
       !Density lookup
       call add_separator("Density lookup")
-      call parse_input_variable(look4dens%mu,"MU",InputFile,default=0d0,comment="Chemical potential.")
+      call parse_input_variable(look4dens%mu,"MU",InputFile,default=0d0,comment="Absolute chemical potential if REMOVE_UHALF=0. Shift with respect to the half-filling mu otherwise.")
       call parse_input_variable(look4dens%TargetDensity,"N_READ_LAT",InputFile,default=0d0,comment="Target density on the lattice. Lookup is switched on to this value if its >0d0. Otherwise mu will be kept fixed.")
       if(ExpandImpurity)then
          call parse_input_variable(look4dens%local,"N_READ_LAT_LOC",InputFile,default=.false.,comment="Flag to restrict the lattice density lookup to the ORBS_1 indexes corresponding to the solved impurity.")
@@ -460,6 +465,7 @@ contains
       call parse_input_variable(look4dens%muStep,"MU_STEP",InputFile,default=0.2d0,comment="Initial chemical potential step in the density lookup.")
       call parse_input_variable(look4dens%muIter,"MU_ITER",InputFile,default=50,comment="Maximum number of iterations in the density lookup.")
       call parse_input_variable(look4dens%muTime,"MU_TIME",InputFile,default=0.5d0,comment="Minutes of solver runtime in the density lookup.")
+      call parse_input_variable(Solver%removeUhalf,"REMOVE_UHALF",InputFile,default=0,comment="Integer flag to remove the half-filling chemical potential inside the solver.")
       !
       !Interaction variables
       call add_separator("Interaction")
@@ -553,7 +559,7 @@ contains
       call parse_input_variable(DeltaFit,"DELTA_FIT",InputFile,default="Inf",comment="Fit to extract the local energy in GW+EDMFT calculations. Available: Inf, Analytic, Moments.")
       call parse_input_variable(Nfit,"NFIT",InputFile,default=8,comment="Number of bath levels (Analytic) or coefficient (automatic limit to NFIT=4).")
       call parse_input_variable(ReplaceTail_Simp,"WTAIL_SIMP",InputFile,default=80d0,comment="Frequency value above which the tail of Simp is replaced. If =0d0 the tail is not replaced. Only via moments (automatic limit to NFIT=4).")
-      call parse_input_variable(recalc_Hartree,"RECALC_HARTREE",InputFile,default=.false.,comment="Testing Flag.")
+      call parse_input_variable(recalc_Hartree,"RECALC_HARTREE",InputFile,default=.false.,comment="Use the lattice density to compute the Hartree term of the impurity self-energy.")
       !
       !Paths and loop variables
       call add_separator("Paths")

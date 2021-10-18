@@ -159,7 +159,7 @@ cat << EOF > submit_MaxEnt
 #$ -e   error.out
 #$ -o   log.out
 #$ -pe  smp 1
-#$ -q   big.q,new.q
+#$ -q   huge.q,new.q
 
 echo \$RUNOPTIONS
 export PYTHONPATH=\${PYTHONPATH}:${BIN}/docopt/

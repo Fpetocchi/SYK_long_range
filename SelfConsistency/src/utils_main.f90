@@ -1921,8 +1921,6 @@ contains
       enddo
       !
       !Extract and rotate from local (non-diagonal) to imp (diagonal) the given sites
-      !similar result could be obtained with S_Full%ws(:,:,iw,:) + S_Full%N_s
-      !defined in join_SigmaFull but using directly S_DMFT is more precise
       call clear_attributes(Gloc)
       call clear_attributes(SigmaImp)
       if(causal_D)call clear_attributes(DeltaCorr)
@@ -1944,6 +1942,8 @@ contains
       !
       !Recalculate and replace the Hartree term with the lattice densities
       if(recalc_Hartree)then
+         !
+         write(*,"(A)") "     Recalculating Hartree term with lattice density."
          !
          call AllocateBosonicField(curlyU,Norb,Nmats,Crystal%iq_gamma,Beta=Beta)
          call read_BosonicField(curlyU,reg(ItFolder)//"Solver_"//reg(SiteName(isite))//"/","curlyU_"//reg(SiteName(isite))//"_w.DAT")
@@ -1978,7 +1978,7 @@ contains
          SigmaImp%N_s = N_s
          deallocate(N_s)
          !
-         call dump_Matrix(SigmaImp%N_s,reg(ItFolder),"Solver_"//reg(SiteName(isite))//"/Hartree_UNlat"//reg(SiteName(isite)),paramagnet)
+         call dump_Matrix(SigmaImp%N_s,reg(ItFolder),"Solver_"//reg(SiteName(isite))//"/Hartree_UNlat_"//reg(SiteName(isite)),paramagnet)
          !
       endif
       !
@@ -3133,6 +3133,28 @@ contains
 
 
    !---------------------------------------------------------------------------!
+   !PURPOSE: Print heterostructure embedding potentials
+   !---------------------------------------------------------------------------!
+   subroutine print_potentials()
+      implicit none
+      type(FermionicField)                  :: Pot
+      !
+      call AllocateFermionicField(Pot,Hetero%Norb,Nmats,Beta=Beta)
+      !
+      call clear_attributes(Pot)
+      if(allocated(Hetero%P_L)) Pot%ws = Hetero%P_L
+      call dump_FermionicField(Pot,reg(ItFolder),"Pot_L_w",paramagnet)
+      !
+      call clear_attributes(Pot)
+      if(allocated(Hetero%P_R)) Pot%ws = Hetero%P_R
+      call dump_FermionicField(Pot,reg(ItFolder),"Pot_R_w",paramagnet)
+      !
+      call DeallocateField(Pot)
+      !
+   end subroutine print_potentials
+
+
+   !---------------------------------------------------------------------------!
    !PURPOSE: Deallocate all fields
    !---------------------------------------------------------------------------!
    subroutine DeallocateAllFields()
@@ -3223,7 +3245,7 @@ contains
       integer                               :: Norb,Norb_imp
       integer                               :: iorb,jorb,isite
       integer                               :: wn,ws,wsi,wnmin
-      integer                               :: l1,l2,l3,l4,l5,l6
+      integer                               :: l1,l2,l3,l4,l5,l6,l7
       integer                               :: enlrg_
       character(len=255)                    :: header1="Lattice density"
       character(len=255)                    :: header2="Impurity density"
@@ -3231,6 +3253,7 @@ contains
       character(len=255)                    :: header4="Impurity magnetization"
       character(len=255)                    :: header5="Solver magnetization"
       character(len=255)                    :: header6="Lattice magnetization"
+      character(len=255)                    :: header7="Density error"
       !
       Norb = Crystal%Norb
       !
@@ -3240,8 +3263,9 @@ contains
       l4=len(trim(header4))
       l5=len(trim(header5))
       l6=len(trim(header6))
+      l7=len(trim(header7)//" up")
       !
-      wnmin=max(maxval([l1,l2,l3,l4,l5,l6]),Norb*6) !6 because I have 4 precision
+      wnmin=max(maxval([l1,l2,l3,l4,l5,l6,l7]),Norb*6) !6 because I have 4 precision
       enlrg_=3
       if(present(enlrg))enlrg_=enlrg
       !
@@ -3265,7 +3289,15 @@ contains
                write(*,"(2("//str(Norb)//"F"//str(wn)//".4,"//str(ws)//"X))") (dreal(densityDMFT(iorb,jorb,1)),jorb=1,Norb),(dreal(densityDMFT(iorb,jorb,2)),jorb=1,Norb)
             enddo
             !
+            write(*,*)
+            write(*,"(A"//str(wn*Norb)//","//str(ws)//"X)")banner(trim(header7)//" up",wn*Norb)
+            write(*,"("//str(Norb)//"F"//str(wn)//".4,"//str(ws)//"X)") (dreal(densityGW(iorb,iorb,1)-densityDMFT(iorb,iorb,1)),iorb=1,Norb)
+            write(*,*)
+            !
             if(.not.EqvGWndx%S)then
+               write(*,*)
+               write(*,"(A"//str(wn*Norb)//","//str(ws)//"X)")banner(trim(header7)//" dw",wn*Norb)
+               write(*,"("//str(Norb)//"F"//str(wn)//".4,"//str(ws)//"X)") (dreal(densityGW(iorb,iorb,2)-densityDMFT(iorb,iorb,2)),iorb=1,Norb)
                write(*,*)
                write(*,"(A"//str(wn*Norb)//","//str(ws)//"X)")banner(trim(header6),wn*Norb)
                write(*,"("//str(Norb)//"F"//str(wn)//".4,"//str(ws)//"X)") (dreal(densityGW(iorb,iorb,1)-densityGW(iorb,iorb,2)),iorb=1,Norb)

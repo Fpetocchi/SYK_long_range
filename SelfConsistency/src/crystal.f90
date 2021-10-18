@@ -3211,141 +3211,47 @@ contains
       deallocate(dataEk)
       !
       !Compute non-interacting spectral function along path---------------------
-      allocate(zeta(Norb,Norb,Nreal));zeta=czero
-      do iorb=1,Norb
-         do iw=1,Nreal
-            zeta(iorb,iorb,iw) = dcmplx(wreal(iw),eta)
-         enddo
-      enddo
-      !
-      allocate(Akw(Norb,Nreal,Lttc%Nkpt_path));Akw=0d0
-      allocate(invGf(Norb,Norb));invGf=czero
-      !$OMP PARALLEL DEFAULT(NONE),&
-      !$OMP SHARED(Nreal,wreal,Norb,zeta,Lttc,data_intp,Akw),&
-      !$OMP PRIVATE(ik,iw,iorb,invGf)
-      !$OMP DO
-      do ik=1,Lttc%Nkpt_path
-         do iw=1,Nreal
-            invGf = zeta(:,:,iw) - data_intp(:,:,ik)
-            call inv(invGf)
-            do iorb=1,Norb
-               Akw(iorb,iw,ik) = dimag(invGf(iorb,iorb))
-            enddo
-         enddo
-      enddo
-      !$OMP END DO
-      !$OMP END PARALLEL
-      do ik=1,Lttc%Nkpt_path
+      if(hamiltonian)then
+         !
+         allocate(zeta(Norb,Norb,Nreal));zeta=czero
          do iorb=1,Norb
-            Akw(iorb,:,ik) = Akw(iorb,:,ik)/(sum(Akw(iorb,:,ik))*abs(wreal(2)-wreal(1)))
-         enddo
-      enddo
-      deallocate(zeta,invGf)
-      !
-      !Print k-resolved spectral function
-      if(printout)then
-         path = reg(pathOUTPUT)//"Akw_"//reg(label)//"_"//reg(corrname_)//".DAT"
-         unit = free_unit()
-         open(unit,file=reg(path),form="formatted",status="unknown",position="rewind",action="write")
-         do ik=1,Lttc%Nkpt_path
-            do iw=1,Nreal
-                write(unit,"(1I5,200E20.12)") ik,Lttc%Kpathaxis(ik)/Lttc%Kpathaxis(Lttc%Nkpt_path),wreal(iw),(Akw(iorb,iw,ik),iorb=1,Norb)
-            enddo
-            write(unit,*)
-         enddo
-         close(unit)
-      endif
-      deallocate(Akw)
-      !
-      !Compute dispersion in the Gamma-A direction------------------------------
-      if(hetero_)then
-         !
-         !data for the first Nkpt_path*SymmetryPoints at each kz
-         allocate(data_intp_kpkz(Norb_layer,Norb_layer,Lttc%Nkpt_path,0:Nkpt_path));data_intp_kpkz=czero
-         call fill_Gamma_A(data_intp,data_intp_kpkz)
-         !
-         !Compute eigenvalues along path for each kz
-         allocate(dataEk_kpkz(Norb_layer,Lttc%Nkpt_path,0:Nkpt_path));dataEk_kpkz=0d0
-         allocate(dataZk_kpkz(Norb_layer,Norb_layer,Lttc%Nkpt_path,0:Nkpt_path));dataZk_kpkz=czero
-         dataZk_kpkz = data_intp_kpkz
-         do ik=1,Lttc%Nkpt_path
-            do ikz=0,Nkpt_path
-               call eigh(dataZk_kpkz(:,:,ik,ikz),dataEk_kpkz(:,ik,ikz))
-            enddo
-         enddo
-         deallocate(dataZk_kpkz)
-         !
-         !Print Data along the path at kz=0 plus the Gamma-A direction
-         if(printout)then
-            path = reg(pathOUTPUT)//reg(filename_)//"_Hetero_"//reg(corrname_)//".DAT"
-            unit = free_unit()
-            open(unit,file=reg(path),form="formatted",status="unknown",position="rewind",action="write")
-            do ik=1,Lttc%Nkpt_path
-               write(unit,"(1I5,200E20.12)") ik,Lttc%Kpathaxis(ik),(dataEk_kpkz(:,ik,0),iorb=1,Norb_layer)
-            enddo
-            do ikz=1,Nkpt_path
-               write(unit,"(1I5,200E20.12)") ik+ikz,Lttc%Kpathaxis(Lttc%Nkpt_path+ikz),(dataEk_kpkz(:,Lttc%iq_gamma,ikz),iorb=1,Norb_layer)
-            enddo
-            close(unit)
-         endif
-         write(*,"(A,I)") "     Total number of K-points along path (hetero):",Lttc%Nkpt_path+Nkpt_path
-         deallocate(dataEk_kpkz)
-         !
-         !Compute non-interacting spectral function along path at kz=0 plus the Gamma-A direction
-         allocate(zeta(Norb_layer,Norb_layer,Nreal));zeta=czero
-         do iorb=1,Norb_layer
             do iw=1,Nreal
                zeta(iorb,iorb,iw) = dcmplx(wreal(iw),eta)
             enddo
          enddo
          !
-         allocate(Akw(Norb_layer,Nreal,Lttc%Nkpt_path+Nkpt_path));Akw=0d0
-         allocate(invGf(Norb_layer,Norb_layer));invGf=czero
+         allocate(Akw(Norb,Nreal,Lttc%Nkpt_path));Akw=0d0
+         allocate(invGf(Norb,Norb));invGf=czero
          !$OMP PARALLEL DEFAULT(NONE),&
-         !$OMP SHARED(Nreal,wreal,Norb_layer,Nkpt_path,zeta,Lttc,data_intp_kpkz,Akw),&
+         !$OMP SHARED(Nreal,wreal,Norb,zeta,Lttc,Akw),&
          !$OMP PRIVATE(ik,iw,iorb,invGf)
-         !
-         !path in the layer
          !$OMP DO
          do ik=1,Lttc%Nkpt_path
             do iw=1,Nreal
-               invGf = zeta(:,:,iw) - data_intp_kpkz(:,:,ik,0)
+               invGf = zeta(:,:,iw) - Lttc%Hk_path(:,:,ik)
                call inv(invGf)
-               do iorb=1,Norb_layer
+               do iorb=1,Norb
                   Akw(iorb,iw,ik) = dimag(invGf(iorb,iorb))
                enddo
             enddo
          enddo
          !$OMP END DO
-         !
-         !Gamma-A direction
-         !$OMP DO
-         do ik=1,Nkpt_path
-            do iw=1,Nreal
-               invGf = zeta(:,:,iw) - data_intp_kpkz(:,:,Lttc%iq_gamma,ik)
-               call inv(invGf)
-               do iorb=1,Norb_layer
-                  Akw(iorb,iw,Lttc%Nkpt_path+ik) = dimag(invGf(iorb,iorb))
-               enddo
-            enddo
-         enddo
-         !$OMP END DO
          !$OMP END PARALLEL
-         do ik=1,Lttc%Nkpt_path+Nkpt_path
-            do iorb=1,Norb_layer
+         do ik=1,Lttc%Nkpt_path
+            do iorb=1,Norb
                Akw(iorb,:,ik) = Akw(iorb,:,ik)/(sum(Akw(iorb,:,ik))*abs(wreal(2)-wreal(1)))
             enddo
          enddo
-         deallocate(zeta,invGf,data_intp_kpkz)
+         deallocate(zeta,invGf)
          !
          !Print k-resolved spectral function
          if(printout)then
-            path = reg(pathOUTPUT)//"Akw_"//reg(label)//"_Hetero_"//reg(corrname_)//".DAT"
+            path = reg(pathOUTPUT)//"Akw_"//reg(label)//"_"//reg(corrname_)//".DAT"
             unit = free_unit()
             open(unit,file=reg(path),form="formatted",status="unknown",position="rewind",action="write")
-            do ik=1,(Lttc%Nkpt_path+Nkpt_path)
+            do ik=1,Lttc%Nkpt_path
                do iw=1,Nreal
-                   write(unit,"(1I5,200E20.12)") ik,Lttc%Kpathaxis(ik),wreal(iw),(Akw(iorb,iw,ik),iorb=1,Norb_layer)
+                   write(unit,"(1I5,200E20.12)") ik,Lttc%Kpathaxis(ik)/Lttc%Kpathaxis(Lttc%Nkpt_path),wreal(iw),(Akw(iorb,iw,ik),iorb=1,Norb)
                enddo
                write(unit,*)
             enddo
@@ -3353,11 +3259,109 @@ contains
          endif
          deallocate(Akw)
          !
+         !Compute dispersion in the Gamma-A direction---------------------------
+         if(hetero_)then
+            !
+            !data for the first Nkpt_path*SymmetryPoints at each kz
+            allocate(data_intp_kpkz(Norb_layer,Norb_layer,Lttc%Nkpt_path,0:Nkpt_path));data_intp_kpkz=czero
+            call fill_Gamma_A(Lttc%Hk_path,data_intp_kpkz)
+            !
+            !Compute eigenvalues along path for each kz
+            allocate(dataEk_kpkz(Norb_layer,Lttc%Nkpt_path,0:Nkpt_path));dataEk_kpkz=0d0
+            allocate(dataZk_kpkz(Norb_layer,Norb_layer,Lttc%Nkpt_path,0:Nkpt_path));dataZk_kpkz=czero
+            dataZk_kpkz = data_intp_kpkz
+            do ik=1,Lttc%Nkpt_path
+               do ikz=0,Nkpt_path
+                  call eigh(dataZk_kpkz(:,:,ik,ikz),dataEk_kpkz(:,ik,ikz))
+               enddo
+            enddo
+            deallocate(dataZk_kpkz)
+            !
+            !Print Data along the path at kz=0 plus the Gamma-A direction
+            if(printout)then
+               path = reg(pathOUTPUT)//reg(filename_)//"_Hetero_"//reg(corrname_)//".DAT"
+               unit = free_unit()
+               open(unit,file=reg(path),form="formatted",status="unknown",position="rewind",action="write")
+               do ik=1,Lttc%Nkpt_path
+                  write(unit,"(1I5,200E20.12)") ik,Lttc%Kpathaxis(ik),(dataEk_kpkz(:,ik,0),iorb=1,Norb_layer)
+               enddo
+               do ikz=1,Nkpt_path
+                  write(unit,"(1I5,200E20.12)") ik+ikz,Lttc%Kpathaxis(Lttc%Nkpt_path+ikz),(dataEk_kpkz(:,Lttc%iq_gamma,ikz),iorb=1,Norb_layer)
+               enddo
+               close(unit)
+            endif
+            write(*,"(A,I)") "     Total number of K-points along path (hetero):",Lttc%Nkpt_path+Nkpt_path
+            deallocate(dataEk_kpkz)
+            !
+            !Compute non-interacting spectral function along path at kz=0 plus the Gamma-A direction
+            allocate(zeta(Norb_layer,Norb_layer,Nreal));zeta=czero
+            do iorb=1,Norb_layer
+               do iw=1,Nreal
+                  zeta(iorb,iorb,iw) = dcmplx(wreal(iw),eta)
+               enddo
+            enddo
+            !
+            allocate(Akw(Norb_layer,Nreal,Lttc%Nkpt_path+Nkpt_path));Akw=0d0
+            allocate(invGf(Norb_layer,Norb_layer));invGf=czero
+            !$OMP PARALLEL DEFAULT(NONE),&
+            !$OMP SHARED(Nreal,wreal,Norb_layer,Nkpt_path,zeta,Lttc,data_intp_kpkz,Akw),&
+            !$OMP PRIVATE(ik,iw,iorb,invGf)
+            !
+            !path in the layer
+            !$OMP DO
+            do ik=1,Lttc%Nkpt_path
+               do iw=1,Nreal
+                  invGf = zeta(:,:,iw) - data_intp_kpkz(:,:,ik,0)
+                  call inv(invGf)
+                  do iorb=1,Norb_layer
+                     Akw(iorb,iw,ik) = dimag(invGf(iorb,iorb))
+                  enddo
+               enddo
+            enddo
+            !$OMP END DO
+            !
+            !Gamma-A direction
+            !$OMP DO
+            do ik=1,Nkpt_path
+               do iw=1,Nreal
+                  invGf = zeta(:,:,iw) - data_intp_kpkz(:,:,Lttc%iq_gamma,ik)
+                  call inv(invGf)
+                  do iorb=1,Norb_layer
+                     Akw(iorb,iw,Lttc%Nkpt_path+ik) = dimag(invGf(iorb,iorb))
+                  enddo
+               enddo
+            enddo
+            !$OMP END DO
+            !$OMP END PARALLEL
+            do ik=1,Lttc%Nkpt_path+Nkpt_path
+               do iorb=1,Norb_layer
+                  Akw(iorb,:,ik) = Akw(iorb,:,ik)/(sum(Akw(iorb,:,ik))*abs(wreal(2)-wreal(1)))
+               enddo
+            enddo
+            deallocate(zeta,invGf,data_intp_kpkz)
+            !
+            !Print k-resolved spectral function
+            if(printout)then
+               path = reg(pathOUTPUT)//"Akw_"//reg(label)//"_Hetero_"//reg(corrname_)//".DAT"
+               unit = free_unit()
+               open(unit,file=reg(path),form="formatted",status="unknown",position="rewind",action="write")
+               do ik=1,(Lttc%Nkpt_path+Nkpt_path)
+                  do iw=1,Nreal
+                      write(unit,"(1I5,200E20.12)") ik,Lttc%Kpathaxis(ik),wreal(iw),(Akw(iorb,iw,ik),iorb=1,Norb_layer)
+                  enddo
+                  write(unit,*)
+               enddo
+               close(unit)
+            endif
+            deallocate(Akw)
+            !
+         endif
+         !
       endif
       !
       deallocate(data_intp,wreal)
       !
-      if(doplane_)then
+      if(doplane_.and.hamiltonian)then
          !
          Nkpt_Kside_ = 201 !fixed
          if(present(Nkpt_Kside)) Nkpt_Kside_ = Nkpt_Kside
@@ -3383,7 +3387,7 @@ contains
          allocate(Fk(Norb,Lttc%Nkpt_Plane));Fk=0d0
          allocate(invGf(Norb,Norb));invGf=czero
          do ik=1,Lttc%Nkpt_Plane
-            invGf = zeye(Norb)*dcmplx(EcutSheet,eta) - data_intp(:,:,ik)
+            invGf = zeye(Norb)*dcmplx(EcutSheet,eta) - Lttc%Hk_Plane(:,:,ik)
             call inv(invGf)
             do iorb=1,Norb
                Fk(iorb,ik) = -dimag(invGf(iorb,iorb))
@@ -3412,7 +3416,7 @@ contains
             !
             !data inside the kx,ky plane at each kz
             allocate(data_intp_kpkz(Norb_layer,Norb_layer,Lttc%Nkpt_Plane,0:Nkpt_path));data_intp_kpkz=czero
-            call fill_Gamma_A(data_intp,data_intp_kpkz)
+            call fill_Gamma_A(Lttc%Hk_Plane,data_intp_kpkz)
             !
             !Compute Fermi surface at kz=0
             allocate(Fk(Norb_layer,Lttc%Nkpt_Plane));Fk=0d0
@@ -3471,7 +3475,7 @@ contains
                enddo
                close(unit)
             endif
-            deallocate(Fk)
+            deallocate(Fk,data_intp)
             !
          endif
          !

@@ -13,24 +13,67 @@ declare -a dirindex=( "86" "87" "78" "79" )
 #for it in `seq 13 1 16`;do
 
 #------------------------------------------------------------------------------#
-for it in `seq 80 1 85`; do
+for it in `seq 90 1 104`; do #2_AL
+
+for it in `seq  80 1 84` ; do #2_a
+for it in `seq  95 1 99` ; do #2_b
+for it in `seq 111 1 116`; do #2_c
+for it in `seq 120 1 124`; do #2_d
+for it in `seq 135 1 139`; do #2_e
+
+
+
+
+for it in `seq 105 1 109`; do #4_a
+for it in `seq 120 1 122`; do #4_b
+for it in `seq 113 1 117`; do #4_c
+for it in `seq 144 1 148`; do #4_d
+for it in `seq 158 1 162`; do #4_e
+
+for it in `seq 0 1 109`; do
+   grep -A 1 "Density error u" Results_beta06/${it}/report_* | tail -1 >> errors
+done
+
+
+
+declare -a dirindex=( "plot" )
+GENMAT=/home/petocchif/1_GW_EDMFT/nobackup/1_production/Calculation_template
+for it in `seq 113 1 117`; do
+   cd $it/Convergence
+   cp ${GENMAT}/${MATERIAL}/MaxEnt/MaxEnt.sh .
+   chmod 700 MaxEnt.sh
+   #
+   ./MaxEnt.sh -e 0.004 -w 5000 -W  15 -f G -o 1 -i qmc_S1 -p ${GENMAT}
+   ./MaxEnt.sh -e 0.004 -w 5000 -W  15 -f G -o 1 -i qmc_S2 -p ${GENMAT}
+   ./MaxEnt.sh -e 0.004 -w 5000 -W  15 -f G -o 1 -i qmc_S3 -p ${GENMAT}
+   ./MaxEnt.sh -e 0.004 -w 5000 -W  15 -f G -o 1 -i qmc_S4 -p ${GENMAT}
+   ./MaxEnt.sh -e 0.004 -w 5000 -W  15 -f G -o 1 -i qmc_S5 -p ${GENMAT}
+   ./MaxEnt.sh -e 0.004 -w 5000 -W  15 -f G -o 1 -i qmc_S6 -p ${GENMAT}
+   ./MaxEnt.sh -e 0.004 -w 5000 -W  15 -f G -o 1 -i qmc_S7 -p ${GENMAT}
+   ./MaxEnt.sh -e 0.004 -w 5000 -W  15 -f G -o 1 -i qmc_S8 -p ${GENMAT}
+   #
+   cd ../../
+done
+
+
+
 
 
 GENMAT=/home/petocchif/1_GW_EDMFT/nobackup/1_production/Calculation_template
-for it in `seq 103 1 109`; do
+for it in `seq 117 1 127`; do
    ## LATTICE
    cd $it/Convergence
    cp ${GENMAT}/${MATERIAL}/MaxEnt/MaxEnt.sh .
    chmod 700 MaxEnt.sh
    #
-   ./MaxEnt.sh -e 0.005 -w 5000 -W  15 -f G -o 1 -i lat -p ${GENMAT}
-   ./MaxEnt.sh -e 0.005 -w 5000 -W  15 -f G -o 2 -i lat -p ${GENMAT}
-   ./MaxEnt.sh -e 0.005 -w 5000 -W  15 -f G -o 3 -i lat -p ${GENMAT}
-   ./MaxEnt.sh -e 0.005 -w 5000 -W  15 -f G -o 4 -i lat -p ${GENMAT}
-   ./MaxEnt.sh -e 0.005 -w 5000 -W  15 -f G -o 5 -i lat -p ${GENMAT}
-   ./MaxEnt.sh -e 0.005 -w 5000 -W  15 -f G -o 6 -i lat -p ${GENMAT}
-   ./MaxEnt.sh -e 0.005 -w 5000 -W  15 -f G -o 7 -i lat -p ${GENMAT}
-   ./MaxEnt.sh -e 0.005 -w 5000 -W  15 -f G -o 8 -i lat -p ${GENMAT}
+   #./MaxEnt.sh -e 0.005 -w 5000 -W  15 -f G -o 1 -i lat -p ${GENMAT}
+   #./MaxEnt.sh -e 0.005 -w 5000 -W  15 -f G -o 2 -i lat -p ${GENMAT}
+   #./MaxEnt.sh -e 0.005 -w 5000 -W  15 -f G -o 3 -i lat -p ${GENMAT}
+   #./MaxEnt.sh -e 0.005 -w 5000 -W  15 -f G -o 4 -i lat -p ${GENMAT}
+   #./MaxEnt.sh -e 0.005 -w 5000 -W  15 -f G -o 5 -i lat -p ${GENMAT}
+   #./MaxEnt.sh -e 0.005 -w 5000 -W  15 -f G -o 6 -i lat -p ${GENMAT}
+   #./MaxEnt.sh -e 0.005 -w 5000 -W  15 -f G -o 7 -i lat -p ${GENMAT}
+   #./MaxEnt.sh -e 0.005 -w 5000 -W  15 -f G -o 8 -i lat -p ${GENMAT}
 
    #./MaxEnt.sh -e 0.05  -w 4000 -W 100 -f W -o 1 -i lat -p ${GENMAT}
    #./MaxEnt.sh -e 0.05  -w 4000 -W 100 -f W -o 2 -i lat -p ${GENMAT}
@@ -48,14 +91,14 @@ for it in `seq 103 1 109`; do
    cp ${GENMAT}/${MATERIAL}/MaxEnt/MaxEnt.sh .
    chmod 700 MaxEnt.sh
    #
-   ./MaxEnt.sh -e 0.005 -w 5000 -W  15 -f G -o 1 -i qmc_S1 -p ${GENMAT}
-   ./MaxEnt.sh -e 0.005 -w 5000 -W  15 -f G -o 1 -i qmc_S2 -p ${GENMAT}
-   ./MaxEnt.sh -e 0.005 -w 5000 -W  15 -f G -o 1 -i qmc_S3 -p ${GENMAT}
-   ./MaxEnt.sh -e 0.005 -w 5000 -W  15 -f G -o 1 -i qmc_S4 -p ${GENMAT}
-   ./MaxEnt.sh -e 0.005 -w 5000 -W  15 -f G -o 1 -i qmc_S5 -p ${GENMAT}
-   ./MaxEnt.sh -e 0.005 -w 5000 -W  15 -f G -o 1 -i qmc_S6 -p ${GENMAT}
-   ./MaxEnt.sh -e 0.005 -w 5000 -W  15 -f G -o 1 -i qmc_S7 -p ${GENMAT}
-   ./MaxEnt.sh -e 0.005 -w 5000 -W  15 -f G -o 1 -i qmc_S8 -p ${GENMAT}
+   ./MaxEnt.sh -e 0.004 -w 5000 -W  15 -f G -o 1 -i qmc_S1 -p ${GENMAT}
+   ./MaxEnt.sh -e 0.004 -w 5000 -W  15 -f G -o 1 -i qmc_S2 -p ${GENMAT}
+   ./MaxEnt.sh -e 0.004 -w 5000 -W  15 -f G -o 1 -i qmc_S3 -p ${GENMAT}
+   ./MaxEnt.sh -e 0.004 -w 5000 -W  15 -f G -o 1 -i qmc_S4 -p ${GENMAT}
+   ./MaxEnt.sh -e 0.004 -w 5000 -W  15 -f G -o 1 -i qmc_S5 -p ${GENMAT}
+   ./MaxEnt.sh -e 0.004 -w 5000 -W  15 -f G -o 1 -i qmc_S6 -p ${GENMAT}
+   ./MaxEnt.sh -e 0.004 -w 5000 -W  15 -f G -o 1 -i qmc_S7 -p ${GENMAT}
+   ./MaxEnt.sh -e 0.004 -w 5000 -W  15 -f G -o 1 -i qmc_S8 -p ${GENMAT}
    #
    #./MaxEnt.sh -e 0.01 -w 4000 -W  5 -f G -o 1 -i imp    -p ${GENMAT}
    #./MaxEnt.sh -e 0.01   -w 4000 -W 20 -f C -o 1 -i imp
@@ -63,6 +106,7 @@ for it in `seq 103 1 109`; do
 
    cd ../../
 done
+
 
 
 
@@ -84,10 +128,13 @@ done
 
 
 
-set ytics 4; set xrange [-0.7:0.7]; set grid
+it='a_2.857x0035ndis_0035dis/80'
+#p for [i=1:8] './'.it.'/Convergence/MaxEnt_Glat_o'.i.'_s1/Glat_t_o'.i.'_s1.DAT_dos.dat' u 1:($2+(i-1)*4) w l lw 3
 
-p for [i=1:8] './'.it.'/Convergence/MaxEnt_Glat_o'.i.'_s1/Glat_t_o'.i.'_s1.DAT_dos.dat' u 1:($2+(i-1)*4) w l lw 3
+set ytics 4; set xrange [-0.5:0.5]; set yrange [0:38]; set grid; set xtic 0.1
 p for [i=1:8] './'.it.'/Convergence/MaxEnt_Gqmc_S'.i.'_o1_s1/Gqmc_S'.i.'_t_o1_s1.DAT_dos.dat' u 1:($2+(i-1)*4) w l lw 3
+
+
 
 it=50
 p for [i=1:8] '1_beta_400_A_stack_MET_highE/Results_beta400/'.it.'/Convergence/MaxEnt_Glat_o'.i.'_s1/Glat_t_o'.i.'_s1.DAT_dos.dat' u 1:($2+(i-1)*4) w l lw 3

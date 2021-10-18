@@ -38,7 +38,7 @@ class ct_hyb
 
       ct_hyb( path SiteName, double beta, int Nspin, int Norb, int NtauF, int NtauB,
               int Norder, bool Gexp, int Nmeas, int Ntherm, int NsegShift, int NspinSwap, int NnntMeas,
-              bool paramagnet, bool retarded, std::vector<int> SetsNorb,
+              bool removeUhalf, bool paramagnet, bool retarded, std::vector<int> SetsNorb,
               int printTime, std::vector<int> bins, CustomMPI &mpi):
       SiteName(SiteName),
       Beta(beta),
@@ -53,6 +53,7 @@ class ct_hyb
       NsegShift(NsegShift),
       NspinSwap(NspinSwap),
       NnntMeas(NnntMeas),
+      removeUhalf(removeUhalf),
       paramagnet(paramagnet),
       retarded(retarded),
       SetsNorb(SetsNorb),
@@ -137,10 +138,17 @@ class ct_hyb
          //
          //adjust the internal chemical potential
          mu_correction.resize(Norb,0.0);
-         for(int iorb=0; iorb < Norb; iorb++)
+         if(removeUhalf)
          {
-            mu_correction[iorb] = Uloc(2*iorb,2*iorb+1)/2.0;
-            mpi.report(" Orbital "+str(iorb)+": correction of the local level: "+str(mu_correction[iorb],4));
+            for(int iorb=0; iorb < Norb; iorb++)
+            {
+               //old: Hartree given only by Uaa
+               //mu_correction[iorb] = Uloc(2*iorb,2*iorb+1)/2.0;
+               //new: Hartree given by the full row
+               for(int ifl=0; ifl < Nflavor; ifl++) mu_correction[iorb] += Uloc(2*iorb,ifl)/4.0;
+               mu_correction[iorb] += Uloc(2*iorb,2*iorb+1)/4.0;
+               mpi.report(" Orbital "+str(iorb)+": shift of the local level: "+str(mu_correction[iorb],4));
+            }
          }
 
          //
@@ -368,6 +376,7 @@ class ct_hyb
       int                                 NsegShift;
       int                                 NspinSwap;
       int                                 NnntMeas;
+      bool                                removeUhalf;
       bool                                paramagnet;
       bool                                retarded;
       int                                 printTime;

@@ -38,8 +38,8 @@ int main(int argc, char *argv[])
    int Nspin,NtauF,NtauB,Norder;
    int Nmeas,Ntherm,Nshift,Nswap,Nnnt,printTime;
    //logical flags and compatibility typo fix
-   bool Gexp,paramagnet,retarded,quickloops;
-   int Gexp_read,para_read,ret_read,quick_read;
+   bool Gexp,paramagnet,retarded,removeUhalf,quickloops;
+   int Gexp_read,para_read,ret_read,rmvU2_read,quick_read;
    // Post-processing of the Green's function
    int binlength,binstart;
    //Symmetrization type
@@ -81,35 +81,36 @@ int main(int argc, char *argv[])
       // Iteration folder
       IterationDir = argv[2];
       // Global Vars
-      find_param(argv[1], "BETA"       , Beta      );
-      find_param(argv[1], "NSPIN"      , Nspin     );
-      find_param(argv[1], "NTAU_F_IMP" , NtauF     );
-      find_param(argv[1], "NTAU_B_IMP" , NtauB     );
-      find_param(argv[1], "NORDER"     , Norder    );
+      find_param(argv[1], "BETA"         , Beta        );
+      find_param(argv[1], "NSPIN"        , Nspin       );
+      find_param(argv[1], "NTAU_F_IMP"   , NtauF       );
+      find_param(argv[1], "NTAU_B_IMP"   , NtauB       );
+      find_param(argv[1], "NORDER"       , Norder      );
       // Measurments
-      find_param(argv[1], "NMEAS"      , Nmeas     );
-      find_param(argv[1], "GEXPENSIVE" , Gexp_read ); Gexp = (Gexp_read == 1) ? true : false;
-      find_param(argv[1], "NTHERM"     , Ntherm    );
-      find_param(argv[1], "NSHIFT"     , Nshift    );
-      find_param(argv[1], "NSWAP"      , Nswap     );
-      find_param(argv[1], "N_NNT"      , Nnnt      );
-      find_param(argv[1], "PRINT_TIME" , printTime );
-      find_param(argv[1], "PARAMAGNET" , para_read ); paramagnet = (para_read == 1) ? true : false;
-      find_param(argv[1], "RETARDED"   , ret_read  ); retarded = (ret_read == 1) ? true : false;
+      find_param(argv[1], "NMEAS"        , Nmeas       );
+      find_param(argv[1], "GEXPENSIVE"   , Gexp_read   ); Gexp = (Gexp_read == 1) ? true : false;
+      find_param(argv[1], "NTHERM"       , Ntherm      );
+      find_param(argv[1], "NSHIFT"       , Nshift      );
+      find_param(argv[1], "NSWAP"        , Nswap       );
+      find_param(argv[1], "N_NNT"        , Nnnt        );
+      find_param(argv[1], "PRINT_TIME"   , printTime   );
+      find_param(argv[1], "PARAMAGNET"   , para_read   ); paramagnet = (para_read == 1) ? true : false;
+      find_param(argv[1], "RETARDED"     , ret_read    ); retarded = (ret_read == 1) ? true : false;
       // Post-processing of the Green's function
-      find_param(argv[1], "BINLENGTH"  , binlength );
-      find_param(argv[1], "BINSTART"   , binstart  );
+      find_param(argv[1], "BINLENGTH"    , binlength   );
+      find_param(argv[1], "BINSTART"     , binstart    );
       // Density lookup algorithm (dichotomy)
-      find_param(argv[1], "N_READ_IMP" , density   );
-      find_param(argv[1], "MU_STEP"    , muStep    );
-      find_param(argv[1], "MU_ITER"    , muIter    );
-      find_param(argv[1], "MU_TIME"    , muTime    );
-      find_param(argv[1], "N_ERR"      , muErr     );
-      find_param(argv[1], "N_QUICK"    , quick_read); quickloops = (quick_read == 1) ? true : false;
+      find_param(argv[1], "N_READ_IMP"   , density     );
+      find_param(argv[1], "MU_STEP"      , muStep      );
+      find_param(argv[1], "MU_ITER"      , muIter      );
+      find_param(argv[1], "MU_TIME"      , muTime      );
+      find_param(argv[1], "REMOVE_UHALF" , rmvU2_read  ); removeUhalf = (rmvU2_read == 1) ? true : false;
+      find_param(argv[1], "N_ERR"        , muErr       );
+      find_param(argv[1], "N_QUICK"      , quick_read  ); quickloops = (quick_read == 1) ? true : false;
       //Symmetrization type
-      find_param(argv[1], "SYM_MODE"   , sym_read  ); OrbSym = (sym_read > 1) ? true : false;
+      find_param(argv[1], "SYM_MODE"     , sym_read    ); OrbSym = (sym_read > 1) ? true : false;
       // Site Dependent Vars
-      find_param(argv[1], "NIMP"       , Nimp      );
+      find_param(argv[1], "NIMP"         , Nimp        );
       //
       if(mpi.is_master()) //debug &&
       {
@@ -126,6 +127,7 @@ int main(int argc, char *argv[])
          mpi.report(" printTime= "+str(printTime)+"min");
          mpi.report(" retarded= "+str(retarded));
          mpi.report(" quickloops= "+str(quickloops));
+         mpi.report(" removeUhalf= "+str(removeUhalf));
          mpi.report(" paramagnet= "+str(paramagnet));
          mpi.report(" OrbSym= "+str(OrbSym));
          mpi.report(" debug= "+str(debug));
@@ -240,10 +242,10 @@ int main(int argc, char *argv[])
          if(PathExist(strcpy(new char[SiteDir[isite].length() + 1], SiteDir[isite].c_str())))
          {
             mpi.report(" Folder = "+SiteDir[isite]+" (Found).");
-            ImpurityList.push_back(ct_hyb( SiteName[isite], Beta, Nspin, SiteNorb[isite], NtauF, NtauB,
-                                           Norder, Gexp, Nmeas, Ntherm, Nshift, Nswap, Nnnt,
-                                           paramagnet, retarded, SiteSetsNorb[isite],
-                                           printTime, std::vector<int> { binlength,binstart }, mpi ));
+            ImpurityList.push_back( ct_hyb( SiteName[isite], Beta, Nspin, SiteNorb[isite], NtauF, NtauB,
+                                            Norder, Gexp, Nmeas, Ntherm, Nshift, Nswap, Nnnt,
+                                            removeUhalf, paramagnet, retarded, SiteSetsNorb[isite],
+                                            printTime, std::vector<int> { binlength,binstart }, mpi ) );
             ImpurityList[isite].init( SiteDir[isite]);
          }
          else

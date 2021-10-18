@@ -195,6 +195,7 @@ module parameters
       !I'm writing these as integers due to some mismatch on how to write boolean between fortrann and c++
       integer                               :: retarded=0
       integer                               :: quickloops=0
+      integer                               :: removeUhalf=0
    end type QMC
 
    !---------------------------------------------------------------------------!
@@ -244,7 +245,11 @@ module parameters
       integer                               :: NtzExplicit=0
       integer,allocatable                   :: ExplicitTzPos(:)
       real(8),allocatable                   :: ExplicitTzRatios(:)
-      complex(8),allocatable                :: tz(:,:,:,:)
+      complex(8),allocatable                :: tz(:,:,:,:)                      ![Norb,Norb,Nkpt,ilayer]
+      complex(8),allocatable                :: tz_path(:,:,:,:)                 ![Norb,Norb,Nkpt,ilayer]
+      complex(8),allocatable                :: tz_Plane(:,:,:,:)                ![Norb,Norb,Nkpt,ilayer]
+      complex(8),allocatable                :: P_L(:,:,:,:)                     ![Norb,Norb,Npoints,Nspin]
+      complex(8),allocatable                :: P_R(:,:,:,:)                     ![Norb,Norb,Npoints,Nspin]
       logical                               :: status=.false.
       logical                               :: offDiagEk=.false.
    end type Heterostructures
