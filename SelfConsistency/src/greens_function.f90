@@ -355,17 +355,21 @@ contains
                NbulkL = Hetero%Explicit(1)-1
                !
                !Diagonal arrays of the first layer explicitly solved
-               zeta_ = zeta(Ln(1):Ln(2),Ln(1):Ln(2),:)
-               Hk_ = Hk(Ln(1):Ln(2),Ln(1):Ln(2),:)
+               allocate(zeta_(Hetero%Norb,Hetero%Norb,Nmats));  zeta_ = zeta(Ln(1):Ln(2),Ln(1):Ln(2),:)
+               allocate(Hk_(Hetero%Norb,Hetero%Norb,Nkpt))   ;  Hk_ = Hk(Ln(1):Ln(2),Ln(1):Ln(2),:)
                !
                !Connection-to and self-energy-of the first layer explicitly solved
-               ta = tz(:,:,:,Hetero%Explicit(1)-1); Sa = Smats%wks(Ln(1):Ln(2),Ln(1):Ln(2),:,:,:)
+               ta = tz(:,:,:,Hetero%Explicit(1)-1)
+               allocate(Sa(Hetero%Norb,Hetero%Norb,Nmats,Nkpt,Nspin));Sa=czero
+               Sa = Smats%wks(Ln(1):Ln(2),Ln(1):Ln(2),:,:,:)
                !
                !Connection-to and self-energy-of the second layer explicitly solved
-               tb = tz(:,:,:,Hetero%Explicit(1))  ; Sb = Smats%wks(Ln(1)+Hetero%Norb:Ln(2)+Hetero%Norb,Ln(1)+Hetero%Norb:Ln(2)+Hetero%Norb,:,:,:)
+               tb = tz(:,:,:,Hetero%Explicit(1))
+               allocate(Sb(Hetero%Norb,Hetero%Norb,Nmats,Nkpt,Nspin));Sb=czero
+               Sb = Smats%wks(Ln(1)+Hetero%Norb:Ln(2)+Hetero%Norb,Ln(1)+Hetero%Norb:Ln(2)+Hetero%Norb,:,:,:)
                !
                write(*,"(2(A,2I4))") "     Left potential orbital lattice indexes: ",Ln(1),Ln(2)," thickness: ",NbulkL
-               call AllocateFermionicField(Potential_L,Norb,Nmats,Nkpt=Nkpt,Nsite=Gmats%Nsite,Beta=Beta)
+               call AllocateFermionicField(Potential_L,Hetero%Norb,Nmats,Nkpt=Nkpt,Beta=Beta)
                call build_Potential(Potential_L,NbulkL,zeta_,Hk_,ta,tb,Sa,Sb)
                deallocate(zeta_,Hk_,ta,tb,Sa,Sb)
                !
@@ -383,17 +387,21 @@ contains
                NbulkR = Hetero%Nslab-Hetero%Explicit(2)
                !
                !Diagonal arrays of the last layer explicitly solved
-               zeta_ = zeta(Rn(1):Rn(2),Rn(1):Rn(2),:)
-               Hk_ = Hk(Rn(1):Rn(2),Rn(1):Rn(2),:)
+               allocate(zeta_(Hetero%Norb,Hetero%Norb,Nmats));  zeta_ = zeta(Rn(1):Rn(2),Rn(1):Rn(2),:)
+               allocate(Hk_(Hetero%Norb,Hetero%Norb,Nkpt))   ;  Hk_ = Hk(Rn(1):Rn(2),Rn(1):Rn(2),:)
                !
                !Connection-to and self-energy-of the last layer explicitly solved
-               ta = tz(:,:,:,Hetero%Explicit(2))  ; Sa = Smats%wks(Rn(1):Rn(2),Rn(1):Rn(2),:,:,:)
+               ta = tz(:,:,:,Hetero%Explicit(2))
+               allocate(Sa(Hetero%Norb,Hetero%Norb,Nmats,Nkpt,Nspin));Sa=czero
+               Sa = Smats%wks(Rn(1):Rn(2),Rn(1):Rn(2),:,:,:)
                !
                !Connection-to and self-energy-of the semi-last layer explicitly solved
-               tb = tz(:,:,:,Hetero%Explicit(2)-1); Sb = Smats%wks(Rn(1)-Hetero%Norb:Rn(2)-Hetero%Norb,Rn(1)-Hetero%Norb:Rn(2)-Hetero%Norb,:,:,:)
+               tb = tz(:,:,:,Hetero%Explicit(2)-1)
+               allocate(Sb(Hetero%Norb,Hetero%Norb,Nmats,Nkpt,Nspin));Sb=czero
+               Sb = Smats%wks(Rn(1)-Hetero%Norb:Rn(2)-Hetero%Norb,Rn(1)-Hetero%Norb:Rn(2)-Hetero%Norb,:,:,:)
                !
                write(*,"(2(A,2I4))") "     Right potential orbital lattice indexes: ",Rn(1),Rn(2)," thickness: ",NbulkR
-               call AllocateFermionicField(Potential_R,Norb,Nmats,Nkpt=Nkpt,Nsite=Gmats%Nsite,Beta=Beta)
+               call AllocateFermionicField(Potential_R,Hetero%Norb,Nmats,Nkpt=Nkpt,Beta=Beta)
                call build_Potential(Potential_R,NbulkR,zeta_,Hk_,ta,tb,Sa,Sb)
                deallocate(zeta_,Hk_,ta,tb,Sa,Sb)
                !
@@ -1178,10 +1186,6 @@ contains
                call inv(Gbulk)
                Potential%wks(:,:,iw,ik,ispin) = rotate(Gbulk,tkz(:,:,Pndx))
                !
-               !TEST>>>
-               if(iw.eq.1.and.ik.eq.1)print *, " ibulk ",1,Npot,Pndx
-               !>>>TEST
-               !
                !all the other
                do ibulk=2,Npot
                   !
@@ -1189,10 +1193,6 @@ contains
                   Ptmp = zeta(:,:,iw) - Hk(:,:,ik) - Swks(:,:,Pndx) - Potential%wks(:,:,iw,ik,ispin)
                   call inv(Ptmp)
                   Potential%wks(:,:,iw,ik,ispin) = rotate(Ptmp,tkz(:,:,Pndx))
-                  !
-                  !TEST>>>
-                  if(iw.eq.1.and.ik.eq.1)print *, " ibulk ",ibulk,Npot-ibulk+1,mod(Npot-ibulk+1,2)
-                  !>>>TEST
                   !
                enddo
                !

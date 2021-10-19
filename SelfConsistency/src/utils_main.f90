@@ -2823,16 +2823,13 @@ contains
          enddo
          !
          allocate(HartreeQMC(Norb*Nspin));HartreeQMC=0d0
-         HartreeQMC = matmul(Uinst,rhoQMC)
-         deallocate(Uinst,rhoQMC)
-         !
+         HartreeQMC = matmul(Uinst,rhoQMC)/2d0
          do ib1=1,Nflavor
             iorb = (ib1+mod(ib1,2))/2
             ispin = abs(mod(ib1,2)-2)
-            Simp%N_s(iorb,iorb,ispin) = HartreeQMC(ib1)
+            Simp%N_s(iorb,iorb,ispin) = HartreeQMC(ib1) + Uinst(2*iorb,2*iorb-1)*rhoQMC(ib1)/2d0
          enddo
-         deallocate(HartreeQMC)
-
+         deallocate(Uinst,rhoQMC,HartreeQMC)
          !
          !The magnetization will be given only by the self-energy beyond Hartree
          Simp%N_s(:,:,1) = (Simp%N_s(:,:,1)+Simp%N_s(:,:,2))/2d0
@@ -3142,12 +3139,16 @@ contains
       call AllocateFermionicField(Pot,Hetero%Norb,Nmats,Beta=Beta)
       !
       call clear_attributes(Pot)
-      if(allocated(Hetero%P_L)) Pot%ws = Hetero%P_L
-      call dump_FermionicField(Pot,reg(ItFolder),"Pot_L_w",paramagnet)
+      if(allocated(Hetero%P_L))then
+         Pot%ws = Hetero%P_L
+         call dump_FermionicField(Pot,reg(ItFolder),"Pot_L_w",paramagnet)
+      endif
       !
       call clear_attributes(Pot)
-      if(allocated(Hetero%P_R)) Pot%ws = Hetero%P_R
-      call dump_FermionicField(Pot,reg(ItFolder),"Pot_R_w",paramagnet)
+      if(allocated(Hetero%P_R))then
+         Pot%ws = Hetero%P_R
+         call dump_FermionicField(Pot,reg(ItFolder),"Pot_R_w",paramagnet)
+      endif
       !
       call DeallocateField(Pot)
       !

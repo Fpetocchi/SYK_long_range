@@ -30,8 +30,8 @@ for it in `seq 113 1 117`; do #4_c
 for it in `seq 144 1 148`; do #4_d
 for it in `seq 158 1 162`; do #4_e
 
-for it in `seq 0 1 109`; do
-   grep -A 1 "Density error u" Results_beta06/${it}/report_* | tail -1 >> errors
+for it in `seq 0 1 20`; do
+   grep -A 1 "Density error u" Results_beta06/${it}/report_* | tail -1 >> Nerr
 done
 
 
