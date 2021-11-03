@@ -274,9 +274,6 @@ contains
       integer                               :: iw,ik,iwan,ispin
       logical                               :: along_path_,along_plane_
       !potentials
-      complex(8),allocatable                :: zeta_(:,:,:),Hk_(:,:,:)
-      complex(8),allocatable                :: ta(:,:,:),tb(:,:,:)
-      complex(8),allocatable                :: Sa(:,:,:,:,:),Sb(:,:,:,:,:)
       type(FermionicField)                  :: Potential_L
       type(FermionicField)                  :: Potential_R
       integer                               :: Ln(2),Rn(2),NbulkL,NbulkR
@@ -342,79 +339,50 @@ contains
          if(.not.Smats%status) stop "calc_Gmats_Full: Smats not properly initialized."
          if(Smats%Npoints.ne.Nmats) stop "calc_Gmats_Full: Smats has different number of Matsubara points with respect to Gmats."
          if(Smats%Nkpt.ne.Nkpt) stop "calc_Gmats_Full: Smats has different number of k-points with respect to Gmats."
-         if(verbose)write(*,"(A)") "     Interacting Green's function."
+         write(*,"(A)") "     Computing interacting Green's function."
          !
          Ln=0;Rn=0
          if(Hetero%status)then
             !
             !Potential to the left/upper side of the Heterostructure
             if(Hetero%Explicit(1).ne.1)then
-               !
-               Ln(1) = 1
-               Ln(2) = Hetero%Norb
-               NbulkL = Hetero%Explicit(1)-1
-               !
-               !Diagonal arrays of the first layer explicitly solved
-               allocate(zeta_(Hetero%Norb,Hetero%Norb,Nmats));  zeta_ = zeta(Ln(1):Ln(2),Ln(1):Ln(2),:)
-               allocate(Hk_(Hetero%Norb,Hetero%Norb,Nkpt))   ;  Hk_ = Hk(Ln(1):Ln(2),Ln(1):Ln(2),:)
-               !
-               !Connection-to and self-energy-of the first layer explicitly solved
-               ta = tz(:,:,:,Hetero%Explicit(1)-1)
-               allocate(Sa(Hetero%Norb,Hetero%Norb,Nmats,Nkpt,Nspin));Sa=czero
-               Sa = Smats%wks(Ln(1):Ln(2),Ln(1):Ln(2),:,:,:)
-               !
-               !Connection-to and self-energy-of the second layer explicitly solved
-               tb = tz(:,:,:,Hetero%Explicit(1))
-               allocate(Sb(Hetero%Norb,Hetero%Norb,Nmats,Nkpt,Nspin));Sb=czero
-               Sb = Smats%wks(Ln(1)+Hetero%Norb:Ln(2)+Hetero%Norb,Ln(1)+Hetero%Norb:Ln(2)+Hetero%Norb,:,:,:)
-               !
-               write(*,"(2(A,2I4))") "     Left potential orbital lattice indexes: ",Ln(1),Ln(2)," thickness: ",NbulkL
                call AllocateFermionicField(Potential_L,Hetero%Norb,Nmats,Nkpt=Nkpt,Beta=Beta)
-               call build_Potential(Potential_L,NbulkL,zeta_,Hk_,ta,tb,Sa,Sb)
-               deallocate(zeta_,Hk_,ta,tb,Sa,Sb)
-               !
-               !this is to be able to print it form main
-               if(allocated(Hetero%P_L))deallocate(Hetero%P_L)
-               Hetero%P_L = Potential_L%ws
-               !
+               call build_Potential(Potential_L,Hetero,Ln,NbulkL,zeta,Hk,tz,"left",paramagnet,Smats=Smats)
+               write(*,"(2(A,2I4))") "     Left potential orbital lattice indexes: ",Ln(1),Ln(2)," thickness: ",NbulkL
             endif
             !
             !Potential to the right/lower side of the Heterostructure
             if(Hetero%Explicit(2).ne.Hetero%Nslab)then
-               !
-               Rn(1) = 1+ Norb - Hetero%Norb
-               Rn(2) = Norb
-               NbulkR = Hetero%Nslab-Hetero%Explicit(2)
-               !
-               !Diagonal arrays of the last layer explicitly solved
-               allocate(zeta_(Hetero%Norb,Hetero%Norb,Nmats));  zeta_ = zeta(Rn(1):Rn(2),Rn(1):Rn(2),:)
-               allocate(Hk_(Hetero%Norb,Hetero%Norb,Nkpt))   ;  Hk_ = Hk(Rn(1):Rn(2),Rn(1):Rn(2),:)
-               !
-               !Connection-to and self-energy-of the last layer explicitly solved
-               ta = tz(:,:,:,Hetero%Explicit(2))
-               allocate(Sa(Hetero%Norb,Hetero%Norb,Nmats,Nkpt,Nspin));Sa=czero
-               Sa = Smats%wks(Rn(1):Rn(2),Rn(1):Rn(2),:,:,:)
-               !
-               !Connection-to and self-energy-of the semi-last layer explicitly solved
-               tb = tz(:,:,:,Hetero%Explicit(2)-1)
-               allocate(Sb(Hetero%Norb,Hetero%Norb,Nmats,Nkpt,Nspin));Sb=czero
-               Sb = Smats%wks(Rn(1)-Hetero%Norb:Rn(2)-Hetero%Norb,Rn(1)-Hetero%Norb:Rn(2)-Hetero%Norb,:,:,:)
-               !
-               write(*,"(2(A,2I4))") "     Right potential orbital lattice indexes: ",Rn(1),Rn(2)," thickness: ",NbulkR
                call AllocateFermionicField(Potential_R,Hetero%Norb,Nmats,Nkpt=Nkpt,Beta=Beta)
-               call build_Potential(Potential_R,NbulkR,zeta_,Hk_,ta,tb,Sa,Sb)
-               deallocate(zeta_,Hk_,ta,tb,Sa,Sb)
-               !
-               !this is to be able to print it form main
-               if(allocated(Hetero%P_R))deallocate(Hetero%P_R)
-               Hetero%P_R = Potential_R%ws
-               !
+               call build_Potential(Potential_R,Hetero,Rn,NbulkR,zeta,Hk,tz,"right",paramagnet,Smats=Smats)
+               write(*,"(2(A,2I4))") "     Right potential orbital lattice indexes: ",Rn(1),Rn(2)," thickness: ",NbulkR
             endif
             !
          endif
          !
       else
-         if(verbose)write(*,"(A)") "     LDA Green's function."
+         !
+         write(*,"(A)") "     Computing non-interacting Green's function."
+         !
+         Ln=0;Rn=0
+         if(Hetero%status)then
+            !
+            !Potential to the left/upper side of the Heterostructure
+            if(Hetero%Explicit(1).ne.1)then
+               call AllocateFermionicField(Potential_L,Hetero%Norb,Nmats,Nkpt=Nkpt,Beta=Beta)
+               call build_Potential(Potential_L,Hetero,Ln,NbulkL,zeta,Hk,tz,"left",paramagnet)
+               write(*,"(2(A,2I4))") "     Left potential orbital lattice indexes: ",Ln(1),Ln(2)," thickness: ",NbulkL
+            endif
+            !
+            !Potential to the right/lower side of the Heterostructure
+            if(Hetero%Explicit(2).ne.Hetero%Nslab)then
+               call AllocateFermionicField(Potential_R,Hetero%Norb,Nmats,Nkpt=Nkpt,Beta=Beta)
+               call build_Potential(Potential_R,Hetero,Rn,NbulkR,zeta,Hk,tz,"right",paramagnet)
+               write(*,"(2(A,2I4))") "     Right potential orbital lattice indexes: ",Rn(1),Rn(2)," thickness: ",NbulkR
+            endif
+            !
+         endif
+         !
       endif
       !
       call clear_attributes(Gmats)
@@ -861,12 +829,14 @@ contains
       use parameters
       use linalg
       use utils_misc
+      use utils_fields
       use file_io
       use fourier_transforms
       use input_vars, only : pathINPUT
       use input_vars, only : Nreal, wrealMax, eta
       use input_vars, only : wmatsMax
       use input_vars, only : Ntau, tau_uniform
+      use input_vars, only : Hetero
       implicit none
       !
       real(8),intent(in)                    :: mu
@@ -875,12 +845,16 @@ contains
       character(len=*),intent(in),optional  :: pathOUTPUT
       !
       character(len=256)                    :: pathOUTPUT_
-      integer                               :: iwan1,iwan2,ik,iw,itau
+      integer                               :: iorb,jorb,ik,iw,itau
       integer                               :: Norb,Nkpt,Nmats
       real(8),allocatable                   :: axis(:)
       complex(8),allocatable                :: zeta(:,:,:),invGf(:,:)
       complex(8),allocatable                :: Gk_print_H(:,:,:,:),Gk_print_E(:,:,:)
       complex(8),allocatable                :: Gk_itau_H(:,:,:,:),Gk_itau_E(:,:,:)
+      !Hetero
+      type(FermionicField)                  :: Potential_L
+      type(FermionicField)                  :: Potential_R
+      integer                               :: Ln(2),Rn(2),NbulkL,NbulkR
       !deafults
       logical                               :: print_G0real=.true.
       logical                               :: print_G0itau=.true.
@@ -905,6 +879,9 @@ contains
       Nkpt = Lttc%Nkpt
       !
       !
+      !NOTE: potentials are only in Greal since its the only one computed with
+      !      an inversion
+      !
       !
       !print G(w) in diagonal and Wannier basis---------------------------------
       if(print_G0real)then
@@ -912,26 +889,49 @@ contains
          allocate(axis(Nreal));axis=0d0
          axis = linspace(-wrealMax*1.5d0,+wrealMax*1.5d0,Nreal)
          allocate(zeta(Norb,Norb,Nreal));zeta=czero
-         do iwan1=1,Norb
+         do iorb=1,Norb
             do iw=1,Nreal
-               zeta(iwan1,iwan1,iw) = dcmplx(  axis(iw) + mu , eta )
+               zeta(iorb,iorb,iw) = dcmplx(  axis(iw) + mu , eta )
             enddo
          enddo
+         !
+         Ln=0;Rn=0
+         if(Hetero%status)then
+            !
+            !Potential to the left/upper side of the Heterostructure
+            if(Hetero%Explicit(1).ne.1)then
+               call AllocateFermionicField(Potential_L,Hetero%Norb,Nreal,Nkpt=Nkpt,Beta=Beta)
+               call build_Potential(Potential_L,Hetero,Ln,NbulkL,zeta,Lttc%Hk,Hetero%tz,"left",.true.)
+               write(*,"(2(A,2I4))") "     Left potential orbital lattice indexes: ",Ln(1),Ln(2)," thickness: ",NbulkL
+            endif
+            !
+            !Potential to the right/lower side of the Heterostructure
+            if(Hetero%Explicit(2).ne.Hetero%Nslab)then
+               call AllocateFermionicField(Potential_R,Hetero%Norb,Nreal,Nkpt=Nkpt,Beta=Beta)
+               call build_Potential(Potential_R,Hetero,Rn,NbulkR,zeta,Lttc%Hk,Hetero%tz,"right",.true.)
+               write(*,"(2(A,2I4))") "     Right potential orbital lattice indexes: ",Rn(1),Rn(2)," thickness: ",NbulkR
+            endif
+            !
+         endif
          !
          allocate(Gk_print_E(Norb,Nreal,Nkpt));Gk_print_E=czero
          allocate(Gk_print_H(Norb,Norb,Nreal,Nkpt));Gk_print_H=czero
          allocate(invGf(Norb,Norb));invGf=czero
          !$OMP PARALLEL DEFAULT(SHARED),&
-         !$OMP PRIVATE(iwan1,iw,ik,invGf)
+         !$OMP PRIVATE(iorb,iw,ik,invGf)
          !$OMP DO
          do ik=1,Nkpt
             do iw=1,Nreal
                !
-               do iwan1=1,Norb
-                  Gk_print_E(iwan1,iw,ik) = 1d0/( dcmplx(  axis(iw) + mu , eta ) - Lttc%Ek(iwan1,ik) )
+               do iorb=1,Norb
+                  Gk_print_E(iorb,iw,ik) = 1d0/( dcmplx(  axis(iw) + mu , eta ) - Lttc%Ek(iorb,ik) )
                enddo
                !
                invGf = zeta(:,:,iw) - Lttc%Hk(:,:,ik)
+               !
+               if(Potential_L%status) invGf(Ln(1):Ln(2),Ln(1):Ln(2)) = invGf(Ln(1):Ln(2),Ln(1):Ln(2)) - Potential_L%wks(:,:,iw,ik,1)
+               if(Potential_R%status) invGf(Rn(1):Rn(2),Rn(1):Rn(2)) = invGf(Rn(1):Rn(2),Rn(1):Rn(2)) - Potential_R%wks(:,:,iw,ik,1)
+               !
                call inv(invGf)
                Gk_print_H(:,:,iw,ik) = invGf
                !
@@ -940,6 +940,8 @@ contains
          !$OMP END DO
          !$OMP END PARALLEL
          deallocate(zeta,invGf)
+         if(Potential_L%status) call DeallocateField(Potential_L)
+         if(Potential_R%status) call DeallocateField(Potential_R)
          !
          ! Print
          call print_G("Greal",Nreal,printAllK_G0real,.true.)
@@ -963,7 +965,7 @@ contains
          allocate(Gk_print_H(Norb,Norb,Ntau,Nkpt));Gk_print_H=czero
          call calc_G0_tau(Gk_print_E,mu,Beta,Lttc%Ek)
          !$OMP PARALLEL DEFAULT(SHARED),&
-         !$OMP PRIVATE(iwan1,iw,ik)
+         !$OMP PRIVATE(iorb,iw,ik)
          !$OMP DO
          do ik=1,Nkpt
             do itau=1,Ntau
@@ -1008,9 +1010,9 @@ contains
             allocate(axis(2*Nmats+1));axis=0d0
             axis = FermionicFreqMesh(Beta,2*Nmats+1,full=.true.)
             allocate(zeta(Norb,Norb,2*Nmats+1));zeta=czero
-            do iwan1=1,Norb
+            do iorb=1,Norb
                do iw=1,2*Nmats+1
-                  zeta(iwan1,iwan1,iw) = dcmplx(  mu , axis(iw) )
+                  zeta(iorb,iorb,iw) = dcmplx(  mu , axis(iw) )
                enddo
             enddo
             !
@@ -1018,13 +1020,13 @@ contains
             allocate(Gk_print_H(Norb,Norb,2*Nmats+1,Nkpt));Gk_print_H=czero
             allocate(invGf(Norb,Norb));invGf=czero
             !$OMP PARALLEL DEFAULT(SHARED),&
-            !$OMP PRIVATE(iwan1,iw,ik,invGf)
+            !$OMP PRIVATE(iorb,iw,ik,invGf)
             !$OMP DO
             do ik=1,Nkpt
                do iw=1,2*Nmats+1
                   !
-                  do iwan1=1,Norb
-                     Gk_print_E(iwan1,iw,ik) = 1d0/( dcmplx(  mu , axis(iw) ) - Lttc%Ek(iwan1,ik) )
+                  do iorb=1,Norb
+                     Gk_print_E(iorb,iw,ik) = 1d0/( dcmplx(  mu , axis(iw) ) - Lttc%Ek(iorb,ik) )
                   enddo
                   !
                   invGf = zeta(:,:,iw) - Lttc%Hk(:,:,ik)
@@ -1064,19 +1066,19 @@ contains
          !
          if(allK)then
             do ik=1,Nkpt
-               do iwan1=1,Norb
-                  call dump_FermionicField(Gk_print_E(iwan1,:,ik),reg(pathOUTPUT_),reg(name)//"_Ek_"//str(iwan1)//"_k"//str(ik)//".lda",axis)
+               do iorb=1,Norb
+                  call dump_FermionicField(Gk_print_E(iorb,:,ik),reg(pathOUTPUT_),reg(name)//"_Ek_"//str(iorb)//"_k"//str(ik)//".lda",axis)
                   if(printAkw)then
-                     Akw = dimag(G_print_E(iwan1,:))
+                     Akw = dimag(G_print_E(iorb,:))
                      Akw = Akw/(sum(Akw)*abs(axis(2)-axis(1)))
-                     call dump_FermionicField(Akw,reg(pathOUTPUT_),"Akw_Ek_"//str(iwan1)//"_k"//str(ik)//".lda",axis)
+                     call dump_FermionicField(Akw,reg(pathOUTPUT_),"Akw_Ek_"//str(iorb)//"_k"//str(ik)//".lda",axis)
                   endif
-                  do iwan2=1,Norb
-                     call dump_FermionicField(Gk_print_H(iwan1,iwan2,:,ik),reg(pathOUTPUT_),reg(name)//"_Hk_"//str(iwan1)//str(iwan2)//"_k"//str(ik)//".lda",axis)
+                  do jorb=1,Norb
+                     call dump_FermionicField(Gk_print_H(iorb,jorb,:,ik),reg(pathOUTPUT_),reg(name)//"_Hk_"//str(iorb)//str(jorb)//"_k"//str(ik)//".lda",axis)
                      if(printAkw)then
-                        Akw = dimag(G_print_H(iwan1,iwan2,:))
+                        Akw = dimag(G_print_H(iorb,jorb,:))
                         Akw = Akw/(sum(Akw)*abs(axis(2)-axis(1)))
-                        call dump_FermionicField(Akw,reg(pathOUTPUT_),"Akw_Hk_"//str(iwan1)//str(iwan2)//"_k"//str(ik)//".lda",axis)
+                        call dump_FermionicField(Akw,reg(pathOUTPUT_),"Akw_Hk_"//str(iorb)//str(jorb)//"_k"//str(ik)//".lda",axis)
                      endif
                   enddo
                enddo
@@ -1085,19 +1087,19 @@ contains
          !
          allocate(G_print_E(Norb,Naxis))      ; G_print_E = sum(Gk_print_E,dim=3)/Nkpt
          allocate(G_print_H(Norb,Norb,Naxis)) ; G_print_H = sum(Gk_print_H,dim=4)/Nkpt
-         do iwan1=1,Norb
-            call dump_FermionicField(G_print_E(iwan1,:),reg(pathOUTPUT_),reg(name)//"_Ek_"//str(iwan1)//".lda",axis)
+         do iorb=1,Norb
+            call dump_FermionicField(G_print_E(iorb,:),reg(pathOUTPUT_),reg(name)//"_Ek_"//str(iorb)//".lda",axis)
             if(printAkw)then
-               Akw = dimag(G_print_E(iwan1,:))
+               Akw = dimag(G_print_E(iorb,:))
                Akw = Akw/(sum(Akw)*abs(axis(2)-axis(1)))
-               call dump_FermionicField(Akw,reg(pathOUTPUT_),"Akw_Ek_"//str(iwan1)//".lda",axis)
+               call dump_FermionicField(Akw,reg(pathOUTPUT_),"Akw_Ek_"//str(iorb)//".lda",axis)
             endif
-            do iwan2=1,Norb
-               call dump_FermionicField(G_print_H(iwan1,iwan2,:),reg(pathOUTPUT_),reg(name)//"_Hk_"//str(iwan1)//str(iwan2)//".lda",axis)
+            do jorb=1,Norb
+               call dump_FermionicField(G_print_H(iorb,jorb,:),reg(pathOUTPUT_),reg(name)//"_Hk_"//str(iorb)//str(jorb)//".lda",axis)
                if(printAkw)then
-                  Akw = dimag(G_print_H(iwan1,iwan2,:))
+                  Akw = dimag(G_print_H(iorb,jorb,:))
                   Akw = Akw/(sum(Akw)*abs(axis(2)-axis(1)))
-                  call dump_FermionicField(Akw,reg(pathOUTPUT_),"Akw_Hk_"//str(iwan1)//str(iwan2)//".lda",axis)
+                  call dump_FermionicField(Akw,reg(pathOUTPUT_),"Akw_Hk_"//str(iorb)//str(jorb)//".lda",axis)
                endif
             enddo
          enddo
@@ -1109,107 +1111,5 @@ contains
       !
       !
    end subroutine calc_Glda
-
-
-   !---------------------------------------------------------------------------!
-   !PURPOSE: Prints lda Gf on different axis.
-   !---------------------------------------------------------------------------!
-   subroutine build_Potential(Potential,Npot,zeta,Hk,tz_a,tz_b,Smats_a,Smats_b)
-      !
-      use parameters
-      use linalg, only : inv, rotate
-      use utils_misc
-      use utils_fields
-      use input_vars, only : paramagnet
-      implicit none
-      !
-      type(FermionicField),intent(inout)    :: Potential
-      integer,intent(in)                    :: Npot
-      complex(8),intent(in)                 :: zeta(:,:,:)
-      complex(8),intent(in)                 :: Hk(:,:,:)
-      complex(8),intent(in)                 :: tz_a(:,:,:)
-      complex(8),intent(in)                 :: tz_b(:,:,:)
-      complex(8),intent(in)                 :: Smats_a(:,:,:,:,:)
-      complex(8),intent(in)                 :: Smats_b(:,:,:,:,:)
-      !
-      complex(8),allocatable                :: invGbulk(:,:)
-      complex(8),allocatable                :: Gbulk(:,:)
-      complex(8),allocatable                :: Ptmp(:,:)
-      complex(8),allocatable                :: tkz(:,:,:)
-      complex(8),allocatable                :: Swks(:,:,:)
-      integer                               :: Norb,Nmats,Nkpt
-      integer                               :: iw,ik,ispin,ibulk,Pndx
-      !
-      !
-      if(verbose)write(*,"(A)") "---- build_Potential"
-      !
-      !
-      Norb = Potential%Norb
-      Nmats = Potential%Npoints
-      Nkpt = Potential%Nkpt
-      !
-      call assert_shape(zeta,[Norb,Norb,Nmats],"build_Potential","zeta")
-      call assert_shape(Hk,[Norb,Norb,Nkpt],"build_Potential","Hk")
-      call assert_shape(tz_a,[Norb,Norb,Nkpt],"build_Potential","tz_a")
-      call assert_shape(tz_b,[Norb,Norb,Nkpt],"build_Potential","tz_b")
-      call assert_shape(Smats_a,[Norb,Norb,Nmats,Nkpt,Nspin],"build_Smats","Smats_a")
-      call assert_shape(Smats_b,[Norb,Norb,Nmats,Nkpt,Nspin],"build_Smats","Smats_b")
-      !
-      call clear_attributes(Potential)
-      !
-      !G and invG of each layer are constant
-      allocate(invGbulk(Norb,Norb));invGbulk=czero
-      allocate(Gbulk(Norb,Norb));Gbulk=czero
-      allocate(Ptmp(Norb,Norb));Ptmp=czero
-      allocate(tkz(Norb,Norb,0:1));tkz=czero
-      allocate(Swks(Norb,Norb,0:1));Swks=czero
-      spinPloop: do ispin=1,Nspin
-         !$OMP PARALLEL DEFAULT(NONE),&
-         !$OMP SHARED(ispin,Nmats,Nkpt,zeta,Hk,Smats_b,Smats_a,Npot,tz_a,tz_b,Potential),&
-         !$OMP PRIVATE(ik,iw,ibulk,invGbulk,Gbulk,Ptmp,tkz,Swks,Pndx)
-         !$OMP DO
-         do iw=1,Nmats
-            do ik=1,Nkpt
-               !
-               !connecting hopping: even Nbulk--> ta...tb odd Nbulk--> ta...ta
-               tkz(:,:,1) = tz_a(:,:,ik)
-               tkz(:,:,0) = tz_b(:,:,ik)
-               !
-               !self-energy repetition: even Nbulk--> Sb...Sa odd Nbulk--> Sb...Sb
-               Swks(:,:,1) = Smats_b(:,:,iw,ik,ispin)
-               Swks(:,:,0) = Smats_a(:,:,iw,ik,ispin)
-               !
-               !first t*G*t is the farthest layer
-               Pndx = mod(Npot,2)
-               invGbulk = zeta(:,:,iw) - Hk(:,:,ik) - Swks(:,:,Pndx)
-               Gbulk = invGbulk
-               call inv(Gbulk)
-               Potential%wks(:,:,iw,ik,ispin) = rotate(Gbulk,tkz(:,:,Pndx))
-               !
-               !all the other
-               do ibulk=2,Npot
-                  !
-                  Pndx = mod(Npot-ibulk+1,2)
-                  Ptmp = zeta(:,:,iw) - Hk(:,:,ik) - Swks(:,:,Pndx) - Potential%wks(:,:,iw,ik,ispin)
-                  call inv(Ptmp)
-                  Potential%wks(:,:,iw,ik,ispin) = rotate(Ptmp,tkz(:,:,Pndx))
-                  !
-               enddo
-               !
-            enddo
-         enddo
-         !$OMP END DO
-         !$OMP END PARALLEL
-         if(paramagnet)then
-            Potential%wks(:,:,:,:,Nspin) = Potential%wks(:,:,:,:,1)
-            exit spinPloop
-         endif
-      enddo spinPloop
-      deallocate(Gbulk,invGbulk,Ptmp,tkz,Swks)
-      !
-      call FermionicKsum(Potential)
-      !
-   end subroutine build_Potential
-
 
 end module greens_function

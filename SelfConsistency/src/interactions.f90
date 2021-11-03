@@ -101,9 +101,7 @@ contains
       if(Pmats%Nkpt.eq.0) stop "calc_W_full: Pmats k dependent attributes not properly initialized."
       if(Umats%iq_gamma.lt.0) stop "calc_W_full: Umats iq_gamma not defined."
       !
-      !TEST>>>
       symQ_=.false.
-      !>>>TEST
       if(present(symQ))symQ_=symQ
       Ustatic=.false.
       if(Umodel.and.(Umats%Npoints.eq.1))Ustatic=.true.
@@ -292,7 +290,7 @@ contains
       !
       !$OMP PARALLEL DEFAULT(NONE),&
       !$OMP SHARED(Pmats,Umats,Wmats,Lttc,Ustatic,symQ_),&
-      !$OMP SHARED(small_ik,epsGamma,HandleGammaPoint,AverageList,smear,Navg),&
+      !$OMP SHARED(small_ik,epsGamma,HandleGammaPoint,smear,AverageList,Navg),&
       !$OMP PRIVATE(iw,iwU,iq,invW,W_q,iavg,add_iq)
       !$OMP DO
       do iw=1,Wmats%Npoints
@@ -300,6 +298,7 @@ contains
          iwU = iw
          if(Ustatic)iwU = 1
          !
+         iavg=0
          do iq=1,Umats%Nkpt
             !
             !avoid the gamma point
@@ -2121,7 +2120,7 @@ contains
    !PURPOSE: Given the Bosonic Field it extracts the screened interaction and
    ! retardation function.
    !---------------------------------------------------------------------------!
-   subroutine calc_QMCinteractions(Umats,Uinst,Kfunct,sym)
+   subroutine calc_QMCinteractions(Umats,Uinst,Kfunct,Kpfunct,sym)
       !
       use parameters
       use file_io
@@ -2133,6 +2132,7 @@ contains
       type(BosonicField),intent(in)         :: Umats
       real(8),intent(inout)                 :: Uinst(:,:)
       real(8),intent(inout),optional        :: Kfunct(:,:,:)
+      real(8),intent(inout),optional        :: Kpfunct(:,:,:)
       logical,intent(in),optional           :: sym
       !
       integer                               :: Nbp,Norb,Nflavor
@@ -2141,7 +2141,7 @@ contains
       integer                               :: iw,itau
       real(8),allocatable                   :: wmats(:),tau(:)
       complex(8),allocatable                :: Kaux(:,:,:)
-      logical                               :: Uloc,U1st,U2nd,retarded
+      logical                               :: Uloc,U1st,U2nd,retarded,Kp
       type(physicalU)                       :: PhysicalUelements
       logical                               :: sym_
       !
@@ -2153,6 +2153,8 @@ contains
       if(.not.Umats%status) stop "calc_QMCinteractions: Umats not properly initialized."
       retarded=.false.
       if(present(Kfunct))retarded=.true.
+      Kp=.false.
+      if(present(Kpfunct).and.retarded)Kp=.true.
       !
       sym_=.true.
       if(present(sym))sym_=sym
@@ -2167,6 +2169,7 @@ contains
       Uinst=0d0
       if(retarded)then
          call assert_shape(Kfunct,[Nflavor,Nflavor,Solver%NtauB],"calc_QMCinteractions","Kfunct")
+         if(Kp)call assert_shape(Kpfunct,[Nflavor,Nflavor,Solver%NtauB],"calc_QMCinteractions","Kpfunct")
          allocate(Kaux(Nflavor,Nflavor,Umats%Npoints));Kaux=czero
          allocate(tau(Solver%NtauB));tau=0d0
          tau = linspace(0d0,Umats%Beta,Solver%NtauB)
@@ -2226,14 +2229,20 @@ contains
       if(retarded)then
          Kfunct=0d0
          do itau=2,Solver%NtauB-1
-            !
             do iw=2,Umats%Npoints
                Kfunct(:,:,itau) = Kfunct(:,:,itau) - 2d0*Kaux(:,:,iw) * ( cos(wmats(iw)*tau(itau)) - 1d0 ) / ( Umats%Beta*wmats(iw)**2 )
             enddo
-            !
             if(sym_)call check_Symmetry(Kfunct(:,:,itau),eps,enforce=.true.,hardstop=.false.,name="Kfunct_t"//str(itau))
-            !
          enddo
+         if(Kp)then
+            Kpfunct=0d0
+            do itau=2,Solver%NtauB-1
+               do iw=2,Umats%Npoints
+                  Kpfunct(:,:,itau) = Kpfunct(:,:,itau) + 2d0*Kaux(:,:,iw) * sin(wmats(iw)*tau(itau)) / ( Umats%Beta*wmats(iw) )
+               enddo
+               if(sym_)call check_Symmetry(Kpfunct(:,:,itau),eps,enforce=.true.,hardstop=.false.,name="Kpfunct_t"//str(itau))
+            enddo
+         endif
          deallocate(Kaux,tau,wmats)
       endif
       !
@@ -2457,9 +2466,7 @@ contains
       type(physicalU)                       :: PhysicalUelements
       !
       !
-      !TEST>>>
       verbose=.true.
-      !>>>TEST
       if(verbose)write(*,"(A)") "---- correct_Gamma"
       !
       !

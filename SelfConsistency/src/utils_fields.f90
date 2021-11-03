@@ -83,6 +83,11 @@ module utils_fields
       module procedure DeallocateBosonicField
    end interface DeallocateField
 
+   interface build_Potential
+      module procedure build_Potential_Field
+      module procedure build_Potential_Mat
+   end interface build_Potential
+
    !---------------------------------------------------------------------------!
    !PURPOSE: Module variables
    !---------------------------------------------------------------------------!
@@ -118,6 +123,7 @@ module utils_fields
    public :: symmetrize_imp
    public :: join_SigmaCX
    public :: MergeFields
+   public :: build_Potential
    !functions
    public :: product2NN
    public :: NN2product
@@ -3027,6 +3033,343 @@ contains
       deallocate(U,G)
       !
    end function calc_Ep
+
+
+   !---------------------------------------------------------------------------!
+   !PURPOSE: Interface with the potential subroutine in utils_mist.
+   !         This subroutine takes the frequency mesh, Hk, vertical hoppig array
+   !         and optionally the self-energy of the whole heterostructure and
+   !         extract the slices needed to construct the embedding potentials
+   !         via a continued fraction representation with the periodicity of
+   !         the two extremals layers.
+   !---------------------------------------------------------------------------!
+   subroutine build_Potential_Field(Potential,Hetero,ndx,Nbulk,zeta,Hk,tz,mode,paramagnet,Smats)
+      !
+      use parameters
+      use linalg, only : inv, rotate
+      use utils_misc
+      implicit none
+      !
+      type(FermionicField),intent(inout)    :: Potential
+      integer,intent(out)                   :: Nbulk
+      integer,intent(out)                   :: ndx(2)
+      type(Heterostructures),intent(inout)  :: Hetero
+      complex(8),intent(in)                 :: zeta(:,:,:)
+      complex(8),intent(in)                 :: Hk(:,:,:)
+      complex(8),intent(in)                 :: tz(:,:,:,:)
+      character(len=*),intent(in)           :: mode
+      logical,intent(in)                    :: paramagnet
+      type(FermionicField),intent(in),optional :: Smats
+      !
+      integer                               :: Norb,Nmats,Nkpt
+      complex(8),allocatable                :: zeta_(:,:,:),Hk_(:,:,:)
+      complex(8),allocatable                :: ta(:,:,:),tb(:,:,:)
+      complex(8),allocatable                :: Sa(:,:,:,:,:),Sb(:,:,:,:,:)
+      !
+      !
+      if(verbose)write(*,"(A)") "---- build_Potential_Field"
+      !
+      !
+      if(.not.Potential%status) stop "build_Potential_Field: Potential not properly initialized."
+      if(.not.Hetero%status) stop "build_Potential_Field: Heterostructure not properly initialized."
+      if(Potential%Norb.ne.Hetero%Norb) stop "build_Potential_Field: Potential and Heterostructure have different orbital dimension."
+      !
+      Norb = size(Hk,dim=1)
+      Nmats = Potential%Npoints
+      Nkpt = Potential%Nkpt
+      !
+      call assert_shape(zeta,[Norb,Norb,Nmats],"build_Potential_Field","zeta")
+      call assert_shape(Hk,[Norb,Norb,Nkpt],"build_Potential_Field","Hk")
+      call assert_shape(tz,[Hetero%Norb,Hetero%Norb,Nkpt,(Hetero%tzIndex(2)-Hetero%tzIndex(1)+1)],"build_Potential_Field","tz")
+      !
+      if(present(Smats))then
+         if(.not.Smats%status) stop "build_Potential_Field: Smats present but not properly initialized."
+         if(Smats%Norb.ne.Norb) stop "build_Potential_Field: Smats has wrong orbital dimension."
+         if(Smats%Npoints.ne.Nmats) stop "build_Potential_Field: Smats has wrong Matsubara frequency mesh."
+         if(Smats%Nkpt.ne.Nkpt) stop "build_Potential_Field: Smats has wrong k-point mesh."
+         if(Smats%Beta.ne.Potential%Beta) stop "build_Potential_Field: Smats has different Beta with respect of the Potential."
+      endif
+      !
+      call clear_attributes(Potential)
+      allocate(ta(Hetero%Norb,Hetero%Norb,Nkpt));ta=czero
+      allocate(tb(Hetero%Norb,Hetero%Norb,Nkpt));tb=czero
+      allocate(Sa(Hetero%Norb,Hetero%Norb,Nmats,Nkpt,Nspin));Sa=czero
+      allocate(Sb(Hetero%Norb,Hetero%Norb,Nmats,Nkpt,Nspin));Sb=czero
+      !
+      select case(reg(mode))
+         case default
+            !
+            stop "build_Potential_Field: Available modes: left, right."
+            !
+         case("left")
+            !
+            if(Hetero%Explicit(1).eq.1) stop "build_Potential_Field: requested left potential but no bulk present."
+            ndx(1) = 1
+            ndx(2) = Hetero%Norb
+            Nbulk = Hetero%Explicit(1)-1
+            !
+            !Connection-to and self-energy-of the first layer explicitly solved
+            ta = tz(:,:,:,Hetero%Explicit(1)-1)
+            if(present(Smats)) Sa = Smats%wks(ndx(1):ndx(2),ndx(1):ndx(2),:,:,:)
+            !
+            !Connection-to and self-energy-of the second layer explicitly solved
+            tb = tz(:,:,:,Hetero%Explicit(1))
+            if(present(Smats)) Sb = Smats%wks(ndx(1)+Hetero%Norb:ndx(2)+Hetero%Norb,ndx(1)+Hetero%Norb:ndx(2)+Hetero%Norb,:,:,:)
+            !
+         case("right")
+            !
+            if(Hetero%Explicit(2).eq.Hetero%Nslab) stop "build_Potential_Field: requested right potential but no bulk present."
+            ndx(1) = 1+ Norb - Hetero%Norb
+            ndx(2) = Norb
+            Nbulk = Hetero%Nslab-Hetero%Explicit(2)
+            !
+            !Connection-to and self-energy-of the last layer explicitly solved
+            ta = tz(:,:,:,Hetero%Explicit(2))
+            if(present(Smats)) Sa = Smats%wks(ndx(1):ndx(2),ndx(1):ndx(2),:,:,:)
+            !
+            !Connection-to and self-energy-of the semi-last layer explicitly solved
+            tb = tz(:,:,:,Hetero%Explicit(2)-1)
+            if(present(Smats)) Sb = Smats%wks(ndx(1)-Hetero%Norb:ndx(2)-Hetero%Norb,ndx(1)-Hetero%Norb:ndx(2)-Hetero%Norb,:,:,:)
+            !
+      end select
+      !
+      if(mod(Nbulk,2).ne.0)Nbulk=Nbulk+1
+      !
+      !Diagonal arrays of the first/last layer explicitly solved
+      allocate(zeta_(Hetero%Norb,Hetero%Norb,Nmats));  zeta_ = zeta(ndx(1):ndx(2),ndx(1):ndx(2),:)
+      allocate(Hk_(Hetero%Norb,Hetero%Norb,Nkpt))   ;  Hk_ = Hk(ndx(1):ndx(2),ndx(1):ndx(2),:)
+      !
+      call Embedding_ContinuedFraction(Potential%wks,Nbulk,zeta_,Hk_,ta,tb,Sa,Sb,paramagnet)
+      !
+      call FermionicKsum(Potential)
+      !
+      !this is to be able to print it form main
+      if(reg(mode).eq."left")then
+         if(allocated(Hetero%P_L))deallocate(Hetero%P_L)
+         Hetero%P_L = Potential%ws
+      elseif(reg(mode).eq."right")then
+         if(allocated(Hetero%P_R))deallocate(Hetero%P_R)
+         Hetero%P_R = Potential%ws
+      endif
+      !
+   end subroutine build_Potential_Field
+   !
+   subroutine build_Potential_Mat(Potential,Hetero,ndx,Nbulk,zeta,Hk,tz,mode,paramagnet,Smats)
+      !
+      use parameters
+      use linalg, only : inv, rotate
+      use utils_misc
+      implicit none
+      !
+      complex(8),intent(inout)              :: Potential(:,:,:,:,:)
+      integer,intent(out)                   :: Nbulk
+      integer,intent(out)                   :: ndx(2)
+      type(Heterostructures),intent(inout)  :: Hetero
+      complex(8),intent(in)                 :: zeta(:,:,:)
+      complex(8),intent(in)                 :: Hk(:,:,:)
+      complex(8),intent(in)                 :: tz(:,:,:,:)
+      character(len=*),intent(in)           :: mode
+      logical,intent(in)                    :: paramagnet
+      complex(8),intent(in),optional        :: Smats(:,:,:,:,:)
+      !
+      integer                               :: Norb,Nmats,Nkpt,ik
+      complex(8),allocatable                :: zeta_(:,:,:),Hk_(:,:,:)
+      complex(8),allocatable                :: ta(:,:,:),tb(:,:,:)
+      complex(8),allocatable                :: Sa(:,:,:,:,:),Sb(:,:,:,:,:)
+      complex(8),allocatable                :: Potential_loc(:,:,:,:)
+      !
+      !
+      if(verbose)write(*,"(A)") "---- build_Potential_Mat"
+      !
+      !
+      if(.not.Hetero%status) stop "build_Potential_Mat: Heterostructure not properly initialized."
+      if(size(Potential,dim=1).ne.Hetero%Norb) stop "build_Potential_Mat: Potential and Heterostructure have different orbital dimension."
+      !
+      Norb = size(Hk,dim=1)
+      Nmats = size(Potential,dim=3)
+      Nkpt = size(Potential,dim=4)
+      !
+      call assert_shape(Potential,[Hetero%Norb,Hetero%Norb,Nmats,Nkpt,Nspin],"build_Potential_Mat","Potential")
+      call assert_shape(zeta,[Norb,Norb,Nmats],"build_Potential_Mat","zeta")
+      call assert_shape(Hk,[Norb,Norb,Nkpt],"build_Potential_Mat","Hk")
+      call assert_shape(tz,[Hetero%Norb,Hetero%Norb,Nkpt,(Hetero%tzIndex(2)-Hetero%tzIndex(1)+1)],"build_Potential_Mat","tz")
+      !
+      if(present(Smats))then
+         if(size(Smats,dim=1).ne.Norb) stop "build_Potential_Mat: Smats has wrong orbital 1st dimension."
+         if(size(Smats,dim=2).ne.Norb) stop "build_Potential_Mat: Smats has wrong orbital 2nd dimension."
+         if(size(Smats,dim=3).ne.Nmats) stop "build_Potential_Mat: Smats has wrong Matsubara frequency mesh."
+         if(size(Smats,dim=4).ne.Nkpt) stop "build_Potential_Mat: Smats has wrong k-point mesh."
+      endif
+      !
+      Potential=czero
+      allocate(ta(Hetero%Norb,Hetero%Norb,Nkpt));ta=czero
+      allocate(tb(Hetero%Norb,Hetero%Norb,Nkpt));tb=czero
+      allocate(Sa(Hetero%Norb,Hetero%Norb,Nmats,Nkpt,Nspin));Sa=czero
+      allocate(Sb(Hetero%Norb,Hetero%Norb,Nmats,Nkpt,Nspin));Sb=czero
+      !
+      select case(reg(mode))
+         case default
+            !
+            stop "build_Potential_Mat: Available modes: left, right."
+            !
+         case("left")
+            !
+            if(Hetero%Explicit(1).eq.1) stop "build_Potential_Mat: requested left potential but no bulk present."
+            ndx(1) = 1
+            ndx(2) = Hetero%Norb
+            Nbulk = Hetero%Explicit(1)-1
+            !
+            !Connection-to and self-energy-of the first layer explicitly solved
+            ta = tz(:,:,:,Hetero%Explicit(1)-1)
+            if(present(Smats)) Sa = Smats(ndx(1):ndx(2),ndx(1):ndx(2),:,:,:)
+            !
+            !Connection-to and self-energy-of the second layer explicitly solved
+            tb = tz(:,:,:,Hetero%Explicit(1))
+            if(present(Smats)) Sb = Smats(ndx(1)+Hetero%Norb:ndx(2)+Hetero%Norb,ndx(1)+Hetero%Norb:ndx(2)+Hetero%Norb,:,:,:)
+            !
+         case("right")
+            !
+            if(Hetero%Explicit(2).eq.Hetero%Nslab) stop "build_Potential_Mat: requested right potential but no bulk present."
+            ndx(1) = 1+ Norb - Hetero%Norb
+            ndx(2) = Norb
+            Nbulk = Hetero%Nslab-Hetero%Explicit(2)
+            !
+            !Connection-to and self-energy-of the last layer explicitly solved
+            ta = tz(:,:,:,Hetero%Explicit(2))
+            if(present(Smats)) Sa = Smats(ndx(1):ndx(2),ndx(1):ndx(2),:,:,:)
+            !
+            !Connection-to and self-energy-of the semi-last layer explicitly solved
+            tb = tz(:,:,:,Hetero%Explicit(2)-1)
+            if(present(Smats)) Sb = Smats(ndx(1)-Hetero%Norb:ndx(2)-Hetero%Norb,ndx(1)-Hetero%Norb:ndx(2)-Hetero%Norb,:,:,:)
+            !
+      end select
+      !
+      if(mod(Nbulk,2).ne.0)Nbulk=Nbulk+1
+      !
+      !Diagonal arrays of the first/last layer explicitly solved
+      allocate(zeta_(Hetero%Norb,Hetero%Norb,Nmats));  zeta_ = zeta(ndx(1):ndx(2),ndx(1):ndx(2),:)
+      allocate(Hk_(Hetero%Norb,Hetero%Norb,Nkpt))   ;  Hk_ = Hk(ndx(1):ndx(2),ndx(1):ndx(2),:)
+      !
+      call Embedding_ContinuedFraction(Potential,Nbulk,zeta_,Hk_,ta,tb,Sa,Sb,paramagnet)
+      !
+      allocate(Potential_loc(Hetero%Norb,Hetero%Norb,Nmats,Nspin));Potential_loc=czero
+      do ik=1,Nkpt
+         Potential_loc = Potential_loc + Potential(:,:,:,ik,:)/Nkpt
+      enddo
+      !
+      !this is to be able to print it form main
+      if(reg(mode).eq."left")then
+         if(allocated(Hetero%P_L))deallocate(Hetero%P_L)
+         Hetero%P_L = Potential_loc
+      elseif(reg(mode).eq."right")then
+         if(allocated(Hetero%P_R))deallocate(Hetero%P_R)
+         Hetero%P_R = Potential_loc
+      endif
+      deallocate(Potential_loc)
+      !
+   end subroutine build_Potential_Mat
+
+
+   !---------------------------------------------------------------------------!
+   !PURPOSE: This subroutine takes the frequency mesh, Hk, vertical hoppig array
+   !         and the self-energy of the first/last (depending on "mode") layers
+   !         of the heterostructure and build the embedding potentials with a
+   !         continued fraction representation.
+   !---------------------------------------------------------------------------!
+   subroutine Embedding_ContinuedFraction(Potential,Npot,zeta,Hk,tz_a,tz_b,Smats_a,Smats_b,paramagnet)
+      !
+      use parameters
+      use utils_misc
+      use linalg, only : inv, rotate
+      implicit none
+      !
+      complex(8),intent(inout)              :: Potential(:,:,:,:,:)
+      integer,intent(in)                    :: Npot
+      complex(8),intent(in)                 :: zeta(:,:,:)
+      complex(8),intent(in)                 :: Hk(:,:,:)
+      complex(8),intent(in)                 :: tz_a(:,:,:)
+      complex(8),intent(in)                 :: tz_b(:,:,:)
+      complex(8),intent(in)                 :: Smats_a(:,:,:,:,:)
+      complex(8),intent(in)                 :: Smats_b(:,:,:,:,:)
+      logical,intent(in)                    :: paramagnet
+      !
+      complex(8),allocatable                :: invGbulk(:,:)
+      complex(8),allocatable                :: Gbulk(:,:)
+      complex(8),allocatable                :: Ptmp(:,:)
+      complex(8),allocatable                :: tkz(:,:,:)
+      complex(8),allocatable                :: Swks(:,:,:)
+      integer                               :: Norb,Nmats,Nkpt
+      integer                               :: iw,ik,ispin,ibulk,Pndx
+      !
+      !
+      if(verbose)write(*,"(A)") "---- Embedding_ContinuedFraction"
+      !
+      !
+      Norb = size(Potential,dim=1)
+      Nmats = size(Potential,dim=3)
+      Nkpt = size(Potential,dim=4)
+      !
+      call assert_shape(Potential,[Norb,Norb,Nmats,Nkpt,Nspin],"Embedding_ContinuedFraction","Potential")
+      call assert_shape(zeta,[Norb,Norb,Nmats],"Embedding_ContinuedFraction","zeta")
+      call assert_shape(Hk,[Norb,Norb,Nkpt],"Embedding_ContinuedFraction","Hk")
+      call assert_shape(tz_a,[Norb,Norb,Nkpt],"Embedding_ContinuedFraction","tz_a")
+      call assert_shape(tz_b,[Norb,Norb,Nkpt],"Embedding_ContinuedFraction","tz_b")
+      call assert_shape(Smats_a,[Norb,Norb,Nmats,Nkpt,Nspin],"Embedding_ContinuedFraction","Smats_a")
+      call assert_shape(Smats_b,[Norb,Norb,Nmats,Nkpt,Nspin],"Embedding_ContinuedFraction","Smats_b")
+      !
+      Potential = czero
+      !
+      !G and invG of each layer are constant
+      allocate(invGbulk(Norb,Norb));invGbulk=czero
+      allocate(Gbulk(Norb,Norb));Gbulk=czero
+      allocate(Ptmp(Norb,Norb));Ptmp=czero
+      allocate(tkz(Norb,Norb,0:1));tkz=czero
+      allocate(Swks(Norb,Norb,0:1));Swks=czero
+      spinPloop: do ispin=1,Nspin
+         !$OMP PARALLEL DEFAULT(NONE),&
+         !$OMP SHARED(ispin,Nmats,Nkpt,zeta,Hk,Smats_b,Smats_a,Npot,tz_a,tz_b,Potential),&
+         !$OMP PRIVATE(ik,iw,ibulk,invGbulk,Gbulk,Ptmp,tkz,Swks,Pndx)
+         !$OMP DO
+         do iw=1,Nmats
+            do ik=1,Nkpt
+               !
+               !connecting hopping: even Nbulk--> ta...tb odd Nbulk--> ta...ta
+               tkz(:,:,1) = tz_a(:,:,ik)
+               tkz(:,:,0) = tz_b(:,:,ik)
+               !
+               !self-energy repetition: even Nbulk--> Sb...Sa odd Nbulk--> Sb...Sb
+               Swks(:,:,1) = Smats_b(:,:,iw,ik,ispin)
+               Swks(:,:,0) = Smats_a(:,:,iw,ik,ispin)
+               !
+               !first t*G*t is the farthest layer
+               Pndx = mod(Npot,2)
+               invGbulk = zeta(:,:,iw) - Hk(:,:,ik) - Swks(:,:,Pndx)
+               Gbulk = invGbulk
+               call inv(Gbulk)
+               Potential(:,:,iw,ik,ispin) = rotate(Gbulk,tkz(:,:,Pndx))
+               !
+               !all the other
+               do ibulk=2,Npot
+                  !
+                  Pndx = mod(Npot-ibulk+1,2)
+                  Ptmp = zeta(:,:,iw) - Hk(:,:,ik) - Swks(:,:,Pndx) - Potential(:,:,iw,ik,ispin)
+                  call inv(Ptmp)
+                  Potential(:,:,iw,ik,ispin) = rotate(Ptmp,tkz(:,:,Pndx))
+                  !
+               enddo
+               !
+            enddo
+         enddo
+         !$OMP END DO
+         !$OMP END PARALLEL
+         if(paramagnet)then
+            Potential(:,:,:,:,Nspin) = Potential(:,:,:,:,1)
+            exit spinPloop
+         endif
+      enddo spinPloop
+      deallocate(invGbulk,Gbulk,Ptmp,tkz,Swks)
+      !
+   end subroutine Embedding_ContinuedFraction
 
 
 end module utils_fields

@@ -38,7 +38,7 @@ class ct_hyb
 
       ct_hyb( path SiteName, double beta, int Nspin, int Norb, int NtauF, int NtauB,
               int Norder, bool Gexp, int Nmeas, int Ntherm, int NsegShift, int NspinSwap, int NnntMeas,
-              bool removeUhalf, bool paramagnet, bool retarded, std::vector<int> SetsNorb,
+              bool removeUhalf, bool paramagnet, bool retarded, bool readScreening, std::vector<int> SetsNorb,
               int printTime, std::vector<int> bins, CustomMPI &mpi):
       SiteName(SiteName),
       Beta(beta),
@@ -56,6 +56,7 @@ class ct_hyb
       removeUhalf(removeUhalf),
       paramagnet(paramagnet),
       retarded(retarded),
+      readScreening(readScreening),
       SetsNorb(SetsNorb),
       printTime(printTime),
       bins(bins),
@@ -116,6 +117,7 @@ class ct_hyb
          // Check if mandatory files are present
          std::vector<path> mandatoryFiles{"/Eloc.DAT", "/Delta_t.DAT", "/Umat.DAT"};
          if(retarded) mandatoryFiles.push_back("/K_t.DAT");
+         if(retarded&&readScreening) mandatoryFiles.push_back("/Screening.DAT");
          if(OrbSym) mandatoryFiles.push_back("/Eqv.DAT");
          for(int ifile=0; ifile < (int)mandatoryFiles.size(); ifile++)
          {
@@ -134,26 +136,6 @@ class ct_hyb
          //
          //read the istantaneous interaction ( Eigen::MatrixXd )
          read_EigenMat(inputDir+"/Umat.DAT", Uloc, Nflavor, Nflavor);
-
-         //
-         //adjust the internal chemical potential
-         mu_correction.resize(Norb,0.0);
-         if(removeUhalf)
-         {
-            for(int iorb=0; iorb < Norb; iorb++)
-            {
-               //old: Hartree given only by Uaa
-               //mu_correction[iorb] = Uloc(2*iorb,2*iorb+1)/2.0;
-               //new: Hartree given by the full row
-               for(int ifl=0; ifl < Nflavor; ifl++) mu_correction[iorb] += Uloc(2*iorb,ifl)/4.0;
-               mu_correction[iorb] += Uloc(2*iorb,2*iorb+1)/4.0;
-               mpi.report(" Orbital "+str(iorb)+": shift of the local level: "+str(mu_correction[iorb],4));
-            }
-         }
-
-         //
-         //set the levels for the impurity solver
-         set_levels();
 
          //
          //read the hybridization function ( std::vector<std::vector<double>> )
@@ -187,6 +169,43 @@ class ct_hyb
                }
             }
          }
+
+         //
+         //rescale the chemical potential rescaling with the half-filling one
+         Hartree_shift.resize(Norb,0.0);
+         if(removeUhalf)
+         {
+            for(int iorb=0; iorb < Norb; iorb++)
+            {
+               //old: Hartree given only by Uaa: Hartree_shift[iorb] = Uloc(2*iorb,2*iorb+1)/2.0;
+               for(int ifl=0; ifl < Nflavor; ifl++) Hartree_shift[iorb] += Uloc(2*iorb,ifl)/2.0; //4.0//Hartree_shift[iorb] += Uloc(2*iorb,2*iorb+1)/4.0;
+               mpi.report(" Orbital "+str(iorb)+" - Hartree shift: "+str(Hartree_shift[iorb],6));
+            }
+         }
+
+         //
+         //correction to the chemical potential shift encoded in the screening function
+         Screening_shift.resize(Norb,0.0);
+         if(retarded && !removeUhalf)
+         {
+            if(readScreening)
+            {
+               //Read the screening from file
+               mpi.report(" Reading screening file.");
+               read_Vec(inputDir+"/Screening.DAT", Screening_shift, Norb );
+            }
+            else
+            {
+               //Estimate from the derivative of K(tau) in tau=0. Deprecated.
+               mpi.report(" Computing screening from K(tau) derivative.");
+               for(int iorb=0; iorb < Norb; iorb++) Screening_shift[iorb] = (NtauB-1)*K_table[2*iorb][2*iorb][1]/Beta;
+            }
+            for(int iorb=0; iorb < Norb; iorb++)mpi.report(" Orbital "+str(iorb)+" - screening shift: "+str(Screening_shift[iorb],6));
+         }
+
+         //
+         //set the levels for the impurity solver
+         set_levels();
 
          //
          //read in the indexes contained to each equivalent set
@@ -379,6 +398,7 @@ class ct_hyb
       bool                                removeUhalf;
       bool                                paramagnet;
       bool                                retarded;
+      bool                                readScreening;
       int                                 printTime;
       std::vector<int>                    SetsNorb;
       std::vector<int>                    bins;                                 // 2D vec Contains binlength and binstart in [0] and [1] respectively
@@ -404,7 +424,8 @@ class ct_hyb
       bool                                OrbSym;
       // Input data
       Vec                                 Levels;                               // mu - <\epsilon> + mu_correction
-      Vec                                 mu_correction;                        // chemical potential correction due to the interaction shift
+      Vec                                 Hartree_shift;                        // chemical potential shift
+      Vec                                 Screening_shift;                      // chemical potential correction due to shift encoded in the screening function
       Vec                                 Eloc;                                 // <\epsilon>
       Mat                                 Uloc;                                 // Istantaneous U matrix
       VecVec                              F;                                    // F_up(\tau) = -G_{0,down}^{-1}(-\tau) + (iw + mu)
@@ -611,7 +632,7 @@ class ct_hyb
       void set_levels()
       {
          Levels.resize(Nflavor,0.0);
-         for (int ifl=0; ifl<Nflavor; ifl++) Levels[ifl] = mu - Eloc[ifl] + mu_correction[(int)(ifl/2)];
+         for (int ifl=0; ifl<Nflavor; ifl++) Levels[ifl] = mu - Eloc[ifl] + Hartree_shift[(int)(ifl/2)] - Screening_shift[(int)(ifl/2)]/2.0;
       }
 
       //----------------------------------------------------------------------//

@@ -94,7 +94,8 @@ module module_container
    MergeFields                              ,&
    join_SigmaCX                             ,&
    product2NN,NN2product                    ,&
-   calc_Ek,calc_Ep
+   calc_Ek,calc_Ep                          ,&
+   build_Potential
 
 
    !(h) Input/Output routines. Depends on (b),(e),(g)

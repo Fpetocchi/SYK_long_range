@@ -28,7 +28,7 @@ subroutine interpolateG2Path(Sfull,Lttc,pathOUTPUT)
    integer                               :: Norb,Nmats,unit!,Ntau
    integer                               :: ik,iw,itau,ispin,iorb
    integer                               :: ikx,iky
-   integer                               :: tzl,tzr,ilayer
+   !integer                               :: tzl,tzr,ilayer
    real(8)                               :: kx,ky,Bvec(3),Blat(3,3)
    character(len=256)                    :: path
    logical                               :: Kdependence
@@ -56,7 +56,7 @@ subroutine interpolateG2Path(Sfull,Lttc,pathOUTPUT)
    !---------------------- LDA Hamiltonian and corrections --------------------!
    !
    !non-interacting data (Bands, spectral function, Fermi-surface)
-   call interpolateHk2Path(Lttc,structure,Nkpt_path,pathOUTPUT=reg(pathOUTPUT)//"K_resolved/",doplane=FermiSurf,hetero=Hetero%status)
+   call interpolateHk2Path(Lttc,structure,Nkpt_path,pathOUTPUT=reg(pathOUTPUT)//"K_resolved/",doplane=FermiSurf,hetero=Hetero)
    !
    !correction to LDA given by the real part of the local self-energy in iw=0
    allocate(correction(Norb,Norb,Sfull%Nkpt));correction=czero
@@ -65,7 +65,7 @@ subroutine interpolateG2Path(Sfull,Lttc,pathOUTPUT)
       do ik=1,Sfull%Nkpt
          correction(:,:,ik) = zeye(Norb)*Sfull%mu - dreal(Sfull%ws(:,:,1,ispin))
       enddo
-      call interpolateHk2Path(Lttc,structure,Nkpt_path,pathOUTPUT=reg(pathOUTPUT)//"K_resolved/",corrname="dmft_s"//str(ispin),correction=correction,doplane=FermiSurf,hetero=Hetero%status)
+      call interpolateHk2Path(Lttc,structure,Nkpt_path,pathOUTPUT=reg(pathOUTPUT)//"K_resolved/",corrname="dmft_s"//str(ispin),correction=correction,doplane=FermiSurf,hetero=Hetero)
       if(paramagnet) exit
       !
    enddo
@@ -82,31 +82,11 @@ subroutine interpolateG2Path(Sfull,Lttc,pathOUTPUT)
          do iorb=1,Norb
             correction(iorb,iorb,:) = dcmplx(dreal(correction(iorb,iorb,:)),0d0)
          enddo
-         call interpolateHk2Path(Lttc,structure,Nkpt_path,pathOUTPUT=reg(pathOUTPUT)//"K_resolved/",corrname="qpsc_s"//str(ispin),correction=correction,doplane=FermiSurf,hetero=Hetero%status)
+         call interpolateHk2Path(Lttc,structure,Nkpt_path,pathOUTPUT=reg(pathOUTPUT)//"K_resolved/",corrname="qpsc_s"//str(ispin),correction=correction,doplane=FermiSurf,hetero=Hetero)
          if(paramagnet) exit
          !
       enddo
       deallocate(correction)
-   endif
-   !
-   if(Hetero%status)then
-      !
-      tzl = 0 ; tzr = 0
-      if(Hetero%Explicit(1).ne.1) tzl = 1
-      if(Hetero%Explicit(2).ne.Hetero%Nslab) tzr = 1
-      !
-      allocate(Hetero%tz_path(Norb,Norb,Lttc%Nkpt_path,(Hetero%Explicit(1)-tzl):(Hetero%Explicit(2)-1+tzr)));Hetero%tz_path=czero
-      do ilayer = Hetero%Explicit(1)-tzl,Hetero%Explicit(2)-1+tzr
-         call wannierinterpolation(Lttc%Nkpt3,Lttc%kpt,Lttc%kptpath(:,1:Lttc%Nkpt_path),Hetero%tz(:,:,:,ilayer),Hetero%tz_path(:,:,:,ilayer))
-      enddo
-      !
-      if(FermiSurf)then
-         allocate(Hetero%tz_Plane(Norb,Norb,Lttc%Nkpt_Plane,(Hetero%Explicit(1)-tzl):(Hetero%Explicit(2)-1+tzr)));Hetero%tz_Plane=czero
-         do ilayer = Hetero%Explicit(1)-tzl,Hetero%Explicit(2)-1+tzr
-            call wannierinterpolation(Lttc%Nkpt3,Lttc%kpt,Lttc%kptPlane,Hetero%tz(:,:,:,ilayer),Hetero%tz_Plane(:,:,:,ilayer))
-         enddo
-      endif
-      !
    endif
    !
    !
@@ -115,7 +95,7 @@ subroutine interpolateG2Path(Sfull,Lttc,pathOUTPUT)
    !
    !
    !recalculate the internal K-meshes
-   call interpolateHk2Path(Lttc,structure,Nkpt_path,doplane=FermiSurf,Nkpt_Kside=Nkpt_Fermi,hetero=Hetero%status)
+   call interpolateHk2Path(Lttc,structure,Nkpt_path,doplane=FermiSurf,Nkpt_Kside=Nkpt_Fermi,hetero=Hetero)
    !
    !Dump MaxEnt data for the local self-energy (done for every CalculationType)
    if(scan(reg(path_funct),"S").gt.0)call calc_MaxEnt_on_Sigma_imp(Sfull)
@@ -310,7 +290,7 @@ contains
       integer                               :: ikx,iky
       !Hetero
       integer                               :: Norb_layer,ikz
-      complex(8),allocatable                :: Gmats_kpkz(:,:,:,:,:,:),Gmats_kpkz_diag(:,:,:,:,:)
+      complex(8),allocatable                :: Gmats_kz(:,:,:,:,:,:),Gmats_kz_diag(:,:,:,:,:)
       complex(8),allocatable                :: Gitau_kpkz_diag(:,:,:,:,:)
       !
       !
@@ -366,8 +346,8 @@ contains
             unit = free_unit()
             open(unit,file=reg(path),form="formatted",status="unknown",position="rewind",action="write")
             do itau=1,NtauFT
-                !write(unit,"(200E20.12)") tau(itau),(dreal(Gitau_diag(iorb,itau,ik,ispin)),iorb=1,Norb)
-                write(unit,"(200E20.12)") tau(itau),(-abs(Gitau_diag(iorb,itau,ik,ispin)),iorb=1,Norb)
+                write(unit,"(200E20.12)") tau(itau),(dreal(Gitau_diag(iorb,itau,ik,ispin)),iorb=1,Norb)
+                !write(unit,"(200E20.12)") tau(itau),(-abs(Gitau_diag(iorb,itau,ik,ispin)),iorb=1,Norb)
             enddo
             close(unit)
             !
@@ -415,37 +395,37 @@ contains
          if(Norb_layer.ne.int(Lttc%Norb/Lttc%Nsite)) stop "calc_MaxEnt_on_G_K: wrong hetero orbital dimension."
          !
          !Fill in Gamma-A direction
-         allocate(Gmats_kpkz(Norb_layer,Norb_layer,Nmats,Nkpt,0:Nkpt_path,Nspin));Gmats_kpkz=czero
+         allocate(Gmats_kz(Norb_layer,Norb_layer,Nmats,Nkpt,0:Nkpt_path,Nspin));Gmats_kz=czero
          do ispin=1,Nspin
             do iw=1,Nmats
-               call fill_Gamma_A(Gmats_in%wks(:,:,iw,:,ispin),Gmats_kpkz(:,:,iw,:,:,ispin))
+               call fill_Gamma_A(Gmats_in%wks(:,:,iw,:,ispin),Gmats_kz(:,:,iw,:,:,ispin))
             enddo
             if(paramagnet)then
-               Gmats_kpkz(:,:,:,:,:,Nspin) = Gmats_kpkz(:,:,:,:,:,1)
+               Gmats_kz(:,:,:,:,:,Nspin) = Gmats_kz(:,:,:,:,:,1)
                exit
             endif
          enddo
          !
          !Extract the diagonal of the Green's function
-         allocate(Gmats_kpkz_diag(Norb_layer,Nmats,Nkpt,0:Nkpt_path,Nspin));Gmats_kpkz_diag=czero
+         allocate(Gmats_kz_diag(Norb_layer,Nmats,Nkpt,0:Nkpt_path,Nspin));Gmats_kz_diag=czero
          do iorb=1,Norb
-            Gmats_kpkz_diag(iorb,:,:,:,:) = Gmats_kpkz(iorb,iorb,:,:,:,:)
+            Gmats_kz_diag(iorb,:,:,:,:) = Gmats_kz(iorb,iorb,:,:,:,:)
          enddo
-         deallocate(Gmats_kpkz)
+         deallocate(Gmats_kz)
          !
          !Fourier transform the diagonal of the Green's function
          call cpu_time(start)
          allocate(Gitau_kpkz_diag(Norb_layer,NtauFT,Nkpt,0:Nkpt_path,Nspin));Gitau_kpkz_diag=czero
          do ispin=1,Nspin
             do ikz=0,Nkpt_path
-               call Fmats2itau_vec(Sfull%Beta,Gmats_kpkz_diag(:,:,:,ikz,ispin),Gitau_kpkz_diag(:,:,:,ikz,ispin),asympt_corr=.true.,tau_uniform=.true.)
+               call Fmats2itau_vec(Sfull%Beta,Gmats_kz_diag(:,:,:,ikz,ispin),Gitau_kpkz_diag(:,:,:,ikz,ispin),asympt_corr=.true.,tau_uniform=.true.)
             enddo
             if(paramagnet)then
                Gitau_kpkz_diag(:,:,:,:,Nspin) = Gitau_kpkz_diag(:,:,:,:,1)
                exit
             endif
          enddo
-         deallocate(Gmats_kpkz_diag)
+         deallocate(Gmats_kz_diag)
          call cpu_time(finish)
          write(*,"(A,F)") "     Glat(K"//reg(mode)//",kz,iw) --> Glat(K"//reg(mode)//",kz,tau) cpu timing:", finish-start
          !
@@ -458,7 +438,8 @@ contains
                 unit = free_unit()
                 open(unit,file=reg(path),form="formatted",status="unknown",position="rewind",action="write")
                 do itau=1,NtauFT
-                    write(unit,"(200E20.12)") tau(itau),(-abs(Gitau_kpkz_diag(iorb,itau,ik,0,ispin)),iorb=1,Norb_layer)
+                   write(unit,"(200E20.12)") tau(itau),(dreal(Gitau_kpkz_diag(iorb,itau,ik,0,ispin)),iorb=1,Norb_layer)
+                   !write(unit,"(200E20.12)") tau(itau),(-abs(Gitau_kpkz_diag(iorb,itau,ik,0,ispin)),iorb=1,Norb_layer)
                 enddo
                 close(unit)
                 !
@@ -469,7 +450,8 @@ contains
                 unit = free_unit()
                 open(unit,file=reg(path),form="formatted",status="unknown",position="rewind",action="write")
                 do itau=1,NtauFT
-                    write(unit,"(200E20.12)") tau(itau),(-abs(Gitau_kpkz_diag(iorb,itau,Lttc%iq_gamma,ik-Nkpt,ispin)),iorb=1,Norb_layer)
+                   write(unit,"(200E20.12)") tau(itau),(dreal(Gitau_kpkz_diag(iorb,itau,Lttc%iq_gamma,ik-Nkpt,ispin)),iorb=1,Norb_layer)
+                   !write(unit,"(200E20.12)") tau(itau),(-abs(Gitau_kpkz_diag(iorb,itau,Lttc%iq_gamma,ik-Nkpt,ispin)),iorb=1,Norb_layer)
                 enddo
                 close(unit)
                 !
@@ -488,27 +470,28 @@ contains
       implicit none
       !
       complex(8),intent(in)              :: data_in(:,:,:)
-      complex(8),intent(out)             :: data_out(:,:,:,0:)
+      complex(8),intent(inout)           :: data_out(:,:,:,0:)
       !
       integer                            :: ra,rb,ca,cb,ikz
       integer                            :: isite,jsite
-      integer                            :: Nkpt_layer,Norb_layer
+      integer                            :: Nkpt_layer
       real(8)                            :: kR
       complex(8)                         :: cfac
       !
       Nkpt_layer = size(data_in,dim=3)
-      Norb_layer = size(data_out,dim=1)
+      if(Nkpt_layer.ne.size(data_out,dim=3)) stop "fill_Gamma_A: planar K-mesh does not coincide between layer-resolved and kz integrated."
       !
+      data_out=czero
       !$OMP PARALLEL DEFAULT(PRIVATE),&
-      !$OMP SHARED(Lttc,Nkpt_layer,Nkpt_path,Norb_layer,data_out,data_in)
+      !$OMP SHARED(Lttc,Nkpt_layer,Nkpt_path,Hetero,data_out,data_in)
       !$OMP DO
       do ik=1,Nkpt_layer
          do ikz=0,Nkpt_path
             do isite=1,Lttc%Nsite
                do jsite=1,Lttc%Nsite
                   !
-                  ra = 1+(isite-1)*Norb_layer ; rb = ra + Norb_layer-1
-                  ca = 1+(jsite-1)*Norb_layer ; cb = ca + Norb_layer-1
+                  ra = 1+(isite-1)*Hetero%Norb ; rb = ra + Hetero%Norb-1
+                  ca = 1+(jsite-1)*Hetero%Norb ; cb = ca + Hetero%Norb-1
                   !
                   kR = 2*pi * Lttc%kptpath(3,Lttc%Nkpt_path+ikz) * (isite-jsite)
                   cfac = dcmplx(cos(kR),+sin(kR))

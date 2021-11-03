@@ -309,7 +309,7 @@ void read_list( std::string path, std::vector<int> &ListDim, std::vector<std::ve
 void read_Vec( std::string path, std::vector<double> &Vec, int &idim)
 {
    //
-   Vec = std::vector<double>(idim,0.0); //.resize(Nflavor,0.0);
+   Vec = std::vector<double>(idim,0.0);
    ifstream file( path );
    //
    for (int i=0; i<(int)Vec.size(); i++) file >> Vec[i];
@@ -318,7 +318,7 @@ void read_Vec( std::string path, std::vector<double> &Vec, int &idim)
 void read_Vec( std::string path, std::vector<double> &Vec, int &idim, double &mu)
 {
    //
-   Vec = std::vector<double>(idim,0.0); //.resize(Nflavor,0.0);
+   Vec = std::vector<double>(idim,0.0);
    ifstream file( path );
    //
    file >> mu;

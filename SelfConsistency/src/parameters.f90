@@ -28,7 +28,6 @@ module parameters
    real(8),parameter                        :: eps=1e-9
    !
    real(8),parameter                        :: EcutSheet=0d0
-   real(8),parameter                        :: kz_cut=0.5d0
 
 
    !---------------------------------------------------------------------------!
@@ -196,6 +195,7 @@ module parameters
       integer                               :: retarded=0
       integer                               :: quickloops=0
       integer                               :: removeUhalf=0
+      integer                               :: readScreening=0
    end type QMC
 
    !---------------------------------------------------------------------------!
@@ -243,6 +243,7 @@ module parameters
       integer                               :: Explicit(2)=[1,1]
       real(8)                               :: GlobalTzRatio=0d0
       integer                               :: NtzExplicit=0
+      integer                               :: tzIndex(2)=[0,0]
       integer,allocatable                   :: ExplicitTzPos(:)
       real(8),allocatable                   :: ExplicitTzRatios(:)
       complex(8),allocatable                :: tz(:,:,:,:)                      ![Norb,Norb,Nkpt,ilayer]

@@ -188,7 +188,7 @@ contains
       calc_Sguess = calc_Sguess .and. (FirstIteration.eq.0) .and. solve_DMFT
       calc_Pguess = calc_Pguess .and. (FirstIteration.eq.0) .and. solve_DMFT
       !
-      Ustart = Ustart .and. (ItStart.eq.0) .and. (.not.calc_Pguess)
+      Ustart = Ustart .and. (FirstIteration.eq.0) .and. (.not.calc_Pguess)
       !
       causal_D = causal_D .and. ((FirstIteration.ne.0).or.calc_Sguess)
       causal_U = causal_U .and. ((FirstIteration.ne.0).or.calc_Pguess)
@@ -654,16 +654,16 @@ contains
       if(ItStart.eq.0)then
          !
          call calc_Glda(0d0,Beta,Lttc)
+         call print_potentials(pathINPUT)
          !
          allocate(Egrid(Nreal));Egrid=0d0
          Egrid = linspace(-wrealMax,+wrealMax,Nreal)
          call tetrahedron_integration(reg(pathINPUT),Lttc%Ek,Lttc%Nkpt3,Lttc%kpt,Egrid,fact_intp=2,pathOUTPUT=reg(pathINPUT))
          deallocate(Egrid)
          !
-         if(reg(structure).ne."None")call interpolateHk2Path(Lttc,reg(structure),Nkpt_path,pathOUTPUT=reg(pathINPUT),doplane=.true.,hetero=Hetero%status)
+         if(reg(structure).ne."None")call interpolateHk2Path(Lttc,reg(structure),Nkpt_path,pathOUTPUT=reg(pathINPUT),doplane=.true.,hetero=Hetero)
          !
       endif
-      !
       !
    end subroutine initialize_Lattice
 
@@ -2285,13 +2285,12 @@ contains
       type(BosonicField)                    :: curlyU,curlyUold
       type(BosonicField)                    :: curlyUcorr
       type(physicalU)                       :: PhysicalUelements
-      integer                               :: Norb,Nflavor,Nbp
-      integer                               :: ib1,ib2,itau,iw
-      integer                               :: unit,ndx,isitecheck
+      integer                               :: Norb,Nflavor,Nbp,unit
+      integer                               :: ib1,ib2,iorb,itau,iw
+      integer                               :: isitecheck
       integer,allocatable                   :: Orbs(:)
       real(8),allocatable                   :: Uinst(:,:),Ucheck(:,:)
-      real(8),allocatable                   :: Kfunct(:,:,:)
-      real(8),allocatable                   :: tau(:),PrintLine(:)
+      real(8),allocatable                   :: Kfunct(:,:,:),ScreenShift(:)
       complex(8),allocatable                :: Rot(:,:)
       character(len=255)                    :: file
       !
@@ -2308,9 +2307,6 @@ contains
       Orbs = SiteOrbs(isite,1:Norb)
       Nbp = Norb**2
       Nflavor = Norb*Nspin
-      !
-      allocate(tau(Solver%NtauB));tau=0d0
-      tau = linspace(0d0,Beta,Solver%NtauB)
       !
       call init_Uelements(Norb,PhysicalUelements)
       !
@@ -2346,8 +2342,16 @@ contains
             endif
            !call isReal(curlyU)
             !
+            !istantaneous interaction and screening function
             allocate(Kfunct(Nflavor,Nflavor,Solver%NtauB));Kfunct=0d0
-            call calc_QMCinteractions(curlyU,Uinst,Kfunct)
+            call calc_QMCinteractions(curlyU,Uinst,Kfunct=Kfunct)
+            !
+            !Shift of the local levels due to screening
+            allocate(ScreenShift(Norb));ScreenShift=0d0
+            do iorb=1,Norb
+               ib1 = iorb+Norb*(iorb-1)
+               ScreenShift(iorb) = curlyU%bare_local(ib1,ib1) - curlyU%screened_local(ib1,ib1,1)
+            enddo
             !
          case("EDMFT","GW+EDMFT")
             !
@@ -2409,8 +2413,16 @@ contains
                call DeallocateBosonicField(curlyUold)
             endif
             !
+            !istantaneous interaction and screening function
             allocate(Kfunct(Nflavor,Nflavor,Solver%NtauB));Kfunct=0d0
-            call calc_QMCinteractions(curlyU,Uinst,Kfunct)
+            call calc_QMCinteractions(curlyU,Uinst,Kfunct=Kfunct)
+            !
+            !Shift of the local levels due to screening
+            allocate(ScreenShift(Norb));ScreenShift=0d0
+            do iorb=1,Norb
+               ib1 = iorb+Norb*(iorb-1)
+               ScreenShift(iorb) = curlyU%bare_local(ib1,ib1) - curlyU%screened_local(ib1,ib1,1)
+            enddo
             !
       end select
       deallocate(Orbs)
@@ -2420,36 +2432,23 @@ contains
       !
       !Istantaneous interaction
       call dump_Matrix(Uinst,reg(ItFolder)//"Solver_"//reg(SiteName(isite))//"/","Umat.DAT")
+      deallocate(Uinst)
       !
       !Print data for retarded interactions
       if(allocated(Kfunct))then
-         !
-         !Screening function
-         file = reg(ItFolder)//"Solver_"//reg(SiteName(isite))//"/K_t.DAT"
+         call print_K(Kfunct,"K_t")
+         deallocate(Kfunct)
+      endif
+      if(allocated(ScreenShift))then
+         file = reg(ItFolder)//"Solver_"//reg(SiteName(isite))//"/Screening.DAT"
          unit = free_unit()
          open(unit,file=reg(file),form="formatted",status="unknown",position="rewind",action="write")
-         allocate(PrintLine(Nflavor*(Nflavor+1)/2));PrintLine=0d0
-         do itau=1,Solver%NtauB
-            ndx=1
-            !print diagonal and LT
-            do ib1=1,Nflavor
-               do ib2=1,ib1
-                  !
-                  PrintLine(ndx) = Kfunct(ib1,ib2,itau)
-                  if(Kdiag) PrintLine(ndx) = Kfunct(ib1,ib1,itau)
-                  ndx=ndx+1
-                  !
-               enddo
-            enddo
-            write(unit,"(999E20.12)") tau(itau),PrintLine
+         do iorb=1,Norb
+            write(unit,"(1E20.12)") ScreenShift(iorb)
          enddo
-         deallocate(PrintLine)
          close(unit)
-         !
-         deallocate(Kfunct)
-         !
+         deallocate(ScreenShift)
       endif
-      deallocate(tau,Uinst)
       !
       !Check if the screened effective local interaction at iw=0 is the same for all the sites. Same Orbital dimension assumed.
       if(checkInvariance)then
@@ -2511,6 +2510,47 @@ contains
       endif
       !
       call DeallocateBosonicField(curlyU)
+      !
+      !
+      !
+   contains
+      !
+      !
+      !
+      subroutine print_K(K,filename)
+         implicit none
+         real(8),intent(in)                 :: K(:,:,:)
+         character(len=*),intent(in)        :: filename
+         integer                            :: ndx
+         real(8),allocatable                :: tau(:),PrintLine(:)
+         !
+         allocate(tau(Solver%NtauB));tau=0d0
+         tau = linspace(0d0,Beta,Solver%NtauB)
+         !
+         file = reg(ItFolder)//"Solver_"//reg(SiteName(isite))//"/"//reg(filename)//".DAT"
+         unit = free_unit()
+         open(unit,file=reg(file),form="formatted",status="unknown",position="rewind",action="write")
+         allocate(PrintLine(Nflavor*(Nflavor+1)/2));PrintLine=0d0
+         do itau=1,Solver%NtauB
+            ndx=1
+            !print diagonal and LT
+            do ib1=1,Nflavor
+               do ib2=1,ib1
+                  !
+                  PrintLine(ndx) = K(ib1,ib2,itau)
+                  if(Kdiag) PrintLine(ndx) = K(ib1,ib1,itau)
+                  ndx=ndx+1
+                  !
+               enddo
+            enddo
+            write(unit,"(999E20.12)") tau(itau),PrintLine
+         enddo
+         deallocate(tau,PrintLine)
+         close(unit)
+         !
+      end subroutine print_K
+      !
+      !
       !
    end subroutine calc_Interaction
 
@@ -2823,11 +2863,11 @@ contains
          enddo
          !
          allocate(HartreeQMC(Norb*Nspin));HartreeQMC=0d0
-         HartreeQMC = matmul(Uinst,rhoQMC)/2d0
+         HartreeQMC = matmul(Uinst,rhoQMC)!/2d0
          do ib1=1,Nflavor
             iorb = (ib1+mod(ib1,2))/2
             ispin = abs(mod(ib1,2)-2)
-            Simp%N_s(iorb,iorb,ispin) = HartreeQMC(ib1) + Uinst(2*iorb,2*iorb-1)*rhoQMC(ib1)/2d0
+            Simp%N_s(iorb,iorb,ispin) = HartreeQMC(ib1) !+ Uinst(2*iorb,2*iorb-1)*rhoQMC(ib1)/2d0
          enddo
          deallocate(Uinst,rhoQMC,HartreeQMC)
          !
@@ -2964,7 +3004,7 @@ contains
                   ispin = abs(mod(ib1,2)-2)
                   jspin = abs(mod(ib2,2)-2)
                   !
-                  call halfbeta_symm(nnt(ib1,ib2,:))
+                  !call halfbeta_symm(nnt(ib1,ib2,:))
                   NNitau(iorb,jorb,ispin,jspin,:) = dcmplx(nnt(ib1,ib2,:),0d0)
                   !
                enddo
@@ -3016,7 +3056,7 @@ contains
                enddo
             enddo
             deallocate(NNitau)
-            call isReal(ChiCitau)
+            !call isReal(ChiCitau)
             !
             !User-defined modification of local charge susceptibility
             if(alphaChi.ne.1d0)then
@@ -3037,7 +3077,7 @@ contains
             call AllocateBosonicField(ChiCmats,Norb,Nmats,Crystal%iq_gamma,no_bare=.true.,Beta=Beta)
             call Bitau2mats(Beta,ChiCitau%screened_local,ChiCmats%screened_local,tau_uniform=.true.)
             call DeallocateBosonicField(ChiCitau)
-            call isReal(ChiCmats)
+            !call isReal(ChiCmats)
             !
             !Remove the iw=0 divergency of local charge susceptibility
             if(removeCDW_C)then
@@ -3045,7 +3085,7 @@ contains
                call dump_BosonicField(ChiCmats,reg(PrevItFolder)//"Solver_"//reg(SiteName(isite))//"/","ChiC_CDW_"//reg(SiteName(isite))//"_w.DAT")
                allocate(CDW(ChiCmats%Nbp,ChiCmats%Nbp));CDW=0d0
                CDW = real(ChiCmats%screened_local(:,:,1))
-               call remove_CDW(ChiCmats,"diag")
+               call remove_CDW(ChiCmats,"imp")
                CDW = CDW - real(ChiCmats%screened_local(:,:,1))
                call dump_Matrix(CDW,reg(PrevItFolder)//"Solver_"//reg(SiteName(isite))//"/","CDW_"//reg(SiteName(isite))//".DAT")
                deallocate(CDW)
@@ -3105,7 +3145,11 @@ contains
          if(removeCDW_P)then
             write(*,"(A)") new_line("A")//"     Divergency removal in Pimp(iw=0)."
             call dump_BosonicField(P_EDMFT,reg(PrevItFolder),"Pimp_CDW_w.DAT")
-            call remove_CDW(P_EDMFT,"diag")
+            if(RotateUloc)then
+               call remove_CDW(P_EDMFT,"lat")
+            else
+               call remove_CDW(P_EDMFT,"imp_exp")
+            endif
          endif
          !
          !Print
@@ -3132,22 +3176,27 @@ contains
    !---------------------------------------------------------------------------!
    !PURPOSE: Print heterostructure embedding potentials
    !---------------------------------------------------------------------------!
-   subroutine print_potentials()
+   subroutine print_potentials(printpath)
       implicit none
+      character(len=*),intent(in),optional  :: printpath
       type(FermionicField)                  :: Pot
+      character(len=255)                    :: printpath_
+      !
+      printpath_=reg(ItFolder)
+      if(present(printpath))printpath_=printpath
       !
       call AllocateFermionicField(Pot,Hetero%Norb,Nmats,Beta=Beta)
       !
       call clear_attributes(Pot)
       if(allocated(Hetero%P_L))then
          Pot%ws = Hetero%P_L
-         call dump_FermionicField(Pot,reg(ItFolder),"Pot_L_w",paramagnet)
+         call dump_FermionicField(Pot,reg(printpath_),"Pot_L_w",paramagnet)
       endif
       !
       call clear_attributes(Pot)
       if(allocated(Hetero%P_R))then
          Pot%ws = Hetero%P_R
-         call dump_FermionicField(Pot,reg(ItFolder),"Pot_R_w",paramagnet)
+         call dump_FermionicField(Pot,reg(printpath_),"Pot_R_w",paramagnet)
       endif
       !
       call DeallocateField(Pot)
@@ -3408,7 +3457,11 @@ contains
             if(removeCDW_P)then
                write(*,"(A)") new_line("A")//"     Divergency removal in Pimp(iw=0)."
                call dump_BosonicField(P_EDMFT,reg(PrevItFolder),"Pimp_CDW_w.DAT")
-               call remove_CDW(P_EDMFT,"imp")
+               if(RotateUloc)then
+                  call remove_CDW(P_EDMFT,"lat")
+               else
+                  call remove_CDW(P_EDMFT,"imp_exp")
+               endif
             endif
             call dump_BosonicField(P_EDMFT,reg(PrevItFolder),"Pimp_w.DAT")
             call DeallocateBosonicField(P_EDMFT)
@@ -3442,7 +3495,11 @@ contains
             if(removeCDW_P)then
                write(*,"(A)") new_line("A")//"     Divergency removal in Pimp(iw=0)."
                call dump_BosonicField(P_EDMFT,reg(PrevItFolder),"Pimp_CDW_w.DAT")
-               call remove_CDW(P_EDMFT,"imp")
+               if(RotateUloc)then
+                  call remove_CDW(P_EDMFT,"lat")
+               else
+                  call remove_CDW(P_EDMFT,"imp_exp")
+               endif
             endif
             call dump_BosonicField(P_EDMFT,reg(PrevItFolder),"Pimp_w.DAT")
             call DeallocateBosonicField(P_EDMFT)

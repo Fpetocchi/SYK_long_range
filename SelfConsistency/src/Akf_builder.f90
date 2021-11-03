@@ -72,7 +72,7 @@ program Akw_builder
    !---------------------------------------------------------------------------!
    !
    !
-   call interpolateHk2Path(Crystal,reg(structure),Nkpt_path,doplane=FermiSurf,Nkpt_Kside=Nkpt_Fermi,hetero=Hetero%status)
+   call interpolateHk2Path(Crystal,reg(structure),Nkpt_path,doplane=FermiSurf,Nkpt_Kside=Nkpt_Fermi,hetero=Hetero)
    Crystal%Nkpt_path = Crystal%Nkpt_path-1
    !
    !

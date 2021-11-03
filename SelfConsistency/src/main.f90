@@ -42,6 +42,7 @@ program SelfConsistency
    !
    !
 #ifdef _akw
+   call calc_Glda(0d0,Beta,Crystal)
    call AllocateFermionicField(S_Full,Crystal%Norb,Nmats,Nkpt=Crystal%Nkpt,Nsite=Nsite,Beta=Beta)
    call read_FermionicField(S_Full,reg(ItFolder),"Sfull_w",Crystal%kpt)
    call interpolateG2Path(S_Full,Crystal,reg(ItFolder))

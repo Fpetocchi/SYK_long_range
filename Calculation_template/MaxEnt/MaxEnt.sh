@@ -1,6 +1,7 @@
 #!/bin/bash
 #
-
+QUEUES="new.q"
+#
 ################################################################################
 #                                USER SETTINGS                                 #
 ################################################################################
@@ -159,7 +160,7 @@ cat << EOF > submit_MaxEnt
 #$ -e   error.out
 #$ -o   log.out
 #$ -pe  smp 1
-#$ -q   huge.q,new.q
+#$ -q   ${QUEUES}
 
 echo \$RUNOPTIONS
 export PYTHONPATH=\${PYTHONPATH}:${BIN}/docopt/
