@@ -654,7 +654,7 @@ contains
       if(ItStart.eq.0)then
          !
          call calc_Glda(0d0,Beta,Lttc)
-         call print_potentials(pathINPUT)
+         if(Hetero%status)call print_potentials(pathINPUT)
          !
          allocate(Egrid(Nreal));Egrid=0d0
          Egrid = linspace(-wrealMax,+wrealMax,Nreal)
@@ -2597,6 +2597,9 @@ contains
       type(BosonicField)                    :: Pimp
       type(BosonicField)                    :: Wimp
       real(8),allocatable                   :: CDW(:,:)
+      !TEST>>>
+      real(8)                               :: shift
+      !>>>TEST
       !
       !
       write(*,"(A)") new_line("A")//new_line("A")//"---- collect_QMC_results"
@@ -3056,7 +3059,28 @@ contains
                enddo
             enddo
             deallocate(NNitau)
-            !call isReal(ChiCitau)
+            !
+            !TEST>>>
+            if(Test_flag_1)then
+               !
+               do ib1=1,ChiCitau%Nbp
+                  do ib2=ib1,ChiCitau%Nbp
+                     !
+                     if(ib1.eq.ib2)then
+                        shift = minval(dreal(ChiCitau%screened_local(ib1,ib2,:)))
+                        if(shift.lt.0d0) ChiCitau%screened_local(ib1,ib2,:) = ChiCitau%screened_local(ib1,ib2,:) - shift
+                     else
+                        shift = maxval(dreal(ChiCitau%screened_local(ib1,ib2,:)))
+                        if(shift.gt.0d0) ChiCitau%screened_local(ib1,ib2,:) = ChiCitau%screened_local(ib1,ib2,:) - shift
+                     endif
+                     !
+                     ChiCitau%screened_local(ib2,ib1,:) = ChiCitau%screened_local(ib1,ib2,:)
+                     !
+                  enddo
+               enddo
+               !
+            endif
+            !>>>TEST
             !
             !User-defined modification of local charge susceptibility
             if(alphaChi.ne.1d0)then

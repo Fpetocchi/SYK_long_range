@@ -3210,7 +3210,7 @@ contains
          close(unit)
       endif
       write(*,"(A,I)") "     Total number of K-points along path:",Lttc%Nkpt_path
-      wrealMax = 1.2*maxval(abs(dataEk))
+      wrealMax = 2.0*maxval(abs(dataEk))
       deallocate(dataEk)
       !
       !
@@ -3313,7 +3313,7 @@ contains
             !
             allocate(Akw_kz(Hetero%Norb,Hetero%Norb,Nreal,Lttc%Nkpt_path,0:Nkpt_path));Akw_kz=czero
             do iw=1,Nreal
-               call fill_Gamma_A_noPot(Akw(:,:,iw,:),Akw_kz(:,:,iw,:,:))
+               call fill_Gamma_A(Akw(:,:,iw,:),Akw_kz(:,:,iw,:,:))
             enddo
             !
             !Normalization

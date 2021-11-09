@@ -191,8 +191,14 @@ p for [i=1:8] '3_beta_400_L_stack_INS_GS1/Results_beta400/'.it.'/Convergence/Max
 ################################################################################
 #                   PASTE THE FOLLOWING WITHIN IT/K_resolved                   #
 ################################################################################
-./MaxEnt_Kresolved.sh -e 0.001 -w 5001 -W 15 -F G -N 240 -B 120 -m path -s _Hetero
-./MaxEnt_Kresolved.sh -e 0.001 -w 5001 -W 15 -F G -N 240 -B 120 -m path -241 1 -f 241 -s _Hetero
+2_stacking_AL
+./MaxEnt_Kresolved.sh -e 0.002 -w 5001 -W 15 -F G -N 240 -B 120 -m path -s _Hetero
+./MaxEnt_Kresolved.sh -e 0.003 -w 5001 -W 15 -F G -N 240 -B 120 -m path -i 164 -f 164 -s _Hetero
+./MaxEnt_Kresolved.sh -e 0.003 -w 5001 -W 15 -F G -N 240 -B 120 -m path -i 20 -f 22 -s _Hetero
+
+4_stacking_LA
+./MaxEnt_Kresolved.sh -e 0.002 -w 5001 -W 15 -F G -N 240 -B 120 -m path -s _Hetero
+
 
 
 

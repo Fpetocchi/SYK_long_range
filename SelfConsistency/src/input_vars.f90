@@ -554,6 +554,9 @@ contains
          call parse_input_variable(causal_U_type,"CAUSAL_U_TYPE",InputFile,default="curlyU",comment="Correction mode for generalized bosonic cavity construction. Available: curlyU, Ploc.")
          if((reg(causal_U_type).eq."Ploc").and.((Nsite.gt.1).or.(maxval(SiteNorb).gt.1)))causal_U_type="curlyU"
       endif
+      !TEST>>>
+      call parse_input_variable(Test_flag_1,"CORRECT_CHI_NEG",InputFile,default=.false.,comment="Flag to shift the local charge susceptibility if negative.")
+      !>>>TEST
       !
       !Variables for the fit
       call parse_input_variable(DeltaFit,"DELTA_FIT",InputFile,default="Inf",comment="Fit to extract the local energy in GW+EDMFT calculations. Available: Inf, Analytic, Moments.")
@@ -661,7 +664,7 @@ contains
       call parse_input_variable(Solver%binlength,"BINLENGTH",InputFile,default=4,comment="If >0 the Green's function at itau will be the average within +/-binlength.")
       call parse_input_variable(Solver%binstart,"BINSTART",InputFile,default=100,comment="Tau points skipped at the beginning and end of the Green's function average.")
       call append_to_input_list(Solver%retarded,"RETARDED","Integer flag to include the frequency dependent part of the interaction. User cannot set this as its deduced from CALC_TYPE.")
-      call parse_input_variable(Solver%readScreening,"READ_SCREENING",InputFile,default=1,comment="Integer flag to read the screening shift from curlyU. If =0 its computed from the derivative of K in tau=0")
+      call parse_input_variable(Solver%readScreening,"READ_SCREENING",InputFile,default=1,comment="Integer flag to read the screening shift from curlyU. If =0 its computed from the derivative of K in tau=0 (deprecated).")
       Solver%quickloops=look4dens%quickloops
       if(ExpandImpurity)then
          allocate(Solver%Time(1));Solver%Time=0
