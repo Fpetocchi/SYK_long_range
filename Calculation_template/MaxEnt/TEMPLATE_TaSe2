@@ -209,4 +209,19 @@ p for [i=1:8] '3_beta_400_L_stack_INS_GS1/Results_beta400/'.it.'/Convergence/Max
 
 
 
+GENMAT=/home/petocchif/1_GW_EDMFT/nobackup/1_production/Calculation_template
+for it in `seq  0 1 0` ; do
+   cd $it/Convergence
+   cp ${GENMAT}/${MATERIAL}/MaxEnt/MaxEnt.sh .
+   chmod 700 MaxEnt.sh
+   #
+   ./MaxEnt.sh -e 0.01 -w 5000 -W  100 -f G -o 1 -i qmc_Sq -p ${GENMAT}
+   #
+   ./MaxEnt.sh -e 0.01 -w 5000 -W  100 -f G -o 1 -i lat -p ${GENMAT}
+   #
+   cd ../../
+done
+
+
+
 #

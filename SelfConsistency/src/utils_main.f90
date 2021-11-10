@@ -2286,11 +2286,11 @@ contains
       type(BosonicField)                    :: curlyUcorr
       type(physicalU)                       :: PhysicalUelements
       integer                               :: Norb,Nflavor,Nbp,unit
-      integer                               :: ib1,ib2,iorb,itau,iw
+      integer                               :: ib1,ib2,itau,iw
       integer                               :: isitecheck
       integer,allocatable                   :: Orbs(:)
       real(8),allocatable                   :: Uinst(:,:),Ucheck(:,:)
-      real(8),allocatable                   :: Kfunct(:,:,:),ScreenShift(:)
+      real(8),allocatable                   :: Kfunct(:,:,:),ScreeningMat(:,:)
       complex(8),allocatable                :: Rot(:,:)
       character(len=255)                    :: file
       !
@@ -2327,8 +2327,8 @@ contains
                call TransformBosonicField(curlyU,Rot,PhysicalUelements%Full_Map)
                deallocate(Rot)
             endif
-           !call isReal(curlyU)
             !
+            !istantaneous interaction
             call calc_QMCinteractions(curlyU,Uinst)
             !
          case("DMFT+dynU")
@@ -2340,18 +2340,11 @@ contains
                call TransformBosonicField(curlyU,Rot,PhysicalUelements%Full_Map)
                deallocate(Rot)
             endif
-           !call isReal(curlyU)
             !
-            !istantaneous interaction and screening function
+            !istantaneous interaction, retarded function and screening matrix
             allocate(Kfunct(Nflavor,Nflavor,Solver%NtauB));Kfunct=0d0
-            call calc_QMCinteractions(curlyU,Uinst,Kfunct=Kfunct)
-            !
-            !Shift of the local levels due to screening
-            allocate(ScreenShift(Norb));ScreenShift=0d0
-            do iorb=1,Norb
-               ib1 = iorb+Norb*(iorb-1)
-               ScreenShift(iorb) = curlyU%bare_local(ib1,ib1) - curlyU%screened_local(ib1,ib1,1)
-            enddo
+            allocate(ScreeningMat(Nflavor,Nflavor));ScreeningMat=0d0
+            call calc_QMCinteractions(curlyU,Uinst,Kfunct=Kfunct,Screening=ScreeningMat)
             !
          case("EDMFT","GW+EDMFT")
             !
@@ -2365,7 +2358,6 @@ contains
                   call TransformBosonicField(curlyU,Rot,PhysicalUelements%Full_Map)
                   deallocate(Rot)
                endif
-              !call isReal(curlyU)
                !
             else
                !
@@ -2399,7 +2391,6 @@ contains
                call DeallocateBosonicField(Wloc)
                !
             endif
-           !call isReal(curlyU)
             !
             !Mixing curlyU
             if((Mixing_curlyU.gt.0d0).and.(Iteration.gt.0))then
@@ -2413,16 +2404,10 @@ contains
                call DeallocateBosonicField(curlyUold)
             endif
             !
-            !istantaneous interaction and screening function
+            !istantaneous interaction, retarded function and screening matrix
             allocate(Kfunct(Nflavor,Nflavor,Solver%NtauB));Kfunct=0d0
-            call calc_QMCinteractions(curlyU,Uinst,Kfunct=Kfunct)
-            !
-            !Shift of the local levels due to screening
-            allocate(ScreenShift(Norb));ScreenShift=0d0
-            do iorb=1,Norb
-               ib1 = iorb+Norb*(iorb-1)
-               ScreenShift(iorb) = curlyU%bare_local(ib1,ib1) - curlyU%screened_local(ib1,ib1,1)
-            enddo
+            allocate(ScreeningMat(Nflavor,Nflavor));ScreeningMat=0d0
+            call calc_QMCinteractions(curlyU,Uinst,Kfunct=Kfunct,Screening=ScreeningMat)
             !
       end select
       deallocate(Orbs)
@@ -2439,15 +2424,10 @@ contains
          call print_K(Kfunct,"K_t")
          deallocate(Kfunct)
       endif
-      if(allocated(ScreenShift))then
-         file = reg(ItFolder)//"Solver_"//reg(SiteName(isite))//"/Screening.DAT"
-         unit = free_unit()
-         open(unit,file=reg(file),form="formatted",status="unknown",position="rewind",action="write")
-         do iorb=1,Norb
-            write(unit,"(1E20.12)") ScreenShift(iorb)
-         enddo
-         close(unit)
-         deallocate(ScreenShift)
+      !
+      if(allocated(ScreeningMat))then
+         call dump_Matrix(ScreeningMat,reg(ItFolder)//"Solver_"//reg(SiteName(isite))//"/","Screening.DAT")
+         deallocate(ScreeningMat)
       endif
       !
       !Check if the screened effective local interaction at iw=0 is the same for all the sites. Same Orbital dimension assumed.
@@ -2597,9 +2577,6 @@ contains
       type(BosonicField)                    :: Pimp
       type(BosonicField)                    :: Wimp
       real(8),allocatable                   :: CDW(:,:)
-      !TEST>>>
-      real(8)                               :: shift
-      !>>>TEST
       !
       !
       write(*,"(A)") new_line("A")//new_line("A")//"---- collect_QMC_results"
@@ -3067,11 +3044,11 @@ contains
                   do ib2=ib1,ChiCitau%Nbp
                      !
                      if(ib1.eq.ib2)then
-                        shift = minval(dreal(ChiCitau%screened_local(ib1,ib2,:)))
-                        if(shift.lt.0d0) ChiCitau%screened_local(ib1,ib2,:) = ChiCitau%screened_local(ib1,ib2,:) - shift
+                        taup = minval(dreal(ChiCitau%screened_local(ib1,ib2,:)))
+                        if(taup.lt.0d0) ChiCitau%screened_local(ib1,ib2,:) = ChiCitau%screened_local(ib1,ib2,:) - taup
                      else
-                        shift = maxval(dreal(ChiCitau%screened_local(ib1,ib2,:)))
-                        if(shift.gt.0d0) ChiCitau%screened_local(ib1,ib2,:) = ChiCitau%screened_local(ib1,ib2,:) - shift
+                        taup = maxval(dreal(ChiCitau%screened_local(ib1,ib2,:)))
+                        if(taup.gt.0d0) ChiCitau%screened_local(ib1,ib2,:) = ChiCitau%screened_local(ib1,ib2,:) - taup
                      endif
                      !
                      ChiCitau%screened_local(ib2,ib1,:) = ChiCitau%screened_local(ib1,ib2,:)

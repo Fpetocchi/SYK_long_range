@@ -118,7 +118,7 @@ module module_container
    W_Moments
 
 
-   !(l) Interactions container. Depends on (b),(c),(e),(f),(g),(h)
+   !(l) Interactions container. Depends on (b),(c),(d),(e),(f),(g),(h)
    use interactions, only:                   &
    read_U_spex                              ,&
    calc_W_full                              ,&

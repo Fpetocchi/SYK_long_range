@@ -38,7 +38,7 @@ class ct_hyb
 
       ct_hyb( path SiteName, double beta, int Nspin, int Norb, int NtauF, int NtauB,
               int Norder, bool Gexp, int Nmeas, int Ntherm, int NsegShift, int NspinSwap, int NnntMeas,
-              bool removeUhalf, bool paramagnet, bool retarded, bool readScreening, std::vector<int> SetsNorb,
+              bool removeUhalf, bool paramagnet, bool retarded, std::vector<int> SetsNorb,
               int printTime, std::vector<int> bins, CustomMPI &mpi):
       SiteName(SiteName),
       Beta(beta),
@@ -56,7 +56,6 @@ class ct_hyb
       removeUhalf(removeUhalf),
       paramagnet(paramagnet),
       retarded(retarded),
-      readScreening(readScreening),
       SetsNorb(SetsNorb),
       printTime(printTime),
       bins(bins),
@@ -116,8 +115,7 @@ class ct_hyb
          //
          // Check if mandatory files are present
          std::vector<path> mandatoryFiles{"/Eloc.DAT", "/Delta_t.DAT", "/Umat.DAT"};
-         if(retarded) mandatoryFiles.push_back("/K_t.DAT");
-         if(retarded&&readScreening) mandatoryFiles.push_back("/Screening.DAT");
+         if(retarded) mandatoryFiles.insert( mandatoryFiles.end(), { "/K_t.DAT", "/Screening.DAT" } );
          if(OrbSym) mandatoryFiles.push_back("/Eqv.DAT");
          for(int ifile=0; ifile < (int)mandatoryFiles.size(); ifile++)
          {
@@ -140,22 +138,37 @@ class ct_hyb
          //
          //read the hybridization function ( std::vector<std::vector<double>> )
          read_VecVec(inputDir+"/Delta_t.DAT", F, Nflavor, NtauF, true, true);  // last flag is to reverse the tau index
+         for(int ifl=0; ifl < Nflavor; ifl++)
+         {
+            for(int itau=0; itau < F[ifl].size(); itau++)
+            {
+               path Dcomp = "Delta["+str(ifl)+"]";
+               if(F[ifl][itau]<0.0) mpi.StopError( " ->"+Dcomp+" at tau "+str(itau)+" is positive - Exiting.");
+            }
+         }
 
          //
          //read the screening function ( std::vector<std::vector<std::vector<double>>> )
+         Screening_shift.resize(Norb,0.0);
          if(retarded)
          {
-            read_VecVecVec(inputDir+"/K_t.DAT", K_table, Nflavor, true); // read_VecVecVec(inputDir+"/K.DAT", K_table, Norb, Ntau, true);
             //
+            //Read the screening from file ( Eigen::MatrixXd )
+            if(!removeUhalf)
+            {
+               mpi.report(" Reading screening file.");
+               read_EigenMat(inputDir+"/Screening.DAT", Screening_Mat, Nflavor, Nflavor); //read_Vec(inputDir+"/Screening.DAT", Screening_shift, Norb );
+               for(int iorb=0; iorb < Norb; iorb++)
+               {
+                  for(int ifl=0; ifl < Nflavor; ifl++) Screening_shift[iorb] += Screening_Mat(2*iorb,ifl)/4.0;
+                  mpi.report(" Orbital "+str(iorb)+" - screening shift = S/2: "+str(Screening_shift[iorb],6));
+               }
+            }
+
+            //
+            read_VecVecVec(inputDir+"/K_t.DAT", K_table, Nflavor, true); // read_VecVecVec(inputDir+"/K.DAT", K_table, Norb, Ntau, true);
             for(int ifl=0; ifl < Nflavor; ifl++)
             {
-               //
-               for(int itau=0; itau < F[ifl].size(); itau++)
-               {
-                  path Dcomp = "Delta["+str(ifl)+"]";
-                  if(F[ifl][itau]<0.0) mpi.StopError( " ->"+Dcomp+" at tau "+str(itau)+" is positive - Exiting.");
-               }
-               //
                for(int jfl=0; jfl <= ifl; jfl++)
                {
                   int Ntau_K = K_table[ifl][jfl].size();
@@ -177,31 +190,19 @@ class ct_hyb
          {
             for(int iorb=0; iorb < Norb; iorb++)
             {
-               //old: Hartree given only by Uaa: Hartree_shift[iorb] = Uloc(2*iorb,2*iorb+1)/2.0;
-               for(int ifl=0; ifl < Nflavor; ifl++) Hartree_shift[iorb] += Uloc(2*iorb,ifl)/2.0; //4.0//Hartree_shift[iorb] += Uloc(2*iorb,2*iorb+1)/4.0;
-               mpi.report(" Orbital "+str(iorb)+" - Hartree shift: "+str(Hartree_shift[iorb],6));
+               //old: Hartree given only by Uaa: Hartree_shift[iorb]  = Uloc(2*iorb,2*iorb+1)/2.0;
+               for(int ifl=0; ifl < Nflavor; ifl++) Hartree_shift[iorb] += Uloc(2*iorb,ifl)/2.0; //Hartree_shift[iorb] += Uloc(2*iorb,ifl)/4.0;
+               //Hartree_shift[iorb] += Uloc(2*iorb,2*iorb+1)/4.0;
+               mpi.report(" Orbital "+str(iorb)+" - Hartree shift = U/2: "+str(Hartree_shift[iorb],6));
             }
          }
-
-         //
-         //correction to the chemical potential shift encoded in the screening function
-         Screening_shift.resize(Norb,0.0);
-         if(retarded && !removeUhalf)
+         /*QUESTO ANDAVA BENE????
+         for(int ifl=0; ifl < Nflavor; ifl++) //Hartree_shift[iorb] += Uloc(2*iorb,ifl)/2.0;
          {
-            if(readScreening)
-            {
-               //Read the screening from file
-               mpi.report(" Reading screening file.");
-               read_Vec(inputDir+"/Screening.DAT", Screening_shift, Norb );
-            }
-            else
-            {
-               //Estimate from the derivative of K(tau) in tau=0. Deprecated.
-               mpi.report(" Computing screening from K(tau) derivative.");
-               for(int iorb=0; iorb < Norb; iorb++) Screening_shift[iorb] = (NtauB-1)*K_table[2*iorb][2*iorb][1]/Beta;
-            }
-            for(int iorb=0; iorb < Norb; iorb++)mpi.report(" Orbital "+str(iorb)+" - screening shift: "+str(Screening_shift[iorb],6));
+            Hartree_shift[iorb] += Uloc(2*iorb,ifl)/4.0;
+            Hartree_shift[iorb] += Uloc(2*iorb,2*iorb+1)/4.0;
          }
+         */
 
          //
          //set the levels for the impurity solver
@@ -398,7 +399,6 @@ class ct_hyb
       bool                                removeUhalf;
       bool                                paramagnet;
       bool                                retarded;
-      bool                                readScreening;
       int                                 printTime;
       std::vector<int>                    SetsNorb;
       std::vector<int>                    bins;                                 // 2D vec Contains binlength and binstart in [0] and [1] respectively
@@ -428,6 +428,7 @@ class ct_hyb
       Vec                                 Screening_shift;                      // chemical potential correction due to shift encoded in the screening function
       Vec                                 Eloc;                                 // <\epsilon>
       Mat                                 Uloc;                                 // Istantaneous U matrix
+      Mat                                 Screening_Mat;                        // Screening matrix
       VecVec                              F;                                    // F_up(\tau) = -G_{0,down}^{-1}(-\tau) + (iw + mu)
       VecVecVec                           K_table;                              // K function matrix for retarded interactions
       // Solver vars
@@ -632,7 +633,8 @@ class ct_hyb
       void set_levels()
       {
          Levels.resize(Nflavor,0.0);
-         for (int ifl=0; ifl<Nflavor; ifl++) Levels[ifl] = mu - Eloc[ifl] + Hartree_shift[(int)(ifl/2)] - Screening_shift[(int)(ifl/2)]/2.0;
+         for (int ifl=0; ifl<Nflavor; ifl++) Levels[ifl] = mu - Eloc[ifl] + Hartree_shift[(int)(ifl/2)] - Screening_shift[(int)(ifl/2)];
+         //for (int ifl=0; ifl<Nflavor; ifl++) Levels[ifl] = mu - Eloc[ifl] + 1.5 - Screening_shift[(int)(ifl/2)]/2.0;
       }
 
       //----------------------------------------------------------------------//

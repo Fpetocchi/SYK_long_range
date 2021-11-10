@@ -38,8 +38,8 @@ int main(int argc, char *argv[])
    int Nspin,NtauF,NtauB,Norder;
    int Nmeas,Ntherm,Nshift,Nswap,Nnnt,printTime;
    //logical flags and compatibility typo fix
-   bool Gexp,paramagnet,retarded,removeUhalf,quickloops,readScreening;
-   int Gexp_read,para_read,ret_read,rmvU2_read,quick_read,Scrn_read;
+   bool Gexp,paramagnet,retarded,removeUhalf,quickloops;
+   int Gexp_read,para_read,ret_read,rmvU2_read,quick_read;
    // Post-processing of the Green's function
    int binlength,binstart;
    //Symmetrization type
@@ -96,7 +96,6 @@ int main(int argc, char *argv[])
       find_param(argv[1], "PRINT_TIME"      , printTime   );
       find_param(argv[1], "PARAMAGNET"      , para_read   ); paramagnet = (para_read == 1) ? true : false;
       find_param(argv[1], "RETARDED"        , ret_read    ); retarded = (ret_read == 1) ? true : false;
-      find_param(argv[1], "READ_SCREENING"  , Scrn_read   ); readScreening = (Scrn_read == 1) ? true : false;
       // Post-processing of the Green's function
       find_param(argv[1], "BINLENGTH"       , binlength   );
       find_param(argv[1], "BINSTART"        , binstart    );
@@ -127,7 +126,6 @@ int main(int argc, char *argv[])
          mpi.report(" Nnnt= "+str(Nnnt));
          mpi.report(" printTime= "+str(printTime)+"min");
          mpi.report(" retarded= "+str(retarded));
-         mpi.report(" readScreening= "+str(readScreening));
          mpi.report(" quickloops= "+str(quickloops));
          mpi.report(" removeUhalf= "+str(removeUhalf));
          mpi.report(" paramagnet= "+str(paramagnet));
@@ -246,7 +244,7 @@ int main(int argc, char *argv[])
             mpi.report(" Folder = "+SiteDir[isite]+" (Found).");
             ImpurityList.push_back( ct_hyb( SiteName[isite], Beta, Nspin, SiteNorb[isite], NtauF, NtauB,
                                             Norder, Gexp, Nmeas, Ntherm, Nshift, Nswap, Nnnt,
-                                            removeUhalf, paramagnet, retarded, readScreening, SiteSetsNorb[isite],
+                                            removeUhalf, paramagnet, retarded, SiteSetsNorb[isite],
                                             printTime, std::vector<int> { binlength,binstart }, mpi ) );
             ImpurityList[isite].init( SiteDir[isite]);
          }

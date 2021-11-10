@@ -1391,6 +1391,10 @@ contains
       use utils_fields
       use input_vars, only : Nreal, wrealMax, pathINPUTtr
       use input_vars, only : Hetero
+      !TEST>>>
+      use input_vars, only : tau_uniform, Ntau
+      use fourier_transforms
+      !>>>TEST
       implicit none
       !
       type(BosonicField),intent(inout),target :: Umats
@@ -1404,14 +1408,19 @@ contains
       integer                               :: Nsite
       real(8)                               :: RealU,ImagU
       real(8),allocatable                   :: wreal(:),wmats(:)
-      complex(8),allocatable                :: D1(:,:),D2(:,:),D3(:,:)
-      complex(8),allocatable                :: Utmp(:,:)
+      complex(8),allocatable                :: D(:,:),Utmp(:,:)
       type(BosonicField)                    :: Ureal
       type(BosonicField),target             :: Umats_imp
       type(BosonicField),pointer            :: Umats_ptr
       type(physicalU)                       :: PhysicalUelements
       logical                               :: LocalOnly_
       real                                  :: start,finish
+      !TEST>>>
+      type(BosonicField)                    :: Utmp1,Utmp2
+      real(8)                               :: g,w,b
+      integer                               :: itau
+      real(8),allocatable                   :: tau(:)
+      !>>>TEST
       !
       !
       if(verbose)write(*,"(A)") "---- build_Uret_singlParam_ph"
@@ -1464,12 +1473,12 @@ contains
       do ib1=1,Nbp
          do ib2=1,Nbp
             do iph=1,Nph
-               iwp=minloc(wreal-wo_eph(iph),dim=1)
+               iwp=minloc(abs(wreal-wo_eph(iph)),dim=1)
                do iw=1,Nreal
                   !
                   RealU = 2*(g_eph(iph)**2)*wo_eph(iph) / ( (wreal(iw)**2) - (wo_eph(iph)**2) )
                   ImagU=0d0
-                  if(iw.eq.iwp) ImagU = -pi*(g_eph(iph)**2)
+                  if(iw.eq.iwp) ImagU = -pi*(g_eph(iph)**2)/abs(wreal(3)-wreal(2))
                   !
                   Ureal%screened_local(ib1,ib2,iw) = Umats_ptr%bare_local(ib1,ib2) + dcmplx(RealU,ImagU)
                   !
@@ -1480,51 +1489,35 @@ contains
       !
       ! Allocate the temporary quantities needed by the Analytical continuation
       allocate(Utmp(Nbp,Nbp));Utmp=czero
-      allocate(D1(Nbp,Nbp));D1=czero
-      allocate(D2(Nbp,Nbp));D2=czero
-      allocate(D3(Nbp,Nbp));D3=czero
+      allocate(D(Nbp,Nbp));D=czero
       !
       ! Analytical continuation of the local component to imag axis using spectral rep
       call cpu_time(start)
       !$OMP PARALLEL DEFAULT(NONE),&
       !$OMP SHARED(Nbp,wmats,wreal,Nreal,Ureal,Umats_ptr),&
-      !$OMP PRIVATE(ib1,ib2,iw1,iw2,D1,D2,D3,Utmp)
+      !$OMP PRIVATE(ib1,ib2,iw1,iw2,D,Utmp)
       !$OMP DO
       do iw1=1,Umats_ptr%Npoints
+         !
          Utmp=czero
-         do iw2=1,Nreal-2,2
+         !
+         do iw2=1,Nreal
             !
-            do ib1=1,Nbp
-               do ib2=1,Nbp
-                  D1(ib1,ib2) = -dimag( Ureal%screened_local(ib1,ib2,iw2)   )/pi
-                  D2(ib1,ib2) = -dimag( Ureal%screened_local(ib1,ib2,iw2+1) )/pi
-                  D3(ib1,ib2) = -dimag( Ureal%screened_local(ib1,ib2,iw2+2) )/pi
-               enddo
-            enddo
+            if((wmats(iw1).eq.0d0).and.(wreal(iw2).eq.0d0))cycle
             !
-            !D(-w)=-D(w), integrate using Simpson method
-            if(wreal(iw2).gt.0.d0) then
-               Utmp(:,:) = Utmp(:,:) + ( D1(:,:)/(dcmplx(0.d0,wmats(iw1))-wreal(iw2)  ) - D1(:,:)/(dcmplx(0.d0,wmats(iw1))+wreal(iw2)  ) ) *(wreal(iw2+1)-wreal(iw2))/3.d0
-               Utmp(:,:) = Utmp(:,:) + ( D2(:,:)/(dcmplx(0.d0,wmats(iw1))-wreal(iw2+1)) - D2(:,:)/(dcmplx(0.d0,wmats(iw1))+wreal(iw2+1)) ) *(wreal(iw2+1)-wreal(iw2))*4.d0/3.d0
-               Utmp(:,:) = Utmp(:,:) + ( D3(:,:)/(dcmplx(0.d0,wmats(iw1))-wreal(iw2+2)) - D3(:,:)/(dcmplx(0.d0,wmats(iw1))+wreal(iw2+2)) ) *(wreal(iw2+1)-wreal(iw2))/3.d0
-            elseif(dabs(wreal(iw2)).lt.1.d-12) then
-               Utmp(:,:) = Utmp(:,:) + ( D2(:,:)/(dcmplx(0.d0,wmats(iw1))-wreal(iw2+1)) - D2(:,:)/(dcmplx(0.d0,wmats(iw1))+wreal(iw2+1)) ) *(wreal(iw2+1)-wreal(iw2))*4.d0/3.d0
-               Utmp(:,:) = Utmp(:,:) + ( D3(:,:)/(dcmplx(0.d0,wmats(iw1))-wreal(iw2+2)) - D3(:,:)/(dcmplx(0.d0,wmats(iw1))+wreal(iw2+2)) ) *(wreal(iw2+1)-wreal(iw2))/3.d0
-            endif
+            D = -dimag( Ureal%screened_local(:,:,iw2)*abs(wreal(3)-wreal(2)) )/pi
+            Utmp = Utmp +  D/( dcmplx(0.d0,wmats(iw1))-wreal(iw2) ) - D/( dcmplx(0.d0,wmats(iw1))+wreal(iw2) )
+            !
          enddo
          !
-         do ib1=1,Nbp
-            do ib2=1,Nbp
-               Umats_ptr%screened_local(ib1,ib2,iw1) = Utmp(ib1,ib2) + Umats_ptr%bare_local(ib1,ib2)
-            enddo
-         enddo
+         Umats_ptr%screened_local(:,:,iw1) = Utmp + Umats_ptr%bare_local
          !
       enddo !iw1
       !
       !$OMP END DO
       !$OMP END PARALLEL
       call cpu_time(finish)
-      deallocate(D1,D2,D3,Utmp,wmats,wreal)
+      deallocate(D,Utmp,wmats,wreal)
       call DeallocateBosonicField(Ureal)
       write(*,"(A,F)") "     Ue-ph(w) --> Ue-ph(iw) cpu timing:", finish-start
       !
@@ -1540,10 +1533,45 @@ contains
          Nsite = Hetero%Explicit(2)-Hetero%Explicit(1)+1
          call Expand2Nsite(Umats,Umats_ptr,Nsite)
          call DeallocateBosonicField(Umats_imp)
-         nullify(Umats_ptr)
       endif
+      nullify(Umats_ptr)
       !
       call dump_BosonicField(Umats,reg(pathINPUTtr),"Uloc_mats.DAT")
+      !
+      !TEST>>>
+      allocate(tau(Ntau));tau=0d0
+      if(tau_uniform)tau = linspace(0d0,Umats%Beta,Ntau)
+      if(.not.tau_uniform)tau = denspace(Umats%Beta,Ntau)
+      !
+      !FT from U(iw) computed with AC to numerical U(tau)
+      call AllocateBosonicField(Utmp1,Norb,Ntau,0,Beta=Umats%Beta)
+      call Bmats2itau(Umats%Beta,Umats%screened_local,Utmp1%screened_local,asympt_corr=.true.,tau_uniform=tau_uniform,Umats_bare=Umats%bare_local)
+      call dump_BosonicField(Utmp1,reg(pathINPUTtr),"Uloc_tau_FTofAC.DAT",axis=tau)
+      !
+      !analytical U(tau)
+      g = g_eph(1)
+      w = wo_eph(1)
+      b = Umats%Beta/2
+      call clear_attributes(Utmp1)
+      do itau=1,Ntau
+         Utmp1%screened_local(:,:,itau) = -g**2 * cosh(w*(b-tau(itau))) / ( sinh(w*b) )
+      enddo
+      call dump_BosonicField(Utmp1,reg(pathINPUTtr),"Uloc_tau_analytic.DAT",axis=tau)
+      !
+      !FT from analytical U(tau) to U(iw)
+      call AllocateBosonicField(Utmp2,Norb,Umats%Npoints,0,Beta=Umats%Beta)
+      call Bitau2mats(Umats%Beta,Utmp1%screened_local,Utmp2%screened_local,tau_uniform=tau_uniform)
+      do iw=1,Utmp2%Npoints
+         Utmp2%screened_local(:,:,iw) = Utmp2%screened_local(:,:,iw) + Umats%bare_local
+      enddo
+      Utmp2%bare_local = Umats%bare_local
+      call dump_BosonicField(Utmp2,reg(pathINPUTtr),"Uloc_mats_FTofAnalytical.DAT")
+      !
+      call duplicate(Umats,Utmp2)
+      !
+      call DeallocateField(Utmp1)
+      call DeallocateField(Utmp2)
+      !>>>TEST
       !
    end subroutine build_Uret_singlParam_ph
    !
@@ -1568,8 +1596,7 @@ contains
       integer                               :: Nsite
       real(8)                               :: RealU,ImagU
       real(8),allocatable                   :: wreal(:),wmats(:)
-      complex(8),allocatable                :: D1(:,:),D2(:,:),D3(:,:)
-      complex(8),allocatable                :: Utmp(:,:)
+      complex(8),allocatable                :: D(:,:),Utmp(:,:)
       type(BosonicField)                    :: Ureal
       type(BosonicField),target             :: Umats_imp
       type(BosonicField),pointer            :: Umats_ptr
@@ -1635,12 +1662,12 @@ contains
       do ib1=1,Nbp
          do ib2=1,Nbp
             do iph=1,Nph
-               iwp=minloc(wreal-wo_eph(iph),dim=1)
+               iwp=minloc(abs(wreal-wo_eph(iph)),dim=1)
                do iw=1,Nreal
                   !
                   RealU = 2*(g_eph(iph)**2)*wo_eph(iph) / ( (wreal(iw)**2) - (wo_eph(iph)**2) )
                   ImagU=0d0
-                  if(iw.eq.iwp) ImagU = -pi*(g_eph(iph)**2)
+                  if(iw.eq.iwp) ImagU = -pi*(g_eph(iph)**2)/abs(wreal(3)-wreal(2))
                   !
                   Ureal%screened_local(ib1,ib2,iw) = Umats_ptr%bare_local(ib1,ib2) + dcmplx(RealU,ImagU)
                   !
@@ -1651,51 +1678,35 @@ contains
       !
       ! Allocate the temporary quantities needed by the Analytical continuation
       allocate(Utmp(Nbp,Nbp));Utmp=czero
-      allocate(D1(Nbp,Nbp));D1=czero
-      allocate(D2(Nbp,Nbp));D2=czero
-      allocate(D3(Nbp,Nbp));D3=czero
+      allocate(D(Nbp,Nbp));D=czero
       !
       ! Analytical continuation of the local component to imag axis using spectral rep
       call cpu_time(start)
       !$OMP PARALLEL DEFAULT(NONE),&
       !$OMP SHARED(Nbp,wmats,wreal,Nreal,Ureal,Umats_ptr),&
-      !$OMP PRIVATE(ib1,ib2,iw1,iw2,D1,D2,D3,Utmp)
+      !$OMP PRIVATE(ib1,ib2,iw1,iw2,D,Utmp)
       !$OMP DO
       do iw1=1,Umats_ptr%Npoints
+         !
          Utmp=czero
-         do iw2=1,Nreal-2,2
+         !
+         do iw2=1,Nreal
             !
-            do ib1=1,Nbp
-               do ib2=1,Nbp
-                  D1(ib1,ib2) = -dimag( Ureal%screened_local(ib1,ib2,iw2)   )/pi
-                  D2(ib1,ib2) = -dimag( Ureal%screened_local(ib1,ib2,iw2+1) )/pi
-                  D3(ib1,ib2) = -dimag( Ureal%screened_local(ib1,ib2,iw2+2) )/pi
-               enddo
-            enddo
+            if((wmats(iw1).eq.0d0).and.(wreal(iw2).eq.0d0))cycle
             !
-            !D(-w)=-D(w), integrate using Simpson method
-            if(wreal(iw2).gt.0.d0) then
-               Utmp(:,:) = Utmp(:,:) + ( D1(:,:)/(dcmplx(0.d0,wmats(iw1))-wreal(iw2)  ) - D1(:,:)/(dcmplx(0.d0,wmats(iw1))+wreal(iw2)  ) ) *(wreal(iw2+1)-wreal(iw2))/3.d0
-               Utmp(:,:) = Utmp(:,:) + ( D2(:,:)/(dcmplx(0.d0,wmats(iw1))-wreal(iw2+1)) - D2(:,:)/(dcmplx(0.d0,wmats(iw1))+wreal(iw2+1)) ) *(wreal(iw2+1)-wreal(iw2))*4.d0/3.d0
-               Utmp(:,:) = Utmp(:,:) + ( D3(:,:)/(dcmplx(0.d0,wmats(iw1))-wreal(iw2+2)) - D3(:,:)/(dcmplx(0.d0,wmats(iw1))+wreal(iw2+2)) ) *(wreal(iw2+1)-wreal(iw2))/3.d0
-            elseif(dabs(wreal(iw2)).lt.1.d-12) then
-               Utmp(:,:) = Utmp(:,:) + ( D2(:,:)/(dcmplx(0.d0,wmats(iw1))-wreal(iw2+1)) - D2(:,:)/(dcmplx(0.d0,wmats(iw1))+wreal(iw2+1)) ) *(wreal(iw2+1)-wreal(iw2))*4.d0/3.d0
-               Utmp(:,:) = Utmp(:,:) + ( D3(:,:)/(dcmplx(0.d0,wmats(iw1))-wreal(iw2+2)) - D3(:,:)/(dcmplx(0.d0,wmats(iw1))+wreal(iw2+2)) ) *(wreal(iw2+1)-wreal(iw2))/3.d0
-            endif
+            D = -dimag( Ureal%screened_local(:,:,iw2)*abs(wreal(3)-wreal(2)) )/pi
+            Utmp = Utmp +  D/( dcmplx(0.d0,wmats(iw1))-wreal(iw2) ) - D/( dcmplx(0.d0,wmats(iw1))+wreal(iw2) )
+            !
          enddo
          !
-         do ib1=1,Nbp
-            do ib2=1,Nbp
-               Umats_ptr%screened_local(ib1,ib2,iw1) = Utmp(ib1,ib2) + Umats_ptr%bare_local(ib1,ib2)
-            enddo
-         enddo
+         Umats_ptr%screened_local(:,:,iw1) = Utmp + Umats_ptr%bare_local
          !
       enddo !iw1
       !
       !$OMP END DO
       !$OMP END PARALLEL
       call cpu_time(finish)
-      deallocate(D1,D2,D3,Utmp,wmats,wreal)
+      deallocate(D,Utmp,wmats,wreal)
       call DeallocateBosonicField(Ureal)
       write(*,"(A,F)") "     Ue-ph(w) --> Ue-ph(iw) cpu timing:", finish-start
       !
@@ -1711,8 +1722,8 @@ contains
          Nsite = Hetero%Explicit(2)-Hetero%Explicit(1)+1
          call Expand2Nsite(Umats,Umats_ptr,Nsite)
          call DeallocateBosonicField(Umats_imp)
-         nullify(Umats_ptr)
       endif
+      nullify(Umats_ptr)
       !
       call dump_BosonicField(Umats,reg(pathINPUTtr),"Uloc_mats.DAT")
       !
@@ -1907,8 +1918,8 @@ contains
          Nsite = Hetero%Explicit(2)-Hetero%Explicit(1)+1
          call Expand2Nsite(Umats,Umats_ptr,Nsite)
          call DeallocateBosonicField(Umats_imp)
-         nullify(Umats_ptr)
       endif
+      nullify(Umats_ptr)
       !
       call dump_BosonicField(Umats,reg(pathINPUTtr),"Uloc_mats_nosum.DAT")
       call BosonicKsum(Umats)
@@ -2108,8 +2119,8 @@ contains
          Nsite = Hetero%Explicit(2)-Hetero%Explicit(1)+1
          call Expand2Nsite(Umats,Umats_ptr,Nsite)
          call DeallocateBosonicField(Umats_imp)
-         nullify(Umats_ptr)
       endif
+      nullify(Umats_ptr)
       !
       call dump_BosonicField(Umats,reg(pathINPUTtr),"Uloc_mats.DAT")
       !
@@ -2120,19 +2131,23 @@ contains
    !PURPOSE: Given the Bosonic Field it extracts the screened interaction and
    ! retardation function.
    !---------------------------------------------------------------------------!
-   subroutine calc_QMCinteractions(Umats,Uinst,Kfunct,Kpfunct,sym)
+   subroutine calc_QMCinteractions(Umats,Uinst,Kfunct,Kpfunct,Screening,sym)
       !
       use parameters
       use file_io
       use utils_misc
       use utils_fields
       use input_vars, only : Solver
+      !TEST>>>
+      use input_vars, only : g_eph,wo_eph,Test_flag_2
+      !>>>TEST
       implicit none
       !
       type(BosonicField),intent(in)         :: Umats
       real(8),intent(inout)                 :: Uinst(:,:)
       real(8),intent(inout),optional        :: Kfunct(:,:,:)
       real(8),intent(inout),optional        :: Kpfunct(:,:,:)
+      real(8),intent(inout),optional        :: Screening(:,:)
       logical,intent(in),optional           :: sym
       !
       integer                               :: Nbp,Norb,Nflavor
@@ -2141,20 +2156,27 @@ contains
       integer                               :: iw,itau
       real(8),allocatable                   :: wmats(:),tau(:)
       complex(8),allocatable                :: Kaux(:,:,:)
-      logical                               :: Uloc,U1st,U2nd,retarded,Kp
+      logical                               :: Uloc,U1st,U2nd,retarded,Kp,Scr
       type(physicalU)                       :: PhysicalUelements
       logical                               :: sym_
+      !TEST>>>
+      real(8)                               :: g,w,b
+      !>>>TEST
       !
       !
       if(verbose)write(*,"(A)") "---- calc_QMCinteractions"
       !
       !
-      ! Check on the input field
       if(.not.Umats%status) stop "calc_QMCinteractions: Umats not properly initialized."
+      !
       retarded=.false.
       if(present(Kfunct))retarded=.true.
+      !
       Kp=.false.
       if(present(Kpfunct).and.retarded)Kp=.true.
+      !
+      Scr=.false.
+      if(present(Screening).and.retarded)Scr=.true.
       !
       sym_=.true.
       if(present(sym))sym_=sym
@@ -2170,6 +2192,7 @@ contains
       if(retarded)then
          call assert_shape(Kfunct,[Nflavor,Nflavor,Solver%NtauB],"calc_QMCinteractions","Kfunct")
          if(Kp)call assert_shape(Kpfunct,[Nflavor,Nflavor,Solver%NtauB],"calc_QMCinteractions","Kpfunct")
+         if(Scr)call assert_shape(Screening,[Nflavor,Nflavor],"calc_QMCinteractions","Screening")
          allocate(Kaux(Nflavor,Nflavor,Umats%Npoints));Kaux=czero
          allocate(tau(Solver%NtauB));tau=0d0
          tau = linspace(0d0,Umats%Beta,Solver%NtauB)
@@ -2221,11 +2244,25 @@ contains
                !
             endif
             !
+            if(Scr)then
+               !
+               if(Uloc) Screening(ib1,ib2) =  Umats%bare_local(iu1,iu2) - Umats%screened_local(iu1,iu2,1)
+               if(U1st) Screening(ib1,ib2) =  Umats%bare_local(iu1,iu2) - Umats%screened_local(iu1,iu2,1)
+               if(U2nd) Screening(ib1,ib2) =  Umats%bare_local(iu1,iu2) - (Umats%bare_local(ix1,ix2)+Umats%bare_local(ip1,ip2))/2d0 - &
+                                          (Umats%screened_local(iu1,iu2,1) - (Umats%screened_local(ix1,ix2,1)+Umats%screened_local(ip1,ip2,1))/2d0)
+               !same orbital - same spin screening
+               if(Uloc.and.(ib2.gt.ib1)) then
+                  Screening(ib1,ib1) = Screening(ib1,ib2)
+                  Screening(ib2,ib2) = Screening(ib1,ib2)
+               endif
+               !
+            endif
+            !
          enddo
       enddo
       if(sym_)call check_Symmetry(Uinst,eps,enforce=.true.,hardstop=.false.,name="Uinst")
       !
-      !setting the reterdation function
+      !computing the retarded function
       if(retarded)then
          Kfunct=0d0
          do itau=2,Solver%NtauB-1
@@ -2234,17 +2271,33 @@ contains
             enddo
             if(sym_)call check_Symmetry(Kfunct(:,:,itau),eps,enforce=.true.,hardstop=.false.,name="Kfunct_t"//str(itau))
          enddo
-         if(Kp)then
-            Kpfunct=0d0
-            do itau=2,Solver%NtauB-1
-               do iw=2,Umats%Npoints
-                  Kpfunct(:,:,itau) = Kpfunct(:,:,itau) + 2d0*Kaux(:,:,iw) * sin(wmats(iw)*tau(itau)) / ( Umats%Beta*wmats(iw) )
-               enddo
-               if(sym_)call check_Symmetry(Kpfunct(:,:,itau),eps,enforce=.true.,hardstop=.false.,name="Kpfunct_t"//str(itau))
-            enddo
-         endif
-         deallocate(Kaux,tau,wmats)
       endif
+      !
+      !computing the first derivative of retarded function
+      if(retarded.and.kp)then
+         Kpfunct=0d0
+         do itau=2,Solver%NtauB-1
+            do iw=2,Umats%Npoints
+               Kpfunct(:,:,itau) = Kpfunct(:,:,itau) + 2d0*Kaux(:,:,iw) * sin(wmats(iw)*tau(itau)) / ( Umats%Beta*wmats(iw) )
+            enddo
+            if(sym_)call check_Symmetry(Kpfunct(:,:,itau),eps,enforce=.true.,hardstop=.false.,name="Kpfunct_t"//str(itau))
+         enddo
+      endif
+      !
+      !TEST>>>
+      if(retarded.and.Test_flag_2)then
+         write(*,"(A)") new_line("A")//new_line("A")//"---- calc_QMCinteractions: Analytical screening function."
+         Kfunct=0d0
+         g = g_eph(1)
+         w = wo_eph(1)
+         b = Umats%Beta/2
+         do itau=2,Solver%NtauB-1
+            Kfunct(:,:,itau) = -( g**2/w ) * ( cosh(w*(b-tau(itau))) - cosh(w*b) ) / ( sinh(w*b) )
+         enddo
+      endif
+      !>>>TEST
+      !
+      if(retarded)deallocate(Kaux,tau,wmats)
       !
    end subroutine calc_QMCinteractions
 

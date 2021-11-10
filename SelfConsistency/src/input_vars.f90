@@ -229,9 +229,10 @@ module input_vars
    logical,public                           :: bosonicSC=.false.
    !
    !Testing flags
-   logical,public                           :: Test_flag_1
-   logical,public                           :: Test_flag_2
-   logical,public                           :: Test_flag_3
+   logical,private                          :: Testing=.false.
+   logical,public                           :: Test_flag_1=.false.
+   logical,public                           :: Test_flag_2=.false.
+   logical,public                           :: Test_flag_3=.false.
    !
    !Variables that are needed in post_processing
    complex(8),allocatable,public            :: OlocSite(:,:,:)
@@ -485,7 +486,7 @@ contains
             call parse_input_variable(J,"JH",InputFile,default=0.5d0,comment="Hund's coupling (orbital independent).")
          endif
          !phononic model U
-         call parse_input_variable(Nphonons,"N_PH",InputFile,default=3,comment="Number of custom phononic modes.")
+         call parse_input_variable(Nphonons,"N_PH",InputFile,default=0,comment="Number of custom phononic modes.")
          if(Nphonons.gt.0)then
             allocate(g_eph(Nphonons));g_eph=0d0
             allocate(wo_eph(Nphonons));wo_eph=0d0
@@ -495,7 +496,7 @@ contains
             enddo
          endif
          !long-range model U
-         call parse_input_variable(N_Vnn,"N_V",InputFile,default=1,comment="Range of the non-local interaction in real space (orbital independent).")
+         call parse_input_variable(N_Vnn,"N_V",InputFile,default=0,comment="Range of the non-local interaction in real space (orbital independent).")
          if(N_Vnn.gt.0)then
             !long-range coulombian
             call parse_input_variable(long_range,"LONG_RANGE",InputFile,default="Explicit",comment="Avalibale long range interaction: Explicit(reads VNN for each N_V), Coulomb(reads first VNN, max neighbor N_V), Ewald(reads first VNN, unrestricted range).")
@@ -554,9 +555,6 @@ contains
          call parse_input_variable(causal_U_type,"CAUSAL_U_TYPE",InputFile,default="curlyU",comment="Correction mode for generalized bosonic cavity construction. Available: curlyU, Ploc.")
          if((reg(causal_U_type).eq."Ploc").and.((Nsite.gt.1).or.(maxval(SiteNorb).gt.1)))causal_U_type="curlyU"
       endif
-      !TEST>>>
-      call parse_input_variable(Test_flag_1,"CORRECT_CHI_NEG",InputFile,default=.false.,comment="Flag to shift the local charge susceptibility if negative.")
-      !>>>TEST
       !
       !Variables for the fit
       call parse_input_variable(DeltaFit,"DELTA_FIT",InputFile,default="Inf",comment="Fit to extract the local energy in GW+EDMFT calculations. Available: Inf, Analytic, Moments.")
@@ -664,7 +662,6 @@ contains
       call parse_input_variable(Solver%binlength,"BINLENGTH",InputFile,default=4,comment="If >0 the Green's function at itau will be the average within +/-binlength.")
       call parse_input_variable(Solver%binstart,"BINSTART",InputFile,default=100,comment="Tau points skipped at the beginning and end of the Green's function average.")
       call append_to_input_list(Solver%retarded,"RETARDED","Integer flag to include the frequency dependent part of the interaction. User cannot set this as its deduced from CALC_TYPE.")
-      call parse_input_variable(Solver%readScreening,"READ_SCREENING",InputFile,default=1,comment="Integer flag to read the screening shift from curlyU. If =0 its computed from the derivative of K in tau=0 (deprecated).")
       Solver%quickloops=look4dens%quickloops
       if(ExpandImpurity)then
          allocate(Solver%Time(1));Solver%Time=0
@@ -674,6 +671,13 @@ contains
          do isite=1,Nsite
             call parse_input_variable(Solver%Time(isite),"TIME_"//str(isite),InputFile,default=15,comment="Minutes of solver runtime for site number "//str(isite))
          enddo
+      endif
+      !
+      if(Testing)then
+         call add_separator("Testing flags")
+         call parse_input_variable(Test_flag_1,"CORRECT_CHI_NEG",InputFile,default=.false.,comment="Flag to shift the local charge susceptibility if negative.")
+         call parse_input_variable(Test_flag_2,"CASULA",InputFile,default=.false.,comment="Flag to use the Casula scheme.")
+         call parse_input_variable(Test_flag_3,"FLAG",InputFile,default=.false.,comment="Flag to ___.")
       endif
       !
       !
