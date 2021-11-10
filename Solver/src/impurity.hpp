@@ -154,15 +154,12 @@ class ct_hyb
          {
             //
             //Read the screening from file ( Eigen::MatrixXd )
-            if(!removeUhalf)
+            mpi.report(" Reading screening file.");
+            read_EigenMat(inputDir+"/Screening.DAT", Screening_Mat, Nflavor, Nflavor); //read_Vec(inputDir+"/Screening.DAT", Screening_shift, Norb );
+            for(int iorb=0; iorb < Norb; iorb++)
             {
-               mpi.report(" Reading screening file.");
-               read_EigenMat(inputDir+"/Screening.DAT", Screening_Mat, Nflavor, Nflavor); //read_Vec(inputDir+"/Screening.DAT", Screening_shift, Norb );
-               for(int iorb=0; iorb < Norb; iorb++)
-               {
-                  for(int ifl=0; ifl < Nflavor; ifl++) Screening_shift[iorb] += Screening_Mat(2*iorb,ifl)/4.0;
-                  mpi.report(" Orbital "+str(iorb)+" - screening shift = S/2: "+str(Screening_shift[iorb],6));
-               }
+               Screening_shift[iorb] = Screening_Mat(2*iorb,2*iorb)/2.0;
+               mpi.report(" Orbital "+str(iorb)+" - screening shift = S/2: "+str(Screening_shift[iorb],6));
             }
 
             //
@@ -190,19 +187,14 @@ class ct_hyb
          {
             for(int iorb=0; iorb < Norb; iorb++)
             {
-               //old: Hartree given only by Uaa: Hartree_shift[iorb]  = Uloc(2*iorb,2*iorb+1)/2.0;
-               for(int ifl=0; ifl < Nflavor; ifl++) Hartree_shift[iorb] += Uloc(2*iorb,ifl)/2.0; //Hartree_shift[iorb] += Uloc(2*iorb,ifl)/4.0;
-               //Hartree_shift[iorb] += Uloc(2*iorb,2*iorb+1)/4.0;
-               mpi.report(" Orbital "+str(iorb)+" - Hartree shift = U/2: "+str(Hartree_shift[iorb],6));
+               //old: Hartree given only by Uaa: Hartree_shift[iorb]  = Uloc(2*iorb,2*iorb+1)/2.0; //Hartree_shift[iorb] += Uloc(2*iorb,ifl)/4.0; //Hartree_shift[iorb] += ( Uloc(2*iorb,2*iorb+1) + Screening_Mat(2*iorb,2*iorb+1) )/4.0;
+               for(int ifl=0; ifl < Nflavor; ifl++)
+               {
+                  if(2*iorb!=ifl) Hartree_shift[iorb] += ( Uloc(2*iorb,ifl) + Screening_Mat(2*iorb,ifl) )/2.0;
+               }
+               mpi.report(" Orbital "+str(iorb)+" - Hartree shift = Ubare/2: "+str(Hartree_shift[iorb],6));
             }
          }
-         /*QUESTO ANDAVA BENE????
-         for(int ifl=0; ifl < Nflavor; ifl++) //Hartree_shift[iorb] += Uloc(2*iorb,ifl)/2.0;
-         {
-            Hartree_shift[iorb] += Uloc(2*iorb,ifl)/4.0;
-            Hartree_shift[iorb] += Uloc(2*iorb,2*iorb+1)/4.0;
-         }
-         */
 
          //
          //set the levels for the impurity solver
@@ -634,7 +626,6 @@ class ct_hyb
       {
          Levels.resize(Nflavor,0.0);
          for (int ifl=0; ifl<Nflavor; ifl++) Levels[ifl] = mu - Eloc[ifl] + Hartree_shift[(int)(ifl/2)] - Screening_shift[(int)(ifl/2)];
-         //for (int ifl=0; ifl<Nflavor; ifl++) Levels[ifl] = mu - Eloc[ifl] + 1.5 - Screening_shift[(int)(ifl/2)]/2.0;
       }
 
       //----------------------------------------------------------------------//
