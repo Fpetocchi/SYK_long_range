@@ -1391,10 +1391,6 @@ contains
       use utils_fields
       use input_vars, only : Nreal, wrealMax, pathINPUTtr
       use input_vars, only : Hetero
-      !TEST>>>
-      use input_vars, only : tau_uniform, Ntau
-      use fourier_transforms
-      !>>>TEST
       implicit none
       !
       type(BosonicField),intent(inout),target :: Umats
@@ -1413,14 +1409,8 @@ contains
       type(BosonicField),target             :: Umats_imp
       type(BosonicField),pointer            :: Umats_ptr
       type(physicalU)                       :: PhysicalUelements
-      logical                               :: LocalOnly_
+      logical                               :: LocalOnly_,Screen
       real                                  :: start,finish
-      !TEST>>>
-      type(BosonicField)                    :: Utmp1,Utmp2
-      real(8)                               :: g,w,b
-      integer                               :: itau
-      real(8),allocatable                   :: tau(:)
-      !>>>TEST
       !
       !
       if(verbose)write(*,"(A)") "---- build_Uret_singlParam_ph"
@@ -1472,6 +1462,9 @@ contains
       !setting the phonons
       do ib1=1,Nbp
          do ib2=1,Nbp
+            !
+            Screen = .not. (PhysicalUelements%Full_Jsf(ib1,ib2).or.PhysicalUelements%Full_Jph(ib1,ib2))
+            !
             do iph=1,Nph
                iwp=minloc(abs(wreal-wo_eph(iph)),dim=1)
                do iw=1,Nreal
@@ -1480,7 +1473,8 @@ contains
                   ImagU=0d0
                   if(iw.eq.iwp) ImagU = -pi*(g_eph(iph)**2)/abs(wreal(3)-wreal(2))
                   !
-                  Ureal%screened_local(ib1,ib2,iw) = Umats_ptr%bare_local(ib1,ib2) + dcmplx(RealU,ImagU)
+                  Ureal%screened_local(ib1,ib2,iw) = Umats_ptr%bare_local(ib1,ib2)
+                  if(Screen) Ureal%screened_local(ib1,ib2,iw) = Ureal%screened_local(ib1,ib2,iw) + dcmplx(RealU,ImagU)
                   !
                enddo
             enddo
@@ -1520,6 +1514,7 @@ contains
       deallocate(D,Utmp,wmats,wreal)
       call DeallocateBosonicField(Ureal)
       write(*,"(A,F)") "     Ue-ph(w) --> Ue-ph(iw) cpu timing:", finish-start
+      if(Norb.gt.1)write(*,"(A)") "     Screening not considered for Hund coupling."
       !
       if(.not.LocalOnly_)then
          write(*,"(A)") "     Filling the K-dependent attributes."
@@ -1537,41 +1532,6 @@ contains
       nullify(Umats_ptr)
       !
       call dump_BosonicField(Umats,reg(pathINPUTtr),"Uloc_mats.DAT")
-      !
-      !TEST>>>
-      allocate(tau(Ntau));tau=0d0
-      if(tau_uniform)tau = linspace(0d0,Umats%Beta,Ntau)
-      if(.not.tau_uniform)tau = denspace(Umats%Beta,Ntau)
-      !
-      !FT from U(iw) computed with AC to numerical U(tau)
-      call AllocateBosonicField(Utmp1,Norb,Ntau,0,Beta=Umats%Beta)
-      call Bmats2itau(Umats%Beta,Umats%screened_local,Utmp1%screened_local,asympt_corr=.true.,tau_uniform=tau_uniform,Umats_bare=Umats%bare_local)
-      call dump_BosonicField(Utmp1,reg(pathINPUTtr),"Uloc_tau_FTofAC.DAT",axis=tau)
-      !
-      !analytical U(tau)
-      g = g_eph(1)
-      w = wo_eph(1)
-      b = Umats%Beta/2
-      call clear_attributes(Utmp1)
-      do itau=1,Ntau
-         Utmp1%screened_local(:,:,itau) = -g**2 * cosh(w*(b-tau(itau))) / ( sinh(w*b) )
-      enddo
-      call dump_BosonicField(Utmp1,reg(pathINPUTtr),"Uloc_tau_analytic.DAT",axis=tau)
-      !
-      !FT from analytical U(tau) to U(iw)
-      call AllocateBosonicField(Utmp2,Norb,Umats%Npoints,0,Beta=Umats%Beta)
-      call Bitau2mats(Umats%Beta,Utmp1%screened_local,Utmp2%screened_local,tau_uniform=tau_uniform)
-      do iw=1,Utmp2%Npoints
-         Utmp2%screened_local(:,:,iw) = Utmp2%screened_local(:,:,iw) + Umats%bare_local
-      enddo
-      Utmp2%bare_local = Umats%bare_local
-      call dump_BosonicField(Utmp2,reg(pathINPUTtr),"Uloc_mats_FTofAnalytical.DAT")
-      !
-      call duplicate(Umats,Utmp2)
-      !
-      call DeallocateField(Utmp1)
-      call DeallocateField(Utmp2)
-      !>>>TEST
       !
    end subroutine build_Uret_singlParam_ph
    !
@@ -1601,7 +1561,7 @@ contains
       type(BosonicField),target             :: Umats_imp
       type(BosonicField),pointer            :: Umats_ptr
       type(physicalU)                       :: PhysicalUelements
-      logical                               :: LocalOnly_
+      logical                               :: LocalOnly_,Screen
       real                                  :: start,finish
       !
       !
@@ -1661,6 +1621,9 @@ contains
       !setting the phonons
       do ib1=1,Nbp
          do ib2=1,Nbp
+            !
+            Screen = .not. (PhysicalUelements%Full_Jsf(ib1,ib2).or.PhysicalUelements%Full_Jph(ib1,ib2))
+            !
             do iph=1,Nph
                iwp=minloc(abs(wreal-wo_eph(iph)),dim=1)
                do iw=1,Nreal
@@ -1669,7 +1632,8 @@ contains
                   ImagU=0d0
                   if(iw.eq.iwp) ImagU = -pi*(g_eph(iph)**2)/abs(wreal(3)-wreal(2))
                   !
-                  Ureal%screened_local(ib1,ib2,iw) = Umats_ptr%bare_local(ib1,ib2) + dcmplx(RealU,ImagU)
+                  Ureal%screened_local(ib1,ib2,iw) = Umats_ptr%bare_local(ib1,ib2)
+                  if(Screen) Ureal%screened_local(ib1,ib2,iw) = Ureal%screened_local(ib1,ib2,iw) + dcmplx(RealU,ImagU)
                   !
                enddo
             enddo
@@ -1709,6 +1673,7 @@ contains
       deallocate(D,Utmp,wmats,wreal)
       call DeallocateBosonicField(Ureal)
       write(*,"(A,F)") "     Ue-ph(w) --> Ue-ph(iw) cpu timing:", finish-start
+      if(Norb.gt.1)write(*,"(A)") "     Screening not considered for Hund coupling."
       !
       if(.not.LocalOnly_)then
          write(*,"(A)") "     Filling the K-dependent attributes."
@@ -2138,9 +2103,6 @@ contains
       use utils_misc
       use utils_fields
       use input_vars, only : Solver
-      !TEST>>>
-      use input_vars, only : g_eph,wo_eph,Test_flag_2
-      !>>>TEST
       implicit none
       !
       type(BosonicField),intent(in)         :: Umats
@@ -2159,9 +2121,6 @@ contains
       logical                               :: Uloc,U1st,U2nd,retarded,Kp,Scr
       type(physicalU)                       :: PhysicalUelements
       logical                               :: sym_
-      !TEST>>>
-      real(8)                               :: g,w,b
-      !>>>TEST
       !
       !
       if(verbose)write(*,"(A)") "---- calc_QMCinteractions"
@@ -2283,19 +2242,6 @@ contains
             if(sym_)call check_Symmetry(Kpfunct(:,:,itau),eps,enforce=.true.,hardstop=.false.,name="Kpfunct_t"//str(itau))
          enddo
       endif
-      !
-      !TEST>>>
-      if(retarded.and.Test_flag_2)then
-         write(*,"(A)") new_line("A")//new_line("A")//"---- calc_QMCinteractions: Analytical screening function."
-         Kfunct=0d0
-         g = g_eph(1)
-         w = wo_eph(1)
-         b = Umats%Beta/2
-         do itau=2,Solver%NtauB-1
-            Kfunct(:,:,itau) = -( g**2/w ) * ( cosh(w*(b-tau(itau))) - cosh(w*b) ) / ( sinh(w*b) )
-         enddo
-      endif
-      !>>>TEST
       !
       if(retarded)deallocate(Kaux,tau,wmats)
       !

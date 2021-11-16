@@ -3037,7 +3037,7 @@ contains
             enddo
             deallocate(NNitau)
             !
-            !TEST>>>
+            !TEST(keep)>>>
             if(Test_flag_1)then
                !
                do ib1=1,ChiCitau%Nbp
@@ -3057,7 +3057,7 @@ contains
                enddo
                !
             endif
-            !>>>TEST
+            !>>>TEST(keep)
             !
             !User-defined modification of local charge susceptibility
             if(alphaChi.ne.1d0)then

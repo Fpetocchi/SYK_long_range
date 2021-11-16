@@ -158,7 +158,8 @@ class ct_hyb
             read_EigenMat(inputDir+"/Screening.DAT", Screening_Mat, Nflavor, Nflavor); //read_Vec(inputDir+"/Screening.DAT", Screening_shift, Norb );
             for(int iorb=0; iorb < Norb; iorb++)
             {
-               Screening_shift[iorb] = Screening_Mat(2*iorb,2*iorb)/2.0;
+               //old: Screening_shift[iorb] = Screening_Mat(2*iorb,2*iorb)/2.0;
+               for(int ifl=0; ifl < Nflavor; ifl++) Screening_shift[iorb] += (2*iorb!=ifl) ? Screening_Mat(2*iorb,ifl)/2.0 : 0.0 ;
                mpi.report(" Orbital "+str(iorb)+" - screening shift = S/2: "+str(Screening_shift[iorb],6));
             }
 
@@ -188,10 +189,7 @@ class ct_hyb
             for(int iorb=0; iorb < Norb; iorb++)
             {
                //old: Hartree given only by Uaa: Hartree_shift[iorb]  = Uloc(2*iorb,2*iorb+1)/2.0; //Hartree_shift[iorb] += Uloc(2*iorb,ifl)/4.0; //Hartree_shift[iorb] += ( Uloc(2*iorb,2*iorb+1) + Screening_Mat(2*iorb,2*iorb+1) )/4.0;
-               for(int ifl=0; ifl < Nflavor; ifl++)
-               {
-                  if(2*iorb!=ifl) Hartree_shift[iorb] += ( Uloc(2*iorb,ifl) + Screening_Mat(2*iorb,ifl) )/2.0;
-               }
+               for(int ifl=0; ifl < Nflavor; ifl++) Hartree_shift[iorb] += (2*iorb!=ifl) ? ( Uloc(2*iorb,ifl) + Screening_Mat(2*iorb,ifl) )/2.0 : 0.0 ;
                mpi.report(" Orbital "+str(iorb)+" - Hartree shift = Ubare/2: "+str(Hartree_shift[iorb],6));
             }
          }

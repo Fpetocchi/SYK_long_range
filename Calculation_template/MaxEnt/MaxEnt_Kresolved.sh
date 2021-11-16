@@ -203,6 +203,7 @@ EOF
       #submit all batches
       for btndx in `seq 1 1 ${Nbatch}` ; do
          qsub submit_MaxEnt_${NAME}_B_${btndx}
+         sleep 0.5
       done
       #
       #
@@ -253,6 +254,7 @@ EOF
       #submit all the user-provided K-points
       for kp in `seq ${STARTK} ${STOPK}`; do # -w
          qsub submit_MaxEnt_${NAME}_K_${kp}
+         sleep 0.5
       done
       #
       #
