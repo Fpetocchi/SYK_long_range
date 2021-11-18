@@ -790,7 +790,7 @@ contains
          allocate(n_k(Norb,Norb,Nkpt));n_k=czero
          do ik=1,Nkpt
             !paramagnetic
-            n_k(:,:,ik) = -2.d0*diag(dreal(Gitau(:,Ntau,ik)))
+            n_k(:,:,ik) = -Nspin*diag(dreal(Gitau(:,Ntau,ik)))
             !if present, the restriction is on the orbitals in Wannier basis
             n_k(:,:,ik) = rotate(n_k(:,:,ik),transpose(conjg(Lttc%Zk(:,:,ik))))
          enddo

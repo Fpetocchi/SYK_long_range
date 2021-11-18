@@ -905,7 +905,7 @@ contains
       Nflavor = Norb*Nspin
       !
       ! Elements when the interaction is in the Norb*Nspin form
-      Uelements%Flav_Size = Norb
+      Uelements%Flav_Size = Nflavor
       if(allocated(Uelements%Flav_Uloc))deallocate(Uelements%Flav_Uloc)
       if(allocated(Uelements%Flav_U1st))deallocate(Uelements%Flav_U1st)
       if(allocated(Uelements%Flav_U2nd))deallocate(Uelements%Flav_U2nd)
@@ -942,7 +942,7 @@ contains
       enddo
       !
       ! Elements when the interaction is in the Norb^2 form
-      Uelements%Flav_Size = Norb*Norb
+      Uelements%Full_Size = Norb*Norb
       if(allocated(Uelements%Full_Uaa))deallocate(Uelements%Full_Uaa)
       if(allocated(Uelements%Full_Uab))deallocate(Uelements%Full_Uab)
       if(allocated(Uelements%Full_Jsf))deallocate(Uelements%Full_Jsf)

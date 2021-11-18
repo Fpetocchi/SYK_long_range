@@ -169,7 +169,7 @@ contains
       character(len=255)                    :: path
       integer                               :: unit,ierr
       integer                               :: Nh,Nfit_read
-      integer                               :: ibath,iorb
+      integer                               :: ibath,iorb,ispin
       real(8)                               :: de
       real(8),allocatable                   :: ReadLine(:)
       logical                               :: filexists
@@ -208,7 +208,7 @@ contains
       if(filexists)then
          !
          if(verbose)write(*,"(A)") "     Reading Anderson Parameters from "//reg(paramFile)
-         allocate(ReadLine(4))
+         allocate(ReadLine(2*Nspin))
          unit = free_unit()
          open(unit,file=reg(path),form="formatted",status="old",action="read",position="rewind")
          read(unit,*) Nfit_read
@@ -217,10 +217,10 @@ contains
             do ibath=1,Nfit
                ReadLine=0d0
                read(unit,*) ReadLine
-               AndPram%Epsk(iorb,ibath,1) = ReadLine(1) !Epsk_up
-               AndPram%Epsk(iorb,ibath,2) = ReadLine(3) !Epsk_dw
-               AndPram%Vk(iorb,ibath,1)   = ReadLine(2) !Vk_up
-               AndPram%Vk(iorb,ibath,2)   = ReadLine(4) !Vk_dw
+               do ispin=1,Nspin
+                  AndPram%Epsk(iorb,ibath,ispin) = ReadLine(1+Nspin*(ispin-1)) !Epsk_s
+                  AndPram%Vk(iorb,ibath,ispin)   = ReadLine(2+Nspin*(ispin-1)) !Vk_s
+               enddo
             enddo
             read(unit,*)
          enddo
@@ -285,7 +285,7 @@ contains
       !
       character(len=255)                    :: path
       integer                               :: unit
-      integer                               :: ibath,iorb
+      integer                               :: ibath,iorb,ispin
       logical                               :: filexists
       !
       !
@@ -300,9 +300,9 @@ contains
       open(unit,file=reg(path),form="formatted",status="unknown",action="write",position="rewind")
       write(unit,"(I5,A)") Nfit," Number of bath levels."
       do iorb=1,AndPram%Norb
-         write(unit,"(2E20.12)") AndPram%Eloc(iorb,1),AndPram%Eloc(iorb,2)
+         write(unit,"(2E20.12)") (AndPram%Eloc(iorb,ispin),ispin=1,Nspin)
          do ibath=1,Nfit
-            write(unit,"(4E20.12)") AndPram%Epsk(iorb,ibath,1),AndPram%Vk(iorb,ibath,1),AndPram%Epsk(iorb,ibath,2),AndPram%Vk(iorb,ibath,2)
+            write(unit,"(4E20.12)") ([AndPram%Epsk(iorb,ibath,ispin),AndPram%Vk(iorb,ibath,ispin)],ispin=1,Nspin)
          enddo
          write(unit,*)
       enddo

@@ -105,6 +105,7 @@ module input_vars
    !model H(k)
    logical,public                           :: Hmodel
    logical,public                           :: readHr
+   logical,public                           :: readHk
    real(8),public                           :: LatticeVec(3,3)
    integer,public                           :: Norb_model
    real(8),allocatable,public               :: hopping(:)
@@ -305,20 +306,24 @@ contains
       !K-points
       call add_separator("K-points and hopping")
       call parse_input_variable(Nkpt3,"NKPT3",InputFile,default=[8,8,8],comment="Number of K-points per dimension.")
-      call parse_input_variable(UseXepsKorder,"XEPS_KORDER",InputFile,default=.true.,comment="Flag to use the K-point ordering of XEPS.DAT if present.")
       !
       !model H(k)
       call parse_input_variable(Hmodel,"H_MODEL",InputFile,default=.false.,comment="Flag to build a model H(k).")
       if(Hmodel)then
+         call parse_input_variable(Norb_model,"NORB_MODEL",InputFile,default=1,comment="Orbtilas in the model non-interacting Hamiltonian.")
+         call parse_input_variable(readHr,"READ_HR",InputFile,default=.false.,comment="Read W90 real space Hamiltonian (Hr.DAT) from PATH_INPUT.")
+         call parse_input_variable(readHk,"READ_HK",InputFile,default=.false.,comment="Read W90 K-space Hamiltonian (Hk.DAT) from PATH_INPUT.")
+         call parse_input_variable(Hetero%status,"HETERO",InputFile,default=.false.,comment="Flag to build an heterostructured setup from model H(k).")
+         if(readHr.and.readHk) stop "read_InputFile: Make up your mind, READ_HR or READ_HK?"
          call parse_input_variable(LatticeVec(:,1),"LAT_VEC_1",InputFile,default=[1d0,0d0,0d0],comment="Unit cell vector #1 of the model lattice.")
          call parse_input_variable(LatticeVec(:,2),"LAT_VEC_2",InputFile,default=[0d0,1d0,0d0],comment="Unit cell vector #2 of the model lattice.")
          call parse_input_variable(LatticeVec(:,3),"LAT_VEC_3",InputFile,default=[0d0,0d0,1d0],comment="Unit cell vector #3 of the model lattice.")
-         call parse_input_variable(Norb_model,"NORB_MODEL",InputFile,default=1,comment="Orbtilas in the model H(k).")
-         call parse_input_variable(readHr,"READ_HR",InputFile,default=.false.,comment="Read W90 real space Hamiltonian (Hr.DAT) from PATH_INPUT.")
-         allocate(hopping(Norb_model))
-         call parse_input_variable(hopping,"HOPPING",InputFile,comment="NN hopping for each orbital if READ_HR=F. Longitudinal hopping if READ_HR=T and HETERO=T.")
+         if(Hetero%status .or. ((.not.readHr).and.(.not.readHk)))then
+            allocate(hopping(Norb_model))
+            call parse_input_variable(hopping,"HOPPING",InputFile,comment="NN hopping for each orbital if READ_HR=F. Longitudinal hopping if READ_HR=T and HETERO=T.")
+         endif
+         !
          !Heterostructured setup
-         call parse_input_variable(Hetero%status,"HETERO",InputFile,default=.false.,comment="Flag to build an heterostructured setup from model H(k).")
          if(Hetero%status)then
             Hetero%Norb = Norb_model
             call parse_input_variable(Hetero%Nslab,"NSLAB",InputFile,default=20,comment="Global dimension fo the slab.")
@@ -345,6 +350,9 @@ contains
                endif
             endif
          endif
+      else
+         call parse_input_variable(UseXepsKorder,"XEPS_KORDER",InputFile,default=.true.,comment="Flag to use the K-point ordering of XEPS.DAT if present.")
+         readHk=.true.
       endif
       !
       !Site and Orbital space
@@ -358,8 +366,6 @@ contains
       call parse_input_variable(RotateHloc,"ROTATE_F",InputFile,default=.false.,comment="Solve the Fermionic impurity problem in the basis where H(R=0) is diagonal.")
       call parse_input_variable(RotateUloc,"ROTATE_B",InputFile,default=RotateHloc,comment="Solve the Bosonic impurity problem in the basis where H(R=0) is diagonal.")
       call parse_input_variable(AFMselfcons,"AFM",InputFile,default=.false.,comment="Flag to use the AFM self-consistency by flipping the spin. Requires input with doubled unit cell.")
-     !call parse_input_variable(Gtau_K,"GTAU_K",InputFile,default=.true.,comment="Flag to perform the iw->tau FT of the Green's function in K space.")
-     !call parse_input_variable(cmplxHyb,"CMPLX_HYB",InputFile,default=.true.,comment="Flag to indicate the presence of complex hybridizations in H(k).")
       allocate(SiteNorb(Nsite));SiteNorb=0
       allocate(SiteName(Nsite))
       do isite=1,Nsite
@@ -479,11 +485,11 @@ contains
       call parse_input_variable(Kdiag,"K_DIAG",InputFile,default=.false.,comment="Flag to use only one J-independent screening function.")
       if((Umodel.and.Uspex).or.((.not.Umodel).and.(.not.Uspex))) stop "read_InputFile: Make up your mind, U_MODEL or U_SPEX?"
       if(Umodel)then
-         call parse_input_variable(Uaa,"UAA",InputFile,default=5d0,comment="Interaction between same orbital and opposite spin electrons (orbital independent).")
+         call parse_input_variable(Uaa,"UAA",InputFile,default=0d0,comment="Interaction between same orbital and opposite spin electrons (orbital independent).")
          if(Norb_model.gt.1)then
             !cahnge this if you want to have them orbital dependent
-            call parse_input_variable(Uab,"UAB",InputFile,default=4d0,comment="Interaction between different orbital and opposite spin electrons (orbital independent).")
-            call parse_input_variable(J,"JH",InputFile,default=0.5d0,comment="Hund's coupling (orbital independent).")
+            call parse_input_variable(Uab,"UAB",InputFile,default=0d0,comment="Interaction between different orbital and opposite spin electrons (orbital independent).")
+            call parse_input_variable(J,"JH",InputFile,default=0d0,comment="Hund's coupling (orbital independent).")
          endif
          !phononic model U
          call parse_input_variable(Nphonons,"N_PH",InputFile,default=0,comment="Number of custom phononic modes.")

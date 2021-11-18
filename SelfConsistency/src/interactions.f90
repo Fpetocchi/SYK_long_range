@@ -1757,7 +1757,8 @@ contains
       else
          Umats_ptr => Umats
       endif
-      Vrange = size(Vnn)
+      !
+      Vrange = size(Vnn,dim=2)
       call assert_shape(Vnn,[Norb,Vrange],"build_Uret_singlParam_Vn","Vnn")
       !
       call init_Uelements(Norb,PhysicalUelements)
@@ -1798,6 +1799,7 @@ contains
                   !
                enddo
             enddo
+            !
             cycle
          endif
          !
@@ -1868,6 +1870,7 @@ contains
             !
          enddo
       enddo
+      !
       if(.not.LocalOnly_)then
          !
          Umats_ptr%screened(:,:,1,:) = U_K
@@ -1952,7 +1955,8 @@ contains
       call assert_shape(Uaa,[Norb],"build_Uret_multiParam_Vn","Uaa")
       call assert_shape(Uab,[Norb,Norb],"build_Uret_multiParam_Vn","Uab")
       call assert_shape(J,[Norb,Norb],"build_Uret_multiParam_Vn","J")
-      Vrange = size(Vnn)
+      !
+      Vrange = size(Vnn,dim=2)
       call assert_shape(Vnn,[Norb,Vrange],"build_Uret_multiParam_Vn","Vnn")
       !
       call init_Uelements(Norb,PhysicalUelements)

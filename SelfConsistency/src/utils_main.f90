@@ -407,103 +407,45 @@ contains
       write(*,"(A)") new_line("A")//new_line("A")//"---- initialize_Lattice"
       !
       !
+      if(Hmodel)then
+         call set_lattice(LatticeVec)
+      else
+         call read_lattice(reg(pathINPUT))
+      endif
+      !
       Lttc%Nkpt3 = Nkpt3
       Lttc%Nsite = Nsite
       !
+      if(readHk)then
+         call read_Hk(Hmodel,pathINPUT,alphaHk,Lttc%Hk,Lttc%kpt,Lttc%Ek,Lttc%Zk,Lttc%Hloc,iq_gamma_Hk)
+      else
+         call build_Hk(Norb_model,hopping,Nkpt3,alphaHk,readHr,Hetero, &
+                       Lttc%Hk,Lttc%kpt,Lttc%Ek,Lttc%Zk,Lttc%Hloc,     &
+                       iq_gamma=Lttc%iq_gamma,pathOUTPUT=reg(pathINPUT))
+      endif
+      Lttc%Norb = size(Lttc%Hk,dim=1)
+      Lttc%Nkpt = size(Lttc%Hk,dim=3)
       !
-      select case(reg(CalculationType))
-         case default
-            !
-            stop "Available Calculation types are: G0W0, scGW, DMFT+statU, DMFT+dynU, EDMFT, GW+EDMFT."
-            !
-         case("G0W0","scGW")
-            !
-            if(Hmodel)then
-               !
-               call build_Hk(LatticeVec,Norb_model,hopping,Nkpt3,alphaHk,readHr,Hetero,&
-                             Lttc%Hk,Lttc%kpt,Lttc%Ek,Lttc%Zk,Lttc%Hloc,               &
-                             iq_gamma=Lttc%iq_gamma,pathOUTPUT=reg(pathINPUT))
-               Lttc%Norb = size(Lttc%Hk,dim=1)
-               Lttc%Nkpt = size(Lttc%Hk,dim=3)
-               Lttc%Nkpt_irred = Lttc%Nkpt
-               !
-            else
-               !
-               call read_Hk(pathINPUT,alphaHk,Lttc%Hk,Lttc%kpt,Lttc%Ek,Lttc%Zk,Lttc%Hloc,iq_gamma_Hk)
-               Lttc%Norb = size(Lttc%Hk,dim=1)
-               Lttc%Nkpt = size(Lttc%Hk,dim=3)
-               !
-               allocate(Lttc%kptPos(Lttc%Nkpt));Lttc%kptPos=0
-               call read_xeps(pathINPUT,Lttc%kpt,Nkpt3,UseXepsKorder, &
-               Lttc%kptPos,Lttc%Nkpt_irred,Lttc%UseDisentangledBS,iq_gamma_XEPS,paramagneticSPEX)
-               XEPSisread=.true.
-               if(iq_gamma_Hk.eq.iq_gamma_XEPS)then
-                  Lttc%iq_gamma = iq_gamma_Hk
-               else
-                  stop "Index of the Gamma point is not the same in H(k) and XEPS."
-               endif
-               !
-            endif
-            !
-            call fill_ksumkdiff(Lttc%kpt,Lttc%kptsum,Lttc%kptdif,Nkpt3)
-            !
-            Lttc%status=.true.
-            !
-         case("DMFT+statU","DMFT+dynU")
-            !
-            if(Hmodel)then
-               !
-               call build_Hk(LatticeVec,Norb_model,hopping,Nkpt3,alphaHk,readHr,Hetero,&
-                             Lttc%Hk,Lttc%kpt,Lttc%Ek,Lttc%Zk,Lttc%Hloc,               &
-                             pathOUTPUT=reg(pathINPUT))
-               Lttc%Norb = size(Lttc%Hk,dim=1)
-               Lttc%Nkpt = size(Lttc%Hk,dim=3)
-               Lttc%Nkpt_irred = Lttc%Nkpt
-               !
-            else
-               !
-               call read_Hk(pathINPUT,alphaHk,Lttc%Hk,Lttc%kpt,Lttc%Ek,Lttc%Zk,Lttc%Hloc)
-               Lttc%Norb = size(Lttc%Hk,dim=1)
-               Lttc%Nkpt = size(Lttc%Hk,dim=3)
-               !
-            endif
-            !
-            Lttc%status=.true.
-            !
-         case("EDMFT","GW+EDMFT")
-            !
-            if(Hmodel)then
-               !
-               call build_Hk(LatticeVec,Norb_model,hopping,Nkpt3,alphaHk,readHr,Hetero,&
-                             Lttc%Hk,Lttc%kpt,Lttc%Ek,Lttc%Zk,Lttc%Hloc,               &
-                             iq_gamma=Lttc%iq_gamma,pathOUTPUT=reg(pathINPUT))
-               Lttc%Norb = size(Lttc%Hk,dim=1)
-               Lttc%Nkpt = size(Lttc%Hk,dim=3)
-               Lttc%Nkpt_irred = Lttc%Nkpt
-               !
-            else
-               !
-               call read_Hk(pathINPUT,alphaHk,Lttc%Hk,Lttc%kpt,Lttc%Ek,Lttc%Zk,Lttc%Hloc,iq_gamma_Hk)
-               Lttc%Norb = size(Lttc%Hk,dim=1)
-               Lttc%Nkpt = size(Lttc%Hk,dim=3)
-               !
-               allocate(Lttc%kptPos(Lttc%Nkpt));Lttc%kptPos=0
-               call read_xeps(pathINPUT,Lttc%kpt,Nkpt3,UseXepsKorder, &
-               Lttc%kptPos,Lttc%Nkpt_irred,Lttc%UseDisentangledBS,iq_gamma_XEPS,paramagneticSPEX)
-               XEPSisread=.true.
-               if(iq_gamma_Hk.eq.iq_gamma_XEPS)then
-                  Lttc%iq_gamma = iq_gamma_Hk
-               else
-                  stop "Index of the Gamma point is not the same in H(k) and XEPS."
-               endif
-               !
-            endif
-            !
-            call fill_ksumkdiff(Lttc%kpt,Lttc%kptsum,Lttc%kptdif,Nkpt3)
-            !
-            Lttc%status=.true.
-            !
-      end select
+      call fill_ksumkdiff(Lttc%kpt,Lttc%kptsum,Lttc%kptdif,Nkpt3)
+      !
+      !additional data neede for ab-initio calculations
+      if(.not.Hmodel)then
+         allocate(Lttc%kptPos(Lttc%Nkpt));Lttc%kptPos=0
+         call read_xeps(pathINPUT,Lttc%kpt,Nkpt3,UseXepsKorder, &
+         Lttc%kptPos,Lttc%Nkpt_irred,Lttc%UseDisentangledBS,iq_gamma_XEPS,paramagneticSPEX)
+         XEPSisread=.true.
+         if(iq_gamma_Hk.eq.iq_gamma_XEPS)then
+            Lttc%iq_gamma = iq_gamma_Hk
+         else
+            stop "Index of the Gamma point is not the same in H(k) and XEPS."
+         endif
+      else
+         Lttc%Nkpt_irred = Lttc%Nkpt
+         Lttc%iq_gamma = iq_gamma_Hk
+      endif
+      !
+      Lttc%status=.true.
+      !
       if(Lttc%Nkpt.ne.(Nkpt3(1)*Nkpt3(2)*Nkpt3(3)))stop "Total number of K-points does not match with number of K-points per dimension."
       if(XEPSisread)write(*,"(A,1I4)")"     Number of irreducible K-points: ",Lttc%Nkpt_irred
       !
@@ -2047,8 +1989,8 @@ contains
       deallocate(Dfit)
       !
       if(EqvGWndx%para.eq.1)then
-         Eloc(:,1) = (Eloc(:,1) + Eloc(:,2))/2d0
-         Eloc(:,2) = Eloc(:,1)
+         Eloc(:,1) = (Eloc(:,1) + Eloc(:,Nspin))/2d0
+         Eloc(:,Nspin) = Eloc(:,1)
       endif
       !
       !Compute Delta on matsubara
@@ -2852,8 +2794,8 @@ contains
          deallocate(Uinst,rhoQMC,HartreeQMC)
          !
          !The magnetization will be given only by the self-energy beyond Hartree
-         Simp%N_s(:,:,1) = (Simp%N_s(:,:,1)+Simp%N_s(:,:,2))/2d0
-         Simp%N_s(:,:,2) = Simp%N_s(:,:,1)
+         Simp%N_s(:,:,1) = (Simp%N_s(:,:,1)+Simp%N_s(:,:,Nspin))/2d0
+         Simp%N_s(:,:,Nspin) = Simp%N_s(:,:,1)
          !
          !Hartree term in the Solver basis
          call dump_Matrix(Simp%N_s,reg(PrevItFolder),"Solver_"//reg(SiteName(isite))//"/Hartree_UNimp_"//reg(SiteName(isite)),paramagnet)
@@ -2958,6 +2900,7 @@ contains
             unit = free_unit()
             open(unit,file=reg(file),form="formatted",status="old",position="rewind",action="read")
             do itau=1,Solver%NtauB_in
+               !
                ReadLine=0d0
                read(unit,*) taup,ReadLine
                if(abs(taup-tauB(itau)).gt.eps) stop "Impurity bosonic tau mesh does not coincide."
@@ -2971,6 +2914,7 @@ contains
                      ndx=ndx+1
                   enddo
                enddo
+               !
             enddo
             deallocate(ReadLine)
             !
@@ -3294,7 +3238,7 @@ contains
       integer,intent(in)                    :: Iteration
       integer,intent(in),optional           :: enlrg
       integer                               :: Norb,Norb_imp
-      integer                               :: iorb,jorb,isite
+      integer                               :: iorb,jorb,isite,ispin
       integer                               :: wn,ws,wsi,wnmin
       integer                               :: l1,l2,l3,l4,l5,l6,l7
       integer                               :: enlrg_
@@ -3329,15 +3273,17 @@ contains
             call printHeader(Iteration)
             !
             write(*,*)
-            write(*,"(2(A"//str(wn*Norb)//","//str(ws)//"X))")banner(trim(header1)//" up",wn*Norb),banner(trim(header1)//" dw",wn*Norb)
+            if(Nspin.eq.1)write(*,"(A"//str(wn*Norb)//","//str(ws)//"X)")banner(trim(header1)//" up",wn*Norb)
+            if(Nspin.gt.1)write(*,"(2(A"//str(wn*Norb)//","//str(ws)//"X))")banner(trim(header1)//" up",wn*Norb),banner(trim(header1)//" dw",wn*Norb)
             do iorb=1,Norb
-               write(*,"(2("//str(Norb)//"F"//str(wn)//".4,"//str(ws)//"X))") (dreal(densityGW(iorb,jorb,1)),jorb=1,Norb),(dreal(densityGW(iorb,jorb,2)),jorb=1,Norb)
+               write(*,"("//str(Nspin)//"("//str(Norb)//"F"//str(wn)//".4,"//str(ws)//"X))") ((dreal(densityGW(iorb,jorb,1)),jorb=1,Norb),ispin=1,Nspin)!(dreal(densityGW(iorb,jorb,2)),jorb=1,Norb)
             enddo
             !
             write(*,*)
-            write(*,"(2(A"//str(wn*Norb)//","//str(ws)//"X))")banner(trim(header2)//" up",wn*Norb),banner(trim(header2)//" dw",wn*Norb)
+            if(Nspin.eq.1)write(*,"(A"//str(wn*Norb)//","//str(ws)//"X)")banner(trim(header2)//" up",wn*Norb)
+            if(Nspin.gt.1)write(*,"(2(A"//str(wn*Norb)//","//str(ws)//"X))")banner(trim(header2)//" up",wn*Norb),banner(trim(header2)//" dw",wn*Norb)
             do iorb=1,Norb
-               write(*,"(2("//str(Norb)//"F"//str(wn)//".4,"//str(ws)//"X))") (dreal(densityDMFT(iorb,jorb,1)),jorb=1,Norb),(dreal(densityDMFT(iorb,jorb,2)),jorb=1,Norb)
+               write(*,"("//str(Nspin)//"("//str(Norb)//"F"//str(wn)//".4,"//str(ws)//"X))") ((dreal(densityDMFT(iorb,jorb,ispin)),jorb=1,Norb),ispin=1,Nspin)!,(dreal(densityDMFT(iorb,jorb,2)),jorb=1,Norb)
             enddo
             !
             write(*,*)
@@ -3345,7 +3291,7 @@ contains
             write(*,"("//str(Norb)//"F"//str(wn)//".4,"//str(ws)//"X)") (dreal(densityGW(iorb,iorb,1)-densityDMFT(iorb,iorb,1)),iorb=1,Norb)
             write(*,*)
             !
-            if(.not.EqvGWndx%S)then
+            if((.not.EqvGWndx%S).and.(Nspin.ne.1))then
                write(*,*)
                write(*,"(A"//str(wn*Norb)//","//str(ws)//"X)")banner(trim(header7)//" dw",wn*Norb)
                write(*,"("//str(Norb)//"F"//str(wn)//".4,"//str(ws)//"X)") (dreal(densityGW(iorb,iorb,2)-densityDMFT(iorb,iorb,2)),iorb=1,Norb)
@@ -3364,18 +3310,16 @@ contains
                   wsi = wn*Norb - wn*Norb_imp
                   !
                   write(*,*)
-                  write(*,"(2(A"//str(wn*Norb)//","//str(ws)//"X))")banner(trim(header3)//" up",wn*Norb),banner(trim(header3)//" dw",wn*Norb)
+                  if(Nspin.eq.1)write(*,"(A"//str(wn*Norb)//","//str(ws)//"X)")banner(trim(header3)//" up",wn*Norb)
+                  if(Nspin.gt.1)write(*,"("//str(Nspin)//"(A"//str(wn*Norb)//","//str(ws)//"X))")banner(trim(header3)//" up",wn*Norb),banner(trim(header3)//" dw",wn*Norb)
                   do iorb=1,Norb_imp
-                     write(*,"(2("//str(wsi)//"X,"//str(Norb_imp)//"F"//str(wn)//".4,"//str(ws)//"X))") &
-                                       (densityQMC(iorb,jorb,1,isite),jorb=1,Norb_imp),(densityQMC(iorb,jorb,2,isite),jorb=1,Norb_imp)
+                     write(*,"("//str(Nspin)//"("//str(wsi)//"X,"//str(Norb_imp)//"F"//str(wn)//".4,"//str(ws)//"X))") ((densityQMC(iorb,jorb,ispin,isite),jorb=1,Norb_imp),ispin=1,Nspin)!,(densityQMC(iorb,jorb,2,isite),jorb=1,Norb_imp)
                   enddo
                   !
-                  if(.not.EqvGWndx%S)then
+                  if((.not.EqvGWndx%S).and.(Nspin.ne.1))then
                      write(*,*)
                      write(*,"(A"//str(wn*Norb)//","//str(ws)//"X)")banner(trim(header5),wn*Norb)
-                     !do iorb=1,Norb_imp
                      write(*,"("//str(wsi)//"X,"//str(Norb_imp)//"F"//str(wn)//".4,"//str(ws)//"X)")((densityQMC(iorb,iorb,1,isite)-densityQMC(iorb,iorb,2,isite)),iorb=1,Norb_imp)
-                     !enddo
                   endif
                   if(ExpandImpurity.or.AFMselfcons)exit
                   !
@@ -3387,9 +3331,10 @@ contains
             call printHeader(Iteration)
             !
             write(*,*)
-            write(*,"(2(A"//str(wn*Norb)//","//str(ws)//"X))")banner(trim(header1)//" up",wn*Norb),banner(trim(header1)//" dw",wn*Norb)
+            if(Nspin.eq.1)write(*,"(A"//str(wn*Norb)//","//str(ws)//"X)")banner(trim(header1)//" up",wn*Norb)
+            if(Nspin.gt.1)write(*,"(2(A"//str(wn*Norb)//","//str(ws)//"X))")banner(trim(header1)//" up",wn*Norb),banner(trim(header1)//" dw",wn*Norb)
             do iorb=1,Norb
-               write(*,"(2("//str(Norb)//"F"//str(wn)//".4,"//str(ws)//"X))") (dreal(densityGW(iorb,jorb,1)),jorb=1,Norb),(dreal(densityGW(iorb,jorb,2)),jorb=1,Norb)
+               write(*,"("//str(Nspin)//"("//str(Norb)//"F"//str(wn)//".4,"//str(ws)//"X))") ((dreal(densityGW(iorb,jorb,1)),jorb=1,Norb),ispin=1,Nspin)!(dreal(densityGW(iorb,jorb,2)),jorb=1,Norb)
             enddo
             !
       end select

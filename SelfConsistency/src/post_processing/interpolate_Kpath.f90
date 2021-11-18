@@ -43,6 +43,8 @@ subroutine interpolateG2Path(Sfull,Lttc,pathOUTPUT)
    !
    if(Sfull%Norb.ne.Lttc%Norb) stop "interpolateG2Path: Lttc has different number of orbitals with respect to Sfull."
    if(Sfull%Nkpt.ne.Lttc%Nkpt) stop "interpolateG2Path: Lttc has different number of k-points with respect to Sfull."
+   !
+   write(*,"(A,F)")"     Chemical potential: ",Sfull%mu
    Norb = Sfull%Norb
    Nmats = Sfull%Npoints
    !

@@ -101,6 +101,7 @@ module crystal
    !---------------------------------------------------------------------------!
    !subroutines
    public :: read_lattice
+   public :: set_lattice
    public :: build_kpt
    public :: read_xeps
    public :: read_Hk
@@ -444,12 +445,13 @@ contains
    !PURPOSE: Read the Hamiltonian and kpoints providing Eigen-values/vectors
    !by now only for paramagnetic Hk
    !---------------------------------------------------------------------------!
-   subroutine read_Hk(pathINPUT,alphaHk,Hk,kpt,Ek,Zk,Hloc,iq_gamma)
+   subroutine read_Hk(Hmodel,pathINPUT,alphaHk,Hk,kpt,Ek,Zk,Hloc,iq_gamma)
       !
       use utils_misc
       use linalg, only :  eigh
       implicit none
       !
+      logical,intent(in)                    :: Hmodel
       character(len=*),intent(in)           :: pathINPUT
       real(8),intent(in)                    :: alphaHk
       complex(8),allocatable,intent(out)    :: Hk(:,:,:)
@@ -470,16 +472,15 @@ contains
       if(verbose)write(*,"(A)") "---- read_Hk"
       !
       !
-      !Read the lattice vectors
-      call read_lattice(reg(pathINPUT))
+      if(.not.Lat_stored) stop "read_Hk: Lattice vectors not stored."
       !
       ! Look for Hk.DAT
       path=reg(pathINPUT)//"Hk.DAT"
       call inquireFile(reg(path),filexists)
-      !
       unit = free_unit()
       open(unit,file=reg(path),form="formatted",status="old",position="rewind",action="read")
       read(unit,*) idum1,Nkpt,Norb
+      write(*,*) idum1,Nkpt,Norb
       !
       if(allocated(Hk))deallocate(Hk)
       if(allocated(kpt))deallocate(kpt)
@@ -499,13 +500,17 @@ contains
       Ek=0d0
       do ik=1,nkpt
          read(unit,*) idum1,idum2,kpt(:,ik)
-         if (idum2.ne.ik) stop "ik"
+         if (idum2.ne.ik) stop "read_Hk: wrong index ik"
          do iwan1=1,Norb
             do iwan2=1,Norb
                read(unit,*) idum1,idum2,ReHk,ImHk
                if (idum1.ne.iwan1) stop "read_Hk: wrong index iwan1."
                if (idum2.ne.iwan2) stop "read_Hk: wrong index iwan2."
-               Hk(iwan1,iwan2,ik) = dcmplx(ReHk,ImHk)*H2eV*alphaHk
+               if(Hmodel)then
+                  Hk(iwan1,iwan2,ik) = dcmplx(ReHk,ImHk)*alphaHk
+               else
+                  Hk(iwan1,iwan2,ik) = dcmplx(ReHk,ImHk)*H2eV*alphaHk
+               endif
             enddo
             !Hk(iwan1,iwan1,ik) = dcmplx(dreal(Hk(iwan1,iwan1,ik)),0d0)
          enddo
@@ -536,14 +541,13 @@ contains
    !---------------------------------------------------------------------------!
    !PURPOSE: Build the Hamiltonian and kpoints from user-given parameters
    !---------------------------------------------------------------------------!
-   subroutine build_Hk(Rinput,Norb,hopping,Nkpt3,alphaHk,readHr,Hetero,Hk,kpt,Ek,Zk,Hloc,iq_gamma,pathOUTPUT)
+   subroutine build_Hk(Norb,hopping,Nkpt3,alphaHk,readHr,Hetero,Hk,kpt,Ek,Zk,Hloc,iq_gamma,pathOUTPUT)
       !
       use utils_misc
       use parameters, only : Heterostructures !WHY IS THIS WORKING?
       use linalg, only : zeye, diagonal, diag, eigh, dag
       implicit none
       !
-      real(8),intent(in)                    :: Rinput(3,3)
       integer,intent(in)                    :: Norb
       real(8),intent(in)                    :: hopping(:)
       integer,intent(in)                    :: Nkpt3(3)
@@ -583,6 +587,7 @@ contains
       if(verbose)write(*,"(A)") "---- build_Hk"
       !
       !
+      if(.not.Lat_stored) stop "build_Hk: Lattice vectors not stored."
       if(readHr.and.(.not.present(pathOUTPUT))) stop "build_Hk: reading of Hr.DAT requested but missing path."
       !
       Nkpt = Nkpt3(1)*Nkpt3(2)*Nkpt3(3)
@@ -594,7 +599,6 @@ contains
       if(allocated(kpt))deallocate(kpt)
       allocate(kpt(3,Nkpt));kpt=0d0
       !
-      call set_lattice(Rinput)
       call build_kpt(Nkpt3,kpt,pathOUTPUT=reg(pathOUTPUT))
       !
       !recover the vectors in real space and allocate hopping in real space
