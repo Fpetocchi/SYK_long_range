@@ -919,7 +919,8 @@ contains
             do iwan1=1,Norb
                do iwan2=1,Norb
                   !
-                  read(unit,"(1F20.10,2I4,2E20.12)") axispoint,idum1,idum2,RealG,ImagG
+                  !read(unit,"(1F20.10,2I4,2E20.12)") axispoint,idum1,idum2,RealG,ImagG
+                  read(unit,*) axispoint,idum1,idum2,RealG,ImagG
                   if (idum1.ne.iwan1) stop "read_FermionicField_local: iwan1 does not match."
                   if (idum2.ne.iwan2) stop "read_FermionicField_local: iwan2 does not match."
                   G%ws(iwan1,iwan2,iaxis,ispin) = dcmplx(RealG,ImagG)

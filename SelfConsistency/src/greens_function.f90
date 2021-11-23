@@ -967,8 +967,8 @@ contains
          !$OMP PARALLEL DEFAULT(SHARED),&
          !$OMP PRIVATE(iorb,iw,ik)
          !$OMP DO
-         do ik=1,Nkpt
-            do itau=1,Ntau
+         do itau=1,Ntau
+            do ik=1,Nkpt
                Gk_print_H(:,:,itau,ik) = rotate(diag(Gk_print_E(:,itau,ik)),conjg(transpose(Lttc%Zk(:,:,ik))))
             enddo
          enddo
@@ -1022,8 +1022,8 @@ contains
             !$OMP PARALLEL DEFAULT(SHARED),&
             !$OMP PRIVATE(iorb,iw,ik,invGf)
             !$OMP DO
-            do ik=1,Nkpt
-               do iw=1,2*Nmats+1
+            do iw=1,2*Nmats+1
+               do ik=1,Nkpt
                   !
                   do iorb=1,Norb
                      Gk_print_E(iorb,iw,ik) = 1d0/( dcmplx(  mu , axis(iw) ) - Lttc%Ek(iorb,ik) )
@@ -1085,8 +1085,15 @@ contains
             enddo
          endif
          !
-         allocate(G_print_E(Norb,Naxis))      ; G_print_E = sum(Gk_print_E,dim=3)/Nkpt
-         allocate(G_print_H(Norb,Norb,Naxis)) ; G_print_H = sum(Gk_print_H,dim=4)/Nkpt
+         allocate(G_print_E(Norb,Naxis));G_print_E=czero
+         allocate(G_print_H(Norb,Norb,Naxis));G_print_H=czero
+         if(Nkpt.gt.1)then
+            G_print_E = sum(Gk_print_E,dim=3)/Nkpt
+            G_print_H = sum(Gk_print_H,dim=4)/Nkpt
+         else
+            G_print_E = Gk_print_E(:,:,1)
+            G_print_H = Gk_print_H(:,:,:,1)
+         endif
          do iorb=1,Norb
             call dump_FermionicField(G_print_E(iorb,:),reg(pathOUTPUT_),reg(name)//"_Ek_"//str(iorb)//".lda",axis)
             if(printAkw)then

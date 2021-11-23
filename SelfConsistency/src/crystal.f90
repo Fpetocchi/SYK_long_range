@@ -480,7 +480,6 @@ contains
       unit = free_unit()
       open(unit,file=reg(path),form="formatted",status="old",position="rewind",action="read")
       read(unit,*) idum1,Nkpt,Norb
-      write(*,*) idum1,Nkpt,Norb
       !
       if(allocated(Hk))deallocate(Hk)
       if(allocated(kpt))deallocate(kpt)
@@ -498,7 +497,7 @@ contains
       Zk=czero
       Hloc=czero
       Ek=0d0
-      do ik=1,nkpt
+      do ik=1,Nkpt
          read(unit,*) idum1,idum2,kpt(:,ik)
          if (idum2.ne.ik) stop "read_Hk: wrong index ik"
          do iwan1=1,Norb
@@ -524,8 +523,10 @@ contains
          !
       enddo
       !
-      if(present(iq_gamma))iq_gamma = find_vec([0d0,0d0,0d0],kpt,eps)
+      iq_gamma = 0
+      if(present(iq_gamma).and.(Nkpt.gt.1)) iq_gamma = find_vec([0d0,0d0,0d0],kpt,eps)
       write(*,"(A,I4)")"     Gamma point index: ",iq_gamma
+      !
       Hk_stored=.true.
       !
       unit = free_unit()

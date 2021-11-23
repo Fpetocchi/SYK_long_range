@@ -859,7 +859,7 @@ contains
    !PURPOSE: Expand the the subset of orbital indexes of corresponging to a
    !         given site to the full lattice quantity
    !---------------------------------------------------------------------------!
-   subroutine imp2loc_Fermionic(Gloc,Gimp,impndx,orbs,expand,AFM,U)
+   subroutine imp2loc_Fermionic(Gloc,Gimp,impndx,orbs,expand,AFM,U,name)
       !
       use parameters
       use utils_misc
@@ -873,6 +873,7 @@ contains
       logical,intent(in)                    :: expand
       logical,intent(in)                    :: AFM
       complex(8),allocatable,optional       :: U(:,:,:)
+      character(len=*),intent(in),optional  :: name
       !
       complex(8),allocatable                :: Rot(:,:)
       complex(8),allocatable                :: Gtmp(:,:,:,:,:),Ntmp(:,:,:,:)
@@ -914,9 +915,17 @@ contains
          Nsite = Gloc%Nsite
          if(mod(Norb_loc,size(orbs)).ne.0)stop "imp2loc_Fermionic: Number of requested orbitals is not a commensurate subset of the lattice field."
          if(AFM) stop "imp2loc_Fermionic: Expansion to real space and AFM condition not yet implemented."
-         write(*,"(A)") "     The impurity field will be expanded to match the lattice orbital space."
+         if(present(name))then
+            write(*,"(A)") "     "//reg(name)//" of site "//str(impndx)//" will be expanded to match the lattice orbital space."
+         else
+            write(*,"(A)") "     The impurity field of site "//str(impndx)//" will be expanded to match the lattice orbital space."
+         endif
       else
-         write(*,"(A,15I3)") "     Impurity field will be inserted into the lattice orbital indexes: ",orbs
+         if(present(name))then
+            write(*,"(A,15I3)") "     "//reg(name)//" of site "//str(impndx)//" will be inserted into the lattice orbital indexes: ",orbs
+         else
+            write(*,"(A,15I3)") "     Impurity field of site "//str(impndx)//" will be inserted into the lattice orbital indexes: ",orbs
+         endif
          Nsite = 1
       endif
       !
@@ -924,7 +933,11 @@ contains
          if(size(U,dim=1).ne.size(U,dim=2)) stop "imp2loc_Fermionic: Rotation matrix not square."
          if(size(U,dim=3).ne.Gloc%Nsite) stop "imp2loc_Fermionic: Number of rotation matrices and number of sites does not match."
          if(size(U,dim=1).ne.3) write(*,"(A)") "     Warning: The local orbital space rotation is well defined only for a t2g sub-shell."
-         write(*,"(A)") "     The impurity orbital space will be rotated during insertion in "//str(Nsite)//" sites."
+         if(present(name))then
+            write(*,"(A)") "     "//reg(name)//" orbital space will be rotated during insertion in "//str(Nsite)//" sites."
+         else
+            write(*,"(A)") "     The impurity orbital space will be rotated during insertion in "//str(Nsite)//" sites."
+         endif
       endif
       !
       allocate(Ntmp(Gimp%Norb,Gimp%Norb,Nspin,Nsite));Ntmp=czero
@@ -992,7 +1005,7 @@ contains
       !
    end subroutine imp2loc_Fermionic
    !
-   subroutine imp2loc_Matrix(Oloc,Oimp,impndx,orbs,expand,U)
+   subroutine imp2loc_Matrix(Oloc,Oimp,impndx,orbs,expand,U,name)
       !
       use parameters
       use utils_misc
@@ -1005,6 +1018,7 @@ contains
       integer,intent(in)                    :: orbs(:)
       logical,intent(in)                    :: expand
       complex(8),intent(in),optional        :: U(:,:,:)
+      character(len=*),intent(in),optional  :: name
       !
       complex(8),allocatable                :: Rot(:,:)
       complex(8),allocatable                :: Otmp(:,:,:)
@@ -1029,9 +1043,17 @@ contains
       if(expand)then
          Nsite = size(Oloc,dim=1)/size(orbs)
          if(mod(size(Oloc,dim=1),size(orbs)).ne.0)stop "imp2loc_Matrix: Number of requested orbitals is not a commensurate subset of the lattice observable."
-         write(*,"(A)") "     The impurity field will be expanded to match the lattice orbital space."
+         if(present(name))then
+            write(*,"(A)") "     "//reg(name)//" of site "//str(impndx)//" will be expanded to match the lattice orbital space."
+         else
+            write(*,"(A)") "     The impurity field of site "//str(impndx)//" will be expanded to match the lattice orbital space."
+         endif
       else
-         write(*,"(A,15I3)") "     Impurity field will be inserted into the lattice orbital indexes: ",orbs
+         if(present(name))then
+            write(*,"(A,15I3)") "     "//reg(name)//" of site "//str(impndx)//" will be inserted into the lattice orbital indexes: ",orbs
+         else
+            write(*,"(A,15I3)") "     Impurity field of site "//str(impndx)//" will be inserted into the lattice orbital indexes: ",orbs
+         endif
          Nsite = 1
       endif
       !
@@ -1039,7 +1061,11 @@ contains
          if(size(U,dim=1).ne.size(U,dim=2)) stop "imp2loc_Matrix: Rotation matrix not square."
          if((size(U,dim=3).ne.Nsite))stop "imp2loc_Matrix: Number of rotation matrices and number of sites does not match."
          if(size(U,dim=1).ne.3) write(*,"(A)") "     Warning: The local orbital space rotation is well defined only for a t2g sub-shell."
-         write(*,"(A)") "     The impurity orbital space will be rotated during insertion in "//str(Nsite)//" sites."
+         if(present(name))then
+            write(*,"(A)") "     "//reg(name)//" orbital space will be rotated during insertion in "//str(Nsite)//" sites."
+         else
+            write(*,"(A)") "     The impurity orbital space will be rotated during insertion in "//str(Nsite)//" sites."
+         endif
       endif
       !
       allocate(Otmp(size(Oloc,dim=1),size(Oloc,dim=1),Nsite));Otmp=czero
@@ -1091,7 +1117,7 @@ contains
       !
    end subroutine imp2loc_Matrix
    !
-   subroutine imp2loc_Matrix_s(Oloc,Oimp,impndx,orbs,expand,AFM,U)
+   subroutine imp2loc_Matrix_s(Oloc,Oimp,impndx,orbs,expand,AFM,U,name)
       !
       use parameters
       use utils_misc
@@ -1105,6 +1131,7 @@ contains
       logical,intent(in)                    :: expand
       logical,intent(in)                    :: AFM
       complex(8),intent(in),optional        :: U(:,:,:)
+      character(len=*),intent(in),optional  :: name
       !
       complex(8),allocatable                :: Rot(:,:)
       complex(8),allocatable                :: Otmp(:,:,:,:)
@@ -1138,9 +1165,17 @@ contains
          Nsite = size(Oloc,dim=1)/size(orbs)
          if(mod(size(Oloc,dim=1),size(orbs)).ne.0)stop "imp2loc_Matrix_s: Number of requested orbitals is not a commensurate subset of the lattice observable."
          if(AFM) stop "imp2loc_Matrix_s: Expansion to real space and AFM condition not yet implemented."
-         write(*,"(A)") "     The impurity field will be expanded to match the lattice orbital space."
+         if(present(name))then
+            write(*,"(A)") "     "//reg(name)//" of site "//str(impndx)//" will be expanded to match the lattice orbital space."
+         else
+            write(*,"(A)") "     The impurity field of site "//str(impndx)//" will be expanded to match the lattice orbital space."
+         endif
       else
-         write(*,"(A,15I3)") "     Impurity field will be inserted into the lattice orbital indexes: ",orbs
+         if(present(name))then
+            write(*,"(A,15I3)") "     "//reg(name)//" of site "//str(impndx)//" will be inserted into the lattice orbital indexes: ",orbs
+         else
+            write(*,"(A,15I3)") "     Impurity field of site "//str(impndx)//" will be inserted into the lattice orbital indexes: ",orbs
+         endif
          Nsite = 1
       endif
       !
@@ -1148,7 +1183,11 @@ contains
          if(size(U,dim=1).ne.size(U,dim=2)) stop "imp2loc_Matrix_s: Rotation matrix not square."
          if((size(U,dim=3).ne.Nsite))stop "imp2loc_Matrix_s: Number of rotation matrices and number of sites does not match."
          if(size(U,dim=1).ne.3) write(*,"(A)") "     Warning: The local orbital space rotation is well defined only for a t2g sub-shell."
-         write(*,"(A)") "     The impurity orbital space will be rotated during insertion in "//str(Nsite)//" sites."
+         if(present(name))then
+            write(*,"(A)") "     "//reg(name)//" orbital space will be rotated during insertion in "//str(Nsite)//" sites."
+         else
+            write(*,"(A)") "     The impurity orbital space will be rotated during insertion in "//str(Nsite)//" sites."
+         endif
       endif
       !
       allocate(Otmp(size(Oloc,dim=1),size(Oloc,dim=1),Nspin,Nsite));Otmp=czero
@@ -1209,7 +1248,7 @@ contains
       !
    end subroutine imp2loc_Matrix_s
    !
-   subroutine imp2loc_Bosonic(Wloc,Wimp,impndx,orbs,expand,AFM,U,Map)
+   subroutine imp2loc_Bosonic(Wloc,Wimp,impndx,orbs,expand,AFM,U,Map,name)
       !
       use parameters
       use utils_misc
@@ -1224,6 +1263,7 @@ contains
       logical,intent(in)                    :: AFM
       complex(8),allocatable,optional       :: U(:,:,:)
       integer,allocatable,optional          :: Map(:,:,:)
+      character(len=*),intent(in),optional  :: name
       !
       complex(8),allocatable                :: Rot(:,:)
       complex(8),allocatable                :: Wbtmp(:,:,:),Wstmp(:,:,:,:)
@@ -1269,9 +1309,17 @@ contains
          Nsite = Wloc%Nsite
          if(mod(Norb_loc,size(orbs)).ne.0)stop "imp2loc_Bosonic: Number of requested orbitals is not a commensurate subset of Wloc."
          if(AFM) stop "imp2loc_Bosonic: Expansion to real space and AFM condition not yet implemented."
-         write(*,"(A)") "     The impurity field will be expanded to match the lattice orbital space."
+         if(present(name))then
+            write(*,"(A)") "     "//reg(name)//" of site "//str(impndx)//" will be expanded to match the lattice orbital space."
+         else
+            write(*,"(A)") "     The impurity field of site "//str(impndx)//" will be expanded to match the lattice orbital space."
+         endif
       else
-         write(*,"(A,15I3)") "     Impurity field will be inserted into the lattice orbital indexes: ",orbs
+         if(present(name))then
+            write(*,"(A,15I3)") "     "//reg(name)//" of site "//str(impndx)//" will be inserted into the lattice orbital indexes: ",orbs
+         else
+            write(*,"(A,15I3)") "     Impurity field of site "//str(impndx)//" will be inserted into the lattice orbital indexes: ",orbs
+         endif
          Nsite = 1
       endif
       !
@@ -1280,7 +1328,11 @@ contains
          if(size(U,dim=1).ne.size(U,dim=2)) stop "imp2loc_Bosonic: Rotation matrix not square."
          if(size(U,dim=3).ne.Wloc%Nsite) stop "imp2loc_Bosonic: Number of rotation matrices and number of sites does not match."
          if(size(U,dim=1).ne.3) write(*,"(A)") "     Warning: The local orbital space rotation is well defined only for a t2g sub-shell."
-         write(*,"(A)") "     The impurity orbital space will be rotated during insertion in "//str(Nsite)//" sites."
+         if(present(name))then
+            write(*,"(A)") "     "//reg(name)//" orbital space will be rotated during insertion in "//str(Nsite)//" sites."
+         else
+            write(*,"(A)") "     The impurity orbital space will be rotated during insertion in "//str(Nsite)//" sites."
+         endif
       endif
       if(present(Map))then
          if(.not.present(U)) stop "imp2loc_Bosonic: Also the rotation must be provided."

@@ -37,6 +37,7 @@ module module_container
    !(c) Lattice related quantities. Depends on (a),(b) not on specific types.
    use crystal, only:                        &
    read_lattice                             ,&
+   set_lattice                              ,&
    read_xeps                                ,&
    read_Hk                                  ,&
    build_kpt                                ,&

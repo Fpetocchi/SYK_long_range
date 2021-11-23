@@ -120,7 +120,7 @@ module input_vars
   !logical,public                           :: Gtau_K
   !logical,public                           :: cmplxHyb
    integer,allocatable,public               :: SiteNorb(:)
-   character(len=255),allocatable,public    :: SiteName(:)
+   character(len=2),allocatable,public      :: SiteName(:)
    integer,allocatable,public               :: SiteOrbs(:,:)
    logical,public                           :: addCF
    real(8),allocatable,public               :: SiteCF(:,:)
@@ -168,12 +168,14 @@ module input_vars
    character(len=256),public                :: SpexVersion
    character(len=256),public                :: VH_type
    character(len=256),public                :: DC_type
+   character(len=256),public                :: Embedding
    logical,public                           :: addTierIII
    logical,public                           :: RecomputeG0W0
    integer,public                           :: HandleGammaPoint
    logical,public                           :: calc_Sguess
    logical,public                           :: calc_Pguess
    logical,public                           :: GoWoDC_loc
+   logical,public                           :: RemoveHartree
    real(8),public                           :: alphaChi
    real(8),public                           :: alphaPi
    real(8),public                           :: alphaSigma
@@ -308,9 +310,9 @@ contains
       call parse_input_variable(Nkpt3,"NKPT3",InputFile,default=[8,8,8],comment="Number of K-points per dimension.")
       !
       !model H(k)
-      call parse_input_variable(Hmodel,"H_MODEL",InputFile,default=.false.,comment="Flag to build a model H(k).")
+      call parse_input_variable(Hmodel,"H_MODEL",InputFile,default=.false.,comment="Flag to build a model non-interacting Hamiltonian.")
       if(Hmodel)then
-         call parse_input_variable(Norb_model,"NORB_MODEL",InputFile,default=1,comment="Orbtilas in the model non-interacting Hamiltonian.")
+         call parse_input_variable(Norb_model,"NORB_MODEL",InputFile,default=1,comment="Orbitals in the model non-interacting Hamiltonian.")
          call parse_input_variable(readHr,"READ_HR",InputFile,default=.false.,comment="Read W90 real space Hamiltonian (Hr.DAT) from PATH_INPUT.")
          call parse_input_variable(readHk,"READ_HK",InputFile,default=.false.,comment="Read W90 K-space Hamiltonian (Hk.DAT) from PATH_INPUT.")
          call parse_input_variable(Hetero%status,"HETERO",InputFile,default=.false.,comment="Flag to build an heterostructured setup from model H(k).")
@@ -378,7 +380,7 @@ contains
                SiteName(isite) = reg(SiteName(1))
             endif
          else
-            call parse_input_variable(SiteName(isite),"NAME_"//str(isite),InputFile,default="El",comment="Chemical species of the site number "//str(isite))
+            call parse_input_variable(SiteName(isite),"NAME_"//str(isite),InputFile,default="El",comment="Chemical species (or 2-character tag) of the site number "//str(isite))
             call parse_input_variable(SiteNorb(isite),"NORB_"//str(isite),InputFile,default=1,comment="Number of orbitals in site number "//str(isite))
          endif
       enddo
@@ -435,7 +437,7 @@ contains
       endif
       if(EqvGWndx%para.gt.0)EqvGWndx%S=.true. !generic spin symmetrization
       if(EqvGWndx%Nset.gt.0)then
-         call parse_input_variable(sym_mode,"SYM_MODE",InputFile,default=3,comment="If =1 only the lattice orbitals will be symmetrized, if =2 also the corresponding n(tau) inside the solver, if =3 only n(tau).")
+         call parse_input_variable(sym_mode,"SYM_MODE",InputFile,default=3,comment="If =1 only the lattice orbitals will be symmetrized, if =2 also the corresponding n(tau) inside the solver, if =3 (PREFERRED) only n(tau). 0 to avoid.")
       else
          sym_mode=0
          call append_to_input_list(sym_mode,"SYM_MODE","No orbital symmetrizations.")
@@ -534,7 +536,10 @@ contains
          if(Hmodel)RecomputeG0W0=.false.
          call parse_input_variable(GoWoDC_loc,"G0W0DC_LOC",InputFile,default=.true.,comment="Keep the local contribution of Tier-III. Automatically removed if non-causal.")
       endif
+      call parse_input_variable(RemoveHartree,"REMOVE_HARTREE",InputFile,default=.true.,comment="Remove the Hartree term from the Impurity self-energy. Hartree=curlyU(0)*Nimp/2.")
+      if(addTierIII.or.(.not.Hmodel))RemoveHartree=.true.
       call parse_input_variable(DC_type,"DC_TYPE",InputFile,default="GlocWloc",comment="Local GW self-energy which is replaced by DMFT self-energy. Avalibale: GlocWloc, Sloc.")
+      call parse_input_variable(Embedding,"ADD_EMBEDDING",InputFile,default="None",comment="Constant embedding self-energy stored in PATH_INPUT. Avalibale: loc (filename: Semb_w_s[1,2].DAT), nonloc (filename: Semb_w_k_s[1,2].DAT), None to avoid.")
       if(Hmodel.or.Umodel)addTierIII=.false.
       call parse_input_variable(HandleGammaPoint,"SMEAR_GAMMA",InputFile,default=1,comment="If >0 the dielectric function will be averaged on the SMEAR_GAMMA nearest K-points close to Gamma. If <0 the UcRPA will be rescaled like a Lorentzian in the SMEAR_GAMMA nearest K-points close to Gamma. Inactive if =0.")
       if(Umodel)HandleGammaPoint=0

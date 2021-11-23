@@ -183,7 +183,8 @@ contains
       if(AFMselfcons.and.(Nsite.ne.2)) stop "AFM self-consistency is implemented only for lattices with 2 sites."
       if(RotateUloc.and.(.not.RotateHloc)) stop "Rotate the Bosonic impurity problem without rotating the Ferminic one is not allowed."
       !
-      if(Hmodel)HartreeFact=0d0
+      if(.not.RemoveHartree)HartreeFact=0d0
+      !if(Hmodel)HartreeFact=0d0
       !
       calc_Sguess = calc_Sguess .and. (FirstIteration.eq.0) .and. solve_DMFT
       calc_Pguess = calc_Pguess .and. (FirstIteration.eq.0) .and. solve_DMFT
@@ -1430,6 +1431,7 @@ contains
       logical                               :: causal_G0W0_loc
       type(FermionicField)                  :: S_G0W0_imp
       type(FermionicField)                  :: S_G0W0_DMFT
+      type(FermionicField)                  :: S_EMB
       !
       !
       write(*,"(A)") new_line("A")//new_line("A")//"---- join_SigmaFull"
@@ -1606,6 +1608,41 @@ contains
                endif
             enddo
             call FermionicKsum(S_Full)
+            !
+            !
+      end select
+      !
+      !Add constant embedding self-energy
+      select case(reg(Embedding))
+         case default
+            !
+            stop "Available Embedding self-energies types are: loc (filename: Semb_w_s[1,2].DAT), nonloc (filename: Semb_w_k_s[1,2].DAT)."
+            !
+         case("None")
+            !
+            if(verbose)write(*,"(A)") "     No embedding self-energy included."
+            !
+         case("nonloc")
+            !
+            write(*,"(A)") "     Adding constant non-local embedding self-energy."
+            call AllocateFermionicField(S_EMB,Crystal%Norb,Nmats,Nkpt=Crystal%Nkpt,Nsite=Nsite,Beta=Beta)
+            call read_FermionicField(S_EMB,reg(pathINPUTtr),"Semb_w",Crystal%kpt)
+            !
+            !Add non-local embedding
+            S_Full%wks = S_Full%wks + S_EMB%wks
+            call DeallocateFermionicField(S_EMB)
+            !
+         case("loc")
+            !
+            write(*,"(A)") "     Adding constant local embedding self-energy."
+            call AllocateFermionicField(S_EMB,Crystal%Norb,Nmats,Nsite=Nsite,Beta=Beta)
+            call read_FermionicField(S_EMB,reg(pathINPUTtr),"Semb_w")
+            !
+            !Add local embedding to all k-points
+            do ik=1,S_Full%Nkpt
+               S_Full%wks(:,:,:,ik,:) = S_Full%wks(:,:,:,ik,:) + S_EMB%ws
+            enddo
+            call DeallocateFermionicField(S_EMB)
             !
       end select
       !
@@ -1925,9 +1962,8 @@ contains
       endif
       !
       !Print what's used to compute delta
-      call dump_Matrix(Gloc%N_s,reg(ItFolder),"Solver_"//reg(SiteName(isite))//"/N_"//reg(SiteName(isite)),paramagnet)
-      call dump_FermionicField(Gloc,reg(ItFolder)//"Solver_"//reg(SiteName(isite))//"/","G_"//reg(SiteName(isite))//"_w",paramagnet)
-      call dump_FermionicField(SigmaImp,reg(ItFolder)//"Solver_"//reg(SiteName(isite))//"/","S_"//reg(SiteName(isite))//"_w",paramagnet)
+      call dump_Matrix(Gloc%N_s,reg(ItFolder),"Solver_"//reg(SiteName(isite))//"/Nloc_"//reg(SiteName(isite)),paramagnet)
+      call dump_FermionicField(Gloc,reg(ItFolder)//"Solver_"//reg(SiteName(isite))//"/","Glat_"//reg(SiteName(isite))//"_w",paramagnet)
       if(causal_D)call dump_FermionicField(DeltaCorr,reg(ItFolder)//"Solver_"//reg(SiteName(isite))//"/","D_correction_"//reg(SiteName(isite))//"_w",paramagnet)
       !
       !Compute the fermionic Weiss field invCurlyG
@@ -2487,29 +2523,27 @@ contains
       !
       implicit none
       !
-      integer                               :: Norb,Nflavor,Nbp
       integer                               :: iorb,jorb,ispin,jspin
       integer                               :: ib1,ib2,isite,idum
       integer                               :: unit,ndx,itau,iw,wndx,wndxOpt
       real(8)                               :: taup,muQMC
-      integer,allocatable                   :: Orbs(:)
       real(8),allocatable                   :: tauF(:),tauB(:),wmats(:)
       real(8),allocatable                   :: ReadLine(:)
       real(8),allocatable                   :: Moments(:,:,:)
       character(len=255)                    :: file,MomDir
-      logical                               :: filexists
+      logical                               :: filexists,fitSigmaTail
       type(physicalU)                       :: PhysicalUelements
+      type(QMC_observables),allocatable     :: SolverObs(:)
       !Impurity Green's function
-      type(FermionicField)                  :: Gimp
+      type(FermionicField),allocatable      :: Gimp(:)
       complex(8),allocatable                :: Gitau(:,:,:)
-      complex(8),allocatable                :: Gmats(:,:,:,:)
+      complex(8),allocatable                :: Gmats(:,:)
       !Impurity self-energy and fermionic Dyson equation
-      type(FermionicField)                  :: Simp
+      type(FermionicField),allocatable      :: Simp(:)
       type(FermionicField)                  :: G0imp
       type(BosonicField)                    :: curlyU
-      complex(8),allocatable                :: Smats(:,:,:,:)
-      complex(8),allocatable                :: SmatsTail(:),SmatsNoFit(:,:,:,:)
-      real(8),allocatable                   :: Uinst(:,:),rhoQMC(:),HartreeQMC(:)
+      complex(8),allocatable                :: Sfit(:,:,:),SmatsTail(:)
+      real(8),allocatable                   :: Uinst(:,:),HartreeQMC(:)
       !Impurity susceptibilities
       real(8),allocatable                   :: nnt(:,:,:)
       complex(8),allocatable                :: NNitau(:,:,:,:,:)
@@ -2524,78 +2558,104 @@ contains
       write(*,"(A)") new_line("A")//new_line("A")//"---- collect_QMC_results"
       !
       !
+      !Impurity observables initialization
+      if(ExpandImpurity)then
+         allocate(SolverObs(1))
+         allocate(Gimp(1))
+         allocate(Simp(1))
+      else
+         allocate(SolverObs(Nsite))
+         allocate(Gimp(Nsite))
+         allocate(Simp(Nsite))
+      endif
+      do isite=1,Nsite
+         !
+         write(*,"(A)") "     Setting up site: "//reg(SiteName(isite))
+         !
+         SolverObs(isite)%Norb = SiteNorb(isite)
+         SolverObs(isite)%Nflavor = SiteNorb(isite)*Nspin
+         SolverObs(isite)%Nbp = SiteNorb(isite)**2
+         SolverObs(isite)%Index = isite
+         SolverObs(isite)%Name = reg(SiteName(isite))
+         !
+         allocate(SolverObs(isite)%Orbs(SiteNorb(isite)))
+         SolverObs(isite)%Orbs = SiteOrbs(isite,1:SiteNorb(isite))
+         !
+         allocate(SolverObs(isite)%rho_Flav(SolverObs(isite)%Nflavor))
+         SolverObs(isite)%rho_Flav=0d0
+         !
+         allocate(SolverObs(isite)%rho_OrbSpin(SolverObs(isite)%Norb,SolverObs(isite)%Norb,Nspin))
+         SolverObs(isite)%rho_OrbSpin=0d0
+         !
+         allocate(SolverObs(isite)%Docc(SolverObs(isite)%Norb,SolverObs(isite)%Norb))
+         SolverObs(isite)%Docc=0d0
+         !
+         call AllocateFermionicField(Gimp(isite),SolverObs(isite)%Norb,Nmats,Beta=Beta)
+         call clear_attributes(Gimp(isite))
+         !
+         call AllocateFermionicField(Simp(isite),SolverObs(isite)%Norb,Nmats,Beta=Beta)
+         call clear_attributes(Simp(isite))
+         !
+      enddo
+      !
+      fitSigmaTail = (ReplaceTail_Simp.ne.0d0).and.(ReplaceTail_Simp.lt.wmatsMax)
       !
       !
       ! COLLECT IMPURITY OCCUPATION --------------------------------------------
       allocate(densityDMFT(Crystal%Norb,Crystal%Norb,Nspin));densityDMFT=czero
-      allocate(densityQMC(maxval(SiteNorb),maxval(SiteNorb),Nspin,Nsite));densityQMC=0d0
-      !
       do isite=1,Nsite
          !
-         write(*,"(A)") new_line("A")//"     Collecting occupation of site: "//reg(SiteName(isite))
-         !
-         Norb = SiteNorb(isite)
-         allocate(Orbs(Norb))
-         Orbs = SiteOrbs(isite,1:Norb)
-         Nflavor = Norb*Nspin
-         !
+         write(*,"(A)") new_line("A")//"     Collecting occupation of site: "//SolverObs(isite)%Name
          !
          !Read the impurity occupation
-         file = reg(PrevItFolder)//"Solver_"//reg(SiteName(isite))//"/resultsQMC/Nqmc.DAT"
+         file = reg(PrevItFolder)//"Solver_"//SolverObs(isite)%Name//"/resultsQMC/Nqmc.DAT"
          call inquireFile(reg(file),filexists,verb=verbose)
          unit = free_unit()
          open(unit,file=reg(file),form="formatted",status="old",position="rewind",action="read")
          read(unit,*) muQMC
-         do ib1=1,Nflavor
+         do ib1=1,SolverObs(isite)%Nflavor
+            !
+            read(unit,*) idum,SolverObs(isite)%rho_Flav(ib1)
+            !
             iorb = (ib1+mod(ib1,2))/2
             ispin = abs(mod(ib1,2)-2)
-            read(unit,*) idum,densityQMC(iorb,iorb,ispin,isite)
+            SolverObs(isite)%rho_OrbSpin(iorb,iorb,ispin) = SolverObs(isite)%rho_Flav(ib1)
+            !
          enddo
          close(unit)
          !
-         !
-         !Insert or Expand to the Lattice basis
+         !Insert or Expand to the Lattice basis (this is just for printing)
          if(RotateHloc)then
-            if(sym_mode.gt.1)call symmetrize_imp(densityQMC(:,:,:,isite),OlocEig(:,isite))
-            call imp2loc(densityDMFT,dcmplx(densityQMC(1:Norb,1:Norb,:,isite),0d0),isite,Orbs,ExpandImpurity,AFMselfcons,U=OlocRotDag)
+            call imp2loc(densityDMFT,dcmplx(SolverObs(isite)%rho_OrbSpin,0d0),isite,SolverObs(isite)%Orbs,ExpandImpurity,AFMselfcons,U=OlocRotDag,name="Nimp")
          else
-            call imp2loc(densityDMFT,dcmplx(densityQMC(1:Norb,1:Norb,:,isite),0d0),isite,Orbs,ExpandImpurity,AFMselfcons)
+            call imp2loc(densityDMFT,dcmplx(SolverObs(isite)%rho_OrbSpin,0d0),isite,SolverObs(isite)%Orbs,ExpandImpurity,AFMselfcons,name="Nimp")
          endif
          !
-         deallocate(Orbs)
          if(ExpandImpurity.or.AFMselfcons)exit
          !
       enddo
       !
-      !symmetrize GW indexes and print
-      if(EqvGWndx%O.or.EqvGWndx%S)then
-         !
-         if(verbose)call dump_Matrix(densityDMFT,reg(PrevItFolder),"Nimp_noSym",paramagnet)
-         !
-         call symmetrize_GW(densityDMFT,EqvGWndx)
-         !
-      endif
+      !symmetrize and print
+      if(verbose)call dump_Matrix(densityDMFT,reg(PrevItFolder),"Nimp_noSym",paramagnet)
+      call symmetrize_GW(densityDMFT,EqvGWndx)
+      !
       call dump_Matrix(densityDMFT,reg(PrevItFolder),"Nimp",paramagnet)
       deallocate(densityDMFT)
       !
       !
       !
       !
-      ! COLLECT IMPURITY GF AND FERMIONIC DYSON --------------------------------
-      allocate(Gmats(maxval(SiteNorb),Nmats,Nspin,Nsite));Gmats=czero
+      ! COLLECT IMPURITY GF ----------------------------------------------------
+      call AllocateFermionicField(G_DMFT,Crystal%Norb,Nmats,Nsite=Nsite,Beta=Beta)
       do isite=1,Nsite
          !
-         write(*,"(A)") new_line("A")//"     Collecting the impurity Green's function of site: "//reg(SiteName(isite))
-         !
-         Norb = SiteNorb(isite)
-         allocate(Orbs(Norb))
-         Orbs = SiteOrbs(isite,1:Norb)
+         write(*,"(A)") new_line("A")//"     Collecting the impurity Green's function of site: "//SolverObs(isite)%Name
          !
          !Read the impurity Green's function
          allocate(tauF(Solver%NtauF_in));tauF = linspace(0d0,Beta,Solver%NtauF_in)
-         allocate(Gitau(Norb,Solver%NtauF_in,Nspin));Gitau=czero
-         allocate(ReadLine(Nspin*Norb))
-         file = reg(PrevItFolder)//"Solver_"//reg(SiteName(isite))//"/resultsQMC/Gimp_t.DAT"
+         allocate(Gitau(SolverObs(isite)%Norb,Solver%NtauF_in,Nspin));Gitau=czero
+         allocate(ReadLine(SolverObs(isite)%Nflavor))
+         file = reg(PrevItFolder)//"Solver_"//SolverObs(isite)%Name//"/resultsQMC/Gimp_t.DAT"
          call inquireFile(reg(file),filexists,verb=verbose)
          unit = free_unit()
          open(unit,file=reg(file),form="formatted",status="old",position="rewind",action="read")
@@ -2605,7 +2665,7 @@ contains
             if(abs(taup-tauF(itau)).gt.eps) stop "Impurity fermionic tau mesh does not coincide."
             !
             ndx=1
-            do iorb=1,Norb
+            do iorb=1,SolverObs(isite)%Norb
                do ispin=1,Nspin
                   Gitau(iorb,itau,ispin) = dcmplx(ReadLine(ndx),0d0)
                   ndx=ndx+1
@@ -2614,259 +2674,179 @@ contains
             !
          enddo
          deallocate(ReadLine,tauF)
+         call dump_MaxEnt(Gitau,"itau",reg(PrevItFolder)//"Convergence/","Gqmc_"//SolverObs(isite)%Name)
          !
          !FT to the matsubara axis
+         allocate(Gmats(SolverObs(isite)%Norb,Nmats));Gmats=czero
          do ispin=1,Nspin
-            call Fitau2mats_vec(Beta,Gitau(:,:,ispin),Gmats(1:Norb,:,ispin,isite),tau_uniform=.true.)
+            call Fitau2mats_vec(Beta,Gitau(:,:,ispin),Gmats,tau_uniform=.true.)
+            do iw=1,Nmats
+               Gimp(isite)%ws(:,:,iw,ispin) = diag(Gmats(:,iw))
+            enddo
+            if(paramagnet)then
+               Gimp(isite)%ws(:,:,:,Nspin) = Gimp(isite)%ws(:,:,:,1)
+               exit
+            endif
          enddo
+         deallocate(Gitau,Gmats)
+         call dump_FermionicField(Gimp(isite),reg(PrevItFolder)//"Solver_"//SolverObs(isite)%Name//"/","Gimp_"//SolverObs(isite)%Name//"_w",paramagnet)
          !
-         call dump_MaxEnt(Gitau,"itau",reg(PrevItFolder)//"Convergence/","Gqmc_"//reg(SiteName(isite)))
-         deallocate(Gitau)
+         !Insert or Expand to the Lattice basis
+         if(RotateHloc)then
+            call imp2loc(G_DMFT,Gimp(isite),isite,SolverObs(isite)%Orbs,ExpandImpurity,AFMselfcons,U=OlocRotDag,name="Gimp")
+         else
+            call imp2loc(G_DMFT,Gimp(isite),isite,SolverObs(isite)%Orbs,ExpandImpurity,AFMselfcons,name="Gimp")
+         endif
          !
-         deallocate(Orbs)
          if(ExpandImpurity.or.AFMselfcons)exit
          !
       enddo
       !
-      !Save to file in standard format Gimp
-      call AllocateFermionicField(G_DMFT,Crystal%Norb,Nmats,Nsite=Nsite,Beta=Beta)
-      do isite=1,Nsite
-         !
-         Norb = SiteNorb(isite)
-         allocate(Orbs(Norb))
-         Orbs = SiteOrbs(isite,1:Norb)
-         call AllocateFermionicField(Gimp,Norb,Nmats,Beta=Beta)
-         !
-         !Push Gimp to a Local fermionic field
-         call clear_attributes(Gimp)
-         do iorb=1,Norb
-            Gimp%ws(iorb,iorb,:,:) = Gmats(iorb,:,:,isite)
-         enddo
-         !
-         !Expand to the Lattice basis
-         if(RotateHloc)then
-            if(sym_mode.gt.1)call symmetrize_imp(Gimp,OlocEig(:,isite))
-            call imp2loc(G_DMFT,Gimp,isite,Orbs,ExpandImpurity,AFMselfcons,U=OlocRotDag)
-         else
-            call imp2loc(G_DMFT,Gimp,isite,Orbs,ExpandImpurity,AFMselfcons)
-         endif
-         !
-         deallocate(Orbs)
-         call DeallocateFermionicField(Gimp)
-         if(ExpandImpurity.or.AFMselfcons)exit
-         !
-      enddo
+      !symmetrize and print
+      if(verbose)call dump_FermionicField(G_DMFT,reg(PrevItFolder),"Gimp_noSym_w",paramagnet)
+      call symmetrize_GW(G_DMFT,EqvGWndx)
       !
       call dump_FermionicField(G_DMFT,reg(PrevItFolder),"Gimp_w",paramagnet)
       call dump_MaxEnt(G_DMFT,"mats",reg(PrevItFolder)//"Convergence/","Gimp",EqvGWndx%SetOrbs,WmaxPade=PadeWlimit)
       call dump_MaxEnt(G_DMFT,"mats2itau",reg(PrevItFolder)//"Convergence/","Gimp",EqvGWndx%SetOrbs)
       call DeallocateFermionicField(G_DMFT)
       !
-      !Fermionic Dyson equation
-      allocate(Smats(maxval(SiteNorb),Nmats,Nspin,Nsite));Smats=czero
+      !
+      !
+      !
+      ! FERMIONIC DYSON EQUATION -----------------------------------------------
+      call AllocateFermionicField(S_DMFT,Crystal%Norb,Nmats,Nsite=Nsite,Beta=Beta)
       do isite=1,Nsite
          !
-         Norb = SiteNorb(isite)
-         allocate(Orbs(Norb))
-         Orbs = SiteOrbs(isite,1:Norb)
-         !
-         write(*,"(A)") new_line("A")//"     Collecting curlyG of site: "//reg(SiteName(isite))
+         write(*,"(A)") new_line("A")//"     Collecting curlyG of site: "//SolverObs(isite)%Name
          !
          !Read curlyG
-         call AllocateFermionicField(G0imp,Norb,Nmats,Beta=Beta)
-         call read_FermionicField(G0imp,reg(PrevItFolder)//"Solver_"//reg(SiteName(isite))//"/","G0_"//reg(SiteName(isite))//"_w")
+         call AllocateFermionicField(G0imp,SolverObs(isite)%Norb,Nmats,Beta=Beta)
+         call read_FermionicField(G0imp,reg(PrevItFolder)//"Solver_"//SolverObs(isite)%Name//"/","G0_"//reg(SiteName(isite))//"_w")
          !
          !Adjust with the chemical potential if the solver has changed it
          if((abs(G0imp%mu-muQMC).gt.1e-5).and.update_curlyG)then
             write(*,"(A)") new_line("A")//"     Updating the chemical potential of curlyG from "//str(G0imp%mu)//" to "//str(muQMC)
             do ispin=1,Nspin
                do iw=1,Nmats
-                  do iorb=1,Norb
+                  do iorb=1,SolverObs(isite)%Norb
                      G0imp%ws(iorb,iorb,iw,ispin) = 1d0/(1d0/G0imp%ws(iorb,iorb,iw,ispin) - G0imp%mu + muQMC)
                   enddo
                enddo
+               if(paramagnet)then
+                  G0imp%ws(:,:,:,Nspin) = G0imp%ws(:,:,:,1)
+                  exit
+               endif
             enddo
             G0imp%mu=muQMC
-            call dump_FermionicField(G0imp,reg(PrevItFolder)//"Solver_"//reg(SiteName(isite))//"/","G0_"//reg(SiteName(isite))//"_w",paramagnet)
+            call dump_FermionicField(G0imp,reg(PrevItFolder)//"Solver_"//SolverObs(isite)%Name//"/","G0_"//SolverObs(isite)%Name//"_w",paramagnet)
          endif
          !
          !Fermionic Dyson equation in the solver basis (always diagonal)
-         write(*,"(A)") new_line("A")//"     Solving fermionic Dyson of site: "//reg(SiteName(isite))
+         write(*,"(A)") new_line("A")//"     Solving fermionic Dyson of site: "//SolverObs(isite)%Name
          do ispin=1,Nspin
-            do iorb=1,Norb
-               Smats(iorb,:,ispin,isite) = 1d0/G0imp%ws(iorb,iorb,:,ispin) - 1d0/Gmats(iorb,:,ispin,isite)
+            do iorb=1,SolverObs(isite)%Norb
+               Simp(isite)%ws(iorb,iorb,:,ispin) = 1d0/G0imp%ws(iorb,iorb,:,ispin) - 1d0/Gimp(isite)%ws(iorb,iorb,:,ispin)
             enddo
+            if(paramagnet)then
+               Simp(isite)%ws(:,:,:,Nspin) = Simp(isite)%ws(:,:,:,1)
+               exit
+            endif
          enddo
          call DeallocateFermionicField(G0imp)
          !
-         deallocate(Orbs)
-         if(ExpandImpurity.or.AFMselfcons)exit
-         !
-      enddo
-      deallocate(Gmats)
-      !
-      !Replace the tail with the fitted self-energy - I'm doing another loop over sites because I want to store all the SmatsNoFit
-      if((ReplaceTail_Simp.ne.0d0).and.(ReplaceTail_Simp.lt.wmatsMax))then
-         !
-         allocate(SmatsNoFit(maxval(SiteNorb),Nmats,Nspin,Nsite))
-         SmatsNoFit=Smats
-         !
-         do isite=1,Nsite
+         !Fit the impurity self-energy tail
+         if(fitSigmaTail)then
             !
-            write(*,"(A)") new_line("A")//"     Fitting self-energy moments of site: "//reg(SiteName(isite))
+            call dump_FermionicField(Simp(isite),reg(PrevItFolder)//"Solver_"//SolverObs(isite)%Name//"/","S_noFit_"//SolverObs(isite)%Name//"_w",paramagnet)
             !
-            Norb = SiteNorb(isite)
-            allocate(Orbs(Norb))
-            Orbs = SiteOrbs(isite,1:Norb)
-            !
-            !perform the fit
-            file = "SimpMom_"//reg(SiteName(isite))//".DAT"
-            MomDir = reg(PrevItFolder)//"Solver_"//reg(SiteName(isite))//"/"
-            allocate(wmats(Nmats));wmats=FermionicFreqMesh(Beta,Nmats)
+            write(*,"(A)") new_line("A")//"     Fitting self-energy moments of site: "//SolverObs(isite)%Name
             !
             !define the frequency index from which substitute the tail
+            allocate(wmats(Nmats));wmats=FermionicFreqMesh(Beta,Nmats)
             wndx = minloc(abs(wmats-ReplaceTail_Simp),dim=1)
             wndxOpt = wndx
             do ispin=1,Nspin
-               do iorb=1,Norb
-                  wndxOpt = min(wndxOpt,minloc(abs(SmatsNoFit(iorb,:,ispin,isite)-0.3d0*minval(dimag(SmatsNoFit(iorb,:,ispin,isite)))),dim=1))
+               do iorb=1,SolverObs(isite)%Norb
+                  wndxOpt = min(wndxOpt,minloc(abs(Simp(isite)%ws(iorb,iorb,:,ispin)-0.3d0*minval(dimag(Simp(isite)%ws(iorb,iorb,:,ispin)))),dim=1))
                enddo
             enddo
             !
-            allocate(Moments(Norb,Nspin,0:min(SigmaMaxMom,Nfit)));Moments=0d0
-            call fit_moments(Smats(:,:,:,isite),Beta,reg(MomDir),reg(file),"Sigma",Moments,filename="Simp",Wlimit=wndx)
+            !perform the fit on the diagonal
+            file = "SimpMom_"//SolverObs(isite)%Name//".DAT"
+            MomDir = reg(PrevItFolder)//"Solver_"//SolverObs(isite)%Name//"/"
+            !
+            allocate(Moments(SolverObs(isite)%Norb,Nspin,0:min(SigmaMaxMom,Nfit)));Moments=0d0
+            allocate(Sfit(SolverObs(isite)%Norb,Nmats,Nspin))
+            do ispin=1,Nspin
+               do iorb=1,SolverObs(isite)%Norb
+                  Sfit(iorb,:,ispin) = Simp(isite)%ws(iorb,iorb,:,ispin)
+               enddo
+            enddo
+            call fit_moments(Sfit,Beta,reg(MomDir),reg(file),"Sigma",Moments,filename="Simp",Wlimit=wndx)
             !
             allocate(SmatsTail(Nmats));SmatsTail=czero
             write(*,"(A,F)") new_line("A")//"     Replacing Sigma tail starting from iw_["//str(wndx)//"]=",wmats(wndx)
             if(abs(wmats(wndx)-wmats(wndxOpt)).gt.1d0)write(*,"(A,F)") "     Optimal would be iw_["//str(wndxOpt)//"]=",wmats(wndxOpt)
             do ispin=1,Nspin
-               do iorb=1,Norb
+               do iorb=1,SolverObs(isite)%Norb
                   SmatsTail = S_Moments(Moments(iorb,ispin,:),wmats)
-                  Smats(iorb,wndx:Nmats,ispin,isite) = SmatsTail(wndx:Nmats)
+                  Simp(isite)%ws(iorb,iorb,wndx:Nmats,ispin) = SmatsTail(wndx:Nmats)
                enddo
+               if(paramagnet)then
+                  Simp(isite)%ws(:,:,:,Nspin) = Simp(isite)%ws(:,:,:,1)
+                  exit
+               endif
             enddo
-            deallocate(wmats,Moments,SmatsTail)
+            deallocate(wmats,Sfit,Moments,SmatsTail)
             !
-            deallocate(Orbs)
-            if(ExpandImpurity.or.AFMselfcons)exit
-            !
-         enddo
-         !
-      endif
-      !
-      !Save to file in standard format the eventually fitted self-energy
-      call AllocateFermionicField(S_DMFT,Crystal%Norb,Nmats,Nsite=Nsite,Beta=Beta)
-      do isite=1,Nsite
-         !
-         Norb = SiteNorb(isite)
-         allocate(Orbs(Norb))
-         Orbs = SiteOrbs(isite,1:Norb)
-         call AllocateFermionicField(Simp,Norb,Nmats,Beta=Beta)
-         !
-         !Push Simp to a Local fermionic field
-         call clear_attributes(Simp)
-         do iorb=1,Norb
-            Simp%ws(iorb,iorb,:,:) = Smats(iorb,:,:,isite)
-         enddo
+         endif
          !
          !Fill up the N_s attribute that correspond to the Hartree term of the
          !self-energy always diagonal in the solver basis
-         call AllocateBosonicField(curlyU,Norb,Nmats,Crystal%iq_gamma,Beta=Beta)
-         call read_BosonicField(curlyU,reg(PrevItFolder)//"Solver_"//reg(SiteName(isite))//"/","curlyU_"//reg(SiteName(isite))//"_w.DAT")
-         allocate(Uinst(Norb*Nspin,Norb*Nspin));Uinst=0d0
+         call AllocateBosonicField(curlyU,SolverObs(isite)%Norb,Nmats,Crystal%iq_gamma,Beta=Beta)
+         call read_BosonicField(curlyU,reg(PrevItFolder)//"Solver_"//SolverObs(isite)%Name//"/","curlyU_"//SolverObs(isite)%Name//"_w.DAT")
+         allocate(Uinst(SolverObs(isite)%Nflavor,SolverObs(isite)%Nflavor));Uinst=0d0
          call calc_QMCinteractions(curlyU,Uinst)
          call DeallocateBosonicField(curlyU)
          !
-         allocate(rhoQMC(Norb*Nspin));rhoQMC=0d0
-         do ib1=1,Nflavor
-            iorb = (ib1+mod(ib1,2))/2
-            ispin = abs(mod(ib1,2)-2)
-            rhoQMC(ib1) = densityQMC(iorb,iorb,ispin,isite)
-         enddo
+         allocate(HartreeQMC(SolverObs(isite)%Nflavor));HartreeQMC=0d0
+         HartreeQMC = matmul(Uinst,SolverObs(isite)%rho_Flav)
          !
-         allocate(HartreeQMC(Norb*Nspin));HartreeQMC=0d0
-         HartreeQMC = matmul(Uinst,rhoQMC)!/2d0
-         do ib1=1,Nflavor
+         do ib1=1,SolverObs(isite)%Nflavor
             iorb = (ib1+mod(ib1,2))/2
             ispin = abs(mod(ib1,2)-2)
-            Simp%N_s(iorb,iorb,ispin) = HartreeQMC(ib1) !+ Uinst(2*iorb,2*iorb-1)*rhoQMC(ib1)/2d0
+            Simp(isite)%N_s(iorb,iorb,ispin) = HartreeQMC(ib1)
          enddo
-         deallocate(Uinst,rhoQMC,HartreeQMC)
+         deallocate(Uinst,HartreeQMC)
          !
          !The magnetization will be given only by the self-energy beyond Hartree
-         Simp%N_s(:,:,1) = (Simp%N_s(:,:,1)+Simp%N_s(:,:,Nspin))/2d0
-         Simp%N_s(:,:,Nspin) = Simp%N_s(:,:,1)
+         Simp(isite)%N_s(:,:,1) = (Simp(isite)%N_s(:,:,1)+Simp(isite)%N_s(:,:,Nspin))/2d0
+         Simp(isite)%N_s(:,:,Nspin) = Simp(isite)%N_s(:,:,1)
          !
          !Hartree term in the Solver basis
-         call dump_Matrix(Simp%N_s,reg(PrevItFolder),"Solver_"//reg(SiteName(isite))//"/Hartree_UNimp_"//reg(SiteName(isite)),paramagnet)
+         call dump_Matrix(Simp(isite)%N_s,reg(PrevItFolder),"Solver_"//SolverObs(isite)%Name//"/Hartree_UNimp_"//SolverObs(isite)%Name,paramagnet)
          !
-         !Expand to the Lattice basis
+         !Insert or Expand to the Lattice basis
          if(RotateHloc)then
-            if(sym_mode.gt.1)call symmetrize_imp(Simp,OlocEig(:,isite))
-            call imp2loc(S_DMFT,Simp,isite,Orbs,ExpandImpurity,AFMselfcons,U=OlocRotDag)
+            if(sym_mode.gt.1)call symmetrize_imp(Simp(isite),OlocEig(:,isite))
+            call imp2loc(S_DMFT,Simp(isite),isite,SolverObs(isite)%Orbs,ExpandImpurity,AFMselfcons,U=OlocRotDag,name="Simp")
          else
-            call imp2loc(S_DMFT,Simp,isite,Orbs,ExpandImpurity,AFMselfcons)
+            call imp2loc(S_DMFT,Simp(isite),isite,SolverObs(isite)%Orbs,ExpandImpurity,AFMselfcons,name="Simp")
          endif
          !
-         call DeallocateFermionicField(Simp)
-         deallocate(Orbs)
          if(ExpandImpurity.or.AFMselfcons)exit
          !
       enddo
       !
-      !symmetrize GW indexes and print
-      if(EqvGWndx%O.or.EqvGWndx%S)then
-         !
-         if(verbose)then
-            call dump_FermionicField(S_DMFT,reg(PrevItFolder),"Simp_noSym_w",paramagnet)
-            call dump_Matrix(S_DMFT%N_s,reg(PrevItFolder),"Hartree_UNimp_noSym",paramagnet)
-         endif
-         !
-         call symmetrize_GW(S_DMFT,EqvGWndx)
-         !
-      endif
-      deallocate(Smats)
+      !symmetrize and print
+      if(verbose)call dump_FermionicField(S_DMFT,reg(PrevItFolder),"Simp_noSym_w",paramagnet)
+      call symmetrize_GW(S_DMFT,EqvGWndx)
       !
       call dump_FermionicField(S_DMFT,reg(PrevItFolder),"Simp_w",paramagnet)
       call dump_MaxEnt(S_DMFT,"mats",reg(PrevItFolder)//"Convergence/","Simp",EqvGWndx%SetOrbs,WmaxPade=PadeWlimit)
       call dump_Matrix(S_DMFT%N_s,reg(PrevItFolder),"Hartree_UNimp",paramagnet)
       call DeallocateFermionicField(S_DMFT)
-      !
-      !Save the non-Fitted non-symmetrized self-energy if present
-      if(ReplaceTail_Simp.ne.0d0)then
-         !
-         if(.not.allocated(SmatsNoFit)) stop "SmatsNoFit is not allocated."
-         call AllocateFermionicField(S_DMFT,Crystal%Norb,Nmats,Nsite=Nsite,Beta=Beta)
-         do isite=1,Nsite
-            !
-            Norb = SiteNorb(isite)
-            allocate(Orbs(Norb))
-            Orbs = SiteOrbs(isite,1:Norb)
-            call AllocateFermionicField(Simp,Norb,Nmats,Beta=Beta)
-            !
-            !Push Simp to a Local fermionic field
-            call clear_attributes(Simp)
-            do iorb=1,Norb
-               Simp%ws(iorb,iorb,:,:) = SmatsNoFit(iorb,:,:,isite)
-            enddo
-            !
-            !Expand to the Lattice basis
-            if(RotateHloc)then
-               call imp2loc(S_DMFT,Simp,isite,Orbs,ExpandImpurity,AFMselfcons,U=OlocRotDag)
-            else
-               call imp2loc(S_DMFT,Simp,isite,Orbs,ExpandImpurity,AFMselfcons)
-            endif
-            !
-            call DeallocateFermionicField(Simp)
-            deallocate(Orbs)
-            if(ExpandImpurity.or.AFMselfcons)exit
-            !
-         enddo
-         deallocate(SmatsNoFit)
-         call dump_FermionicField(S_DMFT,reg(PrevItFolder),"Simp_noFit_w",paramagnet)
-         call DeallocateFermionicField(S_DMFT)
-         !
-      endif
       !
       !
       !
@@ -2881,21 +2861,14 @@ contains
          !
          do isite=1,Nsite
             !
-            write(*,"(A)") new_line("A")//"     Collecting the impurity susceptibilities of site: "//reg(SiteName(isite))
-            !
-            Norb = SiteNorb(isite)
-            allocate(Orbs(Norb))
-            Orbs = SiteOrbs(isite,1:Norb)
-            Nbp = Norb**2
-            Nflavor = Norb*Nspin
-            allocate(wmats(Nmats));wmats=BosonicFreqMesh(Beta,Nmats)
+            write(*,"(A)") new_line("A")//"     Collecting the impurity susceptibilities of site: "//SolverObs(isite)%Name
             !
             !Read the impurity N(tau)N(0)
             allocate(tauB(Solver%NtauB_in));tauB=0d0
             tauB = linspace(0d0,Beta,Solver%NtauB_in)
-            allocate(nnt(Nflavor,Nflavor,Solver%NtauB_in));nnt=0d0
-            allocate(ReadLine(Nflavor*(Nflavor+1)/2))
-            file = reg(PrevItFolder)//"Solver_"//reg(SiteName(isite))//"/resultsQMC/nn_t.DAT"
+            allocate(nnt(SolverObs(isite)%Nflavor,SolverObs(isite)%Nflavor,Solver%NtauB_in));nnt=0d0
+            allocate(ReadLine(SolverObs(isite)%Nflavor*(SolverObs(isite)%Nflavor+1)/2))
+            file = reg(PrevItFolder)//"Solver_"//SolverObs(isite)%Name//"/resultsQMC/nn_t.DAT"
             call inquireFile(reg(file),filexists,verb=verbose)
             unit = free_unit()
             open(unit,file=reg(file),form="formatted",status="old",position="rewind",action="read")
@@ -2907,7 +2880,7 @@ contains
                !
                !this is cumbersome but better be safe
                ndx=1
-               do ib1=1,Nflavor
+               do ib1=1,SolverObs(isite)%Nflavor
                   do ib2=1,ib1
                      nnt(ib1,ib2,itau) = ReadLine(ndx)
                      if(ib1.ne.ib2)nnt(ib2,ib1,itau) = ReadLine(ndx)
@@ -2919,9 +2892,9 @@ contains
             deallocate(ReadLine)
             !
             !Reshape N(tau)N(0)for easier handling
-            allocate(NNitau(Norb,Norb,Nspin,Nspin,Solver%NtauB_in));NNitau=czero
-            do ib1=1,Nflavor
-               do ib2=1,Nflavor
+            allocate(NNitau(SolverObs(isite)%Norb,SolverObs(isite)%Norb,Nspin,Nspin,Solver%NtauB_in));NNitau=czero
+            do ib1=1,SolverObs(isite)%Nflavor
+               do ib2=1,SolverObs(isite)%Nflavor
                   !
                   iorb = (ib1+mod(ib1,2))/2
                   jorb = (ib2+mod(ib2,2))/2
@@ -2941,8 +2914,8 @@ contains
             allocate(ChiMitau(Solver%NtauB_in));ChiMitau=czero
             do ispin=1,Nspin
                do jspin=1,Nspin
-                  do iorb=1,Norb
-                     do jorb=1,Norb
+                  do iorb=1,SolverObs(isite)%Norb
+                     do jorb=1,SolverObs(isite)%Norb
                         !
                         ChiMitau = ChiMitau + NNitau(iorb,jorb,ispin,jspin,:)*(-1d0)**(ispin-jspin)/4d0
                         !
@@ -2950,29 +2923,29 @@ contains
                   enddo
                enddo
             enddo
-            call dump_BosonicField(ChiMitau,reg(PrevItFolder)//"Solver_"//reg(SiteName(isite))//"/","ChiM_"//reg(SiteName(isite))//"_t.DAT",tauB)
+            call dump_BosonicField(ChiMitau,reg(PrevItFolder)//"Solver_"//SolverObs(isite)%Name//"/","ChiM_"//SolverObs(isite)%Name//"_t.DAT",tauB)
             !
             !FT to get ChiM(iw)
+            allocate(wmats(Nmats));wmats=BosonicFreqMesh(Beta,Nmats)
             allocate(ChiMmats(Nmats));ChiMmats=czero
             call Bitau2mats(Beta,ChiMitau,ChiMmats,tau_uniform=.true.)
-            call dump_BosonicField(ChiMmats,reg(PrevItFolder)//"Solver_"//reg(SiteName(isite))//"/","ChiM_"//reg(SiteName(isite))//"_w.DAT",wmats)
+            call dump_BosonicField(ChiMmats,reg(PrevItFolder)//"Solver_"//SolverObs(isite)%Name//"/","ChiM_"//SolverObs(isite)%Name//"_w.DAT",wmats)
             deallocate(ChiMitau,ChiMmats,wmats)
             !
             !
             !Charge susceptibility----------------------------------------------
             !ChiC(tau) = Sum_s1s2 <Na(tau)Nb(0)> - <Na><Nb> in the solver basis
-            !here I have to use the non-symmetrized Nqmc because <Na><Nb> is not symmetrized
-            call AllocateBosonicField(ChiCitau,Norb,Solver%NtauB_in,Crystal%iq_gamma,no_bare=.true.,Beta=Beta)
-            do iorb=1,Norb
-               do jorb=1,Norb
+            call AllocateBosonicField(ChiCitau,SolverObs(isite)%Norb,Solver%NtauB_in,Crystal%iq_gamma,no_bare=.true.,Beta=Beta)
+            do iorb=1,SolverObs(isite)%Norb
+               do jorb=1,SolverObs(isite)%Norb
                   !
-                  call F2Bindex(Norb,[iorb,iorb],[jorb,jorb],ib1,ib2)
+                  call F2Bindex(SolverObs(isite)%Norb,[iorb,iorb],[jorb,jorb],ib1,ib2)
                   !
                   do ispin=1,Nspin
                      do jspin=1,Nspin
                         !
-                        ChiCitau%screened_local(ib1,ib2,:) = ChiCitau%screened_local(ib1,ib2,:) + (NNitau(iorb,jorb,ispin,jspin,:) &
-                                                           - densityQMC(iorb,iorb,ispin,isite)*densityQMC(jorb,jorb,jspin,isite))
+                        ChiCitau%screened_local(ib1,ib2,:) = ChiCitau%screened_local(ib1,ib2,:) + &
+                        ( NNitau(iorb,jorb,ispin,jspin,:) - SolverObs(isite)%rho_OrbSpin(iorb,iorb,ispin)*SolverObs(isite)%rho_OrbSpin(jorb,jorb,jspin) )
                         !
                      enddo
                   enddo
@@ -3015,58 +2988,61 @@ contains
                enddo
             endif
             !
-            call dump_BosonicField(ChiCitau,reg(PrevItFolder)//"Solver_"//reg(SiteName(isite))//"/","ChiC_"//reg(SiteName(isite))//"_t.DAT",axis=tauB)
+            call dump_BosonicField(ChiCitau,reg(PrevItFolder)//"Solver_"//SolverObs(isite)%Name//"/","ChiC_"//SolverObs(isite)%Name//"_t.DAT",axis=tauB)
             deallocate(tauB)
             !
             !FT to get ChiC(iw)
-            call AllocateBosonicField(ChiCmats,Norb,Nmats,Crystal%iq_gamma,no_bare=.true.,Beta=Beta)
+            call AllocateBosonicField(ChiCmats,SolverObs(isite)%Norb,Nmats,Crystal%iq_gamma,no_bare=.true.,Beta=Beta)
             call Bitau2mats(Beta,ChiCitau%screened_local,ChiCmats%screened_local,tau_uniform=.true.)
             call DeallocateBosonicField(ChiCitau)
             !call isReal(ChiCmats)
             !
             !Remove the iw=0 divergency of local charge susceptibility
             if(removeCDW_C)then
-               write(*,"(A)") new_line("A")//"     Divergency removal in ChiC(iw=0) of site: "//reg(SiteName(isite))
-               call dump_BosonicField(ChiCmats,reg(PrevItFolder)//"Solver_"//reg(SiteName(isite))//"/","ChiC_CDW_"//reg(SiteName(isite))//"_w.DAT")
+               write(*,"(A)") new_line("A")//"     Divergency removal in ChiC(iw=0) of site: "//SolverObs(isite)%Name
+               call dump_BosonicField(ChiCmats,reg(PrevItFolder)//"Solver_"//SolverObs(isite)%Name//"/","ChiC_CDW_"//SolverObs(isite)%Name//"_w.DAT")
                allocate(CDW(ChiCmats%Nbp,ChiCmats%Nbp));CDW=0d0
                CDW = real(ChiCmats%screened_local(:,:,1))
                call remove_CDW(ChiCmats,"imp")
                CDW = CDW - real(ChiCmats%screened_local(:,:,1))
-               call dump_Matrix(CDW,reg(PrevItFolder)//"Solver_"//reg(SiteName(isite))//"/","CDW_"//reg(SiteName(isite))//".DAT")
+               call dump_Matrix(CDW,reg(PrevItFolder)//"Solver_"//SolverObs(isite)%Name//"/","CDW_"//SolverObs(isite)%Name//".DAT")
                deallocate(CDW)
             endif
             !
             !Print ChiC
-            call dump_BosonicField(ChiCmats,reg(PrevItFolder)//"Solver_"//reg(SiteName(isite))//"/","ChiC_"//reg(SiteName(isite))//"_w.DAT")
+            call dump_BosonicField(ChiCmats,reg(PrevItFolder)//"Solver_"//SolverObs(isite)%Name//"/","ChiC_"//SolverObs(isite)%Name//"_w.DAT")
+            !
+            !
+            !BOSONIC DYSON -----------------------------------------------------
             !
             !recollect curlyU
-            call AllocateBosonicField(curlyU,Norb,Nmats,Crystal%iq_gamma,Beta=Beta)
-            call read_BosonicField(curlyU,reg(PrevItFolder)//"Solver_"//reg(SiteName(isite))//"/","curlyU_"//reg(SiteName(isite))//"_w.DAT")
+            call AllocateBosonicField(curlyU,SolverObs(isite)%Norb,Nmats,Crystal%iq_gamma,Beta=Beta)
+            call read_BosonicField(curlyU,reg(PrevItFolder)//"Solver_"//SolverObs(isite)%Name//"/","curlyU_"//SolverObs(isite)%Name//"_w.DAT")
             !
             !Bosonic Dyson equation in the solver basis
-            write(*,"(A)") new_line("A")//"     Solving bosonic Dyson of site: "//reg(SiteName(isite))
-            call AllocateBosonicField(Pimp,Norb,Nmats,Crystal%iq_gamma,no_bare=.true.,Beta=Beta)
+            write(*,"(A)") new_line("A")//"     Solving bosonic Dyson of site: "//SolverObs(isite)%Name
+            call AllocateBosonicField(Pimp,SolverObs(isite)%Norb,Nmats,Crystal%iq_gamma,no_bare=.true.,Beta=Beta)
             call calc_Pimp(Pimp,curlyU,ChiCmats)
             !
             !Compute convergence benchmark for the interaction
-            call AllocateBosonicField(Wimp,Norb,Nmats,Crystal%iq_gamma,Beta=Beta)
+            call AllocateBosonicField(Wimp,SolverObs(isite)%Norb,Nmats,Crystal%iq_gamma,Beta=Beta)
             call calc_Wimp(Wimp,curlyU,ChiCmats)
             !
             !Expand to the Lattice basis
             if(RotateHloc)then
-               call init_Uelements(Norb,PhysicalUelements)
-               call imp2loc(C_EDMFT,ChiCmats,isite,Orbs,ExpandImpurity,AFMselfcons,U=OlocRotDag,Map=PhysicalUelements%Full_Map)
-               call imp2loc(P_EDMFT,Pimp,isite,Orbs,ExpandImpurity,AFMselfcons,U=OlocRotDag,Map=PhysicalUelements%Full_Map)
-               call imp2loc(W_EDMFT,Wimp,isite,Orbs,ExpandImpurity,AFMselfcons,U=OlocRotDag,Map=PhysicalUelements%Full_Map)
+               call init_Uelements(SolverObs(isite)%Norb,PhysicalUelements)
+               call imp2loc(C_EDMFT,ChiCmats,isite,SolverObs(isite)%Orbs,ExpandImpurity,AFMselfcons,U=OlocRotDag,Map=PhysicalUelements%Full_Map,name="Cimp")
+               call imp2loc(P_EDMFT,Pimp,isite,SolverObs(isite)%Orbs,ExpandImpurity,AFMselfcons,U=OlocRotDag,Map=PhysicalUelements%Full_Map,name="Pimp")
+               call imp2loc(W_EDMFT,Wimp,isite,SolverObs(isite)%Orbs,ExpandImpurity,AFMselfcons,U=OlocRotDag,Map=PhysicalUelements%Full_Map,name="Wimp")
             else
-               call imp2loc(C_EDMFT,ChiCmats,isite,Orbs,ExpandImpurity,AFMselfcons)
-               call imp2loc(P_EDMFT,Pimp,isite,Orbs,ExpandImpurity,AFMselfcons)
-               call imp2loc(W_EDMFT,Wimp,isite,Orbs,ExpandImpurity,AFMselfcons)
+               call imp2loc(C_EDMFT,ChiCmats,isite,SolverObs(isite)%Orbs,ExpandImpurity,AFMselfcons,name="Cimp")
+               call imp2loc(P_EDMFT,Pimp,isite,SolverObs(isite)%Orbs,ExpandImpurity,AFMselfcons,name="Pimp")
+               call imp2loc(W_EDMFT,Wimp,isite,SolverObs(isite)%Orbs,ExpandImpurity,AFMselfcons,name="Wimp")
             endif
             if(RotateUloc)then
-               call imp2loc(curlyU_EDMFT,curlyU,isite,Orbs,ExpandImpurity,AFMselfcons,U=OlocRotDag,Map=PhysicalUelements%Full_Map)
+               call imp2loc(curlyU_EDMFT,curlyU,isite,SolverObs(isite)%Orbs,ExpandImpurity,AFMselfcons,U=OlocRotDag,Map=PhysicalUelements%Full_Map,name="curlyU")
             else
-               call imp2loc(curlyU_EDMFT,curlyU,isite,Orbs,ExpandImpurity,AFMselfcons)
+               call imp2loc(curlyU_EDMFT,curlyU,isite,SolverObs(isite)%Orbs,ExpandImpurity,AFMselfcons,name="curlyU")
             endif
             !
             call DeallocateBosonicField(ChiCmats)
@@ -3074,17 +3050,13 @@ contains
             call DeallocateBosonicField(Pimp)
             call DeallocateBosonicField(Wimp)
             !
-            deallocate(Orbs)
             if(ExpandImpurity.or.AFMselfcons)exit
             !
          enddo
-         deallocate(densityQMC)
          !
-         !symmetrize GW indexes
-         if(EqvGWndx%O)then
-            if(verbose)call dump_BosonicField(P_EDMFT,reg(PrevItFolder),"Pimp_noSym_w.DAT")
-            call symmetrize_GW(P_EDMFT,EqvGWndx)
-         endif
+         !symmetrize and print
+         if(verbose)call dump_BosonicField(P_EDMFT,reg(PrevItFolder),"Pimp_noSym_w.DAT")
+         call symmetrize_GW(P_EDMFT,EqvGWndx)
          !
          !Remove the iw=0 divergency of local polarization
          if(removeCDW_P)then
@@ -3114,6 +3086,8 @@ contains
          call DeallocateBosonicField(C_EDMFT)
          !
       endif
+      !
+      deallocate(SolverObs,Gimp,Simp)
       !
    end subroutine collect_QMC_results
 

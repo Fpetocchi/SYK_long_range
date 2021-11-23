@@ -1731,7 +1731,7 @@ contains
       complex(8),allocatable                :: EwaldShift(:)
       real(8),allocatable                   :: V(:)
       real(8)                               :: eta,den
-      logical                               :: LocalOnly_
+      logical                               :: LocalOnly_,RealSpace
       real                                  :: start,finish
       !
       !
@@ -1749,8 +1749,11 @@ contains
       !
       Nbp = Umats%Nbp
       Norb = int(sqrt(dble(Nbp)))
-      if(Hetero%status)then
-         Norb = Hetero%Norb
+      RealSpace = Lttc%Nsite.gt.1
+      !
+      if(RealSpace)then
+         Norb = Lttc%Norb/Lttc%Nsite
+         if(Hetero%status) Norb = Hetero%Norb
          Nbp = Norb**2
          call AllocateBosonicField(Umats_imp,Norb,Umats%Npoints,Umats%iq_gamma,Nkpt=Umats%Nkpt,Beta=Umats%Beta)
          Umats_ptr => Umats_imp
@@ -1834,7 +1837,7 @@ contains
       !
       if(verbose)then
          write(*,*)"     Real-space interaction elements:"
-         write(*,"(A6,3A12)") "  i  ","  Ri  ","  H(Ri)  "," [n1,n2,n3] "
+         write(*,"(A6,3A12)") "    i","    Ri","    H(Ri)","  [n1,n2,n3]"
          do iwig=1,Nwig
             write(*,"(1I6,2F12.4,3I4)")Rorder(iwig),Rsorted(Rorder(iwig)),real(U_R(1,1,Rorder(iwig))),Nvecwig(:,Rorder(iwig))
          enddo
@@ -1842,7 +1845,11 @@ contains
       !
       !FT to K-space
       allocate(U_K(Nbp,Nbp,Lttc%Nkpt));U_K=czero
-      call wannier_R2K(Lttc%Nkpt3,Lttc%kpt,U_R,U_K)
+      if(Lttc%Nkpt.gt.1)then
+         call wannier_R2K(Lttc%Nkpt3,Lttc%kpt,U_R,U_K)
+      else
+         U_K(:,:,1) = U_R(:,:,wig0)
+      endif
       deallocate(U_R,Rorder,Rsorted)
       !
       call cpu_time(finish)
@@ -1882,8 +1889,9 @@ contains
       endif
       deallocate(U_K)
       !
-      if(Hetero%status)then
-         Nsite = Hetero%Explicit(2)-Hetero%Explicit(1)+1
+      if(RealSpace)then
+         Nsite = Lttc%Nsite
+         if(Hetero%status) Nsite = Hetero%Explicit(2)-Hetero%Explicit(1)+1
          call Expand2Nsite(Umats,Umats_ptr,Nsite)
          call DeallocateBosonicField(Umats_imp)
       endif
@@ -1926,7 +1934,7 @@ contains
       complex(8),allocatable                :: EwaldShift(:)
       real(8),allocatable                   :: V(:)
       real(8)                               :: eta,den
-      logical                               :: LocalOnly_
+      logical                               :: LocalOnly_,RealSpace
       real                                  :: start,finish
       !
       !
@@ -1944,8 +1952,11 @@ contains
       !
       Nbp = Umats%Nbp
       Norb = int(sqrt(dble(Nbp)))
-      if(Hetero%status)then
-         Norb = Hetero%Norb
+      RealSpace = Lttc%Nsite.gt.1
+      !
+      if(RealSpace)then
+         Norb = Lttc%Norb/Lttc%Nsite
+         if(Hetero%status) Norb = Hetero%Norb
          Nbp = Norb**2
          call AllocateBosonicField(Umats_imp,Norb,Umats%Npoints,Umats%iq_gamma,Nkpt=Umats%Nkpt,Beta=Umats%Beta)
          Umats_ptr => Umats_imp
@@ -2000,13 +2011,14 @@ contains
                   !
                enddo
             enddo
+            !
             cycle
          endif
          !
          !increasing range
          if(iwig.gt.2)then
             if((Rsorted(Rorder(iwig))-Rsorted(Rorder(iwig-1))).gt.1e-5) idist=idist+1
-            if(idist.gt.Vrange) exit loopwig
+            if((idist.gt.Vrange).and.(reg(long_range).ne."Ewald")) exit loopwig
          endif
          !
          !setting the R dependence
@@ -2034,7 +2046,7 @@ contains
       !
       if(verbose)then
          write(*,*)"     Real-space interaction elements:"
-         write(*,"(A6,3A12)") "  i  ","  Ri  ","  H(Ri)  "," [n1,n2,n3] "
+         write(*,"(A6,3A12)") "    i","    Ri","    H(Ri)","  [n1,n2,n3]"
          do iwig=1,Nwig
             write(*,"(1I6,2F12.4,3I4)")Rorder(iwig),Rsorted(Rorder(iwig)),real(U_R(1,1,Rorder(iwig))),Nvecwig(:,Rorder(iwig))
          enddo
@@ -2042,7 +2054,11 @@ contains
       !
       !FT to K-space
       allocate(U_K(Nbp,Nbp,Lttc%Nkpt));U_K=czero
-      call wannier_R2K(Lttc%Nkpt3,Lttc%kpt,U_R,U_K)
+      if(Lttc%Nkpt.gt.1)then
+         call wannier_R2K(Lttc%Nkpt3,Lttc%kpt,U_R,U_K)
+      else
+         U_K(:,:,1) = U_R(:,:,wig0)
+      endif
       deallocate(U_R,Rorder,Rsorted)
       !
       call cpu_time(finish)
@@ -2073,6 +2089,7 @@ contains
             !
          enddo
       enddo
+      !
       if(.not.LocalOnly_)then
          !
          Umats_ptr%screened(:,:,1,:) = U_K
@@ -2084,13 +2101,16 @@ contains
       endif
       deallocate(U_K)
       !
-      if(Hetero%status)then
-         Nsite = Hetero%Explicit(2)-Hetero%Explicit(1)+1
+      if(RealSpace)then
+         Nsite = Lttc%Nsite
+         if(Hetero%status) Nsite = Hetero%Explicit(2)-Hetero%Explicit(1)+1
          call Expand2Nsite(Umats,Umats_ptr,Nsite)
          call DeallocateBosonicField(Umats_imp)
       endif
       nullify(Umats_ptr)
       !
+      call dump_BosonicField(Umats,reg(pathINPUTtr),"Uloc_mats_nosum.DAT")
+      call BosonicKsum(Umats)
       call dump_BosonicField(Umats,reg(pathINPUTtr),"Uloc_mats.DAT")
       !
    end subroutine build_Uret_multiParam_Vn

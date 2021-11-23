@@ -14,17 +14,9 @@ declare -a dirindex=( "86" "87" "78" "79" )
 
 #------------------------------------------------------------------------------#
 
-## A
-for it in `seq  10 1 16` ; do
-
-## L
-for it in `seq  12 1 17` ; do
-
-
-
 declare -a dirindex=( "1000" )
 GENMAT=/home/petocchif/1_GW_EDMFT/nobackup/1_production/Calculation_template
-for it in `seq  60 1 65` ; do
+for it in `seq  1021 1 1036` ; do
    cd $it/Convergence
    cp ${GENMAT}/${MATERIAL}/MaxEnt/MaxEnt.sh .
    chmod 700 MaxEnt.sh
@@ -49,6 +41,7 @@ for it in `seq  60 1 65` ; do
    #
    cd ../../
 done
+
 
 
 
@@ -99,22 +92,12 @@ rep for [i=1:8] './'.it.'/Convergence/MaxEnt_Glat_o'.i.'_s1/Glat_t_o'.i.'_s1.DAT
 
 
 
-
-
-
-set arrow from 0.286340575697,-2 to 0.286340575697,2 nohead front lw 0.5 lc rgb "white"
-set arrow from 0.578524836612,-2 to 0.578524836612,2 nohead front lw 0.5 lc rgb "white"
-
-
+set yrange [-2.5:2.5]
 unset xtics; set xtics format " ";set xtics ("Gamma" 0.0, "X" 0.286340575697, "M" 0.578524836612, "Gamma" 1.0 )
+set arrow from 0.286340575697,-2.5 to 0.286340575697,2.5 nohead front lw 0.5 lc rgb "white"
+set arrow from 0.578524836612,-2.5 to 0.578524836612,2.5 nohead front lw 0.5 lc rgb "white"
 
 
-
-
-1  0.000000000000E+00
-2  0.286340575697E+00
-3  0.578524836612E+00
-4  0.100000000000E+01
 
 
 #
