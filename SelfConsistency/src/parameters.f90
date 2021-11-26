@@ -250,16 +250,14 @@ module parameters
    !---------------------------------------------------------------------------!
    type Heterostructures
       integer                               :: Nslab=1
+      integer                               :: Nlayer=1
       integer                               :: Norb=0
       integer                               :: Explicit(2)=[1,1]
-      real(8)                               :: GlobalTzRatio=0d0
-      integer                               :: NtzExplicit=0
       integer                               :: tzIndex(2)=[0,0]
-      integer,allocatable                   :: ExplicitTzPos(:)
-      real(8),allocatable                   :: ExplicitTzRatios(:)
-      complex(8),allocatable                :: tz(:,:,:,:)                      ![Norb,Norb,Nkpt,ilayer]
-      complex(8),allocatable                :: tz_path(:,:,:,:)                 ![Norb,Norb,Nkpt,ilayer]
-      complex(8),allocatable                :: tz_Plane(:,:,:,:)                ![Norb,Norb,Nkpt,ilayer]
+      real(8),allocatable                   :: tz(:,:)                          ![Norb,Nlayer]
+      complex(8),allocatable                :: tkz(:,:,:,:)                     ![Norb,Norb,Nkpt,Nlayer]
+      complex(8),allocatable                :: tkz_path(:,:,:,:)                ![Norb,Norb,Nkpt,Nlayer]
+      complex(8),allocatable                :: tkz_Plane(:,:,:,:)               ![Norb,Norb,Nkpt,Nlayer]
       complex(8),allocatable                :: P_L(:,:,:,:)                     ![Norb,Norb,Npoints,Nspin]
       complex(8),allocatable                :: P_R(:,:,:,:)                     ![Norb,Norb,Npoints,Nspin]
       logical                               :: status=.false.

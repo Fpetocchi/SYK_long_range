@@ -397,7 +397,7 @@ contains
       implicit none
       type(Lattice),intent(out)             :: Lttc
       integer,intent(in)                    :: ItStart
-      integer                               :: isite,iadd,iset,iorb
+      integer                               :: isite,iadd,iset,iorb,ik
       integer                               :: iq_gamma_Hk,iq_gamma_XEPS
       integer                               :: shift
       logical                               :: present
@@ -409,27 +409,50 @@ contains
       !
       !
       if(Hmodel)then
-         call set_lattice(LatticeVec)
+         call set_lattice(LatticeVec,ucVec)
       else
          call read_lattice(reg(pathINPUT))
       endif
       !
-      Lttc%Nkpt3 = Nkpt3
-      Lttc%Nsite = Nsite
-      !
       if(readHk)then
-         call read_Hk(Hmodel,pathINPUT,alphaHk,Lttc%Hk,Lttc%kpt,Lttc%Ek,Lttc%Zk,Lttc%Hloc,iq_gamma_Hk)
+         call read_Hk(Lttc%Hk,Lttc%kpt,pathINPUT)
       else
-         call build_Hk(Norb_model,hopping,Nkpt3,alphaHk,readHr,Hetero, &
-                       Lttc%Hk,Lttc%kpt,Lttc%Ek,Lttc%Zk,Lttc%Hloc,     &
-                       iq_gamma=Lttc%iq_gamma,pathOUTPUT=reg(pathINPUT))
+         call build_Hk(Lttc%Hk,Lttc%kpt,hopping,Nkpt3,readHr,Hetero,pathOUTPUT=reg(pathINPUT))
       endif
+      !
+      !Filling the Lattice attributes
+      Lttc%Nkpt3 = Nkpt3
+      Lttc%Nkpt = product(Nkpt3)
       Lttc%Norb = size(Lttc%Hk,dim=1)
-      Lttc%Nkpt = size(Lttc%Hk,dim=3)
+      Lttc%Nsite = Nsite
       !
       call fill_ksumkdiff(Lttc%kpt,Lttc%kptsum,Lttc%kptdif,Nkpt3)
       !
+      if(Hmodel)then
+         Lttc%Hk = Lttc%Hk * alphaHk
+      else
+         Lttc%Hk = Lttc%Hk * alphaHk * H2eV
+      endif
+      !
+      if(allocated(Lttc%Hloc))deallocate(Lttc%Hloc)
+      allocate(Lttc%Hloc(Lttc%Norb,Lttc%Norb));Lttc%Hloc=czero
+      Lttc%Hloc = sum(Lttc%Hk,dim=3)/Lttc%Nkpt
+      !
+      if(allocated(Lttc%Zk))deallocate(Lttc%Zk)
+      if(allocated(Lttc%Ek))deallocate(Lttc%Ek)
+      allocate(Lttc%Zk(Lttc%Norb,Lttc%Norb,Lttc%Nkpt));Lttc%Zk=czero
+      allocate(Lttc%Ek(Lttc%Norb,Lttc%Nkpt));Lttc%Ek=0d0
+      do ik=1,Lttc%Nkpt
+         Lttc%Ek(:,ik) = 0d0
+         Lttc%Zk(:,:,ik) = Lttc%Hk(:,:,ik)
+         call eigh(Lttc%Zk(:,:,ik),Lttc%Ek(:,ik))
+      enddo
+      !
       !additional data neede for ab-initio calculations
+      iq_gamma_Hk = 1
+      if(Lttc%Nkpt.gt.1) iq_gamma_Hk = find_vec([0d0,0d0,0d0],Lttc%kpt,eps)
+      write(*,"(A)")"     Gamma point index: "//str(iq_gamma_Hk)
+      !
       if(.not.Hmodel)then
          allocate(Lttc%kptPos(Lttc%Nkpt));Lttc%kptPos=0
          call read_xeps(pathINPUT,Lttc%kpt,Nkpt3,UseXepsKorder, &
@@ -607,6 +630,9 @@ contains
          if(reg(structure).ne."None")call interpolateHk2Path(Lttc,reg(structure),Nkpt_path,pathOUTPUT=reg(pathINPUT),doplane=.true.,hetero=Hetero)
          !
       endif
+      !TEST>>>
+      stop
+      !>>>TEST
       !
    end subroutine initialize_Lattice
 

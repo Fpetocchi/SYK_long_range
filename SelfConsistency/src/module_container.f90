@@ -52,7 +52,7 @@ module module_container
    calc_Kplane                              ,&
    calc_Ewald                               ,&
    set_UserPath                             ,&
-   get_Rlat,get_Blat                        ,&
+   get_Ruc,get_Rlat,get_Blat                ,&
    interpolateHk2Path                       ,&
    tetrahedron_integration
 

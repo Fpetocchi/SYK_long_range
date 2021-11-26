@@ -107,6 +107,7 @@ module input_vars
    logical,public                           :: readHr
    logical,public                           :: readHk
    real(8),public                           :: LatticeVec(3,3)
+   real(8),allocatable,public               :: ucVec(:,:)
    integer,public                           :: Norb_model
    real(8),allocatable,public               :: hopping(:)
    type(Heterostructures),public            :: Hetero
@@ -117,8 +118,6 @@ module input_vars
    logical,public                           :: RotateHloc
    logical,public                           :: RotateUloc
    logical,public                           :: AFMselfcons
-  !logical,public                           :: Gtau_K
-  !logical,public                           :: cmplxHyb
    integer,allocatable,public               :: SiteNorb(:)
    character(len=2),allocatable,public      :: SiteName(:)
    integer,allocatable,public               :: SiteOrbs(:,:)
@@ -276,7 +275,7 @@ contains
       use parameters
       implicit none
       character(len=*)                      :: InputFile
-      integer                               :: isite,iset,iph,iorb
+      integer                               :: iorb,isite,ilayer,iset,iph
       integer                               :: isym_user
       integer,allocatable                   :: tmpOrbs(:)
       real(8),allocatable                   :: tmpCF(:)
@@ -312,45 +311,35 @@ contains
       !model H(k)
       call parse_input_variable(Hmodel,"H_MODEL",InputFile,default=.false.,comment="Flag to build a model non-interacting Hamiltonian.")
       if(Hmodel)then
-         call parse_input_variable(Norb_model,"NORB_MODEL",InputFile,default=1,comment="Orbitals in the model non-interacting Hamiltonian.")
+         call parse_input_variable(Norb_model,"NORB_MODEL",InputFile,default=1,comment="Site-Orbitals in the model non-interacting Hamiltonian.")
          call parse_input_variable(readHr,"READ_HR",InputFile,default=.false.,comment="Read W90 real space Hamiltonian (Hr.DAT) from PATH_INPUT.")
          call parse_input_variable(readHk,"READ_HK",InputFile,default=.false.,comment="Read W90 K-space Hamiltonian (Hk.DAT) from PATH_INPUT.")
-         call parse_input_variable(Hetero%status,"HETERO",InputFile,default=.false.,comment="Flag to build an heterostructured setup from model H(k).")
+         call parse_input_variable(Hetero%status,"HETERO",InputFile,default=.false.,comment="Flag to build an heterostructured setup from model the non-interacting Hamiltonian.")
          if(readHr.and.readHk) stop "read_InputFile: Make up your mind, READ_HR or READ_HK?"
          call parse_input_variable(LatticeVec(:,1),"LAT_VEC_1",InputFile,default=[1d0,0d0,0d0],comment="Unit cell vector #1 of the model lattice.")
          call parse_input_variable(LatticeVec(:,2),"LAT_VEC_2",InputFile,default=[0d0,1d0,0d0],comment="Unit cell vector #2 of the model lattice.")
          call parse_input_variable(LatticeVec(:,3),"LAT_VEC_3",InputFile,default=[0d0,0d0,1d0],comment="Unit cell vector #3 of the model lattice.")
-         if(Hetero%status .or. ((.not.readHr).and.(.not.readHk)))then
+         if((.not.readHr).and.(.not.readHk))then
             allocate(hopping(Norb_model))
-            call parse_input_variable(hopping,"HOPPING",InputFile,comment="NN hopping for each orbital if READ_HR=F. Longitudinal hopping if READ_HR=T and HETERO=T.")
+            call parse_input_variable(hopping,"HOPPING",InputFile,comment="NN hopping for each orbital of the non-interacting Hamiltonian.")
          endif
-         !
          !Heterostructured setup
          if(Hetero%status)then
+            if(Nkpt3(3).ne.1) stop "read_InputFile: requested Heterostructured non-interacting Hamiltonian but Nk_z is not 1."
             Hetero%Norb = Norb_model
             call parse_input_variable(Hetero%Nslab,"NSLAB",InputFile,default=20,comment="Global dimension fo the slab.")
             call parse_input_variable(Hetero%Explicit,"EXPLICIT",InputFile,default=[1,10],comment="Index boundaries of the impurities explicitly solved.")
-            call parse_input_variable(Hetero%offDiagEk,"OD_DISPERSION",InputFile,default=.false.,comment="Flag to assume a NN off-diagonal dispersion with the same geometry of the layer.")
-            if((Hetero%Explicit(2)-Hetero%Explicit(1)+1).eq.1) stop "read_InputFile: a single layer heterostructure does not make sense."
-            if(readHr)then
-               Hetero%GlobalTzRatio=1d0
-               call parse_input_variable(Hetero%NtzExplicit,"EXPLICIT_TZ",InputFile,default=0,comment="Number of out-of-plane hoppings different from the global one (HOPPING).")
-            else
-               call parse_input_variable(Hetero%GlobalTzRatio,"GLOB_TZ_RATIO",InputFile,default=0.1d0,comment="Ratio between all the out-of-plane hoppings and the in-plane (HOPPING). Orbital structure is mantained.")
-               call parse_input_variable(Hetero%NtzExplicit,"EXPLICIT_TZ",InputFile,default=0,comment="Number of out-of-plane hopping ratios different from the global one (GLOB_TZ_RATIO).")
-            endif
-            if(Hetero%NtzExplicit.gt.0)then
-               allocate(Hetero%ExplicitTzPos(Hetero%NtzExplicit));Hetero%ExplicitTzPos=0
-               allocate(Hetero%ExplicitTzRatios(Hetero%NtzExplicit));Hetero%ExplicitTzRatios=0d0
-               call parse_input_variable(Hetero%ExplicitTzPos,"EXPLICIT_TZ_POS",InputFile,comment="Indexes of the out-of-plane hoppings different from the global one.")
-               if(any(Hetero%ExplicitTzPos.lt.1)) stop "read_InputFile: illegal value (<1) in EXPLICIT_TZ_POS."
-               if(any(Hetero%ExplicitTzPos.ge.Hetero%Nslab)) stop "read_InputFile: illegal value (<=NSLAB) in EXPLICIT_TZ_POS."
-               if(readHr)then
-                  call parse_input_variable(Hetero%ExplicitTzRatios,"EXPLICIT_TZ_RATIOS",InputFile,comment="Values of the explicit factors multiplying the global out-of-plane hopping (HOPPING).")
-               else
-                  call parse_input_variable(Hetero%ExplicitTzRatios,"EXPLICIT_TZ_RATIOS",InputFile,comment="Values of the out-of-plane hopping ratios different from the global one.")
-               endif
-            endif
+            Hetero%Nlayer = Hetero%Explicit(2)-Hetero%Explicit(1)+1
+            if(Hetero%Nlayer.le.1) stop "read_InputFile: a single layer heterostructure does not make sense."
+            !setting up the indexes of the longitudinal hopping: t_1 is the hopping connecting layer #1 and #2
+            Hetero%tzIndex(1) = Hetero%Explicit(1)
+            Hetero%tzIndex(2) = Hetero%Explicit(2) - 1
+            if(Hetero%Explicit(1).ne.1) Hetero%tzIndex(1) = Hetero%tzIndex(1) - 1              ! hopping to the left potential
+            if(Hetero%Explicit(2).ne.Hetero%Nslab) Hetero%tzIndex(2) = Hetero%tzIndex(2) + 1   ! hopping to the right potential
+            allocate(Hetero%tz(Norb_model,Hetero%tzIndex(1):Hetero%tzIndex(2)));Hetero%tz=0d0
+            do ilayer=Hetero%tzIndex(1),Hetero%tzIndex(2)
+               call parse_input_variable(Hetero%tz(:,ilayer),"TZ_"//str(ilayer),InputFile,comment="Longitudinal hopping for each orbital between layer #"//str(ilayer)//" and layer #"//str(ilayer+1))
+            enddo
          endif
       else
          call parse_input_variable(UseXepsKorder,"XEPS_KORDER",InputFile,default=.true.,comment="Flag to use the K-point ordering of XEPS.DAT if present.")
@@ -362,7 +351,7 @@ contains
       call append_to_input_list(Nspin,"NSPIN","Number of spins. User cannot set this as its fixed to 2.")
       call parse_input_variable(Nsite,"NSITE",InputFile,default=1,comment="Number of inequivalent sites in the lattice.")
       if(Hetero%status)then
-         if(Nsite.ne.(Hetero%Explicit(2)-Hetero%Explicit(1)+1)) stop "read_InputFile: The number of explitit slabs does not match with NSITE."
+         if(Nsite.ne.(Hetero%Explicit(2)-Hetero%Explicit(1)+1)) stop "read_InputFile: The number of explicit slabs does not match with NSITE."
       endif
       call parse_input_variable(ExpandImpurity,"EXPAND",InputFile,default=.false.,comment="Flag to use a single impurity solution for all the sites of the lattice. Only indexes for site 1 readed.")
       call parse_input_variable(RotateHloc,"ROTATE_F",InputFile,default=.false.,comment="Solve the Fermionic impurity problem in the basis where H(R=0) is diagonal.")
@@ -406,6 +395,13 @@ contains
          endif
          deallocate(tmpOrbs)
       enddo
+      if(Hmodel)then
+         allocate(ucVec(3,Nsite))
+         ucVec=czero
+         do isite=1,Nsite
+            call parse_input_variable(ucVec(:,isite),"UC_VEC_"//str(isite),InputFile,default=[0d0,0d0,0d0],comment="Position of site #"//str(isite)//" inside the unit cell.")
+         enddo
+      endif
       call parse_input_variable(addCF,"ADD_CF",InputFile,default=.false.,comment="Flag to include additional crystal-fields.")
       if(addCF)then
          allocate(SiteCF(Nsite,maxval(SiteNorb)));SiteCF=0d0

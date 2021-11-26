@@ -296,21 +296,21 @@ contains
       !
       if(along_path_)then
          Hk => Lttc%Hk_path
-         if(Hetero%status) tz = Hetero%tz_path
+         if(Hetero%status) tz = Hetero%tkz_path
          if(Gmats%Nkpt.ne.Lttc%Nkpt_path) stop "calc_Gmats_Full: Lttc Kpath has different number of path k-points with respect to Gmats."
          if(Gmats%Nkpt.ne.size(Hk,dim=3)) stop "calc_Gmats_Full: Lttc Hk_path has different number of path k-points with respect to Gmats."
          if(.not.allocated(Lttc%Hk_path)) stop "calc_Gmats_Full: H(k) along path not allocated."
          if(verbose)write(*,"(A)") "     H(k) is along a path."
       elseif(along_plane_)then
          Hk => Lttc%Hk_Plane
-         if(Hetero%status) tz = Hetero%tz_Plane
+         if(Hetero%status) tz = Hetero%tkz_Plane
          if(Gmats%Nkpt.ne.Lttc%Nkpt_Plane) stop "calc_Gmats_Full: Lttc Kplane has different number of path k-points with respect to Gmats."
          if(Gmats%Nkpt.ne.size(Hk,dim=3)) stop "calc_Gmats_Full: Lttc Hk_Plane has different number of path k-points with respect to Gmats."
          if(.not.allocated(Lttc%Hk_Plane)) stop "calc_Gmats_Full: H(k) in plane not allocated."
          if(verbose)write(*,"(A)") "     H(k) is within a plane."
       else
          Hk => Lttc%Hk
-         if(Hetero%status) tz = Hetero%tz
+         if(Hetero%status) tz = Hetero%tkz
          if(Gmats%Nkpt.ne.Lttc%Nkpt) stop "calc_Gmats_Full: Lttc has different number of k-points with respect to Gmats."
          if(Gmats%Nkpt.ne.size(Hk,dim=3)) stop "calc_Gmats_Full: Lttc Hk has different number of path k-points with respect to Gmats."
          if(verbose)write(*,"(A)") "     H(k) is within the full BZ."
@@ -901,14 +901,14 @@ contains
             !Potential to the left/upper side of the Heterostructure
             if(Hetero%Explicit(1).ne.1)then
                call AllocateFermionicField(Potential_L,Hetero%Norb,Nreal,Nkpt=Nkpt,Beta=Beta)
-               call build_Potential(Potential_L,Hetero,Ln,NbulkL,zeta,Lttc%Hk,Hetero%tz,"left",.true.)
+               call build_Potential(Potential_L,Hetero,Ln,NbulkL,zeta,Lttc%Hk,Hetero%tkz,"left",.true.)
                write(*,"(2(A,2I4))") "     Left potential orbital lattice indexes: ",Ln(1),Ln(2)," thickness: ",NbulkL
             endif
             !
             !Potential to the right/lower side of the Heterostructure
             if(Hetero%Explicit(2).ne.Hetero%Nslab)then
                call AllocateFermionicField(Potential_R,Hetero%Norb,Nreal,Nkpt=Nkpt,Beta=Beta)
-               call build_Potential(Potential_R,Hetero,Rn,NbulkR,zeta,Lttc%Hk,Hetero%tz,"right",.true.)
+               call build_Potential(Potential_R,Hetero,Rn,NbulkR,zeta,Lttc%Hk,Hetero%tkz,"right",.true.)
                write(*,"(2(A,2I4))") "     Right potential orbital lattice indexes: ",Rn(1),Rn(2)," thickness: ",NbulkR
             endif
             !

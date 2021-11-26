@@ -61,9 +61,10 @@ module crystal
    real(8),allocatable                      :: rsite(:,:)
    integer,allocatable                      :: Kprint(:)
    !
-   real(8),private                          :: Rlat(3,3)
-   real(8),private                          :: Blat(3,3)
-   real(8),private                          :: vol
+   real(8),allocatable,private,protected    :: Ruc(:,:)
+   real(8),private,protected                :: Rlat(3,3)
+   real(8),private,protected                :: Blat(3,3)
+   real(8),private,protected                :: vol
    !
    !Available outside the module
    !
@@ -79,7 +80,6 @@ module crystal
    !
    real(8),allocatable,public,protected     :: UserPath(:,:)
    !
-   logical,public,protected                 :: Hk_stored=.false.
    logical,public,protected                 :: Ruc_stored=.false.               !Global flag for routines that need positions within the u.c.
    logical,public,protected                 :: Lat_stored=.false.               !Global flag for routines that need rlat
    logical,public,protected                 :: Wig_stored=.false.               !Global flag for routines performing Wannier interpolation
@@ -117,7 +117,7 @@ module crystal
    public :: wannier_K2R
    public :: wannier_R2K
    public :: set_UserPath
-   public :: get_Rlat,get_Blat
+   public :: get_Ruc,get_Rlat,get_Blat
    public :: interpolateHk2Path
    public :: calc_Kpath
    public :: calc_Kplane
@@ -181,27 +181,32 @@ contains
    !---------------------------------------------------------------------------!
    !PURPOSE: Build the lattice vectors
    !---------------------------------------------------------------------------!
-   subroutine set_lattice(Rinput)
+   subroutine set_lattice(Rlat_input,Ruc_input)
       !
       use utils_misc
       use linalg, only : det, inv_sym, cross_product
       implicit none
       !
-      real(8),intent(in)                    :: Rinput(3,3)
+      real(8),intent(in)                    :: Rlat_input(3,3)
+      real(8),intent(in)                    :: Ruc_input(:,:)
       integer                               :: ir
       !
       !
       if(verbose)write(*,"(A)") "---- set_lattice"
       !
       !
-      Rlat(:,1) = Rinput(:,1)
-      Rlat(:,2) = Rinput(:,2)
-      Rlat(:,3) = Rinput(:,3)
+      Rlat(:,1) = Rlat_input(:,1)
+      Rlat(:,2) = Rlat_input(:,2)
+      Rlat(:,3) = Rlat_input(:,3)
       vol = dot_product(cross_product(Rlat(:,1),Rlat(:,2)),Rlat(:,3))
       if(verbose)write(*,"(A,F)")"     Unit cell volume: ",vol
       Blat(:,1) = cross_product(Rlat(:,2),Rlat(:,3))/vol
       Blat(:,2) = cross_product(Rlat(:,3),Rlat(:,1))/vol
       Blat(:,3) = cross_product(Rlat(:,1),Rlat(:,2))/vol
+      !
+      if(allocated(Ruc))deallocate(Ruc)
+      allocate(Ruc(3,size(Ruc_input,dim=2)))
+      Ruc = Ruc_input
       !
       write(*,"(A)")new_line("A")//"     Unit cell vectors: "
       do ir=1,3
@@ -220,6 +225,16 @@ contains
    !---------------------------------------------------------------------------!
    !PURPOSE: Access private-protected variables
    !---------------------------------------------------------------------------!
+   subroutine get_Ruc(Ruc_out)
+      implicit none
+      real(8),intent(out)                   :: Ruc_out(3,3)
+      if(Lat_stored)then
+         Ruc_out = Ruc
+      else
+         write(*,"(A)")"     Warning: requested unit cell vetors but lattice is not stored."
+      endif
+   end subroutine get_Ruc
+   !
    subroutine get_Rlat(Rlat_out)
       implicit none
       real(8),intent(out)                   :: Rlat_out(3,3)
@@ -445,25 +460,19 @@ contains
    !PURPOSE: Read the Hamiltonian and kpoints providing Eigen-values/vectors
    !by now only for paramagnetic Hk
    !---------------------------------------------------------------------------!
-   subroutine read_Hk(Hmodel,pathINPUT,alphaHk,Hk,kpt,Ek,Zk,Hloc,iq_gamma)
+   subroutine read_Hk(Hk,kpt,pathINPUT,filename)
       !
       use utils_misc
-      use linalg, only :  eigh
       implicit none
       !
-      logical,intent(in)                    :: Hmodel
-      character(len=*),intent(in)           :: pathINPUT
-      real(8),intent(in)                    :: alphaHk
       complex(8),allocatable,intent(out)    :: Hk(:,:,:)
       real(8),allocatable,intent(out)       :: kpt(:,:)
-      real(8),allocatable,intent(out)       :: Ek(:,:)
-      complex(8),allocatable,intent(out)    :: Zk(:,:,:)
-      complex(8),allocatable,intent(out)    :: Hloc(:,:)
-      integer,intent(out),optional          :: iq_gamma
+      character(len=*),intent(in)           :: pathINPUT
+      character(len=*),intent(in),optional  :: filename
       !
       character(len=256)                    :: path
       integer                               :: unit,Nkpt,Norb
-      integer                               :: iwan1,iwan2,ik
+      integer                               :: iorb,jorb,ik
       integer                               :: idum1,idum2
       real(8)                               :: ReHk,ImHk
       logical                               :: filexists
@@ -476,58 +485,42 @@ contains
       !
       ! Look for Hk.DAT
       path=reg(pathINPUT)//"Hk.DAT"
+      if(present(filename))path=reg(pathINPUT)//reg(filename)
+      write(*,"(A)")"     Reading "//reg(path)
       call inquireFile(reg(path),filexists)
       unit = free_unit()
       open(unit,file=reg(path),form="formatted",status="old",position="rewind",action="read")
       read(unit,*) idum1,Nkpt,Norb
       !
+      write(*,"(A)") "     Reading "//reg(path)
+      write(*,"(A)") "     Number of K-points from file: "//str(Nkpt)
+      write(*,"(A)") "     Orbital space from file: "//str(Norb)
+      !
       if(allocated(Hk))deallocate(Hk)
       if(allocated(kpt))deallocate(kpt)
-      if(allocated(Ek))deallocate(Ek)
-      if(allocated(Zk))deallocate(Zk)
-      if(allocated(Hloc))deallocate(Hloc)
       !
       allocate(Hk(Norb,Norb,Nkpt));Hk=czero
       allocate(kpt(3,Nkpt));kpt=0d0
-      allocate(Ek(Norb,Nkpt));Ek=0d0
-      allocate(Zk(Norb,Norb,Nkpt));Zk=czero
-      allocate(Hloc(Norb,Norb));Hloc=czero
       !
       Hk=czero
-      Zk=czero
-      Hloc=czero
-      Ek=0d0
       do ik=1,Nkpt
          read(unit,*) idum1,idum2,kpt(:,ik)
          if (idum2.ne.ik) stop "read_Hk: wrong index ik"
-         do iwan1=1,Norb
-            do iwan2=1,Norb
+         do iorb=1,Norb
+            do jorb=1,Norb
+               !
                read(unit,*) idum1,idum2,ReHk,ImHk
-               if (idum1.ne.iwan1) stop "read_Hk: wrong index iwan1."
-               if (idum2.ne.iwan2) stop "read_Hk: wrong index iwan2."
-               if(Hmodel)then
-                  Hk(iwan1,iwan2,ik) = dcmplx(ReHk,ImHk)*alphaHk
-               else
-                  Hk(iwan1,iwan2,ik) = dcmplx(ReHk,ImHk)*H2eV*alphaHk
-               endif
+               if (idum1.ne.iorb) stop "read_Hk: wrong index iwan1."
+               if (idum2.ne.jorb) stop "read_Hk: wrong index iwan2."
+               !
+               Hk(iorb,jorb,ik) = dcmplx(ReHk,ImHk)
+               !
             enddo
-            !Hk(iwan1,iwan1,ik) = dcmplx(dreal(Hk(iwan1,iwan1,ik)),0d0)
          enddo
-         Hloc = Hloc + Hk(:,:,ik)/nkpt
          !
          call check_Hermiticity(Hk(:,:,ik),eps)
          !
-         Ek(:,ik) = 0d0
-         Zk(:,:,ik) = Hk(:,:,ik)
-         call eigh(Zk(:,:,ik),Ek(:,ik))
-         !
       enddo
-      !
-      iq_gamma = 0
-      if(present(iq_gamma).and.(Nkpt.gt.1)) iq_gamma = find_vec([0d0,0d0,0d0],kpt,eps)
-      write(*,"(A,I4)")"     Gamma point index: ",iq_gamma
-      !
-      Hk_stored=.true.
       !
       unit = free_unit()
       open(unit,file=reg(pathINPUT)//"Kpoints_BZ.DAT",form="formatted",status="unknown",position="rewind",action="write")
@@ -542,31 +535,28 @@ contains
    !---------------------------------------------------------------------------!
    !PURPOSE: Build the Hamiltonian and kpoints from user-given parameters
    !---------------------------------------------------------------------------!
-   subroutine build_Hk(Norb,hopping,Nkpt3,alphaHk,readHr,Hetero,Hk,kpt,Ek,Zk,Hloc,iq_gamma,pathOUTPUT)
+   subroutine build_Hk(Hk,kpt,hopping,Nkpt3,readHr,Hetero,pathOUTPUT)
       !
       use utils_misc
       use parameters, only : Heterostructures !WHY IS THIS WORKING?
       use linalg, only : zeye, diagonal, diag, eigh, dag
       implicit none
       !
-      integer,intent(in)                    :: Norb
-      real(8),intent(in)                    :: hopping(:)
-      integer,intent(in)                    :: Nkpt3(3)
-      real(8),intent(in)                    :: alphaHk
-      logical,intent(in)                    :: readHr
-      type(Heterostructures),intent(inout)  :: Hetero
       complex(8),allocatable,intent(out)    :: Hk(:,:,:)
       real(8),allocatable,intent(out)       :: kpt(:,:)
-      real(8),allocatable,intent(out)       :: Ek(:,:)
-      complex(8),allocatable,intent(out)    :: Zk(:,:,:)
-      complex(8),allocatable,intent(out)    :: Hloc(:,:)
-      integer,intent(out),optional          :: iq_gamma
+      real(8),intent(in)                    :: hopping(:)
+      integer,intent(in)                    :: Nkpt3(3)
+      logical,intent(in)                    :: readHr
+      type(Heterostructures),intent(inout)  :: Hetero
       character(len=*),intent(in),optional  :: pathOUTPUT
       !
-      !User
-      integer                               :: unit,Nkpt
-      integer                               :: iwan1,iwan2,ik
-      integer                               :: Trange,idist,iwig
+      integer                               :: Nkpt,Norb
+      integer                               :: Nsite,Nsite_bulk
+      integer                               :: iorb,jorb,io,jo,ik
+      integer                               :: Trange,iwig,iD
+      integer                               :: unit
+      real(8)                               :: Rdist
+      complex(8),allocatable                :: Hr(:,:,:),Hr_bulk(:,:,:)
       !W90
       integer,parameter                     :: W90NumCol=15
       integer                               :: Num_wann,Nrpts
@@ -575,301 +565,376 @@ contains
       integer,allocatable                   :: Ndegen(:)
       real(8)                               :: ReHr,ImHr
       character(len=256)                    :: path
-      logical                               :: filexists,Tcond
+      logical                               :: filexists
       !Hetero
-      integer                               :: isite,Nsite,na,nb,ilayer
-      logical,allocatable                   :: inHomo(:)
-      real(8)                               :: tzRatio,angle,Rvec(3)
-      real(8),allocatable                   :: Rsorted(:)
-      integer,allocatable                   :: Rorder(:),itz(:)
-      complex(8),allocatable                :: Hr(:,:,:),Hk_single(:,:,:),Hk_single_offdiag(:,:,:)
+      integer                               :: isite,jsite
+      integer                               :: ilayer,jlayer,islab
+      integer                               :: na,nb,il,jl
+      real(8)                               :: Rvec(3)
+      real(8),allocatable                   :: Rsorted(:,:),Rsorted_bkp(:,:)
+      integer,allocatable                   :: Rorder(:),Dist(:,:),DistList(:)
       !
       !
       if(verbose)write(*,"(A)") "---- build_Hk"
       !
       !
-      if(.not.Lat_stored) stop "build_Hk: Lattice vectors not stored."
-      if(readHr.and.(.not.present(pathOUTPUT))) stop "build_Hk: reading of Hr.DAT requested but missing path."
+      path=reg(pathOUTPUT)//"Hk_built.DAT"
+      call inquireFile(reg(path),filexists,hardstop=.false.)
       !
-      Nkpt = Nkpt3(1)*Nkpt3(2)*Nkpt3(3)
-      call assert_shape(hopping,[Norb],"build_Hk","hopping")
-      !
-      if(allocated(Hk))deallocate(Hk)
-      allocate(Hk(Norb,Norb,Nkpt));Hk=czero
-      !
-      if(allocated(kpt))deallocate(kpt)
-      allocate(kpt(3,Nkpt));kpt=0d0
-      !
-      call build_kpt(Nkpt3,kpt,pathOUTPUT=reg(pathOUTPUT))
-      !
-      !recover the vectors in real space and allocate hopping in real space
-      if(.not.Wig_stored)call calc_wignerseiz(Nkpt3)
-      allocate(Rsorted(Nwig));Rsorted = radiuswig
-      allocate(Rorder(Nwig))
-      call sort_array(Rsorted,Rorder)
-      allocate(Hr(Norb,Norb,Nwig));Hr=czero
-      !
-      if(readHr)then
+      if(filexists)then
          !
-         ! Look for Hk.DAT
-         path=reg(pathOUTPUT)//"Hr.DAT"
-         call inquireFile(reg(path),filexists)
-         !
-         unit = free_unit()
-         open(unit,file=reg(path),form="formatted",status="unknown",position="rewind",action="read")
-         read(unit,*)                      !skip first line
-         read(unit,*) Num_wann !Number of Wannier orbitals
-         read(unit,*) Nrpts    !Number of Wigner-Seitz vectors
-         !
-         if(Num_wann.ne.Norb) stop "build_Hk: number of Wannier orbital in Hr.DAT and model orbital space does not coincide."
-         !
-         Qst = int(Nrpts/W90NumCol)
-         Rst = mod(Nrpts,W90NumCol)
-         !
-         allocate(Ndegen(Nrpts));Ndegen=0
-         do i=1,Qst
-            read(unit,*)(Ndegen(j+(i-1)*W90NumCol),j=1,W90NumCol)
-         enddo
-         if(Rst.ne.0)read(unit,*)(Ndegen(j+Qst*W90NumCol),j=1,Rst)
-         !
-         !Read W90 TB hoppings in real space. Assumed paramagnetic
-         do ir=1,Nrpts
-            do i=1,Num_wann
-               do j=1,Num_wann
-                  !
-                  read(unit,*) nx, ny, nz, iwan1, iwan2, ReHr, ImHr
-                  !
-                  iwig = find_vec([nx,ny,nz],Nvecwig)
-                  !
-                  Hr(iwan1,iwan2,iwig) = dcmplx(ReHr,ImHr)/Ndegen(ir)
-                  !nrdegwig(iwig) = Ndegen(ir) <-- this would mess-up things in the FT
-                  !
-               enddo
-            enddo
-         enddo
-         close(unit)
-         deallocate(Ndegen)
+         write(*,"(A)")"     Reading Hk.DAT from "//reg(pathOUTPUT)
+         call read_Hk(Hk,kpt,reg(pathOUTPUT),filename="Hk_built.DAT")
          !
       else
          !
-         !User-provided hopping is only nearest neighbor by now
-         Trange=1
+         write(*,"(A)")"     Building Hk.DAT from input parameters."
+         if(.not.Lat_stored) stop "build_Hk: Lattice vectors not stored."
+         if(readHr.and.(.not.present(pathOUTPUT))) stop "build_Hk: reading of Hr.DAT requested but missing path."
          !
-         !loop over the sorted Wigner Seiz positions
-         idist=1
-         loopwigD:do iwig=1,Nwig
-            !
-            !setting the local energy
-            if(Rsorted(Rorder(iwig)).eq.0d0)then
-               if(Rorder(iwig).ne.wig0)stop "build_Hk: wrong index of R=0 vector."
-               cycle
-            endif
-            !
-            !increasing range
-            if(iwig.gt.2)then
-               if((Rsorted(Rorder(iwig))-Rsorted(Rorder(iwig-1))).gt.1e-5) idist=idist+1  !if(Rsorted(Rorder(iwig)).gt.Rsorted(Rorder(iwig-1))) idist=idist+1
-               if(idist.gt.Trange) exit loopwigD
-            endif
-            !
-            !setting matrix element
-            do iwan1=1,Norb
-               Hr(iwan1,iwan1,Rorder(iwig)) = -dcmplx(hopping(iwan1),0d0)
-            enddo
-            !
-         enddo loopwigD
+         Nkpt = product(Nkpt3)
+         Norb = size(hopping)
+         Nsite = size(Ruc,dim=2)
+         Nsite_bulk = Nsite
+         if(Hetero%status) Nsite_bulk = int(Nsite/Hetero%Nlayer)
          !
-      endif
-      !
-      if(verbose)then
-         if(readHr)then
-            write(*,'(1A)')        "     H_W90:"
-            write(*,'(A,I6)')      "     Number of Wannier functions:   ",Num_wann
-            write(*,'(A,I6)')      "     Number of Wigner-Seitz vectors:",Nrpts
-            write(*,'(A,I6,A,I6)') "     Deg rows:",Qst," N last row   :",Rst
-         endif
-         write(*,'(1A)')"     Real-space hopping elements:"
-         write(*,"(A6,3A12,1A4)") "  i  ","  Ri  ","  H(Ri)  "," [n1,n2,n3] "," Ndeg "
-         do iwig=1,Nwig
-            write(*,"(1I6,2F12.4,5I4)")Rorder(iwig),Rsorted(Rorder(iwig)),real(Hr(1,1,Rorder(iwig))),Nvecwig(:,Rorder(iwig)),nrdegwig(Rorder(iwig))
-         enddo
-      endif
-      !
-      !FT Hr-->Hk
-      call wannier_R2K(Nkpt3,kpt,Hr,Hk)
-      deallocate(Hr)
-      !
-      do ik=1,nkpt
-         do iwan1=1,Norb
-            Hk(iwan1,iwan1,ik) = dcmplx(dreal(Hk(iwan1,iwan1,ik)),0d0)
-         enddo
-         if(Norb.gt.1)call check_Hermiticity(Hk(:,:,ik),eps)
-      enddo
-      !
-      !Build up the Heterostructure Hamiltonian
-      Nsite = 1
-      if(Hetero%status)then
-         !
-         !this should be already been checked in input_vars
-         Nsite = Hetero%Explicit(2)-Hetero%Explicit(1)+1
-         !
-         !Setting up off-diagonal dispersion if requested
-         if(Hetero%offDiagEk)then
-            !
-            allocate(Hk_single_offdiag(Norb,Norb,Nkpt));Hk_single_offdiag=czero
-            allocate(Hr(Norb,Norb,Nwig));Hr=czero
-            !
-            !User-provided hopping is only nearest neighbor by now
-            Trange=1
-            !
-            !loop over the sorted Wigner Seiz positions
-            idist=1
-            loopwigOD:do iwig=1,Nwig
-               !
-               !setting the local energy
-               if(Rsorted(Rorder(iwig)).eq.0d0)then
-                  if(Rorder(iwig).ne.wig0)stop "build_Hk: wrong index of R=0 vector."
-                  cycle
-               endif
-               !
-               !increasing range
-               if(iwig.gt.2)then
-                  if((Rsorted(Rorder(iwig))-Rsorted(Rorder(iwig-1))).gt.1e-5) idist=idist+1
-                  if(idist.gt.Trange) exit loopwigOD
-               endif
-               !
-               !setting matrix element
-               !PROJECT SPECIFIC (TaS2)>>> The vertical hopping has only three next neighbor
-               !do iwan1=1,Norb
-               !   Hr(iwan1,iwan1,Rorder(iwig)) = dcmplx(1d0,0d0)
-               !enddo
-               Rvec = Nvecwig(1,Rorder(iwig))*Rlat(:,1) + Nvecwig(2,Rorder(iwig))*Rlat(:,2) + Nvecwig(3,Rorder(iwig))*Rlat(:,3)
-               angle = atan2(Rvec(2),Rvec(1))
-               if(angle.lt.0d0) angle = angle + 2d0*pi
-               Tcond = (mod(nint(angle*180/pi)/60,2)-1) .eq. 0
-               if(Tcond)then
-                  !write(*,*)angle,angle*180/pi,nint(angle*180/pi),mod(nint(angle*180/pi)/60,2),(mod(nint(angle*180/pi)/60,2)-1)
-                  !write(*,*)Nvecwig(:,Rorder(iwig))
-                  do iwan1=1,Norb
-                     Hr(iwan1,iwan1,Rorder(iwig)) = dcmplx(1d0,0d0)
-                  enddo
-               endif
-               !>>>PROJECT SPECIFIC (TaS2)
-               !
-            enddo loopwigOD
-            !
-            call wannier_R2K(Nkpt3,kpt,Hr,Hk_single_offdiag)
-            deallocate(Hr)
-            !
-         endif
-         !
-         !Setting up the out-of-plane hopping array
-         Hetero%tzIndex(1) = Hetero%Explicit(1)
-         Hetero%tzIndex(2) = Hetero%Explicit(2) - 1
-         if(Hetero%Explicit(1).ne.1) Hetero%tzIndex(1) = Hetero%tzIndex(1) - 1              ! hopping to the left potential
-         if(Hetero%Explicit(2).ne.Hetero%Nslab) Hetero%tzIndex(2) = Hetero%tzIndex(2) + 1   ! hopping to the right potential
-         !
-         allocate(Hetero%tz(Norb,Norb,Nkpt,Hetero%tzIndex(1):Hetero%tzIndex(2)));Hetero%tz=czero
-         allocate(inHomo(Hetero%tzIndex(1):Hetero%tzIndex(2)));inHomo=.false.
-         write(*,"(A)")new_line("A")//"     Hetero:"
-         do ilayer = Hetero%tzIndex(1),Hetero%tzIndex(2)
-            !
-            inHomo(ilayer) = (Hetero%NtzExplicit.gt.0) !.and. any(Hetero%ExplicitTzPos.eq.ilayer)
-            if(inHomo(ilayer)) inHomo(ilayer) = inHomo(ilayer) .and. any(Hetero%ExplicitTzPos.eq.ilayer)
-            !
-            tzRatio = 1d0
-            if(inHomo(ilayer))then
-               allocate(itz(Hetero%NtzExplicit));itz=0
-               itz = findloc(Hetero%ExplicitTzPos,value=ilayer)
-               if(itz(1).eq.0) stop "build_Hk: something wrong with the Hetero%ExplicitTzPos"
-               tzRatio = Hetero%ExplicitTzRatios(itz(1))
-               deallocate(itz)
-            else
-               tzRatio = Hetero%GlobalTzRatio
-            endif
-            !
-            do ik=1,Nkpt
-               !PROJECT SPECIFIC (TaS2)>>> The ihomogeneous vertical hopping is also without dispersion
-               !if(Hetero%offDiagEk)then
-               if(Hetero%offDiagEk.and.(.not.inHomo(ilayer)))then
-               !>>>PROJECT SPECIFIC (TaS2)
-                  Hetero%tz(:,:,ik,ilayer) = matmul(diag(hopping)*tzRatio,Hk_single_offdiag(:,:,ik))
-               else
-                  Hetero%tz(:,:,ik,ilayer) = diag(hopping)*tzRatio
-               endif
-            enddo
-            !
-            write(*,"(A,F)")"     tz/tplane ["//str(ilayer)//"-"//str(ilayer+1)//"]:",tzRatio
-            !
-         enddo
-         !
-         !Setting up multi-site H(k)
-         allocate(Hk_single(Norb,Norb,Nkpt));Hk_single=czero
-         Hk_single = Hk
-         deallocate(Hk)
+         if(allocated(Hk))deallocate(Hk)
          allocate(Hk(Norb*Nsite,Norb*Nsite,Nkpt));Hk=czero
          !
-         !adding non-diaongonal part
-         do isite=1,Nsite
-            !
-            !Index of the layer inside the slab - Needed because Hetero%tz has a different indexing
-            ilayer = Hetero%Explicit(1) + (isite-1)
-            !
-            !In-plane orbital block
-            na = 1+(isite-1)*Norb
-            nb = isite*Norb
-            !
-            !In-plane Hk
-            Hk(na:nb,na:nb,:) = Hk_single
-            !
-            !Out-of-plane hopping
-            if(isite.ne.Nsite)then
-               do ik=1,Nkpt
-                  Hk(na:nb,na+Norb:nb+Norb,ik) = Hetero%tz(:,:,ik,ilayer)
-                  Hk(na+Norb:nb+Norb,na:nb,ik) = dag(Hk(na:nb,na+Norb:nb+Norb,ik))
+         if(allocated(kpt))deallocate(kpt)
+         allocate(kpt(3,Nkpt));kpt=0d0
+         !
+         call build_kpt(Nkpt3,kpt,pathOUTPUT=reg(pathOUTPUT))
+         !
+         !recover the vectors in real space
+         if(.not.Wig_stored)call calc_wignerseiz(Nkpt3)
+         allocate(Rsorted(Nwig*Nsite_bulk*Nsite_bulk,6));
+         iR=0
+         do iwig=1,Nwig
+            do jsite=1,Nsite_bulk
+               do isite=1,Nsite_bulk
+                  !
+                  Rvec = Rvecwig(:,iwig) + Ruc(:,jsite) - Ruc(:,isite)
+                  Rdist = sqrt(dble(dot_product(Rvec,Rvec)))
+                  !
+                  iR = iR +1
+                  !
+                  Rsorted(iR,1) = Rdist
+                  if(Rdist.le.eps)Rsorted(iR,1)=1d6                             !skip the local energy
+                  Rsorted(iR,2) = iwig
+                  Rsorted(iR,3) = jsite
+                  Rsorted(iR,4) = isite
+                  !
                enddo
+            enddo
+         enddo
+         !
+         !
+         !Sorting the positions
+         allocate(Rorder(Nwig*Nsite_bulk*Nsite_bulk));Rorder=0
+         allocate(Rsorted_bkp(Nwig*Nsite_bulk*Nsite_bulk,6));Rsorted_bkp=0d0
+         Rsorted_bkp = Rsorted
+         call sort_array(Rsorted(:,1),Rorder)
+         Rsorted=0d0
+         do iR=1,Nwig*Nsite_bulk*Nsite_bulk
+            Rsorted(iR,:) = Rsorted_bkp(Rorder(iR),:)
+         enddo
+         deallocate(Rsorted_bkp,Rorder)
+         !
+         !Regroup according to distance. The list contains the indexes of all the positions with a given distance
+         call get_pattern(Dist,Rsorted(:,1),eps,listDim=DistList)
+         !
+         if(readHr)then
+            !
+            ! Look for Hr.DAT
+            path=reg(pathOUTPUT)//"Hr.DAT"
+            call inquireFile(reg(path),filexists)
+            !
+            unit = free_unit()
+            open(unit,file=reg(path),form="formatted",status="unknown",position="rewind",action="read")
+            read(unit,*)                      !skip first line
+            read(unit,*) Num_wann !Number of Wannier orbitals
+            read(unit,*) Nrpts    !Number of Wigner-Seitz vectors
+            !
+            if(Nsite_bulk.ne.int(Num_wann)/Norb) stop "build_Hk: Hr.DAT does not have the correct dimension."
+            !
+            Qst = int(Nrpts/W90NumCol)
+            Rst = mod(Nrpts,W90NumCol)
+            !
+            allocate(Ndegen(Nrpts));Ndegen=0
+            do i=1,Qst
+               read(unit,*)(Ndegen(j+(i-1)*W90NumCol),j=1,W90NumCol)
+            enddo
+            if(Rst.ne.0)read(unit,*)(Ndegen(j+Qst*W90NumCol),j=1,Rst)
+            !
+            !Read W90 TB hoppings in real space. Assumed paramagnetic
+            allocate(Hr_bulk(Num_wann,Num_wann,Nrpts));Hr_bulk=czero
+            do ir=1,Nrpts
+               do i=1,Num_wann
+                  do j=1,Num_wann
+                     !
+                     read(unit,*) nx, ny, nz, iorb, jorb, ReHr, ImHr
+                     !
+                     iwig = find_vec([nx,ny,nz],Nvecwig)
+                     !
+                     Hr_bulk(iorb,jorb,iwig) = dcmplx(ReHr,ImHr)/Ndegen(ir)
+                     !
+                  enddo
+               enddo
+            enddo
+            close(unit)
+            deallocate(Ndegen)
+            !
+         else
+            !
+            Trange=1
+            !
+            !User-provided hopping is only nearest neighbor and its the same for all the sites
+            allocate(Hr_bulk(Norb*Nsite_bulk,Norb*Nsite_bulk,Nwig));Hr_bulk=czero
+            do iorb=1,Norb
+               !all the possible ranges
+               do iD=1,Trange
+                  !all the indexes within that range
+                  do iR=1,DistList(iD)
+                     !
+                     !retrieve indexes from sorted list
+                     iwig = Rsorted(Dist(iD,iR),2)
+                     jsite = Rsorted(Dist(iD,iR),3)
+                     isite = Rsorted(Dist(iD,iR),4)
+                     !
+                     !site-orbital indexes of Hr
+                     io = iorb + Norb*(isite-1)
+                     jo = iorb + Norb*(jsite-1)
+                     !
+                     Hr_bulk(io,jo,iwig) = dcmplx(hopping(iorb),0d0)
+                     !
+                  enddo
+               enddo
+            enddo
+            !
+         endif
+         !
+         if(verbose)then
+            path="Hr_report.DAT"
+            if(present(pathOUTPUT))then
+               path=reg(pathOUTPUT)//"Hr_report.DAT"
+               unit = free_unit()
+               open(unit,file=reg(path),form="formatted",status="unknown",position="rewind",action="write")
+            else
+               unit=6
+            endif
+            if(readHr)then
+               write(unit,'(1A)')        "     H_W90:"
+               write(unit,'(A,I6)')      "     Number of Wannier functions:   ",Num_wann
+               write(unit,'(A,I6)')      "     Number of Wigner-Seitz vectors:",Nrpts
+               write(unit,'(A,I6,A,I6)') "     Deg rows:",Qst," N last row   :",Rst
+            endif
+            do iD=1,size(Dist,dim=1)
+               write(unit,"(A)") "     Dist: "//str(iD)
+               write(unit,"(A8,6A6,20A12)") "ndx" , "n1" , "n2" , "n3" , "iwig" , "jsite" , "isite" , "R" , "Rtest" , "H(Ri)"
+               do iR=1,DistList(iD)
+                  iwig = Rsorted(Dist(iD,iR),2)
+                  jsite = Rsorted(Dist(iD,iR),3)
+                  isite = Rsorted(Dist(iD,iR),4)
+                  Rvec = Rvecwig(:,iwig) + Ruc(:,jsite) - Ruc(:,isite)
+                  Rdist = sqrt(dble(dot_product(Rvec,Rvec)))
+                  write(unit,"(I8,6I6,20F12.4)") iR,Nvecwig(:,iwig),iwig,jsite,isite,Rsorted(Dist(iD,iR),1),Rdist,&
+                  (dreal(Hr_bulk(iorb + Norb*(isite-1),iorb + Norb*(jsite-1),iwig)),iorb=1,Norb)
+               enddo
+            enddo
+            if(present(pathOUTPUT))close(unit)
+         endif
+         !
+         !
+         !Set up the heterostructure
+         if(Hetero%status)then
+            !
+            allocate(Hr(Norb*Nsite,Norb*Nsite,Nwig));Hr=czero
+            !
+            !reshuffle the single-layer Hr into the heterostructured one
+            do iorb=1,Norb
+               do ilayer=1,Hetero%Nlayer
+                  do isite=1,Nsite_bulk
+                     do jsite=1,Nsite_bulk
+                        !
+                        il = iorb + Norb*(isite-1)
+                        jl = iorb + Norb*(jsite-1)
+                        !
+                        io = il + Norb*Nsite_bulk*(ilayer-1)
+                        jo = jl + Norb*Nsite_bulk*(ilayer-1)
+                        !
+                        Hr(io,jo,:) = Hr_bulk(il,jl,:)
+                        !
+                     enddo
+                  enddo
+               enddo
+            enddo
+            !
+            !adding the hopping between the layers. This implies that the Ruc are ordered correctly!
+            deallocate(Rsorted,Dist,DistList)
+            allocate(Rsorted(Nwig*Nsite*Nsite,6));Rsorted=0d0
+            iR=0
+            do iwig=1,Nwig
+               do ilayer=1,Hetero%Nlayer
+                  do jlayer=1,Hetero%Nlayer
+                     do jsite=1,Nsite_bulk
+                        do isite=1,Nsite_bulk
+                           !
+                           Rvec = Rvecwig(:,iwig) + Ruc(:,jsite+Nsite_bulk*(jlayer-1)) - Ruc(:,isite+Nsite_bulk*(ilayer-1))
+                           Rdist = sqrt(dble(dot_product(Rvec,Rvec)))
+                           !
+                           iR = iR +1
+                           !
+                           Rsorted(iR,1) = Rdist
+                           if(Rdist.le.eps)Rsorted(iR,1)=1d6                    !skip the local energy
+                           if(ilayer.eq.jlayer)Rsorted(iR,1)=1d6                !skip the intra-layer hopping
+                           Rsorted(iR,2) = iwig
+                           Rsorted(iR,3) = jsite
+                           Rsorted(iR,4) = isite
+                           Rsorted(iR,5) = ilayer
+                           Rsorted(iR,6) = jlayer
+                           !
+                        enddo
+                     enddo
+                  enddo
+               enddo
+            enddo
+            !
+            !Sorting the positions
+            allocate(Rorder(Nwig*Nsite*Nsite));Rorder=0
+            allocate(Rsorted_bkp(Nwig*Nsite*Nsite,6));Rsorted_bkp=0d0
+            Rsorted_bkp = Rsorted
+            call sort_array(Rsorted(:,1),Rorder)
+            Rsorted=0d0
+            do iR=1,Nwig*Nsite*Nsite
+               Rsorted(iR,:) = Rsorted_bkp(Rorder(iR),:)
+            enddo
+            deallocate(Rsorted_bkp,Rorder)
+            !
+            !Regrouping according to distance. The list contains the indexes of all the positions with a given distance
+            call get_pattern(Dist,Rsorted(:,1),eps,listDim=DistList)
+            !
+            !add the inter-layer hopping
+            do iorb=1,Norb
+               !all the possible ranges
+               do iD=1,Trange
+                  !all the indexes within that range
+                  do iR=1,DistList(iD)
+                     !
+                     !retrieve indexes from sorted list
+                     iwig = Rsorted(Dist(iD,iR),2)
+                     jsite = Rsorted(Dist(iD,iR),3)
+                     isite = Rsorted(Dist(iD,iR),4)
+                     ilayer = Rsorted(Dist(iD,iR),5)
+                     jlayer = Rsorted(Dist(iD,iR),6)
+                     !
+                     !site-orbital indexes of Hr
+                     io = iorb + Norb*(isite-1) + Norb*Nsite_bulk*(ilayer-1)
+                     jo = iorb + Norb*(jsite-1) + Norb*Nsite_bulk*(jlayer-1)
+                     !
+                     islab = min(ilayer,jlayer) + Hetero%Explicit(1) - 1
+                     if(ilayer.ne.jlayer) Hr(io,jo,iwig) = dcmplx(Hetero%tz(iorb,islab),0d0)
+                     !
+                  enddo
+               enddo
+            enddo
+            !
+            if(verbose)then
+               path="Hr_report_Hetero.DAT"
+               if(present(pathOUTPUT))then
+                  path=reg(pathOUTPUT)//"Hr_report_Hetero.DAT"
+                  unit = free_unit()
+                  open(unit,file=reg(path),form="formatted",status="unknown",position="rewind",action="write")
+               else
+                  unit=6
+               endif
+               do iD=1,size(Dist,dim=1)
+                  write(unit,"(A,1F12.4)") "     Dist: "//str(iD)
+                  write(unit,"(A8,8A6,20A12)") "ndx" , "n1" , "n2" , "n3" , "iwig" , "jsite" , "isite" , "jlay" , "ilay" , "R" , "Rtest" , "H(Ri)"
+                  do iR=1,DistList(iD)
+                     iwig = Rsorted(Dist(iD,iR),2)
+                     jsite = Rsorted(Dist(iD,iR),3)
+                     isite = Rsorted(Dist(iD,iR),4)
+                     ilayer = Rsorted(Dist(iD,iR),5)
+                     jlayer = Rsorted(Dist(iD,iR),6)
+                     Rvec = Rvecwig(:,iwig) + Ruc(:,jsite+Nsite_bulk*(jlayer-1)) - Ruc(:,isite+Nsite_bulk*(ilayer-1))
+                     Rdist = sqrt(dble(dot_product(Rvec,Rvec)))
+                     write(unit,"(I8,8I6,20F12.4)") iR,Nvecwig(:,iwig),iwig,jsite,isite,jlayer,ilayer,Rsorted(Dist(iD,iR),1),Rdist,&
+                     (dreal(Hr(iorb + Norb*(isite-1) + Norb*Nsite_bulk*(ilayer-1),iorb + Norb*(jsite-1) + Norb*Nsite_bulk*(jlayer-1),iwig)),iorb=1,Norb)
+                  enddo
+               enddo
+               if(present(pathOUTPUT))close(unit)
             endif
             !
+         else
+            !
+            Hr = Hr_bulk
+            deallocate(Hr_bulk)
+            !
+         endif
+         deallocate(Rsorted,Dist,DistList)
+         !
+         !FT Hr-->Hk
+         call wannier_R2K(Nkpt3,kpt,Hr,Hk)
+         deallocate(Hr)
+         do ik=1,nkpt
+            if(Norb.gt.1)call check_Hermiticity(Hk(:,:,ik),eps)
          enddo
-         deallocate(Hk_single,inHomo)
+         where(abs((Hk))<eps) Hk=czero
          !
       endif
-      deallocate(Rorder,Rsorted)
-      if(Hetero%offDiagEk)deallocate(Hk_single_offdiag)
       !
-      Hk = Hk*alphaHk
-      !
-      if(allocated(Ek))deallocate(Ek)
-      if(allocated(Zk))deallocate(Zk)
-      if(allocated(Hloc))deallocate(Hloc)
-      allocate(Ek(Norb*Nsite,Nkpt));Ek=0d0
-      allocate(Zk(Norb*Nsite,Norb*Nsite,Nkpt));Zk=czero
-      allocate(Hloc(Norb*Nsite,Norb*Nsite));Hloc=czero
-      !
-      do ik=1,Nkpt
+      !Extract the off-diagonal dispersion
+      if(Hetero%status)then
          !
-         call check_Hermiticity(Hk(:,:,ik),eps)
+         allocate(Hetero%tkz(Norb*Nsite_bulk,Norb*Nsite_bulk,Nkpt,Hetero%tzIndex(1):Hetero%tzIndex(2)));Hetero%tkz=czero
+         do ilayer=1,Hetero%Nlayer-1
+            !
+            islab = ilayer + Hetero%Explicit(1) - 1
+            na = 1 + (ilayer-1)*Norb*Nsite_bulk
+            nb = ilayer*Norb*Nsite_bulk
+            !
+            do ik=1,Nkpt
+               Hetero%tkz(:,:,ik,islab) = Hk(na:nb,na+Norb*Nsite_bulk:nb+Norb*Nsite_bulk,ik)
+            enddo
+            !
+         enddo
          !
-         Ek(:,ik) = 0d0
-         Zk(:,:,ik) = Hk(:,:,ik)
-         call eigh(Zk(:,:,ik),Ek(:,ik))
+         if(Hetero%Explicit(1).ne.1)then
+            !
+            ilayer = Hetero%Explicit(1) + 1
+            na = 1 + (ilayer-1)*Norb*Nsite_bulk
+            nb = ilayer*Norb*Nsite_bulk
+            !
+            do ik=1,Nkpt
+               Hetero%tkz(:,:,ik,Hetero%tzIndex(1)) = Hk(na:nb,na+Norb*Nsite_bulk:nb+Norb*Nsite_bulk,ik)
+            enddo
+            !
+         endif
+         if(Hetero%Explicit(2).ne.Hetero%Nslab)then
+            !
+            ilayer = Hetero%Explicit(2) - 2
+            na = 1 + (ilayer-1)*Norb*Nsite_bulk
+            nb = ilayer*Norb*Nsite_bulk
+            !
+            do ik=1,Nkpt
+               Hetero%tkz(:,:,ik,Hetero%tzIndex(2)) = Hk(na:nb,na+Norb*Nsite_bulk:nb+Norb*Nsite_bulk,ik)
+            enddo
+            !
+         endif
          !
-      enddo
-      Hloc = sum(Hk,dim=3)/Nkpt
-      !
-      if(present(iq_gamma))iq_gamma = find_vec([0d0,0d0,0d0],kpt,eps)
-      write(*,"(A,I4)")"     Gamma point index: ",iq_gamma
-      Hk_stored=.true.
+      endif
       !
       if(present(pathOUTPUT))then
          !
          unit = free_unit()
-         open(unit,file=reg(pathOUTPUT)//"Hk.DAT",form="formatted",status="unknown",position="rewind",action="write")
-         write(unit,("(3I10)")) 1,Nkpt,Norb
+         open(unit,file=reg(pathOUTPUT)//"Hk_built.DAT",form="formatted",status="unknown",position="rewind",action="write")
+         write(unit,("(3I10)")) 1,Nkpt,Norb*Nsite
          do ik=1,Nkpt
             write(unit,("(3F14.8)")) kpt(:,ik)
-            do iwan1=1,Norb*Nsite
-               do iwan2=1,Norb*Nsite
-                  write(unit,("(2I4,2E20.12)")) iwan1,iwan2,dreal(Hk(iwan1,iwan2,ik)),dimag(Hk(iwan1,iwan2,ik))
+            do iorb=1,Norb*Nsite
+               do jorb=1,Norb*Nsite
+                  write(unit,("(2I4,2E20.12)")) iorb,jorb,dreal(Hk(iorb,jorb,ik)),dimag(Hk(iorb,jorb,ik))
                enddo
             enddo
          enddo
@@ -3239,23 +3304,23 @@ contains
          Ln=0;Rn=0
          if(hetero_)then
             !
-            if(allocated(Hetero%tz_path))deallocate(Hetero%tz_path)
-            allocate(Hetero%tz_path(Hetero%Norb,Hetero%Norb,Lttc%Nkpt_path,Hetero%tzIndex(1):Hetero%tzIndex(2)));Hetero%tz_path=czero
+            if(allocated(Hetero%tkz_path))deallocate(Hetero%tkz_path)
+            allocate(Hetero%tkz_path(Hetero%Norb,Hetero%Norb,Lttc%Nkpt_path,Hetero%tzIndex(1):Hetero%tzIndex(2)));Hetero%tkz_path=czero
             do ilayer = Hetero%tzIndex(1),Hetero%tzIndex(2)
-               call wannierinterpolation(Lttc%Nkpt3,Lttc%kpt,Lttc%kptpath(:,1:Lttc%Nkpt_path),Hetero%tz(:,:,:,ilayer),Hetero%tz_path(:,:,:,ilayer))
+               call wannierinterpolation(Lttc%Nkpt3,Lttc%kpt,Lttc%kptpath(:,1:Lttc%Nkpt_path),Hetero%tkz(:,:,:,ilayer),Hetero%tkz_path(:,:,:,ilayer))
             enddo
             !
             !Non-interacting potential to the left/upper side of the Heterostructure
             if(Hetero%Explicit(1).ne.1)then
                allocate(Potential_L(Hetero%Norb,Hetero%Norb,Nreal,Lttc%Nkpt_path,Nspin));Potential_L=czero
-               call build_Potential(Potential_L,Hetero,Ln,NbulkL,zeta,Lttc%Hk_path,Hetero%tz_path,"left",.true.)
+               call build_Potential(Potential_L,Hetero,Ln,NbulkL,zeta,Lttc%Hk_path,Hetero%tkz_path,"left",.true.)
                write(*,"(2(A,2I4))") "     Left potential (path) orbital lattice indexes: ",Ln(1),Ln(2)," thickness: ",NbulkL
             endif
             !
             !Non-interacting potential to the right/lower side of the Heterostructure
             if(Hetero%Explicit(2).ne.Hetero%Nslab)then
                allocate(Potential_R(Hetero%Norb,Hetero%Norb,Nreal,Lttc%Nkpt_path,Nspin));Potential_R=czero
-               call build_Potential(Potential_R,Hetero,Rn,NbulkR,zeta,Lttc%Hk_path,Hetero%tz_path,"right",.true.)
+               call build_Potential(Potential_R,Hetero,Rn,NbulkR,zeta,Lttc%Hk_path,Hetero%tkz_path,"right",.true.)
                write(*,"(2(A,2I4))") "     Right potential (path) orbital lattice indexes: ",Rn(1),Rn(2)," thickness: ",NbulkR
             endif
             !
@@ -3396,23 +3461,23 @@ contains
          Ln=0;Rn=0
          if(hetero_)then
             !
-            if(allocated(Hetero%tz_Plane))deallocate(Hetero%tz_Plane)
-            allocate(Hetero%tz_Plane(Hetero%Norb,Hetero%Norb,Lttc%Nkpt_Plane,Hetero%tzIndex(1):Hetero%tzIndex(2)));Hetero%tz_Plane=czero
+            if(allocated(Hetero%tkz_Plane))deallocate(Hetero%tkz_Plane)
+            allocate(Hetero%tkz_Plane(Hetero%Norb,Hetero%Norb,Lttc%Nkpt_Plane,Hetero%tzIndex(1):Hetero%tzIndex(2)));Hetero%tkz_Plane=czero
             do ilayer = Hetero%tzIndex(1),Hetero%tzIndex(2)
-               call wannierinterpolation(Lttc%Nkpt3,Lttc%kpt,Lttc%kptPlane,Hetero%tz(:,:,:,ilayer),Hetero%tz_Plane(:,:,:,ilayer))
+               call wannierinterpolation(Lttc%Nkpt3,Lttc%kpt,Lttc%kptPlane,Hetero%tkz(:,:,:,ilayer),Hetero%tkz_Plane(:,:,:,ilayer))
             enddo
             !
             !Non-interacting potential to the left/upper side of the Heterostructure
             if(Hetero%Explicit(1).ne.1)then
                allocate(Potential_L(Hetero%Norb,Hetero%Norb,1,Lttc%Nkpt_Plane,Nspin));Potential_L=czero
-               call build_Potential(Potential_L,Hetero,Ln,NbulkL,zeta,Lttc%Hk_Plane,Hetero%tz_Plane,"left",.true.)
+               call build_Potential(Potential_L,Hetero,Ln,NbulkL,zeta,Lttc%Hk_Plane,Hetero%tkz_Plane,"left",.true.)
                write(*,"(2(A,2I4))") "     Left potential (plane) orbital lattice indexes: ",Ln(1),Ln(2)," thickness: ",NbulkL
             endif
             !
             !Non-interacting potential to the right/lower side of the Heterostructure
             if(Hetero%Explicit(2).ne.Hetero%Nslab)then
                allocate(Potential_R(Hetero%Norb,Hetero%Norb,1,Lttc%Nkpt_Plane,Nspin));Potential_R=czero
-               call build_Potential(Potential_R,Hetero,Rn,NbulkR,zeta,Lttc%Hk_Plane,Hetero%tz_Plane,"right",.true.)
+               call build_Potential(Potential_R,Hetero,Rn,NbulkR,zeta,Lttc%Hk_Plane,Hetero%tkz_Plane,"right",.true.)
                write(*,"(2(A,2I4))") "     Right potential (plane) orbital lattice indexes: ",Rn(1),Rn(2)," thickness: ",NbulkR
             endif
             !

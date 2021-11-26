@@ -1114,6 +1114,10 @@ contains
       iset=0
       do iel=1,Nelements
          !
+         !TEST>>>
+         write(*,*)iel,Nelements
+         !>>>TEST
+         !
          actRow=0
          do jel=1,Nelements
             if(abs(pattern(iel)-pattern(jel)).lt.tol) actRow(jel) = jel
@@ -2002,13 +2006,17 @@ contains
     !---------------------------------------------------------------------------
     !PURPOSE : sort array of integer using random algorithm
     !---------------------------------------------------------------------------
-    subroutine sort_array_i(array,order)
+    subroutine sort_array_i(array,order,replace)
       implicit none
       integer,dimension(:)                    :: array
       integer,dimension(size(array))          :: order
+      logical,intent(in),optional             :: replace
       integer,dimension(size(array))          :: backup
       integer                                 :: i
       integer                                 :: lf,rg
+      logical                                 :: replace_
+      replace_=.false.
+      if(present(replace))replace_=replace
       lf=1
       rg=size(array)
       forall(i=1:size(array))order(i)=i
@@ -2016,7 +2024,7 @@ contains
       do i=1,size(array)
          backup(i)=array(order(i))
       enddo
-      !array=backup
+      if(replace_)array=backup
     contains
       recursive subroutine qsort_sort( array, order, left, right )
         integer, dimension(:) :: array
