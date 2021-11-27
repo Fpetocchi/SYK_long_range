@@ -993,16 +993,20 @@ contains
    !---------------------------------------------------------------------------!
    !PURPOSE: Deduce simmetrical indexes in a vector.
    !---------------------------------------------------------------------------!
-   subroutine get_pattern_i(list,pattern,listDim)
+   subroutine get_pattern_i(list,pattern,listDim,IncludeSingle)
       implicit none
       integer,allocatable,intent(out)       :: list(:,:)
       integer,intent(in)                    :: pattern(:)
       integer,allocatable,intent(out),optional :: listDim(:)
+      logical,intent(in),optional           :: IncludeSingle
       integer                               :: Nelements,iel,jel,iset,jset
       integer                               :: maxLen,Neqv
       integer,allocatable                   :: actRow(:),listDim_(:)
       integer,allocatable                   :: listOld(:,:),listDimOld(:)
-      logical                               :: addSet
+      logical                               :: addSet,IncludeSingle_
+      !
+      IncludeSingle_=.false.
+      if(present(IncludeSingle))IncludeSingle_=IncludeSingle
       !
       Nelements = size(pattern)
       !
@@ -1081,17 +1085,21 @@ contains
       !
    end subroutine get_pattern_i
    !
-   subroutine get_pattern_d(list,pattern,tol,listDim)
+   subroutine get_pattern_d(list,pattern,tol,listDim,IncludeSingle)
       implicit none
       integer,allocatable,intent(out)       :: list(:,:)
       real(8),intent(in)                    :: pattern(:)
       real(8),intent(in)                    :: tol
       integer,allocatable,intent(out),optional :: listDim(:)
+      logical,intent(in),optional           :: IncludeSingle
       integer                               :: Nelements,iel,jel,iset,jset
       integer                               :: maxLen,Neqv
       integer,allocatable                   :: actRow(:),listDim_(:)
       integer,allocatable                   :: listOld(:,:),listDimOld(:)
-      logical                               :: addSet
+      logical                               :: addSet,IncludeSingle_
+      !
+      IncludeSingle_=.false.
+      if(present(IncludeSingle))IncludeSingle_=IncludeSingle
       !
       Nelements = size(pattern)
       !
@@ -1114,17 +1122,13 @@ contains
       iset=0
       do iel=1,Nelements
          !
-         !TEST>>>
-         write(*,*)iel,Nelements
-         !>>>TEST
-         !
          actRow=0
          do jel=1,Nelements
             if(abs(pattern(iel)-pattern(jel)).lt.tol) actRow(jel) = jel
          enddo
          Neqv = size( pack( actRow, actRow.gt.0 ) )
          !
-         if(Neqv.gt.1)then
+         if((Neqv.gt.1).or.IncludeSingle_)then
             !
             if(iset.eq.0)then
                !
@@ -1174,17 +1178,21 @@ contains
       !
    end subroutine get_pattern_d
    !
-   subroutine get_pattern_z(list,pattern,tol,listDim)
+   subroutine get_pattern_z(list,pattern,tol,listDim,IncludeSingle)
       implicit none
       integer,allocatable,intent(out)       :: list(:,:)
       complex(8),intent(in)                 :: pattern(:)
       real(8),intent(in)                    :: tol
       integer,allocatable,intent(out),optional :: listDim(:)
+      logical,intent(in),optional           :: IncludeSingle
       integer                               :: Nelements,iel,jel,iset,jset
       integer                               :: maxLen,Neqv
       integer,allocatable                   :: actRow(:),listDim_(:)
       integer,allocatable                   :: listOld(:,:),listDimOld(:)
-      logical                               :: addSet
+      logical                               :: addSet,IncludeSingle_
+      !
+      IncludeSingle_=.false.
+      if(present(IncludeSingle))IncludeSingle_=IncludeSingle
       !
       Nelements = size(pattern)
       !

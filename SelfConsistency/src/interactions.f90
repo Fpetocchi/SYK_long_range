@@ -1380,8 +1380,7 @@ contains
 
    !---------------------------------------------------------------------------!
    !PURPOSE: Create the freq. dependent interaction tensor from user-given
-   !         phononic modes. This is useful only for local interactions as
-   !         the phonons are dispersionless
+   !         phononic modes.
    !---------------------------------------------------------------------------!
    subroutine build_Uret_singlParam_ph(Umats,Uaa,Uab,J,g_eph,wo_eph,LocalOnly)
       !
@@ -1697,8 +1696,7 @@ contains
 
    !---------------------------------------------------------------------------!
    !PURPOSE: Create the K-dependent interaction tensor from user-given
-   !         long-range couplings. It's not useful to include screening as it
-   !         does not dependend on frequency.
+   !         long-range couplings.
    !---------------------------------------------------------------------------!
    subroutine build_Uret_singlParam_Vn(Umats,Uaa,Uab,J,Vnn,Lttc,LocalOnly)
       !

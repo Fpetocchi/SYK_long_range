@@ -569,9 +569,9 @@ contains
       !Hetero
       integer                               :: isite,jsite
       integer                               :: ilayer,jlayer,islab
-      integer                               :: na,nb,il,jl
+      integer                               :: na,nb,site_i,site_j
       real(8)                               :: Rvec(3)
-      real(8),allocatable                   :: Rsorted(:,:),Rsorted_bkp(:,:)
+      real(8),allocatable                   :: Rsorted(:,:),Rsorted_bkp(:,:),Vec_test(:)
       integer,allocatable                   :: Rorder(:),Dist(:,:),DistList(:)
       !
       !
@@ -608,41 +608,6 @@ contains
          !
          !recover the vectors in real space
          if(.not.Wig_stored)call calc_wignerseiz(Nkpt3)
-         allocate(Rsorted(Nwig*Nsite_bulk*Nsite_bulk,6));
-         iR=0
-         do iwig=1,Nwig
-            do jsite=1,Nsite_bulk
-               do isite=1,Nsite_bulk
-                  !
-                  Rvec = Rvecwig(:,iwig) + Ruc(:,jsite) - Ruc(:,isite)
-                  Rdist = sqrt(dble(dot_product(Rvec,Rvec)))
-                  !
-                  iR = iR +1
-                  !
-                  Rsorted(iR,1) = Rdist
-                  if(Rdist.le.eps)Rsorted(iR,1)=1d6                             !skip the local energy
-                  Rsorted(iR,2) = iwig
-                  Rsorted(iR,3) = jsite
-                  Rsorted(iR,4) = isite
-                  !
-               enddo
-            enddo
-         enddo
-         !
-         !
-         !Sorting the positions
-         allocate(Rorder(Nwig*Nsite_bulk*Nsite_bulk));Rorder=0
-         allocate(Rsorted_bkp(Nwig*Nsite_bulk*Nsite_bulk,6));Rsorted_bkp=0d0
-         Rsorted_bkp = Rsorted
-         call sort_array(Rsorted(:,1),Rorder)
-         Rsorted=0d0
-         do iR=1,Nwig*Nsite_bulk*Nsite_bulk
-            Rsorted(iR,:) = Rsorted_bkp(Rorder(iR),:)
-         enddo
-         deallocate(Rsorted_bkp,Rorder)
-         !
-         !Regroup according to distance. The list contains the indexes of all the positions with a given distance
-         call get_pattern(Dist,Rsorted(:,1),eps,listDim=DistList)
          !
          if(readHr)then
             !
@@ -688,6 +653,42 @@ contains
          else
             !
             Trange=1
+            !
+            !Get all the possible positions
+            allocate(Rsorted(Nwig*Nsite_bulk*Nsite_bulk,4));Rsorted=0d0
+            iR=0
+            do iwig=1,Nwig
+               do jsite=1,Nsite_bulk
+                  do isite=1,Nsite_bulk
+                     !
+                     Rvec = Rvecwig(:,iwig) + Ruc(:,jsite) - Ruc(:,isite)
+                     Rdist = sqrt(dble(dot_product(Rvec,Rvec)))
+                     !
+                     iR = iR +1
+                     !
+                     Rsorted(iR,1) = Rdist
+                     if(Rdist.le.eps)Rsorted(iR,1)=1d6                          !skip the local energy
+                     Rsorted(iR,2) = iwig
+                     Rsorted(iR,3) = jsite
+                     Rsorted(iR,4) = isite
+                     !
+                  enddo
+               enddo
+            enddo
+            !
+            !Sorting the positions according to distance
+            allocate(Rorder(Nwig*Nsite_bulk*Nsite_bulk));Rorder=0
+            allocate(Rsorted_bkp(Nwig*Nsite_bulk*Nsite_bulk,4));Rsorted_bkp=0d0
+            Rsorted_bkp = Rsorted
+            call sort_array(Rsorted(:,1),Rorder)
+            Rsorted=0d0
+            do iR=1,Nwig*Nsite_bulk*Nsite_bulk
+               Rsorted(iR,:) = Rsorted_bkp(Rorder(iR),:)
+            enddo
+            deallocate(Rsorted_bkp,Rorder)
+            !
+            !Regroup according to distance. The list contains the indexes of all the positions with a given distance
+            call get_pattern(Dist,Rsorted(:,1),eps,listDim=DistList)
             !
             !User-provided hopping is only nearest neighbor and its the same for all the sites
             allocate(Hr_bulk(Norb*Nsite_bulk,Norb*Nsite_bulk,Nwig));Hr_bulk=czero
@@ -744,7 +745,7 @@ contains
             enddo
             if(present(pathOUTPUT))close(unit)
          endif
-         !
+         deallocate(Rsorted,Dist,DistList)
          !
          !Set up the heterostructure
          if(Hetero%status)then
@@ -757,13 +758,10 @@ contains
                   do isite=1,Nsite_bulk
                      do jsite=1,Nsite_bulk
                         !
-                        il = iorb + Norb*(isite-1)
-                        jl = iorb + Norb*(jsite-1)
+                        io = iorb + Norb*(isite-1)
+                        jo = iorb + Norb*(jsite-1)
                         !
-                        io = il + Norb*Nsite_bulk*(ilayer-1)
-                        jo = jl + Norb*Nsite_bulk*(ilayer-1)
-                        !
-                        Hr(io,jo,:) = Hr_bulk(il,jl,:)
+                        Hr(io+Norb*Nsite_bulk*(ilayer-1),jo+Norb*Nsite_bulk*(ilayer-1),:) = Hr_bulk(io,jo,:)
                         !
                      enddo
                   enddo
@@ -771,100 +769,104 @@ contains
             enddo
             !
             !adding the hopping between the layers. This implies that the Ruc are ordered correctly!
-            deallocate(Rsorted,Dist,DistList)
-            allocate(Rsorted(Nwig*Nsite*Nsite,6));Rsorted=0d0
-            iR=0
-            do iwig=1,Nwig
-               do ilayer=1,Hetero%Nlayer
+            do ilayer=1,Hetero%Nlayer
+               do isite=1,Nsite_bulk
+                  !
+                  allocate(Rsorted(Nsite*Nwig,4));Rsorted=0d0
+                  allocate(Rsorted_bkp(Nsite*Nwig,4));Rsorted_bkp=0d0
+                  allocate(Rorder(Nsite*Nwig));Rorder=0
+                  !
+                  site_i = isite + (ilayer-1)*Nsite_bulk
+                  !
+                  iR=0
                   do jlayer=1,Hetero%Nlayer
                      do jsite=1,Nsite_bulk
-                        do isite=1,Nsite_bulk
+                        !
+                        site_j = jsite + (jlayer-1)*Nsite_bulk
+                        !
+                        do iwig=1,Nwig
                            !
-                           Rvec = Rvecwig(:,iwig) + Ruc(:,jsite+Nsite_bulk*(jlayer-1)) - Ruc(:,isite+Nsite_bulk*(ilayer-1))
+                           Rvec = Rvecwig(:,iwig) + Ruc(:,site_j) - Ruc(:,site_i)
                            Rdist = sqrt(dble(dot_product(Rvec,Rvec)))
                            !
                            iR = iR +1
                            !
                            Rsorted(iR,1) = Rdist
-                           if(Rdist.le.eps)Rsorted(iR,1)=1d6                    !skip the local energy
-                           if(ilayer.eq.jlayer)Rsorted(iR,1)=1d6                !skip the intra-layer hopping
+                           !if(Rdist.le.eps)Rsorted(iR,1)=1d6        !skip the local energy by pushing it very far
+                           if(ilayer.eq.jlayer)Rsorted(iR,1)=1d6    !skip the intra-layer hopping by pushing it very far
                            Rsorted(iR,2) = iwig
                            Rsorted(iR,3) = jsite
-                           Rsorted(iR,4) = isite
-                           Rsorted(iR,5) = ilayer
-                           Rsorted(iR,6) = jlayer
+                           Rsorted(iR,4) = jlayer
                            !
                         enddo
                      enddo
                   enddo
-               enddo
-            enddo
-            !
-            !Sorting the positions
-            allocate(Rorder(Nwig*Nsite*Nsite));Rorder=0
-            allocate(Rsorted_bkp(Nwig*Nsite*Nsite,6));Rsorted_bkp=0d0
-            Rsorted_bkp = Rsorted
-            call sort_array(Rsorted(:,1),Rorder)
-            Rsorted=0d0
-            do iR=1,Nwig*Nsite*Nsite
-               Rsorted(iR,:) = Rsorted_bkp(Rorder(iR),:)
-            enddo
-            deallocate(Rsorted_bkp,Rorder)
-            !
-            !Regrouping according to distance. The list contains the indexes of all the positions with a given distance
-            call get_pattern(Dist,Rsorted(:,1),eps,listDim=DistList)
-            !
-            !add the inter-layer hopping
-            do iorb=1,Norb
-               !all the possible ranges
-               do iD=1,Trange
-                  !all the indexes within that range
-                  do iR=1,DistList(iD)
-                     !
-                     !retrieve indexes from sorted list
-                     iwig = Rsorted(Dist(iD,iR),2)
-                     jsite = Rsorted(Dist(iD,iR),3)
-                     isite = Rsorted(Dist(iD,iR),4)
-                     ilayer = Rsorted(Dist(iD,iR),5)
-                     jlayer = Rsorted(Dist(iD,iR),6)
-                     !
-                     !site-orbital indexes of Hr
-                     io = iorb + Norb*(isite-1) + Norb*Nsite_bulk*(ilayer-1)
-                     jo = iorb + Norb*(jsite-1) + Norb*Nsite_bulk*(jlayer-1)
-                     !
-                     islab = min(ilayer,jlayer) + Hetero%Explicit(1) - 1
-                     if(ilayer.ne.jlayer) Hr(io,jo,iwig) = dcmplx(Hetero%tz(iorb,islab),0d0)
-                     !
+                  !
+                  !Re-ordering distances for each site in the system
+                  Rorder=0
+                  Rsorted_bkp = Rsorted
+                  call sort_array(Rsorted(:,1),Rorder)
+                  do iR=1,Nwig*Nsite
+                     Rsorted(iR,:) = Rsorted_bkp(Rorder(iR),:)
                   enddo
-               enddo
-            enddo
-            !
-            if(verbose)then
-               path="Hr_report_Hetero.DAT"
-               if(present(pathOUTPUT))then
-                  path=reg(pathOUTPUT)//"Hr_report_Hetero.DAT"
-                  unit = free_unit()
-                  open(unit,file=reg(path),form="formatted",status="unknown",position="rewind",action="write")
-               else
-                  unit=6
-               endif
-               do iD=1,size(Dist,dim=1)
-                  write(unit,"(A,1F12.4)") "     Dist: "//str(iD)
-                  write(unit,"(A8,8A6,20A12)") "ndx" , "n1" , "n2" , "n3" , "iwig" , "jsite" , "isite" , "jlay" , "ilay" , "R" , "Rtest" , "H(Ri)"
-                  do iR=1,DistList(iD)
-                     iwig = Rsorted(Dist(iD,iR),2)
-                     jsite = Rsorted(Dist(iD,iR),3)
-                     isite = Rsorted(Dist(iD,iR),4)
-                     ilayer = Rsorted(Dist(iD,iR),5)
-                     jlayer = Rsorted(Dist(iD,iR),6)
-                     Rvec = Rvecwig(:,iwig) + Ruc(:,jsite+Nsite_bulk*(jlayer-1)) - Ruc(:,isite+Nsite_bulk*(ilayer-1))
-                     Rdist = sqrt(dble(dot_product(Rvec,Rvec)))
-                     write(unit,"(I8,8I6,20F12.4)") iR,Nvecwig(:,iwig),iwig,jsite,isite,jlayer,ilayer,Rsorted(Dist(iD,iR),1),Rdist,&
-                     (dreal(Hr(iorb + Norb*(isite-1) + Norb*Nsite_bulk*(ilayer-1),iorb + Norb*(jsite-1) + Norb*Nsite_bulk*(jlayer-1),iwig)),iorb=1,Norb)
+                  !
+                  !Regrouping according to distance. The list contains the indexes of all the positions with a given distance
+                  call get_pattern(Dist,Rsorted(:,1),eps,listDim=DistList,IncludeSingle=.true.)
+                  !
+                  !add the inter-layer hopping up to the first Trange neighbors
+                  do iorb=1,Norb
+                     !all the possible ranges
+                     do iD=1,Trange
+                        !all the indexes within that range
+                        do iR=1,DistList(iD)
+                           !
+                           !retrieve indexes from sorted list
+                           iwig = Rsorted(Dist(iD,iR),2)
+                           jsite = Rsorted(Dist(iD,iR),3)
+                           jlayer = Rsorted(Dist(iD,iR),4)
+                           !
+                           !site-orbital indexes of Hr
+                           io = iorb + Norb*(isite-1) + Norb*Nsite_bulk*(ilayer-1)
+                           jo = iorb + Norb*(jsite-1) + Norb*Nsite_bulk*(jlayer-1)
+                           !
+                           islab = min(ilayer,jlayer) + Hetero%Explicit(1) - 1
+                           if(ilayer.ne.jlayer) Hr(io,jo,iwig) = dcmplx(Hetero%tz(iorb,islab),0d0)
+                           !
+                        enddo
+                     enddo
                   enddo
-               enddo
-               if(present(pathOUTPUT))close(unit)
-            endif
+                  !
+                  if(verbose)then
+                     path="Hr_report_Hetero_"//str(site_i)//".DAT"
+                     if(present(pathOUTPUT))then
+                        path=reg(pathOUTPUT)//"Hr_report_Hetero_"//str(site_i)//".DAT"
+                        unit = free_unit()
+                        open(unit,file=reg(path),form="formatted",status="unknown",position="rewind",action="write")
+                     else
+                        unit=6
+                     endif
+                     write(unit,"(A)") "     Global site: "//str(site_i)
+                     do iD=1,size(Dist,dim=1)
+                        write(unit,"(A)") "     Dist: "//str(iD)
+                        write(unit,"(A8,8A6,20A12)") "ndx" , "n1" , "n2" , "n3" , "iwig" , "ilay" , "isite" , "jlay" , "jsite" , "R" , "Rtest" , "H(Ri)"
+                        do iR=1,DistList(iD)
+                           iwig = Rsorted(Dist(iD,iR),2)
+                           jsite = Rsorted(Dist(iD,iR),3)
+                           jlayer = Rsorted(Dist(iD,iR),4)
+                           Rvec = Rvecwig(:,iwig) + Ruc(:,jsite+Nsite_bulk*(jlayer-1)) - Ruc(:,isite+Nsite_bulk*(ilayer-1))
+                           Rdist = sqrt(dble(dot_product(Rvec,Rvec)))
+                           write(unit,"(I8,8I6,20F12.4)") iR,Nvecwig(:,iwig),iwig,ilayer,isite,jlayer,jsite,Rsorted(Dist(iD,iR),1),Rdist,&
+                           (dreal(Hr(iorb + Norb*(isite-1) + Norb*Nsite_bulk*(ilayer-1),iorb + Norb*(jsite-1) + Norb*Nsite_bulk*(jlayer-1),iwig)),iorb=1,Norb)
+                        enddo
+                     enddo
+                     if(present(pathOUTPUT))close(unit)
+                  endif
+                  !
+                  deallocate(Rsorted,Rsorted_bkp,Rorder,Dist,DistList)
+                  !
+               enddo !isite
+            enddo !ilayer
+
             !
          else
             !
@@ -872,7 +874,6 @@ contains
             deallocate(Hr_bulk)
             !
          endif
-         deallocate(Rsorted,Dist,DistList)
          !
          !FT Hr-->Hk
          call wannier_R2K(Nkpt3,kpt,Hr,Hk)
@@ -931,7 +932,7 @@ contains
          open(unit,file=reg(pathOUTPUT)//"Hk_built.DAT",form="formatted",status="unknown",position="rewind",action="write")
          write(unit,("(3I10)")) 1,Nkpt,Norb*Nsite
          do ik=1,Nkpt
-            write(unit,("(3F14.8)")) kpt(:,ik)
+            write(unit,("(2I6,3F14.8)")) 1,ik,kpt(:,ik)
             do iorb=1,Norb*Nsite
                do jorb=1,Norb*Nsite
                   write(unit,("(2I4,2E20.12)")) iorb,jorb,dreal(Hk(iorb,jorb,ik)),dimag(Hk(iorb,jorb,ik))

@@ -1,3 +1,17 @@
+Vec_test = [4d0,5d0,4d0,1d0,2d0,1d0,3d0,4d0,9d0,4d0,2d0,3d0,3d0,4d0]
+call get_pattern(Dist,Vec_test,eps,listDim=DistList,IncludeSingle=.true.)
+
+write(*,"(A,100I3)")  "     Vec: ",int(Vec_test)
+do iD=1,size(Dist,dim=1)
+   write(*,"(A,1I3)")  new_line("A")//"     list row: ",iD
+   write(*,"(A,10I3)") "     list col: ",(Dist(iD,iR),iR=1,DistList(iD))
+   write(*,"(A,10I3)") "     list els: ",(int(Vec_test(Dist(iD,iR))),iR=1,DistList(iD))
+enddo
+
+
+
+
+
 subroutine build_Uret_singlParam_ph(Umats,Uaa,Uab,J,g_eph,wo_eph,LocalOnly)
    !
    use parameters
@@ -376,7 +390,6 @@ subroutine calc_QMCinteractions(Umats,Uinst,Kfunct,Kpfunct,Screening,sym)
    !
 end subroutine calc_QMCinteractions
 
-
 subroutine build_Hk(Norb,hopping,Nkpt3,alphaHk,readHr,Hetero,Hk,kpt,Ek,Zk,Hloc,iq_gamma,pathOUTPUT)
    !
    use utils_misc
@@ -711,3 +724,418 @@ subroutine build_Hk(Norb,hopping,Nkpt3,alphaHk,readHr,Hetero,Hk,kpt,Ek,Zk,Hloc,i
    endif
    !
 end subroutine build_Hk
+
+subroutine build_Uret_singlParam_Vn(Umats,Uaa,Uab,J,Vnn,Lttc,LocalOnly)
+   !
+   use parameters
+   use file_io
+   use utils_misc
+   use utils_fields
+   use crystal
+   use input_vars, only : pathINPUTtr, pathINPUT
+   use input_vars, only : long_range, structure, Nkpt_path
+   use input_vars, only : Hetero
+   implicit none
+   !
+   type(BosonicField),intent(inout),target :: Umats
+   real(8),intent(in)                    :: Uaa,Uab,J
+   real(8),intent(in)                    :: Vnn(:,:)
+   type(Lattice),intent(inout)           :: Lttc
+   logical,intent(in),optional           :: LocalOnly
+   !
+   complex(8),allocatable                :: U_K(:,:,:)
+   complex(8),allocatable                :: U_R(:,:,:)
+   integer                               :: Nbp,Norb,Vrange
+   integer                               :: ib1,ib2,iorb
+   integer                               :: iwig,idist,Nsite
+   real(8),allocatable                   :: Rsorted(:)
+   integer,allocatable                   :: Rorder(:)
+   type(physicalU)                       :: PhysicalUelements
+   type(BosonicField),target             :: Umats_imp
+   type(BosonicField),pointer            :: Umats_ptr
+   complex(8),allocatable                :: EwaldShift(:)
+   real(8),allocatable                   :: V(:)
+   real(8)                               :: eta,den
+   logical                               :: LocalOnly_,RealSpace
+   real                                  :: start,finish
+   !
+   !
+   if(verbose)write(*,"(A)") "---- build_Uret_singlParam_Vn"
+   !
+   !
+   ! Check on the input field
+   if(.not.Umats%status) stop "build_Uret_singlParam_Vn: BosonicField not properly initialized."
+   if(Umats%Npoints.ne.1) stop "build_Uret_singlParam_Vn: Number of matsubara points in Umats is supposed to be equal to 1."
+   !
+   LocalOnly_=.false.
+   if(present(LocalOnly))LocalOnly_=LocalOnly
+   if(LocalOnly_.and.(Umats%Nkpt.ne.0)) stop "build_Uret_singlParam_Vn: Umats k dependent attributes are supposed to be unallocated."
+   if((.not.LocalOnly_).and.(Umats%Nkpt.ne.Lttc%Nkpt)) stop "build_Uret_singlParam_Vn: Umats number of K-points does not match with the lattice."
+   !
+   Nbp = Umats%Nbp
+   Norb = int(sqrt(dble(Nbp)))
+   RealSpace = Lttc%Nsite.gt.1
+   !
+   if(RealSpace)then
+      Norb = Lttc%Norb/Lttc%Nsite
+      if(Hetero%status) Norb = Hetero%Norb
+      Nbp = Norb**2
+      call AllocateBosonicField(Umats_imp,Norb,Umats%Npoints,Umats%iq_gamma,Nkpt=Umats%Nkpt,Beta=Umats%Beta)
+      Umats_ptr => Umats_imp
+   else
+      Umats_ptr => Umats
+   endif
+   !
+   Vrange = size(Vnn,dim=2)
+   call assert_shape(Vnn,[Norb,Vrange],"build_Uret_singlParam_Vn","Vnn")
+   !
+   call init_Uelements(Norb,PhysicalUelements)
+   !
+   call cpu_time(start)
+   !
+   !recover the vectors in real space and allocate interaction in real space
+   if(.not.Wig_stored)call calc_wignerseiz(Lttc%Nkpt3)
+   allocate(Rsorted(Nwig));Rsorted = radiuswig
+   allocate(Rorder(Nwig))
+   call sort_array(Rsorted,Rorder)
+   allocate(U_R(Nbp,Nbp,Nwig));U_R=czero
+   allocate(V(Norb));V=czero
+   if(reg(long_range).eq."Ewald")then
+      eta = Rsorted(Rorder(Nwig))/2d0
+      allocate(EwaldShift(Nwig));EwaldShift=czero
+      if(any(Lttc%Nkpt3.eq.1))then
+         call calc_Ewald(EwaldShift,Lttc%kpt,eta,"2D")
+      else
+         call calc_Ewald(EwaldShift,Lttc%kpt,eta,"3D")
+      endif
+   endif
+   !
+   !loop over the sorted Wigner Seiz positions
+   idist=1
+   loopwig:do iwig=1,Nwig
+      !
+      !setting the local interaction
+      if(Rsorted(Rorder(iwig)).eq.0d0)then
+         if(Rorder(iwig).ne.wig0)stop "build_Uret_singlParam_Vn: wrong index of R=0 vector."
+         do ib1=1,Nbp
+            do ib2=1,Nbp
+               !
+               if(PhysicalUelements%Full_Uaa(ib1,ib2)) U_R(ib1,ib2,Rorder(iwig)) = dcmplx(Uaa,0d0)
+               if(PhysicalUelements%Full_Uab(ib1,ib2)) U_R(ib1,ib2,Rorder(iwig)) = dcmplx(Uab,0d0)
+               if(PhysicalUelements%Full_Jsf(ib1,ib2)) U_R(ib1,ib2,Rorder(iwig)) = dcmplx(J,0d0)
+               if(PhysicalUelements%Full_Jph(ib1,ib2)) U_R(ib1,ib2,Rorder(iwig)) = dcmplx(J,0d0)
+               !
+            enddo
+         enddo
+         !
+         cycle
+      endif
+      !
+      !increasing range
+      if(iwig.gt.2)then
+         if((Rsorted(Rorder(iwig))-Rsorted(Rorder(iwig-1))).gt.1e-5) idist=idist+1
+         if((idist.gt.Vrange).and.(reg(long_range).ne."Ewald")) exit loopwig
+      endif
+      !
+      !setting the R dependence
+      if(reg(long_range).eq."Explicit")then
+         V = Vnn(:,idist)
+      elseif(reg(long_range).eq."Coulomb")then
+         V = Vnn(:,1)/Rsorted(Rorder(iwig))
+      elseif(reg(long_range).eq."Ewald")then
+         den = 2d0*sqrt(eta)
+         if(any(Lttc%Nkpt3.eq.1)) den = 2d0*eta
+         V = (Vnn(:,1)/Rsorted(Rorder(iwig)))*erfc(Rsorted(Rorder(iwig))/den) + EwaldShift(Rorder(iwig))
+      else
+         stop "build_Uret_singlParam_Vn: the long_range varibale is not set."
+      endif
+      !
+      !setting matrix element
+      do ib1=1,Nbp
+         iorb = PhysicalUelements%Full_Map(ib1,ib1,1)
+         if(PhysicalUelements%Full_Uaa(ib1,ib1)) U_R(ib1,ib1,Rorder(iwig)) = dcmplx(V(iorb),0d0)
+      enddo
+      !
+   enddo loopwig
+   deallocate(V)
+   if(allocated(EwaldShift))deallocate(EwaldShift)
+   !
+   if(verbose)then
+      write(*,*)"     Real-space interaction elements:"
+      write(*,"(A6,3A12)") "    i","    Ri","    H(Ri)","  [n1,n2,n3]"
+      do iwig=1,Nwig
+         write(*,"(1I6,2F12.4,3I4)")Rorder(iwig),Rsorted(Rorder(iwig)),real(U_R(1,1,Rorder(iwig))),Nvecwig(:,Rorder(iwig))
+      enddo
+   endif
+   !
+   !FT to K-space
+   allocate(U_K(Nbp,Nbp,Lttc%Nkpt));U_K=czero
+   if(Lttc%Nkpt.gt.1)then
+      call wannier_R2K(Lttc%Nkpt3,Lttc%kpt,U_R,U_K)
+   else
+      U_K(:,:,1) = U_R(:,:,wig0)
+   endif
+   deallocate(U_R,Rorder,Rsorted)
+   !
+   call cpu_time(finish)
+   write(*,"(A,F)") "     Unn(R) --> Unn(K) cpu timing:", finish-start
+   !
+   if(reg(structure).ne."None")then
+      call interpolateHk2Path(Lttc,reg(structure),Nkpt_path,pathOUTPUT=reg(pathINPUT),filename="Uk",data_in=U_K)
+   endif
+   !
+   !fill in the output
+   do ib1=1,Nbp
+      do ib2=1,Nbp
+         !
+         if(PhysicalUelements%Full_Uaa(ib1,ib2)) Umats_ptr%screened_local(ib1,ib2,1) = dcmplx(Uaa,0d0)
+         if(PhysicalUelements%Full_Uab(ib1,ib2)) Umats_ptr%screened_local(ib1,ib2,1) = dcmplx(Uab,0d0)
+         if(PhysicalUelements%Full_Jsf(ib1,ib2)) Umats_ptr%screened_local(ib1,ib2,1) = dcmplx(J,0d0)
+         if(PhysicalUelements%Full_Jph(ib1,ib2)) Umats_ptr%screened_local(ib1,ib2,1) = dcmplx(J,0d0)
+         !
+         if(allocated(Umats_ptr%bare_local))then
+            if(PhysicalUelements%Full_Uaa(ib1,ib2)) Umats_ptr%bare_local(ib1,ib2) = dcmplx(Uaa,0d0)
+            if(PhysicalUelements%Full_Uab(ib1,ib2)) Umats_ptr%bare_local(ib1,ib2) = dcmplx(Uab,0d0)
+            if(PhysicalUelements%Full_Jsf(ib1,ib2)) Umats_ptr%bare_local(ib1,ib2) = dcmplx(J,0d0)
+            if(PhysicalUelements%Full_Jph(ib1,ib2)) Umats_ptr%bare_local(ib1,ib2) = dcmplx(J,0d0)
+         endif
+         !
+      enddo
+   enddo
+   !
+   if(.not.LocalOnly_)then
+      !
+      Umats_ptr%screened(:,:,1,:) = U_K
+      !
+      if(allocated(Umats_ptr%bare))then
+         Umats_ptr%bare = U_K
+      endif
+      !
+   endif
+   deallocate(U_K)
+   !
+   if(RealSpace)then
+      Nsite = Lttc%Nsite
+      if(Hetero%status) Nsite = Hetero%Explicit(2)-Hetero%Explicit(1)+1
+      call Expand2Nsite(Umats,Umats_ptr,Nsite)
+      call DeallocateBosonicField(Umats_imp)
+   endif
+   nullify(Umats_ptr)
+   !
+   call dump_BosonicField(Umats,reg(pathINPUTtr),"Uloc_mats_nosum.DAT")
+   call BosonicKsum(Umats)
+   call dump_BosonicField(Umats,reg(pathINPUTtr),"Uloc_mats.DAT")
+   !
+end subroutine build_Uret_singlParam_Vn
+!
+subroutine build_Uret_multiParam_Vn(Umats,Uaa,Uab,J,Vnn,Lttc,LocalOnly)
+   !
+   use parameters
+   use file_io
+   use utils_misc
+   use utils_fields
+   use crystal
+   use input_vars, only : pathINPUTtr, pathINPUT
+   use input_vars, only : long_range, structure, Nkpt_path
+   use input_vars, only : Hetero
+   implicit none
+   !
+   type(BosonicField),intent(inout),target :: Umats
+   real(8),intent(in)                    :: Uaa(:),Uab(:,:),J(:,:)
+   real(8),intent(in)                    :: Vnn(:,:)
+   type(Lattice),intent(inout)           :: Lttc
+   logical,intent(in),optional           :: LocalOnly
+   !
+   complex(8),allocatable                :: U_K(:,:,:)
+   complex(8),allocatable                :: U_R(:,:,:)
+   integer                               :: Nbp,Norb,Vrange
+   integer                               :: ib1,ib2,iorb,jorb
+   integer                               :: iwig,idist,Nsite
+   real(8),allocatable                   :: Rsorted(:)
+   integer,allocatable                   :: Rorder(:)
+   type(physicalU)                       :: PhysicalUelements
+   type(BosonicField),target             :: Umats_imp
+   type(BosonicField),pointer            :: Umats_ptr
+   complex(8),allocatable                :: EwaldShift(:)
+   real(8),allocatable                   :: V(:)
+   real(8)                               :: eta,den
+   logical                               :: LocalOnly_,RealSpace
+   real                                  :: start,finish
+   !
+   !
+   if(verbose)write(*,"(A)") "---- build_Uret_multiParam_Vn"
+   !
+   !
+   ! Check on the input field
+   if(.not.Umats%status) stop "build_Uret_multiParam_Vn: BosonicField not properly initialized."
+   if(Umats%Npoints.ne.1) stop "build_Uret_multiParam_Vn: Number of matsubara points in Umats is supposed to be equal to 1."
+   !
+   LocalOnly_=.false.
+   if(present(LocalOnly))LocalOnly_=LocalOnly
+   if(LocalOnly_.and.(Umats%Nkpt.ne.0)) stop "build_Uret_multiParam_Vn: Umats k dependent attributes are supposed to be unallocated."
+   if((.not.LocalOnly_).and.(Umats%Nkpt.ne.Lttc%Nkpt)) stop "build_Uret_multiParam_Vn: Umats number of K-points does not match with the lattice."
+   !
+   Nbp = Umats%Nbp
+   Norb = int(sqrt(dble(Nbp)))
+   RealSpace = Lttc%Nsite.gt.1
+   !
+   if(RealSpace)then
+      Norb = Lttc%Norb/Lttc%Nsite
+      if(Hetero%status) Norb = Hetero%Norb
+      Nbp = Norb**2
+      call AllocateBosonicField(Umats_imp,Norb,Umats%Npoints,Umats%iq_gamma,Nkpt=Umats%Nkpt,Beta=Umats%Beta)
+      Umats_ptr => Umats_imp
+   else
+      Umats_ptr => Umats
+   endif
+   call assert_shape(Uaa,[Norb],"build_Uret_multiParam_Vn","Uaa")
+   call assert_shape(Uab,[Norb,Norb],"build_Uret_multiParam_Vn","Uab")
+   call assert_shape(J,[Norb,Norb],"build_Uret_multiParam_Vn","J")
+   !
+   Vrange = size(Vnn,dim=2)
+   call assert_shape(Vnn,[Norb,Vrange],"build_Uret_multiParam_Vn","Vnn")
+   !
+   call init_Uelements(Norb,PhysicalUelements)
+   !
+   call cpu_time(start)
+   !
+   !recover the vectors in real space and allocate interaction in real space
+   if(.not.Wig_stored)call calc_wignerseiz(Lttc%Nkpt3)
+   allocate(Rsorted(Nwig));Rsorted = radiuswig
+   allocate(Rorder(Nwig))
+   call sort_array(Rsorted,Rorder)
+   allocate(U_R(Nbp,Nbp,Nwig));U_R=czero
+   allocate(V(Norb));V=czero
+   if(reg(long_range).eq."Ewald")then
+      eta = Rsorted(Rorder(Nwig))/2d0
+      allocate(EwaldShift(Nwig));EwaldShift=czero
+      if(any(Lttc%Nkpt3.eq.1))then
+         call calc_Ewald(EwaldShift,Lttc%kpt,eta,"2D")
+      else
+         call calc_Ewald(EwaldShift,Lttc%kpt,eta,"3D")
+      endif
+   endif
+   !
+   !loop over the sorted Wigner Seiz positions
+   idist=1
+   loopwig:do iwig=1,Nwig
+      !
+      !setting the local interaction
+      if(Rsorted(Rorder(iwig)).eq.0d0)then
+         if(Rorder(iwig).ne.wig0)stop "build_Uret_multiParam_Vn: wrong index of R=0 vector."
+         do ib1=1,Nbp
+            do ib2=1,Nbp
+               !
+               iorb = PhysicalUelements%Full_Map(ib1,ib2,1)
+               jorb = PhysicalUelements%Full_Map(ib1,ib2,2)
+               !
+               if(PhysicalUelements%Full_Uaa(ib1,ib2)) U_R(ib1,ib2,Rorder(iwig)) = dcmplx(Uaa(iorb),0d0)
+               if(PhysicalUelements%Full_Uab(ib1,ib2)) U_R(ib1,ib2,Rorder(iwig)) = dcmplx(Uab(iorb,jorb),0d0)
+               if(PhysicalUelements%Full_Jsf(ib1,ib2)) U_R(ib1,ib2,Rorder(iwig)) = dcmplx(J(iorb,jorb),0d0)
+               if(PhysicalUelements%Full_Jph(ib1,ib2)) U_R(ib1,ib2,Rorder(iwig)) = dcmplx(J(iorb,jorb),0d0)
+               !
+            enddo
+         enddo
+         !
+         cycle
+      endif
+      !
+      !increasing range
+      if(iwig.gt.2)then
+         if((Rsorted(Rorder(iwig))-Rsorted(Rorder(iwig-1))).gt.1e-5) idist=idist+1
+         if((idist.gt.Vrange).and.(reg(long_range).ne."Ewald")) exit loopwig
+      endif
+      !
+      !setting the R dependence
+      if(reg(long_range).eq."Explicit")then
+         V = Vnn(:,idist)
+      elseif(reg(long_range).eq."Coulomb")then
+         V = Vnn(:,1)/Rsorted(Rorder(iwig))
+      elseif(reg(long_range).eq."Ewald")then
+         den = 2d0*sqrt(eta)
+         if(any(Lttc%Nkpt3.eq.1)) den = 2d0*eta
+         V = (Vnn(:,1)/Rsorted(Rorder(iwig)))*erfc(Rsorted(Rorder(iwig))/den) + EwaldShift(Rorder(iwig))
+      else
+         stop "build_Uret_singlParam_Vn: the long_range varibale is not set."
+      endif
+      !
+      !setting matrix element
+      do ib1=1,Nbp
+         iorb = PhysicalUelements%Full_Map(ib1,ib1,1)
+         if(PhysicalUelements%Full_Uaa(ib1,ib1)) U_R(ib1,ib1,Rorder(iwig)) = dcmplx(V(iorb),0d0)
+      enddo
+      !
+   enddo loopwig
+   deallocate(V)
+   if(allocated(EwaldShift))deallocate(EwaldShift)
+   !
+   if(verbose)then
+      write(*,*)"     Real-space interaction elements:"
+      write(*,"(A6,3A12)") "    i","    Ri","    H(Ri)","  [n1,n2,n3]"
+      do iwig=1,Nwig
+         write(*,"(1I6,2F12.4,3I4)")Rorder(iwig),Rsorted(Rorder(iwig)),real(U_R(1,1,Rorder(iwig))),Nvecwig(:,Rorder(iwig))
+      enddo
+   endif
+   !
+   !FT to K-space
+   allocate(U_K(Nbp,Nbp,Lttc%Nkpt));U_K=czero
+   if(Lttc%Nkpt.gt.1)then
+      call wannier_R2K(Lttc%Nkpt3,Lttc%kpt,U_R,U_K)
+   else
+      U_K(:,:,1) = U_R(:,:,wig0)
+   endif
+   deallocate(U_R,Rorder,Rsorted)
+   !
+   call cpu_time(finish)
+   write(*,"(A,F)") "     Unn(R) --> Unn(K) cpu timing:", finish-start
+   !
+   if(reg(structure).ne."None")then
+      call interpolateHk2Path(Lttc,reg(structure),Nkpt_path,pathOUTPUT=reg(pathINPUT),filename="Uk",data_in=U_K)
+   endif
+   !
+   !fill in the output
+   do ib1=1,Nbp
+      do ib2=1,Nbp
+         !
+         iorb = PhysicalUelements%Full_Map(ib1,ib2,1)
+         jorb = PhysicalUelements%Full_Map(ib1,ib2,2)
+         !
+         if(PhysicalUelements%Full_Uaa(ib1,ib2)) Umats_ptr%screened_local(ib1,ib2,1) = dcmplx(Uaa(iorb),0d0)
+         if(PhysicalUelements%Full_Uab(ib1,ib2)) Umats_ptr%screened_local(ib1,ib2,1) = dcmplx(Uab(iorb,jorb),0d0)
+         if(PhysicalUelements%Full_Jsf(ib1,ib2)) Umats_ptr%screened_local(ib1,ib2,1) = dcmplx(J(iorb,jorb),0d0)
+         if(PhysicalUelements%Full_Jph(ib1,ib2)) Umats_ptr%screened_local(ib1,ib2,1) = dcmplx(J(iorb,jorb),0d0)
+         !
+         if(allocated(Umats_ptr%bare_local))then
+            if(PhysicalUelements%Full_Uaa(ib1,ib2)) Umats_ptr%bare_local(ib1,ib2) = dcmplx(Uaa(iorb),0d0)
+            if(PhysicalUelements%Full_Uab(ib1,ib2)) Umats_ptr%bare_local(ib1,ib2) = dcmplx(Uab(iorb,jorb),0d0)
+            if(PhysicalUelements%Full_Jsf(ib1,ib2)) Umats_ptr%bare_local(ib1,ib2) = dcmplx(J(iorb,jorb),0d0)
+            if(PhysicalUelements%Full_Jph(ib1,ib2)) Umats_ptr%bare_local(ib1,ib2) = dcmplx(J(iorb,jorb),0d0)
+         endif
+         !
+      enddo
+   enddo
+   !
+   if(.not.LocalOnly_)then
+      !
+      Umats_ptr%screened(:,:,1,:) = U_K
+      !
+      if(allocated(Umats_ptr%bare))then
+         Umats_ptr%bare = U_K
+      endif
+      !
+   endif
+   deallocate(U_K)
+   !
+   if(RealSpace)then
+      Nsite = Lttc%Nsite
+      if(Hetero%status) Nsite = Hetero%Explicit(2)-Hetero%Explicit(1)+1
+      call Expand2Nsite(Umats,Umats_ptr,Nsite)
+      call DeallocateBosonicField(Umats_imp)
+   endif
+   nullify(Umats_ptr)
+   !
+   call dump_BosonicField(Umats,reg(pathINPUTtr),"Uloc_mats_nosum.DAT")
+   call BosonicKsum(Umats)
+   call dump_BosonicField(Umats,reg(pathINPUTtr),"Uloc_mats.DAT")
+   !
+end subroutine build_Uret_multiParam_Vn
