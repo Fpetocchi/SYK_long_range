@@ -157,7 +157,7 @@ module input_vars
    real(8),allocatable,public               :: g_eph(:)
    real(8),allocatable,public               :: wo_eph(:)
    integer,public                           :: N_Vnn
-   real(8),allocatable,public               :: Vnn(:,:)
+   real(8),allocatable,public               :: Vnn(:,:,:)
    character(len=256),public                :: long_range
    logical,public                           :: Kdiag
    !
@@ -271,14 +271,16 @@ contains
    !---------------------------------------------------------------------------!
    subroutine read_InputFile(InputFile)
       use omp_lib
+      use linalg, only : diag
       use utils_misc
       use parameters
       implicit none
       character(len=*)                      :: InputFile
-      integer                               :: iorb,isite,ilayer,iset,iph
+      integer                               :: isite,ilayer,iset,iph,irange
       integer                               :: isym_user
       integer,allocatable                   :: tmpOrbs(:)
-      real(8),allocatable                   :: tmpCF(:)
+      real(8),allocatable                   :: tmpCF(:),V_read(:)
+      logical                               :: readVnn
       !
       !OMP parallelization.
       !call execute_command_line(" lscpu | grep 'CPU(s):       ' | awk '{print $2}' > Nthread.used ")
@@ -504,19 +506,38 @@ contains
          if(N_Vnn.gt.0)then
             !long-range coulombian
             call parse_input_variable(long_range,"LONG_RANGE",InputFile,default="Explicit",comment="Avalibale long range interaction: Explicit(reads VNN for each N_V), Coulomb(reads first VNN, max neighbor N_V), Ewald(reads first VNN, unrestricted range).")
-            allocate(Vnn(Norb_model,N_Vnn));Vnn=0d0
-            if(reg(long_range).eq."Explicit")then
-               do iorb=1,Norb_model
-                  call parse_input_variable(Vnn(iorb,:),"VNN_"//str(iorb),InputFile,comment="Magnitude of the long-range interactions for orbital number "//str(iorb))
-               enddo
+            allocate(Vnn(Norb_model,Norb_model,N_Vnn));Vnn=0d0
+            call parse_input_variable(readVnn,"READ_LONG_RANGE",InputFile,default=.false.,comment="Flag to read the long-range interaction matrix [NORB,NORB] from file PATH_INPUT/Vnn.DAT. If False the diagonal entries are provided by the user.")
+            if(readVnn)then
+               call read_Vnn()
             else
-               do iorb=1,Norb_model
-                  call parse_input_variable(Vnn(iorb,1),"VNN_"//str(iorb),InputFile,comment="Magnitude of the long-range interactions for orbital number "//str(iorb))
-               enddo
+               allocate(V_read(Norb_model))
+               if(reg(long_range).eq."Explicit")then
+                  do irange=1,N_Vnn
+                     V_read=0d0
+                     call parse_input_variable(V_read,"VNN_"//str(irange),InputFile,comment="Magnitude of the long-range interactions for each orbital at range "//str(irange))
+                     Vnn(:,:,irange) = diag(V_read)
+                  enddo
+               else
+                  V_read=0d0
+                  call parse_input_variable(V_read,"VNN_1",InputFile,comment="Magnitude of the long-range interactions for each orbital between nearest neighbor  sites.")
+                  Vnn(:,:,1) = diag(V_read)
+               endif
+               if(Hetero%status)then
+                  allocate(Hetero%Vz(Norb_model,Norb_model,Hetero%tzIndex(1):Hetero%tzIndex(2)));Hetero%Vz=0d0
+                  do ilayer=Hetero%tzIndex(1),Hetero%tzIndex(2)
+                     V_read=0d0
+                     call parse_input_variable(V_read,"VZ_"//str(ilayer),InputFile,comment="Magnitude of the longitudinal interaction for each orbital between layer #"//str(ilayer)//" and layer #"//str(ilayer+1))
+                     Hetero%Vz(:,:,ilayer) = diag(V_read)
+                  enddo
+               endif
+               deallocate(V_read)
             endif
+         else
+            long_range="None"
          endif
          if((Nphonons.gt.0).and.(N_Vnn.gt.0)) stop "read_InputFile: Model interaction with both phonons and non-local couplings not implemented."
-         if((Nphonons.eq.0).and.(N_Vnn.eq.0)) stop "read_InputFile: Model interaction requested buth neither phonons nor long-range couplings provided."
+         !if((Nphonons.eq.0).and.(N_Vnn.eq.0)) stop "read_InputFile: Model interaction requested buth neither phonons nor long-range couplings provided."
       endif
       !
       !Double counting types, divergencies, scaling coefficients
@@ -708,19 +729,43 @@ contains
 
 
    !---------------------------------------------------------------------------!
+   !PURPOSE: Read the non-local interaction matrix from file
+   !---------------------------------------------------------------------------!
+   subroutine read_Vnn()
+      use utils_misc
+      implicit none
+      integer                               :: unit,idum,idist,iorb
+      unit=free_unit()
+      open(unit,file=pathINPUT//"Vnn.DAT",form="formatted",status="old",position="rewind",action="read")
+      read(unit,*)
+      read(unit,*)idum !Number of orbitals
+      if(idum.ne.Norb_model) stop "read_InputFile/read_Vnn: unexpected orbital dimension from file pathINPUT/Vnn.DAT"
+      do idist=1,N_Vnn
+         read(unit,*)
+         read(unit,*)idum  !distance index
+         if(idum.ne.idist) stop "read_InputFile/read_Vnn: unexpected distance index from file pathINPUT/Vnn.DAT"
+         do iorb=1,Norb_model
+            read(unit,*) Vnn(iorb,1:Norb_model,idist)
+         enddo
+      enddo
+      close(unit)
+   end subroutine read_Vnn
+
+
+   !---------------------------------------------------------------------------!
    !PURPOSE: Somethig that could save my ass
    !---------------------------------------------------------------------------!
    subroutine code_version()
       implicit none
       include "revision_SelfCons.inc"
-      integer(4),dimension(8)                  :: dummy
-      integer(4)                               :: year
-      integer(4)                               :: mese
-      integer(4)                               :: day
-      integer(4)                               :: h
-      integer(4)                               :: m
-      integer(4)                               :: s
-      integer(4)                               :: ms
+      integer(4),dimension(8)               :: dummy
+      integer(4)                            :: year
+      integer(4)                            :: mese
+      integer(4)                            :: day
+      integer(4)                            :: h
+      integer(4)                            :: m
+      integer(4)                            :: s
+      integer(4)                            :: ms
       character(len=9),parameter,dimension(12) :: month = (/   &
            'January  ', 'February ', 'March    ', 'April    ', &
            'May      ', 'June     ', 'July     ', 'August   ', &
@@ -752,9 +797,9 @@ contains
    !---------------------------------------------------------------------------!
    subroutine add_separator(descriptor)
       implicit none
-      character(len=*)                :: descriptor
-      integer                         :: sizeOld,sizeNew
-      type(input_comment),allocatable :: prv(:)
+      character(len=*)                      :: descriptor
+      integer                               :: sizeOld,sizeNew
+      type(input_comment),allocatable       :: prv(:)
       !
       if(allocated(comments))then
          !
@@ -802,10 +847,10 @@ contains
    !---------------------------------------------------------------------------!
    subroutine print_InputFile(file,list)
       implicit none
-      character(len=*),optional              :: file
-      type(input_list),optional              :: list
-      integer                                :: counter,counterCom,size
-      type(input_node),pointer               :: c
+      character(len=*),optional             :: file
+      type(input_list),optional             :: list
+      integer                               :: counter,counterCom,size
+      type(input_node),pointer              :: c
       if(present(list))then
          c => list%root%next
       else
@@ -856,8 +901,8 @@ contains
    !---------------------------------------------------------------------------!
    subroutine delete_Input(list)
       implicit none
-      type(input_list),optional              :: list
-      type(input_node),pointer               :: p,c
+      type(input_list),optional             :: list
+      type(input_node),pointer              :: p,c
       integer :: i
       if(present(list))then
          do
@@ -1037,17 +1082,17 @@ contains
    subroutine iv_parse_input(variable,name,file,default,comment)
      use utils_misc
      implicit none
-     integer,dimension(:)                        :: variable
-     integer,dimension(size(variable)),optional  :: default
-     character(len=*)                            :: name
-     character(len=*),optional                   :: comment
-     character(len=*)                            :: file
-     character(len=len(name))                    :: name_
-     type(input_variable)                        :: var
-     integer                                     :: unit,pos,j,ndim,nargs,pos0,iarg
-     integer                                     :: status
-     logical                                     :: bool
-     character(len=255)                          :: buffer
+     integer,dimension(:)                   :: variable
+     integer,dimension(size(variable)),optional :: default
+     character(len=*)                       :: name
+     character(len=*),optional              :: comment
+     character(len=*)                       :: file
+     character(len=len(name))               :: name_
+     type(input_variable)                   :: var
+     integer                                :: unit,pos,j,ndim,nargs,pos0,iarg
+     integer                                :: status
+     logical                                :: bool
+     character(len=255)                     :: buffer
      If(present(default))variable=default
      ndim=size(variable)
      name_=name;call upper_case(name_)
@@ -1094,17 +1139,17 @@ contains
    subroutine dv_parse_input(variable,name,file,default,comment)
      use utils_misc
      implicit none
-     real(8),dimension(:)                        :: variable
-     real(8),dimension(size(variable)),optional  :: default
-     character(len=*)                            :: name
-     character(len=*),optional                   :: comment
-     character(len=*)                            :: file
-     character(len=len(name))                    :: name_
-     type(input_variable)                        :: var
-     integer                                     :: unit,pos,j,ndim,nargs,pos0,iarg
-     integer                                     :: status
-     logical                                     :: bool
-     character(len=255)                          :: buffer
+     real(8),dimension(:)                   :: variable
+     real(8),dimension(size(variable)),optional :: default
+     character(len=*)                       :: name
+     character(len=*),optional              :: comment
+     character(len=*)                       :: file
+     character(len=len(name))               :: name_
+     type(input_variable)                   :: var
+     integer                                :: unit,pos,j,ndim,nargs,pos0,iarg
+     integer                                :: status
+     logical                                :: bool
+     character(len=255)                     :: buffer
      If(present(default))variable=default
      ndim=size(variable)
      name_=name;call upper_case(name_)
@@ -1151,17 +1196,17 @@ contains
    subroutine lv_parse_input(variable,name,file,default,comment)
      use utils_misc
      implicit none
-     logical,dimension(:)                        :: variable
-     logical,dimension(size(variable)),optional  :: default
-     character(len=*)                            :: name
-     character(len=*),optional                   :: comment
-     character(len=*)                            :: file
-     character(len=len(name))                    :: name_
-     type(input_variable)                        :: var
-     integer                                     :: unit,pos,j,ndim,nargs,pos0,iarg
-     integer                                     :: status
-     logical                                     :: bool
-     character(len=255)                          :: buffer
+     logical,dimension(:)                   :: variable
+     logical,dimension(size(variable)),optional :: default
+     character(len=*)                       :: name
+     character(len=*),optional              :: comment
+     character(len=*)                       :: file
+     character(len=len(name))               :: name_
+     type(input_variable)                   :: var
+     integer                                :: unit,pos,j,ndim,nargs,pos0,iarg
+     integer                                :: status
+     logical                                :: bool
+     character(len=255)                     :: buffer
      If(present(default))variable=default
      ndim=size(variable)
      name_=name;call upper_case(name_)
@@ -1316,12 +1361,12 @@ contains
    !VECTOR
    subroutine iv_parse_cmd_variable(variable,name,default)
      implicit none
-     integer,dimension(:)                        :: variable
-     integer,dimension(size(variable)),optional  :: default
-     character(len=*)                            :: name
-     character(len=len(name))                    :: name_
-     type(input_variable)                        :: var
-     integer                                     :: i,j,ndim,nargs,pos0,iarg
+     integer,dimension(:)                   :: variable
+     integer,dimension(size(variable)),optional :: default
+     character(len=*)                       :: name
+     character(len=len(name))               :: name_
+     type(input_variable)                   :: var
+     integer                                :: i,j,ndim,nargs,pos0,iarg
      If(present(default))variable=default
      ndim=size(variable)
      name_=name;call upper_case(name_)
@@ -1350,12 +1395,12 @@ contains
    !
    subroutine dv_parse_cmd_variable(variable,name,default)
      implicit none
-     real(8),dimension(:)                        :: variable
-     real(8),dimension(size(variable)),optional  :: default
-     character(len=*)                            :: name
-     character(len=len(name))                    :: name_
-     type(input_variable)                        :: var
-     integer                                     :: i,j,ndim,nargs,pos0,iarg
+     real(8),dimension(:)                   :: variable
+     real(8),dimension(size(variable)),optional :: default
+     character(len=*)                       :: name
+     character(len=len(name))               :: name_
+     type(input_variable)                   :: var
+     integer                                :: i,j,ndim,nargs,pos0,iarg
      If(present(default))variable=default
      ndim=size(variable)
      name_=name;call upper_case(name_)
@@ -1384,12 +1429,12 @@ contains
    !
    subroutine lv_parse_cmd_variable(variable,name,default)
      implicit none
-     logical,dimension(:)                        :: variable
-     logical,dimension(size(variable)),optional  :: default
-     character(len=*)                            :: name
-     character(len=len(name))                    :: name_
-     type(input_variable)                        :: var
-     integer                                     :: i,j,ndim,nargs,pos0,iarg
+     logical,dimension(:)                   :: variable
+     logical,dimension(size(variable)),optional :: default
+     character(len=*)                       :: name
+     character(len=len(name))               :: name_
+     type(input_variable)                   :: var
+     integer                                :: i,j,ndim,nargs,pos0,iarg
      If(present(default))variable=default
      ndim=size(variable)
      name_=name;call upper_case(name_)

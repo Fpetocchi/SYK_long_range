@@ -1024,15 +1024,15 @@ contains
                call read_U_spex(Ulat,save2readable=verbose,kpt=Crystal%kpt,doAC=U_AC,pathOUTPUT=reg(pathINPUTtr))
                call dump_MaxEnt(Ulat,"mats",reg(ItFolder)//"Convergence/","Ulat",EqvGWndx%SetOrbs)
             elseif(Umodel)then
-               if(Nphonons.eq.0)then
-                  write(*,"(A)")"     Warning: the model interaction built with long-range couplings is frequency-independent."
-                  call AllocateBosonicField(Ulat,Crystal%Norb,1,Crystal%iq_gamma,Nkpt=Crystal%Nkpt,Nsite=Nsite,Beta=Beta)
-                  call build_Uret(Ulat,Uaa,Uab,J,Vnn,Crystal)
-               elseif(N_Vnn.eq.0)then
+               if(Nphonons.gt.0)then
                   write(*,"(A)")"     Warning: the model interaction built with phononic modes is K-independent."
                   call AllocateBosonicField(Ulat,Crystal%Norb,Nmats,Crystal%iq_gamma,Nkpt=Crystal%Nkpt,Nsite=Nsite,Beta=Beta)
-                  call build_Uret(Ulat,Uaa,Uab,J,g_eph,wo_eph,LocalOnly=.false.)
+                  call build_Uret(Ulat,Uaa,Uab,J,g_eph,wo_eph,Hetero,LocalOnly=.false.)
                   call dump_MaxEnt(Ulat,"mats",reg(ItFolder)//"Convergence/","Ulat",EqvGWndx%SetOrbs)
+               else
+                  write(*,"(A)")"     Warning: the model interaction built with long-range couplings is frequency-independent."
+                  call AllocateBosonicField(Ulat,Crystal%Norb,1,Crystal%iq_gamma,Nkpt=Crystal%Nkpt,Nsite=Nsite,Beta=Beta)
+                  call build_Uret(Ulat,Uaa,Uab,J,Vnn,Crystal,Hetero)
                endif
             endif
             !
@@ -1100,20 +1100,20 @@ contains
                call read_U_spex(Ulat,save2readable=verbose,doAC=U_AC,pathOUTPUT=reg(pathINPUTtr))
                call dump_MaxEnt(Ulat,"mats",reg(ItFolder)//"Convergence/","Ulat",EqvGWndx%SetOrbs)
             elseif(Umodel)then
-               if(Nphonons.eq.0)then
-                  write(*,"(A)")"     Warning: the model interaction built with long-range couplings is frequency-independent."
-                  call AllocateBosonicField(Ulat,Crystal%Norb,1,Crystal%iq_gamma,Nsite=Nsite,Beta=Beta)
-                  call build_Uret(Ulat,Uaa,Uab,J,Vnn,Crystal,LocalOnly=.true.)
-               elseif(N_Vnn.eq.0)then
+               if(Nphonons.gt.0)then
                   write(*,"(A)")"     Warning: the model interaction built with phononic modes is K-independent."
                   call AllocateBosonicField(Ulat,Crystal%Norb,Nmats,Crystal%iq_gamma,Nsite=Nsite,Beta=Beta)
                   call inquireFile(reg(pathINPUTtr)//"Uloc_mats.DAT",filexists,hardstop=.false.,verb=verbose)
                   if(filexists)then
                      call read_BosonicField(Ulat,reg(pathINPUTtr),"Uloc_mats.DAT")
                   else
-                     call build_Uret(Ulat,Uaa,Uab,J,g_eph,wo_eph)
+                     call build_Uret(Ulat,Uaa,Uab,J,g_eph,wo_eph,Hetero)
                   endif
                   call dump_MaxEnt(Ulat,"mats",reg(ItFolder)//"Convergence/","Ulat",EqvGWndx%SetOrbs)
+               else
+                  write(*,"(A)")"     Warning: the model interaction built with long-range couplings is frequency-independent."
+                  call AllocateBosonicField(Ulat,Crystal%Norb,1,Crystal%iq_gamma,Nsite=Nsite,Beta=Beta)
+                  call build_Uret(Ulat,Uaa,Uab,J,Vnn,Crystal,Hetero,LocalOnly=.true.)
                endif
             endif
             !
@@ -1141,15 +1141,15 @@ contains
                call read_U_spex(Ulat,save2readable=verbose,kpt=Crystal%kpt,doAC=U_AC,pathOUTPUT=reg(pathINPUTtr))
                call dump_MaxEnt(Ulat,"mats",reg(ItFolder)//"Convergence/","Ulat",EqvGWndx%SetOrbs)
             elseif(Umodel)then
-               if(Nphonons.eq.0)then
-                  write(*,"(A)")"     Warning: the model interaction built with long-range couplings is frequency-independent."
-                  call AllocateBosonicField(Ulat,Crystal%Norb,1,Crystal%iq_gamma,Nkpt=Crystal%Nkpt,Nsite=Nsite,Beta=Beta)
-                  call build_Uret(Ulat,Uaa,Uab,J,Vnn,Crystal)
-               elseif(N_Vnn.eq.0)then
+               if(Nphonons.gt.0)then
                   write(*,"(A)")"     Warning: the model interaction built with phononic modes is K-independent."
                   call AllocateBosonicField(Ulat,Crystal%Norb,Nmats,Crystal%iq_gamma,Nkpt=Crystal%Nkpt,Nsite=Nsite,Beta=Beta)
-                  call build_Uret(Ulat,Uaa,Uab,J,g_eph,wo_eph,LocalOnly=.false.)
+                  call build_Uret(Ulat,Uaa,Uab,J,g_eph,wo_eph,Hetero,LocalOnly=.false.)
                   call dump_MaxEnt(Ulat,"mats",reg(ItFolder)//"Convergence/","Ulat",EqvGWndx%SetOrbs)
+               else
+                  write(*,"(A)")"     Warning: the model interaction built with long-range couplings is frequency-independent."
+                  call AllocateBosonicField(Ulat,Crystal%Norb,1,Crystal%iq_gamma,Nkpt=Crystal%Nkpt,Nsite=Nsite,Beta=Beta)
+                  call build_Uret(Ulat,Uaa,Uab,J,Vnn,Crystal,Hetero)
                endif
             endif
             !
@@ -1202,15 +1202,15 @@ contains
                call read_U_spex(Ulat,save2readable=verbose,kpt=Crystal%kpt,doAC=U_AC,pathOUTPUT=reg(pathINPUTtr))
                call dump_MaxEnt(Ulat,"mats",reg(ItFolder)//"Convergence/","Ulat",EqvGWndx%SetOrbs)
             elseif(Umodel)then
-               if(Nphonons.eq.0)then
-                  write(*,"(A)")"     Warning: the model interaction built with long-range couplings is frequency-independent."
-                  call AllocateBosonicField(Ulat,Crystal%Norb,1,Crystal%iq_gamma,Nkpt=Crystal%Nkpt,Nsite=Nsite,Beta=Beta)
-                  call build_Uret(Ulat,Uaa,Uab,J,Vnn,Crystal)
-               elseif(N_Vnn.eq.0)then
+               if(Nphonons.gt.0)then
                   write(*,"(A)")"     Warning: the model interaction built with phononic modes is K-independent."
                   call AllocateBosonicField(Ulat,Crystal%Norb,Nmats,Crystal%iq_gamma,Nkpt=Crystal%Nkpt,Nsite=Nsite,Beta=Beta)
-                  call build_Uret(Ulat,Uaa,Uab,J,g_eph,wo_eph,LocalOnly=.false.)
+                  call build_Uret(Ulat,Uaa,Uab,J,g_eph,wo_eph,Hetero,LocalOnly=.false.)
                   call dump_MaxEnt(Ulat,"mats",reg(ItFolder)//"Convergence/","Ulat",EqvGWndx%SetOrbs)
+               else
+                  write(*,"(A)")"     Warning: the model interaction built with long-range couplings is frequency-independent."
+                  call AllocateBosonicField(Ulat,Crystal%Norb,1,Crystal%iq_gamma,Nkpt=Crystal%Nkpt,Nsite=Nsite,Beta=Beta)
+                  call build_Uret(Ulat,Uaa,Uab,J,Vnn,Crystal,Hetero)
                endif
             endif
             !
