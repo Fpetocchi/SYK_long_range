@@ -205,12 +205,16 @@ contains
       Blat(:,3) = cross_product(Rlat(:,1),Rlat(:,2))/vol
       !
       if(allocated(Ruc))deallocate(Ruc)
-      allocate(Ruc(3,size(Ruc_input,dim=2)))
+      allocate(Ruc(3,size(Ruc_input,dim=2)));Ruc=0d0
       Ruc = Ruc_input
       !
       write(*,"(A)")new_line("A")//"     Unit cell vectors: "
       do ir=1,3
          write(*,"(A)")"     R_"//str(ir)//": [ "//str(Rlat(1,ir),3)//" , "//str(Rlat(2,ir),3)//" , "//str(Rlat(3,ir),3)//" ]"
+      enddo
+      write(*,"(A)")new_line("A")//"     Positions inside the unit cell: "
+      do ir=1,size(Ruc,dim=2)
+         write(*,"(A)")"     r_"//str(ir)//": [ "//str(Ruc(1,ir),3)//" , "//str(Ruc(2,ir),3)//" , "//str(Ruc(3,ir),3)//" ]"
       enddo
       write(*,"(A)")new_line("A")//"     Reciprocal lattice vectors: "
       do ir=1,3
@@ -227,8 +231,10 @@ contains
    !---------------------------------------------------------------------------!
    subroutine get_Ruc(Ruc_out)
       implicit none
-      real(8),intent(out)                   :: Ruc_out(:,:)
+      real(8),allocatable,intent(inout)     :: Ruc_out(:,:)
       if(Lat_stored)then
+         if(allocated(Ruc_out))deallocate(Ruc_out)
+         allocate(Ruc_out(size(Ruc,dim=1),size(Ruc,dim=2)));Ruc_out=0d0
          Ruc_out = Ruc
       else
          write(*,"(A)")"     Warning: requested unit cell vetors but lattice is not stored."
@@ -564,7 +570,7 @@ contains
       integer,allocatable                   :: Ndegen(:)
       real(8)                               :: ReHr,ImHr
       character(len=256)                    :: path
-      logical                               :: filexists
+      logical                               :: filexists,rebuild
       !multi-site
       integer                               :: isite,jsite
       integer                               :: ilayer,jlayer,islab
@@ -580,22 +586,32 @@ contains
       path=reg(pathOUTPUT)//"Hk_built.DAT"
       call inquireFile(reg(path),filexists,hardstop=.false.)
       !
+      Nkpt = product(Nkpt3)
+      Norb = size(hopping)
+      Nsite = size(Ruc,dim=2)
+      Nsite_bulk = Nsite
+      if(Hetero%status) Nsite_bulk = int(Nsite/Hetero%Nlayer)
+      !
       if(filexists)then
          !
-         write(*,"(A)")"     Reading Hk.DAT from "//reg(pathOUTPUT)
+         rebuild=.false.
+         write(*,"(A)")"     Reading Hk_built.DAT from "//reg(pathOUTPUT)
          call read_Hk(Hk,kpt,reg(pathOUTPUT),filename="Hk_built.DAT")
+         if(size(Hk,dim=3).ne.Nkpt)then
+            write(*,"(A)")"     Hk_built.DAT has the wrong number of K-points. Rebuiuding."
+            rebuild=.true.
+         elseif(size(Hk,dim=1).ne.(Nsite*Norb))then
+             write(*,"(A)")"     Hk_built.DAT has the wrong orbital dimension. Rebuiuding."
+             rebuild=.true.
+          endif
          !
-      else
+      endif
+      !
+      if((.not.filexists).or.rebuild)then
          !
          write(*,"(A)")"     Building Hk.DAT from input parameters."
          if(.not.Lat_stored) stop "build_Hk: Lattice vectors not stored."
          if(readHr.and.(.not.present(pathOUTPUT))) stop "build_Hk: reading of Hr.DAT requested but missing path."
-         !
-         Nkpt = product(Nkpt3)
-         Norb = size(hopping)
-         Nsite = size(Ruc,dim=2)
-         Nsite_bulk = Nsite
-         if(Hetero%status) Nsite_bulk = int(Nsite/Hetero%Nlayer)
          !
          if(allocated(Hk))deallocate(Hk)
          allocate(Hk(Norb*Nsite,Norb*Nsite,Nkpt));Hk=czero
@@ -666,7 +682,6 @@ contains
                      iR = iR +1
                      !
                      Rsorted(iR,1) = Rdist
-                     if(Rdist.le.eps)Rsorted(iR,1)=1d6                          !skip the local energy
                      Rsorted(iR,2) = iwig
                      Rsorted(iR,3) = jsite
                      Rsorted(iR,4) = isite
@@ -687,12 +702,12 @@ contains
             deallocate(Rsorted_bkp,Rorder)
             !
             !Regroup according to distance. The list contains the indexes of all the positions with a given distance
-            call get_pattern(Dist,Rsorted(:,1),eps,listDim=DistList)
+            call get_pattern(Dist,Rsorted(:,1),eps,listDim=DistList,IncludeSingle=.true.)
             !
             !User-provided hopping is only nearest neighbor and its the same for all the sites
             allocate(Hr_bulk(Norb*Nsite_bulk,Norb*Nsite_bulk,Nwig));Hr_bulk=czero
             !all the possible ranges
-            do iD=1,Trange
+            do iD=1,Trange+1
                !all the indexes within that range
                do iR=1,DistList(iD)
                   !
@@ -701,15 +716,24 @@ contains
                   jsite = Rsorted(Dist(iD,iR),3)
                   isite = Rsorted(Dist(iD,iR),4)
                   !
-                  do iorb=1,Norb
+                  if(iD.eq.1)then
                      !
-                     !site-orbital indexes of Hr
-                     io = iorb + Norb*(isite-1)
-                     jo = iorb + Norb*(jsite-1)
+                     if(Rsorted(Dist(iD,iR),2).ne.wig0) stop "build_Hk: wrong R=0 local index in position list."
+                     if(Rsorted(Dist(iD,iR),1).ne.0d0) stop "build_Hk: wrong R=0 distance in position list."
                      !
-                     Hr_bulk(io,jo,iwig) = dcmplx(hopping(iorb),0d0)
+                  else
                      !
-                  enddo
+                     do iorb=1,Norb
+                        !
+                        !site-orbital indexes of Hr
+                        io = iorb + Norb*(isite-1)
+                        jo = iorb + Norb*(jsite-1)
+                        !
+                        Hr_bulk(io,jo,iwig) = dcmplx(hopping(iorb),0d0)
+                        !
+                     enddo
+                     !
+                  endif
                   !
                enddo
             enddo
@@ -800,7 +824,6 @@ contains
                            iR = iR +1
                            !
                            Rsorted(iR,1) = Rdist
-                           if(ilayer.eq.jlayer)Rsorted(iR,1)=1d6                !skip the intra-layer hopping
                            Rsorted(iR,2) = iwig
                            Rsorted(iR,3) = jsite
                            Rsorted(iR,4) = jlayer
@@ -821,7 +844,7 @@ contains
                   call get_pattern(Dist,Rsorted(:,1),eps,listDim=DistList,IncludeSingle=.true.)
                   !
                   !add the inter-layer hopping up to the first Trange neighbors
-                  do iD=1,Trange
+                  do iD=1,Trange+1
                      !all the indexes within that range
                      do iR=1,DistList(iD)
                         !
@@ -837,7 +860,7 @@ contains
                            jo = iorb + Norb*(jsite-1) + Norb*Nsite_bulk*(jlayer-1)
                            !
                            islab = min(ilayer,jlayer) + Hetero%Explicit(1) - 1
-                           if(ilayer.ne.jlayer) Hr(io,jo,iwig) = dcmplx(Hetero%tz(iorb,islab),0d0)
+                           if(abs(ilayer-jlayer).eq.1) Hr(io,jo,iwig) = dcmplx(Hetero%tz(iorb,islab),0d0)
                            !
                         enddo
                         !
@@ -1674,7 +1697,7 @@ contains
       !
       if (abs(sum(1d0/nrdegwig_tmp(1:iwig))-nkpt).gt.epsWig) then
          write(*,"(A,F)") "Error: sum(1/nrdeg(:))=",sum(1d0/nrdegwig_tmp(1:iwig))
-         stop "calc_wignerseiz: nrdeg failed."
+         stop "calc_wignerseiz: nrdeg failed one of the lattice vectors might be wrong."
       endif
       !
       if(allocated(radiuswig))deallocate(radiuswig)
@@ -3287,7 +3310,7 @@ contains
          unit = free_unit()
          open(unit,file=reg(path),form="formatted",status="unknown",position="rewind",action="write")
          do ik=1,Lttc%Nkpt_path
-            write(unit,"(1I5,200E20.12)") ik,Lttc%Kpathaxis(ik)/Lttc%Kpathaxis(Lttc%Nkpt_path),(dataEk(:,ik),iorb=1,Norb)
+            write(unit,"(1I5,10000E20.12)") ik,Lttc%Kpathaxis(ik)/Lttc%Kpathaxis(Lttc%Nkpt_path),(dataEk(:,ik),iorb=1,Norb)
          enddo
          close(unit)
       endif

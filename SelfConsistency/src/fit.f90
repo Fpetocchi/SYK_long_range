@@ -671,7 +671,7 @@ contains
       !
       character(len=255)                    :: path
       integer                               :: unit
-      integer                               :: imoment,iorb,Norb
+      integer                               :: imoment,iorb,Norb,ispin
       logical                               :: filexists
       !
       !
@@ -687,7 +687,7 @@ contains
       open(unit,file=reg(path),form="formatted",status="unknown",action="write",position="rewind")
       write(unit,"(1I5,A)") Nfit," Number of coefficients."
       do imoment=0,MaxMom
-         write(unit,"(999E20.12)") (Moments(iorb,1,imoment),iorb=1,Norb),(Moments(iorb,2,imoment),iorb=1,Norb)
+         write(unit,"(999E20.12)") ((Moments(iorb,ispin,imoment),iorb=1,Norb),ispin=1,Nspin)
       enddo
       close(unit)
       !

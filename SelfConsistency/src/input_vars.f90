@@ -150,14 +150,15 @@ module input_vars
    logical,public                           :: Ustart
    logical,public                           :: U_AC
    real(8),public                           :: Uthresh
-   real(8),public                           :: Uaa
-   real(8),public                           :: Uab
-   real(8),public                           :: J
+   real(8),public                           :: Uaa=0d0
+   real(8),public                           :: Uab=0d0
+   real(8),public                           :: J=0d0
    integer,public                           :: Nphonons
    real(8),allocatable,public               :: g_eph(:)
    real(8),allocatable,public               :: wo_eph(:)
    integer,public                           :: N_Vnn
-   real(8),allocatable,public               :: Vnn(:,:,:)
+   real(8),allocatable,public               :: Vnn(:,:,:),Vnn_diag(:,:)
+   real(8),allocatable,public               :: Vz_diag(:,:)
    character(len=256),public                :: long_range
    logical,public                           :: Kdiag
    !
@@ -279,7 +280,7 @@ contains
       integer                               :: isite,ilayer,iset,iph,irange
       integer                               :: isym_user
       integer,allocatable                   :: tmpOrbs(:)
-      real(8),allocatable                   :: tmpCF(:),V_read(:)
+      real(8),allocatable                   :: tmpCF(:)
       logical                               :: readVnn
       !
       !OMP parallelization.
@@ -511,27 +512,24 @@ contains
             if(readVnn)then
                call read_Vnn()
             else
-               allocate(V_read(Norb_model))
+               allocate(Vnn_diag(Norb_model,N_Vnn));Vnn_diag=0d0
                if(reg(long_range).eq."Explicit")then
                   do irange=1,N_Vnn
-                     V_read=0d0
-                     call parse_input_variable(V_read,"VNN_"//str(irange),InputFile,comment="Magnitude of the long-range interactions for each orbital at range "//str(irange))
-                     Vnn(:,:,irange) = diag(V_read)
+                     call parse_input_variable(Vnn_diag(1:Norb_model,irange),"VNN_"//str(irange),InputFile,comment="Magnitude of the long-range interactions for each orbital at range "//str(irange))
+                     Vnn(:,:,irange) = diag(Vnn_diag(1:Norb_model,irange))
                   enddo
                else
-                  V_read=0d0
-                  call parse_input_variable(V_read,"VNN_1",InputFile,comment="Magnitude of the long-range interactions for each orbital between nearest neighbor  sites.")
-                  Vnn(:,:,1) = diag(V_read)
+                  call parse_input_variable(Vnn_diag(1:Norb_model,1),"VNN_1",InputFile,comment="Magnitude of the long-range interactions for each orbital between nearest neighbor  sites.")
+                  Vnn(:,:,1) = diag(Vnn_diag(1:Norb_model,1))
                endif
                if(Hetero%status)then
+                  allocate(Vz_diag(Norb_model,Hetero%tzIndex(1):Hetero%tzIndex(2)));Vz_diag=0d0
                   allocate(Hetero%Vz(Norb_model,Norb_model,Hetero%tzIndex(1):Hetero%tzIndex(2)));Hetero%Vz=0d0
                   do ilayer=Hetero%tzIndex(1),Hetero%tzIndex(2)
-                     V_read=0d0
-                     call parse_input_variable(V_read,"VZ_"//str(ilayer),InputFile,comment="Magnitude of the longitudinal interaction for each orbital between layer #"//str(ilayer)//" and layer #"//str(ilayer+1))
-                     Hetero%Vz(:,:,ilayer) = diag(V_read)
+                     call parse_input_variable(Vz_diag(1:Norb_model,ilayer),"VZ_"//str(ilayer),InputFile,comment="Magnitude of the longitudinal interaction for each orbital between layer #"//str(ilayer)//" and layer #"//str(ilayer+1))
+                     Hetero%Vz(:,:,ilayer) = diag(Vz_diag(1:Norb_model,1))
                   enddo
                endif
-               deallocate(V_read)
             endif
          else
             long_range="None"
@@ -611,7 +609,7 @@ contains
          call parse_input_variable(Nsym_user,"NSYM_USER",InputFile,default=4,comment="Number of high-symmetry points provided by the user.")
          allocate(UserPath(3,Nsym_user));UserPath=0d0
          do isym_user=1,Nsym_user
-            call parse_input_variable(UserPath(:,isym_user),"KP_"//str(isym_user),InputFile,default=[0d0,0d0,0d0],comment="User=provided high symmetry K-point #"//str(isym_user))
+            call parse_input_variable(UserPath(:,isym_user),"KP_"//str(isym_user),InputFile,default=[0d0,0d0,0d0],comment="User provided high symmetry K-point #"//str(isym_user))
          enddo
       endif
       call parse_input_variable(path_funct,"PATH_FUNCT",InputFile,default="None",comment="Print interacting fields on high-symmetry points. Available fields: G=Green's function, S=self-energy, GS=both. None to avoid.")

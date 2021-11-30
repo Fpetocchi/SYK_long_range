@@ -630,9 +630,6 @@ contains
          if(reg(structure).ne."None")call interpolateHk2Path(Lttc,reg(structure),Nkpt_path,pathOUTPUT=reg(pathINPUT),doplane=.true.,hetero=Hetero)
          !
       endif
-      !TEST>>>
-      stop
-      !>>>TEST
       !
    end subroutine initialize_Lattice
 
@@ -3316,11 +3313,11 @@ contains
                      write(*,"("//str(Nspin)//"("//str(wsi)//"X,"//str(Norb_imp)//"F"//str(wn)//".4,"//str(ws)//"X))") ((densityQMC(iorb,jorb,ispin,isite),jorb=1,Norb_imp),ispin=1,Nspin)!,(densityQMC(iorb,jorb,2,isite),jorb=1,Norb_imp)
                   enddo
                   !
-                  if((.not.EqvGWndx%S).and.(Nspin.ne.1))then
-                     write(*,*)
-                     write(*,"(A"//str(wn*Norb)//","//str(ws)//"X)")banner(trim(header5),wn*Norb)
-                     write(*,"("//str(wsi)//"X,"//str(Norb_imp)//"F"//str(wn)//".4,"//str(ws)//"X)")((densityQMC(iorb,iorb,1,isite)-densityQMC(iorb,iorb,2,isite)),iorb=1,Norb_imp)
-                  endif
+                  !if((.not.EqvGWndx%S).and.(Nspin.ne.1))then
+                  !   write(*,*)
+                  !   write(*,"(A"//str(wn*Norb)//","//str(ws)//"X)")banner(trim(header5),wn*Norb)
+                  !   write(*,"("//str(wsi)//"X,"//str(Norb_imp)//"F"//str(wn)//".4,"//str(ws)//"X)")((densityQMC(iorb,iorb,1,isite)-densityQMC(iorb,iorb,2,isite)),iorb=1,Norb_imp)
+                  !endif
                   if(ExpandImpurity.or.AFMselfcons)exit
                   !
                enddo
