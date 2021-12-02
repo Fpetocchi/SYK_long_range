@@ -117,6 +117,11 @@ program SelfConsistency
             P_EDMFT%screened_local = dreal(Plat%screened_local)*alphaPi
          endif
          !
+         if(dump_Chik) then
+            call calc_chi(Chi,Ulat,Plat,Crystal,pathPk=reg(ItFolder))
+            call DeallocateBosonicField(Chi)
+         endif
+         !
       endif
       !
       !

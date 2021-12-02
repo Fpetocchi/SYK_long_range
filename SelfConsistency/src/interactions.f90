@@ -26,7 +26,7 @@ module interactions
       module procedure build_Uret_singlParam_ph              !      (GW Format) ![BosonicField,Uaa_bare,Uab_bare,J_bare,vector_g,vector_w0,LocalOnly(optional)]
       module procedure build_Uret_multiParam_ph              !      (GW Format) ![BosonicField,Vector,Matrix,Matrix,vector_g,vector_w0,LocalOnly(optional)]      !NOT USED: the input is not formatted for interactions with different matrix elements
       module procedure build_Uret_singlParam_Vn              !      (GW Format) ![BosonicField,Uaa_bare,Uab_bare,J_bare,vector_g,vector_w0,LocalOnly(optional)]
-   !   module procedure build_Uret_multiParam_Vn              !      (GW Format) ![BosonicField,Vector,Matrix,Matrix,vector_g,vector_w0,LocalOnly(optional)]      !NOT USED: the input is not formatted for interactions with different matrix elements
+      module procedure build_Uret_multiParam_Vn              !      (GW Format) ![BosonicField,Vector,Matrix,Matrix,vector_g,vector_w0,LocalOnly(optional)]      !NOT USED: the input is not formatted for interactions with different matrix elements
    end interface build_Uret
 
    !---------------------------------------------------------------------------!
@@ -44,8 +44,7 @@ module interactions
    !subroutines
    public :: calc_W_full
    public :: calc_W_edmft
-   public :: calc_chi_full
-   public :: calc_chi_edmft
+   public :: calc_chi
    public :: read_U_spex
    public :: build_Umat
    public :: build_Uret
@@ -369,61 +368,71 @@ contains
 
 
    !---------------------------------------------------------------------------!
-   !PURPOSE: Computes [ 1 - U*Pi ]^-1 * Pi - GW+EDMFT
+   !PURPOSE: Computes [ 1 - U*Pi ]^-1 * Pi
    !---------------------------------------------------------------------------!
-   subroutine calc_chi_full(Chi,Umats,Pmats,Lttc)
+   subroutine calc_chi(Chi,Umats,Pmats,Lttc,pathPk)
       !
       use parameters
       use utils_misc
       use utils_fields
+      use crystal
       use linalg, only : zeye, inv
-      use input_vars, only : Umodel
+      use input_vars, only : Umodel, structure, Nkpt_path
       implicit none
       !
       type(BosonicField),intent(inout)      :: Chi
       type(BosonicField),intent(in)         :: Umats
       type(BosonicField),intent(in)         :: Pmats
-      type(Lattice),intent(in)              :: Lttc
+      type(Lattice),intent(inout)           :: Lttc
+      character(len=*),intent(in),optional  :: pathPk
       !
       complex(8),allocatable                :: invW(:,:)
       real(8)                               :: Beta
       integer                               :: Nbp,Nkpt,Nmats
       integer                               :: iq,iw,iwU
+      integer                               :: unit,ib
+      real(8),allocatable                   :: wmats(:)
+      complex(8),allocatable                :: Pwk(:,:,:,:),Pk(:,:,:)
+      logical                               :: Ustatic
+
       !
       !
-      if(verbose)write(*,"(A)") "---- calc_chi_full"
+      if(verbose)write(*,"(A)") "---- calc_chi"
       !
       !
       ! Check on the input Fields
-      if(.not.Chi%status) stop "calc_chi_full: Chi not properly initialized."
-      if(.not.Umats%status) stop "calc_chi_full: Umats not properly initialized."
-      if(.not.Pmats%status) stop "calc_chi_full: Pmats not properly initialized."
-      if(Chi%Nkpt.eq.0) stop "calc_chi_full: Chi k dependent attributes not properly initialized."
-      if(Umats%Nkpt.eq.0) stop "calc_chi_full: Umats k dependent attributes not properly initialized."
-      if(Pmats%Nkpt.eq.0) stop "calc_chi_full: Pmats k dependent attributes not properly initialized."
-      if(Umats%iq_gamma.lt.0) stop "calc_chi_full: Umats iq_gamma not defined."
+      if(.not.Chi%status) stop "calc_chi: Chi not properly initialized."
+      if(.not.Umats%status) stop "calc_chi: Umats not properly initialized."
+      if(.not.Pmats%status) stop "calc_chi: Pmats not properly initialized."
+      if(Chi%Nkpt.eq.0) stop "calc_chi: Chi k dependent attributes not properly initialized."
+      if(Umats%Nkpt.eq.0) stop "calc_chi: Umats k dependent attributes not properly initialized."
+      if(Pmats%Nkpt.eq.0) stop "calc_chi: Pmats k dependent attributes not properly initialized."
+      if(Umats%iq_gamma.lt.0) stop "calc_chi: Umats iq_gamma not defined."
+      !
+      Ustatic=.false.
+      if(Umodel.and.(Umats%Npoints.eq.1))Ustatic=.true.
+      if(Ustatic)write(*,"(A)")"     Static U bare."
       !
       Nbp = Chi%Nbp
       Nkpt = Chi%Nkpt
       Beta = Chi%Beta
       Nmats = Chi%Npoints
       !
-      if(all([Umats%Nbp-Nbp,Pmats%Nbp-Nbp].ne.[0,0])) stop "calc_chi_full: Either Umats and/or Pmats have different orbital dimension with respect to Chi."
-      if(all([Umats%Nkpt-Nkpt,Pmats%Nkpt-Nkpt].ne.[0,0])) stop "calc_chi_full: Either Umats and/or Pmats have different number of k-points with respect to Chi."
-      if(all([Umats%Beta-Beta,Pmats%Beta-Beta].ne.[0d0,0d0])) stop "calc_chi_full: Either Umats and/or Pmats have different Beta with respect to Chi."
-      if(Pmats%Npoints.ne.Nmats) stop "calc_chi_full: Pmats has different number of Matsubara points with respect to Chi."
+      if(all([Umats%Nbp-Nbp,Pmats%Nbp-Nbp].ne.[0,0])) stop "calc_chi: Either Umats and/or Pmats have different orbital dimension with respect to Chi."
+      if(all([Umats%Nkpt-Nkpt,Pmats%Nkpt-Nkpt].ne.[0,0])) stop "calc_chi: Either Umats and/or Pmats have different number of k-points with respect to Chi."
+      if(all([Umats%Beta-Beta,Pmats%Beta-Beta].ne.[0d0,0d0])) stop "calc_chi: Either Umats and/or Pmats have different Beta with respect to Chi."
+      if(Pmats%Npoints.ne.Nmats) stop "calc_chi: Pmats has different number of Matsubara points with respect to Chi."
       !
       allocate(invW(Nbp,Nbp));invW=czero
       call clear_attributes(Chi)
-      Chi%bare = Umats%bare
       !$OMP PARALLEL DEFAULT(NONE),&
-      !$OMP SHARED(Pmats,Umats,Chi,Lttc,Umodel),&
+      !$OMP SHARED(Pmats,Umats,Chi,Lttc,Ustatic),&
       !$OMP PRIVATE(iw,iwU,iq,invW)
       !$OMP DO
       do iw=1,Chi%Npoints
          !
          iwU = iw
-         if(Umodel.and.(Umats%Npoints.eq.1))iwU = 1
+         if(Ustatic)iwU = 1
          !
          do iq=1,Chi%Nkpt
             !
@@ -447,86 +456,38 @@ contains
       !
       call BosonicKsum(Chi)
       !
-   end subroutine calc_chi_full
-
-
-   !---------------------------------------------------------------------------!
-   !PURPOSE: Computes [ 1 - U*Pi ]^-1 * Pi - EDMFT
-   !---------------------------------------------------------------------------!
-   subroutine calc_chi_edmft(Chi,Umats,Pmats,Lttc)
-      !
-      use parameters
-      use utils_misc
-      use utils_fields
-      use linalg, only : zeye, inv
-      use input_vars, only : Umodel
-      implicit none
-      !
-      type(BosonicField),intent(inout)      :: Chi
-      type(BosonicField),intent(in)         :: Umats
-      type(BosonicField),intent(in)         :: Pmats
-      type(Lattice),intent(in)              :: Lttc
-      !
-      complex(8),allocatable                :: invW(:,:)
-      real(8)                               :: Beta
-      integer                               :: Nbp,Nkpt,Nmats
-      integer                               :: iq,iw,iwU
-      !
-      !
-      if(verbose)write(*,"(A)") "---- calc_chi_edmft"
-      !
-      !
-      ! Check on the input Fields
-      if(.not.Chi%status) stop "calc_chi_edmft: Chi not properly initialized."
-      if(.not.Umats%status) stop "calc_chi_edmft: Umats not properly initialized."
-      if(.not.Pmats%status) stop "calc_chi_edmft: Pmats not properly initialized."
-      if(Chi%Nkpt.ne.0) stop "calc_chi_edmft: Chi k dependent attributes are supposed to be unallocated."
-      if(Umats%Nkpt.eq.0) stop "calc_chi_edmft: Umats k dependent attributes not properly initialized."
-      if(Pmats%Nkpt.ne.0) stop "calc_chi_edmft: Pmats k dependent attributes are supposed to be unallocated."
-      if(Umats%iq_gamma.lt.0) stop "calc_chi_edmft: Umats iq_gamma not defined."
-      !
-      Nbp = Chi%Nbp
-      Nkpt = Umats%Nkpt
-      Beta = Chi%Beta
-      Nmats = Chi%Npoints
-      !
-      if(all([Umats%Nbp-Nbp,Pmats%Nbp-Nbp].ne.[0,0])) stop "calc_chi_edmft: Either Umats and/or Pmats have different orbital dimension with respect to Chi."
-      if(all([Umats%Beta-Beta,Pmats%Beta-Beta].ne.[0d0,0d0])) stop "calc_chi_edmft: Either Umats and/or Pmats have different Beta with respect to Chi."
-      if(Pmats%Npoints.ne.Nmats) stop "calc_chi_edmft: Pmats has different number of Matsubara points with respect to Chi."
-      !
-      allocate(invW(Nbp,Nbp));invW=czero
-      call clear_attributes(Chi)
-      Chi%bare_local = Umats%bare_local
-      !$OMP PARALLEL DEFAULT(NONE),&
-      !$OMP SHARED(Pmats,Umats,Chi,Lttc,Umodel),&
-      !$OMP PRIVATE(iw,iwU,iq,invW)
-      !$OMP DO
-      do iw=1,Chi%Npoints
+      !print along path
+      if(present(pathPk).and.(reg(structure).ne."None"))then
          !
-         iwU = iw
-         if(Umodel.and.(Umats%Npoints.eq.1))iwU = 1
-         !
-         do iq=1,Umats%Nkpt
+         !interpolation at each bosonic frequency
+         do iw=1,Nmats
             !
-            !avoid the gamma point
-            if(iq.eq.Umats%iq_gamma)cycle
+            allocate(Pk(Nbp,Nbp,Nmats));Pk=czero
+            call interpolateHk2Path(Lttc,reg(structure),Nkpt_path,data_in=Chi%screened(:,:,iw,:),data_out=Pk,store=.false.)
             !
-            ! [ 1 - U*Pi ]
-            invW = zeye(Chi%Nbp) - matmul(Umats%screened(:,:,iwU,iq),Pmats%screened_local(:,:,iw))
-            !
-            ! [ 1 - U*Pi ]^-1
-            call inv(invW)
-            !
-            ! [ 1 - U*Pi ]^-1 * Pi
-            Chi%screened_local(:,:,iw) = Chi%screened_local(:,:,iw) + matmul(invW,Pmats%screened_local(:,:,iw))/Umats%Nkpt
+            if(iw.eq.1) allocate(Pwk(Nbp,Nbp,Nmats,size(Pk,dim=3)))
+            Pwk(:,:,iw,:) = Pk
+            deallocate(Pk)
             !
          enddo
-      enddo
-      !$OMP END DO
-      !$OMP END PARALLEL
-      deallocate(invW)
+         !
+         !Print susceptibility along path
+         call createDir(reg(pathPk),verb=verbose)
+         allocate(wmats(Chi%Npoints))
+         wmats = BosonicFreqMesh(Beta,Nmats)
+         do iq=1,size(Pk,dim=3)
+             unit = free_unit()
+             open(unit,file=reg(pathPk)//"Pk_w_k"//str(iq)//".DAT",form="formatted",status="unknown",position="rewind",action="write")
+             do iw=1,Nmats
+                 write(unit,"(200E20.12)") wmats(iw),(dreal(Pwk(ib,ib,iw,iq)),ib=1,Nbp)
+             enddo
+             close(unit)
+         enddo
+         deallocate(wmats,Pwk)
+         !
+      endif
       !
-   end subroutine calc_chi_edmft
+   end subroutine calc_chi
 
 
    !---------------------------------------------------------------------------!
@@ -1725,7 +1686,7 @@ contains
       !multi-site
       real(8),allocatable                   :: Ruc(:,:)
       integer                               :: isite,jsite
-      integer                               :: ilayer,jlayer,islab
+      integer                               :: ilayer,jlayer
       integer                               :: site_i,site_j
       real(8)                               :: Rvec(3),Rdist
       real(8),allocatable                   :: Rsorted(:,:),Rsorted_bkp(:,:)
@@ -1874,7 +1835,7 @@ contains
          deallocate(Rsorted_bkp,Rorder)
          !
          !Regroup according to distance. The list contains the indexes of all the positions with a given distance
-         call get_pattern(Dist,Rsorted(:,1),eps,listDim=DistList,IncludeSingle=.true.)
+         call get_pattern(Dist,Rsorted(:,1),1e4*eps,listDim=DistList,IncludeSingle=.true.)
          !
          !Compute Ewald shift only if Nsite_bulk=1
          if(reg(long_range).eq."Ewald")then
@@ -1896,7 +1857,7 @@ contains
          do iD=1,size(Dist,dim=1)
             !
             !iD=1 is the local, iD=2 is the nearest neighbor and so on
-            if((reg(long_range).eq."Explicit").and.((iD-1).gt.Vrange))exit
+            if((reg(long_range).ne."Ewald").and.((iD-1).gt.Vrange))exit
             !
             !all the indexes within that range
             do iR=1,DistList(iD)
@@ -1981,8 +1942,8 @@ contains
                   endif
                   do iorb=1,Norb
                      do jorb=1,Norb
-                        ib1 = iorb + Norb*(isite-1) + (iorb + Norb*(jsite-1)-1)*Norb*Nsite_bulk
-                        ib2 = jorb + Norb*(isite-1) + (jorb + Norb*(jsite-1)-1)*Norb*Nsite_bulk
+                        ib1 = iorb + Norb*(isite-1) + Norb*Nsite_bulk*(iorb + Norb*(isite-1)-1)
+                        ib2 = jorb + Norb*(jsite-1) + Norb*Nsite_bulk*(jorb + Norb*(jsite-1)-1)
                         write(unit,"(A5,A16,1F12.4)") " ","U"//str(iorb)//","//str(jorb)//"(Ri):["//str(ib1)//","//str(ib2)//"] ",dreal(Ur_bulk(ib1,ib2,iwig))
                      enddo
                   enddo
@@ -2053,7 +2014,6 @@ contains
                            iR = iR +1
                            !
                            Rsorted(iR,1) = Rdist
-                           !if(ilayer.eq.jlayer)Rsorted(iR,1)=1d6                !skip the intra-layer interaction
                            Rsorted(iR,2) = iwig
                            Rsorted(iR,3) = jsite
                            Rsorted(iR,4) = jlayer
@@ -2071,33 +2031,51 @@ contains
                   enddo
                   !
                   !Regrouping according to distance. The list contains the indexes of all the positions with a given distance
-                  call get_pattern(Dist,Rsorted(:,1),eps,listDim=DistList,IncludeSingle=.true.)
+                  call get_pattern(Dist,Rsorted(:,1),1e4*eps,listDim=DistList,IncludeSingle=.true.)
                   !
                   !add the inter-layer interaction
                   do iD=1,size(Dist,dim=1)
+                     !
+                     !iD=1 is the local, iD=2 is the nearest neighbor and so on
+                     if((reg(long_range).ne."Ewald").and.((iD-1).gt.Vrange))exit
+                     !
                      !all the indexes within that range
                      do iR=1,DistList(iD)
                         !
                         !retrieve indexes from sorted list
+                        Rdist = Rsorted(Dist(iD,iR),1)
                         iwig = Rsorted(Dist(iD,iR),2)
                         jsite = Rsorted(Dist(iD,iR),3)
                         jlayer = Rsorted(Dist(iD,iR),4)
                         !
-                        do iorb=1,Norb
-                           do jorb=1,Norb
-                              !
-                              !site-orbital indexes of Hr
-                              io = iorb + Norb*(isite-1) + Norb*Nsite_bulk*(ilayer-1)
-                              jo = jorb + Norb*(jsite-1) + Norb*Nsite_bulk*(jlayer-1)
-                              !
-                              !long-range interction added only to desity-density components
-                              call F2Bindex(Norb*Lttc%Nsite,[io,io],[jo,jo],ib1,ib2)
-                              !
-                              islab = min(ilayer,jlayer) + Hetero%Explicit(1) - 1
-                              if(abs(ilayer-jlayer).eq.1) Ur(ib1,ib2,iwig) = dcmplx(Hetero%Vz(iorb,jorb,islab),0d0)
-                              !
+                        if(ilayer.ne.jlayer)then
+                           !
+                           do iorb=1,Norb
+                              do jorb=1,Norb
+                                 !
+                                 !type of long-range interaction
+                                 if(reg(long_range).eq."Explicit")then
+                                    V = Vnn(iorb,jorb,iD-1)
+                                 elseif(reg(long_range).eq."Coulomb")then
+                                    V = Vnn(iorb,jorb,1)/Rdist
+                                 elseif(reg(long_range).eq."None")then
+                                    V = 0d0
+                                 endif
+                                 !
+                                 !site-orbital indexes of Hr
+                                 io = iorb + Norb*(isite-1) + Norb*Nsite_bulk*(ilayer-1)
+                                 jo = jorb + Norb*(jsite-1) + Norb*Nsite_bulk*(jlayer-1)
+                                 !
+                                 !long-range interction added only to desity-density components
+                                 call F2Bindex(Norb*Lttc%Nsite,[io,io],[jo,jo],ib1,ib2)
+                                 !
+                                 Ur(ib1,ib2,iwig) = dcmplx(V,0d0)
+                                 !
+                              enddo
                            enddo
-                        enddo
+                           !
+                        endif
+                        !
                      enddo
                   enddo
                   !
@@ -2116,7 +2094,7 @@ contains
                            write(unit,"(I8,8I6,1F12.4)") iR,Nvecwig(:,iwig),iwig,ilayer,isite,jlayer,jsite,Rsorted(Dist(iD,iR),1)
                            if(Rsorted(Dist(iD,iR),1).ne.Rdist)then
                               write(unit,"(A,2F12.4)") "ERROR: Rsorted(Dist(iD,iR),1).ne.Rdist",Rsorted(Dist(iD,iR),1),Rdist
-                              stop "build_Uret_singlParam_Vn:  check Ur_report_Hetero.DAT"
+                              stop "build_Uret_multiParam_Vn:  check Ur_report_Hetero.DAT"
                            endif
                            do iorb=1,Norb
                               do jorb=1,Norb
@@ -2170,6 +2148,502 @@ contains
       !
    end subroutine build_Uret_singlParam_Vn
    !
+   subroutine build_Uret_multiParam_Vn(Umats,Uaa,Uab,J,Vnn,Lttc,Hetero,LocalOnly)
+      !
+      use parameters
+      use file_io
+      use utils_misc
+      use utils_fields
+      use crystal
+      use input_vars, only : pathINPUTtr, pathINPUT
+      use input_vars, only : long_range, structure, Nkpt_path
+      implicit none
+      !
+      type(BosonicField),intent(inout)      :: Umats
+      real(8),intent(in)                    :: Uaa(:),Uab(:,:),J(:,:)
+      real(8),intent(in)                    :: Vnn(:,:,:)
+      type(Lattice),intent(inout)           :: Lttc
+      type(Heterostructures),intent(in)     :: Hetero
+      logical,intent(in),optional           :: LocalOnly
+      !
+      complex(8),allocatable                :: Ur_bulk(:,:,:),Ur(:,:,:)
+      complex(8),allocatable                :: Uk(:,:,:)
+      integer                               :: Norb,Nsite_bulk,Vrange
+      integer                               :: ib1,ib2,ib1_l,ib2_l
+      integer                               :: iorb,jorb,io,jo,io_l,jo_l
+      integer                               :: iwig,iD,iR,unit
+      complex(8),allocatable                :: EwaldShift(:)
+      real(8)                               :: eta,den,V
+      logical                               :: LocalOnly_
+      real                                  :: start,finish
+      !multi-site
+      real(8),allocatable                   :: Ruc(:,:)
+      integer                               :: isite,jsite
+      integer                               :: ilayer,jlayer
+      integer                               :: site_i,site_j
+      real(8)                               :: Rvec(3),Rdist
+      real(8),allocatable                   :: Rsorted(:,:),Rsorted_bkp(:,:)
+      integer,allocatable                   :: Rorder(:),Dist(:,:),DistList(:)
+      !
+      !
+      if(verbose)write(*,"(A)") "---- build_Uret_multiParam_Vn"
+      !
+      !
+      ! Check on the input field
+      if(.not.Umats%status) stop "build_Uret_multiParam_Vn: BosonicField not properly initialized."
+      if(Umats%Npoints.ne.1) stop "build_Uret_multiParam_Vn: Number of matsubara points in Umats is supposed to be equal to 1."
+      !
+      LocalOnly_=.false.
+      if(present(LocalOnly))LocalOnly_=LocalOnly
+      if(LocalOnly_.and.(Umats%Nkpt.ne.0)) stop "build_Uret_multiParam_Vn: Umats k dependent attributes are supposed to be unallocated."
+      if((.not.LocalOnly_).and.(Umats%Nkpt.ne.Lttc%Nkpt)) stop "build_Uret_multiParam_Vn: Umats number of K-points does not match with the lattice."
+      !
+      Norb = int(sqrt(dble(Umats%Nbp)))/Lttc%Nsite
+      Nsite_bulk = Lttc%Nsite
+      if(Hetero%status) Nsite_bulk = int(Lttc%Nsite/Hetero%Nlayer)
+      !
+      call assert_shape(Uaa,[Norb],"build_Uret_multiParam_Vn","Uaa")
+      call assert_shape(Uab,[Norb,Norb],"build_Uret_multiParam_Vn","Uab")
+      call assert_shape(J,[Norb,Norb],"build_Uret_multiParam_Vn","J")
+      !
+      if(LocalOnly_)then
+         !
+         write(*,"(A)") "     building interaction neglecting non-local dependence."
+         !
+         allocate(Ur_bulk((Norb*Nsite_bulk)**2,(Norb*Nsite_bulk)**2,1));Ur_bulk=czero
+         do jsite=1,Nsite_bulk
+            do isite=1,Nsite_bulk
+               !
+               do iorb=1,Norb
+                  do jorb=1,Norb
+                     !
+                     io = iorb + Norb*(isite-1)
+                     jo = jorb + Norb*(jsite-1)
+                     !
+                     if(isite.eq.jsite)then
+                        !
+                        !local Uaa and Uab
+                        call F2Bindex(Norb*Nsite_bulk,[io,io],[jo,jo],ib1,ib2)
+                        if(io.eq.jo) Ur_bulk(ib1,ib2,1) = dcmplx(Uaa(iorb),0d0)
+                        if(io.ne.jo) Ur_bulk(ib1,ib2,1) = dcmplx(Uab(iorb,jorb),0d0)
+                        !
+                        !local Jsf and Jph
+                        call F2Bindex(Norb*Nsite_bulk,[io,jo],[jo,io],ib1,ib2)
+                        if(io.ne.jo) Ur_bulk(ib1,ib2,1) = dcmplx(J(iorb,jorb),0d0)
+                        call F2Bindex(Norb*Nsite_bulk,[io,jo],[io,jo],ib1,ib2)
+                        if(io.ne.jo) Ur_bulk(ib1,ib2,1) = dcmplx(J(iorb,jorb),0d0)
+                        !
+                     endif
+                     !
+                  enddo
+               enddo
+               !
+            enddo
+         enddo
+         !
+         if(Hetero%status)then
+            !
+            allocate(Ur((Norb*Lttc%Nsite)**2,(Norb*Lttc%Nsite)**2,1));Ur=czero
+            !
+            !reshuffle the single-layer Ur into the heterostructured one
+            do ilayer=1,Hetero%Nlayer
+               do isite=1,Nsite_bulk
+                  do jsite=1,Nsite_bulk
+                     do iorb=1,Norb
+                        do jorb=1,Norb
+                           !
+                           io = iorb + Norb*(isite-1)
+                           jo = jorb + Norb*(jsite-1)
+                           !
+                           io_l = io + Norb*Nsite_bulk*(ilayer-1)
+                           jo_l = jo + Norb*Nsite_bulk*(ilayer-1)
+                           !
+                           !Uaa and Uab
+                           call F2Bindex(Norb*Nsite_bulk,[io,io],[jo,jo],ib1,ib2)
+                           call F2Bindex(Norb*Lttc%Nsite,[io_l,io_l],[jo_l,jo_l],ib1_l,ib2_l)
+                           Ur(ib1_l,ib2_l,1) = Ur_bulk(ib1,ib2,1)
+                           !
+                           !Jsf
+                           call F2Bindex(Norb*Nsite_bulk,[io,jo],[jo,io],ib1,ib2)
+                           call F2Bindex(Norb*Lttc%Nsite,[io_l,jo_l],[jo_l,io_l],ib1_l,ib2_l)
+                           Ur(ib1_l,ib2_l,1) = Ur_bulk(ib1,ib2,1)
+                           !
+                           !Jph
+                           call F2Bindex(Norb*Nsite_bulk,[io,jo],[io,jo],ib1,ib2)
+                           call F2Bindex(Norb*Lttc%Nsite,[io_l,jo_l],[io_l,jo_l],ib1_l,ib2_l)
+                           Ur(ib1_l,ib2_l,1) = Ur_bulk(ib1,ib2,1)
+                           !
+                        enddo
+                     enddo
+                  enddo
+               enddo
+            enddo
+            !
+         endif
+         deallocate(Ur_bulk)
+         !
+         !fill in the output
+         Umats%screened_local(:,:,1) = Ur(:,:,1)
+         if(allocated(Umats%bare)) Umats%bare_local = Ur(:,:,1)
+         !
+         deallocate(Ur)
+         !
+      else
+         !
+         if((reg(long_range).eq."Ewald").and.(Nsite_bulk.ne.1)) stop "build_Uret_singlParam_Vn: Ewald long-range interaction is not implemented for multi-site setups."
+         !
+         Vrange = size(Vnn,dim=3)
+         call assert_shape(Vnn,[Norb,Norb,Vrange],"build_Uret_singlParam_Vn","Vnn")
+         !
+         !recover the vectors in real space
+         if(.not.Wig_stored)call calc_wignerseiz(Lttc%Nkpt3)
+         call get_Ruc(Ruc)
+         !
+         !Get all the possible positions
+         allocate(Rsorted(Nwig*Nsite_bulk*Nsite_bulk,4));Rsorted=0d0
+         iR=0
+         do iwig=1,Nwig
+            do jsite=1,Nsite_bulk
+               do isite=1,Nsite_bulk
+                  !
+                  Rvec = Rvecwig(:,iwig) + Ruc(:,jsite) - Ruc(:,isite)
+                  Rdist = sqrt(dble(dot_product(Rvec,Rvec)))
+                  !
+                  iR = iR +1
+                  !
+                  Rsorted(iR,1) = Rdist
+                  Rsorted(iR,2) = iwig
+                  Rsorted(iR,3) = jsite
+                  Rsorted(iR,4) = isite
+                  !
+               enddo
+            enddo
+         enddo
+         !
+         !Sorting the positions according to distance
+         allocate(Rorder(Nwig*Nsite_bulk*Nsite_bulk));Rorder=0
+         allocate(Rsorted_bkp(Nwig*Nsite_bulk*Nsite_bulk,4));Rsorted_bkp=0d0
+         Rsorted_bkp = Rsorted
+         call sort_array(Rsorted(:,1),Rorder)
+         Rsorted=0d0
+         do iR=1,Nwig*Nsite_bulk*Nsite_bulk
+            Rsorted(iR,:) = Rsorted_bkp(Rorder(iR),:)
+         enddo
+         deallocate(Rsorted_bkp,Rorder)
+         !
+         !Regroup according to distance. The list contains the indexes of all the positions with a given distance
+         call get_pattern(Dist,Rsorted(:,1),1e4*eps,listDim=DistList,IncludeSingle=.true.)
+         !
+         !Compute Ewald shift only if Nsite_bulk=1
+         if(reg(long_range).eq."Ewald")then
+            eta = Rsorted(Nwig,1)/2d0
+            allocate(EwaldShift(Nwig));EwaldShift=czero
+            if(any(Lttc%Nkpt3.eq.1))then
+               call calc_Ewald(EwaldShift,Lttc%kpt,eta,"2D")
+               den = 2d0*eta
+            else
+               call calc_Ewald(EwaldShift,Lttc%kpt,eta,"3D")
+               den = 2d0*sqrt(eta)
+            endif
+         endif
+         !
+         !User-provided non-local interaction
+         call cpu_time(start)
+         allocate(Ur_bulk((Norb*Nsite_bulk)**2,(Norb*Nsite_bulk)**2,Nwig));Ur_bulk=czero
+         !all the possible ranges
+         do iD=1,size(Dist,dim=1)
+            !
+            !iD=1 is the local, iD=2 is the nearest neighbor and so on
+            if((reg(long_range).ne."Ewald").and.((iD-1).gt.Vrange))exit
+            !
+            !all the indexes within that range
+            do iR=1,DistList(iD)
+               !
+               if((iD.eq.1).and.(Rsorted(Dist(iD,iR),2).ne.wig0)) stop "build_Uret_singlParam_Vn: wrong index of R=0 vector."
+               if((iD.eq.1).and.(Rsorted(Dist(iD,iR),1).ne.0d0)) stop "build_Uret_singlParam_Vn: wrong length of R=0 vector."
+               !
+               !retrieve indexes from sorted list
+               iwig = Rsorted(Dist(iD,iR),2)
+               jsite = Rsorted(Dist(iD,iR),3)
+               isite = Rsorted(Dist(iD,iR),4)
+               !
+               do iorb=1,Norb
+                  do jorb=1,Norb
+                     !
+                     !site-orbital indexes of Ur
+                     io = iorb + Norb*(isite-1)
+                     jo = jorb + Norb*(jsite-1)
+                     !
+                     if((isite.eq.jsite) .and. (iwig.eq.wig0))then
+                        !
+                        !local Uaa and Uab
+                        call F2Bindex(Norb*Nsite_bulk,[io,io],[jo,jo],ib1,ib2)
+                        if(io.eq.jo) Ur_bulk(ib1,ib2,iwig) = dcmplx(Uaa(iorb),0d0)
+                        if(io.ne.jo) Ur_bulk(ib1,ib2,iwig) = dcmplx(Uab(iorb,jorb),0d0)
+                        !
+                        !local Jsf and Jph
+                        call F2Bindex(Norb*Nsite_bulk,[io,jo],[jo,io],ib1,ib2)
+                        if(io.ne.jo) Ur_bulk(ib1,ib2,iwig) = dcmplx(J(iorb,jorb),0d0)
+                        call F2Bindex(Norb*Nsite_bulk,[io,jo],[io,jo],ib1,ib2)
+                        if(io.ne.jo) Ur_bulk(ib1,ib2,iwig) = dcmplx(J(iorb,jorb),0d0)
+                        !
+                     else
+                        !
+                        Rdist = Rsorted(Dist(iD,iR),1)
+                        !
+                        if(iD.eq.1)  stop "build_Uret_singlParam_Vn: wrong R=0 local index in position list."
+                        if(Rdist.eq.0d0)  stop "build_Uret_singlParam_Vn: wrong R=0 distance in position list."
+                        !
+                        !type of long-range interaction
+                        if(reg(long_range).eq."Explicit")then
+                           V = Vnn(iorb,jorb,iD-1)
+                        elseif(reg(long_range).eq."Coulomb")then
+                           V = Vnn(iorb,jorb,1)/Rdist
+                        elseif(reg(long_range).eq."Ewald")then
+                           V = (Vnn(iorb,jorb,1)/Rdist)*erfc(Rdist/den) + EwaldShift(iwig)
+                        elseif(reg(long_range).eq."None")then !redundant since there is also the LocalOnly flag
+                           V = 0d0
+                        endif
+                        !
+                        !long-range interction added only to desity-density components
+                        call F2Bindex(Norb*Nsite_bulk,[io,io],[jo,jo],ib1,ib2)
+                        Ur_bulk(ib1,ib2,iwig) =  dcmplx(V,0d0)
+                        !
+                     endif
+                     !
+                  enddo
+               enddo
+               !
+            enddo
+         enddo
+         if(allocated(EwaldShift))deallocate(EwaldShift)
+         call cpu_time(finish)
+         write(*,"(A,F)") "     Calculation of U(R) cpu timing:", finish-start
+         !
+         if(verbose)then
+            unit = free_unit()
+            open(unit,file=reg(pathINPUTtr)//"Ur_report.DAT",form="formatted",status="unknown",position="rewind",action="write")
+            do iD=1,size(Dist,dim=1)
+               write(unit,"(A)") "     Dist: "//str(iD)
+               write(unit,"(A8,6A6,1A12)") "ndx" , "n1" , "n2" , "n3" , "iwig" , "jsite" , "isite" , "R"
+               do iR=1,DistList(iD)
+                  iwig = Rsorted(Dist(iD,iR),2)
+                  jsite = Rsorted(Dist(iD,iR),3)
+                  isite = Rsorted(Dist(iD,iR),4)
+                  Rvec = Rvecwig(:,iwig) + Ruc(:,jsite) - Ruc(:,isite)
+                  Rdist = sqrt(dble(dot_product(Rvec,Rvec)))
+                  write(unit,"(I8,6I6,1F12.4)") iR,Nvecwig(:,iwig),iwig,jsite,isite,Rsorted(Dist(iD,iR),1)
+                  if(Rsorted(Dist(iD,iR),1).ne.Rdist)then
+                     write(unit,"(A,2F12.4)") "ERROR: Rsorted(Dist(iD,iR),1).ne.Rdist",Rsorted(Dist(iD,iR),1),Rdist
+                     stop "build_Uret_singlParam_Vn:  check Ur_report.DAT"
+                  endif
+                  do iorb=1,Norb
+                     do jorb=1,Norb
+                        ib1 = iorb + Norb*(isite-1) + Norb*Nsite_bulk*(iorb + Norb*(isite-1)-1)
+                        ib2 = jorb + Norb*(jsite-1) + Norb*Nsite_bulk*(jorb + Norb*(jsite-1)-1)
+                        write(unit,"(A5,A16,1F12.4)") " ","U"//str(iorb)//","//str(jorb)//"(Ri):["//str(ib1)//","//str(ib2)//"] ",dreal(Ur_bulk(ib1,ib2,iwig))
+                     enddo
+                  enddo
+               enddo
+            enddo
+         endif
+         deallocate(Rsorted,Dist,DistList)
+         !
+         !Set up the heterostructure
+         allocate(Ur((Norb*Lttc%Nsite)**2,(Norb*Lttc%Nsite)**2,Nwig));Ur=czero
+         if(Hetero%status)then
+            !
+            !reshuffle the single-layer Ur into the heterostructured one
+            do ilayer=1,Hetero%Nlayer
+               do isite=1,Nsite_bulk
+                  do jsite=1,Nsite_bulk
+                     do iorb=1,Norb
+                        do jorb=1,Norb
+                           !
+                           io = iorb + Norb*(isite-1)
+                           jo = jorb + Norb*(jsite-1)
+                           !
+                           io_l = io + Norb*Nsite_bulk*(ilayer-1)
+                           jo_l = jo + Norb*Nsite_bulk*(ilayer-1)
+                           !
+                           !Uaa and Uab
+                           call F2Bindex(Norb*Nsite_bulk,[io,io],[jo,jo],ib1,ib2)
+                           call F2Bindex(Norb*Lttc%Nsite,[io_l,io_l],[jo_l,jo_l],ib1_l,ib2_l)
+                           Ur(ib1_l,ib2_l,:) = Ur_bulk(ib1,ib2,:)
+                           !
+                           !Jsf
+                           call F2Bindex(Norb*Nsite_bulk,[io,jo],[jo,io],ib1,ib2)
+                           call F2Bindex(Norb*Lttc%Nsite,[io_l,jo_l],[jo_l,io_l],ib1_l,ib2_l)
+                           Ur(ib1_l,ib2_l,:) = Ur_bulk(ib1,ib2,:)
+                           !
+                           !Jph
+                           call F2Bindex(Norb*Nsite_bulk,[io,jo],[io,jo],ib1,ib2)
+                           call F2Bindex(Norb*Lttc%Nsite,[io_l,jo_l],[io_l,jo_l],ib1_l,ib2_l)
+                           Ur(ib1_l,ib2_l,:) = Ur_bulk(ib1,ib2,:)
+                           !
+                        enddo
+                     enddo
+                  enddo
+               enddo
+            enddo
+            !
+            !adding the interaction between the layers. This implies that the Ruc are ordered correctly!
+            do ilayer=1,Hetero%Nlayer
+               do isite=1,Nsite_bulk
+                  !
+                  allocate(Rsorted(Lttc%Nsite*Nwig,4));Rsorted=0d0
+                  allocate(Rsorted_bkp(Lttc%Nsite*Nwig,4));Rsorted_bkp=0d0
+                  allocate(Rorder(Lttc%Nsite*Nwig));Rorder=0
+                  !
+                  site_i = isite + (ilayer-1)*Nsite_bulk
+                  !
+                  iR=0
+                  do jlayer=1,Hetero%Nlayer
+                     do jsite=1,Nsite_bulk
+                        !
+                        site_j = jsite + (jlayer-1)*Nsite_bulk
+                        !
+                        do iwig=1,Nwig
+                           !
+                           Rvec = Rvecwig(:,iwig) + Ruc(:,site_j) - Ruc(:,site_i)
+                           Rdist = sqrt(dble(dot_product(Rvec,Rvec)))
+                           !
+                           iR = iR +1
+                           !
+                           Rsorted(iR,1) = Rdist
+                           Rsorted(iR,2) = iwig
+                           Rsorted(iR,3) = jsite
+                           Rsorted(iR,4) = jlayer
+                           !
+                        enddo
+                     enddo
+                  enddo
+                  !
+                  !Re-ordering distances for each site in the system
+                  Rorder=0
+                  Rsorted_bkp = Rsorted
+                  call sort_array(Rsorted(:,1),Rorder)
+                  do iR=1,Nwig*Lttc%Nsite
+                     Rsorted(iR,:) = Rsorted_bkp(Rorder(iR),:)
+                  enddo
+                  !
+                  !Regrouping according to distance. The list contains the indexes of all the positions with a given distance
+                  call get_pattern(Dist,Rsorted(:,1),1e4*eps,listDim=DistList,IncludeSingle=.true.)
+                  !
+                  !add the inter-layer interaction
+                  do iD=1,size(Dist,dim=1)
+                     !
+                     !iD=1 is the local, iD=2 is the nearest neighbor and so on
+                     if((reg(long_range).ne."Ewald").and.((iD-1).gt.Vrange))exit
+                     !
+                     !all the indexes within that range
+                     do iR=1,DistList(iD)
+                        !
+                        !retrieve indexes from sorted list
+                        Rdist = Rsorted(Dist(iD,iR),1)
+                        iwig = Rsorted(Dist(iD,iR),2)
+                        jsite = Rsorted(Dist(iD,iR),3)
+                        jlayer = Rsorted(Dist(iD,iR),4)
+                        !
+                        if(ilayer.ne.jlayer)then
+                           !
+                           do iorb=1,Norb
+                              do jorb=1,Norb
+                                 !
+                                 !type of long-range interaction
+                                 if(reg(long_range).eq."Explicit")then
+                                    V = Vnn(iorb,jorb,iD-1)
+                                 elseif(reg(long_range).eq."Coulomb")then
+                                    V = Vnn(iorb,jorb,1)/Rdist
+                                 elseif(reg(long_range).eq."None")then
+                                    V = 0d0
+                                 endif
+                                 !
+                                 !site-orbital indexes of Hr
+                                 io = iorb + Norb*(isite-1) + Norb*Nsite_bulk*(ilayer-1)
+                                 jo = jorb + Norb*(jsite-1) + Norb*Nsite_bulk*(jlayer-1)
+                                 !
+                                 !long-range interction added only to desity-density components
+                                 call F2Bindex(Norb*Lttc%Nsite,[io,io],[jo,jo],ib1,ib2)
+                                 !
+                                 Ur(ib1,ib2,iwig) = dcmplx(V,0d0)
+                                 !
+                              enddo
+                           enddo
+                           !
+                        endif
+                        !
+                     enddo
+                  enddo
+                  !
+                  if(verbose)then
+                     unit = free_unit()
+                     open(unit,file=reg(pathINPUTtr)//"Ur_report_Hetero_layer"//str(site_i)//".DAT",form="formatted",status="unknown",position="rewind",action="write")
+                     do iD=1,size(Dist,dim=1)
+                        write(unit,"(A)") "     Dist: "//str(iD)
+                        write(unit,"(A8,8A6,20A12)") "ndx" , "n1" , "n2" , "n3" , "iwig" , "ilay" , "isite" , "jlay" , "jsite" , "R", "H(Ri)"
+                        do iR=1,DistList(iD)
+                           iwig = Rsorted(Dist(iD,iR),2)
+                           jsite = Rsorted(Dist(iD,iR),3)
+                           jlayer = Rsorted(Dist(iD,iR),4)
+                           Rvec = Rvecwig(:,iwig) + Ruc(:,jsite+Nsite_bulk*(jlayer-1)) - Ruc(:,isite+Nsite_bulk*(ilayer-1))
+                           Rdist = sqrt(dble(dot_product(Rvec,Rvec)))
+                           write(unit,"(I8,8I6,1F12.4)") iR,Nvecwig(:,iwig),iwig,ilayer,isite,jlayer,jsite,Rsorted(Dist(iD,iR),1)
+                           if(Rsorted(Dist(iD,iR),1).ne.Rdist)then
+                              write(unit,"(A,2F12.4)") "ERROR: Rsorted(Dist(iD,iR),1).ne.Rdist",Rsorted(Dist(iD,iR),1),Rdist
+                              stop "build_Uret_multiParam_Vn:  check Ur_report_Hetero.DAT"
+                           endif
+                           do iorb=1,Norb
+                              do jorb=1,Norb
+                                 ib1 = iorb + Norb*(isite-1) + Norb*Nsite_bulk*(ilayer-1) + (iorb + Norb*(isite-1) + Norb*Nsite_bulk*(ilayer-1)-1)*Norb*Lttc%Nsite
+                                 ib2 = jorb + Norb*(jsite-1) + Norb*Nsite_bulk*(jlayer-1) + (jorb + Norb*(jsite-1) + Norb*Nsite_bulk*(jlayer-1)-1)*Norb*Lttc%Nsite
+                                 write(unit,"(A5,A16,1F12.4)") " ","U"//str(iorb)//","//str(jorb)//"(Ri):["//str(ib1)//","//str(ib2)//"] ",dreal(Ur(ib1,ib2,iwig))
+                              enddo
+                           enddo
+                        enddo
+                     enddo
+                  endif
+                  !
+                  deallocate(Rsorted,Rsorted_bkp,Rorder,Dist,DistList)
+                  !
+               enddo !isite
+            enddo !ilayer
+            !
+         else
+            !
+            Ur = Ur_bulk
+            deallocate(Ur_bulk)
+            !
+         endif
+         !
+         !FT to K-space
+         call cpu_time(start)
+         allocate(Uk((Norb*Lttc%Nsite)**2,(Norb*Lttc%Nsite)**2,Lttc%Nkpt));Uk=czero
+         if(Lttc%Nkpt.gt.1)then
+            call wannier_R2K(Lttc%Nkpt3,Lttc%kpt,Ur,Uk)
+         else
+            Uk(:,:,1) = Ur(:,:,wig0)
+         endif
+         deallocate(Ur)
+         where(abs((Uk))<eps) Uk=czero
+         call cpu_time(finish)
+         write(*,"(A,F)") "     U(R) --> U(K) cpu timing:", finish-start
+         !
+         !print along path
+         if(reg(structure).ne."None")then
+            call interpolateHk2Path(Lttc,reg(structure),Nkpt_path,pathOUTPUT=reg(pathINPUT),filename="Uk",data_in=Uk)
+         endif
+         !
+         !fill in the output
+         Umats%screened(:,:,1,:) = Uk
+         if(allocated(Umats%bare)) Umats%bare = Uk
+         call BosonicKsum(Umats)
+         !
+      endif
+      !
+      call dump_BosonicField(Umats,reg(pathINPUTtr),"Uloc_mats.DAT")
+      !
+   end subroutine build_Uret_multiParam_Vn
 
 
 

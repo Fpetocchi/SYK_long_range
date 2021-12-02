@@ -49,6 +49,7 @@ module utils_main
    !
    type(BosonicField)                       :: Ulat
    type(BosonicField)                       :: Plat
+   type(BosonicField)                       :: Chi
    type(BosonicField)                       :: P_EDMFT
    type(BosonicField)                       :: C_EDMFT
    type(BosonicField)                       :: curlyU_EDMFT
@@ -1039,6 +1040,8 @@ contains
             !Polarization
             call AllocateBosonicField(Plat,Crystal%Norb,Nmats,Crystal%iq_gamma,Nkpt=Crystal%Nkpt,Nsite=Nsite,no_bare=.true.,Beta=Beta)
             !
+            if(dump_Chik)call AllocateBosonicField(Chi,Crystal%Norb,Nmats,Crystal%iq_gamma,Nkpt=Crystal%Nkpt,Nsite=Nsite,no_bare=.true.,Beta=Beta)
+            !
             !Lattice Gf
             call AllocateFermionicField(Glat,Crystal%Norb,Nmats,Nkpt=Crystal%Nkpt,Nsite=Nsite,Beta=Beta)
             if(ItStart.ne.0)then
@@ -1158,6 +1161,8 @@ contains
                call AllocateBosonicField(Wlat,Crystal%Norb,Nmats,Crystal%iq_gamma,Nkpt=0,Nsite=Nsite,Beta=Beta)
             endif
             !
+            if(dump_Chik)call AllocateBosonicField(Chi,Crystal%Norb,Nmats,Crystal%iq_gamma,Nkpt=Crystal%Nkpt,Nsite=Nsite,no_bare=.true.,Beta=Beta)
+            !
             !Polarization
             call AllocateBosonicField(P_EDMFT,Crystal%Norb,Nmats,Crystal%iq_gamma,Nsite=Nsite,no_bare=.true.,Beta=Beta)
             if(ItStart.ne.0)call read_BosonicField(P_EDMFT,reg(PrevItFolder),"Pimp_w.DAT")
@@ -1218,6 +1223,8 @@ contains
             call AllocateBosonicField(Plat,Crystal%Norb,Nmats,Crystal%iq_gamma,Nkpt=Crystal%Nkpt,Nsite=Nsite,no_bare=.true.,Beta=Beta)
             call AllocateBosonicField(P_EDMFT,Crystal%Norb,Nmats,Crystal%iq_gamma,Nsite=Nsite,no_bare=.true.,Beta=Beta)
             if(ItStart.ne.0)call read_BosonicField(P_EDMFT,reg(PrevItFolder),"Pimp_w.DAT")
+            !
+            if(dump_Chik)call AllocateBosonicField(Chi,Crystal%Norb,Nmats,Crystal%iq_gamma,Nkpt=Crystal%Nkpt,Nsite=Nsite,no_bare=.true.,Beta=Beta)
             !
             !Impurity Self-energy and Hartree contribution
             call AllocateFermionicField(S_DMFT,Crystal%Norb,Nmats,Nsite=Nsite,Beta=Beta)

@@ -158,7 +158,6 @@ module input_vars
    real(8),allocatable,public               :: wo_eph(:)
    integer,public                           :: N_Vnn
    real(8),allocatable,public               :: Vnn(:,:,:),Vnn_diag(:,:)
-   real(8),allocatable,public               :: Vz_diag(:,:)
    character(len=256),public                :: long_range
    logical,public                           :: Kdiag
    !
@@ -204,6 +203,7 @@ module input_vars
    integer,public                           :: LOGfile
    logical,public                           :: dump_Gk
    logical,public                           :: dump_Sigmak
+   logical,public                           :: dump_Chik
    !
    !Post-processing variables
    character(len=256),public                :: structure
@@ -322,10 +322,8 @@ contains
          call parse_input_variable(LatticeVec(:,1),"LAT_VEC_1",InputFile,default=[1d0,0d0,0d0],comment="Unit cell vector #1 of the model lattice.")
          call parse_input_variable(LatticeVec(:,2),"LAT_VEC_2",InputFile,default=[0d0,1d0,0d0],comment="Unit cell vector #2 of the model lattice.")
          call parse_input_variable(LatticeVec(:,3),"LAT_VEC_3",InputFile,default=[0d0,0d0,1d0],comment="Unit cell vector #3 of the model lattice.")
-         if((.not.readHr).and.(.not.readHk))then
-            allocate(hopping(Norb_model))
-            call parse_input_variable(hopping,"HOPPING",InputFile,comment="NN hopping for each orbital of the non-interacting Hamiltonian.")
-         endif
+         allocate(hopping(Norb_model));hopping=0d0
+         if((.not.readHr).and.(.not.readHk))call parse_input_variable(hopping,"HOPPING",InputFile,comment="NN hopping for each orbital of the non-interacting Hamiltonian.")
          !Heterostructured setup
          if(Hetero%status)then
             if(Nkpt3(3).ne.1) stop "read_InputFile: requested Heterostructured non-interacting Hamiltonian but Nk_z is not 1."
@@ -522,14 +520,6 @@ contains
                   call parse_input_variable(Vnn_diag(1:Norb_model,1),"VNN_1",InputFile,comment="Magnitude of the long-range interactions for each orbital between nearest neighbor  sites.")
                   Vnn(:,:,1) = diag(Vnn_diag(1:Norb_model,1))
                endif
-               if(Hetero%status)then
-                  allocate(Vz_diag(Norb_model,Hetero%tzIndex(1):Hetero%tzIndex(2)));Vz_diag=0d0
-                  allocate(Hetero%Vz(Norb_model,Norb_model,Hetero%tzIndex(1):Hetero%tzIndex(2)));Hetero%Vz=0d0
-                  do ilayer=Hetero%tzIndex(1),Hetero%tzIndex(2)
-                     call parse_input_variable(Vz_diag(1:Norb_model,ilayer),"VZ_"//str(ilayer),InputFile,comment="Magnitude of the longitudinal interaction for each orbital between layer #"//str(ilayer)//" and layer #"//str(ilayer+1))
-                     Hetero%Vz(:,:,ilayer) = diag(Vz_diag(1:Norb_model,1))
-                  enddo
-               endif
             endif
          else
             long_range="None"
@@ -601,6 +591,7 @@ contains
       if(reg(CalculationType).eq."scGW")dump_Gk=.true.
       if(reg(CalculationType).eq."GW+EDMFT")dump_Gk=.true.
       call parse_input_variable(dump_Sigmak,"PRINT_SIGMAK",InputFile,default=.false.,comment="Print the full k-dependent self-energy (binfmt) at each iteration (always optional).")
+      call parse_input_variable(dump_Chik,"PRINT_CHIK",InputFile,default=.false.,comment="Print the k-dependent charge susceptibility along the K-path.")
       !
       !Post-processing variables
       call add_separator("Post processing")

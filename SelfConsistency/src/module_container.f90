@@ -124,8 +124,7 @@ module module_container
    read_U_spex                              ,&
    calc_W_full                              ,&
    calc_W_edmft                             ,&
-   calc_chi_full                            ,&
-   calc_chi_edmft                           ,&
+   calc_chi                                 ,&
    build_Umat                               ,&
    build_Uret                               ,&
    calc_curlyU                              ,&

@@ -9,217 +9,6 @@ do iD=1,size(Dist,dim=1)
 enddo
 
 
-
-
-
-subroutine build_Uret_singlParam_ph(Umats,Uaa,Uab,J,g_eph,wo_eph,LocalOnly)
-   !
-   use parameters
-   use file_io
-   use utils_misc
-   use utils_fields
-   use input_vars, only : Nreal, wrealMax, pathINPUTtr
-   use input_vars, only : Hetero
-   !TEST>>>
-   use input_vars, only : tau_uniform, Ntau, Test_flag_3
-   use fourier_transforms
-   !>>>TEST
-   implicit none
-   !
-   type(BosonicField),intent(inout),target :: Umats
-   real(8),intent(in)                    :: Uaa,Uab,J
-   real(8),intent(in)                    :: g_eph(:),wo_eph(:)
-   logical,intent(in),optional           :: LocalOnly
-   !
-   integer                               :: Nbp,Norb,Nph
-   integer                               :: ib1,ib2,ik
-   integer                               :: iw,iw1,iw2,iph,iwp
-   integer                               :: Nsite
-   real(8)                               :: RealU,ImagU
-   real(8),allocatable                   :: wreal(:),wmats(:)
-   complex(8),allocatable                :: D(:,:),Utmp(:,:)
-   type(BosonicField)                    :: Ureal
-   type(BosonicField),target             :: Umats_imp
-   type(BosonicField),pointer            :: Umats_ptr
-   type(physicalU)                       :: PhysicalUelements
-   logical                               :: LocalOnly_,Screen
-   real                                  :: start,finish
-   !TEST>>>
-   type(BosonicField)                    :: Utmp1,Utmp2
-   real(8)                               :: g,w,b
-   integer                               :: itau
-   real(8),allocatable                   :: tau(:)
-   !>>>TEST
-   !
-   !
-   if(verbose)write(*,"(A)") "---- build_Uret_singlParam_ph"
-   !
-   !
-   ! Check on the input field
-   if(.not.Umats%status) stop "build_Uret_singlParam_ph: BosonicField not properly initialized."
-   !
-   LocalOnly_=.true.
-   if(present(LocalOnly))LocalOnly_=LocalOnly
-   if(LocalOnly_.and.(Umats%Nkpt.ne.0)) stop "build_Uret_singlParam_ph: Umats k dependent attributes are supposed to be unallocated."
-   !
-   Nph = size(g_eph)
-   if(size(g_eph).ne.size(wo_eph)) stop "build_Uret_singlParam_ph: Phonon sizes does not match."
-   !
-   allocate(wmats(Umats%Npoints));wmats=0d0
-   wmats = BosonicFreqMesh(Umats%Beta,Umats%Npoints)
-   allocate(wreal(Nreal));wreal=0d0
-   wreal = linspace(0d0,+wrealMax,Nreal)
-   !
-   call clear_attributes(Umats)
-   !
-   Nbp = Umats%Nbp
-   Norb = int(sqrt(dble(Nbp)))
-   if(Hetero%status)then
-      Norb = Hetero%Norb
-      Nbp = Norb**2
-      call AllocateBosonicField(Umats_imp,Norb,Umats%Npoints,Umats%iq_gamma,Nkpt=Umats%Nkpt,Beta=Umats%Beta)
-      Umats_ptr => Umats_imp
-   else
-      Umats_ptr => Umats
-   endif
-   call AllocateBosonicField(Ureal,Norb,Nreal,0)
-   !
-   call init_Uelements(Norb,PhysicalUelements)
-   !
-   !setting the bare values
-   do ib1=1,Nbp
-      do ib2=1,Nbp
-         !
-         if(PhysicalUelements%Full_Uaa(ib1,ib2)) Umats_ptr%bare_local(ib1,ib2) = dcmplx(Uaa,0d0)
-
-         if(PhysicalUelements%Full_Uab(ib1,ib2)) Umats_ptr%bare_local(ib1,ib2) = dcmplx(Uab,0d0)
-         if(PhysicalUelements%Full_Jsf(ib1,ib2)) Umats_ptr%bare_local(ib1,ib2) = dcmplx(J,0d0)
-         if(PhysicalUelements%Full_Jph(ib1,ib2)) Umats_ptr%bare_local(ib1,ib2) = dcmplx(J,0d0)
-         !
-         if(PhysicalUelements%Full_Uaa(ib1,ib2).and.(ib1.eq.1)) Umats_ptr%bare_local(ib1,ib2) = dcmplx(Uaa,0d0) + 0.5d0
-         !
-      enddo
-   enddo
-   !
-   !setting the phonons
-   do ib1=1,Nbp
-      do ib2=1,Nbp
-         !
-         Screen = .not. (PhysicalUelements%Full_Jsf(ib1,ib2).or.PhysicalUelements%Full_Jph(ib1,ib2))
-         !
-         do iph=1,Nph
-            iwp=minloc(abs(wreal-wo_eph(iph)),dim=1)
-            do iw=1,Nreal
-               !
-               RealU = 2*(g_eph(iph)**2)*wo_eph(iph) / ( (wreal(iw)**2) - (wo_eph(iph)**2) )
-               ImagU=0d0
-               if(iw.eq.iwp) ImagU = -pi*(g_eph(iph)**2)/abs(wreal(3)-wreal(2))
-               !
-               !TEST>>>
-               if(Test_flag_3)then
-                  g = 1d0
-                  if(PhysicalUelements%Full_Uaa(ib1,ib2).and.(ib1.eq.4)) g = 1.185d0
-                  if(iw.eq.iwp) ImagU = -pi*(g**2)/abs(wreal(3)-wreal(2))
-               endif
-               !>>>TEST
-               !
-               Ureal%screened_local(ib1,ib2,iw) = Umats_ptr%bare_local(ib1,ib2)
-               if(Screen) Ureal%screened_local(ib1,ib2,iw) = Ureal%screened_local(ib1,ib2,iw) + dcmplx(RealU,ImagU)
-               !
-            enddo
-         enddo
-      enddo
-   enddo
-   !
-   ! Allocate the temporary quantities needed by the Analytical continuation
-   allocate(Utmp(Nbp,Nbp));Utmp=czero
-   allocate(D(Nbp,Nbp));D=czero
-   !
-   ! Analytical continuation of the local component to imag axis using spectral rep
-   call cpu_time(start)
-   !$OMP PARALLEL DEFAULT(NONE),&
-   !$OMP SHARED(Nbp,wmats,wreal,Nreal,Ureal,Umats_ptr),&
-   !$OMP PRIVATE(ib1,ib2,iw1,iw2,D,Utmp)
-   !$OMP DO
-   do iw1=1,Umats_ptr%Npoints
-      !
-      Utmp=czero
-      !
-      do iw2=1,Nreal
-         !
-         if((wmats(iw1).eq.0d0).and.(wreal(iw2).eq.0d0))cycle
-         !
-         D = -dimag( Ureal%screened_local(:,:,iw2)*abs(wreal(3)-wreal(2)) )/pi
-         Utmp = Utmp +  D/( dcmplx(0.d0,wmats(iw1))-wreal(iw2) ) - D/( dcmplx(0.d0,wmats(iw1))+wreal(iw2) )
-         !
-      enddo
-      !
-      Umats_ptr%screened_local(:,:,iw1) = Utmp + Umats_ptr%bare_local
-      !
-   enddo !iw1
-   !
-   !$OMP END DO
-   !$OMP END PARALLEL
-   call cpu_time(finish)
-   deallocate(D,Utmp,wmats,wreal)
-   call DeallocateBosonicField(Ureal)
-   write(*,"(A,F)") "     Ue-ph(w) --> Ue-ph(iw) cpu timing:", finish-start
-   if(Norb.gt.1)write(*,"(A)") "     Screening not considered for Hund coupling."
-   !
-   if(.not.LocalOnly_)then
-      write(*,"(A)") "     Filling the K-dependent attributes."
-      do ik=1,Umats%Nkpt
-         Umats_ptr%bare(:,:,ik) = Umats_ptr%bare_local
-         Umats_ptr%screened(:,:,:,ik) = Umats_ptr%screened_local
-      enddo
-   endif
-   !
-   if(Hetero%status)then
-      Nsite = Hetero%Explicit(2)-Hetero%Explicit(1)+1
-      call Expand2Nsite(Umats,Umats_ptr,Nsite)
-      call DeallocateBosonicField(Umats_imp)
-   endif
-   nullify(Umats_ptr)
-   !
-   call dump_BosonicField(Umats,reg(pathINPUTtr),"Uloc_mats.DAT")
-   !
-   !TEST>>>
-   allocate(tau(Ntau));tau=0d0
-   if(tau_uniform)tau = linspace(0d0,Umats%Beta,Ntau)
-   if(.not.tau_uniform)tau = denspace(Umats%Beta,Ntau)
-   !
-   !FT from U(iw) computed with AC to numerical U(tau)
-   call AllocateBosonicField(Utmp1,Norb,Ntau,0,Beta=Umats%Beta)
-   call Bmats2itau(Umats%Beta,Umats%screened_local,Utmp1%screened_local,asympt_corr=.true.,tau_uniform=tau_uniform,Umats_bare=Umats%bare_local)
-   call dump_BosonicField(Utmp1,reg(pathINPUTtr),"Uloc_tau_FTofAC.DAT",axis=tau)
-   !
-   analytical U(tau)
-   g = g_eph(1)
-   w = wo_eph(1)
-   b = Umats%Beta/2
-   call clear_attributes(Utmp1)
-   do itau=1,Ntau
-      Utmp1%screened_local(:,:,itau) = -g**2 * cosh(w*(b-tau(itau))) / ( sinh(w*b) )
-   enddo
-   call dump_BosonicField(Utmp1,reg(pathINPUTtr),"Uloc_tau_analytic.DAT",axis=tau)
-   !
-   !FT from analytical U(tau) to U(iw)
-   call AllocateBosonicField(Utmp2,Norb,Umats%Npoints,0,Beta=Umats%Beta)
-   call Bitau2mats(Umats%Beta,Utmp1%screened_local,Utmp2%screened_local,tau_uniform=tau_uniform)
-   do iw=1,Utmp2%Npoints
-      Utmp2%screened_local(:,:,iw) = Utmp2%screened_local(:,:,iw) + Umats%bare_local
-   enddo
-   Utmp2%bare_local = Umats%bare_local
-   call dump_BosonicField(Utmp2,reg(pathINPUTtr),"Uloc_mats_FTofAnalytical.DAT")
-   !
-   call duplicate(Umats,Utmp2)
-   !
-   call DeallocateField(Utmp1)
-   call DeallocateField(Utmp2)
-   !>>>TEST
-   !
-end subroutine build_Uret_singlParam_ph
-
 subroutine calc_QMCinteractions(Umats,Uinst,Kfunct,Kpfunct,Screening,sym)
    !
    use parameters
@@ -389,6 +178,7 @@ subroutine calc_QMCinteractions(Umats,Uinst,Kfunct,Kpfunct,Screening,sym)
    if(retarded)deallocate(Kaux,tau,wmats)
    !
 end subroutine calc_QMCinteractions
+
 
 subroutine build_Hk(Norb,hopping,Nkpt3,alphaHk,readHr,Hetero,Hk,kpt,Ek,Zk,Hloc,iq_gamma,pathOUTPUT)
    !
@@ -724,6 +514,7 @@ subroutine build_Hk(Norb,hopping,Nkpt3,alphaHk,readHr,Hetero,Hk,kpt,Ek,Zk,Hloc,i
    endif
    !
 end subroutine build_Hk
+
 
 subroutine build_Uret_singlParam_Vn(Umats,Uaa,Uab,J,Vnn,Lttc,LocalOnly)
    !
@@ -1142,7 +933,83 @@ end subroutine build_Uret_multiParam_Vn
 
 
 
-
+!---------------------------------------------------------------------------!
+!PURPOSE: Computes [ 1 - U*Pi ]^-1 * Pi - EDMFT
+!---------------------------------------------------------------------------!
+subroutine calc_chi_edmft(Chi,Umats,Pmats,Lttc)
+   !
+   use parameters
+   use utils_misc
+   use utils_fields
+   use linalg, only : zeye, inv
+   use input_vars, only : Umodel
+   implicit none
+   !
+   type(BosonicField),intent(inout)      :: Chi
+   type(BosonicField),intent(in)         :: Umats
+   type(BosonicField),intent(in)         :: Pmats
+   type(Lattice),intent(in)              :: Lttc
+   !
+   complex(8),allocatable                :: invW(:,:)
+   real(8)                               :: Beta
+   integer                               :: Nbp,Nkpt,Nmats
+   integer                               :: iq,iw,iwU
+   !
+   !
+   if(verbose)write(*,"(A)") "---- calc_chi_edmft"
+   !
+   !
+   ! Check on the input Fields
+   if(.not.Chi%status) stop "calc_chi_edmft: Chi not properly initialized."
+   if(.not.Umats%status) stop "calc_chi_edmft: Umats not properly initialized."
+   if(.not.Pmats%status) stop "calc_chi_edmft: Pmats not properly initialized."
+   if(Chi%Nkpt.ne.0) stop "calc_chi_edmft: Chi k dependent attributes are supposed to be unallocated."
+   if(Umats%Nkpt.eq.0) stop "calc_chi_edmft: Umats k dependent attributes not properly initialized."
+   if(Pmats%Nkpt.ne.0) stop "calc_chi_edmft: Pmats k dependent attributes are supposed to be unallocated."
+   if(Umats%iq_gamma.lt.0) stop "calc_chi_edmft: Umats iq_gamma not defined."
+   !
+   Nbp = Chi%Nbp
+   Nkpt = Umats%Nkpt
+   Beta = Chi%Beta
+   Nmats = Chi%Npoints
+   !
+   if(all([Umats%Nbp-Nbp,Pmats%Nbp-Nbp].ne.[0,0])) stop "calc_chi_edmft: Either Umats and/or Pmats have different orbital dimension with respect to Chi."
+   if(all([Umats%Beta-Beta,Pmats%Beta-Beta].ne.[0d0,0d0])) stop "calc_chi_edmft: Either Umats and/or Pmats have different Beta with respect to Chi."
+   if(Pmats%Npoints.ne.Nmats) stop "calc_chi_edmft: Pmats has different number of Matsubara points with respect to Chi."
+   !
+   allocate(invW(Nbp,Nbp));invW=czero
+   call clear_attributes(Chi)
+   Chi%bare_local = Umats%bare_local
+   !$OMP PARALLEL DEFAULT(NONE),&
+   !$OMP SHARED(Pmats,Umats,Chi,Lttc,Umodel),&
+   !$OMP PRIVATE(iw,iwU,iq,invW)
+   !$OMP DO
+   do iw=1,Chi%Npoints
+      !
+      iwU = iw
+      if(Umodel.and.(Umats%Npoints.eq.1))iwU = 1
+      !
+      do iq=1,Umats%Nkpt
+         !
+         !avoid the gamma point
+         if(iq.eq.Umats%iq_gamma)cycle
+         !
+         ! [ 1 - U*Pi ]
+         invW = zeye(Chi%Nbp) - matmul(Umats%screened(:,:,iwU,iq),Pmats%screened_local(:,:,iw))
+         !
+         ! [ 1 - U*Pi ]^-1
+         call inv(invW)
+         !
+         ! [ 1 - U*Pi ]^-1 * Pi
+         Chi%screened_local(:,:,iw) = Chi%screened_local(:,:,iw) + matmul(invW,Pmats%screened_local(:,:,iw))/Umats%Nkpt
+         !
+      enddo
+   enddo
+   !$OMP END DO
+   !$OMP END PARALLEL
+   deallocate(invW)
+   !
+end subroutine calc_chi_edmft
 
 
 

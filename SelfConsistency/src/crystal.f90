@@ -592,6 +592,8 @@ contains
       Nsite_bulk = Nsite
       if(Hetero%status) Nsite_bulk = int(Nsite/Hetero%Nlayer)
       !
+      Trange=1
+      !
       if(filexists)then
          !
          rebuild=.false.
@@ -636,7 +638,8 @@ contains
             read(unit,*) Num_wann !Number of Wannier orbitals
             read(unit,*) Nrpts    !Number of Wigner-Seitz vectors
             !
-            if(Nsite_bulk.ne.int(Num_wann)/Norb) stop "build_Hk: Hr.DAT does not have the correct dimension."
+            if(Norb*Nsite_bulk.ne.Num_wann) stop "build_Hk: Hr.DAT does not have the correct dimension."
+            allocate(Hr_bulk(Norb*Nsite_bulk,Norb*Nsite_bulk,Nwig));Hr_bulk=czero
             !
             Qst = int(Nrpts/W90NumCol)
             Rst = mod(Nrpts,W90NumCol)
@@ -648,7 +651,6 @@ contains
             if(Rst.ne.0)read(unit,*)(Ndegen(j+Qst*W90NumCol),j=1,Rst)
             !
             !Read W90 TB hoppings in real space. Assumed paramagnetic
-            allocate(Hr_bulk(Num_wann,Num_wann,Nrpts));Hr_bulk=czero
             do ir=1,Nrpts
                do i=1,Num_wann
                   do j=1,Num_wann
@@ -666,8 +668,6 @@ contains
             deallocate(Ndegen)
             !
          else
-            !
-            Trange=1
             !
             !Get all the possible positions
             allocate(Rsorted(Nwig*Nsite_bulk*Nsite_bulk,4));Rsorted=0d0
@@ -702,7 +702,7 @@ contains
             deallocate(Rsorted_bkp,Rorder)
             !
             !Regroup according to distance. The list contains the indexes of all the positions with a given distance
-            call get_pattern(Dist,Rsorted(:,1),eps,listDim=DistList,IncludeSingle=.true.)
+            call get_pattern(Dist,Rsorted(:,1),1e4*eps,listDim=DistList,IncludeSingle=.true.)
             !
             !User-provided hopping is only nearest neighbor and its the same for all the sites
             allocate(Hr_bulk(Norb*Nsite_bulk,Norb*Nsite_bulk,Nwig));Hr_bulk=czero
@@ -755,26 +755,28 @@ contains
                write(unit,'(A,I6)')      "     Number of Wigner-Seitz vectors:",Nrpts
                write(unit,'(A,I6,A,I6)') "     Deg rows:",Qst," N last row   :",Rst
             endif
-            do iD=1,size(Dist,dim=1)
-               write(unit,"(A)") "     Dist: "//str(iD)
-               write(unit,"(A8,6A6,20A12)") "ndx" , "n1" , "n2" , "n3" , "iwig" , "jsite" , "isite" , "R" , "H(Ri)"
-               do iR=1,DistList(iD)
-                  iwig = Rsorted(Dist(iD,iR),2)
-                  jsite = Rsorted(Dist(iD,iR),3)
-                  isite = Rsorted(Dist(iD,iR),4)
-                  Rvec = Rvecwig(:,iwig) + Ruc(:,jsite) - Ruc(:,isite)
-                  Rdist = sqrt(dble(dot_product(Rvec,Rvec)))
-                  write(unit,"(I8,6I6,20F12.4)") iR,Nvecwig(:,iwig),iwig,jsite,isite,Rsorted(Dist(iD,iR),1),&
-                  (dreal(Hr_bulk(iorb + Norb*(isite-1),iorb + Norb*(jsite-1),iwig)),iorb=1,Norb)
-                  if(Rsorted(Dist(iD,iR),1).ne.Rdist)then
-                     write(unit,"(A,2F12.4)") "ERROR: Rsorted(Dist(iD,iR),1).ne.Rdist",Rsorted(Dist(iD,iR),1),Rdist
-                     stop "build_Hk:  check Hr_report.DAT"
-                  endif
+            if(.not.readHr)then
+               do iD=1,size(Dist,dim=1)
+                  write(unit,"(A)") "     Dist: "//str(iD)
+                  write(unit,"(A8,6A6,20A12)") "ndx" , "n1" , "n2" , "n3" , "iwig" , "jsite" , "isite" , "R" , "H(Ri)"
+                  do iR=1,DistList(iD)
+                     iwig = Rsorted(Dist(iD,iR),2)
+                     jsite = Rsorted(Dist(iD,iR),3)
+                     isite = Rsorted(Dist(iD,iR),4)
+                     Rvec = Rvecwig(:,iwig) + Ruc(:,jsite) - Ruc(:,isite)
+                     Rdist = sqrt(dble(dot_product(Rvec,Rvec)))
+                     write(unit,"(I8,6I6,20F12.4)") iR,Nvecwig(:,iwig),iwig,jsite,isite,Rsorted(Dist(iD,iR),1),&
+                     (dreal(Hr_bulk(iorb + Norb*(isite-1),iorb + Norb*(jsite-1),iwig)),iorb=1,Norb)
+                     if(Rsorted(Dist(iD,iR),1).ne.Rdist)then
+                        write(unit,"(A,2F12.4)") "ERROR: Rsorted(Dist(iD,iR),1).ne.Rdist",Rsorted(Dist(iD,iR),1),Rdist
+                        stop "build_Hk:  check Hr_report.DAT"
+                     endif
+                  enddo
                enddo
-            enddo
+               deallocate(Rsorted,Dist,DistList)
+            endif
             if(present(pathOUTPUT))close(unit)
          endif
-         deallocate(Rsorted,Dist,DistList)
          !
          !Set up the heterostructure
          if(Hetero%status)then
@@ -841,7 +843,7 @@ contains
                   enddo
                   !
                   !Regrouping according to distance. The list contains the indexes of all the positions with a given distance
-                  call get_pattern(Dist,Rsorted(:,1),eps,listDim=DistList,IncludeSingle=.true.)
+                  call get_pattern(Dist,Rsorted(:,1),1e4*eps,listDim=DistList,IncludeSingle=.true.)
                   !
                   !add the inter-layer hopping up to the first Trange neighbors
                   do iD=1,Trange+1
@@ -909,6 +911,32 @@ contains
             !
          endif
          !
+         !Store Hr in w90 format
+         if(present(pathOUTPUT))then
+            !
+            unit = free_unit()
+            open(unit,file=reg(pathOUTPUT)//"Hr_built.DAT",form="formatted",status="unknown",position="rewind",action="write")
+            write(unit,*)                  !skip first line
+            write(unit,"(1I5)") Norb*Nsite !Number of Wannier orbitals
+            write(unit,"(1I5)") Nwig       !Number of Wigner-Seitz vectors
+            Qst = int(Nwig/W90NumCol)
+            Rst = mod(Nwig,W90NumCol)
+            !I'm going to find later the proper way to print the degeneracy only for the no-vanishing H(r)
+            !do i=1,Qst
+            !   write(unit,"("//str(W90NumCol)//"I5)")(nrdegwig(j+(i-1)*W90NumCol),j=1,W90NumCol)
+            !enddo
+            !if(Rst.ne.0)write(unit,"("//str(Rst)//"I5)")(nrdegwig(j+Qst*W90NumCol),j=1,Rst)
+            do iwig=1,Nwig
+               do iorb=1,Norb*Nsite
+                  do jorb=1,Norb*Nsite
+                     if(abs(Hr(iorb,jorb,iwig)).gt.0d0)write(unit,"(5I5,2F12.6)") Nvecwig(:,iwig), iorb, jorb, dreal(Hr(iorb,jorb,iwig)), dimag(Hr(iorb,jorb,iwig))
+                  enddo
+               enddo
+            enddo
+            close(unit)
+            !
+         endif
+         !
          !FT Hr-->Hk
          call wannier_R2K(Nkpt3,kpt,Hr,Hk)
          deallocate(Hr)
@@ -973,6 +1001,7 @@ contains
                enddo
             enddo
          enddo
+         close(unit)
          !
       endif
       !
@@ -3173,11 +3202,11 @@ contains
    !---------------------------------------------------------------------------!
    !PURPOSE: Interpolate to a user provided K-point path the Hamiltonian
    !---------------------------------------------------------------------------!
-   subroutine interpolateHk2Path(Lttc,structure,Nkpt_path,pathOUTPUT            &
-                                                         ,filename,data_in      &
-                                                         ,corrname,correction   &
-                                                         ,doplane,Nkpt_Kside    &
-                                                         ,hetero)
+   subroutine interpolateHk2Path(Lttc,structure,Nkpt_path,pathOUTPUT                   &
+                                                         ,filename,data_in,data_out    &
+                                                         ,corrname,correction          &
+                                                         ,doplane,Nkpt_Kside           &
+                                                         ,hetero,store)
       !
       use parameters !WHY IS THIS WORKING?
       use utils_misc
@@ -3190,10 +3219,12 @@ contains
       character(len=*),intent(in),optional  :: pathOUTPUT
       character(len=*),intent(in),optional  :: filename
       complex(8),intent(in),target,optional :: data_in(:,:,:)
+      complex(8),intent(out),allocatable,optional :: data_out(:,:,:)
       character(len=*),intent(in),optional  :: corrname
       complex(8),intent(in),optional        :: correction(:,:,:)
       logical,intent(in),optional           :: doplane
       integer,intent(in),optional           :: Nkpt_Kside
+      logical,intent(in),optional           :: store
       type(Heterostructures),intent(inout),optional :: hetero
       !
       character(len=256)                    :: path,label,filename_,corrname_
@@ -3203,7 +3234,7 @@ contains
       real(8)                               :: kp,kx,ky,Bvec(3),wrealMax,eta,kz_cut
       complex(8),pointer                    :: data(:,:,:)
       complex(8),allocatable                :: invGf(:,:)
-      logical                               :: Hamiltonian,doplane_,hetero_,printout
+      logical                               :: Hamiltonian,doplane_,hetero_,printout,store_
       real                                  :: start,finish
       !Interp
       complex(8),allocatable                :: data_intp(:,:,:),dataZk(:,:,:)
@@ -3249,6 +3280,8 @@ contains
       Norb = size(data,dim=1)
       call assert_shape(data,[Norb,Norb,Lttc%Nkpt],"interpolateHk2Path",reg(label))
       !
+      store_=.true.
+      if(present(store))store_=store
       !
       !static correction to the input data--------------------------------------
       corrname_="nonInt"
@@ -3282,9 +3315,13 @@ contains
       call wannierinterpolation(Lttc%Nkpt3,Lttc%kpt,Lttc%kptpath(:,1:Lttc%Nkpt_path),data,data_intp)
       call cpu_time(finish)
       write(*,"(A,F)") "     "//reg(label)//"(fullBZ) --> "//reg(label)//"(Kpath) cpu timing:", finish-start
-      if(Hamiltonian)then
+      if(Hamiltonian.and.store_)then
          if(allocated(Lttc%Hk_path))deallocate(Lttc%Hk_path)
          Lttc%Hk_path = data_intp
+      endif
+      if(present(data_out))then
+         if(allocated(data_out))deallocate(data_out)
+         data_out = data_intp
       endif
       !
       !
@@ -3295,7 +3332,7 @@ contains
       do ik=1,Lttc%Nkpt_path
          call eigh(dataZk(:,:,ik),dataEk(:,ik))
       enddo
-      if(Hamiltonian)then
+      if(Hamiltonian.and.store_)then
          if(allocated(Lttc%Zk_path))deallocate(Lttc%Zk_path)
          if(allocated(Lttc%Ek_path))deallocate(Lttc%Ek_path)
          Lttc%Zk_path = dataZk
@@ -3478,7 +3515,7 @@ contains
          call wannierinterpolation(Lttc%Nkpt3,Lttc%kpt,Lttc%kptPlane,data,data_intp)
          call cpu_time(finish)
          write(*,"(A,F)") "     "//reg(label)//"(fullBZ) --> "//reg(label)//"(kx,ky) cpu timing:", finish-start
-         if(Hamiltonian)then
+         if(Hamiltonian.and.store_)then
             if(allocated(Lttc%Hk_Plane))deallocate(Lttc%Hk_Plane)
             Lttc%Hk_Plane = data_intp
             Lttc%planeStored = .true.
