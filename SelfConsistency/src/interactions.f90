@@ -392,7 +392,7 @@ contains
       integer                               :: iq,iw,iwU
       integer                               :: unit,ib
       real(8),allocatable                   :: wmats(:)
-      complex(8),allocatable                :: Pwk(:,:,:,:),Pk(:,:,:)
+      complex(8),allocatable                :: Pwk(:,:,:,:)
       logical                               :: Ustatic
 
       !
@@ -459,23 +459,18 @@ contains
       !print along path
       if(present(pathPk).and.(reg(structure).ne."None"))then
          !
-         !interpolation at each bosonic frequency
-         do iw=1,Nmats
-            !
-            allocate(Pk(Nbp,Nbp,Nmats));Pk=czero
-            call interpolateHk2Path(Lttc,reg(structure),Nkpt_path,data_in=Chi%screened(:,:,iw,:),data_out=Pk,store=.false.)
-            !
-            if(iw.eq.1) allocate(Pwk(Nbp,Nbp,Nmats,size(Pk,dim=3)))
-            Pwk(:,:,iw,:) = Pk
-            deallocate(Pk)
-            !
-         enddo
+         if(.not.Lttc%pathStored)then
+            write(*,"(A)") "     calc_chi: re-initializing the K-path."
+            call interpolateHk2Path(Lttc,reg(structure),Nkpt_path)
+         endif
+         allocate(Pwk(Nbp,Nbp,Nmats,Lttc%Nkpt_path));Pwk=czero
+         call wannierinterpolation(Lttc%Nkpt3,Lttc%kpt,Lttc%kptpath(:,1:Lttc%Nkpt_path),Chi%screened,Pwk)
          !
          !Print susceptibility along path
          call createDir(reg(pathPk),verb=verbose)
          allocate(wmats(Chi%Npoints))
          wmats = BosonicFreqMesh(Beta,Nmats)
-         do iq=1,size(Pk,dim=3)
+         do iq=1,Lttc%Nkpt_path
              unit = free_unit()
              open(unit,file=reg(pathPk)//"Pk_w_k"//str(iq)//".DAT",form="formatted",status="unknown",position="rewind",action="write")
              do iw=1,Nmats
