@@ -1933,7 +1933,7 @@ contains
                   write(unit,"(I8,6I6,1F12.4)") iR,Nvecwig(:,iwig),iwig,jsite,isite,Rsorted(Dist(iD,iR),1)
                   if(Rsorted(Dist(iD,iR),1).ne.Rdist)then
                      write(unit,"(A,2F12.4)") "ERROR: Rsorted(Dist(iD,iR),1).ne.Rdist",Rsorted(Dist(iD,iR),1),Rdist
-                     stop "build_Uret_singlParam_Vn:  check Ur_report.DAT"
+                     stop "build_Uret_singlParam_Vn: check Ur_report.DAT"
                   endif
                   do iorb=1,Norb
                      do jorb=1,Norb
@@ -2028,7 +2028,7 @@ contains
                   !Regrouping according to distance. The list contains the indexes of all the positions with a given distance
                   call get_pattern(Dist,Rsorted(:,1),1e4*eps,listDim=DistList,IncludeSingle=.true.)
                   !
-                  !add the inter-layer interaction
+                  !add all the inter-layer interactions
                   do iD=1,size(Dist,dim=1)
                      !
                      !iD=1 is the local, iD=2 is the nearest neighbor and so on

@@ -330,6 +330,7 @@ contains
             Hetero%Norb = Norb_model
             call parse_input_variable(Hetero%Nslab,"NSLAB",InputFile,default=20,comment="Global dimension fo the slab.")
             call parse_input_variable(Hetero%Explicit,"EXPLICIT",InputFile,default=[1,10],comment="Index boundaries of the impurities explicitly solved.")
+            call parse_input_variable(Hetero%tzRange,"TZ_RANGE",InputFile,default=1,comment="Range of the longitudinal hopping.")
             Hetero%Nlayer = Hetero%Explicit(2)-Hetero%Explicit(1)+1
             if(Hetero%Nlayer.le.1) stop "read_InputFile: a single layer heterostructure does not make sense."
             !setting up the indexes of the longitudinal hopping: t_1 is the hopping connecting layer #1 and #2

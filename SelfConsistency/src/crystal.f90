@@ -575,7 +575,7 @@ contains
       integer                               :: isite,jsite
       integer                               :: ilayer,jlayer,islab
       integer                               :: na,nb,site_i,site_j,io_l,jo_l
-      real(8)                               :: Rvec(3),Rdist
+      real(8)                               :: Rvec(3),Rdist,fact
       real(8),allocatable                   :: Rsorted(:,:),Rsorted_bkp(:,:)
       integer,allocatable                   :: Rorder(:),Dist(:,:),DistList(:)
       !
@@ -706,7 +706,7 @@ contains
             !
             !User-provided hopping is only nearest neighbor and its the same for all the sites
             allocate(Hr_bulk(Norb*Nsite_bulk,Norb*Nsite_bulk,Nwig));Hr_bulk=czero
-            !all the possible ranges
+            !all the possible ranges, iD=1: local energy iD=2 nearest neighbor hopping
             do iD=1,Trange+1
                !all the indexes within that range
                do iR=1,DistList(iD)
@@ -718,11 +718,13 @@ contains
                   !
                   if(iD.eq.1)then
                      !
+                     !Local energy
                      if(Rsorted(Dist(iD,iR),2).ne.wig0) stop "build_Hk: wrong R=0 local index in position list."
                      if(Rsorted(Dist(iD,iR),1).ne.0d0) stop "build_Hk: wrong R=0 distance in position list."
                      !
                   else
                      !
+                     !nearest neighbor hopping (in the plane)
                      do iorb=1,Norb
                         !
                         !site-orbital indexes of Hr
@@ -740,7 +742,7 @@ contains
             !
          endif
          !
-         if(verbose)then
+         if(verbose.and.(.not.readHr))then
             path="Hr_report.DAT"
             if(present(pathOUTPUT))then
                path=reg(pathOUTPUT)//"Hr_report.DAT"
@@ -749,32 +751,24 @@ contains
             else
                unit=6
             endif
-            if(readHr)then
-               write(unit,'(1A)')        "     H_W90:"
-               write(unit,'(A,I6)')      "     Number of Wannier functions:   ",Num_wann
-               write(unit,'(A,I6)')      "     Number of Wigner-Seitz vectors:",Nrpts
-               write(unit,'(A,I6,A,I6)') "     Deg rows:",Qst," N last row   :",Rst
-            endif
-            if(.not.readHr)then
-               do iD=1,size(Dist,dim=1)
-                  write(unit,"(A)") "     Dist: "//str(iD)
-                  write(unit,"(A8,6A6,20A12)") "ndx" , "n1" , "n2" , "n3" , "iwig" , "jsite" , "isite" , "R" , "H(Ri)"
-                  do iR=1,DistList(iD)
-                     iwig = Rsorted(Dist(iD,iR),2)
-                     jsite = Rsorted(Dist(iD,iR),3)
-                     isite = Rsorted(Dist(iD,iR),4)
-                     Rvec = Rvecwig(:,iwig) + Ruc(:,jsite) - Ruc(:,isite)
-                     Rdist = sqrt(dble(dot_product(Rvec,Rvec)))
-                     write(unit,"(I8,6I6,20F12.4)") iR,Nvecwig(:,iwig),iwig,jsite,isite,Rsorted(Dist(iD,iR),1),&
-                     (dreal(Hr_bulk(iorb + Norb*(isite-1),iorb + Norb*(jsite-1),iwig)),iorb=1,Norb)
-                     if(Rsorted(Dist(iD,iR),1).ne.Rdist)then
-                        write(unit,"(A,2F12.4)") "ERROR: Rsorted(Dist(iD,iR),1).ne.Rdist",Rsorted(Dist(iD,iR),1),Rdist
-                        stop "build_Hk:  check Hr_report.DAT"
-                     endif
-                  enddo
+            do iD=1,size(Dist,dim=1)
+               write(unit,"(A)") "     Dist: "//str(iD)
+               write(unit,"(A8,6A6,20A12)") "ndx" , "n1" , "n2" , "n3" , "iwig" , "jsite" , "isite" , "R" , "H(Ri)"
+               do iR=1,DistList(iD)
+                  iwig = Rsorted(Dist(iD,iR),2)
+                  jsite = Rsorted(Dist(iD,iR),3)
+                  isite = Rsorted(Dist(iD,iR),4)
+                  Rvec = Rvecwig(:,iwig) + Ruc(:,jsite) - Ruc(:,isite)
+                  Rdist = sqrt(dble(dot_product(Rvec,Rvec)))
+                  write(unit,"(I8,6I6,20F12.4)") iR,Nvecwig(:,iwig),iwig,jsite,isite,Rsorted(Dist(iD,iR),1),&
+                  (dreal(Hr_bulk(iorb + Norb*(isite-1),iorb + Norb*(jsite-1),iwig)),iorb=1,Norb)
+                  if(Rsorted(Dist(iD,iR),1).ne.Rdist)then
+                     write(unit,"(A,2F12.4)") "ERROR: Rsorted(Dist(iD,iR),1).ne.Rdist",Rsorted(Dist(iD,iR),1),Rdist
+                     stop "build_Hk:  check Hr_report.DAT"
+                  endif
                enddo
-               deallocate(Rsorted,Dist,DistList)
-            endif
+            enddo
+            deallocate(Rsorted,Dist,DistList)
             if(present(pathOUTPUT))close(unit)
          endif
          !
@@ -826,6 +820,7 @@ contains
                            iR = iR +1
                            !
                            Rsorted(iR,1) = Rdist
+                           if(ilayer.eq.jlayer) Rsorted(iR,1)=1e6               !push away the hopping on the same layer
                            Rsorted(iR,2) = iwig
                            Rsorted(iR,3) = jsite
                            Rsorted(iR,4) = jlayer
@@ -845,8 +840,20 @@ contains
                   !Regrouping according to distance. The list contains the indexes of all the positions with a given distance
                   call get_pattern(Dist,Rsorted(:,1),1e4*eps,listDim=DistList,IncludeSingle=.true.)
                   !
-                  !add the inter-layer hopping up to the first Trange neighbors
-                  do iD=1,Trange+1
+                  !add the inter-layer hopping up to the first neighbors
+                  !QUI ID=1 È IL PRIMO VICINO MENTRE ID=2 È IL SECONDO VICINO DATO TUTTO TRA LAYER DIVERSI DATO CHE HO TOLTO
+                  !L INDICE DENTRO LO STESSO LAYER ORA DEVO AGGIUNGERE UN QUALCHE SCALING A SECONDA DELLA DISTANZA
+                  !
+                  !QUI LO DEVO TOGLIERE PERCHE VOGLIO I PIRMI DUE TRA LAYER DIVERSI
+                  !MENTRE PER L INTERAZIONE NON POSSO TENERE TUTTE LE DISTANZE TANTO IL CUTOFF È DATO DAL VRANGE CHE
+                  !MI DICE SE HO, O MENO, INTERAZIONE TRA I LAYER.
+                  !
+                  do iD=1,Hetero%tzRange
+                     !
+                     !Rescaling factor proportional to the relative distance
+                     fact = Rsorted(Dist(1,1),1) / Rsorted(Dist(iD,1),1)
+                     write(*,*)"fact",fact,iD
+                     !
                      !all the indexes within that range
                      do iR=1,DistList(iD)
                         !
@@ -862,7 +869,7 @@ contains
                            jo = iorb + Norb*(jsite-1) + Norb*Nsite_bulk*(jlayer-1)
                            !
                            islab = min(ilayer,jlayer) + Hetero%Explicit(1) - 1
-                           if(abs(ilayer-jlayer).eq.1) Hr(io,jo,iwig) = dcmplx(Hetero%tz(iorb,islab),0d0)
+                           if(abs(ilayer-jlayer).eq.1) Hr(io,jo,iwig) = dcmplx(Hetero%tz(iorb,islab),0d0)*fact
                            !
                         enddo
                         !
@@ -891,8 +898,7 @@ contains
                            write(unit,"(I8,8I6,20F12.4)") iR,Nvecwig(:,iwig),iwig,ilayer,isite,jlayer,jsite,Rsorted(Dist(iD,iR),1),&
                            (dreal(Hr(iorb + Norb*(isite-1) + Norb*Nsite_bulk*(ilayer-1),iorb + Norb*(jsite-1) + Norb*Nsite_bulk*(jlayer-1),iwig)),iorb=1,Norb)
                            if(Rsorted(Dist(iD,iR),1).ne.Rdist)then
-                              write(unit,"(A,2F12.4)") "ERROR: Rsorted(Dist(iD,iR),1).ne.Rdist",Rsorted(Dist(iD,iR),1),Rdist
-                              stop "build_Hk:  check Hr_report_Hetero"
+                              write(unit,"(A,2F20.4)") "Warning: Rsorted(Dist(iD,iR),1).ne.Rdist",Rsorted(Dist(iD,iR),1),Rdist
                            endif
                         enddo
                      enddo

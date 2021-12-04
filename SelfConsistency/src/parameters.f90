@@ -254,6 +254,7 @@ module parameters
       integer                               :: Norb=0
       integer                               :: Explicit(2)=[1,1]
       integer                               :: tzIndex(2)=[0,0]
+      integer                               :: tzRange=0
       real(8),allocatable                   :: tz(:,:)                          ![Norb,Nlayer]
       complex(8),allocatable                :: tkz(:,:,:,:)                     ![Norb,Norb,Nkpt,Nlayer]
       complex(8),allocatable                :: tkz_path(:,:,:,:)                ![Norb,Norb,Nkpt,Nlayer]
