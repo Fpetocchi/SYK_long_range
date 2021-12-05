@@ -575,9 +575,10 @@ contains
       integer                               :: isite,jsite
       integer                               :: ilayer,jlayer,islab
       integer                               :: na,nb,site_i,site_j,io_l,jo_l
-      real(8)                               :: Rvec(3),Rdist,fact
+      real(8)                               :: Rvec(3),Rdist!,fact
       real(8),allocatable                   :: Rsorted(:,:),Rsorted_bkp(:,:)
       integer,allocatable                   :: Rorder(:),Dist(:,:),DistList(:)
+      logical,allocatable                   :: layerDone(:)
       !
       !
       if(verbose)write(*,"(A)") "---- build_Hk"
@@ -848,11 +849,12 @@ contains
                   !MENTRE PER L INTERAZIONE NON POSSO TENERE TUTTE LE DISTANZE TANTO IL CUTOFF È DATO DAL VRANGE CHE
                   !MI DICE SE HO, O MENO, INTERAZIONE TRA I LAYER.
                   !
+                  allocate(layerDone(Hetero%Nlayer));layerDone=.false.
                   do iD=1,Hetero%tzRange
                      !
                      !Rescaling factor proportional to the relative distance
-                     fact = Rsorted(Dist(1,1),1) / Rsorted(Dist(iD,1),1)
-                     write(*,*)"fact",fact,iD
+                     !fact = Rsorted(Dist(1,1),1) / Rsorted(Dist(iD,1),1)
+                     !write(*,*)"fact",fact,iD
                      !
                      !all the indexes within that range
                      do iR=1,DistList(iD)
@@ -869,12 +871,17 @@ contains
                            jo = iorb + Norb*(jsite-1) + Norb*Nsite_bulk*(jlayer-1)
                            !
                            islab = min(ilayer,jlayer) + Hetero%Explicit(1) - 1
-                           if(abs(ilayer-jlayer).eq.1) Hr(io,jo,iwig) = dcmplx(Hetero%tz(iorb,islab),0d0)*fact
+                           !PROJECT SPECIFIC (TaS2) >>>
+                           !if(abs(ilayer-jlayer).eq.1) Hr(io,jo,iwig) = dcmplx(Hetero%tz(iorb,islab),0d0)*fact
+                           if((abs(ilayer-jlayer).eq.1).and.(.not.layerDone(jlayer))) Hr(io,jo,iwig) = dcmplx(Hetero%tz(iorb,islab),0d0)
+                           !>>> PROJECT SPECIFIC (TaS2)
                            !
                         enddo
                         !
                      enddo
+                     layerDone(jlayer)=.true.
                   enddo
+                  deallocate(layerDone)
                   !
                   if(verbose)then
                      path="Hr_report_Hetero_"//str(site_i)//".DAT"
