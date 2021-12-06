@@ -388,13 +388,12 @@ contains
       !
       complex(8),allocatable                :: invW(:,:)
       real(8)                               :: Beta
-      integer                               :: Nbp,Nkpt,Nmats
+      integer                               :: Nbp,Norb,Nkpt,Nmats
       integer                               :: iq,iw,iwU
-      integer                               :: unit,ib
+      integer                               :: unit,iorb
       real(8),allocatable                   :: wmats(:)
       complex(8),allocatable                :: Pwk(:,:,:,:)
       logical                               :: Ustatic
-
       !
       !
       if(verbose)write(*,"(A)") "---- calc_chi"
@@ -413,6 +412,7 @@ contains
       if(Umodel.and.(Umats%Npoints.eq.1))Ustatic=.true.
       if(Ustatic)write(*,"(A)")"     Static U bare."
       !
+      Norb = int(sqrt(dble(Chi%Nbp)))
       Nbp = Chi%Nbp
       Nkpt = Chi%Nkpt
       Beta = Chi%Beta
@@ -472,9 +472,10 @@ contains
          wmats = BosonicFreqMesh(Beta,Nmats)
          do iq=1,Lttc%Nkpt_path
              unit = free_unit()
-             open(unit,file=reg(pathPk)//"Pk_w_k"//str(iq)//".DAT",form="formatted",status="unknown",position="rewind",action="write")
+             open(unit,file=reg(pathPk)//"ChiC_w_k"//str(iq)//".DAT",form="formatted",status="unknown",position="rewind",action="write")
              do iw=1,Nmats
-                 write(unit,"(200E20.12)") wmats(iw),(dreal(Pwk(ib,ib,iw,iq)),ib=1,Nbp)
+                 write(unit,"(200E20.12)") Lttc%Kpathaxis(iq)/Lttc%Kpathaxis(Lttc%Nkpt_path),wmats(iw),&
+                                          (dreal(Pwk(iorb+Norb*(iorb-1),iorb+Norb*(iorb-1),iw,iq)),iorb=1,Norb)
              enddo
              close(unit)
          enddo

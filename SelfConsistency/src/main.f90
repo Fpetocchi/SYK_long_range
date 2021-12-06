@@ -118,7 +118,7 @@ program SelfConsistency
          endif
          !
          if(dump_Chik) then
-            call calc_chi(Chi,Ulat,Plat,Crystal,pathPk=reg(ItFolder)//"Pk_path/")
+            call calc_chi(Chi,Ulat,Plat,Crystal,pathPk=reg(ItFolder)//"ChiC_path/")
             call DeallocateBosonicField(Chi)
          endif
          !
