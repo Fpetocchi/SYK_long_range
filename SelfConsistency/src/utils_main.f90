@@ -1893,11 +1893,13 @@ contains
       real(8),allocatable                   :: wmats(:),tau(:),Moments(:,:,:)
       real(8),allocatable                   :: Uinst(:,:),rhoLAT(:),HartreeLAT(:),N_s(:,:,:)
       real(8),allocatable                   :: Eloc(:,:),ElocOld(:,:),PrintLine(:),coef01(:,:)
-      real(8)                               :: tailShift,CrystalField
+      real(8)                               :: tailShift,CrystalField,taup
       complex(8),allocatable                :: zeta(:,:,:),invG(:,:),Rot(:,:)
       complex(8),allocatable                :: Dfit(:,:,:),Dmats(:,:,:),Ditau(:,:,:)
-      complex(8),allocatable                :: invCurlyG(:,:,:)!,DeltaTail(:)
+      complex(8),allocatable                :: invCurlyG(:,:,:)
+      real(8),allocatable                   :: tauF(:),ReadLine(:),DitauOld(:,:,:)
       character(len=255)                    :: file,MomDir
+      logical                               :: filexists
       !
       !
       write(*,"(A)") new_line("A")//new_line("A")//"---- calc_Delta of "//reg(SiteName(isite))
@@ -2080,20 +2082,23 @@ contains
       enddo
       deallocate(invCurlyG)
       !
-      !Mixing Delta and local energy
+      !Mixing Delta(iw) and local energy
       if((Mixing_Delta.gt.0d0).and.(Iteration.gt.0))then
          !
          write(*,"(A)")"     Mixing Delta and Eo with "//str(Mixing_Delta,3)//" of old solution."
-         call AllocateFermionicField(DeltaOld,Norb,Nmats,Beta=Beta)
-         call read_FermionicField(DeltaOld,reg(PrevItFolder)//"Solver_"//reg(SiteName(isite))//"/","D_"//reg(SiteName(isite))//"_w")
-         do ispin=1,Nspin
-            do iw=1,Nmats
-               do iorb=1,Norb
-                  Dmats(iorb,iw,ispin) = (1d0-Mixing_Delta)*Dmats(iorb,iw,ispin) + Mixing_Delta*DeltaOld%ws(iorb,iorb,iw,ispin)
+         if(.not.Mixing_Delta_tau)then
+            write(*,"(A)")"     Mixing Delta(iw)."
+            call AllocateFermionicField(DeltaOld,Norb,Nmats,Beta=Beta)
+            call read_FermionicField(DeltaOld,reg(PrevItFolder)//"Solver_"//reg(SiteName(isite))//"/","D_"//reg(SiteName(isite))//"_w")
+            do ispin=1,Nspin
+               do iw=1,Nmats
+                  do iorb=1,Norb
+                     Dmats(iorb,iw,ispin) = (1d0-Mixing_Delta)*Dmats(iorb,iw,ispin) + Mixing_Delta*DeltaOld%ws(iorb,iorb,iw,ispin)
+                  enddo
                enddo
             enddo
-         enddo
-         call DeallocateFermionicField(DeltaOld)
+            call DeallocateFermionicField(DeltaOld)
+         endif
          !
          allocate(ElocOld(Norb,Nspin));ElocOld=0d0
          file = reg(PrevItFolder)//"Solver_"//reg(SiteName(isite))//"/Eloc.DAT"
@@ -2164,6 +2169,42 @@ contains
             enddo
          enddo
       enddo
+      !
+      !Mixing Delta(tau)
+      if((Mixing_Delta.gt.0d0).and.(Iteration.gt.0).and.Mixing_Delta_tau)then
+         !
+         !reading old Delta for each site
+         allocate(tauF(Solver%NtauF_in));tauF = linspace(0d0,Beta,Solver%NtauF_in)
+         allocate(DitauOld(SiteNorb(isite),Solver%NtauF_in,Nspin));DitauOld=czero
+         allocate(ReadLine(SiteNorb(isite)*Nspin))
+         file = reg(PrevItFolder)//"Solver_"//reg(SiteName(isite))//"/Delta_t.DAT"
+         call inquireFile(reg(file),filexists,verb=verbose)
+         unit = free_unit()
+         open(unit,file=reg(file),form="formatted",status="old",position="rewind",action="read")
+         do itau=1,Solver%NtauF_in
+            ReadLine=0d0
+            read(unit,*) taup,ReadLine
+            if(abs(taup-tauF(itau)).gt.eps) stop "Reading Delta_t.DAT from previous iteration: Impurity fermionic tau mesh does not coincide."
+            !
+            ndx=1
+            do iorb=1,SiteNorb(isite)
+               do ispin=1,Nspin
+                  DitauOld(iorb,itau,ispin) = dcmplx(ReadLine(ndx),0d0)
+                  ndx=ndx+1
+               enddo
+            enddo
+            !
+         enddo
+         deallocate(ReadLine,tauF)
+         !
+         Ditau = (1d0-Mixing_Delta)*Ditau + Mixing_Delta*DitauOld
+         !
+         deallocate(DitauOld)
+         !
+      endif
+      !
+      !for half-filled model calculations the local energy is zero
+      !if(Solver%removeUhalf) Eloc=0d0
       !
       !Write Eloc and chemical potential
       if(addCF)then
@@ -2683,7 +2724,7 @@ contains
          !
          !Read the impurity Green's function
          allocate(tauF(Solver%NtauF_in));tauF = linspace(0d0,Beta,Solver%NtauF_in)
-         allocate(Gitau(SolverObs(isite)%Norb,Solver%NtauF_in,Nspin));Gitau=czero
+         allocate(Gitau(SolverObs(isite)%Norb,Solver%NtauF_in,Nspin));Gitau=dcmplx(-eps,0d0)
          allocate(ReadLine(SolverObs(isite)%Nflavor))
          file = reg(PrevItFolder)//"Solver_"//SolverObs(isite)%Name//"/resultsQMC/Gimp_t.DAT"
          call inquireFile(reg(file),filexists,verb=verbose)
@@ -2692,12 +2733,14 @@ contains
          do itau=1,Solver%NtauF_in
             ReadLine=0d0
             read(unit,*) taup,ReadLine
-            if(abs(taup-tauF(itau)).gt.eps) stop "Impurity fermionic tau mesh does not coincide."
+            if(abs(taup-tauF(itau)).gt.eps) stop "Reading Gimp_t.DAT from previous iteration: Impurity fermionic tau mesh does not coincide."
             !
             ndx=1
             do iorb=1,SolverObs(isite)%Norb
                do ispin=1,Nspin
-                  Gitau(iorb,itau,ispin) = dcmplx(ReadLine(ndx),0d0)
+                  !TEST>>>
+                  if(ReadLine(ndx).le.0d0) Gitau(iorb,itau,ispin) = dcmplx(ReadLine(ndx),0d0)
+                  !>>>TEST
                   ndx=ndx+1
                enddo
             enddo
@@ -2906,7 +2949,7 @@ contains
                !
                ReadLine=0d0
                read(unit,*) taup,ReadLine
-               if(abs(taup-tauB(itau)).gt.eps) stop "Impurity bosonic tau mesh does not coincide."
+               if(abs(taup-tauB(itau)).gt.eps) stop "Reading nn_t.DAT from previous iteration: Impurity bosonic tau mesh does not coincide."
                !
                !this is cumbersome but better be safe
                ndx=1

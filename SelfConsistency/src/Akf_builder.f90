@@ -73,7 +73,7 @@ program Akw_builder
    !
    !
    call interpolateHk2Path(Crystal,reg(structure),Nkpt_path,doplane=FermiSurf,Nkpt_Kside=Nkpt_Fermi,hetero=Hetero)
-   Crystal%Nkpt_path = Crystal%Nkpt_path-1
+   Crystal%Nkpt_path = Crystal%Nkpt_path !-1
    !
    !
    do ispin=1,Nspin
@@ -319,7 +319,7 @@ contains
          do ik=1,Nkpt
             do iw=1,Nreal
                if(abs(wreal(iw)).gt.0.5*KKcutoff)cycle
-               write(unit,"(1I5,200E20.12)") ik,Crystal%Kpathaxis(ik),wreal(iw),(Akw_orb(iorb,iw,ik),iorb=1,Norb)
+               write(unit,"(1I5,200E20.12)") ik,Crystal%Kpathaxis(ik)/Crystal%Kpathaxis(Crystal%Nkpt_path),wreal(iw),(Akw_orb(iorb,iw,ik),iorb=1,Norb)
             enddo
             write(unit,*)
          enddo

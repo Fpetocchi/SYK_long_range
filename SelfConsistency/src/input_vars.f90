@@ -182,6 +182,7 @@ module input_vars
    logical,public                           :: ChiDiag
    logical,public                           :: removeCDW_C
    logical,public                           :: removeCDW_P
+   logical,public                           :: Mixing_Delta_tau
    real(8),public                           :: Mixing_Delta
    real(8),public                           :: Mixing_curlyU
    logical,public                           :: causal_D
@@ -562,6 +563,7 @@ contains
       call parse_input_variable(ChiDiag,"CHI_DIAG",InputFile,default=.false.,comment="Flag to remove the off-diagonal components of the local charge susceptibility.")
       call parse_input_variable(removeCDW_C,"CDW_CHI",InputFile,default=.false.,comment="Flag to remove the iw=0 divergence in the local charge susceptibility.")
       call parse_input_variable(removeCDW_P,"CDW_PI",InputFile,default=.false.,comment="Flag to remove the iw=0 divergence in the local polarization.")
+      call parse_input_variable(Mixing_Delta_tau,"MIX_D_TAU",InputFile,default=.true.,comment="Flag to mix Delta(tau) if false the mix is done with Delta(iw).")
       call parse_input_variable(Mixing_Delta,"MIX_D",InputFile,default=0.5d0,comment="Fraction of the old iteration Delta.")
       call parse_input_variable(Mixing_curlyU,"MIX_U",InputFile,default=0.5d0,comment="Fraction of the old iteration curlyU.")
       call parse_input_variable(causal_D,"CAUSAL_D",InputFile,default=.false.,comment="Flag to employ generalized fermionic cavity construction. Active only for GW+EDMFT calculation.")

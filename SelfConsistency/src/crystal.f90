@@ -956,7 +956,7 @@ contains
          do ik=1,nkpt
             if(Norb.gt.1)call check_Hermiticity(Hk(:,:,ik),eps)
          enddo
-         where(abs((Hk))<eps) Hk=czero
+         where(abs((Hk)).lt.eps) Hk=czero
          !
       endif
       !

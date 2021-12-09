@@ -392,7 +392,7 @@ contains
       integer                               :: iq,iw,iwU
       integer                               :: unit,iorb
       real(8),allocatable                   :: wmats(:)
-      complex(8),allocatable                :: Pwk(:,:,:,:)
+      complex(8),allocatable                :: Pwk_noG(:,:,:,:),Pwk(:,:,:,:)
       logical                               :: Ustatic
       !
       !
@@ -436,9 +436,6 @@ contains
          !
          do iq=1,Chi%Nkpt
             !
-            !avoid the gamma point
-            if(iq.eq.Umats%iq_gamma)cycle
-            !
             ! [ 1 - U*Pi ]
             invW = zeye(Chi%Nbp) - matmul(Umats%screened(:,:,iwU,iq),Pmats%screened(:,:,iw,iq))
             !
@@ -463,8 +460,15 @@ contains
             write(*,"(A)") "     calc_chi: re-initializing the K-path."
             call interpolateHk2Path(Lttc,reg(structure),Nkpt_path)
          endif
+         !
+         allocate(Pwk_noG(Nbp,Nbp,Nmats,Nkpt));Pwk_noG=czero
+         do iq=1,Chi%Nkpt
+            Pwk_noG(:,:,:,iq) = Chi%screened(:,:,:,iq) - Chi%screened(:,:,:,Umats%iq_gamma)
+         enddo
+         !
          allocate(Pwk(Nbp,Nbp,Nmats,Lttc%Nkpt_path));Pwk=czero
-         call wannierinterpolation(Lttc%Nkpt3,Lttc%kpt,Lttc%kptpath(:,1:Lttc%Nkpt_path),Chi%screened,Pwk)
+         call wannierinterpolation(Lttc%Nkpt3,Lttc%kpt,Lttc%kptpath(:,1:Lttc%Nkpt_path),Pwk_noG,Pwk)
+         deallocate(Pwk_noG)
          !
          !Print susceptibility along path
          call createDir(reg(pathPk),verb=verbose)
@@ -474,8 +478,8 @@ contains
              unit = free_unit()
              open(unit,file=reg(pathPk)//"ChiC_w_k"//str(iq)//".DAT",form="formatted",status="unknown",position="rewind",action="write")
              do iw=1,Nmats
-                 write(unit,"(200E20.12)") Lttc%Kpathaxis(iq)/Lttc%Kpathaxis(Lttc%Nkpt_path),wmats(iw),&
-                                          (dreal(Pwk(iorb+Norb*(iorb-1),iorb+Norb*(iorb-1),iw,iq)),iorb=1,Norb)
+                write(unit,"(200E20.12)") Lttc%Kpathaxis(iq)/Lttc%Kpathaxis(Lttc%Nkpt_path),wmats(iw),&
+               (dreal(  Pwk(iorb+Norb*(iorb-1),iorb+Norb*(iorb-1),iw,iq)+Chi%screened(iorb+Norb*(iorb-1),iorb+Norb*(iorb-1),iw,Umats%iq_gamma)),iorb=1,Norb)
              enddo
              close(unit)
          enddo
