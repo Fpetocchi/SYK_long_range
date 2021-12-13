@@ -15,31 +15,33 @@ declare -a dirindex=( "86" "87" "78" "79" )
 #------------------------------------------------------------------------------#
 
 GENMAT=/home/petocchif/1_GW_EDMFT/nobackup/1_production/Calculation_template
-for it in `seq  1009 1 1013` ; do
+for it in `seq  45 1 45` ; do
    cd $it/Convergence
    cp ${GENMAT}/${MATERIAL}/MaxEnt/MaxEnt.sh .
    chmod 700 MaxEnt.sh
    #
-   ./MaxEnt.sh -e 0.005 -w 5000 -W  15 -f G -o 1 -i qmc_S1 -p ${GENMAT}
-   ./MaxEnt.sh -e 0.005 -w 5000 -W  15 -f G -o 1 -i qmc_S2 -p ${GENMAT}
-   ./MaxEnt.sh -e 0.005 -w 5000 -W  15 -f G -o 1 -i qmc_S3 -p ${GENMAT}
-   ./MaxEnt.sh -e 0.005 -w 5000 -W  15 -f G -o 1 -i qmc_S4 -p ${GENMAT}
-   ./MaxEnt.sh -e 0.005 -w 5000 -W  15 -f G -o 1 -i qmc_S5 -p ${GENMAT}
-   ./MaxEnt.sh -e 0.005 -w 5000 -W  15 -f G -o 1 -i qmc_S6 -p ${GENMAT}
-   ./MaxEnt.sh -e 0.005 -w 5000 -W  15 -f G -o 1 -i qmc_S7 -p ${GENMAT}
-   ./MaxEnt.sh -e 0.005 -w 5000 -W  15 -f G -o 1 -i qmc_S8 -p ${GENMAT}
+   ./MaxEnt.sh -e 0.001 -w 5000 -W  15 -f G -o 1 -i qmc_S1 -p ${GENMAT}
+   ./MaxEnt.sh -e 0.001 -w 5000 -W  15 -f G -o 1 -i qmc_S2 -p ${GENMAT}
+   ./MaxEnt.sh -e 0.001 -w 5000 -W  15 -f G -o 1 -i qmc_S3 -p ${GENMAT}
+   ./MaxEnt.sh -e 0.001 -w 5000 -W  15 -f G -o 1 -i qmc_S4 -p ${GENMAT}
+   ./MaxEnt.sh -e 0.001 -w 5000 -W  15 -f G -o 1 -i qmc_S5 -p ${GENMAT}
+   ./MaxEnt.sh -e 0.001 -w 5000 -W  15 -f G -o 1 -i qmc_S6 -p ${GENMAT}
+   ./MaxEnt.sh -e 0.001 -w 5000 -W  15 -f G -o 1 -i qmc_S7 -p ${GENMAT}
+   ./MaxEnt.sh -e 0.001 -w 5000 -W  15 -f G -o 1 -i qmc_S8 -p ${GENMAT}
    #
-   ./MaxEnt.sh -e 0.005 -w 5000 -W  15 -f G -o 1 -i lat -p ${GENMAT}
-   ./MaxEnt.sh -e 0.005 -w 5000 -W  15 -f G -o 2 -i lat -p ${GENMAT}
-   ./MaxEnt.sh -e 0.005 -w 5000 -W  15 -f G -o 3 -i lat -p ${GENMAT}
-   ./MaxEnt.sh -e 0.005 -w 5000 -W  15 -f G -o 4 -i lat -p ${GENMAT}
-   ./MaxEnt.sh -e 0.005 -w 5000 -W  15 -f G -o 5 -i lat -p ${GENMAT}
-   ./MaxEnt.sh -e 0.005 -w 5000 -W  15 -f G -o 6 -i lat -p ${GENMAT}
-   ./MaxEnt.sh -e 0.005 -w 5000 -W  15 -f G -o 7 -i lat -p ${GENMAT}
-   ./MaxEnt.sh -e 0.005 -w 5000 -W  15 -f G -o 8 -i lat -p ${GENMAT}
+   #./MaxEnt.sh -e 0.002 -w 5000 -W  15 -f G -o 1 -i lat -p ${GENMAT}
+   #./MaxEnt.sh -e 0.002 -w 5000 -W  15 -f G -o 2 -i lat -p ${GENMAT}
+   #./MaxEnt.sh -e 0.002 -w 5000 -W  15 -f G -o 3 -i lat -p ${GENMAT}
+   #./MaxEnt.sh -e 0.002 -w 5000 -W  15 -f G -o 4 -i lat -p ${GENMAT}
+   #./MaxEnt.sh -e 0.002 -w 5000 -W  15 -f G -o 5 -i lat -p ${GENMAT}
+   #./MaxEnt.sh -e 0.002 -w 5000 -W  15 -f G -o 6 -i lat -p ${GENMAT}
+   #./MaxEnt.sh -e 0.002 -w 5000 -W  15 -f G -o 7 -i lat -p ${GENMAT}
+   #./MaxEnt.sh -e 0.002 -w 5000 -W  15 -f G -o 8 -i lat -p ${GENMAT}
    #
    cd ../../
 done
+
+
 
 
 for k in `seq 1 1 8`;do
@@ -56,18 +58,25 @@ done
 ################################################################################
 o=1;s=1
 set xrange [0:1];h=4
-set yrange [-h:8*h];set grid
-  p for [i=1:8] '< grep " '.i.'   '.i.' " ./'.it.'/Glat_w_s'.s.'.DAT' u 1:($5+(i-1)*h) w lp lw 3 t 'ImGlat '.i
-rep for [i=1:8] '< grep " '.i.'   '.i.' " ./'.it.'/Gimp_w_s'.s.'.DAT' u 1:($5+(i-1)*h) w l  lw 2 lc rgb 'black' notitle
+set yrange [-h:n*h];set grid
+  p for [i=1:n] '< grep " '.i.'   '.i.' " ./'.it.'/Glat_w_s'.s.'.DAT' u 1:($5+(i-1)*h) w lp lw 3 t 'ImGlat '.i
+rep for [i=1:n] '< grep " '.i.'   '.i.' " ./'.it.'/Gimp_w_s'.s.'.DAT' u 1:($5+(i-1)*h) w l  lw 2 lc rgb 'black' notitle
+
+
+
 
 #curly
-p for [i=1:8] '< grep " 1   1   1   1" '.it.'/Solver_S'.i.'/curlyU_S'.i.'_w.DAT' every ::1 u 1:6 w lp lw 3
+p for [i=1:n] '< grep " 1   1   1   1" '.it.'/Solver_S'.i.'/curlyU_S'.i.'_w.DAT' every ::1 u 1:6 w lp lw 3
 
 p for [i=1:8] '< grep " '.i.'   '.i.'   '.i.'   '.i.'" '.it.'/Wlat_w.DAT' every ::1 u 1:6 w lp lw 3
 
-p for [i=1:8]  ''.it.'/Solver_S'.i.'/Delta_t.DAT' u 1:2 w l lw 3 t ''.i
+p for [i=1:n]  ''.it.'/Solver_S'.i.'/Delta_t.DAT' u 1:2 w l lw 3 t ''.i
 
-p for [i=1:8]  ''.it.'/Solver_S'.i.'/resultsQMC/Gimp_t.DAT' u 1:2 w l lw 3 t ''.i
+p for [i=1:n]  ''.it.'/Solver_S'.i.'/resultsQMC/Gimp_t.DAT' u 1:2 w l lw 3 t ''.i
+
+p for [i=1:n]  ''.it.'/Solver_S'.i.'/D_S'.i.'_w_s1.DAT' u 1:4 w l lw 3 t ''.i
+
+p for [i=1:n]  '< grep " '.i.'   '.i.' " '.it.'/Simp_w_s1.DAT' u 1:4 w l lw 3 t ''.i
 
 
 
@@ -75,22 +84,43 @@ p for [i=1:8]  ''.it.'/Solver_S'.i.'/resultsQMC/Gimp_t.DAT' u 1:2 w l lw 3 t ''.
 ################################################################################
 #                            LAYER-RESOLVED SPECTRA                            #
 ################################################################################
-set ytics 4; set xrange [-0.5:0.5]; set yrange [0:38]; set grid; set xtic 0.1
 o=1;s=1
-set xrange [0:1];h=4
 set yrange [-h:8*h];set grid
 set ytics 4; set xrange [-0.5:0.5]; set yrange [0:38]; set grid; set xtic 0.1
-#p 'z_old_implementation/tk0.050_t0.225_GOOD/1000/Convergence/MaxEnt_Gqmc_S1_o1_s1/Gqmc_S1_t_o1_s1.DAT_dos.dat' u 1:2 w lp lw 2
 p for [i=1:8] './'.it.'/Convergence/MaxEnt_Gqmc_S'.i.'_o1_s1/Gqmc_S'.i.'_t_o1_s1.DAT_dos.dat' u 1:($2+(i-1)*4) w l lw 3 lc i t ' '.i
+rep for [i=1:8] './'.it.'/Convergence/MaxEnt_Gqmc_v1/MaxEnt_Gqmc_S'.i.'_o1_s1/Gqmc_S'.i.'_t_o1_s1.DAT_dos.dat' u 1:($2+(i-1)*4) w l lw 1  lc rgb 'black' t ''
+
+
 rep for [i=1:8] './'.it.'/Convergence/MaxEnt_Glat_o'.i.'_s1/Glat_t_o'.i.'_s1.DAT_dos.dat' u 1:($2+(i-1)*4) w l lw 1  lc rgb 'black' t ''
+
+
+#p 'z_old_implementation/tk0.050_t0.225_GOOD/1000/Convergence/MaxEnt_Gqmc_S1_o1_s1/Gqmc_S1_t_o1_s1.DAT_dos.dat' u 1:2 w lp lw 2
+
 
 #LDA
 set ytics 1; set xrange [-0.5:0.5]; h=1 ; set yrange [0:8*h]; set grid; set xtic 0.05
 p for [i=1:8] 'LDA/Akw_Hk_'.i.i.'.lda' u 1:($2+(i-1)*h) w l lw 3 lc i t ' '.i
 
 
+#MOTT
+it='tk0.045_t0.2/52'
+set title 'Mott ending'
+f=0.02
+h=0.78
+set xrange [-0.6:0.6]; set yrange [0:9]; set grid; set xtic 0.1
+p 'Butler_Mott.DAT' u ($1/1000):2 w l lw 3 t 'Butler', 'Lee_Mott.DAT' u (($1-43)/1000):($2*h) w l lw 3 t 'Lee'
+rep '4_stacking_LA/Results_beta400/'.it.'/Convergence/MaxEnt_Gqmc_S1_o1_s1/Gqmc_S1_t_o1_s1.DAT_dos.dat' u ($1-f):2 w l lw 3 t  'Petocchi'
 
 
+
+#BONDING
+it='tk0.045_t0.2/42'
+set title 'Bonding ending'
+f=0.0
+set xrange [-0.6:0.6]; set yrange [0:9]; set grid; set xtic 0.1
+p 'Butler_Bonding.DAT' u ($1/1000-0.02):2 w l lw 3 t 'Butler', 'Lee_Bonding.DAT' u (($1+65)/1000-0.02):($2-0.975) w l lw 3 t 'Lee'
+rep '2_stacking_AL/Results_beta400/'.it.'/Convergence/MaxEnt_Gqmc_S1_o1_s1/Gqmc_S1_t_o1_s1.DAT_dos.dat' u ($1-f):2 w l lw 3 t  'Petocchi'
+#rep '2_stacking_AL/Results_beta400/'.it.'/Convergence/MaxEnt_Glat_o1_s1/Glat_t_o1_s1.DAT_dos.dat' u ($1-f):2 w l lw 1  lc rgb 'black' t ''
 
 
 

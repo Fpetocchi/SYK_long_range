@@ -2131,7 +2131,8 @@ contains
             Dmats(iorb,:,:) = DeltaSym%ws(iorb,iorb,:,:)
          enddo
          call DeallocateFermionicField(DeltaSym)
-      elseif(EqvGWndx%para.eq.1)then
+      endif
+      if(EqvGWndx%para.eq.1)then
          Dmats(:,:,1) = (Dmats(:,:,1) + Dmats(:,:,2))/2d0
          Dmats(:,:,2) = Dmats(:,:,1)
       endif
@@ -2175,8 +2176,8 @@ contains
          !
          !reading old Delta for each site
          allocate(tauF(Solver%NtauF_in));tauF = linspace(0d0,Beta,Solver%NtauF_in)
-         allocate(DitauOld(SiteNorb(isite),Solver%NtauF_in,Nspin));DitauOld=czero
-         allocate(ReadLine(SiteNorb(isite)*Nspin))
+         allocate(DitauOld(Norb,Solver%NtauF_in,Nspin));DitauOld=czero
+         allocate(ReadLine(Nflavor))
          file = reg(PrevItFolder)//"Solver_"//reg(SiteName(isite))//"/Delta_t.DAT"
          call inquireFile(reg(file),filexists,verb=verbose)
          unit = free_unit()
@@ -2187,7 +2188,7 @@ contains
             if(abs(taup-tauF(itau)).gt.eps) stop "Reading Delta_t.DAT from previous iteration: Impurity fermionic tau mesh does not coincide."
             !
             ndx=1
-            do iorb=1,SiteNorb(isite)
+            do iorb=1,Norb
                do ispin=1,Nspin
                   DitauOld(iorb,itau,ispin) = dcmplx(ReadLine(ndx),0d0)
                   ndx=ndx+1
@@ -2200,6 +2201,12 @@ contains
          Ditau = (1d0-Mixing_Delta)*Ditau + Mixing_Delta*DitauOld
          !
          deallocate(DitauOld)
+         !
+         !Recompute Delta(iw) because CurlyG(iw) needs to be updated
+         Dmats=czero
+         do ispin=1,Nspin
+            call Fitau2mats_vec(Beta,Ditau(:,:,ispin),Dmats(:,:,ispin),tau_uniform=.true.)
+         enddo
          !
       endif
       !
@@ -2724,7 +2731,7 @@ contains
          !
          !Read the impurity Green's function
          allocate(tauF(Solver%NtauF_in));tauF = linspace(0d0,Beta,Solver%NtauF_in)
-         allocate(Gitau(SolverObs(isite)%Norb,Solver%NtauF_in,Nspin));Gitau=dcmplx(-eps,0d0)
+         allocate(Gitau(SolverObs(isite)%Norb,Solver%NtauF_in,Nspin));Gitau=czero !dcmplx(-eps,0d0)
          allocate(ReadLine(SolverObs(isite)%Nflavor))
          file = reg(PrevItFolder)//"Solver_"//SolverObs(isite)%Name//"/resultsQMC/Gimp_t.DAT"
          call inquireFile(reg(file),filexists,verb=verbose)
@@ -2739,8 +2746,9 @@ contains
             do iorb=1,SolverObs(isite)%Norb
                do ispin=1,Nspin
                   !TEST>>>
-                  if(ReadLine(ndx).le.0d0) Gitau(iorb,itau,ispin) = dcmplx(ReadLine(ndx),0d0)
+                  !if(ReadLine(ndx).le.0d0) Gitau(iorb,itau,ispin) = dcmplx(ReadLine(ndx),0d0)
                   !>>>TEST
+                  Gitau(iorb,itau,ispin) = dcmplx(ReadLine(ndx),0d0)
                   ndx=ndx+1
                enddo
             enddo
