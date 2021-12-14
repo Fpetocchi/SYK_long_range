@@ -316,13 +316,22 @@ contains
          path = reg(MaxEnt_K)//"Akw_Gk"//reg(suffix_)//"_s"//str(ispin)//".DAT"
          unit = free_unit()
          open(unit,file=reg(path),form="formatted",status="unknown",position="rewind",action="write")
-         do ik=1,Nkpt
+         do ik=1,Crystal%Nkpt_path
             do iw=1,Nreal
                if(abs(wreal(iw)).gt.0.5*KKcutoff)cycle
-               write(unit,"(1I5,200E20.12)") ik,Crystal%Kpathaxis(ik)/Crystal%Kpathaxis(Crystal%Nkpt_path),wreal(iw),(Akw_orb(iorb,iw,ik),iorb=1,Norb)
+               write(unit,"(1I5,200E20.12)") ik,Crystal%Kpathaxis(ik),wreal(iw),(Akw_orb(iorb,iw,ik),iorb=1,Norb)
             enddo
             write(unit,*)
          enddo
+         if(present(suffix).and.(reg(suffix_).eq."_Hetero"))then
+            do ik=Crystal%Nkpt_path+1,Crystal%Nkpt_path + Nkpt_path
+               do iw=1,Nreal
+                  if(abs(wreal(iw)).gt.0.5*KKcutoff)cycle
+                  write(unit,"(1I5,200E20.12)") ik,Crystal%Kpathaxis(ik),wreal(iw),(Akw_orb(iorb,iw,ik),iorb=1,Norb)
+               enddo
+               write(unit,*)
+            enddo
+         endif
          close(unit)
          !
       elseif(reg(mode).eq."plane")then
