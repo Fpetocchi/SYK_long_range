@@ -610,7 +610,7 @@ contains
       do iset=1,size(EqvGWndx%SetOrbs,dim=1)
          write(*,"(2(A,I3),A,10I3)")"     set: ",iset,", number of orbitals: ",EqvGWndx%SetNorb(iset),", indexes: ",EqvGWndx%SetOrbs(iset,1:EqvGWndx%SetNorb(iset))
       enddo
-      write(*,"(A,L)") "     Syimmetrizing off-diagonal: ",EqvGWndx%Gfoffdiag
+      write(*,"(A,L)") "     Symmetrizing off-diagonal: ",EqvGWndx%Gfoffdiag
       if(sym_mode.eq.1)write(*,"(A)") "     Only lattice quantities will be symmetrized."
       if(sym_mode.eq.2)write(*,"(A)") "     Both lattice and impurity quantities will be symmetrized."
       if(sym_mode.eq.3)write(*,"(A)") "     Only impurity quantities will be symmetrized."

@@ -3226,12 +3226,12 @@ contains
       use linalg, only : eigh, inv, zeye
       implicit none
       !
-      type(Lattice),intent(inout),target    :: Lttc
+      type(Lattice),intent(inout)           :: Lttc
       character(len=*),intent(in)           :: structure
       integer,intent(in)                    :: Nkpt_path
       character(len=*),intent(in),optional  :: pathOUTPUT
       character(len=*),intent(in),optional  :: filename
-      complex(8),intent(in),target,optional :: data_in(:,:,:)
+      complex(8),intent(in),optional        :: data_in(:,:,:)
       complex(8),intent(out),allocatable,optional :: data_out(:,:,:)
       character(len=*),intent(in),optional  :: corrname
       complex(8),intent(in),optional        :: correction(:,:,:)
@@ -3246,6 +3246,7 @@ contains
       integer                               :: Nreal,iw,ndx
       real(8)                               :: kp,kx,ky,Bvec(3),wrealMax,eta,kz_cut
       complex(8),pointer                    :: data(:,:,:)
+      complex(8),allocatable,target         :: data_tmp(:,:,:)
       complex(8),allocatable                :: invGf(:,:)
       logical                               :: Hamiltonian,doplane_,hetero_,printout,store_
       real                                  :: start,finish
@@ -3276,13 +3277,14 @@ contains
       !
       if(present(data_in))then
          label = reg(filename_)
-         data => data_in
+         data_tmp = data_in
          Hamiltonian = .false.
       else
          label = "Hk"
-         data => Lttc%Hk
+         data_tmp = Lttc%Hk
          Hamiltonian = .true.
       endif
+      data => data_tmp
       !
       doplane_=.false.
       if(present(doplane))doplane_=doplane
@@ -3304,7 +3306,9 @@ contains
          corrname_="Corrected"
          if(present(corrname))corrname_=reg(corrname)
          write(*,"(A)")"     Correction: "//reg(corrname_)
+         store_=.false.
       endif
+      if(store_) write(*,"(A)")"     Storing Lttc interpolated attributes."
       !
       !
       !Create path along high-symmetry points-----------------------------------
@@ -3352,7 +3356,7 @@ contains
          Lttc%Ek_path = dataEk
          Lttc%pathStored = .true.
       endif
-      deallocate(dataZk,data_intp)
+      deallocate(dataZk)
       !
       !Print eigenvalues along path
       if(printout)then
@@ -3414,14 +3418,13 @@ contains
          !Compute non-interacting spectral function along path
          allocate(Akw(Norb,Norb,Nreal,Lttc%Nkpt_path));Akw=0d0
          allocate(invGf(Norb,Norb));invGf=czero
-         !$OMP PARALLEL DEFAULT(NONE),&
-         !$OMP SHARED(Nreal,wreal,zeta,Lttc,Ln,Rn,Potential_L,Potential_R,Akw),&
+         !$OMP PARALLEL DEFAULT(SHARED),&
          !$OMP PRIVATE(ik,iw,invGf)
          !$OMP DO
          do ik=1,Lttc%Nkpt_path
             do iw=1,Nreal
                !
-               invGf = zeta(:,:,iw) - Lttc%Hk_path(:,:,ik)
+               invGf = zeta(:,:,iw) - data_intp(:,:,ik)
                !
                if(allocated(Potential_L)) invGf(Ln(1):Ln(2),Ln(1):Ln(2)) = invGf(Ln(1):Ln(2),Ln(1):Ln(2)) - Potential_L(:,:,iw,ik,1)
                if(allocated(Potential_R)) invGf(Rn(1):Rn(2),Rn(1):Rn(2)) = invGf(Rn(1):Rn(2),Rn(1):Rn(2)) - Potential_R(:,:,iw,ik,1)
@@ -3507,6 +3510,7 @@ contains
          deallocate(wreal,Akw)
          !
       endif
+      deallocate(data_intp)
       !
       !
       !Non-interacting Fermi surface--------------------------------------------
@@ -3533,7 +3537,6 @@ contains
             Lttc%Hk_Plane = data_intp
             Lttc%planeStored = .true.
          endif
-         deallocate(data_intp)
          !
          !Create zeta array for compatibility
          eta = wrealMax/100 !same as before for Akw
@@ -3576,7 +3579,7 @@ contains
          !$OMP DO
          do ik=1,Lttc%Nkpt_Plane
             !
-            invGf = zeta(:,:,1) - Lttc%Hk_Plane(:,:,ik)
+            invGf = zeta(:,:,1) - data_intp(:,:,ik)
             !
             if(allocated(Potential_L)) invGf(Ln(1):Ln(2),Ln(1):Ln(2)) = invGf(Ln(1):Ln(2),Ln(1):Ln(2)) - Potential_L(:,:,1,ik,1)
             if(allocated(Potential_R)) invGf(Rn(1):Rn(2),Rn(1):Rn(2)) = invGf(Rn(1):Rn(2),Rn(1):Rn(2)) - Potential_R(:,:,1,ik,1)
@@ -3589,7 +3592,7 @@ contains
          !$OMP END PARALLEL
          if(allocated(Potential_L))deallocate(Potential_L)
          if(allocated(Potential_R))deallocate(Potential_R)
-         deallocate(zeta,invGf)
+         deallocate(zeta,invGf,data_intp)
          !
          !Print non-interacting Fermi surface
          if(printout)then
@@ -3671,6 +3674,7 @@ contains
          !
       endif
       if(associated(data))nullify(data)
+      if(allocated(data_tmp))deallocate(data_tmp)
       !
       !Print position of High-symmetry points in the same folder where the function is
       if(printout)then
@@ -3687,11 +3691,12 @@ contains
          open(unit,file=reg(path),form="formatted",status="unknown",position="rewind",action="write")
          do ik=1,size(Lttc%kptpath,dim=2)
             kp = Lttc%Kpathaxis(ik)
+            Bvec = Lttc%kptpath(1,ik)*Blat(:,1) + Lttc%kptpath(2,ik)*Blat(:,2) + Lttc%kptpath(3,ik)*Blat(:,3)
             if(any(abs(Lttc%KpathaxisPoints-kp).lt.eps))then
                ndx = minloc(abs(Lttc%KpathaxisPoints-kp),dim=1)
-               write(unit,"(1I5,200E20.12)") ik,kp,Lttc%kptpath(:,ik),Lttc%KpathaxisPoints(ndx)
+               write(unit,"(1I5,200E20.12)") ik,kp,Lttc%kptpath(:,ik),Bvec,Lttc%KpathaxisPoints(ndx)
             else
-               write(unit,"(1I5,200E20.12)") ik,kp,Lttc%kptpath(:,ik)
+               write(unit,"(1I5,200E20.12)") ik,kp,Lttc%kptpath(:,ik),Bvec
             endif
          enddo
          close(unit)

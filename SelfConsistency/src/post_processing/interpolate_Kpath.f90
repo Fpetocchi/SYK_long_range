@@ -96,8 +96,8 @@ subroutine interpolateG2Path(Sfull,Lttc,pathOUTPUT)
    !------------------- Interpolation of interacting solutuon -----------------!
    !
    !
-   !recalculate the internal K-meshes
-   call interpolateHk2Path(Lttc,structure,Nkpt_path,doplane=FermiSurf,Nkpt_Kside=Nkpt_Fermi,hetero=Hetero)
+   !recalculate the internal K-meshes just for Nkpt_Fermi different from default
+   if(FermiSurf.and.(Nkpt_Fermi.ne.201))call interpolateHk2Path(Lttc,structure,Nkpt_path,doplane=FermiSurf,Nkpt_Kside=Nkpt_Fermi,hetero=Hetero)
    !
    !Dump MaxEnt data for the local self-energy (done for every CalculationType)
    if(scan(reg(path_funct),"S").gt.0)call calc_MaxEnt_on_Sigma_imp(Sfull)
