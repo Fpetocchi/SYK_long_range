@@ -38,7 +38,7 @@ class ct_hyb
 
       ct_hyb( path SiteName, double beta, int Nspin, int Norb, int NtauF, int NtauB,
               int Norder, bool Gexp, int Nmeas, int Ntherm, int NsegShift, int NspinSwap, int NnntMeas,
-              bool removeUhalf, bool paramagnet, bool retarded, std::vector<int> SetsNorb,
+              bool removeUhalf, bool screenshift, bool paramagnet, bool retarded, std::vector<int> SetsNorb,
               int printTime, std::vector<int> bins, CustomMPI &mpi):
       SiteName(SiteName),
       Beta(beta),
@@ -54,6 +54,7 @@ class ct_hyb
       NspinSwap(NspinSwap),
       NnntMeas(NnntMeas),
       removeUhalf(removeUhalf),
+      screenshift(screenshift),
       paramagnet(paramagnet),
       retarded(retarded),
       SetsNorb(SetsNorb),
@@ -154,8 +155,15 @@ class ct_hyb
          {
             //
             //Read the screening from file ( Eigen::MatrixXd )
-            mpi.report(" Reading screening file.");
-            read_EigenMat(inputDir+"/Screening.DAT", Screening_Mat, Nflavor, Nflavor); //read_Vec(inputDir+"/Screening.DAT", Screening_shift, Norb );
+            if(screenshift)
+            {
+               mpi.report(" Reading screening file.");
+               read_EigenMat(inputDir+"/Screening.DAT", Screening_Mat, Nflavor, Nflavor); //read_Vec(inputDir+"/Screening.DAT", Screening_shift, Norb );
+            }
+            else
+            {
+               Screening_Mat.setZero(Nflavor,Nflavor);
+            }
             for(int iorb=0; iorb < Norb; iorb++)
             {
                //old: Screening_shift[iorb] = Screening_Mat(2*iorb,2*iorb)/2.0;
@@ -387,6 +395,7 @@ class ct_hyb
       int                                 NspinSwap;
       int                                 NnntMeas;
       bool                                removeUhalf;
+      bool                                screenshift;
       bool                                paramagnet;
       bool                                retarded;
       int                                 printTime;

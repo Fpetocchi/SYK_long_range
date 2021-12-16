@@ -3218,7 +3218,7 @@ contains
    subroutine interpolateHk2Path(Lttc,structure,Nkpt_path,pathOUTPUT                   &
                                                          ,filename,data_in,data_out    &
                                                          ,corrname,correction          &
-                                                         ,doplane,Nkpt_Kside           &
+                                                         ,doplane,Nkpt_Kside,FermiCut  &
                                                          ,hetero,store)
       !
       use parameters !WHY IS THIS WORKING?
@@ -3226,17 +3226,18 @@ contains
       use linalg, only : eigh, inv, zeye
       implicit none
       !
-      type(Lattice),intent(inout)           :: Lttc
+      type(Lattice),intent(inout),target    :: Lttc
       character(len=*),intent(in)           :: structure
       integer,intent(in)                    :: Nkpt_path
       character(len=*),intent(in),optional  :: pathOUTPUT
       character(len=*),intent(in),optional  :: filename
-      complex(8),intent(in),optional        :: data_in(:,:,:)
+      complex(8),intent(in),optional,target :: data_in(:,:,:)
       complex(8),intent(out),allocatable,optional :: data_out(:,:,:)
       character(len=*),intent(in),optional  :: corrname
       complex(8),intent(in),optional        :: correction(:,:,:)
       logical,intent(in),optional           :: doplane
       integer,intent(in),optional           :: Nkpt_Kside
+      real(8),intent(in),optional           :: FermiCut
       logical,intent(in),optional           :: store
       type(Heterostructures),intent(inout),optional :: hetero
       !
@@ -3244,9 +3245,10 @@ contains
       integer                               :: ik,ikz,iorb,unit,ilayer
       integer                               :: Norb,Nkpt_Kside_,ikx,iky
       integer                               :: Nreal,iw,ndx
-      real(8)                               :: kp,kx,ky,Bvec(3),wrealMax,eta,kz_cut
+      real(8)                               :: kp,kx,ky,Bvec(3)
+      real(8)                               :: wrealMax,eta,kz_cut,FermiCut_
       complex(8),pointer                    :: data(:,:,:)
-      complex(8),allocatable,target         :: data_tmp(:,:,:)
+      complex(8),allocatable                :: correction_used(:,:,:)
       complex(8),allocatable                :: invGf(:,:)
       logical                               :: Hamiltonian,doplane_,hetero_,printout,store_
       real                                  :: start,finish
@@ -3277,17 +3279,19 @@ contains
       !
       if(present(data_in))then
          label = reg(filename_)
-         data_tmp = data_in
+         data => data_in
          Hamiltonian = .false.
       else
          label = "Hk"
-         data_tmp = Lttc%Hk
+         data => Lttc%Hk
          Hamiltonian = .true.
       endif
-      data => data_tmp
       !
       doplane_=.false.
       if(present(doplane))doplane_=doplane
+      !
+      FermiCut_=0d0
+      if(present(FermiCut))FermiCut_=FermiCut
       !
       hetero_=.false.
       if(present(hetero))hetero_=Hetero%status
@@ -3302,11 +3306,13 @@ contains
       corrname_="nonInt"
       if(present(correction))then
          call assert_shape(correction,[Norb,Norb,Lttc%Nkpt],"interpolateHk2Path","correction")
-         data = data + correction
+         correction_used = correction
          corrname_="Corrected"
          if(present(corrname))corrname_=reg(corrname)
          write(*,"(A)")"     Correction: "//reg(corrname_)
          store_=.false.
+      else
+         allocate(correction_used(Norb,Norb,Lttc%Nkpt));correction_used=czero
       endif
       if(store_) write(*,"(A)")"     Storing Lttc interpolated attributes."
       !
@@ -3329,7 +3335,7 @@ contains
       !Interpolate input data along path---------------------------------------------------
       allocate(data_intp(Norb,Norb,Lttc%Nkpt_path));data_intp=czero
       call cpu_time(start)
-      call wannierinterpolation(Lttc%Nkpt3,Lttc%kpt,Lttc%kptpath(:,1:Lttc%Nkpt_path),data,data_intp)
+      call wannierinterpolation(Lttc%Nkpt3,Lttc%kpt,Lttc%kptpath(:,1:Lttc%Nkpt_path),data+correction_used,data_intp)
       call cpu_time(finish)
       write(*,"(A,F)") "     "//reg(label)//"(fullBZ) --> "//reg(label)//"(Kpath) cpu timing:", finish-start
       if(Hamiltonian.and.store_)then
@@ -3529,7 +3535,7 @@ contains
          !Interpolate hamiltonian inside the kx,ky plane
          allocate(data_intp(Norb,Norb,Lttc%Nkpt_Plane));data_intp=czero
          call cpu_time(start)
-         call wannierinterpolation(Lttc%Nkpt3,Lttc%kpt,Lttc%kptPlane,data,data_intp)
+         call wannierinterpolation(Lttc%Nkpt3,Lttc%kpt,Lttc%kptPlane,data+correction_used,data_intp)
          call cpu_time(finish)
          write(*,"(A,F)") "     "//reg(label)//"(fullBZ) --> "//reg(label)//"(kx,ky) cpu timing:", finish-start
          if(Hamiltonian.and.store_)then
@@ -3542,7 +3548,7 @@ contains
          eta = wrealMax/100 !same as before for Akw
          allocate(zeta(Norb,Norb,1));zeta=czero
          do iorb=1,Norb
-            zeta(iorb,iorb,1) = dcmplx(EcutSheet,eta)
+            zeta(iorb,iorb,1) = dcmplx(FermiCut_,eta)
          enddo
          !
          !Interpolate longitudinal tz inside the kx,ky plane and compute potentials
@@ -3674,7 +3680,7 @@ contains
          !
       endif
       if(associated(data))nullify(data)
-      if(allocated(data_tmp))deallocate(data_tmp)
+      if(allocated(correction_used))deallocate(correction_used)
       !
       !Print position of High-symmetry points in the same folder where the function is
       if(printout)then

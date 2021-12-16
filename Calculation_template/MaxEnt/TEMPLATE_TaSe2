@@ -128,14 +128,15 @@ rep '2_stacking_AL/Results_beta400/'.it.'/Convergence/MaxEnt_Gqmc_S1_o1_s1/Gqmc_
 ################################################################################
 #                   PASTE THE FOLLOWING WITHIN IT/K_resolved                   #
 ################################################################################
-#TESTING
+#AL - prova cosi anche LA
 ./MaxEnt_Kresolved.sh -e 0.01 -w 5001 -W 20 -F G -N 280 -B 140 -m path -i 1 -f 281 -s _Hetero
 ./MaxEnt_Kresolved.sh -e 0.01 -w 5001 -W 20 -F G -N 210 -B  70 -m path -i 1 -f 211
 
 
 
-./MaxEnt_Kresolved.sh -e 0.0125 -w 5001 -W 20 -F G -N 280 -B 140 -m path -i 274 -f 276 -s _Hetero
-./MaxEnt_Kresolved.sh -e 0.012 -w 5001 -W 20 -F G -N 280 -B 140 -m path -i 279 -f 281 -s _Hetero
+
+./MaxEnt_Kresolved.sh -e 0.01 -w 5001 -W 20 -F G -N 210 -B  70 -m path -i 1 -f 211 -s _Hetero
+./MaxEnt_Kresolved.sh -e 0.01 -w 5001 -W 20 -F G -N 210 -B  70 -m path -i 1 -f 211
 
 
 
