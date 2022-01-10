@@ -661,6 +661,7 @@ contains
       call add_separator("Impurity solver")
       Solver%Nimp = Nsite
       if(ExpandImpurity) Solver%Nimp = 1
+      if(AFMselfcons) Solver%Nimp = 1
       call append_to_input_list(Solver%Nimp,"NIMP","Number of impurities solved. User cannot set this as its deduced from NSITE and EXPAND.")
       call parse_input_variable(Solver%NtauF,"NTAU_F_IMP",InputFile,default=int(2d0*pi*Nmats),comment="Number of points on the imaginary time axis for Fermionic impurity fields. Its gonna be made odd.")
       if(mod(Solver%NtauF,2).eq.0)Solver%NtauF=Solver%NtauF+1
