@@ -72,7 +72,7 @@ program Akw_builder
    !---------------------------------------------------------------------------!
    !
    !
-   call interpolateHk2Path(Crystal,reg(structure),Nkpt_path,doplane=FermiSurf,Nkpt_Kside=Nkpt_Fermi,FermiCut=FermiCut,hetero=Hetero)
+   call interpolateHk2Path(Crystal,reg(structure),Nkpt_path,doplane=FermiSurf,Nkpt_Kside=Nkpt_Fermi,hetero=Hetero)
    Crystal%Nkpt_path = Crystal%Nkpt_path !-1
    !
    !
@@ -329,9 +329,9 @@ contains
          !
       elseif(reg(mode).eq."plane")then
          !
-         !Print cut at energy EcutSheet in the {kx,ky} plane
-         wndx_cut = minloc(abs(wreal-EcutSheet),dim=1)
-         path = reg(MaxEnt_K)//"Fk_Gk"//reg(suffix_)//"_s"//str(ispin)//".DAT"
+         !Print cut at energy FermiCut in the {kx,ky} plane
+         wndx_cut = minloc(abs(wreal-FermiCut),dim=1)
+         path = reg(MaxEnt_K)//"Fk_Gk"//reg(suffix_)//"_s"//str(ispin)//"_E"//str(FermiCut,3)//".DAT"
          unit = free_unit()
          open(unit,file=reg(path),form="formatted",status="unknown",position="rewind",action="write")
          do ik=1,Nkpt
@@ -631,9 +631,9 @@ contains
          !
       elseif(reg(mode).eq."plane")then
          !
-         !Print cut at energy EcutSheet in the {kx,ky} plane
-         wndx_cut = minloc(abs(wreal-EcutSheet),dim=1)
-         path = reg(MaxEnt_K)//"Fk_S_s"//str(ispin)//".DAT"
+         !Print cut at energy FermiCut in the {kx,ky} plane
+         wndx_cut = minloc(abs(wreal-FermiCut),dim=1)
+         path = reg(MaxEnt_K)//"Fk_S_s"//str(ispin)//"_E"//str(FermiCut,3)//".DAT"
          unit = free_unit()
          open(unit,file=reg(path),form="formatted",status="unknown",position="rewind",action="write")
          do ik=1,Nkpt
@@ -932,9 +932,9 @@ contains
             !
          elseif(reg(mode).eq."plane")then
             !
-            !Print cut at energy EcutSheet in the {kx,ky} plane
-            wndx_cut = minloc(abs(wreal-EcutSheet),dim=1)
-            path = reg(MaxEnt_K)//"Fk_S_s"//str(ispin)//".DAT"
+            !Print cut at energy FermiCut in the {kx,ky} plane
+            wndx_cut = minloc(abs(wreal-FermiCut),dim=1)
+            path = reg(MaxEnt_K)//"Fk_S_s"//str(ispin)//"_E"//str(FermiCut,3)//".DAT"
             unit = free_unit()
             open(unit,file=reg(path),form="formatted",status="unknown",position="rewind",action="write")
             do ik=1,Nkpt

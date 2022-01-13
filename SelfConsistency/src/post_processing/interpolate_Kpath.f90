@@ -8,7 +8,7 @@ subroutine interpolateG2Path(Sfull,Lttc,pathOUTPUT)
    use file_io
    use greens_function, only : calc_Gmats
    use fourier_transforms
-   use input_vars, only : structure, path_funct, Nkpt_path, FermiSurf, Nkpt_Fermi, FermiCut
+   use input_vars, only : structure, path_funct, Nkpt_path, FermiSurf, Nkpt_Fermi
    use input_vars, only : paramagnet, CalculationType, Hetero
    implicit none
    !
@@ -58,7 +58,7 @@ subroutine interpolateG2Path(Sfull,Lttc,pathOUTPUT)
    !---------------------- LDA Hamiltonian and corrections --------------------!
    !
    !non-interacting data (Bands, spectral function, Fermi-surface)
-   call interpolateHk2Path(Lttc,structure,Nkpt_path,pathOUTPUT=reg(pathOUTPUT)//"K_resolved/",doplane=FermiSurf,FermiCut=FermiCut,hetero=Hetero)
+   call interpolateHk2Path(Lttc,structure,Nkpt_path,pathOUTPUT=reg(pathOUTPUT)//"K_resolved/",doplane=FermiSurf,hetero=Hetero)
    !
    !correction to LDA given by the real part of the local self-energy in iw=0
    allocate(correction(Norb,Norb,Sfull%Nkpt));correction=czero
@@ -67,7 +67,7 @@ subroutine interpolateG2Path(Sfull,Lttc,pathOUTPUT)
       do ik=1,Sfull%Nkpt
          correction(:,:,ik) = dreal(Sfull%ws(:,:,1,ispin)) - zeye(Norb)*Sfull%mu
       enddo
-      call interpolateHk2Path(Lttc,structure,Nkpt_path,pathOUTPUT=reg(pathOUTPUT)//"K_resolved/",corrname="dmft_s"//str(ispin),correction=correction,doplane=FermiSurf,FermiCut=FermiCut,hetero=Hetero)
+      call interpolateHk2Path(Lttc,structure,Nkpt_path,pathOUTPUT=reg(pathOUTPUT)//"K_resolved/",corrname="dmft_s"//str(ispin),correction=correction,doplane=FermiSurf,hetero=Hetero)
       if(paramagnet) exit
       !
    enddo
@@ -84,7 +84,7 @@ subroutine interpolateG2Path(Sfull,Lttc,pathOUTPUT)
          do iorb=1,Norb
             correction(iorb,iorb,:) = dcmplx(dreal(correction(iorb,iorb,:)),0d0)
          enddo
-         call interpolateHk2Path(Lttc,structure,Nkpt_path,pathOUTPUT=reg(pathOUTPUT)//"K_resolved/",corrname="qpsc_s"//str(ispin),correction=correction,doplane=FermiSurf,FermiCut=FermiCut,hetero=Hetero)
+         call interpolateHk2Path(Lttc,structure,Nkpt_path,pathOUTPUT=reg(pathOUTPUT)//"K_resolved/",corrname="qpsc_s"//str(ispin),correction=correction,doplane=FermiSurf,hetero=Hetero)
          if(paramagnet) exit
          !
       enddo
@@ -97,7 +97,7 @@ subroutine interpolateG2Path(Sfull,Lttc,pathOUTPUT)
    !
    !
    !recalculate the internal K-meshes just for Nkpt_Fermi different from default
-   if(FermiSurf.and.(Nkpt_Fermi.ne.201))call interpolateHk2Path(Lttc,structure,Nkpt_path,doplane=FermiSurf,Nkpt_Kside=Nkpt_Fermi,FermiCut=FermiCut,hetero=Hetero)
+   if(FermiSurf.and.(Nkpt_Fermi.ne.201))call interpolateHk2Path(Lttc,structure,Nkpt_path,doplane=FermiSurf,Nkpt_Kside=Nkpt_Fermi,hetero=Hetero)
    !
    !Dump MaxEnt data for the local self-energy (done for every CalculationType)
    if(scan(reg(path_funct),"S").gt.0)call calc_MaxEnt_on_Sigma_imp(Sfull)

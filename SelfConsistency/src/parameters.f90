@@ -26,8 +26,6 @@ module parameters
    integer,parameter                        :: Nspin=2
    !
    real(8),parameter                        :: eps=1e-9
-   !
-   real(8),parameter                        :: EcutSheet=0d0
 
 
    !---------------------------------------------------------------------------!

@@ -628,7 +628,7 @@ contains
          call tetrahedron_integration(reg(pathINPUT),Lttc%Ek,Lttc%Nkpt3,Lttc%kpt,Egrid,fact_intp=2,pathOUTPUT=reg(pathINPUT))
          deallocate(Egrid)
          !
-         if(reg(structure).ne."None")call interpolateHk2Path(Lttc,reg(structure),Nkpt_path,pathOUTPUT=reg(pathINPUT),doplane=.true.,FermiCut=FermiCut,hetero=Hetero)
+         if(reg(structure).ne."None")call interpolateHk2Path(Lttc,reg(structure),Nkpt_path,pathOUTPUT=reg(pathINPUT),doplane=.true.,hetero=Hetero)
          !
       endif
       !

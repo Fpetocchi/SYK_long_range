@@ -3218,7 +3218,7 @@ contains
    subroutine interpolateHk2Path(Lttc,structure,Nkpt_path,pathOUTPUT                   &
                                                          ,filename,data_in,data_out    &
                                                          ,corrname,correction          &
-                                                         ,doplane,Nkpt_Kside,FermiCut  &
+                                                         ,doplane,Nkpt_Kside           &
                                                          ,hetero,store)
       !
       use parameters !WHY IS THIS WORKING?
@@ -3237,7 +3237,6 @@ contains
       complex(8),intent(in),optional        :: correction(:,:,:)
       logical,intent(in),optional           :: doplane
       integer,intent(in),optional           :: Nkpt_Kside
-      real(8),intent(in),optional           :: FermiCut
       logical,intent(in),optional           :: store
       type(Heterostructures),intent(inout),optional :: hetero
       !
@@ -3246,7 +3245,7 @@ contains
       integer                               :: Norb,Nkpt_Kside_,ikx,iky
       integer                               :: Nreal,iw,ndx
       real(8)                               :: kp,kx,ky,Bvec(3)
-      real(8)                               :: wrealMax,eta,kz_cut,FermiCut_
+      real(8)                               :: wrealMax,eta,kz_cut
       complex(8),pointer                    :: data(:,:,:)
       complex(8),allocatable                :: correction_used(:,:,:)
       complex(8),allocatable                :: invGf(:,:)
@@ -3289,9 +3288,6 @@ contains
       !
       doplane_=.false.
       if(present(doplane))doplane_=doplane
-      !
-      FermiCut_=0d0
-      if(present(FermiCut))FermiCut_=FermiCut
       !
       hetero_=.false.
       if(present(hetero))hetero_=Hetero%status
@@ -3548,7 +3544,7 @@ contains
          eta = wrealMax/100 !same as before for Akw
          allocate(zeta(Norb,Norb,1));zeta=czero
          do iorb=1,Norb
-            zeta(iorb,iorb,1) = dcmplx(FermiCut_,eta)
+            zeta(iorb,iorb,1) = dcmplx(0d0,eta)
          enddo
          !
          !Interpolate longitudinal tz inside the kx,ky plane and compute potentials
