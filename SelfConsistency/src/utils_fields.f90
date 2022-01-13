@@ -886,6 +886,7 @@ contains
       if(verbose)write(*,"(A)") "---- imp2loc_Fermionic"
       !
       !
+      if(expand.and.AFM) stop "imp2loc_Fermionic: AFM condition and expansion to real space not implemented."
       if(.not.Gloc%status) stop "imp2loc_Fermionic: Gloc not properly initialized."
       if(.not.Gimp%status) stop "imp2loc_Fermionic: Gimp not properly initialized."
       if(Gloc%Norb.eq.0) stop "imp2loc_Fermionic: Norb of Gloc not defined."
@@ -902,17 +903,8 @@ contains
       !
       Norb_loc = Gloc%Norb
       Norb_imp = Gimp%Norb
-      Nsite=1
-      !
-      if(AFM)then
-         if(Gloc%Nsite.ne.2) stop "imp2loc_Fermionic: AFM is implemented only for a two site lattice."
-         if(Norb_loc/Norb_imp.ne.2) stop "imp2loc_Fermionic: Lattice indexes are not twice the impurity ones."
-         if(expand) stop "imp2loc_Fermionic: AFM condition and expansion to real space not yet implemented."
-         Nsite = 2
-      endif
       !
       if(expand)then
-         Nsite = Gloc%Nsite
          if(mod(Norb_loc,size(orbs)).ne.0)stop "imp2loc_Fermionic: Number of requested orbitals is not a commensurate subset of the lattice field."
          if(AFM) stop "imp2loc_Fermionic: Expansion to real space and AFM condition not yet implemented."
          if(present(name))then
@@ -920,11 +912,21 @@ contains
          else
             write(*,"(A)") "     The impurity field of site "//str(impndx)//" will be expanded to match the lattice orbital space."
          endif
+         Nsite = Gloc%Nsite
+      elseif(AFM)then
+         if(Gloc%Nsite.ne.2) stop "imp2loc_Fermionic: AFM is implemented only for a two site lattice."
+         if(Norb_loc/Norb_imp.ne.2) stop "imp2loc_Fermionic: Lattice indexes are not twice the impurity ones."
+         if(present(name))then
+            write(*,"(2(A,"//str(Norb_imp)//"I3))") "     "//reg(name)//" of site "//str(impndx)//" will be inserted into the lattice orbital indexes: ",orbs," and spin-flipped into: ",orbs+Norb_imp
+         else
+            write(*,"(2(A,"//str(Norb_imp)//"I3))") "     The impurity field of site "//str(impndx)//" will be inserted into the lattice orbital indexes: ",orbs," and spin-flipped into: ",orbs+Norb_imp
+         endif
+         Nsite = 2
       else
          if(present(name))then
             write(*,"(A,15I3)") "     "//reg(name)//" of site "//str(impndx)//" will be inserted into the lattice orbital indexes: ",orbs
          else
-            write(*,"(A,15I3)") "     Impurity field of site "//str(impndx)//" will be inserted into the lattice orbital indexes: ",orbs
+            write(*,"(A,15I3)") "     The impurity field of site "//str(impndx)//" will be inserted into the lattice orbital indexes: ",orbs
          endif
          Nsite = 1
       endif
@@ -1038,21 +1040,20 @@ contains
       !
       Norb_loc = size(Oloc,dim=1)
       Norb_imp = size(orbs)
-      Nsite=1
       !
       if(expand)then
-         Nsite = size(Oloc,dim=1)/size(orbs)
          if(mod(size(Oloc,dim=1),size(orbs)).ne.0)stop "imp2loc_Matrix: Number of requested orbitals is not a commensurate subset of the lattice observable."
          if(present(name))then
             write(*,"(A)") "     "//reg(name)//" of site "//str(impndx)//" will be expanded to match the lattice orbital space."
          else
-            write(*,"(A)") "     The impurity field of site "//str(impndx)//" will be expanded to match the lattice orbital space."
+            write(*,"(A)") "     The matrix of site "//str(impndx)//" will be expanded to match the lattice orbital space."
          endif
+         Nsite = size(Oloc,dim=1)/size(orbs)
       else
          if(present(name))then
             write(*,"(A,15I3)") "     "//reg(name)//" of site "//str(impndx)//" will be inserted into the lattice orbital indexes: ",orbs
          else
-            write(*,"(A,15I3)") "     Impurity field of site "//str(impndx)//" will be inserted into the lattice orbital indexes: ",orbs
+            write(*,"(A,15I3)") "     The matrix of site "//str(impndx)//" will be inserted into the lattice orbital indexes: ",orbs
          endif
          Nsite = 1
       endif
@@ -1064,7 +1065,7 @@ contains
          if(present(name))then
             write(*,"(A)") "     "//reg(name)//" orbital space will be rotated during insertion in "//str(Nsite)//" sites."
          else
-            write(*,"(A)") "     The impurity orbital space will be rotated during insertion in "//str(Nsite)//" sites."
+            write(*,"(A)") "     The matrix orbital space will be rotated during insertion in "//str(Nsite)//" sites."
          endif
       endif
       !
@@ -1144,6 +1145,7 @@ contains
       if(verbose)write(*,"(A)") "---- imp2loc_Matrix_s"
       !
       !
+      if(expand.and.AFM) stop "imp2loc_Matrix_s: AFM condition and expansion to real space not implemented."
       if(size(Oloc,dim=1).ne.size(Oloc,dim=2)) stop "imp2loc_Matrix_s: Oloc not square."
       if(size(Oimp,dim=1).ne.size(Oimp,dim=2)) stop "imp2loc_Matrix_s: Oimp not square."
       if(size(Oimp,dim=3).ne.Nspin) stop "imp2loc_Matrix_s: Oimp third dimension is not Nspin."
@@ -1153,28 +1155,29 @@ contains
       !
       Norb_loc = size(Oloc,dim=1)
       Norb_imp = size(orbs)
-      Nsite=1
-      !
-      if(AFM)then
-         if(Norb_loc/Norb_imp.ne.2) stop "imp2loc_Matrix_s: Lattice indexes are not twice the impurity ones."
-         if(expand) stop "imp2loc_Matrix_s: AFM condition and expansion to real space not yet implemented."
-         Nsite = 2
-      endif
       !
       if(expand)then
-         Nsite = size(Oloc,dim=1)/size(orbs)
          if(mod(size(Oloc,dim=1),size(orbs)).ne.0)stop "imp2loc_Matrix_s: Number of requested orbitals is not a commensurate subset of the lattice observable."
          if(AFM) stop "imp2loc_Matrix_s: Expansion to real space and AFM condition not yet implemented."
          if(present(name))then
             write(*,"(A)") "     "//reg(name)//" of site "//str(impndx)//" will be expanded to match the lattice orbital space."
          else
-            write(*,"(A)") "     The impurity field of site "//str(impndx)//" will be expanded to match the lattice orbital space."
+            write(*,"(A)") "     The matrix of site "//str(impndx)//" will be expanded to match the lattice orbital space."
          endif
+         Nsite = size(Oloc,dim=1)/size(orbs)
+      elseif(AFM)then
+         if(Norb_loc/Norb_imp.ne.2) stop "imp2loc_Matrix_s: Lattice indexes are not twice the impurity ones."
+         if(present(name))then
+            write(*,"(2(A,"//str(Norb_imp)//"I3))") "     "//reg(name)//" of site "//str(impndx)//" will be inserted into the lattice orbital indexes: ",orbs," and spin-flipped into: ",orbs+Norb_imp
+         else
+            write(*,"(2(A,"//str(Norb_imp)//"I3))") "     The matrix of site "//str(impndx)//" will be inserted into the lattice orbital indexes: ",orbs," and spin-flipped into: ",orbs+Norb_imp
+         endif
+         Nsite = 2
       else
          if(present(name))then
             write(*,"(A,15I3)") "     "//reg(name)//" of site "//str(impndx)//" will be inserted into the lattice orbital indexes: ",orbs
          else
-            write(*,"(A,15I3)") "     Impurity field of site "//str(impndx)//" will be inserted into the lattice orbital indexes: ",orbs
+            write(*,"(A,15I3)") "     The matrix of site "//str(impndx)//" will be inserted into the lattice orbital indexes: ",orbs
          endif
          Nsite = 1
       endif
@@ -1186,7 +1189,7 @@ contains
          if(present(name))then
             write(*,"(A)") "     "//reg(name)//" orbital space will be rotated during insertion in "//str(Nsite)//" sites."
          else
-            write(*,"(A)") "     The impurity orbital space will be rotated during insertion in "//str(Nsite)//" sites."
+            write(*,"(A)") "     The matrix orbital space will be rotated during insertion in "//str(Nsite)//" sites."
          endif
       endif
       !
@@ -1278,6 +1281,7 @@ contains
       if(verbose)write(*,"(A)") "---- imp2loc_Bosonic"
       !
       !
+      if(expand.and.AFM) stop "imp2loc_Bosonic: AFM condition and expansion to real space not implemented."
       if(.not.Wloc%status) stop "imp2loc_Bosonic: Wloc not properly initialized."
       if(.not.Wimp%status) stop "imp2loc_Bosonic: Wimp not properly initialized."
       if(Wloc%Nbp.eq.0) stop "imp2loc_Bosonic: Norb of Wloc not defined."
@@ -1293,20 +1297,11 @@ contains
       Norb_imp = int(sqrt(dble(Wimp%Nbp)))
       Norb_loc = int(sqrt(dble(Wloc%Nbp)))
       doBare = allocated(Wimp%bare_local)
-      Nsite=1
       !
       if(size(orbs).ne.Norb_imp) stop "imp2loc_Bosonic: can't fit the requested orbitals from Wimp."
       if(size(orbs).gt.Norb_loc) stop "imp2loc_Bosonic: number of requested orbitals greater than Wloc size."
       !
-      if(AFM)then
-         if(Wloc%Nsite.ne.2) stop "imp2loc_Bosonic: AFM is implemented only for a two site lattice."
-         if(Norb_loc/Norb_imp.ne.2) stop "imp2loc_Bosonic: Lattice indexes are not twice the impurity ones."
-         if(expand) stop "imp2loc_Bosonic: AFM condition and expansion to real space not yet implemented."
-         Nsite = 2
-      endif
-      !
       if(expand)then
-         Nsite = Wloc%Nsite
          if(mod(Norb_loc,size(orbs)).ne.0)stop "imp2loc_Bosonic: Number of requested orbitals is not a commensurate subset of Wloc."
          if(AFM) stop "imp2loc_Bosonic: Expansion to real space and AFM condition not yet implemented."
          if(present(name))then
@@ -1314,11 +1309,21 @@ contains
          else
             write(*,"(A)") "     The impurity field of site "//str(impndx)//" will be expanded to match the lattice orbital space."
          endif
+         Nsite = Wloc%Nsite
+      elseif(AFM)then
+         if(Wloc%Nsite.ne.2) stop "imp2loc_Bosonic: AFM is implemented only for a two site lattice."
+         if(Norb_loc/Norb_imp.ne.2) stop "imp2loc_Bosonic: Lattice indexes are not twice the impurity ones."
+         if(present(name))then
+            write(*,"(2(A,"//str(Norb_imp)//"I3))") "     "//reg(name)//" of site "//str(impndx)//" will be inserted into the lattice orbital indexes: ",orbs," and into: ",orbs+Norb_imp
+         else
+            write(*,"(2(A,"//str(Norb_imp)//"I3))") "     The impurity field of site "//str(impndx)//" will be inserted into the lattice orbital indexes: ",orbs," and into: ",orbs+Norb_imp
+         endif
+         Nsite = 2
       else
          if(present(name))then
             write(*,"(A,15I3)") "     "//reg(name)//" of site "//str(impndx)//" will be inserted into the lattice orbital indexes: ",orbs
          else
-            write(*,"(A,15I3)") "     Impurity field of site "//str(impndx)//" will be inserted into the lattice orbital indexes: ",orbs
+            write(*,"(A,15I3)") "     The impurity field of site "//str(impndx)//" will be inserted into the lattice orbital indexes: ",orbs
          endif
          Nsite = 1
       endif

@@ -463,7 +463,7 @@ contains
       call parse_input_variable(Solver%removeUhalf,"REMOVE_UHALF",InputFile,default=0,comment="Integer flag to remove the half-filling chemical potential inside the solver. Recommended only for degenerate orbitals in model calculations.")
       call parse_input_variable(look4dens%mu,"MU",InputFile,default=0d0,comment="Absolute chemical potential or shift with respect to the half-filling mu depending on REMOVE_UHALF.")
       call parse_input_variable(look4dens%TargetDensity,"N_READ_LAT",InputFile,default=0d0,comment="Target density on the lattice. Lookup is switched on to this value if its >0d0. Otherwise mu will be kept fixed.")
-      if(ExpandImpurity)then
+      if(ExpandImpurity.or.AFMselfcons)then
          call parse_input_variable(look4dens%local,"N_READ_LAT_LOC",InputFile,default=.false.,comment="Flag to restrict the lattice density lookup to the ORBS_1 indexes corresponding to the solved impurity.")
          if(look4dens%local)then
             look4dens%orbs = SiteOrbs(1,1:SiteNorb(1))
@@ -660,8 +660,7 @@ contains
       !Variables related to the impurity solver
       call add_separator("Impurity solver")
       Solver%Nimp = Nsite
-      if(ExpandImpurity) Solver%Nimp = 1
-      if(AFMselfcons) Solver%Nimp = 1
+      if(ExpandImpurity.or.AFMselfcons) Solver%Nimp = 1
       call append_to_input_list(Solver%Nimp,"NIMP","Number of impurities solved. User cannot set this as its deduced from NSITE and EXPAND.")
       call parse_input_variable(Solver%NtauF,"NTAU_F_IMP",InputFile,default=int(2d0*pi*Nmats),comment="Number of points on the imaginary time axis for Fermionic impurity fields. Its gonna be made odd.")
       if(mod(Solver%NtauF,2).eq.0)Solver%NtauF=Solver%NtauF+1
@@ -670,7 +669,7 @@ contains
       call parse_input_variable(Solver%NtauF_in,"NTAU_F_IMP_IN",InputFile,default=Solver%NtauF,comment="Number of points on the fermionic imaginary time axis used in the previous iteration.")
       call parse_input_variable(Solver%NtauB_in,"NTAU_B_IMP_IN",InputFile,default=Solver%NtauB,comment="Number of points on the bosonic imaginary time axis used in the previous iteration.")
       Solver%TargetDensity = look4dens%TargetDensity
-      if(ExpandImpurity.and.(.not.look4dens%local))Solver%TargetDensity = look4dens%TargetDensity/Nsite
+      if((ExpandImpurity.or.AFMselfcons).and.(.not.look4dens%local))Solver%TargetDensity = look4dens%TargetDensity/Nsite
       call append_to_input_list(Solver%TargetDensity,"N_READ_IMP","Target density in the impurity list. User cannot set this as its the the same density on within the impurity orbitals if EXPAND=F otherwise its N_READ_LAT/NSITE.")
      !call parse_input_variable(Solver%TargetDensity,"N_READ_IMP",InputFile,default=look4dens%TargetDensity,comment="Target density in the impurity list.")
       call parse_input_variable(Solver%Norder,"NORDER",InputFile,default=10,comment="Maximum perturbation order measured. Not yet implemented.")

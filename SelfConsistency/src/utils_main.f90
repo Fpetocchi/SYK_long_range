@@ -179,7 +179,7 @@ contains
       logical                               :: PrvItexist,ZeroItexist
       !
       !Few general checks
-      if(ExpandImpurity.and.AFMselfcons) stop "AFM self-consistency and expansion to real space not yet implemented."
+      if(ExpandImpurity.and.AFMselfcons) stop "AFM self-consistency and expansion to real space not implemented."
       if(ExpandImpurity.and.(Nsite.eq.1)) stop "Cannot expand a single site."
       if(AFMselfcons.and.(Nsite.ne.2)) stop "AFM self-consistency is implemented only for lattices with 2 sites."
       if(RotateUloc.and.(.not.RotateHloc)) stop "Rotate the Bosonic impurity problem without rotating the Ferminic one is not allowed."
@@ -2745,9 +2745,6 @@ contains
             ndx=1
             do iorb=1,SolverObs(isite)%Norb
                do ispin=1,Nspin
-                  !TEST>>>
-                  !if(ReadLine(ndx).le.0d0) Gitau(iorb,itau,ispin) = dcmplx(ReadLine(ndx),0d0)
-                  !>>>TEST
                   Gitau(iorb,itau,ispin) = dcmplx(ReadLine(ndx),0d0)
                   ndx=ndx+1
                enddo
@@ -3331,7 +3328,7 @@ contains
             if(Nspin.eq.1)write(*,"(A"//str(wn*Norb)//","//str(ws)//"X)")banner(trim(header1)//" up",wn*Norb)
             if(Nspin.gt.1)write(*,"(2(A"//str(wn*Norb)//","//str(ws)//"X))")banner(trim(header1)//" up",wn*Norb),banner(trim(header1)//" dw",wn*Norb)
             do iorb=1,Norb
-               write(*,"("//str(Nspin)//"("//str(Norb)//"F"//str(wn)//".4,"//str(ws)//"X))") ((dreal(densityGW(iorb,jorb,1)),jorb=1,Norb),ispin=1,Nspin)!(dreal(densityGW(iorb,jorb,2)),jorb=1,Norb)
+               write(*,"("//str(Nspin)//"("//str(Norb)//"F"//str(wn)//".4,"//str(ws)//"X))") ((dreal(densityGW(iorb,jorb,ispin)),jorb=1,Norb),ispin=1,Nspin)!(dreal(densityGW(iorb,jorb,2)),jorb=1,Norb)
             enddo
             !
             write(*,*)
