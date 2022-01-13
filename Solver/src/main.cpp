@@ -289,6 +289,7 @@ int main(int argc, char *argv[])
          {
             mpi.report(" Input chemical potential doesn't need to be changed.");
             musearch=false;
+            for(int isite=0; isite < Nimp; isite++) ImpurityList[isite].reset_mu( mu_start );
          }
 
          if(musearch)
