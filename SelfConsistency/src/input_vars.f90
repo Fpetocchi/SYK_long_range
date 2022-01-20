@@ -460,8 +460,7 @@ contains
       !
       !Density lookup
       call add_separator("Density lookup")
-      call parse_input_variable(Solver%removeUhalf,"REMOVE_UHALF",InputFile,default=0,comment="Integer flag to remove the half-filling chemical potential inside the solver. Recommended only for degenerate orbitals in model calculations.")
-      call parse_input_variable(look4dens%mu,"MU",InputFile,default=0d0,comment="Absolute chemical potential or shift with respect to the half-filling mu depending on REMOVE_UHALF.")
+      call parse_input_variable(look4dens%mu,"MU",InputFile,default=0d0,comment="Absolute chemical potential or shift with respect to the half-filling mu depending on REMOVE_HARTREE.")
       call parse_input_variable(look4dens%TargetDensity,"N_READ_LAT",InputFile,default=0d0,comment="Target density on the lattice. Lookup is switched on to this value if its >0d0. Otherwise mu will be kept fixed.")
       if(ExpandImpurity.or.AFMselfcons)then
          call parse_input_variable(look4dens%local,"N_READ_LAT_LOC",InputFile,default=.false.,comment="Flag to restrict the lattice density lookup to the ORBS_1 indexes corresponding to the solved impurity.")
@@ -684,8 +683,8 @@ contains
       call parse_input_variable(Solver%binlength,"BINLENGTH",InputFile,default=4,comment="If >0 the Green's function at itau will be the average within +/-binlength.")
       call parse_input_variable(Solver%binstart,"BINSTART",InputFile,default=100,comment="Tau points skipped at the beginning and end of the Green's function average.")
       call append_to_input_list(Solver%retarded,"RETARDED","Integer flag to include the frequency dependent part of the interaction. User cannot set this as its deduced from CALC_TYPE.")
-      call parse_input_variable(Solver%screenshift,"SCREENING_SHIFT",InputFile,default=1,comment="Integer flag to compensate for the local energy shifts induced by the retarded interaction.")
-      if(Solver%retarded.eq.0)Solver%screenshift=0
+      if(RemoveHartree)Solver%removeUhalf=1
+      call append_to_input_list(Solver%removeUhalf,"REMOVE_UHALF","Integer flag to remove the half-filling chemical potential inside the solver. User cannot set this as its deduced from REMOVE_HARTREE.")
       Solver%quickloops=look4dens%quickloops
       if(ExpandImpurity)then
          allocate(Solver%Time(1));Solver%Time=0

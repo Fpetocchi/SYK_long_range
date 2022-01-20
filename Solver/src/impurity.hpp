@@ -36,10 +36,11 @@ class ct_hyb
 
       //----------------------------------------------------------------------//
 
-      ct_hyb( path SiteName, double beta, int Nspin, int Norb, int NtauF, int NtauB,
+      ct_hyb( path inputDir, path SiteName, double beta, int Nspin, int Norb, int NtauF, int NtauB,
               int Norder, bool Gexp, int Nmeas, int Ntherm, int NsegShift, int NspinSwap, int NnntMeas,
-              bool removeUhalf, bool screenshift, bool paramagnet, bool retarded, std::vector<int> SetsNorb,
+              bool removeUhalf, bool paramagnet, bool retarded, std::vector<int> SetsNorb,
               int printTime, std::vector<int> bins, CustomMPI &mpi):
+      inputDir(inputDir),
       SiteName(SiteName),
       Beta(beta),
       Nspin(Nspin),
@@ -54,7 +55,6 @@ class ct_hyb
       NspinSwap(NspinSwap),
       NnntMeas(NnntMeas),
       removeUhalf(removeUhalf),
-      screenshift(screenshift),
       paramagnet(paramagnet),
       retarded(retarded),
       SetsNorb(SetsNorb),
@@ -97,7 +97,7 @@ class ct_hyb
 
       //----------------------------------------------------------------------//
 
-      void init(path &inputDir)
+      void init(void)
       {
          //
          // This can be made optional or changed
@@ -155,18 +155,10 @@ class ct_hyb
          {
             //
             //Read the screening from file ( Eigen::MatrixXd )
-            if(screenshift)
-            {
-               mpi.report(" Reading screening file.");
-               read_EigenMat(inputDir+"/Screening.DAT", Screening_Mat, Nflavor, Nflavor); //read_Vec(inputDir+"/Screening.DAT", Screening_shift, Norb );
-            }
-            else
-            {
-               Screening_Mat.setZero(Nflavor,Nflavor);
-            }
+            mpi.report(" Reading screening file.");
+            read_EigenMat(inputDir+"/Screening.DAT", Screening_Mat, Nflavor, Nflavor); //read_Vec(inputDir+"/Screening.DAT", Screening_shift, Norb );
             for(int iorb=0; iorb < Norb; iorb++)
             {
-               //old: Screening_shift[iorb] = Screening_Mat(2*iorb,2*iorb)/2.0;
                for(int ifl=0; ifl < Nflavor; ifl++) Screening_shift[iorb] += (2*iorb!=ifl) ? Screening_Mat(2*iorb,ifl)/2.0 : 0.0 ;
                mpi.report(" Orbital "+str(iorb)+" - screening shift = S/2: "+str(Screening_shift[iorb],6));
             }
@@ -196,10 +188,10 @@ class ct_hyb
          {
             for(int iorb=0; iorb < Norb; iorb++)
             {
-               //old: Hartree given only by Uaa: Hartree_shift[iorb]  = Uloc(2*iorb,2*iorb+1)/2.0; //Hartree_shift[iorb] += Uloc(2*iorb,ifl)/4.0; //Hartree_shift[iorb] += ( Uloc(2*iorb,2*iorb+1) + Screening_Mat(2*iorb,2*iorb+1) )/4.0;
-               for(int ifl=0; ifl < Nflavor; ifl++) Hartree_shift[iorb] += (2*iorb!=ifl) ? ( Uloc(2*iorb,ifl) + Screening_Mat(2*iorb,ifl) )/2.0 : 0.0 ;
-               mpi.report(" Orbital "+str(iorb)+" - Hartree shift = Ubare/2: "+str(Hartree_shift[iorb],6));
+               for(int ifl=0; ifl < Nflavor; ifl++) Hartree_shift[iorb] += (2*iorb!=ifl) ? ( Uloc(2*iorb,ifl) )/2.0 : 0.0 ;
+               mpi.report(" Orbital "+str(iorb)+" - Hartree term = Uscr/2: "+str(Hartree_shift[iorb],6));
             }
+            Screening_shift.resize(Norb,0.0);
          }
 
          //
@@ -222,7 +214,6 @@ class ct_hyb
          if(mpi.is_master()) //debug &&
          {
             print_Vec(inputDir+"/used.Eloc.DAT", Eloc, mu);
-            print_Vec(inputDir+"/used.Levels.DAT", Levels);
             print_VecVec(inputDir+"/used.Delta_t.DAT", F);
             if(retarded)print_VecVecVec(inputDir+"/used.K_t.DAT", K_table);
          }
@@ -381,6 +372,7 @@ class ct_hyb
 
       //----------------------------------------------------------------------//
       // Input vars
+      path                                inputDir;
       path                                SiteName;
       double                              Beta;                                 // inverse temperature
       int                                 Nspin;
@@ -629,10 +621,11 @@ class ct_hyb
 
       //----------------------------------------------------------------------//
 
-      void set_levels()
+      void set_levels(void)
       {
          Levels.resize(Nflavor,0.0);
-         for (int ifl=0; ifl<Nflavor; ifl++) Levels[ifl] = mu - Eloc[ifl] + Hartree_shift[(int)(ifl/2)] - Screening_shift[(int)(ifl/2)];
+         for (int ifl=0; ifl<Nflavor; ifl++) Levels[ifl] = mu - Eloc[ifl] + Hartree_shift[(int)(ifl/2)] + Screening_shift[(int)(ifl/2)];
+         print_Vec(inputDir+"/used.Levels.DAT", Levels);
       }
 
       //----------------------------------------------------------------------//

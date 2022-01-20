@@ -184,8 +184,10 @@ contains
       if(AFMselfcons.and.(Nsite.ne.2)) stop "AFM self-consistency is implemented only for lattices with 2 sites."
       if(RotateUloc.and.(.not.RotateHloc)) stop "Rotate the Bosonic impurity problem without rotating the Ferminic one is not allowed."
       !
-      if(.not.RemoveHartree)HartreeFact=0d0
-      !if(Hmodel)HartreeFact=0d0
+      !if(.not.RemoveHartree)HartreeFact=0d0
+      !Now the factor mutltiplying the Hartree impurity self-energy during the merge is always zero
+      !as the RemoveHartree flag controls the removal within the solver. Now S_DMFT%N_s is rebuilt but not used.
+      HartreeFact=0d0
       !
       calc_Sguess = calc_Sguess .and. (FirstIteration.eq.0) .and. solve_DMFT
       calc_Pguess = calc_Pguess .and. (FirstIteration.eq.0) .and. solve_DMFT

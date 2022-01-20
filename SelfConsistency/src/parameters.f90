@@ -193,7 +193,6 @@ module parameters
       integer                               :: retarded=0
       integer                               :: quickloops=0
       integer                               :: removeUhalf=0
-      integer                               :: screenshift=0
    end type QMC
    !
    type QMC_observables
