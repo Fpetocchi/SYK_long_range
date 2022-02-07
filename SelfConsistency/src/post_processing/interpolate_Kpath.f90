@@ -799,8 +799,7 @@ contains
    subroutine calc_MaxEnt_on_Sigma_imp(Smats_in)
       !
       use input_vars, only : ReplaceTail_Simp, PadeWlimit
-      use input_vars, only : SiteNorb, SiteOrbs, SiteName, Nsite, EqvGWndx
-      use input_vars, only : OlocSite, OlocRot, OlocRotDag, OlocEig
+      use input_vars, only : LocalOrbs, EqvGWndx
       use input_vars, only : RotateHloc, ExpandImpurity, AFMselfcons, wrealMax
       use input_vars, only : Ntau
       implicit none
@@ -811,12 +810,10 @@ contains
       real(8),allocatable                   :: wmats(:),Sparams(:,:,:)
       complex(8),allocatable                :: Smats_diag(:,:,:)
       complex(8),allocatable                :: Sitau_diag(:,:,:)
-      complex(8),allocatable                :: Rot(:,:)
-      integer,allocatable                   :: Orbs(:)
       real(8)                               :: M0,M1,M2,M3,M4
       real(8)                               :: x1,x2,x3,y1,y2,y3
       integer                               :: unit,wndx,iw1,iw2,iw3
-      integer                               :: isite
+      integer                               :: isite,Nsite
       character(len=256)                    :: ParaFile
       !
       !
@@ -824,6 +821,9 @@ contains
       !
       !
       if(.not.Smats_in%status) stop "calc_MaxEnt_on_Sigma_imp: Smats_in not properly allocated."
+      if(.not.allocated(LocalOrbs)) stop "calc_MaxEnt_on_Sigma_imp: LocalOrbs not properly initialized."
+      !
+      Nsite = size(LocalOrbs)
       !
       allocate(wmats(Nmats));wmats=FermionicFreqMesh(Smats_in%Beta,Nmats)
       if(ReplaceTail_Simp.gt.0d0)then
@@ -835,35 +835,30 @@ contains
       !Operations at each site
       do isite=1,Nsite
          !
-         allocate(Orbs(SiteNorb(isite)))
-         Orbs = SiteOrbs(isite,1:SiteNorb(isite))
-         !
-         allocate(Smats_diag(SiteNorb(isite),Nmats,Nspin));Smats_diag=czero
-         allocate(Sparams(SiteNorb(isite),Nspin,2));Sparams=0d0
+         allocate(Smats_diag(LocalOrbs(isite)%Norb,Nmats,Nspin));Smats_diag=czero
+         allocate(Sparams(LocalOrbs(isite)%Norb,Nspin,2));Sparams=0d0
          !
          !Get the irreducible local self-energy
-         call AllocateFermionicField(Simp,SiteNorb(isite),Nmats,Beta=Smats_in%Beta)
+         call AllocateFermionicField(Simp,LocalOrbs(isite)%Norb,Nmats,Beta=Smats_in%Beta)
          if(RotateHloc)then
             !
-            allocate(Rot(SiteNorb(isite),SiteNorb(isite)))
-            Rot=OlocRot(1:SiteNorb(isite),1:SiteNorb(isite),isite)
-            call loc2imp(Simp,Smats_in,Orbs,U=Rot)
+            call loc2imp(Simp,Smats_in,LocalOrbs(isite)%Orbs,U=LocalOrbs(isite)%Rot)
             !
          else
             !
-            call loc2imp(Simp,Smats_in,Orbs)
+            call loc2imp(Simp,Smats_in,LocalOrbs(isite)%Orbs)
             !
          endif
          !
          !I need a standard array for the FT
          do ispin=1,Nspin
-            do iorb=1,SiteNorb(isite)
+            do iorb=1,LocalOrbs(isite)%Norb
                Smats_diag(iorb,:,ispin) = Simp%ws(iorb,iorb,:,ispin)
             enddo
          enddo
          !
          !Check Print - This has to be identical to the one in the Solver_* folder
-         call dump_MaxEnt(Smats_diag,"mats",reg(pathOUTPUT)//"Convergence/","Sqmc_"//reg(SiteName(isite)))
+         call dump_MaxEnt(Smats_diag,"mats",reg(pathOUTPUT)//"Convergence/","Sqmc_"//reg(LocalOrbs(isite)%Name))
          !
          !Reference frequencies
          if(wndx.gt.4)  iw1 = wndx-1
@@ -877,7 +872,7 @@ contains
          !
          !Extract the rescaling parameters from the Self-energy
          do ispin=1,Nspin
-            do iorb=1,SiteNorb(isite)
+            do iorb=1,LocalOrbs(isite)%Norb
                !
                !Real part asymptotic behaviour M0, M2
                y1 = dreal(Smats_diag(iorb,iw1,ispin))
@@ -911,7 +906,7 @@ contains
                !
                !Print comparison
                !if(verbose)then
-                  write(*,"(5X,A8,I5,A)")"isite=",isite,"  Element: "//reg(SiteName(isite))
+                  write(*,"(5X,A8,I5,A)")"isite=",isite,"  Element: "//reg(LocalOrbs(isite)%Name)
                   write(*,"(5X,2(A8,I5))")"iorb=",iorb,"ispin=",ispin
                   write(*,"(5X,A12,1F20.8)")"M0(S): ",Sparams(iorb,ispin,1)
                   write(*,"(5X,A12,1F20.8)")"M1(S): ",Sparams(iorb,ispin,2)
@@ -930,12 +925,12 @@ contains
          enddo
          !
          !Check Print - This is to check the self-energy in the diagonal basis after the removal of M0 and rescaling of M1
-         call dump_MaxEnt(Smats_diag,"mats",reg(pathOUTPUT)//"Convergence/","Sqmc_rescaled_"//reg(SiteName(isite)))
+         call dump_MaxEnt(Smats_diag,"mats",reg(pathOUTPUT)//"Convergence/","Sqmc_rescaled_"//reg(LocalOrbs(isite)%Name))
          !
          !Fourier transform
          !Ntau = 300
          call cpu_time(start)
-         allocate(Sitau_diag(SiteNorb(isite),Ntau,Nspin));Sitau_diag=czero
+         allocate(Sitau_diag(LocalOrbs(isite)%Norb,Ntau,Nspin));Sitau_diag=czero
          do ispin=1,Nspin
             call Fmats2itau_vec(Sfull%Beta,Smats_diag(:,:,ispin),Sitau_diag(:,:,ispin),asympt_corr=.true.,tau_uniform=.true.)
             if(paramagnet)then
@@ -945,10 +940,10 @@ contains
          enddo
          deallocate(Smats_diag)
          call cpu_time(finish)
-         write(*,"(A,F)") "     Sqmc_"//reg(SiteName(isite))//"(iw) --> Sqmc_"//reg(SiteName(isite))//"(tau) cpu timing:", finish-start
+         write(*,"(A,F)") "     Sqmc_"//reg(LocalOrbs(isite)%Name)//"(iw) --> Sqmc_"//reg(LocalOrbs(isite)%Name)//"(tau) cpu timing:", finish-start
          !
          !Final correction
-         do iorb=1,SiteNorb(isite)
+         do iorb=1,LocalOrbs(isite)%Norb
             !
             if(dreal(Sitau_diag(iorb,1,1)).gt.0d0) then
                write(*,"(A)")"     Warning: orbital# "//str(iorb)//" is positive in tau=0"
@@ -964,18 +959,18 @@ contains
          enddo
          !
          !Print data for MaxEnt
-         call dump_MaxEnt(Sitau_diag,"itau",reg(pathOUTPUT)//"Convergence/","Sqmc_"//reg(SiteName(isite)))
+         call dump_MaxEnt(Sitau_diag,"itau",reg(pathOUTPUT)//"Convergence/","Sqmc_"//reg(LocalOrbs(isite)%Name))
          deallocate(Sitau_diag)
          !
          !Print data needed to reconstruct the Self-energy
-         ParaFile = reg(pathOUTPUT)//"K_resolved/Sigma_vars/Sqmc_"//reg(SiteName(isite))//"_Params.DAT"
+         ParaFile = reg(pathOUTPUT)//"K_resolved/Sigma_vars/Sqmc_"//reg(LocalOrbs(isite)%Name)//"_Params.DAT"
          unit = free_unit()
          open(unit,file=reg(ParaFile),form="formatted",status="unknown",position="rewind",action="write")
-         write(unit,"(200E20.12)") (Sparams(iorb,1,1),iorb=1,SiteNorb(isite)),(Sparams(iorb,1,2),iorb=1,SiteNorb(isite)),         & !spin=1
-                                   (Sparams(iorb,Nspin,1),iorb=1,SiteNorb(isite)),(Sparams(iorb,Nspin,2),iorb=1,SiteNorb(isite))    !spin=2
+         write(unit,"(200E20.12)") (Sparams(iorb,1,1),iorb=1,LocalOrbs(isite)%Norb),(Sparams(iorb,1,2),iorb=1,LocalOrbs(isite)%Norb),         & !spin=1
+                                   (Sparams(iorb,Nspin,1),iorb=1,LocalOrbs(isite)%Norb),(Sparams(iorb,Nspin,2),iorb=1,LocalOrbs(isite)%Norb)    !spin=2
          close(unit)
          !
-         deallocate(Orbs,Sparams)
+         deallocate(Sparams)
          call DeallocateFermionicField(Simp)
          if(ExpandImpurity.or.AFMselfcons)exit
          !

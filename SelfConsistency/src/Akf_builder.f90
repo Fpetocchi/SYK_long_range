@@ -7,10 +7,6 @@ program Akw_builder
    integer                                  :: TimeStart
    integer                                  :: ItStart,Itend
    integer                                  :: ispin
-
-   !
-   !
-
    !
    !
    !
@@ -674,7 +670,6 @@ contains
       complex(8),allocatable                :: Sigma_rho(:,:,:)
       complex(8),allocatable                :: Sigma_orb(:,:,:),Greal_orb(:,:,:)
       complex(8),allocatable                :: Hk(:,:,:)
-      integer,allocatable                   :: Orbs(:)
       logical                               :: justSigma_
       !
       justSigma_=.false.
@@ -718,19 +713,16 @@ contains
       !
       do isite=1,Nsite
          !
-         allocate(Orbs(SiteNorb(isite)))
-         Orbs = SiteOrbs(isite,1:SiteNorb(isite))
-         !
          if(allocated(Kmask))deallocate(Kmask)
-         allocate(Kmask(SiteNorb(isite)));Kmask=.false.
+         allocate(Kmask(LocalOrbs(isite)%Norb));Kmask=.false.
          !
          !First check that all the files contains the same number fo real frequecies
-         do iorb=1,SiteNorb(isite)
+         do iorb=1,LocalOrbs(isite)%Norb
             !
-            path = reg(ItFolder)//"Convergence/MaxEnt_Sqmc_"//reg(SiteName(isite))//"_o"//str(iorb)//"_s1/Sqmc_"//reg(SiteName(isite))//"_t_o"//str(iorb)//"_s"//str(ispin)//".DAT_dos.dat"
+            path = reg(ItFolder)//"Convergence/MaxEnt_Sqmc_"//reg(LocalOrbs(isite)%Name)//"_o"//str(iorb)//"_s1/Sqmc_"//reg(LocalOrbs(isite)%Name)//"_t_o"//str(iorb)//"_s"//str(ispin)//".DAT_dos.dat"
             call inquireFile(reg(path),Kmask(iorb),hardstop=.false.,verb=.true.)
             if(.not.Kmask(iorb)) then
-               write(*,"(A)") "     Warning: the MaxEnt_Sqmc_"//reg(SiteName(isite))//"_o"//str(iorb)//"_s"//str(ispin)//" folder is missing one orbital."
+               write(*,"(A)") "     Warning: the MaxEnt_Sqmc_"//reg(LocalOrbs(isite)%Name)//"_o"//str(iorb)//"_s"//str(ispin)//" folder is missing one orbital."
                return
             endif
             !
@@ -758,10 +750,10 @@ contains
          enddo
          !
          allocate(wreal_read(Nreal_read));wreal_read=0d0
-         allocate(ImSigma_read(SiteNorb(isite),Nreal_read));ImSigma_read=0d0
-         do iorb=1,SiteNorb(isite)
+         allocate(ImSigma_read(LocalOrbs(isite)%Norb,Nreal_read));ImSigma_read=0d0
+         do iorb=1,LocalOrbs(isite)%Norb
             !
-            path = reg(ItFolder)//"Convergence/MaxEnt_Sqmc_"//reg(SiteName(isite))//"_o"//str(iorb)//"_s1/Sqmc_"//reg(SiteName(isite))//"_t_o"//str(iorb)//"_s"//str(ispin)//".DAT_dos.dat"
+            path = reg(ItFolder)//"Convergence/MaxEnt_Sqmc_"//reg(LocalOrbs(isite)%Name)//"_o"//str(iorb)//"_s1/Sqmc_"//reg(LocalOrbs(isite)%Name)//"_t_o"//str(iorb)//"_s"//str(ispin)//".DAT_dos.dat"
             unit = free_unit()
             open(unit,file=reg(path),form="formatted",status="unknown",position="rewind",action="read")
             do iw=1,Nreal_read
@@ -779,12 +771,12 @@ contains
          write(*,"(A)") "     MaxEnt output on self-energy is read."
          !
          !Read the parameters for the Self-energy rescaling
-         allocate(Sparams(SiteNorb(isite),Nspin,2));Sparams=0d0
-         path = reg(MaxEnt_K)//"Sigma_vars/Sqmc_"//reg(SiteName(isite))//"_Params.DAT"
+         allocate(Sparams(LocalOrbs(isite)%Norb,Nspin,2));Sparams=0d0
+         path = reg(MaxEnt_K)//"Sigma_vars/Sqmc_"//reg(LocalOrbs(isite)%Name)//"_Params.DAT"
          unit = free_unit()
          open(unit,file=reg(path),form="formatted",status="unknown",position="rewind",action="read")
-         read(unit,*) (Sparams(iorb,1,1),iorb=1,SiteNorb(isite)),(Sparams(iorb,1,2),iorb=1,SiteNorb(isite)), &
-                      (Sparams(iorb,Nspin,1),iorb=1,SiteNorb(isite)),(Sparams(iorb,Nspin,2),iorb=1,SiteNorb(isite))
+         read(unit,*) (Sparams(iorb,1,1),iorb=1,LocalOrbs(isite)%Norb),(Sparams(iorb,1,2),iorb=1,LocalOrbs(isite)%Norb), &
+                      (Sparams(iorb,Nspin,1),iorb=1,LocalOrbs(isite)%Norb),(Sparams(iorb,Nspin,2),iorb=1,LocalOrbs(isite)%Norb)
          close(unit)
          write(*,"(A)") "     Self-energy parameters are read."
          !
@@ -806,8 +798,8 @@ contains
          endif
          !
          !Manipulate MaxEnt output
-         allocate(ImSigma(SiteNorb(isite),Nreal));ImSigma=0d0
-         do iorb=1,SiteNorb(isite)
+         allocate(ImSigma(LocalOrbs(isite)%Norb,Nreal));ImSigma=0d0
+         do iorb=1,LocalOrbs(isite)%Norb
             !
             !Chunk the data to the smaller frequency array and revert the poles
             do iw=1,Nreal
@@ -832,9 +824,9 @@ contains
          !
          !
          !Compute the real part and build the full self-energy
-         allocate(Sigma_rho(SiteNorb(isite),SiteNorb(isite),Nreal));Sigma_rho=czero
+         allocate(Sigma_rho(LocalOrbs(isite)%Norb,LocalOrbs(isite)%Norb,Nreal));Sigma_rho=czero
          allocate(ReSigma(Nreal));ReSigma=0d0
-         do iorb=1,SiteNorb(isite)
+         do iorb=1,LocalOrbs(isite)%Norb
             !
             call KK_Im2Re(ReSigma,ImSigma(iorb,:),wreal,KKcutoff,BareVal=Sparams(iorb,ispin,1),symmetric=.false.)
             !
@@ -845,8 +837,8 @@ contains
          write(*,"(A)") "     Real Part of the self-energy computed."
          !
          !Check Print
-         do iorb=1,SiteNorb(isite)
-            path = reg(ItFolder)//"Convergence/MaxEnt_Sqmc_"//reg(SiteName(isite))//"_o"//str(iorb)//"_s1/Sqmc_rebuilt_"//reg(SiteName(isite))//"_t_o"//str(iorb)//"_s"//str(ispin)//".DAT_dos.dat"
+         do iorb=1,LocalOrbs(isite)%Norb
+            path = reg(ItFolder)//"Convergence/MaxEnt_Sqmc_"//reg(LocalOrbs(isite)%Name)//"_o"//str(iorb)//"_s1/Sqmc_rebuilt_"//reg(LocalOrbs(isite)%Name)//"_t_o"//str(iorb)//"_s"//str(ispin)//".DAT_dos.dat"
             unit = free_unit()
             open(unit,file=reg(path),form="formatted",status="unknown",position="rewind",action="write")
             do iw=1,Nreal
@@ -856,17 +848,10 @@ contains
          enddo
          !
          !Expand to the Lattice basis
-         if(RotateHloc)then
-            do iw=1,Nreal
-               call imp2loc(Sigma_orb(:,:,iw),Sigma_rho(:,:,iw),isite,Orbs,ExpandImpurity,U=OlocRotDag)
-            enddo
-         else
-            do iw=1,Nreal
-               call imp2loc(Sigma_orb(:,:,iw),Sigma_rho(:,:,iw),isite,Orbs,ExpandImpurity)
-            enddo
-         endif
+         do iw=1,Nreal
+            call imp2loc(Sigma_orb(:,:,iw),Sigma_rho(:,:,iw),isite,LocalOrbs,ExpandImpurity,RotateHloc)
+         enddo
          !
-         deallocate(Orbs)
          if(ExpandImpurity.or.AFMselfcons)exit
          !
       enddo

@@ -111,7 +111,7 @@ program SelfConsistency
          call dump_MaxEnt(Plat,"mats",reg(ItFolder)//"Convergence/","Plat",EqvGWndx%SetOrbs)
          !
          if(merge_P)then
-            call MergeFields(Plat,P_EDMFT,alphaPi,SiteOrbs,RotateHloc)
+            call MergeFields(Plat,P_EDMFT,alphaPi,LocalOrbs,RotateHloc)
             call dump_BosonicField(Plat,reg(ItFolder),"Plat_merged_w.DAT")
          elseif(calc_Pguess)then
             P_EDMFT%screened_local = dreal(Plat%screened_local)*alphaPi
@@ -158,11 +158,17 @@ program SelfConsistency
       !K-dependent self-energy - only G0W0,scGW,GW+EDMFT
       if(calc_Sigmak)then
          !
-         !Hartree shift between G0W0 and LDA
-         if(.not.allocated(VH))allocate(VH(Crystal%Norb,Crystal%Norb));VH=czero
+         !Hartree shift between G0W0 and scGW
          if(addTierIII)then
-            call calc_VH(VH,densityLDA,Glat,Ulat) !call calc_VH(VH,densityLDA,densityDMFT,Ulat) !call calc_VH(VH,densityLDA,Glat,Ulat)
-            call dump_Matrix(VH,reg(ItFolder),"VH.DAT")
+            select case(reg(VN_type))
+               case default
+                  stop "Wrong entry for VN_TYPE."
+               case("Nlat")
+                  call calc_VH(VH,densityLDA,densityGW,Ulat)
+               case("Nimp")
+                  call calc_VH(VH,densityLDA,densityDMFT,Ulat)
+            end select
+            call dump_Matrix(VH,reg(ItFolder),"VH_"//reg(VN_type)//".DAT")
             if(.not.VH_use)then
                VH=czero
                write(*,"(A)")"     VH not used."
@@ -171,35 +177,31 @@ program SelfConsistency
          if(solve_DMFT.and.bosonicSC.and.(.not.Ustart))call DeallocateBosonicField(Ulat)
          !
          !read from SPEX G0W0 self-energy and Vexchange
-         if(.not.allocated(Vxc))allocate(Vxc(Crystal%Norb,Crystal%Norb,Crystal%Nkpt,Nspin));Vxc=czero
          call AllocateFermionicField(S_G0W0,Crystal%Norb,Nmats,Nkpt=Crystal%Nkpt,Nsite=Nsite,Beta=Beta)
-         if(addTierIII)then
-            if(Vxc_in)then
-               call read_Sigma_spex(SpexVersion,S_G0W0,Crystal,verbose,recompute=RecomputeG0W0,pathOUTPUT=reg(pathINPUTtr))
-            else
-               call read_Sigma_spex(SpexVersion,S_G0W0,Crystal,verbose,recompute=RecomputeG0W0,pathOUTPUT=reg(pathINPUTtr),Vxc_out=Vxc)
-            endif
-         endif
+         if(addTierIII) call read_Sigma_spex(SpexVersion,S_G0W0,Crystal,verbose,RecomputeG0W0,Vxc)
          !
          !scGW
          if(Iteration.eq.0)then
             !
             if(addTierIII)then
                !
-               !Compute the Dc between G0W0 and scGW self-energies
-               call AllocateFermionicField(S_G0W0dc,Crystal%Norb,Nmats,Nkpt=Crystal%Nkpt,Nsite=Nsite,Beta=Beta)
-               call calc_sigmaGW(S_G0W0dc,Glat,Wlat,Crystal,LDAoffdiag=.false.)
-               !
                !Store the Dc between G0W0 and scGW self-energies and use G0W0 as self-energy for the first iteration
-               call check_S_G0W0()
-               call dump_FermionicField(S_G0W0dc,reg(ItFolder),"SGoWo_dc_w",.true.,Crystal%kpt,paramagnet)
-               call dump_FermionicField(S_G0W0dc,reg(ItFolder),"SGoWo_dc_w",paramagnet)
+               call AllocateFermionicField(S_G0W0dc,Crystal%Norb,Nmats,Nkpt=Crystal%Nkpt,Nsite=Nsite,Beta=Beta)
+               if(calc_S_G0W0dc)then
+                  write(*,"(A,F)")"     Computing dc between G0W0 and scGW."
+                  call calc_sigmaGW(S_G0W0dc,Glat,Wlat,Crystal)!,LDAoffdiag=.false.) I believed the scGWdc should have had OD terms removed but its not working
+                  call dump_FermionicField(S_G0W0dc,reg(pathINPUTtr),"SGoWo_dc_w",.true.,Crystal%kpt,paramagnet)
+                  call dump_FermionicField(S_G0W0dc,reg(pathINPUTtr),"SGoWo_dc_w",paramagnet)
+               elseif(spex_S_G0W0dc)then
+                  write(*,"(A,F)")"     Reading dc between G0W0 and scGW from SPEX_VERSION: "//reg(SpexVersion)
+                  call read_Sigma_spex(SpexVersion,S_G0W0dc,Crystal,verbose,RecomputeG0W0,Vxc,DC=.true.)
+               endif
                call DeallocateFermionicField(S_G0W0dc)
                !
             else
                !
                !Use directly the GW formula since G0W0 is absent for model calculations
-               call calc_sigmaGW(S_G0W0,Glat,Wlat,Crystal,LDAoffdiag=.false.)
+               call calc_sigmaGW(S_G0W0,Glat,Wlat,Crystal)
                !
             endif
             !
@@ -211,8 +213,7 @@ program SelfConsistency
             !Read the Dc between G0W0 and scGW if present
             if(addTierIII)then
                call AllocateFermionicField(S_G0W0dc,Crystal%Norb,Nmats,Nkpt=Crystal%Nkpt,Nsite=Nsite,Beta=Beta)
-               call read_FermionicField(S_G0W0dc,reg(pathDATA)//"0/","SGoWo_dc_w",kpt=Crystal%kpt)
-               if(RecomputeG0W0)call check_S_G0W0()
+               call read_FermionicField(S_G0W0dc,reg(pathINPUTtr),"SGoWo_dc_w",kpt=Crystal%kpt)
             endif
             !
             !Compute the scGW self-energy
@@ -229,12 +230,12 @@ program SelfConsistency
             if(reg(DC_type).eq."GlocWloc")then
                call AllocateFermionicField(S_GWdc,Crystal%Norb,Nmats,Nsite=Nsite,Beta=Beta)
                call calc_sigmaGWdc(S_GWdc,Glat,Wlat)
-               call MergeFields(S_GW,S_DMFT,[alphaSigma,HartreeFact],SiteOrbs,RotateHloc,SigmaGW_DC=S_GWdc)
+               call MergeFields(S_GW,S_DMFT,[alphaSigma,HartreeFact],LocalOrbs,SigmaGW_DC=S_GWdc)
                call DeallocateFermionicField(S_GWdc)
             elseif(reg(DC_type).eq."Sloc")then
-               call MergeFields(S_GW,S_DMFT,[alphaSigma,HartreeFact],SiteOrbs,RotateHloc)
+               call MergeFields(S_GW,S_DMFT,[alphaSigma,HartreeFact],LocalOrbs)
             endif
-            if(verbose)call dump_FermionicField(S_GW,reg(ItFolder),"Slat_merged_w",paramagnet)
+            call dump_FermionicField(S_GW,reg(ItFolder),"Slat_merged_w",paramagnet)
             !
          endif
          !
@@ -313,8 +314,8 @@ program SelfConsistency
          !The local problem must give the same density in the same subset
          if(MultiTier)then
             write(*,*)
-            write(*,"(A,1I3)") "     N_READ_IMP updated from "//str(Solver%TargetDensity,4)//" to "//str(get_Tier_occupation(densityGW,SiteOrbs),4)
-            Solver%TargetDensity = get_Tier_occupation(densityGW,SiteOrbs)
+            write(*,"(A,1I3)") "     N_READ_IMP updated from "//str(Solver%TargetDensity,4)//" to "//str(get_Tier_occupation(densityGW,LocalOrbs),4)
+            Solver%TargetDensity = get_Tier_occupation(densityGW,LocalOrbs)
             call save_InputFile(reg(InputFile))
          endif
          !

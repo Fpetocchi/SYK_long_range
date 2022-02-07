@@ -155,12 +155,18 @@ class ct_hyb
          {
             //
             //Read the screening from file ( Eigen::MatrixXd )
-            mpi.report(" Reading screening file.");
-            read_EigenMat(inputDir+"/Screening.DAT", Screening_Mat, Nflavor, Nflavor); //read_Vec(inputDir+"/Screening.DAT", Screening_shift, Norb );
-            for(int iorb=0; iorb < Norb; iorb++)
+            if(!removeUhalf)
             {
-               for(int ifl=0; ifl < Nflavor; ifl++) Screening_shift[iorb] += (2*iorb!=ifl) ? Screening_Mat(2*iorb,ifl)/2.0 : 0.0 ;
-               mpi.report(" Orbital "+str(iorb)+" - screening shift = S/2: "+str(Screening_shift[iorb],6));
+               mpi.report(" Reading screening file.");
+               read_EigenMat(inputDir+"/Screening.DAT", Screening_Mat, Nflavor, Nflavor); //read_Vec(inputDir+"/Screening.DAT", Screening_shift, Norb );
+               for(int iorb=0; iorb < Norb; iorb++)
+               {
+                  // big number
+                  //for(int ifl=0; ifl < Nflavor; ifl++) Screening_shift[iorb] += (2*iorb!=ifl) ? Screening_Mat(2*iorb,ifl)/2.0 : 0.0 ;
+                  // small number
+                  Screening_shift[iorb] += Screening_Mat(2*iorb,2*iorb)/2.0;
+                  mpi.report(" Orbital "+str(iorb)+" - screening shift = S/2: "+str(Screening_shift[iorb],6));
+               }
             }
 
             //
@@ -191,7 +197,6 @@ class ct_hyb
                for(int ifl=0; ifl < Nflavor; ifl++) Hartree_shift[iorb] += (2*iorb!=ifl) ? ( Uloc(2*iorb,ifl) )/2.0 : 0.0 ;
                mpi.report(" Orbital "+str(iorb)+" - Hartree term = Uscr/2: "+str(Hartree_shift[iorb],6));
             }
-            Screening_shift.resize(Norb,0.0);
          }
 
          //

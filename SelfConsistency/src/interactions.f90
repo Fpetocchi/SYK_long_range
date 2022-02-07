@@ -2651,7 +2651,7 @@ contains
    !PURPOSE: Given the Bosonic Field it extracts the screened interaction and
    ! retardation function.
    !---------------------------------------------------------------------------!
-   subroutine calc_QMCinteractions(Umats,Uinst,Kfunct,Kpfunct,Screening,sym)
+   subroutine calc_QMCinteractions(Umats,Uinst,Kfunct,Kpfunct,Screening,sym,casula)
       !
       use parameters
       use file_io
@@ -2666,16 +2666,17 @@ contains
       real(8),intent(inout),optional        :: Kpfunct(:,:,:)
       real(8),intent(inout),optional        :: Screening(:,:)
       logical,intent(in),optional           :: sym
+      logical,intent(in),optional           :: casula
       !
       integer                               :: Nbp,Norb,Nflavor
       integer                               :: ib1,ib2,iorb,jorb
       integer                               :: iu1,iu2,ix1,ix2,ip1,ip2
-      integer                               :: iw,itau
+      integer                               :: iw,itau,iwlimit
       real(8),allocatable                   :: wmats(:),tau(:)
       complex(8),allocatable                :: Kaux(:,:,:)
       logical                               :: Uloc,U1st,U2nd,retarded,Kp,Scr
       type(physicalU)                       :: PhysicalUelements
-      logical                               :: sym_
+      logical                               :: sym_,casula_
       !
       !
       if(verbose)write(*,"(A)") "---- calc_QMCinteractions"
@@ -2694,6 +2695,11 @@ contains
       !
       sym_=.true.
       if(present(sym))sym_=sym
+      !
+      casula_=.false.
+      if(present(casula))casula_=casula
+      iwlimit=1
+      if(casula_)iwlimit=Umats%Npoints
       !
       Nbp = Umats%Nbp
       Norb = int(sqrt(dble(Nbp)))
@@ -2746,10 +2752,10 @@ contains
             !
             if(retarded)then
                !
-               if(Uloc) Kaux(ib1,ib2,:) =  Umats%screened_local(iu1,iu2,:) - Umats%screened_local(iu1,iu2,1)
-               if(U1st) Kaux(ib1,ib2,:) =  Umats%screened_local(iu1,iu2,:) - Umats%screened_local(iu1,iu2,1)
+               if(Uloc) Kaux(ib1,ib2,:) =  Umats%screened_local(iu1,iu2,:) - Umats%screened_local(iu1,iu2,iwlimit)
+               if(U1st) Kaux(ib1,ib2,:) =  Umats%screened_local(iu1,iu2,:) - Umats%screened_local(iu1,iu2,iwlimit)
                if(U2nd) Kaux(ib1,ib2,:) =  Umats%screened_local(iu1,iu2,:) - (Umats%screened_local(ix1,ix2,:)+Umats%screened_local(ip1,ip2,:))/2d0 - &
-                                          (Umats%screened_local(iu1,iu2,1) - (Umats%screened_local(ix1,ix2,1)+Umats%screened_local(ip1,ip2,1))/2d0)
+                                          (Umats%screened_local(iu1,iu2,iwlimit) - (Umats%screened_local(ix1,ix2,iwlimit)+Umats%screened_local(ip1,ip2,iwlimit))/2d0)
                !same orbital - same spin screening
                if(Uloc.and.(ib2.gt.ib1)) then
                   Kaux(ib1,ib1,:) = Kaux(ib1,ib2,:)
@@ -2780,6 +2786,7 @@ contains
       if(retarded)then
          Kfunct=0d0
          do itau=2,Solver%NtauB-1
+            if(casula_) Kfunct(:,:,itau) = Kfunct(:,:,itau) - Kaux(:,:,1) * ( -(tau(itau)-Umats%Beta/2d0)**2 )/Umats%Beta
             do iw=2,Umats%Npoints
                Kfunct(:,:,itau) = Kfunct(:,:,itau) - 2d0*Kaux(:,:,iw) * ( cos(wmats(iw)*tau(itau)) - 1d0 ) / ( Umats%Beta*wmats(iw)**2 )
             enddo
@@ -2791,6 +2798,7 @@ contains
       if(retarded.and.kp)then
          Kpfunct=0d0
          do itau=2,Solver%NtauB-1
+            if(casula_) Kpfunct(:,:,itau) = Kpfunct(:,:,itau) + 2d0*Kaux(:,:,iw) * (tau(itau)-Umats%Beta/2d0)/Umats%Beta
             do iw=2,Umats%Npoints
                Kpfunct(:,:,itau) = Kpfunct(:,:,itau) + 2d0*Kaux(:,:,iw) * sin(wmats(iw)*tau(itau)) / ( Umats%Beta*wmats(iw) )
             enddo

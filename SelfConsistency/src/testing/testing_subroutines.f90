@@ -1013,9 +1013,6 @@ end subroutine calc_chi_edmft
 
 
 
-
-
-
 subroutine build_Uret_multiParam_Vn(Umats,Uaa,Uab,J,Vnn,Lttc,LocalOnly)
    !
    use parameters
@@ -1227,3 +1224,92 @@ subroutine build_Uret_multiParam_Vn(Umats,Uaa,Uab,J,Vnn,Lttc,LocalOnly)
    call dump_BosonicField(Umats,reg(pathINPUTtr),"Uloc_mats.DAT")
    !
 end subroutine build_Uret_multiParam_Vn
+
+
+
+!---------------------------------------------------------------------------!
+!PURPOSE: Check that the double counting between G0W0 and scGW at the
+!         0th iteration yeld a causal local self-energy. Usually that's the case,
+!         but, given that SPEX is a zero T calculation, some very small numeircal
+!         errors might be present at low freq.
+!         This subroutine, if needed, correct the SPEX self-energy by a
+!         small rescaling factor computed just from the first matsubara
+!         frequency. If a non-causal difference between the local SPEX G0W0
+!         and local scGW is still present it will be removed in join_SigmaFull
+!         This information is present already at the 0th iteration but the
+!         input value of GoWoDC_loc cannot be changed between iterations
+!         therefore the check in join_SigmaFull is required each time the
+!         total self-energy is computed.
+!---------------------------------------------------------------------------!
+subroutine check_S_G0W0()
+   !
+   implicit none
+   integer                               :: iw,ik,iorb,ispin,isite
+   real(8)                               :: y1,y2,x1,x2,m,q
+   real(8),allocatable                   :: wmats_orig(:)
+   type(OldBeta)                         :: Beta_Match
+   real(8)                               :: ImS_1,ImS_2
+   logical                               :: causal_G0W0_loc
+   type(FermionicField)                  :: S_G0W0_imp
+   type(FermionicField)                  :: S_G0W0_DMFT
+   logical                               :: shift
+   !
+   if(.not.S_G0W0%status) stop "check_S_G0W0: S_G0W0 not properly initialized."
+   if(.not.S_G0W0dc%status) stop "check_S_G0W0: S_G0W0dc not properly initialized."
+   !
+   call FermionicKsum(S_G0W0)
+   call FermionicKsum(S_G0W0dc)
+   !
+   allocate(wmats_orig(S_G0W0%Npoints));wmats_orig=0d0
+   wmats_orig = FermionicFreqMesh(S_G0W0%Beta,S_G0W0%Npoints)
+   !
+   !Compute the G0W0 contribution to the local self-energy with removed DC
+   call AllocateFermionicField(S_G0W0_DMFT,Crystal%Norb,Nmats,Nkpt=Crystal%Nkpt,Nsite=Nsite,Beta=Beta,mu=Glat%mu)
+   do isite=1,Nsite
+      !
+      !Extract the local G0W0 self-energy for each site
+      call AllocateFermionicField(S_G0W0_imp,LocalOrbs(isite)%Norb,Nmats,Beta=Beta)
+      call loc2imp(S_G0W0_imp,S_G0W0,LocalOrbs(isite)%Orbs)
+      !
+      !Put it into an object that contains only the site indexes
+      call imp2loc(S_G0W0_DMFT,S_G0W0_imp,isite,LocalOrbs,.false.,.false.,.false.,name="S_G0W0_imp")
+      !
+      call DeallocateField(S_G0W0_imp)
+      !
+   enddo
+   !
+   !Check for the causality in the G0W0 contribution to the local self-energy
+   !at all frequencies since it's not done in check_S_G0W0
+   causal_G0W0_loc = GoWoDC_loc
+   if(causal_G0W0_loc)then
+      causaloop: do ispin=1,Nspin
+         do iorb=1,S_G0W0_DMFT%Norb
+            do iw=1,S_G0W0_DMFT%Npoints
+               ImS_1 = dimag(S_G0W0_DMFT%ws(iorb,iorb,iw,ispin))
+               if(ImS_1.gt.0d0)then
+                  write(*,"(A)")"     Warning: the local G0W0 self-energy has been found non-causal at iw="//str(iw)//" iorb="//str(iorb)//" ispin="//str(ispin)
+                  causal_G0W0_loc=.false.
+                  exit causaloop
+               endif
+               if(iw.le.10)then
+                  ImS_2 = dimag(S_G0W0_DMFT%ws(iorb,iorb,iw+1,ispin))
+                  if(ImS_2.gt.ImS_1) write(*,"(A)")"     Warning: the local G0W0 self-energy seems not to scale as a Fermi-liquid. If Delta(tau) is non-causal try to set G0W0DC_LOC=F."
+               endif
+            enddo
+         enddo
+      enddo causaloop
+   endif
+   !
+   !Enclose in the EDMFT *ALL* the local contributions to the self-energy
+   !From the S_G0W0^{SPEX}_{ij} + S_G0W0^{SPEX}_{i} - S_G0W0^{DC}_{ij} - S_G0W0^{DC}_{i}
+   !we remove [ S_G0W0^{SPEX}_{i} - S_G0W0^{DC}_{i} ]
+   !here, if Vxc is inside S_G0W0, also the local contribution from Vxc is removed
+   if((.not.GoWoDC_loc).or.(.not.causal_G0W0_loc))then
+      write(*,"(A)")"     Local G0W0-scGW_DC self-energy removed."
+      do ik=1,S_G0W0%Nkpt
+         S_G0W0%wks(:,:,:,ik,:) = S_G0W0%wks(:,:,:,ik,:) - S_G0W0_DMFT%ws
+      enddo
+   endif
+   call DeallocateField(S_G0W0_DMFT)
+   !
+end subroutine check_S_G0W0

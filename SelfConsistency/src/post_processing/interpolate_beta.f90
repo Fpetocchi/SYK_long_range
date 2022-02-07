@@ -4,7 +4,7 @@ subroutine interpolate2Beta_Fermionic(G,Beta_Match,mode,offDiag,wmats_in)
    use utils_misc
    use utils_fields
    use interactions
-   use input_vars, only: Nsite, SiteNorb, SiteOrbs
+   use input_vars, only: LocalOrbs
    implicit none
    !
    type(FermionicField),intent(inout)    :: G
@@ -14,7 +14,7 @@ subroutine interpolate2Beta_Fermionic(G,Beta_Match,mode,offDiag,wmats_in)
    real(8),intent(in),optional           :: wmats_in(:)
    !
    type(FermionicField)                  :: G_old
-   integer                               :: isite,ik,iw
+   integer                               :: Nsite,isite,ik,iw
    integer                               :: i,j,ispin
    integer                               :: i_lat,j_lat
    logical                               :: LocalOnly,replace
@@ -29,6 +29,9 @@ subroutine interpolate2Beta_Fermionic(G,Beta_Match,mode,offDiag,wmats_in)
    if(.not.G%status) stop "interpolate2Beta_Fermionic: FermionicField not properly initialized."
    if(G%Beta.ne.Beta_Match%Beta_old) stop "interpolate2Beta_Fermionic: Fermionic field Beta is different from the expected one."
    if(G%Npoints.ne.Beta_Match%Nmats_old) stop "interpolate2Beta_Fermionic: Fermionic field Npoints is different from the expected one."
+   if(.not.allocated(LocalOrbs)) stop "interpolate2Beta_Fermionic: LocalOrbs not properly initialized."
+   !
+   Nsite = size(LocalOrbs)
    !
    LocalOnly=.true.
    if(G%Nkpt.ne.0)LocalOnly=.false.
@@ -54,18 +57,16 @@ subroutine interpolate2Beta_Fermionic(G,Beta_Match,mode,offDiag,wmats_in)
          allocate(ReD(Beta_Match%Nmats_old)) ;allocate(ImD(Beta_Match%Nmats_old))
          allocate(ReGf(Beta_Match%Nmats_new));allocate(ImGf(Beta_Match%Nmats_new))
          !
-         !$OMP PARALLEL DEFAULT(NONE),&
-         !$OMP SHARED(G,G_old,Nsite,SiteNorb,SiteOrbs),&
-         !$OMP SHARED(Beta_Match,offDiag,wmats_new,wmats_old),&
+         !$OMP PARALLEL DEFAULT(SHARED),&
          !$OMP PRIVATE(ispin,isite,i,j,i_lat,j_lat,replace,iw,ReD,ReGf,ImD,ImGf)
          !$OMP DO
          do isite=1,Nsite
             !
-            do i=1,SiteNorb(isite)
-               do j=1,SiteNorb(isite)
+            do i=1,LocalOrbs(isite)%Norb
+               do j=1,LocalOrbs(isite)%Norb
                   !
-                  i_lat = SiteOrbs(isite,i)
-                  j_lat = SiteOrbs(isite,j)
+                  i_lat = LocalOrbs(isite)%Orbs(i)
+                  j_lat = LocalOrbs(isite)%Orbs(j)
                   !
                   replace = i_lat.eq.j_lat
                   if(offDiag) replace = .true.
@@ -169,7 +170,7 @@ subroutine interpolate2Beta_Bosonic(W,Beta_Match,mode,offDiag,wmats_in)
    use utils_misc
    use utils_fields
    use interactions
-   use input_vars, only: Nsite, SiteNorb, SiteOrbs, UfullStructure
+   use input_vars, only: LocalOrbs, UfullStructure
    implicit none
    !
    type(BosonicField),intent(inout)      :: W
@@ -180,7 +181,7 @@ subroutine interpolate2Beta_Bosonic(W,Beta_Match,mode,offDiag,wmats_in)
    !
    type(BosonicField)                    :: W_old
    integer                               :: Norb
-   integer                               :: isite,iq,ib1,ib2,iw
+   integer                               :: Nsite,isite,iq,ib1,ib2,iw
    integer                               :: i,j,k,l
    integer                               :: i_lat,j_lat,k_lat,l_lat
    logical                               :: LocalOnly,replace
@@ -196,7 +197,9 @@ subroutine interpolate2Beta_Bosonic(W,Beta_Match,mode,offDiag,wmats_in)
    if(.not.W%status) stop "interpolate2Beta_Bosonic: BosonicField not properly initialized."
    if(W%Beta.ne.Beta_Match%Beta_old) stop "interpolate2Beta_Bosonic: Bosonic field Beta is different from the expected one."
    if(W%Npoints.ne.Beta_Match%Nmats_old) stop "interpolate2Beta_Bosonic: Bosonic field Npoints is different from the expected one."
+   if(.not.allocated(LocalOrbs)) stop "interpolate2Beta_Bosonic: LocalOrbs not properly initialized."
    !
+   Nsite = size(LocalOrbs)
    Norb = int(sqrt(dble(W%Nbp)))
    !
    LocalOnly=.true.
@@ -225,23 +228,21 @@ subroutine interpolate2Beta_Bosonic(W,Beta_Match,mode,offDiag,wmats_in)
          !
          call init_Uelements(Norb,PhysicalUelements)
          !
-         !$OMP PARALLEL DEFAULT(NONE),&
-         !$OMP SHARED(W,W_old,Nsite,SiteNorb,SiteOrbs,Norb),&
-         !$OMP SHARED(Beta_Match,offDiag,UfullStructure,PhysicalUelements,wmats_new,wmats_old),&
+         !$OMP PARALLEL DEFAULT(SHARED),&
          !$OMP PRIVATE(isite,i,j,k,l,i_lat,j_lat,k_lat,l_lat,ib1,ib2,replace,iw,ReD,ReW)
          !$OMP DO
          do isite=1,W%Nsite
             !
-            do i=1,SiteNorb(isite)
-               do j=1,SiteNorb(isite)
-                  do k=1,SiteNorb(isite)
-                     do l=1,SiteNorb(isite)
+            do i=1,LocalOrbs(isite)%Norb
+               do j=1,LocalOrbs(isite)%Norb
+                  do k=1,LocalOrbs(isite)%Norb
+                     do l=1,LocalOrbs(isite)%Norb
                         !
                         ! mapping
-                        i_lat = SiteOrbs(isite,i)
-                        j_lat = SiteOrbs(isite,j)
-                        k_lat = SiteOrbs(isite,k)
-                        l_lat = SiteOrbs(isite,l)
+                        i_lat = LocalOrbs(isite)%Orbs(i)
+                        j_lat = LocalOrbs(isite)%Orbs(j)
+                        k_lat = LocalOrbs(isite)%Orbs(k)
+                        l_lat = LocalOrbs(isite)%Orbs(l)
                         !
                         ! bosonic indexes on the lattice
                         call F2Bindex(Norb,[i_lat,j_lat],[k_lat,l_lat],ib1,ib2)

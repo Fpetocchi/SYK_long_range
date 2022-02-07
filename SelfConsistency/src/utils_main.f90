@@ -29,12 +29,6 @@ module utils_main
    !
    type(Lattice)                            :: Crystal
    !
-   !moved to input_vars
-   !complex(8),allocatable                   :: OlocSite(:,:,:)
-   !complex(8),allocatable                   :: OlocRot(:,:,:)
-   !complex(8),allocatable                   :: OlocRotDag(:,:,:)
-   !real(8),allocatable                      :: OlocEig(:,:)
-   !
    type(FermionicField)                     :: Glat
    type(FermionicField)                     :: G_DMFT
    !
@@ -54,7 +48,7 @@ module utils_main
    type(BosonicField)                       :: C_EDMFT
    type(BosonicField)                       :: curlyU_EDMFT
    !
-   type(FermionicField)                     :: D_correction
+   type(FermionicField)                     :: Delta_correction
    type(BosonicField)                       :: curlyU_correction
    !
    real(8),allocatable                      :: Ek(:,:)
@@ -64,7 +58,6 @@ module utils_main
    complex(8),allocatable                   :: densityLDA(:,:,:)
    complex(8),allocatable                   :: densityGW(:,:,:)
    complex(8),allocatable                   :: densityDMFT(:,:,:)
-   real(8),allocatable                      :: densityQMC(:,:,:,:)
    !
    complex(8),allocatable                   :: Vxc(:,:,:,:)
    complex(8),allocatable                   :: VH(:,:)
@@ -83,11 +76,14 @@ module utils_main
    logical                                  :: calc_Sigmak=.false.
    logical                                  :: merge_Sigma=.false.
    !
+   logical                                  :: calc_S_G0W0dc=.false.
+   logical                                  :: spex_S_G0W0dc=.false.
+   !
+   character(len=255)                       :: HartreeType="GW" ! "GW" "DMFT"
    real(8)                                  :: HartreeFact=1d0
    logical                                  :: update_curlyG=.true.
    integer                                  :: SigmaMaxMom=3
    !
-   logical                                  :: sym_constrained=.false.
    logical                                  :: MultiTier=.false.
    logical                                  :: print_path=.false.
    !
@@ -177,6 +173,7 @@ contains
       character(len=256)                    :: Itpath
       integer                               :: isite,ispin
       logical                               :: PrvItexist,ZeroItexist
+      logical                               :: JulichDCexists,LundDCexists,DCcond
       !
       !Few general checks
       if(ExpandImpurity.and.AFMselfcons) stop "AFM self-consistency and expansion to real space not implemented."
@@ -184,10 +181,7 @@ contains
       if(AFMselfcons.and.(Nsite.ne.2)) stop "AFM self-consistency is implemented only for lattices with 2 sites."
       if(RotateUloc.and.(.not.RotateHloc)) stop "Rotate the Bosonic impurity problem without rotating the Ferminic one is not allowed."
       !
-      !if(.not.RemoveHartree)HartreeFact=0d0
-      !Now the factor mutltiplying the Hartree impurity self-energy during the merge is always zero
-      !as the RemoveHartree flag controls the removal within the solver. Now S_DMFT%N_s is rebuilt but not used.
-      HartreeFact=0d0
+      if(.not.RemoveHartree)HartreeFact=0d0
       !
       calc_Sguess = calc_Sguess .and. (FirstIteration.eq.0) .and. solve_DMFT
       calc_Pguess = calc_Pguess .and. (FirstIteration.eq.0) .and. solve_DMFT
@@ -197,10 +191,23 @@ contains
       causal_D = causal_D .and. ((FirstIteration.ne.0).or.calc_Sguess)
       causal_U = causal_U .and. ((FirstIteration.ne.0).or.calc_Pguess)
       !
-      sym_constrained = ExpandImpurity .and. (reg(VH_type).ne."Ustatic")
-      sym_constrained = ExpandImpurity .and. (reg(VH_type).ne."Ubare")
-      !
       if(Hmodel.or.Umodel)addTierIII=.false.
+      !
+      if(addTierIII)then
+         !
+         calc_S_G0W0dc=.true.
+         spex_S_G0W0dc=.false.
+         !
+         call inquireFile(reg(pathINPUT)//"Sigma_dc_imag/spex.out",JulichDCexists,hardstop=.false.,verb=.false.)
+         call inquireDir(reg(pathINPUT)//"Sigma_dc_real_01",LundDCexists,hardstop=.false.,verb=.false.)
+         !
+         DCcond = ( JulichDCexists .and. (reg(SpexVersion).eq."Julich") ) .or. ( LundDCexists .and. (reg(SpexVersion).eq."Lund") )
+         if(DCcond)then
+            calc_S_G0W0dc=.false.
+            spex_S_G0W0dc=.true.
+         endif
+         !
+      endif
       !
       print_path = (reg(path_funct).ne."None") .and. (reg(structure).ne."None")
       !
@@ -220,7 +227,7 @@ contains
             if(ItStart.ne.0) stop "CalculationType is G0W0 but the starting iteration is not 0."
             call createDir(reg(Itpath),verb=verbose)
             do isite=1,Nsite
-               call createDir(reg(Itpath)//"Solver_"//reg(SiteName(isite))//"/fits",verb=verbose)
+               call createDir(reg(Itpath)//"Solver_"//reg(LocalOrbs(isite)%Name)//"/fits",verb=verbose)
                if(ExpandImpurity.or.AFMselfcons)exit
             enddo
             !
@@ -282,7 +289,7 @@ contains
                !
                call createDir(reg(Itpath),verb=verbose)
                do isite=1,Nsite
-                  call createDir(reg(Itpath)//"/Solver_"//reg(SiteName(isite))//"/fits",verb=verbose)
+                  call createDir(reg(Itpath)//"/Solver_"//reg(LocalOrbs(isite)%Name)//"/fits",verb=verbose)
                   if(ExpandImpurity.or.AFMselfcons)exit
                enddo
                Itend = ItStart
@@ -383,7 +390,7 @@ contains
          print_path=.false.
       endif
       !
-      write(*,"(A)") "     HartreeFact: "//str(HartreeFact)
+      write(*,"(A)") "     HartreeFact: "//str(HartreeFact,2)
       !
       !Save changes to the inputfile
       call save_InputFile("input.in")
@@ -491,9 +498,9 @@ contains
       write(*,"(A,1I3)") "     Number of inequivalent sites: ",Nsite
       write(*,"(A,1I3)") "     Number of solved impurities : ",Solver%Nimp
       do isite=1,Nsite
-         write(*,"(2(A,I3),A,10I3)")"     site: ",isite,", orbital space: ",SiteNorb(isite),", orbital indexes: ",SiteOrbs(isite,1:SiteNorb(isite))
+         write(*,"(2(A,I3),A,10I3)")"     site: ",isite,", orbital space: ",LocalOrbs(isite)%Norb,", orbital indexes: ",LocalOrbs(isite)%Orbs
       enddo
-      if(sum(SiteNorb).ne.Lttc%Norb)then
+      if(sum(LocalOrbs(:)%Norb).ne.Lttc%Norb)then
          !
          MultiTier = .true.
          if(Hetero%status) stop "MultiTier construction and Heterostructured setup are not allowed together."
@@ -510,7 +517,7 @@ contains
       if(RotateHloc)then
          !
          write(*,"(A)") new_line("A")//new_line("A")//"---- Rotations of the local LDA Hamiltonian (used)"
-         call build_rotations("Hloc",OlocSite,OlocEig,OlocRot,OlocRotDag,LatticeOp=Lttc%Hloc)
+         call build_rotations("Hloc",LatticeOp=Lttc%Hloc)
          call update_ImpEqvOrbs()
          !
       else
@@ -536,7 +543,7 @@ contains
          EqvGWndx%Ntotset=EqvGWndx%Nset
          EqvGWndx%Gfoffdiag = sym_mode.le.2
          !
-         if(sum(EqvGWndx%SetNorb).lt.Lttc%Norb)then !sum(SiteNorb)
+         if(sum(EqvGWndx%SetNorb).lt.Lttc%Norb)then
             !
             EqvGWndx%Ntotset = EqvGWndx%Nset + (Lttc%Norb-sum(EqvGWndx%SetNorb))
             !
@@ -642,24 +649,20 @@ contains
    !         LatticeOp. Fixed rotations are stored in pathINPUT, iteration
    !         dependent rotations are stored in the iteration folder.
    !---------------------------------------------------------------------------!
-   subroutine build_rotations(Opname,SiteOp,SiteEig,SiteRot,SiteRotdag,LatticeOp,read)
+   subroutine build_rotations(Opname,LatticeOp,read)
       !
       implicit none
       !
       character(len=*),intent(in)           :: Opname
-      complex(8),allocatable,intent(out)    :: SiteOp(:,:,:)
-      real(8),allocatable,intent(out)       :: SiteEig(:,:)
-      complex(8),allocatable,intent(out)    :: SiteRot(:,:,:)
-      complex(8),allocatable,intent(out)    :: SiteRotdag(:,:,:)
       complex(8),intent(in),optional        :: LatticeOp(:,:)
       logical,intent(in),optional           :: read
       !
       character(len=255)                    :: Folder
       integer                               :: isite,Norb
-      integer,allocatable                   :: Orbs(:)
-      complex(8),allocatable                :: Oloc(:,:),Rot(:,:)
-      real(8),allocatable                   :: Eig(:),EigR(:,:)
+      real(8),allocatable                   :: EigR(:,:)
       logical                               :: storeIt,read_,build_
+      !
+      if(.not.allocated(LocalOrbs)) stop "build_rotations: LocalOrbs not properly initialized."
       !
       read_=.false.
       if(present(read))read_=read
@@ -683,192 +686,60 @@ contains
             storeIt=.true.
       end select
       !
-      if(allocated(SiteOp))deallocate(SiteOp)
-      if(allocated(SiteEig))deallocate(SiteEig)
-      if(allocated(SiteRot))deallocate(SiteRot)
-      if(allocated(SiteRotdag))deallocate(SiteRotdag)
+      do isite=1,Nsite
+         if(allocated(LocalOrbs(isite)%Op))    deallocate(LocalOrbs(isite)%Op)
+         if(allocated(LocalOrbs(isite)%Rot))   deallocate(LocalOrbs(isite)%Rot)
+         if(allocated(LocalOrbs(isite)%RotDag))deallocate(LocalOrbs(isite)%RotDag)
+         if(allocated(LocalOrbs(isite)%Eig))   deallocate(LocalOrbs(isite)%Eig)
+      enddo
       !
-      if(build_)then
+      do isite=1,Nsite
          !
-         if(ExpandImpurity)then !Only one set of orbital provided - all matrices with same "Norb" dimension
+         if(storeIt) Folder = reg(ItFolder)//"Solver_"//reg(LocalOrbs(isite)%Name)//"/"
+         !
+         Norb = LocalOrbs(isite)%Norb
+         if( ExpandImpurity .and. (Norb.ne.LocalOrbs(1)%Norb) ) stop "The orbital space is not the same among the different impurities."
+         !
+         allocate(LocalOrbs(isite)%Op(Norb,Norb));LocalOrbs(isite)%Op=czero
+         allocate(LocalOrbs(isite)%Eig(Norb));LocalOrbs(isite)%Eig=0d0
+         allocate(LocalOrbs(isite)%Rot(Norb,Norb));LocalOrbs(isite)%Rot=czero
+         allocate(LocalOrbs(isite)%RotDag(Norb,Norb));LocalOrbs(isite)%RotDag=czero
+         !
+         if(build_)then
             !
-            allocate(SiteOp(SiteNorb(1),SiteNorb(1),Nsite));SiteOp=czero
-            allocate(SiteEig(SiteNorb(1),Nsite));SiteEig=0d0
-            allocate(SiteRot(SiteNorb(1),SiteNorb(1),Nsite));SiteRot=czero
-            allocate(SiteRotdag(SiteNorb(1),SiteNorb(1),Nsite));SiteRotdag=czero
+            !Extract then local Hamiltonian for each site
+            call loc2imp(LocalOrbs(isite)%Op,LatticeOp,LocalOrbs(isite)%Orbs)
             !
-            do isite=1,Nsite
-               !
-               if(storeIt)Folder=reg(ItFolder)//"Solver_"//reg(SiteName(isite))//"/"
-               !
-               Norb = SiteNorb(1)
-               if(Norb.ne.SiteNorb(isite)) stop "The orbital space is not the same among the different impurities."
-               !
-               allocate(Oloc(Norb,Norb));Oloc=czero
-               allocate(Eig(Norb));Eig=0d0
-               allocate(Rot(Norb,Norb));Rot=czero
-               allocate(Orbs(Norb));Orbs=0
-               !
-               Orbs=SiteOrbs(isite,:)
-               !
-               !Extract then local Hamiltonian for each site
-               call loc2imp(Oloc,LatticeOp,Orbs)
-               !
-               !Always real rotations assumed for now
-               Rot = dreal(Oloc)
-               !
-               !Rotate
-               call eigh(Rot,Eig)
-               !
-               !Save
-               call dump_Matrix(Oloc,reg(Folder),reg(Opname)//"Site_"//reg(SiteName(1))//"_"//str(isite)//".DAT")
-               call dump_Matrix(diag(Eig),reg(Folder),reg(Opname)//"Eig_"//reg(SiteName(1))//"_"//str(isite)//".DAT")
-               call dump_Matrix(Rot,reg(Folder),reg(Opname)//"Rot_"//reg(SiteName(1))//"_"//str(isite)//".DAT")
-               !
-               !SO(3)check
-               write(*,"(A,"//str(Norb)//"I3)") "     Orbs: ",Orbs
-               write(*,"(A,2F)") "     det(Rot) of "//reg(SiteName(1))//"_"//str(isite)//" :",det(Rot)
-               !
-               SiteOp(1:Norb,1:Norb,isite) = Oloc
-               SiteEig(1:Norb,isite) = Eig
-               SiteRot(1:Norb,1:Norb,isite) = Rot
-               SiteRotdag(1:Norb,1:Norb,isite) = conjg(transpose(Rot))
-               !
-               deallocate(Oloc,Eig,Rot,Orbs)
-               !
-            enddo
+            !Always real rotations assumed for now
+            LocalOrbs(isite)%Rot = dreal(LocalOrbs(isite)%Op)
             !
-         else !Potentially different set of orbitals provided - all matrices with different dimension (SiteNorb(isite))
+            !Rotate
+            call eigh(LocalOrbs(isite)%Rot,LocalOrbs(isite)%Eig)
+            LocalOrbs(isite)%RotDag = conjg(transpose(LocalOrbs(isite)%Rot))
             !
-            allocate(SiteOp(maxval(SiteNorb),maxval(SiteNorb),Nsite));SiteOp=czero
-            allocate(SiteEig(maxval(SiteNorb),Nsite));SiteEig=0d0
-            allocate(SiteRot(maxval(SiteNorb),maxval(SiteNorb),Nsite));SiteRot=czero
-            allocate(SiteRotdag(maxval(SiteNorb),maxval(SiteNorb),Nsite));SiteRotdag=czero
+            !Save
+            call dump_Matrix(LocalOrbs(isite)%Op,reg(Folder),reg(Opname)//"Site_"//reg(LocalOrbs(isite)%Name)//"_"//str(isite)//".DAT")
+            call dump_Matrix(LocalOrbs(isite)%Rot,reg(Folder),reg(Opname)//"Rot_"//reg(LocalOrbs(isite)%Name)//"_"//str(isite)//".DAT")
+            call dump_Matrix(LocalOrbs(isite)%RotDag,reg(Folder),reg(Opname)//"RotDag_"//reg(LocalOrbs(isite)%Name)//"_"//str(isite)//".DAT")
+            call dump_Matrix(diag(LocalOrbs(isite)%Eig),reg(Folder),reg(Opname)//"Eig_"//reg(LocalOrbs(isite)%Name)//"_"//str(isite)//".DAT")
             !
-            do isite=1,Nsite
-               !
-               if(storeIt)Folder=reg(ItFolder)//"Solver_"//reg(SiteName(isite))//"/"
-               !
-               Norb = SiteNorb(isite)
-               !
-               allocate(Oloc(Norb,Norb));Oloc=czero
-               allocate(Eig(Norb));Eig=0d0
-               allocate(Rot(Norb,Norb));Rot=czero
-               allocate(Orbs(Norb));Orbs=0
-               !
-               Orbs=SiteOrbs(isite,:)
-               !
-               !Extract then local Hamiltonian for each site
-               call loc2imp(Oloc,LatticeOp,Orbs)
-               !
-               !Always real rotations assumed for now
-               Rot = dreal(Oloc)
-               !
-               !Rotate
-               call eigh(Rot,Eig)
-               !
-               !Save
-               call dump_Matrix(Oloc,reg(Folder),reg(Opname)//"Site_"//reg(SiteName(isite))//".DAT")
-               call dump_Matrix(diag(Eig),reg(Folder),reg(Opname)//"Eig_"//reg(SiteName(isite))//".DAT")
-               call dump_Matrix(Rot,reg(Folder),reg(Opname)//"Rot_"//reg(SiteName(isite))//".DAT")
-               !
-               !SO(3)check
-               write(*,"(A,"//str(Norb)//"I3)") "     Orbs: ",Orbs
-               write(*,"(A,F)") "     det(Rot) of "//reg(SiteName(isite))//" :",det(SiteRot(:,:,isite))
-               !
-               SiteOp(1:Norb,1:Norb,isite) = Oloc
-               SiteEig(1:Norb,isite) = Eig
-               SiteRot(1:Norb,1:Norb,isite) = Rot
-               SiteRotdag(1:Norb,1:Norb,isite) = conjg(transpose(Rot))
-               !
-               deallocate(Oloc,Eig,Rot,Orbs)
-               !
-            enddo
+         elseif(read_)then
+            !
+            call read_Matrix(LocalOrbs(isite)%Op,reg(Folder)//reg(Opname)//"Site_"//reg(LocalOrbs(isite)%Name)//"_"//str(isite)//".DAT")
+            call read_Matrix(LocalOrbs(isite)%Rot,reg(Folder)//reg(Opname)//"Rot_"//reg(LocalOrbs(isite)%Name)//"_"//str(isite)//".DAT")
+            call read_Matrix(LocalOrbs(isite)%RotDag,reg(Folder)//reg(Opname)//"RotDag_"//reg(LocalOrbs(isite)%Name)//"_"//str(isite)//".DAT")
+            allocate(EigR(Norb,Norb));EigR=0d0
+            call read_Matrix(EigR,reg(Folder)//reg(Opname)//"Eig_"//reg(LocalOrbs(isite)%Name)//"_"//str(isite)//".DAT")
+            LocalOrbs(isite)%Eig = diagonal(EigR)
+            deallocate(EigR)
             !
          endif
          !
-      elseif(read_)then
+         !SO(3)check
+         write(*,"(A,"//str(Norb)//"I3)") "     Orbs: ",LocalOrbs(isite)%Orbs
+         write(*,"(A,2F)") "     det(Rot) of "//reg(LocalOrbs(isite)%Name)//"_"//str(isite)//" :",det(LocalOrbs(isite)%Rot)
          !
-         if(ExpandImpurity)then !Only one set of orbital provided - all matrices with same "Norb" dimension
-            !
-            allocate(SiteOp(SiteNorb(1),SiteNorb(1),Nsite));SiteOp=czero
-            allocate(SiteEig(SiteNorb(1),Nsite));SiteEig=0d0
-            allocate(SiteRot(SiteNorb(1),SiteNorb(1),Nsite));SiteRot=czero
-            allocate(SiteRotdag(SiteNorb(1),SiteNorb(1),Nsite));SiteRotdag=czero
-            !
-            do isite=1,Nsite
-               !
-               if(storeIt)Folder=reg(PrevItFolder)//"Solver_"//reg(SiteName(isite))//"/"
-               !
-               Norb = SiteNorb(1)
-               if(Norb.ne.SiteNorb(isite)) stop "The orbital space is not the same among the different impurities."
-               !
-               allocate(Oloc(Norb,Norb));Oloc=czero
-               allocate(EigR(Norb,Norb));EigR=0d0
-               allocate(Rot(Norb,Norb));Rot=czero
-               allocate(Orbs(Norb));Orbs=0
-               !
-               Orbs=SiteOrbs(isite,:)
-               !
-               !Read
-               call read_Matrix(Oloc,reg(Folder)//reg(Opname)//"Site_"//reg(SiteName(1))//"_"//str(isite)//".DAT")
-               call read_Matrix(EigR,reg(Folder)//reg(Opname)//"Eig_"//reg(SiteName(1))//"_"//str(isite)//".DAT")
-               call read_Matrix(Rot,reg(Folder)//reg(Opname)//"Rot_"//reg(SiteName(1))//"_"//str(isite)//".DAT")
-               !
-               !SO(3)check
-               write(*,"(A,"//str(Norb)//"I3)") "     Orbs: ",Orbs
-               write(*,"(A,2F)") "     det(Rot) of "//reg(SiteName(1))//"_"//str(isite)//" :",det(Rot)
-               !
-               SiteOp(1:Norb,1:Norb,isite) = Oloc
-               SiteEig(1:Norb,isite) = diagonal(EigR)
-               SiteRot(1:Norb,1:Norb,isite) = Rot
-               SiteRotdag(1:Norb,1:Norb,isite) = conjg(transpose(Rot))
-               !
-               deallocate(Oloc,EigR,Rot,Orbs)
-               !
-            enddo
-            !
-         else !Potentially different set of orbitals provided - all matrices with different dimension (SiteNorb(isite))
-            !
-            allocate(SiteOp(maxval(SiteNorb),maxval(SiteNorb),Nsite));SiteOp=czero
-            allocate(SiteEig(maxval(SiteNorb),Nsite));SiteEig=0d0
-            allocate(SiteRot(maxval(SiteNorb),maxval(SiteNorb),Nsite));SiteRot=czero
-            allocate(SiteRotdag(maxval(SiteNorb),maxval(SiteNorb),Nsite));SiteRotdag=czero
-            !
-            do isite=1,Nsite
-               !
-               if(storeIt)Folder=reg(PrevItFolder)//"Solver_"//reg(SiteName(isite))//"/"
-               !
-               Norb = SiteNorb(isite)
-               !
-               allocate(Oloc(Norb,Norb));Oloc=czero
-               allocate(EigR(Norb,Norb));EigR=0d0
-               allocate(Rot(Norb,Norb));Rot=czero
-               allocate(Orbs(Norb));Orbs=0
-               !
-               Orbs=SiteOrbs(isite,:)
-               !
-               !Read
-               call read_Matrix(Oloc,reg(Folder)//reg(Opname)//"Site_"//reg(SiteName(isite))//".DAT")
-               call read_Matrix(EigR,reg(Folder)//reg(Opname)//"Eig_"//reg(SiteName(isite))//".DAT")
-               call read_Matrix(Rot,reg(Folder)//reg(Opname)//"Rot_"//reg(SiteName(isite))//".DAT")
-               !
-               !SO(3)check
-               write(*,"(A,"//str(Norb)//"I3)") "     Orbs: ",Orbs
-               write(*,"(A,F)") "     det(Rot) of "//reg(SiteName(isite))//" :",det(SiteRot(:,:,isite))
-               !
-               SiteOp(1:Norb,1:Norb,isite) = Oloc
-               SiteEig(1:Norb,isite) = diagonal(EigR)
-               SiteRot(1:Norb,1:Norb,isite) = Rot
-               SiteRotdag(1:Norb,1:Norb,isite) = conjg(transpose(Rot))
-               !
-               deallocate(Oloc,EigR,Rot,Orbs)
-               !
-            enddo
-            !
-         endif
-         !
-      endif
+      enddo
       !
    end subroutine build_rotations
 
@@ -896,7 +767,7 @@ contains
          do isite=1,Nsite
             !
             !look for pattern given by the diagonal lattice operator
-            call get_pattern(EqvImpndx(isite)%SetOrbs,OlocEig(:,isite),1e4*eps)
+            call get_pattern(EqvImpndx(isite)%SetOrbs,LocalOrbs(isite)%Eig,1e4*eps)
             !
             if(allocated(EqvImpndx(isite)%SetOrbs))then
                !
@@ -934,14 +805,14 @@ contains
                contained=.true.
                do set_ndx=1,EqvGWndx%SetNorb(iset)
                   set_orb = EqvGWndx%SetOrbs(iset,set_ndx)
-                  contained = contained.and.any( SiteOrbs(isite,1:SiteNorb(isite)).eq. set_orb )
+                  contained = contained.and.any( LocalOrbs(isite)%Orbs .eq. set_orb )
                enddo
                !
                !the site contains all the indexes within the set
                if(contained.and.(EqvGWndx%SetNorb(iset).gt.1))then
                   EqvImpndx(isite)%Nset = EqvImpndx(isite)%Nset+1
                   EqvImpndx(isite)%SetNorb(EqvImpndx(isite)%Nset) = EqvGWndx%SetNorb(iset)
-                  EqvImpndx(isite)%SetOrbs(EqvImpndx(isite)%Nset,:) = EqvGWndx%SetOrbs(iset,:) - (SiteOrbs(isite,1)-1)
+                  EqvImpndx(isite)%SetOrbs(EqvImpndx(isite)%Nset,:) = EqvGWndx%SetOrbs(iset,:) - (LocalOrbs(isite)%Orbs(1)-1)
                endif
                !
             enddo
@@ -958,7 +829,7 @@ contains
          if(FirstIteration.ne.LastIteration)then
             do isite=1,Nsite
                if(EqvImpndx(isite)%Nset.gt.0)then
-                  file = reg(ItFolder)//"Solver_"//reg(SiteName(isite))//"/Eqv.DAT"
+                  file = reg(ItFolder)//"Solver_"//reg(LocalOrbs(isite)%Name)//"/Eqv.DAT"
                   unit = free_unit()
                   open(unit,file=reg(file),form="formatted",status="unknown",position="rewind",action="write")
                   do iset=1,EqvImpndx(isite)%Nset
@@ -1268,6 +1139,21 @@ contains
       end select
       !
       !
+      if(calc_Sigmak)then
+         !
+         if(allocated(VH))deallocate(VH)
+         allocate(VH(Crystal%Norb,Crystal%Norb))
+         VH=czero
+         !
+         if(allocated(Vxc))deallocate(Vxc)
+         if(.not.Vxc_in)then
+            allocate(Vxc(Crystal%Norb,Crystal%Norb,Crystal%Nkpt,Nspin))
+            Vxc=czero
+         endif
+         !
+      endif
+      !
+      !
       calc_W = calc_Wedmft .or. calc_Wfull
       !
       !
@@ -1275,13 +1161,15 @@ contains
       allocate(densityLDA(Crystal%Norb,Crystal%Norb,Nspin));densityLDA=czero
       allocate(densityGW(Crystal%Norb,Crystal%Norb,Nspin));densityGW=czero
       allocate(densityDMFT(Crystal%Norb,Crystal%Norb,Nspin));densityDMFT=czero
-      allocate(densityQMC(maxval(SiteNorb),maxval(SiteNorb),Nspin,Nsite));densityQMC=0d0
+      do isite=1,Nsite
+         allocate(LocalOrbs(isite)%rho_OrbSpin(LocalOrbs(isite)%Norb,LocalOrbs(isite)%Norb,Nspin))
+         LocalOrbs(isite)%rho_OrbSpin=0d0
+      enddo
       if(ItStart.eq.0)then
          !
          densityLDA = Glat%N_s
-         densityGW=czero
+         densityGW = Glat%N_s
          densityDMFT=czero
-         densityQMC=0d0
          !
          call dump_Matrix(densityLDA,reg(pathINPUT),"Nlda",paramagnet)
          !
@@ -1292,16 +1180,16 @@ contains
          densityGW=Glat%N_s
          !
          do isite=1,Nsite
-            file = reg(PrevItFolder)//"Solver_"//reg(SiteName(isite))//"/resultsQMC/Nqmc.DAT"
+            file = reg(PrevItFolder)//"Solver_"//reg(LocalOrbs(isite)%Name)//"/resultsQMC/Nqmc.DAT"
             call inquireFile(reg(file),filexists,hardstop=.false.,verb=verbose)
             if(filexists)then
                unit = free_unit()
                open(unit,file=reg(file),form="formatted",status="old",position="rewind",action="read")
                read(unit,*) muQMC
-               do ib1=1,Nspin*SiteNorb(isite)
+               do ib1=1,LocalOrbs(isite)%Nflavor
                   iorb = (ib1+mod(ib1,2))/2
                   ispin = abs(mod(ib1,2)-2)
-                  read(unit,*) idum,densityQMC(iorb,iorb,ispin,isite)
+                  read(unit,*) idum,LocalOrbs(isite)%rho_OrbSpin(iorb,iorb,ispin)
                enddo
                close(unit)
             endif
@@ -1338,7 +1226,7 @@ contains
       if(FirstIteration.ne.0) stop "calc_SigmaGuess: this subroutine works only in the 0th iteration."
       if((reg(CalculationType).eq."GW+EDMFT").and.(.not.S_G0W0%status).and.addTierIII)then
          call AllocateFermionicField(S_G0W0,Crystal%Norb,Nmats,Nkpt=Crystal%Nkpt,Nsite=Nsite,Beta=Beta)
-         call read_Sigma_spex(SpexVersion,S_G0W0,Crystal,verbose,recompute=RecomputeG0W0,pathOUTPUT=reg(pathINPUTtr))
+         call read_Sigma_spex(SpexVersion,S_G0W0,Crystal,verbose,RecomputeG0W0,Vxc)
       endif
       !
       !This has to be fixed because it works only for calculations with Wlat stored
@@ -1383,87 +1271,16 @@ contains
 
 
    !---------------------------------------------------------------------------!
-   !PURPOSE: Check that the double counting between G0W0 and scGW at the
-   !         0th iteration yeld a causal local self-energy. Usually that's the case,
-   !         but, given that SPEX is a zero T calculation, some very small numeircal
-   !         errors might be present at low freq.
-   !         This subroutine, if needed, correct the SPEX self-energy by a
-   !         small rescaling factor computed just from the first matsubara
-   !         frequency. If a non-causal difference between the local SPEX G0W0
-   !         and local scGW is still present it will be removed in join_SigmaFull
-   !         This information is present already at the 0th iteration but the
-   !         input value of GoWoDC_loc cannot be changed between iterations
-   !         therefore the check in join_SigmaFull is required each time the
-   !         total self-energy is computed.
-   !---------------------------------------------------------------------------!
-   subroutine check_S_G0W0()
-      !
-      implicit none
-      integer                               :: iorb,ispin
-      real(8)                               :: y1,y2,x1,x2,m,q
-      real(8),allocatable                   :: wmats_orig(:)
-      type(OldBeta)                         :: Beta_Match
-      logical                               :: shift
-      !
-      if(.not.S_G0W0dc%status) stop "check_S_G0W0: S_G0W0dc not properly initialized."
-      if(.not.S_G0W0%status) stop "check_S_G0W0: S_G0W0 not properly initialized."
-      !
-      allocate(wmats_orig(S_G0W0%Npoints));wmats_orig=0d0
-      wmats_orig = FermionicFreqMesh(S_G0W0%Beta,S_G0W0%Npoints)
-      !
-      !check for any component that does not extrapolate to iw=0 in the imagnary part
-      shift=.false.
-      checkloop: do ispin=1,Nspin
-         do iorb=1,S_G0W0%Norb
-            !
-            y1 = dimag(S_G0W0%ws(iorb,iorb,1,ispin)) ; x1 = wmats_orig(1)
-            y2 = dimag(S_G0W0%ws(iorb,iorb,2,ispin)) ; x2 = wmats_orig(2)
-            m = (y2 - y1)/(x2 - x1)
-            q = y1 - m*x1
-            !
-            !shift the S_G0W0 axis in order to have the imaginary part extrapolating to zero
-            if(dimag(S_G0W0%ws(iorb,iorb,1,ispin)).ge.dimag(S_G0W0dc%ws(iorb,iorb,1,ispin)))then
-               shift=.true.
-               wmats_orig = wmats_orig - q/abs(m)
-               exit checkloop
-            endif
-            !
-         enddo
-      enddo checkloop
-      !
-      if(shift)then
-         !
-         write(*,"(A,F)")"     Correcting G0W0 self-energy. Axis shift: ",q/m
-         Beta_Match%Nmats_old = S_G0W0%Npoints
-         Beta_Match%Nmats_new = S_G0W0%Npoints
-         Beta_Match%Beta_old = S_G0W0%Beta
-         Beta_Match%Beta_new = S_G0W0%Beta
-         call interpolate2Beta(S_G0W0,Beta_Match,"lat",.true.,wmats_in=wmats_orig)
-         deallocate(wmats_orig)
-         !
-         call dump_FermionicField(S_G0W0,reg(pathINPUTtr),"SGoWo_w",.true.,Crystal%kpt,.true.)
-         !
-      endif
-      !
-   end subroutine check_S_G0W0
-
-
-   !---------------------------------------------------------------------------!
    !PURPOSE: Join the all the component of the self-energy.
    !---------------------------------------------------------------------------!
    subroutine join_SigmaFull(Iteration)
       !
       implicit none
       integer,intent(in)                    :: Iteration
-      integer                               :: iorb,ik,iw,ispin
-      integer                               :: isite,Norb
-      integer,allocatable                   :: Orbs(:)
+      integer                               :: ik,iw,ispin
       complex(8),allocatable                :: Vxc_loc(:,:,:)
-      real(8)                               :: ImS_1,ImS_2
-      logical                               :: causal_G0W0_loc
-      type(FermionicField)                  :: S_G0W0_imp
-      type(FermionicField)                  :: S_G0W0_DMFT
       type(FermionicField)                  :: S_EMB
+
       !
       !
       write(*,"(A)") new_line("A")//new_line("A")//"---- join_SigmaFull"
@@ -1481,128 +1298,66 @@ contains
          case("G0W0","scGW","GW+EDMFT")
             !
             !
-            if(.not.allocated(VH)) stop "join_SigmaFull: VH not allocated."
-            if(.not.allocated(Vxc)) stop "join_SigmaFull: Vxc not allocated."
-            allocate(Vxc_loc(S_Full%Norb,S_Full%Norb,Nspin));Vxc_loc=czero
-            do ik=1,S_Full%Nkpt
-               Vxc_loc = Vxc_loc + Vxc(:,:,ik,:)/S_Full%Nkpt
-            enddo
-            !
             if(.not.S_G0W0%status) stop "join_SigmaFull: S_G0W0 not properly initialized."
+            if((Iteration.gt.0).and.(.not.S_GW%status)) stop "join_SigmaFull: S_GW not properly initialized."
+            if((Iteration.gt.0).and.addTierIII.and.(.not.S_G0W0dc%status)) stop "join_SigmaFull: S_G0W0dc not properly initialized."
+            if(.not.allocated(VH)) stop "join_SigmaFull: VH not allocated."
+            if(.not.allocated(Vxc))then !stop "join_SigmaFull: Vxc not allocated."
+               if(addTierIII)write(*,"(A)")"     Allocating empty Vxc ( enclosed in SigmaGoWo(k,iw) )"
+               allocate(Vxc(Crystal%Norb,Crystal%Norb,Crystal%Nkpt,Nspin))
+               Vxc=czero
+               allocate(Vxc_loc(S_Full%Norb,S_Full%Norb,Nspin));Vxc_loc=czero
+               call read_Matrix(Vxc_loc,reg(pathINPUT)//"Vxc",paramagnet)
+            else
+               allocate(Vxc_loc(S_Full%Norb,S_Full%Norb,Nspin));Vxc_loc=czero
+               do ik=1,S_Full%Nkpt
+                  Vxc_loc = Vxc_loc + Vxc(:,:,ik,:)/S_Full%Nkpt
+               enddo
+               if(verbose)call dump_matrix(Vxc_loc,reg(ItFolder),"Vxc",paramagnet)
+            endif
             !
-            if(Iteration.eq.0)then
+            !
+            !Check that the difference between G0W0 and scDGdc is locally causal
+            if(addTierIII.and.(Iteration.gt.0))then
+               S_G0W0%wks = S_G0W0%wks - S_G0W0dc%wks
+               call check_S_G0W0()
+            endif
+            !
+            !
+            do ispin=1,Nspin
                !
-               !Keep only single-shot GW
-               do ispin=1,Nspin
-                  !$OMP PARALLEL DEFAULT(NONE),&
-                  !$OMP SHARED(ispin,S_Full,S_G0W0,VH,Vxc),&
-                  !$OMP PRIVATE(ik,iw)
-                  !$OMP DO
-                  do ik=1,S_Full%Nkpt
-                     do iw=1,S_Full%Npoints
-                        S_Full%wks(:,:,iw,ik,ispin) = + S_G0W0%wks(:,:,iw,ik,ispin) - Vxc(:,:,ik,ispin) + VH(:,:)
-                     enddo
+               do ik=1,S_Full%Nkpt
+                  do iw=1,S_Full%Npoints
+                     !
+                     if(Iteration.eq.0)then
+                        !
+                        !Keep only single-shot GW: G0W0 - Vxc + VH
+                        if(addTierIII)then
+                           S_Full%wks(:,:,iw,ik,ispin) = S_G0W0%wks(:,:,iw,ik,ispin) - Vxc(:,:,ik,ispin) + VH(:,:)
+                        else
+                           S_Full%wks(:,:,iw,ik,ispin) = S_G0W0%wks(:,:,iw,ik,ispin)
+                        endif
+                        !
+                     else
+                        !
+                        !Put together all the terms: G0W0(already with removed DC) + scGW(already containing Simp)
+                        if(addTierIII)then
+                           S_Full%wks(:,:,iw,ik,ispin) = S_G0W0%wks(:,:,iw,ik,ispin) + S_GW%wks(:,:,iw,ik,ispin) - Vxc(:,:,ik,ispin) + VH(:,:)
+                        else
+                           S_Full%wks(:,:,iw,ik,ispin) = S_GW%wks(:,:,iw,ik,ispin)
+                        endif
+                        !
+                     endif
+                     !
                   enddo
-                  !$OMP END DO
-                  !$OMP END PARALLEL
-                  if(paramagnet)then
-                     S_Full%wks(:,:,:,:,Nspin) = S_Full%wks(:,:,:,:,1)
-                     exit
-                  endif
                enddo
                !
-            elseif(Iteration.gt.0)then
-               !
-               if(.not.S_GW%status) stop "join_SigmaFull: S_GW not properly initialized."
-               !
-               if(addTierIII)then
-                  !
-                  if(.not.S_G0W0dc%status) stop "join_SigmaFull: S_G0W0dc not properly initialized."
-                  !
-                  !Remove Dc between G0W0 and scGW self-energies
-                  !S_G0W0dc contains only diagonal elements in the LDA basis as the S_G0W0 computed from SPEX
-                  S_G0W0%wks = S_G0W0%wks - S_G0W0dc%wks
-                  call FermionicKsum(S_G0W0)
-                  !
-                  !Compute the G0W0 contribution to the local self-energy with removed DC
-                  call AllocateFermionicField(S_G0W0_DMFT,Crystal%Norb,Nmats,Nkpt=Crystal%Nkpt,Nsite=Nsite,Beta=Beta,mu=Glat%mu)
-                  do isite=1,Nsite
-                     !
-                     Norb = SiteNorb(isite)
-                     allocate(Orbs(Norb))
-                     Orbs = SiteOrbs(isite,1:Norb)
-                     !
-                     !Extract the local G0W0 self-energy for each site
-                     call AllocateFermionicField(S_G0W0_imp,Norb,Nmats,Beta=Beta)
-                     call loc2imp(S_G0W0_imp,S_G0W0,Orbs)
-                     !
-                     !Put it into an object that contains only the site indexes
-                     call imp2loc(S_G0W0_DMFT,S_G0W0_imp,isite,Orbs,.false.,.false.)
-                     !
-                     call DeallocateField(S_G0W0_imp)
-                     deallocate(Orbs)
-                     !
-                  enddo
-                  !
-                  !Check for the causality in the G0W0 contribution to the local self-energy
-                  !at all frequencies since it's not done in check_S_G0W0
-                  causal_G0W0_loc = GoWoDC_loc
-                  if(causal_G0W0_loc)then
-                     causaloop: do ispin=1,Nspin
-                        do iorb=1,S_G0W0_DMFT%Norb
-                           do iw=1,S_G0W0_DMFT%Npoints
-                              ImS_1 = dimag(S_G0W0_DMFT%ws(iorb,iorb,iw,ispin))
-                              if(ImS_1.gt.0d0)then
-                                 write(*,"(A)")"     Warning: the local G0W0 self-energy has been found non-causal at iw="//str(iw)//" iorb="//str(iorb)//" ispin="//str(ispin)
-                                 causal_G0W0_loc=.false.
-                                 exit causaloop
-                              endif
-                              if(iw.le.10)then
-                                 ImS_2 = dimag(S_G0W0_DMFT%ws(iorb,iorb,iw+1,ispin))
-                                 if(ImS_2.gt.ImS_1) write(*,"(A)")"     Warning: the local G0W0 self-energy seems not to scale as a Fermi-liquid. If Delta(tau) is non-causal try to set G0W0DC_LOC=F."
-                              endif
-                           enddo
-                        enddo
-                     enddo causaloop
-                  endif
-                  !
-                  !Enclose in the EDMFT *ALL* the local contributions to the self-energy
-                  !From the S_G0W0^{SPEX}_{ij} + S_G0W0^{SPEX}_{i} - S_G0W0^{DC}_{ij} - S_G0W0^{DC}_{i}
-                  !we remove [ S_G0W0^{SPEX}_{i} - S_G0W0^{DC}_{i} ]
-                  !here, if Vxc is inside S_G0W0, also the local contribution from Vxc is removed
-                  if((.not.GoWoDC_loc).or.(.not.causal_G0W0_loc))then
-                     write(*,"(A)")"     Local G0W0 self-energy removed."
-                     do ik=1,S_G0W0%Nkpt
-                        S_G0W0%wks(:,:,:,ik,:) = S_G0W0%wks(:,:,:,ik,:) - S_G0W0_DMFT%ws
-                     enddo
-                  endif
-                  call DeallocateField(S_G0W0_DMFT)
-                  !
-                  !Add S_G0W0 to S_GW (already containing Simp)
-                  S_GW%wks = S_GW%wks + S_G0W0%wks
-                  !
+               if(paramagnet)then
+                  S_Full%wks(:,:,:,:,Nspin) = S_Full%wks(:,:,:,:,1)
+                  exit
                endif
                !
-               !Put together all the terms
-               do ispin=1,Nspin
-                  !$OMP PARALLEL DEFAULT(NONE),&
-                  !$OMP SHARED(S_Full,S_GW,Glat,VH,Vxc,ispin),&
-                  !$OMP PRIVATE(ik,iw)
-                  !$OMP DO
-                  do ik=1,S_Full%Nkpt
-                     do iw=1,S_Full%Npoints
-                        S_Full%wks(:,:,iw,ik,ispin) = + S_GW%wks(:,:,iw,ik,ispin) - Vxc(:,:,ik,ispin) + VH(:,:)
-                     enddo
-                  enddo
-                  !$OMP END DO
-                  !$OMP END PARALLEL
-                  if(paramagnet)then
-                     S_Full%wks(:,:,:,:,Nspin) = S_Full%wks(:,:,:,:,1)
-                     exit
-                  endif
-               enddo
-               !
-            endif
+            enddo
             call FermionicKsum(S_Full)
             !
             do ispin=1,Nspin
@@ -1622,17 +1377,11 @@ contains
             !
             !Put together all the terms
             do ispin=1,Nspin
-               !$OMP PARALLEL DEFAULT(NONE),&
-               !$OMP SHARED(HartreeFact,S_Full,S_DMFT,ispin),&
-               !$OMP PRIVATE(ik,iw)
-               !$OMP DO
                do ik=1,S_Full%Nkpt
                   do iw=1,S_Full%Npoints
                      S_Full%wks(:,:,iw,ik,ispin) = S_DMFT%ws(:,:,iw,ispin) - HartreeFact*S_DMFT%N_s(:,:,int(Nspin/ispin))
                   enddo
                enddo
-               !$OMP END DO
-               !$OMP END PARALLEL
                S_Full%N_s(:,:,ispin) = HartreeFact*S_DMFT%N_s(:,:,int(Nspin/ispin))
                if(paramagnet)then
                   S_Full%wks(:,:,:,:,Nspin) = S_Full%wks(:,:,:,:,1)
@@ -1643,6 +1392,7 @@ contains
             !
             !
       end select
+      !
       !
       !Add constant embedding self-energy
       select case(reg(Embedding))
@@ -1678,6 +1428,78 @@ contains
             !
       end select
       !
+      !
+      !
+   contains
+      !
+      !
+      !
+      subroutine check_S_G0W0()
+         !
+         implicit none
+         integer                               :: iw,ik,iorb,ispin,isite
+         real(8),allocatable                   :: wmats_orig(:)
+         real(8)                               :: ImS_1,ImS_2
+         logical                               :: causal_G0W0_loc
+         type(FermionicField)                  :: S_G0W0_DMFT
+         type(FermionicField)                  :: S_G0W0_imp
+         !
+         call FermionicKsum(S_G0W0)
+         !
+         !Compute the G0W0 contribution to the local self-energy with removed DC
+         call AllocateFermionicField(S_G0W0_DMFT,Crystal%Norb,Nmats,Nsite=Nsite,Beta=Beta,mu=Glat%mu)
+         do isite=1,Nsite
+            !
+            !Extract the local G0W0 self-energy for each site
+            call AllocateFermionicField(S_G0W0_imp,LocalOrbs(isite)%Norb,Nmats,Beta=Beta)
+            call loc2imp(S_G0W0_imp,S_G0W0,LocalOrbs(isite)%Orbs)
+            !
+            !Put it into an object that contains only the site indexes
+            call imp2loc(S_G0W0_DMFT,S_G0W0_imp,isite,LocalOrbs,.false.,.false.,.false.,name="S_G0W0_imp")
+            !
+            call DeallocateField(S_G0W0_imp)
+            !
+         enddo
+         !
+         !Check for the causality in the G0W0 contribution to the local self-energy
+         !at all frequencies since it's not done in check_S_G0W0
+         causal_G0W0_loc = GoWoDC_loc
+         if(causal_G0W0_loc)then
+            causaloop: do ispin=1,Nspin
+               do iorb=1,S_G0W0_DMFT%Norb
+                  do iw=1,S_G0W0_DMFT%Npoints
+                     ImS_1 = dimag(S_G0W0_DMFT%ws(iorb,iorb,iw,ispin))
+                     if(ImS_1.gt.0d0)then
+                        write(*,"(A)")"     Warning: the local G0W0 self-energy has been found non-causal at iw="//str(iw)//" iorb="//str(iorb)//" ispin="//str(ispin)
+                        causal_G0W0_loc=.false.
+                        exit causaloop
+                     endif
+                     if(iw.le.10)then
+                        ImS_2 = dimag(S_G0W0_DMFT%ws(iorb,iorb,iw+1,ispin))
+                        if(ImS_2.gt.ImS_1) write(*,"(A)")"     Warning: the local G0W0 self-energy seems not to scale as a Fermi-liquid. If Delta(tau) is non-causal try to set G0W0DC_LOC=F."
+                     endif
+                  enddo
+               enddo
+            enddo causaloop
+         endif
+         !
+         !From the S_G0W0^{SPEX}_{ij} + S_G0W0^{SPEX}_{i} - S_G0W0^{DC}_{ij} - S_G0W0^{DC}_{i}
+         !we remove [ S_G0W0^{SPEX}_{i} - S_G0W0^{DC}_{i} ]
+         !here, if Vxc is inside S_G0W0, also the local contribution from Vxc is removed
+         if((.not.GoWoDC_loc).or.(.not.causal_G0W0_loc))then
+            write(*,"(A)")"     Local G0W0-scGW_DC self-energy removed."
+            do ik=1,S_G0W0%Nkpt
+               S_G0W0%wks(:,:,:,ik,:) = S_G0W0%wks(:,:,:,ik,:) - S_G0W0_DMFT%ws
+            enddo
+         else
+            write(*,"(A)")"     Local G0W0-scGW_DC kept."
+         endif
+         call DeallocateField(S_G0W0_DMFT)
+         !
+      endsubroutine check_S_G0W0
+      !
+      !
+      !
    end subroutine join_SigmaFull
 
 
@@ -1699,14 +1521,14 @@ contains
       if(.not.S_GW%status) stop "calc_causality_Delta_correction: S_GW not properly initialized."
       if(.not.Glat%status) stop "calc_causality_Delta_correction: Glat not properly initialized."
       !
-      call AllocateFermionicField(D_correction,Crystal%Norb,Nmats,Nsite=Nsite,Beta=Beta)
+      call AllocateFermionicField(Delta_correction,Crystal%Norb,Nmats,Nsite=Nsite,Beta=Beta)
       allocate(GS(S_GW%Norb,S_GW%Norb));GS=czero
       allocate(SG(S_GW%Norb,S_GW%Norb));SG=czero
       allocate(SGS(S_GW%Norb,S_GW%Norb));SGS=czero
       allocate(invG(S_GW%Norb,S_GW%Norb));invG=czero
       !
       !$OMP PARALLEL DEFAULT(NONE),&
-      !$OMP SHARED(S_GW,Glat,D_correction),&
+      !$OMP SHARED(S_GW,Glat,Delta_correction),&
       !$OMP PRIVATE(ispin,iw,ik,GS,SG,SGS,invG)
       !$OMP DO
       do ispin=1,Nspin
@@ -1727,7 +1549,7 @@ contains
             call inv(invG)
             !
             ! Put toghether all the pieces. arxiv:2011.05311 Eq.7
-            D_correction%ws(:,:,iw,ispin) = + SGS                             &
+            Delta_correction%ws(:,:,iw,ispin) = + SGS                             &
                                             - matmul(SG,matmul(invG,GS))      &
                                             + 2d0*S_GW%ws(:,:,iw,ispin)       & !<-- this is S_DMFT + all the local shifts
                                             - matmul(SG,invG)                 &
@@ -1741,8 +1563,8 @@ contains
       !
       call DeallocateFermionicField(S_GW)
       !
-      call symmetrize_GW(D_correction,EqvGWndx)
-      call dump_FermionicField(D_correction,reg(ItFolder),"D_correction_w",paramagnet)
+      call symmetrize_GW(Delta_correction,EqvGWndx)
+      call dump_FermionicField(Delta_correction,reg(ItFolder),"Delta_correction_w",paramagnet)
       !
    end subroutine calc_causality_Delta_correction
    !
@@ -1889,14 +1711,14 @@ contains
       type(FermionicField)                  :: FermiPrint
       type(FermionicField)                  :: DeltaOld,DeltaSym
       type(BosonicField)                    :: curlyU
-      integer                               :: Norb,Nflavor,unit
-      integer                               :: ispin,iorb,iw,ib1,itau,ndx,wndx
-      integer,allocatable                   :: Orbs(:)
+      integer                               :: Norb,unit
+      integer                               :: ispin,iorb,jorb,iw,ib1,ib2
+      integer                               :: itau,ndx,wndx
       real(8),allocatable                   :: wmats(:),tau(:),Moments(:,:,:)
-      real(8),allocatable                   :: Uinst(:,:),rhoLAT(:),HartreeLAT(:),N_s(:,:,:)
+      real(8),allocatable                   :: Uinst(:,:),rhoLAT(:),N_s(:,:,:)
       real(8),allocatable                   :: Eloc(:,:),ElocOld(:,:),PrintLine(:),coef01(:,:)
       real(8)                               :: tailShift,CrystalField,taup
-      complex(8),allocatable                :: zeta(:,:,:),invG(:,:),Rot(:,:)
+      complex(8),allocatable                :: zeta(:,:,:),invG(:,:)
       complex(8),allocatable                :: Dfit(:,:,:),Dmats(:,:,:),Ditau(:,:,:)
       complex(8),allocatable                :: invCurlyG(:,:,:)
       real(8),allocatable                   :: tauF(:),ReadLine(:),DitauOld(:,:,:)
@@ -1904,17 +1726,15 @@ contains
       logical                               :: filexists
       !
       !
-      write(*,"(A)") new_line("A")//new_line("A")//"---- calc_Delta of "//reg(SiteName(isite))
+      write(*,"(A)") new_line("A")//new_line("A")//"---- calc_Delta of "//reg(LocalOrbs(isite)%Name)
       !
       !
       if(.not.S_DMFT%status) stop "calc_Delta: S_DMFT not properly initialized."
       if(.not.Glat%status) stop "calc_Delta: Glat not properly initialized."
-      if(causal_D.and.(.not.D_correction%status)) stop "calc_Delta: requested causality correction but D_correction not properly initialized."
+      if(causal_D.and.(.not.Delta_correction%status)) stop "calc_Delta: requested causality correction but Delta_correction not properly initialized."
+      if(.not.allocated(LocalOrbs)) stop "calc_Delta: LocalOrbs not properly initialized."
       !
-      Norb = SiteNorb(isite)
-      allocate(Orbs(Norb))
-      Orbs = SiteOrbs(isite,1:Norb)
-      Nflavor = Norb*Nspin
+      Norb = LocalOrbs(isite)%Norb
       !
       allocate(Eloc(Norb,Nspin));Eloc=0d0
       allocate(coef01(Norb,Nspin));coef01=0d0
@@ -1939,17 +1759,15 @@ contains
       if(causal_D)call clear_attributes(DeltaCorr)
       if(RotateHloc)then
          !
-         allocate(Rot(Norb,Norb)); Rot=OlocRot(1:Norb,1:Norb,isite)
-         call loc2imp(Gloc,Glat,Orbs,U=Rot)
-         call loc2imp(SigmaImp,S_DMFT,Orbs,U=Rot)
-         if(causal_D)call loc2imp(DeltaCorr,D_correction,Orbs,U=Rot)
-         deallocate(Rot)
+         call loc2imp(Gloc,Glat,LocalOrbs(isite)%Orbs,U=LocalOrbs(isite)%Rot)
+         call loc2imp(SigmaImp,S_DMFT,LocalOrbs(isite)%Orbs,U=LocalOrbs(isite)%Rot)
+         if(causal_D)call loc2imp(DeltaCorr,Delta_correction,LocalOrbs(isite)%Orbs,U=LocalOrbs(isite)%Rot)
          !
       else
          !
-         call loc2imp(Gloc,Glat,Orbs)
-         call loc2imp(SigmaImp,S_DMFT,Orbs)
-         if(causal_D)call loc2imp(DeltaCorr,D_correction,Orbs)
+         call loc2imp(Gloc,Glat,LocalOrbs(isite)%Orbs)
+         call loc2imp(SigmaImp,S_DMFT,LocalOrbs(isite)%Orbs)
+         if(causal_D)call loc2imp(DeltaCorr,Delta_correction,LocalOrbs(isite)%Orbs)
          !
       endif
       !
@@ -1959,48 +1777,74 @@ contains
          write(*,"(A)") "     Recalculating Hartree term with lattice density."
          !
          call AllocateBosonicField(curlyU,Norb,Nmats,Crystal%iq_gamma,Beta=Beta)
-         call read_BosonicField(curlyU,reg(ItFolder)//"Solver_"//reg(SiteName(isite))//"/","curlyU_"//reg(SiteName(isite))//"_w.DAT")
-         allocate(Uinst(Norb*Nspin,Norb*Nspin));Uinst=0d0
-         call calc_QMCinteractions(curlyU,Uinst)
-         call DeallocateBosonicField(curlyU)
+         call read_BosonicField(curlyU,reg(ItFolder)//"Solver_"//reg(LocalOrbs(isite)%Name)//"/","curlyU_"//reg(LocalOrbs(isite)%Name)//"_w.DAT")
+         select case(reg(HartreeType))
+            case default
+               stop "collect_QMC_results: Available HartreeT types: GW or DMFT."
+            case("GW")
+               !
+               N_s = czero
+               do ispin=1,Nspin
+                  do iorb=1,LocalOrbs(isite)%Norb
+                     do jorb=1,LocalOrbs(isite)%Norb
+                        call F2Bindex(LocalOrbs(isite)%Norb,[iorb,iorb],[jorb,jorb],ib1,ib2)
+                        N_s(iorb,iorb,ispin) = N_s(iorb,iorb,ispin) + curlyU%screened_local(ib1,ib2,1)*Gloc%N_s(jorb,jorb,ispin)
+                        !
+                     enddo
+                  enddo
+               enddo
+               call DeallocateBosonicField(curlyU)
+               !
+               !The magnetization will be given only by the self-energy beyond Hartree
+               N_s(:,:,1) = (N_s(:,:,1)+N_s(:,:,Nspin))
+               N_s(:,:,Nspin) = N_s(:,:,1)
+               !
+            case("DMFT")
+               !
+               allocate(Uinst(Norb*Nspin,Norb*Nspin));Uinst=0d0
+               call calc_QMCinteractions(curlyU,Uinst)
+               call DeallocateBosonicField(curlyU)
+               !
+               allocate(rhoLAT(Norb*Nspin));rhoLAT=0d0
+               do ib1=1,LocalOrbs(isite)%Nflavor
+                  iorb = (ib1+mod(ib1,2))/2
+                  ispin = abs(mod(ib1,2)-2)
+                  rhoLAT(ib1) = Gloc%N_s(iorb,iorb,ispin)
+               enddo
+               !
+               allocate(N_s(Norb,Norb,Nspin));N_s=czero
+               do ib1=1,LocalOrbs(isite)%Nflavor
+                  iorb = (ib1+mod(ib1,2))/2
+                  ispin = abs(mod(ib1,2)-2)
+                  do ib2=1,LocalOrbs(isite)%Nflavor
+                     if(ib1.eq.ib2) cycle !N_s(iorb,iorb,ispin) = N_s(iorb,iorb,ispin) + Uinst(2*iorb-1,2*iorb)*rhoLAT(ib2)
+                     N_s(iorb,iorb,ispin) = N_s(iorb,iorb,ispin) + Uinst(ib1,ib2)*rhoLAT(ib2)
+                  enddo
+               enddo
+               deallocate(Uinst,rhoLAT)
+               N_s(:,:,1) = (N_s(:,:,1)+N_s(:,:,Nspin))/2d0
+               N_s(:,:,Nspin) = N_s(:,:,1)
+               !
+         end select
          !
-         allocate(rhoLAT(Norb*Nspin));rhoLAT=0d0
-         do ib1=1,Nflavor
-            iorb = (ib1+mod(ib1,2))/2
-            ispin = abs(mod(ib1,2)-2)
-            rhoLAT(ib1) = Gloc%N_s(iorb,iorb,ispin)
-         enddo
+         !do iw=1,Nmats
+         !   SigmaImp%ws(:,:,iw,:) = SigmaImp%ws(:,:,iw,:) - SigmaImp%N_s + N_s
+         !enddo
          !
-         allocate(HartreeLAT(Norb*Nspin));HartreeLAT=0d0
-         HartreeLAT = matmul(Uinst,rhoLAT)
-         deallocate(Uinst,rhoLAT)
-         !
-         allocate(N_s(Norb,Norb,Nspin));N_s=czero
-         do ib1=1,Nflavor
-            iorb = (ib1+mod(ib1,2))/2
-            ispin = abs(mod(ib1,2)-2)
-            N_s(iorb,iorb,ispin) = HartreeLAT(ib1)
-         enddo
-         deallocate(HartreeLAT)
-         N_s(:,:,1) = (N_s(:,:,1)+N_s(:,:,2))/2d0
-         N_s(:,:,2) = N_s(:,:,1)
-         !
-         do iw=1,Nmats
-            SigmaImp%ws(:,:,iw,:) = SigmaImp%ws(:,:,iw,:) - SigmaImp%N_s + N_s
-         enddo
          SigmaImp%N_s = N_s
          deallocate(N_s)
          !
-         call dump_Matrix(SigmaImp%N_s,reg(ItFolder),"Solver_"//reg(SiteName(isite))//"/Hartree_UNlat_"//reg(SiteName(isite)),paramagnet)
+         call dump_Matrix(SigmaImp%N_s,reg(ItFolder),"Solver_"//reg(LocalOrbs(isite)%Name)//"/Hartree_UNlat_"//reg(LocalOrbs(isite)%Name),paramagnet)
          !
       endif
       !
       !Print what's used to compute delta
-      call dump_Matrix(Gloc%N_s,reg(ItFolder),"Solver_"//reg(SiteName(isite))//"/Nloc_"//reg(SiteName(isite)),paramagnet)
-      call dump_FermionicField(Gloc,reg(ItFolder)//"Solver_"//reg(SiteName(isite))//"/","Glat_"//reg(SiteName(isite))//"_w",paramagnet)
-      if(causal_D)call dump_FermionicField(DeltaCorr,reg(ItFolder)//"Solver_"//reg(SiteName(isite))//"/","D_correction_"//reg(SiteName(isite))//"_w",paramagnet)
+      call dump_Matrix(Gloc%N_s,reg(ItFolder),"Solver_"//reg(LocalOrbs(isite)%Name)//"/Nloc_"//reg(LocalOrbs(isite)%Name),paramagnet)
+      call dump_FermionicField(Gloc,reg(ItFolder)//"Solver_"//reg(LocalOrbs(isite)%Name)//"/","Glat_"//reg(LocalOrbs(isite)%Name)//"_w",paramagnet)
+      if(causal_D)call dump_FermionicField(DeltaCorr,reg(ItFolder)//"Solver_"//reg(LocalOrbs(isite)%Name)//"/","Delta_correction_"//reg(LocalOrbs(isite)%Name)//"_w",paramagnet)
+      call dump_FermionicField(SigmaImp,reg(ItFolder)//"Solver_"//reg(LocalOrbs(isite)%Name)//"/","Simp_"//reg(LocalOrbs(isite)%Name)//"_w",paramagnet)
       !
-      !Compute the fermionic Weiss field invCurlyG
+      !Compute the fermionic Weiss field invCurlyG.
       allocate(invG(Norb,Norb));invG=czero
       do ispin=1,Nspin
          do iw=1,Nmats
@@ -2010,10 +1854,14 @@ contains
             !
             if(causal_D)then
                do iorb=1,Norb
+                  !self-consistency is only on SigmaXC
+                  !invCurlyG(iorb,iw,ispin) = invG(iorb,iorb) + ( SigmaImp%ws(iorb,iorb,iw,ispin) - SigmaImp%N_s(iorb,iorb,ispin) ) - DeltaCorr%ws(iorb,iorb,iw,ispin)
                   invCurlyG(iorb,iw,ispin) = invG(iorb,iorb) + SigmaImp%ws(iorb,iorb,iw,ispin) - DeltaCorr%ws(iorb,iorb,iw,ispin)
                enddo
             else
                do iorb=1,Norb
+                  !self-consistency is only on SigmaXC
+                  !invCurlyG(iorb,iw,ispin) = invG(iorb,iorb) + ( SigmaImp%ws(iorb,iorb,iw,ispin) - SigmaImp%N_s(iorb,iorb,ispin) )
                   invCurlyG(iorb,iw,ispin) = invG(iorb,iorb) + SigmaImp%ws(iorb,iorb,iw,ispin)
                enddo
             endif
@@ -2035,15 +1883,15 @@ contains
             !
          case("Analytic")
             !
-            file = "DeltaPara_"//reg(SiteName(isite))//".DAT"
-            MomDir = reg(ItFolder)//"Solver_"//reg(SiteName(isite))//"/"
+            file = "DeltaPara_"//reg(LocalOrbs(isite)%Name)//".DAT"
+            MomDir = reg(ItFolder)//"Solver_"//reg(LocalOrbs(isite)%Name)//"/"
             wndx = minloc(abs(wmats-0.85*wmatsMax),dim=1)
             call fit_Delta(Dfit,Beta,Nfit,reg(MomDir),reg(file),"Shifted",Eloc,filename="DeltaAnd",Wlimit=wndx,coef01=coef01)
             !
          case("Moments","Inf")
             !
-            file = "DeltaMom_"//reg(SiteName(isite))//".DAT"
-            MomDir = reg(ItFolder)//"Solver_"//reg(SiteName(isite))//"/"
+            file = "DeltaMom_"//reg(LocalOrbs(isite)%Name)//".DAT"
+            MomDir = reg(ItFolder)//"Solver_"//reg(LocalOrbs(isite)%Name)//"/"
             !
             allocate(Moments(Norb,Nspin,0:min(SigmaMaxMom,Nfit)));Moments=0d0
             wndx = minloc(abs(wmats-0.85*wmatsMax),dim=1)
@@ -2091,7 +1939,7 @@ contains
          if(.not.Mixing_Delta_tau)then
             write(*,"(A)")"     Mixing Delta(iw)."
             call AllocateFermionicField(DeltaOld,Norb,Nmats,Beta=Beta)
-            call read_FermionicField(DeltaOld,reg(PrevItFolder)//"Solver_"//reg(SiteName(isite))//"/","D_"//reg(SiteName(isite))//"_w")
+            call read_FermionicField(DeltaOld,reg(PrevItFolder)//"Solver_"//reg(LocalOrbs(isite)%Name)//"/","Delta_"//reg(LocalOrbs(isite)%Name)//"_w")
             do ispin=1,Nspin
                do iw=1,Nmats
                   do iorb=1,Norb
@@ -2103,7 +1951,7 @@ contains
          endif
          !
          allocate(ElocOld(Norb,Nspin));ElocOld=0d0
-         file = reg(PrevItFolder)//"Solver_"//reg(SiteName(isite))//"/Eloc.DAT"
+         file = reg(PrevItFolder)//"Solver_"//reg(LocalOrbs(isite)%Name)//"/Eloc.DAT"
          unit = free_unit()
          open(unit,file=reg(file),form="formatted",status="unknown",position="rewind",action="read")
          read(unit,*)
@@ -2123,11 +1971,8 @@ contains
             DeltaSym%ws(iorb,iorb,:,:) = Dmats(iorb,:,:)
          enddo
          if(RotateHloc)then
-            call symmetrize_imp(DeltaSym,OlocEig(:,isite))
-            if(causal_D)call symmetrize_imp(DeltaCorr,OlocEig(:,isite))
-         else
-            call symmetrize_GW(DeltaSym,EqvGWndx,override=.true.)
-            if(causal_D)call symmetrize_GW(DeltaCorr,EqvGWndx,override=.true.)
+            call symmetrize_imp(DeltaSym,LocalOrbs(isite)%Eig)
+            if(causal_D)call symmetrize_imp(DeltaCorr,LocalOrbs(isite)%Eig)
          endif
          do iorb=1,Norb
             Dmats(iorb,:,:) = DeltaSym%ws(iorb,iorb,:,:)
@@ -2135,8 +1980,8 @@ contains
          call DeallocateFermionicField(DeltaSym)
       endif
       if(EqvGWndx%para.eq.1)then
-         Dmats(:,:,1) = (Dmats(:,:,1) + Dmats(:,:,2))/2d0
-         Dmats(:,:,2) = Dmats(:,:,1)
+         Dmats(:,:,1) = (Dmats(:,:,1) + Dmats(:,:,Nspin))/2d0
+         Dmats(:,:,Nspin) = Dmats(:,:,1)
       endif
       !
       !Fourier transform to the tau axis
@@ -2179,8 +2024,8 @@ contains
          !reading old Delta for each site
          allocate(tauF(Solver%NtauF_in));tauF = linspace(0d0,Beta,Solver%NtauF_in)
          allocate(DitauOld(Norb,Solver%NtauF_in,Nspin));DitauOld=czero
-         allocate(ReadLine(Nflavor))
-         file = reg(PrevItFolder)//"Solver_"//reg(SiteName(isite))//"/Delta_t.DAT"
+         allocate(ReadLine(LocalOrbs(isite)%Nflavor))
+         file = reg(PrevItFolder)//"Solver_"//reg(LocalOrbs(isite)%Name)//"/Delta_t.DAT"
          call inquireFile(reg(file),filexists,verb=verbose)
          unit = free_unit()
          open(unit,file=reg(file),form="formatted",status="old",position="rewind",action="read")
@@ -2217,31 +2062,31 @@ contains
       !
       !Write Eloc and chemical potential
       if(addCF)then
-         file = reg(ItFolder)//"Solver_"//reg(SiteName(isite))//"/Eloc_noCF.DAT"
+         file = reg(ItFolder)//"Solver_"//reg(LocalOrbs(isite)%Name)//"/Eloc_noCF.DAT"
          unit = free_unit()
          open(unit,file=reg(file),form="formatted",status="unknown",position="rewind",action="write")
          write(unit,"(1E20.12)") Glat%mu
          do iorb=1,Norb
-            write(unit,"(2E20.12)") ((Eloc(iorb,ispin)+(-1d0**mod(ispin,2))*EqvGWndx%hseed),ispin=1,Nspin)!,Eloc(iorb,2)-EqvGWndx%hseed
+            write(unit,"(2E20.12)") ((Eloc(iorb,ispin)+(-1d0**mod(ispin,2))*EqvGWndx%hseed),ispin=1,Nspin)
          enddo
          close(unit)
       endif
-      file = reg(ItFolder)//"Solver_"//reg(SiteName(isite))//"/Eloc.DAT"
+      file = reg(ItFolder)//"Solver_"//reg(LocalOrbs(isite)%Name)//"/Eloc.DAT"
       unit = free_unit()
       open(unit,file=reg(file),form="formatted",status="unknown",position="rewind",action="write")
       write(unit,"(1E20.12)") Glat%mu
       CrystalField=0d0
       do iorb=1,Norb
-         if(addCF)CrystalField=SiteCF(isite,iorb)
-         write(unit,"(2E20.12)") ((Eloc(iorb,ispin)+(-1d0**mod(ispin,2))*EqvGWndx%hseed+CrystalField),ispin=1,Nspin)!,Eloc(iorb,2)-EqvGWndx%hseed+CrystalField
+         if(addCF) CrystalField = LocalOrbs(isite)%CrystalField(iorb)
+         write(unit,"(2E20.12)") ((Eloc(iorb,ispin)+(-1d0**mod(ispin,2))*EqvGWndx%hseed+CrystalField),ispin=1,Nspin)
       enddo
       close(unit)
       !
       !Write Delta(tau)
       allocate(tau(Solver%NtauF));tau=0d0
       tau = linspace(0d0,Beta,Solver%NtauF)
-      allocate(PrintLine(Nflavor))
-      file = reg(ItFolder)//"Solver_"//reg(SiteName(isite))//"/Delta_t.DAT"
+      allocate(PrintLine(LocalOrbs(isite)%Nflavor))
+      file = reg(ItFolder)//"Solver_"//reg(LocalOrbs(isite)%Name)//"/Delta_t.DAT"
       unit = free_unit()
       open(unit,file=reg(file),form="formatted",status="unknown",position="rewind",action="write")
       do itau=1,Solver%NtauF
@@ -2271,7 +2116,7 @@ contains
          enddo
       enddo
       FermiPrint%mu=Glat%mu
-      call dump_FermionicField(FermiPrint,reg(ItFolder)//"Solver_"//reg(SiteName(isite))//"/","G0_"//reg(SiteName(isite))//"_w",paramagnet)
+      call dump_FermionicField(FermiPrint,reg(ItFolder)//"Solver_"//reg(LocalOrbs(isite)%Name)//"/","G0_"//reg(LocalOrbs(isite)%Name)//"_w",paramagnet)
       !
       !Delta(iw)
       call clear_attributes(FermiPrint)
@@ -2279,7 +2124,7 @@ contains
          FermiPrint%ws(iorb,iorb,:,:) = Dmats(iorb,:,:)
       enddo
       FermiPrint%mu=Glat%mu
-      call dump_FermionicField(FermiPrint,reg(ItFolder)//"Solver_"//reg(SiteName(isite))//"/","D_"//reg(SiteName(isite))//"_w",paramagnet)
+      call dump_FermionicField(FermiPrint,reg(ItFolder)//"Solver_"//reg(LocalOrbs(isite)%Name)//"/","Delta_"//reg(LocalOrbs(isite)%Name)//"_w",paramagnet)
       !
       !Delta(iw) without causality correction
       if(causal_D)then
@@ -2289,7 +2134,7 @@ contains
                FermiPrint%ws(iorb,iorb,:,ispin) = Dmats(iorb,:,ispin) - DeltaCorr%ws(iorb,iorb,:,ispin)
             enddo
          enddo
-         call dump_FermionicField(FermiPrint,reg(ItFolder)//"Solver_"//reg(SiteName(isite))//"/","D_notCorr_"//reg(SiteName(isite))//"_w",paramagnet)
+         call dump_FermionicField(FermiPrint,reg(ItFolder)//"Solver_"//reg(LocalOrbs(isite)%Name)//"/","Delta_notCorr_"//reg(LocalOrbs(isite)%Name)//"_w",paramagnet)
          call DeallocateFermionicField(DeltaCorr)
       endif
       !
@@ -2307,7 +2152,7 @@ contains
                FermiPrint%ws(iorb,iorb,:,ispin) = Dmats(iorb,:,ispin)
             enddo
          enddo
-         call dump_FermionicField(FermiPrint,reg(ItFolder)//"Solver_"//reg(SiteName(isite))//"/","testFT_D_"//reg(SiteName(isite))//"_w",paramagnet)
+         call dump_FermionicField(FermiPrint,reg(ItFolder)//"Solver_"//reg(LocalOrbs(isite)%Name)//"/","testFT_Delta_"//reg(LocalOrbs(isite)%Name)//"_w",paramagnet)
          !
          call clear_attributes(FermiPrint)
          do ispin=1,Nspin
@@ -2315,12 +2160,12 @@ contains
                FermiPrint%ws(iorb,iorb,:,ispin) = Eloc(iorb,ispin) + Dmats(iorb,:,ispin)
             enddo
          enddo
-         call dump_FermionicField(FermiPrint,reg(ItFolder)//"Solver_"//reg(SiteName(isite))//"/fits/","test_Eo+D_"//reg(SiteName(isite))//"_w",paramagnet)
+         call dump_FermionicField(FermiPrint,reg(ItFolder)//"Solver_"//reg(LocalOrbs(isite)%Name)//"/fits/","test_Eo+Delta_"//reg(LocalOrbs(isite)%Name)//"_w",paramagnet)
          !
       endif
       call DeallocateFermionicField(FermiPrint)
       !
-      deallocate(Orbs,Eloc,zeta,Dmats,Ditau,tau,wmats)
+      deallocate(Eloc,zeta,Dmats,Ditau,tau,wmats)
       !
    end subroutine calc_Delta
 
@@ -2343,32 +2188,29 @@ contains
       type(BosonicField)                    :: curlyU,curlyUold
       type(BosonicField)                    :: curlyUcorr
       type(physicalU)                       :: PhysicalUelements
-      integer                               :: Norb,Nflavor,Nbp,unit
+      integer                               :: Norb,Nbp,unit
       integer                               :: ib1,ib2,itau,iw
       integer                               :: isitecheck
-      integer,allocatable                   :: Orbs(:)
       real(8),allocatable                   :: Uinst(:,:),Ucheck(:,:)
-      real(8),allocatable                   :: Kfunct(:,:,:),ScreeningMat(:,:)
-      complex(8),allocatable                :: Rot(:,:)
+      real(8),allocatable                   :: Kfunct(:,:,:),Kpfunct(:,:,:)
+      real(8),allocatable                   :: ScreeningMat(:,:)
       character(len=255)                    :: file
       !
       !
-      write(*,"(A)") new_line("A")//new_line("A")//"---- calc_Interaction of "//reg(SiteName(isite))
+      write(*,"(A)") new_line("A")//new_line("A")//"---- calc_Interaction of "//reg(LocalOrbs(isite)%Name)
       !
       !
       if(.not.P_EDMFT%status) stop "calc_Interaction: P_EDMFT not properly initialized."
       if(.not.Wlat%status) stop "calc_Interaction: Wlat not properly initialized."
       if(causal_U.and.(.not.curlyU_correction%status)) stop "calc_Interaction: requested causality correction but curlyU_correction not properly initialized."
+      if(.not.allocated(LocalOrbs)) stop "calc_Interaction: LocalOrbs not properly initialized."
       !
-      Norb = SiteNorb(isite)
-      allocate(Orbs(Norb))
-      Orbs = SiteOrbs(isite,1:Norb)
+      Norb = LocalOrbs(isite)%Norb
       Nbp = Norb**2
-      Nflavor = Norb*Nspin
       !
       call init_Uelements(Norb,PhysicalUelements)
       !
-      allocate(Uinst(Nflavor,Nflavor));Uinst=0d0
+      allocate(Uinst(LocalOrbs(isite)%Nflavor,LocalOrbs(isite)%Nflavor));Uinst=0d0
       call AllocateBosonicField(curlyU,Norb,Nmats,Crystal%iq_gamma,Beta=Beta)
       !
       select case(reg(CalculationType))
@@ -2378,30 +2220,22 @@ contains
             !
          case("DMFT+statU")
             !
-            call loc2imp(curlyU,Ulat,Orbs)
+            call loc2imp(curlyU,Ulat,LocalOrbs(isite)%Orbs)
             !
-            if(RotateUloc)then
-               allocate(Rot(Norb,Norb)); Rot=OlocRot(1:Norb,1:Norb,isite)
-               call TransformBosonicField(curlyU,Rot,PhysicalUelements%Full_Map)
-               deallocate(Rot)
-            endif
+            if(RotateUloc) call TransformBosonicField(curlyU,LocalOrbs(isite)%Rot,PhysicalUelements%Full_Map)
             !
             !istantaneous interaction
             call calc_QMCinteractions(curlyU,Uinst)
             !
          case("DMFT+dynU")
             !
-            call loc2imp(curlyU,Ulat,Orbs)
+            call loc2imp(curlyU,Ulat,LocalOrbs(isite)%Orbs)
             !
-            if(RotateUloc)then
-               allocate(Rot(Norb,Norb)); Rot=OlocRot(1:Norb,1:Norb,isite)
-               call TransformBosonicField(curlyU,Rot,PhysicalUelements%Full_Map)
-               deallocate(Rot)
-            endif
+            if(RotateUloc) call TransformBosonicField(curlyU,LocalOrbs(isite)%Rot,PhysicalUelements%Full_Map)
             !
             !istantaneous interaction, retarded function and screening matrix
-            allocate(Kfunct(Nflavor,Nflavor,Solver%NtauB));Kfunct=0d0
-            allocate(ScreeningMat(Nflavor,Nflavor));ScreeningMat=0d0
+            allocate(Kfunct(LocalOrbs(isite)%Nflavor,LocalOrbs(isite)%Nflavor,Solver%NtauB));Kfunct=0d0
+            allocate(ScreeningMat(LocalOrbs(isite)%Nflavor,LocalOrbs(isite)%Nflavor));ScreeningMat=0d0
             call calc_QMCinteractions(curlyU,Uinst,Kfunct=Kfunct,Screening=ScreeningMat)
             !
          case("EDMFT","GW+EDMFT")
@@ -2409,13 +2243,9 @@ contains
             if(Ustart)then
                !
                write(*,"(A)") "     Using local Ucrpa as effective interaction."
-               call loc2imp(curlyU,Ulat,Orbs)
+               call loc2imp(curlyU,Ulat,LocalOrbs(isite)%Orbs)
                !
-               if(RotateUloc)then
-                  allocate(Rot(Norb,Norb)); Rot=OlocRot(1:Norb,1:Norb,isite)
-                  call TransformBosonicField(curlyU,Rot,PhysicalUelements%Full_Map)
-                  deallocate(Rot)
-               endif
+               if(RotateUloc) call TransformBosonicField(curlyU,LocalOrbs(isite)%Rot,PhysicalUelements%Full_Map)
                !
             else
                !
@@ -2423,25 +2253,23 @@ contains
                call AllocateBosonicField(Pimp,Norb,Nmats,Crystal%iq_gamma,no_bare=.true.,Beta=Beta)
                call AllocateBosonicField(Wloc,Norb,Nmats,Crystal%iq_gamma,Beta=Beta)
                !
-               call loc2imp(Pimp,P_EDMFT,Orbs)
-               call loc2imp(Wloc,Wlat,Orbs)
+               call loc2imp(Pimp,P_EDMFT,LocalOrbs(isite)%Orbs)
+               call loc2imp(Wloc,Wlat,LocalOrbs(isite)%Orbs)
                !
                if(causal_U)then
                   call AllocateBosonicField(curlyUcorr,Norb,Nmats,Crystal%iq_gamma,Beta=Beta,no_bare=.true.)
-                  call loc2imp(curlyUcorr,curlyU_correction,Orbs)
+                  call loc2imp(curlyUcorr,curlyU_correction,LocalOrbs(isite)%Orbs)
                   call calc_curlyU(curlyU,Wloc,Pimp,curlyUcorr=curlyUcorr,mode=reg(causal_U_type))
                else
                   call calc_curlyU(curlyU,Wloc,Pimp)
                endif
                !
                if(RotateUloc)then
-                  allocate(Rot(Norb,Norb)); Rot=OlocRot(1:Norb,1:Norb,isite)
-                  call TransformBosonicField(curlyU,Rot,PhysicalUelements%Full_Map)
+                  call TransformBosonicField(curlyU,LocalOrbs(isite)%Rot,PhysicalUelements%Full_Map)
                   if(causal_U)then
-                     call TransformBosonicField(curlyUcorr,Rot,PhysicalUelements%Full_Map)
-                     call dump_BosonicField(curlyUcorr,reg(ItFolder)//"Solver_"//reg(SiteName(isite))//"/","curlyU_correction_"//reg(SiteName(isite))//"_w.DAT")
+                     call TransformBosonicField(curlyUcorr,LocalOrbs(isite)%Rot,PhysicalUelements%Full_Map)
+                     call dump_BosonicField(curlyUcorr,reg(ItFolder)//"Solver_"//reg(LocalOrbs(isite)%Name)//"/","curlyU_correction_"//reg(LocalOrbs(isite)%Name)//"_w.DAT")
                   endif
-                  deallocate(Rot)
                endif
                !
                call DeallocateBosonicField(curlyUcorr)
@@ -2453,8 +2281,9 @@ contains
             !Mixing curlyU
             if((Mixing_curlyU.gt.0d0).and.(Iteration.gt.0))then
                write(*,"(A)")"     Mixing curlyU with "//str(Mixing_curlyU,3)//" of old solution."
+               call dump_BosonicField(curlyU,reg(ItFolder)//"Solver_"//reg(LocalOrbs(isite)%Name)//"/","curlyU_noMix_"//reg(LocalOrbs(isite)%Name)//"_w.DAT")
                call AllocateBosonicField(curlyUold,Norb,Nmats,Crystal%iq_gamma,Beta=Beta)
-               call read_BosonicField(curlyUold,reg(PrevItFolder)//"Solver_"//reg(SiteName(isite))//"/","curlyU_"//reg(SiteName(isite))//"_w.DAT")
+               call read_BosonicField(curlyUold,reg(PrevItFolder)//"Solver_"//reg(LocalOrbs(isite)%Name)//"/","curlyU_"//reg(LocalOrbs(isite)%Name)//"_w.DAT")
                curlyU%bare_local = (1d0-Mixing_curlyU)*curlyU%bare_local + Mixing_curlyU*curlyUold%bare_local
                do iw=1,Nmats
                   curlyU%screened_local(:,:,iw) = (1d0-Mixing_curlyU)*curlyU%screened_local(:,:,iw) + Mixing_curlyU*curlyUold%screened_local(:,:,iw)
@@ -2463,18 +2292,19 @@ contains
             endif
             !
             !istantaneous interaction, retarded function and screening matrix
-            allocate(Kfunct(Nflavor,Nflavor,Solver%NtauB));Kfunct=0d0
-            allocate(ScreeningMat(Nflavor,Nflavor));ScreeningMat=0d0
-            call calc_QMCinteractions(curlyU,Uinst,Kfunct=Kfunct,Screening=ScreeningMat)
+            allocate(Kfunct(LocalOrbs(isite)%Nflavor,LocalOrbs(isite)%Nflavor,Solver%NtauB));Kfunct=0d0
+            allocate(Kpfunct(LocalOrbs(isite)%Nflavor,LocalOrbs(isite)%Nflavor,Solver%NtauB));Kpfunct=0d0
+            allocate(ScreeningMat(LocalOrbs(isite)%Nflavor,LocalOrbs(isite)%Nflavor));ScreeningMat=0d0
+            !
+            call calc_QMCinteractions(curlyU,Uinst,Kfunct=Kfunct,Kpfunct=Kpfunct,Screening=ScreeningMat)
             !
       end select
-      deallocate(Orbs)
       !
       !Print curlyU in the solver basis
-      call dump_BosonicField(curlyU,reg(ItFolder)//"Solver_"//reg(SiteName(isite))//"/","curlyU_"//reg(SiteName(isite))//"_w.DAT")
+      call dump_BosonicField(curlyU,reg(ItFolder)//"Solver_"//reg(LocalOrbs(isite)%Name)//"/","curlyU_"//reg(LocalOrbs(isite)%Name)//"_w.DAT")
       !
       !Istantaneous interaction
-      call dump_Matrix(Uinst,reg(ItFolder)//"Solver_"//reg(SiteName(isite))//"/","Umat.DAT")
+      call dump_Matrix(Uinst,reg(ItFolder)//"Solver_"//reg(LocalOrbs(isite)%Name)//"/","Umat.DAT")
       deallocate(Uinst)
       !
       !Print data for retarded interactions
@@ -2482,9 +2312,13 @@ contains
          call print_K(Kfunct,"K_t")
          deallocate(Kfunct)
       endif
+      if(allocated(Kpfunct))then
+         call print_K(Kpfunct,"Kp_t")
+         deallocate(Kpfunct)
+      endif
       !
       if(allocated(ScreeningMat))then
-         call dump_Matrix(ScreeningMat,reg(ItFolder)//"Solver_"//reg(SiteName(isite))//"/","Screening.DAT")
+         call dump_Matrix(ScreeningMat,reg(ItFolder)//"Solver_"//reg(LocalOrbs(isite)%Name)//"/","Screening.DAT")
          deallocate(ScreeningMat)
       endif
       !
@@ -2493,27 +2327,24 @@ contains
          !
          do isitecheck=1,Nsite
             !
-            Norb = SiteNorb(isitecheck)
-            Nflavor = Nspin*Norb
-            allocate(Orbs(Norb))
-            Orbs = SiteOrbs(isitecheck,1:Norb)
+            Norb = LocalOrbs(isitecheck)%Norb
             !
-            write(*,"(A)")"     Checking site "//reg(SiteName(1))//"_"//str(isitecheck)
-            write(*,"(A,10I3)")"     Norb: "//str(Norb)//" Orbitals: ",Orbs
+            write(*,"(A)")"     Checking site "//reg(LocalOrbs(1)%Name)//"_"//str(isitecheck)
+            write(*,"(A,10I3)")"     Norb: "//str(Norb)//" Orbitals: ",LocalOrbs(isitecheck)%Orbs
             !
-            if(isitecheck.eq.1)allocate(Uinst(Nflavor,Nflavor))
-            if(isitecheck.ne.1)allocate(Ucheck(Nflavor,Nflavor))
+            if(isitecheck.eq.1)allocate(Uinst(LocalOrbs(isitecheck)%Nflavor,LocalOrbs(isitecheck)%Nflavor))
+            if(isitecheck.ne.1)allocate(Ucheck(LocalOrbs(isitecheck)%Nflavor,LocalOrbs(isitecheck)%Nflavor))
             !
             call clear_attributes(curlyU)
             !
             if(Ustart)then
-               call loc2imp(curlyU,Ulat,Orbs)
+               call loc2imp(curlyU,Ulat,LocalOrbs(isitecheck)%Orbs)
               !call isReal(curlyU)
             else
                call AllocateBosonicField(Pimp,Norb,Nmats,Crystal%iq_gamma,no_bare=.true.,Beta=Beta)
                call AllocateBosonicField(Wloc,Norb,Nmats,Crystal%iq_gamma,Beta=Beta)
-               call loc2imp(Pimp,P_EDMFT,Orbs)
-               call loc2imp(Wloc,Wlat,Orbs)
+               call loc2imp(Pimp,P_EDMFT,LocalOrbs(isitecheck)%Orbs)
+               call loc2imp(Wloc,Wlat,LocalOrbs(isitecheck)%Orbs)
                !
                call calc_curlyU(curlyU,Wloc,Pimp,sym=.false.)
                !
@@ -2524,13 +2355,13 @@ contains
             !
             if(isitecheck.eq.1)then
                call calc_QMCinteractions(curlyU,Uinst,sym=.false.)
-               call dump_Matrix(Uinst,reg(ItFolder)//"Solver_"//reg(SiteName(isitecheck))//"/","Umat_noSym_"//str(isitecheck)//".DAT")
+               call dump_Matrix(Uinst,reg(ItFolder)//"Solver_"//reg(LocalOrbs(isitecheck)%Name)//"/","Umat_noSym_"//str(isitecheck)//".DAT")
             else
                call calc_QMCinteractions(curlyU,Ucheck,sym=.false.)
-               call dump_Matrix(Ucheck,reg(ItFolder)//"Solver_"//reg(SiteName(isitecheck))//"/","Umat_noSym_"//str(isitecheck)//".DAT")
+               call dump_Matrix(Ucheck,reg(ItFolder)//"Solver_"//reg(LocalOrbs(isitecheck)%Name)//"/","Umat_noSym_"//str(isitecheck)//".DAT")
                !
-               do ib1=1,Nflavor
-                  do ib2=1,Nflavor
+               do ib1=1,LocalOrbs(isitecheck)%Nflavor
+                  do ib2=1,LocalOrbs(isitecheck)%Nflavor
                      if(abs(Ucheck(ib1,ib2)-Uinst(ib1,ib2)).gt.1e-3)then
                         write(*,"(A,F,A,F)")"     Warning: Element["//str(ib1)//"]["//str(ib2)//"] is different:",Ucheck(ib1,ib2)," instead of: ",Uinst(ib1,ib2)
                      endif
@@ -2539,8 +2370,6 @@ contains
                deallocate(Ucheck)
                !
             endif
-            !
-            deallocate(Orbs)
             !
          enddo !isitecheck
          deallocate(Uinst)
@@ -2565,14 +2394,14 @@ contains
          allocate(tau(Solver%NtauB));tau=0d0
          tau = linspace(0d0,Beta,Solver%NtauB)
          !
-         file = reg(ItFolder)//"Solver_"//reg(SiteName(isite))//"/"//reg(filename)//".DAT"
+         file = reg(ItFolder)//"Solver_"//reg(LocalOrbs(isite)%Name)//"/"//reg(filename)//".DAT"
          unit = free_unit()
          open(unit,file=reg(file),form="formatted",status="unknown",position="rewind",action="write")
-         allocate(PrintLine(Nflavor*(Nflavor+1)/2));PrintLine=0d0
+         allocate(PrintLine(size(K,dim=1)*(size(K,dim=1)+1)/2));PrintLine=0d0
          do itau=1,Solver%NtauB
             ndx=1
             !print diagonal and LT
-            do ib1=1,Nflavor
+            do ib1=1,size(K,dim=1)
                do ib2=1,ib1
                   !
                   PrintLine(ndx) = K(ib1,ib2,itau)
@@ -2612,8 +2441,6 @@ contains
       real(8),allocatable                   :: Moments(:,:,:)
       character(len=255)                    :: file,MomDir
       logical                               :: filexists,fitSigmaTail
-      type(physicalU)                       :: PhysicalUelements
-      type(QMC_observables),allocatable     :: SolverObs(:)
       !Impurity Green's function
       type(FermionicField),allocatable      :: Gimp(:)
       complex(8),allocatable                :: Gitau(:,:,:)
@@ -2623,7 +2450,7 @@ contains
       type(FermionicField)                  :: G0imp
       type(BosonicField)                    :: curlyU
       complex(8),allocatable                :: Sfit(:,:,:),SmatsTail(:)
-      real(8),allocatable                   :: Uinst(:,:),HartreeQMC(:)
+      real(8),allocatable                   :: Uinst(:,:)
       !Impurity susceptibilities
       real(8),allocatable                   :: nnt(:,:,:)
       complex(8),allocatable                :: NNitau(:,:,:,:,:)
@@ -2638,42 +2465,36 @@ contains
       write(*,"(A)") new_line("A")//new_line("A")//"---- collect_QMC_results"
       !
       !
+      if(.not.allocated(LocalOrbs)) stop "collect_QMC_results: LocalOrbs not properly initialized."
+      !
       !Impurity observables initialization
       if(ExpandImpurity)then
-         allocate(SolverObs(1))
          allocate(Gimp(1))
          allocate(Simp(1))
       else
-         allocate(SolverObs(Nsite))
          allocate(Gimp(Nsite))
          allocate(Simp(Nsite))
       endif
       do isite=1,Nsite
          !
-         write(*,"(A)") "     Setting up site: "//reg(SiteName(isite))
+         write(*,"(A)") "     Setting up site: "//reg(LocalOrbs(isite)%Name)
          !
-         SolverObs(isite)%Norb = SiteNorb(isite)
-         SolverObs(isite)%Nflavor = SiteNorb(isite)*Nspin
-         SolverObs(isite)%Nbp = SiteNorb(isite)**2
-         SolverObs(isite)%Index = isite
-         SolverObs(isite)%Name = reg(SiteName(isite))
+         if(allocated(LocalOrbs(isite)%rho_Flav))deallocate(LocalOrbs(isite)%rho_Flav)
+         allocate(LocalOrbs(isite)%rho_Flav(LocalOrbs(isite)%Nflavor))
+         LocalOrbs(isite)%rho_Flav=0d0
          !
-         allocate(SolverObs(isite)%Orbs(SiteNorb(isite)))
-         SolverObs(isite)%Orbs = SiteOrbs(isite,1:SiteNorb(isite))
+         if(allocated(LocalOrbs(isite)%rho_OrbSpin))deallocate(LocalOrbs(isite)%rho_OrbSpin)
+         allocate(LocalOrbs(isite)%rho_OrbSpin(LocalOrbs(isite)%Norb,LocalOrbs(isite)%Norb,Nspin))
+         LocalOrbs(isite)%rho_OrbSpin=0d0
          !
-         allocate(SolverObs(isite)%rho_Flav(SolverObs(isite)%Nflavor))
-         SolverObs(isite)%rho_Flav=0d0
+         if(allocated(LocalOrbs(isite)%Docc))deallocate(LocalOrbs(isite)%Docc)
+         allocate(LocalOrbs(isite)%Docc(LocalOrbs(isite)%Norb,LocalOrbs(isite)%Norb))
+         LocalOrbs(isite)%Docc=0d0
          !
-         allocate(SolverObs(isite)%rho_OrbSpin(SolverObs(isite)%Norb,SolverObs(isite)%Norb,Nspin))
-         SolverObs(isite)%rho_OrbSpin=0d0
-         !
-         allocate(SolverObs(isite)%Docc(SolverObs(isite)%Norb,SolverObs(isite)%Norb))
-         SolverObs(isite)%Docc=0d0
-         !
-         call AllocateFermionicField(Gimp(isite),SolverObs(isite)%Norb,Nmats,Beta=Beta)
+         call AllocateFermionicField(Gimp(isite),LocalOrbs(isite)%Norb,Nmats,Beta=Beta)
          call clear_attributes(Gimp(isite))
          !
-         call AllocateFermionicField(Simp(isite),SolverObs(isite)%Norb,Nmats,Beta=Beta)
+         call AllocateFermionicField(Simp(isite),LocalOrbs(isite)%Norb,Nmats,Beta=Beta)
          call clear_attributes(Simp(isite))
          !
       enddo
@@ -2685,31 +2506,27 @@ contains
       allocate(densityDMFT(Crystal%Norb,Crystal%Norb,Nspin));densityDMFT=czero
       do isite=1,Nsite
          !
-         write(*,"(A)") new_line("A")//"     Collecting occupation of site: "//SolverObs(isite)%Name
+         write(*,"(A)") new_line("A")//"     Collecting occupation of site: "//LocalOrbs(isite)%Name
          !
          !Read the impurity occupation
-         file = reg(PrevItFolder)//"Solver_"//SolverObs(isite)%Name//"/resultsQMC/Nqmc.DAT"
+         file = reg(PrevItFolder)//"Solver_"//LocalOrbs(isite)%Name//"/resultsQMC/Nqmc.DAT"
          call inquireFile(reg(file),filexists,verb=verbose)
          unit = free_unit()
          open(unit,file=reg(file),form="formatted",status="old",position="rewind",action="read")
          read(unit,*) muQMC
-         do ib1=1,SolverObs(isite)%Nflavor
+         do ib1=1,LocalOrbs(isite)%Nflavor
             !
-            read(unit,*) idum,SolverObs(isite)%rho_Flav(ib1)
+            read(unit,*) idum,LocalOrbs(isite)%rho_Flav(ib1)
             !
             iorb = (ib1+mod(ib1,2))/2
             ispin = abs(mod(ib1,2)-2)
-            SolverObs(isite)%rho_OrbSpin(iorb,iorb,ispin) = SolverObs(isite)%rho_Flav(ib1)
+            LocalOrbs(isite)%rho_OrbSpin(iorb,iorb,ispin) = LocalOrbs(isite)%rho_Flav(ib1)
             !
          enddo
          close(unit)
          !
          !Insert or Expand to the Lattice basis (this is just for printing)
-         if(RotateHloc)then
-            call imp2loc(densityDMFT,dcmplx(SolverObs(isite)%rho_OrbSpin,0d0),isite,SolverObs(isite)%Orbs,ExpandImpurity,AFMselfcons,U=OlocRotDag,name="Nimp")
-         else
-            call imp2loc(densityDMFT,dcmplx(SolverObs(isite)%rho_OrbSpin,0d0),isite,SolverObs(isite)%Orbs,ExpandImpurity,AFMselfcons,name="Nimp")
-         endif
+         call imp2loc(densityDMFT,dcmplx(LocalOrbs(isite)%rho_OrbSpin,0d0),isite,LocalOrbs,ExpandImpurity,AFMselfcons,RotateHloc,name="Nimp")
          !
          if(ExpandImpurity.or.AFMselfcons)exit
          !
@@ -2729,13 +2546,13 @@ contains
       call AllocateFermionicField(G_DMFT,Crystal%Norb,Nmats,Nsite=Nsite,Beta=Beta)
       do isite=1,Nsite
          !
-         write(*,"(A)") new_line("A")//"     Collecting the impurity Green's function of site: "//SolverObs(isite)%Name
+         write(*,"(A)") new_line("A")//"     Collecting the impurity Green's function of site: "//LocalOrbs(isite)%Name
          !
          !Read the impurity Green's function
          allocate(tauF(Solver%NtauF_in));tauF = linspace(0d0,Beta,Solver%NtauF_in)
-         allocate(Gitau(SolverObs(isite)%Norb,Solver%NtauF_in,Nspin));Gitau=czero !dcmplx(-eps,0d0)
-         allocate(ReadLine(SolverObs(isite)%Nflavor))
-         file = reg(PrevItFolder)//"Solver_"//SolverObs(isite)%Name//"/resultsQMC/Gimp_t.DAT"
+         allocate(Gitau(LocalOrbs(isite)%Norb,Solver%NtauF_in,Nspin));Gitau=czero !dcmplx(-eps,0d0)
+         allocate(ReadLine(LocalOrbs(isite)%Nflavor))
+         file = reg(PrevItFolder)//"Solver_"//LocalOrbs(isite)%Name//"/resultsQMC/Gimp_t.DAT"
          call inquireFile(reg(file),filexists,verb=verbose)
          unit = free_unit()
          open(unit,file=reg(file),form="formatted",status="old",position="rewind",action="read")
@@ -2745,7 +2562,7 @@ contains
             if(abs(taup-tauF(itau)).gt.eps) stop "Reading Gimp_t.DAT from previous iteration: Impurity fermionic tau mesh does not coincide."
             !
             ndx=1
-            do iorb=1,SolverObs(isite)%Norb
+            do iorb=1,LocalOrbs(isite)%Norb
                do ispin=1,Nspin
                   Gitau(iorb,itau,ispin) = dcmplx(ReadLine(ndx),0d0)
                   ndx=ndx+1
@@ -2754,10 +2571,10 @@ contains
             !
          enddo
          deallocate(ReadLine,tauF)
-         call dump_MaxEnt(Gitau,"itau",reg(PrevItFolder)//"Convergence/","Gqmc_"//SolverObs(isite)%Name)
+         call dump_MaxEnt(Gitau,"itau",reg(PrevItFolder)//"Convergence/","Gqmc_"//LocalOrbs(isite)%Name)
          !
          !FT to the matsubara axis
-         allocate(Gmats(SolverObs(isite)%Norb,Nmats));Gmats=czero
+         allocate(Gmats(LocalOrbs(isite)%Norb,Nmats));Gmats=czero
          do ispin=1,Nspin
             call Fitau2mats_vec(Beta,Gitau(:,:,ispin),Gmats,tau_uniform=.true.)
             do iw=1,Nmats
@@ -2769,14 +2586,10 @@ contains
             endif
          enddo
          deallocate(Gitau,Gmats)
-         call dump_FermionicField(Gimp(isite),reg(PrevItFolder)//"Solver_"//SolverObs(isite)%Name//"/","Gimp_"//SolverObs(isite)%Name//"_w",paramagnet)
+         call dump_FermionicField(Gimp(isite),reg(PrevItFolder)//"Solver_"//LocalOrbs(isite)%Name//"/","Gimp_"//LocalOrbs(isite)%Name//"_w",paramagnet)
          !
          !Insert or Expand to the Lattice basis
-         if(RotateHloc)then
-            call imp2loc(G_DMFT,Gimp(isite),isite,SolverObs(isite)%Orbs,ExpandImpurity,AFMselfcons,U=OlocRotDag,name="Gimp")
-         else
-            call imp2loc(G_DMFT,Gimp(isite),isite,SolverObs(isite)%Orbs,ExpandImpurity,AFMselfcons,name="Gimp")
-         endif
+         call imp2loc(G_DMFT,Gimp(isite),isite,LocalOrbs,ExpandImpurity,AFMselfcons,RotateHloc,name="Gimp")
          !
          if(ExpandImpurity.or.AFMselfcons)exit
          !
@@ -2798,18 +2611,18 @@ contains
       call AllocateFermionicField(S_DMFT,Crystal%Norb,Nmats,Nsite=Nsite,Beta=Beta)
       do isite=1,Nsite
          !
-         write(*,"(A)") new_line("A")//"     Collecting curlyG of site: "//SolverObs(isite)%Name
+         write(*,"(A)") new_line("A")//"     Collecting curlyG of site: "//LocalOrbs(isite)%Name
          !
          !Read curlyG
-         call AllocateFermionicField(G0imp,SolverObs(isite)%Norb,Nmats,Beta=Beta)
-         call read_FermionicField(G0imp,reg(PrevItFolder)//"Solver_"//SolverObs(isite)%Name//"/","G0_"//reg(SiteName(isite))//"_w")
+         call AllocateFermionicField(G0imp,LocalOrbs(isite)%Norb,Nmats,Beta=Beta)
+         call read_FermionicField(G0imp,reg(PrevItFolder)//"Solver_"//LocalOrbs(isite)%Name//"/","G0_"//reg(LocalOrbs(isite)%Name)//"_w")
          !
          !Adjust with the chemical potential if the solver has changed it
          if((abs(G0imp%mu-muQMC).gt.1e-5).and.update_curlyG)then
             write(*,"(A)") new_line("A")//"     Updating the chemical potential of curlyG from "//str(G0imp%mu)//" to "//str(muQMC)
             do ispin=1,Nspin
                do iw=1,Nmats
-                  do iorb=1,SolverObs(isite)%Norb
+                  do iorb=1,LocalOrbs(isite)%Norb
                      G0imp%ws(iorb,iorb,iw,ispin) = 1d0/(1d0/G0imp%ws(iorb,iorb,iw,ispin) - G0imp%mu + muQMC)
                   enddo
                enddo
@@ -2819,13 +2632,13 @@ contains
                endif
             enddo
             G0imp%mu=muQMC
-            call dump_FermionicField(G0imp,reg(PrevItFolder)//"Solver_"//SolverObs(isite)%Name//"/","G0_"//SolverObs(isite)%Name//"_w",paramagnet)
+            call dump_FermionicField(G0imp,reg(PrevItFolder)//"Solver_"//LocalOrbs(isite)%Name//"/","G0_"//LocalOrbs(isite)%Name//"_w",paramagnet)
          endif
          !
          !Fermionic Dyson equation in the solver basis (always diagonal)
-         write(*,"(A)") new_line("A")//"     Solving fermionic Dyson of site: "//SolverObs(isite)%Name
+         write(*,"(A)") new_line("A")//"     Solving fermionic Dyson of site: "//LocalOrbs(isite)%Name
          do ispin=1,Nspin
-            do iorb=1,SolverObs(isite)%Norb
+            do iorb=1,LocalOrbs(isite)%Norb
                Simp(isite)%ws(iorb,iorb,:,ispin) = 1d0/G0imp%ws(iorb,iorb,:,ispin) - 1d0/Gimp(isite)%ws(iorb,iorb,:,ispin)
             enddo
             if(paramagnet)then
@@ -2838,28 +2651,28 @@ contains
          !Fit the impurity self-energy tail
          if(fitSigmaTail)then
             !
-            call dump_FermionicField(Simp(isite),reg(PrevItFolder)//"Solver_"//SolverObs(isite)%Name//"/","S_noFit_"//SolverObs(isite)%Name//"_w",paramagnet)
+            call dump_FermionicField(Simp(isite),reg(PrevItFolder)//"Solver_"//LocalOrbs(isite)%Name//"/","S_noFit_"//LocalOrbs(isite)%Name//"_w",paramagnet)
             !
-            write(*,"(A)") new_line("A")//"     Fitting self-energy moments of site: "//SolverObs(isite)%Name
+            write(*,"(A)") new_line("A")//"     Fitting self-energy moments of site: "//LocalOrbs(isite)%Name
             !
             !define the frequency index from which substitute the tail
             allocate(wmats(Nmats));wmats=FermionicFreqMesh(Beta,Nmats)
             wndx = minloc(abs(wmats-ReplaceTail_Simp),dim=1)
             wndxOpt = wndx
             do ispin=1,Nspin
-               do iorb=1,SolverObs(isite)%Norb
+               do iorb=1,LocalOrbs(isite)%Norb
                   wndxOpt = min(wndxOpt,minloc(abs(Simp(isite)%ws(iorb,iorb,:,ispin)-0.3d0*minval(dimag(Simp(isite)%ws(iorb,iorb,:,ispin)))),dim=1))
                enddo
             enddo
             !
             !perform the fit on the diagonal
-            file = "SimpMom_"//SolverObs(isite)%Name//".DAT"
-            MomDir = reg(PrevItFolder)//"Solver_"//SolverObs(isite)%Name//"/"
+            file = "SimpMom_"//LocalOrbs(isite)%Name//".DAT"
+            MomDir = reg(PrevItFolder)//"Solver_"//LocalOrbs(isite)%Name//"/"
             !
-            allocate(Moments(SolverObs(isite)%Norb,Nspin,0:min(SigmaMaxMom,Nfit)));Moments=0d0
-            allocate(Sfit(SolverObs(isite)%Norb,Nmats,Nspin))
+            allocate(Moments(LocalOrbs(isite)%Norb,Nspin,0:min(SigmaMaxMom,Nfit)));Moments=0d0
+            allocate(Sfit(LocalOrbs(isite)%Norb,Nmats,Nspin))
             do ispin=1,Nspin
-               do iorb=1,SolverObs(isite)%Norb
+               do iorb=1,LocalOrbs(isite)%Norb
                   Sfit(iorb,:,ispin) = Simp(isite)%ws(iorb,iorb,:,ispin)
                enddo
             enddo
@@ -2869,7 +2682,7 @@ contains
             write(*,"(A,F)") new_line("A")//"     Replacing Sigma tail starting from iw_["//str(wndx)//"]=",wmats(wndx)
             if(abs(wmats(wndx)-wmats(wndxOpt)).gt.1d0)write(*,"(A,F)") "     Optimal would be iw_["//str(wndxOpt)//"]=",wmats(wndxOpt)
             do ispin=1,Nspin
-               do iorb=1,SolverObs(isite)%Norb
+               do iorb=1,LocalOrbs(isite)%Norb
                   SmatsTail = S_Moments(Moments(iorb,ispin,:),wmats)
                   Simp(isite)%ws(iorb,iorb,wndx:Nmats,ispin) = SmatsTail(wndx:Nmats)
                enddo
@@ -2884,36 +2697,58 @@ contains
          !
          !Fill up the N_s attribute that correspond to the Hartree term of the
          !self-energy always diagonal in the solver basis
-         call AllocateBosonicField(curlyU,SolverObs(isite)%Norb,Nmats,Crystal%iq_gamma,Beta=Beta)
-         call read_BosonicField(curlyU,reg(PrevItFolder)//"Solver_"//SolverObs(isite)%Name//"/","curlyU_"//SolverObs(isite)%Name//"_w.DAT")
-         allocate(Uinst(SolverObs(isite)%Nflavor,SolverObs(isite)%Nflavor));Uinst=0d0
-         call calc_QMCinteractions(curlyU,Uinst)
-         call DeallocateBosonicField(curlyU)
-         !
-         allocate(HartreeQMC(SolverObs(isite)%Nflavor));HartreeQMC=0d0
-         HartreeQMC = matmul(Uinst,SolverObs(isite)%rho_Flav)
-         !
-         do ib1=1,SolverObs(isite)%Nflavor
-            iorb = (ib1+mod(ib1,2))/2
-            ispin = abs(mod(ib1,2)-2)
-            Simp(isite)%N_s(iorb,iorb,ispin) = HartreeQMC(ib1)
-         enddo
-         deallocate(Uinst,HartreeQMC)
-         !
-         !The magnetization will be given only by the self-energy beyond Hartree
-         Simp(isite)%N_s(:,:,1) = (Simp(isite)%N_s(:,:,1)+Simp(isite)%N_s(:,:,Nspin))/2d0
-         Simp(isite)%N_s(:,:,Nspin) = Simp(isite)%N_s(:,:,1)
+         call AllocateBosonicField(curlyU,LocalOrbs(isite)%Norb,Nmats,Crystal%iq_gamma,Beta=Beta)
+         call read_BosonicField(curlyU,reg(PrevItFolder)//"Solver_"//LocalOrbs(isite)%Name//"/","curlyU_"//LocalOrbs(isite)%Name//"_w.DAT")
+         select case(reg(HartreeType))
+            case default
+               stop "collect_QMC_results: Available HartreeT types: GW or DMFT."
+            case("GW")
+               !
+               Simp(isite)%N_s = czero
+               do ispin=1,Nspin
+                  do iorb=1,LocalOrbs(isite)%Norb
+                     do jorb=1,LocalOrbs(isite)%Norb
+                        call F2Bindex(LocalOrbs(isite)%Norb,[iorb,iorb],[jorb,jorb],ib1,ib2)
+                        Simp(isite)%N_s(iorb,iorb,ispin) = Simp(isite)%N_s(iorb,iorb,ispin) + curlyU%screened_local(ib1,ib2,1)*LocalOrbs(isite)%rho_OrbSpin(jorb,jorb,ispin)
+                        !
+                     enddo
+                  enddo
+               enddo
+               call DeallocateBosonicField(curlyU)
+               !
+               !The magnetization will be given only by the self-energy beyond Hartree
+               Simp(isite)%N_s(:,:,1) = (Simp(isite)%N_s(:,:,1)+Simp(isite)%N_s(:,:,Nspin))
+               Simp(isite)%N_s(:,:,Nspin) = Simp(isite)%N_s(:,:,1)
+               !
+            case("DMFT")
+               !
+               allocate(Uinst(LocalOrbs(isite)%Nflavor,LocalOrbs(isite)%Nflavor));Uinst=0d0
+               call calc_QMCinteractions(curlyU,Uinst)
+               call DeallocateBosonicField(curlyU)
+               !
+               Simp(isite)%N_s = czero
+               do ib1=1,LocalOrbs(isite)%Nflavor
+                  iorb = (ib1+mod(ib1,2))/2
+                  ispin = abs(mod(ib1,2)-2)
+                  do ib2=1,LocalOrbs(isite)%Nflavor
+                     if(ib1.eq.ib2) cycle !Simp(isite)%N_s(iorb,iorb,ispin) = Simp(isite)%N_s(iorb,iorb,ispin) + Uinst(2*iorb-1,2*iorb)*LocalOrbs(isite)%rho_Flav(ib2)
+                     Simp(isite)%N_s(iorb,iorb,ispin) = Simp(isite)%N_s(iorb,iorb,ispin) + Uinst(ib1,ib2)*LocalOrbs(isite)%rho_Flav(ib2)
+                  enddo
+               enddo
+               deallocate(Uinst)
+               !
+               !The magnetization will be given only by the self-energy beyond Hartree
+               Simp(isite)%N_s(:,:,1) = (Simp(isite)%N_s(:,:,1)+Simp(isite)%N_s(:,:,Nspin))/2d0
+               Simp(isite)%N_s(:,:,Nspin) = Simp(isite)%N_s(:,:,1)
+               !
+         end select
          !
          !Hartree term in the Solver basis
-         call dump_Matrix(Simp(isite)%N_s,reg(PrevItFolder),"Solver_"//SolverObs(isite)%Name//"/Hartree_UNimp_"//SolverObs(isite)%Name,paramagnet)
+         call dump_Matrix(Simp(isite)%N_s,reg(PrevItFolder),"Solver_"//LocalOrbs(isite)%Name//"/Hartree_UNimp_"//LocalOrbs(isite)%Name,paramagnet)
          !
          !Insert or Expand to the Lattice basis
-         if(RotateHloc)then
-            if(sym_mode.gt.1)call symmetrize_imp(Simp(isite),OlocEig(:,isite))
-            call imp2loc(S_DMFT,Simp(isite),isite,SolverObs(isite)%Orbs,ExpandImpurity,AFMselfcons,U=OlocRotDag,name="Simp")
-         else
-            call imp2loc(S_DMFT,Simp(isite),isite,SolverObs(isite)%Orbs,ExpandImpurity,AFMselfcons,name="Simp")
-         endif
+         if(RotateHloc.and.(sym_mode.gt.1))call symmetrize_imp(Simp(isite),LocalOrbs(isite)%Eig)
+         call imp2loc(S_DMFT,Simp(isite),isite,LocalOrbs,ExpandImpurity,AFMselfcons,RotateHloc,name="Simp")
          !
          if(ExpandImpurity.or.AFMselfcons)exit
          !
@@ -2941,14 +2776,14 @@ contains
          !
          do isite=1,Nsite
             !
-            write(*,"(A)") new_line("A")//"     Collecting the impurity susceptibilities of site: "//SolverObs(isite)%Name
+            write(*,"(A)") new_line("A")//"     Collecting the impurity susceptibilities of site: "//LocalOrbs(isite)%Name
             !
             !Read the impurity N(tau)N(0)
             allocate(tauB(Solver%NtauB_in));tauB=0d0
             tauB = linspace(0d0,Beta,Solver%NtauB_in)
-            allocate(nnt(SolverObs(isite)%Nflavor,SolverObs(isite)%Nflavor,Solver%NtauB_in));nnt=0d0
-            allocate(ReadLine(SolverObs(isite)%Nflavor*(SolverObs(isite)%Nflavor+1)/2))
-            file = reg(PrevItFolder)//"Solver_"//SolverObs(isite)%Name//"/resultsQMC/nn_t.DAT"
+            allocate(nnt(LocalOrbs(isite)%Nflavor,LocalOrbs(isite)%Nflavor,Solver%NtauB_in));nnt=0d0
+            allocate(ReadLine(LocalOrbs(isite)%Nflavor*(LocalOrbs(isite)%Nflavor+1)/2))
+            file = reg(PrevItFolder)//"Solver_"//LocalOrbs(isite)%Name//"/resultsQMC/nn_t.DAT"
             call inquireFile(reg(file),filexists,verb=verbose)
             unit = free_unit()
             open(unit,file=reg(file),form="formatted",status="old",position="rewind",action="read")
@@ -2960,7 +2795,7 @@ contains
                !
                !this is cumbersome but better be safe
                ndx=1
-               do ib1=1,SolverObs(isite)%Nflavor
+               do ib1=1,LocalOrbs(isite)%Nflavor
                   do ib2=1,ib1
                      nnt(ib1,ib2,itau) = ReadLine(ndx)
                      if(ib1.ne.ib2)nnt(ib2,ib1,itau) = ReadLine(ndx)
@@ -2972,9 +2807,9 @@ contains
             deallocate(ReadLine)
             !
             !Reshape N(tau)N(0)for easier handling
-            allocate(NNitau(SolverObs(isite)%Norb,SolverObs(isite)%Norb,Nspin,Nspin,Solver%NtauB_in));NNitau=czero
-            do ib1=1,SolverObs(isite)%Nflavor
-               do ib2=1,SolverObs(isite)%Nflavor
+            allocate(NNitau(LocalOrbs(isite)%Norb,LocalOrbs(isite)%Norb,Nspin,Nspin,Solver%NtauB_in));NNitau=czero
+            do ib1=1,LocalOrbs(isite)%Nflavor
+               do ib2=1,LocalOrbs(isite)%Nflavor
                   !
                   iorb = (ib1+mod(ib1,2))/2
                   jorb = (ib2+mod(ib2,2))/2
@@ -2994,8 +2829,8 @@ contains
             allocate(ChiMitau(Solver%NtauB_in));ChiMitau=czero
             do ispin=1,Nspin
                do jspin=1,Nspin
-                  do iorb=1,SolverObs(isite)%Norb
-                     do jorb=1,SolverObs(isite)%Norb
+                  do iorb=1,LocalOrbs(isite)%Norb
+                     do jorb=1,LocalOrbs(isite)%Norb
                         !
                         ChiMitau = ChiMitau + NNitau(iorb,jorb,ispin,jspin,:)*(-1d0)**(ispin-jspin)/4d0
                         !
@@ -3003,29 +2838,29 @@ contains
                   enddo
                enddo
             enddo
-            call dump_BosonicField(ChiMitau,reg(PrevItFolder)//"Solver_"//SolverObs(isite)%Name//"/","ChiM_"//SolverObs(isite)%Name//"_t.DAT",tauB)
+            call dump_BosonicField(ChiMitau,reg(PrevItFolder)//"Solver_"//LocalOrbs(isite)%Name//"/","ChiM_"//LocalOrbs(isite)%Name//"_t.DAT",tauB)
             !
             !FT to get ChiM(iw)
             allocate(wmats(Nmats));wmats=BosonicFreqMesh(Beta,Nmats)
             allocate(ChiMmats(Nmats));ChiMmats=czero
             call Bitau2mats(Beta,ChiMitau,ChiMmats,tau_uniform=.true.)
-            call dump_BosonicField(ChiMmats,reg(PrevItFolder)//"Solver_"//SolverObs(isite)%Name//"/","ChiM_"//SolverObs(isite)%Name//"_w.DAT",wmats)
+            call dump_BosonicField(ChiMmats,reg(PrevItFolder)//"Solver_"//LocalOrbs(isite)%Name//"/","ChiM_"//LocalOrbs(isite)%Name//"_w.DAT",wmats)
             deallocate(ChiMitau,ChiMmats,wmats)
             !
             !
             !Charge susceptibility----------------------------------------------
             !ChiC(tau) = Sum_s1s2 <Na(tau)Nb(0)> - <Na><Nb> in the solver basis
-            call AllocateBosonicField(ChiCitau,SolverObs(isite)%Norb,Solver%NtauB_in,Crystal%iq_gamma,no_bare=.true.,Beta=Beta)
-            do iorb=1,SolverObs(isite)%Norb
-               do jorb=1,SolverObs(isite)%Norb
+            call AllocateBosonicField(ChiCitau,LocalOrbs(isite)%Norb,Solver%NtauB_in,Crystal%iq_gamma,no_bare=.true.,Beta=Beta)
+            do iorb=1,LocalOrbs(isite)%Norb
+               do jorb=1,LocalOrbs(isite)%Norb
                   !
-                  call F2Bindex(SolverObs(isite)%Norb,[iorb,iorb],[jorb,jorb],ib1,ib2)
+                  call F2Bindex(LocalOrbs(isite)%Norb,[iorb,iorb],[jorb,jorb],ib1,ib2)
                   !
                   do ispin=1,Nspin
                      do jspin=1,Nspin
                         !
                         ChiCitau%screened_local(ib1,ib2,:) = ChiCitau%screened_local(ib1,ib2,:) + &
-                        ( NNitau(iorb,jorb,ispin,jspin,:) - SolverObs(isite)%rho_OrbSpin(iorb,iorb,ispin)*SolverObs(isite)%rho_OrbSpin(jorb,jorb,jspin) )
+                        ( NNitau(iorb,jorb,ispin,jspin,:) - LocalOrbs(isite)%rho_OrbSpin(iorb,iorb,ispin)*LocalOrbs(isite)%rho_OrbSpin(jorb,jorb,jspin) )
                         !
                      enddo
                   enddo
@@ -3068,62 +2903,51 @@ contains
                enddo
             endif
             !
-            call dump_BosonicField(ChiCitau,reg(PrevItFolder)//"Solver_"//SolverObs(isite)%Name//"/","ChiC_"//SolverObs(isite)%Name//"_t.DAT",axis=tauB)
+            call dump_BosonicField(ChiCitau,reg(PrevItFolder)//"Solver_"//LocalOrbs(isite)%Name//"/","ChiC_"//LocalOrbs(isite)%Name//"_t.DAT",axis=tauB)
             deallocate(tauB)
             !
             !FT to get ChiC(iw)
-            call AllocateBosonicField(ChiCmats,SolverObs(isite)%Norb,Nmats,Crystal%iq_gamma,no_bare=.true.,Beta=Beta)
+            call AllocateBosonicField(ChiCmats,LocalOrbs(isite)%Norb,Nmats,Crystal%iq_gamma,no_bare=.true.,Beta=Beta)
             call Bitau2mats(Beta,ChiCitau%screened_local,ChiCmats%screened_local,tau_uniform=.true.)
             call DeallocateBosonicField(ChiCitau)
             !call isReal(ChiCmats)
             !
             !Remove the iw=0 divergency of local charge susceptibility
             if(removeCDW_C)then
-               write(*,"(A)") new_line("A")//"     Divergency removal in ChiC(iw=0) of site: "//SolverObs(isite)%Name
-               call dump_BosonicField(ChiCmats,reg(PrevItFolder)//"Solver_"//SolverObs(isite)%Name//"/","ChiC_CDW_"//SolverObs(isite)%Name//"_w.DAT")
+               write(*,"(A)") new_line("A")//"     Divergency removal in ChiC(iw=0) of site: "//LocalOrbs(isite)%Name
+               call dump_BosonicField(ChiCmats,reg(PrevItFolder)//"Solver_"//LocalOrbs(isite)%Name//"/","ChiC_CDW_"//LocalOrbs(isite)%Name//"_w.DAT")
                allocate(CDW(ChiCmats%Nbp,ChiCmats%Nbp));CDW=0d0
                CDW = real(ChiCmats%screened_local(:,:,1))
                call remove_CDW(ChiCmats,"imp")
                CDW = CDW - real(ChiCmats%screened_local(:,:,1))
-               call dump_Matrix(CDW,reg(PrevItFolder)//"Solver_"//SolverObs(isite)%Name//"/","CDW_"//SolverObs(isite)%Name//".DAT")
+               call dump_Matrix(CDW,reg(PrevItFolder)//"Solver_"//LocalOrbs(isite)%Name//"/","CDW_"//LocalOrbs(isite)%Name//".DAT")
                deallocate(CDW)
             endif
             !
             !Print ChiC
-            call dump_BosonicField(ChiCmats,reg(PrevItFolder)//"Solver_"//SolverObs(isite)%Name//"/","ChiC_"//SolverObs(isite)%Name//"_w.DAT")
+            call dump_BosonicField(ChiCmats,reg(PrevItFolder)//"Solver_"//LocalOrbs(isite)%Name//"/","ChiC_"//LocalOrbs(isite)%Name//"_w.DAT")
             !
             !
             !BOSONIC DYSON -----------------------------------------------------
             !
             !recollect curlyU
-            call AllocateBosonicField(curlyU,SolverObs(isite)%Norb,Nmats,Crystal%iq_gamma,Beta=Beta)
-            call read_BosonicField(curlyU,reg(PrevItFolder)//"Solver_"//SolverObs(isite)%Name//"/","curlyU_"//SolverObs(isite)%Name//"_w.DAT")
+            call AllocateBosonicField(curlyU,LocalOrbs(isite)%Norb,Nmats,Crystal%iq_gamma,Beta=Beta)
+            call read_BosonicField(curlyU,reg(PrevItFolder)//"Solver_"//LocalOrbs(isite)%Name//"/","curlyU_"//LocalOrbs(isite)%Name//"_w.DAT")
             !
             !Bosonic Dyson equation in the solver basis
-            write(*,"(A)") new_line("A")//"     Solving bosonic Dyson of site: "//SolverObs(isite)%Name
-            call AllocateBosonicField(Pimp,SolverObs(isite)%Norb,Nmats,Crystal%iq_gamma,no_bare=.true.,Beta=Beta)
+            write(*,"(A)") new_line("A")//"     Solving bosonic Dyson of site: "//LocalOrbs(isite)%Name
+            call AllocateBosonicField(Pimp,LocalOrbs(isite)%Norb,Nmats,Crystal%iq_gamma,no_bare=.true.,Beta=Beta)
             call calc_Pimp(Pimp,curlyU,ChiCmats)
             !
             !Compute convergence benchmark for the interaction
-            call AllocateBosonicField(Wimp,SolverObs(isite)%Norb,Nmats,Crystal%iq_gamma,Beta=Beta)
+            call AllocateBosonicField(Wimp,LocalOrbs(isite)%Norb,Nmats,Crystal%iq_gamma,Beta=Beta)
             call calc_Wimp(Wimp,curlyU,ChiCmats)
             !
             !Expand to the Lattice basis
-            if(RotateHloc)then
-               call init_Uelements(SolverObs(isite)%Norb,PhysicalUelements)
-               call imp2loc(C_EDMFT,ChiCmats,isite,SolverObs(isite)%Orbs,ExpandImpurity,AFMselfcons,U=OlocRotDag,Map=PhysicalUelements%Full_Map,name="Cimp")
-               call imp2loc(P_EDMFT,Pimp,isite,SolverObs(isite)%Orbs,ExpandImpurity,AFMselfcons,U=OlocRotDag,Map=PhysicalUelements%Full_Map,name="Pimp")
-               call imp2loc(W_EDMFT,Wimp,isite,SolverObs(isite)%Orbs,ExpandImpurity,AFMselfcons,U=OlocRotDag,Map=PhysicalUelements%Full_Map,name="Wimp")
-            else
-               call imp2loc(C_EDMFT,ChiCmats,isite,SolverObs(isite)%Orbs,ExpandImpurity,AFMselfcons,name="Cimp")
-               call imp2loc(P_EDMFT,Pimp,isite,SolverObs(isite)%Orbs,ExpandImpurity,AFMselfcons,name="Pimp")
-               call imp2loc(W_EDMFT,Wimp,isite,SolverObs(isite)%Orbs,ExpandImpurity,AFMselfcons,name="Wimp")
-            endif
-            if(RotateUloc)then
-               call imp2loc(curlyU_EDMFT,curlyU,isite,SolverObs(isite)%Orbs,ExpandImpurity,AFMselfcons,U=OlocRotDag,Map=PhysicalUelements%Full_Map,name="curlyU")
-            else
-               call imp2loc(curlyU_EDMFT,curlyU,isite,SolverObs(isite)%Orbs,ExpandImpurity,AFMselfcons,name="curlyU")
-            endif
+            call imp2loc(C_EDMFT,ChiCmats,isite,LocalOrbs,ExpandImpurity,AFMselfcons,RotateHloc,name="Cimp")
+            call imp2loc(P_EDMFT,Pimp,isite,LocalOrbs,ExpandImpurity,AFMselfcons,RotateHloc,name="Pimp")
+            call imp2loc(W_EDMFT,Wimp,isite,LocalOrbs,ExpandImpurity,AFMselfcons,RotateHloc,name="Wimp")
+            call imp2loc(curlyU_EDMFT,curlyU,isite,LocalOrbs,ExpandImpurity,AFMselfcons,RotateUloc,name="curlyU")
             !
             call DeallocateBosonicField(ChiCmats)
             call DeallocateBosonicField(curlyU)
@@ -3167,7 +2991,12 @@ contains
          !
       endif
       !
-      deallocate(SolverObs,Gimp,Simp)
+      deallocate(Gimp,Simp)
+      do isite=1,Nsite
+         deallocate(LocalOrbs(isite)%rho_Flav)
+         deallocate(LocalOrbs(isite)%rho_OrbSpin)
+         deallocate(LocalOrbs(isite)%Docc)
+      enddo
       !
    end subroutine collect_QMC_results
 
@@ -3272,9 +3101,9 @@ contains
          write(*,"(A)") "     Deallocating C_EDMFT"
          call DeallocateBosonicField(C_EDMFT)
       endif
-      if(D_correction%status)then
-         write(*,"(A)") "     Deallocating D_correction"
-         call DeallocateFermionicField(D_correction)
+      if(Delta_correction%status)then
+         write(*,"(A)") "     Deallocating Delta_correction"
+         call DeallocateFermionicField(Delta_correction)
       endif
       if(curlyU_correction%status)then
          write(*,"(A)") "     Deallocating curlyU_correction"
@@ -3360,21 +3189,16 @@ contains
             if(Nsite.gt.1)then
                do isite=1,Nsite
                   !
-                  Norb_imp = SiteNorb(isite)
+                  Norb_imp = LocalOrbs(isite)%Norb
                   wsi = wn*Norb - wn*Norb_imp
                   !
                   write(*,*)
                   if(Nspin.eq.1)write(*,"(A"//str(wn*Norb)//","//str(ws)//"X)")banner(trim(header3)//" up",wn*Norb)
                   if(Nspin.gt.1)write(*,"("//str(Nspin)//"(A"//str(wn*Norb)//","//str(ws)//"X))")banner(trim(header3)//" up",wn*Norb),banner(trim(header3)//" dw",wn*Norb)
                   do iorb=1,Norb_imp
-                     write(*,"("//str(Nspin)//"("//str(wsi)//"X,"//str(Norb_imp)//"F"//str(wn)//".4,"//str(ws)//"X))") ((densityQMC(iorb,jorb,ispin,isite),jorb=1,Norb_imp),ispin=1,Nspin)!,(densityQMC(iorb,jorb,2,isite),jorb=1,Norb_imp)
+                     write(*,"("//str(Nspin)//"("//str(wsi)//"X,"//str(Norb_imp)//"F"//str(wn)//".4,"//str(ws)//"X))") ((LocalOrbs(isite)%rho_OrbSpin(iorb,jorb,ispin),jorb=1,Norb_imp),ispin=1,Nspin)
                   enddo
                   !
-                  !if((.not.EqvGWndx%S).and.(Nspin.ne.1))then
-                  !   write(*,*)
-                  !   write(*,"(A"//str(wn*Norb)//","//str(ws)//"X)")banner(trim(header5),wn*Norb)
-                  !   write(*,"("//str(wsi)//"X,"//str(Norb_imp)//"F"//str(wn)//".4,"//str(ws)//"X)")((densityQMC(iorb,iorb,1,isite)-densityQMC(iorb,iorb,2,isite)),iorb=1,Norb_imp)
-                  !endif
                   if(ExpandImpurity.or.AFMselfcons)exit
                   !
                enddo
@@ -3405,7 +3229,6 @@ contains
          end function banner
          !
    end subroutine show_Densities
-
 
 
    !---------------------------------------------------------------------------!
@@ -3533,6 +3356,35 @@ contains
       end select
       !
    end subroutine interpolate_from_oldBeta
+
+
+   !---------------------------------------------------------------------------!
+   !PURPOSE: Extract the occupation from a subset of orbtials
+   !---------------------------------------------------------------------------!
+   function get_Tier_occupation(rho,LocalOrbs) result(occupation)
+      implicit none
+      complex(8),intent(in)                 :: rho(:,:,:)
+      type(LocalOrbitals),allocatable,intent(in):: LocalOrbs(:)
+      real(8)                               :: occupation
+      integer                               :: Norb,Nspin,Nsite
+      integer                               :: iorb,ispin,isite,orbndx
+      if(.not.allocated(LocalOrbs)) stop "get_Tier_occupation: LocalOrbs not properly initialized."
+      Norb=size(rho,dim=1)
+      Nspin=size(rho,dim=3)
+      Nsite=size(LocalOrbs)
+      if(size(rho,dim=2).ne.Norb)stop"get_Tier_occupation: density matrix not square."
+      occupation=0d0
+      do isite=1,Nsite
+         if(LocalOrbs(isite)%Norb.gt.Norb)stop"get_Tier_occupation: orbital list bigger than density matrix."
+         do iorb=1,LocalOrbs(isite)%Norb
+            orbndx = LocalOrbs(isite)%Orbs(iorb)
+            if(orbndx.gt.Norb)stop"get_Tier_occupation: orbital outside the density matrix space."
+            do ispin=1,Nspin
+               occupation = occupation + real(rho(orbndx,orbndx,ispin))
+            enddo
+         enddo
+      enddo
+   end function get_Tier_occupation
 
 
 end module utils_main

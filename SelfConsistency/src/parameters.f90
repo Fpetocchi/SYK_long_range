@@ -29,6 +29,27 @@ module parameters
 
 
    !---------------------------------------------------------------------------!
+   !PURPOSE: container for site-orbitals arrangement
+   !---------------------------------------------------------------------------!
+   type LocalOrbitals
+      integer                               :: Norb
+      integer                               :: Nflavor
+      character(len=2)                      :: Name
+      integer,allocatable                   :: Orbs(:)
+      real(8),allocatable                   :: CrystalField(:)
+      !local rotations
+      complex(8),allocatable                :: Op(:,:)
+      complex(8),allocatable                :: Rot(:,:)
+      complex(8),allocatable                :: RotDag(:,:)
+      real(8),allocatable                   :: Eig(:)
+      !local observables
+      real(8),allocatable                   :: rho_Flav(:)                      ![Norb*Nspin]
+      real(8),allocatable                   :: rho_OrbSpin(:,:,:)               ![Norb,Norb,Nspin]
+      real(8),allocatable                   :: Docc(:,:)
+   end type LocalOrbitals
+
+
+   !---------------------------------------------------------------------------!
    !PURPOSE: container for lattice data
    !---------------------------------------------------------------------------!
    type Lattice
@@ -194,18 +215,6 @@ module parameters
       integer                               :: quickloops=0
       integer                               :: removeUhalf=0
    end type QMC
-   !
-   type QMC_observables
-      integer                               :: Norb=0
-      integer                               :: Nflavor=0
-      integer                               :: Nbp
-      integer                               :: Index=0
-      character(len=2)                      :: Name
-      integer,allocatable                   :: Orbs(:)
-      real(8),allocatable                   :: rho_Flav(:)                      ![Norb*Nspin]
-      real(8),allocatable                   :: rho_OrbSpin(:,:,:)               ![Norb,Norb,Nspin]
-      real(8),allocatable                   :: Docc(:,:)                        ![Norb,Norb]
-   end type QMC_observables
 
    !---------------------------------------------------------------------------!
    !PURPOSE: container for the match beta variables

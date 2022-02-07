@@ -1062,6 +1062,9 @@ contains
          real(8),allocatable                :: Akw(:)
          complex(8),allocatable             :: G_print_H(:,:,:),G_print_E(:,:)
          !
+         call assert_shape(Gk_print_H,[Norb,Norb,Naxis,Nkpt],"print_G","Gk_print_H")
+         call assert_shape(Gk_print_E,[Norb,Naxis,Nkpt],"print_G","Gk_print_E")
+         !
          if(printAkw)allocate(Akw(Naxis));Akw=0d0
          !
          if(allK)then
@@ -1088,8 +1091,12 @@ contains
          allocate(G_print_E(Norb,Naxis));G_print_E=czero
          allocate(G_print_H(Norb,Norb,Naxis));G_print_H=czero
          if(Nkpt.gt.1)then
-            G_print_E = sum(Gk_print_E,dim=3)/Nkpt
-            G_print_H = sum(Gk_print_H,dim=4)/Nkpt
+            !G_print_E = sum(Gk_print_E,dim=3)/Nkpt
+            !G_print_H = sum(Gk_print_H,dim=4)/Nkpt  <-- for a misterious reason this line randomly gives seg.fault. No reason found.
+            do ik=1,Nkpt
+               G_print_E = G_print_E + Gk_print_E(:,:,ik)/Nkpt
+               G_print_H = G_print_H + Gk_print_H(:,:,:,ik)/Nkpt
+            enddo
          else
             G_print_E = Gk_print_E(:,:,1)
             G_print_H = Gk_print_H(:,:,:,1)

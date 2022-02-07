@@ -118,11 +118,8 @@ module input_vars
    logical,public                           :: RotateHloc
    logical,public                           :: RotateUloc
    logical,public                           :: AFMselfcons
-   integer,allocatable,public               :: SiteNorb(:)
-   character(len=2),allocatable,public      :: SiteName(:)
-   integer,allocatable,public               :: SiteOrbs(:,:)
+   type(LocalOrbitals),allocatable,public   :: LocalOrbs(:)
    logical,public                           :: addCF
-   real(8),allocatable,public               :: SiteCF(:,:)
    !
    !Equivalent lattice indexes
    integer,public                           :: sym_mode
@@ -166,6 +163,7 @@ module input_vars
    logical,public                           :: Vxc_in
    character(len=256),public                :: SpexVersion
    character(len=256),public                :: VH_type
+   character(len=256),public                :: VN_type
    character(len=256),public                :: DC_type
    character(len=256),public                :: Embedding
    logical,public                           :: addTierIII
@@ -239,12 +237,6 @@ module input_vars
    logical,public                           :: Test_flag_2=.false.
    logical,public                           :: Test_flag_3=.false.
    !
-   !Variables that are needed in post_processing
-   complex(8),allocatable,public            :: OlocSite(:,:,:)
-   complex(8),allocatable,public            :: OlocRot(:,:,:)
-   complex(8),allocatable,public            :: OlocRotDag(:,:,:)
-   real(8),allocatable,public               :: OlocEig(:,:)
-   !
 #ifdef _verb
    logical,private                          :: verbose=.true.
 #else
@@ -282,7 +274,6 @@ contains
       integer                               :: isite,ilayer,iset,iph,irange
       integer                               :: isym_user
       integer,allocatable                   :: tmpOrbs(:)
-      real(8),allocatable                   :: tmpCF(:)
       logical                               :: readVnn
       !
       !OMP parallelization.
@@ -361,43 +352,28 @@ contains
       call parse_input_variable(RotateHloc,"ROTATE_F",InputFile,default=.false.,comment="Solve the Fermionic impurity problem in the basis where H(R=0) is diagonal.")
       call parse_input_variable(RotateUloc,"ROTATE_B",InputFile,default=RotateHloc,comment="Solve the Bosonic impurity problem in the basis where H(R=0) is diagonal.")
       call parse_input_variable(AFMselfcons,"AFM",InputFile,default=.false.,comment="Flag to use the AFM self-consistency by flipping the spin. Requires input with doubled unit cell.")
-      allocate(SiteNorb(Nsite));SiteNorb=0
-      allocate(SiteName(Nsite))
+      allocate(LocalOrbs(Nsite))
       do isite=1,Nsite
-         if(ExpandImpurity)then
-            if(isite.eq.1)then
-               call parse_input_variable(SiteName(isite),"NAME_1",InputFile,default="El",comment="Chemical species of the site number 1")
-               call parse_input_variable(SiteNorb(isite),"NORB_1",InputFile,default=1,comment="Number of orbitals in site number 1")
-            else
-               SiteNorb(isite) = SiteNorb(1)
-               SiteName(isite) = reg(SiteName(1))
-            endif
-         else
-            call parse_input_variable(SiteName(isite),"NAME_"//str(isite),InputFile,default="El",comment="Chemical species (or 2-character tag) of the site number "//str(isite))
-            call parse_input_variable(SiteNorb(isite),"NORB_"//str(isite),InputFile,default=1,comment="Number of orbitals in site number "//str(isite))
-         endif
-      enddo
-      allocate(SiteOrbs(Nsite,maxval(SiteNorb)));SiteOrbs=0
-      do isite=1,Nsite
-         allocate(tmpOrbs(1:SiteNorb(isite)));tmpOrbs=0
-         if(ExpandImpurity)then
-            if(isite.eq.1)then
-               call parse_input_variable(SiteOrbs(1,1:SiteNorb(1)),"ORBS_1",InputFile,default=tmpOrbs,comment="Lattice orbital indexes of site number 1")
-            else
-               if(SiteNorb(1).gt.1)then
-                  if(abs(SiteOrbs(1,2)-SiteOrbs(1,1)).eq.1)then
-                     SiteOrbs(isite,:) = SiteOrbs(1,:) + SiteNorb(1)*(isite-1)
-                  elseif(abs(SiteOrbs(1,2)-SiteOrbs(1,1)).eq.Nsite)then
-                     SiteOrbs(isite,:) = SiteOrbs(1,:) + isite-1
-                  endif
-               else
-                  SiteOrbs(isite,:) = SiteOrbs(1,:) + 1*(isite-1)
+         if( .not.(ExpandImpurity) .or. (ExpandImpurity.and.(isite.eq.1)) )then
+            call parse_input_variable(LocalOrbs(isite)%Name,"NAME_"//str(isite),InputFile,default="El",comment="Chemical species (or 2-character tag) of the site number "//str(isite))
+            call parse_input_variable(LocalOrbs(isite)%Norb,"NORB_"//str(isite),InputFile,default=1,comment="Number of orbitals in site number "//str(isite))
+            LocalOrbs(isite)%Nflavor = LocalOrbs(isite)%Norb*Nspin
+            allocate(LocalOrbs(isite)%Orbs(LocalOrbs(isite)%Norb));LocalOrbs(isite)%Orbs=0
+            call parse_input_variable(LocalOrbs(isite)%Orbs,"ORBS_"//str(isite),InputFile,default=LocalOrbs(isite)%Orbs,comment="Lattice orbital indexes of site number "//str(isite))
+         elseif(ExpandImpurity.and.(isite.gt.1))then
+            LocalOrbs(isite)%Name = LocalOrbs(1)%Name
+            LocalOrbs(isite)%Norb = LocalOrbs(1)%Norb
+            LocalOrbs(isite)%Nflavor = LocalOrbs(1)%Norb*Nspin
+            if(LocalOrbs(1)%Norb.gt.1)then
+               if(abs(LocalOrbs(1)%Orbs(2)-LocalOrbs(1)%Orbs(1)).eq.1)then
+                  LocalOrbs(isite)%Orbs = LocalOrbs(1)%Orbs + LocalOrbs(1)%Norb*(isite-1)
+               elseif(abs(LocalOrbs(1)%Orbs(2)-LocalOrbs(1)%Orbs(1)).eq.Nsite)then
+                  LocalOrbs(isite)%Orbs = LocalOrbs(1)%Orbs + isite-1
                endif
+            else
+               LocalOrbs(isite)%Orbs = LocalOrbs(1)%Orbs + 1*(isite-1)
             endif
-         else
-            call parse_input_variable(SiteOrbs(isite,1:SiteNorb(isite)),"ORBS_"//str(isite),InputFile,default=tmpOrbs,comment="Lattice orbital indexes of site number "//str(isite))
          endif
-         deallocate(tmpOrbs)
       enddo
       if(Hmodel)then
          allocate(ucVec(3,Nsite))
@@ -408,11 +384,9 @@ contains
       endif
       call parse_input_variable(addCF,"ADD_CF",InputFile,default=.false.,comment="Flag to include additional crystal-fields.")
       if(addCF)then
-         allocate(SiteCF(Nsite,maxval(SiteNorb)));SiteCF=0d0
          do isite=1,Nsite
-            allocate(tmpCF(1:SiteNorb(isite)));tmpCF=0d0
-            call parse_input_variable(SiteCF(isite,1:SiteNorb(isite)),"CF_"//str(isite),InputFile,default=tmpCF,comment="Additional crystal-fields on diagonal orbitals of site number "//str(isite))
-            deallocate(tmpCF)
+            allocate(LocalOrbs(isite)%CrystalField(LocalOrbs(isite)%Norb));LocalOrbs(isite)%CrystalField=0d0
+            call parse_input_variable(LocalOrbs(isite)%CrystalField,"CF_"//str(isite),InputFile,default=LocalOrbs(isite)%CrystalField,comment="Additional crystal-fields on diagonal orbitals of site number "//str(isite))
             if(ExpandImpurity)exit
          enddo
       endif
@@ -465,7 +439,7 @@ contains
       if(ExpandImpurity.or.AFMselfcons)then
          call parse_input_variable(look4dens%local,"N_READ_LAT_LOC",InputFile,default=.false.,comment="Flag to restrict the lattice density lookup to the ORBS_1 indexes corresponding to the solved impurity.")
          if(look4dens%local)then
-            look4dens%orbs = SiteOrbs(1,1:SiteNorb(1))
+            look4dens%orbs = LocalOrbs(1)%Orbs
             look4dens%TargetDensity = look4dens%TargetDensity/Nsite
          endif
       endif
@@ -537,14 +511,15 @@ contains
          call parse_input_variable(SpexVersion,"SPEX_VERSION",InputFile,default="Julich",comment="Version of SPEX with which the G0W0 self-energy is computed. Available: Julich, Lund.")
          call parse_input_variable(VH_type,"VH_TYPE",InputFile,default="Ustatic_SPEX",comment="Hartree term mismatch between GoWo and scGW. Available: Ubare, Ustatic, Ubare_SPEX(V_nodiv.DAT required), Ustatic_SPEX(V_nodiv.DAT required).")
          if(Umodel)VH_type="Ustatic"
-         call parse_input_variable(VH_use,"VH_USE",InputFile,default=.true.,comment="Flag to use the Hartree term correction between Tier-III and Tier-II, which is printed in PATH_INPUT even if not used.")
+         call parse_input_variable(VN_type,"VN_TYPE",InputFile,default="Nlat",comment="Density matrix used to compute the Hartree term mismatch between GoWo and scGW. Available: Nlat, Nimp.")
+         call parse_input_variable(VH_use,"VH_USE",InputFile,default=.true.,comment="Flag to use the Hartree term correction between Tier-III and Tier-II. Printed even if not used.")
          call parse_input_variable(Vxc_in,"VXC_IN",InputFile,default=.true.,comment="Flag to include the Vxc potential inside the SigmaG0W0.")
          call parse_input_variable(RecomputeG0W0,"RECOMP_G0W0",InputFile,default=.false.,comment="Flag to recompute the G0W0 self-energy from the SPEX input.")
          if(Hmodel)RecomputeG0W0=.false.
          call parse_input_variable(GoWoDC_loc,"G0W0DC_LOC",InputFile,default=.true.,comment="Keep the local contribution of Tier-III. Automatically removed if non-causal.")
       endif
-      call parse_input_variable(RemoveHartree,"REMOVE_HARTREE",InputFile,default=.true.,comment="Remove the Hartree term from the Impurity self-energy. Hartree=curlyU(0)*Nimp/2.")
-      if(addTierIII.or.(.not.Hmodel))RemoveHartree=.true.
+      call parse_input_variable(RemoveHartree,"REMOVE_HARTREE",InputFile,default=(.not.Hmodel),comment="Remove the Hartree term (curlyU(0)*Nimp/2) from the Impurity self-energy and perform the self-consistency only with the remaining part.")
+      if(.not.Hmodel)RemoveHartree=.true.
       call parse_input_variable(DC_type,"DC_TYPE",InputFile,default="GlocWloc",comment="Local GW self-energy which is replaced by DMFT self-energy. Avalibale: GlocWloc, Sloc.")
       call parse_input_variable(Embedding,"ADD_EMBEDDING",InputFile,default="None",comment="Constant embedding self-energy stored in PATH_INPUT. Avalibale: loc (filename: Semb_w_s[1,2].DAT), nonloc (filename: Semb_w_k_s[1,2].DAT), None to avoid.")
       if(Hmodel.or.Umodel)addTierIII=.false.
@@ -572,7 +547,7 @@ contains
       if(reg(CalculationType).ne."GW+EDMFT")causal_U=.false.
       if(causal_U)then
          call parse_input_variable(causal_U_type,"CAUSAL_U_TYPE",InputFile,default="curlyU",comment="Correction mode for generalized bosonic cavity construction. Available: curlyU, Ploc.")
-         if((reg(causal_U_type).eq."Ploc").and.((Nsite.gt.1).or.(maxval(SiteNorb).gt.1)))causal_U_type="curlyU"
+         if((reg(causal_U_type).eq."Ploc").and.((Nsite.gt.1).or.(maxval(LocalOrbs(:)%Norb).gt.1)))causal_U_type="curlyU"
       endif
       !
       !Variables for the fit
@@ -670,7 +645,6 @@ contains
       Solver%TargetDensity = look4dens%TargetDensity
       if((ExpandImpurity.or.AFMselfcons).and.(.not.look4dens%local))Solver%TargetDensity = look4dens%TargetDensity/Nsite
       call append_to_input_list(Solver%TargetDensity,"N_READ_IMP","Target density in the impurity list. User cannot set this as its the the same density on within the impurity orbitals if EXPAND=F otherwise its N_READ_LAT/NSITE.")
-     !call parse_input_variable(Solver%TargetDensity,"N_READ_IMP",InputFile,default=look4dens%TargetDensity,comment="Target density in the impurity list.")
       call parse_input_variable(Solver%Norder,"NORDER",InputFile,default=10,comment="Maximum perturbation order measured. Not yet implemented.")
       call parse_input_variable(Solver%Gexp,"GEXPENSIVE",InputFile,default=0,comment="If =1 the impurity Green's function measurment is considered expensive (Needed at high Beta*Bandwidth).")
       call parse_input_variable(Solver%Nmeas,"NMEAS",InputFile,default=1000,comment="Sweeps where expensive measurments are not performed.")
@@ -683,8 +657,8 @@ contains
       call parse_input_variable(Solver%binlength,"BINLENGTH",InputFile,default=4,comment="If >0 the Green's function at itau will be the average within +/-binlength.")
       call parse_input_variable(Solver%binstart,"BINSTART",InputFile,default=100,comment="Tau points skipped at the beginning and end of the Green's function average.")
       call append_to_input_list(Solver%retarded,"RETARDED","Integer flag to include the frequency dependent part of the interaction. User cannot set this as its deduced from CALC_TYPE.")
-      if(RemoveHartree)Solver%removeUhalf=1
-      call append_to_input_list(Solver%removeUhalf,"REMOVE_UHALF","Integer flag to remove the half-filling chemical potential inside the solver. User cannot set this as its deduced from REMOVE_HARTREE.")
+      call parse_input_variable(Solver%removeUhalf,"REMOVE_UHALF",InputFile,default=0,comment="Integer flag to use the particle-hole symmetric interaction by removing the half-filling chemical potential inside the solver.")
+      if(.not.Hmodel)Solver%removeUhalf=0
       Solver%quickloops=look4dens%quickloops
       if(ExpandImpurity)then
          allocate(Solver%Time(1));Solver%Time=0

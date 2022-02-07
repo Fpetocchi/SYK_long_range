@@ -21,7 +21,6 @@ module module_container
    fermidirac,diff_fermidirac               ,&
    linspace,denspace                        ,&
    FermionicFilon,BosonicFilon              ,&
-   get_Tier_occupation                      ,&
    reg,str,free_unit                        ,&
    tick,tock                                ,&
    inquireFile,inquireDir                   ,&

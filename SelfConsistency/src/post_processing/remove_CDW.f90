@@ -5,7 +5,7 @@ subroutine remove_CDW(W,mode,site)
    use utils_fields
    use interactions
    use linalg
-   use input_vars, only: Nsite, SiteNorb, SiteOrbs
+   use input_vars, only: LocalOrbs
    implicit none
    !
    type(BosonicField),intent(inout)      :: W
@@ -13,7 +13,7 @@ subroutine remove_CDW(W,mode,site)
    integer,intent(in),optional           :: site
    !
    integer                               :: Norb,Nmats,iw
-   integer                               :: isite,ib1,ib2
+   integer                               :: Nsite,isite,ib1,ib2
    integer                               :: i,j,k,l
    integer                               :: i_lat,j_lat,k_lat,l_lat
    logical                               :: replace
@@ -27,8 +27,11 @@ subroutine remove_CDW(W,mode,site)
    !
    !
    if(.not.W%status) stop "remove_CDW: BosonicField not properly initialized."
+   if(.not.allocated(LocalOrbs)) stop "remove_CDW: LocalOrbs not properly initialized."
+   !
    Norb = int(sqrt(dble(W%Nbp)))
    Nmats = W%Npoints
+   Nsite = size(LocalOrbs)
    !
    allocate(wmats(Nmats))
    wmats=BosonicFreqMesh(W%Beta,Nmats)
@@ -67,16 +70,16 @@ subroutine remove_CDW(W,mode,site)
             !
             if(present(site).and.(isite.ne.site))cycle
             !
-            do i=1,SiteNorb(isite)
-               do j=1,SiteNorb(isite)
-                  do k=1,SiteNorb(isite)
-                     do l=1,SiteNorb(isite)
+            do i=1,LocalOrbs(isite)%Norb
+               do j=1,LocalOrbs(isite)%Norb
+                  do k=1,LocalOrbs(isite)%Norb
+                     do l=1,LocalOrbs(isite)%Norb
                         !
                         ! mapping
-                        i_lat = SiteOrbs(isite,i)
-                        j_lat = SiteOrbs(isite,j)
-                        k_lat = SiteOrbs(isite,k)
-                        l_lat = SiteOrbs(isite,l)
+                        i_lat = LocalOrbs(isite)%Orbs(i)
+                        j_lat = LocalOrbs(isite)%Orbs(j)
+                        k_lat = LocalOrbs(isite)%Orbs(k)
+                        l_lat = LocalOrbs(isite)%Orbs(l)
                         !
                         if(any([i_lat,j_lat,k_lat,l_lat].gt.Norb)) stop "remove_CDW: the input field is not in the lattice space."
                         !

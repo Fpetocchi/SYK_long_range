@@ -434,7 +434,7 @@ contains
    !---------------------------------------------------------------------------!
    !PURPOSE: Compute Hartree difference with G0W0
    !---------------------------------------------------------------------------!
-   subroutine calc_VH_G(VH,density_LDA_spin,Gmats,Umats,sym_constrained)
+   subroutine calc_VH_G(VH,density_LDA_spin,Gmats,Umats)
       !
       use parameters
       use linalg
@@ -442,28 +442,23 @@ contains
       use utils_misc
       use utils_fields
       use greens_function, only : calc_density
-      use input_vars, only : Nsite, SiteNorb
-      use input_vars, only : pathINPUT, VH_type, Nsite
+      use input_vars, only : LocalOrbs
+      use input_vars, only : pathINPUT, VH_type
       implicit none
       !
       complex(8),intent(inout)              :: VH(:,:)
       complex(8),intent(in)                 :: density_LDA_spin(:,:,:)
       type(FermionicField),intent(in)       :: Gmats
       type(BosonicField),intent(in)         :: Umats
-      logical,intent(in),optional           :: sym_constrained
       !
       complex(8),allocatable                :: density_LDA(:,:)
       complex(8),allocatable                :: density(:,:),density_spin(:,:,:)
       complex(8),allocatable                :: Vgamma(:,:),Vevec(:,:)
       real(8),allocatable                   :: Veval(:)
-      integer,allocatable                   :: orbs(:)
-      integer                               :: Norb,Nbp
-      integer                               :: isite,shift_N,shift_V
+      integer                               :: Nsite,Norb,Nbp
       integer                               :: ib1,ib2
       integer                               :: i,j,k,l
-      integer                               :: i_N,j_N,k_N,l_N
-      integer                               :: i_V,j_V,k_V,l_V
-      logical                               :: filexists,sym_constrained_
+      logical                               :: filexists
       character(len=256)                    :: path
       !
       !
@@ -476,13 +471,9 @@ contains
       if(Gmats%Nkpt.eq.0) stop "calc_VH_G: Gmats k dependent attributes not properly initialized."
       if(Umats%Nkpt.eq.0) stop "calc_VH_G: Umats k dependent attributes not properly initialized."
       if(Umats%iq_gamma.lt.0) stop "calc_VH_G: Umats iq_gamma not defined."
+      if(.not.allocated(LocalOrbs)) stop "calc_VH_G: LocalOrbs not properly initialized."
       !
-      sym_constrained_=.false.
-      if(present(sym_constrained))sym_constrained_=sym_constrained
-      !
-      if(sym_constrained_.and.(reg(VH_type).eq."Ustatic")) stop "calc_VH_G: Ordering of sym_constrained is not implemented for Ustatic."
-      if(sym_constrained_.and.(reg(VH_type).eq."Ubare")) stop "calc_VH_G: Ordering of sym_constrained_ is not implemented for Ubare."
-      !
+      Nsite = size(LocalOrbs)
       Norb = Gmats%Norb
       Nbp = Umats%Nbp
       !
@@ -538,7 +529,6 @@ contains
             !
          case("Ubare_SPEX")
             !
-            if(sym_constrained_) write(*,"(A)") "     Assuming [Norb*[Nsite]] Vgamma arrangement."
             allocate(Vgamma(Nbp,Nbp));Vgamma=czero
             path = reg(pathINPUT)//"V_nodiv.DAT"
             call inquireFile(reg(path),filexists,verb=verbose)
@@ -546,7 +536,6 @@ contains
             !
          case("Ustatic_SPEX")
             !
-            if(sym_constrained_) write(*,"(A)") "     Assuming [Norb*[Nsite]] Vgamma arrangement."
             allocate(Vgamma(Nbp,Nbp));Vgamma=czero
             path = reg(pathINPUT)//"V_nodiv.DAT"
             call inquireFile(reg(path),filexists,verb=verbose)
@@ -557,68 +546,20 @@ contains
       call dump_matrix(Vgamma,reg(pathINPUT),"Vgamma_"//reg(VH_type)//".DAT")
       !
       VH=czero
-      if(sym_constrained_)then
-         !
-         allocate(orbs(SiteNorb(1)));orbs=0
-         do i=1,SiteNorb(1)
-            orbs(i) = (i-1)*Nsite + 1
-         enddo
-         write(*,"(A,"//str(SiteNorb(1))//"I4)") "     Orbs: ",orbs
-         !
-         do isite=1,Nsite
-            !
-            if(isite.gt.1)then
-               if(SiteNorb(isite).ne.SiteNorb(isite-1)) stop "calc_VH_G: sym_constrained not implemented for non-identical sites."
-            endif
-            !
-            ![Nsite*[Norb]] arrangement
-            shift_N = SiteNorb(isite)*(isite-1)
-            shift_V = isite-1
-            !
-            do i=1,SiteNorb(isite)
-               do j=1,SiteNorb(isite)
-                  do k=1,SiteNorb(isite)
-                     do l=1,SiteNorb(isite)
-                        !
-                        i_N = i + shift_N
-                        j_N = j + shift_N
-                        k_N = k + shift_N
-                        l_N = l + shift_N
-                        !
-                        i_V = orbs(i) + shift_V
-                        j_V = orbs(j) + shift_V
-                        k_V = orbs(k) + shift_V
-                        l_V = orbs(l) + shift_V
-                        !
-                        call F2Bindex(Norb,[i_V,j_V],[k_V,l_V],ib1,ib2)
-                        !
-                        VH(i_N,j_N) = VH(i_N,j_N) + dreal(density(k_N,l_N)-density_LDA(k_N,l_N)) * dreal(Vgamma(ib1,ib2))
-                        !
-                     enddo
-                  enddo
-               enddo
-            enddo
-            !
-         enddo
-         deallocate(orbs)
-         !
-      else
-         !
-         do i=1,Norb
-            do j=1,Norb
-               do k=1,Norb
-                  do l=1,Norb
-                     !
-                     call F2Bindex(Norb,[i,j],[k,l],ib1,ib2)
-                     !
-                     VH(i,j) = VH(i,j) + dreal(density(k,l)-density_LDA(k,l)) * dreal(Vgamma(ib1,ib2))
-                     !
-                  enddo
+      do i=1,Norb
+         do j=1,Norb
+            do k=1,Norb
+               do l=1,Norb
+                  !
+                  call F2Bindex(Norb,[i,j],[k,l],ib1,ib2)
+                  !
+                  VH(i,j) = VH(i,j) + dreal(Vgamma(ib1,ib2)) * dreal(density(k,l)-density_LDA(k,l))
+                  !
                enddo
             enddo
          enddo
-         !
-      endif
+      enddo
+      !
       deallocate(density_LDA,density,Vgamma)
       !
       contains
@@ -659,7 +600,7 @@ contains
       !
    end subroutine calc_VH_G
    !
-   subroutine calc_VH_N(VH,density_LDA_spin,density_spin,Umats,sym_constrained)
+   subroutine calc_VH_N(VH,density_LDA_spin,density_spin,Umats)
       !
       use parameters
       use linalg
@@ -667,28 +608,23 @@ contains
       use utils_misc
       use utils_fields
       use greens_function, only : calc_density
-      use input_vars, only : Nsite, SiteNorb
-      use input_vars, only : pathINPUT, VH_type, Nsite
+      use input_vars, only : LocalOrbs
+      use input_vars, only : pathINPUT, VH_type
       implicit none
       !
       complex(8),intent(inout)              :: VH(:,:)
       complex(8),intent(in)                 :: density_LDA_spin(:,:,:)
       complex(8),intent(in)                 :: density_spin(:,:,:)
       type(BosonicField),intent(in)         :: Umats
-      logical,intent(in),optional           :: sym_constrained
       !
       complex(8),allocatable                :: density_LDA(:,:)
       complex(8),allocatable                :: density(:,:)
       complex(8),allocatable                :: Vgamma(:,:),Vevec(:,:)
       real(8),allocatable                   :: Veval(:)
-      integer,allocatable                   :: orbs(:)
-      integer                               :: Norb,Nbp
-      integer                               :: isite,shift_N,shift_V
+      integer                               :: Nsite,Norb,Nbp
       integer                               :: ib1,ib2
       integer                               :: i,j,k,l
-      integer                               :: i_N,j_N,k_N,l_N
-      integer                               :: i_V,j_V,k_V,l_V
-      logical                               :: filexists,sym_constrained_
+      logical                               :: filexists
       character(len=256)                    :: path
       !
       !
@@ -699,13 +635,9 @@ contains
       if(.not.Umats%status) stop "calc_VH_N: Umats not properly initialized."
       if(Umats%Nkpt.eq.0) stop "calc_VH_N: Umats k dependent attributes not properly initialized."
       if(Umats%iq_gamma.lt.0) stop "calc_VH_N: Umats iq_gamma not defined."
+      if(.not.allocated(LocalOrbs)) stop "calc_VH_N: LocalOrbs not properly initialized."
       !
-      sym_constrained_=.false.
-      if(present(sym_constrained))sym_constrained_=sym_constrained
-      !
-      if(sym_constrained_.and.(reg(VH_type).eq."Ustatic")) stop "calc_VH_N: Ordering of sym_constrained is not implemented for Ustatic."
-      if(sym_constrained_.and.(reg(VH_type).eq."Ubare")) stop "calc_VH_N: Ordering of sym_constrained is not implemented for Ubare."
-      !
+      Nsite = size(LocalOrbs)
       Norb = size(density_LDA_spin,dim=1)
       Nbp = Umats%Nbp
       !
@@ -759,7 +691,6 @@ contains
             !
          case("Ubare_SPEX")
             !
-            if(sym_constrained_) write(*,"(A)") "     Assuming [Norb*[Nsite]] Vgamma arrangement."
             allocate(Vgamma(Nbp,Nbp));Vgamma=czero
             path = reg(pathINPUT)//"V_nodiv.DAT"
             call inquireFile(reg(path),filexists,verb=verbose)
@@ -767,7 +698,6 @@ contains
             !
          case("Ustatic_SPEX")
             !
-            if(sym_constrained_) write(*,"(A)") "     Assuming [Norb*[Nsite]] Vgamma arrangement."
             allocate(Vgamma(Nbp,Nbp));Vgamma=czero
             path = reg(pathINPUT)//"V_nodiv.DAT"
             call inquireFile(reg(path),filexists,verb=verbose)
@@ -777,59 +707,21 @@ contains
       !
       call dump_matrix(Vgamma,reg(pathINPUT),"Vgamma_"//reg(VH_type)//".DAT")
       !
-      allocate(orbs(SiteNorb(1)));orbs=0
-      if(sym_constrained_)then
-         do i=1,SiteNorb(1)
-            orbs(i) = (i-1)*Nsite + 1
-         enddo
-      else
-         do i=1,SiteNorb(1)
-            orbs(i) = i
-         enddo
-      endif
-      write(*,"(A,"//str(SiteNorb(1))//"I4)") "     Orbs: ",orbs
-      !
       VH=czero
-      do isite=1,Nsite
-         !
-         ![Nsite*[Norb]] arrangement
-         shift_N = SiteNorb(isite)*(isite-1)
-         shift_V = shift_N
-         !
-         ![Norb*[Nsite]] arrangement only for Vgamma
-         if(sym_constrained_)then
-            shift_V = isite-1
-            if(isite.gt.1)then
-               if(SiteNorb(isite).ne.SiteNorb(isite-1)) stop "calc_VH_N: sym_constrained not implemented for non-identical sites."
-            endif
-         endif
-         !
-         do i=1,SiteNorb(isite)
-            do j=1,SiteNorb(isite)
-               do k=1,SiteNorb(isite)
-                  do l=1,SiteNorb(isite)
-                     !
-                     i_N = i + shift_N
-                     j_N = j + shift_N
-                     k_N = k + shift_N
-                     l_N = l + shift_N
-                     !
-                     i_V = orbs(i) + shift_V
-                     j_V = orbs(j) + shift_V
-                     k_V = orbs(k) + shift_V
-                     l_V = orbs(l) + shift_V
-                     !
-                     call F2Bindex(Norb,[i_V,j_V],[k_V,l_V],ib1,ib2)
-                     !
-                     VH(i_N,j_N) = VH(i_N,j_N) + dreal(density(k_N,l_N)-density_LDA(k_N,l_N)) * dreal(Vgamma(ib1,ib2))
-                     !
-                  enddo
+      do i=1,Norb
+         do j=1,Norb
+            do k=1,Norb
+               do l=1,Norb
+                  !
+                  call F2Bindex(Norb,[i,j],[k,l],ib1,ib2)
+                  !
+                  VH(i,j) = VH(i,j) + dreal(Vgamma(ib1,ib2)) * dreal(density(k,l)-density_LDA(k,l))
+                  !
                enddo
             enddo
          enddo
-         !
       enddo
-      deallocate(orbs,density_LDA,density,Vgamma)
+      deallocate(density_LDA,density,Vgamma)
       !
       contains
          !
@@ -873,36 +765,55 @@ contains
    !---------------------------------------------------------------------------!
    !PURPOSE: Read self-energy from SPEX files.
    !---------------------------------------------------------------------------!
-   subroutine read_Sigma_spex(mode,Smats_GoWo,Lttc,save2readable,Vxc_out,pathOUTPUT,recompute)
+   subroutine read_Sigma_spex(mode,Smats_GoWo,Lttc,save2readable,recompute,Vxc_out,DC,pathOUTPUT)
       !
       use parameters
       use utils_misc
+      use input_vars, only : pathINPUTtr
       implicit none
       !
       character(len=*),intent(in)           :: mode
       type(FermionicField),intent(inout)    :: Smats_GoWo
       type(Lattice),intent(inout)           :: Lttc
       logical,intent(in)                    :: save2readable
-      complex(8),intent(inout),optional     :: Vxc_out(:,:,:,:)
+      logical,intent(in)                    :: recompute
+      complex(8),allocatable,intent(inout)  :: Vxc_out(:,:,:,:)
       character(len=*),intent(in),optional  :: pathOUTPUT
-      logical,intent(in),optional           :: recompute
+      logical,intent(in),optional           :: DC
+      !
+      character(len=256)                    :: pathOUTPUT_
+      logical                               :: DC_
+      !
+      pathOUTPUT_ = pathINPUTtr
+      if(present(pathOUTPUT)) pathOUTPUT_ = pathOUTPUT
+      !
+      DC_=.false.
+      if(present(DC)) DC_ = DC
       !
       select case(reg(mode))
          case default
             stop "read_Sigma_spex: Available modes are: Julich, Lund."
          case("Julich")
             !
-            call read_Sigma_spex_Julich(Smats_GoWo,Lttc,save2readable,Vxc_out,pathOUTPUT,recompute)
+            if(allocated(Vxc_out))then
+               call read_Sigma_spex_Julich(Smats_GoWo,Lttc,save2readable,recompute=recompute,Vxc_out=Vxc_out,pathOUTPUT=pathOUTPUT_,DC=DC_)
+            else
+               call read_Sigma_spex_Julich(Smats_GoWo,Lttc,save2readable,recompute=recompute,pathOUTPUT=pathOUTPUT_,DC=DC_)
+            endif
             !
          case("Lund")
             !
-            call read_Sigma_spex_Lund(Smats_GoWo,Lttc,save2readable,Vxc_out,pathOUTPUT,recompute)
+            if(allocated(Vxc_out))then
+               call read_Sigma_spex_Lund(Smats_GoWo,Lttc,save2readable,recompute=recompute,Vxc_out=Vxc_out,pathOUTPUT=pathOUTPUT_,DC=DC_)
+            else
+               call read_Sigma_spex_Lund(Smats_GoWo,Lttc,save2readable,recompute=recompute,pathOUTPUT=pathOUTPUT_,DC=DC_)
+            endif
             !
       end select
       !
    end subroutine read_Sigma_spex
    !
-   subroutine read_Sigma_spex_Lund(Smats_GoWo,Lttc,save2readable,Vxc_out,pathOUTPUT,recompute)
+   subroutine read_Sigma_spex_Lund(Smats_GoWo,Lttc,save2readable,recompute,Vxc_out,pathOUTPUT,DC)
       !
       use linalg
       use parameters
@@ -910,17 +821,18 @@ contains
       use utils_misc
       use crystal
       use utils_fields
-      use input_vars, only : pathINPUT,UseXepsKorder,paramagneticSPEX,XEPSisread
+      use input_vars, only : pathINPUT,pathINPUTtr,UseXepsKorder,paramagneticSPEX,XEPSisread
       implicit none
       !
       type(FermionicField),intent(inout)    :: Smats_GoWo
       type(Lattice),intent(inout)           :: Lttc
       logical,intent(in)                    :: save2readable
+      logical,intent(in),optional           :: recompute
       complex(8),intent(inout),optional     :: Vxc_out(:,:,:,:)
       character(len=*),intent(in),optional  :: pathOUTPUT
-      logical,intent(in),optional           :: recompute
+      logical,intent(in),optional           :: DC
       !
-      logical                               :: filexists,ACdone,recompute_,Vxcdone,doVxc
+      logical                               :: filexists,ACdone,recompute_,Vxcdone,doVxc,DC_
       character(len=256)                    :: path,pathOUTPUT_
       integer                               :: iseg,SigmaSegments
       integer                               :: iq,ik,iw,iw2,ispin,iwan1,iwan2,unit
@@ -949,9 +861,11 @@ contains
       !
       !
       write(*,"(A)") new_line("A")//new_line("A")//"---- read_Sigma_spex_Lund"
-      pathOUTPUT_ = pathINPUT
+      pathOUTPUT_ = pathINPUTtr
       if(present(pathOUTPUT)) pathOUTPUT_ = pathOUTPUT
       !
+      DC_ = .false.
+      if(present(DC)) DC_ = DC
       !
       ! Check on the input Fields
       if(.not.Smats_GoWo%status) stop "read_Sigma_spex_Lund: FermionicField not properly initialized."
@@ -977,6 +891,7 @@ contains
       !
       ! Check if the data on the Matsubara axis are present if(.not.paramagneticSPEX) look also for spin2
       path = reg(pathOUTPUT_)//"SGoWo_w_k_s1.DAT"
+      if(DC_) path = reg(pathOUTPUT_)//"SGoWo_dc_w_k_s1.DAT"
       call inquireFile(reg(path),ACdone,hardstop=.false.,verb=verbose)
       recompute_ = .not.ACdone
       if(present(recompute)) recompute_ = recompute .or. recompute_
@@ -984,7 +899,7 @@ contains
       ! Check if the Vxc_wann is present
       path = reg(pathINPUT)//"Vxc_k_s1.DAT"
       call inquireFile(reg(path),Vxcdone,hardstop=.false.,verb=verbose)
-      doVxc = .not.Vxcdone
+      doVxc = (.not.Vxcdone) .and. (.not.DC_)
       !
       !
       if(doVxc.and.(.not.recompute_))then
@@ -1031,6 +946,7 @@ contains
          SigmaSegments=0
          do iseg=1,99
             path = reg(pathINPUT)//"Sigma_real_"//str(iseg,2)
+            if(DC_)path = reg(pathINPUT)//"Sigma_dc_real_"//str(iseg,2)
             call inquireDir(reg(path),filexists,hardstop=.false.,verb=verbose)
             if(.not.filexists) exit
             SigmaSegments = SigmaSegments + 1
@@ -1043,6 +959,7 @@ contains
             Nkpt_file = 0
             do ik=1,2000
                path = reg(pathINPUT)//"Sigma_real_"//str(iseg,2)//"/SIGMA.Q"//str(ik,4)//".DAT"
+               if(DC_)path = reg(pathINPUT)//"Sigma_dc_real_"//str(iseg,2)//"/SIGMA.Q"//str(ik,4)//".DAT"
                call inquireFile(reg(path),filexists,hardstop=.false.,verb=verbose)
                if(.not.filexists) exit
                Nkpt_file = Nkpt_file + 1
@@ -1058,6 +975,7 @@ contains
             do ik=1,Lttc%Nkpt_irred
                !
                path = reg(pathINPUT)//"Sigma_real_"//str(iseg,2)//"/SIGMA.Q"//str(ik,4)//".DAT"
+               if(DC_)path = reg(pathINPUT)//"Sigma_dc_real_"//str(iseg,2)//"/SIGMA.Q"//str(ik,4)//".DAT"
                if(verbose)write(*,"(A)") "     Checking "//reg(path)
                call inquireFile(reg(path),filexists,verb=verbose)!redundant control
                !
@@ -1127,6 +1045,7 @@ contains
             do iq=1,Lttc%Nkpt_irred
                !
                path = reg(pathINPUT)//"Sigma_real_"//str(iseg,2)//"/SIGMA.Q"//str(iq,4)//".DAT"
+               if(DC_)path = reg(pathINPUT)//"Sigma_dc_real_"//str(iseg,2)//"/SIGMA.Q"//str(iq,4)//".DAT"
                if(verbose)write(*,"(A)") "     Opening "//reg(path)
                call inquireFile(reg(path),filexists,verb=verbose) !redundant control
                !
@@ -1245,23 +1164,37 @@ contains
          call FermionicKsum(Smats_GoWo)
          !
          call cpu_time(finish)
-         write(*,"(A,F)") "     Sigma_GoWo(k,w) --> Sigma_GoWo(k,iw) cpu timing:", finish-start
          !
-         ! Print out the transformed stuff
-         call dump_FermionicField(Smats_GoWo,reg(pathOUTPUT_),"SGoWo_w",.true.,Lttc%kpt,paramagneticSPEX)
-         if(save2readable)call dump_FermionicField(Smats_GoWo,reg(pathOUTPUT_)//"Sigma_imag/","SGoWo_w",.false.,Lttc%kpt,paramagneticSPEX)
-         !
-         ! Read the Vxc and print it out
-         if(doVxc)then
-            call read_Vxc_Lund(Vxc,Lttc,ib_sigma1,ib_sigma2,save2readable)
+         if(DC_)then
+            !
+            write(*,"(A,F)") "     Sigma_GoWo_dc(k,w)[Lund] --> Sigma_GoWo_dc(k,iw) cpu timing:", finish-start
+            !
+            ! Print out the transformed stuff
+            call dump_FermionicField(Smats_GoWo,reg(pathOUTPUT_),"SGoWo_dc_w",.true.,Lttc%kpt,paramagneticSPEX)
+            if(save2readable)call dump_FermionicField(Smats_GoWo,reg(pathOUTPUT_)//"Sigma_dc_imag/","SGoWo_dc_w",.false.,Lttc%kpt,paramagneticSPEX)
+            call dump_FermionicField(Smats_GoWo,reg(pathOUTPUT_),"SGoWo_dc_w",paramagneticSPEX)
+            !
          else
-            write(*,"(A)")"     Reading Vxc(k) from "//reg(pathINPUT)
-            call read_matrix(Vxc(:,:,:,1),reg(pathINPUT)//"Vxc_k_s1.DAT")
-            if(paramagneticSPEX)then
-               Vxc(:,:,:,2) = Vxc(:,:,:,1)
+            !
+            write(*,"(A,F)") "     Sigma_GoWo(k,w)[Lund] --> Sigma_GoWo(k,iw) cpu timing:", finish-start
+            !
+            ! Print out the transformed stuff
+            call dump_FermionicField(Smats_GoWo,reg(pathOUTPUT_),"SGoWo_w",.true.,Lttc%kpt,paramagneticSPEX)
+            if(save2readable)call dump_FermionicField(Smats_GoWo,reg(pathOUTPUT_)//"Sigma_imag/","SGoWo_w",.false.,Lttc%kpt,paramagneticSPEX)
+            !
+            ! Read the Vxc and print it out
+            if(doVxc)then
+               call read_Vxc_Lund(Vxc,Lttc,ib_sigma1,ib_sigma2,save2readable)
             else
-               call read_matrix(Vxc(:,:,:,2),reg(pathINPUT)//"Vxc_k_s2.DAT")
+               write(*,"(A)")"     Reading Vxc(k) from "//reg(pathINPUT)
+               call read_matrix(Vxc(:,:,:,1),reg(pathINPUT)//"Vxc_k_s1.DAT")
+               if(paramagneticSPEX)then
+                  Vxc(:,:,:,2) = Vxc(:,:,:,1)
+               else
+                  call read_matrix(Vxc(:,:,:,2),reg(pathINPUT)//"Vxc_k_s2.DAT")
+               endif
             endif
+            !
          endif
          !
          !---------------------------------------------------------------------!
@@ -1271,41 +1204,59 @@ contains
          !---------------------------------------------------------------------!
          !
          ! Just read all
-         write(*,"(A)")"     Reading SigmaGoWo(k,iw) from "//reg(pathOUTPUT_)//"SGoWo_w_k_s[1,2].DAT"
-         call clear_attributes(Smats_GoWo)
-         call read_FermionicField(Smats_GoWo,reg(pathOUTPUT_),"SGoWo_w",Lttc%kpt)
-         call FermionicKsum(Smats_GoWo)
-         !
-         write(*,"(A)")"     Reading Vxc(k) from "//reg(pathINPUT)
-         call read_matrix(Vxc(:,:,:,1),reg(pathINPUT)//"Vxc_k_s1.DAT")
-         if(paramagneticSPEX)then
-            Vxc(:,:,:,2) = Vxc(:,:,:,1)
+         if(DC_)then
+            !
+            write(*,"(A)")"     Reading SigmaGoWo_dc(k,iw) from "//reg(pathOUTPUT_)//"SGoWo_dc_w_k_s[1,2].DAT"
+            call clear_attributes(Smats_GoWo)
+            call read_FermionicField(Smats_GoWo,reg(pathOUTPUT_),"SGoWo_dc_w",Lttc%kpt)
+            call FermionicKsum(Smats_GoWo)
+            !
          else
-            call read_matrix(Vxc(:,:,:,2),reg(pathINPUT)//"Vxc_k_s2.DAT")
+            !
+            write(*,"(A)")"     Reading SigmaGoWo(k,iw) from "//reg(pathOUTPUT_)//"SGoWo_w_k_s[1,2].DAT"
+            call clear_attributes(Smats_GoWo)
+            call read_FermionicField(Smats_GoWo,reg(pathOUTPUT_),"SGoWo_w",Lttc%kpt)
+            call FermionicKsum(Smats_GoWo)
+            !
+            write(*,"(A)")"     Reading Vxc(k) from "//reg(pathINPUT)
+            call read_matrix(Vxc(:,:,:,1),reg(pathINPUT)//"Vxc_k_s1.DAT")
+            if(paramagneticSPEX)then
+               Vxc(:,:,:,2) = Vxc(:,:,:,1)
+            else
+               call read_matrix(Vxc(:,:,:,2),reg(pathINPUT)//"Vxc_k_s2.DAT")
+            endif
+            !
          endif
          !
          !
       endif
       !
       ! Provide output
-      if(present(Vxc_out))then
+      if(DC_)then
          !
-         write(*,"(A)")"     SigmaGoWo(k,iw) and  Vxc(k) are provided separately."
-         Vxc_out = Vxc
+         write(*,"(A)")"     SigmaGoWo_DC(k,iw) --> Vxc(k) is not provided anywhere."
          !
       else
-         !
-         write(*,"(A)")"     SigmaGoWo(k,iw)-Vxc(k) is provided in the Fermionic Field."
-         do iw=1,Nmats
-            Smats_GoWo%wks(:,:,iw,:,:) = Smats_GoWo%wks(:,:,iw,:,:) - Vxc
-         enddo
-         call FermionicKsum(Smats_GoWo)
-         !
+         if(present(Vxc_out))then
+            !
+            write(*,"(A)")"     SigmaGoWo(k,iw) and  Vxc(k) are provided separately."
+            call assert_shape(Vxc_out,[Norb,Norb,Nkpt,Nspin],"read_Sigma_spex_Lund","Vxc_out")
+            Vxc_out = Vxc
+            !
+         else
+            !
+            write(*,"(A)")"     SigmaGoWo(k,iw)-Vxc(k) is provided in the Fermionic Field."
+            do iw=1,Nmats
+               Smats_GoWo%wks(:,:,iw,:,:) = Smats_GoWo%wks(:,:,iw,:,:) - Vxc
+            enddo
+            call FermionicKsum(Smats_GoWo)
+            !
+         endif
       endif
       !
    end subroutine read_Sigma_spex_Lund
    !
-   subroutine read_Sigma_spex_Julich(Smats_GoWo,Lttc,save2readable,Vxc_out,pathOUTPUT,recompute)
+   subroutine read_Sigma_spex_Julich(Smats_GoWo,Lttc,save2readable,recompute,Vxc_out,pathOUTPUT,DC)
       !
       use linalg
       use parameters
@@ -1313,23 +1264,24 @@ contains
       use utils_misc
       use crystal
       use utils_fields
-      use input_vars, only : pathINPUT,UseXepsKorder,paramagneticSPEX,XEPSisread
+      use input_vars, only : pathINPUT,pathINPUTtr,UseXepsKorder,paramagneticSPEX,XEPSisread
       implicit none
       !
       type(FermionicField),intent(inout)    :: Smats_GoWo
       type(Lattice),intent(inout)           :: Lttc
       logical,intent(in)                    :: save2readable
+      logical,intent(in),optional           :: recompute
       complex(8),intent(inout),optional     :: Vxc_out(:,:,:,:)
       character(len=*),intent(in),optional  :: pathOUTPUT
-      logical,intent(in),optional           :: recompute
+      logical,intent(in),optional           :: DC
       !
-      logical                               :: filexists,interpdone,recompute_,Vxcdone,doVxc
+      logical                               :: filexists,interpdone,recompute_,Vxcdone,doVxc,DC_
       character(len=256)                    :: path,pathOUTPUT_
       integer                               :: ifile,ierr
       integer                               :: ik,iw,ispin,iwan1,iwan2,unit
       integer                               :: Nkpt,Norb,Nmats,Nfreq
       real(8),allocatable                   :: wread(:),wmats(:)
-
+      real                                  :: start,finish
       !Uwan
       integer                               :: Nspin_Uwan,Nkpt_Uwan,Nwan
       integer                               :: ib_Uwan1,ib_Uwan2,Norb_Uwan
@@ -1350,9 +1302,11 @@ contains
       !
       !
       write(*,"(A)") new_line("A")//new_line("A")//"---- read_Sigma_spex_Julich"
-      pathOUTPUT_ = pathINPUT
+      pathOUTPUT_ = pathINPUTtr
       if(present(pathOUTPUT)) pathOUTPUT_ = pathOUTPUT
       !
+      DC_ = .false.
+      if(present(DC)) DC_ = DC
       !
       ! Check on the input Fields
       if(.not.Smats_GoWo%status) stop "read_Sigma_spex_Julich: FermionicField not properly initialized."
@@ -1378,6 +1332,7 @@ contains
       !
       ! Check if the data on the Matsubara axis are present if(.not.paramagneticSPEX) look also for spin2
       path = reg(pathOUTPUT_)//"SGoWo_w_k_s1.DAT"
+      if(DC_) path = reg(pathOUTPUT_)//"SGoWo_dc_w_k_s1.DAT"
       call inquireFile(reg(path),interpdone,hardstop=.false.,verb=verbose)
       recompute_ = .not.interpdone
       if(present(recompute)) recompute_ = recompute .or. recompute_
@@ -1385,7 +1340,7 @@ contains
       ! Check if the Vxc_wann is present
       path = reg(pathINPUT)//"Vxc_k_s1.DAT"
       call inquireFile(reg(path),Vxcdone,hardstop=.false.,verb=verbose)
-      doVxc = .not.Vxcdone
+      doVxc = (.not.Vxcdone) .and. (.not.DC_)
       !
       !
       if(doVxc.and.(.not.recompute_))then
@@ -1425,11 +1380,13 @@ contains
          Nwan = abs(ib_Uwan2-ib_Uwan1+1)
          !
          ! Look for the Number of Sigma files and internal consistency.
+         call cpu_time(start)
          Nspin_spex = Nspin
          if(paramagneticSPEX) Nspin_spex = 1
          do ifile=1,Nwan*Lttc%Nkpt_irred*Nspin_spex
             !
             path = reg(pathINPUT)//"Sigma_imag/spex.sew."//str(ifile-1,3)
+            if(DC_)path = reg(pathINPUT)//"Sigma_dc_imag/spex.sew."//str(ifile-1,3)
             if(verbose)write(*,"(A)") "     Checking "//reg(path)
             call inquireFile(reg(path),filexists,verb=verbose)
             !
@@ -1465,6 +1422,7 @@ contains
                do iwan1=1,Nwan
                   !
                   path = reg(pathINPUT)//"Sigma_imag/spex.sew."//str(ifile,3)
+                  if(DC_)path = reg(pathINPUT)//"Sigma_dc_imag/spex.sew."//str(ifile,3)
                   if(verbose)write(*,"(A)") "     Reading "//reg(path)
                   call inquireFile(reg(path),filexists,verb=verbose)
                   !
@@ -1519,6 +1477,7 @@ contains
          allocate(Smats_GoWo_X(Nwan,Lttc%Nkpt_irred,Nspin_spex));Smats_GoWo_X=0d0
          !
          path = reg(pathINPUT)//"Sigma_imag/spex.out"
+         if(DC_)path = reg(pathINPUT)//"Sigma_dc_imag/spex.out"
          if(verbose)write(*,"(A)") "     Reading "//reg(path)
          call inquireFile(reg(path),filexists,verb=verbose)
          !
@@ -1576,35 +1535,52 @@ contains
          call DeallocateFermionicField(Smats_GoWo_C)
          if(paramagneticSPEX)then
             Smats_GoWo%wks(:,:,:,:,Nspin) = Smats_GoWo%wks(:,:,:,:,1)
-            Vxc(:,:,:,Nspin) = Vxc(:,:,:,1)
+            if(doVxc) Vxc(:,:,:,Nspin) = Vxc(:,:,:,1)
          endif
          !
          call FermionicKsum(Smats_GoWo)
          !
-         ! Print out the transformed stuff
-         call dump_FermionicField(Smats_GoWo,reg(pathOUTPUT_),"SGoWo_w",.true.,Lttc%kpt,paramagneticSPEX)
+         call cpu_time(finish)
          !
-         ! Read or print print Vxc out
-         if(doVxc)then
-            do ispin=1,Nspin_Uwan
-               call dump_matrix(Vxc(:,:,:,ispin),.true.,reg(pathINPUT),"Vxc",ispin=ispin)
-               if(save2readable)call dump_matrix(Vxc(:,:,:,ispin),.false.,reg(pathINPUT)//"Vxc/","Vxc",ispin=ispin)
-            enddo
+         if(DC_)then
             !
-            allocate(Vxc_loc(Norb,Norb,Nspin));Vxc_loc=czero
-            do ik=1,Nkpt
-               Vxc_loc = Vxc_loc + Vxc(:,:,ik,:)/Nkpt
-            enddo
-            call dump_matrix(Vxc_loc,reg(pathINPUT),"Vxc",(Nspin_Uwan.eq.2))
-            deallocate(Vxc_loc)
+            write(*,"(A,F)") "     Sigma_GoWo_dc(k,w)[Julich] --> Sigma_GoWo_dc(k,iw) cpu timing:", finish-start
+            !
+            ! Print out the transformed stuff
+            call dump_FermionicField(Smats_GoWo,reg(pathOUTPUT_),"SGoWo_dc_w",.true.,Lttc%kpt,paramagneticSPEX)
+            if(save2readable)call dump_FermionicField(Smats_GoWo,reg(pathOUTPUT_)//"Sigma_dc_imag/","SGoWo_dc_w",.false.,Lttc%kpt,paramagneticSPEX)
+            call dump_FermionicField(Smats_GoWo,reg(pathOUTPUT_),"SGoWo_dc_w",paramagneticSPEX)
+            !
          else
-            write(*,"(A)")"     Reading Vxc(k) from "//reg(pathINPUT)
-            call read_matrix(Vxc(:,:,:,1),reg(pathINPUT)//"Vxc_k_s1.DAT")
-            if(paramagneticSPEX)then
-               Vxc(:,:,:,2) = Vxc(:,:,:,1)
+            !
+            write(*,"(A,F)") "     Sigma_GoWo(k,w)[Julich] --> Sigma_GoWo(k,iw) cpu timing:", finish-start
+            !
+            ! Print out the transformed stuff
+            call dump_FermionicField(Smats_GoWo,reg(pathOUTPUT_),"SGoWo_w",.true.,Lttc%kpt,paramagneticSPEX)
+            !
+            ! Read or print print Vxc out
+            if(doVxc)then
+               do ispin=1,Nspin_Uwan
+                  call dump_matrix(Vxc(:,:,:,ispin),.true.,reg(pathINPUT),"Vxc",ispin=ispin)
+                  if(save2readable)call dump_matrix(Vxc(:,:,:,ispin),.false.,reg(pathINPUT)//"Vxc/","Vxc",ispin=ispin)
+               enddo
+               !
+               allocate(Vxc_loc(Norb,Norb,Nspin));Vxc_loc=czero
+               do ik=1,Nkpt
+                  Vxc_loc = Vxc_loc + Vxc(:,:,ik,:)/Nkpt
+               enddo
+               call dump_matrix(Vxc_loc,reg(pathINPUT),"Vxc",(Nspin_Uwan.eq.2))
+               deallocate(Vxc_loc)
             else
-               call read_matrix(Vxc(:,:,:,2),reg(pathINPUT)//"Vxc_k_s2.DAT")
+               write(*,"(A)")"     Reading Vxc(k) from "//reg(pathINPUT)
+               call read_matrix(Vxc(:,:,:,1),reg(pathINPUT)//"Vxc_k_s1.DAT")
+               if(paramagneticSPEX)then
+                  Vxc(:,:,:,2) = Vxc(:,:,:,1)
+               else
+                  call read_matrix(Vxc(:,:,:,2),reg(pathINPUT)//"Vxc_k_s2.DAT")
+               endif
             endif
+            !
          endif
          !
          !---------------------------------------------------------------------!
@@ -1614,36 +1590,54 @@ contains
          !---------------------------------------------------------------------!
          !
          ! Just read all
-         write(*,"(A)")"     Reading SigmaGoWo(k,iw) from "//reg(pathOUTPUT_)//"SGoWo_w_k_s[1,2].DAT"
-         call clear_attributes(Smats_GoWo)
-         call read_FermionicField(Smats_GoWo,reg(pathOUTPUT_),"SGoWo_w",Lttc%kpt)
-         call FermionicKsum(Smats_GoWo)
-         !
-         write(*,"(A)")"     Reading Vxc(k) from "//reg(pathINPUT)
-         call read_matrix(Vxc(:,:,:,1),reg(pathINPUT)//"Vxc_k_s1.DAT")
-         if(paramagneticSPEX)then
-            Vxc(:,:,:,2) = Vxc(:,:,:,1)
+         if(DC_)then
+            !
+            write(*,"(A)")"     Reading SigmaGoWo_dc(k,iw) from "//reg(pathOUTPUT_)//"SGoWo_dc_w_k_s[1,2].DAT"
+            call clear_attributes(Smats_GoWo)
+            call read_FermionicField(Smats_GoWo,reg(pathOUTPUT_),"SGoWo_dc_w",Lttc%kpt)
+            call FermionicKsum(Smats_GoWo)
+            !
          else
-            call read_matrix(Vxc(:,:,:,2),reg(pathINPUT)//"Vxc_k_s2.DAT")
+            !
+            write(*,"(A)")"     Reading SigmaGoWo(k,iw) from "//reg(pathOUTPUT_)//"SGoWo_w_k_s[1,2].DAT"
+            call clear_attributes(Smats_GoWo)
+            call read_FermionicField(Smats_GoWo,reg(pathOUTPUT_),"SGoWo_w",Lttc%kpt)
+            call FermionicKsum(Smats_GoWo)
+            !
+            write(*,"(A)")"     Reading Vxc(k) from "//reg(pathINPUT)
+            call read_matrix(Vxc(:,:,:,1),reg(pathINPUT)//"Vxc_k_s1.DAT")
+            if(paramagneticSPEX)then
+               Vxc(:,:,:,2) = Vxc(:,:,:,1)
+            else
+               call read_matrix(Vxc(:,:,:,2),reg(pathINPUT)//"Vxc_k_s2.DAT")
+            endif
+            !
          endif
          !
          !
       endif
       !
       ! Provide output
-      if(present(Vxc_out))then
+      if(DC_)then
          !
-         write(*,"(A)")"     SigmaGoWo(k,iw) and  Vxc(k) are provided separately."
-         Vxc_out = Vxc
+         write(*,"(A)")"     SigmaGoWo_DC(k,iw) --> Vxc(k) is not provided anywhere."
          !
       else
-         !
-         write(*,"(A)")"     SigmaGoWo(k,iw)-Vxc(k) is provided in the Fermionic Field."
-         do iw=1,Nmats
-            Smats_GoWo%wks(:,:,iw,:,:) = Smats_GoWo%wks(:,:,iw,:,:) - Vxc
-         enddo
-         call FermionicKsum(Smats_GoWo)
-         !
+         if(present(Vxc_out))then
+            !
+            write(*,"(A)")"     SigmaGoWo(k,iw) and  Vxc(k) are provided separately."
+            call assert_shape(Vxc_out,[Norb,Norb,Nkpt,Nspin],"read_Sigma_spex_Julich","Vxc_out")
+            Vxc_out = Vxc
+            !
+         else
+            !
+            write(*,"(A)")"     SigmaGoWo(k,iw)-Vxc(k) is provided in the Fermionic Field."
+            do iw=1,Nmats
+               Smats_GoWo%wks(:,:,iw,:,:) = Smats_GoWo%wks(:,:,iw,:,:) - Vxc
+            enddo
+            call FermionicKsum(Smats_GoWo)
+            !
+         endif
       endif
       !
    end subroutine read_Sigma_spex_Julich
@@ -1884,7 +1878,7 @@ contains
       use utils_misc
       use utils_fields
       use interactions
-      use input_vars, only: Nsite, SiteNorb, SiteOrbs
+      use input_vars, only: LocalOrbs
       implicit none
       !
       type(FermionicField),intent(inout)    :: G
@@ -1894,7 +1888,7 @@ contains
       real(8),intent(in),optional           :: wmats_in(:)
       !
       type(FermionicField)                  :: G_old
-      integer                               :: isite,ik,iw
+      integer                               :: Nsite,isite,ik,iw
       integer                               :: i,j,ispin
       integer                               :: i_lat,j_lat
       logical                               :: LocalOnly,replace
@@ -1909,6 +1903,9 @@ contains
       if(.not.G%status) stop "interpolate2Beta_Fermionic: FermionicField not properly initialized."
       if(G%Beta.ne.Beta_Match%Beta_old) stop "interpolate2Beta_Fermionic: Fermionic field Beta is different from the expected one."
       if(G%Npoints.ne.Beta_Match%Nmats_old) stop "interpolate2Beta_Fermionic: Fermionic field Npoints is different from the expected one."
+      !
+      if(.not.allocated(LocalOrbs)) stop "interpolate2Beta_Fermionic: LocalOrbs not properly initialized."
+      Nsite = size(LocalOrbs)
       !
       LocalOnly=.true.
       if(G%Nkpt.ne.0)LocalOnly=.false.
@@ -1935,17 +1932,17 @@ contains
             allocate(ReGf(Beta_Match%Nmats_new));allocate(ImGf(Beta_Match%Nmats_new))
             !
             !$OMP PARALLEL DEFAULT(NONE),&
-            !$OMP SHARED(G,G_old,Nsite,SiteNorb,SiteOrbs),&
+            !$OMP SHARED(G,G_old,Nsite,LocalOrbs),&
             !$OMP SHARED(Beta_Match,offDiag,wmats_new,wmats_old),&
             !$OMP PRIVATE(ispin,isite,i,j,i_lat,j_lat,replace,iw,ReD,ReGf,ImD,ImGf)
             !$OMP DO
             do isite=1,Nsite
                !
-               do i=1,SiteNorb(isite)
-                  do j=1,SiteNorb(isite)
+               do i=1,LocalOrbs(isite)%Norb
+                  do j=1,LocalOrbs(isite)%Norb
                      !
-                     i_lat = SiteOrbs(isite,i)
-                     j_lat = SiteOrbs(isite,j)
+                     i_lat = LocalOrbs(isite)%Orbs(i)
+                     j_lat = LocalOrbs(isite)%Orbs(j)
                      !
                      replace = i_lat.eq.j_lat
                      if(offDiag) replace = .true.
