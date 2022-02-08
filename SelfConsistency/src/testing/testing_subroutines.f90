@@ -1313,3 +1313,222 @@ subroutine check_S_G0W0()
    call DeallocateField(S_G0W0_DMFT)
    !
 end subroutine check_S_G0W0
+
+
+
+subroutine calc_QMCinteractions_2(Umats,Uinst,Kfunct,Ktilda,Screening,Kpfunct,sym)
+   !
+   use parameters
+   use file_io
+   use utils_misc
+   use utils_fields
+   use input_vars, only : Solver
+   implicit none
+   !
+   type(BosonicField),intent(in)         :: Umats
+   real(8),intent(inout)                 :: Uinst(:,:)
+   real(8),intent(inout),optional        :: Kfunct(:,:,:)
+   logical,intent(in),optional           :: Ktilda
+   real(8),intent(inout),optional        :: Screening(:,:)
+   real(8),intent(inout),optional        :: Kpfunct(:,:,:)
+   logical,intent(in),optional           :: sym
+   !
+   integer                               :: Nbp,Norb,Nflavor
+   integer                               :: ib1,ib2,iorb,jorb
+   integer                               :: iu1,iu2,ix1,ix2,ip1,ip2
+   integer                               :: iw,itau,iwlimit
+   complex(8)                            :: iwp,iwm
+   real(8),allocatable                   :: wmats(:),tau(:)
+   real(8),allocatable                   :: Kaux(:,:,:),Kp(:,:,:)
+   logical                               :: Uloc,U1st,U2nd
+   logical                               :: retarded,Kp_out,Scr_out
+   type(physicalU)                       :: PhysicalUelements
+   logical                               :: sym_,Ktilda_
+   !
+   !
+   if(verbose)write(*,"(A)") "---- calc_QMCinteractions"
+   !
+   !
+   if(.not.Umats%status) stop "calc_QMCinteractions: Umats not properly initialized."
+   !
+   retarded=.false.
+   if(present(Kfunct))retarded=.true.
+   !
+   Ktilda_=.false.
+   if(present(Ktilda).and.retarded)Ktilda_=Ktilda
+   iwlimit=Umats%Npoints
+   if(Ktilda_)iwlimit=1
+   !
+   Kp_out=.false.
+   if(present(Kpfunct).and.retarded)Kp_out=.true.
+   !
+   Scr_out=.false.
+   if(present(Screening).and.retarded)Scr_out=.true.
+   !
+   sym_=.true.
+   if(present(sym))sym_=sym
+   !
+   Nbp = Umats%Nbp
+   Norb = int(sqrt(dble(Nbp)))
+   Nflavor = Norb*Nspin
+   !
+   call init_Uelements(Norb,PhysicalUelements)
+   !
+   call assert_shape(Uinst,[Nflavor,Nflavor],"calc_QMCinteractions","Uinst")
+   Uinst=0d0
+   if(retarded)then
+      call assert_shape(Kfunct,[Nflavor,Nflavor,Solver%NtauB],"calc_QMCinteractions","Kfunct")
+      if(Kp_out)call assert_shape(Kpfunct,[Nflavor,Nflavor,Solver%NtauB],"calc_QMCinteractions","Kpfunct")
+      if(Scr_out)call assert_shape(Screening,[Nflavor,Nflavor],"calc_QMCinteractions","Screening")
+      allocate(Kaux(Nflavor,Nflavor,Umats%Npoints));Kaux=czero
+      allocate(Kp(Nflavor,Nflavor,Solver%NtauB));Kp=0d0
+      allocate(tau(Solver%NtauB));tau=0d0
+      tau = linspace(0d0,Umats%Beta,Solver%NtauB)
+      allocate(wmats(Umats%Npoints));wmats=0d0
+      wmats = BosonicFreqMesh(Umats%Beta,Umats%Npoints)
+   endif
+   !
+   !computing the screened interaction
+   do ib1=1,Nflavor
+      do ib2=1,Nflavor
+         !
+         !This is just for a more compact coding
+         Uloc = PhysicalUelements%Flav_Uloc(ib1,ib2)
+         U1st = PhysicalUelements%Flav_U1st(ib1,ib2)
+         U2nd = PhysicalUelements%Flav_U2nd(ib1,ib2)
+         !
+         !Orbital indexes
+         iorb = PhysicalUelements%Flav_Map(ib1,ib2,1)
+         jorb = PhysicalUelements%Flav_Map(ib1,ib2,2)
+         !
+         !The maps inside PhysicalUelements contain separately the orbital
+         !indexes specifially for that representation. The matching between
+         !the two is not done, so I have to do it here.
+         !
+         ! (iorb,iorb)(jorb,jorb) indexes in the Norb^2 representaion
+         call F2Bindex(Norb,[iorb,iorb],[jorb,jorb],iu1,iu2)
+         !
+         ! (iorb,jorb)(jorb,iorb) indexes
+         call F2Bindex(Norb,[iorb,jorb],[jorb,iorb],ix1,ix2)
+         !
+         ! (iorb,jorb)(iorb,jorb) indexes
+         call F2Bindex(Norb,[iorb,jorb],[iorb,jorb],ip1,ip2)
+         !
+         if(Uloc) Uinst(ib1,ib2) = Umats%screened_local(iu1,iu2,1)
+         if(U1st) Uinst(ib1,ib2) = Umats%screened_local(iu1,iu2,1)
+         if(U2nd) Uinst(ib1,ib2) = Umats%screened_local(iu1,iu2,1) - (Umats%screened_local(ix1,ix2,1)+Umats%screened_local(ip1,ip2,1))/2d0
+         !
+         !auxiliary function to build the screening function
+         if(retarded)then
+            !
+            if(Uloc) Kaux(ib1,ib2,:) =  Umats%screened_local(iu1,iu2,:) - Umats%screened_local(iu1,iu2,iwlimit)
+            if(U1st) Kaux(ib1,ib2,:) =  Umats%screened_local(iu1,iu2,:) - Umats%screened_local(iu1,iu2,iwlimit)
+            if(U2nd) Kaux(ib1,ib2,:) =  Umats%screened_local(iu1,iu2,:) - (Umats%screened_local(ix1,ix2,:)+Umats%screened_local(ip1,ip2,:))/2d0 - &
+                                       (Umats%screened_local(iu1,iu2,iwlimit) - (Umats%screened_local(ix1,ix2,iwlimit)+Umats%screened_local(ip1,ip2,iwlimit))/2d0)
+            !same orbital - same spin screening
+            if(Uloc.and.(ib2.gt.ib1)) then
+               Kaux(ib1,ib1,:) = Kaux(ib1,ib2,:)
+               Kaux(ib2,ib2,:) = Kaux(ib1,ib2,:)
+            endif
+            !
+         endif
+         !
+      enddo
+   enddo
+   if(sym_)call check_Symmetry(Uinst,eps,enforce=.true.,hardstop=.false.,name="Uinst")
+   !
+   !computing the screening function and first derivative
+   if(retarded)then
+      !
+      Kfunct=0d0
+      do itau=1,Solver%NtauB-1
+         !TEST>>>
+         !if(Ktilda_) Kfunct(:,:,itau) = Kfunct(:,:,itau) - Kaux(:,:,1) * ( -(tau(itau)-Umats%Beta/2d0)**2 )/Umats%Beta
+         !do iw=2,Umats%Npoints
+         !   Kfunct(:,:,itau) = Kfunct(:,:,itau) - 2d0*Kaux(:,:,iw) * ( cos(wmats(iw)*tau(itau)) - 1d0 ) / ( Umats%Beta*wmats(iw)**2 )
+         !enddo
+         !
+         do iw=2,Umats%Npoints
+            iwp = +img*wmats(iw) ; iwm = -img*wmats(iw)
+            Kfunct(:,:,itau) = Kfunct(:,:,itau) + (Kaux(:,:,iw)-Kaux(:,:,1))/Umats%Beta * dreal( ( exp(iwp*tau(itau)) - 1d0 ) / iwp**2 + ( exp(iwm*tau(itau)) - 1d0 ) / iwm**2 )
+         enddo
+         !>>>TEST
+         if(sym_)call check_Symmetry(Kfunct(:,:,itau),eps,enforce=.true.,hardstop=.false.,name="K_t"//str(itau))
+      enddo
+      !
+      Kp=0d0
+      do itau=1,Solver%NtauB-1
+         !TEST>>>
+         !if(Ktilda_) Kpaux(:,:,itau) = Kpaux(:,:,itau) + 2d0*Kaux(:,:,iw) * (tau(itau)-Umats%Beta/2d0)/Umats%Beta
+         !do iw=2,Umats%Npoints
+         !   Kpaux(:,:,itau) = Kpaux(:,:,itau) + 2d0*Kaux(:,:,iw) * sin(wmats(iw)*tau(itau)) / ( Umats%Beta*wmats(iw) )
+         !enddo
+         do iw=2,Umats%Npoints
+            iwp = +img*wmats(iw) ; iwm = -img*wmats(iw)
+            Kp(:,:,itau) = Kp(:,:,itau) + (Kaux(:,:,iw)-Kaux(:,:,1))/Umats%Beta * dreal( ( iwp*exp(iwp*tau(itau)) ) / iwp**2 + ( iwm*exp(iwm*tau(itau)) ) / iwm**2 )
+         enddo
+         !>>>TEST
+         if(sym_)call check_Symmetry(Kp(:,:,itau),eps,enforce=.true.,hardstop=.false.,name="Kp_t"//str(itau))
+      enddo
+      if(Kp_out) Kpfunct = Kp
+      !
+   endif
+   !
+   !computing the screening matrix
+   if(Scr_out)then
+      Screening=0d0
+      if(Ktilda_)then
+         !
+         !Screening shift is the Ubare-Uscr difference
+         do ib1=1,Nflavor
+            do ib2=1,Nflavor
+               !
+               !This is just for a more compact code
+               Uloc = PhysicalUelements%Flav_Uloc(ib1,ib2)
+               U1st = PhysicalUelements%Flav_U1st(ib1,ib2)
+               U2nd = PhysicalUelements%Flav_U2nd(ib1,ib2)
+               !
+               !Orbital indexes
+               iorb = PhysicalUelements%Flav_Map(ib1,ib2,1)
+               jorb = PhysicalUelements%Flav_Map(ib1,ib2,2)
+               !
+               !The maps inside PhysicalUelements contain separately the orbital
+               !indexes specifially for that representation. The matching between
+               !the two is not done, so I have to do it here.
+               !
+               ! (iorb,iorb)(jorb,jorb) indexes in the Norb^2 representaion
+               call F2Bindex(Norb,[iorb,iorb],[jorb,jorb],iu1,iu2)
+               !
+               ! (iorb,jorb)(jorb,iorb) indexes
+               call F2Bindex(Norb,[iorb,jorb],[jorb,iorb],ix1,ix2)
+               !
+               ! (iorb,jorb)(iorb,jorb) indexes
+               call F2Bindex(Norb,[iorb,jorb],[iorb,jorb],ip1,ip2)
+               !
+               if(Uloc) Screening(ib1,ib2) =  Umats%bare_local(iu1,iu2) - Umats%screened_local(iu1,iu2,1)
+               if(U1st) Screening(ib1,ib2) =  Umats%bare_local(iu1,iu2) - Umats%screened_local(iu1,iu2,1)
+               if(U2nd) Screening(ib1,ib2) =  Umats%bare_local(iu1,iu2) - (Umats%bare_local(ix1,ix2)+Umats%bare_local(ip1,ip2))/2d0 - &
+                                             (Umats%screened_local(iu1,iu2,1) - (Umats%screened_local(ix1,ix2,1)+Umats%screened_local(ip1,ip2,1))/2d0)
+               !same orbital - same spin screening
+               if(Uloc.and.(ib2.gt.ib1)) then
+                   Screening(ib1,ib1) = Screening(ib1,ib2)
+                   Screening(ib2,ib2) = Screening(ib1,ib2)
+               endif
+               !
+            enddo
+         enddo
+         !
+      else
+         !
+         !Screening shift is the first derivative of the screening function in beta=0
+         Screening = Kp(:,:,1)
+         !
+      endif
+      !TEST>>> I want to see the derivative
+      Screening = Kp(:,:,1)
+      !>>>TEST
+   endif
+   !
+   if(retarded)deallocate(Kaux,Kp,tau,wmats)
+   !
+end subroutine calc_QMCinteractions_2

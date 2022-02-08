@@ -2651,32 +2651,34 @@ contains
    !PURPOSE: Given the Bosonic Field it extracts the screened interaction and
    ! retardation function.
    !---------------------------------------------------------------------------!
-   subroutine calc_QMCinteractions(Umats,Uinst,Kfunct,Kpfunct,Screening,sym,casula)
+   subroutine calc_QMCinteractions(Umats,Uinst,Kfunct,Ktilda,Screening,Kpfunct,sym)
       !
       use parameters
       use file_io
       use utils_misc
       use utils_fields
+      use fourier_transforms
       use input_vars, only : Solver
       implicit none
       !
       type(BosonicField),intent(in)         :: Umats
       real(8),intent(inout)                 :: Uinst(:,:)
       real(8),intent(inout),optional        :: Kfunct(:,:,:)
-      real(8),intent(inout),optional        :: Kpfunct(:,:,:)
+      logical,intent(in),optional           :: Ktilda
       real(8),intent(inout),optional        :: Screening(:,:)
+      real(8),intent(inout),optional        :: Kpfunct(:,:,:)
       logical,intent(in),optional           :: sym
-      logical,intent(in),optional           :: casula
       !
       integer                               :: Nbp,Norb,Nflavor
       integer                               :: ib1,ib2,iorb,jorb
       integer                               :: iu1,iu2,ix1,ix2,ip1,ip2
       integer                               :: iw,itau,iwlimit
       real(8),allocatable                   :: wmats(:),tau(:)
-      complex(8),allocatable                :: Kaux(:,:,:)
-      logical                               :: Uloc,U1st,U2nd,retarded,Kp,Scr
+      complex(8),allocatable                :: Kaux(:,:,:),Ktmp(:,:,:)
+      logical                               :: Uloc,U1st,U2nd
+      logical                               :: retarded,Kp_out,Scr_out
       type(physicalU)                       :: PhysicalUelements
-      logical                               :: sym_,casula_
+      logical                               :: sym_,Ktilda_
       !
       !
       if(verbose)write(*,"(A)") "---- calc_QMCinteractions"
@@ -2687,19 +2689,19 @@ contains
       retarded=.false.
       if(present(Kfunct))retarded=.true.
       !
-      Kp=.false.
-      if(present(Kpfunct).and.retarded)Kp=.true.
+      Ktilda_=.true. !according to the theory this flag is uneffective
+      if(present(Ktilda).and.retarded)Ktilda_=Ktilda
+      iwlimit = Umats%Npoints
+      if(Ktilda_) iwlimit = 1
       !
-      Scr=.false.
-      if(present(Screening).and.retarded)Scr=.true.
+      Kp_out=.false.
+      if(present(Kpfunct).and.retarded) Kp_out=.true.
+      !
+      Scr_out=.false.
+      if(present(Screening).and.retarded) Scr_out=.true.
       !
       sym_=.true.
       if(present(sym))sym_=sym
-      !
-      casula_=.false.
-      if(present(casula))casula_=casula
-      iwlimit=1
-      if(casula_)iwlimit=Umats%Npoints
       !
       Nbp = Umats%Nbp
       Norb = int(sqrt(dble(Nbp)))
@@ -2711,20 +2713,21 @@ contains
       Uinst=0d0
       if(retarded)then
          call assert_shape(Kfunct,[Nflavor,Nflavor,Solver%NtauB],"calc_QMCinteractions","Kfunct")
-         if(Kp)call assert_shape(Kpfunct,[Nflavor,Nflavor,Solver%NtauB],"calc_QMCinteractions","Kpfunct")
-         if(Scr)call assert_shape(Screening,[Nflavor,Nflavor],"calc_QMCinteractions","Screening")
+         if(Kp_out)call assert_shape(Kpfunct,[Nflavor,Nflavor,Solver%NtauB],"calc_QMCinteractions","Kpfunct")
+         if(Scr_out)call assert_shape(Screening,[Nflavor,Nflavor],"calc_QMCinteractions","Screening")
          allocate(Kaux(Nflavor,Nflavor,Umats%Npoints));Kaux=czero
+         allocate(Ktmp(Nflavor,Nflavor,Solver%NtauB));Ktmp=czero
          allocate(tau(Solver%NtauB));tau=0d0
          tau = linspace(0d0,Umats%Beta,Solver%NtauB)
          allocate(wmats(Umats%Npoints));wmats=0d0
          wmats = BosonicFreqMesh(Umats%Beta,Umats%Npoints)
       endif
       !
-      !setting the istantaneous values
+      !computing the screened interaction
       do ib1=1,Nflavor
          do ib2=1,Nflavor
             !
-            !This is just for a more compact code
+            !This is just for a more compact coding
             Uloc = PhysicalUelements%Flav_Uloc(ib1,ib2)
             U1st = PhysicalUelements%Flav_U1st(ib1,ib2)
             U2nd = PhysicalUelements%Flav_U2nd(ib1,ib2)
@@ -2750,6 +2753,7 @@ contains
             if(U1st) Uinst(ib1,ib2) = Umats%screened_local(iu1,iu2,1)
             if(U2nd) Uinst(ib1,ib2) = Umats%screened_local(iu1,iu2,1) - (Umats%screened_local(ix1,ix2,1)+Umats%screened_local(ip1,ip2,1))/2d0
             !
+            !auxiliary function to build the screening function
             if(retarded)then
                !
                if(Uloc) Kaux(ib1,ib2,:) =  Umats%screened_local(iu1,iu2,:) - Umats%screened_local(iu1,iu2,iwlimit)
@@ -2762,19 +2766,8 @@ contains
                   Kaux(ib2,ib2,:) = Kaux(ib1,ib2,:)
                endif
                !
-            endif
-            !
-            if(Scr)then
-               !
-               if(Uloc) Screening(ib1,ib2) =  Umats%bare_local(iu1,iu2) - Umats%screened_local(iu1,iu2,1)
-               if(U1st) Screening(ib1,ib2) =  Umats%bare_local(iu1,iu2) - Umats%screened_local(iu1,iu2,1)
-               if(U2nd) Screening(ib1,ib2) =  Umats%bare_local(iu1,iu2) - (Umats%bare_local(ix1,ix2)+Umats%bare_local(ip1,ip2))/2d0 - &
-                                          (Umats%screened_local(iu1,iu2,1) - (Umats%screened_local(ix1,ix2,1)+Umats%screened_local(ip1,ip2,1))/2d0)
-               !same orbital - same spin screening
-               if(Uloc.and.(ib2.gt.ib1)) then
-                  Screening(ib1,ib1) = Screening(ib1,ib2)
-                  Screening(ib2,ib2) = Screening(ib1,ib2)
-               endif
+               !removing numerical noise on the imaginary part
+               Kaux(ib1,ib2,:) = dcmplx(dreal(Kaux(ib1,ib2,:)),0d0)
                !
             endif
             !
@@ -2782,31 +2775,47 @@ contains
       enddo
       if(sym_)call check_Symmetry(Uinst,eps,enforce=.true.,hardstop=.false.,name="Uinst")
       !
-      !computing the retarded function
+      !computing the screening function and first derivative
       if(retarded)then
+         !
+         !This is the D(iw)-D(0)/iw^2 screening function
+         do iw=2,Umats%Npoints
+            Kaux(:,:,iw) = - (Kaux(:,:,iw)-Kaux(:,:,1)) / (wmats(iw)**2)
+         enddo
+         Kaux(:,:,1) = czero
+         !
+         Ktmp=czero
+         call Bmats2itau(Umats%Beta,Kaux,Ktmp,asympt_corr=.true.,tau_uniform=.true.)
          Kfunct=0d0
          do itau=2,Solver%NtauB-1
-            if(casula_) Kfunct(:,:,itau) = Kfunct(:,:,itau) - Kaux(:,:,1) * ( -(tau(itau)-Umats%Beta/2d0)**2 )/Umats%Beta
-            do iw=2,Umats%Npoints
-               Kfunct(:,:,itau) = Kfunct(:,:,itau) - 2d0*Kaux(:,:,iw) * ( cos(wmats(iw)*tau(itau)) - 1d0 ) / ( Umats%Beta*wmats(iw)**2 )
-            enddo
-            if(sym_)call check_Symmetry(Kfunct(:,:,itau),eps,enforce=.true.,hardstop=.false.,name="Kfunct_t"//str(itau))
+            Kfunct(:,:,itau) = dreal(Ktmp(:,:,itau) - Ktmp(:,:,1))
+            if(sym_)call check_Symmetry(Kfunct(:,:,itau),eps,enforce=.true.,hardstop=.false.,name="K_t"//str(itau))
          enddo
+         !
+         !Mid-point derivative since the coefficients for Bmats2itau are assuming even bosonic functions
+         deallocate(Ktmp,Kaux)
+         allocate(Kaux(Nflavor,Nflavor,0:Solver%NtauB+1));Kaux=czero
+         Kaux(:,:,1:Solver%NtauB) = Kfunct
+         Kaux(:,:,0) = -Kaux(:,:,2)
+         Kaux(:,:,Solver%NtauB+1) = -Kaux(:,:,Solver%NtauB-1)
+         allocate(Ktmp(Nflavor,Nflavor,Solver%NtauB));Ktmp=czero
+         do itau=1,Solver%NtauB
+            Ktmp(:,:,itau) = ( Kaux(:,:,itau-1) - Kaux(:,:,itau+1) ) / ( tau(1)-tau(3) )
+         enddo
+         if(Kp_out)then
+            Kpfunct = dreal(Ktmp)
+            do itau=1,Solver%NtauB
+               if(sym_)call check_Symmetry(Kpfunct(:,:,itau),eps,enforce=.true.,hardstop=.false.,name="Kp_t"//str(itau))
+            enddo
+         endif
+         if(Scr_out)then
+            Screening = 2d0*dreal(Ktmp(:,:,1))
+            if(sym_)call check_Symmetry(Screening,eps,enforce=.true.,hardstop=.false.,name="Screening")
+         endif
+         !
       endif
       !
-      !computing the first derivative of retarded function
-      if(retarded.and.kp)then
-         Kpfunct=0d0
-         do itau=2,Solver%NtauB-1
-            if(casula_) Kpfunct(:,:,itau) = Kpfunct(:,:,itau) + 2d0*Kaux(:,:,iw) * (tau(itau)-Umats%Beta/2d0)/Umats%Beta
-            do iw=2,Umats%Npoints
-               Kpfunct(:,:,itau) = Kpfunct(:,:,itau) + 2d0*Kaux(:,:,iw) * sin(wmats(iw)*tau(itau)) / ( Umats%Beta*wmats(iw) )
-            enddo
-            if(sym_)call check_Symmetry(Kpfunct(:,:,itau),eps,enforce=.true.,hardstop=.false.,name="Kpfunct_t"//str(itau))
-         enddo
-      endif
-      !
-      if(retarded)deallocate(Kaux,tau,wmats)
+      if(retarded)deallocate(Kaux,Ktmp,tau,wmats)
       !
    end subroutine calc_QMCinteractions
 

@@ -2295,7 +2295,6 @@ contains
             allocate(Kfunct(LocalOrbs(isite)%Nflavor,LocalOrbs(isite)%Nflavor,Solver%NtauB));Kfunct=0d0
             allocate(Kpfunct(LocalOrbs(isite)%Nflavor,LocalOrbs(isite)%Nflavor,Solver%NtauB));Kpfunct=0d0
             allocate(ScreeningMat(LocalOrbs(isite)%Nflavor,LocalOrbs(isite)%Nflavor));ScreeningMat=0d0
-            !
             call calc_QMCinteractions(curlyU,Uinst,Kfunct=Kfunct,Kpfunct=Kpfunct,Screening=ScreeningMat)
             !
       end select

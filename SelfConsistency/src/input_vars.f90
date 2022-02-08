@@ -157,6 +157,7 @@ module input_vars
    real(8),allocatable,public               :: Vnn(:,:,:),Vnn_diag(:,:)
    character(len=256),public                :: long_range
    logical,public                           :: Kdiag
+   !logical,public                           :: Ktilda
    !
    !Double counting types, divergencies, scaling and self-consistency coefficients
    logical,public                           :: VH_use
@@ -458,6 +459,7 @@ contains
       call parse_input_variable(U_AC,"U_AC",InputFile,default=.false.,comment="Flag to force the analytic continuation on the SPEX interaction.")
       call parse_input_variable(Uthresh,"U_THRES",InputFile,default=0.001d0,comment="Lowest magnitude considered in SPEX Ucrpa bare interaction (only for local interactions).")
       call parse_input_variable(Kdiag,"K_DIAG",InputFile,default=.false.,comment="Flag to use only one J-independent screening function.")
+      !call parse_input_variable(Ktilda,"K_TILDA",InputFile,default=.true.,comment="Flag to U(iw)-U(0) to build the screening function.")
       if((Umodel.and.Uspex).or.((.not.Umodel).and.(.not.Uspex))) stop "read_InputFile: Make up your mind, U_MODEL or U_SPEX?"
       if(Umodel)then
          call parse_input_variable(Uaa,"UAA",InputFile,default=0d0,comment="Interaction between same orbital and opposite spin electrons (orbital independent).")
@@ -519,7 +521,7 @@ contains
          call parse_input_variable(GoWoDC_loc,"G0W0DC_LOC",InputFile,default=.true.,comment="Keep the local contribution of Tier-III. Automatically removed if non-causal.")
       endif
       call parse_input_variable(RemoveHartree,"REMOVE_HARTREE",InputFile,default=(.not.Hmodel),comment="Remove the Hartree term (curlyU(0)*Nimp/2) from the Impurity self-energy and perform the self-consistency only with the remaining part.")
-      if(.not.Hmodel)RemoveHartree=.true.
+      !if(.not.Hmodel)RemoveHartree=.true.
       call parse_input_variable(DC_type,"DC_TYPE",InputFile,default="GlocWloc",comment="Local GW self-energy which is replaced by DMFT self-energy. Avalibale: GlocWloc, Sloc.")
       call parse_input_variable(Embedding,"ADD_EMBEDDING",InputFile,default="None",comment="Constant embedding self-energy stored in PATH_INPUT. Avalibale: loc (filename: Semb_w_s[1,2].DAT), nonloc (filename: Semb_w_k_s[1,2].DAT), None to avoid.")
       if(Hmodel.or.Umodel)addTierIII=.false.
@@ -658,7 +660,7 @@ contains
       call parse_input_variable(Solver%binstart,"BINSTART",InputFile,default=100,comment="Tau points skipped at the beginning and end of the Green's function average.")
       call append_to_input_list(Solver%retarded,"RETARDED","Integer flag to include the frequency dependent part of the interaction. User cannot set this as its deduced from CALC_TYPE.")
       call parse_input_variable(Solver%removeUhalf,"REMOVE_UHALF",InputFile,default=0,comment="Integer flag to use the particle-hole symmetric interaction by removing the half-filling chemical potential inside the solver.")
-      if(.not.Hmodel)Solver%removeUhalf=0
+      !if(.not.Hmodel)Solver%removeUhalf=0
       Solver%quickloops=look4dens%quickloops
       if(ExpandImpurity)then
          allocate(Solver%Time(1));Solver%Time=0
