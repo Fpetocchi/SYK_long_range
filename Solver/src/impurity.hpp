@@ -336,7 +336,7 @@ class ct_hyb
                   print_timestamp("min");
                   mpi.report(" Partial sweeps: "+str( (debug == true) ? RankSweeps : WorldSweeps ));
                   mpi.report(" Average sign: "+str( (debug == true) ? RankSign : WorldSign ));
-                  mpi.report(" Density: "+str(get_Density(debug)));
+                  mpi.report(" Density: "+str(get_Density(debug))+" mu: "+str(mu,6) );
                   //
                   path pad = "_T"+str(printTime*(TimeStamp-1))+".DAT";
                   print_observables(pad,bins);
@@ -354,7 +354,7 @@ class ct_hyb
                mpi.report(" Solver for impurity "+SiteName+" is done. Results written to: "+resultsDir);
                mpi.report(" Total sweeps: "+str( (debug == true) ? RankSweeps : WorldSweeps ));
                mpi.report(" Average sign: "+str( (debug == true) ? RankSign : WorldSign ));
-               mpi.report(" Density: "+str(get_Density(debug)));
+               mpi.report(" Density: "+str(get_Density(debug))+" mu: "+str(mu,6) );
                //
                path pad = ".DAT";
                print_observables(pad,bins);
