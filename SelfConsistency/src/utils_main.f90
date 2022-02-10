@@ -61,6 +61,8 @@ module utils_main
    !
    complex(8),allocatable                   :: Vxc(:,:,:,:)
    complex(8),allocatable                   :: VH(:,:)
+   complex(8),allocatable                   :: VH_Nlat(:,:)
+   complex(8),allocatable                   :: VH_Nimp(:,:)
    !
    real(8),allocatable                      :: Umat(:,:)
    real(8),allocatable                      :: Kfunct(:,:)
@@ -1142,8 +1144,11 @@ contains
       if(calc_Sigmak)then
          !
          if(allocated(VH))deallocate(VH)
-         allocate(VH(Crystal%Norb,Crystal%Norb))
-         VH=czero
+         if(allocated(VH_Nlat))deallocate(VH_Nlat)
+         if(allocated(VH_Nimp))deallocate(VH_Nimp)
+         allocate(VH(Crystal%Norb,Crystal%Norb));VH=czero
+         allocate(VH_Nlat(Crystal%Norb,Crystal%Norb));VH_Nlat=czero
+         allocate(VH_Nimp(Crystal%Norb,Crystal%Norb));VH_Nimp=czero
          !
          if(allocated(Vxc))deallocate(Vxc)
          if(.not.Vxc_in)then
@@ -2495,6 +2500,8 @@ contains
          !
          call AllocateFermionicField(Simp(isite),LocalOrbs(isite)%Norb,Nmats,Beta=Beta)
          call clear_attributes(Simp(isite))
+         !
+         if(ExpandImpurity.or.AFMselfcons)exit
          !
       enddo
       !

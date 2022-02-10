@@ -160,7 +160,6 @@ module input_vars
    !logical,public                           :: Ktilda
    !
    !Double counting types, divergencies, scaling and self-consistency coefficients
-   logical,public                           :: VH_use
    logical,public                           :: Vxc_in
    character(len=256),public                :: SpexVersion
    character(len=256),public                :: VH_type
@@ -513,8 +512,7 @@ contains
          call parse_input_variable(SpexVersion,"SPEX_VERSION",InputFile,default="Julich",comment="Version of SPEX with which the G0W0 self-energy is computed. Available: Julich, Lund.")
          call parse_input_variable(VH_type,"VH_TYPE",InputFile,default="Ustatic_SPEX",comment="Hartree term mismatch between GoWo and scGW. Available: Ubare, Ustatic, Ubare_SPEX(V_nodiv.DAT required), Ustatic_SPEX(V_nodiv.DAT required).")
          if(Umodel)VH_type="Ustatic"
-         call parse_input_variable(VN_type,"VN_TYPE",InputFile,default="Nlat",comment="Density matrix used to compute the Hartree term mismatch between GoWo and scGW. Available: Nlat, Nimp.")
-         call parse_input_variable(VH_use,"VH_USE",InputFile,default=.true.,comment="Flag to use the Hartree term correction between Tier-III and Tier-II. Printed even if not used.")
+         call parse_input_variable(VN_type,"VN_TYPE",InputFile,default="Nlat",comment="Density matrix used to compute the Hartree term mismatch between GoWo and scGW. Available: Nlat, Nimp, None to set VH to zero.")
          call parse_input_variable(Vxc_in,"VXC_IN",InputFile,default=.true.,comment="Flag to include the Vxc potential inside the SigmaG0W0.")
          call parse_input_variable(RecomputeG0W0,"RECOMP_G0W0",InputFile,default=.false.,comment="Flag to recompute the G0W0 self-energy from the SPEX input.")
          if(Hmodel)RecomputeG0W0=.false.

@@ -160,19 +160,26 @@ program SelfConsistency
          !
          !Hartree shift between G0W0 and scGW
          if(addTierIII)then
+            call calc_VH(VH_Nlat,densityLDA,densityGW,Ulat)
+            call calc_VH(VH_Nimp,densityLDA,densityDMFT,Ulat)
             select case(reg(VN_type))
                case default
-                  stop "Wrong entry for VN_TYPE."
+                  stop "Wrong entry for VN_TYPE. Available: Nlat, Nimp, None."
                case("Nlat")
-                  call calc_VH(VH,densityLDA,densityGW,Ulat)
+                  VH = VH_Nlat
+                  call dump_Matrix(VH_Nlat,reg(ItFolder),"VH_Nlat_used.DAT")
+                  call dump_Matrix(VH_Nimp,reg(ItFolder),"VH_Nimp.DAT")
                case("Nimp")
-                  call calc_VH(VH,densityLDA,densityDMFT,Ulat)
+                  VH = VH_Nimp
+                  call dump_Matrix(VH_Nlat,reg(ItFolder),"VH_Nlat.DAT")
+                  call dump_Matrix(VH_Nimp,reg(ItFolder),"VH_Nimp_used.DAT")
+               case("None")
+                  VH = czero
+                  call dump_Matrix(VH_Nlat,reg(ItFolder),"VH_Nlat.DAT")
+                  call dump_Matrix(VH_Nimp,reg(ItFolder),"VH_Nimp.DAT")
+                  write(*,"(A)")"     VH not used."
             end select
-            call dump_Matrix(VH,reg(ItFolder),"VH_"//reg(VN_type)//".DAT")
-            if(.not.VH_use)then
-               VH=czero
-               write(*,"(A)")"     VH not used."
-            endif
+            deallocate(VH_Nlat,VH_Nimp)
          endif
          if(solve_DMFT.and.bosonicSC.and.(.not.Ustart))call DeallocateBosonicField(Ulat)
          !

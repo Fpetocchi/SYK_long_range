@@ -914,7 +914,11 @@ contains
          !
          !---------------------------------------------------------------------!
          !
-         write(*,"(A)")"     Performing Analytic continuation to get SigmaGoWo(ik,iw)."
+         if(DC_)then
+            write(*,"(A)")"     Performing Analytic continuation to get SigmaGoWo_dc(ik,iw)."
+         else
+            write(*,"(A)")"     Performing Analytic continuation to get SigmaGoWo(ik,iw)."
+         endif
          !
          ! Read UWAN file
          if(Lttc%UseDisentangledBS)then
@@ -1353,9 +1357,11 @@ contains
       ! Perform cnalytical continuation on the self-energy on the real axis
       if(recompute_)then
          !
-         !---------------------------------------------------------------------!
-         !
-         write(*,"(A)")"     Reading SPEX self-energy on the imaginary axis."
+         if(DC_)then
+            write(*,"(A)")"     Reading SigmaGoWo_dc(ik,iw) on the imaginary axis."
+         else
+            write(*,"(A)")"     Reading SigmaGoWo(ik,iw) on the imaginary axis."
+         endif
          !
          ! Read UWAN file
          path = reg(pathINPUT)//"UWAN.DAT"
