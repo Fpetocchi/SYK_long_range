@@ -2512,10 +2512,10 @@ contains
       allocate(densityDMFT(Crystal%Norb,Crystal%Norb,Nspin));densityDMFT=czero
       do isite=1,Nsite
          !
-         write(*,"(A)") new_line("A")//"     Collecting occupation of site: "//LocalOrbs(isite)%Name
+         write(*,"(A)") new_line("A")//"     Collecting occupation of site: "//reg(LocalOrbs(isite)%Name)
          !
          !Read the impurity occupation
-         file = reg(PrevItFolder)//"Solver_"//LocalOrbs(isite)%Name//"/resultsQMC/Nqmc.DAT"
+         file = reg(PrevItFolder)//"Solver_"//reg(LocalOrbs(isite)%Name)//"/resultsQMC/Nqmc.DAT"
          call inquireFile(reg(file),filexists,verb=verbose)
          unit = free_unit()
          open(unit,file=reg(file),form="formatted",status="old",position="rewind",action="read")
@@ -2552,13 +2552,13 @@ contains
       call AllocateFermionicField(G_DMFT,Crystal%Norb,Nmats,Nsite=Nsite,Beta=Beta)
       do isite=1,Nsite
          !
-         write(*,"(A)") new_line("A")//"     Collecting the impurity Green's function of site: "//LocalOrbs(isite)%Name
+         write(*,"(A)") new_line("A")//"     Collecting the impurity Green's function of site: "//reg(LocalOrbs(isite)%Name)
          !
          !Read the impurity Green's function
          allocate(tauF(Solver%NtauF_in));tauF = linspace(0d0,Beta,Solver%NtauF_in)
          allocate(Gitau(LocalOrbs(isite)%Norb,Solver%NtauF_in,Nspin));Gitau=czero !dcmplx(-eps,0d0)
          allocate(ReadLine(LocalOrbs(isite)%Nflavor))
-         file = reg(PrevItFolder)//"Solver_"//LocalOrbs(isite)%Name//"/resultsQMC/Gimp_t.DAT"
+         file = reg(PrevItFolder)//"Solver_"//reg(LocalOrbs(isite)%Name)//"/resultsQMC/Gimp_t.DAT"
          call inquireFile(reg(file),filexists,verb=verbose)
          unit = free_unit()
          open(unit,file=reg(file),form="formatted",status="old",position="rewind",action="read")
@@ -2577,7 +2577,7 @@ contains
             !
          enddo
          deallocate(ReadLine,tauF)
-         call dump_MaxEnt(Gitau,"itau",reg(PrevItFolder)//"Convergence/","Gqmc_"//LocalOrbs(isite)%Name)
+         call dump_MaxEnt(Gitau,"itau",reg(PrevItFolder)//"Convergence/","Gqmc_"//reg(LocalOrbs(isite)%Name))
          !
          !FT to the matsubara axis
          allocate(Gmats(LocalOrbs(isite)%Norb,Nmats));Gmats=czero
@@ -2592,7 +2592,7 @@ contains
             endif
          enddo
          deallocate(Gitau,Gmats)
-         call dump_FermionicField(Gimp(isite),reg(PrevItFolder)//"Solver_"//LocalOrbs(isite)%Name//"/","Gimp_"//LocalOrbs(isite)%Name//"_w",paramagnet)
+         call dump_FermionicField(Gimp(isite),reg(PrevItFolder)//"Solver_"//reg(LocalOrbs(isite)%Name)//"/","Gimp_"//reg(LocalOrbs(isite)%Name)//"_w",paramagnet)
          !
          !Insert or Expand to the Lattice basis
          call imp2loc(G_DMFT,Gimp(isite),isite,LocalOrbs,ExpandImpurity,AFMselfcons,RotateHloc,name="Gimp")
@@ -2617,11 +2617,11 @@ contains
       call AllocateFermionicField(S_DMFT,Crystal%Norb,Nmats,Nsite=Nsite,Beta=Beta)
       do isite=1,Nsite
          !
-         write(*,"(A)") new_line("A")//"     Collecting curlyG of site: "//LocalOrbs(isite)%Name
+         write(*,"(A)") new_line("A")//"     Collecting curlyG of site: "//reg(LocalOrbs(isite)%Name)
          !
          !Read curlyG
          call AllocateFermionicField(G0imp,LocalOrbs(isite)%Norb,Nmats,Beta=Beta)
-         call read_FermionicField(G0imp,reg(PrevItFolder)//"Solver_"//LocalOrbs(isite)%Name//"/","G0_"//reg(LocalOrbs(isite)%Name)//"_w")
+         call read_FermionicField(G0imp,reg(PrevItFolder)//"Solver_"//reg(LocalOrbs(isite)%Name)//"/","G0_"//reg(LocalOrbs(isite)%Name)//"_w")
          !
          !Adjust with the chemical potential if the solver has changed it
          if((abs(G0imp%mu-muQMC).gt.1e-5).and.update_curlyG)then
@@ -2638,11 +2638,11 @@ contains
                endif
             enddo
             G0imp%mu=muQMC
-            call dump_FermionicField(G0imp,reg(PrevItFolder)//"Solver_"//LocalOrbs(isite)%Name//"/","G0_"//LocalOrbs(isite)%Name//"_w",paramagnet)
+            call dump_FermionicField(G0imp,reg(PrevItFolder)//"Solver_"//reg(LocalOrbs(isite)%Name)//"/","G0_"//reg(LocalOrbs(isite)%Name)//"_w",paramagnet)
          endif
          !
          !Fermionic Dyson equation in the solver basis (always diagonal)
-         write(*,"(A)") new_line("A")//"     Solving fermionic Dyson of site: "//LocalOrbs(isite)%Name
+         write(*,"(A)") new_line("A")//"     Solving fermionic Dyson of site: "//reg(LocalOrbs(isite)%Name)
          do ispin=1,Nspin
             do iorb=1,LocalOrbs(isite)%Norb
                Simp(isite)%ws(iorb,iorb,:,ispin) = 1d0/G0imp%ws(iorb,iorb,:,ispin) - 1d0/Gimp(isite)%ws(iorb,iorb,:,ispin)
@@ -2657,9 +2657,9 @@ contains
          !Fit the impurity self-energy tail
          if(fitSigmaTail)then
             !
-            call dump_FermionicField(Simp(isite),reg(PrevItFolder)//"Solver_"//LocalOrbs(isite)%Name//"/","S_noFit_"//LocalOrbs(isite)%Name//"_w",paramagnet)
+            call dump_FermionicField(Simp(isite),reg(PrevItFolder)//"Solver_"//reg(LocalOrbs(isite)%Name)//"/","S_noFit_"//reg(LocalOrbs(isite)%Name)//"_w",paramagnet)
             !
-            write(*,"(A)") new_line("A")//"     Fitting self-energy moments of site: "//LocalOrbs(isite)%Name
+            write(*,"(A)") new_line("A")//"     Fitting self-energy moments of site: "//reg(LocalOrbs(isite)%Name)
             !
             !define the frequency index from which substitute the tail
             allocate(wmats(Nmats));wmats=FermionicFreqMesh(Beta,Nmats)
@@ -2672,8 +2672,8 @@ contains
             enddo
             !
             !perform the fit on the diagonal
-            file = "SimpMom_"//LocalOrbs(isite)%Name//".DAT"
-            MomDir = reg(PrevItFolder)//"Solver_"//LocalOrbs(isite)%Name//"/"
+            file = "SimpMom_"//reg(LocalOrbs(isite)%Name)//".DAT"
+            MomDir = reg(PrevItFolder)//"Solver_"//reg(LocalOrbs(isite)%Name)//"/"
             !
             allocate(Moments(LocalOrbs(isite)%Norb,Nspin,0:min(SigmaMaxMom,Nfit)));Moments=0d0
             allocate(Sfit(LocalOrbs(isite)%Norb,Nmats,Nspin))
@@ -2704,7 +2704,7 @@ contains
          !Fill up the N_s attribute that correspond to the Hartree term of the
          !self-energy always diagonal in the solver basis
          call AllocateBosonicField(curlyU,LocalOrbs(isite)%Norb,Nmats,Crystal%iq_gamma,Beta=Beta)
-         call read_BosonicField(curlyU,reg(PrevItFolder)//"Solver_"//LocalOrbs(isite)%Name//"/","curlyU_"//LocalOrbs(isite)%Name//"_w.DAT")
+         call read_BosonicField(curlyU,reg(PrevItFolder)//"Solver_"//reg(LocalOrbs(isite)%Name)//"/","curlyU_"//reg(LocalOrbs(isite)%Name)//"_w.DAT")
          select case(reg(HartreeType))
             case default
                stop "collect_QMC_results: Available HartreeT types: GW or DMFT."
@@ -2750,7 +2750,7 @@ contains
          end select
          !
          !Hartree term in the Solver basis
-         call dump_Matrix(Simp(isite)%N_s,reg(PrevItFolder),"Solver_"//LocalOrbs(isite)%Name//"/Hartree_UNimp_"//LocalOrbs(isite)%Name,paramagnet)
+         call dump_Matrix(Simp(isite)%N_s,reg(PrevItFolder),"Solver_"//reg(LocalOrbs(isite)%Name)//"/Hartree_UNimp_"//reg(LocalOrbs(isite)%Name),paramagnet)
          !
          !Insert or Expand to the Lattice basis
          if(RotateHloc.and.(sym_mode.gt.1))call symmetrize_imp(Simp(isite),LocalOrbs(isite)%Eig)
@@ -2782,14 +2782,14 @@ contains
          !
          do isite=1,Nsite
             !
-            write(*,"(A)") new_line("A")//"     Collecting the impurity susceptibilities of site: "//LocalOrbs(isite)%Name
+            write(*,"(A)") new_line("A")//"     Collecting the impurity susceptibilities of site: "//reg(LocalOrbs(isite)%Name)
             !
             !Read the impurity N(tau)N(0)
             allocate(tauB(Solver%NtauB_in));tauB=0d0
             tauB = linspace(0d0,Beta,Solver%NtauB_in)
             allocate(nnt(LocalOrbs(isite)%Nflavor,LocalOrbs(isite)%Nflavor,Solver%NtauB_in));nnt=0d0
             allocate(ReadLine(LocalOrbs(isite)%Nflavor*(LocalOrbs(isite)%Nflavor+1)/2))
-            file = reg(PrevItFolder)//"Solver_"//LocalOrbs(isite)%Name//"/resultsQMC/nn_t.DAT"
+            file = reg(PrevItFolder)//"Solver_"//reg(LocalOrbs(isite)%Name)//"/resultsQMC/nn_t.DAT"
             call inquireFile(reg(file),filexists,verb=verbose)
             unit = free_unit()
             open(unit,file=reg(file),form="formatted",status="old",position="rewind",action="read")
@@ -2844,13 +2844,13 @@ contains
                   enddo
                enddo
             enddo
-            call dump_BosonicField(ChiMitau,reg(PrevItFolder)//"Solver_"//LocalOrbs(isite)%Name//"/","ChiM_"//LocalOrbs(isite)%Name//"_t.DAT",tauB)
+            call dump_BosonicField(ChiMitau,reg(PrevItFolder)//"Solver_"//reg(LocalOrbs(isite)%Name)//"/","ChiM_"//reg(LocalOrbs(isite)%Name)//"_t.DAT",tauB)
             !
             !FT to get ChiM(iw)
             allocate(wmats(Nmats));wmats=BosonicFreqMesh(Beta,Nmats)
             allocate(ChiMmats(Nmats));ChiMmats=czero
             call Bitau2mats(Beta,ChiMitau,ChiMmats,tau_uniform=.true.)
-            call dump_BosonicField(ChiMmats,reg(PrevItFolder)//"Solver_"//LocalOrbs(isite)%Name//"/","ChiM_"//LocalOrbs(isite)%Name//"_w.DAT",wmats)
+            call dump_BosonicField(ChiMmats,reg(PrevItFolder)//"Solver_"//reg(LocalOrbs(isite)%Name)//"/","ChiM_"//reg(LocalOrbs(isite)%Name)//"_w.DAT",wmats)
             deallocate(ChiMitau,ChiMmats,wmats)
             !
             !
@@ -2909,7 +2909,7 @@ contains
                enddo
             endif
             !
-            call dump_BosonicField(ChiCitau,reg(PrevItFolder)//"Solver_"//LocalOrbs(isite)%Name//"/","ChiC_"//LocalOrbs(isite)%Name//"_t.DAT",axis=tauB)
+            call dump_BosonicField(ChiCitau,reg(PrevItFolder)//"Solver_"//reg(LocalOrbs(isite)%Name)//"/","ChiC_"//reg(LocalOrbs(isite)%Name)//"_t.DAT",axis=tauB)
             deallocate(tauB)
             !
             !FT to get ChiC(iw)
@@ -2920,28 +2920,28 @@ contains
             !
             !Remove the iw=0 divergency of local charge susceptibility
             if(removeCDW_C)then
-               write(*,"(A)") new_line("A")//"     Divergency removal in ChiC(iw=0) of site: "//LocalOrbs(isite)%Name
-               call dump_BosonicField(ChiCmats,reg(PrevItFolder)//"Solver_"//LocalOrbs(isite)%Name//"/","ChiC_CDW_"//LocalOrbs(isite)%Name//"_w.DAT")
+               write(*,"(A)") new_line("A")//"     Divergency removal in ChiC(iw=0) of site: "//reg(LocalOrbs(isite)%Name)
+               call dump_BosonicField(ChiCmats,reg(PrevItFolder)//"Solver_"//reg(LocalOrbs(isite)%Name)//"/","ChiC_CDW_"//reg(LocalOrbs(isite)%Name)//"_w.DAT")
                allocate(CDW(ChiCmats%Nbp,ChiCmats%Nbp));CDW=0d0
                CDW = real(ChiCmats%screened_local(:,:,1))
                call remove_CDW(ChiCmats,"imp")
                CDW = CDW - real(ChiCmats%screened_local(:,:,1))
-               call dump_Matrix(CDW,reg(PrevItFolder)//"Solver_"//LocalOrbs(isite)%Name//"/","CDW_"//LocalOrbs(isite)%Name//".DAT")
+               call dump_Matrix(CDW,reg(PrevItFolder)//"Solver_"//reg(LocalOrbs(isite)%Name)//"/","CDW_"//reg(LocalOrbs(isite)%Name)//".DAT")
                deallocate(CDW)
             endif
             !
             !Print ChiC
-            call dump_BosonicField(ChiCmats,reg(PrevItFolder)//"Solver_"//LocalOrbs(isite)%Name//"/","ChiC_"//LocalOrbs(isite)%Name//"_w.DAT")
+            call dump_BosonicField(ChiCmats,reg(PrevItFolder)//"Solver_"//reg(LocalOrbs(isite)%Name)//"/","ChiC_"//reg(LocalOrbs(isite)%Name)//"_w.DAT")
             !
             !
             !BOSONIC DYSON -----------------------------------------------------
             !
             !recollect curlyU
             call AllocateBosonicField(curlyU,LocalOrbs(isite)%Norb,Nmats,Crystal%iq_gamma,Beta=Beta)
-            call read_BosonicField(curlyU,reg(PrevItFolder)//"Solver_"//LocalOrbs(isite)%Name//"/","curlyU_"//LocalOrbs(isite)%Name//"_w.DAT")
+            call read_BosonicField(curlyU,reg(PrevItFolder)//"Solver_"//reg(LocalOrbs(isite)%Name)//"/","curlyU_"//reg(LocalOrbs(isite)%Name)//"_w.DAT")
             !
             !Bosonic Dyson equation in the solver basis
-            write(*,"(A)") new_line("A")//"     Solving bosonic Dyson of site: "//LocalOrbs(isite)%Name
+            write(*,"(A)") new_line("A")//"     Solving bosonic Dyson of site: "//reg(LocalOrbs(isite)%Name)
             call AllocateBosonicField(Pimp,LocalOrbs(isite)%Norb,Nmats,Crystal%iq_gamma,no_bare=.true.,Beta=Beta)
             call calc_Pimp(Pimp,curlyU,ChiCmats)
             !
@@ -3002,6 +3002,7 @@ contains
          deallocate(LocalOrbs(isite)%rho_Flav)
          deallocate(LocalOrbs(isite)%rho_OrbSpin)
          deallocate(LocalOrbs(isite)%Docc)
+         if(ExpandImpurity.or.AFMselfcons)exit
       enddo
       !
    end subroutine collect_QMC_results
