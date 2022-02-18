@@ -51,7 +51,6 @@ module interactions
    public :: calc_QMCinteractions
    public :: calc_curlyU
    public :: calc_Wimp
-   !public :: rescale_interaction
 
    !===========================================================================!
 
@@ -2791,17 +2790,15 @@ contains
             Kfunct(:,:,itau) = dreal(Ktmp(:,:,itau) - Ktmp(:,:,1))
             if(sym_)call check_Symmetry(Kfunct(:,:,itau),eps,enforce=.true.,hardstop=.false.,name="K_t"//str(itau))
          enddo
+         deallocate(Ktmp,Kaux)
          !
          !Mid-point derivative since the coefficients for Bmats2itau are assuming even bosonic functions
-         deallocate(Ktmp,Kaux)
-         allocate(Kaux(Nflavor,Nflavor,0:Solver%NtauB+1));Kaux=czero
-         Kaux(:,:,1:Solver%NtauB) = Kfunct
-         Kaux(:,:,0) = -Kaux(:,:,2)
-         Kaux(:,:,Solver%NtauB+1) = -Kaux(:,:,Solver%NtauB-1)
          allocate(Ktmp(Nflavor,Nflavor,Solver%NtauB));Ktmp=czero
-         do itau=1,Solver%NtauB
-            Ktmp(:,:,itau) = ( Kaux(:,:,itau-1) - Kaux(:,:,itau+1) ) / ( tau(1)-tau(3) )
+         do itau=2,Solver%NtauB-1
+            Ktmp(:,:,itau) = ( Kfunct(:,:,itau-1) - Kfunct(:,:,itau+1) ) / ( tau(itau-1)-tau(itau+1) )
          enddo
+         Ktmp(:,:,1) = ( Kfunct(:,:,2) - Kfunct(:,:,1) ) / ( tau(2)-tau(1) )
+         Ktmp(:,:,Solver%NtauB) = ( Kfunct(:,:,Solver%NtauB) - Kfunct(:,:,Solver%NtauB-1) ) / ( tau(Solver%NtauB)-tau(Solver%NtauB-1) )
          if(Kp_out)then
             Kpfunct = dreal(Ktmp)
             do itau=1,Solver%NtauB
@@ -2813,9 +2810,8 @@ contains
             if(sym_)call check_Symmetry(Screening,eps,enforce=.true.,hardstop=.false.,name="Screening")
          endif
          !
+         deallocate(Ktmp,tau,wmats)
       endif
-      !
-      if(retarded)deallocate(Kaux,Ktmp,tau,wmats)
       !
    end subroutine calc_QMCinteractions
 

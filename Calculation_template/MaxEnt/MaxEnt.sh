@@ -23,7 +23,7 @@ width="200"                    # -W
 JOR="1"                        # -j
 SPIN="1"                       # -s Available: "1" "2"
 #SOURCE=   MUST BE PROVIDED    # -i Available: "lat", "imp", "qmc_El"
-BINPATH=/home/petocchif/1_GW_EDMFT/nobackup/1_production/Calculation_template
+BINPATH=/home/petocchif/1_GW_EDMFT/GenericMaterial/Calculation_template
 
 
 
@@ -154,20 +154,22 @@ echo
 ################################################################################
 cat << EOF > submit_MaxEnt
 #!/bin/bash
-#$ -S /bin/bash
-#$ -cwd
-#$ -N   ${JOBNAME}
-#$ -e   error.out
-#$ -o   log.out
-#$ -pe  smp 1
-#$ -q   ${QUEUES}
+#SBATCH --job-name=${JOBNAME}
+#SBATCH --output=%x-%j.out
+#SBATCH --error=%x-%j.err
+#SBATCH --time=1-00:00:00
+#SBATCH --ntasks=1
+#SBATCH --cpus-per-task=1
+#SBATCH --mem-per-cpu=2G
+#SBATCH --account=unifr
+#SBATCH --partition=new
 
 echo \$RUNOPTIONS
 export PYTHONPATH=\${PYTHONPATH}:${BIN}/docopt/
 export OMP_NUM_THREADS=1
 
-mpiexec -np 1 python3.6  ${BIN}/bryan.py ${RUNOPTIONS} ${DATA_} > job.out 2> err.out
+srun python3.6  ${BIN}/bryan.py ${RUNOPTIONS} ${DATA_} > job.out 2> err.out
 
 EOF
 
-qsub submit_MaxEnt
+sbatch submit_MaxEnt
