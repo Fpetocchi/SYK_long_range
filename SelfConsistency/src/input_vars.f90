@@ -404,9 +404,12 @@ contains
          enddo
          allocate(EqvGWndx%SetOrbs(EqvGWndx%Nset,maxval(EqvGWndx%SetNorb)));EqvGWndx%SetOrbs=0
          do iset=1,EqvGWndx%Nset
-            allocate(tmpOrbs(1:EqvGWndx%SetNorb(iset)));tmpOrbs=0
-            call parse_input_variable(EqvGWndx%SetOrbs(iset,1:EqvGWndx%SetNorb(iset)),"EQV_ORBS_"//str(iset),InputFile,default=tmpOrbs,comment="Lattice orbital indexes of equivalent set number "//str(iset))
-            deallocate(tmpOrbs)
+            !TEST>>>
+            !allocate(tmpOrbs(1:EqvGWndx%SetNorb(iset)));tmpOrbs=0
+            !call parse_input_variable(EqvGWndx%SetOrbs(iset,1:EqvGWndx%SetNorb(iset)),"EQV_ORBS_"//str(iset),InputFile,default=tmpOrbs,comment="Lattice orbital indexes of equivalent set number "//str(iset))
+            !deallocate(tmpOrbs)
+            call parse_input_variable(EqvGWndx%SetOrbs(iset,1:EqvGWndx%SetNorb(iset)),"EQV_ORBS_"//str(iset),InputFile,comment="Lattice orbital indexes of equivalent set number "//str(iset))
+            !>>>TEST
          enddo
       endif
       if(EqvGWndx%para.gt.0)EqvGWndx%S=.true. !generic spin symmetrization

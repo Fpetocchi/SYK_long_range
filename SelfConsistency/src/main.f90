@@ -15,7 +15,7 @@ program SelfConsistency
    implicit none
    !
    integer                                  :: TimeStart
-   integer                                  :: isite
+   integer                                  :: isite                            ,iset
    integer                                  :: Iteration,ItStart,Itend
 
 #ifdef _akw
@@ -212,6 +212,7 @@ program SelfConsistency
                !
             endif
             !
+            if(addTierIII) call dump_FermionicField(S_G0W0,reg(pathINPUTtr),"SGoWo_w",paramagnet)  ! this is redundant but its just to remove any dependency from the 0th iteration folder
             call dump_FermionicField(S_G0W0,reg(ItFolder),"Slat_w",paramagnet)
             call dump_MaxEnt(S_G0W0,"mats",reg(ItFolder)//"Convergence/","Slat",EqvGWndx%SetOrbs,WmaxPade=PadeWlimit)
             !
@@ -352,6 +353,19 @@ program SelfConsistency
       call execute_command_line(" cp used."//reg(InputFile)//" "//reg(ItFolder))
       if(solve_DMFT)call execute_command_line(" touch doSolver ")
    endif
+   !
+   !TEST>>>
+   write(*,"(A)") new_line("A")//new_line("A")//"---- symmetrized orbital sets"
+   write(*,"(A,1I3)") "     Provided sets: ",EqvGWndx%Nset
+   write(*,"(A,1I3)") "     Expanded sets: ",EqvGWndx%Ntotset
+   do iset=1,size(EqvGWndx%SetOrbs,dim=1)
+      write(*,"(2(A,I3),A,10I3)")"     set: ",iset,", number of orbitals: ",EqvGWndx%SetNorb(iset),", indexes: ",EqvGWndx%SetOrbs(iset,:)
+   enddo
+   write(*,"(A,L)") "     Symmetrizing off-diagonal: ",EqvGWndx%Gfoffdiag
+   if(sym_mode.eq.1)write(*,"(A)") "     Only lattice quantities will be symmetrized."
+   if(sym_mode.eq.2)write(*,"(A)") "     Both lattice and impurity quantities will be symmetrized."
+   if(sym_mode.eq.3)write(*,"(A)") "     Only impurity quantities will be symmetrized."
+   !>>>TEST
    !
 end program SelfConsistency
 

@@ -1,9 +1,10 @@
 #!/bin/bash
 #
-QUEUES="new.q"
+QUEUE="new"
+MEM="2G"
 #
 ################################################################################
-#                                USER SETTINGS                                 #
+#                            REQUIRED USER SETTINGS                            #
 ################################################################################
 G_model=" " #  -M 0.5,1"
 W_model=" " #  -m "$SRC"/Wmodel.dat"
@@ -29,9 +30,9 @@ BINPATH=/home/petocchif/1_GW_EDMFT/GenericMaterial/Calculation_template
 
 
 ################################################################################
-#                             PROVIDED ARGUMENTS                               #
+#                              PROVIDED ARGUMENTS                              #
 ################################################################################
-while getopts ":e:w:W:f:o:j:s:i:p:" o; do
+while getopts ":e:w:W:f:o:j:s:i:p:q:" o; do
    case ${o} in
       e) #ERROR
          #echo ${OPTARG}
@@ -79,6 +80,10 @@ while getopts ":e:w:W:f:o:j:s:i:p:" o; do
       p) #PATH TO MAXENT FOLDER
          #echo ${OPTARG}
          BINPATH="${OPTARG}"
+         ;;
+      q) #SELECTED QUEUE
+         QUEUE="${OPTARG}"
+         if [ "$QUEUE"  != "new" ] && [ "$QUEUE"  != "amd" ]; then echo "Option Error - q" ; exit 1 ; fi
          ;;
       \? )
          echo "Invalid option: $OPTARG" 1>&2
@@ -136,7 +141,7 @@ fi
 
 
 ################################################################################
-#                                  PRINT INFOS                                 #
+#                                 PRINT INFOS                                  #
 ################################################################################
 BIN=${BINPATH}/MaxEnt
 echo
@@ -144,13 +149,15 @@ echo "Binary from: " ${BIN}
 echo "Run options: "${RUNOPTIONS}
 echo "File: "${DATA_}
 echo "Jobname: "${JOBNAME}
+echo "Queue: "${QUEUE}
+echo "Memory: "${MEM}
 echo
 
 
 
 
 ################################################################################
-#                                 SCRIPT CREATION                              #
+#                               SCRIPT CREATION                                #
 ################################################################################
 cat << EOF > submit_MaxEnt
 #!/bin/bash
@@ -160,9 +167,9 @@ cat << EOF > submit_MaxEnt
 #SBATCH --time=1-00:00:00
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=1
-#SBATCH --mem-per-cpu=2G
+#SBATCH --mem-per-cpu=${MEM}
 #SBATCH --account=unifr
-#SBATCH --partition=new
+#SBATCH --partition=${QUEUE}
 
 echo \$RUNOPTIONS
 export PYTHONPATH=\${PYTHONPATH}:${BIN}/docopt/

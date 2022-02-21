@@ -413,6 +413,7 @@ contains
       character(len=*),intent(in)           :: readpath
       logical,intent(in)                    :: paramagnet
       integer                               :: ispin,Nspin
+      logical                               :: filexists
       !
       if(verbose)write(*,"(A)") "---- read_Matrix_local_spin_d"
       Nspin = size(Umat,dim=3)
@@ -424,7 +425,17 @@ contains
          enddo
       else
          do ispin=1,Nspin
-            call read_Matrix_local_d(Umat(:,:,ispin),reg(readpath)//"_s"//str(ispin)//".DAT")
+            if(ispin.ne.1)then
+               call inquireFile(reg(readpath)//"_s"//str(ispin)//".DAT",filexists,verb=verbose,hardstop=.false.)
+               if(filexists)then
+                  call read_Matrix_local_d(Umat(:,:,ispin),reg(readpath)//"_s"//str(ispin)//".DAT")
+               else
+                  write(*,"(A)") "     Copying from "//reg(readpath)//"_s1.DAT"
+                  Umat(:,:,ispin) = Umat(:,:,1)
+               endif
+            else
+               call read_Matrix_local_d(Umat(:,:,ispin),reg(readpath)//"_s"//str(ispin)//".DAT")
+            endif
          enddo
       endif
       !
@@ -477,6 +488,7 @@ contains
       character(len=*),intent(in)           :: readpath
       logical,intent(in)                    :: paramagnet
       integer                               :: ispin,Nspin
+      logical                               :: filexists
       !
       if(verbose)write(*,"(A)") "---- read_Matrix_local_spin_z"
       Nspin = size(Umat,dim=3)
@@ -488,7 +500,17 @@ contains
          enddo
       else
          do ispin=1,Nspin
-            call read_Matrix_local_z(Umat(:,:,ispin),reg(readpath)//"_s"//str(ispin)//".DAT")
+            if(ispin.ne.1)then
+               call inquireFile(reg(readpath)//"_s"//str(ispin)//".DAT",filexists,verb=verbose,hardstop=.false.)
+               if(filexists)then
+                  call read_Matrix_local_z(Umat(:,:,ispin),reg(readpath)//"_s"//str(ispin)//".DAT")
+               else
+                  write(*,"(A)") "     Copying from "//reg(readpath)//"_s1.DAT"
+                  Umat(:,:,ispin) = Umat(:,:,1)
+               endif
+            else
+               call read_Matrix_local_z(Umat(:,:,ispin),reg(readpath)//"_s"//str(ispin)//".DAT")
+            endif
          enddo
       endif
       !

@@ -3,7 +3,7 @@
 ################################################################################
 
 GENMAT=/home/petocchif/1_GW_EDMFT/GenericMaterial/Calculation_template
-for it in `seq  15 1 22` ; do
+for it in `seq  25 1 32` ; do
    cd $it/Convergence
    cp ${GENMAT}/${MATERIAL}/MaxEnt/MaxEnt.sh .
    chmod 700 MaxEnt.sh
@@ -11,21 +11,21 @@ for it in `seq  15 1 22` ; do
    PARAM="-e 0.0015 -w 8001 -W 200"
    ./MaxEnt.sh ${PARAM} -f G -o 1 -i lat -p ${GENMAT}
    PARAM="-e 0.001 -w 8001 -W 200"
-   ./MaxEnt.sh ${PARAM} -f G -o 1 -i qmc_Ti -p ${GENMAT}
-   ./MaxEnt.sh ${PARAM} -f G -o 2 -i qmc_Ti -p ${GENMAT}
-   ./MaxEnt.sh ${PARAM} -f G -o 3 -i qmc_Ti -p ${GENMAT}
+   ./MaxEnt.sh ${PARAM} -f G -o 1 -i qmc_Ti -p ${GENMAT} -q amd
+   ./MaxEnt.sh ${PARAM} -f G -o 2 -i qmc_Ti -p ${GENMAT} -q amd
+   ./MaxEnt.sh ${PARAM} -f G -o 3 -i qmc_Ti -p ${GENMAT} -q amd
    #
    PARAM="-e 0.02 -w 9000 -W 600"
-   ./MaxEnt.sh ${PARAM} -f W -o 1 -i lat -p ${GENMAT}
+   ./MaxEnt.sh ${PARAM} -f W -o 1 -i lat -p ${GENMAT} -q amd
    #
    PARAM="-e 0.01 -w 9000 -W 600"
-   ./MaxEnt.sh ${PARAM} -f C -o 1 -i imp -p ${GENMAT}
+   ./MaxEnt.sh ${PARAM} -f C -o 1 -i imp -p ${GENMAT} -q amd
    #
    PARAM="-e 0.01 -w 9000 -W 600"
-   ./MaxEnt.sh ${PARAM} -f P -o 1 -i imp -p ${GENMAT}
+   ./MaxEnt.sh ${PARAM} -f P -o 1 -i imp -p ${GENMAT} -q amd
    #
    PARAM="-e 0.01 -w 9000 -W 600"
-   ./MaxEnt.sh ${PARAM} -f curlyU -o 1 -i imp -p ${GENMAT}
+   ./MaxEnt.sh ${PARAM} -f curlyU -o 1 -i imp -p ${GENMAT} -q amd
    #
    cd ../../
 done
