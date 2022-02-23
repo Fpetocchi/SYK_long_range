@@ -273,8 +273,8 @@ contains
       character(len=*)                      :: InputFile
       integer                               :: isite,ilayer,iset,iph,irange
       integer                               :: isym_user
-      integer,allocatable                   :: tmpOrbs(:)
       logical                               :: readVnn
+      !integer,allocatable                   :: tmpOrbs(:)
       !
       !OMP parallelization.
       !call execute_command_line(" lscpu | grep 'CPU(s):       ' | awk '{print $2}' > Nthread.used ")

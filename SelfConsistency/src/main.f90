@@ -183,46 +183,34 @@ program SelfConsistency
          endif
          if(solve_DMFT.and.bosonicSC.and.(.not.Ustart))call DeallocateBosonicField(Ulat)
          !
-         !read from SPEX G0W0 self-energy and Vexchange
+         !read from SPEX G0W0 self-energy, double counting and Vexchange
          call AllocateFermionicField(S_G0W0,Crystal%Norb,Nmats,Nkpt=Crystal%Nkpt,Nsite=Nsite,Beta=Beta)
-         if(addTierIII) call read_Sigma_spex(SpexVersion,S_G0W0,Crystal,verbose,RecomputeG0W0,Vxc)
+         if(addTierIII) then
+            ! this is used as self-energy in the 0th iteration or in model calculations
+            call read_Sigma_spex(SpexVersion,S_G0W0,Crystal,verbose,RecomputeG0W0,Vxc)
+            ! this is used only for ab-initio calculations
+            call AllocateFermionicField(S_G0W0dc,Crystal%Norb,Nmats,Nkpt=Crystal%Nkpt,Nsite=Nsite,Beta=Beta)
+            if(calc_S_G0W0dc)then
+               write(*,"(A,F)")"     Computing dc between G0W0 and scGW."
+               call calc_sigmaGW(S_G0W0dc,Glat,Wlat,Crystal)!,LDAoffdiag=.false.) I believed the scGWdc should have had OD terms removed but its not working
+               call dump_FermionicField(S_G0W0dc,reg(pathINPUTtr),"SGoWo_dc_w",.true.,Crystal%kpt,paramagnet)
+               call dump_FermionicField(S_G0W0dc,reg(pathINPUTtr),"SGoWo_dc_w",paramagnet)
+            elseif(spex_S_G0W0dc)then
+               write(*,"(A,F)")"     Reading dc between G0W0 and scGW from SPEX_VERSION: "//reg(SpexVersion)
+               call read_Sigma_spex(SpexVersion,S_G0W0dc,Crystal,verbose,RecomputeG0W0,Vxc,DC=.true.)
+            endif
+         endif
          !
          !scGW
          if(Iteration.eq.0)then
             !
-            if(addTierIII)then
-               !
-               !Store the Dc between G0W0 and scGW self-energies and use G0W0 as self-energy for the first iteration
-               call AllocateFermionicField(S_G0W0dc,Crystal%Norb,Nmats,Nkpt=Crystal%Nkpt,Nsite=Nsite,Beta=Beta)
-               if(calc_S_G0W0dc)then
-                  write(*,"(A,F)")"     Computing dc between G0W0 and scGW."
-                  call calc_sigmaGW(S_G0W0dc,Glat,Wlat,Crystal)!,LDAoffdiag=.false.) I believed the scGWdc should have had OD terms removed but its not working
-                  call dump_FermionicField(S_G0W0dc,reg(pathINPUTtr),"SGoWo_dc_w",.true.,Crystal%kpt,paramagnet)
-                  call dump_FermionicField(S_G0W0dc,reg(pathINPUTtr),"SGoWo_dc_w",paramagnet)
-               elseif(spex_S_G0W0dc)then
-                  write(*,"(A,F)")"     Reading dc between G0W0 and scGW from SPEX_VERSION: "//reg(SpexVersion)
-                  call read_Sigma_spex(SpexVersion,S_G0W0dc,Crystal,verbose,RecomputeG0W0,Vxc,DC=.true.)
-               endif
-               call DeallocateFermionicField(S_G0W0dc)
-               !
-            else
-               !
-               !Use directly the GW formula since G0W0 is absent for model calculations
-               call calc_sigmaGW(S_G0W0,Glat,Wlat,Crystal)
-               !
-            endif
+            !Use directly the GW formula since G0W0 is absent for model calculations
+            if(.not.addTierIII) call calc_sigmaGW(S_G0W0,Glat,Wlat,Crystal)
             !
-            if(addTierIII) call dump_FermionicField(S_G0W0,reg(pathINPUTtr),"SGoWo_w",paramagnet)  ! this is redundant but its just to remove any dependency from the 0th iteration folder
             call dump_FermionicField(S_G0W0,reg(ItFolder),"Slat_w",paramagnet)
             call dump_MaxEnt(S_G0W0,"mats",reg(ItFolder)//"Convergence/","Slat",EqvGWndx%SetOrbs,WmaxPade=PadeWlimit)
             !
          elseif(Iteration.gt.0)then
-            !
-            !Read the Dc between G0W0 and scGW if present
-            if(addTierIII)then
-               call AllocateFermionicField(S_G0W0dc,Crystal%Norb,Nmats,Nkpt=Crystal%Nkpt,Nsite=Nsite,Beta=Beta)
-               call read_FermionicField(S_G0W0dc,reg(pathINPUTtr),"SGoWo_dc_w",kpt=Crystal%kpt)
-            endif
             !
             !Compute the scGW self-energy
             call AllocateFermionicField(S_GW,Crystal%Norb,Nmats,Nkpt=Crystal%Nkpt,Nsite=Nsite,Beta=Beta)

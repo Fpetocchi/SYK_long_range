@@ -1185,6 +1185,7 @@ contains
             ! Print out the transformed stuff
             call dump_FermionicField(Smats_GoWo,reg(pathOUTPUT_),"SGoWo_w",.true.,Lttc%kpt,paramagneticSPEX)
             if(save2readable)call dump_FermionicField(Smats_GoWo,reg(pathOUTPUT_)//"Sigma_imag/","SGoWo_w",.false.,Lttc%kpt,paramagneticSPEX)
+            call dump_FermionicField(Smats_GoWo,reg(pathOUTPUT_),"SGoWo_w",paramagneticSPEX)
             !
             ! Read the Vxc and print it out
             if(doVxc)then
@@ -1563,6 +1564,7 @@ contains
             !
             ! Print out the transformed stuff
             call dump_FermionicField(Smats_GoWo,reg(pathOUTPUT_),"SGoWo_w",.true.,Lttc%kpt,paramagneticSPEX)
+            call dump_FermionicField(Smats_GoWo,reg(pathOUTPUT_),"SGoWo_w",paramagneticSPEX)
             !
             ! Read or print print Vxc out
             if(doVxc)then
