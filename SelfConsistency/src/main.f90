@@ -186,18 +186,27 @@ program SelfConsistency
          !read from SPEX G0W0 self-energy, double counting and Vexchange
          call AllocateFermionicField(S_G0W0,Crystal%Norb,Nmats,Nkpt=Crystal%Nkpt,Nsite=Nsite,Beta=Beta)
          if(addTierIII) then
-            ! this is used as self-energy in the 0th iteration or in model calculations
+            !
+            !G0W0 self-energy: used as self-energy in the 0th iteration or in model calculations
             call read_Sigma_spex(SpexVersion,S_G0W0,Crystal,verbose,RecomputeG0W0,Vxc)
-            ! this is used only for ab-initio calculations
+            !
+            !G0W0 double counting: this is used only for ab-initio calculations
             call AllocateFermionicField(S_G0W0dc,Crystal%Norb,Nmats,Nkpt=Crystal%Nkpt,Nsite=Nsite,Beta=Beta)
-            if(calc_S_G0W0dc)then
-               write(*,"(A,F)")"     Computing dc between G0W0 and scGW."
-               call calc_sigmaGW(S_G0W0dc,Glat,Wlat,Crystal)!,LDAoffdiag=.false.) I believed the scGWdc should have had OD terms removed but its not working
-               call dump_FermionicField(S_G0W0dc,reg(pathINPUTtr),"SGoWo_dc_w",.true.,Crystal%kpt,paramagnet)
-               call dump_FermionicField(S_G0W0dc,reg(pathINPUTtr),"SGoWo_dc_w",paramagnet)
-            elseif(spex_S_G0W0dc)then
-               write(*,"(A,F)")"     Reading dc between G0W0 and scGW from SPEX_VERSION: "//reg(SpexVersion)
-               call read_Sigma_spex(SpexVersion,S_G0W0dc,Crystal,verbose,RecomputeG0W0,Vxc,DC=.true.)
+            !
+            !read if exists otherwise compute a new one
+            call inquireFile(reg(pathINPUTtr)//"SGoWo_dc_w_k_s1.DAT",S_G0W0dc_exist,hardstop=.false.,verb=verbose)
+            if(S_G0W0dc_exist)then
+               call read_FermionicField(S_G0W0dc,reg(pathINPUTtr),"SGoWo_dc_w",Crystal%kpt)
+            else
+               if(calc_S_G0W0dc)then
+                  write(*,"(A,F)")"     Computing dc between G0W0 and scGW."
+                  call calc_sigmaGW(S_G0W0dc,Glat,Wlat,Crystal)!,LDAoffdiag=.false.) I believed the scGWdc should have had OD terms removed but its not working
+                  call dump_FermionicField(S_G0W0dc,reg(pathINPUTtr),"SGoWo_dc_w",.true.,Crystal%kpt,paramagnet)
+                  call dump_FermionicField(S_G0W0dc,reg(pathINPUTtr),"SGoWo_dc_w",paramagnet)
+               elseif(spex_S_G0W0dc)then
+                  write(*,"(A,F)")"     Reading dc between G0W0 and scGW from SPEX_VERSION: "//reg(SpexVersion)
+                  call read_Sigma_spex(SpexVersion,S_G0W0dc,Crystal,verbose,RecomputeG0W0,Vxc,DC=.true.)
+               endif
             endif
          endif
          !

@@ -78,6 +78,7 @@ module utils_main
    logical                                  :: calc_Sigmak=.false.
    logical                                  :: merge_Sigma=.false.
    !
+   logical                                  :: S_G0W0dc_exist=.false.
    logical                                  :: calc_S_G0W0dc=.false.
    logical                                  :: spex_S_G0W0dc=.false.
    !
