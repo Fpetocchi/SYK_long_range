@@ -613,21 +613,20 @@ VecVec measure_nnt( VecVec &n_tau)
    return nn_corr_meas;
 }
 
-void accumulate_nnt( VecVec &nn_corr_meas, VecVec &n_tau, double Beta=0.0 )
+void accumulate_nnt( VecVec &nn_corr_meas, VecVec &n_tau, int nnt_shift=0 )
 {
    //
    int Nflavor = n_tau.size();
    int Ntau = n_tau[0].size();
-   double dtau = Beta/(Ntau-1);
 
    //
    int position=0;
    for (int ifl=0; ifl<Nflavor; ++ifl)
    {
-      double ni = std::accumulate(n_tau[ifl].begin(), n_tau[ifl].end(), 0.0)*dtau;
+      double ni = std::accumulate(n_tau[ifl].begin(), n_tau[ifl].end(), 0.0) * nnt_shift/(Ntau-1) ;
       for (int jfl=0; jfl<=ifl; ++jfl)
       {
-         double nj = std::accumulate(n_tau[jfl].begin(), n_tau[jfl].end(), 0.0)*dtau;
+         double nj = std::accumulate(n_tau[jfl].begin(), n_tau[jfl].end(), 0.0) * nnt_shift/(Ntau-1) ;
          for (int i=0; i<Ntau; ++i)
          {
             for (int index=0; index<Ntau; ++index)
@@ -642,13 +641,12 @@ void accumulate_nnt( VecVec &nn_corr_meas, VecVec &n_tau, double Beta=0.0 )
    }
 }
 
-void accumulate_nnt( VecVec &nn_corr_meas, VecVec &n_tau, double s, int Nmeas, double Beta=0.0 )
+void accumulate_nnt( VecVec &nn_corr_meas, VecVec &n_tau, double s, int Nmeas, int nnt_shift=0 )
 {
    //
    int Nflavor = n_tau.size();
    int Ntau = n_tau[0].size();
    double coeff=s/Nmeas;
-   double dtau = Beta/(Ntau-1);
 
    //
    int position=0;

@@ -575,8 +575,8 @@ class ct_hyb
          accumulate_Szhist( Szhist, n_tau );
          //
          // n(tau)n(0) - computed every Nmeas - step sum
-         if(NnntMeas>1) accumulate_nnt( nnt, n_tau, s, NnntMeas, (nnt_shift==1 ? Beta : 0.0) );
-         if(NnntMeas==1) accumulate_nnt( nnt, n_tau, (nnt_shift==1 ? Beta : 0.0) );
+         if(NnntMeas>1) accumulate_nnt( nnt, n_tau, s, NnntMeas, nnt_shift );
+         if(NnntMeas==1) accumulate_nnt( nnt, n_tau, nnt_shift );
          //
          //.....................................................................
 
