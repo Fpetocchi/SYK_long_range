@@ -158,7 +158,6 @@ module parameters
       integer,allocatable                   :: SetOrbs(:,:)
       logical                               :: Gfoffdiag=.true.
       logical                               :: O=.false.
-      logical                               :: S=.false.
       !I'm writing this as integers due to some mismatch on how to write boolean between fortrann and c++
       integer                               :: para=1
    end type Equivalent
@@ -207,6 +206,7 @@ module parameters
       integer                               :: Nshift=0
       integer                               :: Nswap=0
       integer                               :: N_nnt=0
+      integer                               :: nnt_shift=0
       integer                               :: PrintTime=0
       integer                               :: binlength=0
       integer                               :: binstart=0

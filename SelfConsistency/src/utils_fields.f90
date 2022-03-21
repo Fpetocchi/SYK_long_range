@@ -1622,8 +1622,8 @@ contains
       if(present(override))orbsym = override
       !
       if(Eqv%para.eq.1)then
-         Mat(:,:,1) = (Mat(:,:,1) + Mat(:,:,2))/2d0
-         Mat(:,:,2) = Mat(:,:,1)
+         Mat(:,:,1) = (Mat(:,:,1) + Mat(:,:,Nspin))/2d0
+         Mat(:,:,Nspin) = Mat(:,:,1)
       endif
       !
       if(orbsym)then
@@ -1738,8 +1738,8 @@ contains
       if(present(override))orbsym = override
       !
       if(Eqv%para.eq.1)then
-         Mat(:,:,1) = (Mat(:,:,1) + Mat(:,:,2))/2d0
-         Mat(:,:,2) = Mat(:,:,1)
+         Mat(:,:,1) = (Mat(:,:,1) + Mat(:,:,Nspin))/2d0
+         Mat(:,:,Nspin) = Mat(:,:,1)
       endif
       !
       if(orbsym)then
@@ -1855,12 +1855,12 @@ contains
       !
       if(Eqv%para.eq.1)then
          !
-         G%N_s(:,:,1) = (G%N_s(:,:,1) + G%N_s(:,:,2))/2d0
-         G%N_s(:,:,2) = G%N_s(:,:,1)
+         G%N_s(:,:,1) = (G%N_s(:,:,1) + G%N_s(:,:,Nspin))/2d0
+         G%N_s(:,:,Nspin) = G%N_s(:,:,1)
          !
          do ip=1,G%Npoints
-            G%ws(:,:,ip,1) = (G%ws(:,:,ip,1) + G%ws(:,:,ip,2))/2d0
-            G%ws(:,:,ip,2) = G%ws(:,:,ip,1)
+            G%ws(:,:,ip,1) = (G%ws(:,:,ip,1) + G%ws(:,:,ip,Nspin))/2d0
+            G%ws(:,:,ip,Nspin) = G%ws(:,:,ip,1)
          enddo
          !
       endif
@@ -2317,7 +2317,6 @@ contains
       !
       !The spin symmetrization is done in utils_main
       Eqv_diag%para = 0
-      Eqv_diag%S = .false.
       !
       !The off-diagonal components are absent by constuction
       Eqv_diag%Gfoffdiag = .false.
@@ -2377,7 +2376,6 @@ contains
       !
       !The spin symmetrization is done in utils_main
       Eqv_diag%para = 0
-      Eqv_diag%S = .false.
       !
       !The off-diagonal components are absent by constuction
       Eqv_diag%Gfoffdiag = .false.
@@ -2439,7 +2437,6 @@ contains
       !
       !The spin symmetrization is done in utils_main
       Eqv_diag%para = 0
-      Eqv_diag%S = .false.
       !
       !The off-diagonal components are absent by constuction
       Eqv_diag%Gfoffdiag = .false.

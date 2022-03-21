@@ -368,7 +368,7 @@ void measure_G( Vec &G, segment_container_t &segment, Mat &M, double &Beta, doub
             bool nanCond = std::isnan(G[index]);
             bool infCond = std::isinf(G[index]);
             if( nanCond || infCond )
-            { 
+            {
                if( nanCond ) printf(" NaN G[%d] \n",index);
                if( infCond ) printf(" Inf G[%d] \n",index);
                printf(" M[%d,%d]= %f \n",k,i,M(k,i));
@@ -613,25 +613,28 @@ VecVec measure_nnt( VecVec &n_tau)
    return nn_corr_meas;
 }
 
-void accumulate_nnt( VecVec &nn_corr_meas, VecVec &n_tau )
+void accumulate_nnt( VecVec &nn_corr_meas, VecVec &n_tau, double Beta=0.0 )
 {
    //
    int Nflavor = n_tau.size();
    int Ntau = n_tau[0].size();
+   double dtau = Beta/(Ntau-1);
 
    //
    int position=0;
    for (int ifl=0; ifl<Nflavor; ++ifl)
    {
+      double ni = std::accumulate(n_tau[ifl].begin(), n_tau[ifl].end(), 0.0)*dtau;
       for (int jfl=0; jfl<=ifl; ++jfl)
       {
+         double nj = std::accumulate(n_tau[jfl].begin(), n_tau[jfl].end(), 0.0)*dtau;
          for (int i=0; i<Ntau; ++i)
          {
             for (int index=0; index<Ntau; ++index)
             {
                int j=i+index;
                if (j>Ntau-1) j -= (Ntau-1);
-               nn_corr_meas[position][index] += n_tau[ifl][i]*n_tau[jfl][j] / (double)Ntau;
+               nn_corr_meas[position][index] += (n_tau[ifl][i]*n_tau[jfl][j] - ni*nj ) / (double)Ntau;
             }
          }
          position++;
@@ -639,12 +642,13 @@ void accumulate_nnt( VecVec &nn_corr_meas, VecVec &n_tau )
    }
 }
 
-void accumulate_nnt( VecVec &nn_corr_meas, VecVec &n_tau, double s, int Nmeas)
+void accumulate_nnt( VecVec &nn_corr_meas, VecVec &n_tau, double s, int Nmeas, double Beta=0.0 )
 {
    //
    int Nflavor = n_tau.size();
    int Ntau = n_tau[0].size();
    double coeff=s/Nmeas;
+   double dtau = Beta/(Ntau-1);
 
    //
    int position=0;

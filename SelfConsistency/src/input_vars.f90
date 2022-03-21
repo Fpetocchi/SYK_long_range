@@ -183,6 +183,7 @@ module input_vars
    logical,public                           :: Mixing_Delta_tau
    real(8),public                           :: Mixing_Delta
    real(8),public                           :: Mixing_curlyU
+   integer,public                           :: Mixing_period
    logical,public                           :: causal_D
    logical,public                           :: causal_U
    logical,public                           :: recalc_Hartree
@@ -412,7 +413,6 @@ contains
             !>>>TEST
          enddo
       endif
-      if(EqvGWndx%para.gt.0)EqvGWndx%S=.true. !generic spin symmetrization
       if(EqvGWndx%Nset.gt.0)then
          call parse_input_variable(sym_mode,"SYM_MODE",InputFile,default=3,comment="If =1 only the lattice orbitals will be symmetrized, if =2 also the corresponding n(tau) inside the solver, if =3 (PREFERRED) only n(tau). 0 to avoid.")
       else
@@ -544,6 +544,7 @@ contains
       call parse_input_variable(Mixing_Delta_tau,"MIX_D_TAU",InputFile,default=.true.,comment="Flag to mix Delta(tau) if false the mix is done with Delta(iw).")
       call parse_input_variable(Mixing_Delta,"MIX_D",InputFile,default=0.5d0,comment="Fraction of the old iteration Delta.")
       call parse_input_variable(Mixing_curlyU,"MIX_U",InputFile,default=0.5d0,comment="Fraction of the old iteration curlyU.")
+      call parse_input_variable(Mixing_period,"MIX_P",InputFile,default=1,comment="Backward distance with mixing iteration. if=1 mixing with the previous iteration.")
       call parse_input_variable(causal_D,"CAUSAL_D",InputFile,default=.false.,comment="Flag to employ generalized fermionic cavity construction. Active only for GW+EDMFT calculation.")
       if(reg(CalculationType).ne."GW+EDMFT")causal_D=.false.
       call parse_input_variable(causal_U,"CAUSAL_U",InputFile,default=.false.,comment="Flag to employ generalized bosonic cavity construction. Active only for GW+EDMFT calculation.")
@@ -654,7 +655,8 @@ contains
       call parse_input_variable(Solver%Ntherm,"NTHERM",InputFile,default=100,comment="Thermalization cycles. Each cycle performs NMEAS sweeps.")
       call parse_input_variable(Solver%Nshift,"NSHIFT",InputFile,default=1,comment="Proposed segment shifts at each sweep.")
       call parse_input_variable(Solver%Nswap,"NSWAP",InputFile,default=1,comment="Proposed global spin swaps at each sweep.")
-      call parse_input_variable(Solver%N_nnt,"N_NNT",InputFile,default=1,comment="Measurment for n(tau)n(0) evaluation. Updated according to CALC_TYPE. Should be either =1 or 2*NTAU_B_IMP.")
+      call parse_input_variable(Solver%N_nnt,"N_NNT",InputFile,default=1,comment="Measurment for <n_a(tau)n_b(0)> evaluation. Updated according to CALC_TYPE. Should be either =1 or 2*NTAU_B_IMP.")
+      call parse_input_variable(Solver%nnt_shift,"NNT_SHIFT",InputFile,default=0,comment="If =1 the solver provides directly <n_a(tau)n_b(0)> - <n_a><n_b>.")
       if(.not.bosonicSC)Solver%N_nnt=0
       call parse_input_variable(Solver%PrintTime,"PRINT_TIME",InputFile,default=10,comment="Minutes that have to pass before observables are updated and stored.")
       call parse_input_variable(Solver%binlength,"BINLENGTH",InputFile,default=4,comment="If >0 the Green's function at itau will be the average within +/-binlength.")

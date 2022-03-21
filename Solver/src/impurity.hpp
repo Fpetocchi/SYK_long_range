@@ -37,7 +37,7 @@ class ct_hyb
       //----------------------------------------------------------------------//
 
       ct_hyb( path inputDir, path SiteName, double beta, int Nspin, int Norb, int NtauF, int NtauB,
-              int Norder, bool Gexp, int Nmeas, int Ntherm, int NsegShift, int NspinSwap, int NnntMeas,
+              int Norder, bool Gexp, int Nmeas, int Ntherm, int NsegShift, int NspinSwap, int NnntMeas, int nnt_shift,
               bool removeUhalf, bool paramagnet, bool retarded, std::vector<int> SetsNorb,
               int printTime, std::vector<int> bins, CustomMPI &mpi):
       inputDir(inputDir),
@@ -54,6 +54,7 @@ class ct_hyb
       NsegShift(NsegShift),
       NspinSwap(NspinSwap),
       NnntMeas(NnntMeas),
+      nnt_shift(nnt_shift),
       removeUhalf(removeUhalf),
       paramagnet(paramagnet),
       retarded(retarded),
@@ -240,10 +241,10 @@ class ct_hyb
          //initialize observables
          sign_meas=0.0;
          sign.resize(Nflavor,1.0);                                              // ( std::vector<double> )
+         Order.resize(Nflavor,std::vector<double>(Norder,0.0));                  // ( std::vector<std::vector<double>> )
          Nloc.resize(Nflavor,0.0);                                              // ( std::vector<double> )
          Nhist.resize(Nflavor+1,0.0);                                           // ( std::vector<double> )
          Szhist.resize(Nflavor/2+1,0.0);                                        // ( std::vector<double> )
-         Pert.resize(Nflavor,std::vector<double>(Norder,0.0));                  // ( std::vector<std::vector<double>> )
          G.resize(Nflavor,std::vector<double>(NtauF,0.0));                      // ( std::vector<std::vector<double>> )
          Gerr.resize(Nflavor,std::vector<double>(NtauF,0.0));                   // ( std::vector<std::vector<double>> )
          nt.resize(Nflavor,std::vector<double>(NtauB,0.0));                     // ( std::vector<std::vector<double>> )
@@ -391,6 +392,7 @@ class ct_hyb
       int                                 NsegShift;
       int                                 NspinSwap;
       int                                 NnntMeas;
+      int                                 nnt_shift;
       bool                                removeUhalf;
       bool                                screenshift;
       bool                                paramagnet;
@@ -436,7 +438,7 @@ class ct_hyb
       double                              RankSign,WorldSign;                   // Total Sign
       Vec                                 sign;                                 // Sign per flavor
       Vec                                 Nloc;                                 // Density per flavor
-      VecVec                              Pert;                                 // Perturbation order
+      VecVec                              Order;                                // Perturbation order
       Vec                                 Nhist;                                //
       Vec                                 Szhist;                               //
       VecVec                              G;                                    // Impurity Green's function
@@ -518,6 +520,9 @@ class ct_hyb
                // sign among the segments
                s *= sign[ifl];
                //
+               // pertrbation order
+               if( segments[ifl].size()<Norder ) Order[ifl][(int)segments[ifl].size()] += 1/(double)Nmeas_;
+               //
                // flavour occupation - measurment averaged
                N_tmp[ifl] += compute_overlap(full_segment, segments[ifl], full_line[ifl], Beta)/(Beta*Nmeas_);
                //
@@ -563,7 +568,6 @@ class ct_hyb
          // n(tau) - computed every Nmeas - symmetrization - step sum
          VecVec n_tau(Nflavor,Vec(NtauB,0.0));
          n_tau = measure_nt( segments, full_line, NtauB, Beta );
-         //if(OrbSym) orb_symm( n_tau, SetsOrbs ); this is wrong as nnt is reduced too much
          accumulate_VecVec( nt, n_tau );
          //
          // Histograms - computed every Nmeas - step sum
@@ -571,8 +575,8 @@ class ct_hyb
          accumulate_Szhist( Szhist, n_tau );
          //
          // n(tau)n(0) - computed every Nmeas - step sum
-         if(NnntMeas>1) accumulate_nnt( nnt, n_tau, s, NnntMeas );
-         if(NnntMeas==1) accumulate_nnt( nnt, n_tau );
+         if(NnntMeas>1) accumulate_nnt( nnt, n_tau, s, NnntMeas, (nnt_shift==1 ? Beta : 0.0) );
+         if(NnntMeas==1) accumulate_nnt( nnt, n_tau, (nnt_shift==1 ? Beta : 0.0) );
          //
          //.....................................................................
 
@@ -647,6 +651,10 @@ class ct_hyb
             print_Vec(resultsDir+"/Nqmc_rank"+str(mpi.rank())+pad, PrintNloc, mu);
             mpi.report(" Nqmc_rank"+str(mpi.rank())+pad+" is printed.");
             //
+            // perturbation order
+            print_VecVec(resultsDir+"/Order_rank"+str(mpi.rank())+pad, Order, 0.0, (double)RankSweeps);
+            mpi.report(" Order_rank"+str(mpi.rank())+pad+" is printed.");
+            //
             // error estimate and binning
             if(bins[0]>0)
             {
@@ -695,6 +703,13 @@ class ct_hyb
          if(mpi.is_master()) print_Vec(resultsDir+"/Nqmc"+pad, PrintNloc, mu);
          mpi.report(" Nqmc"+pad+" is printed.");
          //
+         // perturbation order
+         VecVec NormOrder = normalize_VecVec(Order, RankSweeps); // done before allreduce to overcome overfloat error for large RankSweeps
+         VecVec PrintOrder(Nflavor,std::vector<double>(Norder,0.0));
+         mpi.allreduce(NormOrder, PrintOrder, true);
+         if(mpi.is_master()) print_VecVec(resultsDir+"/Order"+pad, PrintOrder);
+         mpi.report(" Order"+pad+" is printed.");
+         //
          // error estimate and binning
          if(bins[0]>0)
          {
@@ -715,7 +730,7 @@ class ct_hyb
             G[ifl].front() = +Ntmp[ifl]-(long double)RankSweeps ;
             G[ifl].back()  = -Ntmp[ifl];
          }
-         VecVec NormG = normalize_VecVec(G, RankSweeps);
+         VecVec NormG = normalize_VecVec(G, RankSweeps); // done before allreduce to overcome overfloat error for large RankSweeps
          VecVec PrintG(Nflavor,std::vector<double>(NtauF,0.0));
          mpi.allreduce(NormG, PrintG, true);
          if(mpi.is_master()) print_VecVec(resultsDir+"/Gimp_t"+pad, PrintG, Beta);

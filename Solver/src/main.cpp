@@ -36,7 +36,7 @@ int main(int argc, char *argv[])
    // Global Vars
    double Beta;
    int Nspin,NtauF,NtauB,Norder;
-   int Nmeas,Ntherm,Nshift,Nswap,Nnnt,printTime;
+   int Nmeas,Ntherm,Nshift,Nswap,Nnnt,nnt_shift,printTime;
    //logical flags and compatibility typo fix
    bool Gexp,paramagnet,retarded,removeUhalf,quickloops;
    int Gexp_read,para_read,ret_read,rmvU2_read,quick_read;
@@ -93,6 +93,7 @@ int main(int argc, char *argv[])
       find_param(argv[1], "NSHIFT"          , Nshift      );
       find_param(argv[1], "NSWAP"           , Nswap       );
       find_param(argv[1], "N_NNT"           , Nnnt        );
+      find_param(argv[1], "NNT_SHIFT"       , nnt_shift  );
       find_param(argv[1], "PRINT_TIME"      , printTime   );
       find_param(argv[1], "PARAMAGNET"      , para_read   ); paramagnet = (para_read == 1) ? true : false;
       find_param(argv[1], "RETARDED"        , ret_read    ); retarded = (ret_read == 1) ? true : false;
@@ -124,6 +125,7 @@ int main(int argc, char *argv[])
          mpi.report(" Nshift= "+str(Nshift));
          mpi.report(" Nswap= "+str(Nswap));
          mpi.report(" Nnnt= "+str(Nnnt));
+         mpi.report(" nnt_shift= "+str(nnt_shift));
          mpi.report(" printTime= "+str(printTime)+"min");
          mpi.report(" retarded= "+str(retarded));
          mpi.report(" quickloops= "+str(quickloops));
@@ -243,7 +245,7 @@ int main(int argc, char *argv[])
          {
             mpi.report(" Folder = "+SiteDir[isite]+" (Found).");
             ImpurityList.push_back( ct_hyb( SiteDir[isite], SiteName[isite], Beta, Nspin, SiteNorb[isite], NtauF, NtauB,
-                                            Norder, Gexp, Nmeas, Ntherm, Nshift, Nswap, Nnnt,
+                                            Norder, Gexp, Nmeas, Ntherm, Nshift, Nswap, Nnnt, nnt_shift,
                                             removeUhalf, paramagnet, retarded, SiteSetsNorb[isite],
                                             printTime, std::vector<int> { binlength,binstart }, mpi ) );
             ImpurityList[isite].init();

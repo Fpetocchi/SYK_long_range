@@ -90,7 +90,7 @@ module utils_main
    logical                                  :: MultiTier=.false.
    logical                                  :: print_path=.false.
    !
-   character(len=255)                       :: ItFolder,PrevItFolder
+   character(len=255)                       :: ItFolder,PrevItFolder,MixItFolder
    character(len=256)                       :: MaxEnt_K
 
    !---------------------------------------------------------------------------!
@@ -325,6 +325,8 @@ contains
       !These are used throughout the whole calculation
       ItFolder = reg(pathDATA)//str(ItStart)//"/"
       PrevItFolder = reg(pathDATA)//str(ItStart-1)//"/"
+      MixItFolder = reg(pathDATA)//str(ItStart-Mixing_period)//"/"
+      !
       MaxEnt_K = reg(ItFolder)//"K_resolved/"
       !
       !Creates folders for the K-resolved data
@@ -508,10 +510,6 @@ contains
          MultiTier = .true.
          if(Hetero%status) stop "MultiTier construction and Heterostructured setup are not allowed together."
          if(RotateHloc.or.RotateUloc) stop "MultiTier construction and Rotations of the local space are not allowed together."
-         if(reg(DC_type).eq."GlocWloc")then
-            DC_type="Sloc"
-            write(*,"(A,1I3)") "     DC_TYPE updated from GlocWloc to "//reg(DC_type)
-         endif
          !
       endif
       !
@@ -534,6 +532,7 @@ contains
       !if(EqvGWndx%Nset.eq.0) --> Nothing to symmetrize
       !if((EqvGWndx%Nset.ne.0).and.(.not.ExpandImpurity)) --> Singularly include in the list all the orbitals not included in the user provided list (if any)
       !if((EqvGWndx%Nset.ne.0).and.ExpandImpurity) ---------> Expand the list like the orbitals are expanded
+      if(sym_mode.eq.0)EqvGWndx%Nset=0
       if(EqvGWndx%Nset.eq.0)then
          !
          EqvGWndx%O=.false.
@@ -543,7 +542,7 @@ contains
       elseif((EqvGWndx%Nset.ne.0).and.(.not.ExpandImpurity))then
          !
          EqvGWndx%O = sym_mode.le.2
-         EqvGWndx%Ntotset=EqvGWndx%Nset
+         EqvGWndx%Ntotset = EqvGWndx%Nset
          EqvGWndx%Gfoffdiag = sym_mode.le.2
          !
          if(sum(EqvGWndx%SetNorb).lt.Lttc%Norb)then
@@ -779,12 +778,19 @@ contains
                do iset=1,EqvImpndx(isite)%Nset
                   EqvImpndx(isite)%SetNorb(iset) = size( pack( EqvImpndx(isite)%SetOrbs(iset,:), EqvImpndx(isite)%SetOrbs(iset,:).gt.0 ) )
                enddo
+               EqvImpndx(isite)%O=.true.
                !
             else
                !
                EqvImpndx(isite)%Nset = 0
+               EqvImpndx(isite)%O=.false.
                !
             endif
+            !
+            !This might cause some problem when only a subset of impurity orbitals are symmetrized
+            EqvImpndx(isite)%Ntotset = EqvImpndx(isite)%Nset
+            EqvImpndx(isite)%para = EqvGWndx%para
+            EqvImpndx(isite)%Gfoffdiag = .true. ! beacuse of curlyU
             !
             if(ExpandImpurity.or.AFMselfcons)exit
             !
@@ -800,6 +806,7 @@ contains
             EqvImpndx(isite)%Nset = 0
             EqvImpndx(isite)%SetNorb = 0
             EqvImpndx(isite)%SetOrbs = 0
+            EqvImpndx(isite)%para = EqvGWndx%para
             !
             !loop over lattice sets
             do iset=1,EqvGWndx%Nset
@@ -816,9 +823,15 @@ contains
                   EqvImpndx(isite)%Nset = EqvImpndx(isite)%Nset+1
                   EqvImpndx(isite)%SetNorb(EqvImpndx(isite)%Nset) = EqvGWndx%SetNorb(iset)
                   EqvImpndx(isite)%SetOrbs(EqvImpndx(isite)%Nset,:) = EqvGWndx%SetOrbs(iset,:) - (LocalOrbs(isite)%Orbs(1)-1)
+                  EqvImpndx(isite)%O=.true.
                endif
                !
             enddo
+            !
+            !This might cause some problem when only a subset of impurity orbitals are symmetrized
+            EqvImpndx(isite)%Ntotset = EqvImpndx(isite)%Nset
+            EqvImpndx(isite)%para = EqvGWndx%para
+            EqvImpndx(isite)%Gfoffdiag = .true. ! beacuse of curlyU
             !
             if(ExpandImpurity.or.AFMselfcons)exit
             !
@@ -1722,7 +1735,7 @@ contains
       integer                               :: itau,ndx,wndx
       real(8),allocatable                   :: wmats(:),tau(:),Moments(:,:,:)
       real(8),allocatable                   :: Uinst(:,:),rhoLAT(:),N_s(:,:,:)
-      real(8),allocatable                   :: Eloc(:,:),ElocOld(:,:),PrintLine(:),coef01(:,:)
+      real(8),allocatable                   :: Eloc(:,:),ElocOld(:,:),Eloc_s(:,:,:),PrintLine(:),coef01(:,:)
       real(8)                               :: tailShift,CrystalField,taup
       complex(8),allocatable                :: zeta(:,:,:),invG(:,:)
       complex(8),allocatable                :: Dfit(:,:,:),Dmats(:,:,:),Ditau(:,:,:)
@@ -1912,11 +1925,6 @@ contains
       end select
       deallocate(Dfit)
       !
-      if(EqvGWndx%para.eq.1)then
-         Eloc(:,1) = (Eloc(:,1) + Eloc(:,Nspin))/2d0
-         Eloc(:,Nspin) = Eloc(:,1)
-      endif
-      !
       !Compute Delta on matsubara
       allocate(Dmats(Norb,Nmats,Nspin));Dmats=czero
       do ispin=1,Nspin
@@ -1938,26 +1946,29 @@ contains
       enddo
       deallocate(invCurlyG)
       !
-      !Mixing Delta(iw) and local energy
+      !Mixing local energy and optionally Delta(iw)
       if((Mixing_Delta.gt.0d0).and.(Iteration.gt.0))then
          !
-         write(*,"(A)")"     Mixing Delta and Eo with "//str(Mixing_Delta,3)//" of old solution."
          if(.not.Mixing_Delta_tau)then
-            write(*,"(A)")"     Mixing Delta(iw)."
-            call AllocateFermionicField(DeltaOld,Norb,Nmats,Beta=Beta)
-            call read_FermionicField(DeltaOld,reg(PrevItFolder)//"Solver_"//reg(LocalOrbs(isite)%Name)//"/","Delta_"//reg(LocalOrbs(isite)%Name)//"_w")
-            do ispin=1,Nspin
-               do iw=1,Nmats
-                  do iorb=1,Norb
-                     Dmats(iorb,iw,ispin) = (1d0-Mixing_Delta)*Dmats(iorb,iw,ispin) + Mixing_Delta*DeltaOld%ws(iorb,iorb,iw,ispin)
+            write(*,"(A)")"     Mixing Delta(iw) with "//str(Mixing_Delta,3)//" of old solution."
+            if(.not.Mixing_Delta_tau)then
+               write(*,"(A)")"     Mixing Delta(iw)."
+               call AllocateFermionicField(DeltaOld,Norb,Nmats,Beta=Beta)
+               call read_FermionicField(DeltaOld,reg(MixItFolder)//"Solver_"//reg(LocalOrbs(isite)%Name)//"/","Delta_"//reg(LocalOrbs(isite)%Name)//"_w")
+               do ispin=1,Nspin
+                  do iw=1,Nmats
+                     do iorb=1,Norb
+                        Dmats(iorb,iw,ispin) = (1d0-Mixing_Delta)*Dmats(iorb,iw,ispin) + Mixing_Delta*DeltaOld%ws(iorb,iorb,iw,ispin)
+                     enddo
                   enddo
                enddo
-            enddo
-            call DeallocateFermionicField(DeltaOld)
+               call DeallocateFermionicField(DeltaOld)
+            endif
          endif
          !
+         write(*,"(A)")"     Mixing Eloc with "//str(Mixing_Delta,3)//" of old solution."
          allocate(ElocOld(Norb,Nspin));ElocOld=0d0
-         file = reg(PrevItFolder)//"Solver_"//reg(LocalOrbs(isite)%Name)//"/Eloc.DAT"
+         file = reg(MixItFolder)//"Solver_"//reg(LocalOrbs(isite)%Name)//"/Eloc.DAT"
          unit = free_unit()
          open(unit,file=reg(file),form="formatted",status="unknown",position="rewind",action="read")
          read(unit,*)
@@ -1970,8 +1981,9 @@ contains
          !
       endif
       !
-      !Symmetrizations - If sets are defined Delta is always symmetrized
+      !Symmetrizations - If sets are defined Delta and Eloc are always symmetrized
       if(sym_mode.gt.0)then
+         !
          call AllocateFermionicField(DeltaSym,Norb,Nmats,Beta=Beta)
          do iorb=1,Norb
             DeltaSym%ws(iorb,iorb,:,:) = Dmats(iorb,:,:)
@@ -1979,12 +1991,31 @@ contains
          if(RotateHloc)then
             call symmetrize_imp(DeltaSym,LocalOrbs(isite)%Eig)
             if(causal_D)call symmetrize_imp(DeltaCorr,LocalOrbs(isite)%Eig)
+         else
+            call symmetrize_GW(DeltaSym,EqvImpndx(isite))
+            if(causal_D)call symmetrize_GW(DeltaCorr,EqvImpndx(isite))
          endif
          do iorb=1,Norb
             Dmats(iorb,:,:) = DeltaSym%ws(iorb,iorb,:,:)
          enddo
          call DeallocateFermionicField(DeltaSym)
+         !
+         allocate(Eloc_s(Norb,Norb,Nspin));Eloc_s=0d0
+         do ispin=1,Nspin
+            Eloc_s(:,:,ispin) = diag(Eloc(:,ispin))
+         enddo
+         if(RotateHloc)then
+            call symmetrize_imp(Eloc_s,LocalOrbs(isite)%Eig)
+         else
+            call symmetrize_GW(Eloc_s,EqvImpndx(isite))
+         endif
+         do ispin=1,Nspin
+            Eloc(:,ispin) = diagonal(Eloc_s(:,:,ispin))
+         enddo
+         deallocate(Eloc_s)
+         !
       endif
+      !
       if(EqvGWndx%para.eq.1)then
          Dmats(:,:,1) = (Dmats(:,:,1) + Dmats(:,:,Nspin))/2d0
          Dmats(:,:,Nspin) = Dmats(:,:,1)
@@ -2027,11 +2058,13 @@ contains
       !Mixing Delta(tau)
       if((Mixing_Delta.gt.0d0).and.(Iteration.gt.0).and.Mixing_Delta_tau)then
          !
+         write(*,"(A)")"     Mixing Delta(tau) with "//str(Mixing_Delta,3)//" of old solution."
+         !
          !reading old Delta for each site
          allocate(tauF(Solver%NtauF_in));tauF = linspace(0d0,Beta,Solver%NtauF_in)
          allocate(DitauOld(Norb,Solver%NtauF_in,Nspin));DitauOld=czero
          allocate(ReadLine(LocalOrbs(isite)%Nflavor))
-         file = reg(PrevItFolder)//"Solver_"//reg(LocalOrbs(isite)%Name)//"/Delta_t.DAT"
+         file = reg(MixItFolder)//"Solver_"//reg(LocalOrbs(isite)%Name)//"/Delta_t.DAT"
          call inquireFile(reg(file),filexists,verb=verbose)
          unit = free_unit()
          open(unit,file=reg(file),form="formatted",status="old",position="rewind",action="read")
@@ -2063,9 +2096,6 @@ contains
          !
       endif
       !
-      !for half-filled model calculations the local energy is zero
-      !if(Solver%removeUhalf) Eloc=0d0
-      !
       !Write Eloc and chemical potential
       if(addCF)then
          file = reg(ItFolder)//"Solver_"//reg(LocalOrbs(isite)%Name)//"/Eloc_noCF.DAT"
@@ -2073,7 +2103,7 @@ contains
          open(unit,file=reg(file),form="formatted",status="unknown",position="rewind",action="write")
          write(unit,"(1E20.12)") Glat%mu
          do iorb=1,Norb
-            write(unit,"(2E20.12)") ((Eloc(iorb,ispin)+(-1d0**mod(ispin,2))*EqvGWndx%hseed),ispin=1,Nspin)
+            write(unit,"(2E20.12)") Eloc(iorb,1)-EqvGWndx%hseed, Eloc(iorb,Nspin)+EqvGWndx%hseed
          enddo
          close(unit)
       endif
@@ -2084,7 +2114,7 @@ contains
       CrystalField=0d0
       do iorb=1,Norb
          if(addCF) CrystalField = LocalOrbs(isite)%CrystalField(iorb)
-         write(unit,"(2E20.12)") ((Eloc(iorb,ispin)+(-1d0**mod(ispin,2))*EqvGWndx%hseed+CrystalField),ispin=1,Nspin)
+         write(unit,"(2E20.12)")  Eloc(iorb,1)-EqvGWndx%hseed+CrystalField, Eloc(iorb,Nspin)+EqvGWndx%hseed+CrystalField
       enddo
       close(unit)
       !
@@ -2219,30 +2249,16 @@ contains
       allocate(Uinst(LocalOrbs(isite)%Nflavor,LocalOrbs(isite)%Nflavor));Uinst=0d0
       call AllocateBosonicField(curlyU,Norb,Nmats,Crystal%iq_gamma,Beta=Beta)
       !
+      !get interaction
       select case(reg(CalculationType))
          case default
             !
             stop "If you got so far somethig is wrong."
             !
-         case("DMFT+statU")
+         case("DMFT+statU","DMFT+dynU")
             !
             call loc2imp(curlyU,Ulat,LocalOrbs(isite)%Orbs)
-            !
             if(RotateUloc) call TransformBosonicField(curlyU,LocalOrbs(isite)%Rot,PhysicalUelements%Full_Map)
-            !
-            !istantaneous interaction
-            call calc_QMCinteractions(curlyU,Uinst)
-            !
-         case("DMFT+dynU")
-            !
-            call loc2imp(curlyU,Ulat,LocalOrbs(isite)%Orbs)
-            !
-            if(RotateUloc) call TransformBosonicField(curlyU,LocalOrbs(isite)%Rot,PhysicalUelements%Full_Map)
-            !
-            !istantaneous interaction, retarded function and screening matrix
-            allocate(Kfunct(LocalOrbs(isite)%Nflavor,LocalOrbs(isite)%Nflavor,Solver%NtauB));Kfunct=0d0
-            allocate(ScreeningMat(LocalOrbs(isite)%Nflavor,LocalOrbs(isite)%Nflavor));ScreeningMat=0d0
-            call calc_QMCinteractions(curlyU,Uinst,Kfunct=Kfunct,Screening=ScreeningMat)
             !
          case("EDMFT","GW+EDMFT")
             !
@@ -2250,7 +2266,6 @@ contains
                !
                write(*,"(A)") "     Using local Ucrpa as effective interaction."
                call loc2imp(curlyU,Ulat,LocalOrbs(isite)%Orbs)
-               !
                if(RotateUloc) call TransformBosonicField(curlyU,LocalOrbs(isite)%Rot,PhysicalUelements%Full_Map)
                !
             else
@@ -2289,7 +2304,7 @@ contains
                write(*,"(A)")"     Mixing curlyU with "//str(Mixing_curlyU,3)//" of old solution."
                call dump_BosonicField(curlyU,reg(ItFolder)//"Solver_"//reg(LocalOrbs(isite)%Name)//"/","curlyU_noMix_"//reg(LocalOrbs(isite)%Name)//"_w.DAT")
                call AllocateBosonicField(curlyUold,Norb,Nmats,Crystal%iq_gamma,Beta=Beta)
-               call read_BosonicField(curlyUold,reg(PrevItFolder)//"Solver_"//reg(LocalOrbs(isite)%Name)//"/","curlyU_"//reg(LocalOrbs(isite)%Name)//"_w.DAT")
+               call read_BosonicField(curlyUold,reg(MixItFolder)//"Solver_"//reg(LocalOrbs(isite)%Name)//"/","curlyU_"//reg(LocalOrbs(isite)%Name)//"_w.DAT")
                curlyU%bare_local = (1d0-Mixing_curlyU)*curlyU%bare_local + Mixing_curlyU*curlyUold%bare_local
                do iw=1,Nmats
                   curlyU%screened_local(:,:,iw) = (1d0-Mixing_curlyU)*curlyU%screened_local(:,:,iw) + Mixing_curlyU*curlyUold%screened_local(:,:,iw)
@@ -2297,12 +2312,20 @@ contains
                call DeallocateBosonicField(curlyUold)
             endif
             !
-            !istantaneous interaction, retarded function and screening matrix
+      end select
+      !
+      !Symmetrizations - If sets are defined curlyU is always symmetrized
+      if(sym_mode.gt.0) call symmetrize_GW(curlyU,EqvImpndx(isite))
+      !
+      !Extract istantaneous interaction and screening function
+      select case(reg(CalculationType))
+         case("DMFT+statU")
+            call calc_QMCinteractions(curlyU,Uinst)
+         case("DMFT+dynU","EDMFT","GW+EDMFT")
             allocate(Kfunct(LocalOrbs(isite)%Nflavor,LocalOrbs(isite)%Nflavor,Solver%NtauB));Kfunct=0d0
             allocate(Kpfunct(LocalOrbs(isite)%Nflavor,LocalOrbs(isite)%Nflavor,Solver%NtauB));Kpfunct=0d0
             allocate(ScreeningMat(LocalOrbs(isite)%Nflavor,LocalOrbs(isite)%Nflavor));ScreeningMat=0d0
             call calc_QMCinteractions(curlyU,Uinst,Kfunct=Kfunct,Kpfunct=Kpfunct,Screening=ScreeningMat)
-            !
       end select
       !
       !Print curlyU in the solver basis
@@ -2440,7 +2463,7 @@ contains
       integer                               :: iorb,jorb,ispin,jspin
       integer                               :: ib1,ib2,isite,idum
       integer                               :: unit,ndx,itau,iw,wndx,wndxOpt
-      real(8)                               :: taup,muQMC
+      real(8)                               :: taup,muQMC,Nfact
       real(8),allocatable                   :: tauF(:),tauB(:),wmats(:)
       real(8),allocatable                   :: ReadLine(:)
       real(8),allocatable                   :: Moments(:,:,:)
@@ -2866,8 +2889,10 @@ contains
                   do ispin=1,Nspin
                      do jspin=1,Nspin
                         !
+                        Nfact=1d0
+                        if(Solver%nnt_shift.eq.1) Nfact=0d0
                         ChiCitau%screened_local(ib1,ib2,:) = ChiCitau%screened_local(ib1,ib2,:) + &
-                        ( NNitau(iorb,jorb,ispin,jspin,:) - LocalOrbs(isite)%rho_OrbSpin(iorb,iorb,ispin)*LocalOrbs(isite)%rho_OrbSpin(jorb,jorb,jspin) )
+                        ( NNitau(iorb,jorb,ispin,jspin,:) - Nfact * LocalOrbs(isite)%rho_OrbSpin(iorb,iorb,ispin) * LocalOrbs(isite)%rho_OrbSpin(jorb,jorb,jspin) )
                         !
                      enddo
                   enddo
@@ -3182,7 +3207,7 @@ contains
             write(*,"("//str(Norb)//"F"//str(wn)//".4,"//str(ws)//"X)") (dreal(densityGW(iorb,iorb,1)-densityDMFT(iorb,iorb,1)),iorb=1,Norb)
             write(*,*)
             !
-            if((.not.EqvGWndx%S).and.(Nspin.ne.1))then
+            if((EqvGWndx%para.eq.0).and.(Nspin.ne.1))then
                write(*,*)
                write(*,"(A"//str(wn*Norb)//","//str(ws)//"X)")banner(trim(header7)//" dw",wn*Norb)
                write(*,"("//str(Norb)//"F"//str(wn)//".4,"//str(ws)//"X)") (dreal(densityGW(iorb,iorb,2)-densityDMFT(iorb,iorb,2)),iorb=1,Norb)
