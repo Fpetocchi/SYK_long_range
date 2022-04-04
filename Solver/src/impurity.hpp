@@ -37,7 +37,7 @@ class ct_hyb
       //----------------------------------------------------------------------//
 
       ct_hyb( path inputDir, path SiteName, double beta, int Nspin, int Norb, int NtauF, int NtauB,
-              int Norder, bool Gexp, int Nmeas, int Ntherm, int NsegShift, int NspinSwap, int NnntMeas, int nnt_shift,
+              int Norder, bool Gexp, int Nmeas, int Ntherm, int NsegShift, int NspinSwap, int NnntMeas,
               bool removeUhalf, bool paramagnet, bool retarded, std::vector<int> SetsNorb,
               int printTime, std::vector<int> bins, CustomMPI &mpi):
       inputDir(inputDir),
@@ -54,7 +54,6 @@ class ct_hyb
       NsegShift(NsegShift),
       NspinSwap(NspinSwap),
       NnntMeas(NnntMeas),
-      nnt_shift(nnt_shift),
       removeUhalf(removeUhalf),
       paramagnet(paramagnet),
       retarded(retarded),
@@ -392,7 +391,6 @@ class ct_hyb
       int                                 NsegShift;
       int                                 NspinSwap;
       int                                 NnntMeas;
-      int                                 nnt_shift;
       bool                                removeUhalf;
       bool                                screenshift;
       bool                                paramagnet;
@@ -575,8 +573,8 @@ class ct_hyb
          accumulate_Szhist( Szhist, n_tau );
          //
          // n(tau)n(0) - computed every Nmeas - step sum
-         if(NnntMeas>1) accumulate_nnt( nnt, n_tau, s, NnntMeas, nnt_shift );
-         if(NnntMeas==1) accumulate_nnt( nnt, n_tau, nnt_shift );
+         if(NnntMeas>1) accumulate_nnt( nnt, n_tau, s, NnntMeas );
+         if(NnntMeas==1) accumulate_nnt( nnt, n_tau );
          //
          //.....................................................................
 

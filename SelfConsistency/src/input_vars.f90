@@ -233,7 +233,7 @@ module input_vars
    logical,public                           :: bosonicSC=.false.
    !
    !Testing flags
-   logical,private                          :: Testing=.false.
+   logical,private                          :: Testing=.true.
    logical,public                           :: Test_flag_1=.false.
    logical,public                           :: Test_flag_2=.false.
    logical,public                           :: Test_flag_3=.false.
@@ -405,12 +405,7 @@ contains
          enddo
          allocate(EqvGWndx%SetOrbs(EqvGWndx%Nset,maxval(EqvGWndx%SetNorb)));EqvGWndx%SetOrbs=0
          do iset=1,EqvGWndx%Nset
-            !TEST>>>
-            !allocate(tmpOrbs(1:EqvGWndx%SetNorb(iset)));tmpOrbs=0
-            !call parse_input_variable(EqvGWndx%SetOrbs(iset,1:EqvGWndx%SetNorb(iset)),"EQV_ORBS_"//str(iset),InputFile,default=tmpOrbs,comment="Lattice orbital indexes of equivalent set number "//str(iset))
-            !deallocate(tmpOrbs)
             call parse_input_variable(EqvGWndx%SetOrbs(iset,1:EqvGWndx%SetNorb(iset)),"EQV_ORBS_"//str(iset),InputFile,comment="Lattice orbital indexes of equivalent set number "//str(iset))
-            !>>>TEST
          enddo
       endif
       if(EqvGWndx%Nset.gt.0)then
@@ -656,7 +651,6 @@ contains
       call parse_input_variable(Solver%Nshift,"NSHIFT",InputFile,default=1,comment="Proposed segment shifts at each sweep.")
       call parse_input_variable(Solver%Nswap,"NSWAP",InputFile,default=1,comment="Proposed global spin swaps at each sweep.")
       call parse_input_variable(Solver%N_nnt,"N_NNT",InputFile,default=1,comment="Measurment for <n_a(tau)n_b(0)> evaluation. Updated according to CALC_TYPE. Should be either =1 or 2*NTAU_B_IMP.")
-      call parse_input_variable(Solver%nnt_shift,"NNT_SHIFT",InputFile,default=0,comment="If =1 the solver provides directly <n_a(tau)n_b(0)> - <n_a><n_b>.")
       if(.not.bosonicSC)Solver%N_nnt=0
       call parse_input_variable(Solver%PrintTime,"PRINT_TIME",InputFile,default=10,comment="Minutes that have to pass before observables are updated and stored.")
       call parse_input_variable(Solver%binlength,"BINLENGTH",InputFile,default=4,comment="If >0 the Green's function at itau will be the average within +/-binlength.")
@@ -678,7 +672,7 @@ contains
       if(Testing)then
          call add_separator("Testing flags")
          call parse_input_variable(Test_flag_1,"CORRECT_CHI_NEG",InputFile,default=.false.,comment="Flag to shift the local charge susceptibility if negative.")
-         call parse_input_variable(Test_flag_2,"CASULA",InputFile,default=.false.,comment="Flag to use the Casula scheme.")
+         call parse_input_variable(Test_flag_2,"REPLACE_CHI",InputFile,default=.false.,comment="Flag to replace the value of ChiC(iw=0) with the stupid integral.")
          call parse_input_variable(Test_flag_3,"FLAG",InputFile,default=.false.,comment="Flag to ___.")
       endif
       !

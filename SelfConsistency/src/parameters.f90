@@ -206,7 +206,6 @@ module parameters
       integer                               :: Nshift=0
       integer                               :: Nswap=0
       integer                               :: N_nnt=0
-      integer                               :: nnt_shift=0
       integer                               :: PrintTime=0
       integer                               :: binlength=0
       integer                               :: binstart=0

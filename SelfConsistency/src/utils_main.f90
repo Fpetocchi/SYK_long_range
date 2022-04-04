@@ -2463,7 +2463,7 @@ contains
       integer                               :: iorb,jorb,ispin,jspin
       integer                               :: ib1,ib2,isite,idum
       integer                               :: unit,ndx,itau,iw,wndx,wndxOpt
-      real(8)                               :: taup,muQMC,Nfact
+      real(8)                               :: taup,muQMC
       real(8),allocatable                   :: tauF(:),tauB(:),wmats(:)
       real(8),allocatable                   :: ReadLine(:)
       real(8),allocatable                   :: Moments(:,:,:)
@@ -2487,7 +2487,7 @@ contains
       !Impurity polarization and bosonic Dyson equation
       type(BosonicField)                    :: Pimp
       type(BosonicField)                    :: Wimp
-      real(8),allocatable                   :: CDW(:,:)
+      real(8),allocatable                   :: CDW(:,:),Integral(:,:)
       !
       !
       write(*,"(A)") new_line("A")//new_line("A")//"---- collect_QMC_results"
@@ -2889,10 +2889,8 @@ contains
                   do ispin=1,Nspin
                      do jspin=1,Nspin
                         !
-                        Nfact=1d0
-                        if(Solver%nnt_shift.eq.1) Nfact=0d0
                         ChiCitau%screened_local(ib1,ib2,:) = ChiCitau%screened_local(ib1,ib2,:) + &
-                        ( NNitau(iorb,jorb,ispin,jspin,:) - Nfact * LocalOrbs(isite)%rho_OrbSpin(iorb,iorb,ispin) * LocalOrbs(isite)%rho_OrbSpin(jorb,jorb,jspin) )
+                        ( NNitau(iorb,jorb,ispin,jspin,:) - LocalOrbs(isite)%rho_OrbSpin(iorb,iorb,ispin) * LocalOrbs(isite)%rho_OrbSpin(jorb,jorb,jspin) )
                         !
                      enddo
                   enddo
@@ -2901,7 +2899,7 @@ contains
             enddo
             deallocate(NNitau)
             !
-            !TEST(keep)>>>
+            !TEST>>>
             if(Test_flag_1)then
                !
                do ib1=1,ChiCitau%Nbp
@@ -2921,7 +2919,12 @@ contains
                enddo
                !
             endif
-            !>>>TEST(keep)
+            !
+            allocate(Integral(ChiCitau%Nbp,ChiCitau%Nbp));Integral=0d0
+            do itau=1,ChiCitau%Npoints-1
+               Integral = Integral + ( ChiCitau%screened_local(:,:,itau) + ChiCitau%screened_local(:,:,itau+1) ) * 0.5d0 * abs(tauB(itau+1)-tauB(itau))
+            enddo
+            !>>>TEST
             !
             !User-defined modification of local charge susceptibility
             if(alphaChi.ne.1d0)then
@@ -2943,6 +2946,14 @@ contains
             call Bitau2mats(Beta,ChiCitau%screened_local,ChiCmats%screened_local,tau_uniform=.true.)
             call DeallocateBosonicField(ChiCitau)
             !call isReal(ChiCmats)
+            !
+            !TEST>>>
+            call dump_Matrix(dreal(Integral-ChiCmats%screened_local(:,:,1)),reg(PrevItFolder)//"Solver_"//reg(LocalOrbs(isite)%Name)//"/","IntDiff_"//reg(LocalOrbs(isite)%Name)//".DAT")
+            if(Test_flag_2)then
+               ChiCmats%screened_local(:,:,1) = Integral
+            endif
+            deallocate(Integral)
+            !>>>TEST
             !
             !Remove the iw=0 divergency of local charge susceptibility
             if(removeCDW_C)then

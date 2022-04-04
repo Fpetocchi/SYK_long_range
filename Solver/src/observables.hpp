@@ -613,7 +613,7 @@ VecVec measure_nnt( VecVec &n_tau)
    return nn_corr_meas;
 }
 
-void accumulate_nnt( VecVec &nn_corr_meas, VecVec &n_tau, int nnt_shift=0 )
+void accumulate_nnt( VecVec &nn_corr_meas, VecVec &n_tau )
 {
    //
    int Nflavor = n_tau.size();
@@ -623,17 +623,15 @@ void accumulate_nnt( VecVec &nn_corr_meas, VecVec &n_tau, int nnt_shift=0 )
    int position=0;
    for (int ifl=0; ifl<Nflavor; ++ifl)
    {
-      double ni = std::accumulate(n_tau[ifl].begin(), n_tau[ifl].end(), 0.0) * nnt_shift/(Ntau-1) ;
       for (int jfl=0; jfl<=ifl; ++jfl)
       {
-         double nj = std::accumulate(n_tau[jfl].begin(), n_tau[jfl].end(), 0.0) * nnt_shift/(Ntau-1) ;
          for (int i=0; i<Ntau; ++i)
          {
             for (int index=0; index<Ntau; ++index)
             {
                int j=i+index;
                if (j>Ntau-1) j -= (Ntau-1);
-               nn_corr_meas[position][index] += (n_tau[ifl][i]*n_tau[jfl][j] - ni*nj ) / (double)Ntau;
+               nn_corr_meas[position][index] += n_tau[ifl][i]*n_tau[jfl][j] / (double)Ntau;
             }
          }
          position++;
@@ -641,7 +639,7 @@ void accumulate_nnt( VecVec &nn_corr_meas, VecVec &n_tau, int nnt_shift=0 )
    }
 }
 
-void accumulate_nnt( VecVec &nn_corr_meas, VecVec &n_tau, double s, int Nmeas, int nnt_shift=0 )
+void accumulate_nnt( VecVec &nn_corr_meas, VecVec &n_tau, double s, int Nmeas )
 {
    //
    int Nflavor = n_tau.size();
