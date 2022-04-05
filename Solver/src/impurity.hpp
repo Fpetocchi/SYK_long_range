@@ -525,7 +525,7 @@ class ct_hyb
                N_tmp[ifl] += compute_overlap(full_segment, segments[ifl], full_line[ifl], Beta)/(Beta*Nmeas_);
                //
                // Green's functions - measurment averaged
-               if( !Gexp && segments[ifl].size()>0) measure_G( G_tmp[ifl], segments[ifl], M[ifl], Beta, (double)(NtauF_m1/Nmeas_) );
+               if( !Gexp && segments[ifl].size()>0) measure_G( G_tmp[ifl], segments[ifl], M[ifl], Beta );
                //...............................................................
             }
             //
@@ -555,10 +555,13 @@ class ct_hyb
          {
             for (int ifl=0; ifl<Nflavor; ifl++)
             {
-               if (segments[ifl].size()>0) measure_G( G_tmp[ifl], segments[ifl], M[ifl], Beta, (double)(NtauF_m1) );
+               if (segments[ifl].size()>0) measure_G( G_tmp[ifl], segments[ifl], M[ifl], Beta );
             }
-
          }
+         double Gnorm = 1.0/(NtauF-1);
+         if(!Gexp) Gnorm *= Nmeas_;
+         G_tmp = normalize_VecVec( G_tmp, Gnorm );
+         //
          if(paramagnet) spin_symm( G_tmp );
          if(OrbSym) orb_symm( G_tmp, SetsOrbs );
          accumulate_VecVec( G, G_tmp );

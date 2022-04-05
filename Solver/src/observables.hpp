@@ -22,14 +22,14 @@
 //============================================================================//
 
 
-template<typename T> Vec normalize_Vec( Vec &Vec_in, T &Norm)
+template<typename T> Vec normalize_Vec( Vec &Vec_in, T Norm)
 {
    int Nrows=Vec_in.size();
    Vec Vec_out(Nrows,0.0);
    for (int irow=0; irow<Nrows; irow++) Vec_out[irow]=Vec_in[irow]/(double) Norm;
    return Vec_out;
 }
-template<typename T> VecVec normalize_VecVec( VecVec &VecVec_in, T &Norm)
+template<typename T> VecVec normalize_VecVec( VecVec &VecVec_in, T Norm)
 {
    int Ncols=VecVec_in.size();
    int Nrows=VecVec_in[0].size();
@@ -40,7 +40,7 @@ template<typename T> VecVec normalize_VecVec( VecVec &VecVec_in, T &Norm)
    }
    return VecVec_out;
 }
-template<typename T> VecVec normalize_VecVec( VecVec &VecVec_in, std::vector<T> &NormCol)
+template<typename T> VecVec normalize_VecVec( VecVec &VecVec_in, std::vector<T> NormCol)
 {
    int Ncols=VecVec_in.size();
    int Nrows=VecVec_in[0].size();
@@ -65,14 +65,6 @@ void spin_symm( Vec &Vec_in )
       //
       int up = 2*ifl;
       int dw = 2*ifl+1;
-      //
-      //if(para_mode == 2)
-      //{
-      //   std::vector<double> shift = { abs(Vec_in[up]-0.5), abs(Vec_in[dw]-0.5) };
-      //   int ndx = std::min_element( shift.begin(), shift.end() ) - shift.begin();
-      //   if(ndx==0) dw = up;
-      //   if(ndx==1) up = dw;
-      //}
       //
       double val = ( Vec_in[up] + Vec_in[dw] ) /2.0;
       Vec_in[up] = val;
@@ -306,13 +298,13 @@ void orb_symm( VecVec &VecVec_in, std::vector<std::vector<int>> &Lists, int Norb
 //----------------------------------------------------------------------------//
 //                                ACCUMULATIONS                               //
 //----------------------------------------------------------------------------//
-void accumulate_Vec( Vec &Vec_out, Vec &Vec_in, double Norm=1.0)
+void accumulate_Vec( Vec &Vec_out, Vec &Vec_in )
 {
    int d1 = Vec_out.size();
-   for (int i=0; i<d1; i++) Vec_out[i] += Vec_in[i]*Norm;
+   for (int i=0; i<d1; i++) Vec_out[i] += Vec_in[i];
 }
 
-void accumulate_VecVec( VecVec &VecVec_out, VecVec &VecVec_in, double Norm=1.0)
+void accumulate_VecVec( VecVec &VecVec_out, VecVec &VecVec_in )
 {
    int d1 = VecVec_out.size();
    int d2 = VecVec_out[0].size();
@@ -320,7 +312,7 @@ void accumulate_VecVec( VecVec &VecVec_out, VecVec &VecVec_in, double Norm=1.0)
    {
       for (int j=0; j<d2; j++)
       {
-         VecVec_out[i][j] += VecVec_in[i][j]*Norm;
+         VecVec_out[i][j] += VecVec_in[i][j];
       }
    }
 }
@@ -330,7 +322,7 @@ void accumulate_VecVec( VecVec &VecVec_out, VecVec &VecVec_in, double Norm=1.0)
 //----------------------------------------------------------------------------//
 //                              GREEN'S FUNCTION                              //
 //----------------------------------------------------------------------------//
-void measure_G( Vec &G, segment_container_t &segment, Mat &M, double &Beta, double Norm=1.0 )
+void measure_G( Vec &G, segment_container_t &segment, Mat &M, double &Beta)
 {
    //
    std::set<times>::iterator it1, it2;
@@ -375,14 +367,8 @@ void measure_G( Vec &G, segment_container_t &segment, Mat &M, double &Beta, doub
                printf(" bubble_sign= %f \n",bubble_sign);
                printf(" Beta= %f \n\n\n",Beta);
             }
-            //
          }
       }
-   }
-   //
-   if(Norm!=1.0)
-   {
-      for (int i=0; i<Ntau; i++) G[i] *= Norm;
    }
 }
 
@@ -418,43 +404,6 @@ void binAverageVec( std::vector<int> &bins, VecVec &G, VecVec &Gerr)
          for (int itau=binlength+binstart; itau<Ntau-binlength-binstart; itau++) G[ifl][itau] = Gsym[itau];
       }
    }
-
-   // bin average - v2
-   /*
-   if(binlength>0)
-   {
-      double Nsample = (double)(2*binlength +1);
-      for (int ifl=0; ifl<Nflavor; ifl++)
-      {
-         Vec Gsym(binlength+1,0.0);
-         for (int itau=binlength; itau<Ntau-binlength; itau++)
-         {
-            //
-            double avrg=0.0;
-            for(int ibin=itau-binlength; ibin<=itau+binlength; ibin++) avrg += G[ifl][ibin] / Nsample;
-            if(itau>2*binlength)
-            {
-               G[ifl][itau-(binlength+1)] = Gsym[0];
-               Gsym.erase(Gsym.begin());
-               Gsym.push_back(avrg);
-               // put the reamaining
-               if(itau==Ntau-binlength-1)
-               {
-                  for (int ibin=binlength; ibin<binlength+1; ibin++) G[ifl][itau-(binlength+1)+ibin] = Gsym[ibin];
-               }
-            }
-            else
-            {
-               Gsym.push_back(avrg);
-            }
-            //
-            double stderr=0.0;
-            for(int ibin=itau-binlength; ibin<=itau+binlength; ibin++) stderr += pow((G[ifl][ibin]-avrg),2) / (Nsample-1);
-            Gerr[ifl][itau] = sqrt(stderr);
-         }
-      }
-   }
-   */
 }
 
 

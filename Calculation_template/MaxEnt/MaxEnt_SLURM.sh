@@ -32,7 +32,7 @@ BINPATH=/home/petocchif/1_GW_EDMFT/GenericMaterial/Calculation_template
 ################################################################################
 #                              PROVIDED ARGUMENTS                              #
 ################################################################################
-while getopts ":e:w:W:f:o:j:s:i:p:q:" o; do
+while getopts ":e:w:W:f:o:j:s:i:p:q:m:" o; do
    case ${o} in
       e) #ERROR
          #echo ${OPTARG}
@@ -84,6 +84,9 @@ while getopts ":e:w:W:f:o:j:s:i:p:q:" o; do
       q) #SELECTED QUEUE
          QUEUE="${OPTARG}"
          if [ "$QUEUE"  != "new" ] && [ "$QUEUE"  != "amd" ]; then echo "Option Error - q" ; exit 1 ; fi
+         ;;
+      m) #MEMORY PER CORE
+         MEM="${OPTARG}"
          ;;
       \? )
          echo "Invalid option: $OPTARG" 1>&2

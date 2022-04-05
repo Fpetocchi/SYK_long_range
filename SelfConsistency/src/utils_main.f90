@@ -1296,7 +1296,8 @@ contains
       !
       implicit none
       integer,intent(in)                    :: Iteration
-      integer                               :: ik,iw,ispin
+      integer                               :: ik,iw,ispin,iorb,jorb
+      real(8),allocatable                   :: Z_qpsc(:,:,:)
       complex(8),allocatable                :: Vxc_loc(:,:,:)
       type(FermionicField)                  :: S_EMB
 
@@ -1432,6 +1433,7 @@ contains
             !Add non-local embedding
             S_Full%wks = S_Full%wks + S_EMB%wks
             call DeallocateFermionicField(S_EMB)
+            call FermionicKsum(S_Full)
             !
          case("loc")
             !
@@ -1444,8 +1446,22 @@ contains
                S_Full%wks(:,:,:,ik,:) = S_Full%wks(:,:,:,ik,:) + S_EMB%ws
             enddo
             call DeallocateFermionicField(S_EMB)
+            call FermionicKsum(S_Full)
             !
       end select
+      !
+      !
+      !Compute local quasiparticle weigth in the Wannier basis for the full self-energy
+      allocate(Z_qpsc(S_Full%Norb,S_Full%Norb,Nspin));Z_qpsc=0d0
+      do ispin=1,Nspin
+         do iorb=1,S_Full%Norb
+            do jorb=1,S_Full%Norb
+               Z_qpsc(iorb,jorb,ispin) = 1d0 / (1d0 + abs(dimag(S_Full%ws(iorb,jorb,1,ispin)))*S_Full%Beta/pi)
+            enddo
+         enddo
+      enddo
+      call dump_Matrix(Z_qpsc,reg(ItFolder),"Z_qpsc",paramagnet)
+      deallocate(Z_qpsc)
       !
       !
       !
@@ -2487,7 +2503,7 @@ contains
       !Impurity polarization and bosonic Dyson equation
       type(BosonicField)                    :: Pimp
       type(BosonicField)                    :: Wimp
-      real(8),allocatable                   :: CDW(:,:),Integral(:,:)
+      real(8),allocatable                   :: CDW(:,:),Integral(:,:),Z_dmft(:,:,:)
       !
       !
       write(*,"(A)") new_line("A")//new_line("A")//"---- collect_QMC_results"
@@ -2791,6 +2807,18 @@ contains
       call dump_FermionicField(S_DMFT,reg(PrevItFolder),"Simp_w",paramagnet)
       call dump_MaxEnt(S_DMFT,"mats",reg(PrevItFolder)//"Convergence/","Simp",EqvGWndx%SetOrbs,WmaxPade=PadeWlimit)
       call dump_Matrix(S_DMFT%N_s,reg(PrevItFolder),"Hartree_UNimp",paramagnet)
+      !
+      !Compute local EDMFT quasiparticle weigth in the Wannier basis
+      allocate(Z_dmft(S_DMFT%Norb,S_DMFT%Norb,Nspin));Z_dmft=0d0
+      do ispin=1,Nspin
+         do iorb=1,S_DMFT%Norb
+            do jorb=1,S_DMFT%Norb
+               Z_dmft(iorb,jorb,ispin) = 1d0 / (1d0 + abs(dimag(S_DMFT%ws(iorb,jorb,1,ispin)))*S_DMFT%Beta/pi)
+            enddo
+         enddo
+      enddo
+      call dump_Matrix(Z_dmft,reg(PrevItFolder),"Z_dmft",paramagnet)
+      deallocate(Z_dmft)
       call DeallocateFermionicField(S_DMFT)
       !
       !
@@ -2897,6 +2925,17 @@ contains
                   !
                enddo
             enddo
+            !
+            !
+            !Double occupations-------------------------------------------------
+            if(Nspin.gt.1)then
+               do iorb=1,LocalOrbs(isite)%Norb
+                  do jorb=1,LocalOrbs(isite)%Norb
+                     LocalOrbs(isite)%Docc(iorb,jorb) = ( NNitau(iorb,jorb,1,2,1)+ NNitau(iorb,jorb,2,1,1) ) / 2d0
+                  enddo
+               enddo
+               call dump_Matrix(LocalOrbs(isite)%Docc,reg(PrevItFolder)//"Solver_"//reg(LocalOrbs(isite)%Name)//"/","Dimp_"//reg(LocalOrbs(isite)%Name)//".DAT")
+            endif
             deallocate(NNitau)
             !
             !TEST>>>
@@ -3216,7 +3255,6 @@ contains
             write(*,*)
             write(*,"(A"//str(wn*Norb)//","//str(ws)//"X)")banner(trim(header7)//" up",wn*Norb)
             write(*,"("//str(Norb)//"F"//str(wn)//".4,"//str(ws)//"X)") (dreal(densityGW(iorb,iorb,1)-densityDMFT(iorb,iorb,1)),iorb=1,Norb)
-            write(*,*)
             !
             if((EqvGWndx%para.eq.0).and.(Nspin.ne.1))then
                write(*,*)
