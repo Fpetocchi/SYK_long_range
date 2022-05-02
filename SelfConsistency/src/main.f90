@@ -106,12 +106,19 @@ program SelfConsistency
       !K-dependent Polarization - only G0W0,scGW,GW+EDMFT
       if(calc_Pk)then
          !
-         call calc_Pi(Plat,Glat,Crystal)
+         call calc_PiGG(Plat,Glat,Crystal)
          call dump_BosonicField(Plat,reg(ItFolder),"Plat_w.DAT")
          call dump_MaxEnt(Plat,"mats",reg(ItFolder)//"Convergence/","Plat",EqvGWndx%SetOrbs)
          !
          if(merge_P)then
-            call MergeFields(Plat,P_EDMFT,alphaPi,LocalOrbs,RotateHloc)
+            if(reg(DC_type_P).eq."GlocGloc")then
+               call AllocateBosonicField(P_GGdc,Crystal%Norb,Nmats,Crystal%iq_gamma,Nsite=Nsite,no_bare=.true.,Beta=Beta)
+               call calc_PiGGdc(P_GGdc,Glat)
+               call MergeFields(Plat,P_EDMFT,alphaPi,LocalOrbs,RotateHloc,PiGG_DC=P_GGdc)
+               call DeallocateBosonicField(P_GGdc)
+            elseif(reg(DC_type_P).eq."Ploc")then
+               call MergeFields(Plat,P_EDMFT,alphaPi,LocalOrbs,RotateHloc)
+            endif
             call dump_BosonicField(Plat,reg(ItFolder),"Plat_merged_w.DAT")
          elseif(calc_Pguess)then
             P_EDMFT%screened_local = dreal(Plat%screened_local)*alphaPi
@@ -232,12 +239,12 @@ program SelfConsistency
          !Merge GW and EDMFT
          if(merge_Sigma)then
             !
-            if(reg(DC_type).eq."GlocWloc")then
+            if(reg(DC_type_S).eq."GlocWloc")then
                call AllocateFermionicField(S_GWdc,Crystal%Norb,Nmats,Nsite=Nsite,Beta=Beta)
                call calc_sigmaGWdc(S_GWdc,Glat,Wlat)
                call MergeFields(S_GW,S_DMFT,[alphaSigma,HartreeFact],LocalOrbs,SigmaGW_DC=S_GWdc)
                call DeallocateFermionicField(S_GWdc)
-            elseif(reg(DC_type).eq."Sloc")then
+            elseif(reg(DC_type_S).eq."Sloc")then
                call MergeFields(S_GW,S_DMFT,[alphaSigma,HartreeFact],LocalOrbs)
             endif
             call dump_FermionicField(S_GW,reg(ItFolder),"Slat_merged_w",paramagnet)
@@ -306,10 +313,12 @@ program SelfConsistency
       !
       !
       !Print full self-energy: local readable, k-dep binfmt (optional) and along path
-      call dump_FermionicField(S_Full,reg(ItFolder),"Sfull_w",paramagnet)
-      if(dump_Sigmak)call dump_FermionicField(S_Full,reg(ItFolder),"Sfull_w",.true.,Crystal%kpt,paramagnet)
-      call dump_MaxEnt(S_Full,"mats",reg(ItFolder)//"Convergence/","Sful",EqvGWndx%SetOrbs,WmaxPade=PadeWlimit)
-      if(print_path)call interpolateG2Path(S_Full,Crystal,reg(ItFolder))
+      if(calc_Sigmak)then
+         call dump_FermionicField(S_Full,reg(ItFolder),"Sfull_w",paramagnet)
+         if(dump_Sigmak)call dump_FermionicField(S_Full,reg(ItFolder),"Sfull_w",.true.,Crystal%kpt,paramagnet)
+         call dump_MaxEnt(S_Full,"mats",reg(ItFolder)//"Convergence/","Sful",EqvGWndx%SetOrbs,WmaxPade=PadeWlimit)
+         if(print_path)call interpolateG2Path(S_Full,Crystal,reg(ItFolder))
+      endif
       call DeallocateFermionicField(S_Full)
       !
       !
@@ -388,12 +397,6 @@ end program SelfConsistency
 !the same, DC reduces to the local projection (k sum) of the full GW self-energy.
 !If the orbital subspace for the EDMFT calculation is smaller than that of the GW
 !calculation the difference between DC and the local projection of the full GW self-energy is...
-
-!call AllocateFermionicField(S_Full,Crystal%Norb,Nmats,Nkpt=Crystal%Nkpt,Nsite=Nsite,Beta=Beta)
-!call read_FermionicField(S_Full,reg(ItFolder),"Sfull_w",Crystal%kpt)
-!call interpolateG2Path(S_Full,Crystal,reg(structure),Nkpt_path,reg(ItFolder))
-
-
 
 
 

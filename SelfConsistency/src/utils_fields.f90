@@ -62,8 +62,8 @@ module utils_fields
    end interface symmetrize_imp
 
    interface MergeFields
-      module procedure MergeSelfEnergy
-      module procedure MergePolarization
+      module procedure Merge_SelfEnergy
+      module procedure Merge_Polarization
    end interface MergeFields
 
    interface isReal
@@ -2570,7 +2570,7 @@ contains
    !         + Replace PiImp in PiGW at the indexes contained in orbs
    !         + The only difference between v1 and v2 is the optional SigmaGW_DC
    !---------------------------------------------------------------------------!
-   subroutine MergeSelfEnergy(SigmaGW,SigmaImp,coeff,LocalOrbs,OffDiag,SigmaGW_DC)
+   subroutine Merge_SelfEnergy(SigmaGW,SigmaImp,coeff,LocalOrbs,OffDiag,SigmaGW_DC)
       !
       use parameters
       use utils_misc
@@ -2588,20 +2588,19 @@ contains
       integer                               :: ispin,Norb_imp
       integer                               :: i_loc,j_loc
       integer                               :: Nkpt,Norb,Nmats,Nsite
-      character(len=12)                     :: DC_type
-      logical                               :: localDC,OffDiag_
+      logical                               :: impDC,OffDiag_
       !
       !
-      write(*,"(A)") new_line("A")//new_line("A")//"---- Merge SelfEnergy"
+      write(*,"(A)") new_line("A")//new_line("A")//"---- Merge_SelfEnergy"
       !
       !
       ! Check on the input Fields
-      if(.not.SigmaGW%status) stop "MergeSelfEnergy: SigmaGW not properly initialized."
-      if(.not.SigmaImp%status) stop "MergeSelfEnergy: SigmaImp not properly initialized."
-      if(SigmaGW%Nkpt.eq.0) stop "MergeSelfEnergy: SigmaGW k dependent attributes not properly initialized."
-      if(SigmaImp%Nkpt.ne.0) stop "MergeSelfEnergy: SigmaImp k dependent attributes are supposed to be unallocated."
-      if(.not.allocated(LocalOrbs)) stop "MergeSelfEnergy: LocalOrbs not properly initialized."
-      if(SigmaGW%Nsite.ne.size(LocalOrbs)) stop "MergeSelfEnergy: number of SigmaGW sites does not match the number of sites in LocalOrbs list."
+      if(.not.SigmaGW%status) stop "Merge_SelfEnergy: SigmaGW not properly initialized."
+      if(.not.SigmaImp%status) stop "Merge_SelfEnergy: SigmaImp not properly initialized."
+      if(SigmaGW%Nkpt.eq.0) stop "Merge_SelfEnergy: SigmaGW k dependent attributes not properly initialized."
+      if(SigmaImp%Nkpt.ne.0) stop "Merge_SelfEnergy: SigmaImp k dependent attributes are supposed to be unallocated."
+      if(.not.allocated(LocalOrbs)) stop "Merge_SelfEnergy: LocalOrbs not properly initialized."
+      if(SigmaGW%Nsite.ne.size(LocalOrbs)) stop "Merge_SelfEnergy: number of SigmaGW sites does not match the number of sites in LocalOrbs list."
       !
       Norb = SigmaGW%Norb
       Nkpt = SigmaGW%Nkpt
@@ -2609,35 +2608,28 @@ contains
       Nmats = SigmaGW%Npoints
       Nsite = SigmaGW%Nsite
       !
-      if(SigmaImp%Norb.ne.Norb) stop "MergeSelfEnergy: SigmaImp has different orbital dimension with respect to SigmaGW."
-      if(SigmaImp%Beta.ne.Beta) stop "MergeSelfEnergy: SigmaImp has different Beta with respect to SigmaGW."
-      if(SigmaImp%Npoints.ne.Nmats) stop "MergeSelfEnergy: SigmaImp has different number of Matsubara points with respect to SigmaGW."
+      if(SigmaImp%Norb.ne.Norb) stop "Merge_SelfEnergy: SigmaImp has different orbital dimension with respect to SigmaGW."
+      if(SigmaImp%Beta.ne.Beta) stop "Merge_SelfEnergy: SigmaImp has different Beta with respect to SigmaGW."
+      if(SigmaImp%Npoints.ne.Nmats) stop "Merge_SelfEnergy: SigmaImp has different number of Matsubara points with respect to SigmaGW."
       !
       Norb_imp=0
       do isite=1,Nsite
          Norb_imp = Norb_imp + LocalOrbs(isite)%Norb
       enddo
-      if(Norb_imp.gt.Norb) stop "MergeSelfEnergy: Number of orbital to be inserted is bigger than the total lattice orbital space."
+      if(Norb_imp.gt.Norb) stop "Merge_SelfEnergy: Number of orbital to be inserted is bigger than the total lattice orbital space."
       !
-      DC_type="Sloc"
-      if(present(SigmaGW_DC)) DC_type="GlocWloc"
+      impDC = .true.
+      if(present(SigmaGW_DC))then
+         if(.not.SigmaGW_DC%status) stop "Merge_SelfEnergy: SigmaGW_DC not properly initialized."
+         if(SigmaGW_DC%Nkpt.ne.0) stop "Merge_SelfEnergy: SigmaGW_DC k dependent attributes are supposed to be unallocated."
+         if(SigmaGW_DC%Norb.ne.Norb) stop "Merge_SelfEnergy: SigmaGW_DC has different orbital dimension with respect to SigmaGW."
+         if(SigmaGW_DC%Beta.ne.Beta) stop "Merge_SelfEnergy: SigmaGW_DC has different Beta with respect to SigmaGW."
+         if(SigmaGW_DC%Npoints.ne.Nmats) stop "Merge_SelfEnergy: SigmaGW_DC has different number of Matsubara points with respect to SigmaGW."
+         impDC = .false.
+      endif
       !
       OffDiag_=.true.
       if(present(OffDiag)) OffDiag_=OffDiag
-      !
-      select case(reg(DC_type))
-         case default
-            stop "MergeSelfEnergy: Available DC types for the self-energy: Sloc or GlocWloc."
-         case("Sloc")
-            localDC = .true.
-         case("GlocWloc")
-            if(.not.SigmaGW_DC%status) stop "MergeSelfEnergy: SigmaGW_DC not properly initialized."
-            if(SigmaGW_DC%Nkpt.ne.0) stop "MergeSelfEnergy: SigmaGW_DC k dependent attributes are supposed to be unallocated."
-            if(SigmaGW_DC%Norb.ne.Norb) stop "MergeSelfEnergy: SigmaGW_DC has different orbital dimension with respect to SigmaGW."
-            if(SigmaGW_DC%Beta.ne.Beta) stop "MergeSelfEnergy: SigmaGW_DC has different Beta with respect to SigmaGW."
-            if(SigmaGW_DC%Npoints.ne.Nmats) stop "MergeSelfEnergy: SigmaGW_DC has different number of Matsubara points with respect to SigmaGW."
-            localDC = .false.
-      end select
       !
       !Fill the local attributes so as to fully replace the local GW contibution
       call FermionicKsum(SigmaGW)
@@ -2660,7 +2652,7 @@ contains
                   do ik=1,Nkpt
                      do ispin=1,Nspin
                         !
-                        if(localDC)then
+                        if(impDC)then
                            SigmaGW%wks(i_loc,j_loc,iw,ik,ispin) = SigmaGW%wks(i_loc,j_loc,iw,ik,ispin)                 &
                                                                 - coeff(1)*SigmaGW%ws(i_loc,j_loc,iw,ispin)            &
                                                                 + coeff(1)*(SigmaImp%ws(i_loc,j_loc,iw,ispin)-coeff(2)*SigmaImp%N_s(i_loc,j_loc,ispin))
@@ -2683,9 +2675,9 @@ contains
       !Put SigmaImp in the local attribute
       call FermionicKsum(SigmaGW)
       !
-   end subroutine MergeSelfEnergy
+   end subroutine Merge_SelfEnergy
    !
-   subroutine MergePolarization(PiGW,PiImp,coeff,LocalOrbs,OffDiag)
+   subroutine Merge_Polarization(PiGW,PiImp,coeff,LocalOrbs,OffDiag,PiGG_DC)
       !
       use parameters
       use utils_misc
@@ -2696,6 +2688,7 @@ contains
       real(8),intent(in)                    :: coeff
       type(LocalOrbitals),allocatable,intent(in):: LocalOrbs(:)
       logical,intent(in)                    :: OffDiag
+      type(BosonicField),intent(in),optional :: PiGG_DC
       !
       real(8)                               :: Beta
       integer                               :: iw,ik,isite
@@ -2703,17 +2696,18 @@ contains
       integer                               :: Norb_imp,ib_loc,jb_loc
       integer                               :: i_loc,j_loc,k_loc,l_loc
       integer                               :: Nkpt,Norb,Nmats,Nsite
+      logical                               :: impDC
       !
       !
-      write(*,"(A)") new_line("A")//new_line("A")//"---- Merge Polarization"
+      write(*,"(A)") new_line("A")//new_line("A")//"---- Merge_Polarization"
       !
       !
       ! Check on the input Fields
-      if(.not.PiGW%status) stop "MergePolarization: PiGW not properly initialized."
-      if(.not.PiImp%status) stop "MergePolarization: PiImp not properly initialized."
-      if(PiGW%Nkpt.eq.0) stop "MergePolarization: PiGW k dependent attributes not properly initialized."
-      if(PiImp%Nkpt.ne.0) stop "MergePolarization: PiImp k dependent attributes are supposed to be unallocated."
-      if(PiGW%Nsite.ne.size(LocalOrbs)) stop "MergePolarization: number of PiGW sites does not match the number of sites in LocalOrbs list."
+      if(.not.PiGW%status) stop "Merge_Polarization: PiGW not properly initialized."
+      if(.not.PiImp%status) stop "Merge_Polarization: PiImp not properly initialized."
+      if(PiGW%Nkpt.eq.0) stop "Merge_Polarization: PiGW k dependent attributes not properly initialized."
+      if(PiImp%Nkpt.ne.0) stop "Merge_Polarization: PiImp k dependent attributes are supposed to be unallocated."
+      if(PiGW%Nsite.ne.size(LocalOrbs)) stop "Merge_Polarization: number of PiGW sites does not match the number of sites in LocalOrbs list."
       !
       Norb = int(sqrt(dble(PiGW%Nbp)))
       Nkpt = PiGW%Nkpt
@@ -2721,14 +2715,24 @@ contains
       Nmats = PiGW%Npoints
       Nsite = PiGW%Nsite
       !
-      if(PiImp%Beta.ne.Beta) stop "MergePolarization: PiImp has different Beta with respect to PiGW."
-      if(PiImp%Npoints.ne.Nmats) stop "MergePolarization: PiImp has different number of Matsubara points with respect to PiGW."
+      if(PiImp%Beta.ne.Beta) stop "Merge_Polarization: PiImp has different Beta with respect to PiGW."
+      if(PiImp%Npoints.ne.Nmats) stop "Merge_Polarization: PiImp has different number of Matsubara points with respect to PiGW."
       !
       Norb_imp=0
       do isite=1,Nsite
          Norb_imp = Norb_imp + LocalOrbs(isite)%Norb
       enddo
-      if(Norb_imp.gt.Norb) stop "MergePolarization: Number of orbital to be inserted is bigger than the total lattice orbital space."
+      if(Norb_imp.gt.Norb) stop "Merge_Polarization: Number of orbital to be inserted is bigger than the total lattice orbital space."
+      !
+      impDC = .true.
+      if(present(PiGG_DC))then
+         if(.not.PiGG_DC%status) stop "Merge_Polarization: PiGG_DC not properly initialized."
+         if(PiGG_DC%Nkpt.ne.0) stop "Merge_Polarization: PiGG_DC k dependent attributes are supposed to be unallocated."
+         if(PiGG_DC%Nbp.ne.PiGW%Nbp) stop "Merge_Polarization: PiGG_DC has different orbital dimension with respect to PiGG."
+         if(PiGG_DC%Beta.ne.Beta) stop "Merge_Polarization: PiGG_DC has different Beta with respect to PiGG."
+         if(PiGG_DC%Npoints.ne.Nmats) stop "Merge_Polarization: PiGG_DC has different number of Matsubara points with respect to PiGG."
+         impDC = .false.
+      endif
       !
       !Fill the local attributes so as to fully replace the local GW contibution
       call BosonicKsum(PiGW)
@@ -2758,9 +2762,15 @@ contains
                      do iw=1,Nmats
                         do ik=1,Nkpt
                            !
-                           PiGW%screened(ib_loc,jb_loc,iw,ik) = PiGW%screened(ib_loc,jb_loc,iw,ik)                &
-                                                              - coeff*PiGW%screened_local(ib_loc,jb_loc,iw)       &
-                                                              + coeff*PiImp%screened_local(ib_loc,jb_loc,iw)
+                           if(impDC)then
+                              PiGW%screened(ib_loc,jb_loc,iw,ik) = PiGW%screened(ib_loc,jb_loc,iw,ik)                &
+                                                                 - coeff*PiGW%screened_local(ib_loc,jb_loc,iw)       &
+                                                                 + coeff*PiImp%screened_local(ib_loc,jb_loc,iw)
+                           else
+                              PiGW%screened(ib_loc,jb_loc,iw,ik) = PiGW%screened(ib_loc,jb_loc,iw,ik)                &
+                                                                 - coeff*PiGG_DC%screened_local(ib_loc,jb_loc,iw)    &
+                                                                 + coeff*PiImp%screened_local(ib_loc,jb_loc,iw)
+                           endif
                            !
                         enddo
                      enddo
@@ -2777,7 +2787,7 @@ contains
       !Put PiImp in the local attribute
       call BosonicKsum(PiGW)
       !
-   end subroutine MergePolarization
+   end subroutine Merge_Polarization
 
 
    !---------------------------------------------------------------------------!

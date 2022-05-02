@@ -133,7 +133,8 @@ module module_container
 
    !(m) Bubble diagram container. Depends on (a),(b),(c),(d),(e),(f),(g),(h)
    use bubbles, only:                        &
-   calc_Pi                                  ,&
+   calc_PiGG                                ,&
+   calc_PiGGdc                              ,&
    calc_Pimp
 
 

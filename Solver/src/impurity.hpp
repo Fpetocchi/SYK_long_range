@@ -40,39 +40,40 @@ class ct_hyb
               int Norder, bool Gexp, int Nmeas, int Ntherm, int NsegShift, int NspinSwap, int NnntMeas,
               bool removeUhalf, bool paramagnet, bool retarded, std::vector<int> SetsNorb,
               int printTime, std::vector<int> bins, CustomMPI &mpi):
-      inputDir(inputDir),
-      SiteName(SiteName),
-      Beta(beta),
-      Nspin(Nspin),
-      Norb(Norb),
-      NtauF(NtauF),
-      NtauB(NtauB),
-      Norder(Norder),
-      Gexp(Gexp),
-      Nmeas(Nmeas),
-      Ntherm(Ntherm),
-      NsegShift(NsegShift),
-      NspinSwap(NspinSwap),
-      NnntMeas(NnntMeas),
-      removeUhalf(removeUhalf),
-      paramagnet(paramagnet),
-      retarded(retarded),
-      SetsNorb(SetsNorb),
-      printTime(printTime),
-      bins(bins),
-      mpi(mpi)
-      {}
+              inputDir(inputDir),
+              SiteName(SiteName),
+              Beta(beta),
+              Nspin(Nspin),
+              Norb(Norb),
+              NtauF(NtauF),
+              NtauB(NtauB),
+              Norder(Norder),
+              Gexp(Gexp),
+              Nmeas(Nmeas),
+              Ntherm(Ntherm),
+              NsegShift(NsegShift),
+              NspinSwap(NspinSwap),
+              NnntMeas(NnntMeas),
+              removeUhalf(removeUhalf),
+              paramagnet(paramagnet),
+              retarded(retarded),
+              SetsNorb(SetsNorb),
+              printTime(printTime),
+              bins(bins),
+              mpi(mpi)
+              {}
 
       //----------------------------------------------------------------------//
 
-      void reset_mu(double mu_new) {mu = mu_new; mu_is_reset=true;}
-      double get_mu(void) {return mu;}
+      void reset_mu( double mu_new ) { mu = mu_new; mu_is_reset=true; }
 
-      Vec get_Nloc(bool EachRank=false)
+      double get_mu(void) { return mu; }
+
+      Vec get_Nloc( bool EachRank=false )
       {
          //
          Vec NormNloc(Nflavor,0.0);
-         for (int ifl=0; ifl<Nflavor; ifl++) NormNloc[ifl] = Nloc[ifl] / RankSweeps;
+         for( int ifl=0; ifl<Nflavor; ifl++ ) NormNloc[ifl] = Nloc[ifl] / RankSweeps;
 
          //
          if(EachRank)
@@ -83,7 +84,7 @@ class ct_hyb
          else
          {
             // return the spin-orbital occupation averaged over the ranks
-            Vec WorldNloc(Nflavor,0.0);
+            Vec WorldNloc( Nflavor, 0.0 );
             mpi.allreduce(NormNloc, WorldNloc, true);
             return WorldNloc;
          }
@@ -128,16 +129,16 @@ class ct_hyb
          }
 
          //
-         //read the local energies ( std::vector<double> )
+         //read the local energies
          read_Vec(inputDir+"/Eloc.DAT", Eloc, Nflavor, mu);
          mpi.report(" Chemical potential: "+str(mu,4));
 
          //
-         //read the istantaneous interaction ( Eigen::MatrixXd )
+         //read the istantaneous interaction
          read_EigenMat(inputDir+"/Umat.DAT", Uloc, Nflavor, Nflavor);
 
          //
-         //read the hybridization function ( std::vector<std::vector<double>> )
+         //read the hybridization function
          read_VecVec(inputDir+"/Delta_t.DAT", F, Nflavor, NtauF, true, true);  // last flag is to reverse the tau index
          for(int ifl=0; ifl < Nflavor; ifl++)
          {
@@ -149,16 +150,16 @@ class ct_hyb
          }
 
          //
-         //read the screening function ( std::vector<std::vector<std::vector<double>>> )
+         //read the screening function
          Screening_shift.resize(Norb,0.0);
          if(retarded)
          {
             //
-            //Read the screening from file ( Eigen::MatrixXd )
+            //Read the screening from file
             if(!removeUhalf)
             {
                mpi.report(" Reading screening file.");
-               read_EigenMat(inputDir+"/Screening.DAT", Screening_Mat, Nflavor, Nflavor); //read_Vec(inputDir+"/Screening.DAT", Screening_shift, Norb );
+               read_EigenMat(inputDir+"/Screening.DAT", Screening_Mat, Nflavor, Nflavor);
                for(int iorb=0; iorb < Norb; iorb++)
                {
                   // big number
@@ -170,7 +171,7 @@ class ct_hyb
             }
 
             //
-            read_VecVecVec(inputDir+"/K_t.DAT", K_table, Nflavor, true); // read_VecVecVec(inputDir+"/K.DAT", K_table, Norb, Ntau, true);
+            read_VecVecVec(inputDir+"/K_t.DAT", K_table, Nflavor, true);
             for(int ifl=0; ifl < Nflavor; ifl++)
             {
                for(int jfl=0; jfl <= ifl; jfl++)
@@ -224,30 +225,30 @@ class ct_hyb
          }
 
          //
-         //initialize segment container ( std::vector<std::set<times>> )
+         //initialize segment container
          segments.resize(Nflavor);
          for (int ifl=0; ifl<Nflavor; ifl++)segments[ifl].clear();
 
          //
-         //initialize full_line ( std::vector<int> )
+         //initialize full_line
          full_line.resize(Nflavor,0);
 
          //
-         //initialize empty Inverse hybridization matrix M ( std::vector<Eigen::MatrixXd> )
+         //initialize empty Inverse hybridization matrix M
          M.resize(Nflavor);
 
          //
          //initialize observables
          sign_meas=0.0;
-         sign.resize(Nflavor,1.0);                                              // ( std::vector<double> )
-         Order.resize(Nflavor,std::vector<double>(Norder,0.0));                  // ( std::vector<std::vector<double>> )
-         Nloc.resize(Nflavor,0.0);                                              // ( std::vector<double> )
-         Nhist.resize(Nflavor+1,0.0);                                           // ( std::vector<double> )
-         Szhist.resize(Nflavor/2+1,0.0);                                        // ( std::vector<double> )
-         G.resize(Nflavor,std::vector<double>(NtauF,0.0));                      // ( std::vector<std::vector<double>> )
-         Gerr.resize(Nflavor,std::vector<double>(NtauF,0.0));                   // ( std::vector<std::vector<double>> )
-         nt.resize(Nflavor,std::vector<double>(NtauB,0.0));                     // ( std::vector<std::vector<double>> )
-         nnt.resize(Nflavor*(Nflavor+1)/2,std::vector<double>(NtauB,0.0));      // ( std::vector<std::vector<double>> )
+         sign.resize( Nflavor, 1.0 );
+         Order.resize( Nflavor, Vec( Norder, 0.0 ) );
+         Nloc.resize( Nflavor, 0.0 );
+         Nhist.resize( Nflavor+1, 0.0 );
+         Szhist.resize( Nflavor/2+1, 0.0 );
+         G.resize( Nflavor, Vec( NtauF, 0.0 ) );
+         Gerr.resize( Nflavor, Vec( NtauF, 0.0 ) );
+         nt.resize( Nflavor, Vec( NtauB, 0.0 ) );
+         nnt.resize( Nflavor*(Nflavor+1)/2, Vec( NtauB, 0.0 ) );
          //
          RankSign=0.0;
          WorldSign=0.0;
@@ -569,6 +570,7 @@ class ct_hyb
          // n(tau) - computed every Nmeas - symmetrization - step sum
          VecVec n_tau(Nflavor,Vec(NtauB,0.0));
          n_tau = measure_nt( segments, full_line, NtauB, Beta );
+         if(OrbSym) orb_symm( n_tau, SetsOrbs ); // TEST
          accumulate_VecVec( nt, n_tau );
          //
          // Histograms - computed every Nmeas - step sum
@@ -660,7 +662,7 @@ class ct_hyb
             if(bins[0]>0)
             {
                VecVec Gerr(Nflavor,Vec(NtauF,0.0));
-               binAverageVec( bins, G, Gerr );
+               binAverageVecVec( bins, G, Gerr );
                print_VecVec(resultsDir+"/Gerr_rank"+str(mpi.rank())+pad, Gerr, Beta, (double)RankSweeps);
                mpi.report(" Gerr_rank"+str(mpi.rank())+pad+" is printed.");
             }
@@ -689,6 +691,14 @@ class ct_hyb
             // n(tau)n(0)
             if(NnntMeas>0)
             {
+               // error estimate and binning
+               if(bins[0]>0)
+               {
+                  VecVec Nerr(Nflavor*(Nflavor+1)/2,Vec(NtauB,0.0));
+                  binAverageVecVec( bins, nnt, Nerr );
+                  print_VecVec(resultsDir+"/nn_err_rank"+str(mpi.rank())+pad, Nerr, Beta, (double)RankSweeps);
+                  mpi.report(" nn_err_rank"+str(mpi.rank())+pad+" is printed.");
+               }
                print_VecVec(resultsDir+"/nn_t_rank"+str(mpi.rank())+pad, nnt, Beta, (double)RankSweeps);
                mpi.report(" nn_t_rank"+str(mpi.rank())+pad+" is printed.");
             }
@@ -706,7 +716,7 @@ class ct_hyb
          //
          // perturbation order
          VecVec NormOrder = normalize_VecVec(Order, RankSweeps); // done before allreduce to overcome overfloat error for large RankSweeps
-         VecVec PrintOrder(Nflavor,std::vector<double>(Norder,0.0));
+         VecVec PrintOrder(Nflavor,Vec(Norder,0.0));
          mpi.allreduce(NormOrder, PrintOrder, true);
          if(mpi.is_master()) print_VecVec(resultsDir+"/Order"+pad, PrintOrder);
          mpi.report(" Order"+pad+" is printed.");
@@ -715,9 +725,9 @@ class ct_hyb
          if(bins[0]>0)
          {
             VecVec Gerr(Nflavor,Vec(NtauF,0.0));
-            binAverageVec( bins, G, Gerr );
+            binAverageVecVec( bins, G, Gerr );
             Gerr = normalize_VecVec(Gerr, RankSweeps);
-            VecVec PrintGerr(Nflavor,std::vector<double>(NtauF,0.0));
+            VecVec PrintGerr(Nflavor,Vec(NtauF,0.0));
             mpi.allreduce(Gerr, PrintGerr, true);
             if(mpi.is_master()) print_VecVec(resultsDir+"/Gerr"+pad, PrintGerr, Beta);
             mpi.report(" Gerr"+pad+" is printed.");
@@ -732,14 +742,14 @@ class ct_hyb
             G[ifl].back()  = -Ntmp[ifl];
          }
          VecVec NormG = normalize_VecVec(G, RankSweeps); // done before allreduce to overcome overfloat error for large RankSweeps
-         VecVec PrintG(Nflavor,std::vector<double>(NtauF,0.0));
+         VecVec PrintG(Nflavor,Vec(NtauF,0.0));
          mpi.allreduce(NormG, PrintG, true);
          if(mpi.is_master()) print_VecVec(resultsDir+"/Gimp_t"+pad, PrintG, Beta);
          mpi.report(" Gimp_t"+pad+" is printed.");
          //
          // observables derived from n(tau)
          VecVec Normnt = normalize_VecVec(nt, RankSweeps);
-         VecVec Printnt(Nflavor,std::vector<double>(NtauB,0.0));
+         VecVec Printnt(Nflavor,Vec(NtauB,0.0));
          mpi.allreduce(Normnt, Printnt, true);
          if(mpi.is_master()) print_VecVec(resultsDir+"/n_t"+pad, Printnt, Beta);
          mpi.report(" n_t"+pad+" is printed.");
@@ -759,8 +769,19 @@ class ct_hyb
          // n(tau)n(0)
          if(NnntMeas>0)
          {
+            // error estimate and binning
+            if(bins[0]>0)
+            {
+               VecVec Nerr(Nflavor*(Nflavor+1)/2,Vec(NtauB,0.0));
+               binAverageVecVec( bins, nnt, Nerr );
+               Nerr = normalize_VecVec(Nerr, RankSweeps);
+               VecVec PrintNerr(Nflavor,Vec(NtauF,0.0));
+               mpi.allreduce(Nerr, PrintNerr, true);
+               if(mpi.is_master()) print_VecVec(resultsDir+"/nn_err"+pad, PrintNerr, Beta);
+               mpi.report(" nn_err"+pad+" is printed.");
+            }
             VecVec Normnnt = normalize_VecVec(nnt, RankSweeps);
-            VecVec Printnnt(Nflavor*(Nflavor+1)/2,std::vector<double>(NtauB,0.0));
+            VecVec Printnnt(Nflavor*(Nflavor+1)/2,Vec(NtauB,0.0));
             mpi.allreduce(Normnnt, Printnnt, true);
             if(mpi.is_master())
             {

@@ -3366,7 +3366,7 @@ contains
          unit = free_unit()
          open(unit,file=reg(path),form="formatted",status="unknown",position="rewind",action="write")
          do ik=1,Lttc%Nkpt_path
-            write(unit,"(1I5,10000E20.12)") ik,Lttc%Kpathaxis(ik)/Lttc%Kpathaxis(Lttc%Nkpt_path),(dataEk(:,ik),iorb=1,Norb)
+            write(unit,"(1I5,10000E20.12)") ik,Lttc%Kpathaxis(ik)/Lttc%Kpathaxis(Lttc%Nkpt_path),(dataEk(iorb,ik),iorb=1,Norb)
          enddo
          close(unit)
       endif

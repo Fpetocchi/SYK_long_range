@@ -12,10 +12,10 @@ module bubbles
    !---------------------------------------------------------------------------!
    !PURPOSE: Module interfaces
    !---------------------------------------------------------------------------!
-   interface calc_Pi
+   interface calc_PiGG
       module procedure calc_Pi_GoGo                                             ![BosonicField,Lattice]
       module procedure calc_Pi_scGG                                             ![BosonicField,FermionicField,Lattice,tau_output(optional)]
-   end interface calc_Pi
+   end interface calc_PiGG
 
    !---------------------------------------------------------------------------!
    !PURPOSE: Module variables
@@ -30,7 +30,8 @@ module bubbles
    !PURPOSE: Rutines available for the user. Description only for interfaces.
    !---------------------------------------------------------------------------!
    !subroutines
-   public :: calc_Pi
+   public :: calc_PiGG
+   public :: calc_PiGGdc
    public :: calc_Pimp
 
    !===========================================================================!
@@ -181,7 +182,8 @@ contains
 
 
    !---------------------------------------------------------------------------!
-   !PURPOSE: Interface between the two possible ways to compute the bubble
+   !PURPOSE: Interface between the two possible ways to compute the bubble.
+   !         Real-space implementation never used
    !---------------------------------------------------------------------------!
    subroutine calc_Pi_scGG(Pout,Gmats,Lttc,tau_output)
       !
@@ -209,8 +211,8 @@ contains
 
 
    !---------------------------------------------------------------------------!
-   !PURPOSE: Computes polarization bubble from the interacting Gf in momentum space
-   !         if tau_output=T P(K,tau) is returned
+   !PURPOSE: Computes polarization bubble from the interacting Gf in momentum
+   !         space. if tau_output=T P(K,tau) is returned
    !---------------------------------------------------------------------------!
    subroutine calc_Pi_scGkGk(Pout,Gmats,Lttc,tau_output)
       !
@@ -590,9 +592,136 @@ contains
 
 
    !---------------------------------------------------------------------------!
+   !PURPOSE: Computes polarization bubble double counting as Gloc*Gloc
+   !---------------------------------------------------------------------------!
+   subroutine calc_PiGGdc(Pout,Gmats)
+      !
+      use parameters
+      use linalg
+      use utils_misc
+      use utils_fields
+      use fourier_transforms
+      use crystal
+      use fourier_transforms
+      use file_io
+      use input_vars, only : Ntau, tau_uniform, paramagnet
+      implicit none
+      !
+      type(BosonicField),intent(inout)      :: Pout
+      type(FermionicField),intent(in)       :: Gmats
+      !
+      complex(8),allocatable                :: Gitau(:,:,:,:)
+      complex(8),allocatable                :: Ptau_dc(:,:,:)
+      real(8),allocatable                   :: tau(:)
+      real(8)                               :: Beta,tau2
+      integer                               :: Nbp,Norb,itau,ispin,ip
+      integer                               :: i,j,k,l,ib1,ib2
+      logical                               :: OD
+      type(physicalU)                       :: PhysicalUelements
+      real                                  :: start,finish
+      !
+      !
+      write(*,"(A)") new_line("A")//new_line("A")//"---- calc_PiGGdc"
+      call cpu_time(start)
+      !
+      !
+      ! Check on the input Fields
+      if(.not.Pout%status) stop "calc_PiGGdc: Pout not properly initialized."
+      if(.not.Gmats%status) stop "calc_PiGGdc: Green's function not properly initialized."
+      if(Pout%Nkpt.ne.0) stop "calc_PiGGdc: Pout k dependent attributes are supposed to be unallocated."
+      if(Pout%Beta.ne.Gmats%Beta) stop "calc_PiGGdc: Pout and Green's have different Beta."
+      !
+      Nbp = Pout%Nbp
+      Beta = Pout%Beta
+      Norb = int(sqrt(dble(Nbp)))
+      if(Gmats%Norb.ne.Norb) stop "calc_PiGGdc: Pout and Green's function have different orbital dimension."
+      !
+      allocate(tau(Ntau));tau=0d0
+      if(tau_uniform)then
+         tau = linspace(0d0,Beta,Ntau)
+      else
+         tau = denspace(beta,Ntau)
+      endif
+      !
+      call init_Uelements(Norb,PhysicalUelements)
+      !
+      ! Compute Glat(tau) - FT all components
+      call cpu_time(start)
+      allocate(Gitau(Norb,Norb,Ntau,Nspin));Gitau=czero
+      do ispin=1,Nspin
+         call Fmats2itau_mat(Beta,Gmats%ws(:,:,:,ispin),Gitau(:,:,:,ispin),asympt_corr=.true.,tau_uniform=tau_uniform)
+      enddo
+      call cpu_time(finish)
+      write(*,"(A,F)") "     Glat(iw), --> Glat(tau) cpu timing:", finish-start
+      !
+      !Hermiticity check
+      call cpu_time(start)
+      !$OMP PARALLEL DEFAULT(SHARED),&
+      !$OMP PRIVATE(ip)
+      !$OMP DO
+      do ip=1,Ntau
+         call check_Hermiticity(Gitau(:,:,ip,1),eps,enforce=.false.,hardstop=.false.,name="Glat_t"//str(ip)//"_s1",verb=.true.)
+         if(.not.paramagnet)call check_Hermiticity(Gitau(:,:,ip,Nspin),eps,enforce=.false.,hardstop=.false.,name="Glat_t"//str(ip)//"_s2",verb=.true.)
+      enddo
+      !$OMP END DO
+      !$OMP END PARALLEL
+      call cpu_time(finish)
+      write(*,"(A,F)") "     Hermiticity check on Glat(tau) cpu timing:", finish-start
+      !
+      !Compute the bubble double counting and tau axis
+      allocate(Ptau_dc(Nbp,Nbp,Ntau))
+      call clear_attributes(Pout)
+      !
+      Ptau_dc=czero
+      !$OMP PARALLEL DEFAULT(SHARED),&
+      !$OMP PRIVATE(itau,tau2,ispin,i,j,k,l,ib1,ib2,OD)
+      !$OMP DO
+      do itau=1,Ntau
+         !
+         tau2=tau(Ntau)-tau(itau)
+         if (dabs(tau2-tau(Ntau-itau+1)).gt.eps) stop "calc_PiGGdc: itau2 not found."
+         !
+         do ib1=1,Nbp
+            do ib2=ib1,Nbp
+               !
+               OD = ib1.ne.ib2
+               !
+               i = PhysicalUelements%Full_Map(ib1,ib2,1)
+               j = PhysicalUelements%Full_Map(ib1,ib2,2)
+               k = PhysicalUelements%Full_Map(ib1,ib2,3)
+               l = PhysicalUelements%Full_Map(ib1,ib2,4)
+               !
+               do ispin=1,Nspin
+                  !
+                  !Pi_(i,j)(k,l)(q,tau) = - sum_k G_ik(k,tau) * G_lj(q-k,beta-tau)
+                  Ptau_dc(ib1,ib2,itau) = Ptau_dc(ib1,ib2,itau) - ( Gitau(i,k,itau,ispin) * Gitau(l,j,Ntau-itau+1,ispin) )
+                  !
+                  !Pi_(k,l)(i,j)(q,tau) = - sum_k G_ki(k,tau) * G_jl(q-k,beta-tau)
+                  if(OD)Ptau_dc(ib2,ib1,itau) = Ptau_dc(ib2,ib1,itau) - ( Gitau(k,i,itau,ispin) * Gitau(j,l,Ntau-itau+1,ispin) )
+                  !
+               enddo
+               !
+            enddo
+         enddo
+         !
+      enddo !itau
+      !$OMP END DO
+      !$OMP END PARALLEL
+      !
+      call Bitau2mats(Beta,Ptau_dc,Pout%screened_local,tau_uniform=tau_uniform)
+      !
+      deallocate(tau,Gitau,Ptau_dc)
+      !
+      call cpu_time(finish)
+      write(*,"(A,F)") "     PiGGdc cpu timing: ", finish-start
+      !
+   end subroutine calc_PiGGdc
+
+
+   !---------------------------------------------------------------------------!
    !PURPOSE: Computes the local polarization vertex
    !---------------------------------------------------------------------------!
-   subroutine calc_Pimp(Pimp,curlyU,ChiC,sym)
+   subroutine calc_Pimp(Pimp,curlyU,ChiC,sym,NaNb)
       !
       use parameters
       use utils_fields
@@ -604,12 +733,15 @@ contains
       type(BosonicField),intent(in)         :: curlyU
       type(BosonicField),intent(in)         :: ChiC
       logical,intent(in),optional           :: sym
+      logical,intent(in),optional           :: NaNb
       !
+      real(8),allocatable                   :: RecurlyU(:,:),ReChiC(:,:)
       complex(8),allocatable                :: invP(:,:)
+      type(physicalU)                       :: PhysicalUelements
       real(8)                               :: Beta
-      integer                               :: Nbp,Nmats
+      integer                               :: Nbp,Nmats,ib1,ib2
       integer                               :: iw
-      logical                               :: sym_
+      logical                               :: sym_,NaNb_
       !
       !
       if(verbose)write(*,"(A)") "---- calc_Pimp"
@@ -629,6 +761,8 @@ contains
       !
       sym_=.true.
       if(present(sym))sym_=sym
+      NaNb_=.true.
+      if(present(NaNb))NaNb_=NaNb
       !
       Nbp = Pimp%Nbp
       Beta = Pimp%Beta
@@ -638,28 +772,46 @@ contains
       if(all([curlyU%Beta-Beta,ChiC%Beta-Beta].ne.[0d0,0d0])) stop "calc_Pimp: Either curlyU and/or ChiC have different Beta with respect to Pimp."
       if(all([curlyU%Npoints-Nmats,ChiC%Npoints-Nmats].ne.[0,0])) stop "calc_Pimp: Either curlyU and/or ChiC have different number of Matsubara points with respect to Pimp."
       !
+      if(NaNb_)call init_Uelements(int(sqrt(dble(Nbp))),PhysicalUelements)
+      !
       call clear_attributes(Pimp)
       !
       allocate(invP(Nbp,Nbp));invP=czero
-      !$OMP PARALLEL DEFAULT(NONE),&
-      !$OMP SHARED(Pimp,ChiC,curlyU),&
-      !$OMP PRIVATE(iw,invP)
+      allocate(RecurlyU(Nbp,Nbp));RecurlyU=0d0
+      allocate(ReChiC(Nbp,Nbp));ReChiC=0d0
+      !$OMP PARALLEL DEFAULT(SHARED),&
+      !$OMP PRIVATE(iw,invP,RecurlyU,ReChiC,ib1,ib2)
       !$OMP DO
       do iw=1,Pimp%Npoints
          !
+         ReChiC = dreal(ChiC%screened_local(:,:,iw))
+         RecurlyU = dreal(curlyU%screened_local(:,:,iw))
+         !
+         ! keeping only curlyU_(aa)(bb) to compute Pimp
+         if(NaNb_)then
+            do ib1=1,Pimp%Nbp
+               do ib2=ib1,Pimp%Nbp
+                  if(.not.PhysicalUelements%Full_Imp(ib1,ib2))then
+                     RecurlyU(ib1,ib2) = 0d0
+                     RecurlyU(ib2,ib1) = 0d0
+                  endif
+               enddo
+            enddo
+         endif
+         !
          ! [ curlyU*ChiC - 1 ]
-         invP = matmul(curlyU%screened_local(:,:,iw),ChiC%screened_local(:,:,iw)) - zeye(Pimp%Nbp)
+         invP = matmul(RecurlyU,ReChiC) - zeye(Pimp%Nbp)
          !
          ! [ curlyU*ChiC - 1 ]^-1
          call inv(invP)
          !
          ! ChiC*[ curlyU*ChiC - 1 ]^-1
-         Pimp%screened_local(:,:,iw) = matmul(ChiC%screened_local(:,:,iw),invP)
+         Pimp%screened_local(:,:,iw) = matmul(ReChiC,invP)
          !
       enddo
       !$OMP END DO
       !$OMP END PARALLEL
-      deallocate(invP)
+      deallocate(invP,RecurlyU,ReChiC)
       call isReal(Pimp)
       !
       !Check if Pimp is locally symmetric - print if relative error is bigger than 1e-3

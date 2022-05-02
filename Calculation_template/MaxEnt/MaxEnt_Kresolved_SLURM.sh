@@ -187,7 +187,7 @@ for i in \`seq  ${startk} ${stopk}\`; do
       #
       echo model > job_Kb_\${i}.out
       if [ "$MODEL"  == "1" ] ; then MODELOPTIONS=${MOMENTS} ; fi
-      if [ "$MODEL"  == "2" ] ; then MODELOPTIONS= -m ../${Gsource}/${FIELD}k_t_k\${i}${SUFFIX}.DAT ; fi
+      if [ "$MODEL"  == "2" ] ; then MODELOPTIONS= -m ../${Gsource}/Models/${FIELD}k_t_k\${i}${SUFFIX}.DAT_dos.dat ; fi
       srun python3.6  ${BIN}/bryan.py ${RUNOPTIONS} \${MODELOPTIONS} ../${Gsource}/${FIELD}k_t_k\${i}${SUFFIX}.DAT >> job_Kb_\${i}.out
       #
    else
@@ -242,7 +242,7 @@ if [ "$MODEL"  != "0" ]; then
    #
    echo model > job_K_${kp}.out
    if [ "$MODEL"  == "1" ] ; then MODELOPTIONS=${MOMENTS} ; fi
-   if [ "$MODEL"  == "2" ] ; then MODELOPTIONS= -m ../${Gsource}/${FIELD}k_t_k${kp}${SUFFIX}.DAT ; fi
+   if [ "$MODEL"  == "2" ] ; then MODELOPTIONS= -m ../${Gsource}/Models/${FIELD}k_t_k${kp}${SUFFIX}.DAT_dos.dat ; fi
    srun python3.6  ${BIN}/bryan.py ${RUNOPTIONS} \${MODELOPTIONS} ../${Gsource}/${FIELD}k_t_k${kp}${SUFFIX}.DAT >> job_K_${kp}.out
    #
 else

@@ -114,10 +114,8 @@ subroutine interpolateG2Path(Sfull,Lttc,pathOUTPUT)
          !
          !
          !--------------- Green's function in the full BZ ---------------!
-         if(scan(reg(path_funct),"S").gt.0)then
-            call AllocateFermionicField(Gfull,Norb,Nmats,Nkpt=Lttc%Nkpt,Nsite=Sfull%Nsite,Beta=Sfull%Beta,mu=Sfull%mu)
-            call calc_Gmats(Gfull,Lttc,Smats=Sfull,along_path=.false.)
-         endif
+         call AllocateFermionicField(Gfull,Norb,Nmats,Nkpt=Lttc%Nkpt,Nsite=Sfull%Nsite,Beta=Sfull%Beta,mu=Sfull%mu)
+         call calc_Gmats(Gfull,Lttc,Smats=Sfull,along_path=.false.)
          !
          !
          !
@@ -241,6 +239,9 @@ subroutine interpolateG2Path(Sfull,Lttc,pathOUTPUT)
    !
    !
    if(scan(reg(path_funct),"G").gt.0)then
+      !
+     !Dump K-resolved MaxEnt data in the full BZ
+     call calc_MaxEnt_on_G_K(Gfull,"full")
      !
      !Dump K-resolved MaxEnt data along the path
      call calc_MaxEnt_on_G_K(Gpath,"path")
@@ -306,6 +307,11 @@ contains
          case default
             !
             stop "calc_MaxEnt_on_G_K: Available Modes are: path, full, plane."
+            !
+         case("full")
+            !
+            Nkpt = Lttc%Nkpt
+            write(*,"(A,I)") "     G full. Total number of K-points in the BZ:",Nkpt
             !
          case("path")
             !

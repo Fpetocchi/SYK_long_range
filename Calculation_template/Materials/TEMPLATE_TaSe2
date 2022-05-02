@@ -95,31 +95,76 @@ rep for [i=2:8] './'.it.'/Convergence/MaxEnt_Gqmc_v1/MaxEnt_Gqmc_S'.i.'_o1_s1/Gq
 set grid
 set xtics 0.2
 s=-1;gf='ret'
+set yrange [-1:66]
 
-#L-TERMINATION
+
+lead='PBC'
 set title 'L-termination'
+  p '2_Lterm_Eq_'.lead.'/G'.gf.'_up_w.out' u ($1-1.5):(s*$3/4+60)  w l lw 2 t 'L=1'
+rep '2_Lterm_Eq_'.lead.'/G'.gf.'_up_w.out' u ($1-1.5):(s*$5/4+56)  w l lw 2 t 'L=2'
+rep '2_Lterm_Eq_'.lead.'/G'.gf.'_up_w.out' u ($1-1.5):(s*$7/4+52)  w l lw 2 t 'L=3'
+rep '2_Lterm_Eq_'.lead.'/G'.gf.'_up_w.out' u ($1-1.5):(s*$9/4+48)  w l lw 2 t 'L=4'
+rep '2_Lterm_Eq_'.lead.'/G'.gf.'_up_w.out' u ($1-1.5):(s*$11/4+44) w l lw 2 t 'L=5'
+rep '2_Lterm_Eq_'.lead.'/G'.gf.'_up_w.out' u ($1-1.5):(s*$13/4+40) w l lw 2 t 'L=6'
+rep '2_Lterm_Eq_'.lead.'/G'.gf.'_up_w.out' u ($1-1.5):(s*$15/4+36) w l lw 2 t 'L=7'
+rep '2_Lterm_Eq_'.lead.'/G'.gf.'_up_w.out' u ($1-1.5):(s*$17/4+32) w l lw 2 t 'L=8'
+rep '2_Lterm_Eq_'.lead.'/G'.gf.'_up_w.out' u ($1-1.5):(s*$19/4+28) w l lw 2 t 'L=9'
+rep '2_Lterm_Eq_'.lead.'/G'.gf.'_up_w.out' u ($1-1.5):(s*$21/4+24) w l lw 2 t 'L=10'
+rep '2_Lterm_Eq_'.lead.'/G'.gf.'_up_w.out' u ($1-1.5):(s*$23/4+20) w l lw 2 t 'L=11'
+rep '2_Lterm_Eq_'.lead.'/G'.gf.'_up_w.out' u ($1-1.5):(s*$25/4+16) w l lw 2 t 'L=12'
+rep '2_Lterm_Eq_'.lead.'/G'.gf.'_up_w.out' u ($1-1.5):(s*$27/4+12) w l lw 2 t 'L=13'
+rep '2_Lterm_Eq_'.lead.'/G'.gf.'_up_w.out' u ($1-1.5):(s*$29/4+8)  w l lw 2 t 'L=14'
+rep '2_Lterm_Eq_'.lead.'/G'.gf.'_up_w.out' u ($1-1.5):(s*$31/4+4)  w l lw 2 t 'L=15'
+rep '2_Lterm_Eq_'.lead.'/G'.gf.'_up_w.out' u ($1-1.5):(s*$33/4+0)  w l lw 2 t 'L=16'
 
-  p '1_Lterm_nonInt/G'.gf.'_up_w.out' u ($1-1.5):(s*$21/4+40) w l lw 2 lc rgb 'black' notitle
-rep '1_Lterm_nonInt/G'.gf.'_up_w.out' u ($1-1.5):(s*$19/4+36) w l lw 2 lc rgb 'black' notitle
-rep '1_Lterm_nonInt/G'.gf.'_up_w.out' u ($1-1.5):(s*$17/4+32) w l lw 2 lc rgb 'black' notitle
-rep '1_Lterm_nonInt/G'.gf.'_up_w.out' u ($1-1.5):(s*$15/4+28) w l lw 2 lc rgb 'black' notitle
-rep '1_Lterm_nonInt/G'.gf.'_up_w.out' u ($1-1.5):(s*$13/4+24) w l lw 2 lc rgb 'black' notitle
-rep '1_Lterm_nonInt/G'.gf.'_up_w.out' u ($1-1.5):(s*$11/4+20) w l lw 2 lc rgb 'black' notitle
-rep '1_Lterm_nonInt/G'.gf.'_up_w.out' u ($1-1.5):(s*$9/4+16)  w l lw 2 lc rgb 'black' notitle
-rep '1_Lterm_nonInt/G'.gf.'_up_w.out' u ($1-1.5):(s*$7/4+12)  w l lw 2 lc rgb 'black' notitle
-rep '1_Lterm_nonInt/G'.gf.'_up_w.out' u ($1-1.5):(s*$5/4+8)   w l lw 2 lc rgb 'black' notitle
-#rep '1_Lterm_nonInt/G'.gf.'_up_w.out' u ($1-1.5):(s*$3/4+4)   w l lw 2 lc rgb 'black' notitle
 
-rep '2_Lterm_Int/G'.gf.'_up_w.out' u ($1-1.5):(s*$21/4+40) w l lw 2 t 'L=1'
-rep '2_Lterm_Int/G'.gf.'_up_w.out' u ($1-1.5):(s*$19/4+36) w l lw 2 t 'L=2'
-rep '2_Lterm_Int/G'.gf.'_up_w.out' u ($1-1.5):(s*$17/4+32) w l lw 2 t 'L=3'
-rep '2_Lterm_Int/G'.gf.'_up_w.out' u ($1-1.5):(s*$15/4+28) w l lw 2 t 'L=4'
-rep '2_Lterm_Int/G'.gf.'_up_w.out' u ($1-1.5):(s*$13/4+24) w l lw 2 t 'L=5'
-rep '2_Lterm_Int/G'.gf.'_up_w.out' u ($1-1.5):(s*$11/4+20) w l lw 2 t 'L=6'
-rep '2_Lterm_Int/G'.gf.'_up_w.out' u ($1-1.5):(s*$9/4+16)  w l lw 2 t 'L=7'
-rep '2_Lterm_Int/G'.gf.'_up_w.out' u ($1-1.5):(s*$7/4+12)  w l lw 2 t 'L=8'
-rep '2_Lterm_Int/G'.gf.'_up_w.out' u ($1-1.5):(s*$5/4+8)   w l lw 2 t 'L=9'
-#rep '2_Lterm_Int/G'.gf.'_up_w.out' u ($1-1.5):(s*$3/4+4)   w l lw 2 t 'L=10'
+set title 'L-termination'
+  p '4_Aterm_Eq_'.lead.'/G'.gf.'_up_w.out' u ($1-1.5):(s*$3/4+60)  w l lw 2 t 'L=1'
+rep '4_Aterm_Eq_'.lead.'/G'.gf.'_up_w.out' u ($1-1.5):(s*$5/4+56)  w l lw 2 t 'L=2'
+rep '4_Aterm_Eq_'.lead.'/G'.gf.'_up_w.out' u ($1-1.5):(s*$7/4+52)  w l lw 2 t 'L=3'
+rep '4_Aterm_Eq_'.lead.'/G'.gf.'_up_w.out' u ($1-1.5):(s*$9/4+48)  w l lw 2 t 'L=4'
+rep '4_Aterm_Eq_'.lead.'/G'.gf.'_up_w.out' u ($1-1.5):(s*$11/4+44) w l lw 2 t 'L=5'
+rep '4_Aterm_Eq_'.lead.'/G'.gf.'_up_w.out' u ($1-1.5):(s*$13/4+40) w l lw 2 t 'L=6'
+rep '4_Aterm_Eq_'.lead.'/G'.gf.'_up_w.out' u ($1-1.5):(s*$15/4+36) w l lw 2 t 'L=7'
+rep '4_Aterm_Eq_'.lead.'/G'.gf.'_up_w.out' u ($1-1.5):(s*$17/4+32) w l lw 2 t 'L=8'
+rep '4_Aterm_Eq_'.lead.'/G'.gf.'_up_w.out' u ($1-1.5):(s*$19/4+28) w l lw 2 t 'L=9'
+rep '4_Aterm_Eq_'.lead.'/G'.gf.'_up_w.out' u ($1-1.5):(s*$21/4+24) w l lw 2 t 'L=10'
+rep '4_Aterm_Eq_'.lead.'/G'.gf.'_up_w.out' u ($1-1.5):(s*$23/4+20) w l lw 2 t 'L=11'
+rep '4_Aterm_Eq_'.lead.'/G'.gf.'_up_w.out' u ($1-1.5):(s*$25/4+16) w l lw 2 t 'L=12'
+rep '4_Aterm_Eq_'.lead.'/G'.gf.'_up_w.out' u ($1-1.5):(s*$27/4+12) w l lw 2 t 'L=13'
+rep '4_Aterm_Eq_'.lead.'/G'.gf.'_up_w.out' u ($1-1.5):(s*$29/4+8)  w l lw 2 t 'L=14'
+rep '4_Aterm_Eq_'.lead.'/G'.gf.'_up_w.out' u ($1-1.5):(s*$31/4+4)  w l lw 2 t 'L=15'
+rep '4_Aterm_Eq_'.lead.'/G'.gf.'_up_w.out' u ($1-1.5):(s*$33/4+0)  w l lw 2 t 'L=16'
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+re
 
 set term jpeg size 750,1000
 set output 'plots/Lterm.jpeg'

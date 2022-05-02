@@ -42,7 +42,7 @@ module utils_main
    type(BosonicField)                       :: W_EDMFT
    !
    type(BosonicField)                       :: Ulat
-   type(BosonicField)                       :: Plat
+   type(BosonicField)                       :: Plat,P_GGdc
    type(BosonicField)                       :: Chi
    type(BosonicField)                       :: P_EDMFT
    type(BosonicField)                       :: C_EDMFT
@@ -337,6 +337,7 @@ contains
          do ispin=1,Nspin
             if(reg(path_funct).eq."G")then
                !
+               call createDir(reg(MaxEnt_K)//"/MaxEnt_Gk_full_t_s"//str(ispin),verb=verbose)  ! This is for MaxEnt on G in the full BZ
                call createDir(reg(MaxEnt_K)//"/MaxEnt_Gk_path_t_s"//str(ispin),verb=verbose)  ! This is for MaxEnt on G along the K-path
                if(FermiSurf)call createDir(reg(MaxEnt_K)//"/MaxEnt_Gk_plane_t_s"//str(ispin),verb=verbose)  ! This is for MaxEnt on G in the full BZ to get Fermi surface
                !
@@ -1745,17 +1746,15 @@ contains
       type(FermionicField)                  :: DeltaCorr
       type(FermionicField)                  :: FermiPrint
       type(FermionicField)                  :: DeltaOld,DeltaSym
-      type(BosonicField)                    :: curlyU
-      integer                               :: Norb,unit
-      integer                               :: ispin,iorb,jorb,iw,ib1,ib2
+      integer                               :: Norb,Norb_MultiTier,unit
+      integer                               :: ispin,iorb,iw
       integer                               :: itau,ndx,wndx
       real(8),allocatable                   :: wmats(:),tau(:),Moments(:,:,:)
-      real(8),allocatable                   :: Uinst(:,:),rhoLAT(:),N_s(:,:,:)
       real(8),allocatable                   :: Eloc(:,:),ElocOld(:,:),Eloc_s(:,:,:),PrintLine(:),coef01(:,:)
       real(8)                               :: tailShift,CrystalField,taup
       complex(8),allocatable                :: zeta(:,:,:),invG(:,:)
       complex(8),allocatable                :: Dfit(:,:,:),Dmats(:,:,:),Ditau(:,:,:)
-      complex(8),allocatable                :: invCurlyG(:,:,:)
+      complex(8),allocatable                :: invCurlyG(:,:,:),invCurlyG_MultiTier(:,:,:)
       real(8),allocatable                   :: tauF(:),ReadLine(:),DitauOld(:,:,:)
       character(len=255)                    :: file,MomDir
       logical                               :: filexists
@@ -1773,10 +1772,6 @@ contains
       !
       allocate(Eloc(Norb,Nspin));Eloc=0d0
       allocate(coef01(Norb,Nspin));coef01=0d0
-      !
-      call AllocateFermionicField(SigmaImp,Norb,Nmats,Beta=Beta)
-      call AllocateFermionicField(Gloc,Norb,Nmats,Beta=Beta)
-      if(causal_D)call AllocateFermionicField(DeltaCorr,Norb,Nmats,Beta=Beta)
       allocate(invCurlyG(Norb,Nmats,Nspin));invCurlyG=czero
       !
       allocate(wmats(Nmats));wmats=0d0
@@ -1788,124 +1783,94 @@ contains
          enddo
       enddo
       !
-      !Extract and rotate from local (non-diagonal) to imp (diagonal) the given sites
-      call clear_attributes(Gloc)
-      call clear_attributes(SigmaImp)
-      if(causal_D)call clear_attributes(DeltaCorr)
-      if(RotateHloc)then
+      if(MultiTier.and.(Nsite.eq.1))then
          !
-         call loc2imp(Gloc,Glat,LocalOrbs(isite)%Orbs,U=LocalOrbs(isite)%Rot)
-         call loc2imp(SigmaImp,S_DMFT,LocalOrbs(isite)%Orbs,U=LocalOrbs(isite)%Rot)
-         if(causal_D)call loc2imp(DeltaCorr,Delta_correction,LocalOrbs(isite)%Orbs,U=LocalOrbs(isite)%Rot)
+         !The Dyson equation occurs inside all the local space. Rotations not allowed here.
+         Norb_MultiTier = Glat%Norb
+         allocate(invCurlyG_MultiTier(Norb_MultiTier,Nmats,Nspin));invCurlyG_MultiTier=czero
+         allocate(invG(Norb_MultiTier,Norb_MultiTier));invG=czero
+         do ispin=1,Nspin
+            do iw=1,Nmats
+               !
+               invG = Glat%ws(:,:,iw,ispin)
+               call inv(invG)
+               !
+               do iorb=1,Norb_MultiTier
+                  !
+                  invCurlyG_MultiTier(iorb,iw,ispin) = invG(iorb,iorb) + S_DMFT%ws(iorb,iorb,iw,ispin)
+                  if(causal_D) invCurlyG(iorb,iw,ispin) = invG(iorb,iorb) + S_DMFT%ws(iorb,iorb,iw,ispin) - Delta_correction%ws(iorb,iorb,iw,ispin)
+                  !
+               enddo
+               !
+            enddo
+         enddo
+         deallocate(invG)
+         !
+         !LocalOrbs are extracted
+         do iorb=1,Norb
+            invCurlyG(iorb,:,:) = invCurlyG_MultiTier(LocalOrbs(isite)%Orbs(iorb),:,:)
+         enddo
+         deallocate(invCurlyG_MultiTier)
          !
       else
          !
-         call loc2imp(Gloc,Glat,LocalOrbs(isite)%Orbs)
-         call loc2imp(SigmaImp,S_DMFT,LocalOrbs(isite)%Orbs)
-         if(causal_D)call loc2imp(DeltaCorr,Delta_correction,LocalOrbs(isite)%Orbs)
+         !The Dyson equation occurs directly on LocalOrbs.
+         call AllocateFermionicField(SigmaImp,Norb,Nmats,Beta=Beta)
+         call AllocateFermionicField(Gloc,Norb,Nmats,Beta=Beta)
+         if(causal_D)call AllocateFermionicField(DeltaCorr,Norb,Nmats,Beta=Beta)
          !
-      endif
-      !
-      !Recalculate and replace the Hartree term with the lattice densities
-      if(recalc_Hartree)then
-         !
-         write(*,"(A)") "     Recalculating Hartree term with lattice density."
-         !
-         call AllocateBosonicField(curlyU,Norb,Nmats,Crystal%iq_gamma,Beta=Beta)
-         call read_BosonicField(curlyU,reg(ItFolder)//"Solver_"//reg(LocalOrbs(isite)%Name)//"/","curlyU_"//reg(LocalOrbs(isite)%Name)//"_w.DAT")
-         select case(reg(HartreeType))
-            case default
-               stop "collect_QMC_results: Available HartreeT types: GW or DMFT."
-            case("GW")
-               !
-               N_s = czero
-               do ispin=1,Nspin
-                  do iorb=1,LocalOrbs(isite)%Norb
-                     do jorb=1,LocalOrbs(isite)%Norb
-                        call F2Bindex(LocalOrbs(isite)%Norb,[iorb,iorb],[jorb,jorb],ib1,ib2)
-                        N_s(iorb,iorb,ispin) = N_s(iorb,iorb,ispin) + curlyU%screened_local(ib1,ib2,1)*Gloc%N_s(jorb,jorb,ispin)
-                        !
-                     enddo
-                  enddo
-               enddo
-               call DeallocateBosonicField(curlyU)
-               !
-               !The magnetization will be given only by the self-energy beyond Hartree
-               N_s(:,:,1) = (N_s(:,:,1)+N_s(:,:,Nspin))
-               N_s(:,:,Nspin) = N_s(:,:,1)
-               !
-            case("DMFT")
-               !
-               allocate(Uinst(Norb*Nspin,Norb*Nspin));Uinst=0d0
-               call calc_QMCinteractions(curlyU,Uinst)
-               call DeallocateBosonicField(curlyU)
-               !
-               allocate(rhoLAT(Norb*Nspin));rhoLAT=0d0
-               do ib1=1,LocalOrbs(isite)%Nflavor
-                  iorb = (ib1+mod(ib1,2))/2
-                  ispin = abs(mod(ib1,2)-2)
-                  rhoLAT(ib1) = Gloc%N_s(iorb,iorb,ispin)
-               enddo
-               !
-               allocate(N_s(Norb,Norb,Nspin));N_s=czero
-               do ib1=1,LocalOrbs(isite)%Nflavor
-                  iorb = (ib1+mod(ib1,2))/2
-                  ispin = abs(mod(ib1,2)-2)
-                  do ib2=1,LocalOrbs(isite)%Nflavor
-                     if(ib1.eq.ib2) cycle !N_s(iorb,iorb,ispin) = N_s(iorb,iorb,ispin) + Uinst(2*iorb-1,2*iorb)*rhoLAT(ib2)
-                     N_s(iorb,iorb,ispin) = N_s(iorb,iorb,ispin) + Uinst(ib1,ib2)*rhoLAT(ib2)
-                  enddo
-               enddo
-               deallocate(Uinst,rhoLAT)
-               N_s(:,:,1) = (N_s(:,:,1)+N_s(:,:,Nspin))/2d0
-               N_s(:,:,Nspin) = N_s(:,:,1)
-               !
-         end select
-         !
-         !do iw=1,Nmats
-         !   SigmaImp%ws(:,:,iw,:) = SigmaImp%ws(:,:,iw,:) - SigmaImp%N_s + N_s
-         !enddo
-         !
-         SigmaImp%N_s = N_s
-         deallocate(N_s)
-         !
-         call dump_Matrix(SigmaImp%N_s,reg(ItFolder),"Solver_"//reg(LocalOrbs(isite)%Name)//"/Hartree_UNlat_"//reg(LocalOrbs(isite)%Name),paramagnet)
-         !
-      endif
-      !
-      !Print what's used to compute delta
-      call dump_Matrix(Gloc%N_s,reg(ItFolder),"Solver_"//reg(LocalOrbs(isite)%Name)//"/Nloc_"//reg(LocalOrbs(isite)%Name),paramagnet)
-      call dump_FermionicField(Gloc,reg(ItFolder)//"Solver_"//reg(LocalOrbs(isite)%Name)//"/","Glat_"//reg(LocalOrbs(isite)%Name)//"_w",paramagnet)
-      if(causal_D)call dump_FermionicField(DeltaCorr,reg(ItFolder)//"Solver_"//reg(LocalOrbs(isite)%Name)//"/","Delta_correction_"//reg(LocalOrbs(isite)%Name)//"_w",paramagnet)
-      call dump_FermionicField(SigmaImp,reg(ItFolder)//"Solver_"//reg(LocalOrbs(isite)%Name)//"/","Simp_"//reg(LocalOrbs(isite)%Name)//"_w",paramagnet)
-      !
-      !Compute the fermionic Weiss field invCurlyG.
-      allocate(invG(Norb,Norb));invG=czero
-      do ispin=1,Nspin
-         do iw=1,Nmats
+         !Extract and rotate from local (non-diagonal) to imp (diagonal) the given sites
+         call clear_attributes(Gloc)
+         call clear_attributes(SigmaImp)
+         if(causal_D)call clear_attributes(DeltaCorr)
+         if(RotateHloc)then
             !
-            invG = Gloc%ws(:,:,iw,ispin)
-            call inv(invG)
+            call loc2imp(Gloc,Glat,LocalOrbs(isite)%Orbs,U=LocalOrbs(isite)%Rot)
+            call loc2imp(SigmaImp,S_DMFT,LocalOrbs(isite)%Orbs,U=LocalOrbs(isite)%Rot)
+            if(causal_D)call loc2imp(DeltaCorr,Delta_correction,LocalOrbs(isite)%Orbs,U=LocalOrbs(isite)%Rot)
             !
-            if(causal_D)then
+         else
+            !
+            call loc2imp(Gloc,Glat,LocalOrbs(isite)%Orbs)
+            call loc2imp(SigmaImp,S_DMFT,LocalOrbs(isite)%Orbs)
+            if(causal_D)call loc2imp(DeltaCorr,Delta_correction,LocalOrbs(isite)%Orbs)
+            !
+         endif
+         !
+         !Compute the fermionic Weiss field invCurlyG.
+         allocate(invG(Norb,Norb));invG=czero
+         do ispin=1,Nspin
+            do iw=1,Nmats
+               !
+               invG = Gloc%ws(:,:,iw,ispin)
+               call inv(invG)
+               !
                do iorb=1,Norb
-                  !self-consistency is only on SigmaXC
-                  !invCurlyG(iorb,iw,ispin) = invG(iorb,iorb) + ( SigmaImp%ws(iorb,iorb,iw,ispin) - SigmaImp%N_s(iorb,iorb,ispin) ) - DeltaCorr%ws(iorb,iorb,iw,ispin)
-                  invCurlyG(iorb,iw,ispin) = invG(iorb,iorb) + SigmaImp%ws(iorb,iorb,iw,ispin) - DeltaCorr%ws(iorb,iorb,iw,ispin)
+                  !
+                  if(causal_D) then
+                     !self-consistency is only on SigmaXC: invCurlyG(iorb,iw,ispin) = invG(iorb,iorb) + ( SigmaImp%ws(iorb,iorb,iw,ispin) - SigmaImp%N_s(iorb,iorb,ispin) ) - DeltaCorr%ws(iorb,iorb,iw,ispin)
+                     invCurlyG(iorb,iw,ispin) = invG(iorb,iorb) + SigmaImp%ws(iorb,iorb,iw,ispin) - DeltaCorr%ws(iorb,iorb,iw,ispin)
+                  else
+                     !self-consistency is only on SigmaXC: invCurlyG(iorb,iw,ispin) = invG(iorb,iorb) + ( SigmaImp%ws(iorb,iorb,iw,ispin) - SigmaImp%N_s(iorb,iorb,ispin) )
+                     invCurlyG(iorb,iw,ispin) = invG(iorb,iorb) + SigmaImp%ws(iorb,iorb,iw,ispin)
+                  endif
+                  !
                enddo
-            else
-               do iorb=1,Norb
-                  !self-consistency is only on SigmaXC
-                  !invCurlyG(iorb,iw,ispin) = invG(iorb,iorb) + ( SigmaImp%ws(iorb,iorb,iw,ispin) - SigmaImp%N_s(iorb,iorb,ispin) )
-                  invCurlyG(iorb,iw,ispin) = invG(iorb,iorb) + SigmaImp%ws(iorb,iorb,iw,ispin)
-               enddo
-            endif
-            !
+               !
+            enddo
          enddo
-      enddo
-      deallocate(invG)
-      call DeallocateFermionicField(SigmaImp)
-      call DeallocateFermionicField(Gloc)
+         deallocate(invG)
+         !Recalculate and replace the Hartree term with the lattice densities would go here
+         !
+         !Print the impurity fields used to compute delta
+         call dump_Matrix(Gloc%N_s,reg(ItFolder),"Solver_"//reg(LocalOrbs(isite)%Name)//"/Nloc_"//reg(LocalOrbs(isite)%Name),paramagnet)
+         call dump_FermionicField(Gloc,reg(ItFolder)//"Solver_"//reg(LocalOrbs(isite)%Name)//"/","Glat_"//reg(LocalOrbs(isite)%Name)//"_w",paramagnet)
+         if(causal_D)call dump_FermionicField(DeltaCorr,reg(ItFolder)//"Solver_"//reg(LocalOrbs(isite)%Name)//"/","Delta_correction_"//reg(LocalOrbs(isite)%Name)//"_w",paramagnet)
+         call dump_FermionicField(SigmaImp,reg(ItFolder)//"Solver_"//reg(LocalOrbs(isite)%Name)//"/","Simp_"//reg(LocalOrbs(isite)%Name)//"_w",paramagnet)
+         call DeallocateFermionicField(SigmaImp)
+         call DeallocateFermionicField(Gloc)
+         !
+      endif
       !
       !Extract the local energy
       allocate(Dfit(Norb,Nmats,Nspin));Dfit=czero
@@ -2113,16 +2078,6 @@ contains
       endif
       !
       !Write Eloc and chemical potential
-      if(addCF)then
-         file = reg(ItFolder)//"Solver_"//reg(LocalOrbs(isite)%Name)//"/Eloc_noCF.DAT"
-         unit = free_unit()
-         open(unit,file=reg(file),form="formatted",status="unknown",position="rewind",action="write")
-         write(unit,"(1E20.12)") Glat%mu
-         do iorb=1,Norb
-            write(unit,"(2E20.12)") Eloc(iorb,1)-EqvGWndx%hseed, Eloc(iorb,Nspin)+EqvGWndx%hseed
-         enddo
-         close(unit)
-      endif
       file = reg(ItFolder)//"Solver_"//reg(LocalOrbs(isite)%Name)//"/Eloc.DAT"
       unit = free_unit()
       open(unit,file=reg(file),form="formatted",status="unknown",position="rewind",action="write")
@@ -2240,7 +2195,7 @@ contains
       type(BosonicField)                    :: curlyU,curlyUold
       type(BosonicField)                    :: curlyUcorr
       type(physicalU)                       :: PhysicalUelements
-      integer                               :: Norb,Nbp,unit
+      integer                               :: Norb,Norb_MultiTier,Nbp,unit
       integer                               :: ib1,ib2,itau,iw
       integer                               :: isitecheck
       real(8),allocatable                   :: Uinst(:,:),Ucheck(:,:)
@@ -2286,32 +2241,54 @@ contains
                !
             else
                !
-               write(*,"(A)") "     Computing the local effective interaction."
-               call AllocateBosonicField(Pimp,Norb,Nmats,Crystal%iq_gamma,no_bare=.true.,Beta=Beta)
-               call AllocateBosonicField(Wloc,Norb,Nmats,Crystal%iq_gamma,Beta=Beta)
-               !
-               call loc2imp(Pimp,P_EDMFT,LocalOrbs(isite)%Orbs)
-               call loc2imp(Wloc,Wlat,LocalOrbs(isite)%Orbs)
-               !
-               if(causal_U)then
-                  call AllocateBosonicField(curlyUcorr,Norb,Nmats,Crystal%iq_gamma,Beta=Beta,no_bare=.true.)
-                  call loc2imp(curlyUcorr,curlyU_correction,LocalOrbs(isite)%Orbs)
-                  call calc_curlyU(curlyU,Wloc,Pimp,curlyUcorr=curlyUcorr,mode=reg(causal_U_type))
-               else
-                  call calc_curlyU(curlyU,Wloc,Pimp)
-               endif
-               !
-               if(RotateUloc)then
-                  call TransformBosonicField(curlyU,LocalOrbs(isite)%Rot,PhysicalUelements%Full_Map)
+               if(MultiTier.and.(Nsite.eq.1))then
+                  !
+                  !The Dyson equation occurs inside all the local space. Rotations not allowed here.
+                  write(*,"(A)") "     Computing the local effective interaction (MultiTier)."
+                  Norb_MultiTier = int(sqrt(dble(Wlat%Nbp)))
+                  call AllocateBosonicField(curlyU_EDMFT,Norb_MultiTier,Nmats,Crystal%iq_gamma,Beta=Beta)
+                  !
                   if(causal_U)then
-                     call TransformBosonicField(curlyUcorr,LocalOrbs(isite)%Rot,PhysicalUelements%Full_Map)
-                     call dump_BosonicField(curlyUcorr,reg(ItFolder)//"Solver_"//reg(LocalOrbs(isite)%Name)//"/","curlyU_correction_"//reg(LocalOrbs(isite)%Name)//"_w.DAT")
+                     call calc_curlyU(curlyU_EDMFT,Wlat,P_EDMFT,curlyUcorr=curlyU_correction,mode=reg(causal_U_type))
+                  else
+                     call calc_curlyU(curlyU_EDMFT,Wlat,P_EDMFT)
                   endif
+                  !
+                  !LocalOrbs are extracted
+                  call loc2imp(curlyU,curlyU_EDMFT,LocalOrbs(isite)%Orbs)
+                  call DeallocateBosonicField(curlyU_EDMFT)
+                  !
+               else
+                  !
+                  !The Dyson equation occurs directly on LocalOrbs.
+                  write(*,"(A)") "     Computing the local effective interaction."
+                  call AllocateBosonicField(Pimp,Norb,Nmats,Crystal%iq_gamma,no_bare=.true.,Beta=Beta)
+                  call AllocateBosonicField(Wloc,Norb,Nmats,Crystal%iq_gamma,Beta=Beta)
+                  !
+                  call loc2imp(Pimp,P_EDMFT,LocalOrbs(isite)%Orbs)
+                  call loc2imp(Wloc,Wlat,LocalOrbs(isite)%Orbs)
+                  !
+                  if(causal_U)then
+                     call AllocateBosonicField(curlyUcorr,Norb,Nmats,Crystal%iq_gamma,Beta=Beta,no_bare=.true.)
+                     call loc2imp(curlyUcorr,curlyU_correction,LocalOrbs(isite)%Orbs)
+                     call calc_curlyU(curlyU,Wloc,Pimp,curlyUcorr=curlyUcorr,mode=reg(causal_U_type))
+                  else
+                     call calc_curlyU(curlyU,Wloc,Pimp)
+                  endif
+                  !
+                  if(RotateUloc)then
+                     call TransformBosonicField(curlyU,LocalOrbs(isite)%Rot,PhysicalUelements%Full_Map)
+                     if(causal_U)then
+                        call TransformBosonicField(curlyUcorr,LocalOrbs(isite)%Rot,PhysicalUelements%Full_Map)
+                        call dump_BosonicField(curlyUcorr,reg(ItFolder)//"Solver_"//reg(LocalOrbs(isite)%Name)//"/","curlyU_correction_"//reg(LocalOrbs(isite)%Name)//"_w.DAT")
+                     endif
+                  endif
+                  !
+                  call DeallocateBosonicField(curlyUcorr)
+                  call DeallocateBosonicField(Pimp)
+                  call DeallocateBosonicField(Wloc)
+                  !
                endif
-               !
-               call DeallocateBosonicField(curlyUcorr)
-               call DeallocateBosonicField(Pimp)
-               call DeallocateBosonicField(Wloc)
                !
             endif
             !
@@ -2874,7 +2851,7 @@ contains
                   ispin = abs(mod(ib1,2)-2)
                   jspin = abs(mod(ib2,2)-2)
                   !
-                  !call halfbeta_symm(nnt(ib1,ib2,:))
+                  call halfbeta_symm(nnt(ib1,ib2,:))
                   NNitau(iorb,jorb,ispin,jspin,:) = dcmplx(nnt(ib1,ib2,:),0d0)
                   !
                enddo
@@ -2984,7 +2961,7 @@ contains
             call AllocateBosonicField(ChiCmats,LocalOrbs(isite)%Norb,Nmats,Crystal%iq_gamma,no_bare=.true.,Beta=Beta)
             call Bitau2mats(Beta,ChiCitau%screened_local,ChiCmats%screened_local,tau_uniform=.true.)
             call DeallocateBosonicField(ChiCitau)
-            !call isReal(ChiCmats)
+            call isReal(ChiCmats)
             !
             !TEST>>>
             call dump_Matrix(dreal(Integral-ChiCmats%screened_local(:,:,1)),reg(PrevItFolder)//"Solver_"//reg(LocalOrbs(isite)%Name)//"/","IntDiff_"//reg(LocalOrbs(isite)%Name)//".DAT")
@@ -3019,7 +2996,7 @@ contains
             !Bosonic Dyson equation in the solver basis
             write(*,"(A)") new_line("A")//"     Solving bosonic Dyson of site: "//reg(LocalOrbs(isite)%Name)
             call AllocateBosonicField(Pimp,LocalOrbs(isite)%Norb,Nmats,Crystal%iq_gamma,no_bare=.true.,Beta=Beta)
-            call calc_Pimp(Pimp,curlyU,ChiCmats)
+            call calc_Pimp(Pimp,curlyU,ChiCmats,NaNb=Test_flag_3)
             !
             !Compute convergence benchmark for the interaction
             call AllocateBosonicField(Wimp,LocalOrbs(isite)%Norb,Nmats,Crystal%iq_gamma,Beta=Beta)

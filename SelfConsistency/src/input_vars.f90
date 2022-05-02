@@ -164,7 +164,8 @@ module input_vars
    character(len=256),public                :: SpexVersion
    character(len=256),public                :: VH_type
    character(len=256),public                :: VN_type
-   character(len=256),public                :: DC_type
+   character(len=256),public                :: DC_type_S
+   character(len=256),public                :: DC_type_P
    character(len=256),public                :: Embedding
    logical,public                           :: addTierIII
    logical,public                           :: RecomputeG0W0
@@ -517,8 +518,8 @@ contains
          call parse_input_variable(GoWoDC_loc,"G0W0DC_LOC",InputFile,default=.true.,comment="Keep the local contribution of Tier-III. Automatically removed if non-causal.")
       endif
       call parse_input_variable(RemoveHartree,"REMOVE_HARTREE",InputFile,default=(.not.Hmodel),comment="Remove the Hartree term (curlyU(0)*Nimp/2) from the Impurity self-energy and perform the self-consistency only with the remaining part.")
-      !if(.not.Hmodel)RemoveHartree=.true.
-      call parse_input_variable(DC_type,"DC_TYPE",InputFile,default="GlocWloc",comment="Local GW self-energy which is replaced by DMFT self-energy. Avalibale: GlocWloc, Sloc.")
+      call parse_input_variable(DC_type_S,"DC_TYPE_S",InputFile,default="GlocWloc",comment="Local GW self-energy which is replaced by the DMFT one. Avalibale: GlocWloc, Sloc.")
+      call parse_input_variable(DC_type_P,"DC_TYPE_P",InputFile,default="GlocGloc",comment="Local GG polarization which is replaced by the DMFT one. Avalibale: GlocGloc, Ploc.")
       call parse_input_variable(Embedding,"ADD_EMBEDDING",InputFile,default="None",comment="Constant embedding self-energy stored in PATH_INPUT. Avalibale: loc (filename: Semb_w_s[1,2].DAT), nonloc (filename: Semb_w_k_s[1,2].DAT), None to avoid.")
       if(Hmodel.or.Umodel)addTierIII=.false.
       call parse_input_variable(HandleGammaPoint,"SMEAR_GAMMA",InputFile,default=1,comment="If >0 the dielectric function will be averaged on the SMEAR_GAMMA nearest K-points close to Gamma. If <0 the UcRPA will be rescaled like a Lorentzian in the SMEAR_GAMMA nearest K-points close to Gamma. Inactive if =0.")
@@ -539,7 +540,7 @@ contains
       call parse_input_variable(Mixing_Delta_tau,"MIX_D_TAU",InputFile,default=.true.,comment="Flag to mix Delta(tau) if false the mix is done with Delta(iw).")
       call parse_input_variable(Mixing_Delta,"MIX_D",InputFile,default=0.5d0,comment="Fraction of the old iteration Delta.")
       call parse_input_variable(Mixing_curlyU,"MIX_U",InputFile,default=0.5d0,comment="Fraction of the old iteration curlyU.")
-      call parse_input_variable(Mixing_period,"MIX_P",InputFile,default=1,comment="Backward distance with mixing iteration. if=1 mixing with the previous iteration.")
+      call parse_input_variable(Mixing_period,"MIX_PERIOD",InputFile,default=1,comment="Backward distance with mixing iteration. if=1 mixing with the previous iteration.")
       call parse_input_variable(causal_D,"CAUSAL_D",InputFile,default=.false.,comment="Flag to employ generalized fermionic cavity construction. Active only for GW+EDMFT calculation.")
       if(reg(CalculationType).ne."GW+EDMFT")causal_D=.false.
       call parse_input_variable(causal_U,"CAUSAL_U",InputFile,default=.false.,comment="Flag to employ generalized bosonic cavity construction. Active only for GW+EDMFT calculation.")

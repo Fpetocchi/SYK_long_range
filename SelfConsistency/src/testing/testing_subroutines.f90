@@ -1532,3 +1532,71 @@ subroutine calc_QMCinteractions_2(Umats,Uinst,Kfunct,Ktilda,Screening,Kpfunct,sy
    if(retarded)deallocate(Kaux,Kp,tau,wmats)
    !
 end subroutine calc_QMCinteractions_2
+
+
+
+!Recalculate and replace the Hartree term with the lattice densities
+integer                               :: jorb,ib1,ib2
+type(BosonicField)                    :: curlyU
+real(8),allocatable                   :: Uinst(:,:),rhoLAT(:),N_s(:,:,:)
+if(recalc_Hartree)then
+   !
+   write(*,"(A)") "     Recalculating Hartree term with lattice density."
+   !
+   call AllocateBosonicField(curlyU,Norb,Nmats,Crystal%iq_gamma,Beta=Beta)
+   call read_BosonicField(curlyU,reg(ItFolder)//"Solver_"//reg(LocalOrbs(isite)%Name)//"/","curlyU_"//reg(LocalOrbs(isite)%Name)//"_w.DAT")
+   select case(reg(HartreeType))
+      case default
+         stop "collect_QMC_results: Available HartreeT types: GW or DMFT."
+      case("GW")
+         !
+         N_s = czero
+         do ispin=1,Nspin
+            do iorb=1,LocalOrbs(isite)%Norb
+               do jorb=1,LocalOrbs(isite)%Norb
+                  call F2Bindex(LocalOrbs(isite)%Norb,[iorb,iorb],[jorb,jorb],ib1,ib2)
+                  N_s(iorb,iorb,ispin) = N_s(iorb,iorb,ispin) + curlyU%screened_local(ib1,ib2,1)*Gloc%N_s(jorb,jorb,ispin)
+                  !
+               enddo
+            enddo
+         enddo
+         call DeallocateBosonicField(curlyU)
+         !
+         !The magnetization will be given only by the self-energy beyond Hartree
+         N_s(:,:,1) = (N_s(:,:,1)+N_s(:,:,Nspin))
+         N_s(:,:,Nspin) = N_s(:,:,1)
+         !
+      case("DMFT")
+         !
+         allocate(Uinst(Norb*Nspin,Norb*Nspin));Uinst=0d0
+         call calc_QMCinteractions(curlyU,Uinst)
+         call DeallocateBosonicField(curlyU)
+         !
+         allocate(rhoLAT(Norb*Nspin));rhoLAT=0d0
+         do ib1=1,LocalOrbs(isite)%Nflavor
+            iorb = (ib1+mod(ib1,2))/2
+            ispin = abs(mod(ib1,2)-2)
+            rhoLAT(ib1) = Gloc%N_s(iorb,iorb,ispin)
+         enddo
+         !
+         allocate(N_s(Norb,Norb,Nspin));N_s=czero
+         do ib1=1,LocalOrbs(isite)%Nflavor
+            iorb = (ib1+mod(ib1,2))/2
+            ispin = abs(mod(ib1,2)-2)
+            do ib2=1,LocalOrbs(isite)%Nflavor
+               if(ib1.eq.ib2) cycle !N_s(iorb,iorb,ispin) = N_s(iorb,iorb,ispin) + Uinst(2*iorb-1,2*iorb)*rhoLAT(ib2)
+               N_s(iorb,iorb,ispin) = N_s(iorb,iorb,ispin) + Uinst(ib1,ib2)*rhoLAT(ib2)
+            enddo
+         enddo
+         deallocate(Uinst,rhoLAT)
+         N_s(:,:,1) = (N_s(:,:,1)+N_s(:,:,Nspin))/2d0
+         N_s(:,:,Nspin) = N_s(:,:,1)
+         !
+   end select
+   !
+   SigmaImp%N_s = N_s
+   deallocate(N_s)
+   !
+   call dump_Matrix(SigmaImp%N_s,reg(ItFolder),"Solver_"//reg(LocalOrbs(isite)%Name)//"/Hartree_UNlat_"//reg(LocalOrbs(isite)%Name),paramagnet)
+   !
+endif

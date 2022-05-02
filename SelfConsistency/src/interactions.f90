@@ -2834,6 +2834,7 @@ contains
       type(BosonicField),intent(in),optional:: curlyUcorr
       character(len=*),intent(in),optional  :: mode
       !
+      real(8),allocatable                   :: ReWimp(:,:),RePimp(:,:)
       complex(8),allocatable                :: invW(:,:)
       real(8)                               :: Beta
       integer                               :: Nbp,Nmats
@@ -2850,7 +2851,7 @@ contains
       if(.not.Wimp%status) stop "calc_curlyU: Wimp not properly initialized."
       if(.not.Pimp%status) stop "calc_curlyU: Pimp not properly initialized."
       if(curlyU%Nkpt.ne.0) stop "calc_curlyU: curlyU k dependent attributes are supposed to be unallocated."
-      if(Wimp%Nkpt.ne.0) stop "calc_curlyU: Wimp k dependent attributes are supposed to be unallocated."
+      !if(Wimp%Nkpt.ne.0) stop "calc_curlyU: Wimp k dependent attributes are supposed to be unallocated."
       if(Pimp%Nkpt.ne.0) stop "calc_curlyU: Pimp k dependent attributes are supposed to be unallocated."
       !
       sym_=.true.
@@ -2891,25 +2892,30 @@ contains
       curlyU%bare_local = Wimp%bare_local
       !
       allocate(invW(Nbp,Nbp));invW=czero
+      allocate(ReWimp(Nbp,Nbp));ReWimp=0d0
+      allocate(RePimp(Nbp,Nbp));RePimp=0d0
       !$OMP PARALLEL DEFAULT(NONE),&
       !$OMP SHARED(Wimp,Pimp,curlyU,correctP,curlyUcorr),&
-      !$OMP PRIVATE(iw,invW)
+      !$OMP PRIVATE(iw,invW,ReWimp,RePimp)
       !$OMP DO
       do iw=1,curlyU%Npoints
          !
+         ReWimp = dreal(Wimp%screened_local(:,:,iw))
+         RePimp = dreal(Pimp%screened_local(:,:,iw))
+         !
          if(correctP)then
-            invW = zeye(curlyU%Nbp) + matmul((Pimp%screened_local(:,:,iw) - curlyUcorr%screened_local(:,:,iw)),Wimp%screened_local(:,:,iw))
+            invW = zeye(curlyU%Nbp) + matmul((RePimp - curlyUcorr%screened_local(:,:,iw)),ReWimp)
          else
-            invW = zeye(curlyU%Nbp) + matmul(Pimp%screened_local(:,:,iw),Wimp%screened_local(:,:,iw))
+            invW = zeye(curlyU%Nbp) + matmul(RePimp,ReWimp)
          endif
          !
          call inv(invW)
-         curlyU%screened_local(:,:,iw) = matmul(Wimp%screened_local(:,:,iw),invW)
+         curlyU%screened_local(:,:,iw) = matmul(ReWimp,invW)
          !
       enddo
       !$OMP END DO
       !$OMP END PARALLEL
-      deallocate(invW)
+      deallocate(invW,ReWimp,RePimp)
       !
       !Causality correction on curlyU
       if(correctU)then

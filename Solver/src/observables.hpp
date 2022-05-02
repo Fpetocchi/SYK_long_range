@@ -372,7 +372,7 @@ void measure_G( Vec &G, segment_container_t &segment, Mat &M, double &Beta)
    }
 }
 
-void binAverageVec( std::vector<int> &bins, VecVec &G, VecVec &Gerr)
+void binAverageVecVec( std::vector<int> &bins, VecVec &G, VecVec &Gerr)
 {
    //
    int Nflavor = G.size();

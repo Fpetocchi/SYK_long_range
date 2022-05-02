@@ -1021,7 +1021,7 @@ contains
          !
          read(unit) ispin_read,Nkpt_read,Norb_read,Naxis_read,mu_read(ispin)
          !
-         if(ispin_read.ne.ispin) stop "read_FermionicField_Kdep: File with wrong spin index."
+         !if(ispin_read.ne.ispin) stop "read_FermionicField_Kdep: File with wrong spin index."
          if(Nkpt_read.ne.G%Nkpt) stop "read_FermionicField_Kdep: File with wrong number of K-points."
          if(Norb_read.ne.Norb) stop "read_FermionicField_Kdep: File with wrong number of Wannier functions."
          if(present(axis))then
@@ -1042,7 +1042,7 @@ contains
          do ik=1,G%Nkpt
             !
             read(unit) idum1,idum2,kvec
-            if (idum1.ne.ispin) stop "read_FermionicField_Kdep: ispin does not match."
+            !if (idum1.ne.ispin) stop "read_FermionicField_Kdep: ispin does not match."
             if (idum2.ne.ik) stop "read_FermionicField_Kdep: ik does not match."
             if(abs(kvec(1)-kpt(1,ik)).gt.eps)then
                write(*,"(A,1I5,2F)")"     Kx error in reading: "//reg(filename)//"_k_s"//str(ispin)//".DAT",ik,kvec(1),kpt(1,ik)

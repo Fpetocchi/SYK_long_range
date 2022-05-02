@@ -27,6 +27,7 @@ program Akw_builder
    do ispin=1,Nspin
       if(reg(path_funct).eq."G")then
          !
+         call createDir(reg(MaxEnt_K)//"Akw_Gk_full_s"//str(ispin))  ! Spectral functions from MaxEnt on G in the full BZ
          call createDir(reg(MaxEnt_K)//"Akw_Gk_path_s"//str(ispin))  ! Spectral functions from MaxEnt on G along the K-path
          if(FermiSurf)call createDir(reg(MaxEnt_K)//"Akw_Gk_plane_s"//str(ispin)) ! Spectral functions from MaxEnt on G in the full BZ to get Fermi surface
          !
@@ -83,6 +84,7 @@ program Akw_builder
          write(*,"(A)") new_line("A")//new_line("A")//"---- Collecting results from K-resolved MaxEnt on the Green's function."
          !
          !Collect the spectral function from MaxEnt on G
+         call rebuild_G("full")
          call rebuild_G("path")
          if(FermiSurf)call rebuild_G("plane")
          if(Hetero%status)call rebuild_G("path",suffix="Hetero")
@@ -156,7 +158,14 @@ contains
       select case(reg(mode))
          case default
             !
-            stop "rebuild_G: Available Modes are: path, full."
+            stop "rebuild_G: Available Modes are: full, path, plane."
+            !
+         case("full")
+            !
+            Nkpt = Crystal%Nkpt
+            Norb = Crystal%Norb
+            suffix_=" "
+            write(*,"(A,I)") "     G full. Total number of K-points in the BZ:",Nkpt
             !
          case("path")
             !
