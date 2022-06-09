@@ -27,7 +27,7 @@ Nspin=1
 SPIN_DW="F"
 SINGSUB="F"
 MODEL="0"
-MOMENTS=" -M 0,1"
+MOMENTS=" -M 0,6"
 #
 SUFFIX=""
 #
@@ -186,8 +186,8 @@ for i in \`seq  ${startk} ${stopk}\`; do
    if [ "$MODEL"  != "0" ]; then
       #
       echo model > job_Kb_\${i}.out
-      if [ "$MODEL"  == "1" ] ; then MODELOPTIONS=${MOMENTS} ; fi
-      if [ "$MODEL"  == "2" ] ; then MODELOPTIONS= -m ../${Gsource}/Models/${FIELD}k_t_k\${i}${SUFFIX}.DAT_dos.dat ; fi
+      if [ "$MODEL"  == "1" ] ; then export MODELOPTIONS=${MOMENTS} ; fi
+      if [ "$MODEL"  == "2" ] ; then export MODELOPTIONS= -m ../${Gsource}/Models/${FIELD}k_t_k\${i}${SUFFIX}.DAT_dos.dat ; fi
       srun python3.6  ${BIN}/bryan.py ${RUNOPTIONS} \${MODELOPTIONS} ../${Gsource}/${FIELD}k_t_k\${i}${SUFFIX}.DAT >> job_Kb_\${i}.out
       #
    else
@@ -218,6 +218,12 @@ EOF
          #
          #Info
          echo "k point: "${kp}
+         MODELOPTIONS=""
+         if [ "$MODEL"  != "0" ]; then
+            if [ "$MODEL"  == "1" ] ; then MODELOPTIONS=${MOMENTS} ; fi
+            if [ "$MODEL"  == "2" ] ; then MODELOPTIONS= -m ../${Gsource}/Models/${FIELD}k_t_k${kp}${SUFFIX}.DAT_dos.dat ; fi
+            echo ${MODELOPTIONS}
+         fi
          #
          #Edit one submit script for all the user-provided K-points
          cat << EOF > submit_MaxEnt_${NAME}_K_${kp}
@@ -238,18 +244,7 @@ export OMP_NUM_THREADS=1
 #
 echo K_${kp} > job_K_${kp}.out
 #
-if [ "$MODEL"  != "0" ]; then
-   #
-   echo model > job_K_${kp}.out
-   if [ "$MODEL"  == "1" ] ; then MODELOPTIONS=${MOMENTS} ; fi
-   if [ "$MODEL"  == "2" ] ; then MODELOPTIONS= -m ../${Gsource}/Models/${FIELD}k_t_k${kp}${SUFFIX}.DAT_dos.dat ; fi
-   srun python3.6  ${BIN}/bryan.py ${RUNOPTIONS} \${MODELOPTIONS} ../${Gsource}/${FIELD}k_t_k${kp}${SUFFIX}.DAT >> job_K_${kp}.out
-   #
-else
-   #
-   srun python3.6  ${BIN}/bryan.py ${RUNOPTIONS} ../${Gsource}/${FIELD}k_t_k${kp}${SUFFIX}.DAT >> job_K_${kp}.out
-   #
-fi
+srun python3.6  ${BIN}/bryan.py ${RUNOPTIONS} ${MODELOPTIONS} ../${Gsource}/${FIELD}k_t_k${kp}${SUFFIX}.DAT >> job_K_${kp}.out
 #
 echo "MaxEnt on K_${kp} done" >> job_K_${kp}.out
 #

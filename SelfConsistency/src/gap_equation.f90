@@ -172,14 +172,14 @@ contains
             write(*,"(A)")"     Interpolation grid for Hk provided but one dimension has Nk=0. Interpolation skipped."
             Nkpt3_Hk = Nkpt3_orig
             kpt_Hk = kpt_orig
-            call calc_dispersion(Hk_orig,Ek)
+            Hk_intp = Hk_orig
             !
          elseif(all(Nkpt3_intp_Hk.eq.Nkpt3_orig))then
             !
             write(*,"(A)")"     Interpolation grid for Hk provided but equal to the original. Interpolation skipped."
             Nkpt3_Hk = Nkpt3_orig
             kpt_Hk = kpt_orig
-            call calc_dispersion(Hk_orig,Ek)
+            Hk_intp = Hk_orig
             !
          else
             !
@@ -193,8 +193,6 @@ contains
             call wannierinterpolation(Nkpt3_orig,kpt_orig,kpt_Hk,Hk_orig,Hk_intp)
             call cpu_time(finish)
             write(*,"(A,F)") "     interpolation to ["//str(Nkpt3_Hk(1))//","//str(Nkpt3_Hk(2))//","//str(Nkpt3_Hk(3))//"] K-grid cpu timing:", finish-start
-            call calc_dispersion(Hk_intp,Ek)
-            deallocate(Hk_intp)
             !
          endif
          !
@@ -202,7 +200,7 @@ contains
          !
          Nkpt3_Hk = Nkpt3_orig
          kpt_Hk = kpt_orig
-         call calc_dispersion(Hk_orig,Ek)
+         Hk_intp = Hk_orig
          !
       endif
       !
@@ -210,10 +208,10 @@ contains
       allocate(DoS_1(Ngrid));DoS_1=0d0
       !
       call cpu_time(start)
-      call tetrahedron_integration(reg(pathINPUT),Ek,Nkpt3_Hk,kpt_Hk,Egrid,weights_out=weights_1,DoS_out=DoS_1)
+      call tetrahedron_integration(reg(pathINPUT),Hk_intp,Nkpt3_Hk,kpt_Hk,Egrid,weights_out=weights_1,DoS_out=DoS_1)
       call cpu_time(finish)
       write(*,"(A,F)") "     tetrahedron integration cpu timing:", finish-start
-      deallocate(Ek)
+      deallocate(Hk_intp)
       !
       DoS_Hk => DoS_1
       weights_Hk => weights_1
@@ -231,14 +229,16 @@ contains
                write(*,"(A)")"     Interpolation grid for Wk provided but one dimension has Nk=0. Interpolation skipped."
                Nkpt3_Wk = Nkpt3_orig
                kpt_Wk = kpt_orig
-               call calc_dispersion(Hk_orig,Ek,Z=Zk)
+               Hk_intp = Hk_orig
+               call calc_dispersion(Hk_intp,Ek,Z=Zk)
                !
             elseif(all(Nkpt3_intp_Wk.eq.Nkpt3_orig))then
                !
                write(*,"(A)")"     Interpolation grid for Wk provided but equal to the original. Interpolation skipped."
                Nkpt3_Wk = Nkpt3_orig
                kpt_Wk = kpt_orig
-               call calc_dispersion(Hk_orig,Ek,Z=Zk)
+               Hk_intp = Hk_orig
+               call calc_dispersion(Hk_intp,Ek,Z=Zk)
                !
             else
                !
@@ -253,7 +253,6 @@ contains
                call cpu_time(finish)
                write(*,"(A,F)") "     interpolation to ["//str(Nkpt3_Wk(1))//","//str(Nkpt3_Wk(2))//","//str(Nkpt3_Wk(3))//"] K-grid cpu timing:", finish-start
                call calc_dispersion(Hk_intp,Ek,Z=Zk)
-               deallocate(Hk_intp)
                !
             endif
             !
@@ -261,7 +260,8 @@ contains
             !
             Nkpt3_Wk = Nkpt3_orig
             kpt_Wk = kpt_orig
-            call calc_dispersion(Hk_orig,Ek,Z=Zk)
+            Hk_intp = Hk_orig
+            call calc_dispersion(Hk_intp,Ek,Z=Zk)
             !
          endif
          !
@@ -279,10 +279,10 @@ contains
             allocate(DoS_2(Ngrid));DoS_2=0d0
             !
             call cpu_time(start)
-            call tetrahedron_integration(reg(pathINPUT),Ek,Nkpt3_Wk,kpt_Wk,Egrid,weights_out=weights_2,DoS_out=DoS_2)
+            call tetrahedron_integration(reg(pathINPUT),Hk_intp,Nkpt3_Wk,kpt_Wk,Egrid,weights_out=weights_2,DoS_out=DoS_2)
             call cpu_time(finish)
             write(*,"(A,F)") "     tetrahedron integration cpu timing:", finish-start
-            deallocate(Ek)
+            deallocate(Hk_intp,Ek)
             !
             DoS_Wk => DoS_2
             weights_Wk => weights_2

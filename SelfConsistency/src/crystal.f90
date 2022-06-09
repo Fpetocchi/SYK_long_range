@@ -601,10 +601,10 @@ contains
          write(*,"(A)")"     Reading Hk_built.DAT from "//reg(pathOUTPUT)
          call read_Hk(Hk,kpt,reg(pathOUTPUT),filename="Hk_built.DAT")
          if(size(Hk,dim=3).ne.Nkpt)then
-            write(*,"(A)")"     Hk_built.DAT has the wrong number of K-points. Rebuiuding."
+            write(*,"(A)")"     Hk_built.DAT has the wrong number of K-points. Rebuilding."
             rebuild=.true.
          elseif(size(Hk,dim=1).ne.(Nsite*Norb))then
-             write(*,"(A)")"     Hk_built.DAT has the wrong orbital dimension. Rebuiuding."
+             write(*,"(A)")"     Hk_built.DAT has the wrong orbital dimension. Rebuilding."
              rebuild=.true.
           endif
          !
@@ -3923,13 +3923,13 @@ contains
    !      k,n                           n   e (k) = E
    !                                         n       F
    !---------------------------------------------------------------------------!
-   subroutine tetrahedron_integration(pathINPUT,Ek_orig,nkpt3,kpt,Egrid,weights_out,DoS_out,fact_intp,pathOUTPUT,store_weights)
+   subroutine tetrahedron_integration(pathINPUT,Hk_orig,nkpt3,kpt,Egrid,weights_out,DoS_out,fact_intp,pathOUTPUT,store_weights)
       !
       use utils_misc
       implicit none
       !
       character(len=*),intent(in)           :: pathINPUT
-      real(8),intent(in)                    :: Ek_orig(:,:)
+      complex(8),intent(in)                 :: Hk_orig(:,:,:)
       integer,intent(in)                    :: nkpt3(3)
       real(8),intent(in)                    :: kpt(:,:)
       real(8),intent(in)                    :: Egrid(:)
@@ -3947,6 +3947,7 @@ contains
       real(8),allocatable                   :: nkstar(:),DoS(:,:)
       real(8),allocatable                   :: kpt_intp(:,:)
       real(8),allocatable                   :: weights(:,:,:)
+      complex(8),allocatable                :: Hk_intp(:,:,:)
       integer                               :: k1,k2,k3,i,kk
       integer                               :: itria,ntria,itetra,unit
       integer                               :: pnt(4),kindx(8),Nkpt3_used(3)
@@ -3966,7 +3967,7 @@ contains
          return
       endif
       !
-      Norb = size(Ek_orig,dim=1)
+      Norb = size(Hk_orig,dim=1)
       Ngrid = size(Egrid)
       dE = abs(Egrid(10)-Egrid(9))
       !
@@ -3981,21 +3982,11 @@ contains
          !Generate K-points in the irreducible BZ (finer K-mesh)
          call calc_irredBZ(reg(pathINPUT),Nkpt3_used,Nkpti,kptp,pkpt,nkstar,kpt_out=kpt_intp)
          !
-         !Interpolate Ek to the new K mesh
-         allocate(Ek_intp(Norb,Nkpt));Ek_intp=0d0
-         call wannierinterpolation(Nkpt3,kpt,kpt_intp,Ek_orig,Ek_intp)
-         !
-         !The irreducible K-points are always the first Nkpti found by kptp
-         allocate(Ek(Norb,Nkpt));Ek=0d0
-         do ik=1,Nkpt
-            do iorb=1,Norb
-               Ek(iorb,ik) = Ek_intp(iorb,kptp(ik))
-            enddo
-         enddo
-         deallocate(Ek_intp)
+         !Interpolate Hk to the new K mesh
+         allocate(Hk_intp(Norb,Norb,Nkpt));Hk_intp=czero
+         call wannierinterpolation(Nkpt3,kpt,kpt_intp,Hk_orig,Hk_intp)
          !
       else
-         !
          !
          Nkpt3_used = Nkpt3
          Nkpt = product(Nkpt3_used)
@@ -4003,15 +3994,27 @@ contains
          !Generate K-points in the irreducible BZ
          call calc_irredBZ(reg(pathINPUT),Nkpt3_used,Nkpti,kptp,pkpt,nkstar,store=store_weights_)
          !
-         !allocate dispersion
-         allocate(Ek(Norb,Nkpt));Ek=0d0
-         do ik=1,Nkpt
-            do iorb=1,Norb
-               Ek(iorb,ik) = Ek_orig(iorb,kptp(ik))
-            enddo
-         enddo
+         !Copy input Hk
+         allocate(Hk_intp(Norb,Norb,Nkpt));Hk_intp=czero
+         Hk_intp = Hk_orig
          !
       endif
+      !
+      !Diagonalize Hk in the new or original K-point mesh
+      allocate(Ek_intp(Norb,Nkpt));Ek_intp=0d0
+      do ik=1,Nkpt
+         call eigh(Hk_intp(:,:,ik),Ek_intp(:,ik))
+      enddo
+      deallocate(Hk_intp)
+      !
+      !The irreducible K-points are always the first Nkpti found by kptp
+      allocate(Ek(Norb,Nkpt));Ek=0d0
+      do ik=1,Nkpt
+         do iorb=1,Norb
+            Ek(iorb,ik) = Ek_intp(iorb,kptp(ik))
+         enddo
+      enddo
+      deallocate(Ek_intp)
       !
       allocate(weights(Ngrid,Norb,Nkpt));weights=0d0
       !$OMP PARALLEL DEFAULT(PRIVATE),&

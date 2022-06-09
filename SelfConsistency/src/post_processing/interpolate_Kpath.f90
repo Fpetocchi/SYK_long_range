@@ -241,13 +241,13 @@ subroutine interpolateG2Path(Sfull,Lttc,pathOUTPUT)
    if(scan(reg(path_funct),"G").gt.0)then
       !
      !Dump K-resolved MaxEnt data in the full BZ
-     call calc_MaxEnt_on_G_K(Gfull,"full")
+     call dump_MaxEnt_on_G_K(Gfull,"full")
      !
      !Dump K-resolved MaxEnt data along the path
-     call calc_MaxEnt_on_G_K(Gpath,"path")
+     call dump_MaxEnt_on_G_K(Gpath,"path")
      !
      !Dump K-resolved MaxEnt data along the {kx,ky} plane
-     if(FermiSurf)call calc_MaxEnt_on_G_K(Gfermi,"plane")
+     if(FermiSurf)call dump_MaxEnt_on_G_K(Gfermi,"plane")
      !
    endif
    !
@@ -257,13 +257,13 @@ subroutine interpolateG2Path(Sfull,Lttc,pathOUTPUT)
      if(Kdependence)then
          !
          !Dump K-resolved MaxEnt data in the full BZ
-         call calc_MaxEnt_on_Sigma_K(Gfull,"full")
+         call dump_MaxEnt_on_Sigma_K(Gfull,"full")
          !
          !Dump K-resolved MaxEnt data along the path
-         call calc_MaxEnt_on_Sigma_K(Gpath,"path")
+         call dump_MaxEnt_on_Sigma_K(Gpath,"path")
          !
          !Dump K-resolved MaxEnt data along the {kx,ky} plane
-         call calc_MaxEnt_on_Sigma_K(Gfermi,"plane")
+         call dump_MaxEnt_on_Sigma_K(Gfermi,"plane")
          !
      endif
      !
@@ -278,7 +278,7 @@ contains
    !
    !
    !
-   subroutine calc_MaxEnt_on_G_K(Gmats_in,mode)
+   subroutine dump_MaxEnt_on_G_K(Gmats_in,mode)
       !
       use input_vars, only : Ntau
       implicit none
@@ -287,8 +287,8 @@ contains
       character(len=*),intent(in)           :: mode
       !
       complex(8),allocatable                :: Gmats_diag(:,:,:,:),Gitau_diag(:,:,:,:)
-      real(8),allocatable                   :: Ak(:,:)
-      real(8),allocatable                   :: tau(:)
+      real(8),allocatable                   :: Ak(:,:),tau(:),Gshift(:)
+      real(8)                               :: Gmax
       integer                               :: Nkpt,NtauFT
       integer                               :: ikx,iky
       !Hetero
@@ -297,16 +297,16 @@ contains
       complex(8),allocatable                :: Gitau_kpkz_diag(:,:,:,:,:)
       !
       !
-      if(verbose) write(*,"(A)") new_line("A")//new_line("A")//"---- calc_MaxEnt_on_G_K"
+      if(verbose) write(*,"(A)") new_line("A")//new_line("A")//"---- dump_MaxEnt_on_G_K"
       !
       NtauFT = Ntau ! <-- should I decrease this guy to ease MaxEnt? Now it's the lattice one
       !
       !
-      if(.not.Gmats_in%status) stop "calc_MaxEnt_on_G_K: Gmats_in not properly allocated."
+      if(.not.Gmats_in%status) stop "dump_MaxEnt_on_G_K: Gmats_in not properly allocated."
       select case(reg(mode))
          case default
             !
-            stop "calc_MaxEnt_on_G_K: Available Modes are: path, full, plane."
+            stop "dump_MaxEnt_on_G_K: Available Modes are: path, full, plane."
             !
          case("full")
             !
@@ -347,22 +347,28 @@ contains
       !
       !Print data for K-resolved MaxEnt
       allocate(tau(NtauFT));tau = linspace(0d0,Sfull%Beta,NtauFT)
+      allocate(Gshift(Norb));Gshift=0d0
       do ispin=1,Nspin
         do ik=1,Nkpt
+            !
+            do iorb=1,Norb
+               Gmax = maxval(dreal(Gitau_diag(iorb,:,ik,ispin)))
+               if(Gmax.gt.0d0) Gshift(iorb)=Gmax
+            enddo
+            write(*,"(A,"//str(Norb)//"F)") "     G"//reg(mode)//"_s"//str(ispin)//"(K_"//str(ik)//",tau) shift:", Gshift
             !
             path = reg(pathOUTPUT)//"K_resolved/MaxEnt_Gk_"//reg(mode)//"_t_s"//str(ispin)//"/Gk_t_k"//str(ik)//".DAT"
             unit = free_unit()
             open(unit,file=reg(path),form="formatted",status="unknown",position="rewind",action="write")
             do itau=1,NtauFT
-                write(unit,"(200E20.12)") tau(itau),(dreal(Gitau_diag(iorb,itau,ik,ispin)),iorb=1,Norb)
-                !write(unit,"(200E20.12)") tau(itau),(-abs(Gitau_diag(iorb,itau,ik,ispin)),iorb=1,Norb)
+                write(unit,"(200E20.12)") tau(itau),(dreal(Gitau_diag(iorb,itau,ik,ispin))-Gshift(iorb),iorb=1,Norb)
             enddo
             close(unit)
             !
         enddo
         if(paramagnet)exit
       enddo
-      deallocate(tau)
+      deallocate(tau,Gshift)
       !
       !Compute the spectral weight at Fermi along the path. See arxiv:0805.3778 Eq.(5)
       do ispin=1,Nspin
@@ -400,7 +406,7 @@ contains
       if(Hetero%status)then
          !
          Norb_layer = Hetero%Norb
-         if(Norb_layer.ne.int(Lttc%Norb/Lttc%Nsite)) stop "calc_MaxEnt_on_G_K: wrong hetero orbital dimension."
+         if(Norb_layer.ne.int(Lttc%Norb/Lttc%Nsite)) stop "dump_MaxEnt_on_G_K: wrong hetero orbital dimension."
          !
          !Fill in Gamma-A direction
          allocate(Gmats_kz(Norb_layer,Norb_layer,Nmats,Nkpt,0:Nkpt_path,Nspin));Gmats_kz=czero
@@ -439,37 +445,48 @@ contains
          !
          !Print data for K-resolved MaxEnt
          allocate(tau(NtauFT));tau = linspace(0d0,Sfull%Beta,NtauFT)
+         allocate(Gshift(Norb_layer));Gshift=0d0
          do ispin=1,Nspin
             do ik=1,Nkpt
-                !
-                path = reg(pathOUTPUT)//"K_resolved/MaxEnt_Gk_"//reg(mode)//"_t_s"//str(ispin)//"/Gk_t_k"//str(ik)//"_Hetero.DAT"
-                unit = free_unit()
-                open(unit,file=reg(path),form="formatted",status="unknown",position="rewind",action="write")
-                do itau=1,NtauFT
-                   write(unit,"(200E20.12)") tau(itau),(dreal(Gitau_kpkz_diag(iorb,itau,ik,0,ispin)),iorb=1,Norb_layer)
-                   !write(unit,"(200E20.12)") tau(itau),(-abs(Gitau_kpkz_diag(iorb,itau,ik,0,ispin)),iorb=1,Norb_layer)
-                enddo
-                close(unit)
-                !
+               !
+               do iorb=1,Norb_layer
+                  Gmax = maxval(dreal(Gitau_kpkz_diag(iorb,:,ik,0,ispin)))
+                  if(Gmax.gt.0d0) Gshift(iorb)=Gmax
+               enddo
+               write(*,"(A,"//str(Norb_layer)//"F)") "     G"//reg(mode)//"_Hetero_s"//str(ispin)//"(K_"//str(ik)//",0,tau) shift:", Gshift
+               !
+               path = reg(pathOUTPUT)//"K_resolved/MaxEnt_Gk_"//reg(mode)//"_t_s"//str(ispin)//"/Gk_t_k"//str(ik)//"_Hetero.DAT"
+               unit = free_unit()
+               open(unit,file=reg(path),form="formatted",status="unknown",position="rewind",action="write")
+               do itau=1,NtauFT
+                  write(unit,"(200E20.12)") tau(itau),(dreal(Gitau_kpkz_diag(iorb,itau,ik,0,ispin))-Gshift(iorb),iorb=1,Norb_layer)
+               enddo
+               close(unit)
+               !
             enddo
             do ik=Nkpt+1,Nkpt+Nkpt_path
-                !
-                path = reg(pathOUTPUT)//"K_resolved/MaxEnt_Gk_"//reg(mode)//"_t_s"//str(ispin)//"/Gk_t_k"//str(ik)//"_Hetero.DAT"
-                unit = free_unit()
-                open(unit,file=reg(path),form="formatted",status="unknown",position="rewind",action="write")
-                do itau=1,NtauFT
-                   write(unit,"(200E20.12)") tau(itau),(dreal(Gitau_kpkz_diag(iorb,itau,Lttc%iq_gamma,ik-Nkpt,ispin)),iorb=1,Norb_layer)
-                   !write(unit,"(200E20.12)") tau(itau),(-abs(Gitau_kpkz_diag(iorb,itau,Lttc%iq_gamma,ik-Nkpt,ispin)),iorb=1,Norb_layer)
-                enddo
-                close(unit)
-                !
+               !
+               do iorb=1,Norb_layer
+                  Gmax = maxval(dreal(Gitau_kpkz_diag(iorb,:,Lttc%iq_gamma,ik-Nkpt,ispin)))
+                  if(Gmax.gt.0d0) Gshift(iorb)=Gmax
+               enddo
+               write(*,"(A,"//str(Norb_layer)//"F)") "     G"//reg(mode)//"_Hetero_s"//str(ispin)//"(Gamma,Kz_"//str(ik-Nkpt)//",tau) shift:", Gshift
+               !
+               path = reg(pathOUTPUT)//"K_resolved/MaxEnt_Gk_"//reg(mode)//"_t_s"//str(ispin)//"/Gk_t_k"//str(ik)//"_Hetero.DAT"
+               unit = free_unit()
+               open(unit,file=reg(path),form="formatted",status="unknown",position="rewind",action="write")
+               do itau=1,NtauFT
+                  write(unit,"(200E20.12)") tau(itau),(dreal(Gitau_kpkz_diag(iorb,itau,Lttc%iq_gamma,ik-Nkpt,ispin)),iorb=1,Norb_layer)
+               enddo
+               close(unit)
+               !
             enddo
            if(paramagnet)exit
          enddo
-         deallocate(tau,Gitau_kpkz_diag)
+         deallocate(tau,Gitau_kpkz_diag,Gshift)
       endif
       !
-   end subroutine calc_MaxEnt_on_G_K
+   end subroutine dump_MaxEnt_on_G_K
    !
    !
    !
@@ -517,7 +534,7 @@ contains
    !
    !
    !
-   subroutine calc_MaxEnt_on_Sigma_K(Gmats_in,mode)
+   subroutine dump_MaxEnt_on_Sigma_K(Gmats_in,mode)
       !
       use linalg, only : diagonal, rotate
       use input_vars, only : ReplaceTail_Simp
@@ -540,14 +557,14 @@ contains
       integer                               :: Nkpt
       !
       !
-      if(verbose) write(*,"(A)") new_line("A")//new_line("A")//"---- calc_MaxEnt_on_Sigma_K"
+      if(verbose) write(*,"(A)") new_line("A")//new_line("A")//"---- dump_MaxEnt_on_Sigma_K"
       !
       !
-      if(.not.Gmats_in%status) stop "calc_MaxEnt_on_Sigma_K: Gmats_in not properly allocated."
+      if(.not.Gmats_in%status) stop "dump_MaxEnt_on_Sigma_K: Gmats_in not properly allocated."
       select case(reg(mode))
          case default
             !
-            stop "calc_MaxEnt_on_Sigma_K: Available Modes are: path, full, plane."
+            stop "dump_MaxEnt_on_Sigma_K: Available Modes are: path, full, plane."
             !
          case("full")
             !
@@ -798,7 +815,7 @@ contains
       deallocate(Sparams,RotN,EigN)
       close(unit)
       !
-   end subroutine calc_MaxEnt_on_Sigma_K
+   end subroutine dump_MaxEnt_on_Sigma_K
    !
    !
    !
