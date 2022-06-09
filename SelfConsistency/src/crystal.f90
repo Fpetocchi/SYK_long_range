@@ -3925,6 +3925,7 @@ contains
    !---------------------------------------------------------------------------!
    subroutine tetrahedron_integration(pathINPUT,Hk_orig,nkpt3,kpt,Egrid,weights_out,DoS_out,fact_intp,pathOUTPUT,store_weights)
       !
+      use linalg, only : eigh
       use utils_misc
       implicit none
       !
