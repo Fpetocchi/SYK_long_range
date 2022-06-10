@@ -3226,12 +3226,12 @@ contains
       use linalg, only : eigh, inv, zeye
       implicit none
       !
-      type(Lattice),intent(inout),target    :: Lttc
+      type(Lattice),intent(inout)           :: Lttc
       character(len=*),intent(in)           :: structure
       integer,intent(in)                    :: Nkpt_path
       character(len=*),intent(in),optional  :: pathOUTPUT
       character(len=*),intent(in),optional  :: filename
-      complex(8),intent(in),optional,target :: data_in(:,:,:)
+      complex(8),intent(in),optional        :: data_in(:,:,:)
       complex(8),intent(out),allocatable,optional :: data_out(:,:,:)
       character(len=*),intent(in),optional  :: corrname
       complex(8),intent(in),optional        :: correction(:,:,:)
@@ -3246,8 +3246,7 @@ contains
       integer                               :: Nreal,iw,ndx
       real(8)                               :: kp,kx,ky,Bvec(3)
       real(8)                               :: wrealMax,eta,kz_cut
-      complex(8),pointer                    :: data(:,:,:)
-      complex(8),allocatable                :: correction_used(:,:,:)
+      complex(8),allocatable                :: data_orig(:,:,:)
       complex(8),allocatable                :: invGf(:,:)
       logical                               :: Hamiltonian,doplane_,hetero_,printout,store_
       real                                  :: start,finish
@@ -3276,14 +3275,18 @@ contains
       filename_="Bands"
       if(present(filename))filename_=reg(filename)
       !
+      store_=.true.
+      if(present(store))store_=store
+      !
       if(present(data_in))then
-         label = reg(filename_)
-         data => data_in
-         Hamiltonian = .false.
+         label=reg(filename_)
+         data_orig=data_in
+         Hamiltonian=.false.
+         store_=.false.
       else
-         label = "Hk"
-         data => Lttc%Hk
-         Hamiltonian = .true.
+         label="Hk"
+         data_orig=Lttc%Hk
+         Hamiltonian=.true.
       endif
       !
       doplane_=.false.
@@ -3292,23 +3295,18 @@ contains
       hetero_=.false.
       if(present(hetero))hetero_=Hetero%status
       !
-      Norb = size(data,dim=1)
-      call assert_shape(data,[Norb,Norb,Lttc%Nkpt],"interpolateHk2Path",reg(label))
-      !
-      store_=.true.
-      if(present(store))store_=store
+      Norb = size(data_orig,dim=1)
+      call assert_shape(data_orig,[Norb,Norb,Lttc%Nkpt],"interpolateHk2Path",reg(label))
       !
       !static correction to the input data--------------------------------------
       corrname_="nonInt"
       if(present(correction))then
          call assert_shape(correction,[Norb,Norb,Lttc%Nkpt],"interpolateHk2Path","correction")
-         correction_used = correction
+         data_orig = data_orig + correction
          corrname_="Corrected"
          if(present(corrname))corrname_=reg(corrname)
          write(*,"(A)")"     Correction: "//reg(corrname_)
          store_=.false.
-      else
-         allocate(correction_used(Norb,Norb,Lttc%Nkpt));correction_used=czero
       endif
       if(store_) write(*,"(A)")"     Storing Lttc interpolated attributes."
       !
@@ -3331,7 +3329,7 @@ contains
       !Interpolate input data along path---------------------------------------------------
       allocate(data_intp(Norb,Norb,Lttc%Nkpt_path));data_intp=czero
       call cpu_time(start)
-      call wannierinterpolation(Lttc%Nkpt3,Lttc%kpt,Lttc%kptpath(:,1:Lttc%Nkpt_path),data+correction_used,data_intp)
+      call wannierinterpolation(Lttc%Nkpt3,Lttc%kpt,Lttc%kptpath(:,1:Lttc%Nkpt_path),data_orig,data_intp)
       call cpu_time(finish)
       write(*,"(A,F)") "     "//reg(label)//"(fullBZ) --> "//reg(label)//"(Kpath) cpu timing:", finish-start
       if(Hamiltonian.and.store_)then
@@ -3531,7 +3529,7 @@ contains
          !Interpolate hamiltonian inside the kx,ky plane
          allocate(data_intp(Norb,Norb,Lttc%Nkpt_Plane));data_intp=czero
          call cpu_time(start)
-         call wannierinterpolation(Lttc%Nkpt3,Lttc%kpt,Lttc%kptPlane,data+correction_used,data_intp)
+         call wannierinterpolation(Lttc%Nkpt3,Lttc%kpt,Lttc%kptPlane,data_orig,data_intp)
          call cpu_time(finish)
          write(*,"(A,F)") "     "//reg(label)//"(fullBZ) --> "//reg(label)//"(kx,ky) cpu timing:", finish-start
          if(Hamiltonian.and.store_)then
@@ -3675,8 +3673,7 @@ contains
          deallocate(Fk)
          !
       endif
-      if(associated(data))nullify(data)
-      if(allocated(correction_used))deallocate(correction_used)
+      deallocate(data_orig)
       !
       !Print position of High-symmetry points in the same folder where the function is
       if(printout)then
