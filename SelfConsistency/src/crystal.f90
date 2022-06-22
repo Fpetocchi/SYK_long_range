@@ -591,7 +591,7 @@ contains
       Norb = size(hopping)
       Nsite = size(Ruc,dim=2)
       Nsite_bulk = Nsite
-      if(Hetero%status) Nsite_bulk = int(Nsite/Hetero%Nlayer)
+      if(Hetero%status) Nsite_bulk = int(Nsite/Hetero%Nlayer) !only one site per layer
       !
       Trange=1
       !
@@ -841,20 +841,9 @@ contains
                   !Regrouping according to distance. The list contains the indexes of all the positions with a given distance
                   call get_pattern(Dist,Rsorted(:,1),1e4*eps,listDim=DistList,IncludeSingle=.true.)
                   !
-                  !add the inter-layer hopping up to the first neighbors
-                  !QUI ID=1 È IL PRIMO VICINO MENTRE ID=2 È IL SECONDO VICINO DATO TUTTO TRA LAYER DIVERSI DATO CHE HO TOLTO
-                  !L INDICE DENTRO LO STESSO LAYER ORA DEVO AGGIUNGERE UN QUALCHE SCALING A SECONDA DELLA DISTANZA
-                  !
-                  !QUI LO DEVO TOGLIERE PERCHE VOGLIO I PIRMI DUE TRA LAYER DIVERSI
-                  !MENTRE PER L INTERAZIONE NON POSSO TENERE TUTTE LE DISTANZE TANTO IL CUTOFF È DATO DAL VRANGE CHE
-                  !MI DICE SE HO, O MENO, INTERAZIONE TRA I LAYER.
-                  !
+                  !add the inter-layer hopping up to the provided range
                   allocate(layerDone(Hetero%Nlayer));layerDone=.false.
                   do iD=1,Hetero%tzRange
-                     !
-                     !Rescaling factor proportional to the relative distance
-                     !fact = Rsorted(Dist(1,1),1) / Rsorted(Dist(iD,1),1)
-                     !write(*,*)"fact",fact,iD
                      !
                      !all the indexes within that range
                      do iR=1,DistList(iD)
@@ -871,10 +860,10 @@ contains
                            jo = iorb + Norb*(jsite-1) + Norb*Nsite_bulk*(jlayer-1)
                            !
                            islab = min(ilayer,jlayer) + Hetero%Explicit(1) - 1
-                           !PROJECT SPECIFIC (TaS2) >>>
-                           !if(abs(ilayer-jlayer).eq.1) Hr(io,jo,iwig) = dcmplx(Hetero%tz(iorb,islab),0d0)*fact
-                           if((abs(ilayer-jlayer).eq.1).and.(.not.layerDone(jlayer))) Hr(io,jo,iwig) = dcmplx(Hetero%tz(iorb,islab),0d0)
-                           !>>> PROJECT SPECIFIC (TaS2)
+                           !
+                           !OLD implementation without specified range
+                           !if((abs(ilayer-jlayer).eq.1).and.(.not.layerDone(jlayer))) Hr(io,jo,iwig) = dcmplx(Hetero%tz(iorb,islab),0d0)
+                           if((abs(ilayer-jlayer).eq.1)) Hr(io,jo,iwig) = dcmplx(Hetero%tz(iorb,islab,iD),0d0)
                            !
                         enddo
                         !
@@ -3215,11 +3204,11 @@ contains
    !---------------------------------------------------------------------------!
    !PURPOSE: Interpolate to a user provided K-point path the Hamiltonian
    !---------------------------------------------------------------------------!
-   subroutine interpolateHk2Path(Lttc,structure,Nkpt_path,pathOUTPUT                   &
-                                                         ,filename,data_in,data_out    &
-                                                         ,corrname,correction          &
-                                                         ,doplane,Nkpt_Kside           &
-                                                         ,hetero,store)
+   subroutine interpolateHk2Path(Lttc,structure,Nkpt_path,pathOUTPUT           &
+                                                 ,filename,data_in,data_out    &
+                                                 ,corrname,correction          &
+                                                 ,doplane,Nkpt_Kside           &
+                                                 ,hetero,store)
       !
       use parameters !WHY IS THIS WORKING?
       use utils_misc
@@ -3539,7 +3528,7 @@ contains
          endif
          !
          !Create zeta array for compatibility
-         eta = wrealMax/100 !same as before for Akw
+         eta = wrealMax/200 !same as before for Akw
          allocate(zeta(Norb,Norb,1));zeta=czero
          do iorb=1,Norb
             zeta(iorb,iorb,1) = dcmplx(0d0,eta)

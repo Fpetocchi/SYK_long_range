@@ -309,7 +309,7 @@ contains
       !model H(k)
       call parse_input_variable(Hmodel,"H_MODEL",InputFile,default=.false.,comment="Flag to build a model non-interacting Hamiltonian.")
       if(Hmodel)then
-         call parse_input_variable(Norb_model,"NORB_MODEL",InputFile,default=1,comment="Site-Orbitals in the model non-interacting Hamiltonian.")
+         call parse_input_variable(Norb_model,"NORB_MODEL",InputFile,default=1,comment="Orbitals in the model non-interacting Hamiltonian (in Hr/Hk if read).")
          call parse_input_variable(readHr,"READ_HR",InputFile,default=.false.,comment="Read W90 real space Hamiltonian (Hr.DAT) from PATH_INPUT.")
          call parse_input_variable(readHk,"READ_HK",InputFile,default=.false.,comment="Read W90 K-space Hamiltonian (Hk.DAT) from PATH_INPUT.")
          call parse_input_variable(Hetero%status,"HETERO",InputFile,default=.false.,comment="Flag to build an heterostructured setup from model the non-interacting Hamiltonian.")
@@ -333,9 +333,11 @@ contains
             Hetero%tzIndex(2) = Hetero%Explicit(2) - 1
             if(Hetero%Explicit(1).ne.1) Hetero%tzIndex(1) = Hetero%tzIndex(1) - 1              ! hopping to the left potential
             if(Hetero%Explicit(2).ne.Hetero%Nslab) Hetero%tzIndex(2) = Hetero%tzIndex(2) + 1   ! hopping to the right potential
-            allocate(Hetero%tz(Norb_model,Hetero%tzIndex(1):Hetero%tzIndex(2)));Hetero%tz=0d0
-            do ilayer=Hetero%tzIndex(1),Hetero%tzIndex(2)
-               call parse_input_variable(Hetero%tz(:,ilayer),"TZ_"//str(ilayer),InputFile,comment="Longitudinal hopping for each orbital between layer #"//str(ilayer)//" and layer #"//str(ilayer+1))
+            allocate(Hetero%tz(Norb_model,Hetero%tzIndex(1):Hetero%tzIndex(2),Hetero%tzRange));Hetero%tz=0d0
+            do irange=1,Hetero%tzRange
+               do ilayer=Hetero%tzIndex(1),Hetero%tzIndex(2)
+                  call parse_input_variable(Hetero%tz(:,ilayer,irange),"TZ"//str(irange)//"_"//str(ilayer),InputFile,comment="Longitudinal hopping for each orbital at distance "//str(irange)//" between layer #"//str(ilayer)//" and layer #"//str(ilayer+1))
+               enddo
             enddo
          endif
       else

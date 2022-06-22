@@ -15,28 +15,28 @@ declare -a dirindex=( "86" "87" "78" "79" )
 #------------------------------------------------------------------------------#
 
 GENMAT=/home/petocchif/1_GW_EDMFT/GenericMaterial/Calculation_template
-for it in `seq  23 1 36` ; do
+for it in `seq  70 1 84` ; do
    cd $it/Convergence
    cp ${GENMAT}/MaxEnt/MaxEnt_SLURM.sh .
    chmod 700 MaxEnt_SLURM.sh
    #
-   ./MaxEnt_SLURM.sh -e 0.001 -w 5000 -W  15 -f G -o 1 -i qmc_S1 -p ${GENMAT}
-   ./MaxEnt_SLURM.sh -e 0.001 -w 5000 -W  15 -f G -o 1 -i qmc_S2 -p ${GENMAT}
-   ./MaxEnt_SLURM.sh -e 0.001 -w 5000 -W  15 -f G -o 1 -i qmc_S3 -p ${GENMAT}
-   ./MaxEnt_SLURM.sh -e 0.001 -w 5000 -W  15 -f G -o 1 -i qmc_S4 -p ${GENMAT}
-   ./MaxEnt_SLURM.sh -e 0.001 -w 5000 -W  15 -f G -o 1 -i qmc_S5 -p ${GENMAT}
-   ./MaxEnt_SLURM.sh -e 0.001 -w 5000 -W  15 -f G -o 1 -i qmc_S6 -p ${GENMAT}
-   ./MaxEnt_SLURM.sh -e 0.001 -w 5000 -W  15 -f G -o 1 -i qmc_S7 -p ${GENMAT}
-   ./MaxEnt_SLURM.sh -e 0.001 -w 5000 -W  15 -f G -o 1 -i qmc_S8 -p ${GENMAT}
+   ./MaxEnt_SLURM.sh -e 0.0005 -w 4000 -W  15 -f G -o 1 -i qmc_S1 -p ${GENMAT}
+   ./MaxEnt_SLURM.sh -e 0.0005 -w 4000 -W  15 -f G -o 1 -i qmc_S2 -p ${GENMAT}
+   ./MaxEnt_SLURM.sh -e 0.0005 -w 4000 -W  15 -f G -o 1 -i qmc_S3 -p ${GENMAT}
+   ./MaxEnt_SLURM.sh -e 0.0005 -w 4000 -W  15 -f G -o 1 -i qmc_S4 -p ${GENMAT}
+   ./MaxEnt_SLURM.sh -e 0.0005 -w 4000 -W  15 -f G -o 1 -i qmc_S5 -p ${GENMAT}
+   ./MaxEnt_SLURM.sh -e 0.0005 -w 4000 -W  15 -f G -o 1 -i qmc_S6 -p ${GENMAT}
+   ./MaxEnt_SLURM.sh -e 0.0005 -w 4000 -W  15 -f G -o 1 -i qmc_S7 -p ${GENMAT}
+   ./MaxEnt_SLURM.sh -e 0.0005 -w 4000 -W  15 -f G -o 1 -i qmc_S8 -p ${GENMAT}
    #
-   ./MaxEnt_SLURM.sh -e 0.002 -w 5000 -W  15 -f G -o 1 -i lat -p ${GENMAT}
-   ./MaxEnt_SLURM.sh -e 0.002 -w 5000 -W  15 -f G -o 2 -i lat -p ${GENMAT}
-   ./MaxEnt_SLURM.sh -e 0.002 -w 5000 -W  15 -f G -o 3 -i lat -p ${GENMAT}
-   ./MaxEnt_SLURM.sh -e 0.002 -w 5000 -W  15 -f G -o 4 -i lat -p ${GENMAT}
-   ./MaxEnt_SLURM.sh -e 0.002 -w 5000 -W  15 -f G -o 5 -i lat -p ${GENMAT}
-   ./MaxEnt_SLURM.sh -e 0.002 -w 5000 -W  15 -f G -o 6 -i lat -p ${GENMAT}
-   ./MaxEnt_SLURM.sh -e 0.002 -w 5000 -W  15 -f G -o 7 -i lat -p ${GENMAT}
-   ./MaxEnt_SLURM.sh -e 0.002 -w 5000 -W  15 -f G -o 8 -i lat -p ${GENMAT}
+   ./MaxEnt_SLURM.sh -e 0.0005 -w 4000 -W  15 -f G -o 1 -i lat -p ${GENMAT}
+   ./MaxEnt_SLURM.sh -e 0.0005 -w 4000 -W  15 -f G -o 2 -i lat -p ${GENMAT}
+   ./MaxEnt_SLURM.sh -e 0.0005 -w 4000 -W  15 -f G -o 3 -i lat -p ${GENMAT}
+   ./MaxEnt_SLURM.sh -e 0.0005 -w 4000 -W  15 -f G -o 4 -i lat -p ${GENMAT}
+   ./MaxEnt_SLURM.sh -e 0.0005 -w 4000 -W  15 -f G -o 5 -i lat -p ${GENMAT}
+   ./MaxEnt_SLURM.sh -e 0.0005 -w 4000 -W  15 -f G -o 6 -i lat -p ${GENMAT}
+   ./MaxEnt_SLURM.sh -e 0.0005 -w 4000 -W  15 -f G -o 7 -i lat -p ${GENMAT}
+   ./MaxEnt_SLURM.sh -e 0.0005 -w 4000 -W  15 -f G -o 8 -i lat -p ${GENMAT}
    #
    cd ../../
 done
@@ -405,6 +405,11 @@ set yrange [ymin:ymax];set ytics 0.25; set grid
 unset xtics; set xtics format " ";set xtics ("G" 0.0, "M" 0.305463624453, "K" 0.535442556754, "G" 1.0 )
 set arrow from 0.305463624453,ymin to 0.305463624453,ymax nohead front lw 0.5 lc rgb "black"
 set arrow from 0.535442556754,ymin to 0.535442556754,ymax nohead front lw 0.5 lc rgb "black"
+p 'Bands_nonInt.DAT' u 2:3 w l lw 3
+rep 'Bands_nonInt.DAT' u 2:4 w l lw 3
+
+
+
 p for [i=3:4] 'GWinput_bulk/Bands_nonInt.DAT' u 2:i w l lw 3 lc rgb 'red' t 'bulk - L'.(i-2)
 rep for [i=3:4] 'GWinput_2layer/Bands_nonInt.DAT' u 2:i w l lw 3 lc rgb 'blue' t '2-Layers - L'.(i-2)
 
