@@ -27,8 +27,10 @@ SRCS = linalg.f90 parameters.f90 input_vars.f90 utils_misc.f90 fit.f90 utils_fie
 OBJS = $(SRCS:.f90=.o) minimize.o gap_equation.o main.o
 EXE  = SelfConsistency
 # Post-processing
-OBJS_PP = $(SRCS:.f90=.o) minimize.o gap_equation.o Akf_builder.o
-EXE_PP  = Akw_builder
+OBJS_PP1 = $(SRCS:.f90=.o) minimize.o gap_equation.o pp_Akf_builder.o
+EXE_PP1  = Akf_builder
+#OBJS_PP2 = $(SRCS:.f90=.o) minimize.o gap_equation.o pp_dispersion_fit.o
+#EXE_PP2  = Hk_fit
 
 
 #
@@ -54,8 +56,10 @@ DBGFFLAGS += -module $(DBGDIR)
 DBGEXE = $(EXECDIR)/$(EXE)_debug$(SUFFIX)
 DBGOBJS = $(addprefix $(DBGDIR)/, $(OBJS))
 # Post-processing
-DBGEXE_PP = $(EXECDIR)/$(EXE_PP)_debug
-DBGOBJS_PP = $(addprefix $(DBGDIR)/, $(OBJS_PP))
+DBGEXE_PP1 = $(EXECDIR)/$(EXE_PP1)_debug
+DBGOBJS_PP1 = $(addprefix $(DBGDIR)/, $(OBJS_PP1))
+DBGEXE_PP2 = $(EXECDIR)/$(EXE_PP2)_debug
+DBGOBJS_PP2 = $(addprefix $(DBGDIR)/, $(OBJS_PP2))
 # Custom libraries
 DBGDIR_GT = debug/libs
 ifeq ($(GT),T)
@@ -72,8 +76,10 @@ RELFFLAGS += -module $(RELDIR)
 RELEXE = $(EXECDIR)/$(EXE)$(SUFFIX)
 RELOBJS = $(addprefix $(RELDIR)/, $(OBJS))
 # Post-processing
-RELEXE_PP = $(EXECDIR)/$(EXE_PP)
-RELOBJS_PP = $(addprefix $(RELDIR)/, $(OBJS_PP))
+RELEXE_PP1 = $(EXECDIR)/$(EXE_PP1)
+RELOBJS_PP1 = $(addprefix $(RELDIR)/, $(OBJS_PP1))
+RELEXE_PP2 = $(EXECDIR)/$(EXE_PP2)
+RELOBJS_PP2 = $(addprefix $(RELDIR)/, $(OBJS_PP2))
 # Custom libraries
 RELDIR_GT = release/libs
 ifeq ($(GT),T)
@@ -94,7 +100,7 @@ all: prepREL release
 
 #
 # Debug rules-------------------------------------------------------------------
-debug: prepDBG DBGGTlib $(DBGEXE) $(DBGEXE_PP)
+debug: prepDBG DBGGTlib $(DBGEXE) $(DBGEXE_PP1) #$(DBGEXE_PP2)
 
 # Modules
 $(DBGDIR)/linalg.o: $(SRCDIR)/linalg.f90
@@ -155,20 +161,25 @@ $(DBGDIR)/utils_main.o: $(SRCDIR)/utils_main.f90 $(DBGDIR)/parameters.o $(DBGDIR
 $(DBGDIR)/main.o: $(SRCDIR)/main.f90
 	$(FC) -c $(FFLAGS) -D$(SUFFIX) $(DBGFFLAGS) -o $@ $<
 
-$(DBGDIR)/Akf_builder.o: $(SRCDIR)/Akf_builder.f90
+$(DBGDIR)/pp_Akf_builder.o: $(SRCDIR)/pp_Akf_builder.f90
+	$(FC) -c $(FFLAGS) $(DBGFFLAGS) -o $@ $<
+
+$(DBGDIR)/pp_dispersion_fit.o: $(SRCDIR)/pp_dispersion_fit.f90
 	$(FC) -c $(FFLAGS) $(DBGFFLAGS) -o $@ $<
 
 # Executables
 $(DBGEXE): $(DBGOBJS)
 	$(FC) $(FFLAGS) $(DBGFFLAGS) -o $(DBGEXE) $^ $(DBGLIB)
 
-$(DBGEXE_PP): $(DBGOBJS_PP)
-	$(FC) $(FFLAGS) $(DBGFFLAGS) -o $(DBGEXE_PP) $^ $(DBGLIB)
+$(DBGEXE_PP1): $(DBGOBJS_PP1)
+	$(FC) $(FFLAGS) $(DBGFFLAGS) -o $(DBGEXE_PP1) $^ $(DBGLIB)
 
+#$(DBGEXE_PP2): $(DBGOBJS_PP2)
+#	$(FC) $(FFLAGS) $(DBGFFLAGS) -o $(DBGEXE_PP2) $^ $(DBGLIB)
 
 #
 # Release rules-----------------------------------------------------------------
-release: prepREL RELGTlib $(RELEXE) $(RELEXE_PP)
+release: prepREL RELGTlib $(RELEXE) $(RELEXE_PP1) #$(RELEXE_PP2)
 
 # Modules
 $(RELDIR)/linalg.o: $(SRCDIR)/linalg.f90
@@ -229,16 +240,21 @@ $(RELDIR)/utils_main.o: $(SRCDIR)/utils_main.f90 $(RELDIR)/parameters.o $(RELDIR
 $(RELDIR)/main.o: $(SRCDIR)/main.f90
 	$(FC) -c $(FFLAGS) -D$(SUFFIX) $(RELFFLAGS) -o $@ $<
 
-$(RELDIR)/Akf_builder.o: $(SRCDIR)/Akf_builder.f90
+$(RELDIR)/pp_Akf_builder.o: $(SRCDIR)/pp_Akf_builder.f90
+	$(FC) -c $(FFLAGS) $(RELFFLAGS) -o $@ $<
+
+$(RELDIR)/pp_dispersion_fit.o: $(SRCDIR)/pp_dispersion_fit.f90
 	$(FC) -c $(FFLAGS) $(RELFFLAGS) -o $@ $<
 
 # Executables
 $(RELEXE): $(RELOBJS)
 	$(FC) $(FFLAGS) $(RELFFLAGS) -o $(RELEXE) $^ $(RELLIB)
 
-$(RELEXE_PP): $(RELOBJS_PP)
-	$(FC) $(FFLAGS) $(RELFFLAGS) -o $(RELEXE_PP) $^ $(RELLIB)
+$(RELEXE_PP1): $(RELOBJS_PP1)
+	$(FC) $(FFLAGS) $(RELFFLAGS) -o $(RELEXE_PP1) $^ $(RELLIB)
 
+#$(RELEXE_PP2): $(RELOBJS_PP2)
+#	$(FC) $(FFLAGS) $(RELFFLAGS) -o $(RELEXE_PP2) $^ $(RELLIB)
 
 #
 # GTlib debug rules-------------------------------------------------------------

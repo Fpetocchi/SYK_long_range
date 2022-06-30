@@ -111,6 +111,7 @@ module module_container
 
    !(i) minimization routines. Depends on (b),(e),(h)
    use fit, only:                            &
+   fit_wrapper                              ,&
    fit_moments                              ,&
    fit_delta                                ,&
    G_Moments                                ,&

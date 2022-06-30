@@ -499,6 +499,7 @@ contains
       use utils_misc
       use utils_fields
       use crystal
+      use input_vars, only : Nkpt3
       use input_vars, only : pathINPUT, UfullStructure, Uthresh, HandleGammaPoint
       implicit none
       !
@@ -516,7 +517,7 @@ contains
       integer                               :: ib1,ib2,iw1,iw2
       real(8),allocatable                   :: wread(:),wmats(:)
       complex(8),allocatable                :: D1(:,:),D2(:,:),D3(:,:)
-      complex(8),allocatable                :: Utmp(:,:)
+      complex(8),allocatable                :: Utmp(:,:),URnn(:,:,:)
       type(BosonicField)                    :: Ureal
       type(physicalU)                       :: PhysicalUelements
       real                                  :: start,finish
@@ -924,6 +925,17 @@ contains
          !
          !---------------------------------------------------------------------!
          !
+      endif
+      !
+      ! Print the nn non local interaction
+      if((.not.LocalOnly).and.doAC_)then
+         allocate(URnn(Umats%Nbp,Umats%Nbp,3));URnn=czero
+         call wannier_K2R_NN(Nkpt3,kpt,Umats%screened(:,:,1,:),URnn)
+         where(abs((URnn))<eps) URnn=czero
+         call dump_Matrix(URnn(:,:,1),reg(trim(pathOUTPUT_)),"Unn_Rx.DAT")
+         call dump_Matrix(URnn(:,:,2),reg(trim(pathOUTPUT_)),"Unn_Ry.DAT")
+         call dump_Matrix(URnn(:,:,3),reg(trim(pathOUTPUT_)),"Unn_Rz.DAT")
+         deallocate(URnn)
       endif
       !
    end subroutine read_U_spex_full

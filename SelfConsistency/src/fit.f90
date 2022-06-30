@@ -61,6 +61,7 @@ module fit
    !---------------------------------------------------------------------------!
    !PURPOSE: Rutines available for the user. Description only for interfaces.
    !---------------------------------------------------------------------------!
+   public :: fit_wrapper
    public :: fit_moments
    public :: fit_delta
    public :: G_Moments
@@ -1133,7 +1134,7 @@ contains
    !---------------------------------------------------------------------------!
    !PURPOSE: Wrapper around the specific minimization routine used
    !---------------------------------------------------------------------------!
-   subroutine fit_wrapper(funct,param,err,outit)
+   subroutine fit_wrapper(funct,param,err,outit,ftol)
       !
       implicit none
       !
@@ -1141,10 +1142,11 @@ contains
       real(8),allocatable,intent(inout)     :: param(:)
       real(8),intent(out)                   :: err
       integer,intent(out)                   :: outit
+      real(8),intent(in),optional           :: ftol
       !
       integer                               :: Npara
       integer                               :: mode,iprint,iexit
-      real(8)                               :: hh,dfn
+      real(8)                               :: hh,dfn,ftol_
       real(8),allocatable,dimension(:)      :: g,hess,w,xprmt
       !
       !
@@ -1168,7 +1170,10 @@ contains
       err=1e5
       outit=0
       !
-      call minimize(funct,Npara,param,err,g,hess,w,dfn,xprmt,hh,cg_Ftol,mode,cg_niter,iprint,iexit,outit)
+      ftol_=cg_Ftol
+      if(present(ftol))ftol_=ftol
+      !
+      call minimize(funct,Npara,param,err,g,hess,w,dfn,xprmt,hh,ftol_,mode,cg_niter,iprint,iexit,outit)
       !
       deallocate(g,hess,w,xprmt)
       !
