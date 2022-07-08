@@ -355,7 +355,8 @@ contains
                Gmax = maxval(dreal(Gitau_diag(iorb,:,ik,ispin)))
                if(Gmax.gt.0d0) Gshift(iorb)=Gmax
             enddo
-            write(*,"(A,"//str(Norb)//"F)") "     G"//reg(mode)//"_s"//str(ispin)//"(K_"//str(ik)//",tau) shift:", Gshift
+            Gshift=0d0
+            !write(*,"(A,"//str(Norb)//"F)") "     G"//reg(mode)//"_s"//str(ispin)//"(K_"//str(ik)//",tau) shift:", Gshift
             !
             path = reg(pathOUTPUT)//"K_resolved/MaxEnt_Gk_"//reg(mode)//"_t_s"//str(ispin)//"/Gk_t_k"//str(ik)//".DAT"
             unit = free_unit()

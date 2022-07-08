@@ -729,7 +729,7 @@ contains
       ! Check on the input Field
       if(.not.G%status) stop "dump_FermionicField_local: Field not properly initialized."
       if(present(axis))then
-         if(size(axis).ne.G%Npoints)write(*,"(A)")"     Warning: axis provided but its length: "//str(size(axis))//" does not match with field mesh: "//str(G%Npoints)//". Writing up to the smaller."
+         if(size(axis).ne.G%Npoints)write(*,"(A)")"     Warning - axis provided but its length: "//str(size(axis))//" does not match with field mesh: "//str(G%Npoints)//". Writing up to the smaller."
          Naxis = min(size(axis),G%Npoints)
          if(allocated(axis_))deallocate(axis_)
          allocate(axis_(Naxis));axis_=0d0
@@ -800,7 +800,7 @@ contains
       if(G%Nkpt.eq.0) stop "dump_FermionicField_Kdep: K-dependent part not allocated."
       call assert_shape(kpt,[3,G%Nkpt],"dump_FermionicField_Kdep","kpt")
       if(present(axis))then
-         if(size(axis).ne.G%Npoints)write(*,"(A)")"     Warning: axis provided but its length: "//str(size(axis))//" does not match with field mesh: "//str(G%Npoints)//". Writing up to the smaller."
+         if(size(axis).ne.G%Npoints)write(*,"(A)")"     Warning - axis provided but its length: "//str(size(axis))//" does not match with field mesh: "//str(G%Npoints)//". Writing up to the smaller."
          Naxis = min(size(axis),G%Npoints)
          if(allocated(axis_))deallocate(axis_)
          allocate(axis_(Naxis));axis_=0d0
@@ -922,14 +922,14 @@ contains
          !
          if(Norb_read.ne.Norb) stop "read_FermionicField_local: File with wrong number of Wannier functions."
          if(present(axis))then
-            if(size(axis).ne.G%Npoints)write(*,"(A)")"     Warning: Axis provided but its length: "//str(size(axis))//" does not match with field mesh: "//str(G%Npoints)//". Reading up to the smaller."
+            if(size(axis).ne.G%Npoints)write(*,"(A)")"     Warning - Axis provided but its length: "//str(size(axis))//" does not match with field mesh: "//str(G%Npoints)//". Reading up to the smaller."
             Naxis = min(size(axis),G%Npoints)
-            if(Naxis.ne.Naxis_read)write(*,"(A)")"     Warning: Expected grid: "//str(Naxis)//" does not match with files grid: "//str(Naxis_read)//". Reading up to the smaller."
+            if(Naxis.ne.Naxis_read)write(*,"(A)")"     Warning - Expected grid: "//str(Naxis)//" does not match with files grid: "//str(Naxis_read)//". Reading up to the smaller."
             Naxis = min(Naxis,Naxis_read)
             if(allocated(axis_))deallocate(axis_)
             allocate(axis_(Naxis));axis_=0d0
          else
-            if(Naxis_read.ne.G%Npoints)write(*,"(A)")"     Warning: Files grid: "//str(Naxis_read)//" does not match with field mesh: "//str(G%Npoints)//". Reading up to the smaller."
+            if(Naxis_read.ne.G%Npoints)write(*,"(A)")"     Warning - Files grid: "//str(Naxis_read)//" does not match with field mesh: "//str(G%Npoints)//". Reading up to the smaller."
             Naxis = min(Naxis_read,G%Npoints)
             if(allocated(axis_))deallocate(axis_)
             allocate(axis_(Naxis));axis_=0d0
@@ -1025,14 +1025,14 @@ contains
          if(Nkpt_read.ne.G%Nkpt) stop "read_FermionicField_Kdep: File with wrong number of K-points."
          if(Norb_read.ne.Norb) stop "read_FermionicField_Kdep: File with wrong number of Wannier functions."
          if(present(axis))then
-            if(size(axis).ne.G%Npoints)write(*,"(A)")"     Warning: Axis provided but its length: "//str(size(axis))//" does not match with field mesh: "//str(G%Npoints)//". Reading up to the smaller."
+            if(size(axis).ne.G%Npoints)write(*,"(A)")"     Warning - Axis provided but its length: "//str(size(axis))//" does not match with field mesh: "//str(G%Npoints)//". Reading up to the smaller."
             Naxis = min(size(axis),G%Npoints)
-            if(Naxis.ne.Naxis_read)write(*,"(A)")"     Warning: Expected grid: "//str(Naxis)//" does not match with files grid: "//str(Naxis_read)//". Reading up to the smaller."
+            if(Naxis.ne.Naxis_read)write(*,"(A)")"     Warning - Expected grid: "//str(Naxis)//" does not match with files grid: "//str(Naxis_read)//". Reading up to the smaller."
             Naxis = min(Naxis,Naxis_read)
             if(allocated(axis_))deallocate(axis_)
             allocate(axis_(Naxis));axis_=0d0
          else
-            if(Naxis_read.ne.G%Npoints)write(*,"(A)")"     Warning: Files grid: "//str(Naxis_read)//" does not match with field mesh: "//str(G%Npoints)//". Reading up to the smaller."
+            if(Naxis_read.ne.G%Npoints)write(*,"(A)")"     Warning - Files grid: "//str(Naxis_read)//" does not match with field mesh: "//str(G%Npoints)//". Reading up to the smaller."
             Naxis = min(Naxis_read,G%Npoints)
             if(allocated(axis_))deallocate(axis_)
             allocate(axis_(Naxis));axis_=0d0
@@ -1129,7 +1129,7 @@ contains
       ! Check on the input Field
       if(.not.U%status) stop "dump_BosonicField_local: Field not properly initialized."
       if(present(axis))then
-         if(size(axis).ne.U%Npoints)write(*,"(A)")"     Warning: axis provided but its length: "//str(size(axis))//" does not match with field mesh: "//str(U%Npoints)//". Writing up to the smaller."
+         if(size(axis).ne.U%Npoints)write(*,"(A)")"     Warning - axis provided but its length: "//str(size(axis))//" does not match with field mesh: "//str(U%Npoints)//". Writing up to the smaller."
          Naxis = min(size(axis),U%Npoints)
          if(allocated(axis_))deallocate(axis_)
          allocate(axis_(Naxis));axis_=0d0
@@ -1214,7 +1214,7 @@ contains
       if(.not.U%status) stop "dump_BosonicField_Kdep_SPEXlike: Field not properly initialized."
       if(U%Nkpt.eq.0) stop "dump_BosonicField_Kdep_SPEXlike: K-dependent part not allocated."
       if(present(axis))then
-         if(size(axis).ne.U%Npoints)write(*,"(A)")"     Warning: axis provided but its length: "//str(size(axis))//" does not match with field mesh: "//str(U%Npoints)//". Writing up to the smaller."
+         if(size(axis).ne.U%Npoints)write(*,"(A)")"     Warning - axis provided but its length: "//str(size(axis))//" does not match with field mesh: "//str(U%Npoints)//". Writing up to the smaller."
          Naxis = min(size(axis),U%Npoints)
          if(allocated(axis_))deallocate(axis_)
          allocate(axis_(Naxis));axis_=0d0
@@ -1356,14 +1356,14 @@ contains
       !
       if(Norb_read.ne.Norb) stop "read_BosonicField_local: File with wrong number of Wannier functions."
       if(present(axis))then
-         if(size(axis).ne.U%Npoints)write(*,"(A)")"     Warning: Axis provided but its length: "//str(size(axis))//" does not match with field mesh: "//str(U%Npoints)//". Reading up to the smaller."
+         if(size(axis).ne.U%Npoints)write(*,"(A)")"     Warning - Axis provided but its length: "//str(size(axis))//" does not match with field mesh: "//str(U%Npoints)//". Reading up to the smaller."
          Naxis = min(size(axis),U%Npoints)
-         if(Naxis.ne.Naxis_read)write(*,"(A)")"     Warning: Expected grid: "//str(Naxis)//" does not match with files grid: "//str(Naxis_read)//". Reading up to the smaller."
+         if(Naxis.ne.Naxis_read)write(*,"(A)")"     Warning - Expected grid: "//str(Naxis)//" does not match with files grid: "//str(Naxis_read)//". Reading up to the smaller."
          Naxis = min(Naxis,Naxis_read)
          if(allocated(axis_))deallocate(axis_)
          allocate(axis_(Naxis));axis_=0d0
       else
-         if(Naxis_read.ne.U%Npoints)write(*,"(A)")"     Warning: Files grid: "//str(Naxis_read)//" does not match with field mesh: "//str(U%Npoints)//". Reading up to the smaller."
+         if(Naxis_read.ne.U%Npoints)write(*,"(A)")"     Warning - Files grid: "//str(Naxis_read)//" does not match with field mesh: "//str(U%Npoints)//". Reading up to the smaller."
          Naxis = min(Naxis_read,U%Npoints)
          if(allocated(axis_))deallocate(axis_)
          allocate(axis_(Naxis));axis_=0d0

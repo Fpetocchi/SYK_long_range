@@ -1600,3 +1600,73 @@ if(recalc_Hartree)then
    call dump_Matrix(SigmaImp%N_s,reg(ItFolder),"Solver_"//reg(LocalOrbs(isite)%Name)//"/Hartree_UNlat_"//reg(LocalOrbs(isite)%Name),paramagnet)
    !
 endif
+
+
+
+
+
+
+
+
+!! old implementation with the absolute value
+!
+s_p = sign(1d0,E1+E2)
+Kel_dyn_e_p=czero
+do ix=2,Ngrid-1
+   !
+   w_p = abs(E1+E2) * (1d0+xgrid(ix))/(1d0-xgrid(ix))
+   !
+   if(w_p.gt.wmats(Nmats))then
+      Kel_dyn_e_p = Kel_dyn_e_p - 0.5d0 * s_p * (2d0/pi) * Kel_dyn_x * dx / (1d0+xgrid(ix-1)**2)
+      exit
+   endif
+   !
+   wndx_a = floor(w_p/MatsStep)+1
+   wndx_b = ceiling(w_p/MatsStep)+1
+   !
+   Kel_dyn_x = Kel_dyn_w(wndx_a) * ( 1d0 - (w_p-wmats(wndx_a))/(wmats(wndx_b)-wmats(wndx_a)) ) + &
+               Kel_dyn_w(wndx_b) * (w_p-wmats(wndx_a))/(wmats(wndx_b)-wmats(wndx_a))
+   !
+   fact=1d0
+   if(ix.eq.2) fact=0.5d0
+   !
+   Kel_dyn_e_p = Kel_dyn_e_p + fact * s_p * (2d0/pi) * Kel_dyn_x * dx / (1d0+xgrid(ix)**2)
+   !
+enddo
+!
+!adding the tail to w-->inf limit of the interaction
+Kel_dyn_e_p = Kel_dyn_e_p + Kel_dyn_w(Nmats) * (pi/2d0 - atan2(wmats(Nmats),(E1+E2)) )
+!
+!adding the fermi function
+Kel_dyn_e_p = Kel_dyn_e_p * (fermidirac(-E1,Beta)-fermidirac(E2,Beta))
+!
+!integral over auxiliary variable x for E1-E2
+s_m = sign(1d0,E1-E2)
+Kel_dyn_e_m=czero
+do ix=2,Ngrid-1
+   !
+   w_m = abs(E1-E2) * (1d0+xgrid(ix))/(1d0-xgrid(ix))
+   !
+   if(w_m.gt.wmats(Nmats))then
+      Kel_dyn_e_m = Kel_dyn_e_m - 0.5d0 * s_m * (2d0/pi) * Kel_dyn_x * dx / (1d0+xgrid(ix-1)**2)
+      exit
+   endif
+   !
+   wndx_a = floor(w_m/(2*pi/Beta))+1
+   wndx_b = ceiling(w_m/(2*pi/Beta))+1
+   !
+   Kel_dyn_x = Kel_dyn_w(wndx_a) * ( 1d0 - (w_m-wmats(wndx_a))/(wmats(wndx_b)-wmats(wndx_a)) ) + &
+               Kel_dyn_w(wndx_b) * (w_m-wmats(wndx_a))/(wmats(wndx_b)-wmats(wndx_a))
+   !
+   fact=1d0
+   if(ix.eq.2) fact=0.5d0
+   !
+   Kel_dyn_e_m = Kel_dyn_e_m + fact * s_m * (2d0/pi) * Kel_dyn_x * dx / (1d0+xgrid(ix)**2)
+   !
+enddo
+!
+!adding the tail to w-->inf limit of the interaction
+Kel_dyn_e_m = Kel_dyn_e_m + s_m * Kel_dyn_w(Nmats) * (pi/2d0 - atan2(wmats(Nmats),(E1-E2)) )
+!
+!adding the fermi function
+Kel_dyn_e_m = Kel_dyn_e_m * (fermidirac(E1,Beta)-fermidirac(E2,Beta))

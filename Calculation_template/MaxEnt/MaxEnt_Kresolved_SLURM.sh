@@ -221,8 +221,8 @@ EOF
          MODELOPTIONS=""
          if [ "$MODEL"  != "0" ]; then
             if [ "$MODEL"  == "1" ] ; then MODELOPTIONS=${MOMENTS} ; fi
-            if [ "$MODEL"  == "2" ] ; then MODELOPTIONS= -m ../${Gsource}/Models/${FIELD}k_t_k${kp}${SUFFIX}.DAT_dos.dat ; fi
-            echo ${MODELOPTIONS}
+            if [ "$MODEL"  == "2" ] ; then MODELOPTIONS="-m ../${Gsource}/Models/${FIELD}k_t_k${kp}${SUFFIX}.DAT_dos.dat" ; fi
+            echo "Model options:" ${MODELOPTIONS}
          fi
          #
          #Edit one submit script for all the user-provided K-points

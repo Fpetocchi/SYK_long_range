@@ -145,7 +145,7 @@ contains
       select case(reg(mode_el))
          case default
             !
-            stop "Available electronic modes in gap equation: static, static+dynamic."
+            stop "Available electronic modes in gap equation: static, static+dynamic, None."
             !
          case("None")
             !
@@ -192,7 +192,7 @@ contains
             call cpu_time(start)
             call wannierinterpolation(Nkpt3_orig,kpt_orig,kpt_Hk,Hk_orig,Hk_intp)
             call cpu_time(finish)
-            write(*,"(A,F)") "     interpolation to ["//str(Nkpt3_Hk(1))//","//str(Nkpt3_Hk(2))//","//str(Nkpt3_Hk(3))//"] K-grid cpu timing:", finish-start
+            write(*,"(A,F)") "     interpolation to new ["//str(Nkpt3_Hk(1))//","//str(Nkpt3_Hk(2))//","//str(Nkpt3_Hk(3))//"] K-grid cpu timing:", finish-start
             !
          endif
          !
@@ -500,8 +500,7 @@ contains
             do iorb=1,Norb
                do jorb=1,Norb
                   !
-                  ib1 = iorb + Norb*(iorb-1)
-                  ib2 = jorb + Norb*(jorb-1)
+                  call F2Bindex(Norb,[iorb,iorb],[jorb,jorb],ib1,ib2)
                   !
                   Wk(iorb,jorb,iw,ik) = Wk_w(ib1,ib2,ik)
                   !
@@ -545,7 +544,7 @@ contains
       character(len=*),intent(in),optional  :: printKpath
       character(len=*),intent(in),optional  :: printmode
       !
-      integer                               :: Efermi_ndx,unit
+      integer                               :: Efermi_ndx
       integer                               :: iE,iE1,iE2,Ngrid
       integer                               :: iorb,jorb,Norb
       integer                               :: ik,Nkpt,Nmats
@@ -628,100 +627,7 @@ contains
       if(present(printKpath).and.(reg(printmode).ne."None"))then
          printmode_used="E0"
          if(present(printmode))printmode_used=reg(printmode)
-         select case(reg(printmode_used))
-            case default
-               !
-               stop "Available print modes of phononic Kernel: E0, 0E, diag, surf, all."
-               !
-            case("E0")
-               !
-               unit = free_unit()
-               open(unit,file=reg(printKpath)//"Kel_stat_e_E0_T"//str(Temp,2)//".DAT",form="formatted",status="unknown",position="rewind",action="write")
-               do iE=1,Ngrid
-                  write(unit,"(3F20.10)")Egrid(iE),dreal(Kel_stat_e(iE,Efermi_ndx)),dimag(Kel_stat_e(iE,Efermi_ndx))
-               enddo
-               close(unit)
-               !
-            case("0E")
-               !
-               unit = free_unit()
-               open(unit,file=reg(printKpath)//"Kel_stat_e_0E_T"//str(Temp,2)//".DAT",form="formatted",status="unknown",position="rewind",action="write")
-               do iE=1,Ngrid
-                  write(unit,"(3F20.10)")Egrid(iE),dreal(Kel_stat_e(Efermi_ndx,iE)),dimag(Kel_stat_e(Efermi_ndx,iE))
-               enddo
-               close(unit)
-               !
-            case("diag")
-               !
-               unit = free_unit()
-               open(unit,file=reg(printKpath)//"Kel_stat_e_diag_T"//str(Temp,2)//".DAT",form="formatted",status="unknown",position="rewind",action="write")
-               do iE=1,Ngrid
-                  write(unit,"(3F20.10)")Egrid(iE),dreal(Kel_stat_e(iE,iE)),dimag(Kel_stat_e(iE,iE))
-               enddo
-               close(unit)
-               !
-            case("surf")
-               !
-               unit = free_unit()
-               open(unit,file=reg(printKpath)//"Kel_stat_e_surf_R_T"//str(Temp,2)//".DAT",form="formatted",status="unknown",position="rewind",action="write")
-               do iE1=1,Ngrid
-                  do iE2=1,Ngrid
-                     write(unit,"(3F20.10)")Egrid(iE1),Egrid(iE2),dreal(Kel_stat_e(iE1,iE2))
-                  enddo
-                  write(unit,*)
-               enddo
-               close(unit)
-               unit = free_unit()
-               open(unit,file=reg(printKpath)//"Kel_stat_e_surf_I_T"//str(Temp,2)//".DAT",form="formatted",status="unknown",position="rewind",action="write")
-               do iE1=1,Ngrid
-                  do iE2=1,Ngrid
-                     write(unit,"(3F20.10)")Egrid(iE1),Egrid(iE2),dimag(Kel_stat_e(iE1,iE2))
-                  enddo
-                  write(unit,*)
-               enddo
-               close(unit)
-               !
-            case("all")
-               !
-               unit = free_unit()
-               open(unit,file=reg(printKpath)//"Kel_stat_e_E0_T"//str(Temp,2)//".DAT",form="formatted",status="unknown",position="rewind",action="write")
-               do iE=1,Ngrid
-                  write(unit,"(3F20.10)")Egrid(iE),dreal(Kel_stat_e(iE,Efermi_ndx)),dimag(Kel_stat_e(iE,Efermi_ndx))
-               enddo
-               close(unit)
-               unit = free_unit()
-               open(unit,file=reg(printKpath)//"Kel_stat_e_0E_T"//str(Temp,2)//".DAT",form="formatted",status="unknown",position="rewind",action="write")
-               do iE=1,Ngrid
-                  write(unit,"(3F20.10)")Egrid(iE),dreal(Kel_stat_e(Efermi_ndx,iE)),dimag(Kel_stat_e(Efermi_ndx,iE))
-               enddo
-               close(unit)
-               unit = free_unit()
-               open(unit,file=reg(printKpath)//"Kel_stat_e_diag_T"//str(Temp,2)//".DAT",form="formatted",status="unknown",position="rewind",action="write")
-               do iE=1,Ngrid
-                  write(unit,"(3F20.10)")Egrid(iE),dreal(Kel_stat_e(iE,iE)),dimag(Kel_stat_e(iE,iE))
-               enddo
-               close(unit)
-               unit = free_unit()
-               open(unit,file=reg(printKpath)//"Kel_stat_e_surf_R_T"//str(Temp,2)//".DAT",form="formatted",status="unknown",position="rewind",action="write")
-               do iE1=1,Ngrid
-                  do iE2=1,Ngrid
-                     write(unit,"(3F20.10)")Egrid(iE1),Egrid(iE2),dreal(Kel_stat_e(iE1,iE2))
-                  enddo
-                  write(unit,*)
-               enddo
-               close(unit)
-               unit = free_unit()
-               open(unit,file=reg(printKpath)//"Kel_stat_e_surf_I_T"//str(Temp,2)//".DAT",form="formatted",status="unknown",position="rewind",action="write")
-               do iE1=1,Ngrid
-                  do iE2=1,Ngrid
-                     write(unit,"(3F20.10)")Egrid(iE1),Egrid(iE2),dimag(Kel_stat_e(iE1,iE2))
-                  enddo
-                  write(unit,*)
-               enddo
-               close(unit)
-               !
-               !
-         end select
+         call print_Kernel("electronic",printmode_used,reg(printKpath),"Kel_stat",Temp,Egrid,Kel_stat_e)
          !
       endif
       !
@@ -747,18 +653,23 @@ contains
       character(len=*),intent(in),optional  :: printKpath
       character(len=*),intent(in),optional  :: printmode
       !
-      integer                               :: Efermi_ndx,unit
-      integer                               :: iE,iE1,iE2,ix,Ngrid
+      integer                               :: Efermi_ndx
       integer                               :: iorb,jorb,Norb
       integer                               :: ik,Nkpt,Nmats
+      integer                               :: iE,iE1,iE2,iy,Ngrid
       integer                               :: wndx_a,wndx_b
-      real(8)                               :: DoSnorm,dE,E1,E2,dx,fact,Temp
-      real(8)                               :: s_p,s_m,w_p,w_m
-      complex(8)                            :: Kel_dyn_x,Kel_dyn_e_p,Kel_dyn_e_m
-      real(8),allocatable                   :: DoS(:),wmats(:),xgrid(:)
+      real(8)                               :: DoSnorm,Temp
+      real(8)                               :: wmax,ymax
+      real(8)                               :: E1,E2,DE,DE_m,DE_p
+      real(8)                               :: dy,dy_m,dy_p
+      real(8)                               :: y_i,y_j
+      real(8)                               :: wm,m,q
+      real(8)                               :: W_wm_i,W_wm_j,Int_i,Int_j
+      complex(8)                            :: Kel_dyn_e_p,Kel_dyn_e_m
+      real(8),allocatable                   :: DoS(:),wmats(:)
+      real(8),allocatable                   :: ygrid_m(:),ygrid_p(:)
       complex(8),allocatable                :: Wk_pvt(:,:,:,:)
-      complex(8),allocatable                :: Kel_dyn_w(:)
-      logical                               :: cond1,cond2
+      complex(8),allocatable                :: Wee(:)
       character(len=12)                     :: printmode_used
       real                                  :: start,finish
       !
@@ -781,9 +692,6 @@ contains
       Efermi_ndx = minloc(abs(Egrid),dim=1)
       if(Egrid(Efermi_ndx).ne.0d0) stop "calc_Kel_dyn_e: the energy grid requires the E=0 point."
       !
-      if(MatsStep.le.0d0) stop "calc_Kel_dyn_e: MatsStep must be >0."
-      write(*,"(A,F)") "     Bosonic frequency step:",MatsStep
-      !
       DoSnorm=0
       allocate(DoS(Ngrid));DoS=0d0
       do iE=1,Ngrid
@@ -803,17 +711,22 @@ contains
       !
       Temp = 1d0 / (Beta*K2eV)
       !
-      allocate(xgrid(Ngrid));xgrid=linspace(-1d0,+1d0,Ngrid)
-      dx=abs(xgrid(2)-xgrid(1))
+      if(MatsStep.le.0d0) stop "calc_Kel_dyn_e: MatsStep must be >0."
+      write(*,"(A,F)") "     Bosonic frequency step:",MatsStep
+      !
       allocate(wmats(Nmats));wmats=BosonicFreqMesh(Beta,Nmats)
+      wmax = wmats(Nmats)
       !
       call cpu_time(start)
       !$OMP PARALLEL DEFAULT(PRIVATE),&
-      !$OMP SHARED(Wk,Ngrid,DoS,Norb,Nmats,Nkpt,weights,wmats,xgrid,dx,MatsStep,Kel_dyn_e)
+      !$OMP SHARED(Wk,Ngrid,DoS,Norb,Nmats,Nkpt,weights,wmats,MatsStep,Wee)
       !
-      allocate(Kel_dyn_w(Nmats));Kel_dyn_w=czero
+      allocate(Wee(Nmats));Wee=czero
       allocate(Wk_pvt(Norb,Norb,Nmats,Nkpt));Wk_pvt=czero
       Wk_pvt = Wk
+      !
+      allocate(ygrid_m(Ngrid));ygrid_m=0d0
+      allocate(ygrid_p(Ngrid));ygrid_p=0d0
       !
       !$OMP DO SCHEDULE(DYNAMIC)
       do iE1=1,Ngrid
@@ -823,92 +736,122 @@ contains
             !
             E1=Egrid(iE1)
             E2=Egrid(iE2)
-            if((E1.eq.0d0).and.(E2.eq.0d0))cycle
             !
+            !avoid the divergence coming from 1/tanh(0) = 1/0
+            if((E1.eq.0d0).or.(E2.eq.0d0))cycle
+            !avoid the Fermi level since it is interpolated later on
+            if((iE1.eq.Efermi_ndx).or.(iE2.eq.Efermi_ndx))cycle
+            !
+            !bring interaction on the energy gird
             do iorb=1,Norb
                do jorb=1,Norb
                   do ik=1,Nkpt
                      !
-                     Kel_dyn_w = Kel_dyn_w + (weights(iE1,iorb,ik)/DoS(iE1)) * (weights(iE2,jorb,ik)/DoS(iE2)) * (Wk_pvt(iorb,jorb,:,ik)-Wk_pvt(iorb,jorb,1,ik))
+                     Wee = Wee + (weights(iE1,iorb,ik)/DoS(iE1)) * (weights(iE2,jorb,ik)/DoS(iE2)) * (Wk_pvt(iorb,jorb,:,ik)-Wk_pvt(iorb,jorb,1,ik))
                      !
                   enddo
                enddo
             enddo
             !
-            !integral over auxiliary variable x for E1+E2
-            s_p = sign(1d0,E1+E2)
-            Kel_dyn_e_p=czero
-            do ix=2,Ngrid-1
-               !
-               w_p = abs(E1+E2) * (1d0+xgrid(ix))/(1d0-xgrid(ix))
-               !
-               if(w_p.gt.wmats(Nmats))then
-                  Kel_dyn_e_p = Kel_dyn_e_p - 0.5d0 * s_p * (2d0/pi) * Kel_dyn_x * dx / (1d0+xgrid(ix-1)**2)
-                  exit
-               endif
-               !
-               wndx_a = floor(w_p/MatsStep)+1
-               wndx_b = ceiling(w_p/MatsStep)+1
-               !
-               Kel_dyn_x = Kel_dyn_w(wndx_a) * ( 1d0 - (w_p-wmats(wndx_a))/(wmats(wndx_b)-wmats(wndx_a)) ) + &
-                           Kel_dyn_w(wndx_b) * (w_p-wmats(wndx_a))/(wmats(wndx_b)-wmats(wndx_a))
-               !
-               fact=1d0
-               if(ix.eq.2) fact=0.5d0
-               !
-               Kel_dyn_e_p = Kel_dyn_e_p + fact * s_p * (2d0/pi) * Kel_dyn_x * dx / (1d0+xgrid(ix)**2)
-               !
-            enddo
+            !integral over auxiliary variable y for DE_m = E1-E2 and DE_p = E1+E2
+            DE_m = E1 - E2
+            ymax = (wmax-DE_m) / (wmax+DE_m)
+            if(ymax.eq.1d0) stop "calc_Kel_dyn_e: divergence will occur for ymax(E1-E2) = 1."
+            ygrid_m=linspace(-1d0,ymax,Ngrid)
+            dy_m = abs(ygrid_m(2)-ygrid_m(1))
             !
-            !adding the tail to w-->inf limit of the interaction
-            Kel_dyn_e_p = Kel_dyn_e_p + Kel_dyn_w(Nmats) * (pi/2d0 - atan2(wmats(Nmats),(E1+E2)) )
+            DE_p = E1 - E2
+            ymax = (wmax-DE_p) / (wmax+DE_p)
+            if(ymax.eq.1d0) stop "calc_Kel_dyn_e: divergence will occur for ymax(E1+E2) = 1."
+            ygrid_p=linspace(-1d0,ymax,Ngrid)
+            dy_p = abs(ygrid_p(2)-ygrid_p(1))
             !
-            !adding the fermi function
-            Kel_dyn_e_p = Kel_dyn_e_p * (fermidirac(-E1,Beta)-fermidirac(E2,Beta))
-            !
-            !integral over auxiliary variable x for E1-E2
-            s_m = sign(1d0,E1-E2)
+            !one loop for both auxiliary y variables
             Kel_dyn_e_m=czero
-            do ix=2,Ngrid-1
+            Kel_dyn_e_p=czero
+            do iy=2,Ngrid-1
                !
-               w_m = abs(E1-E2) * (1d0+xgrid(ix))/(1d0-xgrid(ix))
+               !-------------------- first term of the sum ---------------------
+               DE = DE_m
+               dy = dy_m
+               y_i = ygrid_m(iy)
+               y_j = ygrid_m(iy-1)
                !
-               if(w_m.gt.wmats(Nmats))then
-                  Kel_dyn_e_m = Kel_dyn_e_m - 0.5d0 * s_m * (2d0/pi) * Kel_dyn_x * dx / (1d0+xgrid(ix-1)**2)
-                  exit
-               endif
+               !continous frequency correspnding to iy
+               wm = abs(DE) * (1+y_i)/(1-y_i)
+               !linear interpolation between the two points on the matsubara grid enclosing wm
+               wndx_a = floor(wm/MatsStep) + 1
+               wndx_b = wndx_a + 1
+               m = (Wee(wndx_b)-Wee(wndx_a))/(wmats(wndx_b)-wmats(wndx_a))
+               q = Wee(wndx_a) - m*wmats(wndx_a)
+               W_wm_i = m * wm + q
                !
-               wndx_a = floor(w_m/(2*pi/Beta))+1
-               wndx_b = ceiling(w_m/(2*pi/Beta))+1
+               !continous frequency correspnding to iy+1
+               wm = abs(DE) * (1+y_j)/(1-y_j)
+               !linear interpolation between the two points on the matsubara grid enclosing wm
+               wndx_a = floor(wm/MatsStep) + 1
+               wndx_b = wndx_a + 1
+               m = (Wee(wndx_b)-Wee(wndx_a))/(wmats(wndx_b)-wmats(wndx_a))
+               q = Wee(wndx_a) - m*wmats(wndx_a)
+               W_wm_j = m * wm + q
                !
-               Kel_dyn_x = Kel_dyn_w(wndx_a) * ( 1d0 - (w_m-wmats(wndx_a))/(wmats(wndx_b)-wmats(wndx_a)) ) + &
-                           Kel_dyn_w(wndx_b) * (w_m-wmats(wndx_a))/(wmats(wndx_b)-wmats(wndx_a))
+               !integrand for iy and iy-1
+               Int_i = W_wm_i / ( 1 + y_i*y_i )
+               Int_j = W_wm_j / ( 1 + y_j*y_j )
                !
-               fact=1d0
-               if(ix.eq.2) fact=0.5d0
+               !trapezoidal integration
+               Kel_dyn_e_m = Kel_dyn_e_m + (1d0/pi) * (Int_i+Int_j)*(dy/2d0)
                !
-               Kel_dyn_e_m = Kel_dyn_e_m + fact * s_m * (2d0/pi) * Kel_dyn_x * dx / (1d0+xgrid(ix)**2)
+               !
+               !------------------- second term of the sum ---------------------
+               DE = DE_p
+               dy = dy_p
+               y_i = ygrid_p(iy)
+               y_j = ygrid_p(iy-1)
+               !
+               !continous frequency correspnding to iy
+               wm = abs(DE) * (1+y_i)/(1-y_i)
+               !linear interpolation between the two points on the matsubara grid enclosing wm
+               wndx_a = floor(wm/MatsStep) + 1
+               wndx_b = wndx_a + 1
+               m = (Wee(wndx_b)-Wee(wndx_a))/(wmats(wndx_b)-wmats(wndx_a))
+               q = Wee(wndx_a) - m*wmats(wndx_a)
+               W_wm_i = m * wm + q
+               !
+               !continous frequency correspnding to iy+1
+               wm = abs(DE) * (1+y_j)/(1-y_j)
+               !linear interpolation between the two points on the matsubara grid enclosing wm
+               wndx_a = floor(wm/MatsStep) + 1
+               wndx_b = wndx_a + 1
+               m = (Wee(wndx_b)-Wee(wndx_a))/(wmats(wndx_b)-wmats(wndx_a))
+               q = Wee(wndx_a) - m*wmats(wndx_a)
+               W_wm_j = m * wm + q
+               !
+               !integrand for iy and iy-1
+               Int_i = W_wm_i / ( 1 + y_i*y_i )
+               Int_j = W_wm_j / ( 1 + y_j*y_j )
+               !
+               !trapezoidal integration
+               Kel_dyn_e_p = Kel_dyn_e_p + (1d0/pi) * (Int_i+Int_j)*(dy/2d0)
                !
             enddo
             !
             !adding the tail to w-->inf limit of the interaction
-            Kel_dyn_e_m = Kel_dyn_e_m + s_m * Kel_dyn_w(Nmats) * (pi/2d0 - atan2(wmats(Nmats),(E1-E2)) )
+            Kel_dyn_e_m = Kel_dyn_e_m + Wee(Nmats) * (1d0 - (pi/2d0)*atan2(wmats(Nmats),DE_m) )
+            Kel_dyn_e_p = Kel_dyn_e_p + Wee(Nmats) * (1d0 - (pi/2d0)*atan2(wmats(Nmats),DE_p) )
             !
             !adding the fermi function
-            Kel_dyn_e_m = Kel_dyn_e_m * (fermidirac(E1,Beta)-fermidirac(E2,Beta))
+            Kel_dyn_e_m = Kel_dyn_e_m * ( fermidirac(+E1,Beta) - fermidirac(+E2,Beta) )*2d0
+            Kel_dyn_e_p = Kel_dyn_e_p * ( fermidirac(-E1,Beta) - fermidirac(+E2,Beta) )*2d0
             !
-            cond1 = .not.((E1.eq.0d0).and.(E2.ne.0d0))
-            cond2 = .not.((E1.ne.0d0).and.(E2.eq.0d0))
-            if(cond1.and.cond2)then
-               Kel_dyn_e(iE1,iE2) = ( Kel_dyn_e_m + Kel_dyn_e_p ) * (1d0/(tanh(Beta/2d0*E1)*tanh(Beta/2d0*E2)))
-            endif
+            Kel_dyn_e(iE1,iE2) = ( Kel_dyn_e_m + Kel_dyn_e_p ) / ( tanh(Beta/2d0*E1) * tanh(Beta/2d0*E2) )
             !
          enddo
       enddo
       !$OMP END DO
-      deallocate(Wk_pvt,Kel_dyn_w)
+      deallocate(Wk_pvt,Wee)
       !$OMP END PARALLEL
-      deallocate(DoS,wmats,xgrid)
+      deallocate(DoS,wmats,ygrid_m,ygrid_p)
       !
       !Filling the Fermi lines
       call interpFermi(Kel_dyn_e,Egrid,Efermi_ndx)
@@ -919,100 +862,7 @@ contains
       if(present(printKpath).and.(reg(printmode).ne."None"))then
          printmode_used="E0"
          if(present(printmode))printmode_used=reg(printmode)
-         select case(reg(printmode_used))
-            case default
-               !
-               stop "Available print modes of phononic Kernel: E0, 0E, diag, surf, all."
-               !
-            case("E0")
-               !
-               unit = free_unit()
-               open(unit,file=reg(printKpath)//"Kel_dyn_e_E0_T"//str(Temp,2)//".DAT",form="formatted",status="unknown",position="rewind",action="write")
-               do iE=1,Ngrid
-                  write(unit,"(3F20.10)")Egrid(iE),dreal(Kel_dyn_e(iE,Efermi_ndx)),dimag(Kel_dyn_e(iE,Efermi_ndx))
-               enddo
-               close(unit)
-               !
-            case("0E")
-               !
-               unit = free_unit()
-               open(unit,file=reg(printKpath)//"Kel_dyn_e_0E_T"//str(Temp,2)//".DAT",form="formatted",status="unknown",position="rewind",action="write")
-               do iE=1,Ngrid
-                  write(unit,"(3F20.10)")Egrid(iE),dreal(Kel_dyn_e(Efermi_ndx,iE)),dimag(Kel_dyn_e(Efermi_ndx,iE))
-               enddo
-               close(unit)
-               !
-            case("diag")
-               !
-               unit = free_unit()
-               open(unit,file=reg(printKpath)//"Kel_dyn_e_diag_T"//str(Temp,2)//".DAT",form="formatted",status="unknown",position="rewind",action="write")
-               do iE=1,Ngrid
-                  write(unit,"(3F20.10)")Egrid(iE),dreal(Kel_dyn_e(iE,iE)),dimag(Kel_dyn_e(iE,iE))
-               enddo
-               close(unit)
-               !
-            case("surf")
-               !
-               unit = free_unit()
-               open(unit,file=reg(printKpath)//"Kel_dyn_e_surf_R_T"//str(Temp,2)//".DAT",form="formatted",status="unknown",position="rewind",action="write")
-               do iE1=1,Ngrid
-                  do iE2=1,Ngrid
-                     write(unit,"(3F20.10)")Egrid(iE1),Egrid(iE2),dreal(Kel_dyn_e(iE1,iE2))
-                  enddo
-                  write(unit,*)
-               enddo
-               close(unit)
-               unit = free_unit()
-               open(unit,file=reg(printKpath)//"Kel_dyn_e_surf_I_T"//str(Temp,2)//".DAT",form="formatted",status="unknown",position="rewind",action="write")
-               do iE1=1,Ngrid
-                  do iE2=1,Ngrid
-                     write(unit,"(3F20.10)")Egrid(iE1),Egrid(iE2),dimag(Kel_dyn_e(iE1,iE2))
-                  enddo
-                  write(unit,*)
-               enddo
-               close(unit)
-               !
-            case("all")
-               !
-               unit = free_unit()
-               open(unit,file=reg(printKpath)//"Kel_dyn_e_E0_T"//str(Temp,2)//".DAT",form="formatted",status="unknown",position="rewind",action="write")
-               do iE=1,Ngrid
-                  write(unit,"(3F20.10)")Egrid(iE),dreal(Kel_dyn_e(iE,Efermi_ndx)),dimag(Kel_dyn_e(iE,Efermi_ndx))
-               enddo
-               close(unit)
-               unit = free_unit()
-               open(unit,file=reg(printKpath)//"Kel_dyn_e_0E_T"//str(Temp,2)//".DAT",form="formatted",status="unknown",position="rewind",action="write")
-               do iE=1,Ngrid
-                  write(unit,"(3F20.10)")Egrid(iE),dreal(Kel_dyn_e(Efermi_ndx,iE)),dimag(Kel_dyn_e(Efermi_ndx,iE))
-               enddo
-               close(unit)
-               unit = free_unit()
-               open(unit,file=reg(printKpath)//"Kel_dyn_e_diag_T"//str(Temp,2)//".DAT",form="formatted",status="unknown",position="rewind",action="write")
-               do iE=1,Ngrid
-                  write(unit,"(3F20.10)")Egrid(iE),dreal(Kel_dyn_e(iE,iE)),dimag(Kel_dyn_e(iE,iE))
-               enddo
-               close(unit)
-               unit = free_unit()
-               open(unit,file=reg(printKpath)//"Kel_dyn_e_surf_R_T"//str(Temp,2)//".DAT",form="formatted",status="unknown",position="rewind",action="write")
-               do iE1=1,Ngrid
-                  do iE2=1,Ngrid
-                     write(unit,"(3F20.10)")Egrid(iE1),Egrid(iE2),dreal(Kel_dyn_e(iE1,iE2))
-                  enddo
-                  write(unit,*)
-               enddo
-               close(unit)
-               unit = free_unit()
-               open(unit,file=reg(printKpath)//"Kel_dyn_e_surf_I_T"//str(Temp,2)//".DAT",form="formatted",status="unknown",position="rewind",action="write")
-               do iE1=1,Ngrid
-                  do iE2=1,Ngrid
-                     write(unit,"(3F20.10)")Egrid(iE1),Egrid(iE2),dimag(Kel_dyn_e(iE1,iE2))
-                  enddo
-                  write(unit,*)
-               enddo
-               close(unit)
-               !
-               !
-         end select
+         call print_Kernel("electronic",printmode_used,reg(printKpath),"Kel_dyn",Temp,Egrid,Kel_dyn_e)
          !
       endif
       !
@@ -1179,8 +1029,8 @@ contains
       character(len=*),intent(in),optional  :: printKpath
       character(len=*),intent(in),optional  :: printmode
       !
-      integer                               :: Efermi_ndx,unit
-      integer                               :: iE,iE1,iE2,Ngrid
+      integer                               :: Efermi_ndx
+      integer                               :: iE1,iE2,Ngrid
       integer                               :: iomega,Nomega
       real(8)                               :: E1,E2,dw,Temp
       real(8)                               :: a2F_int,DoS_Fermi
@@ -1245,71 +1095,161 @@ contains
       if(present(printKpath).and.(reg(printmode).ne."None"))then
          printmode_used="E0"
          if(present(printmode))printmode_used=reg(printmode)
-         select case(reg(printmode_used))
-            case default
-               !
-               stop "Available print modes of phononic Kernel: E0, diag, surf, all."
-               !
-            case("E0")
-               !
-               unit = free_unit()
-               open(unit,file=reg(printKpath)//"Kph_e_E0_T"//str(Temp,2)//".DAT",form="formatted",status="unknown",position="rewind",action="write")
-               do iE=1,Ngrid
-                  write(unit,"(2F20.10)")Egrid(iE),Kph_e(iE,Efermi_ndx)
-               enddo
-               close(unit)
-               !
-            case("diag")
-               !
-               unit = free_unit()
-               open(unit,file=reg(printKpath)//"Kph_e_diag_T"//str(Temp,2)//".DAT",form="formatted",status="unknown",position="rewind",action="write")
-               do iE=1,Ngrid
-                  write(unit,"(2F20.10)")Egrid(iE),Kph_e(iE,iE)
-               enddo
-               close(unit)
-               !
-            case("surf")
-               !
-               unit = free_unit()
-               open(unit,file=reg(printKpath)//"Kph_e_surf_T"//str(Temp,2)//".DAT",form="formatted",status="unknown",position="rewind",action="write")
-               do iE1=1,Ngrid
-                  do iE2=1,Ngrid
-                     write(unit,"(3F20.10)")Egrid(iE1),Egrid(iE2),Kph_e(iE1,iE2)
-                  enddo
-                  write(unit,*)
-               enddo
-               close(unit)
-               !
-            case("all")
-               !
-               unit = free_unit()
-               open(unit,file=reg(printKpath)//"Kph_e_E0_T"//str(Temp,2)//".DAT",form="formatted",status="unknown",position="rewind",action="write")
-               do iE=1,Ngrid
-                  write(unit,"(2F20.10)")Egrid(iE),Kph_e(iE,Efermi_ndx)
-               enddo
-               close(unit)
-               unit = free_unit()
-               open(unit,file=reg(printKpath)//"Kph_e_diag_T"//str(Temp,2)//".DAT",form="formatted",status="unknown",position="rewind",action="write")
-               do iE=1,Ngrid
-                  write(unit,"(2F20.10)")Egrid(iE),Kph_e(iE,iE)
-               enddo
-               close(unit)
-               unit = free_unit()
-               open(unit,file=reg(printKpath)//"Kph_e_surf_T"//str(Temp,2)//".DAT",form="formatted",status="unknown",position="rewind",action="write")
-               do iE1=1,Ngrid
-                  do iE2=1,Ngrid
-                     write(unit,"(3F20.10)")Egrid(iE1),Egrid(iE2),Kph_e(iE1,iE2)
-                  enddo
-                  write(unit,*)
-               enddo
-               close(unit)
-               !
-               !
-         end select
+         call print_Kernel("phononic",printmode_used,reg(printKpath),"Kph",Temp,Egrid,dcmplx(Kph_e,0d0))
          !
       endif
       !
    end subroutine calc_Kph_e
+
+
+   !---------------------------------------------------------------------------!
+   !PURPOSE: printing Kernel wrapper
+   !---------------------------------------------------------------------------!
+   subroutine print_Kernel(Kerneltype,printmode,printpath,filename,T,Egrid,Kernel)
+      !
+      use utils_misc
+      implicit none
+      !
+      character(len=*),intent(in)           :: Kerneltype
+      character(len=*),intent(inout)        :: printmode
+      character(len=*),intent(in)           :: printpath
+      character(len=*),intent(in)           :: filename
+      real(8),intent(in)                    :: T
+      real(8),intent(in)                    :: Egrid(:)
+      complex(8),intent(in)                 :: Kernel(:,:)
+      !
+      integer                               :: Ngrid,iE,iE1,iE2
+      integer                               :: Efermi_ndx,unit
+      logical                               :: ReK,ImK
+      !
+      if((reg(Kerneltype).ne."electronic").and.(reg(Kerneltype).ne."phononic"))then
+         stop "print_Kernel: available Kerneltype are only electronic or phononic."
+      endif
+      if((reg(Kerneltype).eq."phononic").and.(reg(printmode).eq."0E"))then
+         write(*,"(A)") "     Available print modes of phononic Kernel doen not include 0E, ssetting to E0."
+         printmode="E0"
+      endif
+      !
+      Ngrid = size(Egrid)
+      call assert_shape(Egrid,[Ngrid],"print_Kernel","Egrid")
+      call assert_shape(Kernel,[Ngrid,Ngrid],"print_Kernel","Kernel")
+      Efermi_ndx = minloc(abs(Egrid),dim=1)
+      !
+      ImK=.false.
+      if(reg(Kerneltype).eq."phononic")ImK=.true.
+      ReK = .not.ImK
+      !
+      write(*,"(A)") "     Printing "//reg(Kerneltype)//" Kernel with mode "//reg(printmode)//" in "//reg(printpath)
+      !
+      select case(reg(printmode))
+         case default
+            !
+            if(reg(Kerneltype).eq."phononic")stop "Available print modes for phononic Kernel: E0, diag, surf, all."
+            if(reg(Kerneltype).eq."electronic")stop "Available print modes for electronic Kernel: E0, 0E, diag, surf, all."
+            !
+         case("E0")
+            !
+            unit = free_unit()
+            open(unit,file=reg(printpath)//reg(filename)//"_e_E0_T"//str(T,2)//".DAT",form="formatted",status="unknown",position="rewind",action="write")
+            do iE=1,Ngrid
+               if(ReK) write(unit,"(3F20.10)")Egrid(iE),dreal(Kernel(iE,Efermi_ndx))
+               if(ImK) write(unit,"(3F20.10)")Egrid(iE),dreal(Kernel(iE,Efermi_ndx)),dimag(Kernel(iE,Efermi_ndx))
+            enddo
+            close(unit)
+            !
+         case("0E")
+            !
+            unit = free_unit()
+            open(unit,file=reg(printpath)//reg(filename)//"_e_0E_T"//str(T,2)//".DAT",form="formatted",status="unknown",position="rewind",action="write")
+            do iE=1,Ngrid
+               if(ReK) write(unit,"(3F20.10)")Egrid(iE),dreal(Kernel(Efermi_ndx,iE))
+               if(ImK) write(unit,"(3F20.10)")Egrid(iE),dreal(Kernel(Efermi_ndx,iE)),dimag(Kernel(Efermi_ndx,iE))
+            enddo
+            close(unit)
+            !
+         case("diag")
+            !
+            unit = free_unit()
+            open(unit,file=reg(printpath)//reg(filename)//"_e_diag_T"//str(T,2)//".DAT",form="formatted",status="unknown",position="rewind",action="write")
+            do iE=1,Ngrid
+               if(ReK) write(unit,"(3F20.10)")Egrid(iE),dreal(Kernel(iE,iE))
+               if(ImK) write(unit,"(3F20.10)")Egrid(iE),dreal(Kernel(iE,iE)),dimag(Kernel(iE,iE))
+            enddo
+            close(unit)
+            !
+         case("surf")
+            !
+            unit = free_unit()
+            open(unit,file=reg(printpath)//reg(filename)//"_e_surf_R_T"//str(T,2)//".DAT",form="formatted",status="unknown",position="rewind",action="write")
+            do iE1=1,Ngrid
+               do iE2=1,Ngrid
+                  write(unit,"(3F20.10)")Egrid(iE1),Egrid(iE2),dreal(Kernel(iE1,iE2))
+               enddo
+               write(unit,*)
+            enddo
+            close(unit)
+            if(ImK) then
+               unit = free_unit()
+               open(unit,file=reg(printpath)//reg(filename)//"_e_surf_I_T"//str(T,2)//".DAT",form="formatted",status="unknown",position="rewind",action="write")
+               do iE1=1,Ngrid
+                  do iE2=1,Ngrid
+                     write(unit,"(3F20.10)")Egrid(iE1),Egrid(iE2),dimag(Kernel(iE1,iE2))
+                  enddo
+                  write(unit,*)
+               enddo
+               close(unit)
+            endif
+            !
+         case("all")
+            !
+            unit = free_unit()
+            open(unit,file=reg(printpath)//reg(filename)//"_e_E0_T"//str(T,2)//".DAT",form="formatted",status="unknown",position="rewind",action="write")
+            do iE=1,Ngrid
+               if(ReK) write(unit,"(3F20.10)")Egrid(iE),dreal(Kernel(iE,Efermi_ndx))
+               if(ImK) write(unit,"(3F20.10)")Egrid(iE),dreal(Kernel(iE,Efermi_ndx)),dimag(Kernel(iE,Efermi_ndx))
+            enddo
+            close(unit)
+            if(reg(Kerneltype).eq."electronic")then
+               unit = free_unit()
+               open(unit,file=reg(printpath)//reg(filename)//"_e_0E_T"//str(T,2)//".DAT",form="formatted",status="unknown",position="rewind",action="write")
+               do iE=1,Ngrid
+                  if(ReK) write(unit,"(3F20.10)")Egrid(iE),dreal(Kernel(Efermi_ndx,iE))
+                  if(ImK) write(unit,"(3F20.10)")Egrid(iE),dreal(Kernel(Efermi_ndx,iE)),dimag(Kernel(Efermi_ndx,iE))
+               enddo
+               close(unit)
+            endif
+            unit = free_unit()
+            open(unit,file=reg(printpath)//reg(filename)//"_e_diag_T"//str(T,2)//".DAT",form="formatted",status="unknown",position="rewind",action="write")
+            do iE=1,Ngrid
+               if(ReK) write(unit,"(3F20.10)")Egrid(iE),dreal(Kernel(iE,iE))
+               if(ImK) write(unit,"(3F20.10)")Egrid(iE),dreal(Kernel(iE,iE)),dimag(Kernel(iE,iE))
+            enddo
+            close(unit)
+            unit = free_unit()
+            open(unit,file=reg(printpath)//reg(filename)//"_e_surf_R_T"//str(T,2)//".DAT",form="formatted",status="unknown",position="rewind",action="write")
+            do iE1=1,Ngrid
+               do iE2=1,Ngrid
+                  write(unit,"(3F20.10)")Egrid(iE1),Egrid(iE2),dreal(Kernel(iE1,iE2))
+               enddo
+               write(unit,*)
+            enddo
+            close(unit)
+            if(ImK) then
+               unit = free_unit()
+               open(unit,file=reg(printpath)//reg(filename)//"_e_surf_I_T"//str(T,2)//".DAT",form="formatted",status="unknown",position="rewind",action="write")
+               do iE1=1,Ngrid
+                  do iE2=1,Ngrid
+                     write(unit,"(3F20.10)")Egrid(iE1),Egrid(iE2),dimag(Kernel(iE1,iE2))
+                  enddo
+                  write(unit,*)
+               enddo
+               close(unit)
+            endif
+            !
+            !
+      end select
+      !
+   end subroutine print_Kernel
 
 
    !---------------------------------------------------------------------------!
