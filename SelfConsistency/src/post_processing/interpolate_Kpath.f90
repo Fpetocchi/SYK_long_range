@@ -1,4 +1,4 @@
-subroutine interpolateG2Path(Sfull,Lttc,pathOUTPUT)
+subroutine interpolate2kpath_Fermionic(Sfull,Lttc,pathOUTPUT)
    !
    use parameters
    use utils_misc
@@ -35,14 +35,14 @@ subroutine interpolateG2Path(Sfull,Lttc,pathOUTPUT)
    real                                  :: start,finish
    !
    !
-   write(*,"(A)") new_line("A")//new_line("A")//"---- interpolateG2Path"
+   write(*,"(A)") new_line("A")//new_line("A")//"---- interpolate2kpath_Fermionic"
    !
    !
-   if(.not.Lttc%status) stop "interpolateG2Path: Lttc not properly initialized."
-   if(.not.Sfull%status) stop "interpolateG2Path: Sfull not properly initialized."
+   if(.not.Lttc%status) stop "interpolate2kpath_Fermionic: Lttc not properly initialized."
+   if(.not.Sfull%status) stop "interpolate2kpath_Fermionic: Sfull not properly initialized."
    !
-   if(Sfull%Norb.ne.Lttc%Norb) stop "interpolateG2Path: Lttc has different number of orbitals with respect to Sfull."
-   if(Sfull%Nkpt.ne.Lttc%Nkpt) stop "interpolateG2Path: Lttc has different number of k-points with respect to Sfull."
+   if(Sfull%Norb.ne.Lttc%Norb) stop "interpolate2kpath_Fermionic: Lttc has different number of orbitals with respect to Sfull."
+   if(Sfull%Nkpt.ne.Lttc%Nkpt) stop "interpolate2kpath_Fermionic: Lttc has different number of k-points with respect to Sfull."
    !
    write(*,"(A,F)")"     Chemical potential: ",Sfull%mu
    Norb = Sfull%Norb
@@ -107,7 +107,7 @@ subroutine interpolateG2Path(Sfull,Lttc,pathOUTPUT)
    select case(reg(CalculationType))
       case default
          !
-         stop "interpolateG2Path: Available Calculation types are: G0W0, scGW, DMFT+statU, DMFT+dynU, EDMFT, GW+EDMFT."
+         stop "interpolate2kpath_Fermionic: Available Calculation types are: G0W0, scGW, DMFT+statU, DMFT+dynU, EDMFT, GW+EDMFT."
          !
       case("G0W0","scGW","GW+EDMFT")
          !
@@ -280,7 +280,7 @@ contains
    !
    subroutine dump_MaxEnt_on_G_K(Gmats_in,mode)
       !
-      use input_vars, only : Ntau
+      use input_vars, only : Ntau_path, Solver
       implicit none
       !
       type(FermionicField),intent(in)       :: Gmats_in
@@ -299,7 +299,7 @@ contains
       !
       if(verbose) write(*,"(A)") new_line("A")//new_line("A")//"---- dump_MaxEnt_on_G_K"
       !
-      NtauFT = Ntau ! <-- should I decrease this guy to ease MaxEnt? Now it's the lattice one
+      NtauFT = Ntau_path
       !
       !
       if(.not.Gmats_in%status) stop "dump_MaxEnt_on_G_K: Gmats_in not properly allocated."
@@ -454,7 +454,8 @@ contains
                   Gmax = maxval(dreal(Gitau_kpkz_diag(iorb,:,ik,0,ispin)))
                   if(Gmax.gt.0d0) Gshift(iorb)=Gmax
                enddo
-               write(*,"(A,"//str(Norb_layer)//"F)") "     G"//reg(mode)//"_Hetero_s"//str(ispin)//"(K_"//str(ik)//",0,tau) shift:", Gshift
+               Gshift=0d0
+               !write(*,"(A,"//str(Norb)//"F)") "     G"//reg(mode)//"_s"//str(ispin)//"(K_"//str(ik)//",tau) shift:", Gshift
                !
                path = reg(pathOUTPUT)//"K_resolved/MaxEnt_Gk_"//reg(mode)//"_t_s"//str(ispin)//"/Gk_t_k"//str(ik)//"_Hetero.DAT"
                unit = free_unit()
@@ -471,7 +472,8 @@ contains
                   Gmax = maxval(dreal(Gitau_kpkz_diag(iorb,:,Lttc%iq_gamma,ik-Nkpt,ispin)))
                   if(Gmax.gt.0d0) Gshift(iorb)=Gmax
                enddo
-               write(*,"(A,"//str(Norb_layer)//"F)") "     G"//reg(mode)//"_Hetero_s"//str(ispin)//"(Gamma,Kz_"//str(ik-Nkpt)//",tau) shift:", Gshift
+               Gshift=0d0
+               !write(*,"(A,"//str(Norb_layer)//"F)") "     G"//reg(mode)//"_Hetero_s"//str(ispin)//"(Gamma,Kz_"//str(ik-Nkpt)//",tau) shift:", Gshift
                !
                path = reg(pathOUTPUT)//"K_resolved/MaxEnt_Gk_"//reg(mode)//"_t_s"//str(ispin)//"/Gk_t_k"//str(ik)//"_Hetero.DAT"
                unit = free_unit()
@@ -1052,4 +1054,145 @@ contains
    !
    !
    !
-end subroutine interpolateG2Path
+end subroutine interpolate2kpath_Fermionic
+
+subroutine interpolate2kpath_Bosonic(Wfull,Lttc,pathOUTPUT,name,remove_Gamma,NaNb)
+   !
+   use parameters
+   use utils_misc
+   use utils_fields
+   use linalg, only : eigh, inv, zeye, det
+   use crystal
+   use file_io
+   use greens_function, only : calc_Gmats
+   use fourier_transforms
+   use input_vars, only : structure, Nkpt_path
+   implicit none
+   !
+   type(BosonicField),intent(in)         :: Wfull
+   type(Lattice),intent(inout)           :: Lttc
+   character(len=*),intent(in)           :: pathOUTPUT
+   character(len=*),intent(in)           :: name
+   logical,intent(in),optional           :: remove_Gamma
+   logical,intent(in),optional           :: NaNb
+   !
+   complex(8),allocatable                :: W_orig(:,:,:,:)
+   complex(8),allocatable                :: W_intp(:,:,:,:)
+   complex(8),allocatable                :: Wgamma(:,:,:)
+   real(8),allocatable                   :: wmats(:)
+   !
+   integer                               :: Norb,Nmats,unit,Wdim
+   integer                               :: iq,iw,iorb,jorb,ib1,ib2
+   character(len=256)                    :: path
+   logical                               :: remove_Gamma_,NaNb_
+   real                                  :: start,finish
+   !
+   !
+   write(*,"(A)") new_line("A")//new_line("A")//"---- interpolate2kpath_Bosonic"
+   !
+   !
+   if(.not.Lttc%status) stop "interpolate2kpath_Bosonic: Lttc not properly initialized."
+   if(.not.Wfull%status) stop "interpolate2kpath_Bosonic: Wfull not properly initialized."
+   !
+   Norb = int(sqrt(dble(Wfull%Nbp)))
+   if(Norb.ne.Lttc%Norb) stop "interpolate2kpath_Bosonic: Lttc has different number of orbitals with respect to Wfull."
+   if(Wfull%Nkpt.ne.Lttc%Nkpt) stop "interpolate2kpath_Bosonic: Lttc has different number of k-points with respect to Wfull."
+   !
+   Nmats = Wfull%Npoints
+   !
+   remove_Gamma_ = .true.
+   if(present(remove_Gamma)) remove_Gamma_ = remove_Gamma
+   !
+   NaNb_ = .true.
+   if(present(NaNb)) NaNb_ = NaNb
+   !
+   Wdim = Wfull%Nbp
+   if(NaNb_) Wdim = Norb
+   !
+   !
+   !
+   !------------------- Interpolation of interacting solutuon -----------------!
+   !
+   !
+   !recalculate the internal K-meshes just for Nkpt_Fermi different from default
+   if(.not.Lttc%pathStored) call interpolateHk2Path(Lttc,structure,Nkpt_path,doplane=.false.,store=.false.)
+   !
+   !
+   allocate(W_orig(Wdim,Wdim,Nmats,Lttc%Nkpt));W_orig=czero
+   allocate(Wgamma(Wdim,Wdim,Nmats));Wgamma=czero
+   if(NaNb_)then
+      !
+      do iorb=1,Norb
+         do jorb=1,Norb
+            !
+            call F2Bindex(Norb,[iorb,iorb],[jorb,jorb],ib1,ib2)
+            !
+            W_orig(iorb,jorb,:,:) = Wfull%screened(ib1,ib2,:,:)
+            !
+            if(remove_Gamma_) then
+               Wgamma(iorb,jorb,:) = Wfull%screened(ib1,ib2,:,Wfull%iq_gamma)
+               do iq=1,Wfull%Nkpt
+                  W_orig(iorb,jorb,:,iq) = W_orig(iorb,jorb,:,iq) - Wgamma(iorb,jorb,:)
+               enddo
+            endif
+            !
+         enddo
+      enddo
+      !
+   else
+      !
+      W_orig = Wfull%screened
+      !
+      if(remove_Gamma_) then
+         Wgamma = Wfull%screened(:,:,:,Wfull%iq_gamma)
+         do iq=1,Wfull%Nkpt
+            W_orig(:,:,:,iq) = W_orig(:,:,:,iq) - Wgamma
+         enddo
+      endif
+      !
+   endif
+   !
+   !
+   !Interpolate along the path
+   call cpu_time(start)
+   allocate(W_intp(Wdim,Wdim,Nmats,Lttc%Nkpt_path));W_intp=czero
+   call wannierinterpolation(Lttc%Nkpt3,Lttc%kpt,Lttc%kptpath(:,1:Lttc%Nkpt_path),W_orig,W_intp)
+   deallocate(W_orig)
+   call cpu_time(finish)
+   write(*,"(A,F)") new_line("A")//new_line("A")//"     "//reg(name)//"(fullBZ,iw) --> "//reg(name)//"(Kpath,iw) cpu timing:", finish-start
+   !
+   !
+   !Print along path - I'm printing one orbital at a time because my MaxEnt is shitty for bosons
+   path = reg(pathOUTPUT)//"K_resolved/MaxEnt_"//reg(name)//"k_path_w/"
+   call createDir(reg(path),verb=verbose)
+   allocate(wmats(Nmats))
+   wmats = BosonicFreqMesh(Wfull%Beta,Nmats)
+   do iq=1,Lttc%Nkpt_path
+      unit = free_unit()
+      open(unit,file=reg(path)//reg(name)//"k_w_k"//str(iq)//".DAT",form="formatted",status="unknown",position="rewind",action="write")
+      do iw=1,Nmats-1
+          write(unit,"(200E20.12)") wmats(iw),(dreal(W_intp(iorb,iorb,iw,iq)+Wgamma(iorb,iorb,iw)),iorb=1,Wdim)
+      enddo
+      close(unit)
+   enddo
+   !
+   !
+   !TEST>>>
+   !temporary for the time-being I have a shitty maxent
+   do iorb=1,Wdim
+      path = reg(pathOUTPUT)//"K_resolved/MaxEnt_"//reg(name)//"k_path_w/"
+      call createDir(reg(path),verb=verbose)
+      do iq=1,Lttc%Nkpt_path
+         unit = free_unit()
+         open(unit,file=reg(path)//reg(name)//"k_w_k"//str(iq)//"_o"//str(iorb)//".DAT",form="formatted",status="unknown",position="rewind",action="write")
+         do iw=1,Nmats-1
+             write(unit,"(200E20.12)") wmats(iw),dreal(W_intp(iorb,iorb,iw,iq)+Wgamma(iorb,iorb,iw))
+         enddo
+         close(unit)
+      enddo
+   enddo
+   !>>>TEST
+   deallocate(wmats,W_intp,Wgamma)
+   !
+   !
+end subroutine interpolate2kpath_Bosonic

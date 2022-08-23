@@ -24,6 +24,11 @@ module post_processing
       module procedure :: interpolate2Beta_Bosonic                              ![BosonicField,OldBeta,offDiag]
    end interface interpolate2Beta
 
+   interface interpolate2kpath
+      module procedure :: interpolate2kpath_Fermionic
+      module procedure :: interpolate2kpath_Bosonic
+   end interface interpolate2kpath
+
    !---------------------------------------------------------------------------!
    !PURPOSE: Module variables
    !---------------------------------------------------------------------------!
@@ -42,7 +47,7 @@ module post_processing
    public :: dump_MaxEnt
    public :: remove_CDW
    public :: interpolate2Beta
-   public :: interpolateG2Path
+   public :: interpolate2kpath
    public :: calc_Tc
 
    !===========================================================================!
@@ -58,15 +63,13 @@ contains
 
 
    !---------------------------------------------------------------------------!
-   !PURPOSE:  SOLUTION TO EIGEN PROBLEMS
-   ! - remove_CDW(W,mode,site)
+   !PURPOSE:
    !---------------------------------------------------------------------------!
    include "post_processing/dump_MaxEnt.f90"
 
 
    !---------------------------------------------------------------------------!
-   !PURPOSE:  SOLUTION TO EIGEN PROBLEMS
-   ! - remove_CDW(W,mode,site)
+   !PURPOSE:
    !---------------------------------------------------------------------------!
    include "post_processing/calc_pade.f90"
 

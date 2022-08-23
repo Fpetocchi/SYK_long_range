@@ -1,14 +1,16 @@
 #!/bin/bash
 #
-QUEUE="new"
-MEM="6G"
+QUEUE="amd"
+MEM="1G"
 #
 ################################################################################
 #                              DEFAULT ARGUMENTS                               #
 ################################################################################
 #
-FIELD="G"
+FIELD="G" # "S", "W", "C"
+AXIS="t"
 #
+stat="F"
 err="0.01"
 mesh="3000"
 width="200"
@@ -53,7 +55,8 @@ while getopts ":e:w:W:F:N:B:i:f:m:d:s:p:M:" o; do
          ;;
       F)
          FIELD="${OPTARG}"
-         if [ "$FIELD"  != "G" ] && [ "$FIELD"  != "S" ]; then echo "Option Error - F" ; exit 1 ; fi
+         if [ "$FIELD"  != "G" ] && [ "$FIELD"  != "S" ] && [ "$FIELD"  != "W" ] && [ "$FIELD"  != "C" ]; then echo "Option Error - F" ; exit 1 ; fi
+         if [ "$FIELD"  != "W" ] || [ "$FIELD"  != "C" ] || [ "$FIELD"  != "C" ]; then AXIS="w" ; stat="X" ; fi
          ;;
       N)
          Nktot="${OPTARG}"
@@ -104,7 +107,7 @@ done
 NAME=${FIELD}${PAD}
 #
 if [ "$SPIN_DW"  == "T" ]; then Nspin=2 ; fi
-RUNOPTIONS=" -s "$err" -w "$mesh" -W "$width
+RUNOPTIONS=" -S "$stat" -s "$err" -w "$mesh" -W "$width
 
 
 
@@ -139,10 +142,10 @@ for ispin in `seq 1 1 ${Nspin}` ; do
 
    #
    #Check if the I/O folder are present
-   Gsource=MaxEnt_${FIELD}k_${MODE}_t_s${ispin}
-   reports=${Gsource}_report
-   if [ ! -d ${Gsource} ]; then
-       echo ${Gsource} " (source) does not exists."
+   Fsource=MaxEnt_${FIELD}k_${MODE}_${AXIS}_s${ispin}
+   reports=${Fsource}_report
+   if [ ! -d ${Fsource} ]; then
+       echo ${Fsource} " (source) does not exists."
        exit 1
    fi
    if [ ! -d ${reports} ]; then mkdir ${reports} ; fi
@@ -187,12 +190,12 @@ for i in \`seq  ${startk} ${stopk}\`; do
       #
       echo model > job_Kb_\${i}.out
       if [ "$MODEL"  == "1" ] ; then export MODELOPTIONS=${MOMENTS} ; fi
-      if [ "$MODEL"  == "2" ] ; then export MODELOPTIONS= -m ../${Gsource}/Models/${FIELD}k_t_k\${i}${SUFFIX}.DAT_dos.dat ; fi
-      srun python3.6  ${BIN}/bryan.py ${RUNOPTIONS} \${MODELOPTIONS} ../${Gsource}/${FIELD}k_t_k\${i}${SUFFIX}.DAT >> job_Kb_\${i}.out
+      if [ "$MODEL"  == "2" ] ; then export MODELOPTIONS= -m ../${Fsource}/Models/${FIELD}k_${AXIS}_k\${i}${SUFFIX}.DAT_dos.dat ; fi
+      srun python3.6  ${BIN}/bryan.py ${RUNOPTIONS} \${MODELOPTIONS} ../${Fsource}/${FIELD}k_${AXIS}_k\${i}${SUFFIX}.DAT >> job_Kb_\${i}.out
       #
    else
       #
-      srun python3.6  ${BIN}/bryan.py ${RUNOPTIONS} ../${Gsource}/${FIELD}k_t_k\${i}${SUFFIX}.DAT >> job_Kb_\${i}.out
+      srun python3.6  ${BIN}/bryan.py ${RUNOPTIONS} ../${Fsource}/${FIELD}k_${AXIS}_k\${i}${SUFFIX}.DAT >> job_Kb_\${i}.out
       #
    fi
    #
@@ -221,7 +224,7 @@ EOF
          MODELOPTIONS=""
          if [ "$MODEL"  != "0" ]; then
             if [ "$MODEL"  == "1" ] ; then MODELOPTIONS=${MOMENTS} ; fi
-            if [ "$MODEL"  == "2" ] ; then MODELOPTIONS="-m ../${Gsource}/Models/${FIELD}k_t_k${kp}${SUFFIX}.DAT_dos.dat" ; fi
+            if [ "$MODEL"  == "2" ] ; then MODELOPTIONS="-m ../${Fsource}/Models/${FIELD}k_${AXIS}_k${kp}${SUFFIX}.DAT_dos.dat" ; fi
             echo "Model options:" ${MODELOPTIONS}
          fi
          #
@@ -244,7 +247,7 @@ export OMP_NUM_THREADS=1
 #
 echo K_${kp} > job_K_${kp}.out
 #
-srun python3.6  ${BIN}/bryan.py ${RUNOPTIONS} ${MODELOPTIONS} ../${Gsource}/${FIELD}k_t_k${kp}${SUFFIX}.DAT >> job_K_${kp}.out
+srun python3.6  ${BIN}/bryan.py ${RUNOPTIONS} ${MODELOPTIONS} ../${Fsource}/${FIELD}k_${AXIS}_k${kp}${SUFFIX}.DAT >> job_K_${kp}.out
 #
 echo "MaxEnt on K_${kp} done" >> job_K_${kp}.out
 #

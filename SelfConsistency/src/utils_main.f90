@@ -496,6 +496,8 @@ contains
       call dump_Matrix(Lttc%Hloc,reg(pathINPUT),"Hloc.DAT")
       !
       !allocate Ek and Ep matrices
+      if(allocated(Ek))deallocate(Ek)
+      if(allocated(Ep))deallocate(Ep)
       allocate(Ek(Lttc%Norb,Lttc%Norb));Ek=0d0
       allocate(Ep(Lttc%Norb,Lttc%Norb));Ep=0d0
       !
@@ -1173,8 +1175,10 @@ contains
          !
       endif
       !
-      !
       calc_W = calc_Wedmft .or. calc_Wfull
+      !
+      dump_Chik = dump_Chik .and. calc_Pk .and. (reg(structure).ne."None")
+      dump_Wk = dump_Wk .and. calc_W .and. (reg(structure).ne."None")
       !
       !
       !Allocate and initialize different density matrices

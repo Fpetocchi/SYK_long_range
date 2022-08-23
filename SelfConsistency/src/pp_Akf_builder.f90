@@ -128,7 +128,12 @@ program Akw_builder
       !
       if(paramagnet)exit
    enddo
-   !!
+   !
+   !
+   if(dump_Chik) call rebuild_W("C")
+   if(dump_Wk) call rebuild_W("W")
+   !
+   !
    write(*,"(A)") "     Exiting script."
    stop
    !
@@ -150,6 +155,7 @@ contains
       real(8),allocatable                   :: wreal(:),wreal_read(:)
       real(8),allocatable                   :: Akw_orb(:,:,:)
       real(8)                               :: dw,fact
+      real(8)                               :: kx,ky,Bvec(3),Blat(3,3)
       character(len=256)                    :: path,suffix_
       logical                               :: ik1st_read
       !
@@ -188,6 +194,7 @@ contains
             Norb = Crystal%Norb
             suffix_=" "
             write(*,"(2(A,I))") "     G plane. Total number of K-points in the {kx,ky} sheet:",Nkpt," number of K-points per dimension:",Nkpt_Kside
+            call get_Blat(Blat)
             !
       end select
       !
@@ -195,7 +202,7 @@ contains
       if(allocated(Kmask))deallocate(Kmask)
       allocate(Kmask(Nkpt));Kmask=.false.
       !
-      !First check that all the files contains the same number fo real frequecies
+      !First check that all the files contains the same number of real frequecies
       ik1st_read=.false.
       do ik=1,Nkpt
          !
@@ -237,7 +244,7 @@ contains
          return
       endif
       !
-      allocate(wreal_read(Nreal_read));wreal=0d0
+      allocate(wreal_read(Nreal_read));wreal_read=0d0
       allocate(ImG_read(Norb,Nreal_read,Nkpt));ImG_read=0d0
       do ik=1,Nkpt
          !
@@ -336,13 +343,15 @@ contains
          !
          !Print cut at energy FermiCut in the {kx,ky} plane
          wndx_cut = minloc(abs(wreal-FermiCut),dim=1)
+         write(*,"(A,F)") "     Cutting Fermi surface ar w_["//str(wndx_cut)//"]=",wreal(wndx_cut)
          path = reg(MaxEnt_K)//"Fk_Gk"//reg(suffix_)//"_s"//str(ispin)//"_E"//str(FermiCut,3)//".DAT"
          unit = free_unit()
          open(unit,file=reg(path),form="formatted",status="unknown",position="rewind",action="write")
          do ik=1,Nkpt
-            ikx = int(ik/(Nkpt_Kside+0.001))+1
-            iky = ik - (ikx-1)*Nkpt_Kside
-            write(unit,"(3I5,200E20.12)") ik,ikx,iky,(Akw_orb(iorb,wndx_cut,ik),iorb=1,Norb)
+            ikx = int(ik/(Nkpt_Kside+0.001))+1 ; kx = (ikx-1)/dble(Nkpt_Kside-1) - 0.5d0
+            iky = ik - (ikx-1)*Nkpt_Kside      ; ky = (iky-1)/dble(Nkpt_Kside-1) - 0.5d0
+            Bvec = kx*Blat(:,1) + ky*Blat(:,2)
+            write(unit,"(3I5,200E20.12)") ik,ikx,iky,Bvec(1),Bvec(2),(Akw_orb(iorb,wndx_cut,ik),iorb=1,Norb)
             if(iky.eq.Nkpt_Kside)write(unit,*)
          enddo
          close(unit)
@@ -369,6 +378,7 @@ contains
       character(len=256)                    :: path
       !
       real(8)                               :: etafact
+      real(8)                               :: kx,ky,Bvec(3),Blat(3,3)
       real(8),allocatable                   :: ImSigma_read(:,:,:)
       real(8),allocatable                   :: ImSigma(:,:,:),ReSigma(:)
       real(8),allocatable                   :: Sparams(:,:,:,:)
@@ -408,6 +418,7 @@ contains
             Hk = Crystal%Hk_Plane
             write(*,"(2(A,I))") new_line("A")//new_line("A")//"     Sigma plane. Total number of K-points in the {kx,ky} sheet:",Nkpt," number of K-points per dimension:",Nkpt_Kside
             write(*,"(A,F)") "     Used broadening:",eta*etafact
+            call get_Blat(Blat)
             !
       end select
       !
@@ -415,7 +426,7 @@ contains
       if(allocated(Kmask))deallocate(Kmask)
       allocate(Kmask(Nkpt));Kmask=.false.
       !
-      !First check that all the files contains the same number fo real frequecies
+      !First check that all the files contains the same number of real frequecies
       do ik=1,Nkpt
          !
          path = reg(MaxEnt_K)//"MaxEnt_Sk_"//reg(mode)//"_t_s"//str(ispin)//"/Sk_t_k"//str(ik)//".DAT_dos.dat"
@@ -642,9 +653,10 @@ contains
          unit = free_unit()
          open(unit,file=reg(path),form="formatted",status="unknown",position="rewind",action="write")
          do ik=1,Nkpt
-            ikx = int(ik/(Nkpt_Kside+0.001))+1
-            iky = ik - (ikx-1)*Nkpt_Kside
-            write(unit,"(3I5,200E20.12)") ik,ikx,iky,(Akw_orb(iorb,wndx_cut,ik),iorb=1,Crystal%Norb)
+            ikx = int(ik/(Nkpt_Kside+0.001))+1 ; kx = (ikx-1)/dble(Nkpt_Kside-1) - 0.5d0
+            iky = ik - (ikx-1)*Nkpt_Kside      ; ky = (iky-1)/dble(Nkpt_Kside-1) - 0.5d0
+            Bvec = kx*Blat(:,1) + ky*Blat(:,2)
+            write(unit,"(3I5,200E20.12)") ik,ikx,iky,Bvec(1),Bvec(2),(Akw_orb(iorb,wndx_cut,ik),iorb=1,Crystal%Norb)
             if(iky.eq.Nkpt_Kside)write(unit,*)
          enddo
          close(unit)
@@ -673,6 +685,7 @@ contains
       !
       integer                               :: isite
       real(8)                               :: etafact
+      real(8)                               :: kx,ky,Bvec(3),Blat(3,3)
       real(8),allocatable                   :: ImSigma_read(:,:)
       real(8),allocatable                   :: ImSigma(:,:),ReSigma(:)
       real(8),allocatable                   :: Sparams(:,:,:)
@@ -716,6 +729,7 @@ contains
             Hk = Crystal%Hk_Plane
             write(*,"(2(A,I))") new_line("A")//new_line("A")//"     Sigma plane. Total number of K-points in the {kx,ky} sheet:",Nkpt," number of K-points per dimension:",Nkpt_Kside
             write(*,"(A,F)") "     Used broadening:",eta*etafact
+            call get_Blat(Blat)
             !
       end select
       !
@@ -725,7 +739,7 @@ contains
          if(allocated(Kmask))deallocate(Kmask)
          allocate(Kmask(LocalOrbs(isite)%Norb));Kmask=.false.
          !
-         !First check that all the files contains the same number fo real frequecies
+         !First check that all the files contains the same number of real frequecies
          do iorb=1,LocalOrbs(isite)%Norb
             !
             path = reg(ItFolder)//"Convergence/MaxEnt_Sqmc_"//reg(LocalOrbs(isite)%Name)//"_o"//str(iorb)//"_s1/Sqmc_"//reg(LocalOrbs(isite)%Name)//"_t_o"//str(iorb)//"_s"//str(ispin)//".DAT_dos.dat"
@@ -932,9 +946,10 @@ contains
             unit = free_unit()
             open(unit,file=reg(path),form="formatted",status="unknown",position="rewind",action="write")
             do ik=1,Nkpt
-               ikx = int(ik/(Nkpt_Kside+0.001))+1
-               iky = ik - (ikx-1)*Nkpt_Kside
-               write(unit,"(3I5,200E20.12)") ik,ikx,iky,(Akw_orb(iorb,wndx_cut,ik),iorb=1,Crystal%Norb)
+               ikx = int(ik/(Nkpt_Kside+0.001))+1 ; kx = (ikx-1)/dble(Nkpt_Kside-1) - 0.5d0
+               iky = ik - (ikx-1)*Nkpt_Kside      ; ky = (iky-1)/dble(Nkpt_Kside-1) - 0.5d0
+               Bvec = kx*Blat(:,1) + ky*Blat(:,2)
+               write(unit,"(3I5,200E20.12)") ik,ikx,iky,Bvec(1),Bvec(2),(Akw_orb(iorb,wndx_cut,ik),iorb=1,Crystal%Norb)
                if(iky.eq.Nkpt_Kside)write(unit,*)
             enddo
             close(unit)
@@ -945,6 +960,275 @@ contains
       deallocate(Kmask,Sparams,wreal,Akw_orb)
       !
    end subroutine rebuild_Sigma_imp
+   !
+   !
+   !
+   subroutine rebuild_W(name,orbsep)
+      implicit none
+      character(len=*),intent(in)           :: name
+      logical,intent(in),optional           :: orbsep
+      integer                               :: iq,Nkpt,Norb
+      integer                               :: iw,iorb
+      integer                               :: unit,ierr
+      integer                               :: Nreal_min,Nreal_max,Nreal_read,Nreal_old,ik1st
+      logical,allocatable                   :: Kmask(:)
+      real(8),allocatable                   :: wreal(:),wreal_read(:)
+      real(8),allocatable                   :: Akw_orb(:,:,:)
+      real(8)                               :: dw,fact
+      character(len=256)                    :: path
+      logical                               :: ik1st_read,orbsep_
+      !
+      real(8),allocatable                   :: ImW_read(:,:,:)
+      !
+      Nkpt = Crystal%Nkpt_path
+      Norb = Crystal%Norb
+      !
+      ! this will be removed as soon as I find a better MaxEnt procedure
+      orbsep_ = .true.
+      if(present(orbsep))orbsep_=orbsep
+      !
+      if(orbsep_)then
+         !
+         do iorb=1,Norb
+            !
+            if(allocated(Kmask))deallocate(Kmask)
+            allocate(Kmask(Nkpt));Kmask=.false.
+            !
+            !First check that all the files contains the same number of real frequecies
+            ik1st_read=.false.
+            do iq=1,Nkpt
+               !
+               path = reg(MaxEnt_K)//"MaxEnt_"//reg(name)//"k_path_w/"//reg(name)//"k_w_k"//str(iq)//"_o"//str(iorb)//".DAT_dos.dat"
+               !
+               call inquireFile(reg(path),Kmask(iq),hardstop=.false.,verb=.true.)
+               if(.not.Kmask(iq))then
+                  cycle
+               elseif(.not.ik1st_read)then
+                  ik1st_read=.true.
+                  ik1st = iq
+               endif
+               !
+               unit = free_unit()
+               open(unit,file=reg(path),form="formatted",status="unknown",position="rewind",action="read")
+               !
+               Nreal_read=0
+               ierr=0
+               do while (ierr.eq.0)
+                  Nreal_read = Nreal_read + 1
+                  read(unit,*,iostat=ierr)
+               enddo
+               close(unit)
+               !
+               !MaxEnt parameters written i the last line
+               Nreal_read = Nreal_read - 2
+               !
+               write(*,"(A,1I5)") "     The file "//reg(path)//" contains "//str(Nreal_read)//" real frequencies."
+               if(Kmask(iq).and.(iq.gt.ik1st).and.(Nreal_read.ne.Nreal_old))then
+                  write(*,"(A,1I5)") "     Aborting. Real frequency mesh is not consistent among K-points."
+                  return
+               endif
+               Nreal_old=Nreal_read
+               !
+            enddo
+            !
+            if(all(Kmask.eq..false.)) then
+               write(*,"(A)") "     Warning: the MaxEnt_"//reg(name)//"k_path_w folder is empty for orbital "//str(iorb)
+               return
+            endif
+            !
+            allocate(wreal_read(Nreal_read));wreal_read=0d0
+            allocate(ImW_read(1,Nreal_read,Nkpt));ImW_read=0d0
+            !
+            do iq=1,Nkpt
+               !
+               if(.not.Kmask(iq)) cycle
+               !
+               path = reg(MaxEnt_K)//"MaxEnt_"//reg(name)//"k_path_w/"//reg(name)//"k_w_k"//str(iq)//"_o"//str(iorb)//".DAT_dos.dat"
+               unit = free_unit()
+               open(unit,file=reg(path),form="formatted",status="unknown",position="rewind",action="read")
+               do iw=1,Nreal_read
+                  read(unit,*) wreal_read(iw),ImW_read(1,iw,iq)
+               enddo
+               close(unit)
+               !
+            enddo
+            dw = abs(wreal_read(10)-wreal_read(9))
+            write(*,"(A)") "     MaxEnt output on "//reg(name)//" function is read."
+            !
+            !Define a smaller frequency array
+            if(wreal_read(Nreal_read).gt.KKcutoff)then
+               Nreal_min = minloc(abs(wreal_read+KKcutoff),dim=1)
+               Nreal_max = minloc(abs(wreal_read-KKcutoff),dim=1)
+               Nreal = size(wreal_read(Nreal_min:Nreal_max))
+               if(iorb.eq.1)allocate(wreal(Nreal))
+               wreal=wreal_read(Nreal_min:Nreal_max)
+               write(*,"(A,F)") "     Reduced real frequency mesh (old_min): iw_["//str(Nreal_min)//"]=",wreal_read(Nreal_min)
+               write(*,"(A,F)") "     Reduced real frequency mesh (old_max): iw_["//str(Nreal_max)//"]=",wreal_read(Nreal_max)
+               write(*,"(A,F)") "     Reduced real frequency mesh (new_min): iw_["//str(1)//"]=",wreal(1)
+               write(*,"(A,F)") "     Reduced real frequency mesh (new_max): iw_["//str(Nreal)//"]=",wreal(Nreal)
+               write(*,"(A,F)") "     dw(old): "//str(dw)
+               write(*,"(A,F)") "     dw(new): "//str(abs(wreal(2)-wreal(1)))
+            else
+               Nreal_min = 1
+               Nreal_max = Nreal_read
+               Nreal = Nreal_read
+               if(iorb.eq.1)allocate(wreal(Nreal))
+               wreal=wreal_read
+            endif
+            deallocate(wreal_read)
+            !
+            !Manipulate MaxEnt output
+            if(iorb.eq.1) allocate(Akw_orb(Norb,Nreal,Nkpt))
+            !
+            do iq=1,Nkpt
+               !
+               !Chunk the data to the smaller frequency array and revert the poles
+               do iw=1,Nreal
+                  Akw_orb(iorb,iw,iq) = ImW_read(1,Nreal_min+(iw-1),iq)
+                  if((Nreal_max-(iw-1)).lt.Nreal_min)stop "chunking issue."
+               enddo
+               !
+               !Fix normalization
+               Akw_orb(iorb,:,iq) = Akw_orb(iorb,:,iq) / abs(sum(Akw_orb(iorb,:,iq))*dw)
+               !
+            enddo
+            !
+            deallocate(ImW_read)
+            !
+         enddo
+         where(abs((Akw_orb))<1.d-12)Akw_orb=0d0
+         write(*,"(A)") "     MaxEnt output is Normalized."
+         !
+      else
+         !
+         if(allocated(Kmask))deallocate(Kmask)
+         allocate(Kmask(Nkpt));Kmask=.false.
+         !
+         !First check that all the files contains the same number of real frequecies
+         ik1st_read=.false.
+         do iq=1,Nkpt
+            !
+            path = reg(MaxEnt_K)//"MaxEnt_"//reg(name)//"k_path_w/"//reg(name)//"k_w_k"//str(iq)//".DAT_dos.dat"
+            !
+            call inquireFile(reg(path),Kmask(iq),hardstop=.false.,verb=.true.)
+            if(.not.Kmask(iq))then
+               cycle
+            elseif(.not.ik1st_read)then
+               ik1st_read=.true.
+               ik1st = iq
+            endif
+            !
+            unit = free_unit()
+            open(unit,file=reg(path),form="formatted",status="unknown",position="rewind",action="read")
+            !
+            Nreal_read=0
+            ierr=0
+            do while (ierr.eq.0)
+               Nreal_read = Nreal_read + 1
+               read(unit,*,iostat=ierr)
+            enddo
+            close(unit)
+            !
+            !MaxEnt parameters written i the last line
+            Nreal_read = Nreal_read - 2
+            !
+            write(*,"(A,1I5)") "     The file "//reg(path)//" contains "//str(Nreal_read)//" real frequencies."
+            if(Kmask(iq).and.(iq.gt.ik1st).and.(Nreal_read.ne.Nreal_old))then
+               write(*,"(A,1I5)") "     Aborting. Real frequency mesh is not consistent among K-points."
+               return
+            endif
+            Nreal_old=Nreal_read
+            !
+         enddo
+         !
+         if(all(Kmask.eq..false.)) then
+            write(*,"(A)") "     Warning: the MaxEnt_"//reg(name)//"k_path_w folder is empty."
+            return
+         endif
+         !
+         allocate(wreal_read(Nreal_read));wreal_read=0d0
+         allocate(ImW_read(Norb,Nreal_read,Nkpt));ImW_read=0d0
+         do iq=1,Nkpt
+            !
+            if(.not.Kmask(iq)) cycle
+            !
+            path = reg(MaxEnt_K)//"MaxEnt_"//reg(name)//"k_path_w/"//reg(name)//"k_w_k"//str(iq)//".DAT_dos.dat"
+            unit = free_unit()
+            open(unit,file=reg(path),form="formatted",status="unknown",position="rewind",action="read")
+            do iw=1,Nreal_read
+               read(unit,*) wreal_read(iw),(ImW_read(iorb,iw,iq),iorb=1,Norb)
+            enddo
+            close(unit)
+            !
+         enddo
+         dw = abs(wreal_read(10)-wreal_read(9))
+         write(*,"(A)") "     MaxEnt output on "//reg(name)//" function is read."
+         !
+         !Define a smaller frequency array
+         if(wreal_read(Nreal_read).gt.KKcutoff)then
+            Nreal_min = minloc(abs(wreal_read+KKcutoff),dim=1)
+            Nreal_max = minloc(abs(wreal_read-KKcutoff),dim=1)
+            Nreal = size(wreal_read(Nreal_min:Nreal_max))
+            allocate(wreal(Nreal));wreal=wreal_read(Nreal_min:Nreal_max)
+            write(*,"(A,F)") "     Reduced real frequency mesh (old_min): iw_["//str(Nreal_min)//"]=",wreal_read(Nreal_min)
+            write(*,"(A,F)") "     Reduced real frequency mesh (old_max): iw_["//str(Nreal_max)//"]=",wreal_read(Nreal_max)
+            write(*,"(A,F)") "     Reduced real frequency mesh (new_min): iw_["//str(1)//"]=",wreal(1)
+            write(*,"(A,F)") "     Reduced real frequency mesh (new_max): iw_["//str(Nreal)//"]=",wreal(Nreal)
+            write(*,"(A,F)") "     dw(old): "//str(dw)
+            write(*,"(A,F)") "     dw(new): "//str(abs(wreal(2)-wreal(1)))
+         else
+            Nreal_min = 1
+            Nreal_max = Nreal_read
+            Nreal = Nreal_read
+            allocate(wreal(Nreal));wreal=wreal_read
+         endif
+         deallocate(wreal_read)
+         !
+         !Manipulate MaxEnt output
+         allocate(Akw_orb(Norb,Nreal,Nkpt));Akw_orb=0d0
+         !$OMP PARALLEL DEFAULT(NONE),&
+         !$OMP SHARED(Nkpt,Crystal,Norb,wreal,Nreal,Nreal_max,Nreal_min,dw,ispin,KKcutoff,Akw_orb,ImW_read),&
+         !$OMP PRIVATE(iq,iorb,iw)
+         !$OMP DO
+         do iq=1,Nkpt
+            do iorb=1,Norb
+               !
+               !Chunk the data to the smaller frequency array and revert the poles
+               do iw=1,Nreal
+                  Akw_orb(iorb,iw,iq) = ImW_read(iorb,Nreal_min+(iw-1),iq)
+                  if((Nreal_max-(iw-1)).lt.Nreal_min)stop "chunking issue."
+               enddo
+               !
+               !Fix normalization
+               Akw_orb(iorb,:,iq) = Akw_orb(iorb,:,iq) / abs(sum(Akw_orb(iorb,:,iq))*dw)
+               !
+            enddo
+         enddo
+         !$OMP END DO
+         !$OMP END PARALLEL
+         deallocate(ImW_read)
+         where(abs((Akw_orb))<1.d-12)Akw_orb=0d0
+         write(*,"(A)") "     MaxEnt output is Normalized."
+         !
+      endif
+      !
+      !
+      !Print
+      path = reg(MaxEnt_K)//"Akw_"//reg(name)//"k.DAT"
+      unit = free_unit()
+      open(unit,file=reg(path),form="formatted",status="unknown",position="rewind",action="write")
+      fact=Crystal%Kpathaxis(Crystal%Nkpt_path)
+      do iq=1,Nkpt
+         do iw=1,Nreal
+            if(abs(wreal(iw)).gt.0.5*KKcutoff)cycle
+            write(unit,"(1I5,200E20.12)") iq,Crystal%Kpathaxis(iq)/fact,wreal(iw),(Akw_orb(iorb,iw,iq),iorb=1,Norb)
+         enddo
+         write(unit,*)
+      enddo
+      close(unit)
+      deallocate(Kmask,Akw_orb,wreal)
+      !
+   end subroutine rebuild_W
    !
    !
    !

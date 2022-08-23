@@ -205,6 +205,7 @@ module input_vars
    logical,public                           :: dump_Gk
    logical,public                           :: dump_Sigmak
    logical,public                           :: dump_Chik
+   logical,public                           :: dump_Wk
    !
    !Post-processing variables
    character(len=256),public                :: structure
@@ -212,6 +213,7 @@ module input_vars
    integer,private                          :: Nsym_user
    real(8),allocatable,public               :: UserPath(:,:)
    integer,public                           :: Nkpt_path
+   integer,public                           :: Ntau_path
    integer,public                           :: Nkpt_Fermi
    logical,public                           :: FermiSurf
    real(8),public                           :: FermiCut
@@ -276,7 +278,6 @@ contains
       integer                               :: isite,ilayer,iset,iph,irange
       integer                               :: isym_user
       logical                               :: readVnn
-      !integer,allocatable                   :: tmpOrbs(:)
       !
       !OMP parallelization.
       !call execute_command_line(" lscpu | grep 'CPU(s):       ' | awk '{print $2}' > Nthread.used ")
@@ -571,7 +572,6 @@ contains
       if(reg(CalculationType).eq."scGW")dump_Gk=.true.
       if(reg(CalculationType).eq."GW+EDMFT")dump_Gk=.true.
       call parse_input_variable(dump_Sigmak,"PRINT_SIGMAK",InputFile,default=.false.,comment="Print the full k-dependent self-energy (binfmt) at each iteration (always optional).")
-      call parse_input_variable(dump_Chik,"PRINT_CHIK",InputFile,default=.false.,comment="Print the k-dependent charge susceptibility along the K-path.")
       !
       !Post-processing variables
       call add_separator("Post processing")
@@ -585,11 +585,14 @@ contains
       endif
       call parse_input_variable(path_funct,"PATH_FUNCT",InputFile,default="None",comment="Print interacting fields on high-symmetry points. Available fields: G=Green's function, S=self-energy, GS=both. None to avoid.")
       call parse_input_variable(Nkpt_path,"NK_PATH",InputFile,default=50,comment="Number of K-points between two hig-symmetry Kpoints.")
+      call parse_input_variable(Ntau_path,"NTAU_PATH",InputFile,default=Ntau,comment="Number of tau-points of the interpolated Field.")
       call parse_input_variable(FermiSurf,"FERMI_SURF",InputFile,default=.false.,comment="Flag to compute the Green's function on the planar {kx,ky} sheet. The mesh is set by NK_PATH/2. Ignored if PATH_FUNCT=None.")
       call parse_input_variable(Nkpt_Fermi,"NK_FERMI",InputFile,default=50,comment="Number of K-points in the side of the planar {kx,ky} sheet.")
       call parse_input_variable(FermiCut,"FERMI_CUT",InputFile,default=0d0,comment="Energy level at which the Fermi surface is computed. Used only in Akf_builder.")
       call parse_input_variable(KKcutoff,"KK_CUTOFF",InputFile,default=50d0,comment="Real frequency cutoff for Kramers Kronig integrals, should be twice the region of interest.")
       KKcutoff=abs(KKcutoff)
+      call parse_input_variable(dump_Chik,"PRINT_CHIK",InputFile,default=.false.,comment="Print the k-dependent charge susceptibility along the K-path.")
+      call parse_input_variable(dump_Wk,"PRINT_WK",InputFile,default=.false.,comment="Print the k-dependent screened interaction along the K-path.")
       !
       !Variables for the matching beta
       call add_separator("Matching beta")

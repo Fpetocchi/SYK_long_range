@@ -3344,8 +3344,8 @@ contains
       filename_="Bands"
       if(present(filename))filename_=reg(filename)
       !
-      store_=.true.
-      if(present(store))store_=store
+      !store_=.true.
+      !if(present(store))store_=store
       !
       if(present(data_in))then
          label=reg(filename_)
@@ -3356,6 +3356,7 @@ contains
          label="Hk"
          data_orig=Lttc%Hk
          Hamiltonian=.true.
+         store_=.true.
       endif
       !
       doplane_=.false.
@@ -3377,6 +3378,9 @@ contains
          write(*,"(A)")"     Correction: "//reg(corrname_)
          store_=.false.
       endif
+      !
+      ! if the user provides the variable then it ovverrides all the previous checks
+      if(present(store))store_=store
       if(store_) write(*,"(A)")"     Storing Lttc interpolated attributes."
       !
       !

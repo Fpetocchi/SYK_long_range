@@ -1134,7 +1134,7 @@ contains
    !---------------------------------------------------------------------------!
    !PURPOSE: Wrapper around the specific minimization routine used
    !---------------------------------------------------------------------------!
-   subroutine fit_wrapper(funct,param,err,outit,ftol)
+   subroutine fit_wrapper(funct,param,err,outit,ftol,estm)
       !
       implicit none
       !
@@ -1143,6 +1143,7 @@ contains
       real(8),intent(out)                   :: err
       integer,intent(out)                   :: outit
       real(8),intent(in),optional           :: ftol
+      real(8),intent(in),optional           :: estm
       !
       integer                               :: Npara
       integer                               :: mode,iprint,iexit
@@ -1158,6 +1159,7 @@ contains
       mode=1       !unity Hessian
       dfn=-.5      !frist iteration reduction of energy
       hh=1d-5
+      if(present(estm))hh=estm
       !
       iexit=0
       iprint=0

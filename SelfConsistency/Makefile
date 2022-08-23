@@ -29,8 +29,8 @@ EXE  = SelfConsistency
 # Post-processing
 OBJS_PP1 = $(SRCS:.f90=.o) minimize.o gap_equation.o pp_Akf_builder.o
 EXE_PP1  = Akf_builder
-#OBJS_PP2 = $(SRCS:.f90=.o) minimize.o gap_equation.o pp_dispersion_fit.o
-#EXE_PP2  = Hk_fit
+OBJS_PP2 = $(SRCS:.f90=.o) minimize.o gap_equation.o pp_dispersion_fit.o
+EXE_PP2  = Hk_fit
 
 
 #
@@ -100,7 +100,7 @@ all: prepREL release
 
 #
 # Debug rules-------------------------------------------------------------------
-debug: prepDBG DBGGTlib $(DBGEXE) $(DBGEXE_PP1) #$(DBGEXE_PP2)
+debug: prepDBG DBGGTlib $(DBGEXE) $(DBGEXE_PP1) $(DBGEXE_PP2)
 
 # Modules
 $(DBGDIR)/linalg.o: $(SRCDIR)/linalg.f90
@@ -174,12 +174,12 @@ $(DBGEXE): $(DBGOBJS)
 $(DBGEXE_PP1): $(DBGOBJS_PP1)
 	$(FC) $(FFLAGS) $(DBGFFLAGS) -o $(DBGEXE_PP1) $^ $(DBGLIB)
 
-#$(DBGEXE_PP2): $(DBGOBJS_PP2)
-#	$(FC) $(FFLAGS) $(DBGFFLAGS) -o $(DBGEXE_PP2) $^ $(DBGLIB)
+$(DBGEXE_PP2): $(DBGOBJS_PP2)
+	$(FC) $(FFLAGS) $(DBGFFLAGS) -o $(DBGEXE_PP2) $^ $(DBGLIB)
 
 #
 # Release rules-----------------------------------------------------------------
-release: prepREL RELGTlib $(RELEXE) $(RELEXE_PP1) #$(RELEXE_PP2)
+release: prepREL RELGTlib $(RELEXE) $(RELEXE_PP1) $(RELEXE_PP2)
 
 # Modules
 $(RELDIR)/linalg.o: $(SRCDIR)/linalg.f90
@@ -253,8 +253,8 @@ $(RELEXE): $(RELOBJS)
 $(RELEXE_PP1): $(RELOBJS_PP1)
 	$(FC) $(FFLAGS) $(RELFFLAGS) -o $(RELEXE_PP1) $^ $(RELLIB)
 
-#$(RELEXE_PP2): $(RELOBJS_PP2)
-#	$(FC) $(FFLAGS) $(RELFFLAGS) -o $(RELEXE_PP2) $^ $(RELLIB)
+$(RELEXE_PP2): $(RELOBJS_PP2)
+	$(FC) $(FFLAGS) $(RELFFLAGS) -o $(RELEXE_PP2) $^ $(RELLIB)
 
 #
 # GTlib debug rules-------------------------------------------------------------
