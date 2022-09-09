@@ -663,9 +663,9 @@ contains
                      !
                      read(unit,*) nx, ny, nz, iorb, jorb, ReHr, ImHr
                      !
-                     iwig = find_vec([nx,ny,nz],Nvecwig)
+                     iwig = find_vec([nx,ny,nz],Nvecwig,hardstop=.false.)
                      !
-                     Hr_bulk(iorb,jorb,iwig) = dcmplx(ReHr,ImHr)/Ndegen(ir)
+                     if(iwig.ne.0)Hr_bulk(iorb,jorb,iwig) = dcmplx(ReHr,ImHr)/Ndegen(ir)
                      !
                   enddo
                enddo
@@ -699,6 +699,7 @@ contains
             !Sorting the positions according to distance
             allocate(Rorder(Nwig*Nsite_bulk*Nsite_bulk));Rorder=0
             allocate(Rsorted_bkp(Nwig*Nsite_bulk*Nsite_bulk,4));Rsorted_bkp=0d0
+            !this part is actually not needed because sort_array does not replace the input array
             Rsorted_bkp = Rsorted
             call sort_array(Rsorted(:,1),Rorder)
             Rsorted=0d0
@@ -868,7 +869,8 @@ contains
                            !
                            !OLD implementation without specified range
                            !if((abs(ilayer-jlayer).eq.1).and.(.not.layerDone(jlayer))) Hr(io,jo,iwig) = dcmplx(Hetero%tz(iorb,islab),0d0)
-                           if((abs(ilayer-jlayer).eq.1)) Hr(io,jo,iwig) = dcmplx(Hetero%tz(iorb,islab,iD),0d0)
+                           !if((abs(ilayer-jlayer).eq.1)) Hr(io,jo,iwig) = dcmplx(Hetero%tz(iorb,islab,iD),0d0)
+                           if((abs(ilayer-jlayer).eq.1)) Hr(io,jo,iwig) = dcmplx(Hetero%tz(iorb,ilayer,iD),0d0)
                            !
                         enddo
                         !
@@ -2936,7 +2938,7 @@ contains
       real(8),allocatable,intent(out)       :: KaxisPoints(:)
       !
       real(8),dimension(3)                  :: Gamma,M,R,X,K,L,U,W,H,N,P,A,Z,S,T,Y
-      real(8),dimension(3)                  :: Kdiff
+      real(8),dimension(3)                  :: Kdiff,Bdiff
       real(8),allocatable                   :: Kpoints(:,:),Kdist(:),Kturn(:)
       integer                               :: idir,Ndir,idk,ik,lastK
       real(8)                               :: dKtot,theta,phi,dk,kx,ky,kz
@@ -3223,8 +3225,19 @@ contains
             ik=ik+1
             !
             kpt_path(:,ik) = [kx,ky,kz]
-            if(ik.gt.1)Kdist(ik) = Kdist(ik-1) + dk
-            if(idk.eq.(Nkpt_path+lastK)) Kturn(idir) = Kdist(ik)
+            if(ik.gt.1)then! Kdist(ik) = Kdist(ik-1) + dB ! dk
+               Bdiff = dk*sin(theta)*cos(phi)*Blat(:,1) + dk*sin(theta)*sin(phi)*Blat(:,2) + dk*cos(theta)*Blat(:,3)
+               Kdist(ik) = Kdist(ik-1) + sqrt(dot_product(Bdiff,Bdiff))
+            endif
+            !
+            if(idir.eq.Ndir)then
+               !last chunck contains two points
+               if(idk.eq.1) Kturn(idir-1) = Kdist(ik)
+               if(idk.eq.(Nkpt_path+lastK)) Kturn(idir) = Kdist(ik)
+            else
+               !middle turns contains the point of the previous chunk
+               if((idk.eq.1).and.(idir.gt.2)) Kturn(idir-1) = Kdist(ik)
+            endif
             !
          enddo
          !
@@ -3293,6 +3306,7 @@ contains
       use parameters !WHY IS THIS WORKING?
       use utils_misc
       use linalg, only : eigh, inv, zeye
+      use input_vars, only : eta, Nreal, FermiCut !WHY IS THIS WORKING?
       implicit none
       !
       type(Lattice),intent(inout)           :: Lttc
@@ -3312,9 +3326,9 @@ contains
       character(len=256)                    :: path,label,filename_,corrname_
       integer                               :: ik,ikz,iorb,unit,ilayer
       integer                               :: Norb,Nkpt_Kside_,ikx,iky
-      integer                               :: Nreal,iw,ndx
+      integer                               :: iw,ndx!,Nreal
       real(8)                               :: kp,kx,ky,Bvec(3)
-      real(8)                               :: wrealMax,eta,kz_cut
+      real(8)                               :: wrealMax,kz_cut,FermiLevel!,eta
       complex(8),allocatable                :: data_orig(:,:,:)
       complex(8),allocatable                :: invGf(:,:)
       logical                               :: Hamiltonian,doplane_,hetero_,printout,store_
@@ -3379,7 +3393,7 @@ contains
          store_=.false.
       endif
       !
-      ! if the user provides the variable then it ovverrides all the previous checks
+      ! if the user provides the store variable then it overrides all the previous checks
       if(present(store))store_=store
       if(store_) write(*,"(A)")"     Storing Lttc interpolated attributes."
       !
@@ -3399,7 +3413,7 @@ contains
       endif
       !
       !
-      !Interpolate input data along path---------------------------------------------------
+      !Interpolate input data along path----------------------------------------
       allocate(data_intp(Norb,Norb,Lttc%Nkpt_path));data_intp=czero
       call cpu_time(start)
       call wannierinterpolation(Lttc%Nkpt3,Lttc%kpt,Lttc%kptpath(:,1:Lttc%Nkpt_path),data_orig,data_intp)
@@ -3450,8 +3464,8 @@ contains
       if(hamiltonian)then
          !
          !Default parameters on the real frequency axis
-         Nreal = 2000
-         eta = wrealMax/200
+         !Nreal = 2000
+         !eta = wrealMax/200
          allocate(wreal(Nreal));wreal=0d0
          wreal = linspace(-wrealMax,+wrealMax,Nreal)
          !
@@ -3612,10 +3626,16 @@ contains
          endif
          !
          !Create zeta array for compatibility
-         eta = wrealMax/200 !same as before for Akw
+         FermiLevel = 0d0
+         if(corrname_.eq."nonInt")then
+            FermiLevel = FermiCut
+            corrname_ = reg(corrname_)//"_E"//str(FermiLevel,3)
+            write(*,"(A)")"     Updated Fk label: "//reg(corrname_)
+         endif
+         !eta = wrealMax/200 !same as before for Akw
          allocate(zeta(Norb,Norb,1));zeta=czero
          do iorb=1,Norb
-            zeta(iorb,iorb,1) = dcmplx(0d0,eta)
+            zeta(iorb,iorb,1) = dcmplx(FermiLevel,eta)
          enddo
          !
          !Interpolate longitudinal tz inside the kx,ky plane and compute potentials

@@ -108,7 +108,7 @@ module input_vars
    logical,public                           :: readHk
    real(8),public                           :: LatticeVec(3,3)
    real(8),allocatable,public               :: ucVec(:,:)
-   integer,public                           :: Norb_model
+   integer,public                           :: Norb_model !<== remove from public variables
    real(8),allocatable,public               :: hopping(:)
    type(Heterostructures),public            :: Hetero
    !
@@ -334,10 +334,13 @@ contains
             Hetero%tzIndex(2) = Hetero%Explicit(2) - 1
             if(Hetero%Explicit(1).ne.1) Hetero%tzIndex(1) = Hetero%tzIndex(1) - 1              ! hopping to the left potential
             if(Hetero%Explicit(2).ne.Hetero%Nslab) Hetero%tzIndex(2) = Hetero%tzIndex(2) + 1   ! hopping to the right potential
-            allocate(Hetero%tz(Norb_model,Hetero%tzIndex(1):Hetero%tzIndex(2),Hetero%tzRange));Hetero%tz=0d0
+            !allocate(Hetero%tz(Norb_model,Hetero%tzIndex(1):Hetero%tzIndex(2),Hetero%tzRange));Hetero%tz=0d0
+            !do ilayer=Hetero%tzIndex(1),Hetero%tzIndex(2)
+            allocate(Hetero%tz(Norb_model,Hetero%Nlayer,Hetero%tzRange));Hetero%tz=0d0
             do irange=1,Hetero%tzRange
-               do ilayer=Hetero%tzIndex(1),Hetero%tzIndex(2)
-                  call parse_input_variable(Hetero%tz(:,ilayer,irange),"TZ"//str(irange)//"_"//str(ilayer),InputFile,comment="Longitudinal hopping for each orbital at distance "//str(irange)//" between layer #"//str(ilayer)//" and layer #"//str(ilayer+1))
+               do ilayer=1,Hetero%Nlayer
+                  !call parse_input_variable(Hetero%tz(:,ilayer,irange),"TZ"//str(irange)//"_"//str(ilayer),InputFile,comment="Longitudinal hopping for each orbital at distance "//str(irange)//" between layer #"//str(ilayer)//" and layer #"//str(ilayer+1))
+                  call parse_input_variable(Hetero%tz(:,ilayer,irange),"TZ"//str(irange)//"_"//str(ilayer),InputFile,comment="Longitudinal hopping for each orbital at distance "//str(irange)//" starting from layer #"//str(ilayer))
                enddo
             enddo
          endif

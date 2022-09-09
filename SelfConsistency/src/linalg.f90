@@ -67,8 +67,10 @@ module linalg
    end interface dag
 
    interface rotate
-      module procedure rotate_d
-      module procedure rotate_z
+      module procedure rotate_dd
+      module procedure rotate_zz
+      module procedure rotate_dz
+      module procedure rotate_zd
    end interface rotate
 
    interface Cramer

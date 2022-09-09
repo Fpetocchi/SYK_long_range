@@ -56,7 +56,7 @@ while getopts ":e:w:W:F:N:B:i:f:m:d:s:p:M:" o; do
       F)
          FIELD="${OPTARG}"
          if [ "$FIELD"  != "G" ] && [ "$FIELD"  != "S" ] && [ "$FIELD"  != "W" ] && [ "$FIELD"  != "C" ]; then echo "Option Error - F" ; exit 1 ; fi
-         if [ "$FIELD"  != "W" ] || [ "$FIELD"  != "C" ] || [ "$FIELD"  != "C" ]; then AXIS="w" ; stat="X" ; fi
+         if [ "$FIELD"  == "W" ] || [ "$FIELD"  == "C" ] || [ "$FIELD"  == "C" ]; then AXIS="w" ; stat="X" ; fi
          ;;
       N)
          Nktot="${OPTARG}"
