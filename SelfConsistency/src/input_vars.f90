@@ -135,7 +135,7 @@ module input_vars
    integer,public                           :: Nreal
    real(8),public                           :: wrealMax
    real(8),public                           :: eta
-   integer,public                           :: PadeWlimit
+   real(8),public                           :: PadeWlimit
    !
    !Density lookup
    type(musearch),public                    :: look4dens
@@ -433,9 +433,9 @@ contains
       if(mod(Ntau-1,4).ne.0)Ntau=Ntau+mod(Ntau-1,4)
       call parse_input_variable(tau_uniform,"TAU_UNIF",InputFile,default=.false.,comment="Flag to use a uniform mesh on the imaginary time axis. Only internal for GW.")
       call parse_input_variable(Nreal,"NREAL",InputFile,default=2000,comment="Number of points on the real frequency axis.")
-      call append_to_input_list(wrealMax,"MAX_WREAL","Maximum absolute value of the real frequency mesh. User cannot set this as its derived from Hk.")
+      call parse_input_variable(wrealMax,"MAX_WREAL",InputFile,default=0d0,comment="Maximum absolute value of the real frequency axis.")
       call parse_input_variable(eta,"ETA",InputFile,default=0.04d0,comment="Real frequency broadening.")
-      call parse_input_variable(PadeWlimit,"WPADE",InputFile,default=10,comment="Number of Matsubara frequencies used in pade' analytic continuation. If its =0 Pade will not be performed.")
+      call parse_input_variable(PadeWlimit,"WPADE",InputFile,default=0d0,comment="Higest Matsubara frequency used in pade' analytic continuation. If its =0d0 Pade will not be performed.")
       !
       !Density lookup
       call add_separator("Density lookup")

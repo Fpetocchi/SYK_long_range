@@ -490,7 +490,7 @@ contains
       if(XEPSisread)write(*,"(A,1I4)")"     Number of irreducible K-points: ",Lttc%Nkpt_irred
       !
       !Estimate of the bandwidth plus
-      wrealMax = 1.2*maxval(abs(Lttc%Ek))
+      if(wrealMax.eq.0d0)wrealMax = 1.5*maxval(abs(Lttc%Ek))
       !
       !Store the local Hamiltonian
       call dump_Matrix(Lttc%Hloc,reg(pathINPUT),"Hloc.DAT")

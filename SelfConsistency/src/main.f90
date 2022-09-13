@@ -52,7 +52,12 @@ program SelfConsistency
    Slat_Gamma%mu = S_Full%mu
    Slat_Gamma%ws = S_Full%wks(:,:,:,1,:)
    call dump_FermionicField(Slat_Gamma,reg(ItFolder),"Slat_Gamma_w",paramagnet)
-   call dump_MaxEnt(Slat_Gamma,"mats2itau",reg(ItFolder)//"Convergence/","Slat_Gamma",EqvGWndx%SetOrbs,WmaxPade=PadeWlimit)
+   call dump_MaxEnt(Slat_Gamma,"mats",reg(ItFolder)//"Convergence/","Slat_Gamma",EqvGWndx%SetOrbs,WmaxPade=PadeWlimit)
+   call dump_MaxEnt(Slat_Gamma,"mats2itau",reg(ItFolder)//"Convergence/","Slat_Gamma",EqvGWndx%SetOrbs)
+   !
+   call AllocateFermionicField(S_DMFT,Crystal%Norb,Nmats,Nsite=Nsite,Beta=Beta)
+   call read_FermionicField(S_DMFT,reg(PrevItFolder),"Simp_w")
+   call dump_MaxEnt(S_DMFT,"mats",reg(ItFolder)//"Convergence/","Simp",EqvGWndx%SetOrbs,WmaxPade=PadeWlimit)
    !
    stop
 #elif defined _gap

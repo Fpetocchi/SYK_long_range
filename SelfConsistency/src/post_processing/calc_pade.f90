@@ -2,7 +2,7 @@ function pade(funct_in,type,wlimit) result(funct_out)
    !
    use parameters
    use utils_misc
-   use input_vars, only: Nmats, Nreal, wrealMax, eta, Beta
+   use input_vars, only: Nmats, Nreal, wrealMax, Beta
    implicit none
    !
    complex(8),intent(in)                 :: funct_in(:)
@@ -33,7 +33,7 @@ function pade(funct_in,type,wlimit) result(funct_out)
    end select
    !
    funct_out=czero
-   call padecoeff(funct_out, wreal+img*eta, funct_in(1:Nfreq), img*wmats)
+   call padecoeff(funct_out, wreal+img*0d0, funct_in(1:Nfreq), img*wmats)
    !
 end function pade
 
@@ -78,6 +78,7 @@ subroutine padecoeff(fwout,wout,fwin,win)
       enddo
    enddo
    !
+   fwout = czero
    allocate(a(0:Nin))
    allocate(b(0:Nin))
    do j=1,Nout
@@ -96,6 +97,8 @@ subroutine padecoeff(fwout,wout,fwin,win)
       enddo
       !
       fwout(j) = a(Nin)/b(Nin)
+      if(fwout(j) .ne. fwout(j)) fwout(j)=czero       !remove NaN
+      if(abs(fwout(j)) .ge. huge(1d0)) fwout(j)=czero !remove Infinity
       !
    enddo
    !
