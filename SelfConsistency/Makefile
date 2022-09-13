@@ -100,7 +100,7 @@ all: prepREL release
 
 #
 # Debug rules-------------------------------------------------------------------
-debug: prepDBG DBGGTlib $(DBGEXE) $(DBGEXE_PP1) $(DBGEXE_PP2)
+debug: prepDBG DBGGTlib $(DBGEXE) $(DBGEXE_PP1) # $(DBGEXE_PP2)
 
 # Modules
 $(DBGDIR)/linalg.o: $(SRCDIR)/linalg.f90
@@ -179,7 +179,7 @@ $(DBGEXE_PP2): $(DBGOBJS_PP2)
 
 #
 # Release rules-----------------------------------------------------------------
-release: prepREL RELGTlib $(RELEXE) $(RELEXE_PP1) $(RELEXE_PP2)
+release: prepREL RELGTlib $(RELEXE) $(RELEXE_PP1) # $(RELEXE_PP2)
 
 # Modules
 $(RELDIR)/linalg.o: $(SRCDIR)/linalg.f90

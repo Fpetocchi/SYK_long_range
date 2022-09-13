@@ -280,7 +280,7 @@ contains
    !
    subroutine dump_MaxEnt_on_G_K(Gmats_in,mode)
       !
-      use input_vars, only : Ntau_path, Solver
+      use input_vars, only : Ntau_MaxEnt, Solver
       implicit none
       !
       type(FermionicField),intent(in)       :: Gmats_in
@@ -299,7 +299,7 @@ contains
       !
       if(verbose) write(*,"(A)") new_line("A")//new_line("A")//"---- dump_MaxEnt_on_G_K"
       !
-      NtauFT = Ntau_path
+      NtauFT = Ntau_MaxEnt
       !
       !
       if(.not.Gmats_in%status) stop "dump_MaxEnt_on_G_K: Gmats_in not properly allocated."

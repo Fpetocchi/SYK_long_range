@@ -15,9 +15,9 @@ program SelfConsistency
    implicit none
    !
    integer                                  :: TimeStart
-   integer                                  :: isite                            ,iset
+   integer                                  :: isite
    integer                                  :: Iteration,ItStart,Itend
-
+   !
 #ifdef _akw
    character(len=20)                        :: InputFile="input.in.akw"
 #else
@@ -45,7 +45,15 @@ program SelfConsistency
    call calc_Glda(0d0,Beta,Crystal)
    call AllocateFermionicField(S_Full,Crystal%Norb,Nmats,Nkpt=Crystal%Nkpt,Nsite=Nsite,Beta=Beta)
    call read_FermionicField(S_Full,reg(ItFolder),"Sfull_w",Crystal%kpt)
-   call interpolate2kpath(S_Full,Crystal,reg(ItFolder))
+   if(print_path) call interpolate2kpath(S_Full,Crystal,reg(ItFolder))
+   !
+   ! get self-energy at Gamma
+   call AllocateFermionicField(Slat_Gamma,Crystal%Norb,Nmats,Nsite=Nsite,Beta=Beta)
+   Slat_Gamma%mu = S_Full%mu
+   Slat_Gamma%ws = S_Full%wks(:,:,:,1,:)
+   call dump_FermionicField(Slat_Gamma,reg(ItFolder),"Slat_Gamma_w",paramagnet)
+   call dump_MaxEnt(Slat_Gamma,"mats2itau",reg(ItFolder)//"Convergence/","Slat_Gamma",EqvGWndx%SetOrbs,WmaxPade=PadeWlimit)
+   !
    stop
 #elif defined _gap
    call calc_Tc(reg(ItFolder),gap_equation,Crystal)
@@ -362,23 +370,7 @@ program SelfConsistency
       if(solve_DMFT)call execute_command_line(" touch doSolver ")
    endif
    !
-   !TEST>>>
-   write(*,"(A)") new_line("A")//new_line("A")//"---- symmetrized orbital sets"
-   write(*,"(A,1I3)") "     Provided sets: ",EqvGWndx%Nset
-   write(*,"(A,1I3)") "     Expanded sets: ",EqvGWndx%Ntotset
-   do iset=1,size(EqvGWndx%SetOrbs,dim=1)
-      write(*,"(2(A,I3),A,10I3)")"     set: ",iset,", number of orbitals: ",EqvGWndx%SetNorb(iset),", indexes: ",EqvGWndx%SetOrbs(iset,:)
-   enddo
-   write(*,"(A,L)") "     Symmetrizing off-diagonal: ",EqvGWndx%Gfoffdiag
-   if(sym_mode.eq.1)write(*,"(A)") "     Only lattice quantities will be symmetrized."
-   if(sym_mode.eq.2)write(*,"(A)") "     Both lattice and impurity quantities will be symmetrized."
-   if(sym_mode.eq.3)write(*,"(A)") "     Only impurity quantities will be symmetrized."
-   !>>>TEST
-   !
 end program SelfConsistency
-
-
-
 !
 !
 !

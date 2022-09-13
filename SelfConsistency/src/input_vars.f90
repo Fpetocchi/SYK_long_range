@@ -213,7 +213,7 @@ module input_vars
    integer,private                          :: Nsym_user
    real(8),allocatable,public               :: UserPath(:,:)
    integer,public                           :: Nkpt_path
-   integer,public                           :: Ntau_path
+   integer,public                           :: Ntau_MaxEnt
    integer,public                           :: Nkpt_Fermi
    logical,public                           :: FermiSurf
    real(8),public                           :: FermiCut
@@ -588,7 +588,7 @@ contains
       endif
       call parse_input_variable(path_funct,"PATH_FUNCT",InputFile,default="None",comment="Print interacting fields on high-symmetry points. Available fields: G=Green's function, S=self-energy, GS=both. None to avoid.")
       call parse_input_variable(Nkpt_path,"NK_PATH",InputFile,default=50,comment="Number of K-points between two hig-symmetry Kpoints.")
-      call parse_input_variable(Ntau_path,"NTAU_PATH",InputFile,default=Ntau,comment="Number of tau-points of the interpolated Field.")
+      call parse_input_variable(Ntau_MaxEnt,"NTAU_MAXENT",InputFile,default=Ntau,comment="Number of tau-points of the interpolated Field.")
       call parse_input_variable(FermiSurf,"FERMI_SURF",InputFile,default=.false.,comment="Flag to compute the Green's function on the planar {kx,ky} sheet. The mesh is set by NK_PATH/2. Ignored if PATH_FUNCT=None.")
       call parse_input_variable(Nkpt_Fermi,"NK_FERMI",InputFile,default=50,comment="Number of K-points in the side of the planar {kx,ky} sheet.")
       call parse_input_variable(FermiCut,"FERMI_CUT",InputFile,default=0d0,comment="Energy level at which the Fermi surface is computed. Used only in Akf_builder.")

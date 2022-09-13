@@ -247,7 +247,7 @@ contains
    !---------------------------------------------------------------------------!
    !PURPOSE: Compute the Matsubara Green's Function
    !---------------------------------------------------------------------------!
-   subroutine calc_Gmats_Full(Gmats,Lttc,Smats,along_path,along_plane)
+   subroutine calc_Gmats_Full(Gmats,Lttc,Smats,useSloc,along_path,along_plane)
       !
       use parameters
       use linalg
@@ -259,6 +259,7 @@ contains
       type(FermionicField),intent(inout)    :: Gmats
       type(Lattice),intent(in),target       :: Lttc
       type(FermionicField),intent(in),optional :: Smats
+      logical,intent(in),optional           :: useSloc
       logical,intent(in),optional           :: along_path
       logical,intent(in),optional           :: along_plane
       !
@@ -272,7 +273,7 @@ contains
       real(8)                               :: Beta,mu
       integer                               :: Norb,Nmats,Nkpt
       integer                               :: iw,ik,iwan,ispin
-      logical                               :: along_path_,along_plane_
+      logical                               :: useSloc_,along_path_,along_plane_
       !potentials
       type(FermionicField)                  :: Potential_L
       type(FermionicField)                  :: Potential_R
@@ -289,6 +290,8 @@ contains
       if(Gmats%Nkpt.eq.0) stop "calc_Gmats_Full: Gmats k dependent attributes not properly initialized."
       if(Gmats%Norb.ne.Lttc%Norb) stop "calc_Gmats_Full: Lttc has different number of orbitals with respect to Gmats."
       !
+      useSloc_=.false.
+      if(present(useSloc))useSloc_=useSloc
       along_path_=.false.
       if(present(along_path))along_path_=along_path
       along_plane_=.false.
@@ -338,7 +341,7 @@ contains
          !
          if(.not.Smats%status) stop "calc_Gmats_Full: Smats not properly initialized."
          if(Smats%Npoints.ne.Nmats) stop "calc_Gmats_Full: Smats has different number of Matsubara points with respect to Gmats."
-         if(Smats%Nkpt.ne.Nkpt) stop "calc_Gmats_Full: Smats has different number of k-points with respect to Gmats."
+         if((.not.useSloc_).and.(Smats%Nkpt.ne.Nkpt)) stop "calc_Gmats_Full: Smats has different number of k-points with respect to Gmats."
          write(*,"(A)") "     Computing interacting Green's function."
          !
          Ln=0;Rn=0
@@ -389,7 +392,7 @@ contains
       allocate(invGf(Norb,Norb));invGf=czero
       spinloop: do ispin=1,Nspin
          !$OMP PARALLEL DEFAULT(NONE),&
-         !$OMP SHARED(ispin,zeta,Gmats,Smats,Hk,Ln,Potential_L,Rn,Potential_R),&
+         !$OMP SHARED(ispin,zeta,Gmats,Smats,useSloc_,Hk,Ln,Potential_L,Rn,Potential_R),&
          !$OMP PRIVATE(ik,iw,invGf)
          !$OMP DO
          do iw=1,Gmats%Npoints
@@ -397,7 +400,14 @@ contains
                !
                invGf = zeta(:,:,iw) - Hk(:,:,ik)
                !
-               if(present(Smats)) invGf = invGf - Smats%wks(:,:,iw,ik,ispin)
+               if(present(Smats))then
+                  if(useSloc_)then
+                     invGf = invGf - Smats%ws(:,:,iw,ispin)
+                  else
+                     invGf = invGf - Smats%wks(:,:,iw,ik,ispin)
+                  endif
+               endif
+               !
                if(Potential_L%status) invGf(Ln(1):Ln(2),Ln(1):Ln(2)) = invGf(Ln(1):Ln(2),Ln(1):Ln(2)) - Potential_L%wks(:,:,iw,ik,ispin)
                if(Potential_R%status) invGf(Rn(1):Rn(2),Rn(1):Rn(2)) = invGf(Rn(1):Rn(2),Rn(1):Rn(2)) - Potential_R%wks(:,:,iw,ik,ispin)
                !

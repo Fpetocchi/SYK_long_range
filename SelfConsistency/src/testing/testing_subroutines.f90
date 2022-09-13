@@ -1670,3 +1670,78 @@ Kel_dyn_e_m = Kel_dyn_e_m + s_m * Kel_dyn_w(Nmats) * (pi/2d0 - atan2(wmats(Nmats
 !
 !adding the fermi function
 Kel_dyn_e_m = Kel_dyn_e_m * (fermidirac(E1,Beta)-fermidirac(E2,Beta))
+
+
+
+
+!
+!TEST>>>
+!write(*,"(A)") new_line("A")//new_line("A")//"---- symmetrized orbital sets"
+!write(*,"(A,1I3)") "     Provided sets: ",EqvGWndx%Nset
+!write(*,"(A,1I3)") "     Expanded sets: ",EqvGWndx%Ntotset
+!do iset=1,size(EqvGWndx%SetOrbs,dim=1)
+!   write(*,"(2(A,I3),A,10I3)")"     set: ",iset,", number of orbitals: ",EqvGWndx%SetNorb(iset),", indexes: ",EqvGWndx%SetOrbs(iset,:)
+!enddo
+!write(*,"(A,L)") "     Symmetrizing off-diagonal: ",EqvGWndx%Gfoffdiag
+!if(sym_mode.eq.1)write(*,"(A)") "     Only lattice quantities will be symmetrized."
+!if(sym_mode.eq.2)write(*,"(A)") "     Both lattice and impurity quantities will be symmetrized."
+!if(sym_mode.eq.3)write(*,"(A)") "     Only impurity quantities will be symmetrized."
+!>>>TEST
+
+
+integer                                  :: iw,wndx,Nmats_long,ispin,iorb
+real(8),allocatable                      :: wm(:),Moms(:,:,:)
+complex(8),allocatable                   :: Sfit(:,:,:),SmatsTail(:),invG(:,:),Sinf(:,:,:)
+
+!
+! extend the tail
+Nmats_long = 10*Nmats
+allocate(wm(Nmats_long));wm=FermionicFreqMesh(Beta,Nmats_long)
+wndx = minloc(abs(wm-1.05*ReplaceTail_Simp),dim=1)
+!
+allocate(Moms(Crystal%Norb,Nspin,0:min(SigmaMaxMom,Nfit)));Moms=0d0
+allocate(Sfit(Crystal%Norb,Nmats,Nspin))
+do ispin=1,Nspin
+   do iorb=1,Crystal%Norb
+      Sfit(iorb,:,ispin) = Slat_Gamma%ws(iorb,iorb,:,ispin)
+   enddo
+enddo
+!
+call fit_moments(Sfit,Beta,reg(ItFolder)//"Convergence/Slat_Gamma/","SGammaMom.DAT","Sigma",Moms,filename="Simp",Wlimit=wndx)
+!
+call DeallocateField(Slat_Gamma)
+call AllocateFermionicField(Slat_Gamma,Crystal%Norb,Nmats_long,Nsite=Nsite,Beta=Beta)
+!
+allocate(SmatsTail(Nmats_long));SmatsTail=czero
+do ispin=1,Nspin
+   do iorb=1,Crystal%Norb
+      SmatsTail = S_Moments(Moms(iorb,ispin,:),wm)
+      Slat_Gamma%ws(iorb,iorb,1:Nmats,ispin) = Sfit(iorb,1:Nmats,ispin)
+      Slat_Gamma%ws(iorb,iorb,Nmats:Nmats_long,ispin) = SmatsTail(Nmats:Nmats_long)
+   enddo
+   if(paramagnet)then
+      Slat_Gamma%ws(:,:,:,Nspin) = Slat_Gamma%ws(:,:,:,1)
+      exit
+   endif
+enddo
+deallocate(Sfit,Moms,SmatsTail)
+!
+call dump_FermionicField(Slat_Gamma,reg(ItFolder),"Slat_Gamma_tail_w",paramagnet)
+!
+allocate(invG(Crystal%Norb,Crystal%Norb));invG=czero
+allocate(Sinf(Crystal%Norb,Crystal%Norb,Nspin));Sinf=dreal(Slat_Gamma%ws(:,:,Nmats_long,:))
+!call read_Matrix(Sinf,reg(PrevItFolder)//"Hartree_UNimp",paramagnet)
+write(*,*)S_Full%mu
+do iorb=1,Crystal%Norb
+   write(*,*)Crystal%Hk(iorb,iorb,1)
+enddo
+do ispin=1,Nspin
+   do iw=1,Nmats_long
+      do iorb=1,Crystal%Norb
+         Slat_Gamma%ws(iorb,iorb,iw,ispin) = 1d0 / ( dcmplx(S_Full%mu,wm(iw)) - Crystal%Hk(iorb,iorb,1) -  ( Slat_Gamma%ws(iorb,iorb,iw,ispin) - Sinf(iorb,iorb,ispin) ) )
+      enddo
+   enddo
+enddo
+deallocate(wm,invG,Sinf)
+call dump_FermionicField(Slat_Gamma,reg(ItFolder),"Gaux_Gamma_tail_w",paramagnet)
+call dump_MaxEnt(Slat_Gamma,"mats2itau",reg(ItFolder)//"Convergence/","Gaux_Gamma_tail",EqvGWndx%SetOrbs)

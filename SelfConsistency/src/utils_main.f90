@@ -38,6 +38,8 @@ module utils_main
    type(FermionicField)                     :: S_GWdc,S_GW_Cdc,S_GW_Xdc
    type(FermionicField)                     :: S_DMFT
    !
+   type(FermionicField)                     :: Slat_Gamma
+   !
    type(BosonicField)                       :: Wlat
    type(BosonicField)                       :: W_EDMFT
    !
@@ -251,7 +253,6 @@ contains
                   write(*,"(A)") "     Previous iteration: "//str(FirstIteration-1)//". Not found, exiting."
                   stop
                endif
-               !if((.not.ZeroItexist).and.addTierIII)stop "G0W0 0th iteration not found, exiting."
             endif
             !
             if(Uspex)then
@@ -273,7 +274,6 @@ contains
                   write(*,"(A)") "     Previous iteration: "//str(FirstIteration-1)//". Not found, exiting."
                   stop
                endif
-               !if((reg(CalculationType).eq."GW+EDMFT").and.(.not.ZeroItexist).and.addTierIII) stop "G0W0 0th iteration not found, exiting."
             endif
             !
             if(Uspex)then
@@ -1199,7 +1199,7 @@ contains
          !
       else
          !
-         call read_Matrix(densityLDA,reg(pathINPUT)//"Nlda",paramagnet)
+         if(addTierIII)call read_Matrix(densityLDA,reg(pathINPUT)//"Nlda",paramagnet)
          call read_Matrix(densityDMFT,reg(PrevItFolder)//"Nimp",paramagnet)
          densityGW=Glat%N_s
          !

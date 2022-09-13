@@ -468,8 +468,7 @@ contains
 
 
    !---------------------------------------------------------------------------!
-   !PURPOSE: Read the Hamiltonian and kpoints providing Eigen-values/vectors
-   !by now only for paramagnetic Hk
+   !PURPOSE: Read the Hamiltonian and kpoints
    !---------------------------------------------------------------------------!
    subroutine read_Hk(Hk,kpt,pathINPUT,filename)
       !
@@ -544,6 +543,77 @@ contains
 
 
    !---------------------------------------------------------------------------!
+   !PURPOSE: Read the Hamiltonian and wigner seiz indexes
+   !---------------------------------------------------------------------------!
+   subroutine read_Hr(Hr,Norb,path)
+      !
+      use utils_misc
+      implicit none
+      !
+      complex(8),allocatable,intent(out)    :: Hr(:,:,:)
+      integer,intent(in)                    :: Norb
+      character(len=*),intent(in)           :: path
+      !
+      integer,parameter                     :: W90NumCol=15
+      integer                               :: unit,Num_wann,Nrpts
+      integer                               :: Qst,Rst,i,j,ir,iwig
+      integer                               :: nx,ny,nz
+      integer                               :: iorb,jorb
+      integer,allocatable                   :: Ndegen(:)
+      real(8)                               :: ReHr,ImHr
+      logical                               :: filexists
+      !
+      !
+      if(verbose)write(*,"(A)") "---- read_Hr"
+      !
+      !
+      if(.not.Lat_stored) stop "read_Hr: Lattice vectors not stored."
+      if(.not.Wig_stored) stop "read_Hr: Wigner-Seiz vectors not stored."
+      !
+      call inquireFile(reg(path),filexists)
+      !
+      write(*,"(A)")"     Reading "//reg(path)
+      if(allocated(Hr))deallocate(Hr)
+      !
+      unit = free_unit()
+      open(unit,file=reg(path),form="formatted",status="unknown",position="rewind",action="read")
+      read(unit,*)          !skip first line
+      read(unit,*) Num_wann !Number of Wannier orbitals
+      read(unit,*) Nrpts    !Number of Wigner-Seitz vectors
+      !
+      if(Norb.ne.Num_wann) stop "read_Hr: Hr.DAT does not have the correct dimension."
+      allocate(Hr(Norb,Norb,Nwig));Hr=czero
+      !
+      Qst = int(Nrpts/W90NumCol)
+      Rst = mod(Nrpts,W90NumCol)
+      !
+      allocate(Ndegen(Nrpts));Ndegen=0
+      do i=1,Qst
+         read(unit,*)(Ndegen(j+(i-1)*W90NumCol),j=1,W90NumCol)
+      enddo
+      if(Rst.ne.0)read(unit,*)(Ndegen(j+Qst*W90NumCol),j=1,Rst)
+      !
+      !Read W90 TB hoppings in real space. Assumed paramagnetic
+      do ir=1,Nrpts
+         do i=1,Num_wann
+            do j=1,Num_wann
+               !
+               read(unit,*) nx, ny, nz, iorb, jorb, ReHr, ImHr
+               !
+               iwig = find_vec([nx,ny,nz],Nvecwig,hardstop=.false.)
+               !
+               if(iwig.ne.0)Hr(iorb,jorb,iwig) = dcmplx(ReHr,ImHr)/Ndegen(ir)
+               !
+            enddo
+         enddo
+      enddo
+      close(unit)
+      deallocate(Ndegen)
+      !
+   end subroutine read_Hr
+
+
+   !---------------------------------------------------------------------------!
    !PURPOSE: Build the Hamiltonian and kpoints from user-given parameters
    !---------------------------------------------------------------------------!
    subroutine build_Hk(Hk,kpt,hopping,Nkpt3,readHr,Hetero,pathOUTPUT)
@@ -569,11 +639,7 @@ contains
       complex(8),allocatable                :: Hr(:,:,:),Hr_bulk(:,:,:)
       !W90
       integer,parameter                     :: W90NumCol=15
-      integer                               :: Num_wann,Nrpts
-      integer                               :: Qst,Rst,i,j,ir
-      integer                               :: nx,ny,nz
-      integer,allocatable                   :: Ndegen(:)
-      real(8)                               :: ReHr,ImHr
+      integer                               :: Qst,Rst,ir
       character(len=256)                    :: path
       logical                               :: filexists,rebuild
       !multi-site
@@ -596,7 +662,7 @@ contains
       Norb = size(hopping)
       Nsite = size(Ruc,dim=2)
       Nsite_bulk = Nsite
-      if(Hetero%status) Nsite_bulk = int(Nsite/Hetero%Nlayer) !only one site per layer
+      if(Hetero%status) Nsite_bulk = int(Nsite/Hetero%Nlayer) !multiple sites are on the same layer
       !
       Trange=1
       !
@@ -629,7 +695,7 @@ contains
          !
          call build_kpt(Nkpt3,kpt,pathOUTPUT=reg(pathOUTPUT))
          !
-         !recover the vectors in real space
+         !build the vectors in real space if needed
          if(.not.Wig_stored)call calc_wignerseiz(Nkpt3)
          !
          if(readHr)then
@@ -638,40 +704,7 @@ contains
             path=reg(pathOUTPUT)//"Hr.DAT"
             call inquireFile(reg(path),filexists)
             !
-            unit = free_unit()
-            open(unit,file=reg(path),form="formatted",status="unknown",position="rewind",action="read")
-            read(unit,*)                      !skip first line
-            read(unit,*) Num_wann !Number of Wannier orbitals
-            read(unit,*) Nrpts    !Number of Wigner-Seitz vectors
-            !
-            if(Norb*Nsite_bulk.ne.Num_wann) stop "build_Hk: Hr.DAT does not have the correct dimension."
-            allocate(Hr_bulk(Norb*Nsite_bulk,Norb*Nsite_bulk,Nwig));Hr_bulk=czero
-            !
-            Qst = int(Nrpts/W90NumCol)
-            Rst = mod(Nrpts,W90NumCol)
-            !
-            allocate(Ndegen(Nrpts));Ndegen=0
-            do i=1,Qst
-               read(unit,*)(Ndegen(j+(i-1)*W90NumCol),j=1,W90NumCol)
-            enddo
-            if(Rst.ne.0)read(unit,*)(Ndegen(j+Qst*W90NumCol),j=1,Rst)
-            !
-            !Read W90 TB hoppings in real space. Assumed paramagnetic
-            do ir=1,Nrpts
-               do i=1,Num_wann
-                  do j=1,Num_wann
-                     !
-                     read(unit,*) nx, ny, nz, iorb, jorb, ReHr, ImHr
-                     !
-                     iwig = find_vec([nx,ny,nz],Nvecwig,hardstop=.false.)
-                     !
-                     if(iwig.ne.0)Hr_bulk(iorb,jorb,iwig) = dcmplx(ReHr,ImHr)/Ndegen(ir)
-                     !
-                  enddo
-               enddo
-            enddo
-            close(unit)
-            deallocate(Ndegen)
+            call read_Hr(Hr_bulk,Norb*Nsite_bulk,reg(path))
             !
          else
             !
@@ -786,6 +819,18 @@ contains
             !
             !reshuffle the single-layer Hr into the heterostructured one
             do ilayer=1,Hetero%Nlayer
+               !
+               !Look for layer-dependent real-space Hamiltonian
+               path=reg(pathOUTPUT)//"Hr_"//str(ilayer)//".DAT"
+               call inquireFile(reg(path),filexists,hardstop=.false.)
+               if(filexists)then
+                  call read_Hr(Hr_bulk,Norb*Nsite_bulk,reg(path))
+               else
+                  path=reg(pathOUTPUT)//"Hr.DAT"
+                  call inquireFile(reg(path),filexists)
+                  call read_Hr(Hr_bulk,Norb*Nsite_bulk,reg(path))
+               endif
+               !
                do isite=1,Nsite_bulk
                   do jsite=1,Nsite_bulk
                      do iorb=1,Norb
@@ -949,10 +994,6 @@ contains
          !FT Hr-->Hk
          call wannier_R2K(Nkpt3,kpt,Hr,Hk)
          deallocate(Hr)
-         do ik=1,nkpt
-            if(Norb.gt.1)call check_Hermiticity(Hk(:,:,ik),eps)
-         enddo
-         where(abs((Hk)).lt.eps) Hk=czero
          !
       endif
       !
@@ -995,6 +1036,14 @@ contains
             !
          endif
          !
+      endif
+      !
+      !Check the computed Hk
+      where(abs((Hk)).lt.eps) Hk=czero
+      if(size(Hk,dim=1).gt.1)then
+         do ik=1,nkpt
+            call check_Hermiticity(Hk(:,:,ik),eps,name="Hk_k"//str(ik))
+         enddo
       endif
       !
       if(present(pathOUTPUT))then

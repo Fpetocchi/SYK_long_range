@@ -2,7 +2,7 @@ subroutine dump_MaxEnt_Gfunct(G,mode,dirpath,filename,iorb,WmaxPade)
    !
    use parameters
    use utils_misc
-   use input_vars, only: Nmats, Solver, Beta, Nreal, wrealMax
+   use input_vars, only: Nmats, Solver, Beta, Nreal, wrealMax, Ntau_MaxEnt
    use fourier_transforms
    use file_io
    implicit none
@@ -105,7 +105,7 @@ subroutine dump_MaxEnt_Gfunct(G,mode,dirpath,filename,iorb,WmaxPade)
          !
       case("mats2itau")
          !
-         Ntau = int(2d0*pi*Nmats)
+         Ntau = Ntau_MaxEnt ! int(2d0*pi*Nmats)
          if(Npoints.ne.Nmats) write(*,"(A)")"     Warning: dump_MaxEnt_Gfunct number fo Matsubara points differ from input."
          if(present(WmaxPade).and.(WmaxPade.gt.0)) write(*,"(A)")"     Warning: dump_MaxEnt_Gfunct pade from mats2itau not done."
          allocate(tau(Ntau));tau=0d0
@@ -174,7 +174,7 @@ subroutine dump_MaxEnt_Wfunct(W,mode,dirpath,filename,iorb,type,WmaxPade)
    !
    use parameters
    use utils_misc
-   use input_vars, only: Nmats, Solver, Beta, Nreal, wrealMax
+   use input_vars, only: Nmats, Solver, Beta, Nreal, wrealMax, Ntau_MaxEnt
    use fourier_transforms
    use file_io
    implicit none
@@ -278,7 +278,7 @@ subroutine dump_MaxEnt_Wfunct(W,mode,dirpath,filename,iorb,type,WmaxPade)
          !
       case("mats2itau")
          !
-         Ntau = int(2d0*pi*Nmats)
+         Ntau = Ntau_MaxEnt ! int(2d0*pi*Nmats)
          if(Npoints.ne.Nmats) write(*,"(A)")"     Warning: dump_MaxEnt_Wfunct number fo Matsubara points differ from input."
          if(present(WmaxPade).and.(WmaxPade.gt.0)) write(*,"(A)")"     Warning: dump_MaxEnt_Wfunct pade from mats2itau not done."
          allocate(tau(Ntau));tau=0d0
