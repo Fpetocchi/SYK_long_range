@@ -22,14 +22,14 @@
 //============================================================================//
 
 
-template<typename T> Vec normalize_Vec( Vec &Vec_in, T Norm)
+template<typename T> Vec normalize_Vec( Vec &Vec_in, T Norm )
 {
    int Nrows=Vec_in.size();
    Vec Vec_out(Nrows,0.0);
    for (int irow=0; irow<Nrows; irow++) Vec_out[irow]=Vec_in[irow]/(double) Norm;
    return Vec_out;
 }
-template<typename T> VecVec normalize_VecVec( VecVec &VecVec_in, T Norm)
+template<typename T> VecVec normalize_VecVec( VecVec &VecVec_in, T Norm )
 {
    int Ncols=VecVec_in.size();
    int Nrows=VecVec_in[0].size();
@@ -40,7 +40,7 @@ template<typename T> VecVec normalize_VecVec( VecVec &VecVec_in, T Norm)
    }
    return VecVec_out;
 }
-template<typename T> VecVec normalize_VecVec( VecVec &VecVec_in, std::vector<T> NormCol)
+template<typename T> VecVec normalize_VecVec( VecVec &VecVec_in, std::vector<T> NormCol )
 {
    int Ncols=VecVec_in.size();
    int Nrows=VecVec_in[0].size();
@@ -89,6 +89,18 @@ void spin_symm( VecVec &VecVec_in )
          VecVec_in[dw][i] = val;
       }
    }
+}
+
+void spin_symm( Vec &Vec_1, Vec &Vec_2 )
+{
+   spin_symm( Vec_1 );
+   spin_symm( Vec_2 );
+}
+
+void spin_symm( VecVec &Vec_1, VecVec &Vec_2 )
+{
+   spin_symm( Vec_1 );
+   spin_symm( Vec_2 );
 }
 
 void orb_symm( Vec &Vec_in, std::vector<std::vector<int>> &Lists )
@@ -293,6 +305,18 @@ void orb_symm( VecVec &VecVec_in, std::vector<std::vector<int>> &Lists, int Norb
    }
 }
 
+void orb_symm( Vec &Vec_1, Vec &Vec_2, std::vector<std::vector<int>> &Lists )
+{
+   orb_symm( Vec_1, Lists );
+   orb_symm( Vec_2, Lists );
+}
+
+void orb_symm( VecVec &Vec_1, VecVec &Vec_2, std::vector<std::vector<int>> &Lists )
+{
+   orb_symm( Vec_1, Lists );
+   orb_symm( Vec_2, Lists );
+}
+
 
 
 //----------------------------------------------------------------------------//
@@ -322,7 +346,7 @@ void accumulate_VecVec( VecVec &VecVec_out, VecVec &VecVec_in )
 //----------------------------------------------------------------------------//
 //                              GREEN'S FUNCTION                              //
 //----------------------------------------------------------------------------//
-void measure_G( Vec &G, segment_container_t &segment, Mat &M, double &Beta)
+void measure_G( Vec &G, segment_container_t &segment, Mat &M, double &Beta )
 {
    //
    std::set<times>::iterator it1, it2;
@@ -356,6 +380,7 @@ void measure_G( Vec &G, segment_container_t &segment, Mat &M, double &Beta)
             //
             int index = argument/Beta*(Ntau-1)+0.5;
             G[index] -= M(k,i)*bubble_sign/(Beta*Beta);
+            //
             //safety checks
             bool nanCond = std::isnan(G[index]);
             bool infCond = std::isinf(G[index]);
@@ -367,12 +392,78 @@ void measure_G( Vec &G, segment_container_t &segment, Mat &M, double &Beta)
                printf(" bubble_sign= %f \n",bubble_sign);
                printf(" Beta= %f \n\n\n",Beta);
             }
+            //
          }
       }
    }
 }
 
-void binAverageVecVec( std::vector<int> &bins, VecVec &G, VecVec &Gerr)
+void measure_G( VecVec &Gvec, std::vector<segment_container_t> &segments, VecMat &Mvec, double &Beta )
+{
+   //
+   std::set<times>::iterator it1, it2;
+   int Nflavor = Gvec.size();
+   int Ntau = Gvec[0].size();
+
+   //
+   for (int ifl=0; ifl<Nflavor; ++ifl)
+   {
+      Mat M = Mvec[ifl];
+      segment_container_t segment = segments[ifl];
+
+      //
+      if(segment.size()>0)
+      {
+         //
+         for (int i=0; i<M.cols(); i++)
+         {
+            //
+            (i==0 ? it1 = segment.begin() : it1++);
+            //
+            for (int k=0; k<M.rows(); k++)
+            {
+               //
+               (k==0 ? it2 = segment.begin() : it2++);
+               //
+               if (M(k,i)!=0)
+               {
+                  double argument = it1->t_end()-it2->t_start();
+                  double bubble_sign=1;
+                  //
+                  if (argument > 0)
+                  {
+                     bubble_sign = 1;
+                  }
+                  else
+                  {
+                     bubble_sign = -1;
+                     argument += Beta;
+                  }
+                  //
+                  int index = argument/Beta*(Ntau-1)+0.5;
+                  Gvec[ifl][index] -= M(k,i)*bubble_sign/(Beta*Beta);
+                  //
+                  //safety checks
+                  bool nanCond = std::isnan(Gvec[ifl][index]);
+                  bool infCond = std::isinf(Gvec[ifl][index]);
+                  if( nanCond || infCond )
+                  {
+                     if( nanCond ) printf(" NaN Gvec[%d][%d] \n",ifl,index);
+                     if( infCond ) printf(" Inf Gvec[%d][%d] \n",ifl,index);
+                     printf(" M[%d,%d]= %f \n",k,i,M(k,i));
+                     printf(" bubble_sign= %f \n",bubble_sign);
+                     printf(" Beta= %f \n\n\n",Beta);
+                  }
+                  //
+               }
+            }
+         }
+         //
+      }
+   }
+}
+
+void binAverageVecVec( std::vector<int> &bins, VecVec &G, VecVec &Gerr )
 {
    //
    int Nflavor = G.size();
@@ -411,7 +502,7 @@ void binAverageVecVec( std::vector<int> &bins, VecVec &G, VecVec &Gerr)
 //----------------------------------------------------------------------------//
 //                                   N(tau)                                   //
 //----------------------------------------------------------------------------//
-VecVec measure_nt( std::vector<segment_container_t> &segments, std::vector<int> &full_line, int &Ntau, double &Beta)
+VecVec measure_nt( std::vector<segment_container_t> &segments, std::vector<int> &full_line, int &Ntau, double &Beta )
 {
    //
    int Nflavor = segments.size();
@@ -458,6 +549,134 @@ VecVec measure_nt( std::vector<segment_container_t> &segments, std::vector<int> 
    }
    //
    return n_tau;
+}
+
+
+
+//----------------------------------------------------------------------------//
+//                     IMPROVED ESTIMATOR FOR THE SELF-ENERGY                 //
+//----------------------------------------------------------------------------//
+//void measure_GF( VecVec &Gvec, VecVec &Fvec, std::vector<segment_container_t> &segments, std::vector<int> &full_line, VecMat &Mvec, Mat &Uloc, double &Beta)
+void measure_GF( VecVec &Gvec, VecVec &Fvec_S, VecVec &Fvec_R, std::vector<segment_container_t> &segments, VecMat &Mvec, double &Beta,
+                 Mat &Uloc, VecVecVec &Kp_table )//, Mat &Screening_Mat )
+{
+   //
+   std::set<times>::iterator it1, it2, itn;
+   int Nflavor = Gvec.size();
+   int Ntau = Gvec[0].size();
+   //VecVec n_tau = measure_nt( segments, full_line, Ntau, Beta );
+
+   bool retared = Kp_table.size() > 0;
+
+   //
+   for (int ifl=0; ifl<Nflavor; ++ifl)
+   {
+      Mat M = Mvec[ifl];
+      segment_container_t segment = segments[ifl];
+
+      //
+      if(segment.size()>0)
+      {
+         //
+         for (int i=0; i<M.cols(); i++)
+         {
+            //
+            (i==0 ? it1 = segment.begin() : it1++);
+            //
+            // get corrections for the improved estimator
+            double tie = it1->t_end();
+            Vec nj(Nflavor,0.0);
+            Vec Ij(Nflavor,0.0);
+            for (int jfl=0; jfl<Nflavor; ++jfl)
+            {
+               if(retared)
+               {
+                  int fl1  = std::max(jfl,ifl);
+                  int fl2 = std::min(jfl,ifl);
+                  //
+                  for (itn=segments[jfl].begin(); itn!=segments[jfl].end(); itn++)
+                  {
+                     //
+                     double tjs = itn->t_start();
+                     double tje = itn->t_end();
+                     //
+                     if( (tie <= tje) && (tie >= tjs) && (jfl!=ifl) )
+                     {
+                        nj[jfl]=1.0;
+                     }
+                     //
+                     Ij[jfl] -= ( -H(tje-tie  , Beta, Kp_table[fl1][fl2]) +H(tjs-tie, Beta, Kp_table[fl1][fl2]) );
+                     //
+                     bool selfseg = ( (tie == tje) || (tie == tjs) ) && (jfl==ifl);
+                     if(selfseg) Ij[jfl] -= 2 * Kp_table[fl1][fl2][0];
+                     //
+                  }
+               }
+               else
+               {
+                  if(jfl==ifl) continue;
+                  for (itn=segments[jfl].begin(); itn!=segments[jfl].end(); itn++)
+                  {
+                     //
+                    double tjs = itn->t_start();
+                    double tje = itn->t_end();
+                    //
+                     if( (tie <= tje) && (tie >= tjs) )
+                     {
+                        nj[jfl]=1.0;
+                        break;
+                     }
+                  }
+               }
+
+            }
+            //
+            for (int k=0; k<M.rows(); k++)
+            {
+               //
+               (k==0 ? it2 = segment.begin() : it2++);
+               //
+               if (M(k,i)!=0)
+               {
+                  double argument = it1->t_end()-it2->t_start();
+                  double bubble_sign=1;
+                  //
+                  if (argument > 0)
+                  {
+                     bubble_sign = 1;
+                  }
+                  else
+                  {
+                     bubble_sign = -1;
+                     argument += Beta;
+                  }
+                  //
+                  int index = argument/Beta*(Ntau-1)+0.5;
+                  Gvec[ifl][index] -= M(k,i)*bubble_sign/(Beta*Beta);
+                  //
+                  double Fval_Sta = 0.0;
+                  double Fval_Ret = 0.0;
+                  for (int jfl=0; jfl<Nflavor; ++jfl)
+                  {
+                     if(retared)
+                     {
+                        Fval_Sta += Uloc(jfl,ifl) * nj[jfl] * M(k,i)*bubble_sign/(Beta*Beta);
+                        Fval_Ret += Ij[jfl] * M(k,i)*bubble_sign/(Beta*Beta);
+                     }
+                     else
+                     {
+                        Fval_Sta += Uloc(jfl,ifl) * nj[jfl] * M(k,i)*bubble_sign/(Beta*Beta);
+                     }
+                  }
+                  Fvec_S[ifl][index] -= Fval_Sta;
+                  if(retared) Fvec_R[ifl][index] -= Fval_Ret;
+                  //
+               }
+            }
+         }
+         //
+      }
+   }
 }
 
 

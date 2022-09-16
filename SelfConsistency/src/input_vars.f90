@@ -174,6 +174,8 @@ module input_vars
    logical,public                           :: calc_Pguess
    logical,public                           :: GoWoDC_loc
    logical,public                           :: RemoveHartree
+   logical,public                           :: Dyson_Imprvd_F
+   logical,public                           :: Dyson_Imprvd_B
    real(8),public                           :: alphaChi
    real(8),public                           :: alphaPi
    real(8),public                           :: alphaSigma
@@ -524,6 +526,9 @@ contains
          call parse_input_variable(GoWoDC_loc,"G0W0DC_LOC",InputFile,default=.true.,comment="Keep the local contribution of Tier-III. Automatically removed if non-causal.")
       endif
       call parse_input_variable(RemoveHartree,"REMOVE_HARTREE",InputFile,default=(.not.Hmodel),comment="Remove the Hartree term (curlyU(0)*Nimp/2) from the Impurity self-energy and perform the self-consistency only with the remaining part.")
+      call parse_input_variable(Dyson_Imprvd_F,"DYSON_F_IMPRVD",InputFile,default=.false.,comment="Perform the fermionic Dyson equation using the improved estimators.") !See PRB,85,205106
+      Dyson_Imprvd_B=.false.
+      call append_to_input_list(Dyson_Imprvd_B,"DYSON_B_IMPRVD","Perform the bosonic Dyson equation using the improved estimators (NOT IMPLEMENTED).")
       call parse_input_variable(DC_type_S,"DC_TYPE_S",InputFile,default="GlocWloc",comment="Local GW self-energy which is replaced by the DMFT one. Avalibale: GlocWloc, Sloc.")
       call parse_input_variable(DC_type_P,"DC_TYPE_P",InputFile,default="GlocGloc",comment="Local GG polarization which is replaced by the DMFT one. Avalibale: GlocGloc, Ploc.")
       call parse_input_variable(Embedding,"ADD_EMBEDDING",InputFile,default="None",comment="Constant embedding self-energy stored in PATH_INPUT. Avalibale: loc (filename: Semb_w_s[1,2].DAT), nonloc (filename: Semb_w_k_s[1,2].DAT), None to avoid.")
@@ -653,13 +658,17 @@ contains
       Solver%TargetDensity = look4dens%TargetDensity
       if((ExpandImpurity.or.AFMselfcons).and.(.not.look4dens%local))Solver%TargetDensity = look4dens%TargetDensity/Nsite
       call append_to_input_list(Solver%TargetDensity,"N_READ_IMP","Target density in the impurity list. User cannot set this as its the the same density on within the impurity orbitals if EXPAND=F otherwise its N_READ_LAT/NSITE.")
-      call parse_input_variable(Solver%Norder,"NORDER",InputFile,default=10,comment="Maximum perturbation order measured. Not yet implemented.")
+      call parse_input_variable(Solver%Norder,"NORDER",InputFile,default=10,comment="Maximum perturbation order measured.")
       call parse_input_variable(Solver%Gexp,"GEXPENSIVE",InputFile,default=0,comment="If =1 the impurity Green's function measurment is considered expensive (Needed at high Beta*Bandwidth).")
       call parse_input_variable(Solver%Nmeas,"NMEAS",InputFile,default=1000,comment="Sweeps where expensive measurments are not performed.")
       call parse_input_variable(Solver%Ntherm,"NTHERM",InputFile,default=100,comment="Thermalization cycles. Each cycle performs NMEAS sweeps.")
       call parse_input_variable(Solver%Nshift,"NSHIFT",InputFile,default=1,comment="Proposed segment shifts at each sweep.")
       call parse_input_variable(Solver%Nswap,"NSWAP",InputFile,default=1,comment="Proposed global spin swaps at each sweep.")
-      call parse_input_variable(Solver%N_nnt,"N_NNT",InputFile,default=1,comment="Measurment for <n_a(tau)n_b(0)> evaluation. Updated according to CALC_TYPE. Should be either =1 or 2*NTAU_B_IMP.")
+      call parse_input_variable(Solver%Imprvd_F,"IMPRVD_F",InputFile,default=0,comment="If =1 the improved estimator for the self-energy will be computed.")
+      if(Dyson_Imprvd_F)Solver%Imprvd_F=1
+      call parse_input_variable(Solver%Imprvd_B,"IMPRVD_B",InputFile,default=0,comment="If =1 the improved estimator for the polarization will be computed (NOT IMPLEMENTED).")
+      if(Dyson_Imprvd_B)Solver%Imprvd_B=1
+      call parse_input_variable(Solver%N_nnt,"N_NNT",InputFile,default=1,comment="Measurment for <n_a(tau)n_b(0)> evaluation. Updated according to CALC_TYPE. Should be either =1 or 2*NTAU_B_IMP if =0 measurment avoided.")
       if(.not.bosonicSC)Solver%N_nnt=0
       call parse_input_variable(Solver%PrintTime,"PRINT_TIME",InputFile,default=10,comment="Minutes that have to pass before observables are updated and stored.")
       call parse_input_variable(Solver%binlength,"BINLENGTH",InputFile,default=4,comment="If >0 the Green's function at itau will be the average within +/-binlength.")

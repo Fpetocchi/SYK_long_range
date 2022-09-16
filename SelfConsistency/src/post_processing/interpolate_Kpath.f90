@@ -1162,7 +1162,9 @@ subroutine interpolate2kpath_Bosonic(Wfull,Lttc,pathOUTPUT,name,remove_Gamma,NaN
    write(*,"(A,F)") new_line("A")//new_line("A")//"     "//reg(name)//"(fullBZ,iw) --> "//reg(name)//"(Kpath,iw) cpu timing:", finish-start
    !
    !
-   !Print along path - I'm printing one orbital at a time because my MaxEnt is shitty for bosons
+   !TEST>>>
+   !
+   !Print along path - I'm printing one orbital per file because my MaxEnt is shitty for bosons
    path = reg(pathOUTPUT)//"K_resolved/MaxEnt_"//reg(name)//"k_path_w/"
    call createDir(reg(path),verb=verbose)
    allocate(wmats(Nmats))
@@ -1176,8 +1178,6 @@ subroutine interpolate2kpath_Bosonic(Wfull,Lttc,pathOUTPUT,name,remove_Gamma,NaN
       close(unit)
    enddo
    !
-   !
-   !TEST>>>
    !temporary for the time-being I have a shitty maxent
    do iorb=1,Wdim
       path = reg(pathOUTPUT)//"K_resolved/MaxEnt_"//reg(name)//"k_path_w/"

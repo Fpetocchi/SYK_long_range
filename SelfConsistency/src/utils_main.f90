@@ -56,7 +56,6 @@ module utils_main
    real(8),allocatable                      :: Ek(:,:)
    real(8),allocatable                      :: Ep(:,:)
    !
-   real(8)                                  :: density2set
    complex(8),allocatable                   :: densityLDA(:,:,:)
    complex(8),allocatable                   :: densityGW(:,:,:)
    complex(8),allocatable                   :: densityDMFT(:,:,:)
@@ -2467,9 +2466,9 @@ contains
       character(len=255)                    :: file,MomDir
       logical                               :: filexists,fitSigmaTail
       !Impurity Green's function
-      type(FermionicField),allocatable      :: Gimp(:)
-      complex(8),allocatable                :: Gitau(:,:,:)
-      complex(8),allocatable                :: Gmats(:,:)
+      type(FermionicField),allocatable      :: Gimp(:),Fimp(:)
+      complex(8),allocatable                :: Gitau(:,:,:),Fitau(:,:,:)
+      complex(8),allocatable                :: Gmats(:,:),Fmats(:,:)
       !Impurity self-energy and fermionic Dyson equation
       type(FermionicField),allocatable      :: Simp(:)
       type(FermionicField)                  :: G0imp
@@ -2496,9 +2495,11 @@ contains
       if(ExpandImpurity)then
          allocate(Gimp(1))
          allocate(Simp(1))
+         if(Dyson_Imprvd_F)allocate(Fimp(1))
       else
          allocate(Gimp(Nsite))
          allocate(Simp(Nsite))
+         if(Dyson_Imprvd_F)allocate(Fimp(Nsite))
       endif
       do isite=1,Nsite
          !
@@ -2522,6 +2523,11 @@ contains
          call AllocateFermionicField(Simp(isite),LocalOrbs(isite)%Norb,Nmats,Beta=Beta)
          call clear_attributes(Simp(isite))
          !
+         if(Dyson_Imprvd_F)then
+            call AllocateFermionicField(Fimp(isite),LocalOrbs(isite)%Norb,Nmats,Beta=Beta)
+            call clear_attributes(Fimp(isite))
+         endif
+         !
          if(ExpandImpurity.or.AFMselfcons)exit
          !
       enddo
@@ -2533,7 +2539,7 @@ contains
       allocate(densityDMFT(Crystal%Norb,Crystal%Norb,Nspin));densityDMFT=czero
       do isite=1,Nsite
          !
-         write(*,"(A)") new_line("A")//"     Collecting occupation of site: "//reg(LocalOrbs(isite)%Name)
+         write(*,"(A)") new_line("A")//"     Collecting occupation of site "//reg(LocalOrbs(isite)%Name)
          !
          !Read the impurity occupation
          file = reg(PrevItFolder)//"Solver_"//reg(LocalOrbs(isite)%Name)//"/resultsQMC/Nqmc.DAT"
@@ -2573,11 +2579,11 @@ contains
       call AllocateFermionicField(G_DMFT,Crystal%Norb,Nmats,Nsite=Nsite,Beta=Beta)
       do isite=1,Nsite
          !
-         write(*,"(A)") new_line("A")//"     Collecting the impurity Green's function of site: "//reg(LocalOrbs(isite)%Name)
+         write(*,"(A)") new_line("A")//"     Collecting the impurity Green's function of site "//reg(LocalOrbs(isite)%Name)
          !
          !Read the impurity Green's function
          allocate(tauF(Solver%NtauF_in));tauF = linspace(0d0,Beta,Solver%NtauF_in)
-         allocate(Gitau(LocalOrbs(isite)%Norb,Solver%NtauF_in,Nspin));Gitau=czero !dcmplx(-eps,0d0)
+         allocate(Gitau(LocalOrbs(isite)%Norb,Solver%NtauF_in,Nspin));Gitau=czero
          allocate(ReadLine(LocalOrbs(isite)%Nflavor))
          file = reg(PrevItFolder)//"Solver_"//reg(LocalOrbs(isite)%Name)//"/resultsQMC/Gimp_t.DAT"
          call inquireFile(reg(file),filexists,verb=verbose)
@@ -2636,51 +2642,192 @@ contains
       !
       ! FERMIONIC DYSON EQUATION -----------------------------------------------
       call AllocateFermionicField(S_DMFT,Crystal%Norb,Nmats,Nsite=Nsite,Beta=Beta)
-      do isite=1,Nsite
-         !
-         write(*,"(A)") new_line("A")//"     Collecting curlyG of site: "//reg(LocalOrbs(isite)%Name)
-         !
-         !Read curlyG
-         call AllocateFermionicField(G0imp,LocalOrbs(isite)%Norb,Nmats,Beta=Beta)
-         call read_FermionicField(G0imp,reg(PrevItFolder)//"Solver_"//reg(LocalOrbs(isite)%Name)//"/","G0_"//reg(LocalOrbs(isite)%Name)//"_w")
-         !
-         !Adjust with the chemical potential if the solver has changed it
-         if((abs(G0imp%mu-muQMC).gt.1e-5).and.update_curlyG)then
-            write(*,"(A)") new_line("A")//"     Updating the chemical potential of curlyG from "//str(G0imp%mu)//" to "//str(muQMC)
-            do ispin=1,Nspin
-               do iw=1,Nmats
-                  do iorb=1,LocalOrbs(isite)%Norb
-                     G0imp%ws(iorb,iorb,iw,ispin) = 1d0/(1d0/G0imp%ws(iorb,iorb,iw,ispin) - G0imp%mu + muQMC)
-                  enddo
-               enddo
-               if(paramagnet)then
-                  G0imp%ws(:,:,:,Nspin) = G0imp%ws(:,:,:,1)
-                  exit
-               endif
-            enddo
-            G0imp%mu=muQMC
-            call dump_FermionicField(G0imp,reg(PrevItFolder)//"Solver_"//reg(LocalOrbs(isite)%Name)//"/","G0_"//reg(LocalOrbs(isite)%Name)//"_w",paramagnet)
-         endif
-         !
-         !Fermionic Dyson equation in the solver basis (always diagonal)
-         write(*,"(A)") new_line("A")//"     Solving fermionic Dyson of site: "//reg(LocalOrbs(isite)%Name)
-         do ispin=1,Nspin
-            do iorb=1,LocalOrbs(isite)%Norb
-               Simp(isite)%ws(iorb,iorb,:,ispin) = 1d0/G0imp%ws(iorb,iorb,:,ispin) - 1d0/Gimp(isite)%ws(iorb,iorb,:,ispin)
-            enddo
-            if(paramagnet)then
-               Simp(isite)%ws(:,:,:,Nspin) = Simp(isite)%ws(:,:,:,1)
+      !
+      ! Check if the fermionic improved estimators are present
+      if(Dyson_Imprvd_F)then
+         do isite=1,Nsite
+            file = reg(PrevItFolder)//"Solver_"//reg(LocalOrbs(isite)%Name)//"/resultsQMC/Fimp_S_t.DAT"
+            call inquireFile(reg(file),filexists,hardstop=.false.,verb=verbose)
+            if(.not.filexists)then
+               write(*,"(A)") "     The static improved esitmators for site "//reg(LocalOrbs(isite)%Name)//" is missing. Switching to standard Dyson equation."
+               Dyson_Imprvd_F=.false.
+               deallocate(Fimp)
                exit
             endif
          enddo
-         call DeallocateFermionicField(G0imp)
+      endif
+      !
+      ! Solve the Dyson equation for each site
+      if(Dyson_Imprvd_F)then
+         !
+         ! Collect static improved estimators
+         do isite=1,Nsite
+            !
+            write(*,"(A)") new_line("A")//"     Collecting the static impurity improved estimator of site "//reg(LocalOrbs(isite)%Name)
+            !
+            !Read the impurity Green's function
+            allocate(tauF(Solver%NtauF_in));tauF = linspace(0d0,Beta,Solver%NtauF_in)
+            allocate(Fitau(LocalOrbs(isite)%Norb,Solver%NtauF_in,Nspin));Fitau=czero
+            allocate(ReadLine(LocalOrbs(isite)%Nflavor))
+            file = reg(PrevItFolder)//"Solver_"//reg(LocalOrbs(isite)%Name)//"/resultsQMC/Fimp_S_t.DAT"
+            call inquireFile(reg(file),filexists,verb=verbose)
+            unit = free_unit()
+            open(unit,file=reg(file),form="formatted",status="old",position="rewind",action="read")
+            do itau=1,Solver%NtauF_in
+               ReadLine=0d0
+               read(unit,*) taup,ReadLine
+               if(abs(taup-tauF(itau)).gt.eps) stop "Reading Fimp_S_t.DAT from previous iteration: Impurity fermionic tau mesh does not coincide."
+               !
+               ndx=1
+               do iorb=1,LocalOrbs(isite)%Norb
+                  do ispin=1,Nspin
+                     Fitau(iorb,itau,ispin) = dcmplx(ReadLine(ndx),0d0)
+                     ndx=ndx+1
+                  enddo
+               enddo
+               !
+            enddo
+            deallocate(ReadLine,tauF)
+            call dump_MaxEnt(Fitau,"itau",reg(PrevItFolder)//"Convergence/","Fqmc_S_"//reg(LocalOrbs(isite)%Name))
+            !
+            !FT to the matsubara axis
+            allocate(Fmats(LocalOrbs(isite)%Norb,Nmats));Fmats=czero
+            do ispin=1,Nspin
+               call Fitau2mats_vec(Beta,Fitau(:,:,ispin),Fmats,tau_uniform=.true.)
+               do iw=1,Nmats
+                  Fimp(isite)%ws(:,:,iw,ispin) = diag(Fmats(:,iw))
+               enddo
+               if(paramagnet)then
+                  Fimp(isite)%ws(:,:,:,Nspin) = Fimp(isite)%ws(:,:,:,1)
+                  exit
+               endif
+            enddo
+            deallocate(Fitau,Fmats)
+            call dump_FermionicField(Fimp(isite),reg(PrevItFolder)//"Solver_"//reg(LocalOrbs(isite)%Name)//"/","Fimp_S_"//reg(LocalOrbs(isite)%Name)//"_w",paramagnet)
+            !
+         enddo
+         !
+         ! Collect retarded improved estimators
+         do isite=1,Nsite
+            !
+            write(*,"(A)") new_line("A")//"     Collecting the retarded impurity improved estimator of site "//reg(LocalOrbs(isite)%Name)
+            !
+            !Read the impurity Green's function
+            allocate(tauF(Solver%NtauF_in));tauF = linspace(0d0,Beta,Solver%NtauF_in)
+            allocate(Fitau(LocalOrbs(isite)%Norb,Solver%NtauF_in,Nspin));Fitau=czero
+            allocate(ReadLine(LocalOrbs(isite)%Nflavor))
+            file = reg(PrevItFolder)//"Solver_"//reg(LocalOrbs(isite)%Name)//"/resultsQMC/Fimp_R_t.DAT"
+            call inquireFile(reg(file),filexists,verb=verbose,hardstop=.false.)
+            if(.not.filexists)then
+               write(*,"(A)")"     File "//reg(file)//" not found, using only static improved estimator."
+               cycle
+            endif
+            unit = free_unit()
+            open(unit,file=reg(file),form="formatted",status="old",position="rewind",action="read")
+            do itau=1,Solver%NtauF_in
+               ReadLine=0d0
+               read(unit,*) taup,ReadLine
+               if(abs(taup-tauF(itau)).gt.eps) stop "Reading Fimp_R_t.DAT from previous iteration: Impurity fermionic tau mesh does not coincide."
+               !
+               ndx=1
+               do iorb=1,LocalOrbs(isite)%Norb
+                  do ispin=1,Nspin
+                     Fitau(iorb,itau,ispin) = dcmplx(ReadLine(ndx),0d0)
+                     ndx=ndx+1
+                  enddo
+               enddo
+               !
+            enddo
+            deallocate(ReadLine,tauF)
+            call dump_MaxEnt(Fitau,"itau",reg(PrevItFolder)//"Convergence/","Fqmc_R_"//reg(LocalOrbs(isite)%Name))
+            !
+            !FT to the matsubara axis and add to the existing field
+            allocate(Fmats(LocalOrbs(isite)%Norb,Nmats));Fmats=czero
+            do ispin=1,Nspin
+               call Fitau2mats_vec(Beta,Fitau(:,:,ispin),Fmats,tau_uniform=.true.)
+               do iw=1,Nmats
+                  Fimp(isite)%ws(:,:,iw,ispin) = Fimp(isite)%ws(:,:,iw,ispin) + diag(Fmats(:,iw))
+               enddo
+               if(paramagnet)then
+                  Fimp(isite)%ws(:,:,:,Nspin) = Fimp(isite)%ws(:,:,:,1)
+                  exit
+               endif
+            enddo
+            deallocate(Fitau,Fmats)
+            call dump_FermionicField(Fimp(isite),reg(PrevItFolder)//"Solver_"//reg(LocalOrbs(isite)%Name)//"/","Fimp_"//reg(LocalOrbs(isite)%Name)//"_w",paramagnet)
+            !
+         enddo
+         !
+         !Fermionic Dyson equation in the solver basis (always diagonal)
+         do isite=1,Nsite
+            !
+            write(*,"(A)") new_line("A")//"     Solving fermionic Dyson of site "//reg(LocalOrbs(isite)%Name)//" using improved estimator."
+            do ispin=1,Nspin
+               do iorb=1,LocalOrbs(isite)%Norb
+                  Simp(isite)%ws(iorb,iorb,:,ispin) = Fimp(isite)%ws(iorb,iorb,:,ispin) / Gimp(isite)%ws(iorb,iorb,:,ispin)
+               enddo
+               if(paramagnet)then
+                  Simp(isite)%ws(:,:,:,Nspin) = Simp(isite)%ws(:,:,:,1)
+                  exit
+               endif
+            enddo
+            !
+         enddo
+         !
+      else
+         !
+         do isite=1,Nsite
+            !
+            write(*,"(A)") new_line("A")//"     Collecting curlyG of site "//reg(LocalOrbs(isite)%Name)
+            !
+            !Read curlyG
+            call AllocateFermionicField(G0imp,LocalOrbs(isite)%Norb,Nmats,Beta=Beta)
+            call read_FermionicField(G0imp,reg(PrevItFolder)//"Solver_"//reg(LocalOrbs(isite)%Name)//"/","G0_"//reg(LocalOrbs(isite)%Name)//"_w")
+            !
+            !Adjust with the chemical potential if the solver has changed it
+            if((abs(G0imp%mu-muQMC).gt.1e-5).and.update_curlyG)then
+               write(*,"(A)") new_line("A")//"     Updating the chemical potential of curlyG from "//str(G0imp%mu)//" to "//str(muQMC)
+               do ispin=1,Nspin
+                  do iw=1,Nmats
+                     do iorb=1,LocalOrbs(isite)%Norb
+                        G0imp%ws(iorb,iorb,iw,ispin) = 1d0/(1d0/G0imp%ws(iorb,iorb,iw,ispin) - G0imp%mu + muQMC)
+                     enddo
+                  enddo
+                  if(paramagnet)then
+                     G0imp%ws(:,:,:,Nspin) = G0imp%ws(:,:,:,1)
+                     exit
+                  endif
+               enddo
+               G0imp%mu=muQMC
+               call dump_FermionicField(G0imp,reg(PrevItFolder)//"Solver_"//reg(LocalOrbs(isite)%Name)//"/","G0_"//reg(LocalOrbs(isite)%Name)//"_w",paramagnet)
+            endif
+            !
+            !Fermionic Dyson equation in the solver basis (always diagonal)
+            write(*,"(A)") new_line("A")//"     Solving fermionic Dyson of site "//reg(LocalOrbs(isite)%Name)
+            do ispin=1,Nspin
+               do iorb=1,LocalOrbs(isite)%Norb
+                  Simp(isite)%ws(iorb,iorb,:,ispin) = 1d0/G0imp%ws(iorb,iorb,:,ispin) - 1d0/Gimp(isite)%ws(iorb,iorb,:,ispin)
+               enddo
+               if(paramagnet)then
+                  Simp(isite)%ws(:,:,:,Nspin) = Simp(isite)%ws(:,:,:,1)
+                  exit
+               endif
+            enddo
+            call DeallocateFermionicField(G0imp)
+            !
+         enddo
+         !
+      endif
+      !
+      !Self-energy manipulations
+      do isite=1,Nsite
          !
          !Fit the impurity self-energy tail
          if(fitSigmaTail)then
             !
             call dump_FermionicField(Simp(isite),reg(PrevItFolder)//"Solver_"//reg(LocalOrbs(isite)%Name)//"/","S_noFit_"//reg(LocalOrbs(isite)%Name)//"_w",paramagnet)
             !
-            write(*,"(A)") new_line("A")//"     Fitting self-energy moments of site: "//reg(LocalOrbs(isite)%Name)
+            write(*,"(A)") new_line("A")//"     Fitting self-energy moments of site "//reg(LocalOrbs(isite)%Name)
             !
             !define the frequency index from which substitute the tail
             allocate(wmats(Nmats));wmats=FermionicFreqMesh(Beta,Nmats)
@@ -2815,7 +2962,7 @@ contains
          !
          do isite=1,Nsite
             !
-            write(*,"(A)") new_line("A")//"     Collecting the impurity susceptibilities of site: "//reg(LocalOrbs(isite)%Name)
+            write(*,"(A)") new_line("A")//"     Collecting the impurity susceptibilities of site "//reg(LocalOrbs(isite)%Name)
             !
             !Read the impurity N(tau)N(0)
             allocate(tauB(Solver%NtauB_in));tauB=0d0
@@ -2977,7 +3124,7 @@ contains
             !
             !Remove the iw=0 divergency of local charge susceptibility
             if(removeCDW_C)then
-               write(*,"(A)") new_line("A")//"     Divergency removal in ChiC(iw=0) of site: "//reg(LocalOrbs(isite)%Name)
+               write(*,"(A)") new_line("A")//"     Divergency removal in ChiC(iw=0) of site "//reg(LocalOrbs(isite)%Name)
                call dump_BosonicField(ChiCmats,reg(PrevItFolder)//"Solver_"//reg(LocalOrbs(isite)%Name)//"/","ChiC_CDW_"//reg(LocalOrbs(isite)%Name)//"_w.DAT")
                allocate(CDW(ChiCmats%Nbp,ChiCmats%Nbp));CDW=0d0
                CDW = real(ChiCmats%screened_local(:,:,1))
@@ -2998,9 +3145,9 @@ contains
             call read_BosonicField(curlyU,reg(PrevItFolder)//"Solver_"//reg(LocalOrbs(isite)%Name)//"/","curlyU_"//reg(LocalOrbs(isite)%Name)//"_w.DAT")
             !
             !Bosonic Dyson equation in the solver basis
-            write(*,"(A)") new_line("A")//"     Solving bosonic Dyson of site: "//reg(LocalOrbs(isite)%Name)
+            write(*,"(A)") new_line("A")//"     Solving bosonic Dyson of site "//reg(LocalOrbs(isite)%Name)
             call AllocateBosonicField(Pimp,LocalOrbs(isite)%Norb,Nmats,Crystal%iq_gamma,no_bare=.true.,Beta=Beta)
-            call calc_Pimp(Pimp,curlyU,ChiCmats,NaNb=Test_flag_3)
+            call calc_Pimp(Pimp,curlyU,ChiCmats) !,NaNb=Test_flag_3)
             !
             !Compute convergence benchmark for the interaction
             call AllocateBosonicField(Wimp,LocalOrbs(isite)%Norb,Nmats,Crystal%iq_gamma,Beta=Beta)
@@ -3055,6 +3202,7 @@ contains
       endif
       !
       deallocate(Gimp,Simp)
+      if(Dyson_Imprvd_F)deallocate(Fimp)
       do isite=1,Nsite
          deallocate(LocalOrbs(isite)%rho_Flav)
          deallocate(LocalOrbs(isite)%rho_OrbSpin)

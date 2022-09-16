@@ -55,10 +55,6 @@ program SelfConsistency
    call dump_MaxEnt(Slat_Gamma,"mats",reg(ItFolder)//"Convergence/","Slat_Gamma",EqvGWndx%SetOrbs,WmaxPade=PadeWlimit)
    call dump_MaxEnt(Slat_Gamma,"mats2itau",reg(ItFolder)//"Convergence/","Slat_Gamma",EqvGWndx%SetOrbs)
    !
-   call AllocateFermionicField(S_DMFT,Crystal%Norb,Nmats,Nsite=Nsite,Beta=Beta)
-   call read_FermionicField(S_DMFT,reg(PrevItFolder),"Simp_w")
-   call dump_MaxEnt(S_DMFT,"mats",reg(ItFolder)//"Convergence/","Simp",EqvGWndx%SetOrbs,WmaxPade=PadeWlimit)
-   !
    stop
 #elif defined _gap
    call calc_Tc(reg(ItFolder),gap_equation,Crystal)

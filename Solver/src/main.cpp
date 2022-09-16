@@ -37,9 +37,9 @@ int main(int argc, char *argv[])
    double Beta;
    int Nspin,NtauF,NtauB,Norder;
    int Nmeas,Ntherm,Nshift,Nswap,Nnnt,printTime;
-   //logical flags and compatibility typo fix
-   bool Gexp,paramagnet,retarded,removeUhalf,quickloops;
-   int Gexp_read,para_read,ret_read,rmvU2_read,quick_read;
+   // Logical flags and compatibility typo fix
+   bool Gexp,paramagnet,retarded,removeUhalf,quickloops,Impr_F,Impr_B;
+   int Gexp_read,para_read,ret_read,rmvU2_read,quick_read,Impr_F_read,Impr_B_read;
    // Post-processing of the Green's function
    int binlength,binstart;
    //Symmetrization type
@@ -96,6 +96,9 @@ int main(int argc, char *argv[])
       find_param(argv[1], "PRINT_TIME"      , printTime   );
       find_param(argv[1], "PARAMAGNET"      , para_read   ); paramagnet = (para_read == 1) ? true : false;
       find_param(argv[1], "RETARDED"        , ret_read    ); retarded = (ret_read == 1) ? true : false;
+      // Improved estimators
+      find_param(argv[1], "IMPRVD_F"        , Impr_F_read ); Impr_F = (Impr_F_read == 1) ? true : false;
+      find_param(argv[1], "IMPRVD_B"        , Impr_B_read ); Impr_B = false;
       // Post-processing of the Green's function
       find_param(argv[1], "BINLENGTH"       , binlength   );
       find_param(argv[1], "BINSTART"        , binstart    );
@@ -124,6 +127,8 @@ int main(int argc, char *argv[])
          mpi.report(" Nshift= "+str(Nshift));
          mpi.report(" Nswap= "+str(Nswap));
          mpi.report(" Nnnt= "+str(Nnnt));
+         mpi.report(" Impr_F= "+str(Impr_F));
+         mpi.report(" Impr_B= "+str(Impr_B));
          mpi.report(" printTime= "+str(printTime)+"min");
          mpi.report(" retarded= "+str(retarded));
          mpi.report(" quickloops= "+str(quickloops));
@@ -243,7 +248,7 @@ int main(int argc, char *argv[])
          {
             mpi.report(" Folder = "+SiteDir[isite]+" (Found).");
             ImpurityList.push_back( ct_hyb( SiteDir[isite], SiteName[isite], Beta, Nspin, SiteNorb[isite], NtauF, NtauB,
-                                            Norder, Gexp, Nmeas, Ntherm, Nshift, Nswap, Nnnt,
+                                            Norder, Gexp, Nmeas, Ntherm, Nshift, Nswap, Nnnt, Impr_F, Impr_B,
                                             removeUhalf, paramagnet, retarded, SiteSetsNorb[isite],
                                             printTime, std::vector<int> { binlength,binstart }, mpi ) );
             ImpurityList[isite].init();

@@ -213,6 +213,8 @@ module parameters
       integer                               :: retarded=0
       integer                               :: quickloops=0
       integer                               :: removeUhalf=0
+      integer                               :: Imprvd_F=0
+      integer                               :: Imprvd_B=0
    end type QMC
 
    !---------------------------------------------------------------------------!
