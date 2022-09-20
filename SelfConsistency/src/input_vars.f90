@@ -238,10 +238,11 @@ module input_vars
    logical,public                           :: bosonicSC=.false.
    !
    !Testing flags
-   logical,private                          :: Testing=.true.
+   logical,private                          :: Testing=.false.
    logical,public                           :: Test_flag_1=.false.
    logical,public                           :: Test_flag_2=.false.
    logical,public                           :: Test_flag_3=.false.
+   logical,public                           :: Test_flag_4=.false.
    !
 #ifdef _verb
    logical,private                          :: verbose=.true.

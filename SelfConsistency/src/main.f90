@@ -217,6 +217,7 @@ program SelfConsistency
                call read_FermionicField(S_G0W0dc,reg(pathINPUTtr),"SGoWo_dc_w",Crystal%kpt)
             else
                if(calc_S_G0W0dc)then
+                  if(Iteration.gt.0) stop "The internal G0W0dc calculation must be performed in the 0th iteration."
                   write(*,"(A,F)")"     Computing dc between G0W0 and scGW."
                   call calc_sigmaGW(S_G0W0dc,Glat,Wlat,Crystal)!,LDAoffdiag=.false.) I believed the scGWdc should have had OD terms removed but its not working
                   call dump_FermionicField(S_G0W0dc,reg(pathINPUTtr),"SGoWo_dc_w",.true.,Crystal%kpt,paramagnet)

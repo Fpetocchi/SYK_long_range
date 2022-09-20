@@ -1754,7 +1754,7 @@ contains
       integer                               :: itau,ndx,wndx
       real(8),allocatable                   :: wmats(:),tau(:),Moments(:,:,:)
       real(8),allocatable                   :: Eloc(:,:),ElocOld(:,:),Eloc_s(:,:,:),PrintLine(:),coef01(:,:)
-      real(8)                               :: tailShift,CrystalField,taup
+      real(8)                               :: CrystalField,taup
       complex(8),allocatable                :: zeta(:,:,:),invG(:,:)
       complex(8),allocatable                :: Dfit(:,:,:),Dmats(:,:,:),Ditau(:,:,:)
       complex(8),allocatable                :: invCurlyG(:,:,:),invCurlyG_MultiTier(:,:,:)
@@ -1900,7 +1900,7 @@ contains
             wndx = minloc(abs(wmats-0.85*wmatsMax),dim=1)
             call fit_moments(Dfit,Beta,reg(MomDir),reg(file),"Sigma",Moments,filename="DeltaMom",Wlimit=wndx)
             !
-            if(reg(reg(DeltaFit)).eq."Inf") Eloc = real(Dfit(:,Nmats,:))
+            if(reg(reg(DeltaFit)).eq."Inf") Eloc = dreal(Dfit(:,Nmats,:))
             if(reg(reg(DeltaFit)).eq."Moments") Eloc = Moments(:,:,0)
             coef01 = Moments(:,:,1)
             !
@@ -1917,14 +1917,6 @@ contains
             do iw=1,Nmats
                Dmats(iorb,iw,ispin) = dcmplx( Glat%mu , wmats(iw) ) - Eloc(iorb,ispin) - invCurlyG(iorb,iw,ispin)
             enddo
-            !
-            !Additional correction - maybe useless
-            if(dreal(Dmats(iorb,Nmats,ispin))*real(Dmats(iorb,Nmats-1,ispin)).lt.0d0)then
-               tailShift = real(Dmats(iorb,Nmats,ispin)) + (Dmats(iorb,Nmats,ispin)-Dmats(iorb,Nmats-1,ispin))*2d0
-               write(*,"(A,E13.3)")"     Additional Eloc shift orb: "//str(iorb)//" spin: "//str(ispin),tailShift
-               Eloc(iorb,ispin) = Eloc(iorb,ispin) + tailShift
-               Dmats(iorb,:,ispin) = Dmats(iorb,:,ispin) - tailShift
-            endif
             !
          enddo
       enddo
@@ -2474,7 +2466,7 @@ contains
       type(FermionicField)                  :: G0imp
       type(BosonicField)                    :: curlyU
       complex(8),allocatable                :: Sfit(:,:,:),SmatsTail(:)
-      real(8),allocatable                   :: Uinst(:,:)
+      real(8),allocatable                   :: n0(:,:),Uinst(:,:)
       !Impurity susceptibilities
       real(8),allocatable                   :: nnt(:,:,:)
       complex(8),allocatable                :: NNitau(:,:,:,:,:)
@@ -2603,6 +2595,7 @@ contains
             enddo
             !
          enddo
+         close(unit)
          deallocate(ReadLine,tauF)
          call dump_MaxEnt(Gitau,"itau",reg(PrevItFolder)//"Convergence/","Gqmc_"//reg(LocalOrbs(isite)%Name))
          !
@@ -2687,6 +2680,7 @@ contains
                enddo
                !
             enddo
+            close(unit)
             deallocate(ReadLine,tauF)
             call dump_MaxEnt(Fitau,"itau",reg(PrevItFolder)//"Convergence/","Fqmc_S_"//reg(LocalOrbs(isite)%Name))
             !
@@ -2738,6 +2732,7 @@ contains
                enddo
                !
             enddo
+            close(unit)
             deallocate(ReadLine,tauF)
             call dump_MaxEnt(Fitau,"itau",reg(PrevItFolder)//"Convergence/","Fqmc_R_"//reg(LocalOrbs(isite)%Name))
             !
@@ -2990,6 +2985,7 @@ contains
                enddo
                !
             enddo
+            close(unit)
             deallocate(ReadLine)
             !
             !Reshape N(tau)N(0)for easier handling
@@ -3035,6 +3031,28 @@ contains
             !
             !
             !Charge susceptibility----------------------------------------------
+            !TEST>>>
+            !Collect n(tau=0) instead of the density as it is obtained with the same statistics
+            allocate(n0(LocalOrbs(isite)%Norb,Nspin));n0=0d0
+            allocate(ReadLine(LocalOrbs(isite)%Nflavor))
+            file = reg(PrevItFolder)//"Solver_"//reg(LocalOrbs(isite)%Name)//"/resultsQMC/n_t.DAT"
+            call inquireFile(reg(file),filexists,verb=verbose)
+            unit = free_unit()
+            open(unit,file=reg(file),form="formatted",status="old",position="rewind",action="read")
+            ReadLine=0d0
+            read(unit,*) taup,ReadLine
+            if(abs(taup).gt.0d0) stop "Reading n_t.DAT from previous iteration: first tau point is not zero."
+            ndx=1
+            do iorb=1,LocalOrbs(isite)%Norb
+               do ispin=1,Nspin
+                  n0(iorb,ispin) = ReadLine(ndx)
+                  ndx=ndx+1
+               enddo
+            enddo
+            close(unit)
+            deallocate(ReadLine)
+            !>>>TEST
+            !
             !ChiC(tau) = Sum_s1s2 <Na(tau)Nb(0)> - <Na><Nb> in the solver basis
             call AllocateBosonicField(ChiCitau,LocalOrbs(isite)%Norb,Solver%NtauB_in,Crystal%iq_gamma,no_bare=.true.,Beta=Beta)
             do iorb=1,LocalOrbs(isite)%Norb
@@ -3045,14 +3063,20 @@ contains
                   do ispin=1,Nspin
                      do jspin=1,Nspin
                         !
-                        ChiCitau%screened_local(ib1,ib2,:) = ChiCitau%screened_local(ib1,ib2,:) + &
-                        ( NNitau(iorb,jorb,ispin,jspin,:) - LocalOrbs(isite)%rho_OrbSpin(iorb,iorb,ispin) * LocalOrbs(isite)%rho_OrbSpin(jorb,jorb,jspin) )
+                        if(Test_flag_4)then
+                           ChiCitau%screened_local(ib1,ib2,:) = ChiCitau%screened_local(ib1,ib2,:) + ( NNitau(iorb,jorb,ispin,jspin,:) - n0(iorb,ispin) * n0(jorb,jspin) )
+                           !( NNitau(iorb,jorb,ispin,jspin,:) - LocalOrbs(isite)%rho_OrbSpin(iorb,iorb,ispin) * LocalOrbs(isite)%rho_OrbSpin(jorb,jorb,jspin) )
+                        else
+                           ChiCitau%screened_local(ib1,ib2,:) = ChiCitau%screened_local(ib1,ib2,:) + &
+                           ( NNitau(iorb,jorb,ispin,jspin,:) - LocalOrbs(isite)%rho_OrbSpin(iorb,iorb,ispin) * LocalOrbs(isite)%rho_OrbSpin(jorb,jorb,jspin) )
+                        endif
                         !
                      enddo
                   enddo
                   !
                enddo
             enddo
+            deallocate(n0)
             !
             !
             !Double occupations-------------------------------------------------

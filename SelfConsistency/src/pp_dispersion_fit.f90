@@ -178,7 +178,7 @@ program pp_dispersion_fit
          do iR=1,maplen(idist)
             iwig = map(idist,iR)
             !if(ik.eq.1) write(*,"(2(A,I4),A,2F12.6,2(A,1F12.6),A,3I4)") "iR: ",iR," radius index: ",iwig," hopping: ",thopping(idist,:),"    radius value: ",radiuswig_sorted(iwig),"    Rlat value: ",radiuswig(Zrad(orderR(iwig)))," Nvecwig: ",Nvecwig(:,Zrad(orderR(iwig)))
-            if(ik.eq.1) write(*,"(2(A,I4),A,2F12.6,1(A,1F12.6),A,3I4)") "iR: ",iR," radius index: ",iwig," hopping: ",thopping(idist,:),"    radius value: ",radiuswig_sorted(iwig)," Nvecwig: ",Nvecwig(:,orderR(iwig))
+            if(ik.eq.1) write(*,"(2(A,I4),A,"//str(Crystal%Norb)//"F12.6,1(A,1F12.6),A,3I4)") "iR: ",iR," radius index: ",iwig," hopping: ",thopping(idist,:),"    radius value: ",radiuswig_sorted(iwig)," Nvecwig: ",Nvecwig(:,orderR(iwig))
             kR = 2*pi * dot_product(Crystal%kptpath(:,ik),Nvecwig(:,orderR(iwig)))
             cosinesEk(idist,ik) = cosinesEk(idist,ik) + cos(kR)
          enddo
@@ -272,7 +272,11 @@ program pp_dispersion_fit
    allocate(Rot(Crystal%Norb,Crystal%Norb));Rot=1d0/sqrt(2d0)
    Rot(2,2)=-1d0/sqrt(2d0)
    do ik=1,Crystal%Nkpt
-      Crystal%Hk(:,:,ik) = rotate(diag(Ek_model_BZ(:,ik)),Rot)
+      if(Crystal%Norb.gt.1)then
+         Crystal%Hk(:,:,ik) = rotate(diag(Ek_model_BZ(:,ik)),Rot)
+      else
+         Crystal%Hk(1,1,ik) = Ek_model_BZ(1,ik)
+      endif
       Crystal%Hloc = Crystal%Hloc + Crystal%Hk(:,:,ik)/Crystal%Nkpt
    enddo
    do iorb=1,Crystal%Norb
@@ -488,7 +492,7 @@ program pp_dispersion_fit
              endif
           endif
       else
-          if(abs(Hr_mat(1,2,iR)).gt.eps)write(*,"(5I5,3E20.12)") Nvecwig(:,iR), 1, 2, radiuswig(iR), dreal(Hr_mat(1,2,iR)), dimag(Hr_mat(1,2,iR))
+          if((Crystal%Norb.gt.1).and.(abs(Hr_mat(1,2,iR)).gt.eps))write(*,"(5I5,3E20.12)") Nvecwig(:,iR), 1, 2, radiuswig(iR), dreal(Hr_mat(1,2,iR)), dimag(Hr_mat(1,2,iR))
       endif
    enddo
    close(unit)
@@ -496,6 +500,30 @@ program pp_dispersion_fit
    write(*,*)
    write(*,*)
    write(*,*)
+   !
+   if(Crystal%Norb.eq.1)then
+      unit = free_unit()
+      open(unit,file=reg(pathINPUT)//"Hr.DAT",form="formatted",status="unknown",position="rewind",action="write")
+      write(unit,*)                    !skip first line
+      write(unit,"(1I5)") Crystal%Norb !Number of Wannier orbitals
+      write(unit,"(1I5)") Nwig         !Number of Wigner-Seitz vectors
+      Qst = int(Nwig/W90NumCol)
+      Rst = mod(Nwig,W90NumCol)
+      do i=1,Qst
+        write(unit,"("//str(W90NumCol)//"I5)")(1,j=1,W90NumCol)
+      enddo
+      if(Rst.ne.0)write(unit,"("//str(Rst)//"I5)")(1,j=1,Rst)
+      Nwig_=0
+      do ir=1,Nwig
+         if(abs(Hr_mat(1,1,iR)).gt.eps) then
+            write(unit,"(5I5,2E20.12)") Nvecwig(:,iR), 1, 1, dreal(Hr_mat(1,1,iR)), dimag(Hr_mat(1,1,iR))
+            Nwig_=Nwig_+1
+         endif
+      enddo
+      close(unit)
+      write(*,*)"Nwig_ (single layer)",Nwig_,int(Nwig_/W90NumCol)
+      stop
+   endif
    !
    call get_pattern(map,radiuswig(Zrad),1e4*eps,listDim=maplen,IncludeSingle=.true.)
    Zrad = [ Zrad(map(:,1)) ]
@@ -1225,7 +1253,7 @@ contains
       real(8),allocatable                   :: Ek_model_(:,:)
       !
       ! Recompute dispersion with new Hr here
-      call calc_dispersion(Ek_model_,Hr_vec_,"fitting",.false.)
+      call calc_dispersion(Ek_model_,Hr_vec_,"fitting",.true.)
       !
       chi2=0d0
       do iorb_=1,Crystal%Norb

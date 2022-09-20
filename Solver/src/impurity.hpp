@@ -208,7 +208,8 @@ class ct_hyb
                      //
                      double Kp_zero =  Kp_table[ifl][jfl].front();
                      double Kp_beta =  Kp_table[ifl][jfl].back();
-                     if((Kp_zero+Kp_beta)!=0.0) mpi.StopError( " ->"+Kcomp+" is not symmetric with respect to beta/2 - Exiting.");
+                     //if((Kp_zero+Kp_beta)!=0.0) mpi.StopError( " ->"+Kcomp+" is not symmetric with respect to beta/2 - Exiting.");
+                     if((Kp_zero+Kp_beta)!=0.0) mpi.report( " "+Kcomp+" is not symmetric with respect to beta/2 - Warning.");
                   }
                }
             }
@@ -603,7 +604,7 @@ class ct_hyb
          {
             if(Improved_F)
             {
-             measure_GF( G_tmp, F_tmp_S, F_tmp_R, segments, M, Beta, Uloc, Kp_table );
+               measure_GF( G_tmp, F_tmp_S, F_tmp_R, segments, M, Beta, Uloc, Kp_table );
             }
             else
             {
@@ -791,7 +792,7 @@ class ct_hyb
          //
          //
          // n(tau)--------------------------------------------------------------
-         dump_data( nt, "n_t", pad, Nflavor, NtauB, Beta );
+         dump_data( nt, "n_t", pad, Nflavor, NtauB, Beta, ( OrbSym ? 0 : -1 ) );
          //
          //
          // Green's function----------------------------------------------------

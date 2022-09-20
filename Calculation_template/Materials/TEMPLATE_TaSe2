@@ -156,9 +156,9 @@ set term jpeg; set output 'PES_pa'.pl.'_pl'.pa.'_d'.d.'.jpeg'; rep; set terminal
 #
 ./MaxEnt_Kresolved_SLURM.sh -e 0.015 -w 6001 -W 40 -F G -N 210 -B 70 -m path -i 1 -f 281 -s _Hetero
 #
-./MaxEnt_Kresolved_SLURM.sh -e 0.01  -w 4001 -W 20 -F G -N 22800 -B 114 -m plane
+./MaxEnt_Kresolved_SLURM.sh -e 0.05  -w 4001 -W 40 -F G -N 22800 -B 228 -m plane
 
-
+./MaxEnt_Kresolved_SLURM.sh -e 0.05  -w 4001 -W 40 -F G -N 22800 -B 190 -m plane
 
 
 
@@ -169,7 +169,7 @@ ref='../../../../GWinput_natcomm/natcomm/6_para/'
 
 
 ref=''
-ymin=-0.75
+ymin=-1.5
 ymax=1.75
 set yrange [ymin:ymax];set ytics 0.25; set grid
 unset xtics; set xtics format " ";set xtics ("G" 0.0, "M" 0.3625, "K" 0.5778, "G" 1.0 )

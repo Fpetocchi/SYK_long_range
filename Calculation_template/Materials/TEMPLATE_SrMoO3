@@ -6,7 +6,7 @@ GENMAT=/home/petocchif/1_GW_EDMFT/GenericMaterial/Calculation_template
 #------------------------------------------------------------------------------#
 
 declare -a dirindex=( "avg" )
-for it in `seq  118 1 118` ; do
+for it in `seq  40 1 49` ; do
    if [ -d "$it" ]; then
    #
    cd $it/Convergence
@@ -14,9 +14,9 @@ for it in `seq  118 1 118` ; do
    chmod 700 MaxEnt_SLURM.sh
    #
    ./MaxEnt_SLURM.sh -e 0.0004 -w 8001 -W  300 -f G -o 1 -i lat -p ${GENMAT}
-   ./MaxEnt_SLURM.sh -e 0.02   -w 6000 -W  300 -f W -o 1 -i lat -p ${GENMAT}
+   #./MaxEnt_SLURM.sh -e 0.02   -w 6000 -W  300 -f W -o 1 -i lat -p ${GENMAT}
    ./MaxEnt_SLURM.sh -e 0.0005 -w 8001 -W  300 -f G -o 1 -i qmc_Mo -p ${GENMAT}
-   ./MaxEnt_SLURM.sh -e 0.01   -w 5000 -W  300 -f curlyU -o 1 -i imp -p ${GENMAT}
+   #./MaxEnt_SLURM.sh -e 0.01   -w 5000 -W  300 -f curlyU -o 1 -i imp -p ${GENMAT}
    #
    cd ../../
    #
@@ -78,7 +78,7 @@ rep '< grep " '.o.'   '.o.'   '.b.'   '.b.' " ./'.it.'/curlyUimp_w.DAT' every::1
 #                             CONVERGENCE - wreal                              #
 ################################################################################
 set grid ; set xtics 1
-it=118
+it=40
 o=1
 set xrange [-6:6]; set xtics 1
 p '../../GWinput_SrMoO3/DoS.DAT' u 1:(($2+$3+$4)/3) w l lw 1 lc rgb 'black' title 'LDA'
