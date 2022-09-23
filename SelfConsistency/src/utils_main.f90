@@ -2467,6 +2467,7 @@ contains
       type(BosonicField)                    :: curlyU
       complex(8),allocatable                :: Sfit(:,:,:),SmatsTail(:)
       real(8),allocatable                   :: n0(:,:),Uinst(:,:)
+      real(8)                               :: A(2),B(2)
       !Impurity susceptibilities
       real(8),allocatable                   :: nnt(:,:,:)
       complex(8),allocatable                :: NNitau(:,:,:,:,:)
@@ -2699,6 +2700,8 @@ contains
             deallocate(Fitau,Fmats)
             call dump_FermionicField(Fimp(isite),reg(PrevItFolder)//"Solver_"//reg(LocalOrbs(isite)%Name)//"/","Fimp_S_"//reg(LocalOrbs(isite)%Name)//"_w",paramagnet)
             !
+            if(ExpandImpurity.or.AFMselfcons)exit
+            !
          enddo
          !
          ! Collect retarded improved estimators
@@ -2733,7 +2736,24 @@ contains
                !
             enddo
             close(unit)
-            deallocate(ReadLine,tauF)
+            deallocate(ReadLine)
+            !
+            !Linear interpolation of the tau boundaries
+            do iorb=1,LocalOrbs(isite)%Norb
+               do ispin=1,Nspin
+                  if(tauF(1).eq.0d0) then
+                     A = [tauF(2),dreal(Fitau(iorb,2,ispin))]
+                     B = [tauF(3),dreal(Fitau(iorb,3,ispin))]
+                     Fitau(iorb,1,ispin) = dcmplx(linear_interp(A,B,0d0),0d0)
+                  endif
+                  if(tauF(Solver%NtauF_in).eq.Beta) then
+                     A = [tauF(Solver%NtauF_in-1),dreal(Fitau(iorb,Solver%NtauF_in-1,ispin))]
+                     B = [tauF(Solver%NtauF_in-2),dreal(Fitau(iorb,Solver%NtauF_in-2,ispin))]
+                     Fitau(iorb,Solver%NtauF_in,ispin) = dcmplx(linear_interp(A,B,Beta),0d0)
+                  endif
+               enddo
+            enddo
+            deallocate(tauF)
             call dump_MaxEnt(Fitau,"itau",reg(PrevItFolder)//"Convergence/","Fqmc_R_"//reg(LocalOrbs(isite)%Name))
             !
             !FT to the matsubara axis and add to the existing field
@@ -2751,6 +2771,8 @@ contains
             deallocate(Fitau,Fmats)
             call dump_FermionicField(Fimp(isite),reg(PrevItFolder)//"Solver_"//reg(LocalOrbs(isite)%Name)//"/","Fimp_"//reg(LocalOrbs(isite)%Name)//"_w",paramagnet)
             !
+            if(ExpandImpurity.or.AFMselfcons)exit
+            !
          enddo
          !
          !Fermionic Dyson equation in the solver basis (always diagonal)
@@ -2766,6 +2788,8 @@ contains
                   exit
                endif
             enddo
+            !
+            if(ExpandImpurity.or.AFMselfcons)exit
             !
          enddo
          !
@@ -2809,6 +2833,8 @@ contains
                endif
             enddo
             call DeallocateFermionicField(G0imp)
+            !
+            if(ExpandImpurity.or.AFMselfcons)exit
             !
          enddo
          !

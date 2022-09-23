@@ -139,6 +139,7 @@ module utils_misc
    public :: str
    public :: reg
    public :: cubic_interp
+   public :: linear_interp
 
    !===========================================================================!
 
@@ -1607,6 +1608,24 @@ contains
       deallocate(y2)
       !
    end function cubic_interp
+
+
+   !---------------------------------------------------------------------------!
+   !PURPOSE: function which gives the line passing throughout 2 points
+   !---------------------------------------------------------------------------!
+   function linear_interp(A,B,xp) result(yp)
+      implicit none
+      real(8),intent(in)                    :: A(2)
+      real(8),intent(in)                    :: B(2)
+      real(8),intent(in)                    :: xp
+      real(8)                               :: yp,xA,yA,xB,yB
+      !
+      xA = A(1); yA = A(2)
+      xB = B(1); yB = B(2)
+      !
+      yp = (xp-xB) * (yA-yB)/(xA-xB) + yB
+      !
+   end function linear_interp
 
 
    !---------------------------------------------------------------------------!

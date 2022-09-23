@@ -2810,9 +2810,9 @@ contains
             Ktmp(:,:,itau) = ( Kfunct(:,:,itau-1) - Kfunct(:,:,itau+1) ) / ( tau(itau-1)-tau(itau+1) )
          enddo
          !derivative of K(tau)
-         !Ktmp(:,:,1) = ( Kfunct(:,:,2) - Kfunct(:,:,1) ) / ( tau(2)-tau(1) )
+         Ktmp(:,:,1) = ( Kfunct(:,:,2) - Kfunct(:,:,1) ) / ( tau(2)-tau(1) )
          !interpolation of Kp(tau)
-         Ktmp(:,:,1) = ( tau(1)-tau(3) ) * ( Ktmp(:,:,2) - Ktmp(:,:,3) ) / ( tau(2)-tau(3) ) + Ktmp(:,:,3)
+         !Ktmp(:,:,1) = ( tau(1)-tau(3) ) * ( Ktmp(:,:,2) - Ktmp(:,:,3) ) / ( tau(2)-tau(3) ) + Ktmp(:,:,3)
          !anti-symmetry with respect to beta/2 !( Kfunct(:,:,Solver%NtauB) - Kfunct(:,:,Solver%NtauB-1) ) / ( tau(Solver%NtauB)-tau(Solver%NtauB-1) )
          Ktmp(:,:,Solver%NtauB) = -Ktmp(:,:,1)
          if(Kp_out)then

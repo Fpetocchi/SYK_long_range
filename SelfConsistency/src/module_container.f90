@@ -29,7 +29,8 @@ module module_container
    KK_Im2Re,KK_Re2Im                        ,&
    halfbeta_symm,halfbeta_antisymm          ,&
    assert_shape                             ,&
-   splint,nspline,cubic_interp              ,&
+   splint,nspline                           ,&
+   cubic_interp,linear_interp               ,&
    get_pattern,sort_array
 
 
