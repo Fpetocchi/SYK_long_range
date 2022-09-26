@@ -2723,13 +2723,13 @@ contains
       call assert_shape(Uinst,[Nflavor,Nflavor],"calc_QMCinteractions","Uinst")
       Uinst=0d0
       if(retarded)then
-         call assert_shape(Kfunct,[Nflavor,Nflavor,Solver%NtauB],"calc_QMCinteractions","Kfunct")
-         if(Kp_out)call assert_shape(Kpfunct,[Nflavor,Nflavor,Solver%NtauB],"calc_QMCinteractions","Kpfunct")
+         call assert_shape(Kfunct,[Nflavor,Nflavor,Solver%NtauB_K],"calc_QMCinteractions","Kfunct")
+         if(Kp_out)call assert_shape(Kpfunct,[Nflavor,Nflavor,Solver%NtauB_K],"calc_QMCinteractions","Kpfunct")
          if(Scr_out)call assert_shape(Screening,[Nflavor,Nflavor],"calc_QMCinteractions","Screening")
          allocate(Kaux(Nflavor,Nflavor,Umats%Npoints));Kaux=czero
-         allocate(Ktmp(Nflavor,Nflavor,Solver%NtauB));Ktmp=czero
-         allocate(tau(Solver%NtauB));tau=0d0
-         tau = linspace(0d0,Umats%Beta,Solver%NtauB)
+         allocate(Ktmp(Nflavor,Nflavor,Solver%NtauB_K));Ktmp=czero
+         allocate(tau(Solver%NtauB_K));tau=0d0
+         tau = linspace(0d0,Umats%Beta,Solver%NtauB_K)
          allocate(wmats(Umats%Npoints));wmats=0d0
          wmats = BosonicFreqMesh(Umats%Beta,Umats%Npoints)
       endif
@@ -2798,26 +2798,41 @@ contains
          Ktmp=czero
          call Bmats2itau(Umats%Beta,Kaux,Ktmp,asympt_corr=.true.,tau_uniform=.true.)
          Kfunct=0d0
-         do itau=2,Solver%NtauB-1
+         do itau=2,Solver%NtauB_K-1
             Kfunct(:,:,itau) = dreal(Ktmp(:,:,itau) - Ktmp(:,:,1))
             if(sym_)call check_Symmetry(Kfunct(:,:,itau),eps,enforce=.true.,hardstop=.false.,name="K_t"//str(itau))
          enddo
          deallocate(Ktmp,Kaux)
          !
-         !Mid-point derivative since the coefficients for Bmats2itau are assuming even bosonic functions
-         allocate(Ktmp(Nflavor,Nflavor,Solver%NtauB));Ktmp=czero
-         do itau=2,Solver%NtauB-1
+         !Enforce symmetry with respect to beta/2
+         do ib1=1,Nflavor
+            do ib2=1,Nflavor
+               call halfbeta_sym(Kfunct(ib1,ib2,:),1d0)
+            enddo
+         enddo
+         !
+         !Mid-point derivative since the coefficients for Bmats2itau assume even bosonic functions
+         allocate(Ktmp(Nflavor,Nflavor,Solver%NtauB_K));Ktmp=czero
+         do itau=2,Solver%NtauB_K-1
             Ktmp(:,:,itau) = ( Kfunct(:,:,itau-1) - Kfunct(:,:,itau+1) ) / ( tau(itau-1)-tau(itau+1) )
          enddo
-         !derivative of K(tau)
-         Ktmp(:,:,1) = ( Kfunct(:,:,2) - Kfunct(:,:,1) ) / ( tau(2)-tau(1) )
-         !interpolation of Kp(tau)
-         !Ktmp(:,:,1) = ( tau(1)-tau(3) ) * ( Ktmp(:,:,2) - Ktmp(:,:,3) ) / ( tau(2)-tau(3) ) + Ktmp(:,:,3)
-         !anti-symmetry with respect to beta/2 !( Kfunct(:,:,Solver%NtauB) - Kfunct(:,:,Solver%NtauB-1) ) / ( tau(Solver%NtauB)-tau(Solver%NtauB-1) )
-         Ktmp(:,:,Solver%NtauB) = -Ktmp(:,:,1)
+         !
+         !Interpolate screening and enforce anti-symmetry with respect to beta/2
+         do ib1=1,Nflavor
+            do ib2=1,Nflavor
+               !
+               Ktmp(ib1,ib2,1) = dcmplx(linear_interp([tau(2),dreal(Ktmp(ib1,ib2,2))],[tau(3),dreal(Ktmp(ib1,ib2,3))],0d0),0d0)
+               Ktmp(ib1,ib2,Solver%NtauB_K) = -Ktmp(ib1,ib2,1)
+               !
+               call halfbeta_sym(Ktmp(ib1,ib2,:),-1d0)
+               !
+            enddo
+         enddo
+         !
+         !pass data to output
          if(Kp_out)then
             Kpfunct = dreal(Ktmp)
-            do itau=1,Solver%NtauB
+            do itau=1,Solver%NtauB_K
                if(sym_)call check_Symmetry(Kpfunct(:,:,itau),eps,enforce=.true.,hardstop=.false.,name="Kp_t"//str(itau))
             enddo
          endif

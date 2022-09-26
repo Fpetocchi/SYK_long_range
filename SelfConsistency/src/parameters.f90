@@ -197,6 +197,7 @@ module parameters
       integer                               :: Nimp
       integer                               :: NtauF
       integer                               :: NtauB
+      integer                               :: NtauB_K
       integer                               :: NtauF_in
       integer                               :: NtauB_in
       integer                               :: Norder=0

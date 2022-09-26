@@ -208,8 +208,8 @@ class ct_hyb
                      //
                      double Kp_zero =  Kp_table[ifl][jfl].front();
                      double Kp_beta =  Kp_table[ifl][jfl].back();
-                     //if((Kp_zero+Kp_beta)!=0.0) mpi.StopError( " ->"+Kcomp+" is not symmetric with respect to beta/2 - Exiting.");
-                     if((Kp_zero+Kp_beta)!=0.0) mpi.report( " "+Kcomp+" is not symmetric with respect to beta/2 - Warning.");
+                     if((Kp_zero+Kp_beta)!=0.0) mpi.StopError( " ->"+Kcomp+" is not symmetric with respect to beta/2 - Exiting.");
+                     //if((Kp_zero+Kp_beta)!=0.0) mpi.report( " "+Kcomp+" is not symmetric with respect to beta/2 - Warning.");
                   }
                }
             }

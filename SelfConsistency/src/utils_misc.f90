@@ -67,6 +67,11 @@ module utils_misc
       module procedure check_Symmetry_z
    end interface check_Symmetry
 
+   interface halfbeta_sym
+      module procedure halfbeta_sym_d
+      module procedure halfbeta_sym_z
+   end interface halfbeta_sym
+
    interface get_pattern
       module procedure get_pattern_i
       module procedure get_pattern_d
@@ -119,6 +124,7 @@ module utils_misc
    public :: BosonicFilon
    public :: halfbeta_symm
    public :: halfbeta_antisymm
+   public :: halfbeta_sym
    public :: nspline
    public :: splint
    public :: get_pattern
@@ -1276,6 +1282,34 @@ contains
          funct(ntau-itau+1) = sign*funct(itau)
       enddo
    end subroutine halfbeta_antisymm
+   !
+   subroutine halfbeta_sym_d(funct,sign)
+      implicit none
+      real(8),intent(inout)                 :: funct(:)
+      real(8),intent(in)                    :: sign
+      integer                               :: itau,Ntau
+      Ntau=size(funct)
+      do itau=1,int(Ntau/2)
+         funct(itau) = 0.5 * (funct(itau) + sign*funct(ntau-itau+1))
+      enddo
+      do itau=1,int(Ntau/2)
+         funct(ntau-itau+1) = sign*funct(itau)
+      enddo
+   end subroutine halfbeta_sym_d
+   !
+   subroutine halfbeta_sym_z(funct,sign)
+      implicit none
+      complex(8),intent(inout)              :: funct(:)
+      real(8),intent(in)                    :: sign
+      integer                               :: itau,Ntau
+      Ntau=size(funct)
+      do itau=1,int(Ntau/2)
+         funct(itau) = 0.5 * (funct(itau) + sign*funct(ntau-itau+1))
+      enddo
+      do itau=1,int(Ntau/2)
+         funct(ntau-itau+1) = sign*funct(itau)
+      enddo
+   end subroutine halfbeta_sym_z
 
 
    !---------------------------------------------------------------------------!

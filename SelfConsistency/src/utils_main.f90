@@ -2310,8 +2310,8 @@ contains
          case("DMFT+statU")
             call calc_QMCinteractions(curlyU,Uinst)
          case("DMFT+dynU","EDMFT","GW+EDMFT")
-            allocate(Kfunct(LocalOrbs(isite)%Nflavor,LocalOrbs(isite)%Nflavor,Solver%NtauB));Kfunct=0d0
-            allocate(Kpfunct(LocalOrbs(isite)%Nflavor,LocalOrbs(isite)%Nflavor,Solver%NtauB));Kpfunct=0d0
+            allocate(Kfunct(LocalOrbs(isite)%Nflavor,LocalOrbs(isite)%Nflavor,Solver%NtauB_K));Kfunct=0d0
+            allocate(Kpfunct(LocalOrbs(isite)%Nflavor,LocalOrbs(isite)%Nflavor,Solver%NtauB_K));Kpfunct=0d0
             allocate(ScreeningMat(LocalOrbs(isite)%Nflavor,LocalOrbs(isite)%Nflavor));ScreeningMat=0d0
             call calc_QMCinteractions(curlyU,Uinst,Kfunct=Kfunct,Kpfunct=Kpfunct,Screening=ScreeningMat)
       end select
@@ -2407,14 +2407,14 @@ contains
          integer                            :: ndx
          real(8),allocatable                :: tau(:),PrintLine(:)
          !
-         allocate(tau(Solver%NtauB));tau=0d0
-         tau = linspace(0d0,Beta,Solver%NtauB)
+         allocate(tau(Solver%NtauB_K));tau=0d0
+         tau = linspace(0d0,Beta,Solver%NtauB_K)
          !
          file = reg(ItFolder)//"Solver_"//reg(LocalOrbs(isite)%Name)//"/"//reg(filename)//".DAT"
          unit = free_unit()
          open(unit,file=reg(file),form="formatted",status="unknown",position="rewind",action="write")
          allocate(PrintLine(size(K,dim=1)*(size(K,dim=1)+1)/2));PrintLine=0d0
-         do itau=1,Solver%NtauB
+         do itau=1,Solver%NtauB_K
             ndx=1
             !print diagonal and LT
             do ib1=1,size(K,dim=1)
@@ -3024,7 +3024,7 @@ contains
                   ispin = abs(mod(ib1,2)-2)
                   jspin = abs(mod(ib2,2)-2)
                   !
-                  call halfbeta_symm(nnt(ib1,ib2,:))
+                  call halfbeta_sym(nnt(ib1,ib2,:),+1d0) !call halfbeta_symm(nnt(ib1,ib2,:))
                   NNitau(iorb,jorb,ispin,jspin,:) = dcmplx(nnt(ib1,ib2,:),0d0)
                   !
                enddo

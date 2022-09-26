@@ -27,7 +27,7 @@ module module_container
    createDir,skip_header                    ,&
    check_Hermiticity,check_Symmetry         ,&
    KK_Im2Re,KK_Re2Im                        ,&
-   halfbeta_symm,halfbeta_antisymm          ,&
+   halfbeta_sym                             ,&
    assert_shape                             ,&
    splint,nspline                           ,&
    cubic_interp,linear_interp               ,&

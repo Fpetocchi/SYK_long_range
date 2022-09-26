@@ -656,6 +656,7 @@ contains
       if(mod(Solver%NtauB,2).eq.0)Solver%NtauB=Solver%NtauB+1
       call parse_input_variable(Solver%NtauF_in,"NTAU_F_IMP_IN",InputFile,default=Solver%NtauF,comment="Number of points on the fermionic imaginary time axis used in the previous iteration.")
       call parse_input_variable(Solver%NtauB_in,"NTAU_B_IMP_IN",InputFile,default=Solver%NtauB,comment="Number of points on the bosonic imaginary time axis used in the previous iteration.")
+      call parse_input_variable(Solver%NtauB_K,"NTAU_B_IMP_K",InputFile,default=int(2d0*pi*Nmats),comment="Number of points on the imaginary time axis for  the screening functions.")
       Solver%TargetDensity = look4dens%TargetDensity
       if((ExpandImpurity.or.AFMselfcons).and.(.not.look4dens%local))Solver%TargetDensity = look4dens%TargetDensity/Nsite
       call append_to_input_list(Solver%TargetDensity,"N_READ_IMP","Target density in the impurity list. User cannot set this as its the the same density on within the impurity orbitals if EXPAND=F otherwise its N_READ_LAT/NSITE.")
