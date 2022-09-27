@@ -1745,3 +1745,124 @@ enddo
 deallocate(wm,invG,Sinf)
 call dump_FermionicField(Slat_Gamma,reg(ItFolder),"Gaux_Gamma_tail_w",paramagnet)
 call dump_MaxEnt(Slat_Gamma,"mats2itau",reg(ItFolder)//"Convergence/","Gaux_Gamma_tail",EqvGWndx%SetOrbs)
+
+
+
+
+
+
+
+!TEST>>>
+allocate(Integral(ChiCitau%Nbp,ChiCitau%Nbp));Integral=0d0
+do itau=1,ChiCitau%Npoints-1
+   Integral = Integral + ( ChiCitau%screened_local(:,:,itau) + ChiCitau%screened_local(:,:,itau+1) ) * 0.5d0 * abs(tauB(itau+1)-tauB(itau))
+enddo
+call dump_Matrix(dreal(Integral-ChiCmats%screened_local(:,:,1)),reg(PrevItFolder)//"Solver_"//reg(LocalOrbs(isite)%Name)//"/","IntDiff_"//reg(LocalOrbs(isite)%Name)//".DAT")
+if(Test_flag_2)then
+   ChiCmats%screened_local(:,:,1) = Integral
+endif
+deallocate(Integral)
+!>>>TEST
+
+
+
+!TEST>>>
+!just before "User-defined modification of local charge susceptibility"
+if(Test_flag_1)then
+   !
+   do ib1=1,ChiCitau%Nbp
+      do ib2=ib1,ChiCitau%Nbp
+         !
+         if(ib1.eq.ib2)then
+            taup = minval(dreal(ChiCitau%screened_local(ib1,ib2,:)))
+            if(taup.lt.0d0) ChiCitau%screened_local(ib1,ib2,:) = ChiCitau%screened_local(ib1,ib2,:) - taup
+         else
+            taup = maxval(dreal(ChiCitau%screened_local(ib1,ib2,:)))
+            if(taup.gt.0d0) ChiCitau%screened_local(ib1,ib2,:) = ChiCitau%screened_local(ib1,ib2,:) - taup
+         endif
+         !
+         ChiCitau%screened_local(ib2,ib1,:) = ChiCitau%screened_local(ib1,ib2,:)
+         !
+      enddo
+   enddo
+   !
+endif
+!>>>TEST
+
+
+
+
+!Charge susceptibility----------------------------------------------
+!TEST>>>
+!Collect n(tau=0) instead of the density as it is obtained with the same statistics
+allocate(n0(LocalOrbs(isite)%Norb,Nspin));n0=0d0
+allocate(ReadLine(LocalOrbs(isite)%Nflavor))
+file = reg(PrevItFolder)//"Solver_"//reg(LocalOrbs(isite)%Name)//"/resultsQMC/n_t.DAT"
+call inquireFile(reg(file),filexists,verb=verbose)
+unit = free_unit()
+open(unit,file=reg(file),form="formatted",status="old",position="rewind",action="read")
+ReadLine=0d0
+read(unit,*) taup,ReadLine
+if(abs(taup).gt.0d0) stop "Reading n_t.DAT from previous iteration: first tau point is not zero."
+ndx=1
+do iorb=1,LocalOrbs(isite)%Norb
+   do ispin=1,Nspin
+      n0(iorb,ispin) = ReadLine(ndx)
+      ndx=ndx+1
+   enddo
+enddo
+close(unit)
+deallocate(ReadLine)
+!>>>TEST
+
+
+
+
+!
+!Charge susceptibility----------------------------------------------
+!TEST>>>
+!Collect n(tau=0) instead of the density as it is obtained with the same statistics
+allocate(n0(LocalOrbs(isite)%Norb,Nspin));n0=0d0
+allocate(ReadLine(LocalOrbs(isite)%Nflavor))
+file = reg(PrevItFolder)//"Solver_"//reg(LocalOrbs(isite)%Name)//"/resultsQMC/n_t.DAT"
+call inquireFile(reg(file),filexists,verb=verbose)
+unit = free_unit()
+open(unit,file=reg(file),form="formatted",status="old",position="rewind",action="read")
+ReadLine=0d0
+read(unit,*) taup,ReadLine
+if(abs(taup).gt.0d0) stop "Reading n_t.DAT from previous iteration: first tau point is not zero."
+ndx=1
+do iorb=1,LocalOrbs(isite)%Norb
+   do ispin=1,Nspin
+      n0(iorb,ispin) = ReadLine(ndx)
+      ndx=ndx+1
+   enddo
+enddo
+close(unit)
+deallocate(ReadLine)
+!>>>TEST
+!
+!ChiC(tau) = Sum_s1s2 <Na(tau)Nb(0)> - <Na><Nb> in the solver basis
+call AllocateBosonicField(ChiCitau,LocalOrbs(isite)%Norb,Solver%NtauB_in,Crystal%iq_gamma,no_bare=.true.,Beta=Beta)
+do iorb=1,LocalOrbs(isite)%Norb
+   do jorb=1,LocalOrbs(isite)%Norb
+      !
+      call F2Bindex(LocalOrbs(isite)%Norb,[iorb,iorb],[jorb,jorb],ib1,ib2)
+      !
+      do ispin=1,Nspin
+         do jspin=1,Nspin
+            !
+            if(Test_flag_4)then
+               ChiCitau%screened_local(ib1,ib2,:) = ChiCitau%screened_local(ib1,ib2,:) + ( NNitau(iorb,jorb,ispin,jspin,:) - n0(iorb,ispin) * n0(jorb,jspin) )
+               !( NNitau(iorb,jorb,ispin,jspin,:) - LocalOrbs(isite)%rho_OrbSpin(iorb,iorb,ispin) * LocalOrbs(isite)%rho_OrbSpin(jorb,jorb,jspin) )
+            else
+               ChiCitau%screened_local(ib1,ib2,:) = ChiCitau%screened_local(ib1,ib2,:) + &
+               ( NNitau(iorb,jorb,ispin,jspin,:) - LocalOrbs(isite)%rho_OrbSpin(iorb,iorb,ispin) * LocalOrbs(isite)%rho_OrbSpin(jorb,jorb,jspin) )
+            endif
+            !
+         enddo
+      enddo
+      !
+   enddo
+enddo
+deallocate(n0)

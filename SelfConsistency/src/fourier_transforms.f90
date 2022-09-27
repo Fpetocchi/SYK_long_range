@@ -128,6 +128,7 @@ contains
    subroutine mats2itau_FermionicCoeff(tau,coswt,sinwt,correct)
       !
       use utils_misc
+      use linalg, only : inv
       implicit none
       !
       real(8),intent(in)                    :: tau(:)
@@ -136,8 +137,10 @@ contains
       logical,intent(in)                    :: correct
       !
       real(8)                               :: beta
-      real(8)                               :: v1,v2,v12
+      real(8)                               :: v1,v2,v3
       real(8)                               :: sin1,cos2,sin3,cos4
+      real(8)                               :: tail1,tail2,tail3,tail4
+      real(8),allocatable                   :: tail(:,:),Ae(:,:),Ao(:,:)
       real(8),allocatable                   :: wmats(:)
       integer                               :: iw,itau
       integer                               :: Nmats,Ntau
@@ -156,12 +159,31 @@ contains
       wmats = FermionicFreqMesh(beta,Nmats)
       v1 = wmats(Nmats-1)
       v2 = wmats(Nmats-2)
-      v12 = v1*v1 - v2*v2
+      v3 = wmats(Nmats-3)
+      !
+      ! even tail
+      allocate(tail(2,2));tail=0d0
+      tail(1,1) = 1d0/(v1**2)
+      tail(1,2) = 1d0/(v1**4)
+      tail(2,1) = 1d0/(v2**2)
+      tail(2,2) = 1d0/(v2**4)
+      call inv(tail)
+      Ae = tail
+      deallocate(tail)
+      ! odd tail
+      allocate(tail(2,2));tail=0d0
+      tail(1,1) = 1d0/v1
+      tail(1,2) = 1d0/(v1**3)
+      tail(2,1) = 1d0/v2
+      tail(2,2) = 1d0/(v2**3)
+      call inv(tail)
+      Ao = tail
+      deallocate(tail)
       !
       coswt=0d0
       sinwt=0d0
-      ! loop over imaginary time tau
       do itau=1,Ntau
+         !
          sin1=0d0
          cos2=0d0
          sin3=0d0
@@ -181,38 +203,33 @@ contains
             !
          enddo
          !
-         !
          if(correct)then
             !
             ! (1/beta) S[n=0,inf] cos(vn*tau) / vn^2  = beta/8 - tau/4
             ! (1/beta) S[n=0,inf] cos(vn*tau) / vn^4  = ( beta^3/96 - beta*tau^2/16 + tau^3/24 )
-            coswt(Nmats,itau)   = coswt(Nmats,itau)                                             &
-                                - cos2*v1**4/v12 + cos4*v1**4 *v2**2/v12                        &
-                                + (v1**4/v12) * (beta/2.d0 - tau(itau)) / 4.d0                  &
-                                - (v1**4*v2**2/v12) * (beta**3/96.d0 -beta*tau(itau)**2/16.d0   &
-                                + tau(itau)**3/24.d0 )
             !
-            coswt(Nmats-1,itau) = coswt(Nmats-1,itau)                                           &
-                                + cos2*v2**4/v12 - cos4*v2**4 *v1**2/v12                        &
-                                - (v2**4/v12) * (beta/2.d0 - tau(itau)) / 4.d0                  &
-                                + (v2**4*v1**2/v12) * (beta**3/96.d0 -beta*tau(itau)**2/16.d0   &
-                                + tau(itau)**3/24.d0 )
+            tail2 = Ae(1,1) * ( beta/8d0 - tau(itau)/4d0 - cos2 )
+            tail4 = Ae(2,1) * ( beta**3/96d0 - beta*tau(itau)**2/16d0 + tau(itau)**3/24d0 - cos4 )
+            coswt(Nmats,itau) = coswt(Nmats,itau) + tail2 + tail4
+            !
+            tail2 = Ae(1,2) * ( beta/8d0 - tau(itau)/4d0 - cos2 )
+            tail4 = Ae(2,2) * ( beta**3/96d0 - beta*tau(itau)**2/16d0 + tau(itau)**3/24d0 - cos4 )
+            coswt(Nmats-1,itau) = coswt(Nmats-1,itau) + tail2 + tail4
             !
             ! (1/beta) S[n=0,inf] sin(vn*tau) / vn    = 1/4
             ! (1/beta) S[n=0,inf] sin(vn*tau) / vn^3  = ( beta*tau - tau^2 ) / 8
-            sinwt(Nmats,itau)   = sinwt(Nmats,itau)                                             &
-                                - sin1*v1**3/v12 + sin3*v1**3 *v2**2/v12                        &
-                                + v1**3/(4.d0*v12)                                              &
-                                - (v1**3 * v2**2/v12) * (beta*tau(itau) - tau(itau)**2)/8.d0
             !
-            sinwt(Nmats-1,itau) = sinwt(Nmats-1,itau)                                           &
-                                + sin1*v2**3/v12 - sin3*v2**3 *v1**2/v12                        &
-                                - v2**3/(4.d0*v12)                                              &
-                                + (v2**3 * v1**2/v12) * (beta*tau(itau) - tau(itau)**2)/8.d0
+            tail1 = Ao(1,1) * ( 1d0/4d0 - sin1 )
+            tail3 = Ao(2,1) * ( (beta*tau(itau) - tau(itau)**2)/8d0 - sin3 )
+            sinwt(Nmats,itau)   = sinwt(Nmats,itau) + tail1 + tail3
+            !
+            tail1 = Ao(1,2) * ( 1d0/4d0 - sin1 )
+            tail3 = Ao(2,2) * ( (beta*tau(itau) - tau(itau)**2)/8d0 - sin3 )
+            sinwt(Nmats-1,itau) = sinwt(Nmats-1,itau) + tail1 + tail3
             !
          endif
       enddo !itau
-      deallocate(wmats)
+      deallocate(wmats,Ae,Ao)
       !
    end subroutine mats2itau_FermionicCoeff
 

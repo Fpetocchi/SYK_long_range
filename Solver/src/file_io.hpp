@@ -404,6 +404,34 @@ void read_VecVec( std::string path, std::vector<std::vector<double>> &VecVec, in
    }
 }
 
+void read_VecVec( std::string path, std::vector<std::vector<double>> &VecVec, int &idim, bool axis, bool Delta_like )
+{
+   VecVec.resize(idim);
+   ifstream file( path );
+   double dum;
+   //
+   while(!file.fail())
+   {
+      if(axis)file >> dum;
+      for (int i=0; i<idim; i++)
+      {
+         file >> dum;
+         if ( !file.fail() ) VecVec[i].push_back(dum);
+      }
+   }
+   file.close();
+   //
+   if(Delta_like)
+   {
+      for (int i=0; i<idim; i++)
+      {
+         //Delta(-tau)
+         std::reverse(VecVec[i].begin(),VecVec[i].end());
+         //-Delta(-tau)
+         for (int j=0; j<VecVec[i].size(); j++) VecVec[i][j]*=-1.0;
+      }
+   }
+}
 
 void read_VecVecVec( std::string path, std::vector<std::vector<std::vector<double>>> &VecVecVec, int &idim, int &kdim , bool axis )
 {

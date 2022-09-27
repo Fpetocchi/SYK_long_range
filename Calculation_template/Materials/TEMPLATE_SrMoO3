@@ -7,15 +7,15 @@ GENMAT=/home/petocchif/1_GW_EDMFT/GenericMaterial/Calculation_template
 
 declare -a dirindex=( "117_Std"  )
 #for it in "${dirindex[@]}" ; do
-for it in `seq  130 1 142` ; do
+for it in `seq  154 1 159` ; do
    if [ -d "$it" ]; then
    #
    cd $it/Convergence
    cp ${GENMAT}/${MATERIAL}/MaxEnt/MaxEnt_SLURM.sh .
    chmod 700 MaxEnt_SLURM.sh
    #
-   ./MaxEnt_SLURM.sh -e 0.001 -w 8001 -W  400 -f G -o 1 -i lat -p ${GENMAT}
-   ./MaxEnt_SLURM.sh -e 0.005  -w 8001 -W  400 -f G -o 1 -i qmc_Mo -p ${GENMAT}
+   ./MaxEnt_SLURM.sh -e 0.0001 -w 8001 -W  400 -f G -o 1 -i lat -p ${GENMAT}
+   ./MaxEnt_SLURM.sh -e 0.0005 -w 8001 -W  400 -f G -o 1 -i qmc_Mo -p ${GENMAT}
    #./MaxEnt_SLURM.sh -e 0.02   -w 6000 -W  300 -f W -o 1 -i lat -p ${GENMAT}
    #./MaxEnt_SLURM.sh -e 0.02   -w 5000 -W  300 -f curlyU -o 1 -i imp -p ${GENMAT}
    #
@@ -120,7 +120,7 @@ rep '< grep " '.o.'   '.o.'   '.b.'   '.b.' " ./'.it.'/curlyUimp_w.DAT' every::1
 ################################################################################
 #                             CONVERGENCE - wreal                              #
 ################################################################################
-it='116_Imp'
+it='151'
 set grid ; set xtics 1
 o=1
 set xrange [-6:6]; set xtics 1

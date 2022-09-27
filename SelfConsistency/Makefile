@@ -112,7 +112,7 @@ $(DBGDIR)/utils_misc.o: $(SRCDIR)/utils_misc.f90
 $(DBGDIR)/crystal.o: $(SRCDIR)/crystal.f90 $(DBGDIR)/linalg.o $(DBGDIR)/utils_misc.o
 	$(FC) -c $(FFLAGS) $(KLIB) $(DBGFFLAGS) -o $@ $< $(DBGKLIB)
 
-$(DBGDIR)/fourier_transforms.o: $(SRCDIR)/fourier_transforms.f90 $(DBGDIR)/utils_misc.o $(DBGDIR)/crystal.o
+$(DBGDIR)/fourier_transforms.o: $(SRCDIR)/fourier_transforms.f90 $(DBGDIR)/linalg.o $(DBGDIR)/utils_misc.o $(DBGDIR)/crystal.o
 	$(FC) -c $(FFLAGS) $(DBGFFLAGS) -o $@ $<
 
 $(DBGDIR)/parameters.o: $(SRCDIR)/parameters.f90
@@ -191,7 +191,7 @@ $(RELDIR)/utils_misc.o: $(SRCDIR)/utils_misc.f90
 $(RELDIR)/crystal.o: $(SRCDIR)/crystal.f90 $(RELDIR)/linalg.o $(RELDIR)/utils_misc.o
 	$(FC) -c $(FFLAGS) $(RELFFLAGS) -o $@ $< $(KLIB)
 
-$(RELDIR)/fourier_transforms.o: $(SRCDIR)/fourier_transforms.f90 $(RELDIR)/utils_misc.o $(RELDIR)/crystal.o
+$(RELDIR)/fourier_transforms.o: $(SRCDIR)/fourier_transforms.f90 $(RELDIR)/linalg.o $(RELDIR)/utils_misc.o $(RELDIR)/crystal.o
 	$(FC) -c $(FFLAGS) $(RELFFLAGS) -o $@ $<
 
 $(RELDIR)/parameters.o: $(SRCDIR)/parameters.f90

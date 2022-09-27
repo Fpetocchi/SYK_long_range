@@ -57,7 +57,7 @@ module module_container
    tetrahedron_integration
 
 
-   !(d) Fermionic and Bosonic Fourier transforms. Depends on (b),(c) not on specific types.
+   !(d) Fermionic and Bosonic Fourier transforms. Depends on (a),(b),(c) not on specific types.
    use fourier_transforms, only:             &
    Fmats2itau_mat,Fmats2itau_vec,Fmats2itau ,&
    Fitau2mats_mat,Fitau2mats_vec,Fitau2mats ,&

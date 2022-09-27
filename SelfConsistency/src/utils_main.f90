@@ -1913,11 +1913,9 @@ contains
       allocate(Dmats(Norb,Nmats,Nspin));Dmats=czero
       do ispin=1,Nspin
          do iorb=1,Norb
-            !
             do iw=1,Nmats
                Dmats(iorb,iw,ispin) = dcmplx( Glat%mu , wmats(iw) ) - Eloc(iorb,ispin) - invCurlyG(iorb,iw,ispin)
             enddo
-            !
          enddo
       enddo
       deallocate(invCurlyG)
@@ -1927,19 +1925,16 @@ contains
          !
          if(.not.Mixing_Delta_tau)then
             write(*,"(A)")"     Mixing Delta(iw) with "//str(Mixing_Delta,3)//" of old solution."
-            if(.not.Mixing_Delta_tau)then
-               write(*,"(A)")"     Mixing Delta(iw)."
-               call AllocateFermionicField(DeltaOld,Norb,Nmats,Beta=Beta)
-               call read_FermionicField(DeltaOld,reg(MixItFolder)//"Solver_"//reg(LocalOrbs(isite)%Name)//"/","Delta_"//reg(LocalOrbs(isite)%Name)//"_w")
-               do ispin=1,Nspin
-                  do iw=1,Nmats
-                     do iorb=1,Norb
-                        Dmats(iorb,iw,ispin) = (1d0-Mixing_Delta)*Dmats(iorb,iw,ispin) + Mixing_Delta*DeltaOld%ws(iorb,iorb,iw,ispin)
-                     enddo
+            call AllocateFermionicField(DeltaOld,Norb,Nmats,Beta=Beta)
+            call read_FermionicField(DeltaOld,reg(MixItFolder)//"Solver_"//reg(LocalOrbs(isite)%Name)//"/","Delta_"//reg(LocalOrbs(isite)%Name)//"_w")
+            do ispin=1,Nspin
+               do iw=1,Nmats
+                  do iorb=1,Norb
+                     Dmats(iorb,iw,ispin) = (1d0-Mixing_Delta)*Dmats(iorb,iw,ispin) + Mixing_Delta*DeltaOld%ws(iorb,iorb,iw,ispin)
                   enddo
                enddo
-               call DeallocateFermionicField(DeltaOld)
-            endif
+            enddo
+            call DeallocateFermionicField(DeltaOld)
          endif
          !
          write(*,"(A)")"     Mixing Eloc with "//str(Mixing_Delta,3)//" of old solution."
@@ -1992,37 +1987,29 @@ contains
          !
       endif
       !
-      if(EqvGWndx%para.eq.1)then
+      if(paramagnet)then
          Dmats(:,:,1) = (Dmats(:,:,1) + Dmats(:,:,Nspin))/2d0
          Dmats(:,:,Nspin) = Dmats(:,:,1)
       endif
       !
       !Fourier transform to the tau axis
-      allocate(Ditau(Norb,Solver%NtauF,Nspin));Ditau=0d0
+      allocate(Ditau(Norb,Solver%NtauF_D,Nspin));Ditau=0d0
       do ispin=1,Nspin
-         !add correction that allows to use the tail correction in the FT
-         do iorb=1,Norb
-            if(reg(CalculationType).ne."GW+EDMFT") coef01(iorb,ispin) = abs(dimag(Dmats(iorb,Nmats,ispin)))*wmats(Nmats)
-            write(*,"(A,E10.3)")"     First coeff orb: "//str(iorb)//" spin: "//str(ispin),coef01(iorb,ispin)
-            Dmats(iorb,:,ispin) = Dmats(iorb,:,ispin)/coef01(iorb,ispin)
-         enddo
-         !FT
          call Fmats2itau_vec(Beta,Dmats(:,:,ispin),Ditau(:,:,ispin),asympt_corr=.true.,tau_uniform=.true.)
-         !remove correction
-         do iorb=1,Norb
-            Dmats(iorb,:,ispin) = Dmats(iorb,:,ispin)*coef01(iorb,ispin)
-            Ditau(iorb,:,ispin) = Ditau(iorb,:,ispin)*coef01(iorb,ispin)
-         enddo
+         if(paramagnet)then
+            Ditau(:,:,Nspin) = Ditau(:,:,1)
+            exit
+         endif
       enddo
       !
       !Check on Delta(tau) causality
       do ispin=1,Nspin
          do iorb=1,Norb
-            do itau=1,Solver%NtauF
+            do itau=1,Solver%NtauF_D
                if(dreal(Ditau(iorb,itau,ispin)).gt.0d0)then
                   write(*,"(A,E10.3)")"     Warning: Removing non-causality from Delta(tau) at orb: "//str(iorb)//" spin: "//str(ispin)//" itau: "//str(itau)
-                  if(dreal(Ditau(iorb,int(Solver%NtauF/2),ispin)).lt.0d0)then
-                     Ditau(iorb,itau,ispin) = Ditau(iorb,int(Solver%NtauF/2),ispin)
+                  if(dreal(Ditau(iorb,int(Solver%NtauF_D/2),ispin)).lt.0d0)then
+                     Ditau(iorb,itau,ispin) = Ditau(iorb,int(Solver%NtauF_D/2),ispin)
                   else
                      Ditau(iorb,itau,ispin) = czero
                   endif
@@ -2068,6 +2055,12 @@ contains
          Dmats=czero
          do ispin=1,Nspin
             call Fitau2mats_vec(Beta,Ditau(:,:,ispin),Dmats(:,:,ispin),tau_uniform=.true.)
+            !
+            if(paramagnet)then
+               Dmats(:,:,Nspin) = Dmats(:,:,1)
+               exit
+            endif
+            !
          enddo
          !
       endif
@@ -2085,13 +2078,13 @@ contains
       close(unit)
       !
       !Write Delta(tau)
-      allocate(tau(Solver%NtauF));tau=0d0
-      tau = linspace(0d0,Beta,Solver%NtauF)
+      allocate(tau(Solver%NtauF_D));tau=0d0
+      tau = linspace(0d0,Beta,Solver%NtauF_D)
       allocate(PrintLine(LocalOrbs(isite)%Nflavor))
       file = reg(ItFolder)//"Solver_"//reg(LocalOrbs(isite)%Name)//"/Delta_t.DAT"
       unit = free_unit()
       open(unit,file=reg(file),form="formatted",status="unknown",position="rewind",action="write")
-      do itau=1,Solver%NtauF
+      do itau=1,Solver%NtauF_D
          ndx=1
          PrintLine=0d0
          do iorb=1,Norb
@@ -2466,7 +2459,7 @@ contains
       type(FermionicField)                  :: G0imp
       type(BosonicField)                    :: curlyU
       complex(8),allocatable                :: Sfit(:,:,:),SmatsTail(:)
-      real(8),allocatable                   :: n0(:,:),Uinst(:,:)
+      real(8),allocatable                   :: Uinst(:,:)
       real(8)                               :: A(2),B(2)
       !Impurity susceptibilities
       real(8),allocatable                   :: nnt(:,:,:)
@@ -2476,7 +2469,7 @@ contains
       !Impurity polarization and bosonic Dyson equation
       type(BosonicField)                    :: Pimp
       type(BosonicField)                    :: Wimp
-      real(8),allocatable                   :: CDW(:,:),Integral(:,:),Z_dmft(:,:,:)
+      real(8),allocatable                   :: CDW(:,:),Z_dmft(:,:,:)
       !
       !
       write(*,"(A)") new_line("A")//new_line("A")//"---- collect_QMC_results"
@@ -3057,28 +3050,6 @@ contains
             !
             !
             !Charge susceptibility----------------------------------------------
-            !TEST>>>
-            !Collect n(tau=0) instead of the density as it is obtained with the same statistics
-            allocate(n0(LocalOrbs(isite)%Norb,Nspin));n0=0d0
-            allocate(ReadLine(LocalOrbs(isite)%Nflavor))
-            file = reg(PrevItFolder)//"Solver_"//reg(LocalOrbs(isite)%Name)//"/resultsQMC/n_t.DAT"
-            call inquireFile(reg(file),filexists,verb=verbose)
-            unit = free_unit()
-            open(unit,file=reg(file),form="formatted",status="old",position="rewind",action="read")
-            ReadLine=0d0
-            read(unit,*) taup,ReadLine
-            if(abs(taup).gt.0d0) stop "Reading n_t.DAT from previous iteration: first tau point is not zero."
-            ndx=1
-            do iorb=1,LocalOrbs(isite)%Norb
-               do ispin=1,Nspin
-                  n0(iorb,ispin) = ReadLine(ndx)
-                  ndx=ndx+1
-               enddo
-            enddo
-            close(unit)
-            deallocate(ReadLine)
-            !>>>TEST
-            !
             !ChiC(tau) = Sum_s1s2 <Na(tau)Nb(0)> - <Na><Nb> in the solver basis
             call AllocateBosonicField(ChiCitau,LocalOrbs(isite)%Norb,Solver%NtauB_in,Crystal%iq_gamma,no_bare=.true.,Beta=Beta)
             do iorb=1,LocalOrbs(isite)%Norb
@@ -3089,21 +3060,14 @@ contains
                   do ispin=1,Nspin
                      do jspin=1,Nspin
                         !
-                        if(Test_flag_4)then
-                           ChiCitau%screened_local(ib1,ib2,:) = ChiCitau%screened_local(ib1,ib2,:) + ( NNitau(iorb,jorb,ispin,jspin,:) - n0(iorb,ispin) * n0(jorb,jspin) )
-                           !( NNitau(iorb,jorb,ispin,jspin,:) - LocalOrbs(isite)%rho_OrbSpin(iorb,iorb,ispin) * LocalOrbs(isite)%rho_OrbSpin(jorb,jorb,jspin) )
-                        else
-                           ChiCitau%screened_local(ib1,ib2,:) = ChiCitau%screened_local(ib1,ib2,:) + &
-                           ( NNitau(iorb,jorb,ispin,jspin,:) - LocalOrbs(isite)%rho_OrbSpin(iorb,iorb,ispin) * LocalOrbs(isite)%rho_OrbSpin(jorb,jorb,jspin) )
-                        endif
+                        ChiCitau%screened_local(ib1,ib2,:) = ChiCitau%screened_local(ib1,ib2,:) + &
+                        ( NNitau(iorb,jorb,ispin,jspin,:) - LocalOrbs(isite)%rho_OrbSpin(iorb,iorb,ispin) * LocalOrbs(isite)%rho_OrbSpin(jorb,jorb,jspin) )
                         !
                      enddo
                   enddo
                   !
                enddo
             enddo
-            deallocate(n0)
-            !
             !
             !Double occupations-------------------------------------------------
             if(Nspin.gt.1)then
@@ -3115,33 +3079,6 @@ contains
                call dump_Matrix(LocalOrbs(isite)%Docc,reg(PrevItFolder)//"Solver_"//reg(LocalOrbs(isite)%Name)//"/","Dimp_"//reg(LocalOrbs(isite)%Name)//".DAT")
             endif
             deallocate(NNitau)
-            !
-            !TEST>>>
-            if(Test_flag_1)then
-               !
-               do ib1=1,ChiCitau%Nbp
-                  do ib2=ib1,ChiCitau%Nbp
-                     !
-                     if(ib1.eq.ib2)then
-                        taup = minval(dreal(ChiCitau%screened_local(ib1,ib2,:)))
-                        if(taup.lt.0d0) ChiCitau%screened_local(ib1,ib2,:) = ChiCitau%screened_local(ib1,ib2,:) - taup
-                     else
-                        taup = maxval(dreal(ChiCitau%screened_local(ib1,ib2,:)))
-                        if(taup.gt.0d0) ChiCitau%screened_local(ib1,ib2,:) = ChiCitau%screened_local(ib1,ib2,:) - taup
-                     endif
-                     !
-                     ChiCitau%screened_local(ib2,ib1,:) = ChiCitau%screened_local(ib1,ib2,:)
-                     !
-                  enddo
-               enddo
-               !
-            endif
-            !
-            allocate(Integral(ChiCitau%Nbp,ChiCitau%Nbp));Integral=0d0
-            do itau=1,ChiCitau%Npoints-1
-               Integral = Integral + ( ChiCitau%screened_local(:,:,itau) + ChiCitau%screened_local(:,:,itau+1) ) * 0.5d0 * abs(tauB(itau+1)-tauB(itau))
-            enddo
-            !>>>TEST
             !
             !User-defined modification of local charge susceptibility
             if(alphaChi.ne.1d0)then
@@ -3163,14 +3100,6 @@ contains
             call Bitau2mats(Beta,ChiCitau%screened_local,ChiCmats%screened_local,tau_uniform=.true.)
             call DeallocateBosonicField(ChiCitau)
             call isReal(ChiCmats)
-            !
-            !TEST>>>
-            call dump_Matrix(dreal(Integral-ChiCmats%screened_local(:,:,1)),reg(PrevItFolder)//"Solver_"//reg(LocalOrbs(isite)%Name)//"/","IntDiff_"//reg(LocalOrbs(isite)%Name)//".DAT")
-            if(Test_flag_2)then
-               ChiCmats%screened_local(:,:,1) = Integral
-            endif
-            deallocate(Integral)
-            !>>>TEST
             !
             !Remove the iw=0 divergency of local charge susceptibility
             if(removeCDW_C)then

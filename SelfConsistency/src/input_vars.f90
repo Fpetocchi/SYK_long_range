@@ -656,7 +656,8 @@ contains
       if(mod(Solver%NtauB,2).eq.0)Solver%NtauB=Solver%NtauB+1
       call parse_input_variable(Solver%NtauF_in,"NTAU_F_IMP_IN",InputFile,default=Solver%NtauF,comment="Number of points on the fermionic imaginary time axis used in the previous iteration.")
       call parse_input_variable(Solver%NtauB_in,"NTAU_B_IMP_IN",InputFile,default=Solver%NtauB,comment="Number of points on the bosonic imaginary time axis used in the previous iteration.")
-      call parse_input_variable(Solver%NtauB_K,"NTAU_B_IMP_K",InputFile,default=int(2d0*pi*Nmats),comment="Number of points on the imaginary time axis for  the screening functions.")
+      call parse_input_variable(Solver%NtauF_D,"NTAU_F_IMP_D",InputFile,default=int(2d0*pi*Nmats),comment="Number of points on the imaginary time axis for the hybridization function.")
+      call parse_input_variable(Solver%NtauB_K,"NTAU_B_IMP_K",InputFile,default=int(2d0*pi*Nmats),comment="Number of points on the imaginary time axis for the screening function.")
       Solver%TargetDensity = look4dens%TargetDensity
       if((ExpandImpurity.or.AFMselfcons).and.(.not.look4dens%local))Solver%TargetDensity = look4dens%TargetDensity/Nsite
       call append_to_input_list(Solver%TargetDensity,"N_READ_IMP","Target density in the impurity list. User cannot set this as its the the same density on within the impurity orbitals if EXPAND=F otherwise its N_READ_LAT/NSITE.")
@@ -691,9 +692,10 @@ contains
       !
       if(Testing)then
          call add_separator("Testing flags")
-         call parse_input_variable(Test_flag_1,"CORRECT_CHI_NEG",InputFile,default=.false.,comment="Flag to shift the local charge susceptibility if negative.")
-         call parse_input_variable(Test_flag_2,"REPLACE_CHI",InputFile,default=.false.,comment="Flag to replace the value of ChiC(iw=0) with the stupid integral.")
-         call parse_input_variable(Test_flag_3,"FLAG",InputFile,default=.false.,comment="Flag to ___.")
+         call parse_input_variable(Test_flag_1,"TEST_FLAG_1",InputFile,default=.false.,comment="Flag to ___.")
+         call parse_input_variable(Test_flag_2,"TEST_FLAG_2",InputFile,default=.false.,comment="Flag to ___.")
+         call parse_input_variable(Test_flag_3,"TEST_FLAG_3",InputFile,default=.false.,comment="Flag to ___.")
+         call parse_input_variable(Test_flag_4,"TEST_FLAG_4",InputFile,default=.false.,comment="Flag to ___.")
       endif
       !
       !

@@ -196,6 +196,7 @@ module parameters
       real(8)                               :: TargetDensity=0d0
       integer                               :: Nimp
       integer                               :: NtauF
+      integer                               :: NtauF_D
       integer                               :: NtauB
       integer                               :: NtauB_K
       integer                               :: NtauF_in

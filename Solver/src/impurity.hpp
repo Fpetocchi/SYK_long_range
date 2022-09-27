@@ -147,12 +147,14 @@ class ct_hyb
 
          //
          //read the hybridization function
-         read_VecVec(inputDir+"/Delta_t.DAT", Delta, Nflavor, NtauF, true, true);  // last flag is to reverse the tau index
+         read_VecVec(inputDir+"/Delta_t.DAT", Delta, Nflavor, true, true);  // last flag is to reverse the tau index
          for(int ifl=0; ifl < Nflavor; ifl++)
          {
-            for(int itau=0; itau < Delta[ifl].size(); itau++)
+            path Dcomp = "Delta["+str(ifl)+"]";
+            int Ntau_D =  Delta[ifl].size();
+            if(Ntau_D!=NtauF) mpi.report(" The Number of tau points in "+Dcomp+" is: "+str(Ntau_D)+" different from NtauF: "+str(NtauF));
+            for(int itau=0; itau < Ntau_D; itau++)
             {
-               path Dcomp = "Delta["+str(ifl)+"]";
                if(Delta[ifl][itau]<0.0) mpi.StopError( " ->"+Dcomp+" at tau "+str(itau)+" is positive - Exiting.");
             }
          }
@@ -249,6 +251,7 @@ class ct_hyb
             print_Vec(inputDir+"/used.Eloc.DAT", Eloc, mu);
             print_VecVec(inputDir+"/used.Delta_t.DAT", Delta);
             if(retarded)print_VecVecVec(inputDir+"/used.K_t.DAT", K_table);
+            if(retarded&&Improved_F)print_VecVecVec(inputDir+"/used.Kp_t.DAT", Kp_table);
          }
 
          //
