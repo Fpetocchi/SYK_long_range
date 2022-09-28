@@ -2642,6 +2642,7 @@ contains
                deallocate(Fimp)
                exit
             endif
+            if(ExpandImpurity.or.AFMselfcons)exit
          enddo
       endif
       !
