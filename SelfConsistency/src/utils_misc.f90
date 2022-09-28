@@ -57,6 +57,12 @@ module utils_misc
       module procedure sort_array_d
    end interface sort_array
 
+   interface flip_array
+      module procedure flip_array_i
+      module procedure flip_array_d
+      module procedure flip_array_z
+   end interface flip_array
+
    interface find_vec
       module procedure find_vec_i
       module procedure find_vec_d
@@ -141,11 +147,13 @@ module utils_misc
    public :: keq
    public :: linspace
    public :: denspace
+   public :: flip_array
    public :: free_unit
    public :: str
    public :: reg
    public :: cubic_interp
    public :: linear_interp
+   public :: trapezoid_integration
 
    !===========================================================================!
 
@@ -1663,6 +1671,69 @@ contains
 
 
    !---------------------------------------------------------------------------!
+   !PURPOSE: function which computes the integral of an array
+   !---------------------------------------------------------------------------!
+   function trapezoid_integration(fx,dx) result(Int)
+      implicit none
+      real(8),dimension(:),intent(in)       :: fx
+      real(8),intent(in)                    :: dx
+      real(8)                               :: Int
+      integer                               :: i
+      !
+      if(size(fx).le.1) stop " trapezoid_integration: function with wrong dimension."
+      !
+      Int=0d0
+      do i=2,size(fx)
+         Int = Int + ( fx(i) + fx(i-1) ) * (dx/2d0)
+      enddo
+      !
+   end function trapezoid_integration
+
+
+   !---------------------------------------------------------------------------!
+   !PURPOSE : flip array
+   !---------------------------------------------------------------------------!
+   function flip_array_i(Ain) result(Aout)
+      implicit none
+      integer,dimension(:),intent(in)       :: Ain(:)
+      integer,dimension(size(Ain))          :: Aout
+      integer                               :: i,N
+      !
+      N = size(Ain)
+      do i=1,N
+         Aout(i) = Ain(N-i+1)
+      enddo
+      !
+   end function flip_array_i
+   !
+   function flip_array_d(Ain) result(Aout)
+      implicit none
+      real(8),dimension(:)                  :: Ain(:)
+      integer,dimension(size(Ain))          :: Aout
+      integer                               :: i,N
+      !
+      N = size(Ain)
+      do i=1,N
+         Aout(i) = Ain(N-i+1)
+      enddo
+      !
+   end function flip_array_d
+   !
+   function flip_array_z(Ain) result(Aout)
+      implicit none
+      complex(8),dimension(:)               :: Ain(:)
+      integer,dimension(size(Ain))          :: Aout
+      integer                               :: i,N
+      !
+      N = size(Ain)
+      do i=1,N
+         Aout(i) = Ain(N-i+1)
+      enddo
+      !
+   end function flip_array_z
+
+
+   !---------------------------------------------------------------------------!
    !PURPOSE: General Filon integration
    ! I[x1,x2] dx f(x) cos(kx) and I[x1,x2] dx f(x) sin(kx)
    ! where f(x) is smooth but cos(kx) and sin(kx) can oscillate rapidly,
@@ -2034,13 +2105,13 @@ contains
          !
       endif
       !
-    end subroutine BosonicFilon
+   end subroutine BosonicFilon
 
 
-    !---------------------------------------------------------------------------
-    !PURPOSE : sort array of integer using random algorithm
-    !---------------------------------------------------------------------------
-    subroutine sort_array_i(array,order,replace)
+   !---------------------------------------------------------------------------!
+   !PURPOSE : sort array using random algorithm
+   !---------------------------------------------------------------------------!
+   subroutine sort_array_i(array,order,replace)
       implicit none
       integer,dimension(:)                    :: array
       integer,dimension(size(array))          :: order
@@ -2059,120 +2130,124 @@ contains
          backup(i)=array(order(i))
       enddo
       if(replace_)array=backup
-    contains
+   contains
       recursive subroutine qsort_sort( array, order, left, right )
-        integer, dimension(:) :: array
-        integer, dimension(:) :: order
-        integer               :: left
-        integer               :: right
-        integer               :: i
-        integer               :: last
-        if ( left .ge. right ) return
-        call qsort_swap( order, left, qsort_rand(left,right) )
-        last = left
-        do i = left+1, right
-           if ( compare(array(order(i)), array(order(left)) ) .lt. 0 ) then
-              last = last + 1
-              call qsort_swap( order, last, i )
-           endif
-        enddo
-        call qsort_swap( order, left, last )
-        call qsort_sort( array, order, left, last-1 )
-        call qsort_sort( array, order, last+1, right )
+         integer, dimension(:) :: array
+         integer, dimension(:) :: order
+         integer               :: left
+         integer               :: right
+         integer               :: i
+         integer               :: last
+         if ( left .ge. right ) return
+         call qsort_swap( order, left, qsort_rand(left,right) )
+         last = left
+         do i = left+1, right
+            if ( compare(array(order(i)), array(order(left)) ) .lt. 0 ) then
+               last = last + 1
+               call qsort_swap( order, last, i )
+            endif
+         enddo
+         call qsort_swap( order, left, last )
+         call qsort_sort( array, order, left, last-1 )
+         call qsort_sort( array, order, last+1, right )
       end subroutine qsort_sort
       !---------------------------------------------!
       subroutine qsort_swap( order, first, second )
-        integer, dimension(:) :: order
-        integer               :: first, second
-        integer               :: tmp
-        tmp           = order(first)
-        order(first)  = order(second)
-        order(second) = tmp
+         integer, dimension(:) :: order
+         integer               :: first, second
+         integer               :: tmp
+         tmp           = order(first)
+         order(first)  = order(second)
+         order(second) = tmp
       end subroutine qsort_swap
       !---------------------------------------------!
       integer function qsort_rand( lower, upper )
-        integer            :: lower, upper
-        real(8)               :: r
-        call random_number(r)
-        qsort_rand =  lower + nint(r * (upper-lower))
+         integer            :: lower, upper
+         real(8)               :: r
+         call random_number(r)
+         qsort_rand =  lower + nint(r * (upper-lower))
       end function qsort_rand
       !---------------------------------------------!
       function compare(f,g)
-        implicit none
-        integer               :: f,g
-        integer               :: compare
-        if(f<g) then
-           compare=-1
-        else
-           compare=1
-        endif
+         implicit none
+         integer               :: f,g
+         integer               :: compare
+         if(f<g) then
+            compare=-1
+         else
+            compare=1
+         endif
       end function compare
    end subroutine sort_array_i
    !
-   subroutine sort_array_d(array,order)
-     implicit none
-     real(8),dimension(:)                    :: array
-     integer,dimension(size(array))          :: order
-     integer,dimension(size(array))          :: backup
-     integer                                 :: i
-     integer                                 :: lf,rg
-     lf=1
-     rg=size(array)
-     forall(i=1:size(array))order(i)=i
-     call qsort_sort(array, order,lf, rg)
-     do i=1,size(array)
-        backup(i)=array(order(i))
-     enddo
-     !array=backup
-   contains
-     recursive subroutine qsort_sort( array, order, left, right )
-      real(8), dimension(:) :: array
-      integer, dimension(:) :: order
-      integer               :: left
-      integer               :: right
-      integer               :: i
-      integer               :: last
-      if ( left .ge. right ) return
-      call qsort_swap( order, left, qsort_rand(left,right) )
-      last = left
-      do i = left+1, right
-          if ( compare(array(order(i)), array(order(left)) ) .lt. 0 ) then
-             last = last + 1
-             call qsort_swap( order, last, i )
-          endif
-      enddo
-      call qsort_swap( order, left, last )
-      call qsort_sort( array, order, left, last-1 )
-      call qsort_sort( array, order, last+1, right )
-     end subroutine qsort_sort
-     !---------------------------------------------!
-     subroutine qsort_swap( order, first, second )
-      integer, dimension(:) :: order
-      integer               :: first, second
-      integer               :: tmp
-      tmp           = order(first)
-      order(first)  = order(second)
-      order(second) = tmp
-     end subroutine qsort_swap
-     !---------------------------------------------!
-     integer function qsort_rand( lower, upper )
-      integer               :: lower, upper
-      real(8)               :: r
-      call random_number(r)
-      qsort_rand =  lower + nint(r * (upper-lower))
-     end function qsort_rand
-     !---------------------------------------------!
-     function compare(f,g)
+   subroutine sort_array_d(array,order,replace)
       implicit none
-      real(8)               :: f,g
-      integer               :: compare
-      if(f<g) then
-          compare=-1
-      else
-          compare=1
-      endif
-     end function compare
-  end subroutine sort_array_d
+      real(8),dimension(:)                    :: array
+      integer,dimension(size(array))          :: order
+      logical,intent(in),optional             :: replace
+      integer,dimension(size(array))          :: backup
+      integer                                 :: i
+      integer                                 :: lf,rg
+      logical                                 :: replace_
+      replace_=.false.
+      if(present(replace))replace_=replace
+      lf=1
+      rg=size(array)
+      forall(i=1:size(array))order(i)=i
+      call qsort_sort(array, order,lf, rg)
+      do i=1,size(array)
+         backup(i)=array(order(i))
+      enddo
+      if(replace_)array=backup
+   contains
+      recursive subroutine qsort_sort( array, order, left, right )
+         real(8), dimension(:) :: array
+         integer, dimension(:) :: order
+         integer               :: left
+         integer               :: right
+         integer               :: i
+         integer               :: last
+         if ( left .ge. right ) return
+         call qsort_swap( order, left, qsort_rand(left,right) )
+         last = left
+         do i = left+1, right
+             if ( compare(array(order(i)), array(order(left)) ) .lt. 0 ) then
+                last = last + 1
+             call qsort_swap( order, last, i )
+             endif
+         enddo
+         call qsort_swap( order, left, last )
+         call qsort_sort( array, order, left, last-1 )
+         call qsort_sort( array, order, last+1, right )
+      end subroutine qsort_sort
+      !---------------------------------------------!
+      subroutine qsort_swap( order, first, second )
+         integer, dimension(:) :: order
+         integer               :: first, second
+         integer               :: tmp
+         tmp           = order(first)
+         order(first)  = order(second)
+         order(second) = tmp
+      end subroutine qsort_swap
+      !---------------------------------------------!
+      integer function qsort_rand( lower, upper )
+         integer               :: lower, upper
+         real(8)               :: r
+         call random_number(r)
+         qsort_rand =  lower + nint(r * (upper-lower))
+      end function qsort_rand
+      !---------------------------------------------!
+      function compare(f,g)
+         implicit none
+         real(8)               :: f,g
+         integer               :: compare
+         if(f<g) then
+            compare=-1
+         else
+            compare=1
+         endif
+      end function compare
+   end subroutine sort_array_d
 
 
    !---------------------------------------------------------------------------!
@@ -2185,7 +2260,7 @@ contains
      call i4_to_s_left(i4,string_)
      string=trim(adjustl(trim(string_)))
    end function str_i_to_ch
-
+   !
    function str_i_to_ch_pad(i4,Npad) result(string)
      integer                      :: i4
      integer                      :: Npad
@@ -2234,7 +2309,7 @@ contains
      string="F"
      if(bool)string="T"
    end function str_l_to_ch
-
+   !
    function str_ch_to_ch(txt) result(string)
      character(len=*)                             :: txt
      character(len=:),allocatable :: string
@@ -2673,7 +2748,7 @@ contains
              write(*,"(A,10I2)")trim(routine)//" error: "//trim(matname)//" has illegal shape"
         stop "assert_shape error: wrong matrix shape"
      end if
-  end subroutine l_assert_shape_N1
+   end subroutine l_assert_shape_N1
    subroutine l_assert_shape_N2(A,Ndim,routine,matname)
      logical,dimension(:,:),intent(in)          :: A
      integer,dimension(:),intent(in)            :: Ndim
@@ -2683,7 +2758,7 @@ contains
              write(*,"(A,10I2)")trim(routine)//" error: "//trim(matname)//" has illegal shape"
         stop "assert_shape error: wrong matrix shape"
      end if
-  end subroutine l_assert_shape_N2
+   end subroutine l_assert_shape_N2
    subroutine l_assert_shape_N3(A,Ndim,routine,matname)
      logical,dimension(:,:,:),intent(in)        :: A
      integer,dimension(:),intent(in)            :: Ndim
@@ -2693,7 +2768,7 @@ contains
              write(*,"(A,10I2)")trim(routine)//" error: "//trim(matname)//" has illegal shape"
         stop "assert_shape error: wrong matrix shape"
      end if
-  end subroutine l_assert_shape_N3
+   end subroutine l_assert_shape_N3
    subroutine l_assert_shape_N4(A,Ndim,routine,matname)
      logical,dimension(:,:,:,:),intent(in)        :: A
      integer,dimension(:),intent(in)            :: Ndim
@@ -2703,7 +2778,7 @@ contains
              write(*,"(A,10I2)")trim(routine)//" error: "//trim(matname)//" has illegal shape"
         stop "assert_shape error: wrong matrix shape"
      end if
-  end subroutine l_assert_shape_N4
+   end subroutine l_assert_shape_N4
    subroutine l_assert_shape_N5(A,Ndim,routine,matname)
      logical,dimension(:,:,:,:,:),intent(in)    :: A
      integer,dimension(:),intent(in)            :: Ndim
@@ -2713,7 +2788,7 @@ contains
              write(*,"(A,10I2)")trim(routine)//" error: "//trim(matname)//" has illegal shape"
         stop "assert_shape error: wrong matrix shape"
      end if
-  end subroutine l_assert_shape_N5
+   end subroutine l_assert_shape_N5
    subroutine l_assert_shape_N6(A,Ndim,routine,matname)
      logical,dimension(:,:,:,:,:,:),intent(in)    :: A
      integer,dimension(:),intent(in)            :: Ndim
@@ -2723,7 +2798,7 @@ contains
              write(*,"(A,10I2)")trim(routine)//" error: "//trim(matname)//" has illegal shape"
         stop "assert_shape error: wrong matrix shape"
      end if
-  end subroutine l_assert_shape_N6
+   end subroutine l_assert_shape_N6
    subroutine l_assert_shape_N7(A,Ndim,routine,matname)
      logical,dimension(:,:,:,:,:,:,:),intent(in)    :: A
      integer,dimension(:),intent(in)            :: Ndim
@@ -2733,6 +2808,6 @@ contains
              write(*,"(A,10I2)")trim(routine)//" error: "//trim(matname)//" has illegal shape"
         stop "assert_shape error: wrong matrix shape"
      end if
-  end subroutine l_assert_shape_N7
+   end subroutine l_assert_shape_N7
 
 end module utils_misc

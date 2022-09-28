@@ -31,7 +31,8 @@ module module_container
    assert_shape                             ,&
    splint,nspline                           ,&
    cubic_interp,linear_interp               ,&
-   get_pattern,sort_array
+   trapezoid_integration                    ,&
+   get_pattern,sort_array,flip_array
 
 
    !(c) Lattice related quantities. Depends on (a),(b) not on specific types.

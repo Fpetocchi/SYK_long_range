@@ -149,7 +149,7 @@ subroutine calc_Tc(pathOUTPUT,Inputs,Lttc,Wlat,Sfull)
          !
          call store_Wk(Wlat%screened,Beta,Inputs%Wk_cutoff)
          call calc_Kel_stat_e(Beta,Egrid,weights_Wk,Kel_stat,printKpath=reg(printpath),printmode=reg(Inputs%printmode_el))
-         call calc_Kel_dyn_e(Beta,Egrid,weights_Wk,Inputs%wstep,Kel_dyn,printKpath=reg(printpath),printmode=reg(Inputs%printmode_el))
+         call calc_Kel_dyn_e(Beta,Egrid,weights_Wk,Kel_dyn,printKpath=reg(printpath),printmode=reg(Inputs%printmode_el))
          !
          K = K + Kel_stat + Kel_dyn
          !

@@ -556,15 +556,13 @@ VecVec measure_nt( std::vector<segment_container_t> &segments, std::vector<int> 
 //----------------------------------------------------------------------------//
 //                     IMPROVED ESTIMATOR FOR THE SELF-ENERGY                 //
 //----------------------------------------------------------------------------//
-//void measure_GF( VecVec &Gvec, VecVec &Fvec, std::vector<segment_container_t> &segments, std::vector<int> &full_line, VecMat &Mvec, Mat &Uloc, double &Beta)
 void measure_GF( VecVec &Gvec, VecVec &Fvec_S, VecVec &Fvec_R, std::vector<segment_container_t> &segments, VecMat &Mvec, double &Beta,
-                 Mat &Uloc, VecVecVec &Kp_table )//, Mat &Screening_Mat )
+                 Mat &Uloc, VecVecVec &Kp_table )
 {
    //
    std::set<times>::iterator it1, it2, itn;
    int Nflavor = Gvec.size();
    int Ntau = Gvec[0].size();
-   //VecVec n_tau = measure_nt( segments, full_line, Ntau, Beta );
 
    bool retared = Kp_table.size() > 0;
 

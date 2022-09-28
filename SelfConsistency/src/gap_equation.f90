@@ -639,7 +639,7 @@ contains
    !         only the static limit of the fully screened interaction. Minimal use
    !         of shared variables in order to be able to try different grid/meshes.
    !---------------------------------------------------------------------------!
-   subroutine calc_Kel_dyn_e(Beta,Egrid,weights,MatsStep,Kel_dyn_e,printKpath,printmode)
+   subroutine calc_Kel_dyn_e(Beta,Egrid,weights,Kel_dyn_e,printKpath,printmode)
       !
       use parameters
       use utils_misc
@@ -648,7 +648,6 @@ contains
       real(8),intent(in)                    :: Beta
       real(8),intent(in)                    :: Egrid(:)
       real(8),intent(in)                    :: weights(:,:,:)
-      real(8),intent(in)                    :: MatsStep
       complex(8),intent(out)                :: Kel_dyn_e(:,:)
       character(len=*),intent(in),optional  :: printKpath
       character(len=*),intent(in),optional  :: printmode
@@ -658,18 +657,18 @@ contains
       integer                               :: ik,Nkpt,Nmats
       integer                               :: iE,iE1,iE2,iy,Ngrid
       integer                               :: wndx_a,wndx_b
-      real(8)                               :: DoSnorm,Temp
+      real(8)                               :: DoSnorm,Temp,MatsStep
       real(8)                               :: wmax,ymax
       real(8)                               :: E1,E2,DE,DE_m,DE_p
       real(8)                               :: dy,dy_m,dy_p
       real(8)                               :: y_i,y_j
-      real(8)                               :: wm,m,q
-      real(8)                               :: W_wm_i,W_wm_j,Int_i,Int_j
+      real(8)                               :: wm,ReW_wm_intp,ImW_wm_intp
+      complex(8)                            :: W_wm_i,W_wm_j,Int_i,Int_j
       complex(8)                            :: Kel_dyn_e_p,Kel_dyn_e_m
       real(8),allocatable                   :: DoS(:),wmats(:)
       real(8),allocatable                   :: ygrid_m(:),ygrid_p(:)
+      complex(8),allocatable                :: Wee(:)!WeeC(:)
       complex(8),allocatable                :: Wk_pvt(:,:,:,:)
-      complex(8),allocatable                :: Wee(:)
       character(len=12)                     :: printmode_used
       real                                  :: start,finish
       !
@@ -711,17 +710,17 @@ contains
       !
       Temp = 1d0 / (Beta*K2eV)
       !
-      if(MatsStep.le.0d0) stop "calc_Kel_dyn_e: MatsStep must be >0."
-      write(*,"(A,F)") "     Bosonic frequency step:",MatsStep
-      !
       allocate(wmats(Nmats));wmats=BosonicFreqMesh(Beta,Nmats)
       wmax = wmats(Nmats)
       !
+      MatsStep = abs(wmats(2)-wmats(1))
+      write(*,"(A,F)") "     Bosonic frequency step:",MatsStep
+      !
       call cpu_time(start)
       !$OMP PARALLEL DEFAULT(PRIVATE),&
-      !$OMP SHARED(Wk,Ngrid,DoS,Norb,Nmats,Nkpt,weights,wmats,MatsStep,Wee)
+      !$OMP SHARED(Wk,Ngrid,DoS,Norb,Nmats,Nkpt,weights,wmats,MatsStep)
       !
-      allocate(Wee(Nmats));Wee=czero
+      allocate(Wee(Nmats));Wee=0d0
       allocate(Wk_pvt(Norb,Norb,Nmats,Nkpt));Wk_pvt=czero
       Wk_pvt = Wk
       !
@@ -743,6 +742,7 @@ contains
             if((iE1.eq.Efermi_ndx).or.(iE2.eq.Efermi_ndx))cycle
             !
             !bring interaction on the energy gird
+            !allocate(WeeC(Nmats));WeeC=czero
             do iorb=1,Norb
                do jorb=1,Norb
                   do ik=1,Nkpt
@@ -752,24 +752,27 @@ contains
                   enddo
                enddo
             enddo
+            !only the real part of the interaction is kept
+            !Wee = dreal(WeeC)
+            !deallocate(WeeC)
             !
             !integral over auxiliary variable y for DE_m = E1-E2 and DE_p = E1+E2
             DE_m = E1 - E2
             ymax = (wmax-DE_m) / (wmax+DE_m)
             if(ymax.eq.1d0) stop "calc_Kel_dyn_e: divergence will occur for ymax(E1-E2) = 1."
-            ygrid_m=linspace(-1d0,ymax,Ngrid)
+            ygrid_m = linspace(-1d0,ymax,Ngrid)
             dy_m = abs(ygrid_m(2)-ygrid_m(1))
             !
             DE_p = E1 - E2
             ymax = (wmax-DE_p) / (wmax+DE_p)
             if(ymax.eq.1d0) stop "calc_Kel_dyn_e: divergence will occur for ymax(E1+E2) = 1."
-            ygrid_p=linspace(-1d0,ymax,Ngrid)
+            ygrid_p = linspace(-1d0,ymax,Ngrid)
             dy_p = abs(ygrid_p(2)-ygrid_p(1))
             !
             !one loop for both auxiliary y variables
             Kel_dyn_e_m=czero
             Kel_dyn_e_p=czero
-            do iy=2,Ngrid-1
+            do iy=2,Ngrid
                !
                !-------------------- first term of the sum ---------------------
                DE = DE_m
@@ -779,28 +782,28 @@ contains
                !
                !continous frequency correspnding to iy
                wm = abs(DE) * (1+y_i)/(1-y_i)
-               !linear interpolation between the two points on the matsubara grid enclosing wm
+               !linear interpolation of Wee between the two points on the matsubara grid enclosing wm
                wndx_a = floor(wm/MatsStep) + 1
                wndx_b = wndx_a + 1
-               m = (Wee(wndx_b)-Wee(wndx_a))/(wmats(wndx_b)-wmats(wndx_a))
-               q = Wee(wndx_a) - m*wmats(wndx_a)
-               W_wm_i = m * wm + q
+               ReW_wm_intp = linear_interp( [wmats(wndx_a),dreal(Wee(wndx_a))] , [wmats(wndx_b),dreal(Wee(wndx_b))] , wm )
+               ImW_wm_intp = linear_interp( [wmats(wndx_a),dimag(Wee(wndx_a))] , [wmats(wndx_b),dimag(Wee(wndx_b))] , wm )
+               W_wm_i = dcmplx(ReW_wm_intp,ImW_wm_intp)
                !
-               !continous frequency correspnding to iy+1
+               !continous frequency correspnding to iy-1
                wm = abs(DE) * (1+y_j)/(1-y_j)
-               !linear interpolation between the two points on the matsubara grid enclosing wm
+               !linear interpolation of Wee between the two points on the matsubara grid enclosing wm
                wndx_a = floor(wm/MatsStep) + 1
                wndx_b = wndx_a + 1
-               m = (Wee(wndx_b)-Wee(wndx_a))/(wmats(wndx_b)-wmats(wndx_a))
-               q = Wee(wndx_a) - m*wmats(wndx_a)
-               W_wm_j = m * wm + q
+               ReW_wm_intp = linear_interp( [wmats(wndx_a),dreal(Wee(wndx_a))] , [wmats(wndx_b),dreal(Wee(wndx_b))] , wm )
+               ImW_wm_intp = linear_interp( [wmats(wndx_a),dimag(Wee(wndx_a))] , [wmats(wndx_b),dimag(Wee(wndx_b))] , wm )
+               W_wm_j = dcmplx(ReW_wm_intp,ImW_wm_intp)
                !
                !integrand for iy and iy-1
-               Int_i = W_wm_i / ( 1 + y_i*y_i )
-               Int_j = W_wm_j / ( 1 + y_j*y_j )
+               Int_i = W_wm_i / ( 1d0 + y_i**2 )
+               Int_j = W_wm_j / ( 1d0 + y_j**2 )
                !
                !trapezoidal integration
-               Kel_dyn_e_m = Kel_dyn_e_m + (1d0/pi) * (Int_i+Int_j)*(dy/2d0)
+               Kel_dyn_e_m = Kel_dyn_e_m + (Int_i+Int_j)*(dy/2d0)
                !
                !
                !------------------- second term of the sum ---------------------
@@ -811,39 +814,40 @@ contains
                !
                !continous frequency correspnding to iy
                wm = abs(DE) * (1+y_i)/(1-y_i)
-               !linear interpolation between the two points on the matsubara grid enclosing wm
+               !linear interpolation of Wee between the two points on the matsubara grid enclosing wm
                wndx_a = floor(wm/MatsStep) + 1
                wndx_b = wndx_a + 1
-               m = (Wee(wndx_b)-Wee(wndx_a))/(wmats(wndx_b)-wmats(wndx_a))
-               q = Wee(wndx_a) - m*wmats(wndx_a)
-               W_wm_i = m * wm + q
+               ReW_wm_intp = linear_interp( [wmats(wndx_a),dreal(Wee(wndx_a))] , [wmats(wndx_b),dreal(Wee(wndx_b))] , wm )
+               ImW_wm_intp = linear_interp( [wmats(wndx_a),dimag(Wee(wndx_a))] , [wmats(wndx_b),dimag(Wee(wndx_b))] , wm )
+               W_wm_i = dcmplx(ReW_wm_intp,ImW_wm_intp)
                !
-               !continous frequency correspnding to iy+1
+               !continous frequency correspnding to iy-1
                wm = abs(DE) * (1+y_j)/(1-y_j)
-               !linear interpolation between the two points on the matsubara grid enclosing wm
+               !linear interpolation of Wee between the two points on the matsubara grid enclosing wm
                wndx_a = floor(wm/MatsStep) + 1
                wndx_b = wndx_a + 1
-               m = (Wee(wndx_b)-Wee(wndx_a))/(wmats(wndx_b)-wmats(wndx_a))
-               q = Wee(wndx_a) - m*wmats(wndx_a)
-               W_wm_j = m * wm + q
+               ReW_wm_intp = linear_interp( [wmats(wndx_a),dreal(Wee(wndx_a))] , [wmats(wndx_b),dreal(Wee(wndx_b))] , wm )
+               ImW_wm_intp = linear_interp( [wmats(wndx_a),dimag(Wee(wndx_a))] , [wmats(wndx_b),dimag(Wee(wndx_b))] , wm )
+               W_wm_j = dcmplx(ReW_wm_intp,ImW_wm_intp)
                !
                !integrand for iy and iy-1
-               Int_i = W_wm_i / ( 1 + y_i*y_i )
-               Int_j = W_wm_j / ( 1 + y_j*y_j )
+               Int_i = W_wm_i / ( 1d0 + y_i**2 )
+               Int_j = W_wm_j / ( 1d0 + y_j**2 )
                !
                !trapezoidal integration
-               Kel_dyn_e_p = Kel_dyn_e_p + (1d0/pi) * (Int_i+Int_j)*(dy/2d0)
+               Kel_dyn_e_p = Kel_dyn_e_p + (Int_i+Int_j)*(dy/2d0)
                !
             enddo
             !
             !adding the tail to w-->inf limit of the interaction
-            Kel_dyn_e_m = Kel_dyn_e_m + Wee(Nmats) * (1d0 - (pi/2d0)*atan2(wmats(Nmats),DE_m) )
-            Kel_dyn_e_p = Kel_dyn_e_p + Wee(Nmats) * (1d0 - (pi/2d0)*atan2(wmats(Nmats),DE_p) )
+            Kel_dyn_e_m = Kel_dyn_e_m + Wee(Nmats) * ( pi/2d0 - atan2(wmats(Nmats),DE_m) )
+            Kel_dyn_e_p = Kel_dyn_e_p + Wee(Nmats) * ( pi/2d0 - atan2(wmats(Nmats),DE_p) )
             !
-            !adding the fermi function
-            Kel_dyn_e_m = Kel_dyn_e_m * ( fermidirac(+E1,Beta) - fermidirac(+E2,Beta) )*2d0
-            Kel_dyn_e_p = Kel_dyn_e_p * ( fermidirac(-E1,Beta) - fermidirac(+E2,Beta) )*2d0
+            !adding the fermi function differences
+            Kel_dyn_e_m = Kel_dyn_e_m * ( fermidirac(+E1,Beta) - fermidirac(+E2,Beta) )*(4d0/pi)
+            Kel_dyn_e_p = Kel_dyn_e_p * ( fermidirac(-E1,Beta) - fermidirac(+E2,Beta) )*(4d0/pi)
             !
+            !adding the tanh in front
             Kel_dyn_e(iE1,iE2) = ( Kel_dyn_e_m + Kel_dyn_e_p ) / ( tanh(Beta/2d0*E1) * tanh(Beta/2d0*E2) )
             !
          enddo

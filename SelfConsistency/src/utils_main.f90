@@ -2462,8 +2462,8 @@ contains
       real(8),allocatable                   :: Uinst(:,:)
       real(8)                               :: A(2),B(2)
       !Impurity susceptibilities
-      real(8),allocatable                   :: nnt(:,:,:)
-      complex(8),allocatable                :: NNitau(:,:,:,:,:)
+      real(8),allocatable                   :: nt(:,:,:),nt_av(:,:)
+      real(8),allocatable                   :: nnt(:,:,:),NNitau(:,:,:,:,:)
       complex(8),allocatable                :: ChiMitau(:),ChiMmats(:)
       type(BosonicField)                    :: ChiCitau,ChiCmats
       !Impurity polarization and bosonic Dyson equation
@@ -2576,6 +2576,7 @@ contains
          unit = free_unit()
          open(unit,file=reg(file),form="formatted",status="old",position="rewind",action="read")
          do itau=1,Solver%NtauF_in
+            !
             ReadLine=0d0
             read(unit,*) taup,ReadLine
             if(abs(taup-tauF(itau)).gt.eps) stop "Reading Gimp_t.DAT from previous iteration: Impurity fermionic tau mesh does not coincide."
@@ -2976,11 +2977,46 @@ contains
          !
          do isite=1,Nsite
             !
-            write(*,"(A)") new_line("A")//"     Collecting the impurity susceptibilities of site "//reg(LocalOrbs(isite)%Name)
+            write(*,"(A)") new_line("A")//"     Collecting the impurity time-dependent occupations of site "//reg(LocalOrbs(isite)%Name)
             !
-            !Read the impurity N(tau)N(0)
+            !Read the impurity N(tau)
             allocate(tauB(Solver%NtauB_in));tauB=0d0
             tauB = linspace(0d0,Beta,Solver%NtauB_in)
+            allocate(nt(LocalOrbs(isite)%Nflavor,Solver%NtauB_in,Nspin));nt=0d0
+            allocate(ReadLine(LocalOrbs(isite)%Nflavor))
+            file = reg(PrevItFolder)//"Solver_"//reg(LocalOrbs(isite)%Name)//"/resultsQMC/n_t.DAT"
+            call inquireFile(reg(file),filexists,verb=verbose)
+            unit = free_unit()
+            open(unit,file=reg(file),form="formatted",status="old",position="rewind",action="read")
+            do itau=1,Solver%NtauB_in
+               !
+               ReadLine=0d0
+               read(unit,*) taup,ReadLine
+               if(abs(taup-tauB(itau)).gt.eps) stop "Reading n_t.DAT from previous iteration: Impurity bosonic tau mesh does not coincide."
+               !
+               ndx=1
+               do iorb=1,LocalOrbs(isite)%Norb
+                  do ispin=1,Nspin
+                     nt(iorb,itau,ispin) = ReadLine(ndx)
+                     ndx=ndx+1
+                  enddo
+               enddo
+               !
+            enddo
+            close(unit)
+            deallocate(ReadLine)
+            allocate(nt_av(LocalOrbs(isite)%Norb,Nspin));nt_av=0d0
+            do iorb=1,LocalOrbs(isite)%Norb
+               do ispin=1,Nspin
+                  nt_av(iorb,ispin) = sum(nt(iorb,:,ispin))/Solver%NtauB_in
+                  write(*,"(2(A,1E20.12))")"     Orbital: "//str(iorb)//" spin: "//str(ispin)//" Nqmc: ",LocalOrbs(isite)%rho_OrbSpin(iorb,iorb,ispin)," <n(tau)>: ",nt_av(iorb,ispin)
+               enddo
+            enddo
+            deallocate(nt)
+            !
+            write(*,"(A)") new_line("A")//"     Collecting the impurity correlator of site "//reg(LocalOrbs(isite)%Name)
+            !
+            !Read the impurity N(tau)N(0)
             allocate(nnt(LocalOrbs(isite)%Nflavor,LocalOrbs(isite)%Nflavor,Solver%NtauB_in));nnt=0d0
             allocate(ReadLine(LocalOrbs(isite)%Nflavor*(LocalOrbs(isite)%Nflavor+1)/2))
             file = reg(PrevItFolder)//"Solver_"//reg(LocalOrbs(isite)%Name)//"/resultsQMC/nn_t.DAT"
@@ -3008,7 +3044,7 @@ contains
             deallocate(ReadLine)
             !
             !Reshape N(tau)N(0)for easier handling
-            allocate(NNitau(LocalOrbs(isite)%Norb,LocalOrbs(isite)%Norb,Nspin,Nspin,Solver%NtauB_in));NNitau=czero
+            allocate(NNitau(LocalOrbs(isite)%Norb,LocalOrbs(isite)%Norb,Nspin,Nspin,Solver%NtauB_in));NNitau=0d0
             do ib1=1,LocalOrbs(isite)%Nflavor
                do ib2=1,LocalOrbs(isite)%Nflavor
                   !
@@ -3061,7 +3097,8 @@ contains
                      do jspin=1,Nspin
                         !
                         ChiCitau%screened_local(ib1,ib2,:) = ChiCitau%screened_local(ib1,ib2,:) + &
-                        ( NNitau(iorb,jorb,ispin,jspin,:) - LocalOrbs(isite)%rho_OrbSpin(iorb,iorb,ispin) * LocalOrbs(isite)%rho_OrbSpin(jorb,jorb,jspin) )
+                        !( NNitau(iorb,jorb,ispin,jspin,:) - LocalOrbs(isite)%rho_OrbSpin(iorb,iorb,ispin) * LocalOrbs(isite)%rho_OrbSpin(jorb,jorb,jspin) )
+                        ( NNitau(iorb,jorb,ispin,jspin,:) - nt_av(iorb,ispin) * nt_av(jorb,jspin) )
                         !
                      enddo
                   enddo
@@ -3073,12 +3110,14 @@ contains
             if(Nspin.gt.1)then
                do iorb=1,LocalOrbs(isite)%Norb
                   do jorb=1,LocalOrbs(isite)%Norb
-                     LocalOrbs(isite)%Docc(iorb,jorb) = ( NNitau(iorb,jorb,1,2,1)+ NNitau(iorb,jorb,2,1,1) ) / 2d0
+                     LocalOrbs(isite)%Docc(iorb,jorb) = ( sum(NNitau(iorb,jorb,1,2,:))/Solver%NtauB_in + &
+                                                          sum(NNitau(iorb,jorb,2,1,:))/Solver%NtauB_in ) / 2d0
+                     !LocalOrbs(isite)%Docc(iorb,jorb) = ( NNitau(iorb,jorb,1,2,1)+ NNitau(iorb,jorb,2,1,1) ) / 2d0
                   enddo
                enddo
                call dump_Matrix(LocalOrbs(isite)%Docc,reg(PrevItFolder)//"Solver_"//reg(LocalOrbs(isite)%Name)//"/","Dimp_"//reg(LocalOrbs(isite)%Name)//".DAT")
             endif
-            deallocate(NNitau)
+            deallocate(NNitau,nt_av)
             !
             !User-defined modification of local charge susceptibility
             if(alphaChi.ne.1d0)then

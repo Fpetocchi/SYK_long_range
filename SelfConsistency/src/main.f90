@@ -42,6 +42,9 @@ program SelfConsistency
    !
    !
 #ifdef _akw
+   !
+   call inquireFile(reg(ItFolder)//"Sfull_w_k_s1.DAT",S_Full_exists,hardstop=.true.,verb=verbose)
+   !
    call calc_Glda(0d0,Beta,Crystal)
    call AllocateFermionicField(S_Full,Crystal%Norb,Nmats,Nkpt=Crystal%Nkpt,Nsite=Nsite,Beta=Beta)
    call read_FermionicField(S_Full,reg(ItFolder),"Sfull_w",Crystal%kpt)
@@ -57,7 +60,16 @@ program SelfConsistency
    !
    stop
 #elif defined _gap
-   call calc_Tc(reg(ItFolder),gap_equation,Crystal)
+   !
+   call inquireFile(reg(ItFolder)//"Sfull_w_k_s1.DAT",S_Full_exists,hardstop=.false.,verb=verbose)
+   if(S_Full_exists)then
+      call AllocateFermionicField(S_Full,Crystal%Norb,Nmats,Nkpt=Crystal%Nkpt,Nsite=Nsite,Beta=Beta)
+      call read_FermionicField(S_Full,reg(ItFolder),"Sfull_w",Crystal%kpt)
+      call calc_Tc(reg(ItFolder),gap_equation,Crystal,Wlat=Ulat,Sfull=S_Full)
+   else
+      call calc_Tc(reg(ItFolder),gap_equation,Crystal,Wlat=Ulat)
+   endif
+   !
    stop
 #endif
    !

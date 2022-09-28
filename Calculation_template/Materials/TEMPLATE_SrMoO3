@@ -7,7 +7,7 @@ GENMAT=/home/petocchif/1_GW_EDMFT/GenericMaterial/Calculation_template
 
 declare -a dirindex=( "117_Std"  )
 #for it in "${dirindex[@]}" ; do
-for it in `seq  154 1 159` ; do
+for it in `seq  154 1 162` ; do
    if [ -d "$it" ]; then
    #
    cd $it/Convergence
@@ -46,43 +46,21 @@ done
 ./MaxEnt_Kresolved_SLURM.sh -e 0.001 -w 2001 -W 200 -F G -N 564 -B 188 -m path  -i 1 -f 10
 
 
-
-
-EFFETTO di W
-./MaxEnt_Kresolved_SLURM.sh -e 0.0050 -w 2001 -W 400 -F G -N 564 -B 188 -m full -i 1 -f 1 -s _e1
-./MaxEnt_Kresolved_SLURM.sh -e 0.0050 -w 2001 -W 300 -F G -N 564 -B 188 -m full -i 1 -f 1 -s _e2
-./MaxEnt_Kresolved_SLURM.sh -e 0.0050 -w 2001 -W 200 -F G -N 564 -B 188 -m full -i 1 -f 1 -s _e3
-
 EFFETTO di e
-./MaxEnt_Kresolved_SLURM.sh -e 0.0050 -w 2001 -W 300 -F G -N 564 -B 188 -m full -i 1 -f 1 -s _e4 OK
-./MaxEnt_Kresolved_SLURM.sh -e 0.0040 -w 2001 -W 300 -F G -N 564 -B 188 -m full -i 1 -f 1 -s _e5 OK
-./MaxEnt_Kresolved_SLURM.sh -e 0.0030 -w 2001 -W 300 -F G -N 564 -B 188 -m full -i 1 -f 1 -s _e6 OK
-./MaxEnt_Kresolved_SLURM.sh -e 0.0020 -w 2001 -W 300 -F G -N 564 -B 188 -m full -i 1 -f 1 -s _e7 OK
-./MaxEnt_Kresolved_SLURM.sh -e 0.0010 -w 2001 -W 300 -F G -N 564 -B 188 -m full -i 1 -f 1 -s _e8 OK
-
-./MaxEnt_Kresolved_SLURM.sh -e 0.0008 -w 2001 -W 300 -F G -N 564 -B 188 -m full -i 1 -f 1 -s _e9 NO
-./MaxEnt_Kresolved_SLURM.sh -e 0.0006 -w 2001 -W 300 -F G -N 564 -B 188 -m full -i 1 -f 1 -s _e1 NO
-./MaxEnt_Kresolved_SLURM.sh -e 0.0004 -w 2001 -W 300 -F G -N 564 -B 188 -m full -i 1 -f 1 -s _e2 NO
-./MaxEnt_Kresolved_SLURM.sh -e 0.0002 -w 2001 -W 300 -F G -N 564 -B 188 -m full -i 1 -f 1 -s _e3 NO
-
-
-./MaxEnt_Kresolved_SLURM.sh -e 0.00040 -w 2001 -W 400 -F G -N 564 -B 188 -m full -i 1 -f 1 -s _e1
-./MaxEnt_Kresolved_SLURM.sh -e 0.00020 -w 2001 -W 400 -F G -N 564 -B 188 -m full -i 1 -f 1 -s _e2
-./MaxEnt_Kresolved_SLURM.sh -e 0.00010 -w 2001 -W 400 -F G -N 564 -B 188 -m full -i 1 -f 1 -s _e3
-./MaxEnt_Kresolved_SLURM.sh -e 0.00005 -w 2001 -W 400 -F G -N 564 -B 188 -m full -i 1 -f 1 -s _e4
-./MaxEnt_Kresolved_SLURM.sh -e 0.00004 -w 2001 -W 400 -F G -N 564 -B 188 -m full -i 1 -f 1 -s _e5
-./MaxEnt_Kresolved_SLURM.sh -e 0.00003 -w 2001 -W 400 -F G -N 564 -B 188 -m full -i 1 -f 1 -s _e6
-./MaxEnt_Kresolved_SLURM.sh -e 0.00002 -w 2001 -W 400 -F G -N 564 -B 188 -m full -i 1 -f 1 -s _e7
-
-
-./MaxEnt_Kresolved_SLURM.sh -e 0.00004 -w 2001 -W 400 -F G -N 564 -B 188 -m full -i 1 -f 1 -s _e5a
-./MaxEnt_Kresolved_SLURM.sh -e 0.00004 -w 2500 -W 400 -F G -N 564 -B 188 -m full -i 1 -f 1 -s _e5b
-./MaxEnt_Kresolved_SLURM.sh -e 0.00004 -w 4001 -W 400 -F G -N 564 -B 188 -m full -i 1 -f 1 -s _e5c
-./MaxEnt_Kresolved_SLURM.sh -e 0.00004 -w 5001 -W 400 -F G -N 564 -B 188 -m full -i 1 -f 1 -s _e5d
+./MaxEnt_Kresolved_SLURM.sh -e 0.00050 -w 6001 -W 400 -F G -N 560 -B 140 -m full -i 1 -f 1 -s _e1
+./MaxEnt_Kresolved_SLURM.sh -e 0.00040 -w 6001 -W 400 -F G -N 560 -B 140 -m full -i 1 -f 1 -s _e2
+./MaxEnt_Kresolved_SLURM.sh -e 0.00030 -w 6001 -W 400 -F G -N 560 -B 140 -m full -i 1 -f 1 -s _e3
+./MaxEnt_Kresolved_SLURM.sh -e 0.00020 -w 6001 -W 400 -F G -N 560 -B 140 -m full -i 1 -f 1 -s _e4
+./MaxEnt_Kresolved_SLURM.sh -e 0.00010 -w 6001 -W 400 -F G -N 560 -B 140 -m full -i 1 -f 1 -s _e5
+./MaxEnt_Kresolved_SLURM.sh -e 0.00008 -w 6001 -W 400 -F G -N 560 -B 140 -m full -i 1 -f 1 -s _e6
+./MaxEnt_Kresolved_SLURM.sh -e 0.00006 -w 6001 -W 400 -F G -N 560 -B 140 -m full -i 1 -f 1 -s _e7
+./MaxEnt_Kresolved_SLURM.sh -e 0.00004 -w 6001 -W 400 -F G -N 560 -B 140 -m full -i 1 -f 1 -s _e8
 
 
 
-./MaxEnt_Kresolved_SLURM.sh -e 0.00005 -w 2001 -W 400 -F G -N 564 -B 188 -m path -i 1 -f 10
+
+
+
 
 
 # Kpath W

@@ -639,7 +639,6 @@ contains
          if((reg(gap_equation%mode_ph).eq."None").and.(reg(gap_equation%mode_el).eq."None"))stop "read_InputFile: Tc requested but no mode is choosen."
          call parse_input_variable(gap_equation%Nkpt3_intp_Hk,"NKPT3_HK",InputFile,default=Nkpt3,comment="New interpolation grid for Hk.")
          call parse_input_variable(gap_equation%Nkpt3_intp_Wk,"NKPT3_WK",InputFile,default=Nkpt3,comment="New interpolation grid for Wk.")
-         call parse_input_variable(gap_equation%wstep,"WSTEP",InputFile,default=(2*pi/Beta),comment="Bosonic frequency step of Wk (Different from 2pi/BETA only for T=0 inputs).")
          call parse_input_variable(gap_equation%Wk_cutoff,"WK_CUTOFF",InputFile,default=0.98*wmatsMax,comment="Bosonic frequency cutoff for MODE_EL=static+dynamic calculations.")
          call parse_input_variable(gap_equation%printmode_ph,"PRINT_KPH",InputFile,default="None",comment="Printing mode of the phononic Kernel. Available modes: E0, diag, surf, all. None to avoid.")
          call parse_input_variable(gap_equation%printmode_el,"PRINT_KEL",InputFile,default="None",comment="Printing mode of the electronic Kernel. Available modes: E0, 0E, diag, surf, all. None to avoid.")
