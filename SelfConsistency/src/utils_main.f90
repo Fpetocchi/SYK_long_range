@@ -300,12 +300,13 @@ contains
             !
       end select
       !
-      !For memory demanding applications one has to creat the folders at the beginning
+      !For memory demanding calculations one has to create the folders at the beginning
       call createDir(reg(Itpath)//"/Convergence",verb=verbose)
       call createDir(reg(Itpath)//"/Convergence/Glat",verb=verbose)
       call createDir(reg(Itpath)//"/Convergence/Gimp",verb=verbose)
       call createDir(reg(Itpath)//"/Convergence/Slat",verb=verbose)
       call createDir(reg(Itpath)//"/Convergence/Simp",verb=verbose)
+      call createDir(reg(Itpath)//"/Convergence/Sful",verb=verbose)
       call createDir(reg(Itpath)//"/Convergence/Cimp",verb=verbose)
       call createDir(reg(Itpath)//"/Convergence/Ulat",verb=verbose)
       call createDir(reg(Itpath)//"/Convergence/Wlat",verb=verbose)
@@ -336,24 +337,24 @@ contains
          do ispin=1,Nspin
             if(reg(path_funct).eq."G")then
                !
-               call createDir(reg(MaxEnt_K)//"/MaxEnt_Gk_full_t_s"//str(ispin),verb=verbose)  ! This is for MaxEnt on G in the full BZ
-               call createDir(reg(MaxEnt_K)//"/MaxEnt_Gk_path_t_s"//str(ispin),verb=verbose)  ! This is for MaxEnt on G along the K-path
-               if(FermiSurf)call createDir(reg(MaxEnt_K)//"/MaxEnt_Gk_plane_t_s"//str(ispin),verb=verbose)  ! This is for MaxEnt on G in the full BZ to get Fermi surface
+               call createDir(reg(MaxEnt_K)//"/MaxEnt_Gk_full_s"//str(ispin),verb=verbose)  ! This is for MaxEnt on G in the full BZ
+               call createDir(reg(MaxEnt_K)//"/MaxEnt_Gk_path_s"//str(ispin),verb=verbose)  ! This is for MaxEnt on G along the K-path
+               if(FermiSurf)call createDir(reg(MaxEnt_K)//"/MaxEnt_Gk_plane_s"//str(ispin),verb=verbose)  ! This is for MaxEnt on G in the full BZ to get Fermi surface
                !
             elseif(reg(path_funct).eq."S")then
                !
                if((reg(CalculationType).eq."G0W0").or.(reg(CalculationType).eq."scGW").or.(reg(CalculationType).eq."GW+EDMFT"))then
                   !
-                  call createDir(reg(MaxEnt_K)//"/MaxEnt_Sk_path_t_s"//str(ispin),verb=verbose)  ! This is for MaxEnt on S along the K-path
+                  call createDir(reg(MaxEnt_K)//"/MaxEnt_Sk_path_s"//str(ispin),verb=verbose)  ! This is for MaxEnt on S along the K-path
                   call createDir(reg(MaxEnt_K)//"/Gk_path_wm_s"//str(ispin),verb=verbose)        ! This is for MaxEnt on S along the K-path
                   call createDir(reg(MaxEnt_K)//"/Sk_path_wm_s"//str(ispin),verb=verbose)        ! This is for MaxEnt on S along the K-path
                   !
-                  call createDir(reg(MaxEnt_K)//"/MaxEnt_Sk_full_t_s"//str(ispin),verb=verbose)  ! This is for MaxEnt on S in the full BZ to get Gloc
+                  call createDir(reg(MaxEnt_K)//"/MaxEnt_Sk_full_s"//str(ispin),verb=verbose)  ! This is for MaxEnt on S in the full BZ to get Gloc
                   call createDir(reg(MaxEnt_K)//"/Gk_full_wm_s"//str(ispin),verb=verbose)        ! This is for MaxEnt on S in the full BZ to get Gloc
                   call createDir(reg(MaxEnt_K)//"/Sk_full_wm_s"//str(ispin),verb=verbose)        ! This is for MaxEnt on S in the full BZ to get Gloc
                   !
                   if(FermiSurf)then
-                     call createDir(reg(MaxEnt_K)//"/MaxEnt_Sk_plane_t_s"//str(ispin),verb=verbose)  ! This is for MaxEnt on S in the {kx,ky} plane to get the Fermi surface
+                     call createDir(reg(MaxEnt_K)//"/MaxEnt_Sk_plane_s"//str(ispin),verb=verbose)  ! This is for MaxEnt on S in the {kx,ky} plane to get the Fermi surface
                      call createDir(reg(MaxEnt_K)//"/Gk_plane_wm_s"//str(ispin),verb=verbose)        ! This is for MaxEnt on S in the {kx,ky} plane to get the Fermi surface
                      call createDir(reg(MaxEnt_K)//"/Sk_plane_wm_s"//str(ispin),verb=verbose)        ! This is for MaxEnt on S in the {kx,ky} plane to get the Fermi surface
                   endif
@@ -362,21 +363,21 @@ contains
                !
             elseif(reg(path_funct).eq."GS")then
                !
-               call createDir(reg(MaxEnt_K)//"/MaxEnt_Gk_path_t_s"//str(ispin),verb=verbose)  ! This is for MaxEnt on G along the K-path
-               if(FermiSurf)call createDir(reg(MaxEnt_K)//"/MaxEnt_Gk_plane_t_s"//str(ispin),verb=verbose)  ! This is for MaxEnt on G in the full BZ to get Fermi surface
+               call createDir(reg(MaxEnt_K)//"/MaxEnt_Gk_path_s"//str(ispin),verb=verbose)  ! This is for MaxEnt on G along the K-path
+               if(FermiSurf)call createDir(reg(MaxEnt_K)//"/MaxEnt_Gk_plane_s"//str(ispin),verb=verbose)  ! This is for MaxEnt on G in the full BZ to get Fermi surface
                !
                if((reg(CalculationType).eq."G0W0").or.(reg(CalculationType).eq."scGW").or.(reg(CalculationType).eq."GW+EDMFT"))then
                   !
-                  call createDir(reg(MaxEnt_K)//"/MaxEnt_Sk_path_t_s"//str(ispin),verb=verbose)  ! This is for MaxEnt on S along the K-path
+                  call createDir(reg(MaxEnt_K)//"/MaxEnt_Sk_path_s"//str(ispin),verb=verbose)  ! This is for MaxEnt on S along the K-path
                   call createDir(reg(MaxEnt_K)//"/Gk_path_wm_s"//str(ispin),verb=verbose)        ! This is for MaxEnt on S along the K-path
                   call createDir(reg(MaxEnt_K)//"/Sk_path_wm_s"//str(ispin),verb=verbose)        ! This is for MaxEnt on S along the K-path
                   !
-                  call createDir(reg(MaxEnt_K)//"/MaxEnt_Sk_full_t_s"//str(ispin),verb=verbose)  ! This is for MaxEnt on S in the full BZ to get Gloc
+                  call createDir(reg(MaxEnt_K)//"/MaxEnt_Sk_full_s"//str(ispin),verb=verbose)  ! This is for MaxEnt on S in the full BZ to get Gloc
                   call createDir(reg(MaxEnt_K)//"/Gk_full_wm_s"//str(ispin),verb=verbose)        ! This is for MaxEnt on S in the full BZ to get Gloc
                   call createDir(reg(MaxEnt_K)//"/Sk_full_wm_s"//str(ispin),verb=verbose)        ! This is for MaxEnt on S in the full BZ to get Gloc
                   !
                   if(FermiSurf)then
-                     call createDir(reg(MaxEnt_K)//"/MaxEnt_Sk_plane_t_s"//str(ispin),verb=verbose)  ! This is for MaxEnt on S in the {kx,ky} plane to get the Fermi surface
+                     call createDir(reg(MaxEnt_K)//"/MaxEnt_Sk_plane_s"//str(ispin),verb=verbose)  ! This is for MaxEnt on S in the {kx,ky} plane to get the Fermi surface
                      call createDir(reg(MaxEnt_K)//"/Gk_plane_wm_s"//str(ispin),verb=verbose)        ! This is for MaxEnt on S in the {kx,ky} plane to get the Fermi surface
                      call createDir(reg(MaxEnt_K)//"/Sk_plane_wm_s"//str(ispin),verb=verbose)        ! This is for MaxEnt on S in the {kx,ky} plane to get the Fermi surface
                   endif
@@ -1304,7 +1305,6 @@ contains
       real(8),allocatable                   :: Z_qpsc(:,:,:)
       complex(8),allocatable                :: Vxc_loc(:,:,:)
       type(FermionicField)                  :: S_EMB
-
       !
       !
       write(*,"(A)") new_line("A")//new_line("A")//"---- join_SigmaFull"
@@ -2212,7 +2212,7 @@ contains
       select case(reg(CalculationType))
          case default
             !
-            stop "If you got so far somethig is wrong."
+            stop "calc_Interaction: if you got so far somethig is wrong."
             !
          case("DMFT+statU","DMFT+dynU")
             !
@@ -2282,7 +2282,7 @@ contains
             !
             !Mixing curlyU
             if((Mixing_curlyU.gt.0d0).and.(Iteration.gt.0))then
-               write(*,"(A)")"     Mixing curlyU with "//str(Mixing_curlyU,3)//" of old solution."
+               write(*,"(A)")"     Mixing curlyU(iw) with "//str(Mixing_curlyU,3)//" of old solution."
                call dump_BosonicField(curlyU,reg(ItFolder)//"Solver_"//reg(LocalOrbs(isite)%Name)//"/","curlyU_noMix_"//reg(LocalOrbs(isite)%Name)//"_w.DAT")
                call AllocateBosonicField(curlyUold,Norb,Nmats,Crystal%iq_gamma,Beta=Beta)
                call read_BosonicField(curlyUold,reg(MixItFolder)//"Solver_"//reg(LocalOrbs(isite)%Name)//"/","curlyU_"//reg(LocalOrbs(isite)%Name)//"_w.DAT")

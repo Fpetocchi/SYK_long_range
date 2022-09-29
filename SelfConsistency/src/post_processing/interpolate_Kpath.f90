@@ -287,10 +287,10 @@ contains
       character(len=*),intent(in)           :: mode
       !
       complex(8),allocatable                :: Gmats_diag(:,:,:,:),Gitau_diag(:,:,:,:)
-      real(8),allocatable                   :: Ak(:,:),tau(:),Gshift(:)
+      real(8),allocatable                   :: Ak(:,:),tau(:),Gshift(:),wmats(:)
       real(8)                               :: Gmax
       integer                               :: Nkpt,NtauFT
-      integer                               :: ikx,iky
+      integer                               :: ikx,iky,iw
       !Hetero
       integer                               :: Norb_layer,ikz
       complex(8),allocatable                :: Gmats_kz(:,:,:,:,:,:),Gmats_kz_diag(:,:,:,:,:)
@@ -341,11 +341,11 @@ contains
             exit
          endif
       enddo
-      deallocate(Gmats_diag)
       call cpu_time(finish)
       write(*,"(A,F)") "     Glat(K"//reg(mode)//",iw) --> Glat(K"//reg(mode)//",tau) cpu timing:", finish-start
       !
       !Print data for K-resolved MaxEnt
+      allocate(wmats(Nmats));wmats=FermionicFreqMesh(Sfull%Beta,Nmats)
       allocate(tau(NtauFT));tau = linspace(0d0,Sfull%Beta,NtauFT)
       allocate(Gshift(Norb));Gshift=0d0
       do ispin=1,Nspin
@@ -358,7 +358,7 @@ contains
             Gshift=0d0
             !write(*,"(A,"//str(Norb)//"F)") "     G"//reg(mode)//"_s"//str(ispin)//"(K_"//str(ik)//",tau) shift:", Gshift
             !
-            path = reg(pathOUTPUT)//"K_resolved/MaxEnt_Gk_"//reg(mode)//"_t_s"//str(ispin)//"/Gk_t_k"//str(ik)//".DAT"
+            path = reg(pathOUTPUT)//"K_resolved/MaxEnt_Gk_"//reg(mode)//"_s"//str(ispin)//"/Gk_t_k"//str(ik)//".DAT"
             unit = free_unit()
             open(unit,file=reg(path),form="formatted",status="unknown",position="rewind",action="write")
             do itau=1,NtauFT
@@ -366,10 +366,18 @@ contains
             enddo
             close(unit)
             !
+            path = reg(pathOUTPUT)//"K_resolved/MaxEnt_Gk_"//reg(mode)//"_s"//str(ispin)//"/Gk_w_k"//str(ik)//".DAT"
+            unit = free_unit()
+            open(unit,file=reg(path),form="formatted",status="unknown",position="rewind",action="write")
+            do iw=1,Nmats
+                write(unit,"(200E20.12)") wmats(iw),(Gmats_diag(iorb,iw,ik,ispin),iorb=1,Norb)
+            enddo
+            close(unit)
+            !
         enddo
         if(paramagnet)exit
       enddo
-      deallocate(tau,Gshift)
+      deallocate(tau,Gshift,wmats,Gmats_diag)
       !
       !Compute the spectral weight at Fermi along the path. See arxiv:0805.3778 Eq.(5)
       do ispin=1,Nspin
@@ -457,7 +465,7 @@ contains
                Gshift=0d0
                !write(*,"(A,"//str(Norb)//"F)") "     G"//reg(mode)//"_s"//str(ispin)//"(K_"//str(ik)//",tau) shift:", Gshift
                !
-               path = reg(pathOUTPUT)//"K_resolved/MaxEnt_Gk_"//reg(mode)//"_t_s"//str(ispin)//"/Gk_t_k"//str(ik)//"_Hetero.DAT"
+               path = reg(pathOUTPUT)//"K_resolved/MaxEnt_Gk_"//reg(mode)//"_s"//str(ispin)//"/Gk_t_k"//str(ik)//"_Hetero.DAT"
                unit = free_unit()
                open(unit,file=reg(path),form="formatted",status="unknown",position="rewind",action="write")
                do itau=1,NtauFT
@@ -475,7 +483,7 @@ contains
                Gshift=0d0
                !write(*,"(A,"//str(Norb_layer)//"F)") "     G"//reg(mode)//"_Hetero_s"//str(ispin)//"(Gamma,Kz_"//str(ik-Nkpt)//",tau) shift:", Gshift
                !
-               path = reg(pathOUTPUT)//"K_resolved/MaxEnt_Gk_"//reg(mode)//"_t_s"//str(ispin)//"/Gk_t_k"//str(ik)//"_Hetero.DAT"
+               path = reg(pathOUTPUT)//"K_resolved/MaxEnt_Gk_"//reg(mode)//"_s"//str(ispin)//"/Gk_t_k"//str(ik)//"_Hetero.DAT"
                unit = free_unit()
                open(unit,file=reg(path),form="formatted",status="unknown",position="rewind",action="write")
                do itau=1,NtauFT
@@ -784,7 +792,7 @@ contains
       do ispin=1,Nspin
          do ik=1,Nkpt
             !
-            path = reg(pathOUTPUT)//"K_resolved/MaxEnt_Sk_"//reg(mode)//"_t_s"//str(ispin)//"/Sk_t_k"//str(ik)//".DAT"
+            path = reg(pathOUTPUT)//"K_resolved/MaxEnt_Sk_"//reg(mode)//"_s"//str(ispin)//"/Sk_t_k"//str(ik)//".DAT"
             unit = free_unit()
             open(unit,file=reg(path),form="formatted",status="unknown",position="rewind",action="write")
             do itau=1,Ntau
@@ -1165,7 +1173,7 @@ subroutine interpolate2kpath_Bosonic(Wfull,Lttc,pathOUTPUT,name,remove_Gamma,NaN
    !TEST>>>
    !
    !Print along path - I'm printing one orbital per file because my MaxEnt is shitty for bosons
-   path = reg(pathOUTPUT)//"K_resolved/MaxEnt_"//reg(name)//"k_path_w/"
+   path = reg(pathOUTPUT)//"K_resolved/MaxEnt_"//reg(name)//"k_path/"
    call createDir(reg(path),verb=verbose)
    allocate(wmats(Nmats))
    wmats = BosonicFreqMesh(Wfull%Beta,Nmats)
@@ -1180,7 +1188,7 @@ subroutine interpolate2kpath_Bosonic(Wfull,Lttc,pathOUTPUT,name,remove_Gamma,NaN
    !
    !temporary for the time-being I have a shitty maxent
    do iorb=1,Wdim
-      path = reg(pathOUTPUT)//"K_resolved/MaxEnt_"//reg(name)//"k_path_w/"
+      path = reg(pathOUTPUT)//"K_resolved/MaxEnt_"//reg(name)//"k_path/"
       call createDir(reg(path),verb=verbose)
       do iq=1,Lttc%Nkpt_path
          unit = free_unit()

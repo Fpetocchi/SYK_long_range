@@ -7,7 +7,7 @@ GENMAT=/home/petocchif/1_GW_EDMFT/GenericMaterial/Calculation_template
 
 declare -a dirindex=( "117_Std"  )
 #for it in "${dirindex[@]}" ; do
-for it in `seq  154 1 162` ; do
+for it in `seq  175 1 180` ; do
    if [ -d "$it" ]; then
    #
    cd $it/Convergence
@@ -47,14 +47,12 @@ done
 
 
 EFFETTO di e
-./MaxEnt_Kresolved_SLURM.sh -e 0.00050 -w 6001 -W 400 -F G -N 560 -B 140 -m full -i 1 -f 1 -s _e1
-./MaxEnt_Kresolved_SLURM.sh -e 0.00040 -w 6001 -W 400 -F G -N 560 -B 140 -m full -i 1 -f 1 -s _e2
-./MaxEnt_Kresolved_SLURM.sh -e 0.00030 -w 6001 -W 400 -F G -N 560 -B 140 -m full -i 1 -f 1 -s _e3
-./MaxEnt_Kresolved_SLURM.sh -e 0.00020 -w 6001 -W 400 -F G -N 560 -B 140 -m full -i 1 -f 1 -s _e4
-./MaxEnt_Kresolved_SLURM.sh -e 0.00010 -w 6001 -W 400 -F G -N 560 -B 140 -m full -i 1 -f 1 -s _e5
-./MaxEnt_Kresolved_SLURM.sh -e 0.00008 -w 6001 -W 400 -F G -N 560 -B 140 -m full -i 1 -f 1 -s _e6
-./MaxEnt_Kresolved_SLURM.sh -e 0.00006 -w 6001 -W 400 -F G -N 560 -B 140 -m full -i 1 -f 1 -s _e7
-./MaxEnt_Kresolved_SLURM.sh -e 0.00004 -w 6001 -W 400 -F G -N 560 -B 140 -m full -i 1 -f 1 -s _e8
+./MaxEnt_Kresolved_SLURM.sh -e 0.00050 -w 2001 -W 400 -F G -N 560 -B 140 -m full -i 1 -f 1 -s _e1 -M "0,6"
+./MaxEnt_Kresolved_SLURM.sh -e 0.00040 -w 2001 -W 400 -F G -N 560 -B 140 -m full -i 1 -f 1 -s _e2 -M "0,6"
+./MaxEnt_Kresolved_SLURM.sh -e 0.00030 -w 2001 -W 400 -F G -N 560 -B 140 -m full -i 1 -f 1 -s _e3 -M "0,6"
+./MaxEnt_Kresolved_SLURM.sh -e 0.00020 -w 2001 -W 400 -F G -N 560 -B 140 -m full -i 1 -f 1 -s _e4 -M "0,6"
+./MaxEnt_Kresolved_SLURM.sh -e 0.00010 -w 2001 -W 400 -F G -N 560 -B 140 -m full -i 1 -f 1 -s _e5 -M "0,6"
+./MaxEnt_Kresolved_SLURM.sh -e 0.00008 -w 2001 -W 400 -F G -N 560 -B 140 -m full -i 1 -f 1 -s _e6 -M "0,6"
 
 
 

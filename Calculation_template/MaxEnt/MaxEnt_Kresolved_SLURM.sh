@@ -55,8 +55,8 @@ while getopts ":e:w:W:F:N:B:i:f:m:d:s:p:M:" o; do
          ;;
       F)
          FIELD="${OPTARG}"
-         if [ "$FIELD"  != "G" ] && [ "$FIELD"  != "S" ] && [ "$FIELD"  != "W" ] && [ "$FIELD"  != "C" ]; then echo "Option Error - F" ; exit 1 ; fi
-         if [ "$FIELD"  == "W" ] || [ "$FIELD"  == "C" ] || [ "$FIELD"  == "C" ]; then AXIS="w" ; stat="X" ; fi
+         if [ "$FIELD"  != "G" ] && [ "$FIELD"  != "S" ] && [ "$FIELD"  != "W" ] && [ "$FIELD"  != "C" ] && [ "$FIELD"  != "P" ]; then echo "Option Error - F" ; exit 1 ; fi
+         if [ "$FIELD"  == "W" ] || [ "$FIELD"  == "C" ] || [ "$FIELD"  == "P" ]; then AXIS="w" ; stat="X" ; fi
          ;;
       N)
          Nktot="${OPTARG}"
@@ -91,7 +91,7 @@ while getopts ":e:w:W:F:N:B:i:f:m:d:s:p:M:" o; do
          ;;
       M)
          MODEL="${OPTARG}"
-         if [ "$MODEL"  != "0" ] && [ "$MODEL"  != "1" ] && [ "$MODEL"  != "2" ]; then echo "Option Error - M" ; exit 1 ; fi
+         #if [ "$MODEL"  != "0" ] && [ "$MODEL"  != "1" ] && [ "$MODEL"  != "2" ]; then echo "Option Error - M" ; exit 1 ; fi
          ;;
       \? )
          echo "Invalid option: $OPTARG" 1>&2
@@ -106,7 +106,7 @@ done
 #
 NAME=${FIELD}${PAD}
 #
-if [ "$SPIN_DW"  == "T" ]; then Nspin=2 ; fi
+if [ "$SPIN_DW"  == "T" ] && [ "$AXIS"  == "t" ]; then Nspin=2 ; fi
 RUNOPTIONS=" -S "$stat" -s "$err" -w "$mesh" -W "$width
 
 
@@ -139,10 +139,13 @@ echo
 #                                  SUBMIT LOOP                                 #
 ################################################################################
 for ispin in `seq 1 1 ${Nspin}` ; do
-
    #
    #Check if the I/O folder are present
-   Fsource=MaxEnt_${FIELD}k_${MODE}_${AXIS}_s${ispin}
+   if [ "$AXIS"  == "w" ]; then
+      Fsource=MaxEnt_${FIELD}k_${MODE}_s${ispin}
+   else
+      Fsource=MaxEnt_${FIELD}k_${MODE}
+   fi
    reports=${Fsource}_report
    if [ ! -d ${Fsource} ]; then
        echo ${Fsource} " (source) does not exists."
@@ -189,8 +192,11 @@ for i in \`seq  ${startk} ${stopk}\`; do
    if [ "$MODEL"  != "0" ]; then
       #
       echo model > job_Kb_\${i}.out
-      if [ "$MODEL"  == "1" ] ; then export MODELOPTIONS=${MOMENTS} ; fi
-      if [ "$MODEL"  == "2" ] ; then export MODELOPTIONS= -m ../${Fsource}/Models/${FIELD}k_${AXIS}_k\${i}${SUFFIX}.DAT_dos.dat ; fi
+      if [ "$MODEL"  == "-1" ] ; then
+         export MODELOPTIONS= -m ../${Fsource}/Models/${FIELD}k_${AXIS}_k\${i}${SUFFIX}.DAT_dos.dat
+      else
+         export MODELOPTIONS= -M ${MODEL}
+      fi
       srun python3.6  ${BIN}/bryan.py ${RUNOPTIONS} \${MODELOPTIONS} ../${Fsource}/${FIELD}k_${AXIS}_k\${i}${SUFFIX}.DAT >> job_Kb_\${i}.out
       #
    else
@@ -223,8 +229,11 @@ EOF
          echo "k point: "${kp}
          MODELOPTIONS=""
          if [ "$MODEL"  != "0" ]; then
-            if [ "$MODEL"  == "1" ] ; then MODELOPTIONS=${MOMENTS} ; fi
-            if [ "$MODEL"  == "2" ] ; then MODELOPTIONS="-m ../${Fsource}/Models/${FIELD}k_${AXIS}_k${kp}${SUFFIX}.DAT_dos.dat" ; fi
+            if [ "$MODEL"  == "-1" ] ; then
+               MODELOPTIONS="-m ../${Fsource}/Models/${FIELD}k_${AXIS}_k${kp}${SUFFIX}.DAT_dos.dat"
+            else
+               MODELOPTIONS="-M ${MODEL}"
+            fi
             echo "Model options:" ${MODELOPTIONS}
          fi
          #
