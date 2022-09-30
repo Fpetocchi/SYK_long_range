@@ -598,7 +598,7 @@ void measure_GF( VecVec &Gvec, VecVec &Fvec_S, VecVec &Fvec_R, std::vector<segme
                      double tjs = itn->t_start();
                      double tje = itn->t_end();
                      //
-                     if( (tie <= tje) && (tie >= tjs) && (jfl!=ifl) )
+                     if( (tie < tje) && (tie >= tjs) && (jfl!=ifl) )
                      {
                         nj[jfl]=1.0;
                      }

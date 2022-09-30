@@ -2732,22 +2732,6 @@ contains
             enddo
             close(unit)
             deallocate(ReadLine)
-            !
-            !Linear interpolation of the tau boundaries
-            do iorb=1,LocalOrbs(isite)%Norb
-               do ispin=1,Nspin
-                  if(tauF(1).eq.0d0) then
-                     A = [tauF(2),dreal(Fitau(iorb,2,ispin))]
-                     B = [tauF(3),dreal(Fitau(iorb,3,ispin))]
-                     Fitau(iorb,1,ispin) = dcmplx(linear_interp(A,B,0d0),0d0)
-                  endif
-                  if(tauF(Solver%NtauF_in).eq.Beta) then
-                     A = [tauF(Solver%NtauF_in-1),dreal(Fitau(iorb,Solver%NtauF_in-1,ispin))]
-                     B = [tauF(Solver%NtauF_in-2),dreal(Fitau(iorb,Solver%NtauF_in-2,ispin))]
-                     Fitau(iorb,Solver%NtauF_in,ispin) = dcmplx(linear_interp(A,B,Beta),0d0)
-                  endif
-               enddo
-            enddo
             deallocate(tauF)
             call dump_MaxEnt(Fitau,"itau",reg(PrevItFolder)//"Convergence/","Fqmc_R_"//reg(LocalOrbs(isite)%Name))
             !

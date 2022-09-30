@@ -2685,6 +2685,7 @@ contains
       integer                               :: iu1,iu2,ix1,ix2,ip1,ip2
       integer                               :: iw,itau,iwlimit
       real(8),allocatable                   :: wmats(:),tau(:)
+      real(8),allocatable                   :: Screening_(:,:)
       complex(8),allocatable                :: Kaux(:,:,:),Ktmp(:,:,:)
       logical                               :: Uloc,U1st,U2nd
       logical                               :: retarded,Kp_out,Scr_out
@@ -2728,6 +2729,7 @@ contains
          if(Scr_out)call assert_shape(Screening,[Nflavor,Nflavor],"calc_QMCinteractions","Screening")
          allocate(Kaux(Nflavor,Nflavor,Umats%Npoints));Kaux=czero
          allocate(Ktmp(Nflavor,Nflavor,Solver%NtauB_K));Ktmp=czero
+         allocate(Screening_(Nflavor,Nflavor));Screening_=0d0
          allocate(tau(Solver%NtauB_K));tau=0d0
          tau = linspace(0d0,Umats%Beta,Solver%NtauB_K)
          allocate(wmats(Umats%Npoints));wmats=0d0
@@ -2784,7 +2786,15 @@ contains
             !
          enddo
       enddo
-      if(sym_)call check_Symmetry(Uinst,eps,enforce=.true.,hardstop=.false.,name="Uinst")
+      !
+      !save exact screening
+      Screening_ = -Kaux(:,:,1)
+      if(Ktilda_) Screening_ = Kaux(:,:,Umats%Npoints)
+      !
+      if(sym_)then
+         call check_Symmetry(Screening_,eps,enforce=.true.,hardstop=.false.,name="Screening_")
+         call check_Symmetry(Uinst,eps,enforce=.true.,hardstop=.false.,name="Uinst")
+      endif
       !
       !computing the screening function and first derivative
       if(retarded)then
@@ -2817,15 +2827,12 @@ contains
             Ktmp(:,:,itau) = ( Kfunct(:,:,itau-1) - Kfunct(:,:,itau+1) ) / ( tau(itau-1)-tau(itau+1) )
          enddo
          !
-         !Interpolate screening and enforce anti-symmetry with respect to beta/2
+         !Compute Kp(0) and enforce anti-symmetry with respect to beta/2
+         Ktmp(:,:,1) = Screening_/2d0
+         Ktmp(:,:,Solver%NtauB_K) = -Screening_/2d0
          do ib1=1,Nflavor
             do ib2=1,Nflavor
-               !
-               Ktmp(ib1,ib2,1) = dcmplx(linear_interp([tau(2),dreal(Ktmp(ib1,ib2,2))],[tau(3),dreal(Ktmp(ib1,ib2,3))],0d0),0d0)
-               Ktmp(ib1,ib2,Solver%NtauB_K) = -Ktmp(ib1,ib2,1)
-               !
                call halfbeta_sym(Ktmp(ib1,ib2,:),-1d0)
-               !
             enddo
          enddo
          !
@@ -2836,12 +2843,9 @@ contains
                if(sym_)call check_Symmetry(Kpfunct(:,:,itau),eps,enforce=.true.,hardstop=.false.,name="Kp_t"//str(itau))
             enddo
          endif
-         if(Scr_out)then
-            Screening = 2d0*dreal(Ktmp(:,:,1))
-            if(sym_)call check_Symmetry(Screening,eps,enforce=.true.,hardstop=.false.,name="Screening")
-         endif
+         if(Scr_out)Screening = Screening_
          !
-         deallocate(Ktmp,tau,wmats)
+         deallocate(Ktmp,tau,wmats,Screening_)
       endif
       !
    end subroutine calc_QMCinteractions

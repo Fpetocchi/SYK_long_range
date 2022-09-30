@@ -33,8 +33,8 @@ MOMENTS=" -M 0,6"
 #
 SUFFIX=""
 #
-BINPATH=/home/petocchif/1_GW_EDMFT/GenericMaterial/Calculation_template
-
+BINPATH_BRYAN=/home/petocchif/1_GW_EDMFT/GenericMaterial/Calculation_template
+BINPATH=${BINPATH_BRYAN}
 
 
 
@@ -112,7 +112,6 @@ RUNOPTIONS=" -S "$stat" -s "$err" -w "$mesh" -W "$width
 
 
 
-
 ################################################################################
 #                                  PRINT INFOS                                 #
 ################################################################################
@@ -141,7 +140,7 @@ echo
 for ispin in `seq 1 1 ${Nspin}` ; do
    #
    #Check if the I/O folder are present
-   if [ "$AXIS"  == "w" ]; then
+   if [ "$AXIS"  == "t" ]; then
       Fsource=MaxEnt_${FIELD}k_${MODE}_s${ispin}
    else
       Fsource=MaxEnt_${FIELD}k_${MODE}
@@ -187,25 +186,20 @@ export OMP_NUM_THREADS=1
 
 for i in \`seq  ${startk} ${stopk}\`; do
    #
-   echo K_\${i} > job_Kb_\${i}.out
-   #
    if [ "$MODEL"  != "0" ]; then
       #
-      echo model > job_Kb_\${i}.out
       if [ "$MODEL"  == "-1" ] ; then
          export MODELOPTIONS= -m ../${Fsource}/Models/${FIELD}k_${AXIS}_k\${i}${SUFFIX}.DAT_dos.dat
       else
          export MODELOPTIONS= -M ${MODEL}
       fi
-      srun python3.6  ${BIN}/bryan.py ${RUNOPTIONS} \${MODELOPTIONS} ../${Fsource}/${FIELD}k_${AXIS}_k\${i}${SUFFIX}.DAT >> job_Kb_\${i}.out
+      srun python3.6  ${BIN}/bryan.py ${RUNOPTIONS} \${MODELOPTIONS} ../${Fsource}/${FIELD}k_${AXIS}_k\${i}${SUFFIX}.DAT > job_Kb_\${i}.out
       #
    else
       #
-      srun python3.6  ${BIN}/bryan.py ${RUNOPTIONS} ../${Fsource}/${FIELD}k_${AXIS}_k\${i}${SUFFIX}.DAT >> job_Kb_\${i}.out
+      srun python3.6  ${BIN}/bryan.py ${RUNOPTIONS} ../${Fsource}/${FIELD}k_${AXIS}_k\${i}${SUFFIX}.DAT > job_Kb_\${i}.out
       #
    fi
-   #
-   echo "MaxEnt on K_\${i} done" >> job_Kb_\${i}.out
    #
 done
 EOF
@@ -254,11 +248,7 @@ export PYTHONPATH=\${PYTHONPATH}:${BIN}/docopt/
 export OMP_NUM_THREADS=1
 
 #
-echo K_${kp} > job_K_${kp}.out
-#
-srun python3.6  ${BIN}/bryan.py ${RUNOPTIONS} ${MODELOPTIONS} ../${Fsource}/${FIELD}k_${AXIS}_k${kp}${SUFFIX}.DAT >> job_K_${kp}.out
-#
-echo "MaxEnt on K_${kp} done" >> job_K_${kp}.out
+srun python3.6  ${BIN}/bryan.py ${RUNOPTIONS} ${MODELOPTIONS} ../${Fsource}/${FIELD}k_${AXIS}_k${kp}${SUFFIX}.DAT > job_K_${kp}.out
 #
 EOF
       done
