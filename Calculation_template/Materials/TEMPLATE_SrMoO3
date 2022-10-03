@@ -7,7 +7,7 @@ GENMAT=/home/petocchif/1_GW_EDMFT/GenericMaterial/Calculation_template
 
 declare -a dirindex=( "117_Std"  )
 #for it in "${dirindex[@]}" ; do
-for it in `seq  181 1 181` ; do
+for it in `seq  189 1 191` ; do
    if [ -d "$it" ]; then
    #
    cd $it/Convergence
@@ -87,7 +87,7 @@ rep '< grep " '.o.'   '.o.'   '.b.'   '.b.' " ./'.it.'/Wimp_w.DAT' every::1 u 1:
 rep '< grep " '.o.'   '.o.'   '.b.'   '.b.' " ./'.it.'/Pimp_w.DAT' every::1 u 1:6 w lp lw 3 t 'Pimp '.o
 rep '< grep " '.o.'   '.o.'   '.b.'   '.b.' " ./'.it.'/Pimp_CDW_w.DAT' every::1 u 1:6 w lp lw 2 t 'PimpCDW '.o
 rep '< grep " '.o.'   '.o.'   '.b.'   '.b.' " ./'.it.'/Cimp_w.DAT' every::1 u 1:6 w lp lw 3 t 'Cimp '.o
-rep '< grep " '.o.'   '.o.'   '.b.'   '.b.' " ./'.it.'/curlyUimp_w.DAT' every::1 u 1:6 w lp lw 3 t 'curlyUimp '.o
+rep '< grep " '.o.'   '.o.'   '.b.'   '.b.' " ./'.it.'/Solver_Mo/curlyU_Mo_w.DAT' every::1 u 1:6 w lp lw 3 t 'curlyUimp '.o
 
 
 

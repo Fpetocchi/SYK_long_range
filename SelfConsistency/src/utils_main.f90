@@ -2460,7 +2460,6 @@ contains
       type(BosonicField)                    :: curlyU
       complex(8),allocatable                :: Sfit(:,:,:),SmatsTail(:)
       real(8),allocatable                   :: Uinst(:,:)
-      real(8)                               :: A(2),B(2)
       !Impurity susceptibilities
       real(8),allocatable                   :: nt(:,:,:),nt_av(:,:)
       real(8),allocatable                   :: nnt(:,:,:),NNitau(:,:,:,:,:)

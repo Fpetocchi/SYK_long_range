@@ -837,26 +837,30 @@ contains
       integer                               :: iseg,SigmaSegments
       integer                               :: iq,ik,iw,iw2,ispin,iwan1,iwan2,unit
       integer                               :: Nkpt,Norb,Nmats,Nfreq
-      real(8),allocatable                   :: wread(:),wmats(:)
+      real(8),allocatable                   :: wread(:),wmats(:),wreal(:)
       real                                  :: start,finish
       !Uwan
       integer                               :: Nspin_Uwan,Nkpt_Uwan
       integer                               :: ib_Uwan1,ib_Uwan2,Norb_Uwan
       complex(8),allocatable                :: Uwan(:,:,:,:)
       !spex
+      type(FermionicField)                  :: Sreal_GoWo
       integer                               :: ik_spex,Nspin_spex,Nkpt_irred_spex
       integer                               :: ib,ib_sigma1,ib_sigma2,ispin_spex
       integer                               :: Nspin_spex_old,Nkpt_irred_spex_old
       integer                               :: ib_sigma1_old,ib_sigma2_old
-      integer                               :: iseg_old,Nfreq_old,Nkpt_file,Nkpt_file_old
+      integer                               :: iseg_old,Nfreq_old,Nfreq_tot
+      integer                               :: Nkpt_file,Nkpt_file_old
       logical                               :: ldum,lexonly
       real(8)                               :: wS_old,wE_old
+      integer                               :: iwa,iwb,wshift
       integer,allocatable                   :: NfreqSeg(:)
       real(8)                               :: gamma1,gamma2
       complex(8)                            :: trap
       real(8),allocatable                   :: SigmaX_seg(:,:,:),SigmaX_tmp(:,:)
       complex(8),allocatable                :: SigmaC_seg(:,:,:,:),SigmaC_tmp(:,:,:)
       complex(8),allocatable                :: SigmaC_diag(:,:,:,:)
+      complex(8),allocatable                :: SigmaC_diag_real(:,:,:,:)
       complex(8),allocatable                :: Vxc(:,:,:,:)
       !
       !
@@ -1028,14 +1032,25 @@ contains
             !
             !saving the number of frequency points in each segment
             NfreqSeg(iseg) = Nfreq
+            write(*,"(A,1I4,A,1I6)") "     The number real frequency points in the segment number: ",iseg," is: ",NfreqSeg(iseg)
             !
          enddo !iseg
          write(*,"(A,2I4)") "     The band indexes in the SPEX self-energy are: ",ib_sigma1,ib_sigma2
          !
+         Nfreq_tot=0
+         do iseg=1,SigmaSegments
+            Nfreq_tot = Nfreq_tot + NfreqSeg(iseg)
+         enddo
+         Nfreq_tot = Nfreq_tot - (SigmaSegments-1)
+         allocate(wreal(Nfreq_tot));wreal=0d0
+         write(*,"(A,1I4)") "     Nuumber of real frequency points in the SPEX self-energy is: ",Nfreq_tot
+         !
          allocate(SigmaC_diag(ib_sigma1:ib_sigma2,Nmats,Lttc%Nkpt_irred,Nspin_spex));SigmaC_diag=czero
+         allocate(SigmaC_diag_real(ib_sigma1:ib_sigma2,Nfreq_tot,Lttc%Nkpt_irred,Nspin_spex));SigmaC_diag_real=czero
          !
          ! Perform the transformation on each fraction of the real-axis
          call cpu_time(start)
+         wshift = 0
          do iseg=1,SigmaSegments
             !
             allocate(SigmaX_seg(ib_sigma1:ib_sigma2,Lttc%Nkpt_irred,Nspin_spex));SigmaX_seg=0d0
@@ -1059,7 +1074,6 @@ contains
                read(unit) wread
                !
                do ispin=1,Nspin_spex
-                  !
                   ! Every iq file contains all the different k component of the self-energy
                   ! so that here ik=1 is the sum over all the internal momentum q
                   do ik=1,Lttc%Nkpt_irred
@@ -1079,12 +1093,34 @@ contains
                enddo !ispin
                close(unit)
                !
+               !getting the full real frequency axis
+               if(iq.eq.1)then
+                  if(iseg.gt.1) wshift = wshift + NfreqSeg(iseg-1) - 1
+                  iwa = 1 + wshift
+                  if(iseg.ne.SigmaSegments)then
+                     iwb = wshift + NfreqSeg(iseg) - 1
+                     wreal(iwa:iwb) = wread(1:NfreqSeg(iseg)-1) * H2eV
+                  else
+                     iwb = wshift + NfreqSeg(iseg)
+                     wreal(iwa:iwb) = wread * H2eV
+                  endif
+               endif
+               !
             enddo !iq
             deallocate(SigmaX_tmp,SigmaC_tmp)
             !
             !
             do ik=1,Lttc%Nkpt_irred
                do ib=ib_sigma1,ib_sigma2
+                  !
+                  !getting the full real frequency axis
+                  do ispin=1,Nspin_spex
+                     if(iseg.ne.SigmaSegments)then
+                        SigmaC_diag_real(ib,iwa:iwb,ik,ispin) = SigmaC_seg(1:NfreqSeg(iseg)-1,ib,ik,ispin)
+                     else
+                        SigmaC_diag_real(ib,iwa:iwb,ik,ispin) = SigmaC_seg(:,ib,ik,ispin)
+                     endif
+                  enddo
                   !
                   ! Check that the GoWo self-energy is vanishing at w --> +/-inf
                   if (iseg.eq.1.and.dabs(dimag(SigmaC_seg(1,ib,ik,1))).gt.1.d-3) then
@@ -1136,17 +1172,18 @@ contains
             !
          enddo !iseg
          !
-         !
+         call AllocateFermionicField(Sreal_GoWo,Lttc%Norb,Nfreq_tot,Nkpt=Lttc%Nkpt,Beta=Smats_GoWo%Beta)
+         call clear_attributes(Sreal_GoWo)
          call clear_attributes(Smats_GoWo)
          !Sigma=sigmax+sigmac and transform to Wannier basis
          do ispin_spex=1,Nspin_spex
-            !$OMP PARALLEL DEFAULT(NONE),&
-            !$OMP SHARED(ispin_spex,Nkpt,Norb,ib_Uwan1,ib_Uwan2,Nmats,Lttc,Uwan,SigmaC_diag,SigmaX_seg,Smats_GoWo),&
+            !$OMP PARALLEL DEFAULT(SHARED),&
             !$OMP PRIVATE(ik,iwan1,iwan2,iw)
             !$OMP DO
             do ik=1,Nkpt
                do iwan2=1,Norb
                   do iwan1=1,Norb
+                     !
                      do iw=1,Nmats
                         !
                         Smats_GoWo%wks(iwan1,iwan2,iw,ik,ispin_spex) = &
@@ -1154,18 +1191,32 @@ contains
                         + sum(conjg(Uwan(ib_Uwan1:ib_Uwan2,iwan1,ik,ispin_spex)) * SigmaX_seg(ib_Uwan1:ib_Uwan2,Lttc%kptPos(ik),ispin_spex) * Uwan(ib_Uwan1:ib_Uwan2,iwan2,ik,ispin_spex))
                         !
                      enddo
+                     !
+                     do iw=1,Nfreq_tot
+                        !
+                        Sreal_GoWo%wks(iwan1,iwan2,iw,ik,ispin_spex) = &
+                        + sum(conjg(Uwan(ib_Uwan1:ib_Uwan2,iwan1,ik,ispin_spex)) * SigmaC_diag_real(ib_Uwan1:ib_Uwan2,iw,Lttc%kptPos(ik),ispin_spex) * Uwan(ib_Uwan1:ib_Uwan2,iwan2,ik,ispin_spex))  &
+                        + sum(conjg(Uwan(ib_Uwan1:ib_Uwan2,iwan1,ik,ispin_spex)) * SigmaX_seg(ib_Uwan1:ib_Uwan2,Lttc%kptPos(ik),ispin_spex) * Uwan(ib_Uwan1:ib_Uwan2,iwan2,ik,ispin_spex))
+                        !
+                     enddo
+                     !
                   enddo
                enddo
             enddo
             !$OMP END DO
             !$OMP END PARALLEL
          enddo
-         if(paramagneticSPEX) Smats_GoWo%wks(:,:,:,:,Nspin) = Smats_GoWo%wks(:,:,:,:,1)
-         deallocate(Uwan,SigmaC_diag,SigmaX_seg)
+         if(paramagneticSPEX)then
+            Smats_GoWo%wks(:,:,:,:,Nspin) = Smats_GoWo%wks(:,:,:,:,1)
+            Sreal_GoWo%wks(:,:,:,:,Nspin) = Sreal_GoWo%wks(:,:,:,:,1)
+         endif
+         deallocate(Uwan,SigmaC_diag_real,SigmaC_diag,SigmaX_seg)
          !
          Smats_GoWo%wks = Smats_GoWo%wks * H2eV
+         Sreal_GoWo%wks = Sreal_GoWo%wks * H2eV
          !
          call FermionicKsum(Smats_GoWo)
+         call FermionicKsum(Sreal_GoWo)
          !
          call cpu_time(finish)
          !
@@ -1175,8 +1226,15 @@ contains
             !
             ! Print out the transformed stuff
             call dump_FermionicField(Smats_GoWo,reg(pathOUTPUT_),"SGoWo_dc_w",.true.,Lttc%kpt,paramagneticSPEX)
-            if(save2readable)call dump_FermionicField(Smats_GoWo,reg(pathOUTPUT_)//"Sigma_dc_imag/","SGoWo_dc_w",.false.,Lttc%kpt,paramagneticSPEX)
+            call dump_FermionicField(Sreal_GoWo,reg(pathOUTPUT_),"SGoWo_dc_wr",.true.,Lttc%kpt,paramagneticSPEX,axis=wreal)
+            if(save2readable)then
+               call dump_FermionicField(Smats_GoWo,reg(pathOUTPUT_)//"Sigma_dc_imag/","SGoWo_dc_w",.false.,Lttc%kpt,paramagneticSPEX)
+               call dump_FermionicField(Sreal_GoWo,reg(pathOUTPUT_)//"Sigma_dc_real/","SGoWo_dc_wr",.false.,Lttc%kpt,paramagneticSPEX,axis=wreal)
+            endif
             call dump_FermionicField(Smats_GoWo,reg(pathOUTPUT_),"SGoWo_dc_w",paramagneticSPEX)
+            call dump_FermionicField(Sreal_GoWo,reg(pathOUTPUT_),"SGoWo_dc_wr",paramagneticSPEX,axis=wreal)
+            call DeallocateField(Sreal_GoWo)
+            deallocate(wreal)
             !
          else
             !
@@ -1184,8 +1242,15 @@ contains
             !
             ! Print out the transformed stuff
             call dump_FermionicField(Smats_GoWo,reg(pathOUTPUT_),"SGoWo_w",.true.,Lttc%kpt,paramagneticSPEX)
-            if(save2readable)call dump_FermionicField(Smats_GoWo,reg(pathOUTPUT_)//"Sigma_imag/","SGoWo_w",.false.,Lttc%kpt,paramagneticSPEX)
+            call dump_FermionicField(Sreal_GoWo,reg(pathOUTPUT_),"SGoWo_wr",.true.,Lttc%kpt,paramagneticSPEX,axis=wreal)
+            if(save2readable)then
+               call dump_FermionicField(Smats_GoWo,reg(pathOUTPUT_)//"Sigma_imag/","SGoWo_w",.false.,Lttc%kpt,paramagneticSPEX)
+               call dump_FermionicField(Sreal_GoWo,reg(pathOUTPUT_)//"Sigma_real/","SGoWo_wr",.false.,Lttc%kpt,paramagneticSPEX,axis=wreal)
+            endif
             call dump_FermionicField(Smats_GoWo,reg(pathOUTPUT_),"SGoWo_w",paramagneticSPEX)
+            call dump_FermionicField(Sreal_GoWo,reg(pathOUTPUT_),"SGoWo_wr",paramagneticSPEX,axis=wreal)
+            call DeallocateField(Sreal_GoWo)
+            deallocate(wreal)
             !
             ! Read the Vxc and print it out
             if(doVxc)then
