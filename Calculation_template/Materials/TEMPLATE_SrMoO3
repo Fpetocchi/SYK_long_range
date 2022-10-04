@@ -7,7 +7,7 @@ GENMAT=/home/petocchif/1_GW_EDMFT/GenericMaterial/Calculation_template
 
 declare -a dirindex=( "117_Std"  )
 #for it in "${dirindex[@]}" ; do
-for it in `seq  189 1 191` ; do
+for it in `seq  53 1 54` ; do
    if [ -d "$it" ]; then
    #
    cd $it/Convergence
@@ -77,7 +77,6 @@ set xrange [0:12]
   p '< grep " '.o.'   '.o.' " ./'.it.'/Glat_w_s'.s.'.DAT' u 1:4 w lp lw 3 t 'Glat '.o,'< grep " '.o.'   '.o.' " ./'.it.'/Glat_w_s'.s.'.DAT' u 1:5 w lp lw 3 t ''
 rep '< grep " '.o.'   '.o.' " ./'.it.'/Gimp_w_s'.s.'.DAT' u 1:4 w lp lw 3 t 'Gimp '.o,'< grep " '.o.'   '.o.' " ./'.it.'/Gimp_w_s'.s.'.DAT' u 1:5 w lp lw 3 t ''
 
-it=118
 set grid ; set xtics 1
 o=1;b=o
 set xrange [0:12]; set key top left

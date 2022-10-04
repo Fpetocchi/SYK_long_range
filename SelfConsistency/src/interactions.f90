@@ -867,12 +867,17 @@ contains
          Nbp_spex = Norb_spex**2
          allocate(Utmp(Nbp_spex,Nbp_spex));Utmp=czero
          allocate(wread(Nfreq));wread=0d0
-         write(*,"(A,I)")"     Matsubara frequencies: ",Nfreq
+
          !
          ! Few checks
          if(Nspin_spex.ne.1) stop "read_U_spex_full: Nspin_spex.ne.1"
          if(Umats%Nbp.ne.Nbp_spex) stop "read_U_spex_full: Size of given BosonicField and VW_imag orbital space do not coincide."
-         if(Umats%Npoints.ne.Nfreq) stop "read_U_spex_full: Number of VW_imag Matsubara points and bosonic field mesh does not coincide."
+         if(Umats%Npoints.ne.Nfreq)then
+            write(*,"(A)")"     Warning - Files grid: "//str(Nfreq)//" does not match with U mesh: "//str(Umats%Npoints)//". Reading up to the smaller."
+            !stop "read_U_spex_full: Number of VW_imag Matsubara points and bosonic field mesh does not coincide."
+         else
+            write(*,"(A,I)")"     Matsubara frequencies: ",Nfreq
+         endif
          !
          ! Look for the Number of SPEX files. Which are supposed to be ordered.
          Nkpt = 0
@@ -899,7 +904,7 @@ contains
             !
             read(unit) wread
             wread = H2eV*wread
-            do iw=1,Nfreq
+            do iw=1,Umats%Npoints
                if(dabs(wread(iw)-wmats(iw)).gt.eps) Then
                   write(*,"(F)")dabs(wread(iw)-wmats(iw)),iw,iq
                   stop "read_U_spex_full: wread.ne.wmats"
@@ -908,12 +913,14 @@ contains
             !
             do iw=0,Nfreq
                read(unit) Utmp
-               if(iw.eq.0) then
-                  Umats%bare_local = Umats%bare_local + H2eV*Utmp/(Nkpt**3)
-                  if(.not.LocalOnly) Umats%bare(:,:,iq) = H2eV*Utmp/(Nkpt**2)
-               else
-                  Umats%screened_local(:,:,iw) = Umats%screened_local(:,:,iw) + H2eV*Utmp/(Nkpt**3)
-                  if(.not.LocalOnly) Umats%screened(:,:,iw,iq) = H2eV*Utmp/(Nkpt**2)
+               if(iw.le.Umats%Npoints)then
+                  if(iw.eq.0) then
+                     Umats%bare_local = Umats%bare_local + H2eV*Utmp/(Nkpt**3)
+                     if(.not.LocalOnly) Umats%bare(:,:,iq) = H2eV*Utmp/(Nkpt**2)
+                  else
+                     Umats%screened_local(:,:,iw) = Umats%screened_local(:,:,iw) + H2eV*Utmp/(Nkpt**3)
+                     if(.not.LocalOnly) Umats%screened(:,:,iw,iq) = H2eV*Utmp/(Nkpt**2)
+                  endif
                endif
             enddo
             !

@@ -299,14 +299,17 @@ program SelfConsistency
       !
       !
       !Compute the Full Green's function and set the density
-      call calc_Gmats(Glat,Crystal,S_Full)
-      if(look4dens%TargetDensity.ne.0d0)then
+      write(*,*)
+      if(mu_scan)then
+         call calc_Gmats(Glat,Crystal,S_Full)
          if(Hetero%status)then
             call set_density(Glat,Crystal,look4dens,S_Full)
          else
             call set_density(Glat,Crystal,look4dens)
          endif
       else
+         Glat%mu = muQMC
+         call calc_Gmats(Glat,Crystal,S_Full)
          write(*,"(A,F)")"     Chemical potential:",Glat%mu
          write(*,"(A,F)")"     Lattice density:",trace(Glat%N_s(:,:,1)+Glat%N_s(:,:,2))
       endif

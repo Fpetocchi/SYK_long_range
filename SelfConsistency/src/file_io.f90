@@ -892,7 +892,7 @@ contains
       integer                               :: iwan1,iwan2
       integer                               :: idum1,idum2
       integer                               :: Norb_read,Naxis_read
-      real(8)                               :: mu_read(2)
+      real(8)                               :: mu_read(Nspin)
       real(8)                               :: axispoint,RealG,ImagG
       logical                               :: filexists
       character(len=256)                    :: readpath
@@ -990,7 +990,7 @@ contains
       integer                               :: iwan1,iwan2
       integer                               :: idum1,idum2
       integer                               :: ispin_read,Nkpt_read,Norb_read,Naxis_read
-      real(8)                               :: mu_read(2)
+      real(8)                               :: mu_read(Nspin)
       real(8)                               :: axispoint,RealG,ImagG
       real(8)                               :: kvec(3)
       logical                               :: filexists
@@ -1057,12 +1057,14 @@ contains
                stop "read_FermionicField_Kdep: kvec(3) does not match."
             endif
             !
-            do iaxis=1,Naxis
+            do iaxis=1,Naxis_read
                !
                read(unit) idum1,axispoint
                if (idum1.ne.iaxis) stop "read_FermionicField_Kdep: iaxis does not match"
-               if((.not.present(axis)).and.(abs(axispoint-axis_(iaxis)).gt.eps)) stop "read_FermionicField_Kdep: axispoint does not match with expected grid."
-               axis_(iaxis) = axispoint
+               if(iaxis.le.G%Npoints)then
+                  if((.not.present(axis)).and.(abs(axispoint-axis_(iaxis)).gt.eps)) stop "read_FermionicField_Kdep: axispoint does not match with expected grid."
+                  axis_(iaxis) = axispoint
+               endif
                !
                do iwan1=1,Norb
                   do iwan2=1,Norb
@@ -1070,7 +1072,7 @@ contains
                      read(unit) idum1,idum2,RealG,ImagG
                      if (idum1.ne.iwan1) stop "read_FermionicField_Kdep: iwan1 does not match."
                      if (idum2.ne.iwan2) stop "read_FermionicField_Kdep: iwan2 does not match."
-                     G%wks(iwan1,iwan2,iaxis,ik,ispin) = dcmplx(RealG,ImagG)
+                     if(iaxis.le.G%Npoints) G%wks(iwan1,iwan2,iaxis,ik,ispin) = dcmplx(RealG,ImagG)
                      !
                   enddo
                enddo
@@ -1093,6 +1095,8 @@ contains
          endif
          G%mu=mu_read(1)
       endif
+      !
+      if(present(axis)) axis(1:Naxis)=axis_
       !
       call FermionicKsum(G)
       !

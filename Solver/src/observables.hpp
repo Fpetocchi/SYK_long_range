@@ -598,9 +598,18 @@ void measure_GF( VecVec &Gvec, VecVec &Fvec_S, VecVec &Fvec_R, std::vector<segme
                      double tjs = itn->t_start();
                      double tje = itn->t_end();
                      //
-                     if( (tie < tje) && (tie >= tjs) && (jfl!=ifl) )
+                     if(jfl!=ifl)
                      {
-                        nj[jfl]=1.0;
+                        if( (tje-tjs)>0 )
+                        {
+                           // non-wrapping segments
+                           if( (tjs <= tie) && (tie<tje) )  nj[jfl]=1.0;
+                        }
+                        else
+                        {
+                           // segments exiting the end of the line and entering in the beginning
+                           if( (tjs <= tie) || (tie<tje) )  nj[jfl]=1.0;
+                        }
                      }
                      //
                      Ij[jfl] -= ( -H(tje-tie  , Beta, Kp_table[fl1][fl2]) +H(tjs-tie, Beta, Kp_table[fl1][fl2]) );
@@ -616,14 +625,23 @@ void measure_GF( VecVec &Gvec, VecVec &Fvec_S, VecVec &Fvec_R, std::vector<segme
                   for (itn=segments[jfl].begin(); itn!=segments[jfl].end(); itn++)
                   {
                      //
-                    double tjs = itn->t_start();
-                    double tje = itn->t_end();
-                    //
-                     if( (tie <= tje) && (tie >= tjs) )
+                     double tjs = itn->t_start();
+                     double tje = itn->t_end();
+                     //
+                     if(jfl!=ifl)
                      {
-                        nj[jfl]=1.0;
-                        break;
+                        if( (tje-tjs)>0 )
+                        {
+                           // non-wrapping segments
+                           if( (tjs <= tie) && (tie<tje) )  nj[jfl]=1.0;
+                        }
+                        else
+                        {
+                           // segments exiting the end of the line and entering in the beginning
+                           if( (tjs <= tie) || (tie<tje) )  nj[jfl]=1.0;
+                        }
                      }
+                     if(nj[jfl]==1.0) break;
                   }
                }
 

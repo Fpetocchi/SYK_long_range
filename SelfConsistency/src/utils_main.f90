@@ -53,6 +53,7 @@ module utils_main
    type(FermionicField)                     :: Delta_correction
    type(BosonicField)                       :: curlyU_correction
    !
+   real(8)                                  :: muQMC
    real(8),allocatable                      :: Ek(:,:)
    real(8),allocatable                      :: Ep(:,:)
    !
@@ -78,6 +79,7 @@ module utils_main
    logical                                  :: calc_Wedmft=.false.
    logical                                  :: calc_Sigmak=.false.
    logical                                  :: merge_Sigma=.false.
+   logical                                  :: mu_scan=.false.
    !
    logical                                  :: S_G0W0dc_exist=.false.
    logical                                  :: calc_S_G0W0dc=.false.
@@ -196,6 +198,8 @@ contains
       causal_U = causal_U .and. ((FirstIteration.ne.0).or.calc_Pguess)
       !
       if(Hmodel.or.Umodel)addTierIII=.false.
+      !
+      mu_scan = (look4dens%mu_scan.eq.1) .and. (look4dens%TargetDensity.gt.0d0)
       !
       if(addTierIII)then
          !
@@ -938,10 +942,9 @@ contains
             call AllocateFermionicField(Glat,Crystal%Norb,Nmats,Nkpt=Crystal%Nkpt,Nsite=Nsite,Beta=Beta)
             if(ItStart.ne.0)then
                call read_FermionicField(Glat,reg(PrevItFolder),"Glat_w",Crystal%kpt)
-               if(look4dens%TargetDensity.eq.0d0) Glat%mu = look4dens%mu
             else
                Glat%mu = look4dens%mu
-               if((look4dens%TargetDensity.ne.0d0).and.Hmodel) call set_density(Glat%mu,Beta,Crystal,look4dens)
+               if(mu_scan.and.Hmodel) call set_density(Glat%mu,Beta,Crystal,look4dens)
                call calc_Gmats(Glat,Crystal)
             endif
             call calc_density(Glat,Crystal,Glat%N_ks)
@@ -976,10 +979,9 @@ contains
             call AllocateFermionicField(Glat,Crystal%Norb,Nmats,Nkpt=Crystal%Nkpt,Nsite=Nsite,Beta=Beta)
             if(ItStart.ne.0)then
                call read_FermionicField(Glat,reg(PrevItFolder),"Glat_w")
-               if(look4dens%TargetDensity.eq.0d0) Glat%mu = look4dens%mu
             else
                Glat%mu = look4dens%mu
-               if((look4dens%TargetDensity.ne.0d0).and.Hmodel) call set_density(Glat%mu,Beta,Crystal,look4dens)
+               if(mu_scan.and.Hmodel) call set_density(Glat%mu,Beta,Crystal,look4dens)
                call calc_Gmats(Glat,Crystal)
             endif
             call calc_density(Glat,Glat%N_s)
@@ -1017,10 +1019,9 @@ contains
             call AllocateFermionicField(Glat,Crystal%Norb,Nmats,Nkpt=Crystal%Nkpt,Nsite=Nsite,Beta=Beta)
             if(ItStart.ne.0)then
                call read_FermionicField(Glat,reg(PrevItFolder),"Glat_w")
-               if(look4dens%TargetDensity.eq.0d0) Glat%mu = look4dens%mu
             else
                Glat%mu = look4dens%mu
-               if((look4dens%TargetDensity.ne.0d0).and.Hmodel) call set_density(Glat%mu,Beta,Crystal,look4dens)
+               if(mu_scan.and.Hmodel) call set_density(Glat%mu,Beta,Crystal,look4dens)
                call calc_Gmats(Glat,Crystal)
             endif
             call calc_density(Glat,Glat%N_s)
@@ -1070,10 +1071,9 @@ contains
             call AllocateFermionicField(Glat,Crystal%Norb,Nmats,Nkpt=Crystal%Nkpt,Nsite=Nsite,Beta=Beta)
             if(ItStart.ne.0)then
                call read_FermionicField(Glat,reg(PrevItFolder),"Glat_w")
-               if(look4dens%TargetDensity.eq.0d0) Glat%mu = look4dens%mu
             else
                Glat%mu = look4dens%mu
-               if((look4dens%TargetDensity.ne.0d0).and.Hmodel) call set_density(Glat%mu,Beta,Crystal,look4dens)
+               if(mu_scan.and.Hmodel) call set_density(Glat%mu,Beta,Crystal,look4dens)
                call calc_Gmats(Glat,Crystal)
             endif
             call calc_density(Glat,Glat%N_s)
@@ -1129,10 +1129,9 @@ contains
             call AllocateFermionicField(Glat,Crystal%Norb,Nmats,Nkpt=Crystal%Nkpt,Nsite=Nsite,Beta=Beta)
             if(ItStart.ne.0)then
                call read_FermionicField(Glat,reg(PrevItFolder),"Glat_w",Crystal%kpt)
-               if(look4dens%TargetDensity.eq.0d0) Glat%mu = look4dens%mu
             else
                Glat%mu = look4dens%mu
-               if((look4dens%TargetDensity.ne.0d0).and.Hmodel) call set_density(Glat%mu,Beta,Crystal,look4dens)
+               if(mu_scan.and.Hmodel) call set_density(Glat%mu,Beta,Crystal,look4dens)
                call calc_Gmats(Glat,Crystal)
             endif
             call calc_density(Glat,Crystal,Glat%N_ks)
@@ -1751,9 +1750,10 @@ contains
       type(FermionicField)                  :: DeltaOld,DeltaSym
       integer                               :: Norb,Norb_MultiTier,unit
       integer                               :: ispin,iorb,iw
-      integer                               :: itau,ndx,wndx
-      real(8),allocatable                   :: wmats(:),tau(:),Moments(:,:,:)
-      real(8),allocatable                   :: Eloc(:,:),ElocOld(:,:),Eloc_s(:,:,:),PrintLine(:),coef01(:,:)
+      integer                               :: itau,ndx,wndx,im
+      real(8),allocatable                   :: wmats(:),tau(:)
+      real(8),allocatable                   :: Moments_Fit(:,:,:),Moments_An(:,:)
+      real(8),allocatable                   :: Eloc(:,:),ElocOld(:,:),Eloc_s(:,:,:),PrintLine(:)
       real(8)                               :: CrystalField,taup
       complex(8),allocatable                :: zeta(:,:,:),invG(:,:)
       complex(8),allocatable                :: Dfit(:,:,:),Dmats(:,:,:),Ditau(:,:,:)
@@ -1774,7 +1774,6 @@ contains
       Norb = LocalOrbs(isite)%Norb
       !
       allocate(Eloc(Norb,Nspin));Eloc=0d0
-      allocate(coef01(Norb,Nspin));coef01=0d0
       allocate(invCurlyG(Norb,Nmats,Nspin));invCurlyG=czero
       !
       allocate(wmats(Nmats));wmats=0d0
@@ -1884,27 +1883,42 @@ contains
             !
             stop "Available modes for Delta fitting: Inf, Analytic, Moments."
             !
-         case("Analytic")
+         case("Anaderson")
             !
             file = "DeltaPara_"//reg(LocalOrbs(isite)%Name)//".DAT"
             MomDir = reg(ItFolder)//"Solver_"//reg(LocalOrbs(isite)%Name)//"/"
             wndx = minloc(abs(wmats-0.85*wmatsMax),dim=1)
-            call fit_Delta(Dfit,Beta,Nfit,reg(MomDir),reg(file),"Shifted",Eloc,filename="DeltaAnd",Wlimit=wndx,coef01=coef01)
+            call fit_Delta(Dfit,Beta,Nfit,reg(MomDir),reg(file),"Shifted",Eloc,filename="DeltaAnd",Wlimit=wndx)
             !
-         case("Moments","Inf")
+         case("Moments")
             !
             file = "DeltaMom_"//reg(LocalOrbs(isite)%Name)//".DAT"
             MomDir = reg(ItFolder)//"Solver_"//reg(LocalOrbs(isite)%Name)//"/"
-            !
-            allocate(Moments(Norb,Nspin,0:min(SigmaMaxMom,Nfit)));Moments=0d0
             wndx = minloc(abs(wmats-0.85*wmatsMax),dim=1)
-            call fit_moments(Dfit,Beta,reg(MomDir),reg(file),"Sigma",Moments,filename="DeltaMom",Wlimit=wndx)
+            allocate(Moments_Fit(Norb,Nspin,0:min(SigmaMaxMom,Nfit)));Moments_Fit=0d0
+            call fit_moments(Dfit,Beta,reg(MomDir),reg(file),"Sigma",Moments_Fit,filename="DeltaMom",Wlimit=wndx)
+            Eloc = Moments_Fit(:,:,0)
+            deallocate(Moments_Fit)
             !
-            if(reg(reg(DeltaFit)).eq."Inf") Eloc = dreal(Dfit(:,Nmats,:))
-            if(reg(reg(DeltaFit)).eq."Moments") Eloc = Moments(:,:,0)
-            coef01 = Moments(:,:,1)
+         case("Inf")
             !
-            deallocate(Moments)
+            Eloc = dreal(Dfit(:,Nmats,:))
+            !
+         case("Analytic")
+            !
+            file = reg(ItFolder)//"Solver_"//reg(LocalOrbs(isite)%Name)//"/DeltaAnalytic_"//reg(LocalOrbs(isite)%Name)//".DAT"
+            unit = free_unit()
+            open(unit,file=reg(file),form="formatted",status="unknown",action="write",position="rewind")
+            do ispin=1,Nspin
+               call get_moments_F(Moments_An,Dfit(:,:,ispin),beta,wstep=10)
+               write(unit,"(A,1I5)") " Spin: ",ispin
+               do im=0,4
+                  write(unit,"(999E20.12)") (Moments_An(iorb,im),iorb=1,Norb)
+               enddo
+               Eloc(:,ispin) = Moments_An(:,0)
+            enddo
+            close(unit)
+            deallocate(Moments_An)
             !
       end select
       deallocate(Dfit)
@@ -2444,7 +2458,7 @@ contains
       integer                               :: iorb,jorb,ispin,jspin
       integer                               :: ib1,ib2,isite,idum
       integer                               :: unit,ndx,itau,iw,wndx,wndxOpt
-      real(8)                               :: taup,muQMC
+      real(8)                               :: taup
       real(8),allocatable                   :: tauF(:),tauB(:),wmats(:)
       real(8),allocatable                   :: ReadLine(:)
       real(8),allocatable                   :: Moments(:,:,:)
@@ -2454,9 +2468,10 @@ contains
       type(FermionicField),allocatable      :: Gimp(:),Fimp(:)
       complex(8),allocatable                :: Gitau(:,:,:),Fitau(:,:,:)
       complex(8),allocatable                :: Gmats(:,:),Fmats(:,:)
+      real(8)                               :: muLAT
       !Impurity self-energy and fermionic Dyson equation
       type(FermionicField),allocatable      :: Simp(:)
-      type(FermionicField)                  :: G0imp
+      type(FermionicField),allocatable      :: G0imp(:)
       type(BosonicField)                    :: curlyU
       complex(8),allocatable                :: Sfit(:,:,:),SmatsTail(:)
       real(8),allocatable                   :: Uinst(:,:)
@@ -2479,10 +2494,12 @@ contains
       !Impurity observables initialization
       if(ExpandImpurity)then
          allocate(Gimp(1))
+         allocate(G0imp(1))
          allocate(Simp(1))
          if(Dyson_Imprvd_F)allocate(Fimp(1))
       else
          allocate(Gimp(Nsite))
+         allocate(G0imp(Nsite))
          allocate(Simp(Nsite))
          if(Dyson_Imprvd_F)allocate(Fimp(Nsite))
       endif
@@ -2504,6 +2521,9 @@ contains
          !
          call AllocateFermionicField(Gimp(isite),LocalOrbs(isite)%Norb,Nmats,Beta=Beta)
          call clear_attributes(Gimp(isite))
+         !
+         call AllocateFermionicField(G0imp(isite),LocalOrbs(isite)%Norb,Nmats,Beta=Beta)
+         call clear_attributes(G0imp(isite))
          !
          call AllocateFermionicField(Simp(isite),LocalOrbs(isite)%Norb,Nmats,Beta=Beta)
          call clear_attributes(Simp(isite))
@@ -2561,7 +2581,7 @@ contains
       !
       !
       ! COLLECT IMPURITY GF ----------------------------------------------------
-      call AllocateFermionicField(G_DMFT,Crystal%Norb,Nmats,Nsite=Nsite,Beta=Beta)
+      call AllocateFermionicField(G_DMFT,Crystal%Norb,Nmats,Nsite=Nsite,Beta=Beta,mu=muQMC)
       do isite=1,Nsite
          !
          write(*,"(A)") new_line("A")//"     Collecting the impurity Green's function of site "//reg(LocalOrbs(isite)%Name)
@@ -2628,7 +2648,38 @@ contains
       !
       !
       ! FERMIONIC DYSON EQUATION -----------------------------------------------
-      call AllocateFermionicField(S_DMFT,Crystal%Norb,Nmats,Nsite=Nsite,Beta=Beta)
+      call AllocateFermionicField(S_DMFT,Crystal%Norb,Nmats,Nsite=Nsite,Beta=Beta,mu=muQMC)
+      !
+      !Adjust the chemical potential of curlyG if the solver has changed it
+      do isite=1,Nsite
+         !
+         write(*,"(A)") new_line("A")//"     Collecting curlyG of site "//reg(LocalOrbs(isite)%Name)
+         !
+         !Read curlyG
+         call read_FermionicField(G0imp(isite),reg(PrevItFolder)//"Solver_"//reg(LocalOrbs(isite)%Name)//"/","G0_"//reg(LocalOrbs(isite)%Name)//"_w")
+         if((isite.gt.1).and.(G0imp(isite)%mu.ne.muLAT)) stop "collect_QMC_results: mu stored in curlyG is different among the sites"
+         muLAT=G0imp(isite)%mu
+         !
+         if((abs(G0imp(isite)%mu-muQMC).gt.eps).and.update_curlyG)then
+            write(*,"(A)") new_line("A")//"     Updating the chemical potential of curlyG from "//str(muLAT)//" to "//str(muQMC)
+            do ispin=1,Nspin
+               do iw=1,Nmats
+                  do iorb=1,LocalOrbs(isite)%Norb
+                     G0imp(isite)%ws(iorb,iorb,iw,ispin) = 1d0/(1d0/G0imp(isite)%ws(iorb,iorb,iw,ispin) - G0imp(isite)%mu + muQMC)
+                  enddo
+               enddo
+               if(paramagnet)then
+                  G0imp(isite)%ws(:,:,:,Nspin) = G0imp(isite)%ws(:,:,:,1)
+                  exit
+               endif
+            enddo
+            G0imp(isite)%mu=muQMC
+            call dump_FermionicField(G0imp(isite),reg(PrevItFolder)//"Solver_"//reg(LocalOrbs(isite)%Name)//"/","G0_"//reg(LocalOrbs(isite)%Name)//"_w",paramagnet)
+         endif
+         !
+         if(ExpandImpurity.or.AFMselfcons)exit
+         !
+      enddo
       !
       ! Check if the fermionic improved estimators are present
       if(Dyson_Imprvd_F)then
@@ -2648,12 +2699,15 @@ contains
       ! Solve the Dyson equation for each site
       if(Dyson_Imprvd_F)then
          !
+         !no need to keep curlyG
+         deallocate(G0imp)
+         !
          ! Collect static improved estimators
          do isite=1,Nsite
             !
             write(*,"(A)") new_line("A")//"     Collecting the static impurity improved estimator of site "//reg(LocalOrbs(isite)%Name)
             !
-            !Read the impurity Green's function
+            !Read the impurity estimator
             allocate(tauF(Solver%NtauF_in));tauF = linspace(0d0,Beta,Solver%NtauF_in)
             allocate(Fitau(LocalOrbs(isite)%Norb,Solver%NtauF_in,Nspin));Fitau=czero
             allocate(ReadLine(LocalOrbs(isite)%Nflavor))
@@ -2703,7 +2757,7 @@ contains
             !
             write(*,"(A)") new_line("A")//"     Collecting the retarded impurity improved estimator of site "//reg(LocalOrbs(isite)%Name)
             !
-            !Read the impurity Green's function
+            !Read the impurity estimator
             allocate(tauF(Solver%NtauF_in));tauF = linspace(0d0,Beta,Solver%NtauF_in)
             allocate(Fitau(LocalOrbs(isite)%Norb,Solver%NtauF_in,Nspin));Fitau=czero
             allocate(ReadLine(LocalOrbs(isite)%Nflavor))
@@ -2753,10 +2807,10 @@ contains
             !
          enddo
          !
-         !Fermionic Dyson equation in the solver basis (always diagonal)
+         !Fermionic Dyson equation in the solver basis (always diagonal).
          do isite=1,Nsite
             !
-            write(*,"(A)") new_line("A")//"     Solving fermionic Dyson of site "//reg(LocalOrbs(isite)%Name)//" using improved estimator."
+            write(*,"(A)") new_line("A")//"     Solving fermionic Dyson of site "//reg(LocalOrbs(isite)%Name)//" using improved estimators."
             do ispin=1,Nspin
                do iorb=1,LocalOrbs(isite)%Norb
                   Simp(isite)%ws(iorb,iorb,:,ispin) = Fimp(isite)%ws(iorb,iorb,:,ispin) / Gimp(isite)%ws(iorb,iorb,:,ispin)
@@ -2775,46 +2829,22 @@ contains
          !
          do isite=1,Nsite
             !
-            write(*,"(A)") new_line("A")//"     Collecting curlyG of site "//reg(LocalOrbs(isite)%Name)
-            !
-            !Read curlyG
-            call AllocateFermionicField(G0imp,LocalOrbs(isite)%Norb,Nmats,Beta=Beta)
-            call read_FermionicField(G0imp,reg(PrevItFolder)//"Solver_"//reg(LocalOrbs(isite)%Name)//"/","G0_"//reg(LocalOrbs(isite)%Name)//"_w")
-            !
-            !Adjust with the chemical potential if the solver has changed it
-            if((abs(G0imp%mu-muQMC).gt.1e-5).and.update_curlyG)then
-               write(*,"(A)") new_line("A")//"     Updating the chemical potential of curlyG from "//str(G0imp%mu)//" to "//str(muQMC)
-               do ispin=1,Nspin
-                  do iw=1,Nmats
-                     do iorb=1,LocalOrbs(isite)%Norb
-                        G0imp%ws(iorb,iorb,iw,ispin) = 1d0/(1d0/G0imp%ws(iorb,iorb,iw,ispin) - G0imp%mu + muQMC)
-                     enddo
-                  enddo
-                  if(paramagnet)then
-                     G0imp%ws(:,:,:,Nspin) = G0imp%ws(:,:,:,1)
-                     exit
-                  endif
-               enddo
-               G0imp%mu=muQMC
-               call dump_FermionicField(G0imp,reg(PrevItFolder)//"Solver_"//reg(LocalOrbs(isite)%Name)//"/","G0_"//reg(LocalOrbs(isite)%Name)//"_w",paramagnet)
-            endif
-            !
             !Fermionic Dyson equation in the solver basis (always diagonal)
             write(*,"(A)") new_line("A")//"     Solving fermionic Dyson of site "//reg(LocalOrbs(isite)%Name)
             do ispin=1,Nspin
                do iorb=1,LocalOrbs(isite)%Norb
-                  Simp(isite)%ws(iorb,iorb,:,ispin) = 1d0/G0imp%ws(iorb,iorb,:,ispin) - 1d0/Gimp(isite)%ws(iorb,iorb,:,ispin)
+                  Simp(isite)%ws(iorb,iorb,:,ispin) = 1d0/G0imp(isite)%ws(iorb,iorb,:,ispin) - 1d0/Gimp(isite)%ws(iorb,iorb,:,ispin)
                enddo
                if(paramagnet)then
                   Simp(isite)%ws(:,:,:,Nspin) = Simp(isite)%ws(:,:,:,1)
                   exit
                endif
             enddo
-            call DeallocateFermionicField(G0imp)
             !
             if(ExpandImpurity.or.AFMselfcons)exit
             !
          enddo
+         deallocate(G0imp)
          !
       endif
       !

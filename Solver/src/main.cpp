@@ -109,7 +109,7 @@ int main(int argc, char *argv[])
       find_param(argv[1], "MU_TIME"         , muTime      );
       find_param(argv[1], "REMOVE_UHALF"    , rmvU2_read  ); removeUhalf = (rmvU2_read == 1) ? true : false;
       find_param(argv[1], "N_ERR"           , muErr       );
-      find_param(argv[1], "N_QUICK"         , quick_read  ); quickloops = (quick_read == 1) ? true : false;
+      find_param(argv[1], "NSCAN_IMP"       , quick_read  ); quickloops = (quick_read == 1) ? true : false;
       //Symmetrization type
       find_param(argv[1], "SYM_MODE"        , sym_read    ); OrbSym = (sym_read > 1) ? true : false;
       // Site Dependent Vars

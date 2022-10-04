@@ -143,7 +143,7 @@ module parameters
       logical                               :: local=.false.
       integer,allocatable                   :: orbs(:)                          !orbital restriction (has to be added to the input)
       !I'm writing this as integers due to some mismatch on how to write boolean between fortrann and c++
-      integer                               :: quickloops=0
+      integer                               :: mu_scan=0
    end type musearch
 
 
@@ -213,7 +213,7 @@ module parameters
       integer                               :: binstart=0
       !I'm writing these as integers due to some mismatch on how to write boolean between fortrann and c++
       integer                               :: retarded=0
-      integer                               :: quickloops=0
+      integer                               :: mu_scan=0
       integer                               :: removeUhalf=0
       integer                               :: Imprvd_F=0
       integer                               :: Imprvd_B=0

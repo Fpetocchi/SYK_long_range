@@ -78,6 +78,11 @@ module utils_misc
       module procedure halfbeta_sym_z
    end interface halfbeta_sym
 
+   interface get_moments_F
+      module procedure get_moments_F_d1
+      module procedure get_moments_F_d2
+   end interface get_moments_F
+
    interface get_pattern
       module procedure get_pattern_i
       module procedure get_pattern_d
@@ -136,6 +141,7 @@ module utils_misc
    public :: get_pattern
    public :: KK_Im2Re
    public :: KK_Re2Im
+   public :: get_moments_F
    public :: init_Uelements
    !functions
    public :: FermionicFreqMesh
@@ -1538,6 +1544,174 @@ contains
       !
       !
    end subroutine KK_Re2Im
+
+
+   !---------------------------------------------------------------------------!
+   !PURPOSE: compute the moments from 0 to 4 as in mats2itau_FermionicCoeff
+   !         works only for diagonal functions
+   !---------------------------------------------------------------------------!
+   subroutine get_moments_F_d1(moments,funct,beta,wstep)
+      !
+      use linalg, only : inv
+      implicit none
+      !
+      real(8),allocatable,intent(inout)     :: moments(:)
+      complex(8),intent(in)                 :: funct(:)
+      real(8),intent(in)                    :: beta
+      integer,intent(in),optional           :: wstep
+      real(8)                               :: funct_e(3),funct_o(2)
+      real(8)                               :: mom_e(3),mom_o(2)
+      real(8),allocatable                   :: wmats(:)
+      real(8)                               :: tail_e(3,3),tail_o(2,2)
+      real(8)                               :: w1,w2,w3
+      integer                               :: Nmats,iw,wstep_,i,j
+      !
+      if(allocated(moments))deallocate(moments)
+      allocate(moments(0:4));moments=0d0
+      !
+      wstep_=1
+      if(present(wstep))wstep_=wstep
+      !
+      Nmats = size(funct)
+      allocate(wmats(Nmats));wmats = FermionicFreqMesh(beta,Nmats)
+      w1 = wmats(Nmats-1*wstep_)
+      w2 = wmats(Nmats-2*wstep_)
+      w3 = wmats(Nmats-3*wstep_)
+      deallocate(wmats)
+      !
+      funct_e=0d0;funct_o=0d0
+      do iw=1,3
+         funct_e(iw) = dreal(funct(Nmats-iw*wstep_))
+      enddo
+      do iw=1,2
+         funct_o(iw) = dimag(funct(Nmats-iw*wstep_))
+      enddo
+      !
+      ! even tail
+      tail_e=0d0
+      tail_e(1,1) = 1d0
+      tail_e(1,2) = 1d0/(w1**2)
+      tail_e(1,3) = 1d0/(w1**4)
+      tail_e(2,1) = 1d0
+      tail_e(2,2) = 1d0/(w2**2)
+      tail_e(2,3) = 1d0/(w2**4)
+      tail_e(3,1) = 1d0
+      tail_e(3,2) = 1d0/(w3**2)
+      tail_e(3,3) = 1d0/(w3**4)
+      call inv(tail_e)
+      mom_e=0d0
+      do i=1,3
+         do j=1,3
+            mom_e(i) = mom_e(i) + tail_e(i,j)*funct_e(j)
+         enddo
+      enddo
+      !
+      ! odd tail
+      tail_o=0d0
+      tail_o(1,1) = 1d0/w1
+      tail_o(1,2) = 1d0/(w1**3)
+      tail_o(2,1) = 1d0/w2
+      tail_o(2,2) = 1d0/(w2**3)
+      call inv(tail_o)
+      mom_o=0d0
+      do i=1,2
+         do j=1,2
+            mom_o(i) = mom_o(i) + tail_o(i,j)*funct_o(j)
+         enddo
+      enddo
+      !
+      moments(0) = mom_e(1)
+      moments(1) = mom_o(1)
+      moments(2) = mom_e(2)
+      moments(3) = mom_o(2)
+      moments(4) = mom_e(3)
+      !
+   end subroutine get_moments_F_d1
+   !
+   subroutine get_moments_F_d2(moments,funct,beta,wstep)
+      !
+      use linalg, only : inv
+      implicit none
+      !
+      real(8),allocatable,intent(inout)     :: moments(:,:)
+      complex(8),intent(in)                 :: funct(:,:)
+      real(8),intent(in)                    :: beta
+      integer,intent(in),optional           :: wstep
+      real(8)                               :: funct_e(3),funct_o(2)
+      real(8)                               :: mom_e(3),mom_o(2)
+      real(8),allocatable                   :: wmats(:)
+      real(8)                               :: tail_e(3,3),tail_o(2,2)
+      real(8)                               :: w1,w2,w3
+      integer                               :: Nmats,iw,wstep_,i,j
+      integer                               :: Dim,id
+      !
+      Dim = size(funct,dim=1)
+      !
+      if(allocated(moments))deallocate(moments)
+      allocate(moments(Dim,0:4));moments=0d0
+      !
+      wstep_=1
+      if(present(wstep))wstep_=wstep
+      !
+      Nmats = size(funct,dim=2)
+      allocate(wmats(Nmats));wmats = FermionicFreqMesh(beta,Nmats)
+      w1 = wmats(Nmats-1*wstep_)
+      w2 = wmats(Nmats-2*wstep_)
+      w3 = wmats(Nmats-3*wstep_)
+      deallocate(wmats)
+      !
+      do id=1,Dim
+         !
+         funct_e=0d0;funct_o=0d0
+         do iw=1,3
+            funct_e(iw) = dreal(funct(id,Nmats-iw*wstep_))
+         enddo
+         do iw=1,2
+            funct_o(iw) = dimag(funct(id,Nmats-iw*wstep_))
+         enddo
+         !
+         ! even tail
+         tail_e=0d0
+         tail_e(1,1) = 1d0
+         tail_e(1,2) = 1d0/(w1**2)
+         tail_e(1,3) = 1d0/(w1**4)
+         tail_e(2,1) = 1d0
+         tail_e(2,2) = 1d0/(w2**2)
+         tail_e(2,3) = 1d0/(w2**4)
+         tail_e(3,1) = 1d0
+         tail_e(3,2) = 1d0/(w3**2)
+         tail_e(3,3) = 1d0/(w3**4)
+         call inv(tail_e)
+         mom_e=0d0
+         do i=1,3
+            do j=1,3
+               mom_e(i) = mom_e(i) + tail_e(i,j)*funct_e(j)
+            enddo
+         enddo
+         !
+         ! odd tail
+         tail_o=0d0
+         tail_o(1,1) = 1d0/w1
+         tail_o(1,2) = 1d0/(w1**3)
+         tail_o(2,1) = 1d0/w2
+         tail_o(2,2) = 1d0/(w2**3)
+         call inv(tail_o)
+         mom_o=0d0
+         do i=1,2
+            do j=1,2
+               mom_o(i) = mom_o(i) + tail_o(i,j)*funct_o(j)
+            enddo
+         enddo
+         !
+         moments(id,0) = mom_e(1)
+         moments(id,1) = mom_o(1)
+         moments(id,2) = mom_e(2)
+         moments(id,3) = mom_o(2)
+         moments(id,4) = mom_e(3)
+         !
+      enddo
+      !
+   end subroutine get_moments_F_d2
 
 
    !---------------------------------------------------------------------------!

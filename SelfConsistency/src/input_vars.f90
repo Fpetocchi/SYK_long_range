@@ -443,7 +443,7 @@ contains
       !Density lookup
       call add_separator("Density lookup")
       call parse_input_variable(look4dens%mu,"MU",InputFile,default=0d0,comment="Absolute chemical potential or shift with respect to the half-filling mu depending on REMOVE_HARTREE.")
-      call parse_input_variable(look4dens%TargetDensity,"N_READ_LAT",InputFile,default=0d0,comment="Target density on the lattice. Lookup is switched on to this value if its >0d0. Otherwise mu will be kept fixed.")
+      call parse_input_variable(look4dens%TargetDensity,"N_READ_LAT",InputFile,default=0d0,comment="Target density.")
       if(ExpandImpurity.or.AFMselfcons)then
          call parse_input_variable(look4dens%local,"N_READ_LAT_LOC",InputFile,default=.false.,comment="Flag to restrict the lattice density lookup to the ORBS_1 indexes corresponding to the solved impurity.")
          if(look4dens%local)then
@@ -451,7 +451,8 @@ contains
             look4dens%TargetDensity = look4dens%TargetDensity/Nsite
          endif
       endif
-      call parse_input_variable(look4dens%quickloops,"N_QUICK",InputFile,default=1,comment="Integer flag to switch on the quick density lookup within the solver.")
+      call parse_input_variable(Solver%mu_scan,"NSCAN_IMP",InputFile,default=1,comment="Integer flag to switch on density lookup within the solver.")
+      call parse_input_variable(look4dens%mu_scan,"NSCAN_LAT",InputFile,default=1,comment="Integer flag to switch on density lookup within the lattice problem (self-energy not recomputed).")
       call parse_input_variable(look4dens%densityRelErr,"N_ERR",InputFile,default=0.01d0,comment="Relative error on the target density. Better if not lower than 1e-3.")
       call parse_input_variable(look4dens%muStep,"MU_STEP",InputFile,default=0.2d0,comment="Initial chemical potential step in the density lookup.")
       call parse_input_variable(look4dens%muIter,"MU_ITER",InputFile,default=50,comment="Maximum number of iterations in the density lookup.")
@@ -563,7 +564,7 @@ contains
       endif
       !
       !Variables for the fit
-      call parse_input_variable(DeltaFit,"DELTA_FIT",InputFile,default="Inf",comment="Fit to extract the local energy in GW+EDMFT calculations. Available: Inf, Analytic, Moments.")
+      call parse_input_variable(DeltaFit,"DELTA_FIT",InputFile,default="Analytic",comment="Fit to extract the local energy in GW+EDMFT calculations. Available: Analytic(best), Anaderson, Inf, Moments.")
       call parse_input_variable(Nfit,"NFIT",InputFile,default=8,comment="Number of bath levels (Analytic) or coefficient (automatic limit to NFIT=4).")
       call parse_input_variable(ReplaceTail_Simp,"WTAIL_SIMP",InputFile,default=80d0,comment="Frequency value above which the tail of Simp is replaced. If =0d0 the tail is not replaced. Only via moments (automatic limit to NFIT=4).")
       call parse_input_variable(recalc_Hartree,"RECALC_HARTREE",InputFile,default=.false.,comment="Use the lattice density to compute the Hartree term of the impurity self-energy.")
@@ -678,7 +679,6 @@ contains
       call append_to_input_list(Solver%retarded,"RETARDED","Integer flag to include the frequency dependent part of the interaction. User cannot set this as its deduced from CALC_TYPE.")
       call parse_input_variable(Solver%removeUhalf,"REMOVE_UHALF",InputFile,default=0,comment="Integer flag to use the particle-hole symmetric interaction by removing the half-filling chemical potential inside the solver.")
       !if(.not.Hmodel)Solver%removeUhalf=0
-      Solver%quickloops=look4dens%quickloops
       if(ExpandImpurity)then
          allocate(Solver%Time(1));Solver%Time=0
          call parse_input_variable(Solver%Time(1),"TIME_1",InputFile,default=15,comment="Minutes of solver runtime for site number 1")

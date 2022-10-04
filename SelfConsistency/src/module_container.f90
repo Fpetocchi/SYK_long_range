@@ -28,6 +28,7 @@ module module_container
    check_Hermiticity,check_Symmetry         ,&
    KK_Im2Re,KK_Re2Im                        ,&
    halfbeta_sym                             ,&
+   get_moments_F                            ,&
    assert_shape                             ,&
    splint,nspline                           ,&
    cubic_interp,linear_interp               ,&
