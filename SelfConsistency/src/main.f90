@@ -308,7 +308,7 @@ program SelfConsistency
             call set_density(Glat,Crystal,look4dens)
          endif
       else
-         Glat%mu = muQMC
+         Glat%mu = look4dens%mu
          call calc_Gmats(Glat,Crystal,S_Full)
          write(*,"(A,F)")"     Chemical potential:",Glat%mu
          write(*,"(A,F)")"     Lattice density:",trace(Glat%N_s(:,:,1)+Glat%N_s(:,:,2))
