@@ -39,7 +39,8 @@ class ct_hyb
       ct_hyb( path inputDir, path SiteName, double beta, int Nspin, int Norb, int NtauF, int NtauB,
               int Norder, bool Gexp, int Nmeas, int Ntherm, int NsegShift, int NspinSwap, int NnntMeas,
               bool Improved_F, bool Improved_B,
-              bool removeUhalf, bool paramagnet, bool retarded, std::vector<int> SetsNorb,
+              bool removeUhalf, bool paramagnet, bool retarded,
+              std::vector<int> SetsNorb, bool full_ntOrbSym,
               int printTime, std::vector<int> bins, CustomMPI &mpi):
               inputDir(inputDir),
               SiteName(SiteName),
@@ -61,6 +62,7 @@ class ct_hyb
               paramagnet(paramagnet),
               retarded(retarded),
               SetsNorb(SetsNorb),
+              full_ntOrbSym(full_ntOrbSym),
               printTime(printTime),
               bins(bins),
               mpi(mpi)
@@ -453,6 +455,7 @@ class ct_hyb
       bool debug=false;
    #endif
       std::vector<std::vector<int>>       SetsOrbs;
+      bool                                full_ntOrbSym;
       bool                                OrbSym;
       // Input data
       Vec                                 Levels;                               // mu - <\epsilon> + mu_correction
@@ -631,7 +634,8 @@ class ct_hyb
          VecVec n_tau(Nflavor,Vec(NtauB,0.0));
          n_tau = measure_nt( segments, full_line, NtauB, Beta );
          //
-         //if(OrbSym) orb_symm( n_tau, SetsOrbs );// this gives NaNa = NaNb if a is equivalent to b
+         // this gives NaNa = NaNb if a is equivalent to b: is a more strict constraints
+         if(full_ntOrbSym&&OrbSym) orb_symm( n_tau, SetsOrbs );
          //
          accumulate_VecVec( nt, n_tau );
          //
@@ -795,7 +799,7 @@ class ct_hyb
          //
          //
          // n(tau)--------------------------------------------------------------
-         dump_data( nt, "n_t", pad, Nflavor, NtauB, Beta, ( OrbSym ? 0 : -1 ) );
+         dump_data( nt, "n_t", pad, Nflavor, NtauB, Beta, ( (!full_ntOrbSym && OrbSym) ? 0 : -1 ) );
          //
          //
          // Green's function----------------------------------------------------
@@ -836,7 +840,7 @@ class ct_hyb
             }
             //
             // print
-            dump_data( nnt, "nn_t", pad, Nflavor*(Nflavor+1)/2, NtauB, Beta, ( OrbSym ? Norb : -1 ) );
+            dump_data( nnt, "nn_t", pad, Nflavor*(Nflavor+1)/2, NtauB, Beta, ( (!full_ntOrbSym && OrbSym) ? Norb : -1 ) );
             //
          }
          //

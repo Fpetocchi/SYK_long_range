@@ -299,7 +299,6 @@ program SelfConsistency
       !
       !
       !Compute the Full Green's function and set the density
-      write(*,*)
       if(mu_scan)then
          call calc_Gmats(Glat,Crystal,S_Full)
          if(Hetero%status)then
@@ -308,6 +307,7 @@ program SelfConsistency
             call set_density(Glat,Crystal,look4dens)
          endif
       else
+         write(*,*)
          Glat%mu = look4dens%mu
          call calc_Gmats(Glat,Crystal,S_Full)
          write(*,"(A,F)")"     Chemical potential:",Glat%mu
@@ -340,13 +340,16 @@ program SelfConsistency
       !
       !
       !Print full self-energy: local readable, k-dep binfmt (optional) and along path
-      if(calc_Sigmak)then
-         call dump_FermionicField(S_Full,reg(ItFolder),"Sfull_w",paramagnet)
-         if(dump_Sigmak)call dump_FermionicField(S_Full,reg(ItFolder),"Sfull_w",.true.,Crystal%kpt,paramagnet)
-         call dump_MaxEnt(S_Full,"mats",reg(ItFolder)//"Convergence/","Sful",EqvGWndx%SetOrbs,WmaxPade=PadeWlimit)
-         if(print_path)call interpolate2kpath(S_Full,Crystal,reg(ItFolder))
-      endif
+      call dump_FermionicField(S_Full,reg(ItFolder),"Sfull_w",paramagnet)
+      if(dump_Sigmak)call dump_FermionicField(S_Full,reg(ItFolder),"Sfull_w",.true.,Crystal%kpt,paramagnet)
+      call dump_MaxEnt(S_Full,"mats",reg(ItFolder)//"Convergence/","Sful",EqvGWndx%SetOrbs,WmaxPade=PadeWlimit)
+      if(print_path)call interpolate2kpath(S_Full,Crystal,reg(ItFolder))
       call DeallocateFermionicField(S_Full)
+      !
+      !
+      !Print G0W0 bandstructure
+      if((Iteration.eq.0).and.(reg(structure).ne."None").and.(reg(SpexVersion).eq."Lund"))call print_G0W0_dispersion(Crystal,VH,Vxc,Glat%mu)
+      deallocate(VH,Vxc) !removed from join_SigmaFull
       !
       !
       !Matching the lattice and impurity problems: Fermions

@@ -35,6 +35,7 @@ module self_energy
    public :: calc_sigmaGWdc
    public :: read_Sigma_spex
    public :: calc_VH
+   public :: print_G0W0_dispersion
 
    !===========================================================================!
 
@@ -2112,5 +2113,69 @@ contains
       end select
       !
    end subroutine interpolate2Beta_Fermionic
+
+
+   !---------------------------------------------------------------------------!
+   !PURPOSE: Print print the dispersion corrected with the G0W0 self-energy
+   !---------------------------------------------------------------------------!
+   !print_G0W0_dispersion          (Crystal,reg(pathINPUTtr),VH,Vxc,Glat%mu)
+   subroutine print_G0W0_dispersion(Lttc,VH,Vxc,mu)
+      !
+      use parameters
+      use utils_misc
+      use utils_fields
+      use crystal
+      use file_io
+      use input_vars, only : Nreal, Nkpt_path, structure, pathINPUTtr
+      implicit none
+      !
+      type(Lattice),intent(inout)           :: Lttc
+      complex(8),intent(in)                 :: VH(:,:)
+      complex(8),intent(in)                 :: Vxc(:,:,:,:)
+      real(8),intent(in)                    :: mu
+
+      !
+      type(FermionicField)                  :: S_G0W0
+      complex(8),allocatable                :: S_G0W0_print(:,:,:,:,:)
+      real(8),allocatable                   :: wreal(:)
+      integer                               :: iw,ik,ispin
+      !
+      !
+      write(*,"(A)") new_line("A")//new_line("A")//"---- print_G0W0_dispersion"
+      !
+      !
+      if(.not.Lttc%status) stop "print_G0W0_dispersion: Lattice container not properly initialized."
+      if(.not.Lttc%pathStored) stop "print_G0W0_dispersion: K-points along the path not stored."
+      !
+      call assert_shape(VH,[Lttc%Norb,Lttc%Norb],"print_G0W0_dispersion","VH")
+      call assert_shape(Vxc,[Lttc%Norb,Lttc%Norb,Lttc%Nkpt,Nspin],"print_G0W0_dispersion","Vxc")
+      !
+      allocate(wreal(Nreal));wreal=0d0
+      call AllocateFermionicField(S_G0W0,Lttc%Norb,Nreal,Nkpt=Lttc%Nkpt)
+      call read_FermionicField(S_G0W0,reg(pathINPUTtr),"SGoWo_wr",Lttc%kpt,axis=wreal)
+      !
+      do iw=Nreal,1,-1
+         if(abs(wreal(iw)).ne.0)exit
+      enddo
+      Nreal = iw-1
+      wreal = wreal(1:Nreal) + mu
+      allocate(S_G0W0_print(Lttc%Norb,Lttc%Norb,Nreal,Lttc%Nkpt,Nspin));S_G0W0_print=czero
+      !
+      write(*,"(A,1I6)") "     Frequency axis updated to: ",Nreal
+      write(*,"(A)") "     Frequency boundaries "//str(wreal(1),4)//" - "//str(wreal(Nreal),4)
+      do ispin=1,Nspin
+         do iw=1,Nreal
+            do ik=1,Lttc%Nkpt
+               S_G0W0_print(:,:,iw,ik,ispin) = S_G0W0%wks(:,:,iw,ik,ispin) - Vxc(:,:,ik,ispin) + VH
+            enddo
+         enddo
+      enddo
+      call DeallocateFermionicField(S_G0W0)
+      !
+      call interpolateHk2Path(Lttc,reg(structure),Nkpt_path,pathOUTPUT=reg(pathINPUTtr),Sigma=S_G0W0_print,Sigma_axis=wreal,store=.false.)
+      deallocate(wreal,S_G0W0_print)
+      !
+   end subroutine print_G0W0_dispersion
+
 
 end module self_energy

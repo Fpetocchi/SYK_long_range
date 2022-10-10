@@ -7,16 +7,16 @@ GENMAT=/home/petocchif/1_GW_EDMFT/GenericMaterial/Calculation_template
 
 declare -a dirindex=( "117_Std"  )
 #for it in "${dirindex[@]}" ; do
-for it in `seq  66 1 69` ; do
+for it in `seq  120 1 128` ; do
    if [ -d "$it" ]; then
    #
    cd $it/Convergence
    cp ${GENMAT}/${MATERIAL}/MaxEnt/MaxEnt_SLURM.sh .
    chmod 700 MaxEnt_SLURM.sh
    #
-   ./MaxEnt_SLURM.sh -e 0.0001 -w 8001 -W  400 -f G -o 1 -i lat -p ${GENMAT}
-   ./MaxEnt_SLURM.sh -e 0.0005 -w 8001 -W  400 -f G -o 1 -i qmc_Mo -p ${GENMAT}
-   #./MaxEnt_SLURM.sh -e 0.02   -w 6000 -W  300 -f W -o 1 -i lat -p ${GENMAT}
+   ./MaxEnt_SLURM.sh -e 0.00005 -w 5001 -W  400 -f G -o 1 -i lat -p ${GENMAT}
+   ./MaxEnt_SLURM.sh -e 0.0001 -w 5001 -W  400 -f G -o 1 -i qmc_Mo -p ${GENMAT}
+   ./MaxEnt_SLURM.sh -e 0.01    -w 6000 -W  300 -f W -o 1 -i lat -p ${GENMAT}
    #./MaxEnt_SLURM.sh -e 0.02   -w 5000 -W  300 -f curlyU -o 1 -i imp -p ${GENMAT}
    #
    cd ../../
@@ -47,17 +47,24 @@ done
 
 
 EFFETTO di e
-./MaxEnt_Kresolved_SLURM.sh -e 0.00050 -w 2001 -W 300 -F G -N 560 -B 140 -m full -i 1 -f 1 -s _e1
-./MaxEnt_Kresolved_SLURM.sh -e 0.00040 -w 2001 -W 300 -F G -N 560 -B 140 -m full -i 1 -f 1 -s _e2
-./MaxEnt_Kresolved_SLURM.sh -e 0.00030 -w 2001 -W 300 -F G -N 560 -B 140 -m full -i 1 -f 1 -s _e3
-./MaxEnt_Kresolved_SLURM.sh -e 0.00020 -w 2001 -W 300 -F G -N 560 -B 140 -m full -i 1 -f 1 -s _e4
-./MaxEnt_Kresolved_SLURM.sh -e 0.00010 -w 2001 -W 300 -F G -N 560 -B 140 -m full -i 1 -f 1 -s _e5
-./MaxEnt_Kresolved_SLURM.sh -e 0.00008 -w 2001 -W 300 -F G -N 560 -B 140 -m full -i 1 -f 1 -s _e6
+./MaxEnt_Kresolved_SLURM.sh -e 0.00040 -w 2001 -W 400 -F G -N 350 -B 175 -m full -i 1 -f 1 -s _e1 -M 0,2
+./MaxEnt_Kresolved_SLURM.sh -e 0.00030 -w 2001 -W 400 -F G -N 350 -B 175 -m full -i 1 -f 1 -s _e2 -M 0,2
+./MaxEnt_Kresolved_SLURM.sh -e 0.00020 -w 2001 -W 400 -F G -N 350 -B 175 -m full -i 1 -f 1 -s _e3 -M 0,2
+./MaxEnt_Kresolved_SLURM.sh -e 0.00015 -w 2001 -W 400 -F G -N 350 -B 175 -m full -i 1 -f 1 -s _e4 -M 0,2
+./MaxEnt_Kresolved_SLURM.sh -e 0.00010 -w 2001 -W 400 -F G -N 350 -B 175 -m full -i 1 -f 1 -s _e5 -M 0,2
+./MaxEnt_Kresolved_SLURM.sh -e 0.00008 -w 2001 -W 400 -F G -N 350 -B 175 -m full -i 1 -f 1 -s _e6 -M 0,2
 
 
 
 
 
+./MaxEnt_Kresolved_SLURM.sh -e 0.00040 -w 2001 -W 200 -F G -N 350 -B 175 -m full -i 1 -f 1 -s _e1
+./MaxEnt_Kresolved_SLURM.sh -e 0.00030 -w 2001 -W 200 -F G -N 350 -B 175 -m full -i 1 -f 1 -s _e2
+./MaxEnt_Kresolved_SLURM.sh -e 0.00020 -w 2001 -W 200 -F G -N 350 -B 175 -m full -i 1 -f 1 -s _e3
+
+./MaxEnt_Kresolved_SLURM.sh -e 0.00010 -w 2001 -W 400 -F G -N 350 -B 175 -m full -i 1 -f 1 -s _e4
+./MaxEnt_Kresolved_SLURM.sh -e 0.00008 -w 2001 -W 400 -F G -N 350 -B 175 -m full -i 1 -f 1 -s _e5
+./MaxEnt_Kresolved_SLURM.sh -e 0.00006 -w 2001 -W 400 -F G -N 350 -B 175 -m full -i 1 -f 1 -s _e6
 
 
 
@@ -100,12 +107,23 @@ o=1
 set xrange [-6:6]; set xtics 1
 set term x11 0
 p 'GWinput_SrMoO3/DoS.DAT' u 1:(($2+$3+$4)/3) w l lw 1 lc rgb 'black' title 'LDA'
-rep for [i=1:o] 'beta_15/Results_beta15/'.it.'/Convergence/MaxEnt_Glat_o'.i.'_s1/Glat_t_o'.i.'_s1.DAT_dos.dat' u 1:2 w l lw 3 lc 3 t ' Glat-'.i
-rep for [i=1:o] 'beta_15/Results_beta15/'.it.'/Convergence/MaxEnt_Gqmc_Mo_o'.i.'_s1/Gqmc_Mo_t_o'.i.'_s1.DAT_dos.dat' u 1:2 w l lw 3 lc 4 t ' Gimp-'.i
-set term x11 1
-p 'GWinput_SrMoO3/DoS.DAT' u 1:(($2+$3+$4)/3) w l lw 1 lc rgb 'black' title 'LDA'
+rep 'z_beta_30/Results_beta30/a_noImprvdEstm/118_bkp/Convergence/MaxEnt_Glat_o1_s1/Glat_t_o1_s1.DAT_dos.dat' u 1:2 w l lw 3 lc rgb 'black' notitle
 rep for [i=1:o] 'beta_15_v1/Results_beta15/'.it.'/Convergence/MaxEnt_Glat_o'.i.'_s1/Glat_t_o'.i.'_s1.DAT_dos.dat' u 1:2 w l lw 3 lc 3 t ' Glat-'.i
 rep for [i=1:o] 'beta_15_v1/Results_beta15/'.it.'/Convergence/MaxEnt_Gqmc_Mo_o'.i.'_s1/Gqmc_Mo_t_o'.i.'_s1.DAT_dos.dat' u 1:2 w l lw 3 lc 4 t ' Gimp-'.i
+set term x11 1
+p 'GWinput_SrMoO3/DoS.DAT' u 1:(($2+$3+$4)/3) w l lw 1 lc rgb 'black' title 'LDA'
+rep 'z_beta_30/Results_beta30/a_noImprvdEstm/118_bkp/Convergence/MaxEnt_Glat_o1_s1/Glat_t_o1_s1.DAT_dos.dat' u 1:2 w l lw 3 lc rgb 'black' notitle
+rep for [i=1:o] 'beta_15_v2/Results_beta15/'.it.'/Convergence/MaxEnt_Glat_o'.i.'_s1/Glat_t_o'.i.'_s1.DAT_dos.dat' u 1:2 w l lw 3 lc 3 t ' Glat-'.i
+rep for [i=1:o] 'beta_15_v2/Results_beta15/'.it.'/Convergence/MaxEnt_Gqmc_Mo_o'.i.'_s1/Gqmc_Mo_t_o'.i.'_s1.DAT_dos.dat' u 1:2 w l lw 3 lc 4 t ' Gimp-'.i
+
+
+set grid ; set xtics 1
+o=1
+set xrange [-6:6]; set xtics 1
+set term x11 0
+p '../../GWinput_SrMoO3/DoS.DAT' u 1:(($2+$3+$4)/3) w l lw 1 lc rgb 'black' title 'LDA'
+rep for [i=1:o] './'.it.'/Convergence/MaxEnt_Glat_o'.i.'_s1/Glat_t_o'.i.'_s1.DAT_dos.dat' u 1:2 w l lw 3 lc 3 t ' Glat-'.i
+rep for [i=1:o] './'.it.'/Convergence/MaxEnt_Gqmc_Mo_o'.i.'_s1/Gqmc_Mo_t_o'.i.'_s1.DAT_dos.dat' u 1:2 w l lw 3 lc 4 t ' Gimp-'.i
 
 
 
@@ -170,3 +188,22 @@ set arrow from 0.7640,ymin to 0.7640,ymax nohead front lw 0.2 lc rgb "white"
 set arrow from 0.8808,ymin to 0.8808,ymax nohead front lw 0.2 lc rgb "white"
 set pm3d map
 splot '118/K_resolved/Akw_Wk.DAT' u 2:3:(($4+$5+$6)/$3) pal
+
+
+
+
+
+
+
+
+    Sloc                                                       GlocWloc
+69  1.9993708284733316  1.9883994943  +0.0109713341733316   |  1.9993704848160405  1.9879349113  +0.0114355735160405
+70  1.9939077655526489  2.0080233578  -0.0141155922473511   |  1.9939411252901209  2.0122111471  -0.0182700218098791
+71  2.0034335763321565  2.0028724201  +0.0005611562321565   |  2.0049780637407935  2.0095751110  -0.0045970472592065
+72  2.0013012033926429  1.9992086442  +0.0020925591926429   |  2.0047247823778775  1.9844270646  +0.0202977177778775
+73  1.9995724857699884                                      |  1.9921265140847026
+74
+75
+76
+77
+78

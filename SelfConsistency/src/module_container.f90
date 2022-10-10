@@ -156,7 +156,8 @@ module module_container
    calc_sigmaGW                             ,&
    calc_sigmaGWdc                           ,&
    read_Sigma_spex                          ,&
-   calc_VH
+   calc_VH                                  ,&
+   print_G0W0_dispersion
 
 
    !(p) post-processing container. Depends on (a),(b),(c),(d),(e),(f),(g),(h)

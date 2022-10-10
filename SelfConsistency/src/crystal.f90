@@ -3350,7 +3350,8 @@ contains
                                                  ,filename,data_in,data_out    &
                                                  ,corrname,correction          &
                                                  ,doplane,Nkpt_Kside           &
-                                                 ,hetero,store)
+                                                 ,hetero,store                 &
+                                                 ,Sigma,Sigma_axis)
       !
       use parameters !WHY IS THIS WORKING?
       use utils_misc
@@ -3371,19 +3372,22 @@ contains
       integer,intent(in),optional           :: Nkpt_Kside
       logical,intent(in),optional           :: store
       type(Heterostructures),intent(inout),optional :: hetero
+      complex(8),intent(in),optional        :: Sigma(:,:,:,:,:)
+      real(8),intent(in),optional           :: Sigma_axis(:)
       !
       character(len=256)                    :: path,label,filename_,corrname_
       integer                               :: ik,ikz,iorb,unit,ilayer
       integer                               :: Norb,Nkpt_Kside_,ikx,iky
-      integer                               :: iw,ndx!,Nreal
+      integer                               :: iw,ndx,Nreal_sigma
       real(8)                               :: kp,kx,ky,Bvec(3)
       real(8)                               :: wrealMax,kz_cut,FermiLevel!,eta
       complex(8),allocatable                :: data_orig(:,:,:)
       complex(8),allocatable                :: invGf(:,:)
-      logical                               :: Hamiltonian,doplane_,hetero_,printout,store_
+      logical                               :: Hamiltonian,doplane_,hetero_,printout,store_,addSigma_
       real                                  :: start,finish
       !Interp
       complex(8),allocatable                :: data_intp(:,:,:),dataZk(:,:,:)
+      complex(8),allocatable                :: Sigma_intp(:,:,:,:)
       real(8),allocatable                   :: dataEk(:,:)
       !Plots
       real(8),allocatable                   :: Fk(:,:,:),Akw(:,:,:,:),wreal(:)
@@ -3440,6 +3444,22 @@ contains
          if(present(corrname))corrname_=reg(corrname)
          write(*,"(A)")"     Correction: "//reg(corrname_)
          store_=.false.
+         hetero_=.false.
+      endif
+      !
+      !Self-energy on the real axis correction----------------------------------
+      addSigma_=.false.
+      if(present(Sigma).and.present(Sigma_axis))then
+         Nreal_sigma = size(Sigma_axis)
+         call assert_shape(Sigma,[Norb,Norb,Nreal_sigma,Lttc%Nkpt,Nspin],"interpolateHk2Path","Sigma")
+         corrname_="Sigma"
+         write(*,"(A)")"     Correction: "//reg(corrname_)
+         store_=.false.
+         addSigma_=.true.
+         if(.not.Lttc%pathStored)then
+            write(*,"(A)")"     Warning path not stored, ignoring subroutine call to Sigma interpolation."
+            addSigma_=.false.
+         endif
       endif
       !
       ! if the user provides the store variable then it overrides all the previous checks
@@ -3564,6 +3584,7 @@ contains
                !
                if(allocated(Potential_L)) invGf(Ln(1):Ln(2),Ln(1):Ln(2)) = invGf(Ln(1):Ln(2),Ln(1):Ln(2)) - Potential_L(:,:,iw,ik,1)
                if(allocated(Potential_R)) invGf(Rn(1):Rn(2),Rn(1):Rn(2)) = invGf(Rn(1):Rn(2),Rn(1):Rn(2)) - Potential_R(:,:,iw,ik,1)
+               if(allocated(Sigma_intp))  invGf = invGf - Sigma_intp(:,:,iw,ik)
                !
                call inv(invGf)
                Akw(:,:,iw,ik) = dimag(invGf)
@@ -3644,6 +3665,60 @@ contains
             !
          endif
          deallocate(wreal,Akw)
+         !
+         !Interpolate self-energy along the path - for now only spinless Sigma
+         if(addSigma_)then
+            !
+            allocate(Sigma_intp(Norb,Norb,Nreal_sigma,Lttc%Nkpt_path));Sigma_intp=czero
+            call cpu_time(start)
+            call wannierinterpolation(Lttc%Nkpt3,Lttc%kpt,Lttc%kptpath(:,1:Lttc%Nkpt_path),Sigma(:,:,:,:,1),Sigma_intp)
+            call cpu_time(finish)
+            write(*,"(A,F)") "     Sigma(w,fullBZ) --> Sigma(w,Kpath) cpu timing:", finish-start
+            write(*,"(A,1I6)") "     Nreal_sigma: ", Nreal_sigma
+            !
+            allocate(Akw(Norb,Norb,Nreal_sigma,Lttc%Nkpt_path));Akw=0d0
+            allocate(invGf(Norb,Norb));invGf=czero
+            !$OMP PARALLEL DEFAULT(SHARED),&
+            !$OMP PRIVATE(ik,iw,invGf)
+            !$OMP DO
+            do ik=1,Lttc%Nkpt_path
+               do iw=1,Nreal_sigma
+                  !
+                  !invGf = zeye(Norb)*dcmplx(Sigma_axis(iw),eta) - Lttc%Hk_path(:,:,ik) - Sigma_intp(:,:,iw,ik)
+                  invGf = zeye(Norb)*dcmplx(Sigma_axis(iw),eta) - Lttc%Hk_path(:,:,ik) - dcmplx(dreal(Sigma_intp(:,:,iw,ik)),-abs(dimag(Sigma_intp(:,:,iw,ik))))
+                  !
+                  call inv(invGf)
+                  Akw(:,:,iw,ik) = dimag(invGf)
+                  !
+               enddo
+            enddo
+            !$OMP END DO
+            !$OMP END PARALLEL
+            deallocate(Sigma_intp,invGf)
+            !
+            !Normalization
+            allocate(Akw_print(Norb,Nreal_sigma,Lttc%Nkpt_path));Akw_print=0d0
+            do ik=1,Lttc%Nkpt_path
+               do iorb=1,Norb
+                  Akw_print(iorb,:,ik) = Akw(iorb,iorb,:,ik)/(sum(Akw(iorb,iorb,:,ik))*abs(Sigma_axis(2)-Sigma_axis(1)))
+               enddo
+            enddo
+            deallocate(Akw)
+            !
+            !print
+            path = reg(pathOUTPUT)//"Akw_"//reg(label)//"_Sigma.DAT"
+            unit = free_unit()
+            open(unit,file=reg(path),form="formatted",status="unknown",position="rewind",action="write")
+            do ik=1,Lttc%Nkpt_path
+               do iw=1,Nreal_sigma
+                   write(unit,"(1I5,200E20.12)") ik,Lttc%Kpathaxis(ik)/Lttc%Kpathaxis(Lttc%Nkpt_path),Sigma_axis(iw),(Akw_print(iorb,iw,ik),iorb=1,Norb)
+               enddo
+               write(unit,*)
+            enddo
+            close(unit)
+            deallocate(Akw_print)
+            !
+         endif
          !
       endif
       deallocate(data_intp)

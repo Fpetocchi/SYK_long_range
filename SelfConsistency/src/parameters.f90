@@ -217,6 +217,7 @@ module parameters
       integer                               :: removeUhalf=0
       integer                               :: Imprvd_F=0
       integer                               :: Imprvd_B=0
+      integer                               :: full_ntOrbSym=0
    end type QMC
 
    !---------------------------------------------------------------------------!

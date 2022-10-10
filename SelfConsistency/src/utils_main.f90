@@ -1387,7 +1387,8 @@ contains
                S_Full%N_s(:,:,ispin) = Vxc_loc(:,:,ispin) - VH
             enddo
             !
-            deallocate(VH,Vxc,Vxc_loc)
+            !deallocate(VH,Vxc,Vxc_loc)
+            deallocate(Vxc_loc)
             call DeallocateFermionicField(S_G0W0)
             call DeallocateFermionicField(S_G0W0dc)
             if(.not.causal_D)call DeallocateFermionicField(S_GW)

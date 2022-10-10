@@ -43,8 +43,8 @@ int main(int argc, char *argv[])
    // Post-processing of the Green's function
    int binlength,binstart;
    //Symmetrization type
-   bool OrbSym;
-   int sym_read;
+   bool OrbSym, full_ntOrbSym;
+   int sym_read, ntOrbSym;
    // Density lookup algorithm (dichotomy)
    int muIter;
    double density,muStep,muTime,muErr;
@@ -112,6 +112,8 @@ int main(int argc, char *argv[])
       find_param(argv[1], "NSCAN_IMP"       , quick_read  ); quickloops = (quick_read == 1) ? true : false;
       //Symmetrization type
       find_param(argv[1], "SYM_MODE"        , sym_read    ); OrbSym = (sym_read > 1) ? true : false;
+      find_param(argv[1], "NT_FULLSYM"      , ntOrbSym    ); full_ntOrbSym = (ntOrbSym > 0) ? true : false;
+      full_ntOrbSym = full_ntOrbSym && OrbSym;
       // Site Dependent Vars
       find_param(argv[1], "NIMP"            , Nimp        );
       //
@@ -135,6 +137,7 @@ int main(int argc, char *argv[])
          mpi.report(" removeUhalf= "+str(removeUhalf));
          mpi.report(" paramagnet= "+str(paramagnet));
          mpi.report(" OrbSym= "+str(OrbSym));
+         mpi.report(" full_ntOrbSym= "+str(full_ntOrbSym));
          mpi.report(" debug= "+str(debug));
          if(binlength>0)
          {
@@ -249,7 +252,7 @@ int main(int argc, char *argv[])
             mpi.report(" Folder = "+SiteDir[isite]+" (Found).");
             ImpurityList.push_back( ct_hyb( SiteDir[isite], SiteName[isite], Beta, Nspin, SiteNorb[isite], NtauF, NtauB,
                                             Norder, Gexp, Nmeas, Ntherm, Nshift, Nswap, Nnnt, Impr_F, Impr_B,
-                                            removeUhalf, paramagnet, retarded, SiteSetsNorb[isite],
+                                            removeUhalf, paramagnet, retarded, SiteSetsNorb[isite], full_ntOrbSym,
                                             printTime, std::vector<int> { binlength,binstart }, mpi ) );
             ImpurityList[isite].init();
          }
@@ -324,6 +327,12 @@ int main(int argc, char *argv[])
                {
                   mpi.report(" *NOT* found chemical potential after "+str(muIter)+" rigid shifts. Last value: "+str(mu_new));
                   mpi.report(" (User should try to increase either MU_ITER or MU_STEP.)");
+                  dichotomy=false;
+                  break;
+               }
+               if((fabs(trial_density-density)/density)<muErr)
+               {
+                  mpi.report(" Found correct chemical potential after "+str(imu)+" iterations: "+str(mu_new));
                   dichotomy=false;
                   break;
                }
