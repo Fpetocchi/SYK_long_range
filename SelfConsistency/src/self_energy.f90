@@ -2126,19 +2126,20 @@ contains
       use utils_fields
       use crystal
       use file_io
-      use input_vars, only : Nreal, Nkpt_path, structure, pathINPUTtr
+      use input_vars, only : paramagnet, Nreal, wrealMax
+      use input_vars, only : Nkpt_path, structure, pathINPUTtr
       implicit none
       !
       type(Lattice),intent(inout)           :: Lttc
       complex(8),intent(in)                 :: VH(:,:)
       complex(8),intent(in)                 :: Vxc(:,:,:,:)
-      real(8),intent(in)                    :: mu
-
+      real(8),intent(in),optional           :: mu
       !
-      type(FermionicField)                  :: S_G0W0
-      complex(8),allocatable                :: S_G0W0_print(:,:,:,:,:)
-      real(8),allocatable                   :: wreal(:)
-      integer                               :: iw,ik,ispin
+      type(FermionicField)                  :: S_G0W0,S_G0W0_interp
+      real(8),allocatable                   :: wreal(:),wreal_read(:)
+      real(8)                               :: ReS,ImS,mu_
+      integer                               :: ik,iw,Nreal_read
+      integer                               :: iorb,jorb,ispin
       !
       !
       write(*,"(A)") new_line("A")//new_line("A")//"---- print_G0W0_dispersion"
@@ -2150,30 +2151,68 @@ contains
       call assert_shape(VH,[Lttc%Norb,Lttc%Norb],"print_G0W0_dispersion","VH")
       call assert_shape(Vxc,[Lttc%Norb,Lttc%Norb,Lttc%Nkpt,Nspin],"print_G0W0_dispersion","Vxc")
       !
-      allocate(wreal(Nreal));wreal=0d0
-      call AllocateFermionicField(S_G0W0,Lttc%Norb,Nreal,Nkpt=Lttc%Nkpt)
-      call read_FermionicField(S_G0W0,reg(pathINPUTtr),"SGoWo_wr",Lttc%kpt,axis=wreal)
+      mu_=0d0
+      if(present(mu))mu_=mu
       !
-      do iw=Nreal,1,-1
-         if(abs(wreal(iw)).ne.0)exit
+      !read G0W0 self-energy
+      Nreal_read = 5000
+      allocate(wreal_read(Nreal_read));wreal_read=0d0
+      call AllocateFermionicField(S_G0W0,Lttc%Norb,Nreal_read,Nkpt=Lttc%Nkpt)
+      call read_FermionicField(S_G0W0,reg(pathINPUTtr),"SGoWo_wr",Lttc%kpt,axis=wreal_read)
+      do iw=5000,1,-1
+         if(abs(wreal_read(iw)).ne.0)exit
       enddo
-      Nreal = iw-1
-      wreal = wreal(1:Nreal) + mu
-      allocate(S_G0W0_print(Lttc%Norb,Lttc%Norb,Nreal,Lttc%Nkpt,Nspin));S_G0W0_print=czero
+      Nreal_read = iw-1
+      wreal_read = wreal_read(1:Nreal_read)
+      write(*,"(A,1I6)") "     Frequency axis updated to: ",Nreal_read
+      write(*,"(A)") "     Frequency boundaries "//str(wreal_read(1),4)//" - "//str(wreal_read(Nreal_read),4)
       !
-      write(*,"(A,1I6)") "     Frequency axis updated to: ",Nreal
-      write(*,"(A)") "     Frequency boundaries "//str(wreal(1),4)//" - "//str(wreal(Nreal),4)
-      do ispin=1,Nspin
-         do iw=1,Nreal
-            do ik=1,Lttc%Nkpt
-               S_G0W0_print(:,:,iw,ik,ispin) = S_G0W0%wks(:,:,iw,ik,ispin) - Vxc(:,:,ik,ispin) + VH
+      !interpolate to input real-frequency mesh
+      allocate(wreal(Nreal));wreal=linspace(-wrealMax,+wrealMax,Nreal)
+      call AllocateFermionicField(S_G0W0_interp,Lttc%Norb,Nreal,Nkpt=Lttc%Nkpt)
+      !$OMP PARALLEL DEFAULT(SHARED),&
+      !$OMP PRIVATE(iw,ik,iorb,jorb,ispin,ReS,ImS)
+      !$OMP DO
+      do iw=1,Nreal
+         do ik=1,Lttc%Nkpt
+            do iorb=1,Lttc%Norb
+               do jorb=1,Lttc%Norb
+                  do ispin=1,Nspin
+                     !
+                     ReS = cubic_interp( wreal_read, dreal(S_G0W0%wks(iorb,jorb,1:Nreal_read,ik,ispin)), wreal(iw) )
+                     ImS = cubic_interp( wreal_read, dimag(S_G0W0%wks(iorb,jorb,1:Nreal_read,ik,ispin)), wreal(iw) )
+                     S_G0W0_interp%wks(iorb,jorb,iw,ik,ispin) = dcmplx(ReS,ImS)
+                     !
+                     if(paramagnet)then
+                        S_G0W0_interp%wks(iorb,jorb,iw,ik,Nspin) = S_G0W0_interp%wks(iorb,jorb,iw,ik,1)
+                        cycle
+                     endif
+                     !
+                  enddo
+               enddo
             enddo
          enddo
       enddo
+      !$OMP END DO
+      !$OMP END PARALLEL
       call DeallocateFermionicField(S_G0W0)
+      call FermionicKsum(S_G0W0_interp)
+      call dump_FermionicField(S_G0W0_interp,reg(pathINPUTtr),"SGoWo_wr_interp",.true.,axis=wreal)
       !
-      call interpolateHk2Path(Lttc,reg(structure),Nkpt_path,pathOUTPUT=reg(pathINPUTtr),Sigma=S_G0W0_print,Sigma_axis=wreal,store=.false.)
-      deallocate(wreal,S_G0W0_print)
+      ! remove Vxc and add VH
+      do ik=1,Lttc%Nkpt
+         do iw=1,Nreal
+            do ispin=1,Nspin
+               !
+               S_G0W0_interp%wks(:,:,iw,ik,ispin) = S_G0W0_interp%wks(:,:,iw,ik,ispin) - Vxc(:,:,ik,ispin) + VH
+               !
+            enddo
+         enddo
+      enddo
+      !
+      call interpolateHk2Path(Lttc,reg(structure),Nkpt_path,pathOUTPUT=reg(pathINPUTtr),Sigma=S_G0W0_interp%wks,Sigma_axis=(wreal+mu_),store=.false.)
+      deallocate(wreal_read,wreal)
+      call DeallocateFermionicField(S_G0W0_interp)
       !
    end subroutine print_G0W0_dispersion
 

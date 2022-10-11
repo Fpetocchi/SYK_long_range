@@ -3684,7 +3684,6 @@ contains
             do ik=1,Lttc%Nkpt_path
                do iw=1,Nreal_sigma
                   !
-                  !invGf = zeye(Norb)*dcmplx(Sigma_axis(iw),eta) - Lttc%Hk_path(:,:,ik) - Sigma_intp(:,:,iw,ik)
                   invGf = zeye(Norb)*dcmplx(Sigma_axis(iw),eta) - Lttc%Hk_path(:,:,ik) - dcmplx(dreal(Sigma_intp(:,:,iw,ik)),-abs(dimag(Sigma_intp(:,:,iw,ik))))
                   !
                   call inv(invGf)

@@ -348,7 +348,7 @@ program SelfConsistency
       !
       !
       !Print G0W0 bandstructure
-      if((Iteration.eq.0).and.(reg(structure).ne."None").and.(reg(SpexVersion).eq."Lund"))call print_G0W0_dispersion(Crystal,VH,Vxc,Glat%mu)
+      if((Iteration.eq.0).and.(reg(structure).ne."None").and.(reg(SpexVersion).eq."Lund"))call print_G0W0_dispersion(Crystal,VH,Vxc)
       deallocate(VH,Vxc) !removed from join_SigmaFull
       !
       !

@@ -897,7 +897,7 @@ contains
       if(print_G0real)then
          !
          allocate(axis(Nreal));axis=0d0
-         axis = linspace(-wrealMax*1.5d0,+wrealMax*1.5d0,Nreal)
+         axis = linspace(-wrealMax,+wrealMax,Nreal)
          allocate(zeta(Norb,Norb,Nreal));zeta=czero
          do iorb=1,Norb
             do iw=1,Nreal
