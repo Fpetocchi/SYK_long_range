@@ -599,7 +599,7 @@ contains
          !
          ! Look for the Number of SPEX files. Which are supposed to be ordered.
          Nkpt = 0
-         do iq=1,2000
+         do iq=1,200000
             file_spex = reg(pathINPUT)//"VW_real/VW.Q"//str(iq,4)//".DAT"
             call inquireFile(reg(file_spex),filexists,hardstop=.false.,verb=verbose)
             if(.not.filexists) exit
@@ -881,7 +881,7 @@ contains
          !
          ! Look for the Number of SPEX files. Which are supposed to be ordered.
          Nkpt = 0
-         do iq=1,2000
+         do iq=1,200000
             file_spex = reg(pathOUTPUT_)//"VW_imag/VW.Q"//str(iq,4)//".DAT"
             call inquireFile(reg(file_spex),filexists,hardstop=.false.,verb=verbose)
             if(.not.filexists) exit
@@ -1009,7 +1009,7 @@ contains
          !
          Nkpt=0
          path = reg(pathINPUT)//"VW_real/"
-         do iq=1,2000
+         do iq=1,200000
             !
             file_spex = reg(path)//"VW_real/VW.Q"//str(iq,4)//".DAT"        !write(fn,"(a,a,i4.4,a)") reg(path),"VW_real/VW.Q",iq,".DAT"
             call inquireFile(reg(file_spex),SPEXxists,hardstop=.false.,verb=verbose)

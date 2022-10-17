@@ -3453,6 +3453,7 @@ contains
          Nreal_sigma = size(Sigma_axis)
          call assert_shape(Sigma,[Norb,Norb,Nreal_sigma,Lttc%Nkpt,Nspin],"interpolateHk2Path","Sigma")
          corrname_="Sigma"
+         if(present(corrname))corrname_=reg(corrname_)//"_"//reg(corrname)
          write(*,"(A)")"     Correction: "//reg(corrname_)
          store_=.false.
          addSigma_=.true.
@@ -3705,7 +3706,7 @@ contains
             deallocate(Akw)
             !
             !print
-            path = reg(pathOUTPUT)//"Akw_"//reg(label)//"_Sigma.DAT"
+            path = reg(pathOUTPUT)//"Akw_"//reg(label)//"_"//reg(corrname_)//".DAT"
             unit = free_unit()
             open(unit,file=reg(path),form="formatted",status="unknown",position="rewind",action="write")
             do ik=1,Lttc%Nkpt_path

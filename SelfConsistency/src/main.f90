@@ -239,6 +239,10 @@ program SelfConsistency
                   call read_Sigma_spex(SpexVersion,S_G0W0dc,Crystal,verbose,RecomputeG0W0,Vxc,DC=.true.)
                endif
             endif
+            !
+            !Print G0W0 bandstructure
+            if(dump_G0W0_bands)call print_G0W0_dispersion(Crystal,VH,Vxc)
+            !
          endif
          !
          !scGW
@@ -345,11 +349,6 @@ program SelfConsistency
       call dump_MaxEnt(S_Full,"mats",reg(ItFolder)//"Convergence/","Sful",EqvGWndx%SetOrbs,WmaxPade=PadeWlimit)
       if(print_path)call interpolate2kpath(S_Full,Crystal,reg(ItFolder))
       call DeallocateFermionicField(S_Full)
-      !
-      !
-      !Print G0W0 bandstructure
-      if((Iteration.eq.0).and.(reg(structure).ne."None").and.(reg(SpexVersion).eq."Lund"))call print_G0W0_dispersion(Crystal,VH,Vxc)
-      deallocate(VH,Vxc) !removed from join_SigmaFull
       !
       !
       !Matching the lattice and impurity problems: Fermions

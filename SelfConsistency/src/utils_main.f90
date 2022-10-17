@@ -84,6 +84,7 @@ module utils_main
    logical                                  :: S_G0W0dc_exist=.false.
    logical                                  :: calc_S_G0W0dc=.false.
    logical                                  :: spex_S_G0W0dc=.false.
+   logical                                  :: dump_G0W0_bands=.false.
    !
    character(len=255)                       :: HartreeType="GW" ! "GW" "DMFT"
    real(8)                                  :: HartreeFact=1d0
@@ -218,6 +219,7 @@ contains
       endif
       !
       print_path = (reg(path_funct).ne."None") .and. (reg(structure).ne."None")
+      dump_G0W0_bands = (FirstIteration.eq.0).and.(reg(structure).ne."None").and.(reg(SpexVersion).eq."Lund")
       !
       call inquireDir(reg(pathDATA)//str(FirstIteration-1),PrvItexist,hardstop=.false.,verb=.false.)
       call inquireDir(reg(pathDATA)//str(0),ZeroItexist,hardstop=.false.,verb=.false.)
@@ -324,7 +326,7 @@ contains
          write(*,"(A)") "     Brand new calculation. Initializing "//reg(Itpath)
       else
           write(*,"(A)") "     Initializing "//reg(Itpath)
-       endif
+      endif
       !
       !These are used throughout the whole calculation
       ItFolder = reg(pathDATA)//str(ItStart)//"/"
@@ -1387,8 +1389,7 @@ contains
                S_Full%N_s(:,:,ispin) = Vxc_loc(:,:,ispin) - VH
             enddo
             !
-            !deallocate(VH,Vxc,Vxc_loc)
-            deallocate(Vxc_loc)
+            deallocate(VH,Vxc,Vxc_loc)
             call DeallocateFermionicField(S_G0W0)
             call DeallocateFermionicField(S_G0W0dc)
             if(.not.causal_D)call DeallocateFermionicField(S_GW)
