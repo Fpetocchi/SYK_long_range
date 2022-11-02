@@ -1,6 +1,11 @@
 #!/usr/bin/env python
 # Written by Lewin Boehnke (lboehnke@physnet.uni-hamburg.de), 2009-2015, consulted by Hugo Strand, 2015
 
+verbose=False
+muthres=1.0
+#muthres=0.001
+
+
 try:
     import Gnuplot
     from Gnuplot import Data
@@ -51,8 +56,14 @@ class Bryan:
         A=np.copy(initA)
         A+=1e-8
         u=np.dot(self.TU.transpose(),np.log(A*self.oneovermodel))
+        #
         mu=1e-2
+        #muthres=1.0
+        #muthres=0.001
+        #
+        iter=0
         while True:
+            #
             G_=np.dot(self.TVt.transpose(),np.dot(np.diag(self.TSigma),np.dot(self.TU.transpose(),A))) # G_=K.dot(A)
             dG=G_+self.G
             g=np.dot(np.diag(self.TSigma),np.dot(self.TVt,dG*self.sigmapm2)) # (10) and page 166 left column upper half
@@ -60,16 +71,24 @@ class Bryan:
             MK=np.dot(self.M,K)
             du=np.linalg.solve((alpha)*np.eye(MK.shape[0])+MK, -alpha*u-g) # (B11)
             mdu=np.dot(np.dot(du,K),du) # after (B12)
+            #
+            if verbose: print("mdu=%s"%(mdu))
+            #
             if mdu<1e-7: break # there is an alternate criterion in Bryan's paper
-            if mdu>1:
+            if mdu>muthres:
                 du=np.linalg.solve((alpha+mu)*np.eye(MK.shape[0])+MK, -alpha*u-g) # (B12)
                 mdu=np.dot(np.dot(du,K),du) #after (B12)
-                while (abs(mdu-1)>1e-4):
-                    mu*=1+(mdu-1)
+                while (abs(mdu-muthres)>1e-3*muthres):
+                    mu*=1+(mdu-muthres)
                     du=np.linalg.solve((alpha+mu)*np.eye(MK.shape[0])+MK, -alpha*u-g) # (B12)
                     mdu=np.dot(np.dot(du,K),du) # after (B12)
+                    if verbose: print("mdu inner=%s"%(mdu))
+            #
             u+=du
             A=self.model*np.exp(np.dot(self.TU,u)) # (9)
+            iter=iter+1
+            print("mdu=%s it=%s"%(mdu,iter))
+            #
         lam=np.linalg.eigvalsh(MK)
         tmp=np.log(np.where(A>1e-6,A*(self.oneovermodel+1e-8),1e-6*self.oneovermodel))
         S=np.sum(A-model-(A*tmp)[tmp>-np.inf])

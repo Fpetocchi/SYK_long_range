@@ -193,11 +193,11 @@ for i in \`seq  ${startk} ${stopk}\`; do
       else
          export MODELOPTIONS= -M ${MODEL}
       fi
-      srun python3.6  ${BIN}/bryan.py ${RUNOPTIONS} \${MODELOPTIONS} ../${Fsource}/${FIELD}k_${AXIS}_k\${i}${SUFFIX}.DAT > job_Kb_\${i}.out
+      srun python3.6  ${BIN}/bryan.py ${RUNOPTIONS} \${MODELOPTIONS} ../${Fsource}/${FIELD}k_${AXIS}_k\${i}${SUFFIX}.DAT > job_Kb_\${i}${SUFFIX}.out
       #
    else
       #
-      srun python3.6  ${BIN}/bryan.py ${RUNOPTIONS} ../${Fsource}/${FIELD}k_${AXIS}_k\${i}${SUFFIX}.DAT > job_Kb_\${i}.out
+      srun python3.6  ${BIN}/bryan.py ${RUNOPTIONS} ../${Fsource}/${FIELD}k_${AXIS}_k\${i}${SUFFIX}.DAT > job_Kb_\${i}${SUFFIX}.out
       #
    fi
    #
@@ -248,7 +248,7 @@ export PYTHONPATH=\${PYTHONPATH}:${BIN}/docopt/
 export OMP_NUM_THREADS=1
 
 #
-srun python3.6  ${BIN}/bryan.py ${RUNOPTIONS} ${MODELOPTIONS} ../${Fsource}/${FIELD}k_${AXIS}_k${kp}${SUFFIX}.DAT > job_K_${kp}.out
+srun python3.6  ${BIN}/bryan.py ${RUNOPTIONS} ${MODELOPTIONS} ../${Fsource}/${FIELD}k_${AXIS}_k${kp}${SUFFIX}.DAT > job_K_${kp}${SUFFIX}.out
 #
 EOF
       done

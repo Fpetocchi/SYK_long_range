@@ -51,12 +51,11 @@ program SelfConsistency
    if(print_path) call interpolate2kpath(S_Full,Crystal,reg(ItFolder))
    !
    ! get self-energy at Gamma
-   call AllocateFermionicField(Slat_Gamma,Crystal%Norb,Nmats,Nsite=Nsite,Beta=Beta)
-   Slat_Gamma%mu = S_Full%mu
-   Slat_Gamma%ws = S_Full%wks(:,:,:,1,:)
-   call dump_FermionicField(Slat_Gamma,reg(ItFolder),"Slat_Gamma_w",paramagnet)
-   call dump_MaxEnt(Slat_Gamma,"mats",reg(ItFolder)//"Convergence/","Slat_Gamma",EqvGWndx%SetOrbs,WmaxPade=PadeWlimit)
-   call dump_MaxEnt(Slat_Gamma,"mats2itau",reg(ItFolder)//"Convergence/","Slat_Gamma",EqvGWndx%SetOrbs)
+   S_Full%ws = S_Full%wks(:,:,:,1,:)
+   call dump_FermionicField(S_Full,reg(ItFolder),"Slat_Gamma_w",paramagnet)
+   call dump_MaxEnt(S_Full,"mats",reg(ItFolder)//"Convergence/","Slat_Gamma",EqvGWndx%SetOrbs,WmaxPade=PadeWlimit)
+   call dump_MaxEnt(S_Full,"mats2itau",reg(ItFolder)//"Convergence/","Slat_Gamma",EqvGWndx%SetOrbs)
+   call DeallocateFermionicField(S_Full)
    !
    stop
 #elif defined _gap
@@ -112,7 +111,6 @@ program SelfConsistency
          calc_Sigmak=.false.
          call AllocateFermionicField(S_Full,Crystal%Norb,Nmats,Nkpt=Crystal%Nkpt,Nsite=Nsite,Beta=Beta)
          call read_FermionicField(S_Full,reg(ItFolder),"Sfull_w",Crystal%kpt)
-         if(print_path) call interpolate2kpath(S_Full,Crystal,reg(ItFolder))
          !
          if(Wlat_exists.and.(.not.gap_equation%status))then !(*)
             write(*,"(A)") new_line("A")//new_line("A")//"---- skipping Plat and Wlat calculations."
@@ -240,9 +238,6 @@ program SelfConsistency
                endif
             endif
             !
-            !Print G0W0 bandstructure
-            if(dump_G0W0_bands)call print_G0W0_dispersion(Crystal,VH,Vxc)
-            !
          endif
          !
          !scGW
@@ -320,7 +315,13 @@ program SelfConsistency
       call dump_Matrix(Glat%N_s,reg(ItFolder),"Nlat",paramagnet)
       !
       densityGW = Glat%N_s
-      S_Full%mu = Glat%mu
+      Crystal%mu = Glat%mu
+      if(.not.S_Full_exists) S_Full%mu = Glat%mu !if it exists I won't change mu
+      !
+      !
+      !Print G0W0 bandstructure - Crystal%mu is used by default
+      if(dump_G0W0_bands)call print_G0W0_dispersion(Crystal,VH,Vxc)
+      deallocate(VH,Vxc)! removed from join_SigmaFull
       !
       !
       !Total energy calculation
@@ -343,11 +344,17 @@ program SelfConsistency
       if(Hetero%status)call print_potentials()
       !
       !
-      !Print full self-energy: local readable, k-dep binfmt (optional) and along path
+      !Print the new full self-energy: local readable, k-dep binfmt (optional) and along path
       call dump_FermionicField(S_Full,reg(ItFolder),"Sfull_w",paramagnet)
       if(dump_Sigmak)call dump_FermionicField(S_Full,reg(ItFolder),"Sfull_w",.true.,Crystal%kpt,paramagnet)
       call dump_MaxEnt(S_Full,"mats",reg(ItFolder)//"Convergence/","Sful",EqvGWndx%SetOrbs,WmaxPade=PadeWlimit)
       if(print_path)call interpolate2kpath(S_Full,Crystal,reg(ItFolder))
+      !
+      !Print the new full self-energy at Gamma point
+      S_Full%ws = S_Full%wks(:,:,:,1,:)
+      call dump_FermionicField(S_Full,reg(ItFolder),"Sfull_w_Gamma",paramagnet)
+      call dump_MaxEnt(S_Full,"mats",reg(ItFolder)//"Convergence/","Sful_Gamma",EqvGWndx%SetOrbs,WmaxPade=PadeWlimit)
+      !call dump_MaxEnt(S_Full,"mats2itau",reg(ItFolder)//"Convergence/","Sful_Gamma",EqvGWndx%SetOrbs) ! this is wrong but I'm printing anyway
       call DeallocateFermionicField(S_Full)
       !
       !

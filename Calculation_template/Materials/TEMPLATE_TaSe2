@@ -59,12 +59,6 @@ done
 
 
 
-for k in `seq 1 1 8`;do
-cp ../../3_stacking_L_400/Results_beta400/1037/Solver_S${k}/Delta_t.DAT 7/Solver_S${k}/
-done
-
-
-
 
 
 
@@ -100,6 +94,16 @@ set term x11 1 size 600,900
 rep for [i=1:n] './beta_200_'.it.'/Convergence/MaxEnt_Glat_o'.i.'_s1/Glat_t_o'.i.'_s1.DAT_dos.dat' u 1:($2+h*(n-i)) w l lw 3  lc rgb 'red' t ''
 
 #rep for [i=1:n] './beta_200_'.it.'/Convergence/MaxEnt_Gqmc_S'.i.'_o1_s1/Gqmc_S'.i.'_t_o1_s1.DAT_dos.dat' u 1:($2+(i-1)*h) w l lw 2 lc rgb 'black'  t ''
+
+
+
+
+
+
+
+
+
+
 
 
 

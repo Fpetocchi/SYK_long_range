@@ -5,17 +5,21 @@ GENMAT=/home/petocchif/1_GW_EDMFT/GenericMaterial/Calculation_template
 
 #------------------------------------------------------------------------------#
 
-declare -a dirindex=( "117_Std"  )
-#for it in "${dirindex[@]}" ; do
-for it in `seq  23 1 31` ; do
+declare -a dirindex=( "avg"  )
+for it in "${dirindex[@]}" ; do
+#for it in `seq  75 1 139` ; do
    if [ -d "$it" ]; then
    #
    cd $it/Convergence
    cp ${GENMAT}/${MATERIAL}/MaxEnt/MaxEnt_SLURM.sh .
    chmod 700 MaxEnt_SLURM.sh
    #
-   ./MaxEnt_SLURM.sh -e 0.00005 -w 8001 -W  300 -f G -o 1 -i lat -p ${GENMAT}
-   ./MaxEnt_SLURM.sh -e 0.00005 -w 8001 -W  300 -f G -o 1 -i qmc_Mo -p ${GENMAT}
+  # ./MaxEnt_SLURM.sh -e 0.00005 -w 8001 -W  300 -f G -o 1 -i lat -p ${GENMAT}
+  # ./MaxEnt_SLURM.sh -e 0.00005 -w 8001 -W  300 -f G -o 1 -i qmc_Mo -p ${GENMAT}
+
+   ./MaxEnt_SLURM.sh -e 0.00001 -w 7001 -W  300 -f G -o 1 -i lat -p ${GENMAT}
+   ./MaxEnt_SLURM.sh -e 0.00001 -w 7001 -W  300 -f G -o 1 -i qmc_Mo -p ${GENMAT}
+
   # ./MaxEnt_SLURM.sh -e 0.04   -w 6000 -W  300 -f W -o 1 -i lat -p ${GENMAT}
   # ./MaxEnt_SLURM.sh -e 0.04   -w 6000 -W  300 -f curlyU -o 1 -i imp -p ${GENMAT}
    #
@@ -47,11 +51,39 @@ done
 
 
 EFFETTO di e
-./MaxEnt_Kresolved_SLURM.sh -e 0.00008 -w 2001 -W 250 -F G -N 350 -B 175 -m full -i 1 -f 1 -s _e1 -M -1,2
-./MaxEnt_Kresolved_SLURM.sh -e 0.00006 -w 2001 -W 250 -F G -N 350 -B 175 -m full -i 1 -f 1 -s _e2 -M -1,2
-./MaxEnt_Kresolved_SLURM.sh -e 0.00004 -w 2001 -W 250 -F G -N 350 -B 175 -m full -i 1 -f 1 -s _e3 -M -1,2
-./MaxEnt_Kresolved_SLURM.sh -e 0.00002 -w 2001 -W 250 -F G -N 350 -B 175 -m full -i 1 -f 1 -s _e4 -M -1,2
+./MaxEnt_Kresolved_SLURM.sh -e 0.0001 -w 2001 -W 400 -F G -N 350 -B 175 -m full -i 1 -f 1 -s _e1 # -M -1,2
+./MaxEnt_Kresolved_SLURM.sh -e 0.0001 -w 3001 -W 400 -F G -N 350 -B 175 -m full -i 1 -f 1 -s _e2 # -M -1,2
+./MaxEnt_Kresolved_SLURM.sh -e 0.0001 -w 4001 -W 400 -F G -N 350 -B 175 -m full -i 1 -f 1 -s _e3 # -M -1,2
 
+./MaxEnt_Kresolved_SLURM.sh -e 0.0001 -w 3001 -W 200 -F G -N 350 -B 175 -m full -i 1 -f 1 -s _e4 # -M -1,2
+./MaxEnt_Kresolved_SLURM.sh -e 0.0001 -w 3001 -W 300 -F G -N 350 -B 175 -m full -i 1 -f 1 -s _e5 # -M -1,2
+./MaxEnt_Kresolved_SLURM.sh -e 0.0001 -w 3001 -W 400 -F G -N 350 -B 175 -m full -i 1 -f 1 -s _e6 # -M -1,2
+
+./MaxEnt_Kresolved_SLURM.sh -e 0.0001 -w 2001 -W 200 -F G -N 350 -B 175 -m full -i 1 -f 1 -s _e7 # -M -1,2
+./MaxEnt_Kresolved_SLURM.sh -e 0.0001 -w 3001 -W 200 -F G -N 350 -B 175 -m full -i 1 -f 1 -s _e8 # -M -1,2
+./MaxEnt_Kresolved_SLURM.sh -e 0.0001 -w 4001 -W 200 -F G -N 350 -B 175 -m full -i 1 -f 1 -s _e9 # -M -1,2
+
+
+
+./MaxEnt_Kresolved_SLURM.sh -e 0.0001 -w 3001 -W 300 -F G -N 350 -B 175 -m full -i 1 -f 1 -s _e1 # -M -1,2
+
+
+
+
+
+
+./MaxEnt_Kresolved_SLURM.sh -e 0.00006 -w 3001 -W 300 -F G -N 350 -B 175 -m full -i 1 -f 1 -s _e2 # -M -1,2
+./MaxEnt_Kresolved_SLURM.sh -e 0.00004 -w 3001 -W 300 -F G -N 350 -B 175 -m full -i 1 -f 1 -s _e3 # -M -1,2
+./MaxEnt_Kresolved_SLURM.sh -e 0.00002 -w 3001 -W 300 -F G -N 350 -B 175 -m full -i 1 -f 1 -s _e4 # -M -1,2
+./MaxEnt_Kresolved_SLURM.sh -e 0.00001 -w 3001 -W 300 -F G -N 350 -B 175 -m full -i 1 -f 1 -s _e5 # -M -1,2
+
+
+
+./MaxEnt_Kresolved_SLURM.sh -e 0.00008 -w 3001 -W 200 -F G -N 350 -B 175 -m full -i 1 -f 1 -s _e1 # -M -1,2
+./MaxEnt_Kresolved_SLURM.sh -e 0.00006 -w 3001 -W 200 -F G -N 350 -B 175 -m full -i 1 -f 1 -s _e2 # -M -1,2
+./MaxEnt_Kresolved_SLURM.sh -e 0.00004 -w 3001 -W 200 -F G -N 350 -B 175 -m full -i 1 -f 1 -s _e3 # -M -1,2
+./MaxEnt_Kresolved_SLURM.sh -e 0.00002 -w 3001 -W 200 -F G -N 350 -B 175 -m full -i 1 -f 1 -s _e4 # -M -1,2
+./MaxEnt_Kresolved_SLURM.sh -e 0.00001 -w 3001 -W 200 -F G -N 350 -B 175 -m full -i 1 -f 1 -s _e5 # -M -1,2
 
 
 
@@ -104,23 +136,40 @@ rep '< grep " '.o.'   '.o.'   '.b.'   '.b.' " ./'.it.'/Solver_Mo/curlyU_Mo_w.DAT
 set grid ; set xtics 1
 o=1
 set xrange [-6:6]; set xtics 1
-set term x11 0
-p 'GWinput_SrMoO3/DoS.DAT' u 1:(($2+$3+$4)/3) w l lw 1 lc rgb 'black' title 'LDA'
-rep for [i=1:o] 'beta_20/Results_beta20/'.it.'/Convergence/MaxEnt_Glat_o'.i.'_s1/Glat_t_o'.i.'_s1.DAT_dos.dat' u 1:2 w l lw 3 lc 3 t ' Glat-'.i
-rep for [i=1:o] 'beta_20/Results_beta20/'.it.'/Convergence/MaxEnt_Gqmc_Mo_o'.i.'_s1/Gqmc_Mo_t_o'.i.'_s1.DAT_dos.dat' u 1:2 w l lw 3 lc 4 t ' Gimp-'.i
 set term x11 1
+p 'GWinput_SrMoO3/DoS.DAT' u 1:(($2+$3+$4)/3) w l lw 1 lc rgb 'black' title 'LDA'
+rep for [i=1:o] 'beta_20_v1/Results_beta20/'.it.'/Convergence/MaxEnt_Glat_o'.i.'_s1/Glat_t_o'.i.'_s1.DAT_dos.dat' u 1:2 w l lw 3 lc 3 t ' Glat-'.i
+rep for [i=1:o] 'beta_20_v1/Results_beta20/'.it.'/Convergence/MaxEnt_Gqmc_Mo_o'.i.'_s1/Gqmc_Mo_t_o'.i.'_s1.DAT_dos.dat' u 1:2 w l lw 3 lc 4 t ' Gimp-'.i
+set term x11 2
 p 'GWinput_SrMoO3/DoS.DAT' u 1:(($2+$3+$4)/3) w l lw 1 lc rgb 'black' title 'LDA'
 rep for [i=1:o] 'beta_20_v2/Results_beta20/'.it.'/Convergence/MaxEnt_Glat_o'.i.'_s1/Glat_t_o'.i.'_s1.DAT_dos.dat' u 1:2 w l lw 3 lc 3 t ' Glat-'.i
 rep for [i=1:o] 'beta_20_v2/Results_beta20/'.it.'/Convergence/MaxEnt_Gqmc_Mo_o'.i.'_s1/Gqmc_Mo_t_o'.i.'_s1.DAT_dos.dat' u 1:2 w l lw 3 lc 4 t ' Gimp-'.i
+set term x11 3
+p 'GWinput_SrMoO3/DoS.DAT' u 1:(($2+$3+$4)/3) w l lw 1 lc rgb 'black' title 'LDA'
+rep for [i=1:o] 'beta_20_v3/Results_beta20/'.it.'/Convergence/MaxEnt_Glat_o'.i.'_s1/Glat_t_o'.i.'_s1.DAT_dos.dat' u 1:2 w l lw 3 lc 3 t ' Glat-'.i
+rep for [i=1:o] 'beta_20_v3/Results_beta20/'.it.'/Convergence/MaxEnt_Gqmc_Mo_o'.i.'_s1/Gqmc_Mo_t_o'.i.'_s1.DAT_dos.dat' u 1:2 w l lw 3 lc 4 t ' Gimp-'.i
+set term x11 4
+p 'GWinput_SrMoO3/DoS.DAT' u 1:(($2+$3+$4)/3) w l lw 1 lc rgb 'black' title 'LDA'
+rep for [i=1:o] 'beta_20_v4/Results_beta20/'.it.'/Convergence/MaxEnt_Glat_o'.i.'_s1/Glat_t_o'.i.'_s1.DAT_dos.dat' u 1:2 w l lw 3 lc 3 t ' Glat-'.i
+rep for [i=1:o] 'beta_20_v4/Results_beta20/'.it.'/Convergence/MaxEnt_Gqmc_Mo_o'.i.'_s1/Gqmc_Mo_t_o'.i.'_s1.DAT_dos.dat' u 1:2 w l lw 3 lc 4 t ' Gimp-'.i
 
 
 set grid ; set xtics 1
 o=1
 set xrange [-6:6]; set xtics 1
-set term x11 0
+set term x11 0; set yrange [0:1.4]
 p '../../GWinput_SrMoO3/DoS.DAT' u 1:(($2+$3+$4)/3) w l lw 1 lc rgb 'black' title 'LDA'
 rep for [i=1:o] './'.it.'/Convergence/MaxEnt_Glat_o'.i.'_s1/Glat_t_o'.i.'_s1.DAT_dos.dat' u 1:2 w l lw 3 lc 1 t ' Glat-'.i
-#rep for [i=1:o] './'.it.'/Convergence/MaxEnt_Gimp_o'.i.'_s1/Gimp_t_o'.i.'_s1.DAT_dos.dat' u 1:2 w l lw 3 lc 3 t ' Gimp-'.i
+rep for [i=1:o] './z_impr/'.it.'/Convergence/MaxEnt_Glat_o'.i.'_s1/Glat_t_o'.i.'_s1.DAT_dos.dat' u 1:2 w l lw 3 lc 2 t ' Glat_imp-'.i
+rep for [i=1:o] './'.it.'/Convergence/MaxEnt_Gqmc_Mo_o'.i.'_s1/Gqmc_Mo_t_o'.i.'_s1.DAT_dos.dat' u 1:2 w l lw 3 lc 4 t ' Gqmc-'.i
+rep for [i=1:o] './z_impr/'.it.'/Convergence/MaxEnt_Gqmc_Mo_o'.i.'_s1/Gqmc_Mo_t_o'.i.'_s1.DAT_dos.dat' u 1:2 w l lw 3 lc 3 t ' Gqmc_imp-'.i
+
+set grid ; set xtics 1
+o=1
+set xrange [-6:6]; set xtics 1
+set term x11 0; set yrange [0:1.4]
+p '../../GWinput_SrMoO3/DoS.DAT' u 1:(($2+$3+$4)/3) w l lw 1 lc rgb 'black' title 'LDA'
+rep for [i=1:o] './'.it.'/Convergence/MaxEnt_Glat_o'.i.'_s1/Glat_t_o'.i.'_s1.DAT_dos.dat' u 1:2 w l lw 3 lc 1 t ' Glat-'.i
 rep for [i=1:o] './'.it.'/Convergence/MaxEnt_Gqmc_Mo_o'.i.'_s1/Gqmc_Mo_t_o'.i.'_s1.DAT_dos.dat' u 1:2 w l lw 3 lc 3 t ' Gqmc-'.i
 
 

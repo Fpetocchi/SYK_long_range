@@ -1792,30 +1792,6 @@ endif
 
 
 
-!Charge susceptibility----------------------------------------------
-!TEST>>>
-!Collect n(tau=0) instead of the density as it is obtained with the same statistics
-allocate(n0(LocalOrbs(isite)%Norb,Nspin));n0=0d0
-allocate(ReadLine(LocalOrbs(isite)%Nflavor))
-file = reg(PrevItFolder)//"Solver_"//reg(LocalOrbs(isite)%Name)//"/resultsQMC/n_t.DAT"
-call inquireFile(reg(file),filexists,verb=verbose)
-unit = free_unit()
-open(unit,file=reg(file),form="formatted",status="old",position="rewind",action="read")
-ReadLine=0d0
-read(unit,*) taup,ReadLine
-if(abs(taup).gt.0d0) stop "Reading n_t.DAT from previous iteration: first tau point is not zero."
-ndx=1
-do iorb=1,LocalOrbs(isite)%Norb
-   do ispin=1,Nspin
-      n0(iorb,ispin) = ReadLine(ndx)
-      ndx=ndx+1
-   enddo
-enddo
-close(unit)
-deallocate(ReadLine)
-!>>>TEST
-
-
 
 
 !

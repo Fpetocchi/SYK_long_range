@@ -2118,15 +2118,15 @@ contains
    !---------------------------------------------------------------------------!
    !PURPOSE: Print print the dispersion corrected with the G0W0 self-energy
    !---------------------------------------------------------------------------!
-   !print_G0W0_dispersion          (Crystal,reg(pathINPUTtr),VH,Vxc,Glat%mu)
    subroutine print_G0W0_dispersion(Lttc,VH,Vxc,mu)
       !
       use parameters
+      use linalg
       use utils_misc
       use utils_fields
       use crystal
       use file_io
-      use input_vars, only : paramagnet, Nreal, wrealMax
+      use input_vars, only : paramagnet, Nreal, wrealMax, eta
       use input_vars, only : Nkpt_path, structure, pathINPUTtr
       implicit none
       !
@@ -2137,7 +2137,9 @@ contains
       !
       type(FermionicField)                  :: S_G0W0,S_G0W0_interp
       type(FermionicField)                  :: S_G0W0dc,S_G0W0dc_interp
+      complex(8),allocatable                :: invGf(:,:)
       real(8),allocatable                   :: wreal(:),wreal_read(:)
+      real(8),allocatable                   :: Aloc(:,:,:)
       real(8)                               :: ReS,ImS,mu_
       real                                  :: start,finish
       integer                               :: ik,iw
@@ -2155,8 +2157,9 @@ contains
       call assert_shape(VH,[Lttc%Norb,Lttc%Norb],"print_G0W0_dispersion","VH")
       if(allocated(Vxc))call assert_shape(Vxc,[Lttc%Norb,Lttc%Norb,Lttc%Nkpt,Nspin],"print_G0W0_dispersion","Vxc")
       !
-      mu_=0d0
+      mu_=Lttc%mu
       if(present(mu))mu_=mu
+      write(*,"(A,F)")"     Using mu=",mu_
       !
       !input real-frequency mesh
       allocate(wreal(Nreal));wreal=linspace(-wrealMax,+wrealMax,Nreal)
@@ -2188,7 +2191,7 @@ contains
                      !
                      ReS = cubic_interp( wreal_read, dreal(S_G0W0%wks(iorb,jorb,1:Nreal_read,ik,ispin)), wreal(iw) )
                      ImS = cubic_interp( wreal_read, dimag(S_G0W0%wks(iorb,jorb,1:Nreal_read,ik,ispin)), wreal(iw) )
-                     S_G0W0_interp%wks(iorb,jorb,iw,ik,ispin) = dcmplx(ReS,ImS)
+                     S_G0W0_interp%wks(iorb,jorb,iw,ik,ispin) = dcmplx(ReS,sign(1d0,wreal(iw))*ImS)
                      !
                      if(paramagnet)then
                         S_G0W0_interp%wks(iorb,jorb,iw,ik,Nspin) = S_G0W0_interp%wks(iorb,jorb,iw,ik,1)
@@ -2209,6 +2212,10 @@ contains
       call cpu_time(finish)
       write(*,"(A,F)") "     Interpolation to input real frequency grid cpu timing:", finish-start
       !
+      !print G0W0 self-energy at the Gamma point
+      S_G0W0_interp%ws = S_G0W0_interp%wks(:,:,:,1,:)
+      call dump_FermionicField(S_G0W0_interp,reg(pathINPUTtr)//"G0W0plots/","SGoWo_wr_interp_Gamma",paramagnet,axis=wreal)
+      !
       ! remove Vxc and add VH
       do ik=1,Lttc%Nkpt
          do iw=1,Nreal
@@ -2222,11 +2229,34 @@ contains
       enddo
       !
       !print G0W0 bandstructure
-      call interpolateHk2Path(Lttc,reg(structure),Nkpt_path,pathOUTPUT=reg(pathINPUTtr)//"G0W0plots/",Sigma=S_G0W0_interp%wks,Sigma_axis=(wreal+mu_),corrname="G0W0",store=.false.)
+      call interpolateHk2Path(Lttc,reg(structure),Nkpt_path,pathOUTPUT=reg(pathINPUTtr)//"G0W0plots/",Sigma=S_G0W0_interp%wks,Sigma_axis=wreal,corrname="G0W0",store=.false.)
       !
-      !print G0W0 self-energy at the Gamma point
-      S_G0W0_interp%ws = S_G0W0_interp%wks(:,:,:,1,:)
-      call dump_FermionicField(S_G0W0_interp,reg(pathINPUTtr)//"G0W0plots/","SGoWo_wr_interp_Gamma",paramagnet,axis=wreal)
+      !print G0W0 local spectral function
+      allocate(invGf(Lttc%Norb,Lttc%Norb));invGf=czero
+      do ispin=1,Nspin
+         !
+         allocate(Aloc(Lttc%Norb,Lttc%Norb,Nreal));Aloc=0d0
+         do iw=1,Nreal
+            do ik=1,Lttc%Nkpt
+               !
+               invGf = zeye(Lttc%Norb)*dcmplx(wreal(iw)+mu_,eta) - Lttc%Hk(:,:,ik) - S_G0W0_interp%wks(:,:,iw,ik,ispin)
+               !
+               call inv(invGf)
+               Aloc(:,:,iw) = Aloc(:,:,iw) - dimag(invGf)/Lttc%Nkpt
+               !
+            enddo
+         enddo
+         !
+         do iorb=1,Lttc%Norb
+            Aloc(iorb,iorb,:) = Aloc(iorb,iorb,:)/(sum(Aloc(iorb,iorb,:))*abs(wreal(2)-wreal(1)))
+            call dump_Field_component(Aloc(iorb,iorb,:),reg(pathINPUTtr)//"G0W0plots/","Aw_Hk_Sigma_G0W0_o"//str(iorb)//"_s"//str(ispin)//".DAT",wreal)
+         enddo
+         deallocate(Aloc)
+         !
+         if(paramagnet) exit
+         !
+      enddo
+      deallocate(invGf)
       call DeallocateFermionicField(S_G0W0_interp)
       !
       !
@@ -2261,7 +2291,7 @@ contains
                         !
                         ReS = cubic_interp( wreal_read, dreal(S_G0W0dc%wks(iorb,jorb,1:Nreal_read,ik,ispin)), wreal(iw) )
                         ImS = cubic_interp( wreal_read, dimag(S_G0W0dc%wks(iorb,jorb,1:Nreal_read,ik,ispin)), wreal(iw) )
-                        S_G0W0dc_interp%wks(iorb,jorb,iw,ik,ispin) = dcmplx(ReS,ImS)
+                        S_G0W0dc_interp%wks(iorb,jorb,iw,ik,ispin) = dcmplx(ReS,sign(1d0,wreal(iw))*ImS)
                         !
                         if(paramagnet)then
                            S_G0W0dc_interp%wks(iorb,jorb,iw,ik,Nspin) = S_G0W0dc_interp%wks(iorb,jorb,iw,ik,1)
@@ -2281,9 +2311,6 @@ contains
          call dump_FermionicField(S_G0W0dc_interp,reg(pathINPUTtr)//"G0W0plots/","SGoWo_dc_wr_interp",.true.,axis=wreal)
          call cpu_time(finish)
          write(*,"(A,F)") "     Interpolation to input real frequency grid cpu timing:", finish-start
-         !
-         !print model G0W0 bandstructure
-         call interpolateHk2Path(Lttc,reg(structure),Nkpt_path,pathOUTPUT=reg(pathINPUTtr)//"G0W0plots/",Sigma=S_G0W0dc_interp%wks,Sigma_axis=(wreal+mu_),corrname="G0W0dc",store=.false.)
          !
          !print model G0W0 self-energy at the Gamma point
          S_G0W0dc_interp%ws = S_G0W0dc_interp%wks(:,:,:,1,:)

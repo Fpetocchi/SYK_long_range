@@ -56,7 +56,7 @@ contains
 
 
    !---------------------------------------------------------------------------!
-   !PURPOSE:  SOLUTION TO EIGEN PROBLEMS
+   !PURPOSE:
    ! - remove_CDW(W,mode,site)
    !---------------------------------------------------------------------------!
    include "post_processing/remove_CDW.f90"

@@ -10,6 +10,7 @@ subroutine interpolate2kpath_Fermionic(Sfull,Lttc,pathOUTPUT)
    use fourier_transforms
    use input_vars, only : structure, path_funct, Nkpt_path, FermiSurf, Nkpt_Fermi
    use input_vars, only : paramagnet, CalculationType, Hetero
+   use input_vars, only : wmatsMax, dampStail
    implicit none
    !
    type(FermionicField),intent(inout)    :: Sfull
@@ -134,6 +135,10 @@ subroutine interpolate2kpath_Fermionic(Sfull,Lttc,pathOUTPUT)
          call cpu_time(finish)
          write(*,"(A,F)") new_line("A")//new_line("A")//"     Sigma(fullBZ,iw) --> Sigma(Kpath,iw) cpu timing:", finish-start
          !
+         !Useless and potentially harmful - dampStail is a testflag inactive by dafault
+         if((dampStail.gt.0d0).and.(dampStail.lt.wmatsMax)) call smooth_ImSigma_tail(Spath)
+         call dump_FermionicField(Spath,reg(pathOUTPUT)//"K_resolved/Sk_path/","Sk_w",.false.,Lttc%kptpath(:,1:Lttc%Nkpt_path),paramagnet)
+         !
          !Compute the quasiparticle weight along the path
          do ispin=1,Nspin
             allocate(Zk(Lttc%Nkpt_path,Norb));Zk=0d0
@@ -175,6 +180,9 @@ subroutine interpolate2kpath_Fermionic(Sfull,Lttc,pathOUTPUT)
             enddo
             call cpu_time(finish)
             write(*,"(A,F)") "     Sigma(fullBZ,iw) --> Sigma(kx,ky,iw) cpu timing:", finish-start
+            !
+            !Useless and potentially harmful - dampStail is a testflag inactive by dafault
+            if((dampStail.gt.0d0).and.(dampStail.lt.wmatsMax)) call smooth_ImSigma_tail(Sfermi)
             !
             !Compute the quasiparticle weight along the plane - this part can be optimized by avoiding to interpolate the full frequency range of S_Full
             do ispin=1,Nspin
@@ -280,15 +288,17 @@ contains
    !
    subroutine dump_MaxEnt_on_G_K(Gmats_in,mode)
       !
-      use input_vars, only : Ntau_MaxEnt, Solver
+      use input_vars, only : Ntau_MaxEnt, Nmats_MaxEnt, Solver
+      use utils_misc
       implicit none
       !
       type(FermionicField),intent(in)       :: Gmats_in
       character(len=*),intent(in)           :: mode
       !
-      complex(8),allocatable                :: Gmats_diag(:,:,:,:),Gitau_diag(:,:,:,:)
-      real(8),allocatable                   :: Ak(:,:),tau(:),Gshift(:),wmats(:)
-      real(8)                               :: Gmax
+      complex(8),allocatable                :: Gmats_diag(:,:,:,:),Gmats_diag_tmp(:,:,:,:)
+      complex(8),allocatable                :: Gitau_diag(:,:,:,:)
+      real(8),allocatable                   :: Ak(:,:),tau(:),wmats(:),Moments(:,:)
+      real(8)                               :: Gmax,ReGtail,ImGtail
       integer                               :: Nkpt,NtauFT
       integer                               :: ikx,iky,iw
       !Hetero
@@ -298,6 +308,7 @@ contains
       !
       !
       if(verbose) write(*,"(A)") new_line("A")//new_line("A")//"---- dump_MaxEnt_on_G_K"
+      !
       !
       NtauFT = Ntau_MaxEnt
       !
@@ -331,6 +342,50 @@ contains
          Gmats_diag(iorb,:,:,:) = Gmats_in%wks(iorb,iorb,:,:,:)
       enddo
       !
+      !Attach the tail before the FT to tau axis
+      allocate(wmats(Nmats));wmats=FermionicFreqMesh(Sfull%Beta,Nmats)
+      if(Nmats_MaxEnt.gt.Nmats)then
+         !
+         deallocate(wmats)
+         allocate(wmats(Nmats_MaxEnt));wmats=FermionicFreqMesh(Sfull%Beta,Nmats_MaxEnt)
+         !
+         write(*,"(A)") "     Attaching tail from wm: "//str(wmats(Nmats+1),5)//" to wm: "//str(wmats(Nmats_MaxEnt),5)
+         !
+         allocate(Gmats_diag_tmp(Norb,Nmats,Nkpt,Nspin));Gmats_diag_tmp=czero
+         Gmats_diag_tmp = Gmats_diag
+         deallocate(Gmats_diag)
+         allocate(Gmats_diag(Norb,Nmats_MaxEnt,Nkpt,Nspin));Gmats_diag=czero
+         Gmats_diag(:,1:Nmats,:,:) = Gmats_diag_tmp
+         !
+         do ispin=1,Nspin
+            do ik=1,Nkpt
+               !
+               call get_moments_F(Moments,Gmats_diag_tmp(:,:,ik,ispin),Gmats_in%Beta,wstep=10,Eo=.false.)
+               !
+               do iw=Nmats+1,Nmats_MaxEnt
+                  do iorb=1,Norb
+                     ReGtail = Moments(iorb,2)/(wmats(iw)**2) + Moments(iorb,4)/(wmats(iw)**4)
+                     ImGtail =            -1d0/(wmats(iw)**1) + Moments(iorb,3)/(wmats(iw)**3)
+                     Gmats_diag(iorb,iw,ik,ispin) = dcmplx(ReGtail,ImGtail)
+                  enddo
+               enddo
+               !
+            enddo
+            !
+            if(paramagnet)then
+               Gmats_diag(:,:,:,Nspin) = Gmats_diag(:,:,:,1)
+               exit
+            endif
+            !
+         enddo
+         deallocate(Gmats_diag_tmp)
+         !
+      else
+         !
+         Nmats_MaxEnt = Nmats
+         !
+      endif
+      !
       !Fourier transform the diagonal of the Green's function
       call cpu_time(start)
       allocate(Gitau_diag(Norb,NtauFT,Nkpt,Nspin));Gitau_diag=czero
@@ -345,39 +400,39 @@ contains
       write(*,"(A,F)") "     Glat(K"//reg(mode)//",iw) --> Glat(K"//reg(mode)//",tau) cpu timing:", finish-start
       !
       !Print data for K-resolved MaxEnt
-      allocate(wmats(Nmats));wmats=FermionicFreqMesh(Sfull%Beta,Nmats)
       allocate(tau(NtauFT));tau = linspace(0d0,Sfull%Beta,NtauFT)
-      allocate(Gshift(Norb));Gshift=0d0
       do ispin=1,Nspin
-        do ik=1,Nkpt
+         do ik=1,Nkpt
             !
+            !end-point correction if -G(0)-G(beta) != -1
             do iorb=1,Norb
-               Gmax = maxval(dreal(Gitau_diag(iorb,:,ik,ispin)))
-               if(Gmax.gt.0d0) Gshift(iorb)=Gmax
+               Gmax = - (dreal(Gitau_diag(iorb,1,ik,ispin)) + dreal(Gitau_diag(iorb,NtauFT,ik,ispin)))
+               Gitau_diag(iorb,1,ik,ispin) = Gitau_diag(iorb,1,ik,ispin)/abs(Gmax)
+               Gitau_diag(iorb,NtauFT,ik,ispin) = Gitau_diag(iorb,NtauFT,ik,ispin)/abs(Gmax)
             enddo
-            Gshift=0d0
-            !write(*,"(A,"//str(Norb)//"F)") "     G"//reg(mode)//"_s"//str(ispin)//"(K_"//str(ik)//",tau) shift:", Gshift
             !
+            !print on imaginary time axis
             path = reg(pathOUTPUT)//"K_resolved/MaxEnt_Gk_"//reg(mode)//"_s"//str(ispin)//"/Gk_t_k"//str(ik)//".DAT"
             unit = free_unit()
             open(unit,file=reg(path),form="formatted",status="unknown",position="rewind",action="write")
             do itau=1,NtauFT
-                write(unit,"(200E20.12)") tau(itau),(dreal(Gitau_diag(iorb,itau,ik,ispin))-Gshift(iorb),iorb=1,Norb)
+                write(unit,"(200E20.12)") tau(itau),(dreal(Gitau_diag(iorb,itau,ik,ispin)),iorb=1,Norb)
             enddo
             close(unit)
             !
+            !print on imaginary frequency axis
             path = reg(pathOUTPUT)//"K_resolved/MaxEnt_Gk_"//reg(mode)//"_s"//str(ispin)//"/Gk_w_k"//str(ik)//".DAT"
             unit = free_unit()
             open(unit,file=reg(path),form="formatted",status="unknown",position="rewind",action="write")
-            do iw=1,Nmats
+            do iw=1,Nmats_MaxEnt
                 write(unit,"(200E20.12)") wmats(iw),(Gmats_diag(iorb,iw,ik,ispin),iorb=1,Norb)
             enddo
             close(unit)
             !
-        enddo
-        if(paramagnet)exit
+         enddo
+         if(paramagnet)exit
       enddo
-      deallocate(tau,Gshift,wmats,Gmats_diag)
+      deallocate(tau,wmats,Gmats_diag)
       !
       !Compute the spectral weight at Fermi along the path. See arxiv:0805.3778 Eq.(5)
       do ispin=1,Nspin
@@ -412,6 +467,7 @@ contains
       enddo
       deallocate(Gitau_diag)
       !
+      !Add the dispersion along the Gamma-A direction
       if(Hetero%status)then
          !
          Norb_layer = Hetero%Norb
@@ -454,35 +510,36 @@ contains
          !
          !Print data for K-resolved MaxEnt
          allocate(tau(NtauFT));tau = linspace(0d0,Sfull%Beta,NtauFT)
-         allocate(Gshift(Norb_layer));Gshift=0d0
          do ispin=1,Nspin
             do ik=1,Nkpt
                !
-               do iorb=1,Norb_layer
-                  Gmax = maxval(dreal(Gitau_kpkz_diag(iorb,:,ik,0,ispin)))
-                  if(Gmax.gt.0d0) Gshift(iorb)=Gmax
+               !end-point correction if G(0)+G(beta) != -1
+               do iorb=1,Norb
+                  Gmax = - (dreal(Gitau_kpkz_diag(iorb,1,ik,0,ispin)) + dreal(Gitau_kpkz_diag(iorb,NtauFT,ik,0,ispin)))
+                  Gitau_kpkz_diag(iorb,1,ik,0,ispin) = Gitau_kpkz_diag(iorb,1,ik,0,ispin)/abs(Gmax)
+                  Gitau_kpkz_diag(iorb,NtauFT,ik,0,ispin) = Gitau_kpkz_diag(iorb,NtauFT,ik,0,ispin)/abs(Gmax)
                enddo
-               Gshift=0d0
-               !write(*,"(A,"//str(Norb)//"F)") "     G"//reg(mode)//"_s"//str(ispin)//"(K_"//str(ik)//",tau) shift:", Gshift
                !
+               !print on imaginary time axis
                path = reg(pathOUTPUT)//"K_resolved/MaxEnt_Gk_"//reg(mode)//"_s"//str(ispin)//"/Gk_t_k"//str(ik)//"_Hetero.DAT"
                unit = free_unit()
                open(unit,file=reg(path),form="formatted",status="unknown",position="rewind",action="write")
                do itau=1,NtauFT
-                  write(unit,"(200E20.12)") tau(itau),(dreal(Gitau_kpkz_diag(iorb,itau,ik,0,ispin))-Gshift(iorb),iorb=1,Norb_layer)
+                  write(unit,"(200E20.12)") tau(itau),(dreal(Gitau_kpkz_diag(iorb,itau,ik,0,ispin)),iorb=1,Norb_layer)
                enddo
                close(unit)
                !
             enddo
             do ik=Nkpt+1,Nkpt+Nkpt_path
                !
-               do iorb=1,Norb_layer
-                  Gmax = maxval(dreal(Gitau_kpkz_diag(iorb,:,Lttc%iq_gamma,ik-Nkpt,ispin)))
-                  if(Gmax.gt.0d0) Gshift(iorb)=Gmax
+               !end-point correction if G(0)+G(beta) != -1
+               do iorb=1,Norb
+                  Gmax = - (dreal(Gitau_kpkz_diag(iorb,1,Lttc%iq_gamma,ik-Nkpt,ispin)) + dreal(Gitau_kpkz_diag(iorb,NtauFT,Lttc%iq_gamma,ik-Nkpt,ispin)))
+                  Gitau_kpkz_diag(iorb,1,Lttc%iq_gamma,ik-Nkpt,ispin) = Gitau_kpkz_diag(iorb,1,Lttc%iq_gamma,ik-Nkpt,ispin)/abs(Gmax)
+                  Gitau_kpkz_diag(iorb,NtauFT,Lttc%iq_gamma,ik-Nkpt,ispin) = Gitau_kpkz_diag(iorb,NtauFT,Lttc%iq_gamma,ik-Nkpt,ispin)/abs(Gmax)
                enddo
-               Gshift=0d0
-               !write(*,"(A,"//str(Norb_layer)//"F)") "     G"//reg(mode)//"_Hetero_s"//str(ispin)//"(Gamma,Kz_"//str(ik-Nkpt)//",tau) shift:", Gshift
                !
+               !print on imaginary time axis
                path = reg(pathOUTPUT)//"K_resolved/MaxEnt_Gk_"//reg(mode)//"_s"//str(ispin)//"/Gk_t_k"//str(ik)//"_Hetero.DAT"
                unit = free_unit()
                open(unit,file=reg(path),form="formatted",status="unknown",position="rewind",action="write")
@@ -494,7 +551,7 @@ contains
             enddo
            if(paramagnet)exit
          enddo
-         deallocate(tau,Gitau_kpkz_diag,Gshift)
+         deallocate(tau,Gitau_kpkz_diag)
       endif
       !
    end subroutine dump_MaxEnt_on_G_K
@@ -1204,3 +1261,72 @@ subroutine interpolate2kpath_Bosonic(Wfull,Lttc,pathOUTPUT,name,remove_Gamma,NaN
    !
    !
 end subroutine interpolate2kpath_Bosonic
+
+!---------------------------------------------------------------------------!
+!PURPOSE: Smooth the imaginary part of a K-dependent self-energy on the
+!         Imaginary frequency axis. This is done to ease maxent,
+!         absolutely NOT during self-consistency.
+!---------------------------------------------------------------------------!
+subroutine smooth_ImSigma_tail(Smats)
+   !
+   use parameters
+   use utils_misc
+   use input_vars, only : paramagnet, dampStail
+   implicit none
+   !
+   type(FermionicField),intent(inout)    :: Smats
+   !
+   integer                               :: Nmats,Nkpt,Norb,wndx
+   integer                               :: ispin,iw,ik,iorb,jorb
+   real(8)                               :: Beta,wncut,Moment,ReS,ImS
+   real(8)                               :: limit=0.999
+   real(8),allocatable                   :: wmats(:)
+   integer                               :: TailPower=1
+   !
+   !
+   write(*,"(A)") new_line("A")//new_line("A")//"---- smooth_ImSigma_tail"
+   !
+   !
+   if(.not.Smats%status) stop "smooth_ImSigma_tail: Self-energy not properly initialized."
+   !
+   Nkpt = Smats%Nkpt
+   Nmats = Smats%Npoints
+   Norb = Smats%Norb
+   Beta = Smats%Beta
+   !
+   allocate(wmats(Nmats));wmats=FermionicFreqMesh(Beta,Nmats)
+   !
+   wndx = minloc(abs(wmats-dampStail),dim=1)
+   wncut = wmats(wndx) + log(limit/(1d0-limit))/Beta
+   write(*,"(A)")"     Center of the Fermi function: "//str(wncut,5)
+   !
+   !$OMP PARALLEL DEFAULT(SHARED),&
+   !$OMP PRIVATE(ik,ispin,iorb,jorb,iw,ReS,ImS,Moment)
+   !$OMP DO
+   do ik=1,Nkpt
+      do ispin=1,Nspin
+         do iorb=1,Norb
+            do jorb=1,Norb
+               !
+               Moment = dimag(Smats%wks(iorb,jorb,wndx,ik,ispin))*(wmats(wndx)**TailPower)
+               do iw = wndx,Nmats
+                 !ReS = dreal(Smats%wks(iorb,jorb,wndx,ik,ispin)) ! constant real part
+                  ReS = dreal(Smats%wks(iorb,jorb,iw,ik,ispin))   ! pristine real part
+                  ImS = dimag(Smats%wks(iorb,jorb,iw,ik,ispin))
+                  ImS = ImS + ( Moment/(wmats(iw)**TailPower) - ImS )*(1d0-fermidirac(wmats(iw),wncut,Beta))
+                  Smats%wks(iorb,jorb,iw,ik,ispin) = dcmplx(ReS,ImS)
+               enddo
+               !
+            enddo
+         enddo
+         if(paramagnet)then
+            Smats%wks(:,:,wndx:Nmats,ik,Nspin) = Smats%wks(:,:,wndx:Nmats,ik,1)
+            cycle
+         endif
+      enddo
+   enddo
+   !$OMP END DO
+   !$OMP END PARALLEL
+   deallocate(wmats)
+   !
+end subroutine smooth_ImSigma_tail

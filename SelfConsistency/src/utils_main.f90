@@ -38,8 +38,6 @@ module utils_main
    type(FermionicField)                     :: S_GWdc,S_GW_Cdc,S_GW_Xdc
    type(FermionicField)                     :: S_DMFT
    !
-   type(FermionicField)                     :: Slat_Gamma
-   !
    type(BosonicField)                       :: Wlat
    type(BosonicField)                       :: W_EDMFT
    !
@@ -1389,7 +1387,8 @@ contains
                S_Full%N_s(:,:,ispin) = Vxc_loc(:,:,ispin) - VH
             enddo
             !
-            deallocate(VH,Vxc,Vxc_loc)
+            !deallocate(VH,Vxc)
+            deallocate(Vxc_loc)
             call DeallocateFermionicField(S_G0W0)
             call DeallocateFermionicField(S_G0W0dc)
             if(.not.causal_D)call DeallocateFermionicField(S_GW)
@@ -3181,7 +3180,7 @@ contains
             !Bosonic Dyson equation in the solver basis
             write(*,"(A)") new_line("A")//"     Solving bosonic Dyson of site "//reg(LocalOrbs(isite)%Name)
             call AllocateBosonicField(Pimp,LocalOrbs(isite)%Norb,Nmats,Crystal%iq_gamma,no_bare=.true.,Beta=Beta)
-            call calc_Pimp(Pimp,curlyU,ChiCmats) !,NaNb=Test_flag_3)
+            call calc_Pimp(Pimp,curlyU,ChiCmats,NaNb=Pimp_NaNb)
             !
             !Compute convergence benchmark for the interaction
             call AllocateBosonicField(Wimp,LocalOrbs(isite)%Norb,Nmats,Crystal%iq_gamma,Beta=Beta)
@@ -3287,6 +3286,10 @@ contains
          write(*,"(A)")"     Deallocating Glat"
          call DeallocateFermionicField(Glat)
       endif
+      if(G_DMFT%status)then
+         write(*,"(A)")"     Deallocating G_DMFT"
+         call DeallocateFermionicField(G_DMFT)
+      endif
       if(S_Full%status)then
          write(*,"(A)") "     Deallocating S_Full"
          call DeallocateFermionicField(S_Full)
@@ -3331,6 +3334,10 @@ contains
          write(*,"(A)") "     Deallocating Wlat"
          call DeallocateBosonicField(Wlat)
       endif
+      if(W_EDMFT%status)then
+         write(*,"(A)") "     Deallocating W_EDMFT"
+         call DeallocateBosonicField(W_EDMFT)
+      endif
       if(Ulat%status)then
          write(*,"(A)") "     Deallocating Ulat"
          call DeallocateBosonicField(Ulat)
@@ -3339,6 +3346,14 @@ contains
          write(*,"(A)") "     Deallocating Plat"
          call DeallocateBosonicField(Plat)
       endif
+      if(P_GGdc%status)then
+         write(*,"(A)") "     Deallocating P_GGdc"
+         call DeallocateBosonicField(P_GGdc)
+      endif
+      if(Chi%status)then
+         write(*,"(A)") "     Deallocating Chi"
+         call DeallocateBosonicField(Chi)
+      endif
       if(P_EDMFT%status)then
          write(*,"(A)") "     Deallocating P_EDMFT"
          call DeallocateBosonicField(P_EDMFT)
@@ -3346,6 +3361,10 @@ contains
       if(C_EDMFT%status)then
          write(*,"(A)") "     Deallocating C_EDMFT"
          call DeallocateBosonicField(C_EDMFT)
+      endif
+      if(curlyU_EDMFT%status)then
+         write(*,"(A)") "     Deallocating curlyU_EDMFT"
+         call DeallocateBosonicField(curlyU_EDMFT)
       endif
       if(Delta_correction%status)then
          write(*,"(A)") "     Deallocating Delta_correction"

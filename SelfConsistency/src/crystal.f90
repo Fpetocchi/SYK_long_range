@@ -3585,7 +3585,6 @@ contains
                !
                if(allocated(Potential_L)) invGf(Ln(1):Ln(2),Ln(1):Ln(2)) = invGf(Ln(1):Ln(2),Ln(1):Ln(2)) - Potential_L(:,:,iw,ik,1)
                if(allocated(Potential_R)) invGf(Rn(1):Rn(2),Rn(1):Rn(2)) = invGf(Rn(1):Rn(2),Rn(1):Rn(2)) - Potential_R(:,:,iw,ik,1)
-               if(allocated(Sigma_intp))  invGf = invGf - Sigma_intp(:,:,iw,ik)
                !
                call inv(invGf)
                Akw(:,:,iw,ik) = dimag(invGf)
@@ -3685,7 +3684,7 @@ contains
             do ik=1,Lttc%Nkpt_path
                do iw=1,Nreal_sigma
                   !
-                  invGf = zeye(Norb)*dcmplx(Sigma_axis(iw),eta) - Lttc%Hk_path(:,:,ik) - dcmplx(dreal(Sigma_intp(:,:,iw,ik)),-abs(dimag(Sigma_intp(:,:,iw,ik))))
+                  invGf = zeye(Norb)*dcmplx(Sigma_axis(iw)+Lttc%mu,eta) - Lttc%Hk_path(:,:,ik) - Sigma_intp(:,:,iw,ik)
                   !
                   call inv(invGf)
                   Akw(:,:,iw,ik) = dimag(invGf)

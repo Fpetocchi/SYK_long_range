@@ -1,6 +1,6 @@
 #!/bin/bash
 
-#SBATCH --job-name=Fe20
+#SBATCH --job-name=***
 #SBATCH --nodes=1
 #SBATCH --ntasks=128
 #SBATCH --ntasks-per-node=128
@@ -20,20 +20,21 @@ ulimit -c 0
 #----------------------------------COMPULSORY----------------------------------#
 GENMAT=/home/petocchif/1_GW_EDMFT/GenericMaterial
 
-PATH_INPUT=GWinput_bccFe
-PATH_DATA=Results_beta20
+PATH_INPUT=GWinput_***
+PATH_DATA=Results_beta***
 
-START_IT=6
-END_IT=7
+START_IT=***
+END_IT=***
 
 EXE_SC=SelfConsistency
 EXE_QMC=ct_hyb
 EXE_AKW=Akw_builder
 
 #-----------------------------------OPTIONAL-----------------------------------#
-PATH_INPUT_TR=GWinput_beta20
+PATH_INPUT_TR=GWinput_beta***
 ####SKIP_FIRST_SC="T"
 ####SKIP_ALL_QMC="T"
+####REPLACE_QMC_RES="T"
 ####CHANGE_BETA_IT=1
 ####COLLECT_AKW="T"
 
@@ -47,10 +48,11 @@ LOCAL=$(pwd)
 BINqmc=${GENMAT}/Solver/bin
 BINsc=${GENMAT}/SelfConsistency/bin
 
-if [ -z ${PATH_INPUT_TR+x} ]; then PATH_INPUT_TR=${PATH_INPUT} ; fi
-if [ -z ${SKIP_FIRST_SC+x} ]; then SKIP_FIRST_SC="F"           ; fi
-if [ -z ${SKIP_ALL_QMC+x}  ]; then SKIP_ALL_QMC="F"            ; fi
-if [ -z ${COLLECT_AKW+x}   ]; then COLLECT_AKW="F"             ; fi
+if [ -z ${PATH_INPUT_TR+x}   ]; then PATH_INPUT_TR=${PATH_INPUT} ; fi
+if [ -z ${SKIP_FIRST_SC+x}   ]; then SKIP_FIRST_SC="F"           ; fi
+if [ -z ${SKIP_ALL_QMC+x}    ]; then SKIP_ALL_QMC="F"            ; fi
+if [ -z ${REPLACE_QMC_RES+x} ]; then REPLACE_QMC_RES="F"         ; fi
+if [ -z ${COLLECT_AKW+x}     ]; then COLLECT_AKW="F"             ; fi
 
 export l0=`grep -n "PATH_INPUT=" input.in    | awk -F  ":" '{print $1}'`
 export l1=`grep -n "PATH_INPUT_TR=" input.in | awk -F  ":" '{print $1}'`
@@ -125,6 +127,11 @@ do
    else
       if [ -f "doSolver" ]; then
          rm doSolver
+         if [ "${REPLACE_QMC_RES}" == "T" ]  && [ ${IT} != 0 ] ; then
+            IT_PRV=`LC_ALL=en awk "BEGIN{print ${IT}-1 }"`
+            rm -r ${IT_DATA}/Solver_*
+            cp -r ${LOCAL}/${PATH_DATA}/${IT_PRV}/Solver_* ${IT_DATA}/
+         fi
          continue
       else
          break

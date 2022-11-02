@@ -156,8 +156,6 @@ module input_vars
    integer,public                           :: N_Vnn
    real(8),allocatable,public               :: Vnn(:,:,:),Vnn_diag(:,:)
    character(len=256),public                :: long_range
-   logical,public                           :: Kdiag
-   !logical,public                           :: Ktilda
    !
    !Double counting types, divergencies, scaling and self-consistency coefficients
    logical,public                           :: Vxc_in
@@ -180,9 +178,6 @@ module input_vars
    real(8),public                           :: alphaPi
    real(8),public                           :: alphaSigma
    real(8),public                           :: alphaHk
-   logical,public                           :: ChiDiag
-   logical,public                           :: removeCDW_C
-   logical,public                           :: removeCDW_P
    logical,public                           :: Mixing_Delta_tau
    real(8),public                           :: Mixing_Delta
    real(8),public                           :: Mixing_curlyU
@@ -215,6 +210,7 @@ module input_vars
    integer,private                          :: Nsym_user
    real(8),allocatable,public               :: UserPath(:,:)
    integer,public                           :: Nkpt_path
+   integer,public                           :: Nmats_MaxEnt
    integer,public                           :: Ntau_MaxEnt
    integer,public                           :: Nkpt_Fermi
    logical,public                           :: FermiSurf
@@ -237,12 +233,21 @@ module input_vars
    logical,public                           :: solve_DMFT=.true.
    logical,public                           :: bosonicSC=.false.
    !
-   !Testing flags
-   logical,private                          :: Testing=.false.
-   logical,public                           :: Test_flag_1=.false.
-   logical,public                           :: Test_flag_2=.false.
-   logical,public                           :: Test_flag_3=.false.
-   logical,public                           :: Test_flag_4=.false.
+   !Testing flags -  default values changed only if Testing=.true. at compile time
+   logical,private                          :: TESTING=.false.
+   !
+   logical,public                           :: Kdiag=.false.
+   logical,public                           :: Ktilda=.true.
+   logical,public                           :: ChiDiag=.false.
+   logical,public                           :: removeCDW_C=.false.
+   logical,public                           :: removeCDW_P=.false.
+   logical,public                           :: Pimp_NaNb=.true.
+   real(8),public                           :: dampStail=-10d0
+   !
+   logical,public                           :: Generic_test_flag_1=.false.
+   logical,public                           :: Generic_test_flag_2=.false.
+   logical,public                           :: Generic_test_flag_3=.false.
+   logical,public                           :: Generic_test_flag_4=.false.
    !
 #ifdef _verb
    logical,private                          :: verbose=.true.
@@ -466,8 +471,6 @@ contains
       call parse_input_variable(Ustart,"U_START",InputFile,default=.true.,comment="Flag to use the local Ucrpa interaction as the effetive interaction in the 0th iteration.")
       call parse_input_variable(U_AC,"U_AC",InputFile,default=.false.,comment="Flag to force the analytic continuation on the SPEX interaction.")
       call parse_input_variable(Uthresh,"U_THRES",InputFile,default=0.001d0,comment="Lowest magnitude considered in SPEX Ucrpa bare interaction (only for local interactions).")
-      call parse_input_variable(Kdiag,"K_DIAG",InputFile,default=.false.,comment="Flag to use only one J-independent screening function.")
-      !call parse_input_variable(Ktilda,"K_TILDA",InputFile,default=.true.,comment="Flag to U(iw)-U(0) to build the screening function.")
       if((Umodel.and.Uspex).or.((.not.Umodel).and.(.not.Uspex))) stop "read_InputFile: Make up your mind, U_MODEL or U_SPEX?"
       if(Umodel)then
          call parse_input_variable(Uaa,"UAA",InputFile,default=0d0,comment="Interaction between same orbital and opposite spin electrons (orbital independent).")
@@ -547,9 +550,6 @@ contains
       call parse_input_variable(alphaPi,"ALPHA_PI",InputFile,default=1d0,comment="Fraction of the EDMFT polarization substituted within the lattice one.")
       call parse_input_variable(alphaSigma,"ALPHA_SIGMA",InputFile,default=1d0,comment="Fraction of the EDMFT self-energy substituted within the lattice one.")
       call parse_input_variable(alphaHk,"ALPHA_HK",InputFile,default=1d0,comment="Rescaling of the non-interacting Hamiltonian.")
-      call parse_input_variable(ChiDiag,"CHI_DIAG",InputFile,default=.false.,comment="Flag to remove the off-diagonal components of the local charge susceptibility.")
-      call parse_input_variable(removeCDW_C,"CDW_CHI",InputFile,default=.false.,comment="Flag to remove the iw=0 divergence in the local charge susceptibility.")
-      call parse_input_variable(removeCDW_P,"CDW_PI",InputFile,default=.false.,comment="Flag to remove the iw=0 divergence in the local polarization.")
       call parse_input_variable(Mixing_Delta_tau,"MIX_D_TAU",InputFile,default=.false.,comment="Flag to mix Delta(tau). If false the mix is done with Delta(iw).")
       call parse_input_variable(Mixing_Delta,"MIX_D",InputFile,default=0.5d0,comment="Fraction of the old iteration Delta.")
       call parse_input_variable(Mixing_curlyU,"MIX_U",InputFile,default=0.5d0,comment="Fraction of the old iteration curlyU.")
@@ -595,7 +595,8 @@ contains
       endif
       call parse_input_variable(path_funct,"PATH_FUNCT",InputFile,default="None",comment="Print interacting fields on high-symmetry points. Available fields: G=Green's function, S=self-energy, GS=both. None to avoid.")
       call parse_input_variable(Nkpt_path,"NK_PATH",InputFile,default=50,comment="Number of K-points between two hig-symmetry Kpoints.")
-      call parse_input_variable(Ntau_MaxEnt,"NTAU_MAXENT",InputFile,default=Ntau,comment="Number of tau-points of the interpolated Field.")
+      call parse_input_variable(Nmats_MaxEnt,"NMATS_MAXENT",InputFile,default=Nmats,comment="If >NMATS a tail will be attached before the FT to get G(tau) when computing K-resolved spectra.")
+      call parse_input_variable(Ntau_MaxEnt,"NTAU_MAXENT",InputFile,default=Ntau,comment="Number of tau-points of the interpolated Field. Ignored otherwise.")
       call parse_input_variable(FermiSurf,"FERMI_SURF",InputFile,default=.false.,comment="Flag to compute the Green's function on the planar {kx,ky} sheet. The mesh is set by NK_PATH/2. Ignored if PATH_FUNCT=None.")
       call parse_input_variable(Nkpt_Fermi,"NK_FERMI",InputFile,default=50,comment="Number of K-points in the side of the planar {kx,ky} sheet.")
       call parse_input_variable(FermiCut,"FERMI_CUT",InputFile,default=0d0,comment="Energy level at which the Fermi surface is computed. Used only in Akf_builder.")
@@ -691,12 +692,19 @@ contains
          enddo
       endif
       !
-      if(Testing)then
+      if(TESTING)then
          call add_separator("Testing flags")
-         call parse_input_variable(Test_flag_1,"TEST_FLAG_1",InputFile,default=.false.,comment="Flag to ___.")
-         call parse_input_variable(Test_flag_2,"TEST_FLAG_2",InputFile,default=.false.,comment="Flag to ___.")
-         call parse_input_variable(Test_flag_3,"TEST_FLAG_3",InputFile,default=.false.,comment="Flag to ___.")
-         call parse_input_variable(Test_flag_4,"TEST_FLAG_4",InputFile,default=.false.,comment="Flag to ___.")
+         call parse_input_variable(Kdiag,"K_DIAG",InputFile,default=.false.,comment="Flag to use only one J-independent screening function.")
+         call parse_input_variable(Ktilda,"K_TILDA",InputFile,default=.true.,comment="Flag to U(iw)-U(0) to build the screening function.")
+         call parse_input_variable(ChiDiag,"CHI_DIAG",InputFile,default=.false.,comment="Flag to remove the off-diagonal components of the local charge susceptibility.")
+         call parse_input_variable(removeCDW_C,"CDW_CHI",InputFile,default=.false.,comment="Flag to remove the iw=0 divergence in the local charge susceptibility.")
+         call parse_input_variable(removeCDW_P,"CDW_PI",InputFile,default=.false.,comment="Flag to remove the iw=0 divergence in the local polarization.")
+         call parse_input_variable(Pimp_NaNb,"PI_NANB",InputFile,default=.true.,comment="Flag to keep the off-diagonal components o fthe local impurity polarization.")
+         call parse_input_variable(dampStail,"DAMP_STAIL",InputFile,default=wmatsMax/2d0,comment="Matsubara Frequency from which powers beyond -1 are removed from ImSigma. Used only when computing K-resolved spectra, ignored if <=0d0 or >MAX_WMATS.")
+         call parse_input_variable(Generic_test_flag_1,"GENERIC_TEST_FLAG_1",InputFile,default=.false.,comment="Flag to ___.")
+         call parse_input_variable(Generic_test_flag_2,"GENERIC_TEST_FLAG_2",InputFile,default=.false.,comment="Flag to ___.")
+         call parse_input_variable(Generic_test_flag_3,"GENERIC_TEST_FLAG_3",InputFile,default=.false.,comment="Flag to ___.")
+         call parse_input_variable(Generic_test_flag_4,"GENERIC_TEST_FLAG_4",InputFile,default=.false.,comment="Flag to ___.")
       endif
       !
       !

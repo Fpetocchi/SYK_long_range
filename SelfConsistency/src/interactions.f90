@@ -2708,7 +2708,7 @@ contains
       retarded=.false.
       if(present(Kfunct))retarded=.true.
       !
-      Ktilda_=.true. !according to the theory this flag is uneffective
+      Ktilda_=.true. !This is very delicate do not change.
       if(present(Ktilda).and.retarded)Ktilda_=Ktilda
       iwlimit = Umats%Npoints
       if(Ktilda_) iwlimit = 1

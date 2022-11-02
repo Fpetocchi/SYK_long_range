@@ -144,16 +144,21 @@ contains
    !
    !
    subroutine rebuild_G(mode,suffix)
+      !
+      use input_vars, only : Nreal, wrealMax
+      use utils_misc
       implicit none
+      !
       character(len=*),intent(in)           :: mode
       character(len=*),intent(in),optional  :: suffix
       integer                               :: ik,Nkpt,Nkpt_Kside,Norb
       integer                               :: iw,iorb,ikx,iky,wndx_cut
       integer                               :: unit,ierr
-      integer                               :: Nreal_min,Nreal_max,Nreal_read,Nreal_old,ik1st
+      integer                               :: Nreal_read,Nreal_old,ik1st
+      integer                               :: Nreal_MaxEnt,Nreal_min,Nreal_max
       logical,allocatable                   :: Kmask(:)
-      real(8),allocatable                   :: wreal(:),wreal_read(:)
-      real(8),allocatable                   :: Akw_orb(:,:,:)
+      real(8),allocatable                   :: wreal(:),wreal_read(:),wreal_interp(:)
+      real(8),allocatable                   :: Akw_orb(:,:,:),Akw_orb_interp(:,:,:)
       real(8)                               :: dw,fact
       real(8)                               :: kx,ky,Bvec(3),Blat(3,3)
       character(len=256)                    :: path,suffix_
@@ -206,7 +211,7 @@ contains
       ik1st_read=.false.
       do ik=1,Nkpt
          !
-         path = reg(MaxEnt_K)//"MaxEnt_Gk_"//reg(mode)//"_t_s"//str(ispin)//"/Gk_t_k"//str(ik)//reg(suffix_)//".DAT_dos.dat"
+         path = reg(MaxEnt_K)//"MaxEnt_Gk_"//reg(mode)//"_s"//str(ispin)//"/Gk_t_k"//str(ik)//reg(suffix_)//".DAT_dos.dat"
          !
          call inquireFile(reg(path),Kmask(ik),hardstop=.false.,verb=.true.)
          if(.not.Kmask(ik))then
@@ -240,7 +245,7 @@ contains
       enddo
       !
       if(all(Kmask.eq..false.)) then
-         write(*,"(A)") "     Warning: the MaxEnt_Gk_"//reg(mode)//"_t_s"//str(ispin)//" folder is empty."
+         write(*,"(A)") "     Warning: the MaxEnt_Gk_"//reg(mode)//"_s"//str(ispin)//" folder is empty."
          return
       endif
       !
@@ -250,7 +255,7 @@ contains
          !
          if(.not.Kmask(ik)) cycle
          !
-         path = reg(MaxEnt_K)//"MaxEnt_Gk_"//reg(mode)//"_t_s"//str(ispin)//"/Gk_t_k"//str(ik)//reg(suffix_)//".DAT_dos.dat"
+         path = reg(MaxEnt_K)//"MaxEnt_Gk_"//reg(mode)//"_s"//str(ispin)//"/Gk_t_k"//str(ik)//reg(suffix_)//".DAT_dos.dat"
          unit = free_unit()
          open(unit,file=reg(path),form="formatted",status="unknown",position="rewind",action="read")
          do iw=1,Nreal_read
@@ -266,33 +271,32 @@ contains
       if(wreal_read(Nreal_read).gt.KKcutoff)then
          Nreal_min = minloc(abs(wreal_read+KKcutoff),dim=1)
          Nreal_max = minloc(abs(wreal_read-KKcutoff),dim=1)
-         Nreal = size(wreal_read(Nreal_min:Nreal_max))
-         allocate(wreal(Nreal));wreal=wreal_read(Nreal_min:Nreal_max)
+         Nreal_MaxEnt = size(wreal_read(Nreal_min:Nreal_max))
+         allocate(wreal(Nreal_MaxEnt));wreal=wreal_read(Nreal_min:Nreal_max)
          write(*,"(A,F)") "     Reduced real frequency mesh (old_min): iw_["//str(Nreal_min)//"]=",wreal_read(Nreal_min)
          write(*,"(A,F)") "     Reduced real frequency mesh (old_max): iw_["//str(Nreal_max)//"]=",wreal_read(Nreal_max)
          write(*,"(A,F)") "     Reduced real frequency mesh (new_min): iw_["//str(1)//"]=",wreal(1)
-         write(*,"(A,F)") "     Reduced real frequency mesh (new_max): iw_["//str(Nreal)//"]=",wreal(Nreal)
+         write(*,"(A,F)") "     Reduced real frequency mesh (new_max): iw_["//str(Nreal_MaxEnt)//"]=",wreal(Nreal_MaxEnt)
          write(*,"(A,F)") "     dw(old): "//str(dw)
          write(*,"(A,F)") "     dw(new): "//str(abs(wreal(2)-wreal(1)))
       else
          Nreal_min = 1
          Nreal_max = Nreal_read
-         Nreal = Nreal_read
-         allocate(wreal(Nreal));wreal=wreal_read
+         Nreal_MaxEnt = Nreal_read
+         allocate(wreal(Nreal_MaxEnt));wreal=wreal_read
       endif
-      deallocate(wreal_read)
+      deallocate(wreal_read,Kmask)
       !
       !Manipulate MaxEnt output
-      allocate(Akw_orb(Norb,Nreal,Nkpt));Akw_orb=0d0
-      !$OMP PARALLEL DEFAULT(NONE),&
-      !$OMP SHARED(Nkpt,Crystal,Norb,wreal,Nreal,Nreal_max,Nreal_min,dw,ispin,KKcutoff,Akw_orb,ImG_read),&
+      allocate(Akw_orb(Norb,Nreal_MaxEnt,Nkpt));Akw_orb=0d0
+      !$OMP PARALLEL DEFAULT(SHARED),&
       !$OMP PRIVATE(ik,iorb,iw)
       !$OMP DO
       do ik=1,Nkpt
          do iorb=1,Norb
             !
             !Chunk the data to the smaller frequency array and revert the poles
-            do iw=1,Nreal
+            do iw=1,Nreal_MaxEnt
                Akw_orb(iorb,iw,ik) = +abs(ImG_read(iorb,Nreal_min+(iw-1),ik))
                if((Nreal_max-(iw-1)).lt.Nreal_min)stop "chunking issue."
             enddo
@@ -309,19 +313,19 @@ contains
       write(*,"(A)") "     MaxEnt output is Normalized."
       !
       !
-      !Print
+      !Print each K-point separately
       do ik=1,Nkpt
          path = reg(MaxEnt_K)//"Akw_Gk_"//reg(mode)//"_s"//str(ispin)//"/Akw"//reg(suffix_)//"_k"//str(ik)//".DAT"
          unit = free_unit()
          open(unit,file=reg(path),form="formatted",status="unknown",position="rewind",action="write")
-         do iw=1,Nreal
+         do iw=1,Nreal_MaxEnt
             write(unit,"(200E20.12)") wreal(iw),(Akw_orb(iorb,iw,ik),iorb=1,Norb)
          enddo
          close(unit)
       enddo
       !
       !
-      !
+      !Print in gnuplot pm3d map format
       if(reg(mode).eq."path")then
          !
          !Write down spectral function on the path in usual format - orbital basis
@@ -331,7 +335,7 @@ contains
          fact=Crystal%Kpathaxis(Crystal%Nkpt_path)
          if(present(suffix).and.(reg(suffix_).eq."_Hetero"))fact=1d0
          do ik=1,Nkpt
-            do iw=1,Nreal
+            do iw=1,Nreal_MaxEnt
                if(abs(wreal(iw)).gt.0.5*KKcutoff)cycle
                write(unit,"(1I5,200E20.12)") ik,Crystal%Kpathaxis(ik)/fact,wreal(iw),(Akw_orb(iorb,iw,ik),iorb=1,Norb)
             enddo
@@ -357,7 +361,59 @@ contains
          close(unit)
          !
       endif
-      deallocate(Kmask,Akw_orb,wreal)
+      !
+      !
+      !Print interpolate on the user-provided real frequency mesh
+      if((Nreal.ne.Nreal_MaxEnt).and.(reg(mode).eq."path"))then
+         !
+         write(*,"(A)") "     Interpolating on the input real frequency mesh."
+         !
+         allocate(wreal_interp(Nreal));wreal_interp=linspace(-wrealMax,+wrealMax,Nreal)
+         allocate(Akw_orb_interp(Norb,Nreal,Nkpt));Akw_orb_interp=0d0
+         !
+         !$OMP PARALLEL DEFAULT(SHARED),&
+         !$OMP PRIVATE(ik,iorb,iw)
+         !$OMP DO
+         do ik=1,Nkpt
+            do iorb=1,Norb
+               do iw=1,Nreal
+                  !
+                  Akw_orb_interp(iorb,iw,ik) = cubic_interp( wreal, Akw_orb(iorb,:,ik), wreal_interp(iw) )
+                  !
+               enddo
+            enddo
+         enddo
+         !$OMP END DO
+         !$OMP END PARALLEL
+         !
+         !Print each K-point separately
+         do ik=1,Nkpt
+            path = reg(MaxEnt_K)//"Akw_Gk_path_s"//str(ispin)//"/Akw"//reg(suffix_)//"_k"//str(ik)//"_interp.DAT"
+            unit = free_unit()
+            open(unit,file=reg(path),form="formatted",status="unknown",position="rewind",action="write")
+            do iw=1,Nreal
+               write(unit,"(200E20.12)") wreal_interp(iw),(Akw_orb_interp(iorb,iw,ik),iorb=1,Norb)
+            enddo
+            close(unit)
+         enddo
+         !
+         !Print in gnuplot pm3d map format
+         path = reg(MaxEnt_K)//"Akw_Gk"//reg(suffix_)//"_s"//str(ispin)//"_interp.DAT"
+         unit = free_unit()
+         open(unit,file=reg(path),form="formatted",status="unknown",position="rewind",action="write")
+         fact=Crystal%Kpathaxis(Crystal%Nkpt_path)
+         if(present(suffix).and.(reg(suffix_).eq."_Hetero"))fact=1d0
+         do ik=1,Nkpt
+            do iw=1,Nreal
+               write(unit,"(1I5,200E20.12)") ik,Crystal%Kpathaxis(ik)/fact,wreal_interp(iw),(Akw_orb_interp(iorb,iw,ik),iorb=1,Norb)
+            enddo
+            write(unit,*)
+         enddo
+         close(unit)
+         !
+         deallocate(wreal_interp,Akw_orb_interp)
+      endif
+      deallocate(wreal,Akw_orb)
       !
    end subroutine rebuild_G
    !
