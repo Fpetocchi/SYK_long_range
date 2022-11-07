@@ -31,7 +31,7 @@ def average(G,tlimit,window,log):
 spins = [1]; orbs = [1]; dirs=[]
 # Optional parsing
 parser = OptionParser()
-parser.add_option("--mode"  , dest="mode"   , default="None" )                      # Akw, loc, models(create a model for maxent starting from an existing Akw)
+parser.add_option("--mode"  , dest="mode"   , default="None" )                      # [G,W,C]kw, loc, models(create a model for maxent starting from an existing Akw)
 parser.add_option("--El"    , dest="El"     , default="Mo" )
 parser.add_option("--orbs"  , dest="orbs"   , default="1"  )
 parser.add_option("--itlist", dest="itlist" , default="0"  )                        # list of iteration separated by comma
@@ -80,33 +80,102 @@ if Nit==0:
 # Here I choose to either perform the avergave on the local observables
 # OR on the K-resolved ones. They're too different in kind
 # --------------------------------------------------------------------------- #
-if options.mode=="Akw":
+if options.mode.rstrip("kw") in [ "G", "W", "C" ]:
     #
-    # Check for Nkpt consistency between iterations
-    Gk = glob.glob(dirs[0]+"/%s/MaxEnt_Gk_path_s1/Gk_t_k*.DAT"%Kfolder)
-    Nkpt = len(Gk)
-    print(Nkpt)
-    for dir in dirs:
-        Gk = glob.glob("%s/%s/MaxEnt_Gk_path_s1/Gk_t_k*.DAT"%(dir,Kfolder))
-        print("Check for Nkpt in folder: %s ,Nkpt=%s "%(dir,len(Gk)))
-        if len(Gk) != Nkpt: sys.exit("Wrong number of K-points")
+    field = options.mode.rstrip("kw")
+    if field == "G":
+        funct = "Gk_t"
+    else:
+        funct = "%sk_w"%field
+        spins=[1]
     #
-    path_exists("./avg/%s/MaxEnt_Gk_path_s1"%Kfolder)
-    #
-    for ik in range(1,Nkpt+1):
-        dir = dirs[0]
-        Gpath = "%s/%s/MaxEnt_Gk_path_s1/Gk_t_k%s.DAT"%(dir,Kfolder,ik)
-        Gtauk = np.loadtxt(Gpath)
-        if options.rol !="0": average(Gtauk,int(options.rol.split(",")[0]),int(options.rol.split(",")[1]),options.log)
-        Gtau = Gtauk.copy()/Nit
-        for dir in dirs[1:]:
-            Gpath = "%s/%s/MaxEnt_Gk_path_s1/Gk_t_k%s.DAT"%(dir,Kfolder,ik)
-            Gtauk = np.loadtxt(Gpath)
-            if options.rol !="0": average(Gtauk,int(options.rol.split(",")[0]),int(options.rol.split(",")[1]),options.log)
-            Gtau += Gtauk/Nit
-        if options.dlt: Gtau = np.delete(Gtau, slice(None, None, 2), 0)
-        np.savetxt('./avg/%s/MaxEnt_Gk_path_s1/Gk_t_k%s.DAT'%(Kfolder,ik), Gtau )
-        print("Akw average ik=%s, Nkpt=%s"%(ik,Nkpt))
+    for spin in spins:
+        #
+        pad = "_s%s"%spin if field=="G" else ""
+        folder = "%s/MaxEnt_%sk_path_s%s"%(Kfolder,field,spin) if field=="G" else "%s/MaxEnt_%sk_path"%(Kfolder,field)
+        #
+        # Check for Nkpt consistency between iterations
+        if field == "G":
+            Gk = glob.glob(dirs[0]+"/%s/%s_k*.DAT"%(folder,funct))
+            Nkpt = len(Gk)
+            print(Nkpt)
+            for dir in dirs:
+                Gk = glob.glob("%s/%s/%s_k*.DAT"%(dir,folder,funct))
+                print("Check for Nkpt in folder: %s ,Nkpt=%s "%(dir,len(Gk)))
+                if len(Gk) != Nkpt: sys.exit("Wrong number of K-points")
+        else:
+            # this is temporarty as long as Im keeping the usual maxent
+            for orb in orbs:
+                Gk = glob.glob(dirs[0]+"/%s/%s_k*_o%s.DAT"%(folder,funct,orb))
+                Nkpt = len(Gk)
+                print(Nkpt)
+                for dir in dirs:
+                    Gk = glob.glob("%s/%s/%s_k*_o%s.DAT"%(dir,folder,funct,orb))
+                    print("Check for Nkpt in folder: %s, orb=%s, Nkpt=%s "%(dir,orb,len(Gk)))
+                    if len(Gk) != Nkpt: sys.exit("Wrong number of K-points")
+        #
+        path_exists("./avg/%s"%folder)
+        #
+        for ik in range(1,Nkpt+1):
+            #
+            if field == "G":
+                #
+                dir = dirs[0]
+                Gpath = "%s/%s/%s_k%s.DAT"%(dir,folder,funct,ik)
+                Gtauk = np.loadtxt(Gpath)
+                #
+                if options.rol !="0":
+                    print("Rolling average dir=%s, ik=%s"%(dir,ik))
+                    average(Gtauk,int(options.rol.split(",")[0]),int(options.rol.split(",")[1]),options.log)
+                #
+                Gtau = Gtauk.copy()/Nit
+                for dir in dirs[1:]:
+                    Gpath = "%s/%s/%s_k%s.DAT"%(dir,folder,funct,ik)
+                    Gtauk = np.loadtxt(Gpath)
+                    #
+                    if options.rol !="0":
+                        print("Rolling average dir=%s, ik=%s"%(dir,ik))
+                        average(Gtauk,int(options.rol.split(",")[0]),int(options.rol.split(",")[1]),options.log)
+                    #
+                    Gtau += Gtauk/Nit
+                #
+                if options.dlt:
+                    print("Deleting tau points, ik=%s"%ik)
+                    Gtau = np.delete(Gtau, slice(None, None, 2), 0)
+                #
+                np.savetxt('./avg/%s/%s_k%s.DAT'%(folder,funct,ik), Gtau )
+                print("Akw average ik=%s, Nkpt=%s"%(ik,Nkpt))
+                #
+            else:
+                # this is temporarty as long as Im keeping the usual maxent
+                for orb in orbs:
+                    #
+                    dir = dirs[0]
+                    Gpath = "%s/%s/%s_k%s_o%.DAT"%(dir,folder,funct,ik,orb)
+                    Gtauk = np.loadtxt(Gpath)
+                    #
+                    if options.rol !="0":
+                        print("Rolling average dir=%s, orb=%s, ik=%s"%(dir,orb,ik))
+                        average(Gtauk,int(options.rol.split(",")[0]),int(options.rol.split(",")[1]),options.log)
+                    #
+                    Gtau = Gtauk.copy()/Nit
+                    for dir in dirs[1:]:
+                        Gpath = "%s/%s/%s_k%s_o%.DAT"%(dir,folder,funct,ik,orb)
+                        Gtauk = np.loadtxt(Gpath)
+                        #
+                        if options.rol !="0":
+                            print("Rolling average dir=%s, orb=%s, ik=%s"%(dir,orb,ik))
+                            average(Gtauk,int(options.rol.split(",")[0]),int(options.rol.split(",")[1]),options.log)
+                        #
+                        Gtau += Gtauk/Nit
+                    #
+                    if options.dlt:
+                        print("Deleting tau points, orb=%s, ik=%s"%(orb,ik))
+                        Gtau = np.delete(Gtau, slice(None, None, 2), 0)
+                    #
+                    np.savetxt('./avg/%s/%s_k%s_o%.DAT'%(folder,funct,ik,orb), Gtau )
+                    print("Akw average ik=%s, orb=%s, Nkpt=%s"%(ik,orb,Nkpt))
+                    #
     #
 elif options.mode=="loc":
     #
@@ -119,6 +188,8 @@ elif options.mode=="loc":
     Glat = cllct.defaultdict(dict)
     Wlat = cllct.defaultdict(dict)
     Gqmc = cllct.defaultdict(dict)
+    Sful_Gamma = cllct.defaultdict(dict)
+    curlyUimp = cllct.defaultdict(dict)
     #
     # Data initialization
     idir = 1
@@ -129,6 +200,9 @@ elif options.mode=="loc":
             Glat[iorb][ispin] = np.genfromtxt('%s/Convergence/Glat/Glat_t_o%s_s%s.DAT'%(dir,iorb,ispin), dtype='double', usecols=(1), unpack=True, comments='#')/Nit
             Gqmc[iorb][ispin] = np.genfromtxt('%s/Convergence/Gqmc_%s/Gqmc_%s_t_o%s_s%s.DAT'%(dir,El,El,iorb,ispin), dtype='double', usecols=(1), unpack=True, comments='#')/Nit
         Wlat[iorb] = np.genfromtxt('%s/Convergence/Wlat/Wlat_w_(%s,%s)(%s,%s).DAT'%(dir,iorb,iorb,iorb,iorb), dtype='double', usecols=(1), unpack=True, comments='#')/Nit
+        curlyUimp[iorb] = np.genfromtxt('%s/Convergence/curlyUimp/curlyUimp_w_(%s,%s)(%s,%s).DAT'%(dir,iorb,iorb,iorb,iorb), dtype='double', usecols=(1), unpack=True, comments='#')/Nit
+    Umat = np.loadtxt('%s/Solver_%s/Umat.DAT'%(dir,El))/Nit
+    Eloc = np.loadtxt('%s/Solver_%s/Eloc.DAT'%(dir,El))/Nit
     idir+=1
     #
     # Adding up to average
@@ -139,17 +213,25 @@ elif options.mode=="loc":
                 Glat[iorb][ispin] += np.genfromtxt('%s/Convergence/Glat/Glat_t_o%s_s%s.DAT'%(dir,iorb,ispin), dtype='double', usecols=(1), unpack=True, comments='#')/Nit
                 Gqmc[iorb][ispin] += np.genfromtxt('%s/Convergence/Gqmc_%s/Gqmc_%s_t_o%s_s%s.DAT'%(dir,El,El,iorb,ispin), dtype='double', usecols=(1), unpack=True, comments='#')/Nit
             Wlat[iorb] += np.genfromtxt('%s/Convergence/Wlat/Wlat_w_(%s,%s)(%s,%s).DAT'%(dir,iorb,iorb,iorb,iorb), dtype='double', usecols=(1), unpack=True, comments='#')/Nit
+            curlyUimp[iorb] += np.genfromtxt('%s/Convergence/curlyUimp/curlyUimp_w_(%s,%s)(%s,%s).DAT'%(dir,iorb,iorb,iorb,iorb), dtype='double', usecols=(1), unpack=True, comments='#')/Nit
+        Umat += np.loadtxt('%s/Solver_%s/Umat.DAT'%(dir,El))/Nit
+        Eloc += np.loadtxt('%s/Solver_%s/Eloc.DAT'%(dir,El))/Nit
         idir+=1
     #
     # Print output
     path_exists("./avg/Convergence/Glat")
     path_exists("./avg/Convergence/Wlat")
     path_exists("./avg/Convergence/Gqmc_%s"%El)
+    path_exists("./avg/Convergence/curlyUimp")
+    path_exists("./avg/Solver_%s"%El)
     for iorb in orbs:
         for ispin in spins:
             np.savetxt('./avg/Convergence/Glat/Glat_t_o%s_s%s.DAT'%(iorb,ispin), np.c_[ taulat, Glat[iorb][ispin] ], delimiter='\t')
             np.savetxt('./avg/Convergence/Gqmc_%s/Gqmc_%s_t_o%s_s%s.DAT'%(El,El,iorb,ispin), np.c_[ tauimp, Gqmc[iorb][ispin] ], delimiter='\t')
         np.savetxt('./avg/Convergence/Wlat/Wlat_w_(%s,%s)(%s,%s).DAT'%(iorb,iorb,iorb,iorb), np.c_[ wm, Wlat[iorb] ], delimiter='\t')
+        np.savetxt('./avg/Convergence/curlyUimp/curlyUimp_w_(%s,%s)(%s,%s).DAT'%(iorb,iorb,iorb,iorb), np.c_[ wm, curlyUimp[iorb] ], delimiter='\t')
+    np.savetxt('./avg/Solver_%s/Umat.DAT'%El, Umat)
+    np.savetxt('./avg/Solver_%s/Eloc.DAT'%El, Eloc)
     #
 elif options.mode=="models":
     #

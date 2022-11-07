@@ -45,19 +45,20 @@ program SelfConsistency
    !
    call inquireFile(reg(ItFolder)//"Sfull_w_k_s1.DAT",S_Full_exists,hardstop=.true.,verb=verbose)
    !
-   call calc_Glda(0d0,Beta,Crystal)
+   !call calc_Glda(0d0,Beta,Crystal)
    call AllocateFermionicField(S_Full,Crystal%Norb,Nmats,Nkpt=Crystal%Nkpt,Nsite=Nsite,Beta=Beta)
    call read_FermionicField(S_Full,reg(ItFolder),"Sfull_w",Crystal%kpt)
+   call dump_MaxEnt(S_Full,"mats",reg(ItFolder)//"Convergence/","Sful",EqvGWndx%SetOrbs,WmaxPade=PadeWlimit)
    if(print_path) call interpolate2kpath(S_Full,Crystal,reg(ItFolder))
    !
    ! get self-energy at Gamma
    S_Full%ws = S_Full%wks(:,:,:,1,:)
-   call dump_FermionicField(S_Full,reg(ItFolder),"Slat_Gamma_w",paramagnet)
-   call dump_MaxEnt(S_Full,"mats",reg(ItFolder)//"Convergence/","Slat_Gamma",EqvGWndx%SetOrbs,WmaxPade=PadeWlimit)
-   call dump_MaxEnt(S_Full,"mats2itau",reg(ItFolder)//"Convergence/","Slat_Gamma",EqvGWndx%SetOrbs)
+   call dump_FermionicField(S_Full,reg(ItFolder),"Sfull_w_Gamma",paramagnet)
+   call dump_MaxEnt(S_Full,"mats",reg(ItFolder)//"Convergence/","Sful_Gamma",EqvGWndx%SetOrbs,WmaxPade=PadeWlimit)
    call DeallocateFermionicField(S_Full)
-   !
+   call execute_command_line(" touch doSolver ")
    stop
+   !
 #elif defined _gap
    !
    call inquireFile(reg(ItFolder)//"Sfull_w_k_s1.DAT",S_Full_exists,hardstop=.false.,verb=verbose)
@@ -68,8 +69,8 @@ program SelfConsistency
    else
       call calc_Tc(reg(ItFolder),gap_equation,Crystal,Wlat=Ulat)
    endif
-   !
    stop
+   !
 #endif
    !
    !
@@ -354,7 +355,6 @@ program SelfConsistency
       S_Full%ws = S_Full%wks(:,:,:,1,:)
       call dump_FermionicField(S_Full,reg(ItFolder),"Sfull_w_Gamma",paramagnet)
       call dump_MaxEnt(S_Full,"mats",reg(ItFolder)//"Convergence/","Sful_Gamma",EqvGWndx%SetOrbs,WmaxPade=PadeWlimit)
-      !call dump_MaxEnt(S_Full,"mats2itau",reg(ItFolder)//"Convergence/","Sful_Gamma",EqvGWndx%SetOrbs) ! this is wrong but I'm printing anyway
       call DeallocateFermionicField(S_Full)
       !
       !

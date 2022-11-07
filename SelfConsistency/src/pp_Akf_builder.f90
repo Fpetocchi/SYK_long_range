@@ -1054,7 +1054,7 @@ contains
             ik1st_read=.false.
             do iq=1,Nkpt
                !
-               path = reg(MaxEnt_K)//"MaxEnt_"//reg(name)//"k_path_w/"//reg(name)//"k_w_k"//str(iq)//"_o"//str(iorb)//".DAT_dos.dat"
+               path = reg(MaxEnt_K)//"MaxEnt_"//reg(name)//"k_path/"//reg(name)//"k_w_k"//str(iq)//"_o"//str(iorb)//".DAT_dos.dat"
                !
                call inquireFile(reg(path),Kmask(iq),hardstop=.false.,verb=.true.)
                if(.not.Kmask(iq))then
@@ -1088,7 +1088,7 @@ contains
             enddo
             !
             if(all(Kmask.eq..false.)) then
-               write(*,"(A)") "     Warning: the MaxEnt_"//reg(name)//"k_path_w folder is empty for orbital "//str(iorb)
+               write(*,"(A)") "     Warning: the MaxEnt_"//reg(name)//"k_path folder is empty for orbital "//str(iorb)
                return
             endif
             !
@@ -1099,7 +1099,7 @@ contains
                !
                if(.not.Kmask(iq)) cycle
                !
-               path = reg(MaxEnt_K)//"MaxEnt_"//reg(name)//"k_path_w/"//reg(name)//"k_w_k"//str(iq)//"_o"//str(iorb)//".DAT_dos.dat"
+               path = reg(MaxEnt_K)//"MaxEnt_"//reg(name)//"k_path/"//reg(name)//"k_w_k"//str(iq)//"_o"//str(iorb)//".DAT_dos.dat"
                unit = free_unit()
                open(unit,file=reg(path),form="formatted",status="unknown",position="rewind",action="read")
                do iw=1,Nreal_read
@@ -1164,7 +1164,7 @@ contains
          ik1st_read=.false.
          do iq=1,Nkpt
             !
-            path = reg(MaxEnt_K)//"MaxEnt_"//reg(name)//"k_path_w/"//reg(name)//"k_w_k"//str(iq)//".DAT_dos.dat"
+            path = reg(MaxEnt_K)//"MaxEnt_"//reg(name)//"k_path/"//reg(name)//"k_w_k"//str(iq)//".DAT_dos.dat"
             !
             call inquireFile(reg(path),Kmask(iq),hardstop=.false.,verb=.true.)
             if(.not.Kmask(iq))then
@@ -1198,7 +1198,7 @@ contains
          enddo
          !
          if(all(Kmask.eq..false.)) then
-            write(*,"(A)") "     Warning: the MaxEnt_"//reg(name)//"k_path_w folder is empty."
+            write(*,"(A)") "     Warning: the MaxEnt_"//reg(name)//"k_path folder is empty."
             return
          endif
          !
@@ -1208,7 +1208,7 @@ contains
             !
             if(.not.Kmask(iq)) cycle
             !
-            path = reg(MaxEnt_K)//"MaxEnt_"//reg(name)//"k_path_w/"//reg(name)//"k_w_k"//str(iq)//".DAT_dos.dat"
+            path = reg(MaxEnt_K)//"MaxEnt_"//reg(name)//"k_path/"//reg(name)//"k_w_k"//str(iq)//".DAT_dos.dat"
             unit = free_unit()
             open(unit,file=reg(path),form="formatted",status="unknown",position="rewind",action="read")
             do iw=1,Nreal_read

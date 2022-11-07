@@ -6,19 +6,19 @@ GENMAT=/home/petocchif/1_GW_EDMFT/GenericMaterial/Calculation_template
 #------------------------------------------------------------------------------#
 
 declare -a dirindex=( "avg"  )
-for it in "${dirindex[@]}" ; do
-#for it in `seq  75 1 139` ; do
+#for it in "${dirindex[@]}" ; do
+for it in `seq  18 1 19` ; do
    if [ -d "$it" ]; then
    #
    cd $it/Convergence
    cp ${GENMAT}/${MATERIAL}/MaxEnt/MaxEnt_SLURM.sh .
    chmod 700 MaxEnt_SLURM.sh
    #
-  # ./MaxEnt_SLURM.sh -e 0.00005 -w 8001 -W  300 -f G -o 1 -i lat -p ${GENMAT}
-  # ./MaxEnt_SLURM.sh -e 0.00005 -w 8001 -W  300 -f G -o 1 -i qmc_Mo -p ${GENMAT}
+   ./MaxEnt_SLURM.sh -e 0.00008 -w 8001 -W  300 -f G -o 1 -i lat -p ${GENMAT}
+   ./MaxEnt_SLURM.sh -e 0.00008 -w 8001 -W  300 -f G -o 1 -i qmc_Mo -p ${GENMAT}
 
-   ./MaxEnt_SLURM.sh -e 0.00001 -w 7001 -W  300 -f G -o 1 -i lat -p ${GENMAT}
-   ./MaxEnt_SLURM.sh -e 0.00001 -w 7001 -W  300 -f G -o 1 -i qmc_Mo -p ${GENMAT}
+  # ./MaxEnt_SLURM.sh -e 0.00001 -w 7001 -W  300 -f G -o 1 -i lat -p ${GENMAT}
+  # ./MaxEnt_SLURM.sh -e 0.00001 -w 7001 -W  300 -f G -o 1 -i qmc_Mo -p ${GENMAT}
 
   # ./MaxEnt_SLURM.sh -e 0.04   -w 6000 -W  300 -f W -o 1 -i lat -p ${GENMAT}
   # ./MaxEnt_SLURM.sh -e 0.04   -w 6000 -W  300 -f curlyU -o 1 -i imp -p ${GENMAT}
