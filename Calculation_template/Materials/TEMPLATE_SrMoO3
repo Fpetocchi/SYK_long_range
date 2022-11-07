@@ -7,7 +7,7 @@ GENMAT=/home/petocchif/1_GW_EDMFT/GenericMaterial/Calculation_template
 
 declare -a dirindex=( "avg"  )
 #for it in "${dirindex[@]}" ; do
-for it in `seq  18 1 19` ; do
+for it in `seq  51 1 53` ; do
    if [ -d "$it" ]; then
    #
    cd $it/Convergence

@@ -90,7 +90,6 @@ module utils_main
    integer                                  :: SigmaMaxMom=3
    !
    logical                                  :: MultiTier=.false.
-   logical                                  :: print_path=.false.
    !
    character(len=255)                       :: ItFolder,PrevItFolder,MixItFolder
    character(len=256)                       :: MaxEnt_K
@@ -176,7 +175,7 @@ contains
       integer,intent(out)                   :: ItStart
       integer,intent(out)                   :: Itend
       character(len=256)                    :: Itpath
-      integer                               :: isite,ispin
+      integer                               :: isite
       logical                               :: PrvItexist,ZeroItexist
       logical                               :: JulichDCexists,LundDCexists,DCcond
       !
@@ -216,7 +215,10 @@ contains
          !
       endif
       !
-      print_path = (reg(path_funct).ne."None") .and. (reg(structure).ne."None")
+      print_path_G = print_path_G .and. (reg(structure).ne."None")
+      print_path_Chi = print_path_Chi .and. (reg(structure).ne."None")
+      print_path_W = print_path_W .and. (reg(structure).ne."None")
+      !
       dump_G0W0_bands = (FirstIteration.eq.0).and.(reg(structure).ne."None").and.(reg(SpexVersion).eq."Lund")
       !
       call inquireDir(reg(pathDATA)//str(FirstIteration-1),PrvItexist,hardstop=.false.,verb=.false.)
@@ -304,21 +306,6 @@ contains
             !
       end select
       !
-      !For memory demanding calculations one has to create the folders at the beginning
-      call createDir(reg(Itpath)//"/Convergence",verb=verbose)
-      call createDir(reg(Itpath)//"/Convergence/Glat",verb=verbose)
-      call createDir(reg(Itpath)//"/Convergence/Gimp",verb=verbose)
-      call createDir(reg(Itpath)//"/Convergence/Slat",verb=verbose)
-      call createDir(reg(Itpath)//"/Convergence/Simp",verb=verbose)
-      call createDir(reg(Itpath)//"/Convergence/Sful",verb=verbose)
-      call createDir(reg(Itpath)//"/Convergence/Cimp",verb=verbose)
-      call createDir(reg(Itpath)//"/Convergence/Ulat",verb=verbose)
-      call createDir(reg(Itpath)//"/Convergence/Wlat",verb=verbose)
-      call createDir(reg(Itpath)//"/Convergence/Wimp",verb=verbose)
-      call createDir(reg(Itpath)//"/Convergence/curlyUimp",verb=verbose)
-      call createDir(reg(Itpath)//"/Convergence/Plat",verb=verbose)
-      call createDir(reg(Itpath)//"/Convergence/Pimp",verb=verbose)
-      !
       !Print info to user
       if(FirstIteration.eq.0)then
          write(*,"(A)") "     Brand new calculation. Initializing "//reg(Itpath)
@@ -332,73 +319,6 @@ contains
       MixItFolder = reg(pathDATA)//str(ItStart-Mixing_period)//"/"
       !
       MaxEnt_K = reg(ItFolder)//"K_resolved/"
-      !
-      !Creates folders for the K-resolved data
-      if(print_path)then
-         !
-         call createDir(reg(MaxEnt_K)//"/Sigma_vars",verb=verbose)
-         !
-         do ispin=1,Nspin
-            if(reg(path_funct).eq."G")then
-               !
-               call createDir(reg(MaxEnt_K)//"/MaxEnt_Gk_full_s"//str(ispin),verb=verbose)  ! This is for MaxEnt on G in the full BZ
-               call createDir(reg(MaxEnt_K)//"/MaxEnt_Gk_path_s"//str(ispin),verb=verbose)  ! This is for MaxEnt on G along the K-path
-               if(FermiSurf)call createDir(reg(MaxEnt_K)//"/MaxEnt_Gk_plane_s"//str(ispin),verb=verbose)  ! This is for MaxEnt on G in the full BZ to get Fermi surface
-               !
-            elseif(reg(path_funct).eq."S")then
-               !
-               if((reg(CalculationType).eq."G0W0").or.(reg(CalculationType).eq."scGW").or.(reg(CalculationType).eq."GW+EDMFT"))then
-                  !
-                  call createDir(reg(MaxEnt_K)//"/MaxEnt_Sk_path_s"//str(ispin),verb=verbose)  ! This is for MaxEnt on S along the K-path
-                  call createDir(reg(MaxEnt_K)//"/Gk_path_wm_s"//str(ispin),verb=verbose)        ! This is for MaxEnt on S along the K-path
-                  call createDir(reg(MaxEnt_K)//"/Sk_path_wm_s"//str(ispin),verb=verbose)        ! This is for MaxEnt on S along the K-path
-                  !
-                  call createDir(reg(MaxEnt_K)//"/MaxEnt_Sk_full_s"//str(ispin),verb=verbose)  ! This is for MaxEnt on S in the full BZ to get Gloc
-                  call createDir(reg(MaxEnt_K)//"/Gk_full_wm_s"//str(ispin),verb=verbose)        ! This is for MaxEnt on S in the full BZ to get Gloc
-                  call createDir(reg(MaxEnt_K)//"/Sk_full_wm_s"//str(ispin),verb=verbose)        ! This is for MaxEnt on S in the full BZ to get Gloc
-                  !
-                  if(FermiSurf)then
-                     call createDir(reg(MaxEnt_K)//"/MaxEnt_Sk_plane_s"//str(ispin),verb=verbose)  ! This is for MaxEnt on S in the {kx,ky} plane to get the Fermi surface
-                     call createDir(reg(MaxEnt_K)//"/Gk_plane_wm_s"//str(ispin),verb=verbose)        ! This is for MaxEnt on S in the {kx,ky} plane to get the Fermi surface
-                     call createDir(reg(MaxEnt_K)//"/Sk_plane_wm_s"//str(ispin),verb=verbose)        ! This is for MaxEnt on S in the {kx,ky} plane to get the Fermi surface
-                  endif
-                  !
-               endif
-               !
-            elseif(reg(path_funct).eq."GS")then
-               !
-               call createDir(reg(MaxEnt_K)//"/MaxEnt_Gk_path_s"//str(ispin),verb=verbose)  ! This is for MaxEnt on G along the K-path
-               if(FermiSurf)call createDir(reg(MaxEnt_K)//"/MaxEnt_Gk_plane_s"//str(ispin),verb=verbose)  ! This is for MaxEnt on G in the full BZ to get Fermi surface
-               !
-               if((reg(CalculationType).eq."G0W0").or.(reg(CalculationType).eq."scGW").or.(reg(CalculationType).eq."GW+EDMFT"))then
-                  !
-                  call createDir(reg(MaxEnt_K)//"/MaxEnt_Sk_path_s"//str(ispin),verb=verbose)  ! This is for MaxEnt on S along the K-path
-                  call createDir(reg(MaxEnt_K)//"/Gk_path_wm_s"//str(ispin),verb=verbose)        ! This is for MaxEnt on S along the K-path
-                  call createDir(reg(MaxEnt_K)//"/Sk_path_wm_s"//str(ispin),verb=verbose)        ! This is for MaxEnt on S along the K-path
-                  !
-                  call createDir(reg(MaxEnt_K)//"/MaxEnt_Sk_full_s"//str(ispin),verb=verbose)  ! This is for MaxEnt on S in the full BZ to get Gloc
-                  call createDir(reg(MaxEnt_K)//"/Gk_full_wm_s"//str(ispin),verb=verbose)        ! This is for MaxEnt on S in the full BZ to get Gloc
-                  call createDir(reg(MaxEnt_K)//"/Sk_full_wm_s"//str(ispin),verb=verbose)        ! This is for MaxEnt on S in the full BZ to get Gloc
-                  !
-                  if(FermiSurf)then
-                     call createDir(reg(MaxEnt_K)//"/MaxEnt_Sk_plane_s"//str(ispin),verb=verbose)  ! This is for MaxEnt on S in the {kx,ky} plane to get the Fermi surface
-                     call createDir(reg(MaxEnt_K)//"/Gk_plane_wm_s"//str(ispin),verb=verbose)        ! This is for MaxEnt on S in the {kx,ky} plane to get the Fermi surface
-                     call createDir(reg(MaxEnt_K)//"/Sk_plane_wm_s"//str(ispin),verb=verbose)        ! This is for MaxEnt on S in the {kx,ky} plane to get the Fermi surface
-                  endif
-                  !
-               endif
-               !
-            endif
-            if(paramagnet)exit
-         enddo
-      endif
-      !
-      if((reg(path_funct).ne."G") .and. (reg(path_funct).ne."S") .and. (reg(path_funct).ne."GS") .and. (reg(path_funct).ne."None"))then
-         write(*,"(A)")"     Invalid content of PATH_FUNCT. The calculation on the path will be avoided."
-         print_path=.false.
-      elseif(reg(path_funct).eq."None")then
-         print_path=.false.
-      endif
       !
       write(*,"(A)") "     HartreeFact: "//str(HartreeFact,2)
       !
@@ -936,7 +856,7 @@ contains
             !Polarization
             call AllocateBosonicField(Plat,Crystal%Norb,Nmats,Crystal%iq_gamma,Nkpt=Crystal%Nkpt,Nsite=Nsite,no_bare=.true.,Beta=Beta)
             !
-            if(dump_Chik)call AllocateBosonicField(Chi,Crystal%Norb,Nmats,Crystal%iq_gamma,Nkpt=Crystal%Nkpt,Nsite=Nsite,no_bare=.true.,Beta=Beta)
+            if(print_path_Chi)call AllocateBosonicField(Chi,Crystal%Norb,Nmats,Crystal%iq_gamma,Nkpt=Crystal%Nkpt,Nsite=Nsite,no_bare=.true.,Beta=Beta)
             !
             !Lattice Gf
             call AllocateFermionicField(Glat,Crystal%Norb,Nmats,Nkpt=Crystal%Nkpt,Nsite=Nsite,Beta=Beta)
@@ -1054,7 +974,7 @@ contains
                call AllocateBosonicField(Wlat,Crystal%Norb,Nmats,Crystal%iq_gamma,Nkpt=0,Nsite=Nsite,Beta=Beta)
             endif
             !
-            if(dump_Chik)call AllocateBosonicField(Chi,Crystal%Norb,Nmats,Crystal%iq_gamma,Nkpt=Crystal%Nkpt,Nsite=Nsite,no_bare=.true.,Beta=Beta)
+            if(print_path_Chi)call AllocateBosonicField(Chi,Crystal%Norb,Nmats,Crystal%iq_gamma,Nkpt=Crystal%Nkpt,Nsite=Nsite,no_bare=.true.,Beta=Beta)
             !
             !Polarization
             call AllocateBosonicField(P_EDMFT,Crystal%Norb,Nmats,Crystal%iq_gamma,Nsite=Nsite,no_bare=.true.,Beta=Beta)
@@ -1116,7 +1036,7 @@ contains
             call AllocateBosonicField(P_EDMFT,Crystal%Norb,Nmats,Crystal%iq_gamma,Nsite=Nsite,no_bare=.true.,Beta=Beta)
             if(ItStart.ne.0)call read_BosonicField(P_EDMFT,reg(PrevItFolder),"Pimp_w.DAT")
             !
-            if(dump_Chik)call AllocateBosonicField(Chi,Crystal%Norb,Nmats,Crystal%iq_gamma,Nkpt=Crystal%Nkpt,Nsite=Nsite,no_bare=.true.,Beta=Beta)
+            if(print_path_Chi)call AllocateBosonicField(Chi,Crystal%Norb,Nmats,Crystal%iq_gamma,Nkpt=Crystal%Nkpt,Nsite=Nsite,no_bare=.true.,Beta=Beta)
             !
             !Impurity Self-energy and Hartree contribution
             call AllocateFermionicField(S_DMFT,Crystal%Norb,Nmats,Nsite=Nsite,Beta=Beta)
@@ -1175,9 +1095,6 @@ contains
       endif
       !
       calc_W = calc_Wedmft .or. calc_Wfull
-      !
-      dump_Chik = dump_Chik .and. calc_Pk .and. (reg(structure).ne."None")
-      dump_Wk = dump_Wk .and. calc_W .and. (reg(structure).ne."None")
       !
       !
       !Allocate and initialize different density matrices

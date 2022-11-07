@@ -49,7 +49,7 @@ program SelfConsistency
    call AllocateFermionicField(S_Full,Crystal%Norb,Nmats,Nkpt=Crystal%Nkpt,Nsite=Nsite,Beta=Beta)
    call read_FermionicField(S_Full,reg(ItFolder),"Sfull_w",Crystal%kpt)
    call dump_MaxEnt(S_Full,"mats",reg(ItFolder)//"Convergence/","Sful",EqvGWndx%SetOrbs,WmaxPade=PadeWlimit)
-   if(print_path) call interpolate2kpath(S_Full,Crystal,reg(ItFolder))
+   if(print_path_G) call interpolate2kpath(S_Full,Crystal,reg(MaxEnt_K))
    !
    ! get self-energy at Gamma
    S_Full%ws = S_Full%wks(:,:,:,1,:)
@@ -144,9 +144,9 @@ program SelfConsistency
             P_EDMFT%screened_local = dreal(Plat%screened_local)*alphaPi
          endif
          !
-         if(dump_Chik) then
+         if(print_path_Chi) then
             call calc_chi(Chi,Ulat,Plat,Crystal)!,pathPk=reg(MaxEnt_K)//"/MaxEnt_Chik_path_t")
-            call interpolate2kpath(Chi,Crystal,reg(ItFolder),"C")
+            call interpolate2kpath(Chi,Crystal,reg(MaxEnt_K),"C")
             call DeallocateBosonicField(Chi)
          endif
          !
@@ -158,7 +158,7 @@ program SelfConsistency
          !
          if(calc_Wfull)  call calc_W_full(Wlat,Ulat,Plat,Crystal)
          if(calc_Wedmft) call calc_W_edmft(Wlat,Ulat,P_EDMFT,Crystal)
-         if(dump_Wk) call interpolate2kpath(Wlat,Crystal,reg(ItFolder),"W")
+         if(print_path_W) call interpolate2kpath(Wlat,Crystal,reg(MaxEnt_K),"W")
          call dump_BosonicField(Wlat,reg(ItFolder),"Wlat_w.DAT")
          call dump_MaxEnt(Wlat,"mats",reg(ItFolder)//"Convergence/","Wlat",EqvGWndx%SetOrbs)
          !
@@ -349,7 +349,7 @@ program SelfConsistency
       call dump_FermionicField(S_Full,reg(ItFolder),"Sfull_w",paramagnet)
       if(dump_Sigmak)call dump_FermionicField(S_Full,reg(ItFolder),"Sfull_w",.true.,Crystal%kpt,paramagnet)
       call dump_MaxEnt(S_Full,"mats",reg(ItFolder)//"Convergence/","Sful",EqvGWndx%SetOrbs,WmaxPade=PadeWlimit)
-      if(print_path)call interpolate2kpath(S_Full,Crystal,reg(ItFolder))
+      if(print_path_G)call interpolate2kpath(S_Full,Crystal,reg(MaxEnt_K))
       !
       !Print the new full self-energy at Gamma point
       S_Full%ws = S_Full%wks(:,:,:,1,:)

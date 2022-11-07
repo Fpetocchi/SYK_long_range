@@ -1842,3 +1842,22 @@ do iorb=1,LocalOrbs(isite)%Norb
    enddo
 enddo
 deallocate(n0)
+
+
+
+
+!
+!For memory demanding calculations one has to create the folders at the beginning
+!call createDir(reg(Itpath)//"/Convergence",verb=verbose)
+!call createDir(reg(Itpath)//"/Convergence/Glat",verb=verbose)
+!call createDir(reg(Itpath)//"/Convergence/Gimp",verb=verbose)
+!call createDir(reg(Itpath)//"/Convergence/Slat",verb=verbose)
+!call createDir(reg(Itpath)//"/Convergence/Simp",verb=verbose)
+!call createDir(reg(Itpath)//"/Convergence/Sful",verb=verbose)
+!call createDir(reg(Itpath)//"/Convergence/Cimp",verb=verbose)
+!call createDir(reg(Itpath)//"/Convergence/Ulat",verb=verbose)
+!call createDir(reg(Itpath)//"/Convergence/Wlat",verb=verbose)
+!call createDir(reg(Itpath)//"/Convergence/Wimp",verb=verbose)
+!call createDir(reg(Itpath)//"/Convergence/curlyUimp",verb=verbose)
+!call createDir(reg(Itpath)//"/Convergence/Plat",verb=verbose)
+!call createDir(reg(Itpath)//"/Convergence/Pimp",verb=verbose)

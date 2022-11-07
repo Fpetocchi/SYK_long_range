@@ -42,6 +42,7 @@ module module_container
    set_lattice                              ,&
    read_xeps                                ,&
    read_Hk                                  ,&
+   dump_Hk                                  ,&
    build_kpt                                ,&
    build_Hk                                 ,&
    fill_ksumkdiff                           ,&

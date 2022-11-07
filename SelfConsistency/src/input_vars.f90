@@ -201,21 +201,24 @@ module input_vars
    integer,public                           :: LOGfile
    logical,public                           :: dump_Gk
    logical,public                           :: dump_Sigmak
-   logical,public                           :: dump_Chik
-   logical,public                           :: dump_Wk
    !
    !Post-processing variables
    character(len=256),public                :: structure
-   character(len=256),public                :: path_funct
    integer,private                          :: Nsym_user
    real(8),allocatable,public               :: UserPath(:,:)
-   integer,public                           :: Nkpt_path
-   integer,public                           :: Nmats_MaxEnt
    integer,public                           :: Ntau_MaxEnt
-   integer,public                           :: Nkpt_Fermi
-   logical,public                           :: FermiSurf
+   integer,public                           :: Nmats_MaxEnt
+   logical,public                           :: print_path_G
+   logical,public                           :: print_path_Chi
+   logical,public                           :: print_path_W
+   integer,public                           :: Nkpt_path
+   logical,public                           :: print_plane_G
+   logical,public                           :: print_plane_W
+   integer,public                           :: Nkpt_plane
    real(8),public                           :: FermiCut
    real(8),public                           :: KKcutoff
+   logical,public                           :: print_full_G
+   logical,public                           :: print_path_S
    !
    !Variables for the matching beta
    type(OldBeta),public                     :: Beta_Match
@@ -593,17 +596,22 @@ contains
             call parse_input_variable(UserPath(:,isym_user),"KP_"//str(isym_user),InputFile,default=[0d0,0d0,0d0],comment="User provided high symmetry K-point #"//str(isym_user))
          enddo
       endif
-      call parse_input_variable(path_funct,"PATH_FUNCT",InputFile,default="None",comment="Print interacting fields on high-symmetry points. Available fields: G=Green's function, S=self-energy, GS=both. None to avoid.")
-      call parse_input_variable(Nkpt_path,"NK_PATH",InputFile,default=50,comment="Number of K-points between two hig-symmetry Kpoints.")
-      call parse_input_variable(Nmats_MaxEnt,"NMATS_MAXENT",InputFile,default=Nmats,comment="If >NMATS a tail will be attached before the FT to get G(tau) when computing K-resolved spectra.")
       call parse_input_variable(Ntau_MaxEnt,"NTAU_MAXENT",InputFile,default=Ntau,comment="Number of tau-points of the interpolated Field. Ignored otherwise.")
-      call parse_input_variable(FermiSurf,"FERMI_SURF",InputFile,default=.false.,comment="Flag to compute the Green's function on the planar {kx,ky} sheet. The mesh is set by NK_PATH/2. Ignored if PATH_FUNCT=None.")
-      call parse_input_variable(Nkpt_Fermi,"NK_FERMI",InputFile,default=50,comment="Number of K-points in the side of the planar {kx,ky} sheet.")
+      call parse_input_variable(Nmats_MaxEnt,"NMATS_MAXENT",InputFile,default=Nmats,comment="If >NMATS a tail will be attached before the FT to get G(tau).")
+      !high-symmetry paths
+      call parse_input_variable(print_path_G,"PRINT_PATH_G",InputFile,default=.false.,comment="Print the k-dependent Green's function along the K-path on the imaginary time axis.")
+      call parse_input_variable(print_path_Chi,"PRINT_PATH_CHI",InputFile,default=.false.,comment="Print the k-dependent charge susceptibility along the K-path on the imaginary frequency axis.")
+      call parse_input_variable(print_path_W,"PRINT_PATH_W",InputFile,default=.false.,comment="Print the k-dependent screened interaction along the K-path on the imaginary frequency axis.")
+      call parse_input_variable(Nkpt_path,"NK_PATH",InputFile,default=50,comment="Number of K-points between two hig-symmetry Kpoints.")
+      !Fermi surfaces
+      call parse_input_variable(print_plane_G,"PRINT_PLANE_G",InputFile,default=.false.,comment="Flag to compute the Green's function on the planar {kx,ky} sheet.")
+      call parse_input_variable(print_plane_W,"PRINT_PLANE_W",InputFile,default=.false.,comment="Flag to compute the screened interaction and/or charge susceptibility on the planar {kx,ky} sheet.")
+      call parse_input_variable(Nkpt_plane,"NK_PLANE",InputFile,default=50,comment="Number of K-points in the side of the planar {kx,ky} sheet.")
       call parse_input_variable(FermiCut,"FERMI_CUT",InputFile,default=0d0,comment="Energy level at which the Fermi surface is computed. Used only in Akf_builder.")
       call parse_input_variable(KKcutoff,"KK_CUTOFF",InputFile,default=50d0,comment="Real frequency cutoff for Kramers Kronig integrals, should be twice the region of interest.")
       KKcutoff=abs(KKcutoff)
-      call parse_input_variable(dump_Chik,"PRINT_CHIK",InputFile,default=.false.,comment="Print the k-dependent charge susceptibility along the K-path.")
-      call parse_input_variable(dump_Wk,"PRINT_WK",InputFile,default=.false.,comment="Print the k-dependent screened interaction along the K-path.")
+      call parse_input_variable(print_full_G,"PRINT_FULL_G",InputFile,default=.false.,comment="Print the k-dependent Green's function in the full BZ on the imaginary time axis.")
+      call parse_input_variable(print_path_S,"PRINT_PATH_S",InputFile,default=.false.,comment="Print the k-dependent self-energy function along the K-path on the imaginary frequency axis. Not used for MaxEnt.")
       !
       !Variables for the matching beta
       call add_separator("Matching beta")

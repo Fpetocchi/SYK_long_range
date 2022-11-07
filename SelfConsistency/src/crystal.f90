@@ -110,6 +110,7 @@ module crystal
    public :: build_kpt
    public :: read_xeps
    public :: read_Hk
+   public :: dump_Hk
    public :: build_Hk
    public :: calc_irredBZ
    public :: fill_ksumkdiff
@@ -540,6 +541,47 @@ contains
       close(unit)
       !
    end subroutine read_Hk
+
+
+   !---------------------------------------------------------------------------!
+   !PURPOSE: Write the hamiltonian to file
+   !---------------------------------------------------------------------------!
+   subroutine dump_Hk(Hk,kpt,pathOUTPUT,filename)
+      !
+      use utils_misc
+      implicit none
+      !
+      complex(8),allocatable,intent(in)     :: Hk(:,:,:)
+      real(8),allocatable,intent(in)        :: kpt(:,:)
+      character(len=*),intent(in)           :: pathOUTPUT
+      character(len=*),intent(in)           :: filename
+      !
+      integer                               :: Nkpt,Norb,unit
+      integer                               :: ik,iorb,jorb
+      !
+      !
+      if(verbose)write(*,"(A)") "---- dump_Hk"
+      !
+      !
+      Norb = size(Hk,dim=1)
+      Nkpt = size(Hk,dim=3)
+      call assert_shape(Hk,[Norb,Norb,Nkpt],"dump_Hk","Hk")
+      call assert_shape(kpt,[3,Nkpt],"dump_Hk","kpt")
+      !
+      unit = free_unit()
+      open(unit,file=reg(pathOUTPUT)//reg(filename),form="formatted",status="unknown",position="rewind",action="write")
+      write(unit,("(3I10)")) 1,Nkpt,Norb
+      do ik=1,Nkpt
+         write(unit,("(2I6,3F14.8)")) 1,ik,kpt(:,ik)
+         do iorb=1,Norb
+            do jorb=1,Norb
+               write(unit,("(2I4,2E20.12)")) iorb,jorb,dreal(Hk(iorb,jorb,ik)),dimag(Hk(iorb,jorb,ik))
+            enddo
+         enddo
+      enddo
+      close(unit)
+      !
+   end subroutine dump_Hk
 
 
    !---------------------------------------------------------------------------!
@@ -1046,22 +1088,7 @@ contains
          enddo
       endif
       !
-      if(present(pathOUTPUT))then
-         !
-         unit = free_unit()
-         open(unit,file=reg(pathOUTPUT)//"Hk_built.DAT",form="formatted",status="unknown",position="rewind",action="write")
-         write(unit,("(3I10)")) 1,Nkpt,Norb*Nsite
-         do ik=1,Nkpt
-            write(unit,("(2I6,3F14.8)")) 1,ik,kpt(:,ik)
-            do iorb=1,Norb*Nsite
-               do jorb=1,Norb*Nsite
-                  write(unit,("(2I4,2E20.12)")) iorb,jorb,dreal(Hk(iorb,jorb,ik)),dimag(Hk(iorb,jorb,ik))
-               enddo
-            enddo
-         enddo
-         close(unit)
-         !
-      endif
+      if(present(pathOUTPUT)) call dump_Hk(Hk,kpt,pathOUTPUT,"Hk_built.DAT")
       !
    end subroutine build_Hk
 
