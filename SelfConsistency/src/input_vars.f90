@@ -661,14 +661,22 @@ contains
       call append_to_input_list(Solver%Nimp,"NIMP","Number of impurities solved. User cannot set this as its deduced from NSITE and EXPAND.")
       call parse_input_variable(Solver%NtauF,"NTAU_F_IMP",InputFile,default=int(2d0*pi*Nmats),comment="Number of points on the imaginary time axis for Fermionic impurity fields. Its gonna be made odd.")
       if(mod(Solver%NtauF,2).eq.0)Solver%NtauF=Solver%NtauF+1
+      if(mod(Solver%NtauF-1,4).eq.0)Solver%NtauF=Solver%NtauF+mod(Solver%NtauF-1,4)
       call parse_input_variable(Solver%NtauB,"NTAU_B_IMP",InputFile,default=int(2d0*pi*Nmats),comment="Number of points on the imaginary time axis for Bosonic impurity fields. Its gonna be made odd.")
       if(mod(Solver%NtauB,2).eq.0)Solver%NtauB=Solver%NtauB+1
+      if(mod(Solver%NtauB-1,4).eq.0)Solver%NtauB=Solver%NtauB+mod(Solver%NtauB-1,4)
       call parse_input_variable(Solver%NtauF_in,"NTAU_F_IMP_IN",InputFile,default=Solver%NtauF,comment="Number of points on the fermionic imaginary time axis used in the previous iteration.")
       call parse_input_variable(Solver%NtauB_in,"NTAU_B_IMP_IN",InputFile,default=Solver%NtauB,comment="Number of points on the bosonic imaginary time axis used in the previous iteration.")
       call parse_input_variable(Solver%NtauF_D,"NTAU_F_IMP_D",InputFile,default=int(2d0*pi*Nmats),comment="Number of points on the imaginary time axis for the hybridization function.")
+      if(mod(Solver%NtauF_D,2).eq.0)Solver%NtauF_D=Solver%NtauF_D+1
+      if(mod(Solver%NtauF_D-1,4).eq.0)Solver%NtauF_D=Solver%NtauF_D+mod(Solver%NtauF_D-1,4)
       call parse_input_variable(Solver%NtauB_K,"NTAU_B_IMP_K",InputFile,default=int(2d0*pi*Nmats),comment="Number of points on the imaginary time axis for the screening function.")
+      if(mod(Solver%NtauB_K,2).eq.0)Solver%NtauB_K=Solver%NtauB_K+1
+      if(mod(Solver%NtauB_K-1,4).eq.0)Solver%NtauB_K=Solver%NtauB_K+mod(Solver%NtauB_K-1,4)
       Solver%TargetDensity = look4dens%TargetDensity
       if((ExpandImpurity.or.AFMselfcons).and.(.not.look4dens%local))Solver%TargetDensity = look4dens%TargetDensity/Nsite
+      call parse_input_variable(Solver%tau_uniform_D,"TAU_UNIF_D",InputFile,default=1,comment="Flag to use a uniform mesh on the imaginary time axis for the hybridization function.")
+      call parse_input_variable(Solver%tau_uniform_K,"TAU_UNIF_K",InputFile,default=1,comment="Flag to use a uniform mesh on the imaginary time axis for the screening function.")
       call append_to_input_list(Solver%TargetDensity,"N_READ_IMP","Target density in the impurity list. User cannot set this as its the the same density on within the impurity orbitals if EXPAND=F otherwise its N_READ_LAT/NSITE.")
       call parse_input_variable(Solver%Norder,"NORDER",InputFile,default=10,comment="Maximum perturbation order measured.")
       call parse_input_variable(Solver%Gexp,"GEXPENSIVE",InputFile,default=0,comment="If =1 the impurity Green's function measurment is considered expensive (Needed at high Beta*Bandwidth).")

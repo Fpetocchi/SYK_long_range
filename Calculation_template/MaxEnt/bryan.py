@@ -2,8 +2,9 @@
 # Written by Lewin Boehnke (lboehnke@physnet.uni-hamburg.de), 2009-2015, consulted by Hugo Strand, 2015
 
 verbose=False
-muthres=1.0
-#muthres=0.001
+#muthres=1.0
+muthres=0.001
+#muthres=0.005
 
 
 try:

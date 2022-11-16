@@ -53,12 +53,14 @@ subroutine interpolate2kpath_Fermionic(Sfull,Lttc,pathOUTPUT)
    !
    if(print_plane_G)call get_Blat(Blat)
    !
+   call createDir(reg(pathOUTPUT),verb=verbose)
+   !
    !
    !
    !---------------------- LDA Hamiltonian and corrections --------------------!
    !
    !non-interacting data (Bands, spectral function, Fermi-surface)
-   call interpolateHk2Path(Lttc,structure,Nkpt_path,pathOUTPUT=reg(pathOUTPUT),doplane=print_plane_G,hetero=Hetero,store=.true.)
+   call interpolateHk2Path(Lttc,structure,Nkpt_path,pathOUTPUT=reg(pathOUTPUT),doplane=.true.,hetero=Hetero,store=.true.)
    !
    !correction to LDA given by the real part of the local self-energy in iw=0
    allocate(correction(Norb,Norb,Sfull%Nkpt));correction=czero
@@ -67,7 +69,7 @@ subroutine interpolate2kpath_Fermionic(Sfull,Lttc,pathOUTPUT)
       do ik=1,Sfull%Nkpt
          correction(:,:,ik) = dreal(Sfull%ws(:,:,1,ispin)) - zeye(Norb)*Sfull%mu
       enddo
-      call interpolateHk2Path(Lttc,structure,Nkpt_path,pathOUTPUT=reg(pathOUTPUT),corrname="dmft_s"//str(ispin),correction=correction,doplane=print_plane_G,hetero=Hetero)
+      call interpolateHk2Path(Lttc,structure,Nkpt_path,pathOUTPUT=reg(pathOUTPUT),corrname="dmft_s"//str(ispin),correction=correction,doplane=.true.,hetero=Hetero)
       if(paramagnet) exit
       !
    enddo
@@ -84,7 +86,7 @@ subroutine interpolate2kpath_Fermionic(Sfull,Lttc,pathOUTPUT)
          do iorb=1,Norb
             correction(iorb,iorb,:) = dcmplx(dreal(correction(iorb,iorb,:)),0d0)
          enddo
-         call interpolateHk2Path(Lttc,structure,Nkpt_path,pathOUTPUT=reg(pathOUTPUT),corrname="qpsc_s"//str(ispin),correction=correction,doplane=print_plane_G,hetero=Hetero)
+         call interpolateHk2Path(Lttc,structure,Nkpt_path,pathOUTPUT=reg(pathOUTPUT),corrname="qpsc_s"//str(ispin),correction=correction,doplane=.true.,hetero=Hetero)
          if(paramagnet) exit
          !
       enddo
@@ -286,8 +288,8 @@ contains
       type(FermionicField),intent(in)       :: Gmats_in
       character(len=*),intent(in)           :: mode
       !
-      complex(8),allocatable                :: Gmats_diag(:,:,:,:),Gmats_diag_tmp(:,:,:,:)
-      complex(8),allocatable                :: Gitau_diag(:,:,:,:)
+      complex(8),allocatable                :: Gmats_diag(:,:,:,:),Gmats_diag_tmp(:,:,:,:),Gmats_trace(:,:,:)
+      complex(8),allocatable                :: Gitau_diag(:,:,:,:),Gitau_trace(:,:,:)
       real(8),allocatable                   :: Ak(:,:),tau(:),wmats(:),Moments(:,:)
       real(8)                               :: Gmax,ReGtail,ImGtail
       integer                               :: Nkpt,NtauFT
@@ -382,6 +384,14 @@ contains
          !
       endif
       !
+      !Compute the trace
+      allocate(Gmats_trace(Nkpt,Nmats_MaxEnt,Nspin));Gmats_trace=czero
+      do ik=1,Nkpt
+         do iorb=1,Norb
+            Gmats_trace(ik,:,:) = Gmats_trace + Gmats_diag(iorb,:,ik,:)/Norb
+         enddo
+      enddo
+      !
       !Fourier transform the diagonal of the Green's function
       call cpu_time(start)
       allocate(Gitau_diag(Norb,NtauFT,Nkpt,Nspin));Gitau_diag=czero
@@ -395,6 +405,18 @@ contains
       call cpu_time(finish)
       write(*,"(A,F)") "     Glat(K"//reg(mode)//",iw) --> Glat(K"//reg(mode)//",tau) cpu timing:", finish-start
       !
+      call cpu_time(start)
+      allocate(Gitau_trace(Nkpt,NtauFT,Nspin));Gitau_diag=czero
+      do ispin=1,Nspin
+         call Fmats2itau_vec(Sfull%Beta,Gmats_trace(:,:,ispin),Gitau_trace(:,:,ispin),asympt_corr=.true.,tau_uniform=.true.)
+         if(paramagnet)then
+            Gitau_trace(:,:,Nspin) = Gitau_trace(:,:,1)
+            exit
+         endif
+      enddo
+      call cpu_time(finish)
+      write(*,"(A,F)") "     TrGlat(K"//reg(mode)//",iw) --> TrGlat(K"//reg(mode)//",tau) cpu timing:", finish-start
+      !
       !Print data for K-resolved MaxEnt
       allocate(tau(NtauFT));tau = linspace(0d0,Sfull%Beta,NtauFT)
       do ispin=1,Nspin
@@ -406,6 +428,9 @@ contains
                Gitau_diag(iorb,1,ik,ispin) = Gitau_diag(iorb,1,ik,ispin)/abs(Gmax)
                Gitau_diag(iorb,NtauFT,ik,ispin) = Gitau_diag(iorb,NtauFT,ik,ispin)/abs(Gmax)
             enddo
+            Gmax = - (dreal(Gitau_trace(ik,1,ispin)) + dreal(Gitau_trace(ik,NtauFT,ispin)))
+            Gitau_trace(ik,1,ispin) = Gitau_trace(ik,1,ispin)/abs(Gmax)
+            Gitau_trace(ik,NtauFT,ispin) = Gitau_trace(ik,NtauFT,ispin)/abs(Gmax)
             !
             !print on imaginary time axis
             path = reg(pathOUTPUT)//"MaxEnt_Gk_"//reg(mode)//"_s"//str(ispin)//"/Gk_t_k"//str(ik)//".DAT"
@@ -413,6 +438,14 @@ contains
             open(unit,file=reg(path),form="formatted",status="unknown",position="rewind",action="write")
             do itau=1,NtauFT
                 write(unit,"(200E20.12)") tau(itau),(dreal(Gitau_diag(iorb,itau,ik,ispin)),iorb=1,Norb)
+            enddo
+            close(unit)
+            !
+            path = reg(pathOUTPUT)//"MaxEnt_Gk_"//reg(mode)//"_s"//str(ispin)//"/Gk_t_k"//str(ik)//"_Tr.DAT"
+            unit = free_unit()
+            open(unit,file=reg(path),form="formatted",status="unknown",position="rewind",action="write")
+            do itau=1,NtauFT
+                write(unit,"(200E20.12)") tau(itau),dreal(Gitau_trace(ik,itau,ispin))
             enddo
             close(unit)
             !
@@ -425,10 +458,18 @@ contains
             enddo
             close(unit)
             !
+            path = reg(pathOUTPUT)//"MaxEnt_Gk_"//reg(mode)//"_s"//str(ispin)//"/Gk_w_k"//str(ik)//"_Tr.DAT"
+            unit = free_unit()
+            open(unit,file=reg(path),form="formatted",status="unknown",position="rewind",action="write")
+            do iw=1,Nmats_MaxEnt
+                write(unit,"(200E20.12)") wmats(iw),Gmats_trace(ik,iw,ispin)
+            enddo
+            close(unit)
+            !
          enddo
          if(paramagnet)exit
       enddo
-      deallocate(tau,wmats,Gmats_diag)
+      deallocate(tau,wmats,Gmats_diag,Gmats_trace,Gitau_trace)
       !
       !Compute the spectral weight at Fermi along the path. See arxiv:0805.3778 Eq.(5)
       do ispin=1,Nspin
@@ -440,7 +481,7 @@ contains
             enddo
          enddo
          !
-         path = reg(pathOUTPUT)//"K_resolved/Ak_"//reg(mode)//"_s"//str(ispin)//".DAT"
+         path = reg(pathOUTPUT)//"Ak_"//reg(mode)//"_s"//str(ispin)//".DAT"
          unit = free_unit()
          open(unit,file=reg(path),form="formatted",status="unknown",position="rewind",action="write")
          if(reg(mode).eq."path")then

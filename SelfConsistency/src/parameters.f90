@@ -218,6 +218,8 @@ module parameters
       integer                               :: Imprvd_F=0
       integer                               :: Imprvd_B=0
       integer                               :: full_ntOrbSym=0
+      integer                               :: tau_uniform_D=1
+      integer                               :: tau_uniform_K=1
    end type QMC
 
    !---------------------------------------------------------------------------!

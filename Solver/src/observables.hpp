@@ -557,7 +557,7 @@ VecVec measure_nt( std::vector<segment_container_t> &segments, std::vector<int> 
 //                     IMPROVED ESTIMATOR FOR THE SELF-ENERGY                 //
 //----------------------------------------------------------------------------//
 void measure_GF( VecVec &Gvec, VecVec &Fvec_S, VecVec &Fvec_R, std::vector<segment_container_t> &segments, VecMat &Mvec, double &Beta,
-                 Mat &Uloc, VecVecVec &Kp_table )
+                 Mat &Uloc, VecVecVec &Kp_table, bool &removeUhalf )
 {
    //
    std::set<times>::iterator it1, it2, itn;
@@ -674,14 +674,15 @@ void measure_GF( VecVec &Gvec, VecVec &Fvec_S, VecVec &Fvec_R, std::vector<segme
                   double Fval_Ret = 0.0;
                   for (int jfl=0; jfl<Nflavor; ++jfl)
                   {
+                     double hf_fact = ( removeUhalf ? 0.5 : 0.0 );
                      if(retared)
                      {
-                        Fval_Sta += Uloc(jfl,ifl) * nj[jfl] * M(k,i)*bubble_sign/(Beta*Beta);
+                        Fval_Sta += Uloc(jfl,ifl) * ( nj[jfl]-hf_fact ) * M(k,i)*bubble_sign/(Beta*Beta);
                         Fval_Ret += Ij[jfl] * M(k,i)*bubble_sign/(Beta*Beta);
                      }
                      else
                      {
-                        Fval_Sta += Uloc(jfl,ifl) * nj[jfl] * M(k,i)*bubble_sign/(Beta*Beta);
+                        Fval_Sta += Uloc(jfl,ifl) * ( nj[jfl]-hf_fact ) * M(k,i)*bubble_sign/(Beta*Beta);
                      }
                   }
                   Fvec_S[ifl][index] -= Fval_Sta;

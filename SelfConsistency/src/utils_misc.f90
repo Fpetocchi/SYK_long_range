@@ -2198,6 +2198,7 @@ contains
       oq3=oq*oq2
       !
       do n=1,nseg
+         !
          n2 = 2*n
          h = x(n2) - x(n2-1)
          !
@@ -2208,7 +2209,10 @@ contains
          !
          ! check that fx is not "zero"
          scos = ( fx(n2-1) + 4.d0*fx(n2) + fx(n2+1) )*h/3.d0
-         if(dabs(scos).lt.1d-9) cycle !goto 1111
+         !
+         !if(dabs(scos).lt.1d-9) cycle !goto 1111
+         if(dabs(scos).lt.1e3*tiny(1d0)) cycle !goto 1111
+         !
          h2    = h * h
          oh    = 1.d0/h
          oh2   = oh * oh
@@ -2256,6 +2260,7 @@ contains
          wsin = wsin + coskx*ssin + sinkx*scos
          !1111   continue
       enddo
+      !
    end subroutine FermionicFilon
 
 
@@ -2368,10 +2373,11 @@ contains
       !
       wcos=0d0;wsin=0d0
       !
-      if(dabs(q).lt.1.d-2) then!if(dabs(q).lt.1.d-4) then
+      if(dabs(q).lt.1d-15) then !if(dabs(q).lt.1.d-2) then !if(dabs(q).lt.1.d-4) then
          !
          !Small q
          do n=1,nseg
+            !
             n2 = 2 * n
             h = x(n2) - x(n2-1)
             !

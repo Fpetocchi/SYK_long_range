@@ -455,7 +455,6 @@ void read_VecVecVec( std::string path, std::vector<std::vector<std::vector<doubl
    file.close();
 }
 
-
 void read_VecVecVec( std::string path, std::vector<std::vector<std::vector<double>>> &VecVecVec, int &idim, bool axis )
 {
    //

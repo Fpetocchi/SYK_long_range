@@ -41,6 +41,14 @@ double rndm() {return rand()/(double(RAND_MAX)+1);}
 //------------------------------------------------------------------------------
 
 
+bool tau_uniform_D = true ;
+bool tau_uniform_K = true ;
+bool tau_uniform_Kp = true ;
+
+
+//------------------------------------------------------------------------------
+
+
 class times
 {
  public:
@@ -93,22 +101,57 @@ inline int cycle(int i, int size) {return (i>0 ? i-1 : size-1);}
 //------------------------------------------------------------------------------
 
 
-template <class G> inline double interpolate_F(double t, double Beta, G &F)
+template <class G> inline double interpolate_F(double tau, double Beta, G &F)
 {
    double sign=1;
-   if (t<0)
+   if (tau<0)
    {
-      t += Beta;
-      sign=-1;
+      tau += Beta;
+      sign = -1;
    }
 
    //
-   int N = F.size()-1;
-   double n = t/Beta*N;
-   int n_lower = n; // interpolate linearly between n_lower and n_lower+1
+   int Ntau_m1 = F.size()-1;
+   double dt = Beta / Ntau_m1;
+
+   // linear mesh by default
+   double n = tau / dt;
+
+   // dense mesh optional
+   if(!tau_uniform_D)
+   {
+      // generic point on the exponential function
+      double b = (Beta/2) / ( exp(dt*Ntau_m1/2) - 1 );
+      if( tau<=Beta/2 )
+      {
+         n = log(tau/b+1) / dt;
+      }
+      else
+      {
+         n = Ntau_m1 - log((Beta-tau)/b+1) / dt;
+      }
+
+      //// boundary even indexes containing an odd one
+      //int ndx_1 = (int)n;
+      //if(ndx_1%2==1) ndx_1--;
+      //int ndx_2 = ndx_1+2;
+
+      //// points on the exponential function corresponding to the indexes
+      //double t1 = b * ( exp(dt*ndx_1) - 1 );
+      //double t2 = b * ( exp(dt*ndx_2) - 1 );
+
+      //// new n interpolated on the line connecting the two points on the exponential function
+      //n = (tau-t1)/(t2-t1)*(ndx_2-ndx_1) + ndx_1;
+   }
+
+   // this is the same between the two schemes
+   int n_lower = (int)n;
+
+   // interpolate linearly between n_lower and n_lower+1
+   double Finterp = sign * ( F[n_lower] + (n-n_lower)*(F[n_lower+1]-F[n_lower]) );
 
    //
-   return sign*(F[n_lower] + (n-n_lower)*(F[n_lower+1]-F[n_lower]));
+   return Finterp;
 }
 
 
@@ -742,11 +785,50 @@ template <class G, class S> double det_rat_shift(times &new_segment, int k, Mat 
 
 inline double H(double tau, double Beta, std::vector<double>& Kab)
 {
-   if (tau<0) tau+=Beta;
-   double i=tau/Beta*(Kab.size()-1);
-   int i_lower=(int) i;
+   if (tau<0) tau += Beta;
+
    //
-   return Kab[i_lower]+(i-i_lower)*(Kab[i_lower+1]-Kab[i_lower]);
+   int Ntau_m1 = Kab.size()-1;
+   double dt = Beta / Ntau_m1;
+
+   // linear mesh by default
+   double i = tau / dt;
+
+   // dense mesh optional
+   if( (!tau_uniform_K) || (!tau_uniform_Kp) )
+   {
+      // generic point on the exponential function
+      double b = (Beta/2) / ( exp(dt*Ntau_m1/2) - 1 );
+      if( tau<=Beta/2 )
+      {
+         i = log(tau/b+1) / dt;
+      }
+      else
+      {
+         i = Ntau_m1 - log((Beta-tau)/b+1) / dt;
+      }
+
+      //// boundary even indexes containing an odd one
+      //int ndx_1 = (int)i;
+      //if(ndx_1%2==1) ndx_1--;
+      //int ndx_2 = ndx_1+2;
+
+      //// points on the exponential function corresponding to the indexes
+      //double t1 = b * ( exp(dt*ndx_1) - 1 );
+      //double t2 = b * ( exp(dt*ndx_2) - 1 );
+
+      //// new i interpolated on the line connecting the two points on the exponential function
+      //i = (tau-t1)/(t2-t1)*(ndx_2-ndx_1) + ndx_1;
+   }
+
+   // this is the same
+   int i_lower=(int) i;
+
+   // interpolate linearly between i_lower and i_lower+1
+   double Kinterp = Kab[i_lower] + (i-i_lower)*(Kab[i_lower+1]-Kab[i_lower]);
+
+   //
+   return Kinterp;
 }
 
 

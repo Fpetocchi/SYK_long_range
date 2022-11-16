@@ -1846,6 +1846,51 @@ deallocate(n0)
 
 
 
+
+
+function denspace(end,num,center) result(array)
+   implicit none
+   real(8),intent(in)                    :: end
+   integer,intent(in)                    :: num
+   logical,intent(in),optional           :: center
+   real(8)                               :: array(num)
+   !
+   integer                               :: nsimp=2
+   integer                               :: nseg
+   integer                               :: i,n,n2,nseg2
+   real(8)                               :: mesh,de,a,b
+   logical                               :: center_
+   data de /1.0d0/
+   !
+   nseg=(num-1)/nsimp
+   if (nseg .lt. 1) stop "denspace: nseg < 1"
+   if (nsimp*(nseg/nsimp) .ne. nseg) stop "denspace: nseg is not a multiple of 2 and 4"
+   nseg2 = nseg/2
+   mesh = end/nseg
+   a = mesh * de!/27.2d0
+   b = (end/2.d0)/(dexp(a*nseg2)-1.d0)
+   array(1) = 0.d0
+   do n=2,nseg+1
+      array(n) = b * (dexp(a*(n-1)/2)-1.d0)
+   enddo
+   do n=nseg2*nsimp+2,nsimp*nseg+1
+      array(n) = end-array(nsimp*nseg+1-n+1)
+   enddo
+   if( dabs(array(nsimp*nseg+1)-end).gt.1.d-9) stop "denspace: wrong endpoint"
+   !
+   center_=.false.
+   if(present(center))center_=center
+   if(center_)then
+      n = (num+1)/2
+      array(n:num) = array(1:n)
+      do i=1,num/2
+         array(n-i) = -array(n+i)
+      enddo
+   endif
+   !
+end function denspace
+
+
 !
 !For memory demanding calculations one has to create the folders at the beginning
 !call createDir(reg(Itpath)//"/Convergence",verb=verbose)

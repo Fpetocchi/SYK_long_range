@@ -1927,7 +1927,7 @@ contains
       !Fourier transform to the tau axis
       allocate(Ditau(Norb,Solver%NtauF_D,Nspin));Ditau=0d0
       do ispin=1,Nspin
-         call Fmats2itau_vec(Beta,Dmats(:,:,ispin),Ditau(:,:,ispin),asympt_corr=.true.,tau_uniform=.true.)
+         call Fmats2itau_vec(Beta,Dmats(:,:,ispin),Ditau(:,:,ispin),asympt_corr=.true.,tau_uniform=(Solver%tau_uniform_D.eq.1))
          if(paramagnet)then
             Ditau(:,:,Nspin) = Ditau(:,:,1)
             exit
@@ -1956,7 +1956,12 @@ contains
          write(*,"(A)")"     Mixing Delta(tau) with "//str(Mixing_Delta,3)//" of old solution."
          !
          !reading old Delta for each site
-         allocate(tauF(Solver%NtauF_in));tauF = linspace(0d0,Beta,Solver%NtauF_in)
+         allocate(tauF(Solver%NtauF_in))
+         if(Solver%tau_uniform_D.eq.1)then
+            tauF = linspace(0d0,Beta,Solver%NtauF_in)
+         else
+            tauF = denspace(Beta,Solver%NtauF_in)
+         endif
          allocate(DitauOld(Norb,Solver%NtauF_in,Nspin));DitauOld=czero
          allocate(ReadLine(LocalOrbs(isite)%Nflavor))
          file = reg(MixItFolder)//"Solver_"//reg(LocalOrbs(isite)%Name)//"/Delta_t.DAT"
@@ -1986,7 +1991,7 @@ contains
          !Recompute Delta(iw) because CurlyG(iw) needs to be updated
          Dmats=czero
          do ispin=1,Nspin
-            call Fitau2mats_vec(Beta,Ditau(:,:,ispin),Dmats(:,:,ispin),tau_uniform=.true.)
+            call Fitau2mats_vec(Beta,Ditau(:,:,ispin),Dmats(:,:,ispin),tau_uniform=(Solver%tau_uniform_D.eq.1))
             !
             if(paramagnet)then
                Dmats(:,:,Nspin) = Dmats(:,:,1)
@@ -2011,7 +2016,11 @@ contains
       !
       !Write Delta(tau)
       allocate(tau(Solver%NtauF_D));tau=0d0
-      tau = linspace(0d0,Beta,Solver%NtauF_D)
+      if(Solver%tau_uniform_D.eq.1)then
+         tau = linspace(0d0,Beta,Solver%NtauF_D)
+      else
+         tau = denspace(Beta,Solver%NtauF_D)
+      endif
       allocate(PrintLine(LocalOrbs(isite)%Nflavor))
       file = reg(ItFolder)//"Solver_"//reg(LocalOrbs(isite)%Name)//"/Delta_t.DAT"
       unit = free_unit()
@@ -2070,7 +2079,7 @@ contains
          !
          Dmats=czero
          do ispin=1,Nspin
-            call Fitau2mats_vec(Beta,Ditau(:,:,ispin),Dmats(:,:,ispin),tau_uniform=.true.)
+            call Fitau2mats_vec(Beta,Ditau(:,:,ispin),Dmats(:,:,ispin),tau_uniform=(Solver%tau_uniform_D.eq.1))
          enddo
          !
          call clear_attributes(FermiPrint)
@@ -2333,7 +2342,11 @@ contains
          real(8),allocatable                :: tau(:),PrintLine(:)
          !
          allocate(tau(Solver%NtauB_K));tau=0d0
-         tau = linspace(0d0,Beta,Solver%NtauB_K)
+         if(Solver%tau_uniform_K.eq.1)then
+            tau = linspace(0d0,Beta,Solver%NtauB_K)
+         else
+            tau = denspace(Beta,Solver%NtauB_K)
+         endif
          !
          file = reg(ItFolder)//"Solver_"//reg(LocalOrbs(isite)%Name)//"/"//reg(filename)//".DAT"
          unit = free_unit()

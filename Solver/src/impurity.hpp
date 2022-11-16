@@ -149,7 +149,8 @@ class ct_hyb
 
          //
          //read the hybridization function
-         read_VecVec(inputDir+"/Delta_t.DAT", Delta, Nflavor, true, true);  // last flag is to reverse the tau index
+         //read_VecVec(inputDir+"/Delta_t.DAT", Delta, Nflavor, true, true);  // last flag is to reverse the tau index
+         tau_uniform_D = read_Delta( inputDir+"/Delta_t.DAT", Delta, Nflavor );
          for(int ifl=0; ifl < Nflavor; ifl++)
          {
             path Dcomp = "Delta["+str(ifl)+"]";
@@ -183,7 +184,8 @@ class ct_hyb
             }
 
             //
-            read_VecVecVec(inputDir+"/K_t.DAT", K_table, Nflavor, true);
+            //read_VecVecVec(inputDir+"/K_t.DAT", K_table, Nflavor, true);
+            tau_uniform_K = read_K( inputDir+"/K_t.DAT", K_table, Nflavor );
             for(int ifl=0; ifl < Nflavor; ifl++)
             {
                for(int jfl=0; jfl <= ifl; jfl++)
@@ -201,7 +203,9 @@ class ct_hyb
             //
             if(Improved_F)
             {
-               read_VecVecVec(inputDir+"/Kp_t.DAT", Kp_table, Nflavor, true);
+               //read_VecVecVec(inputDir+"/Kp_t.DAT", Kp_table, Nflavor, true);
+               tau_uniform_Kp = read_K( inputDir+"/Kp_t.DAT", Kp_table, Nflavor );
+               if( tau_uniform_K != tau_uniform_Kp ) mpi.StopError( " K_t.DAT and Kp_t.DAT are on different tau meshes - Exiting.");
                for(int ifl=0; ifl < Nflavor; ifl++)
                {
                   for(int jfl=0; jfl <= ifl; jfl++)
@@ -214,6 +218,11 @@ class ct_hyb
                      double Kp_beta =  Kp_table[ifl][jfl].back();
                      if((Kp_zero+Kp_beta)!=0.0) mpi.StopError( " ->"+Kcomp+" is not symmetric with respect to beta/2 - Exiting.");
                      //if((Kp_zero+Kp_beta)!=0.0) mpi.report( " "+Kcomp+" is not symmetric with respect to beta/2 - Warning.");
+                     if(removeUhalf)
+                     {
+                        Kp_table[ifl][ifl][0] = 0.0;
+                        Kp_table[ifl][ifl][Ntau_K-1] = 0.0;
+                     }
                   }
                }
             }
@@ -580,7 +589,7 @@ class ct_hyb
             {
                if(Improved_F)
                {
-                  measure_GF( G_tmp, F_tmp_S, F_tmp_R, segments, M, Beta, Uloc, Kp_table );
+                  measure_GF( G_tmp, F_tmp_S, F_tmp_R, segments, M, Beta, Uloc, Kp_table, removeUhalf );
                }
                else
                {
@@ -610,7 +619,7 @@ class ct_hyb
          {
             if(Improved_F)
             {
-               measure_GF( G_tmp, F_tmp_S, F_tmp_R, segments, M, Beta, Uloc, Kp_table );
+               measure_GF( G_tmp, F_tmp_S, F_tmp_R, segments, M, Beta, Uloc, Kp_table, removeUhalf );
             }
             else
             {
@@ -938,6 +947,95 @@ class ct_hyb
          }
          mpi.report(" "+name+pad+" is printed.");
       }
+
+      //----------------------------------------------------------------------//
+
+      bool read_Delta( std::string path, std::vector<std::vector<double>> &D, int &dim )
+      {
+         //
+         mpi.report( " Reading "+path );
+
+         //
+         // Read axis
+         std::vector<double> tau_axis;
+         std::string line;
+         ifstream file( path );
+         while( std::getline(file, line) ) // read one line from ifs
+         {
+            std::istringstream iss(line); // access line as a stream
+            double tau_point;
+            iss >> tau_point;
+            tau_axis.push_back(tau_point);
+         }
+         file.close();
+
+         //
+         // Read Delta
+         read_VecVec( path, D, dim, true, true);  // last flag is to reverse the tau index
+
+         // consistency check
+         int Ntau_axis = tau_axis.size();
+         int Ntau_field = D[0].size();
+         if(Ntau_axis!=Ntau_field) mpi.StopError( " Something is wrong with the tau mesh - Exiting.");
+
+         //
+         double dt1 = fabs( tau_axis[1]-tau_axis[0] );
+         double dt2 = fabs( tau_axis[3]-tau_axis[2] );
+         bool tau_uniform = fabs(dt2-dt1) < 1e-12;
+         if( !tau_uniform )
+         {
+            int nseg = (Ntau_axis-1)/2;
+            if( 2*(nseg/2) != nseg ) mpi.StopError( " Dense tau mesh is not a multiple of 2 and 4 - Exiting.");
+            mpi.report( " tau mesh is found to be not uniform." );
+         }
+
+         //
+         return tau_uniform;
+      }
+
+      bool read_K( std::string path, std::vector<std::vector<std::vector<double>>> &K, int &dim )
+      {
+         //
+         mpi.report( " Reading "+path );
+
+         //
+         // Read axis
+         std::vector<double> tau_axis;
+         std::string line;
+         ifstream file( path );
+         while( std::getline(file, line) ) // read one line from ifs
+         {
+            std::istringstream iss(line); // access line as a stream
+            double tau_point;
+            iss >> tau_point;
+            tau_axis.push_back(tau_point);
+         }
+         file.close();
+
+         //
+         // Read K_table
+         read_VecVecVec( path, K, dim, true);
+
+         // consistency check
+         int Ntau_axis = tau_axis.size();
+         int Ntau_field = K[0][0].size();
+         if(Ntau_axis!=Ntau_field) mpi.StopError( " Something is wrong with the tau mesh - Exiting.");
+
+         //
+         double dt1 = fabs( tau_axis[1]-tau_axis[0] );
+         double dt2 = fabs( tau_axis[3]-tau_axis[2] );
+         bool tau_uniform = fabs(dt2-dt1) < 1e-12;
+         if( !tau_uniform )
+         {
+            int nseg = (Ntau_axis-1)/2;
+            if( 2*(nseg/2) != nseg ) mpi.StopError( " Dense tau mesh is not a multiple of 2 and 4 - Exiting.");
+            mpi.report( " tau mesh is found to be not uniform." );
+         }
+
+         //
+         return tau_uniform;
+      }
+
 
 };
 

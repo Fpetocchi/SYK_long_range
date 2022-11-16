@@ -3434,6 +3434,7 @@ contains
       !
       printout=.false.
       if(present(pathOUTPUT))printout=.true.
+      if(printout)call createDir(reg(pathOUTPUT),verb=verbose)
       !
       filename_="Bands"
       if(present(filename))filename_=reg(filename)

@@ -36,6 +36,7 @@ parser.add_option("--El"    , dest="El"     , default="Mo" )
 parser.add_option("--orbs"  , dest="orbs"   , default="1"  )
 parser.add_option("--itlist", dest="itlist" , default="0"  )                        # list of iteration separated by comma
 parser.add_option("--itrng" , dest="itrng"  , default="0"  )                        # initial and final iteration separated by ..
+parser.add_option("--skip"  , dest="skip"   , default="0"  )                        # list of iteration to be ignored separated by comma
 parser.add_option("--mag"   , dest="mag"    , default=False, action="store_true")   # consider also the spin
 parser.add_option("--rol"   , dest="rol"    , default="0" )                         # string of 2 parameters separated by comma in dicating tau_max and tau_window for rolling average
 parser.add_option("--log"   , dest="log"    , default=False, action="store_true")   # this is to take the rolling average in log scale
@@ -57,6 +58,12 @@ elif options.itrng != "0":
     dirs = [ i for i in alldirs if i in map(str,itrng) ]
 else:
     dirs = alldirs
+#
+if options.skip != "0":
+    skip_dirs = list(options.skip.split(","))
+    print("skip_dirs: %s"%skip_dirs)
+    for dir in skip_dirs:
+        dirs.remove(dir)
 #
 Kfolder = "K_resolved"+options.Kpad
 print("Kfolder: %s"%Kfolder)
@@ -182,7 +189,8 @@ elif options.mode=="loc":
     # Default meshes
     taulat = np.genfromtxt('%s/Convergence/Glat/Glat_t_o%s_s%s.DAT'%(dirs[0],orbs[0],spins[0]), dtype='double', usecols=(0), unpack=True, comments='#')
     tauimp = np.genfromtxt('%s/Convergence/Gqmc_%s/Gqmc_%s_t_o%s_s%s.DAT'%(dirs[0],El,El,orbs[0],spins[0]), dtype='double', usecols=(0), unpack=True, comments='#')
-    wm = np.genfromtxt('%s/Convergence/Wlat/Wlat_w_(%s,%s)(%s,%s).DAT'%(dirs[0],orbs[0],orbs[0],orbs[0],orbs[0]), dtype='double', usecols=(0), unpack=True, comments='#')
+    wmB = np.genfromtxt('%s/Convergence/Wlat/Wlat_w_(%s,%s)(%s,%s).DAT'%(dirs[0],orbs[0],orbs[0],orbs[0],orbs[0]), dtype='double', usecols=(0), unpack=True, comments='#')
+    wmF = np.genfromtxt('%s/Convergence/Glat/Glat_w_o%s_s%s.DAT'%(dirs[0],orbs[0],spins[0]), dtype='double', usecols=(0), unpack=True, comments='#')
     #
     # Dictionaries
     Glat = cllct.defaultdict(dict)
@@ -190,6 +198,7 @@ elif options.mode=="loc":
     Gqmc = cllct.defaultdict(dict)
     Sful_Gamma = cllct.defaultdict(dict)
     curlyUimp = cllct.defaultdict(dict)
+    Zmat = cllct.defaultdict(dict)
     #
     # Data initialization
     idir = 1
@@ -199,10 +208,13 @@ elif options.mode=="loc":
         for ispin in spins:
             Glat[iorb][ispin] = np.genfromtxt('%s/Convergence/Glat/Glat_t_o%s_s%s.DAT'%(dir,iorb,ispin), dtype='double', usecols=(1), unpack=True, comments='#')/Nit
             Gqmc[iorb][ispin] = np.genfromtxt('%s/Convergence/Gqmc_%s/Gqmc_%s_t_o%s_s%s.DAT'%(dir,El,El,iorb,ispin), dtype='double', usecols=(1), unpack=True, comments='#')/Nit
+            ReS, ImS = np.genfromtxt('%s/Convergence/Sful_Gamma/Sful_Gamma_w_o%s_s%s.DAT'%(dir,iorb,ispin), dtype='double', usecols=(1,2), unpack=True, comments='#')
+            Sful_Gamma[iorb][ispin] = (ReS+1j*ImS)/Nit
         Wlat[iorb] = np.genfromtxt('%s/Convergence/Wlat/Wlat_w_(%s,%s)(%s,%s).DAT'%(dir,iorb,iorb,iorb,iorb), dtype='double', usecols=(1), unpack=True, comments='#')/Nit
         curlyUimp[iorb] = np.genfromtxt('%s/Convergence/curlyUimp/curlyUimp_w_(%s,%s)(%s,%s).DAT'%(dir,iorb,iorb,iorb,iorb), dtype='double', usecols=(1), unpack=True, comments='#')/Nit
     Umat = np.loadtxt('%s/Solver_%s/Umat.DAT'%(dir,El))/Nit
     Eloc = np.loadtxt('%s/Solver_%s/Eloc.DAT'%(dir,El))/Nit
+    for st in ['dmft','qpsc']: Zmat[st] = np.loadtxt('%s/Z_%s_s1.DAT'%(dir,st))/Nit
     idir+=1
     #
     # Adding up to average
@@ -212,26 +224,32 @@ elif options.mode=="loc":
             for ispin in spins:
                 Glat[iorb][ispin] += np.genfromtxt('%s/Convergence/Glat/Glat_t_o%s_s%s.DAT'%(dir,iorb,ispin), dtype='double', usecols=(1), unpack=True, comments='#')/Nit
                 Gqmc[iorb][ispin] += np.genfromtxt('%s/Convergence/Gqmc_%s/Gqmc_%s_t_o%s_s%s.DAT'%(dir,El,El,iorb,ispin), dtype='double', usecols=(1), unpack=True, comments='#')/Nit
+                ReS, ImS = np.genfromtxt('%s/Convergence/Sful_Gamma/Sful_Gamma_w_o%s_s%s.DAT'%(dir,iorb,ispin), dtype='double', usecols=(1,2), unpack=True, comments='#')
+                Sful_Gamma[iorb][ispin] += (ReS+1j*ImS)/Nit
             Wlat[iorb] += np.genfromtxt('%s/Convergence/Wlat/Wlat_w_(%s,%s)(%s,%s).DAT'%(dir,iorb,iorb,iorb,iorb), dtype='double', usecols=(1), unpack=True, comments='#')/Nit
             curlyUimp[iorb] += np.genfromtxt('%s/Convergence/curlyUimp/curlyUimp_w_(%s,%s)(%s,%s).DAT'%(dir,iorb,iorb,iorb,iorb), dtype='double', usecols=(1), unpack=True, comments='#')/Nit
         Umat += np.loadtxt('%s/Solver_%s/Umat.DAT'%(dir,El))/Nit
         Eloc += np.loadtxt('%s/Solver_%s/Eloc.DAT'%(dir,El))/Nit
+        for st in ['dmft','qpsc']: Zmat[st] += np.loadtxt('%s/Z_%s_s1.DAT'%(dir,st))/Nit
         idir+=1
     #
     # Print output
     path_exists("./avg/Convergence/Glat")
-    path_exists("./avg/Convergence/Wlat")
+    path_exists("./avg/Convergence/Sful_Gamma")
     path_exists("./avg/Convergence/Gqmc_%s"%El)
+    path_exists("./avg/Convergence/Wlat")
     path_exists("./avg/Convergence/curlyUimp")
     path_exists("./avg/Solver_%s"%El)
     for iorb in orbs:
         for ispin in spins:
             np.savetxt('./avg/Convergence/Glat/Glat_t_o%s_s%s.DAT'%(iorb,ispin), np.c_[ taulat, Glat[iorb][ispin] ], delimiter='\t')
             np.savetxt('./avg/Convergence/Gqmc_%s/Gqmc_%s_t_o%s_s%s.DAT'%(El,El,iorb,ispin), np.c_[ tauimp, Gqmc[iorb][ispin] ], delimiter='\t')
-        np.savetxt('./avg/Convergence/Wlat/Wlat_w_(%s,%s)(%s,%s).DAT'%(iorb,iorb,iorb,iorb), np.c_[ wm, Wlat[iorb] ], delimiter='\t')
-        np.savetxt('./avg/Convergence/curlyUimp/curlyUimp_w_(%s,%s)(%s,%s).DAT'%(iorb,iorb,iorb,iorb), np.c_[ wm, curlyUimp[iorb] ], delimiter='\t')
+            np.savetxt('./avg/Convergence/Sful_Gamma/Sful_Gamma_w_o%s_s%s.DAT'%(iorb,ispin), np.c_[ wmF, Sful_Gamma[iorb][ispin].real, Sful_Gamma[iorb][ispin].imag ], delimiter='\t')
+        np.savetxt('./avg/Convergence/Wlat/Wlat_w_(%s,%s)(%s,%s).DAT'%(iorb,iorb,iorb,iorb), np.c_[ wmB, Wlat[iorb] ], delimiter='\t')
+        np.savetxt('./avg/Convergence/curlyUimp/curlyUimp_w_(%s,%s)(%s,%s).DAT'%(iorb,iorb,iorb,iorb), np.c_[ wmB, curlyUimp[iorb] ], delimiter='\t')
     np.savetxt('./avg/Solver_%s/Umat.DAT'%El, Umat)
     np.savetxt('./avg/Solver_%s/Eloc.DAT'%El, Eloc)
+    for st in ['dmft','qpsc']:np.savetxt('./avg/Z_%s_s1.DAT'%st, Zmat[st])
     #
 elif options.mode=="models":
     #

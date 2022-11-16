@@ -2738,7 +2738,11 @@ contains
          allocate(Ktmp(Nflavor,Nflavor,Solver%NtauB_K));Ktmp=czero
          allocate(Screening_(Nflavor,Nflavor));Screening_=0d0
          allocate(tau(Solver%NtauB_K));tau=0d0
-         tau = linspace(0d0,Umats%Beta,Solver%NtauB_K)
+         if(Solver%tau_uniform_K.eq.1)then
+            tau = linspace(0d0,Umats%Beta,Solver%NtauB_K)
+         else
+            tau = denspace(Umats%Beta,Solver%NtauB_K)
+         endif
          allocate(wmats(Umats%Npoints));wmats=0d0
          wmats = BosonicFreqMesh(Umats%Beta,Umats%Npoints)
       endif
@@ -2813,7 +2817,7 @@ contains
          Kaux(:,:,1) = czero
          !
          Ktmp=czero
-         call Bmats2itau(Umats%Beta,Kaux,Ktmp,asympt_corr=.true.,tau_uniform=.true.)
+         call Bmats2itau(Umats%Beta,Kaux,Ktmp,asympt_corr=.true.,tau_uniform=(Solver%tau_uniform_K.eq.1))
          Kfunct=0d0
          do itau=2,Solver%NtauB_K-1
             Kfunct(:,:,itau) = dreal(Ktmp(:,:,itau) - Ktmp(:,:,1))
@@ -2833,10 +2837,10 @@ contains
          do itau=2,Solver%NtauB_K-1
             Ktmp(:,:,itau) = ( Kfunct(:,:,itau-1) - Kfunct(:,:,itau+1) ) / ( tau(itau-1)-tau(itau+1) )
          enddo
-         !
-         !Compute Kp(0) and enforce anti-symmetry with respect to beta/2
          Ktmp(:,:,1) = Screening_/2d0
          Ktmp(:,:,Solver%NtauB_K) = -Screening_/2d0
+         !
+         !Enforce anti-symmetry with respect to beta/2
          do ib1=1,Nflavor
             do ib2=1,Nflavor
                call halfbeta_sym(Ktmp(ib1,ib2,:),-1d0)
@@ -2849,6 +2853,9 @@ contains
             do itau=1,Solver%NtauB_K
                if(sym_)call check_Symmetry(Kpfunct(:,:,itau),eps,enforce=.true.,hardstop=.false.,name="Kp_t"//str(itau))
             enddo
+            !cumbersome but exact
+            Kpfunct(:,:,1) = Screening_/2d0
+            Kpfunct(:,:,Solver%NtauB_K) = -Screening_/2d0
          endif
          if(Scr_out)Screening = Screening_
          !
