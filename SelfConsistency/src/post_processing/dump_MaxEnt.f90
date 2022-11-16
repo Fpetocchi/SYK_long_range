@@ -162,8 +162,12 @@ subroutine dump_MaxEnt_Gfield(G,mode,dirpath,filename,Orbs,WmaxPade)
    !
    if(allocated(Orbs))then
       do iset=1,size(Orbs,dim=1)
-         call dump_MaxEnt_Gfunct(Gprint,reg(mode),reg(dirpath),reg(filename),iorb=Orbs(iset,1))
-         if(present(WmaxPade).and.(WmaxPade.gt.0d0))call dump_MaxEnt_Gfunct(Gprint,reg(mode),reg(dirpath),reg(filename),iorb=Orbs(iset,1),WmaxPade=WmaxPade)
+         do iwan=1,size(Orbs(iset,:))
+            if(iwan.ne.0)then
+               call dump_MaxEnt_Gfunct(Gprint,reg(mode),reg(dirpath),reg(filename),iorb=iwan)
+               if(present(WmaxPade).and.(WmaxPade.gt.0d0))call dump_MaxEnt_Gfunct(Gprint,reg(mode),reg(dirpath),reg(filename),iorb=iwan,WmaxPade=WmaxPade)
+            endif
+         enddo
       enddo
    else
       call dump_MaxEnt_Gfunct(Gprint,reg(mode),reg(dirpath),reg(filename))

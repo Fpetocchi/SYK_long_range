@@ -388,7 +388,7 @@ contains
       allocate(Gmats_trace(Nkpt,Nmats_MaxEnt,Nspin));Gmats_trace=czero
       do ik=1,Nkpt
          do iorb=1,Norb
-            Gmats_trace(ik,:,:) = Gmats_trace + Gmats_diag(iorb,:,ik,:)/Norb
+            Gmats_trace(ik,:,:) = Gmats_trace(ik,:,:) + Gmats_diag(iorb,:,ik,:)/Norb
          enddo
       enddo
       !
