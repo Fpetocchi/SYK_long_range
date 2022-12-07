@@ -28,3 +28,41 @@ enddo
 close(unit)
 !>>>TEST
 !
+
+
+
+
+!do iorb=1,Lttc%Norb
+!   do jorb=1,Lttc%Norb
+!      do ispin=1,Nspin
+!         !
+!         ReS = cubic_interp( wreal_read, dreal(S_G0W0%wks(iorb,jorb,1:Nreal_read,ik,ispin)), wreal(iw) )
+!         ImS = cubic_interp( wreal_read, dimag(S_G0W0%wks(iorb,jorb,1:Nreal_read,ik,ispin)), wreal(iw) )
+!         S_G0W0_interp%wks(iorb,jorb,iw,ik,ispin) = dcmplx(ReS,ImS)
+!         !
+!         if(paramagnet)then
+!            S_G0W0_interp%wks(iorb,jorb,iw,ik,Nspin) = S_G0W0_interp%wks(iorb,jorb,iw,ik,1)
+!            cycle
+!         endif
+!         !
+!      enddo
+!   enddo
+!enddo
+
+
+!do iorb=1,Lttc%Norb
+!   do jorb=1,Lttc%Norb
+!      do ispin=1,Nspin
+!         !
+!         ReS = cubic_interp( wreal_read, dreal(S_G0W0dc%wks(iorb,jorb,1:Nreal_read,ik,ispin)), wreal(iw) )
+!         ImS = cubic_interp( wreal_read, dimag(S_G0W0dc%wks(iorb,jorb,1:Nreal_read,ik,ispin)), wreal(iw) )
+!         S_G0W0dc_interp%wks(iorb,jorb,iw,ik,ispin) = dcmplx(ReS,ImS)
+!         !
+!         if(paramagnet)then
+!            S_G0W0dc_interp%wks(iorb,jorb,iw,ik,Nspin) = S_G0W0dc_interp%wks(iorb,jorb,iw,ik,1)
+!            cycle
+!         endif
+!         !
+!      enddo
+!   enddo
+!enddo

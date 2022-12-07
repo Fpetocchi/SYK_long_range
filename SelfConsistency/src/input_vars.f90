@@ -124,7 +124,8 @@ module input_vars
    !Equivalent lattice indexes
    integer,public                           :: sym_mode
    type(Equivalent),public                  :: EqvGWndx
-   type(Equivalent),allocatable,public      :: EqvImpndx(:)
+   type(Equivalent),allocatable,public      :: EqvImpndxF(:)
+   type(Equivalent),allocatable,public      :: EqvImpndxB(:)
    !
    !Imaginary time and frequency meshes
    real(8),public                           :: Beta

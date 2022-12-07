@@ -94,6 +94,7 @@ contains
       !$OMP DO
       do iq=1,Nkpt
          do ik1=1,Nkpt
+            !
             ik2 = Lttc%kptsum(ik1,iq)
             !
             do iwan4=1,Norb

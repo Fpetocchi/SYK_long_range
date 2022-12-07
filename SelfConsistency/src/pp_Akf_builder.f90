@@ -36,6 +36,7 @@ program Akw_builder
       !
       if(print_path_G)then
          call rebuild_G("path")
+         call rebuild_G("path",suffix="Tr")
          if(Hetero%status)call rebuild_G("path",suffix="Hetero")
       endif
       !
@@ -113,6 +114,9 @@ contains
                if(reg(suffix_).eq."_Hetero")then
                   Nkpt = Crystal%Nkpt_path + Nkpt_path
                   Norb = Hetero%Norb
+               elseif(reg(suffix_).eq."_Tr")then
+                  Nkpt = Crystal%Nkpt_path
+                  Norb = 1
                endif
             endif
             write(*,"(A,I)") new_line("A")//new_line("A")//"     Gpath. Total number of K-points along path:",Nkpt

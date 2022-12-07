@@ -12,51 +12,55 @@ declare -a dirindex=( "86" "87" "78" "79" )
 #for it in "${dirindex[@]}" ; do
 
 #------------------------------------------------------------------------------#
-
+a=119
+b=119
+rm -r 1*/Convergence/MaxEnt_*
 GENMAT=/home/petocchif/1_GW_EDMFT/GenericMaterial/Calculation_template
-for it in `seq  60 1 70` ; do
+for it in `seq  ${a} 1 ${b}` ; do
    cd $it/Convergence
    cp ${GENMAT}/MaxEnt/MaxEnt_SLURM.sh .
    chmod 700 MaxEnt_SLURM.sh
    #
-   ./MaxEnt_SLURM.sh -e 0.0002 -w 5000 -W 20 -f G -o 1 -i qmc_S1 -p ${GENMAT}
-   ./MaxEnt_SLURM.sh -e 0.0002 -w 5000 -W 20 -f G -o 1 -i qmc_S2 -p ${GENMAT}
-   ./MaxEnt_SLURM.sh -e 0.0002 -w 5000 -W 20 -f G -o 1 -i qmc_S3 -p ${GENMAT}
-   ./MaxEnt_SLURM.sh -e 0.0002 -w 5000 -W 20 -f G -o 1 -i qmc_S4 -p ${GENMAT}
-   ./MaxEnt_SLURM.sh -e 0.0002 -w 5000 -W 20 -f G -o 1 -i qmc_S5 -p ${GENMAT}
-   ./MaxEnt_SLURM.sh -e 0.0002 -w 5000 -W 20 -f G -o 1 -i qmc_S6 -p ${GENMAT}
-   ./MaxEnt_SLURM.sh -e 0.0002 -w 5000 -W 20 -f G -o 1 -i qmc_S7 -p ${GENMAT}
-   ./MaxEnt_SLURM.sh -e 0.0002 -w 5000 -W 20 -f G -o 1 -i qmc_S8 -p ${GENMAT}
-   ##
-   ./MaxEnt_SLURM.sh -e 0.004  -w 5000 -W 20 -f G -o 1 -i lat -p ${GENMAT}
-   ./MaxEnt_SLURM.sh -e 0.004  -w 5000 -W 20 -f G -o 2 -i lat -p ${GENMAT}
-   ./MaxEnt_SLURM.sh -e 0.004  -w 5000 -W 20 -f G -o 3 -i lat -p ${GENMAT}
-   ./MaxEnt_SLURM.sh -e 0.004  -w 5000 -W 20 -f G -o 4 -i lat -p ${GENMAT}
-   ./MaxEnt_SLURM.sh -e 0.004  -w 5000 -W 20 -f G -o 5 -i lat -p ${GENMAT}
-   ./MaxEnt_SLURM.sh -e 0.004  -w 5000 -W 20 -f G -o 6 -i lat -p ${GENMAT}
-   ./MaxEnt_SLURM.sh -e 0.004  -w 5000 -W 20 -f G -o 7 -i lat -p ${GENMAT}
-   ./MaxEnt_SLURM.sh -e 0.004  -w 5000 -W 20 -f G -o 8 -i lat -p ${GENMAT}
+   ./MaxEnt_SLURM.sh -e 0.0003  -w 5000 -W 20 -f G -o 1 -i lat -p ${GENMAT}
+   ./MaxEnt_SLURM.sh -e 0.0003  -w 5000 -W 20 -f G -o 2 -i lat -p ${GENMAT}
+   ./MaxEnt_SLURM.sh -e 0.0003  -w 5000 -W 20 -f G -o 3 -i lat -p ${GENMAT}
+   ./MaxEnt_SLURM.sh -e 0.0003  -w 5000 -W 20 -f G -o 4 -i lat -p ${GENMAT}
+   ./MaxEnt_SLURM.sh -e 0.0003  -w 5000 -W 20 -f G -o 5 -i lat -p ${GENMAT}
+   ./MaxEnt_SLURM.sh -e 0.0003  -w 5000 -W 20 -f G -o 6 -i lat -p ${GENMAT}
+   ./MaxEnt_SLURM.sh -e 0.0003  -w 5000 -W 20 -f G -o 7 -i lat -p ${GENMAT}
+   ./MaxEnt_SLURM.sh -e 0.0003  -w 5000 -W 20 -f G -o 8 -i lat -p ${GENMAT}
    #
-   #
-   #
-   #./MaxEnt_SLURM.sh -e 0.002 -w 4000 -W  60 -f curlyU -o 1 -i imp -p ${GENMAT}
-   #./MaxEnt_SLURM.sh -e 0.002 -w 4000 -W  60 -f curlyU -o 2 -i imp -p ${GENMAT}
-   #./MaxEnt_SLURM.sh -e 0.002 -w 4000 -W  60 -f curlyU -o 3 -i imp -p ${GENMAT}
-   #./MaxEnt_SLURM.sh -e 0.002 -w 4000 -W  60 -f curlyU -o 4 -i imp -p ${GENMAT}
-   #./MaxEnt_SLURM.sh -e 0.002 -w 4000 -W  60 -f curlyU -o 5 -i imp -p ${GENMAT}
-   #./MaxEnt_SLURM.sh -e 0.002 -w 4000 -W  60 -f curlyU -o 6 -i imp -p ${GENMAT}
-   #
-   #./MaxEnt_SLURM.sh -e 0.002 -w 4000 -W  60 -f W -o 1 -i lat -p ${GENMAT}
-   #./MaxEnt_SLURM.sh -e 0.002 -w 4000 -W  60 -f W -o 2 -i lat -p ${GENMAT}
-   #./MaxEnt_SLURM.sh -e 0.002 -w 4000 -W  60 -f W -o 3 -i lat -p ${GENMAT}
-   #./MaxEnt_SLURM.sh -e 0.002 -w 4000 -W  60 -f W -o 4 -i lat -p ${GENMAT}
-   #./MaxEnt_SLURM.sh -e 0.002 -w 4000 -W  60 -f W -o 5 -i lat -p ${GENMAT}
-   #./MaxEnt_SLURM.sh -e 0.002 -w 4000 -W  60 -f W -o 6 -i lat -p ${GENMAT}
+   ./MaxEnt_SLURM.sh -e 0.0005 -w 5000 -W 20 -f G -o 1 -i qmc_S1 -p ${GENMAT}
+   ./MaxEnt_SLURM.sh -e 0.0005 -w 5000 -W 20 -f G -o 1 -i qmc_S2 -p ${GENMAT}
+   ./MaxEnt_SLURM.sh -e 0.0005 -w 5000 -W 20 -f G -o 1 -i qmc_S3 -p ${GENMAT}
+   ./MaxEnt_SLURM.sh -e 0.0005 -w 5000 -W 20 -f G -o 1 -i qmc_S4 -p ${GENMAT}
+   ./MaxEnt_SLURM.sh -e 0.0005 -w 5000 -W 20 -f G -o 1 -i qmc_S5 -p ${GENMAT}
+   ./MaxEnt_SLURM.sh -e 0.0005 -w 5000 -W 20 -f G -o 1 -i qmc_S6 -p ${GENMAT}
+   ./MaxEnt_SLURM.sh -e 0.0005 -w 5000 -W 20 -f G -o 1 -i qmc_S7 -p ${GENMAT}
+   ./MaxEnt_SLURM.sh -e 0.0005 -w 5000 -W 20 -f G -o 1 -i qmc_S8 -p ${GENMAT}
    #
    cd ../../
+   #
 done
 
 
+
+
+#
+#
+#./MaxEnt_SLURM.sh -e 0.002 -w 4000 -W  60 -f curlyU -o 1 -i imp -p ${GENMAT}
+#./MaxEnt_SLURM.sh -e 0.002 -w 4000 -W  60 -f curlyU -o 2 -i imp -p ${GENMAT}
+#./MaxEnt_SLURM.sh -e 0.002 -w 4000 -W  60 -f curlyU -o 3 -i imp -p ${GENMAT}
+#./MaxEnt_SLURM.sh -e 0.002 -w 4000 -W  60 -f curlyU -o 4 -i imp -p ${GENMAT}
+#./MaxEnt_SLURM.sh -e 0.002 -w 4000 -W  60 -f curlyU -o 5 -i imp -p ${GENMAT}
+#./MaxEnt_SLURM.sh -e 0.002 -w 4000 -W  60 -f curlyU -o 6 -i imp -p ${GENMAT}
+#
+#./MaxEnt_SLURM.sh -e 0.002 -w 4000 -W  60 -f W -o 1 -i lat -p ${GENMAT}
+#./MaxEnt_SLURM.sh -e 0.002 -w 4000 -W  60 -f W -o 2 -i lat -p ${GENMAT}
+#./MaxEnt_SLURM.sh -e 0.002 -w 4000 -W  60 -f W -o 3 -i lat -p ${GENMAT}
+#./MaxEnt_SLURM.sh -e 0.002 -w 4000 -W  60 -f W -o 4 -i lat -p ${GENMAT}
+#./MaxEnt_SLURM.sh -e 0.002 -w 4000 -W  60 -f W -o 5 -i lat -p ${GENMAT}
+#./MaxEnt_SLURM.sh -e 0.002 -w 4000 -W  60 -f W -o 6 -i lat -p ${GENMAT}
 
 
 
@@ -65,11 +69,11 @@ done
 ################################################################################
 #                          LAYER-RESOLVED CONVERGENCE                          #
 ################################################################################
-o=1;s=1;n=8
+o=1;s=1;n=7;c=5
 set xrange [0:1];h=4
 set yrange [-h:n*h];set grid
-  p for [i=1:n] '< grep " '.i.'   '.i.' " ./'.it.'/Glat_w_s'.s.'.DAT' u 1:($5+(i-1)*h) w lp lw 3 t 'ImGlat '.i
-rep for [i=1:n] '< grep " '.i.'   '.i.' " ./'.it.'/Gimp_w_s'.s.'.DAT' u 1:($5+(i-1)*h) w l  lw 2 lc rgb 'black' notitle
+  p for [i=1:n] '< grep " '.i.'   '.i.' " ./'.it.'/Glat_w_s'.s.'.DAT' u 1:(column(c)+(i-1)*h) w lp lw 3 t 'ImGlat '.i
+rep for [i=1:n] '< grep " '.i.'   '.i.' " ./'.it.'/Gimp_w_s'.s.'.DAT' u 1:(column(c)+(i-1)*h) w l  lw 2 lc rgb 'black' notitle
 
 
 o=1;s=1;n=6
@@ -174,14 +178,28 @@ set term jpeg; set output 'PES_pa'.pl.'_pl'.pa.'_d'.d.'.jpeg'; rep; set terminal
 ################################################################################
 #                   PASTE THE FOLLOWING WITHIN IT/K_resolved                   #
 ################################################################################
- # DONE
-./MaxEnt_Kresolved_SLURM.sh -e 0.015 -w 6001 -W 40 -F G -N 210 -B 70 -m path -i 1 -f 211
-#
-./MaxEnt_Kresolved_SLURM.sh -e 0.015 -w 6001 -W 40 -F G -N 210 -B 70 -m path -i 1 -f 281 -s _Hetero
-#
-./MaxEnt_Kresolved_SLURM.sh -e 0.05  -w 4001 -W 40 -F G -N 22800 -B 228 -m plane
+./MaxEnt_Kresolved_SLURM.sh -e 0.05 -w 4001 -W 40 -F G -N 22800 -B 228 -m plane -i -f
 
-./MaxEnt_Kresolved_SLURM.sh -e 0.07  -w 4001 -W 40 -F G -N 22800 -B 190 -m plane
+
+
+
+
+
+
+declare -a dirindex=( "8510" "8047" "7284" "6673" "5913" "5304"  ) # 2H-1T - U=0.4  for [ k in "8510 8047 7284 6673 5913 5304" ]
+declare -a dirindex=( "8662" "8045" "7283" "6672" "6065" "5149"  ) # 2H-1T - U=1.0  for [ k in "8662 8045 7283 6672 6065 5149" ]
+declare -a dirindex=( "7145" "6833" "5917" "4698" "4089" "3175"  ) # 2H-2T          for [ k in "7145 6833 5917 4698 4089 3175" ]
+
+
+declare -a dirindex=( "7145" "6833" "5917" "4698" "4089" "3175"  )
+mkdir MaxEnt_Gk_full_s1
+for kp in "${dirindex[@]}" ; do
+   cp MaxEnt_Gk_plane_s1/Gk_t_k${kp}.DAT MaxEnt_Gk_full_s1/
+   ./MaxEnt_Kresolved_SLURM.sh -e 0.04 -w 10001 -W 60 -F G -N 22800 -B 228 -m full -i ${kp} -f ${kp}
+done
+
+
+
 
 
 

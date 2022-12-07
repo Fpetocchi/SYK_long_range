@@ -155,6 +155,8 @@ subroutine dump_MaxEnt_Gfield(G,mode,dirpath,filename,Orbs,WmaxPade)
    if(.not.G%status) stop "dump_MaxEnt_Gfield: Fermionic field not properly initialized."
    if(G%Beta.ne.Beta) stop "dump_MaxEnt_Gfield: Beta attribute of the field does not match with data from input file."
    !
+   call createDir(reg(dirpath)//reg(filename)//"/",verb=verbose)
+   !
    allocate(Gprint(G%Norb,G%Npoints,Nspin));Gprint=czero
    do iwan=1,G%Norb
       Gprint(iwan,:,:) = G%ws(iwan,iwan,:,:)
@@ -163,9 +165,9 @@ subroutine dump_MaxEnt_Gfield(G,mode,dirpath,filename,Orbs,WmaxPade)
    if(allocated(Orbs))then
       do iset=1,size(Orbs,dim=1)
          do iwan=1,size(Orbs(iset,:))
-            if(iwan.ne.0)then
-               call dump_MaxEnt_Gfunct(Gprint,reg(mode),reg(dirpath),reg(filename),iorb=iwan)
-               if(present(WmaxPade).and.(WmaxPade.gt.0d0))call dump_MaxEnt_Gfunct(Gprint,reg(mode),reg(dirpath),reg(filename),iorb=iwan,WmaxPade=WmaxPade)
+            if((iwan.ne.0).and.(iwan.le.G%Norb))then
+               call dump_MaxEnt_Gfunct(Gprint,reg(mode),reg(dirpath),reg(filename),iorb=Orbs(iset,iwan))
+               if(present(WmaxPade).and.(WmaxPade.gt.0d0))call dump_MaxEnt_Gfunct(Gprint,reg(mode),reg(dirpath),reg(filename),iorb=Orbs(iset,iwan),WmaxPade=WmaxPade)
             endif
          enddo
       enddo
@@ -329,6 +331,9 @@ subroutine dump_MaxEnt_Wfield(W,mode,dirpath,filename,Orbs,WmaxPade)
    !
    if(.not.W%status) stop "dump_MaxEnt_Wfield: Bosonic field not properly initialized."
    if(W%Beta.ne.Beta) stop "dump_MaxEnt_Wfield: Beta attribute of the field does not match with data from input file."
+   !
+   call createDir(reg(dirpath)//reg(filename)//"/",verb=verbose)
+   !
    Norb = int(sqrt(dble(W%Nbp)))
    !
    if(allocated(Orbs))then

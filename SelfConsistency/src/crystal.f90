@@ -556,7 +556,7 @@ contains
       character(len=*),intent(in)           :: pathOUTPUT
       character(len=*),intent(in)           :: filename
       !
-      integer                               :: Nkpt,Norb,unit
+      integer                               :: Nkpt,Nkpt_path,Norb,unit
       integer                               :: ik,iorb,jorb
       !
       !
@@ -565,8 +565,11 @@ contains
       !
       Norb = size(Hk,dim=1)
       Nkpt = size(Hk,dim=3)
+      Nkpt_path = size(kpt,dim=2)
       call assert_shape(Hk,[Norb,Norb,Nkpt],"dump_Hk","Hk")
-      call assert_shape(kpt,[3,Nkpt],"dump_Hk","kpt")
+      call assert_shape(kpt,[3,Nkpt_path],"dump_Hk","kpt")
+      !
+      if(Nkpt_path.lt.Nkpt) stop "dump_Hk: issue in Hk or kpt Nkpt dimension."
       !
       unit = free_unit()
       open(unit,file=reg(pathOUTPUT)//reg(filename),form="formatted",status="unknown",position="rewind",action="write")

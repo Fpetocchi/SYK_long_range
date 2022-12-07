@@ -83,6 +83,9 @@ module utils_main
    logical                                  :: calc_S_G0W0dc=.false.
    logical                                  :: spex_S_G0W0dc=.false.
    logical                                  :: dump_G0W0_bands=.false.
+   logical                                  :: interp_G=.false.
+   logical                                  :: interp_Chi=.false.
+   logical                                  :: interp_W=.false.
    !
    character(len=255)                       :: HartreeType="GW" ! "GW" "DMFT"
    real(8)                                  :: HartreeFact=1d0
@@ -215,9 +218,9 @@ contains
          !
       endif
       !
-      print_path_G = print_path_G .and. (reg(structure).ne."None")
-      print_path_Chi = print_path_Chi .and. (reg(structure).ne."None")
-      print_path_W = print_path_W .and. (reg(structure).ne."None")
+      interp_G = (print_path_G.or.print_plane_G) .and. (reg(structure).ne."None")
+      interp_Chi = (print_path_Chi.or.print_plane_W) .and. (reg(structure).ne."None")
+      interp_W = (print_path_W.or.print_plane_W) .and. (reg(structure).ne."None")
       !
       dump_G0W0_bands = (FirstIteration.eq.0).and.(reg(structure).ne."None").and.(reg(SpexVersion).eq."Lund")
       !
@@ -236,10 +239,6 @@ contains
             !
             if(ItStart.ne.0) stop "CalculationType is G0W0 but the starting iteration is not 0."
             call createDir(reg(Itpath),verb=verbose)
-            do isite=1,Nsite
-               call createDir(reg(Itpath)//"Solver_"//reg(LocalOrbs(isite)%Name)//"/fits",verb=verbose)
-               if(ExpandImpurity.or.AFMselfcons)exit
-            enddo
             !
             if(Uspex)then
                call createDir(reg(pathINPUTtr)//"VW_imag",verb=verbose)
@@ -259,7 +258,9 @@ contains
                   stop
                endif
             endif
+            call createDir(reg(Itpath),verb=verbose)
             !
+            ! I'm keeping this here in case the folder has to be re-filled at non-0 iteration
             if(Uspex)then
                call createDir(reg(pathINPUTtr)//"VW_imag",verb=verbose)
                if(verbose)then
@@ -267,8 +268,6 @@ contains
                   call createDir(reg(pathINPUTtr)//"VW_real_readable",verb=verbose)
                endif
             endif
-            !
-            call createDir(reg(Itpath),verb=verbose)
             !
             Itend = LastIteration
             !
@@ -281,6 +280,7 @@ contains
                endif
             endif
             !
+            ! I'm keeping this here in case the folder has to be re-filled at non-0 iteration
             if(Uspex)then
                call createDir(reg(pathINPUTtr)//"VW_imag",verb=verbose)
                if(verbose)then
@@ -304,7 +304,23 @@ contains
                !
             endif
             !
+            call createDir(reg(Itpath)//"/Convergence/Gimp",verb=verbose)
+            call createDir(reg(Itpath)//"/Convergence/Simp",verb=verbose)
+            call createDir(reg(Itpath)//"/Convergence/Cimp",verb=verbose)
+            call createDir(reg(Itpath)//"/Convergence/Wimp",verb=verbose)
+            call createDir(reg(Itpath)//"/Convergence/Pimp",verb=verbose)
+            call createDir(reg(Itpath)//"/Convergence/curlyUimp",verb=verbose)
+            !
       end select
+      !
+      !Calculations using large amount of memory result in a crash when the system() is called
+      call createDir(reg(Itpath)//"/Convergence/Glat",verb=verbose)
+      call createDir(reg(Itpath)//"/Convergence/Slat",verb=verbose)
+      call createDir(reg(Itpath)//"/Convergence/Sful",verb=verbose)
+      call createDir(reg(Itpath)//"/Convergence/Sful_Gamma",verb=verbose)
+      call createDir(reg(Itpath)//"/Convergence/Ulat",verb=verbose)
+      call createDir(reg(Itpath)//"/Convergence/Wlat",verb=verbose)
+      call createDir(reg(Itpath)//"/Convergence/Plat",verb=verbose)
       !
       !Print info to user
       if(FirstIteration.eq.0)then
@@ -326,6 +342,61 @@ contains
       call save_InputFile("input.in")
       !
    end subroutine initialize_DataStructure
+   !
+   subroutine update_DataStructure(Iteration)
+      !
+      implicit none
+      integer,intent(in)                    :: Iteration
+      character(len=256)                    :: Itpath
+      logical                               :: PrvItexist,ZeroItexist
+      !
+      ! This subroutine does somethig only for scGW calculations
+      if(reg(CalculationType).eq."scGW")then
+         !
+         call inquireDir(reg(pathDATA)//str(Iteration-1),PrvItexist,hardstop=.false.,verb=.false.)
+         call inquireDir(reg(pathDATA)//str(0),ZeroItexist,hardstop=.false.,verb=.false.)
+         !
+         Itpath = reg(pathDATA)//str(Iteration)
+         !
+         if(Iteration.ne.0)then
+            if(.not.PrvItexist)then
+               write(*,"(A)") "     Previous iteration: "//str(Iteration-1)//". Not found, exiting."
+               stop
+            endif
+         endif
+         call createDir(reg(Itpath),verb=verbose)
+         !
+         ! I'm keeping this here in case the folder has to be re-filled at non-0 iteration
+         if(Uspex)then
+            call createDir(reg(pathINPUTtr)//"VW_imag",verb=verbose)
+            if(verbose)then
+               call createDir(reg(pathINPUTtr)//"VW_imag_readable",verb=verbose)
+               call createDir(reg(pathINPUTtr)//"VW_real_readable",verb=verbose)
+            endif
+         endif
+         !
+         !Calculations using large amount of memory result in a crash when the system() is called
+         call createDir(reg(Itpath)//"/Convergence/Glat",verb=verbose)
+         call createDir(reg(Itpath)//"/Convergence/Slat",verb=verbose)
+         call createDir(reg(Itpath)//"/Convergence/Sful",verb=verbose)
+         call createDir(reg(Itpath)//"/Convergence/Sful_Gamma",verb=verbose)
+         call createDir(reg(Itpath)//"/Convergence/Ulat",verb=verbose)
+         call createDir(reg(Itpath)//"/Convergence/Wlat",verb=verbose)
+         call createDir(reg(Itpath)//"/Convergence/Plat",verb=verbose)
+         !
+         !Print info to user
+         if(Iteration.gt.0)write(*,"(A)") new_line("A")//"     Initializing "//reg(Itpath)
+         !
+         !These are used throughout the whole calculation
+         ItFolder = reg(pathDATA)//str(Iteration)//"/"
+         PrevItFolder = reg(pathDATA)//str(Iteration-1)//"/"
+         MixItFolder = reg(pathDATA)//str(Iteration-Mixing_period)//"/"
+         !
+         MaxEnt_K = reg(ItFolder)//"K_resolved/"
+         !
+      endif
+      !
+   end subroutine update_DataStructure
 
 
    !---------------------------------------------------------------------------!
@@ -679,6 +750,7 @@ contains
    subroutine update_ImpEqvOrbs()
       !
       implicit none
+      type(Equivalent),allocatable          :: EqvImpndx(:),EqvImpndxRot(:)
       integer                               :: iset,isite,Nimp
       integer                               :: set_orb,set_ndx,unit
       character(len=255)                    :: file
@@ -687,96 +759,112 @@ contains
       Nimp = Nsite
       if(ExpandImpurity.or.AFMselfcons) Nimp=1
       !
-      if(allocated(EqvImpndx))deallocate(EqvImpndx)
-      allocate(EqvImpndx(Nimp))
+      if(allocated(EqvImpndxF))deallocate(EqvImpndxF)
+      allocate(EqvImpndxF(Nimp))
+      if(allocated(EqvImpndxB))deallocate(EqvImpndxB)
+      allocate(EqvImpndxB(Nimp))
       !
-      if(RotateHloc)then
+      !store the impurity equivalent indexes when rotation is performed
+      allocate(EqvImpndxRot(Nimp))
+      do isite=1,Nsite
          !
-         !loop over sites
-         do isite=1,Nsite
-            !
-            !look for pattern given by the diagonal lattice operator
-            call get_pattern(EqvImpndx(isite)%SetOrbs,LocalOrbs(isite)%Eig,1e4*eps)
-            !
-            if(allocated(EqvImpndx(isite)%SetOrbs))then
-               !
-               EqvImpndx(isite)%Nset = size(EqvImpndx(isite)%SetOrbs,dim=1)
-               allocate(EqvImpndx(isite)%SetNorb(EqvImpndx(isite)%Nset))
-               do iset=1,EqvImpndx(isite)%Nset
-                  EqvImpndx(isite)%SetNorb(iset) = size( pack( EqvImpndx(isite)%SetOrbs(iset,:), EqvImpndx(isite)%SetOrbs(iset,:).gt.0 ) )
-               enddo
-               EqvImpndx(isite)%O=.true.
-               !
-            else
-               !
-               EqvImpndx(isite)%Nset = 0
-               EqvImpndx(isite)%O=.false.
-               !
-            endif
-            !
-            !This might cause some problem when only a subset of impurity orbitals are symmetrized
-            EqvImpndx(isite)%Ntotset = EqvImpndx(isite)%Nset
-            EqvImpndx(isite)%para = EqvGWndx%para
-            EqvImpndx(isite)%Gfoffdiag = .true. ! beacuse of curlyU
-            !
-            if(ExpandImpurity.or.AFMselfcons)exit
-            !
-         enddo
+         !look for pattern given by the diagonal lattice operator
+         call get_pattern(EqvImpndxRot(isite)%SetOrbs,LocalOrbs(isite)%Eig,1e4*eps)
          !
-      else
+         if(allocated(EqvImpndxRot(isite)%SetOrbs))then
+            !
+            EqvImpndxRot(isite)%Nset = size(EqvImpndxRot(isite)%SetOrbs,dim=1)
+            allocate(EqvImpndxRot(isite)%SetNorb(EqvImpndxRot(isite)%Nset))
+            do iset=1,EqvImpndxRot(isite)%Nset
+               EqvImpndxRot(isite)%SetNorb(iset) = size( pack( EqvImpndxRot(isite)%SetOrbs(iset,:), EqvImpndxRot(isite)%SetOrbs(iset,:).gt.0 ) )
+            enddo
+            EqvImpndxRot(isite)%O=.true.
+            !
+         else
+            !
+            EqvImpndxRot(isite)%Nset = 0
+            EqvImpndxRot(isite)%O=.false.
+            !
+         endif
          !
-         !loop over sites
-         do isite=1,Nsite
+         !This might cause some problem when only a subset of impurity orbitals are symmetrized
+         EqvImpndxRot(isite)%Ntotset = EqvImpndxRot(isite)%Nset
+         EqvImpndxRot(isite)%para = EqvGWndx%para
+         EqvImpndxRot(isite)%Gfoffdiag = .true. ! beacuse of curlyU (updated later)
+         !
+         if(ExpandImpurity.or.AFMselfcons)exit
+         !
+      enddo
+      !
+      !store the impurity equivalent indexes when rotation is NOT performed
+      allocate(EqvImpndx(Nimp))
+      do isite=1,Nsite
+         !
+         !dimensional initialization
+         EqvImpndx(isite) = EqvGWndx
+         EqvImpndx(isite)%Nset = 0
+         EqvImpndx(isite)%SetNorb = 0
+         EqvImpndx(isite)%SetOrbs = 0
+         EqvImpndx(isite)%para = EqvGWndx%para
+         !
+         !loop over lattice sets
+         do iset=1,EqvGWndx%Nset
             !
-            !dimensional initialization
-            EqvImpndx(isite) = EqvGWndx
-            EqvImpndx(isite)%Nset = 0
-            EqvImpndx(isite)%SetNorb = 0
-            EqvImpndx(isite)%SetOrbs = 0
-            EqvImpndx(isite)%para = EqvGWndx%para
-            !
-            !loop over lattice sets
-            do iset=1,EqvGWndx%Nset
-               !
-               !scroll elements in the set
-               contained=.true.
-               do set_ndx=1,EqvGWndx%SetNorb(iset)
-                  set_orb = EqvGWndx%SetOrbs(iset,set_ndx)
-                  contained = contained.and.any( LocalOrbs(isite)%Orbs .eq. set_orb )
-               enddo
-               !
-               !the site contains all the indexes within the set
-               if(contained.and.(EqvGWndx%SetNorb(iset).gt.1))then
-                  EqvImpndx(isite)%Nset = EqvImpndx(isite)%Nset+1
-                  EqvImpndx(isite)%SetNorb(EqvImpndx(isite)%Nset) = EqvGWndx%SetNorb(iset)
-                  EqvImpndx(isite)%SetOrbs(EqvImpndx(isite)%Nset,:) = EqvGWndx%SetOrbs(iset,:) - (LocalOrbs(isite)%Orbs(1)-1)
-                  EqvImpndx(isite)%O=.true.
-               endif
-               !
+            !scroll elements in the set
+            contained=.true.
+            do set_ndx=1,EqvGWndx%SetNorb(iset)
+               set_orb = EqvGWndx%SetOrbs(iset,set_ndx)
+               contained = contained.and.any( LocalOrbs(isite)%Orbs .eq. set_orb )
             enddo
             !
-            !This might cause some problem when only a subset of impurity orbitals are symmetrized
-            EqvImpndx(isite)%Ntotset = EqvImpndx(isite)%Nset
-            EqvImpndx(isite)%para = EqvGWndx%para
-            EqvImpndx(isite)%Gfoffdiag = .true. ! beacuse of curlyU
-            !
-            if(ExpandImpurity.or.AFMselfcons)exit
+            !the site contains all the indexes within the set
+            if(contained.and.(EqvGWndx%SetNorb(iset).gt.1))then
+               EqvImpndx(isite)%Nset = EqvImpndx(isite)%Nset+1
+               EqvImpndx(isite)%SetNorb(EqvImpndx(isite)%Nset) = EqvGWndx%SetNorb(iset)
+               EqvImpndx(isite)%SetOrbs(EqvImpndx(isite)%Nset,:) = EqvGWndx%SetOrbs(iset,:) - (LocalOrbs(isite)%Orbs(1)-1)
+               EqvImpndx(isite)%O=.true.
+            endif
             !
          enddo
          !
-      endif
+         !This might cause some problem when only a subset of impurity orbitals are symmetrized
+         EqvImpndx(isite)%Ntotset = EqvImpndx(isite)%Nset
+         EqvImpndx(isite)%para = EqvGWndx%para
+         EqvImpndx(isite)%Gfoffdiag = .true. ! beacuse of curlyU (updated later)
+         !
+         if(ExpandImpurity.or.AFMselfcons)exit
+         !
+      enddo
       !
-      !write lists
+      !Fermionic case
+      if(RotateHloc)then
+         EqvImpndxF = EqvImpndxRot
+      else
+         EqvImpndxF = EqvImpndx
+      endif
+      EqvImpndxF(:)%Gfoffdiag = .false.
+      !
+      !Bosonic case
+      if(RotateUloc)then
+         EqvImpndxB = EqvImpndxRot
+      else
+         EqvImpndxB = EqvImpndx
+      endif
+      EqvImpndxB(:)%Gfoffdiag = .true.
+      !
+      deallocate(EqvImpndxRot,EqvImpndx)
+      !
+      !write lists, since the local charge susceptibility always depends on the basis
       if(sym_mode.gt.1)then
          !
          if(FirstIteration.ne.LastIteration)then
             do isite=1,Nsite
-               if(EqvImpndx(isite)%Nset.gt.0)then
+               if(EqvImpndxF(isite)%Nset.gt.0)then
                   file = reg(ItFolder)//"Solver_"//reg(LocalOrbs(isite)%Name)//"/Eqv.DAT"
                   unit = free_unit()
                   open(unit,file=reg(file),form="formatted",status="unknown",position="rewind",action="write")
-                  do iset=1,EqvImpndx(isite)%Nset
-                     write(unit,"("//str(EqvImpndx(isite)%SetNorb(iset))//"I4)")EqvImpndx(isite)%SetOrbs(iset,1:EqvImpndx(isite)%SetNorb(iset))-1
+                  do iset=1,EqvImpndxF(isite)%Nset
+                     write(unit,"("//str(EqvImpndxF(isite)%SetNorb(iset))//"I4)")EqvImpndxF(isite)%SetOrbs(iset,1:EqvImpndxF(isite)%SetNorb(iset))-1
                   enddo
                   close(unit)
                endif
@@ -786,13 +874,13 @@ contains
          !
          call add_separator("Solver symmetrizations")
          do isite=1,Nsite
-            call append_to_input_list(EqvImpndx(isite)%Nset,"EQV_"//str(isite)//"_SETS","Number of sets of locally equivalent orbitals in site number "//str(isite)) !User cannot set the EQV_IMP_* fields as they are deduced from EQV_*, EXPAND and ROTATE_F.
-            if(EqvImpndx(isite)%Nset.gt.0)then
-               do iset=1,EqvImpndx(isite)%Nset
-                  call append_to_input_list(EqvImpndx(isite)%SetNorb(iset),"EQV_"//str(isite)//"_NORB_"//str(iset),"Number of equivalent orbitals in the set number "//str(iset)//" in site number "//str(isite))
+            call append_to_input_list(EqvImpndxF(isite)%Nset,"EQV_"//str(isite)//"_SETS","Number of sets of locally equivalent orbitals in site number "//str(isite)) !User cannot set the EQV_IMP_* fields as they are deduced from EQV_*, EXPAND and ROTATE_F.
+            if(EqvImpndxF(isite)%Nset.gt.0)then
+               do iset=1,EqvImpndxF(isite)%Nset
+                  call append_to_input_list(EqvImpndxF(isite)%SetNorb(iset),"EQV_"//str(isite)//"_NORB_"//str(iset),"Number of equivalent orbitals in the set number "//str(iset)//" in site number "//str(isite))
                enddo
-               do iset=1,EqvImpndx(isite)%Nset
-                  call append_to_input_list(EqvImpndx(isite)%SetOrbs(iset,1:EqvImpndx(isite)%SetNorb(iset)),"EQV_"//str(isite)//"_ORBS_"//str(iset),"Orbital indexes of equivalent set number "//str(iset)//" in site number "//str(isite))
+               do iset=1,EqvImpndxF(isite)%Nset
+                  call append_to_input_list(EqvImpndxF(isite)%SetOrbs(iset,1:EqvImpndxF(isite)%SetNorb(iset)),"EQV_"//str(isite)//"_ORBS_"//str(iset),"Orbital indexes of equivalent set number "//str(iset)//" in site number "//str(isite))
                enddo
             endif
             if(ExpandImpurity.or.AFMselfcons)exit
@@ -1304,7 +1392,7 @@ contains
                S_Full%N_s(:,:,ispin) = Vxc_loc(:,:,ispin) - VH
             enddo
             !
-            !deallocate(VH,Vxc)
+            !deallocate(VH,Vxc) scGW needs these
             deallocate(Vxc_loc)
             call DeallocateFermionicField(S_G0W0)
             call DeallocateFermionicField(S_G0W0dc)
@@ -1891,13 +1979,15 @@ contains
          do iorb=1,Norb
             DeltaSym%ws(iorb,iorb,:,:) = Dmats(iorb,:,:)
          enddo
-         if(RotateHloc)then
-            call symmetrize_imp(DeltaSym,LocalOrbs(isite)%Eig)
-            if(causal_D)call symmetrize_imp(DeltaCorr,LocalOrbs(isite)%Eig)
-         else
-            call symmetrize_GW(DeltaSym,EqvImpndx(isite))
-            if(causal_D)call symmetrize_GW(DeltaCorr,EqvImpndx(isite))
-         endif
+         call symmetrize_GW(DeltaSym,EqvImpndxF(isite))
+         if(causal_D)call symmetrize_GW(DeltaCorr,EqvImpndxF(isite))
+         !if(RotateHloc)then
+         !   call symmetrize_imp(DeltaSym,LocalOrbs(isite)%Eig)
+         !   if(causal_D)call symmetrize_imp(DeltaCorr,LocalOrbs(isite)%Eig)
+         !else
+         !   call symmetrize_GW(DeltaSym,EqvImpndxF(isite))
+         !   if(causal_D)call symmetrize_GW(DeltaCorr,EqvImpndxF(isite))
+         !endif
          do iorb=1,Norb
             Dmats(iorb,:,:) = DeltaSym%ws(iorb,iorb,:,:)
          enddo
@@ -1907,11 +1997,12 @@ contains
          do ispin=1,Nspin
             Eloc_s(:,:,ispin) = diag(Eloc(:,ispin))
          enddo
-         if(RotateHloc)then
-            call symmetrize_imp(Eloc_s,LocalOrbs(isite)%Eig)
-         else
-            call symmetrize_GW(Eloc_s,EqvImpndx(isite))
-         endif
+         call symmetrize_GW(Eloc_s,EqvImpndxF(isite))
+         !if(RotateHloc)then
+         !   call symmetrize_imp(Eloc_s,LocalOrbs(isite)%Eig)
+         !else
+         !   call symmetrize_GW(Eloc_s,EqvImpndxF(isite))
+         !endif
          do ispin=1,Nspin
             Eloc(:,ispin) = diagonal(Eloc_s(:,:,ispin))
          enddo
@@ -2237,7 +2328,7 @@ contains
       end select
       !
       !Symmetrizations - If sets are defined curlyU is always symmetrized
-      if(sym_mode.gt.0) call symmetrize_GW(curlyU,EqvImpndx(isite))
+      if(sym_mode.gt.0) call symmetrize_GW(curlyU,EqvImpndxB(isite))
       !
       !Extract istantaneous interaction and screening function
       select case(reg(CalculationType))
@@ -2881,7 +2972,8 @@ contains
          call dump_Matrix(Simp(isite)%N_s,reg(PrevItFolder),"Solver_"//reg(LocalOrbs(isite)%Name)//"/Hartree_UNimp_"//reg(LocalOrbs(isite)%Name),paramagnet)
          !
          !Insert or Expand to the Lattice basis
-         if(RotateHloc.and.(sym_mode.gt.1))call symmetrize_imp(Simp(isite),LocalOrbs(isite)%Eig)
+         !if(RotateHloc.and.(sym_mode.gt.1))call symmetrize_imp(Simp(isite),LocalOrbs(isite)%Eig)
+         if(sym_mode.gt.1) call symmetrize_GW(Simp(isite),EqvImpndxF(isite))
          call imp2loc(S_DMFT,Simp(isite),isite,LocalOrbs,ExpandImpurity,AFMselfcons,RotateHloc,name="Simp")
          !
          if(ExpandImpurity.or.AFMselfcons)exit
@@ -3042,7 +3134,6 @@ contains
                      do jspin=1,Nspin
                         !
                         ChiCitau%screened_local(ib1,ib2,:) = ChiCitau%screened_local(ib1,ib2,:) + &
-                        !( NNitau(iorb,jorb,ispin,jspin,:) - LocalOrbs(isite)%rho_OrbSpin(iorb,iorb,ispin) * LocalOrbs(isite)%rho_OrbSpin(jorb,jorb,jspin) )
                         ( NNitau(iorb,jorb,ispin,jspin,:) - nt_av(iorb,ispin) * nt_av(jorb,jspin) )
                         !
                      enddo
@@ -3057,7 +3148,6 @@ contains
                   do jorb=1,LocalOrbs(isite)%Norb
                      LocalOrbs(isite)%Docc(iorb,jorb) = ( sum(NNitau(iorb,jorb,1,2,:))/Solver%NtauB_in + &
                                                           sum(NNitau(iorb,jorb,2,1,:))/Solver%NtauB_in ) / 2d0
-                     !LocalOrbs(isite)%Docc(iorb,jorb) = ( NNitau(iorb,jorb,1,2,1)+ NNitau(iorb,jorb,2,1,1) ) / 2d0
                   enddo
                enddo
                call dump_Matrix(LocalOrbs(isite)%Docc,reg(PrevItFolder)//"Solver_"//reg(LocalOrbs(isite)%Name)//"/","Dimp_"//reg(LocalOrbs(isite)%Name)//".DAT")
@@ -3111,14 +3201,16 @@ contains
             write(*,"(A)") new_line("A")//"     Solving bosonic Dyson of site "//reg(LocalOrbs(isite)%Name)
             call AllocateBosonicField(Pimp,LocalOrbs(isite)%Norb,Nmats,Crystal%iq_gamma,no_bare=.true.,Beta=Beta)
             call calc_Pimp(Pimp,curlyU,ChiCmats,NaNb=Pimp_NaNb)
+            if(sym_mode.gt.1) call symmetrize_GW(Pimp,EqvImpndxF(isite))!here I'm using the fermionic indexes because chi depbends on the basis
+            call dump_BosonicField(Pimp,reg(PrevItFolder)//"Solver_"//reg(LocalOrbs(isite)%Name)//"/","Pimp_"//reg(LocalOrbs(isite)%Name)//"_w.DAT")
             !
             !Compute convergence benchmark for the interaction
             call AllocateBosonicField(Wimp,LocalOrbs(isite)%Norb,Nmats,Crystal%iq_gamma,Beta=Beta)
             call calc_Wimp(Wimp,curlyU,ChiCmats)
             !
             !Expand to the Lattice basis
-            call imp2loc(C_EDMFT,ChiCmats,isite,LocalOrbs,ExpandImpurity,AFMselfcons,RotateHloc,name="Cimp")
-            call imp2loc(P_EDMFT,Pimp,isite,LocalOrbs,ExpandImpurity,AFMselfcons,RotateHloc,name="Pimp")
+            call imp2loc(C_EDMFT,ChiCmats,isite,LocalOrbs,ExpandImpurity,AFMselfcons,RotateHloc,name="Cimp",fillJ=.true.)
+            call imp2loc(P_EDMFT,Pimp,isite,LocalOrbs,ExpandImpurity,AFMselfcons,RotateHloc,name="Pimp",fillJ=.true.)
             call imp2loc(W_EDMFT,Wimp,isite,LocalOrbs,ExpandImpurity,AFMselfcons,RotateHloc,name="Wimp")
             call imp2loc(curlyU_EDMFT,curlyU,isite,LocalOrbs,ExpandImpurity,AFMselfcons,RotateUloc,name="curlyU")
             !

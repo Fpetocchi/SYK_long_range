@@ -31,22 +31,24 @@ def average(G,tlimit,window,log):
 spins = [1]; orbs = [1]; dirs=[]
 # Optional parsing
 parser = OptionParser()
-parser.add_option("--mode"  , dest="mode"   , default="None" )                      # [G,W,C]kw, loc, models(create a model for maxent starting from an existing Akw)
-parser.add_option("--El"    , dest="El"     , default="Mo" )
-parser.add_option("--orbs"  , dest="orbs"   , default="1"  )
-parser.add_option("--itlist", dest="itlist" , default="0"  )                        # list of iteration separated by comma
-parser.add_option("--itrng" , dest="itrng"  , default="0"  )                        # initial and final iteration separated by ..
-parser.add_option("--skip"  , dest="skip"   , default="0"  )                        # list of iteration to be ignored separated by comma
+parser.add_option("--mode"  , dest="mode"   , default="None"  )                     # [G,W,C]kw, loc, models(create a model for maxent starting from an existing Akw)
+parser.add_option("--Gpad"  , dest="Gpad"   , default="None"  )                     # valid only for Gkw
+parser.add_option("--El"    , dest="El"     , default="Mo"    )
+parser.add_option("--orbs"  , dest="orbs"   , default="None"  )
+parser.add_option("--itlist", dest="itlist" , default="0"     )                     # list of iteration separated by comma
+parser.add_option("--itrng" , dest="itrng"  , default="0"     )                     # initial and final iteration separated by ..
+parser.add_option("--skip"  , dest="skip"   , default="0"     )                     # list of iteration to be ignored separated by comma
 parser.add_option("--mag"   , dest="mag"    , default=False, action="store_true")   # consider also the spin
-parser.add_option("--rol"   , dest="rol"    , default="0" )                         # string of 2 parameters separated by comma in dicating tau_max and tau_window for rolling average
+parser.add_option("--rol"   , dest="rol"    , default="0"     )                     # string of 2 parameters separated by comma in dicating tau_max and tau_window for rolling average
 parser.add_option("--log"   , dest="log"    , default=False, action="store_true")   # this is to take the rolling average in log scale
 parser.add_option("--dlt"   , dest="dlt"    , default=False, action="store_true")   # this is to delete half of the points
-parser.add_option("--Kpad"  , dest="Kpad"   , default=""  )                         # initial and final iteration separated by ..
+parser.add_option("--Kpad"  , dest="Kpad"   , default=""      )                     # additional suffix to the K_resolved folder
 (options, args) = parser.parse_args()
 #
 El = options.El
 spins = [1,2] if options.mag else [1]
-orbs = [ int(o) for o in options.orbs.split(",") ] if options.orbs != "1" else [1]
+if options.orbs != "None":
+    orbs = [ int(o) for o in options.orbs.split(",") ] if options.orbs != "1" else [1]
 #
 alldirs = [d for d in os.listdir('./') if os.path.isdir(os.path.join('./', d))]
 if "0" in alldirs: alldirs.remove("0")
@@ -89,6 +91,11 @@ if Nit==0:
 # --------------------------------------------------------------------------- #
 if options.mode.rstrip("kw") in [ "G", "W", "C" ]:
     #
+    pad = ""
+    if options.Gpad != "None":
+        pad = "_"+options.Gpad
+        print(pad)
+    #
     field = options.mode.rstrip("kw")
     if field == "G":
         funct = "Gk_t"
@@ -98,17 +105,17 @@ if options.mode.rstrip("kw") in [ "G", "W", "C" ]:
     #
     for spin in spins:
         #
-        pad = "_s%s"%spin if field=="G" else ""
+        #pad = "_s%s%s"%(spin,Gpad) if field=="G" else ""
         folder = "%s/MaxEnt_%sk_path_s%s"%(Kfolder,field,spin) if field=="G" else "%s/MaxEnt_%sk_path"%(Kfolder,field)
         #
         # Check for Nkpt consistency between iterations
         if field == "G":
-            Gk = glob.glob(dirs[0]+"/%s/%s_k*.DAT"%(folder,funct))
+            Gk = glob.glob(dirs[0]+"/%s/%s_k*%s.DAT"%(folder,funct,pad))
             Nkpt = len(Gk)
             print(Nkpt)
             for dir in dirs:
-                Gk = glob.glob("%s/%s/%s_k*.DAT"%(dir,folder,funct))
-                print("Check for Nkpt in folder: %s ,Nkpt=%s "%(dir,len(Gk)))
+                Gk = glob.glob("%s/%s/%s_k*%s.DAT"%(dir,folder,funct,pad))
+                print("Check for Nkpt in folder: %s ,Nkpt=%s "%("%s/%s/%s_k*%s.DAT"%(dir,folder,funct,pad),len(Gk)))
                 if len(Gk) != Nkpt: sys.exit("Wrong number of K-points")
         else:
             # this is temporarty as long as Im keeping the usual maxent
@@ -128,7 +135,7 @@ if options.mode.rstrip("kw") in [ "G", "W", "C" ]:
             if field == "G":
                 #
                 dir = dirs[0]
-                Gpath = "%s/%s/%s_k%s.DAT"%(dir,folder,funct,ik)
+                Gpath = "%s/%s/%s_k%s%s.DAT"%(dir,folder,funct,ik,pad)
                 Gtauk = np.loadtxt(Gpath)
                 #
                 if options.rol !="0":
@@ -137,7 +144,7 @@ if options.mode.rstrip("kw") in [ "G", "W", "C" ]:
                 #
                 Gtau = Gtauk.copy()/Nit
                 for dir in dirs[1:]:
-                    Gpath = "%s/%s/%s_k%s.DAT"%(dir,folder,funct,ik)
+                    Gpath = "%s/%s/%s_k%s%s.DAT"%(dir,folder,funct,ik,pad)
                     Gtauk = np.loadtxt(Gpath)
                     #
                     if options.rol !="0":
@@ -150,7 +157,7 @@ if options.mode.rstrip("kw") in [ "G", "W", "C" ]:
                     print("Deleting tau points, ik=%s"%ik)
                     Gtau = np.delete(Gtau, slice(None, None, 2), 0)
                 #
-                np.savetxt('./avg/%s/%s_k%s.DAT'%(folder,funct,ik), Gtau )
+                np.savetxt('./avg/%s/%s_k%s%s.DAT'%(folder,funct,ik,pad), Gtau )
                 print("Akw average ik=%s, Nkpt=%s"%(ik,Nkpt))
                 #
             else:
@@ -201,36 +208,55 @@ elif options.mode=="loc":
     Zmat = cllct.defaultdict(dict)
     #
     # Data initialization
+    #
+    Norb_lat = len(glob.glob(dirs[0]+"/Convergence/Glat/Glat_t_o*_s1.DAT"))
+    Norb_imp = len(glob.glob(dirs[0]+"/Convergence/Gqmc_%s/Gqmc_%s_t_o*_s1.DAT"%(El,El)))
+    #
+    doBoson = True
+    if options.orbs != "None":
+        orbs_lat = orbs
+        orbs_imp = orbs
+    else:
+        orbs_lat = range(1,Norb_lat+1)
+        orbs_imp = range(1,Norb_imp+1)
+        doBoson = False
+    print("orbs_lat= %s"%orbs_lat)
+    print("orbs_imp= %s"%orbs_imp)
+    #
     idir = 1
     dir = dirs[0]
-    print(dir,idir,Nit)
-    for iorb in orbs:
-        for ispin in spins:
-            Glat[iorb][ispin] = np.genfromtxt('%s/Convergence/Glat/Glat_t_o%s_s%s.DAT'%(dir,iorb,ispin), dtype='double', usecols=(1), unpack=True, comments='#')/Nit
-            Gqmc[iorb][ispin] = np.genfromtxt('%s/Convergence/Gqmc_%s/Gqmc_%s_t_o%s_s%s.DAT'%(dir,El,El,iorb,ispin), dtype='double', usecols=(1), unpack=True, comments='#')/Nit
-            ReS, ImS = np.genfromtxt('%s/Convergence/Sful_Gamma/Sful_Gamma_w_o%s_s%s.DAT'%(dir,iorb,ispin), dtype='double', usecols=(1,2), unpack=True, comments='#')
-            Sful_Gamma[iorb][ispin] = (ReS+1j*ImS)/Nit
-        Wlat[iorb] = np.genfromtxt('%s/Convergence/Wlat/Wlat_w_(%s,%s)(%s,%s).DAT'%(dir,iorb,iorb,iorb,iorb), dtype='double', usecols=(1), unpack=True, comments='#')/Nit
-        curlyUimp[iorb] = np.genfromtxt('%s/Convergence/curlyUimp/curlyUimp_w_(%s,%s)(%s,%s).DAT'%(dir,iorb,iorb,iorb,iorb), dtype='double', usecols=(1), unpack=True, comments='#')/Nit
+    #
+    print("local average ",dir,idir,Nit)
     Umat = np.loadtxt('%s/Solver_%s/Umat.DAT'%(dir,El))/Nit
     Eloc = np.loadtxt('%s/Solver_%s/Eloc.DAT'%(dir,El))/Nit
     for st in ['dmft','qpsc']: Zmat[st] = np.loadtxt('%s/Z_%s_s1.DAT'%(dir,st))/Nit
+    for iorb in orbs_lat:
+        for ispin in spins:
+            Glat[iorb][ispin] = np.genfromtxt('%s/Convergence/Glat/Glat_t_o%s_s%s.DAT'%(dir,iorb,ispin), dtype='double', usecols=(1), unpack=True, comments='#')/Nit
+            ReS, ImS = np.genfromtxt('%s/Convergence/Sful_Gamma/Sful_Gamma_w_o%s_s%s.DAT'%(dir,iorb,ispin), dtype='double', usecols=(1,2), unpack=True, comments='#')
+            Sful_Gamma[iorb][ispin] = (ReS+1j*ImS)/Nit
+        if doBoson: Wlat[iorb] = np.genfromtxt('%s/Convergence/Wlat/Wlat_w_(%s,%s)(%s,%s).DAT'%(dir,iorb,iorb,iorb,iorb), dtype='double', usecols=(1), unpack=True, comments='#')/Nit
+    for iorb in orbs_imp:
+        for ispin in spins:
+            Gqmc[iorb][ispin] = np.genfromtxt('%s/Convergence/Gqmc_%s/Gqmc_%s_t_o%s_s%s.DAT'%(dir,El,El,iorb,ispin), dtype='double', usecols=(1), unpack=True, comments='#')/Nit
+        if doBoson: curlyUimp[iorb] = np.genfromtxt('%s/Convergence/curlyUimp/curlyUimp_w_(%s,%s)(%s,%s).DAT'%(dir,iorb,iorb,iorb,iorb), dtype='double', usecols=(1), unpack=True, comments='#')/Nit
     idir+=1
     #
     # Adding up to average
     for dir in dirs[1:]:
         print("local average ",dir,idir,Nit)
-        for iorb in orbs:
-            for ispin in spins:
-                Glat[iorb][ispin] += np.genfromtxt('%s/Convergence/Glat/Glat_t_o%s_s%s.DAT'%(dir,iorb,ispin), dtype='double', usecols=(1), unpack=True, comments='#')/Nit
-                Gqmc[iorb][ispin] += np.genfromtxt('%s/Convergence/Gqmc_%s/Gqmc_%s_t_o%s_s%s.DAT'%(dir,El,El,iorb,ispin), dtype='double', usecols=(1), unpack=True, comments='#')/Nit
-                ReS, ImS = np.genfromtxt('%s/Convergence/Sful_Gamma/Sful_Gamma_w_o%s_s%s.DAT'%(dir,iorb,ispin), dtype='double', usecols=(1,2), unpack=True, comments='#')
-                Sful_Gamma[iorb][ispin] += (ReS+1j*ImS)/Nit
-            Wlat[iorb] += np.genfromtxt('%s/Convergence/Wlat/Wlat_w_(%s,%s)(%s,%s).DAT'%(dir,iorb,iorb,iorb,iorb), dtype='double', usecols=(1), unpack=True, comments='#')/Nit
-            curlyUimp[iorb] += np.genfromtxt('%s/Convergence/curlyUimp/curlyUimp_w_(%s,%s)(%s,%s).DAT'%(dir,iorb,iorb,iorb,iorb), dtype='double', usecols=(1), unpack=True, comments='#')/Nit
         Umat += np.loadtxt('%s/Solver_%s/Umat.DAT'%(dir,El))/Nit
         Eloc += np.loadtxt('%s/Solver_%s/Eloc.DAT'%(dir,El))/Nit
-        for st in ['dmft','qpsc']: Zmat[st] += np.loadtxt('%s/Z_%s_s1.DAT'%(dir,st))/Nit
+        for iorb in orbs_lat:
+            for ispin in spins:
+                Glat[iorb][ispin] += np.genfromtxt('%s/Convergence/Glat/Glat_t_o%s_s%s.DAT'%(dir,iorb,ispin), dtype='double', usecols=(1), unpack=True, comments='#')/Nit
+                ReS, ImS = np.genfromtxt('%s/Convergence/Sful_Gamma/Sful_Gamma_w_o%s_s%s.DAT'%(dir,iorb,ispin), dtype='double', usecols=(1,2), unpack=True, comments='#')
+                Sful_Gamma[iorb][ispin] += (ReS+1j*ImS)/Nit
+            if doBoson: Wlat[iorb] += np.genfromtxt('%s/Convergence/Wlat/Wlat_w_(%s,%s)(%s,%s).DAT'%(dir,iorb,iorb,iorb,iorb), dtype='double', usecols=(1), unpack=True, comments='#')/Nit
+        for iorb in orbs_imp:
+            for ispin in spins:
+                Gqmc[iorb][ispin] += np.genfromtxt('%s/Convergence/Gqmc_%s/Gqmc_%s_t_o%s_s%s.DAT'%(dir,El,El,iorb,ispin), dtype='double', usecols=(1), unpack=True, comments='#')/Nit
+            if doBoson: curlyUimp[iorb] += np.genfromtxt('%s/Convergence/curlyUimp/curlyUimp_w_(%s,%s)(%s,%s).DAT'%(dir,iorb,iorb,iorb,iorb), dtype='double', usecols=(1), unpack=True, comments='#')/Nit
         idir+=1
     #
     # Print output
@@ -240,16 +266,21 @@ elif options.mode=="loc":
     path_exists("./avg/Convergence/Wlat")
     path_exists("./avg/Convergence/curlyUimp")
     path_exists("./avg/Solver_%s"%El)
-    for iorb in orbs:
-        for ispin in spins:
-            np.savetxt('./avg/Convergence/Glat/Glat_t_o%s_s%s.DAT'%(iorb,ispin), np.c_[ taulat, Glat[iorb][ispin] ], delimiter='\t')
-            np.savetxt('./avg/Convergence/Gqmc_%s/Gqmc_%s_t_o%s_s%s.DAT'%(El,El,iorb,ispin), np.c_[ tauimp, Gqmc[iorb][ispin] ], delimiter='\t')
-            np.savetxt('./avg/Convergence/Sful_Gamma/Sful_Gamma_w_o%s_s%s.DAT'%(iorb,ispin), np.c_[ wmF, Sful_Gamma[iorb][ispin].real, Sful_Gamma[iorb][ispin].imag ], delimiter='\t')
-        np.savetxt('./avg/Convergence/Wlat/Wlat_w_(%s,%s)(%s,%s).DAT'%(iorb,iorb,iorb,iorb), np.c_[ wmB, Wlat[iorb] ], delimiter='\t')
-        np.savetxt('./avg/Convergence/curlyUimp/curlyUimp_w_(%s,%s)(%s,%s).DAT'%(iorb,iorb,iorb,iorb), np.c_[ wmB, curlyUimp[iorb] ], delimiter='\t')
     np.savetxt('./avg/Solver_%s/Umat.DAT'%El, Umat)
     np.savetxt('./avg/Solver_%s/Eloc.DAT'%El, Eloc)
     for st in ['dmft','qpsc']:np.savetxt('./avg/Z_%s_s1.DAT'%st, Zmat[st])
+    #
+    for iorb in orbs_lat:
+        for ispin in spins:
+            np.savetxt('./avg/Convergence/Glat/Glat_t_o%s_s%s.DAT'%(iorb,ispin), np.c_[ taulat, Glat[iorb][ispin] ], delimiter='\t')
+            np.savetxt('./avg/Convergence/Sful_Gamma/Sful_Gamma_w_o%s_s%s.DAT'%(iorb,ispin), np.c_[ wmF, Sful_Gamma[iorb][ispin].real, Sful_Gamma[iorb][ispin].imag ], delimiter='\t')
+        if doBoson: np.savetxt('./avg/Convergence/Wlat/Wlat_w_(%s,%s)(%s,%s).DAT'%(iorb,iorb,iorb,iorb), np.c_[ wmB, Wlat[iorb] ], delimiter='\t')
+    #
+    for iorb in orbs_imp:
+        for ispin in spins:
+            np.savetxt('./avg/Convergence/Gqmc_%s/Gqmc_%s_t_o%s_s%s.DAT'%(El,El,iorb,ispin), np.c_[ tauimp, Gqmc[iorb][ispin] ], delimiter='\t')
+        if doBoson: np.savetxt('./avg/Convergence/curlyUimp/curlyUimp_w_(%s,%s)(%s,%s).DAT'%(iorb,iorb,iorb,iorb), np.c_[ wmB, curlyUimp[iorb] ], delimiter='\t')
+
     #
 elif options.mode=="models":
     #

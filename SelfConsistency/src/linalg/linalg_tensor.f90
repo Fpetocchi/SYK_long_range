@@ -15,7 +15,7 @@ subroutine tensor_transform_NNNN_d(Utensor,rot,onlyNaNb)
    integer                                  :: Norb
    integer                                  :: iorb,jorb,korb,lorb
    integer                                  :: io,jo,count
-   logical                                  :: onlyNaNb_
+   logical                                  :: NaNb,onlyNaNb_
    !
    Norb = size(Utensor,dim=1)
    call assert_shape(Utensor,[Norb,Norb,Norb,Norb],"tensor_transform_NNNN_d","Utensor")
@@ -51,6 +51,9 @@ subroutine tensor_transform_NNNN_d(Utensor,rot,onlyNaNb)
          call get_element_from_stride(iorb,jorb,io)
          call get_element_from_stride(korb,lorb,jo)
          !
+         NaNb = (iorb.eq.jorb) .and. (korb.eq.lorb)
+         if(.not.(NaNb).and.onlyNaNb_) cycle
+         !
          Umatrix = Umatrix + dreal(kronecker_product(Nab(:,:,io),Nab(:,:,jo)))*Utensor(iorb,jorb,korb,lorb)
          !
       enddo
@@ -58,10 +61,10 @@ subroutine tensor_transform_NNNN_d(Utensor,rot,onlyNaNb)
    !
    do iorb=1,Norb !row of external submatrix
       do jorb=1,Norb !col of external submatrix
-         if(onlyNaNb_.and.(iorb.ne.iorb))cycle
+         !if(onlyNaNb_.and.(iorb.ne.iorb))cycle
          do korb=1,Norb !row of internal submatrix
             do lorb=1,Norb !col of internal submatrix
-               if(onlyNaNb_.and.(korb.ne.lorb))cycle
+               !if(onlyNaNb_.and.(korb.ne.lorb))cycle
                !
                io = korb + (iorb-1)*Norb
                jo = lorb + (jorb-1)*Norb
@@ -105,7 +108,7 @@ subroutine tensor_transform_NNNN_c(Utensor,rot,onlyNaNb)
    integer                                  :: Norb
    integer                                  :: iorb,jorb,korb,lorb
    integer                                  :: io,jo,count
-   logical                                  :: onlyNaNb_
+   logical                                  :: NaNb,onlyNaNb_
    !
    Norb = size(Utensor,dim=1)
    call assert_shape(Utensor,[Norb,Norb,Norb,Norb],"tensor_transform_NNNN_c","Utensor")
@@ -141,6 +144,9 @@ subroutine tensor_transform_NNNN_c(Utensor,rot,onlyNaNb)
          call get_element_from_stride(iorb,jorb,io)
          call get_element_from_stride(korb,lorb,jo)
          !
+         NaNb = (iorb.eq.jorb) .and. (korb.eq.lorb)
+         if(.not.(NaNb).and.onlyNaNb_) cycle
+         !
          Umatrix = Umatrix + kronecker_product(Nab(:,:,io),Nab(:,:,jo))*Utensor(iorb,jorb,korb,lorb)
          !
       enddo
@@ -148,10 +154,10 @@ subroutine tensor_transform_NNNN_c(Utensor,rot,onlyNaNb)
    !
    do iorb=1,Norb !row of external submatrix
       do jorb=1,Norb !col of external submatrix
-         if(onlyNaNb_.and.(iorb.ne.iorb))cycle
+         !if(onlyNaNb_.and.(iorb.ne.iorb))cycle
          do korb=1,Norb !row of internal submatrix
             do lorb=1,Norb !col of internal submatrix
-               if(onlyNaNb_.and.(korb.ne.lorb))cycle
+               !if(onlyNaNb_.and.(korb.ne.lorb))cycle
                !
                io = korb + (iorb-1)*Norb
                jo = lorb + (jorb-1)*Norb

@@ -105,6 +105,11 @@ module utils_misc
       module procedure boseeinstein_centered
    end interface boseeinstein
 
+   interface F2Bindex
+      module procedure F2Bindex_1
+      module procedure F2Bindex_2
+   end interface F2Bindex
+
 
    !---------------------------------------------------------------------------!
    !PURPOSE: Module variables
@@ -228,7 +233,21 @@ contains
    !---------------------------------------------------------------------------!
    !PURPOSE: Universal map/ordering between Fermionic and Bosonic Wannier basis
    !---------------------------------------------------------------------------!
-   subroutine F2Bindex(Norb,Lorbs,Rorbs,ib1,ib2)
+   subroutine F2Bindex_1(Norb,orbs,ib)
+      implicit none
+      integer,intent(in)                    :: orbs(2)
+      integer,intent(in)                    :: Norb
+      integer,intent(out)                   :: ib
+      integer                               :: i,j
+      !
+      i = orbs(1)
+      j = orbs(2)
+      !
+      ib = j + Norb*(i-1)
+      !
+   end subroutine F2Bindex_1
+   !
+   subroutine F2Bindex_2(Norb,Lorbs,Rorbs,ib1,ib2)
       implicit none
       integer,intent(in)                    :: Lorbs(2)
       integer,intent(in)                    :: Rorbs(2)
@@ -244,7 +263,7 @@ contains
       ib1 = j + Norb*(i-1)
       ib2 = l + Norb*(k-1)
       !
-   end subroutine F2Bindex
+   end subroutine F2Bindex_2
 
 
    !---------------------------------------------------------------------------!

@@ -103,7 +103,7 @@ subroutine interpolate2kpath_Fermionic(Sfull,Lttc,pathOUTPUT)
    !
    !
    ! print the Hamiltonian on the path used
-   call dump_Hk(Lttc%Hk_path,Lttc%kptpath,reg(pathOUTPUT),"Hk_path.DAT")
+   if(print_path_G)call dump_Hk(Lttc%Hk_path,Lttc%kptpath,reg(pathOUTPUT),"Hk_path.DAT")
    !
    !
    !Interpolate the slef-energy along the path if its K-dependent otherwise duplicate the local one
@@ -385,12 +385,14 @@ contains
       endif
       !
       !Compute the trace
-      allocate(Gmats_trace(Nkpt,Nmats_MaxEnt,Nspin));Gmats_trace=czero
-      do ik=1,Nkpt
-         do iorb=1,Norb
-            Gmats_trace(ik,:,:) = Gmats_trace(ik,:,:) + Gmats_diag(iorb,:,ik,:)/Norb
+      if(Norb.gt.1)then
+         allocate(Gmats_trace(Nkpt,Nmats_MaxEnt,Nspin));Gmats_trace=czero
+         do ik=1,Nkpt
+            do iorb=1,Norb
+               Gmats_trace(ik,:,:) = Gmats_trace(ik,:,:) + Gmats_diag(iorb,:,ik,:)/Norb
+            enddo
          enddo
-      enddo
+      endif
       !
       !Fourier transform the diagonal of the Green's function
       call cpu_time(start)
@@ -405,17 +407,19 @@ contains
       call cpu_time(finish)
       write(*,"(A,F)") "     Glat(K"//reg(mode)//",iw) --> Glat(K"//reg(mode)//",tau) cpu timing:", finish-start
       !
-      call cpu_time(start)
-      allocate(Gitau_trace(Nkpt,NtauFT,Nspin));Gitau_diag=czero
-      do ispin=1,Nspin
-         call Fmats2itau_vec(Sfull%Beta,Gmats_trace(:,:,ispin),Gitau_trace(:,:,ispin),asympt_corr=.true.,tau_uniform=.true.)
-         if(paramagnet)then
-            Gitau_trace(:,:,Nspin) = Gitau_trace(:,:,1)
-            exit
-         endif
-      enddo
-      call cpu_time(finish)
-      write(*,"(A,F)") "     TrGlat(K"//reg(mode)//",iw) --> TrGlat(K"//reg(mode)//",tau) cpu timing:", finish-start
+      if(Norb.gt.1)then
+         call cpu_time(start)
+         allocate(Gitau_trace(Nkpt,NtauFT,Nspin));Gitau_trace=czero
+         do ispin=1,Nspin
+            call Fmats2itau_vec(Sfull%Beta,Gmats_trace(:,:,ispin),Gitau_trace(:,:,ispin),asympt_corr=.true.,tau_uniform=.true.)
+            if(paramagnet)then
+               Gitau_trace(:,:,Nspin) = Gitau_trace(:,:,1)
+               exit
+            endif
+         enddo
+         call cpu_time(finish)
+         write(*,"(A,F)") "     TrGlat(K"//reg(mode)//",iw) --> TrGlat(K"//reg(mode)//",tau) cpu timing:", finish-start
+      endif
       !
       !Print data for K-resolved MaxEnt
       allocate(tau(NtauFT));tau = linspace(0d0,Sfull%Beta,NtauFT)
@@ -428,9 +432,6 @@ contains
                Gitau_diag(iorb,1,ik,ispin) = Gitau_diag(iorb,1,ik,ispin)/abs(Gmax)
                Gitau_diag(iorb,NtauFT,ik,ispin) = Gitau_diag(iorb,NtauFT,ik,ispin)/abs(Gmax)
             enddo
-            Gmax = - (dreal(Gitau_trace(ik,1,ispin)) + dreal(Gitau_trace(ik,NtauFT,ispin)))
-            Gitau_trace(ik,1,ispin) = Gitau_trace(ik,1,ispin)/abs(Gmax)
-            Gitau_trace(ik,NtauFT,ispin) = Gitau_trace(ik,NtauFT,ispin)/abs(Gmax)
             !
             !print on imaginary time axis
             path = reg(pathOUTPUT)//"MaxEnt_Gk_"//reg(mode)//"_s"//str(ispin)//"/Gk_t_k"//str(ik)//".DAT"
@@ -438,14 +439,6 @@ contains
             open(unit,file=reg(path),form="formatted",status="unknown",position="rewind",action="write")
             do itau=1,NtauFT
                 write(unit,"(200E20.12)") tau(itau),(dreal(Gitau_diag(iorb,itau,ik,ispin)),iorb=1,Norb)
-            enddo
-            close(unit)
-            !
-            path = reg(pathOUTPUT)//"MaxEnt_Gk_"//reg(mode)//"_s"//str(ispin)//"/Gk_t_k"//str(ik)//"_Tr.DAT"
-            unit = free_unit()
-            open(unit,file=reg(path),form="formatted",status="unknown",position="rewind",action="write")
-            do itau=1,NtauFT
-                write(unit,"(200E20.12)") tau(itau),dreal(Gitau_trace(ik,itau,ispin))
             enddo
             close(unit)
             !
@@ -458,18 +451,35 @@ contains
             enddo
             close(unit)
             !
-            path = reg(pathOUTPUT)//"MaxEnt_Gk_"//reg(mode)//"_s"//str(ispin)//"/Gk_w_k"//str(ik)//"_Tr.DAT"
-            unit = free_unit()
-            open(unit,file=reg(path),form="formatted",status="unknown",position="rewind",action="write")
-            do iw=1,Nmats_MaxEnt
-                write(unit,"(200E20.12)") wmats(iw),Gmats_trace(ik,iw,ispin)
-            enddo
-            close(unit)
+            if(Norb.gt.1)then
+               !
+               Gmax = - (dreal(Gitau_trace(ik,1,ispin)) + dreal(Gitau_trace(ik,NtauFT,ispin)))
+               Gitau_trace(ik,1,ispin) = Gitau_trace(ik,1,ispin)/abs(Gmax)
+               Gitau_trace(ik,NtauFT,ispin) = Gitau_trace(ik,NtauFT,ispin)/abs(Gmax)
+               !
+               path = reg(pathOUTPUT)//"MaxEnt_Gk_"//reg(mode)//"_s"//str(ispin)//"/Gk_t_k"//str(ik)//"_Tr.DAT"
+               unit = free_unit()
+               open(unit,file=reg(path),form="formatted",status="unknown",position="rewind",action="write")
+               do itau=1,NtauFT
+                   write(unit,"(200E20.12)") tau(itau),dreal(Gitau_trace(ik,itau,ispin))
+               enddo
+               close(unit)
+               !
+               path = reg(pathOUTPUT)//"MaxEnt_Gk_"//reg(mode)//"_s"//str(ispin)//"/Gk_w_k"//str(ik)//"_Tr.DAT"
+               unit = free_unit()
+               open(unit,file=reg(path),form="formatted",status="unknown",position="rewind",action="write")
+               do iw=1,Nmats_MaxEnt
+                   write(unit,"(200E20.12)") wmats(iw),Gmats_trace(ik,iw,ispin)
+               enddo
+               close(unit)
+               !
+            endif
             !
          enddo
          if(paramagnet)exit
       enddo
-      deallocate(tau,wmats,Gmats_diag,Gmats_trace,Gitau_trace)
+      if(Norb.gt.1)deallocate(Gmats_trace,Gitau_trace)
+      deallocate(tau,wmats,Gmats_diag)
       !
       !Compute the spectral weight at Fermi along the path. See arxiv:0805.3778 Eq.(5)
       do ispin=1,Nspin

@@ -836,7 +836,7 @@ contains
       logical                               :: filexists,ACdone,recompute_,Vxcdone,doVxc,DC_
       character(len=256)                    :: path,pathOUTPUT_
       integer                               :: iseg,SigmaSegments
-      integer                               :: iq,ik,iw,iw2,ispin,iwan1,iwan2,unit
+      integer                               :: iq,ik,iw,iw2,ispin,unit,iwan1,iwan2
       integer                               :: Nkpt,Norb,Nmats,Nfreq
       real(8),allocatable                   :: wread(:),wmats(:),wreal(:)
       real                                  :: start,finish
@@ -850,13 +850,13 @@ contains
       integer                               :: ib,ib_sigma1,ib_sigma2,ispin_spex
       integer                               :: Nspin_spex_old,Nkpt_irred_spex_old
       integer                               :: ib_sigma1_old,ib_sigma2_old
-      integer                               :: iseg_old,Nfreq_old,Nfreq_tot
+      integer                               :: iseg_old,Nfreq_old,Nfreq_tot,wndx
       integer                               :: Nkpt_file,Nkpt_file_old
       logical                               :: ldum,lexonly
-      real(8)                               :: wS_old,wE_old
+      real(8)                               :: wS_old,wE_old,dw,dw_old
       integer                               :: iwa,iwb,wshift
       integer,allocatable                   :: NfreqSeg(:)
-      real(8)                               :: gamma1,gamma2
+      real(8)                               :: gamma1,gamma2,ReS,ImS
       complex(8)                            :: trap
       real(8),allocatable                   :: SigmaX_seg(:,:,:),SigmaX_tmp(:,:)
       complex(8),allocatable                :: SigmaC_seg(:,:,:,:),SigmaC_tmp(:,:,:)
@@ -966,16 +966,16 @@ contains
          ! Look for the Number of Kpoints in each segment (supposed to be the same of Lttc%Nkpt_irred)
          do iseg=1,SigmaSegments
             Nkpt_file = 0
-            do ik=1,2000
+            do ik=1,20000
                path = reg(pathINPUT)//"Sigma_real_"//str(iseg,2)//"/SIGMA.Q"//str(ik,4)//".DAT"
                if(DC_)path = reg(pathINPUT)//"Sigma_dc_real_"//str(iseg,2)//"/SIGMA.Q"//str(ik,4)//".DAT"
                call inquireFile(reg(path),filexists,hardstop=.false.,verb=verbose)
                if(.not.filexists) exit
                Nkpt_file = Nkpt_file + 1
             enddo
-            write(*,"(A,1I4,A,1I6)") "     The number k-points in the segment number: ",iseg," is: ",Nkpt_file
-            Nkpt_file_old = Nkpt_file
+            write(*,"(A,1I4,A,1I6)") "     The number of k-points in the segment number: ",iseg," is: ",Nkpt_file
             if((iseg.gt.1).and.(Nkpt_file.ne.Nkpt_file_old)) stop "read_Sigma_spex_Lund: Number of K-points does not match among segments."
+            Nkpt_file_old = Nkpt_file
             if(Nkpt_file.ne.Lttc%Nkpt_irred) stop "read_Sigma_spex_Lund: Number of K-points does not match with Nkpt_irred readed from XEPS."
          enddo
          !
@@ -995,15 +995,7 @@ contains
                read(unit) wread
                close(unit)
                if(lexonly) stop "read_Sigma_spex_Lund: lexonly"
-               !
-               iseg_old = iseg
-               Nspin_spex_old = Nspin_spex
-               Nkpt_irred_spex_old = Nkpt_irred_spex
-               ib_sigma1_old = ib_sigma1
-               ib_sigma2_old = ib_sigma2
-               Nfreq_old = Nfreq
-               wS_old = wread(1)
-               wE_old = wread(Nfreq)
+               dw = abs(wread(3)-wread(2))
                !
                ! Each k-point controls
                if(ib_sigma1.gt.ib_Uwan1) stop "read_Sigma_spex_Lund: ib_sigma1>ib_Uwan1"
@@ -1019,6 +1011,7 @@ contains
                      if(Nfreq_old.ne.Nfreq) stop "read_Sigma_spex_Lund: Nfreq does not match among different k-points same segment."
                      if(wS_old.ne.wread(1)) stop "read_Sigma_spex_Lund: First freq does not match among different k-points same segment."
                      if(wE_old.ne.wread(Nfreq)) stop "read_Sigma_spex_Lund: Last freq does not match among different k-points same segment."
+                     if(dw.ne.dw_old) stop "read_Sigma_spex_Lund: dw does not match among different k-points same segment."
                   else
                      if(dabs(wread(1)-wE_old).gt.eps)then
                         write(*,"(A,2F10.5)") "w_old, w(1):",wE_old,wread(1)
@@ -1026,14 +1019,27 @@ contains
                         stop "read_Sigma_spex_Lund: Segments in sigma do not match."
                      endif
                   endif
+               else
+                  if((dw.ne.dw_old).and.(iseg.gt.1)) write(*,"(A)") "     Warning (read_Sigma_spex_Lund) dw does not match between segment #"//str(iseg_old)//" ( "//str(dw_old*H2eV,5)//" ) and segment #"//str(iseg)//" ( "//str(dw*H2eV,5)//" )"
                endif
+               !
+               iseg_old = iseg
+               Nspin_spex_old = Nspin_spex
+               Nkpt_irred_spex_old = Nkpt_irred_spex
+               ib_sigma1_old = ib_sigma1
+               ib_sigma2_old = ib_sigma2
+               Nfreq_old = Nfreq
+               wS_old = wread(1)
+               wE_old = wread(Nfreq)
+               dw_old = dw
+               !
                deallocate(wread)
                !
             enddo !ik
             !
             !saving the number of frequency points in each segment
             NfreqSeg(iseg) = Nfreq
-            write(*,"(A,1I4,A,1I6)") "     The number real frequency points in the segment number: ",iseg," is: ",NfreqSeg(iseg)
+            write(*,"(A,1I4,A,1I6,A)") "     The number of real frequency points in the segment number: ",iseg," is: ",NfreqSeg(iseg)," dw: "//str(dw*H2eV,5)
             !
          enddo !iseg
          write(*,"(A,2I4)") "     The band indexes in the SPEX self-energy are: ",ib_sigma1,ib_sigma2
@@ -1044,7 +1050,7 @@ contains
          enddo
          Nfreq_tot = Nfreq_tot - (SigmaSegments-1)
          allocate(wreal(Nfreq_tot));wreal=0d0
-         write(*,"(A,1I4)") "     Nuumber of real frequency points in the SPEX self-energy is: ",Nfreq_tot
+         write(*,"(A,1I4)") "     Number of real frequency points in the SPEX self-energy is: ",Nfreq_tot
          !
          allocate(SigmaC_diag(ib_sigma1:ib_sigma2,Nmats,Lttc%Nkpt_irred,Nspin_spex));SigmaC_diag=czero
          allocate(SigmaC_diag_real(ib_sigma1:ib_sigma2,Nfreq_tot,Lttc%Nkpt_irred,Nspin_spex));SigmaC_diag_real=czero
@@ -1110,9 +1116,25 @@ contains
             enddo !iq
             deallocate(SigmaX_tmp,SigmaC_tmp)
             !
+            wndx = minloc(abs(wread),dim=1)
+            if(wread(wndx).eq.0.0)then
+               write(*,"(A)") "     Fermi level in segment # "//str(iseg)//" index: "//str(wndx)
+            else
+               wndx = -1
+            endif
             !
             do ik=1,Lttc%Nkpt_irred
                do ib=ib_sigma1,ib_sigma2
+                  !
+                  !removing the annoying minus sign for negative frequency and forcing ImSigma(0)=0
+                  do ispin=1,Nspin_spex
+                     do iw=1,size(SigmaC_seg,dim=1)
+                        ReS = dreal(SigmaC_seg(iw,ib,ik,ispin))
+                        ImS = -abs(dimag(SigmaC_seg(iw,ib,ik,ispin)))
+                        if((wndx.ne.-1).and.(iw.eq.wndx)) ImS=0d0
+                        SigmaC_seg(iw,ib,ik,ispin) = dcmplx(ReS,ImS)
+                     enddo
+                  enddo
                   !
                   !getting the full real frequency axis
                   do ispin=1,Nspin_spex
@@ -1142,21 +1164,22 @@ contains
                      do iw2=1,NfreqSeg(iseg)-1
                         do ispin=1,Nspin_spex
                            !
-                           !try trapetziodal method
-                           if(wread(iw2).lt.0.d0) then
-                              gamma1 = (+1.d0/pi) * dimag( SigmaC_seg(iw2,ib,ik,ispin)   )
-                           else
-                              gamma1 = (-1.d0/pi) * dimag( SigmaC_seg(iw2,ib,ik,ispin)   )
-                           endif
-                           if(wread(iw2+1).lt.0.d0) then
-                              gamma2 = (+1.d0/pi) * dimag( SigmaC_seg(iw2+1,ib,ik,ispin) )
-                           else
-                              gamma2 = (-1.d0/pi) * dimag( SigmaC_seg(iw2+1,ib,ik,ispin) )
-                           endif
+                           !trapetzoidal method
+                           gamma1 = (-1.d0/pi) * dimag( SigmaC_seg(iw2,ib,ik,ispin) )
+                           gamma2 = (-1.d0/pi) * dimag( SigmaC_seg(iw2+1,ib,ik,ispin) )
+                           !if(wread(iw2).lt.0.d0) then
+                           !   gamma1 = (+1.d0/pi) * dimag( SigmaC_seg(iw2,ib,ik,ispin)   )
+                           !else
+                           !   gamma1 = (-1.d0/pi) * dimag( SigmaC_seg(iw2,ib,ik,ispin)   )
+                           !endif
+                           !if(wread(iw2+1).lt.0.d0) then
+                           !   gamma2 = (+1.d0/pi) * dimag( SigmaC_seg(iw2+1,ib,ik,ispin) )
+                           !else
+                           !   gamma2 = (-1.d0/pi) * dimag( SigmaC_seg(iw2+1,ib,ik,ispin) )
+                           !endif
                            !
                            trap = ( dcmplx(gamma1,0.d0) / (dcmplx(0.d0,wmats(iw)/H2eV) - dcmplx(wread(iw2),0.d0)  )  &
                                   + dcmplx(gamma2,0.d0) / (dcmplx(0.d0,wmats(iw)/H2eV) - dcmplx(wread(iw2+1),0.d0))  )/2.d0
-                           !trap=(-dcmplx(gamma*w(iw2),gamma*w_F(iw))/(w_F(iw)**2 + w(iw2)**2) - dcmplx(gamma*w(iw2+1),gamma*w_F(iw))/(w_F(iw)**2 + w(iw2+1)**2))/2.d0
                            SigmaC_diag(ib,iw,ik,ispin) = SigmaC_diag(ib,iw,ik,ispin) + dcmplx(wread(iw2+1)-wread(iw2),0.d0)*trap
                            !
                         enddo !ispin
@@ -1179,28 +1202,21 @@ contains
          !Sigma=sigmax+sigmac and transform to Wannier basis
          do ispin_spex=1,Nspin_spex
             !$OMP PARALLEL DEFAULT(SHARED),&
-            !$OMP PRIVATE(ik,iwan1,iwan2,iw)
+            !$OMP PRIVATE(ik,iw,iwan1,iwan2)
             !$OMP DO
             do ik=1,Nkpt
                do iwan2=1,Norb
                   do iwan1=1,Norb
-                     !
                      do iw=1,Nmats
-                        !
                         Smats_GoWo%wks(iwan1,iwan2,iw,ik,ispin_spex) = &
                         + sum(conjg(Uwan(ib_Uwan1:ib_Uwan2,iwan1,ik,ispin_spex)) * SigmaC_diag(ib_Uwan1:ib_Uwan2,iw,Lttc%kptPos(ik),ispin_spex) * Uwan(ib_Uwan1:ib_Uwan2,iwan2,ik,ispin_spex))  &
                         + sum(conjg(Uwan(ib_Uwan1:ib_Uwan2,iwan1,ik,ispin_spex)) * SigmaX_seg(ib_Uwan1:ib_Uwan2,Lttc%kptPos(ik),ispin_spex) * Uwan(ib_Uwan1:ib_Uwan2,iwan2,ik,ispin_spex))
-                        !
                      enddo
-                     !
                      do iw=1,Nfreq_tot
-                        !
                         Sreal_GoWo%wks(iwan1,iwan2,iw,ik,ispin_spex) = &
                         + sum(conjg(Uwan(ib_Uwan1:ib_Uwan2,iwan1,ik,ispin_spex)) * SigmaC_diag_real(ib_Uwan1:ib_Uwan2,iw,Lttc%kptPos(ik),ispin_spex) * Uwan(ib_Uwan1:ib_Uwan2,iwan2,ik,ispin_spex))  &
                         + sum(conjg(Uwan(ib_Uwan1:ib_Uwan2,iwan1,ik,ispin_spex)) * SigmaX_seg(ib_Uwan1:ib_Uwan2,Lttc%kptPos(ik),ispin_spex) * Uwan(ib_Uwan1:ib_Uwan2,iwan2,ik,ispin_spex))
-                        !
                      enddo
-                     !
                   enddo
                enddo
             enddo
@@ -1349,7 +1365,7 @@ contains
       logical                               :: filexists,interpdone,recompute_,Vxcdone,doVxc,DC_
       character(len=256)                    :: path,pathOUTPUT_
       integer                               :: ifile,ierr
-      integer                               :: ik,iw,ispin,iwan1,iwan2,unit
+      integer                               :: ik,iw,ispin,unit,iwan1,iwan2
       integer                               :: Nkpt,Norb,Nmats,Nfreq
       real(8),allocatable                   :: wread(:),wmats(:)
       real                                  :: start,finish
@@ -1566,7 +1582,7 @@ contains
                do iwan1=1,Nwan
                   read(unit,*) ib_read, Vxc_read(iwan1,ik,1), Smats_GoWo_X(iwan1,ik,1)
                   read(unit,*)
-                  if(ib_read.ne.ib_sigma1+(iwan1-1)) stop "read_Sigma_spex_Julich:orbital index in spex.out not match the expected index."
+                  if(ib_read.ne.ib_sigma1+(iwan1-1)) stop "read_Sigma_spex_Julich: orbital index in spex.out not match the expected index."
                enddo
             endif
          enddo
@@ -1580,24 +1596,18 @@ contains
          call clear_attributes(Smats_GoWo)
          !Sigma=sigmax+sigmac and transform to Wannier basis
          do ispin_spex=1,Nspin_spex
-            !$OMP PARALLEL DEFAULT(NONE),&
-            !$OMP SHARED(ispin_spex,Nkpt,Norb,ib_Uwan1,ib_Uwan2,Nmats,Lttc,Uwan,Smats_GoWo_C,Smats_GoWo_X,Smats_GoWo,&
-            !$OMP doVxc,Vxc,Vxc_read),&
-            !$OMP PRIVATE(ik,iwan1,iwan2,iw)
+            !$OMP PARALLEL DEFAULT(SHARED),&
+            !$OMP PRIVATE(ik,iw,iwan1,iwan2)
             !$OMP DO
             do ik=1,Nkpt
                do iwan2=1,Norb
                   do iwan1=1,Norb
                      do iw=1,Nmats
-                        !
                         Smats_GoWo%wks(iwan1,iwan2,iw,ik,ispin_spex) = &
                         + sum(conjg(Uwan(ib_Uwan1:ib_Uwan2,iwan1,ik,ispin_spex)) * diagonal(Smats_GoWo_C%wks(:,:,iw,Lttc%kptPos(ik),ispin_spex)) * Uwan(ib_Uwan1:ib_Uwan2,iwan2,ik,ispin_spex))  &
                         + sum(conjg(Uwan(ib_Uwan1:ib_Uwan2,iwan1,ik,ispin_spex)) * Smats_GoWo_X(:,Lttc%kptPos(ik),ispin_spex) * Uwan(ib_Uwan1:ib_Uwan2,iwan2,ik,ispin_spex))
-                        !
                      enddo
-                     !
                      if(doVxc) Vxc(iwan1,iwan2,ik,ispin_spex) = sum(conjg(Uwan(ib_Uwan1:ib_Uwan2,iwan1,ik,ispin_spex)) * Vxc_read(ib_Uwan1:ib_Uwan2,Lttc%kptPos(ik),ispin_spex) * Uwan(ib_Uwan1:ib_Uwan2,iwan2,ik,ispin_spex))
-                     !
                   enddo
                enddo
             enddo
@@ -1737,7 +1747,7 @@ contains
       !
       logical                               :: filexists
       character(len=256)                    :: path
-      integer                               :: ik,ispin,iwan1,iwan2,unit
+      integer                               :: ik,ispin,unit,iwan1,iwan2
       integer                               :: Nkpt,Norb,ispin_spex
       !Uwan
       integer                               :: Nspin_Uwan,Nkpt_Uwan
@@ -1882,9 +1892,6 @@ contains
                cmat(:,:)=matmul(vxcmat(ib_Uwan1:ib_Dwan2,ib_Uwan1:ib_Dwan2),dis_evec)
                do i=ib_Uwan1,ib_Uwan2
                   vxc_diag(i,ik,ispin)=dble(dot_product(dis_evec(:,i),cmat(:,i)))
-                  !F.N:
-                  !write(*,*) 'vxc i=',i,'ik=',ik
-                  !write(*,*) vxc(i,ik,ispin)
                enddo
             endif
             !
@@ -1899,26 +1906,21 @@ contains
       endif
       deallocate(vxcmat)
       !
-      !
       Vxc=czero
       ! Transform to Wannier basis
       !Sigma=sigmax+sigmac and transform to Wannier basis
-      !$OMP PARALLEL DEFAULT(NONE),&
-      !$OMP SHARED(paramagneticSPEX,Norb,Nkpt,ib_Uwan1,ib_Uwan2,Lttc,Uwan,vxc_diag,Vxc),&
-      !$OMP PRIVATE(ispin,ispin_spex,iwan1,iwan2)
+      !$OMP PARALLEL DEFAULT(SHARED),&
+      !$OMP PRIVATE(ik,ispin,ispin_spex,iwan2,iwan1)
       !$OMP DO
-      do ispin=1,Nspin
-         do ik=1,Nkpt
+      do ik=1,Nkpt
+         do ispin=1,Nspin
+            ispin_spex=1
+            if(.not.paramagneticSPEX)ispin_spex=ispin
             do iwan2=1,Norb
                do iwan1=1,Norb
-                  !
                   ispin_spex=1
                   if(.not.paramagneticSPEX)ispin_spex=ispin
-                  !
-                  Vxc(iwan1,iwan2,ik,ispin) = sum(conjg(Uwan(ib_Uwan1:ib_Uwan2,iwan1,ik,ispin_spex)) * vxc_diag(ib_Uwan1:ib_Uwan2,Lttc%kptPos(ik),ispin_spex) * Uwan(ib_Uwan1:ib_Uwan2,iwan2,ik,ispin_spex))
-                  !
-                  Vxc(iwan1,iwan2,ik,ispin) = Vxc(iwan1,iwan2,ik,ispin) * H2eV
-                  !
+                  Vxc(iwan1,iwan2,ik,ispin) = sum(conjg(Uwan(ib_Uwan1:ib_Uwan2,iwan1,ik,ispin_spex)) * vxc_diag(ib_Uwan1:ib_Uwan2,Lttc%kptPos(ik),ispin_spex) * Uwan(ib_Uwan1:ib_Uwan2,iwan2,ik,ispin_spex)) * H2eV
                enddo
             enddo
          enddo
@@ -1927,9 +1929,16 @@ contains
       !$OMP END PARALLEL
       deallocate(vxc_diag,Uwan)
       !
+      write(*,"(A)") "     Checking hermiticity of Vxc(k)."
       do ispin=1,Nspin_Uwan
+         !
+         do ik=1,Nkpt
+            call check_Hermiticity(Vxc(:,:,ik,ispin),eps,enforce=.false.,hardstop=.true.,name="Vxc_k"//str(ik)//"_s"//str(ispin),verb=.true.)
+         enddo
+         !
          call dump_matrix(Vxc(:,:,:,ispin),.true.,reg(pathINPUT),"Vxc",ispin=ispin)
          if(save2readable)call dump_matrix(Vxc(:,:,:,ispin),.false.,reg(pathINPUT)//"Vxc/","Vxc",ispin=ispin)
+         !
       enddo
       !
       allocate(Vxc_loc(Norb,Norb,Nspin));Vxc_loc=czero
@@ -2118,7 +2127,7 @@ contains
    !---------------------------------------------------------------------------!
    !PURPOSE: Print print the dispersion corrected with the G0W0 self-energy
    !---------------------------------------------------------------------------!
-   subroutine print_G0W0_dispersion(Lttc,VH,Vxc,mu)
+   subroutine print_G0W0_dispersion(Lttc,Vxc,mu)
       !
       use parameters
       use linalg
@@ -2131,21 +2140,21 @@ contains
       implicit none
       !
       type(Lattice),intent(inout)           :: Lttc
-      complex(8),intent(in)                 :: VH(:,:)
       complex(8),allocatable,intent(in)     :: Vxc(:,:,:,:)
       real(8),intent(in),optional           :: mu
       !
       type(FermionicField)                  :: S_G0W0,S_G0W0_interp
       type(FermionicField)                  :: S_G0W0dc,S_G0W0dc_interp
-      complex(8),allocatable                :: invGf(:,:)
+      complex(8),allocatable                :: invGf(:,:),Smat(:,:,:)
       real(8),allocatable                   :: wreal(:),wreal_read(:)
       real(8),allocatable                   :: Aloc(:,:,:)
       real(8)                               :: ReS,ImS,mu_
       real                                  :: start,finish
-      integer                               :: ik,iw
+      integer                               :: ik,iw,iw2
       integer                               :: Nreal_read = 5000
       integer                               :: iorb,jorb,ispin
       logical                               :: S_G0W0exists
+      logical                               :: print_all=.false.
       !
       !
       write(*,"(A)") new_line("A")//new_line("A")//"---- print_G0W0_dispersion"
@@ -2153,8 +2162,10 @@ contains
       !
       if(.not.Lttc%status) stop "print_G0W0_dispersion: Lattice container not properly initialized."
       if(.not.Lttc%pathStored) stop "print_G0W0_dispersion: K-points along the path not stored."
+      if(.not.allocated(Lttc%Zk)) stop "print_G0W0_dispersion: rotation towards the LDA basis not stored."
       !
-      call assert_shape(VH,[Lttc%Norb,Lttc%Norb],"print_G0W0_dispersion","VH")
+      print_all = .true.
+      !
       if(allocated(Vxc))call assert_shape(Vxc,[Lttc%Norb,Lttc%Norb,Lttc%Nkpt,Nspin],"print_G0W0_dispersion","Vxc")
       !
       mu_=Lttc%mu
@@ -2180,35 +2191,41 @@ contains
       !interpolate to input real-frequency mesh
       call cpu_time(start)
       call AllocateFermionicField(S_G0W0_interp,Lttc%Norb,Nreal,Nkpt=Lttc%Nkpt)
+      allocate(Smat(Lttc%Norb,Lttc%Norb,Nreal_read));Smat=czero
       !$OMP PARALLEL DEFAULT(SHARED),&
-      !$OMP PRIVATE(iw,ik,iorb,jorb,ispin,ReS,ImS)
+      !$OMP PRIVATE(iw,ik,iorb,jorb,ispin,ReS,ImS,iw2,Smat)
       !$OMP DO
       do iw=1,Nreal
          do ik=1,Lttc%Nkpt
-            do iorb=1,Lttc%Norb
-               do jorb=1,Lttc%Norb
-                  do ispin=1,Nspin
-                     !
-                     ReS = cubic_interp( wreal_read, dreal(S_G0W0%wks(iorb,jorb,1:Nreal_read,ik,ispin)), wreal(iw) )
-                     ImS = cubic_interp( wreal_read, dimag(S_G0W0%wks(iorb,jorb,1:Nreal_read,ik,ispin)), wreal(iw) )
-                     S_G0W0_interp%wks(iorb,jorb,iw,ik,ispin) = dcmplx(ReS,sign(1d0,wreal(iw))*ImS)
-                     !
-                     if(paramagnet)then
-                        S_G0W0_interp%wks(iorb,jorb,iw,ik,Nspin) = S_G0W0_interp%wks(iorb,jorb,iw,ik,1)
-                        cycle
-                     endif
-                     !
-                  enddo
+            do ispin=1,Nspin
+               !
+               do iw2=1,Nreal_read
+                  Smat(:,:,iw2) = rotate(S_G0W0%wks(:,:,iw2,ik,ispin),Lttc%Zk(:,:,ik))
                enddo
+               !
+               do iorb=1,Lttc%Norb
+                  ReS = cubic_interp( wreal_read, dreal(Smat(iorb,iorb,1:Nreal_read)), wreal(iw) )
+                  ImS = cubic_interp( wreal_read, dimag(Smat(iorb,iorb,1:Nreal_read)), wreal(iw) )
+                  if(ImS.gt.0d0)ImS=0d0
+                  S_G0W0_interp%wks(iorb,iorb,iw,ik,ispin) = dcmplx(ReS,ImS)
+               enddo
+               !
+               S_G0W0_interp%wks(:,:,iw,ik,ispin) = rotate(S_G0W0_interp%wks(:,:,iw,ik,ispin),transpose(conjg(Lttc%Zk(:,:,ik))))
+               if(paramagnet)then
+                  S_G0W0_interp%wks(:,:,iw,ik,Nspin) = S_G0W0_interp%wks(:,:,iw,ik,1)
+                  cycle
+               endif
+               !
             enddo
          enddo
       enddo
       !$OMP END DO
       !$OMP END PARALLEL
-      deallocate(wreal_read)
+      deallocate(wreal_read,Smat)
       call DeallocateFermionicField(S_G0W0)
       call FermionicKsum(S_G0W0_interp)
       call dump_FermionicField(S_G0W0_interp,reg(pathINPUTtr)//"G0W0plots/","SGoWo_wr_interp",.true.,axis=wreal)
+      if(print_all) call dump_FermionicField(S_G0W0_interp,reg(pathINPUTtr)//"G0W0plots/","SGoWo_wr_interp",.false.,Lttc%kpt,paramagnet,axis=wreal)
       call cpu_time(finish)
       write(*,"(A,F)") "     Interpolation to input real frequency grid cpu timing:", finish-start
       !
@@ -2221,12 +2238,13 @@ contains
          do iw=1,Nreal
             do ispin=1,Nspin
                !
-               S_G0W0_interp%wks(:,:,iw,ik,ispin) = S_G0W0_interp%wks(:,:,iw,ik,ispin) + VH
+               S_G0W0_interp%wks(:,:,iw,ik,ispin) = S_G0W0_interp%wks(:,:,iw,ik,ispin)
                if(allocated(Vxc)) S_G0W0_interp%wks(:,:,iw,ik,ispin) = S_G0W0_interp%wks(:,:,iw,ik,ispin) - Vxc(:,:,ik,ispin)
                !
             enddo
          enddo
       enddo
+      if(print_all) call dump_FermionicField(S_G0W0_interp,reg(pathINPUTtr)//"G0W0plots/","SGoWo_Vxc_wr_interp",.false.,Lttc%kpt,paramagnet,axis=wreal)
       !
       !print G0W0 bandstructure
       call interpolateHk2Path(Lttc,reg(structure),Nkpt_path,pathOUTPUT=reg(pathINPUTtr)//"G0W0plots/",Sigma=S_G0W0_interp%wks,Sigma_axis=wreal,corrname="G0W0",store=.false.)
@@ -2280,35 +2298,41 @@ contains
          !interpolate to input real-frequency mesh
          call cpu_time(start)
          call AllocateFermionicField(S_G0W0dc_interp,Lttc%Norb,Nreal,Nkpt=Lttc%Nkpt)
+         allocate(Smat(Lttc%Norb,Lttc%Norb,Nreal_read));Smat=czero
          !$OMP PARALLEL DEFAULT(SHARED),&
-         !$OMP PRIVATE(iw,ik,iorb,jorb,ispin,ReS,ImS)
+         !$OMP PRIVATE(iw,ik,iorb,jorb,ispin,ReS,ImS,iw2,Smat)
          !$OMP DO
          do iw=1,Nreal
             do ik=1,Lttc%Nkpt
-               do iorb=1,Lttc%Norb
-                  do jorb=1,Lttc%Norb
-                     do ispin=1,Nspin
-                        !
-                        ReS = cubic_interp( wreal_read, dreal(S_G0W0dc%wks(iorb,jorb,1:Nreal_read,ik,ispin)), wreal(iw) )
-                        ImS = cubic_interp( wreal_read, dimag(S_G0W0dc%wks(iorb,jorb,1:Nreal_read,ik,ispin)), wreal(iw) )
-                        S_G0W0dc_interp%wks(iorb,jorb,iw,ik,ispin) = dcmplx(ReS,sign(1d0,wreal(iw))*ImS)
-                        !
-                        if(paramagnet)then
-                           S_G0W0dc_interp%wks(iorb,jorb,iw,ik,Nspin) = S_G0W0dc_interp%wks(iorb,jorb,iw,ik,1)
-                           cycle
-                        endif
-                        !
-                     enddo
+               do ispin=1,Nspin
+                  !
+                  do iw2=1,Nreal_read
+                     Smat(:,:,iw2) = rotate(S_G0W0dc%wks(:,:,iw2,ik,ispin),Lttc%Zk(:,:,ik))
                   enddo
+                  !
+                  do iorb=1,Lttc%Norb
+                     ReS = cubic_interp( wreal_read, dreal(Smat(iorb,iorb,1:Nreal_read)), wreal(iw) )
+                     ImS = cubic_interp( wreal_read, dimag(Smat(iorb,iorb,1:Nreal_read)), wreal(iw) )
+                     if(ImS.gt.0d0)ImS=0d0
+                     S_G0W0dc_interp%wks(iorb,iorb,iw,ik,ispin) = dcmplx(ReS,ImS)
+                  enddo
+                  !
+                  S_G0W0dc_interp%wks(:,:,iw,ik,ispin) = rotate(S_G0W0dc_interp%wks(:,:,iw,ik,ispin),transpose(conjg(Lttc%Zk(:,:,ik))))
+                  if(paramagnet)then
+                     S_G0W0dc_interp%wks(:,:,iw,ik,Nspin) = S_G0W0dc_interp%wks(:,:,iw,ik,1)
+                     cycle
+                  endif
+                  !
                enddo
             enddo
          enddo
          !$OMP END DO
          !$OMP END PARALLEL
-         deallocate(wreal_read)
+         deallocate(wreal_read,Smat)
          call DeallocateFermionicField(S_G0W0dc)
          call FermionicKsum(S_G0W0dc_interp)
          call dump_FermionicField(S_G0W0dc_interp,reg(pathINPUTtr)//"G0W0plots/","SGoWo_dc_wr_interp",.true.,axis=wreal)
+         if(print_all) call dump_FermionicField(S_G0W0dc_interp,reg(pathINPUTtr)//"G0W0plots/","SGoWo_dc_wr_interp",.false.,Lttc%kpt,paramagnet,axis=wreal)
          call cpu_time(finish)
          write(*,"(A,F)") "     Interpolation to input real frequency grid cpu timing:", finish-start
          !

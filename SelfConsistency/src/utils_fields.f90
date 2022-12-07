@@ -1225,7 +1225,7 @@ contains
       !
    end subroutine imp2loc_Matrix_s
    !
-   subroutine imp2loc_Bosonic(Wloc,Wimp,impndx,LocalOrbs,expand,AFM,rot,name)
+   subroutine imp2loc_Bosonic(Wloc,Wimp,impndx,LocalOrbs,expand,AFM,rot,name,fillJ)
       !
       use parameters
       use utils_misc
@@ -1239,6 +1239,7 @@ contains
       logical,intent(in)                    :: expand
       logical,intent(in)                    :: AFM
       logical,intent(in)                    :: rot
+      logical,intent(in),optional           :: fillJ
       character(len=*),intent(in),optional  :: name
       !
       complex(8),allocatable                :: Wbtmp(:,:),Wstmp(:,:,:)
@@ -1248,7 +1249,7 @@ contains
       integer                               :: ib_imp,jb_imp,ib_loc,jb_loc
       integer                               :: i_loc,j_loc,k_loc,l_loc
       integer                               :: i_imp,j_imp,k_imp,l_imp
-      logical                               :: doBare
+      logical                               :: doBare,fillJ_
       !
       !
       if(verbose)write(*,"(A)") "---- imp2loc_Bosonic"
@@ -1302,12 +1303,18 @@ contains
       if(Nsite.gt.size(LocalOrbs)) stop "imp2loc_Bosonic: number of target sites is larger LocalOrbs list."
       if(impndx.gt.size(LocalOrbs)) stop "imp2loc_Bosonic: target site is outside LocalOrbs list."
       !
+      fillJ_=.false.
       if(rot)then
+         !
          if(present(name))then
             write(*,"(A)") "     "//reg(name)//" orbital space will be rotated during insertion in "//str(Nsite)//" sites."
          else
             write(*,"(A)") "     The impurity orbital space will be rotated during insertion in "//str(Nsite)//" sites."
          endif
+         !
+         if(present(fillJ))fillJ_=fillJ
+         if(fillJ_)write(*,"(A)") "     The field is polarization-like missing exchange terms (for the segment solver). Adding components to preserve the symmetry of the rotation."
+         !
       endif
       !
       ! Rotating either one site or all of them depending on expand
@@ -1331,9 +1338,9 @@ contains
             if(.not.allocated(LocalOrbs(sitendx)%RotDag)) stop "imp2loc_Fermionic: One of the rotations is not allocated."
             call assert_shape(LocalOrbs(sitendx)%RotDag,[Norb_imp,Norb_imp],"imp2loc_Fermionic","LocalOrbs("//str(sitendx)//")%RotDag")
             !
-            if(doBare) call tensor_transform(Wbtmp,PhysicalUelements%Full_Map,LocalOrbs(sitendx)%RotDag)
+            if(doBare) call tensor_transform(Wbtmp,PhysicalUelements%Full_Map,LocalOrbs(sitendx)%RotDag,onlyNaNb=fillJ_)
             do ip=1,Wimp%Npoints
-               call tensor_transform(Wstmp(:,:,ip),PhysicalUelements%Full_Map,LocalOrbs(sitendx)%RotDag)
+               call tensor_transform(Wstmp(:,:,ip),PhysicalUelements%Full_Map,LocalOrbs(sitendx)%RotDag,onlyNaNb=fillJ_)
             enddo
             !
          endif
@@ -2687,7 +2694,7 @@ contains
       type(BosonicField),intent(in)         :: PiImp
       real(8),intent(in)                    :: coeff
       type(LocalOrbitals),allocatable,intent(in):: LocalOrbs(:)
-      logical,intent(in)                    :: OffDiag
+      logical,intent(in),optional            :: OffDiag
       type(BosonicField),intent(in),optional :: PiGG_DC
       !
       real(8)                               :: Beta
@@ -2696,7 +2703,7 @@ contains
       integer                               :: Norb_imp,ib_loc,jb_loc
       integer                               :: i_loc,j_loc,k_loc,l_loc
       integer                               :: Nkpt,Norb,Nmats,Nsite
-      logical                               :: impDC
+      logical                               :: impDC,OffDiag_
       !
       !
       write(*,"(A)") new_line("A")//new_line("A")//"---- Merge_Polarization"
@@ -2734,6 +2741,9 @@ contains
          impDC = .false.
       endif
       !
+      OffDiag_=.false. ! this refers to the components different than (aa)(bb)
+      if(present(OffDiag)) OffDiag_=OffDiag
+      !
       !Fill the local attributes so as to fully replace the local GW contibution
       call BosonicKsum(PiGW)
       !
@@ -2753,7 +2763,7 @@ contains
                      !
                      call F2Bindex(Norb,[i_loc,j_loc],[k_loc,l_loc],ib_loc,jb_loc)
                      !
-                     if((.not.OffDiag).and.(.not.((i_loc.eq.j_loc).and.(k_loc.eq.l_loc))))cycle
+                     if((.not.OffDiag_).and.(.not.((i_loc.eq.j_loc).and.(k_loc.eq.l_loc))))cycle
                      !if(.not.((i_loc.eq.k_loc).and.(l_loc.eq.j_loc)))cycle
                      !
                      !$OMP PARALLEL DEFAULT(SHARED),&

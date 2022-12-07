@@ -18,14 +18,20 @@ program SelfConsistency
    integer                                  :: isite
    integer                                  :: Iteration,ItStart,Itend
    !
+   logical                                  :: SGoWo_override=.false.
+   !
 #ifdef _akw
    character(len=20)                        :: InputFile="input.in.akw"
 #else
    character(len=20)                        :: InputFile="input.in"
 #endif
-
+   !
 #ifdef _gap
    character(len=20)                        :: InputFile="input.in.gap"
+#endif
+   !
+#ifdef _SE
+   SGoWo_override = .true.
 #endif
    !
    !
@@ -45,11 +51,10 @@ program SelfConsistency
    !
    call inquireFile(reg(ItFolder)//"Sfull_w_k_s1.DAT",S_Full_exists,hardstop=.true.,verb=verbose)
    !
-   !call calc_Glda(0d0,Beta,Crystal)
    call AllocateFermionicField(S_Full,Crystal%Norb,Nmats,Nkpt=Crystal%Nkpt,Nsite=Nsite,Beta=Beta)
    call read_FermionicField(S_Full,reg(ItFolder),"Sfull_w",Crystal%kpt)
    call dump_MaxEnt(S_Full,"mats",reg(ItFolder)//"Convergence/","Sful",EqvGWndx%SetOrbs,WmaxPade=PadeWlimit)
-   if(print_path_G) call interpolate2kpath(S_Full,Crystal,reg(MaxEnt_K))
+   if(interp_G) call interpolate2kpath(S_Full,Crystal,reg(MaxEnt_K))
    !
    ! get self-energy at Gamma
    S_Full%ws = S_Full%wks(:,:,:,1,:)
@@ -96,10 +101,19 @@ program SelfConsistency
    call initialize_Fields(ItStart)
    if(solve_DMFT.and.(ItStart.gt.0))call show_Densities(ItStart-1)
    !
+   if(SGoWo_override)then
+      calc_Pk=.false.
+      calc_W=.false.
+      solve_DMFT=.false.
+      merge_Sigma=.false.
+      calc_Sigmak=.true.
+   endif
+   !
    do Iteration=ItStart,Itend,1
       !
       !
       call printHeader(Iteration)
+      call update_DataStructure(Iteration)
       !
       !
       !Check if needed fields are already present
@@ -134,7 +148,7 @@ program SelfConsistency
             if(reg(DC_type_P).eq."GlocGloc")then
                call AllocateBosonicField(P_GGdc,Crystal%Norb,Nmats,Crystal%iq_gamma,Nsite=Nsite,no_bare=.true.,Beta=Beta)
                call calc_PiGGdc(P_GGdc,Glat)
-               call MergeFields(Plat,P_EDMFT,alphaPi,LocalOrbs,RotateHloc,PiGG_DC=P_GGdc)
+               call MergeFields(Plat,P_EDMFT,alphaPi,LocalOrbs,PiGG_DC=P_GGdc) !RotateHloc
                call DeallocateBosonicField(P_GGdc)
             elseif(reg(DC_type_P).eq."Ploc")then
                call MergeFields(Plat,P_EDMFT,alphaPi,LocalOrbs,RotateHloc)
@@ -144,7 +158,7 @@ program SelfConsistency
             P_EDMFT%screened_local = dreal(Plat%screened_local)*alphaPi
          endif
          !
-         if(print_path_Chi) then
+         if(interp_Chi) then
             call calc_chi(Chi,Ulat,Plat,Crystal)!,pathPk=reg(MaxEnt_K)//"/MaxEnt_Chik_path_t")
             call interpolate2kpath(Chi,Crystal,reg(MaxEnt_K),"C")
             call DeallocateBosonicField(Chi)
@@ -158,7 +172,7 @@ program SelfConsistency
          !
          if(calc_Wfull)  call calc_W_full(Wlat,Ulat,Plat,Crystal)
          if(calc_Wedmft) call calc_W_edmft(Wlat,Ulat,P_EDMFT,Crystal)
-         if(print_path_W) call interpolate2kpath(Wlat,Crystal,reg(MaxEnt_K),"W")
+         if(interp_W) call interpolate2kpath(Wlat,Crystal,reg(MaxEnt_K),"W")
          call dump_BosonicField(Wlat,reg(ItFolder),"Wlat_w.DAT")
          call dump_MaxEnt(Wlat,"mats",reg(ItFolder)//"Convergence/","Wlat",EqvGWndx%SetOrbs)
          !
@@ -217,7 +231,7 @@ program SelfConsistency
          if(addTierIII) then
             !
             !G0W0 self-energy: used as self-energy in the 0th iteration or in model calculations
-            call read_Sigma_spex(SpexVersion,S_G0W0,Crystal,verbose,RecomputeG0W0,Vxc)
+            call read_Sigma_spex(SpexVersion,S_G0W0,Crystal,verbose,RecomputeG0W0,Vxc) !call read_Sigma_spex(SpexVersion,S_G0W0,Crystal,.true.,RecomputeG0W0,Vxc)
             !
             !G0W0 double counting: this is used only for ab-initio calculations
             call AllocateFermionicField(S_G0W0dc,Crystal%Norb,Nmats,Nkpt=Crystal%Nkpt,Nsite=Nsite,Beta=Beta)
@@ -235,7 +249,7 @@ program SelfConsistency
                   call dump_FermionicField(S_G0W0dc,reg(pathINPUTtr),"SGoWo_dc_w",paramagnet)
                elseif(spex_S_G0W0dc)then
                   write(*,"(A,F)")"     Reading dc between G0W0 and scGW from SPEX_VERSION: "//reg(SpexVersion)
-                  call read_Sigma_spex(SpexVersion,S_G0W0dc,Crystal,verbose,RecomputeG0W0,Vxc,DC=.true.)
+                  call read_Sigma_spex(SpexVersion,S_G0W0dc,Crystal,verbose,RecomputeG0W0,Vxc,DC=.true.) !call read_Sigma_spex(SpexVersion,S_G0W0dc,Crystal,.true.,RecomputeG0W0,Vxc,DC=.true.)
                endif
             endif
             !
@@ -321,8 +335,7 @@ program SelfConsistency
       !
       !
       !Print G0W0 bandstructure - Crystal%mu is used by default
-      if(dump_G0W0_bands)call print_G0W0_dispersion(Crystal,VH,Vxc)
-      deallocate(VH,Vxc)! removed from join_SigmaFull
+      if(dump_G0W0_bands)call print_G0W0_dispersion(Crystal,Vxc)
       !
       !
       !Total energy calculation
@@ -349,7 +362,7 @@ program SelfConsistency
       call dump_FermionicField(S_Full,reg(ItFolder),"Sfull_w",paramagnet)
       if(dump_Sigmak)call dump_FermionicField(S_Full,reg(ItFolder),"Sfull_w",.true.,Crystal%kpt,paramagnet)
       call dump_MaxEnt(S_Full,"mats",reg(ItFolder)//"Convergence/","Sful",EqvGWndx%SetOrbs,WmaxPade=PadeWlimit)
-      if(print_path_G)call interpolate2kpath(S_Full,Crystal,reg(MaxEnt_K))
+      if(interp_G)call interpolate2kpath(S_Full,Crystal,reg(MaxEnt_K))
       !
       !Print the new full self-energy at Gamma point
       S_Full%ws = S_Full%wks(:,:,:,1,:)
