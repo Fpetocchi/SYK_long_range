@@ -1,191 +1,275 @@
 !------------------------------------------------------------------------------!
 !PURPOSE: Rotate a tensor diven by the kroenecker product of square matrices
 !------------------------------------------------------------------------------!
-subroutine tensor_transform_NNNN_d(Utensor,rot,onlyNaNb)
+subroutine tensor_transform_NNNN_c(mode,Utensor,rotL,rotR)
    !
    implicit none
-   real(8),intent(inout)                    :: Utensor(:,:,:,:)
-   complex(8),intent(in)                    :: rot(:,:)
-   logical,intent(in),optional              :: onlyNaNb
-   !
-   real(8),allocatable                      :: Umatrix(:,:)
-   complex(8),allocatable                   :: Nab(:,:,:)
-   complex(8),allocatable                   :: rotdag(:,:)
-   integer,allocatable                      :: stride(:,:)
-   integer                                  :: Norb
-   integer                                  :: iorb,jorb,korb,lorb
-   integer                                  :: io,jo,count
-   logical                                  :: NaNb,onlyNaNb_
-   !
-   Norb = size(Utensor,dim=1)
-   call assert_shape(Utensor,[Norb,Norb,Norb,Norb],"tensor_transform_NNNN_d","Utensor")
-   if(size(rot,dim=1).ne.Norb) stop "tensor_transform_NNNN_d: Rotation has a wrong 1st dimension."
-   if(size(rot,dim=2).ne.Norb) stop "tensor_transform_NNNN_d: Rotation has a wrong 2nd dimension."
-   !
-   onlyNaNb_=.false.
-   if(present(onlyNaNb))onlyNaNb_=onlyNaNb
-   !
-   allocate(Umatrix(Norb*Norb,Norb*Norb));Umatrix=0d0
-   allocate(Nab(Norb,Norb,Norb*Norb));Nab=zero
-   allocate(stride(Norb,Norb));stride=0
-   !
-   allocate(rotdag(Norb,Norb));rotdag=zero
-   rotdag=transpose(conjg(rot))
-   !
-   count=0
-   do iorb=1,Norb
-      do jorb=1,Norb
-         count=count+1
-         Nab(jorb,iorb,count) = one  !N=c^+,c = {col,row} --> transpose
-         stride(iorb,jorb)=count
-      enddo
-   enddo
-   !
-   do io=1,Norb*Norb
-      Nab(:,:,io) = matmul(rotdag,matmul(Nab(:,:,io),rot))
-   enddo
-   !
-   do io=1,Norb*Norb
-      do jo=1,Norb*Norb
-         !
-         call get_element_from_stride(iorb,jorb,io)
-         call get_element_from_stride(korb,lorb,jo)
-         !
-         NaNb = (iorb.eq.jorb) .and. (korb.eq.lorb)
-         if(.not.(NaNb).and.onlyNaNb_) cycle
-         !
-         Umatrix = Umatrix + dreal(kronecker_product(Nab(:,:,io),Nab(:,:,jo)))*Utensor(iorb,jorb,korb,lorb)
-         !
-      enddo
-   enddo
-   !
-   do iorb=1,Norb !row of external submatrix
-      do jorb=1,Norb !col of external submatrix
-         !if(onlyNaNb_.and.(iorb.ne.iorb))cycle
-         do korb=1,Norb !row of internal submatrix
-            do lorb=1,Norb !col of internal submatrix
-               !if(onlyNaNb_.and.(korb.ne.lorb))cycle
-               !
-               io = korb + (iorb-1)*Norb
-               jo = lorb + (jorb-1)*Norb
-               !
-               Utensor(iorb,jorb,korb,lorb) = Umatrix(io,jo)
-               !
-            enddo
-         enddo
-      enddo
-   enddo
-   deallocate(Umatrix,Nab,stride)
-   !
-   contains
-      !
-      subroutine get_element_from_stride(i,j,ndx)
-        implicit none
-        integer,intent(in)                  :: ndx
-        integer,intent(out)                 :: i,j
-        !
-        strideloop:do i=1,Norb
-           do j=1,Norb
-              if(stride(i,j)==ndx) exit strideloop
-           enddo
-        enddo strideloop
-        !
-      end subroutine get_element_from_stride
-      !
-end subroutine tensor_transform_NNNN_d
-!
-subroutine tensor_transform_NNNN_c(Utensor,rot,onlyNaNb)
-   !
-   implicit none
+   character(len=2),intent(in)              :: mode
    complex(8),intent(inout)                 :: Utensor(:,:,:,:)
-   complex(8),intent(in)                    :: rot(:,:)
-   logical,intent(in),optional              :: onlyNaNb
+   complex(8),intent(in)                    :: rotL(:,:)
+   complex(8),intent(in)                    :: rotR(:,:)
    !
-   real(8),allocatable                      :: Umatrix(:,:)
-   complex(8),allocatable                   :: Nab(:,:,:)
-   complex(8),allocatable                   :: rotdag(:,:)
-   integer,allocatable                      :: stride(:,:)
-   integer                                  :: Norb
-   integer                                  :: iorb,jorb,korb,lorb
-   integer                                  :: io,jo,count
-   logical                                  :: NaNb,onlyNaNb_
+   complex(8),allocatable                   :: Umatrix(:,:)
+   complex(8),allocatable                   :: X(:,:,:),Y(:,:,:)
+   integer                                  :: Norb,Nbp,ib,ib1,ib2
+   integer                                  :: i,j,k,l
+   integer                                  :: a,b,c,d
    !
    Norb = size(Utensor,dim=1)
+   Nbp = Norb*Norb
    call assert_shape(Utensor,[Norb,Norb,Norb,Norb],"tensor_transform_NNNN_c","Utensor")
-   if(size(rot,dim=1).ne.Norb) stop "tensor_transform_NNNN_c: Rotation has a wrong 1st dimension."
-   if(size(rot,dim=2).ne.Norb) stop "tensor_transform_NNNN_c: Rotation has a wrong 2nd dimension."
+   call assert_shape(rotL,[Norb,Norb],"tensor_transform_NNNN_c","rotL")
+   call assert_shape(rotR,[Norb,Norb],"tensor_transform_NNNN_c","rotR")
    !
-   onlyNaNb_=.false.
-   if(present(onlyNaNb))onlyNaNb_=onlyNaNb
+   allocate(X(Nbp,Norb,Norb));X=zero
+   allocate(Y(Nbp,Norb,Norb));Y=zero
    !
-   allocate(Umatrix(Norb*Norb,Norb*Norb));Umatrix=zero
-   allocate(Nab(Norb,Norb,Norb*Norb));Nab=zero
-   allocate(stride(Norb,Norb));stride=0
+   select case(mode)
+      case default
+         !
+         stop "tensor_transform_NNNN_c: Available modes: GG, NN."
+         !
+      case("GG")
+         !
+         ! U_ijkl = sum_abcd [ (L*_ai G_ac L_ck) * (R*_dl G_db R_bj) ]
+         ! X_ij(a,b) = L*_ai R_bj
+         ! Y_kl(c,d) = L*_ck R_dl
+         ! U_ijkl = sum_abcd G_acG_db X_ij(a,b) * Y*_kl(c,d)
+         !
+         do a=1,Norb
+            do b=1,Norb
+               !
+               do i=1,Norb
+                  do j=1,Norb
+                     !
+                     call F2Bindex(Norb,[i,j],ib)
+                     !
+                     X(ib,a,b) = dconjg(rotL(a,i))*rotR(b,j)
+                     Y(ib,a,b) = dconjg(rotL(a,i))*rotR(b,j)
+                     !
+                  enddo
+               enddo
+               !
+            enddo
+         enddo
+         !
+         !
+      case("NN")
+         !
+         ! U_ijkl = sum_abcd [ (L*_ai n_ab L_bj) * (R*_ck n_cd R_dl) ] U_abcd
+         ! X_ij(a,b) = L*_ai n_ab L_bj
+         ! Y_kl(c,d) = R_ck n_cd R*_dl
+         ! U_ijkl = sum_abcd U_abcd X_ij(a,b) * Y*_kl(c,d)
+         !
+         do a=1,Norb
+            do b=1,Norb
+               !
+               do i=1,Norb
+                  do j=1,Norb
+                     !
+                     call F2Bindex(Norb,[i,j],ib)
+                     !
+                     X(ib,a,b) = dconjg(rotL(a,i))*rotL(b,j)
+                     Y(ib,a,b) = rotR(a,i)*dconjg(rotR(b,j))
+                     !
+                  enddo
+               enddo
+               !
+            enddo
+         enddo
+         !
+         !
+   end select
    !
-   allocate(rotdag(Norb,Norb));rotdag=zero
-   rotdag=transpose(conjg(rot))
-   !
-   count=0
-   do iorb=1,Norb
-      do jorb=1,Norb
-         count=count+1
-         Nab(jorb,iorb,count) = one  !N=c^+,c = {col,row} --> transpose
-         stride(iorb,jorb)=count
+   !performs the hermitian rank 2 operation: A := alpha*x*y**H + conjg( alpha )*y*x**H + A
+   allocate(Umatrix(Nbp,Nbp));Umatrix = zero
+   do a=1,Norb
+      do b=1,Norb
+         do c=1,Norb
+            do d=1,Norb
+               call ZHER2('U',Nbp,Utensor(a,b,c,d),X(:,a,b),1,Y(:,c,d),1,Umatrix,Nbp)
+            enddo
+         enddo
+      enddo
+   enddo
+   deallocate(X,Y)
+   do ib1=1,Nbp
+      do ib2=1+ib1,Nbp
+         Umatrix(ib2,ib1) = conjg(Umatrix(ib1,ib2))
       enddo
    enddo
    !
-   do io=1,Norb*Norb
-      Nab(:,:,io) = matmul(rotdag,matmul(Nab(:,:,io),rot))
-   enddo
-   !
-   do io=1,Norb*Norb
-      do jo=1,Norb*Norb
-         !
-         call get_element_from_stride(iorb,jorb,io)
-         call get_element_from_stride(korb,lorb,jo)
-         !
-         NaNb = (iorb.eq.jorb) .and. (korb.eq.lorb)
-         if(.not.(NaNb).and.onlyNaNb_) cycle
-         !
-         Umatrix = Umatrix + kronecker_product(Nab(:,:,io),Nab(:,:,jo))*Utensor(iorb,jorb,korb,lorb)
-         !
-      enddo
-   enddo
-   !
-   do iorb=1,Norb !row of external submatrix
-      do jorb=1,Norb !col of external submatrix
-         !if(onlyNaNb_.and.(iorb.ne.iorb))cycle
-         do korb=1,Norb !row of internal submatrix
-            do lorb=1,Norb !col of internal submatrix
-               !if(onlyNaNb_.and.(korb.ne.lorb))cycle
+   !provide U_ijkl
+   Utensor = zero
+   do i=1,Norb
+      do j=1,Norb
+         do k=1,Norb
+            do l=1,Norb
                !
-               io = korb + (iorb-1)*Norb
-               jo = lorb + (jorb-1)*Norb
+               call F2Bindex(Norb,[i,j],ib1)
+               call F2Bindex(Norb,[k,l],ib2)
                !
-               Utensor(iorb,jorb,korb,lorb) = Umatrix(io,jo)
+               Utensor(i,j,k,l) = Umatrix(ib1,ib2)/2d0
                !
             enddo
          enddo
       enddo
    enddo
-   deallocate(Umatrix,Nab,stride)
+   deallocate(Umatrix)
    !
    contains
       !
-      subroutine get_element_from_stride(i,j,ndx)
-        implicit none
-        integer,intent(in)                  :: ndx
-        integer,intent(out)                 :: i,j
-        !
-        strideloop:do i=1,Norb
-           do j=1,Norb
-              if(stride(i,j)==ndx) exit strideloop
-           enddo
-        enddo strideloop
-        !
-      end subroutine get_element_from_stride
+      ! internal product basis ordering
+      subroutine F2Bindex(Norb,orbs,ib)
+         implicit none
+         integer,intent(in)                    :: orbs(2)
+         integer,intent(in)                    :: Norb
+         integer,intent(out)                   :: ib
+         integer                               :: i,j
+         !
+         i = orbs(1)
+         j = orbs(2)
+         !
+         ib = j + Norb*(i-1)
+         !
+      end subroutine F2Bindex
       !
 end subroutine tensor_transform_NNNN_c
+!
+subroutine tensor_transform_NNNN_d(mode,Utensor,rotL,rotR)
+   !
+   implicit none
+   character(len=2),intent(in)              :: mode
+   real(8),intent(inout)                    :: Utensor(:,:,:,:)
+   real(8),intent(in)                       :: rotL(:,:)
+   real(8),intent(in)                       :: rotR(:,:)
+   !
+   real(8),allocatable                      :: Umatrix(:,:)
+   real(8),allocatable                      :: X(:,:,:),Y(:,:,:)
+   integer                                  :: Norb,Nbp,ib,ib1,ib2
+   integer                                  :: i,j,k,l
+   integer                                  :: a,b,c,d
+   !
+   Norb = size(Utensor,dim=1)
+   Nbp = Norb*Norb
+   call assert_shape(Utensor,[Norb,Norb,Norb,Norb],"tensor_transform_NNNN_d","Utensor")
+   call assert_shape(rotL,[Norb,Norb],"tensor_transform_NNNN_d","rotL")
+   call assert_shape(rotR,[Norb,Norb],"tensor_transform_NNNN_d","rotR")
+   !
+   allocate(X(Nbp,Norb,Norb));X=0d0
+   allocate(Y(Nbp,Norb,Norb));Y=0d0
+   !
+   select case(mode)
+      case default
+         !
+         stop "tensor_transform_NNNN_d: Available modes: GG, NN."
+         !
+      case("GG")
+         !
+         ! U_ijkl = sum_abcd [ (L*_ai G_ac L_ck) * (R*_dl G_db R_bj) ]
+         ! X_ij(a,b) = L*_ai R_bj
+         ! Y_kl(c,d) = L*_ck R_dl
+         ! U_ijkl = sum_abcd G_acG_db X_ij(a,b) * Y*_kl(c,d)
+         !
+         do a=1,Norb
+            do b=1,Norb
+               !
+               do i=1,Norb
+                  do j=1,Norb
+                     !
+                     call F2Bindex(Norb,[i,j],ib)
+                     !
+                     X(ib,a,b) = rotL(a,i)*rotR(b,j)
+                     Y(ib,a,b) = rotL(a,i)*rotR(b,j)
+                     !
+                  enddo
+               enddo
+               !
+            enddo
+         enddo
+         !
+         !
+      case("NN")
+         !
+         ! U_ijkl = sum_abcd [ (L*_ai n_ab L_bj) * (R*_ck n_cd R_dl) ] U_abcd
+         ! X_ij(a,b) = L*_ai n_ab L_bj
+         ! Y_kl(c,d) = R_ck n_cd R*_dl
+         ! U_ijkl = sum_abcd U_abcd X_ij(a,b) * Y*_kl(c,d)
+         !
+         do a=1,Norb
+            do b=1,Norb
+               !
+               do i=1,Norb
+                  do j=1,Norb
+                     !
+                     call F2Bindex(Norb,[i,j],ib)
+                     !
+                     X(ib,a,b) = rotL(a,i)*rotL(b,j)
+                     Y(ib,a,b) = rotR(a,i)*rotR(b,j)
+                     !
+                  enddo
+               enddo
+               !
+            enddo
+         enddo
+         !
+         !
+   end select
+   !
+   !performs the symmetric rank 2 operation: A := alpha*x*y**T + alpha*y*x**T + A
+   allocate(Umatrix(Nbp,Nbp));Umatrix = 0d0
+   do a=1,Norb
+      do b=1,Norb
+         do c=1,Norb
+            do d=1,Norb
+               call DSPR2('U',Nbp,Utensor(a,b,c,d),X(:,a,b),1,Y(:,c,d),1,Umatrix,Nbp)
+            enddo
+         enddo
+      enddo
+   enddo
+   deallocate(X,Y)
+   do ib1=1,Nbp
+      do ib2=1+ib1,Nbp
+         Umatrix(ib2,ib1) = Umatrix(ib1,ib2)
+      enddo
+   enddo
+   !
+   !provide U_ijkl
+   Utensor = 0d0
+   do i=1,Norb
+      do j=1,Norb
+         do k=1,Norb
+            do l=1,Norb
+               !
+               call F2Bindex(Norb,[i,j],ib1)
+               call F2Bindex(Norb,[k,l],ib2)
+               !
+               Utensor(i,j,k,l) = Umatrix(ib1,ib2)/2d0
+               !
+            enddo
+         enddo
+      enddo
+   enddo
+   deallocate(Umatrix)
+   !
+   contains
+      !
+      ! internal product basis ordering
+      subroutine F2Bindex(Norb,orbs,ib)
+         implicit none
+         integer,intent(in)                    :: orbs(2)
+         integer,intent(in)                    :: Norb
+         integer,intent(out)                   :: ib
+         integer                               :: i,j
+         !
+         i = orbs(1)
+         j = orbs(2)
+         !
+         ib = j + Norb*(i-1)
+         !
+      end subroutine F2Bindex
+      !
+end subroutine tensor_transform_NNNN_d
 
 
 !------------------------------------------------------------------------------!
@@ -197,30 +281,82 @@ end subroutine tensor_transform_NNNN_c
 !         - Map(io,jo,3) --> korb
 !         - Map(io,jo,4) --> lorb
 !------------------------------------------------------------------------------!
-subroutine tensor_transform_NN_d(Umatrix,Map,rot,onlyNaNb)
+subroutine tensor_transform_NN_c(mode,Umatrix,Map,rotL,rotR)
    !
    implicit none
+   character(len=2),intent(in)              :: mode
+   complex(8),intent(inout)                 :: Umatrix(:,:)
+   integer,intent(in)                       :: Map(:,:,:)
+   complex(8),intent(in)                    :: rotL(:,:)
+   complex(8),intent(in)                    :: rotR(:,:)
+   !
+   complex(8),allocatable                   :: Utensor(:,:,:,:)
+   integer                                  :: Norb,Nbp
+   integer                                  :: iorb,jorb,korb,lorb
+   integer                                  :: io,jo
+   !
+   Nbp = size(Umatrix,dim=1)
+   call assert_shape(Umatrix,[Nbp,Nbp],"tensor_transform_NN_c","Umatrix")
+   call assert_shape(Map,[Nbp,Nbp,4],"tensor_transform_NN_c","Map")
+   !
+   Norb = int(sqrt(dble(Nbp)))
+   call assert_shape(rotL,[Norb,Norb],"tensor_transform_NN_c","rotL")
+   call assert_shape(rotR,[Norb,Norb],"tensor_transform_NN_c","rotR")
+   !
+   allocate(Utensor(Norb,Norb,Norb,Norb));Utensor=zero
+   do io=1,Nbp
+      do jo=1,Nbp
+         !
+         iorb = Map(io,jo,1)
+         jorb = Map(io,jo,2)
+         korb = Map(io,jo,3)
+         lorb = Map(io,jo,4)
+         !
+         Utensor(iorb,jorb,korb,lorb) = Umatrix(io,jo)
+         !
+      enddo
+   enddo
+   !
+   call tensor_transform_NNNN_c(mode,Utensor,rotL,rotR)
+   !
+   Umatrix=zero
+   do io=1,Nbp
+      do jo=1,Nbp
+         !
+         iorb = Map(io,jo,1)
+         jorb = Map(io,jo,2)
+         korb = Map(io,jo,3)
+         lorb = Map(io,jo,4)
+         !
+         Umatrix(io,jo) = Utensor(iorb,jorb,korb,lorb)
+         !
+      enddo
+   enddo
+   deallocate(Utensor)
+   !
+end subroutine tensor_transform_NN_c
+!
+subroutine tensor_transform_NN_d(mode,Umatrix,Map,rotL,rotR)
+   !
+   implicit none
+   character(len=2),intent(in)              :: mode
    real(8),intent(inout)                    :: Umatrix(:,:)
    integer,intent(in)                       :: Map(:,:,:)
-   complex(8),intent(in)                    :: rot(:,:)
-   logical,intent(in),optional              :: onlyNaNb
+   real(8),intent(in)                       :: rotL(:,:)
+   real(8),intent(in)                       :: rotR(:,:)
    !
    real(8),allocatable                      :: Utensor(:,:,:,:)
    integer                                  :: Norb,Nbp
    integer                                  :: iorb,jorb,korb,lorb
    integer                                  :: io,jo
-   logical                                  :: onlyNaNb_
    !
    Nbp = size(Umatrix,dim=1)
    call assert_shape(Umatrix,[Nbp,Nbp],"tensor_transform_NN_d","Umatrix")
    call assert_shape(Map,[Nbp,Nbp,4],"tensor_transform_NN_d","Map")
    !
    Norb = int(sqrt(dble(Nbp)))
-   if(size(rot,dim=1).ne.Norb) stop "tensor_transform_NN_d: Rotation has a wrong 1st dimension."
-   if(size(rot,dim=2).ne.Norb) stop "tensor_transform_NN_d: Rotation has a wrong 2nd dimension."
-   !
-   onlyNaNb_=.false.
-   if(present(onlyNaNb))onlyNaNb_=onlyNaNb
+   call assert_shape(rotL,[Norb,Norb],"tensor_transform_NN_d","rotL")
+   call assert_shape(rotR,[Norb,Norb],"tensor_transform_NN_d","rotR")
    !
    allocate(Utensor(Norb,Norb,Norb,Norb));Utensor=0d0
    do io=1,Nbp
@@ -236,7 +372,7 @@ subroutine tensor_transform_NN_d(Umatrix,Map,rot,onlyNaNb)
       enddo
    enddo
    !
-   call tensor_transform(Utensor,rot,onlyNaNb=onlyNaNb_)
+   call tensor_transform_NNNN_d(mode,Utensor,rotL,rotR)
    !
    Umatrix=0d0
    do io=1,Nbp
@@ -254,61 +390,3 @@ subroutine tensor_transform_NN_d(Umatrix,Map,rot,onlyNaNb)
    deallocate(Utensor)
    !
 end subroutine tensor_transform_NN_d
-!
-subroutine tensor_transform_NN_c(Umatrix,Map,rot,onlyNaNb)
-   !
-   implicit none
-   complex(8),intent(inout)                 :: Umatrix(:,:)
-   integer,intent(in)                       :: Map(:,:,:)
-   complex(8),intent(in)                    :: rot(:,:)
-   logical,intent(in),optional              :: onlyNaNb
-   !
-   complex(8),allocatable                   :: Utensor(:,:,:,:)
-   integer                                  :: Norb,Nbp
-   integer                                  :: iorb,jorb,korb,lorb
-   integer                                  :: io,jo
-   logical                                  :: onlyNaNb_
-   !
-   Nbp = size(Umatrix,dim=1)
-   call assert_shape(Umatrix,[Nbp,Nbp],"tensor_transform_NN_c","Umatrix")
-   call assert_shape(Map,[Nbp,Nbp,4],"tensor_transform_NN_c","Map")
-   !
-   Norb = int(sqrt(dble(Nbp)))
-   if(size(rot,dim=1).ne.Norb) stop "tensor_transform_NN_c: Rotation has a wrong 1st dimension."
-   if(size(rot,dim=2).ne.Norb) stop "tensor_transform_NN_c: Rotation has a wrong 2nd dimension."
-   !
-   onlyNaNb_=.false.
-   if(present(onlyNaNb))onlyNaNb_=onlyNaNb
-   !
-   allocate(Utensor(Norb,Norb,Norb,Norb));Utensor=zero
-   do io=1,Nbp
-      do jo=1,Nbp
-         !
-         iorb = Map(io,jo,1)
-         jorb = Map(io,jo,2)
-         korb = Map(io,jo,3)
-         lorb = Map(io,jo,4)
-         !
-         Utensor(iorb,jorb,korb,lorb) = Umatrix(io,jo)
-         !
-      enddo
-   enddo
-   !
-   call tensor_transform(Utensor,rot,onlyNaNb=onlyNaNb_)
-   !
-   Umatrix=0d0
-   do io=1,Nbp
-      do jo=1,Nbp
-         !
-         iorb = Map(io,jo,1)
-         jorb = Map(io,jo,2)
-         korb = Map(io,jo,3)
-         lorb = Map(io,jo,4)
-         !
-         Umatrix(io,jo) = Utensor(iorb,jorb,korb,lorb)
-         !
-      enddo
-   enddo
-   deallocate(Utensor)
-   !
-end subroutine tensor_transform_NN_c

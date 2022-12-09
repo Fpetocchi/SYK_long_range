@@ -8,7 +8,7 @@ module module_container
    deye, zeye, zeros, ones, dag             ,&
    diag, diagonal, rotate, diag_factor      ,&
    kronecker_product, outerprod             ,&
-   cross_product, s3_product                ,&
+   cross_product, s3_product, RotSO3        ,&
    tensor_transform
 
 

@@ -157,6 +157,7 @@ module linalg
    complex(8),parameter,private             :: zero=(0.d0,0.d0)
    complex(8),parameter,private             :: xi=(0.d0,1.d0)
    complex(8),parameter,private             :: one=(1.d0,0.d0)
+   real(8),parameter,private                :: pi=3.14159265358979323846d0
 
    !---------------------------------------------------------------------------!
    !PURPOSE: Rutines available for the user.
@@ -178,6 +179,7 @@ module linalg
    public :: rotate                                                             !numpy-like. Takes two square matrix returns square matrix.
    public :: diag_factor                                                        !numpy-like. Takes square matrix and real factor returns square matrix.
    public :: kronecker_product                                                  !Takes two square matrix (size Norb) returns square matrix (size Norb**2).
+   public :: RotSO3                                                             !Takes angle and direction returns 3x3 square matrix.
    !
    public :: outerprod                                                          !Form a matrix A(:,:) from the outerproduct of two 1d arrays: A(i,j) = a_i*b_j
    public :: cross_product                                                      !cross or vector product for 2d and 3d vectors.
@@ -239,6 +241,42 @@ contains
    ! of two square matrices into a different basis
    !+--------------------------------------------------------------------------!
    include "linalg/linalg_tensor.f90"
+
+
+   !+--------------------------------------------------------------------------!
+   !PURPOSE: SO3 rotations
+   ! - tensor_transform: rotate a tensor that's given by the kroenecker product
+   ! of two square matrices into a different basis
+   !+--------------------------------------------------------------------------!
+   function RotSO3(theta,dir) result(SO3)
+     real(8),intent(in)        :: theta
+     integer,intent(in)        :: dir
+     real(8),dimension(3,3)    :: SO3
+     real(8),dimension(3,3,3)  :: SO3_d
+     !
+     SO3_d=0d0
+     !
+     SO3_d(1,1,1)=+1d0
+     SO3_d(2,2,1)=+cos(theta*pi/180)
+     SO3_d(2,3,1)=-sin(theta*pi/180)
+     SO3_d(3,2,1)=+sin(theta*pi/180)
+     SO3_d(3,3,1)=+cos(theta*pi/180)
+     !
+     SO3_d(2,2,2)=+1d0
+     SO3_d(1,1,2)=+cos(theta*pi/180)
+     SO3_d(1,3,2)=+sin(theta*pi/180)
+     SO3_d(3,1,2)=-sin(theta*pi/180)
+     SO3_d(3,3,2)=+cos(theta*pi/180)
+     !
+     SO3_d(3,3,3)=+1d0
+     SO3_d(1,1,3)=+cos(theta*pi/180)
+     SO3_d(1,2,3)=-sin(theta*pi/180)
+     SO3_d(2,1,3)=+sin(theta*pi/180)
+     SO3_d(2,2,3)=+cos(theta*pi/180)
+     !
+     SO3 = SO3_d(:,:,dir)
+     !
+   end function RotSO3
 
 
    !---------------------------------------------------------------------------!

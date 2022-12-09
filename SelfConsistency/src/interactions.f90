@@ -1361,7 +1361,7 @@ contains
    !PURPOSE: Create the freq. dependent interaction tensor from user-given
    !         phononic modes.
    !---------------------------------------------------------------------------!
-   subroutine build_Uret_singlParam_ph(Umats,Uaa,Uab,J,g_eph,wo_eph,Hetero,LocalOnly)
+   subroutine build_Uret_singlParam_ph(Umats,Uaa,Uab,J,g_eph,wo_eph,Hetero,LocalOnly,ScreenAll)
       !
       use parameters
       use file_io
@@ -1375,6 +1375,7 @@ contains
       real(8),intent(in)                    :: g_eph(:),wo_eph(:)
       type(Heterostructures),intent(in)     :: Hetero
       logical,intent(in),optional           :: LocalOnly
+      logical,intent(in),optional           :: ScreenAll
       !
       integer                               :: Nbp,Norb,Nph
       integer                               :: ib1,ib2,ik
@@ -1386,7 +1387,8 @@ contains
       type(BosonicField),target             :: Umats_imp
       type(BosonicField),pointer            :: Umats_ptr
       type(physicalU)                       :: PhysicalUelements
-      logical                               :: LocalOnly_,Screen
+      logical                               :: LocalOnly_,ScreenAll_
+      logical                               :: Screen
       real                                  :: start,finish
       !
       !
@@ -1399,6 +1401,9 @@ contains
       LocalOnly_=.true.
       if(present(LocalOnly))LocalOnly_=LocalOnly
       if(LocalOnly_.and.(Umats%Nkpt.ne.0)) stop "build_Uret_singlParam_ph: Umats k dependent attributes are supposed to be unallocated."
+      !
+      ScreenAll_=.true.
+      if(present(ScreenAll))ScreenAll_=ScreenAll
       !
       Nph = size(g_eph)
       if(size(g_eph).ne.size(wo_eph)) stop "build_Uret_singlParam_ph: Phonon sizes does not match."
@@ -1440,7 +1445,7 @@ contains
       do ib1=1,Nbp
          do ib2=1,Nbp
             !
-            Screen = .not. (PhysicalUelements%Full_Jsf(ib1,ib2).or.PhysicalUelements%Full_Jph(ib1,ib2))
+            Screen = ScreenAll_ .or. PhysicalUelements%Full_Uaa(ib1,ib2) .or. PhysicalUelements%Full_Uab(ib1,ib2)
             !
             do iph=1,Nph
                iwp=minloc(abs(wreal-wo_eph(iph)),dim=1)
@@ -1491,7 +1496,7 @@ contains
       deallocate(D,Utmp,wmats,wreal)
       call DeallocateBosonicField(Ureal)
       write(*,"(A,F)") "     Ue-ph(w) --> Ue-ph(iw) cpu timing:", finish-start
-      if(Norb.gt.1)write(*,"(A)") "     Screening not considered for Hund coupling."
+      if(.not.ScreenAll_)write(*,"(A)") "     Screening only Kanamori NaNb terms."
       !
       if(.not.LocalOnly_)then
          write(*,"(A)") "     Filling the K-dependent attributes."
@@ -1511,7 +1516,7 @@ contains
       !
    end subroutine build_Uret_singlParam_ph
    !
-   subroutine build_Uret_multiParam_ph(Umats,Uaa,Uab,J,g_eph,wo_eph,Hetero,LocalOnly)
+   subroutine build_Uret_multiParam_ph(Umats,Uaa,Uab,J,g_eph,wo_eph,Hetero,LocalOnly,ScreenAll)
       !
       use parameters
       use file_io
@@ -1525,6 +1530,7 @@ contains
       real(8),intent(in)                    :: g_eph(:),wo_eph(:)
       type(Heterostructures),intent(in)     :: Hetero
       logical,intent(in),optional           :: LocalOnly
+      logical,intent(in),optional           :: ScreenAll
       !
       integer                               :: Nbp,Norb,Nph
       integer                               :: ib1,ib2,iorb,jorb,ik
@@ -1536,7 +1542,8 @@ contains
       type(BosonicField),target             :: Umats_imp
       type(BosonicField),pointer            :: Umats_ptr
       type(physicalU)                       :: PhysicalUelements
-      logical                               :: LocalOnly_,Screen
+      logical                               :: LocalOnly_,ScreenAll_
+      logical                               :: Screen
       real                                  :: start,finish
       !
       !
@@ -1549,6 +1556,9 @@ contains
       LocalOnly_=.true.
       if(present(LocalOnly))LocalOnly_=LocalOnly
       if(LocalOnly_.and.(Umats%Nkpt.ne.0)) stop "build_Uret_multiParam_ph: Umats k dependent attributes are supposed to be unallocated."
+      !
+      ScreenAll_=.true.
+      if(present(ScreenAll))ScreenAll_=ScreenAll
       !
       Nph = size(g_eph)
       if(size(g_eph).ne.size(wo_eph)) stop "build_Uret_multiParam_ph: Phonon sizes does not match."
@@ -1597,7 +1607,7 @@ contains
       do ib1=1,Nbp
          do ib2=1,Nbp
             !
-            Screen = .not. (PhysicalUelements%Full_Jsf(ib1,ib2).or.PhysicalUelements%Full_Jph(ib1,ib2))
+            Screen = ScreenAll_ .or. PhysicalUelements%Full_Uaa(ib1,ib2) .or. PhysicalUelements%Full_Uab(ib1,ib2)
             !
             do iph=1,Nph
                iwp=minloc(abs(wreal-wo_eph(iph)),dim=1)
@@ -1648,7 +1658,7 @@ contains
       deallocate(D,Utmp,wmats,wreal)
       call DeallocateBosonicField(Ureal)
       write(*,"(A,F)") "     Ue-ph(w) --> Ue-ph(iw) cpu timing:", finish-start
-      if(Norb.gt.1)write(*,"(A)") "     Screening not considered for Hund coupling."
+      if(.not.ScreenAll_)write(*,"(A)") "     Screening only Kanamori NaNb terms."
       !
       if(.not.LocalOnly_)then
          write(*,"(A)") "     Filling the K-dependent attributes."

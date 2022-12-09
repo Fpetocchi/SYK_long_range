@@ -495,7 +495,7 @@ contains
          !$OMP DO
          do ik=1,Nkpt
             !
-            call tensor_transform(Wk_w(:,:,ik),PhysicalUelements%Full_Map,Zk(:,:,ik),onlyNaNb=.true.)
+            !call tensor_transform(Wk_w(:,:,ik),PhysicalUelements%Full_Map,Zk(:,:,ik),onlyNaNb=.true.) FIXME
             !
             do iorb=1,Norb
                do jorb=1,Norb

@@ -296,7 +296,7 @@ contains
             else
                !
                call createDir(reg(Itpath),verb=verbose)
-               do isite=1,Nsite
+               do isite=1,Solver%Nimp
                   call createDir(reg(Itpath)//"/Solver_"//reg(LocalOrbs(isite)%Name)//"/fits",verb=verbose)
                   if(ExpandImpurity.or.AFMselfcons)exit
                enddo
@@ -500,7 +500,7 @@ contains
       write(*,"(A)") new_line("A")//new_line("A")//"---- site and orbital structure"
       write(*,"(A,1I3)") "     Number of inequivalent sites: ",Nsite
       write(*,"(A,1I3)") "     Number of solved impurities : ",Solver%Nimp
-      do isite=1,Nsite
+      do isite=1,size(LocalOrbs)
          write(*,"(2(A,I3),A,10I3)")"     site: ",isite,", orbital space: ",LocalOrbs(isite)%Norb,", orbital indexes: ",LocalOrbs(isite)%Orbs
       enddo
       if(sum(LocalOrbs(:)%Norb).ne.Lttc%Norb)then
@@ -658,11 +658,12 @@ contains
       logical,intent(in),optional           :: read
       !
       character(len=255)                    :: Folder
-      integer                               :: isite,Norb
+      integer                               :: isite,Nsite_loc,Norb
       real(8),allocatable                   :: EigR(:,:)
       logical                               :: storeIt,read_,build_
       !
       if(.not.allocated(LocalOrbs)) stop "build_rotations: LocalOrbs not properly initialized."
+      Nsite_loc = size(LocalOrbs)
       !
       read_=.false.
       if(present(read))read_=read
@@ -686,14 +687,14 @@ contains
             storeIt=.true.
       end select
       !
-      do isite=1,Nsite
+      do isite=1,Nsite_loc
          if(allocated(LocalOrbs(isite)%Op))    deallocate(LocalOrbs(isite)%Op)
          if(allocated(LocalOrbs(isite)%Rot))   deallocate(LocalOrbs(isite)%Rot)
          if(allocated(LocalOrbs(isite)%RotDag))deallocate(LocalOrbs(isite)%RotDag)
          if(allocated(LocalOrbs(isite)%Eig))   deallocate(LocalOrbs(isite)%Eig)
       enddo
       !
-      do isite=1,Nsite
+      do isite=1,Nsite_loc
          !
          if(storeIt) Folder = reg(ItFolder)//"Solver_"//reg(LocalOrbs(isite)%Name)//"/"
          !
@@ -751,22 +752,19 @@ contains
       !
       implicit none
       type(Equivalent),allocatable          :: EqvImpndx(:),EqvImpndxRot(:)
-      integer                               :: iset,isite,Nimp
+      integer                               :: iset,isite
       integer                               :: set_orb,set_ndx,unit
       character(len=255)                    :: file
       logical                               :: contained
       !
-      Nimp = Nsite
-      if(ExpandImpurity.or.AFMselfcons) Nimp=1
-      !
       if(allocated(EqvImpndxF))deallocate(EqvImpndxF)
-      allocate(EqvImpndxF(Nimp))
+      allocate(EqvImpndxF(Solver%Nimp))
       if(allocated(EqvImpndxB))deallocate(EqvImpndxB)
-      allocate(EqvImpndxB(Nimp))
+      allocate(EqvImpndxB(Solver%Nimp))
       !
       !store the impurity equivalent indexes when rotation is performed
-      allocate(EqvImpndxRot(Nimp))
-      do isite=1,Nsite
+      allocate(EqvImpndxRot(Solver%Nimp))
+      do isite=1,Solver%Nimp
          !
          !look for pattern given by the diagonal lattice operator
          call get_pattern(EqvImpndxRot(isite)%SetOrbs,LocalOrbs(isite)%Eig,1e4*eps)
@@ -797,8 +795,8 @@ contains
       enddo
       !
       !store the impurity equivalent indexes when rotation is NOT performed
-      allocate(EqvImpndx(Nimp))
-      do isite=1,Nsite
+      allocate(EqvImpndx(Solver%Nimp))
+      do isite=1,Solver%Nimp
          !
          !dimensional initialization
          EqvImpndx(isite) = EqvGWndx
@@ -842,6 +840,7 @@ contains
       else
          EqvImpndxF = EqvImpndx
       endif
+      !beacuse in the solver basis the local problem is always diagonal
       EqvImpndxF(:)%Gfoffdiag = .false.
       !
       !Bosonic case
@@ -850,6 +849,7 @@ contains
       else
          EqvImpndxB = EqvImpndx
       endif
+      !regardless of the basis the interaction is always non-diagonal
       EqvImpndxB(:)%Gfoffdiag = .true.
       !
       deallocate(EqvImpndxRot,EqvImpndx)
@@ -858,7 +858,7 @@ contains
       if(sym_mode.gt.1)then
          !
          if(FirstIteration.ne.LastIteration)then
-            do isite=1,Nsite
+            do isite=1,Solver%Nimp
                if(EqvImpndxF(isite)%Nset.gt.0)then
                   file = reg(ItFolder)//"Solver_"//reg(LocalOrbs(isite)%Name)//"/Eqv.DAT"
                   unit = free_unit()
@@ -873,7 +873,7 @@ contains
          endif
          !
          call add_separator("Solver symmetrizations")
-         do isite=1,Nsite
+         do isite=1,Solver%Nimp
             call append_to_input_list(EqvImpndxF(isite)%Nset,"EQV_"//str(isite)//"_SETS","Number of sets of locally equivalent orbitals in site number "//str(isite)) !User cannot set the EQV_IMP_* fields as they are deduced from EQV_*, EXPAND and ROTATE_F.
             if(EqvImpndxF(isite)%Nset.gt.0)then
                do iset=1,EqvImpndxF(isite)%Nset
@@ -1189,7 +1189,7 @@ contains
       allocate(densityLDA(Crystal%Norb,Crystal%Norb,Nspin));densityLDA=czero
       allocate(densityGW(Crystal%Norb,Crystal%Norb,Nspin));densityGW=czero
       allocate(densityDMFT(Crystal%Norb,Crystal%Norb,Nspin));densityDMFT=czero
-      do isite=1,Nsite
+      do isite=1,Solver%Nimp
          allocate(LocalOrbs(isite)%rho_OrbSpin(LocalOrbs(isite)%Norb,LocalOrbs(isite)%Norb,Nspin))
          LocalOrbs(isite)%rho_OrbSpin=0d0
       enddo
@@ -1204,10 +1204,10 @@ contains
       else
          !
          if(addTierIII)call read_Matrix(densityLDA,reg(pathINPUT)//"Nlda",paramagnet)
-         call read_Matrix(densityDMFT,reg(PrevItFolder)//"Nimp",paramagnet)
+         if(solve_DMFT)call read_Matrix(densityDMFT,reg(PrevItFolder)//"Nimp",paramagnet)
          densityGW=Glat%N_s
          !
-         do isite=1,Nsite
+         do isite=1,Solver%Nimp
             file = reg(PrevItFolder)//"Solver_"//reg(LocalOrbs(isite)%Name)//"/resultsQMC/Nqmc.DAT"
             call inquireFile(reg(file),filexists,hardstop=.false.,verb=verbose)
             if(filexists)then
@@ -1492,7 +1492,7 @@ contains
          !
          !Compute the G0W0 contribution to the local self-energy with removed DC
          call AllocateFermionicField(S_G0W0_DMFT,Crystal%Norb,Nmats,Nsite=Nsite,Beta=Beta,mu=Glat%mu)
-         do isite=1,Nsite
+         do isite=1,size(LocalOrbs)
             !
             !Extract the local G0W0 self-energy for each site
             call AllocateFermionicField(S_G0W0_imp,LocalOrbs(isite)%Norb,Nmats,Beta=Beta)
@@ -1981,13 +1981,6 @@ contains
          enddo
          call symmetrize_GW(DeltaSym,EqvImpndxF(isite))
          if(causal_D)call symmetrize_GW(DeltaCorr,EqvImpndxF(isite))
-         !if(RotateHloc)then
-         !   call symmetrize_imp(DeltaSym,LocalOrbs(isite)%Eig)
-         !   if(causal_D)call symmetrize_imp(DeltaCorr,LocalOrbs(isite)%Eig)
-         !else
-         !   call symmetrize_GW(DeltaSym,EqvImpndxF(isite))
-         !   if(causal_D)call symmetrize_GW(DeltaCorr,EqvImpndxF(isite))
-         !endif
          do iorb=1,Norb
             Dmats(iorb,:,:) = DeltaSym%ws(iorb,iorb,:,:)
          enddo
@@ -1998,11 +1991,6 @@ contains
             Eloc_s(:,:,ispin) = diag(Eloc(:,ispin))
          enddo
          call symmetrize_GW(Eloc_s,EqvImpndxF(isite))
-         !if(RotateHloc)then
-         !   call symmetrize_imp(Eloc_s,LocalOrbs(isite)%Eig)
-         !else
-         !   call symmetrize_GW(Eloc_s,EqvImpndxF(isite))
-         !endif
          do ispin=1,Nspin
             Eloc(:,ispin) = diagonal(Eloc_s(:,:,ispin))
          enddo
@@ -2249,7 +2237,7 @@ contains
          case("DMFT+statU","DMFT+dynU")
             !
             call loc2imp(curlyU,Ulat,LocalOrbs(isite)%Orbs)
-            if(RotateUloc) call TransformBosonicField(curlyU,LocalOrbs(isite)%Rot,PhysicalUelements%Full_Map)
+            if(RotateUloc) call TransformBosonicField(curlyU,PhysicalUelements%Full_Map,LocalOrbs(isite)%Rot)
             !
          case("EDMFT","GW+EDMFT")
             !
@@ -2257,7 +2245,7 @@ contains
                !
                write(*,"(A)") "     Using local Ucrpa as effective interaction."
                call loc2imp(curlyU,Ulat,LocalOrbs(isite)%Orbs)
-               if(RotateUloc) call TransformBosonicField(curlyU,LocalOrbs(isite)%Rot,PhysicalUelements%Full_Map)
+               if(RotateUloc) call TransformBosonicField(curlyU,PhysicalUelements%Full_Map,LocalOrbs(isite)%Rot)
                !
             else
                !
@@ -2297,9 +2285,9 @@ contains
                   endif
                   !
                   if(RotateUloc)then
-                     call TransformBosonicField(curlyU,LocalOrbs(isite)%Rot,PhysicalUelements%Full_Map)
+                     call TransformBosonicField(curlyU,PhysicalUelements%Full_Map,LocalOrbs(isite)%Rot)
                      if(causal_U)then
-                        call TransformBosonicField(curlyUcorr,LocalOrbs(isite)%Rot,PhysicalUelements%Full_Map)
+                        call TransformBosonicField(curlyUcorr,PhysicalUelements%Full_Map,LocalOrbs(isite)%Rot)
                         call dump_BosonicField(curlyUcorr,reg(ItFolder)//"Solver_"//reg(LocalOrbs(isite)%Name)//"/","curlyU_correction_"//reg(LocalOrbs(isite)%Name)//"_w.DAT")
                      endif
                   endif
@@ -2366,7 +2354,7 @@ contains
       !Check if the screened effective local interaction at iw=0 is the same for all the sites. Same Orbital dimension assumed.
       if(checkInvariance)then
          !
-         do isitecheck=1,Nsite
+         do isitecheck=1,size(LocalOrbs)
             !
             Norb = LocalOrbs(isitecheck)%Norb
             !
@@ -2525,7 +2513,7 @@ contains
          allocate(Simp(Nsite))
          if(Dyson_Imprvd_F)allocate(Fimp(Nsite))
       endif
-      do isite=1,Nsite
+      do isite=1,Solver%Nimp
          !
          write(*,"(A)") "     Setting up site: "//reg(LocalOrbs(isite)%Name)
          !
@@ -2564,7 +2552,7 @@ contains
       !
       ! COLLECT IMPURITY OCCUPATION --------------------------------------------
       allocate(densityDMFT(Crystal%Norb,Crystal%Norb,Nspin));densityDMFT=czero
-      do isite=1,Nsite
+      do isite=1,Solver%Nimp
          !
          write(*,"(A)") new_line("A")//"     Collecting occupation of site "//reg(LocalOrbs(isite)%Name)
          !
@@ -2604,7 +2592,7 @@ contains
       !
       ! COLLECT IMPURITY GF ----------------------------------------------------
       call AllocateFermionicField(G_DMFT,Crystal%Norb,Nmats,Nsite=Nsite,Beta=Beta,mu=muQMC)
-      do isite=1,Nsite
+      do isite=1,Solver%Nimp
          !
          write(*,"(A)") new_line("A")//"     Collecting the impurity Green's function of site "//reg(LocalOrbs(isite)%Name)
          !
@@ -2673,7 +2661,7 @@ contains
       call AllocateFermionicField(S_DMFT,Crystal%Norb,Nmats,Nsite=Nsite,Beta=Beta,mu=muQMC)
       !
       !Adjust the chemical potential of curlyG if the solver has changed it
-      do isite=1,Nsite
+      do isite=1,Solver%Nimp
          !
          write(*,"(A)") new_line("A")//"     Collecting curlyG of site "//reg(LocalOrbs(isite)%Name)
          !
@@ -2705,7 +2693,7 @@ contains
       !
       ! Check if the fermionic improved estimators are present
       if(Dyson_Imprvd_F)then
-         do isite=1,Nsite
+         do isite=1,Solver%Nimp
             file = reg(PrevItFolder)//"Solver_"//reg(LocalOrbs(isite)%Name)//"/resultsQMC/Fimp_S_t.DAT"
             call inquireFile(reg(file),filexists,hardstop=.false.,verb=verbose)
             if(.not.filexists)then
@@ -2725,7 +2713,7 @@ contains
          deallocate(G0imp)
          !
          ! Collect static improved estimators
-         do isite=1,Nsite
+         do isite=1,Solver%Nimp
             !
             write(*,"(A)") new_line("A")//"     Collecting the static impurity improved estimator of site "//reg(LocalOrbs(isite)%Name)
             !
@@ -2775,7 +2763,7 @@ contains
          enddo
          !
          ! Collect retarded improved estimators
-         do isite=1,Nsite
+         do isite=1,Solver%Nimp
             !
             write(*,"(A)") new_line("A")//"     Collecting the retarded impurity improved estimator of site "//reg(LocalOrbs(isite)%Name)
             !
@@ -2830,7 +2818,7 @@ contains
          enddo
          !
          !Fermionic Dyson equation in the solver basis (always diagonal).
-         do isite=1,Nsite
+         do isite=1,Solver%Nimp
             !
             write(*,"(A)") new_line("A")//"     Solving fermionic Dyson of site "//reg(LocalOrbs(isite)%Name)//" using improved estimators."
             do ispin=1,Nspin
@@ -2849,7 +2837,7 @@ contains
          !
       else
          !
-         do isite=1,Nsite
+         do isite=1,Solver%Nimp
             !
             !Fermionic Dyson equation in the solver basis (always diagonal)
             write(*,"(A)") new_line("A")//"     Solving fermionic Dyson of site "//reg(LocalOrbs(isite)%Name)
@@ -2871,7 +2859,7 @@ contains
       endif
       !
       !Self-energy manipulations
-      do isite=1,Nsite
+      do isite=1,Solver%Nimp
          !
          !Fit the impurity self-energy tail
          if(fitSigmaTail)then
@@ -2972,7 +2960,6 @@ contains
          call dump_Matrix(Simp(isite)%N_s,reg(PrevItFolder),"Solver_"//reg(LocalOrbs(isite)%Name)//"/Hartree_UNimp_"//reg(LocalOrbs(isite)%Name),paramagnet)
          !
          !Insert or Expand to the Lattice basis
-         !if(RotateHloc.and.(sym_mode.gt.1))call symmetrize_imp(Simp(isite),LocalOrbs(isite)%Eig)
          if(sym_mode.gt.1) call symmetrize_GW(Simp(isite),EqvImpndxF(isite))
          call imp2loc(S_DMFT,Simp(isite),isite,LocalOrbs,ExpandImpurity,AFMselfcons,RotateHloc,name="Simp")
          !
@@ -3012,7 +2999,7 @@ contains
          call AllocateBosonicField(P_EDMFT,Crystal%Norb,Nmats,Crystal%iq_gamma,Nsite=Nsite,no_bare=.true.,Beta=Beta)
          call AllocateBosonicField(W_EDMFT,Crystal%Norb,Nmats,Crystal%iq_gamma,Nsite=Nsite,Beta=Beta)
          !
-         do isite=1,Nsite
+         do isite=1,Solver%Nimp
             !
             write(*,"(A)") new_line("A")//"     Collecting the impurity time-dependent occupations of site "//reg(LocalOrbs(isite)%Name)
             !
@@ -3209,8 +3196,8 @@ contains
             call calc_Wimp(Wimp,curlyU,ChiCmats)
             !
             !Expand to the Lattice basis
-            call imp2loc(C_EDMFT,ChiCmats,isite,LocalOrbs,ExpandImpurity,AFMselfcons,RotateHloc,name="Cimp",fillJ=.true.)
-            call imp2loc(P_EDMFT,Pimp,isite,LocalOrbs,ExpandImpurity,AFMselfcons,RotateHloc,name="Pimp",fillJ=.true.)
+            call imp2loc(C_EDMFT,ChiCmats,isite,LocalOrbs,ExpandImpurity,AFMselfcons,RotateHloc,name="Cimp")
+            call imp2loc(P_EDMFT,Pimp,isite,LocalOrbs,ExpandImpurity,AFMselfcons,RotateHloc,name="Pimp")
             call imp2loc(W_EDMFT,Wimp,isite,LocalOrbs,ExpandImpurity,AFMselfcons,RotateHloc,name="Wimp")
             call imp2loc(curlyU_EDMFT,curlyU,isite,LocalOrbs,ExpandImpurity,AFMselfcons,RotateUloc,name="curlyU")
             !
@@ -3258,7 +3245,7 @@ contains
       !
       deallocate(Gimp,Simp)
       if(Dyson_Imprvd_F)deallocate(Fimp)
-      do isite=1,Nsite
+      do isite=1,Solver%Nimp
          deallocate(LocalOrbs(isite)%rho_Flav)
          deallocate(LocalOrbs(isite)%rho_OrbSpin)
          deallocate(LocalOrbs(isite)%Docc)
@@ -3473,7 +3460,7 @@ contains
             endif
             !
             if(Nsite.gt.1)then
-               do isite=1,Nsite
+               do isite=1,Solver%Nimp
                   !
                   Norb_imp = LocalOrbs(isite)%Norb
                   wsi = wn*Norb - wn*Norb_imp

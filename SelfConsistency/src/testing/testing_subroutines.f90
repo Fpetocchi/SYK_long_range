@@ -1906,3 +1906,43 @@ end function denspace
 !call createDir(reg(Itpath)//"/Convergence/curlyUimp",verb=verbose)
 !call createDir(reg(Itpath)//"/Convergence/Plat",verb=verbose)
 !call createDir(reg(Itpath)//"/Convergence/Pimp",verb=verbose)
+
+
+
+!TEST>>>
+!
+type(physicalU)           :: PhysicalUelements
+complex(8),dimension(3,3)    :: SO3
+!
+call AllocateBosonicField(Ulat,3,Nmats,Crystal%iq_gamma,Nsite=1,Beta=Beta)
+g_eph = [1d0]
+wo_eph = [050]
+Uaa = 5d0
+Uab = 4d0
+J = 0.5d0
+!
+call init_Uelements(3,PhysicalUelements)
+SO3 = matmul(RotSO3(32.45d0,2),RotSO3(117.45d0,1))
+!
+call build_Uret(Ulat,Uaa,Uab,J,g_eph,wo_eph,Hetero,ScreenAll=.true.)
+call dump_BosonicField(Ulat,reg(ItFolder),"Ulat_noRot_All.DAT")
+call TransformBosonicField("GG",Ulat,PhysicalUelements%Full_Map,SO3)
+call clear_attributes(Ulat,thresh=eps)
+call dump_BosonicField(Ulat,reg(ItFolder),"Ulat_Rot_All.DAT")
+call TransformBosonicField("GG",Ulat,PhysicalUelements%Full_Map,dag(SO3))
+call clear_attributes(Ulat,thresh=eps)
+call dump_BosonicField(Ulat,reg(ItFolder),"Ulat_Rot_All_back.DAT")
+!
+call clear_attributes(Ulat)
+!
+call build_Uret(Ulat,Uaa,Uab,J,g_eph,wo_eph,Hetero,ScreenAll=.false.)
+call dump_BosonicField(Ulat,reg(ItFolder),"Ulat_noRot_noAll.DAT")
+call TransformBosonicField("GG",Ulat,PhysicalUelements%Full_Map,SO3)
+call clear_attributes(Ulat,thresh=eps)
+call dump_BosonicField(Ulat,reg(ItFolder),"Ulat_Rot_noAll.DAT")
+call TransformBosonicField("GG",Ulat,PhysicalUelements%Full_Map,dag(SO3))
+call clear_attributes(Ulat,thresh=eps)
+call dump_BosonicField(Ulat,reg(ItFolder),"Ulat_Rot_noAll_back.DAT")
+!
+stop
+!>>>TEST

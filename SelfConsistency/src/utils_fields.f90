@@ -419,9 +419,10 @@ contains
 
 
    !---------------------------------------------------------------------------!
-   !PURPOSE: Rotate a tensor
+   !PURPOSE: This is just a wrapper around tensor_transform defined in linalg
+   !         in order to deal with the frequency axis
    !---------------------------------------------------------------------------!
-   subroutine TransformBosonicField(W,U,Map,LocalOnly)
+   subroutine TransformBosonicField(W,Map,UL,UR,type)
       !
       use parameters
       use utils_misc
@@ -429,37 +430,36 @@ contains
       implicit none
       !
       type(BosonicField),intent(inout)      :: W
-      complex(8),intent(in)                 :: U(:,:)
       integer,intent(in)                    :: Map(:,:,:)
-      logical,intent(in),optional           :: LocalOnly
+      complex(8),intent(in)                 :: UL(:,:)
+      complex(8),intent(in),optional        :: UR(:,:)
+      character(len=2),intent(in),optional  :: type
       !
-      integer                               :: iw,ik,Norb
-      logical                               :: LocalOnly_
+      integer                               :: iw,Norb
+      complex(8),allocatable                :: UR_(:,:)
+      character(len=2)                      :: type_
       !
-      if(.not.W%status) stop "TransformBosonicField: field not properly initialized."
-      call assert_shape(Map,[W%Nbp,W%Nbp,4],"TransformBosonicField","Map")
+      if(.not.W%status) stop "TransformLocalBosonicField: field not properly initialized."
+      call assert_shape(Map,[W%Nbp,W%Nbp,4],"TransformLocalBosonicField","Map")
       Norb = int(sqrt(dble(W%Nbp)))
-      call assert_shape(U,[Norb,Norb],"TransformBosonicField","U")
-      LocalOnly_=.true.
-      if(present(LocalOnly))LocalOnly_=LocalOnly
+      call assert_shape(UL,[Norb,Norb],"TransformLocalBosonicField","UL")
+      if(present(UR))then
+         call assert_shape(UR,[Norb,Norb],"TransformLocalBosonicField","UR")
+         UR_ = UR
+      else
+         UR_ = UL
+      endif
       !
-      if(allocated(W%bare_local))call tensor_transform(W%bare_local,Map,U)
+      type_="NN"
+      if(present(type))type_=reg(type)
+      !
+      if(allocated(W%bare_local))call tensor_transform(reg(type_),W%bare_local,Map,UL,UR_)
       if(allocated(W%screened_local))then
          do iw=1,W%Npoints
-            call tensor_transform(W%screened_local(:,:,iw),Map,U)
+            call tensor_transform(reg(type_),W%screened_local(:,:,iw),Map,UL,UR_)
          enddo
       endif
-      !
-      if(.not.LocalOnly_)then
-         do ik=1,W%Nkpt
-            if(allocated(W%bare))call tensor_transform(W%bare(:,:,ik),Map,U)
-            if(allocated(W%screened))then
-               do iw=1,W%Npoints
-                  call tensor_transform(W%screened(:,:,iw,ik),Map,U)
-               enddo
-            endif
-         enddo
-      endif
+      deallocate(UR_)
       !
    end subroutine TransformBosonicField
 
@@ -467,26 +467,42 @@ contains
    !---------------------------------------------------------------------------!
    !PURPOSE: Clear the internal attributes of a Fermionic/Bosonic field
    !---------------------------------------------------------------------------!
-   subroutine clear_attributes_Fermion(G)
+   subroutine clear_attributes_Fermion(G,thresh)
       use parameters
       implicit none
       type(FermionicField),intent(inout)    :: G
+      real(8),intent(in),optional           :: thresh
       if(.not.G%status) stop "clear_attributes_Fermion: field not properly initialized."
-      if(allocated(G%N_s)) G%N_s=czero
-      if(allocated(G%ws)) G%ws=czero
-      if(allocated(G%N_ks)) G%N_ks=czero
-      if(allocated(G%wks)) G%wks=czero
+      if(present(thresh))then
+         if(allocated(G%N_s)) where(abs(G%N_s)<abs(thresh)) G%N_s=czero
+         if(allocated(G%ws)) where(abs(G%ws)<abs(thresh)) G%ws=czero
+         if(allocated(G%N_ks)) where(abs(G%N_ks)<abs(thresh)) G%N_ks=czero
+         if(allocated(G%wks)) where(abs(G%wks)<abs(thresh)) G%wks=czero
+      else
+         if(allocated(G%N_s)) G%N_s=czero
+         if(allocated(G%ws)) G%ws=czero
+         if(allocated(G%N_ks)) G%N_ks=czero
+         if(allocated(G%wks)) G%wks=czero
+      endif
    end subroutine clear_attributes_Fermion
    !
-   subroutine clear_attributes_Boson(W)
+   subroutine clear_attributes_Boson(W,thresh)
       use parameters
       implicit none
       type(BosonicField),intent(inout)      :: W
+      real(8),intent(in),optional           :: thresh
       if(.not.W%status) stop "clear_attributes_Boson: field not properly initialized."
-      if(allocated(W%bare_local)) W%bare_local=czero
-      if(allocated(W%screened_local)) W%screened_local=czero
-      if(allocated(W%bare)) W%bare=czero
-      if(allocated(W%screened)) W%screened=czero
+      if(present(thresh))then
+         if(allocated(W%bare_local)) where(abs(W%bare_local)<abs(thresh)) W%bare_local=czero
+         if(allocated(W%screened_local)) where(abs(W%screened_local)<abs(thresh)) W%screened_local=czero
+         if(allocated(W%bare)) where(abs(W%bare)<abs(thresh)) W%bare=czero
+         if(allocated(W%screened)) where(abs(W%screened)<abs(thresh)) W%screened=czero
+      else
+         if(allocated(W%bare_local)) W%bare_local=czero
+         if(allocated(W%screened_local)) W%screened_local=czero
+         if(allocated(W%bare)) W%bare=czero
+         if(allocated(W%screened)) W%screened=czero
+      endif
    end subroutine clear_attributes_Boson
 
 
@@ -753,7 +769,7 @@ contains
       !
    end subroutine loc2imp_Matrix
    !
-   subroutine loc2imp_Bosonic(Wimp,Wloc,orbs,sitename,U,Map)
+   subroutine loc2imp_Bosonic(Wimp,Wloc,orbs,sitename,U,Map,type)
       !
       use parameters
       use utils_misc
@@ -766,6 +782,7 @@ contains
       character(len=*),intent(in),optional  :: sitename
       complex(8),allocatable,optional       :: U(:,:)
       integer,allocatable,optional          :: Map(:,:,:)
+      character(len=2),intent(in),optional  :: type
       !
       integer                               :: ip,ip_loc
       integer                               :: Norb_imp,Norb_loc
@@ -773,6 +790,7 @@ contains
       integer                               :: i_loc,j_loc,k_loc,l_loc
       integer                               :: i_imp,j_imp,k_imp,l_imp
       logical                               :: doBare,rot,WlocStatic
+      character(len=2)                      :: type_
       !
       !
       if(verbose)write(*,"(A)") "---- loc2imp_Bosonic"
@@ -800,7 +818,9 @@ contains
       if(size(orbs).ne.Norb_imp) stop "loc2imp_Bosonic: can't fit the requested orbitals inside Wimp."
       if(size(orbs).gt.Norb_loc) stop "loc2imp_Bosonic: number of requested orbitals greater than Wloc size."
       if(present(U))then
-         if(.not.present(Map)) stop "loc2imp_Bosonic: Also the map must be provided."
+         type_="NN"
+         if(present(type))type_=reg(type)
+         if(.not.present(Map)) stop "loc2imp_Bosonic: requested orbital rotation but map not provided."
          call assert_shape(U,[size(orbs),size(orbs)],"loc2imp_Bosonic","U")
          if(size(U,dim=1).ne.3) write(*,"(A)") "     Warning: The local orbital space rotation is well defined only for a t2g sub-shell."
          write(*,"(A)") "     The local orbital space will be rotated during extraction."
@@ -845,9 +865,9 @@ contains
       enddo
       !
       if(rot)then
-         if(doBare) call tensor_transform(Wimp%bare_local,Map,U)
+         if(doBare) call tensor_transform(reg(type_),Wimp%bare_local,Map,U,U)
          do ip=1,Wimp%Npoints
-            call tensor_transform(Wimp%screened_local(:,:,ip),Map,U)
+            call tensor_transform(reg(type_),Wimp%screened_local(:,:,ip),Map,U,U)
          enddo
       endif
       !
@@ -1225,7 +1245,7 @@ contains
       !
    end subroutine imp2loc_Matrix_s
    !
-   subroutine imp2loc_Bosonic(Wloc,Wimp,impndx,LocalOrbs,expand,AFM,rot,name,fillJ)
+   subroutine imp2loc_Bosonic(Wloc,Wimp,impndx,LocalOrbs,expand,AFM,rot,name,type)
       !
       use parameters
       use utils_misc
@@ -1239,8 +1259,8 @@ contains
       logical,intent(in)                    :: expand
       logical,intent(in)                    :: AFM
       logical,intent(in)                    :: rot
-      logical,intent(in),optional           :: fillJ
       character(len=*),intent(in),optional  :: name
+      character(len=2),intent(in),optional  :: type
       !
       complex(8),allocatable                :: Wbtmp(:,:),Wstmp(:,:,:)
       type(physicalU)                       :: PhysicalUelements
@@ -1249,7 +1269,8 @@ contains
       integer                               :: ib_imp,jb_imp,ib_loc,jb_loc
       integer                               :: i_loc,j_loc,k_loc,l_loc
       integer                               :: i_imp,j_imp,k_imp,l_imp
-      logical                               :: doBare,fillJ_
+      logical                               :: doBare
+      character(len=2)                      :: type_
       !
       !
       if(verbose)write(*,"(A)") "---- imp2loc_Bosonic"
@@ -1303,7 +1324,6 @@ contains
       if(Nsite.gt.size(LocalOrbs)) stop "imp2loc_Bosonic: number of target sites is larger LocalOrbs list."
       if(impndx.gt.size(LocalOrbs)) stop "imp2loc_Bosonic: target site is outside LocalOrbs list."
       !
-      fillJ_=.false.
       if(rot)then
          !
          if(present(name))then
@@ -1312,12 +1332,13 @@ contains
             write(*,"(A)") "     The impurity orbital space will be rotated during insertion in "//str(Nsite)//" sites."
          endif
          !
-         if(present(fillJ))fillJ_=fillJ
-         if(fillJ_)write(*,"(A)") "     The field is polarization-like missing exchange terms (for the segment solver). Adding components to preserve the symmetry of the rotation."
+         type_="NN"
+         if(present(type))type_=reg(type)
          !
       endif
       !
-      ! Rotating either one site or all of them depending on expand
+      ! Rotating either one site or all of them depending on expand.
+      ! I'm allocating another one because Wimp has intent(in)
       if(doBare) allocate(Wbtmp(Wimp%Nbp,Wimp%Nbp))
       allocate(Wstmp(Wimp%Nbp,Wimp%Nbp,Wimp%Npoints))
       do isite=1,Nsite
@@ -1338,9 +1359,9 @@ contains
             if(.not.allocated(LocalOrbs(sitendx)%RotDag)) stop "imp2loc_Fermionic: One of the rotations is not allocated."
             call assert_shape(LocalOrbs(sitendx)%RotDag,[Norb_imp,Norb_imp],"imp2loc_Fermionic","LocalOrbs("//str(sitendx)//")%RotDag")
             !
-            if(doBare) call tensor_transform(Wbtmp,PhysicalUelements%Full_Map,LocalOrbs(sitendx)%RotDag,onlyNaNb=fillJ_)
+            if(doBare) call tensor_transform(reg(type_),Wbtmp,PhysicalUelements%Full_Map,LocalOrbs(sitendx)%RotDag,LocalOrbs(sitendx)%RotDag)
             do ip=1,Wimp%Npoints
-               call tensor_transform(Wstmp(:,:,ip),PhysicalUelements%Full_Map,LocalOrbs(sitendx)%RotDag,onlyNaNb=fillJ_)
+               call tensor_transform(reg(type_),Wstmp(:,:,ip),PhysicalUelements%Full_Map,LocalOrbs(sitendx)%RotDag,LocalOrbs(sitendx)%RotDag)
             enddo
             !
          endif
@@ -1517,7 +1538,6 @@ contains
       !
       use parameters
       use utils_misc
-      use linalg, only : tensor_transform
       implicit none
       !
       type(BosonicField),intent(inout)      :: W

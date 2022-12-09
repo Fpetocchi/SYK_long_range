@@ -178,7 +178,7 @@ program SelfConsistency
          !
       endif
       !
-      ! Causality correction on curlyU
+      !Causality correction on curlyU
       if(causal_U) call calc_causality_curlyU_correction(reg(causal_U_type))
       if(solve_DMFT) call DeallocateBosonicField(Plat)
       !
@@ -186,12 +186,10 @@ program SelfConsistency
       !Matching the lattice and impurity problems: Bosons
       if(solve_DMFT)then
          !
-         do isite=1,Nsite
-            !
-            !Compute local effective interaction
+         !Compute local effective interaction
+         do isite=1,Solver%Nimp
             call calc_Interaction(isite,Iteration,ExpandImpurity)
-            if(ExpandImpurity.or.AFMselfcons)exit
-            !
+            !if(ExpandImpurity.or.AFMselfcons)exit
          enddo
          call DeallocateBosonicField(P_EDMFT)
          !
@@ -385,12 +383,10 @@ program SelfConsistency
          ! Causality correction on Delta
          if(causal_D) call calc_causality_Delta_correction()
          !
-         do isite=1,Nsite
-            !
-            !Extract the hybridization functions and local energies (always diagonal)
+         !Extract the hybridization functions and local energies (always diagonal)
+         do isite=1,Solver%Nimp
             call calc_Delta(isite,Iteration)
-            if(ExpandImpurity.or.AFMselfcons)exit
-            !
+            !if(ExpandImpurity.or.AFMselfcons)exit
          enddo
          !
       endif

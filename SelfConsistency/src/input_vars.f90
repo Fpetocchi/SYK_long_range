@@ -288,7 +288,7 @@ contains
       implicit none
       character(len=*)                      :: InputFile
       integer                               :: isite,ilayer,iset,iph,irange
-      integer                               :: isym_user
+      integer                               :: isym_user,Nsite_loc
       logical                               :: readVnn
       !
       !OMP parallelization.
@@ -365,15 +365,31 @@ contains
       call add_separator("Sites and orbitals")
       call append_to_input_list(Nspin,"NSPIN","Number of spins. User cannot set this as its fixed to 2.")
       call parse_input_variable(Nsite,"NSITE",InputFile,default=1,comment="Number of inequivalent sites in the lattice.")
+      if(solve_DMFT)then
+         call parse_input_variable(Solver%Nimp,"NIMP",InputFile,default=Nsite,comment="Number of impurities solved.")
+      else
+         Solver%Nimp = Nsite
+         !call append_to_input_list(Solver%Nimp,"NIMP","Number of impurities solved.")
+      endif
       if(Hetero%status)then
-         if(Nsite.ne.(Hetero%Explicit(2)-Hetero%Explicit(1)+1)) stop "read_InputFile: The number of explicit slabs does not match with NSITE."
+         if(solve_DMFT)then
+            if(Nsite.ne.(Hetero%Explicit(2)-Hetero%Explicit(1)+1)) stop "read_InputFile: The number of explicit slabs does not match with NSITE."
+         else
+            if(Nsite.ne.(Hetero%Explicit(2)-Hetero%Explicit(1)+1)) stop "read_InputFile: The number of explicit slabs does not match with NSITE."
+         endif
       endif
       call parse_input_variable(ExpandImpurity,"EXPAND",InputFile,default=.false.,comment="Flag to use a single impurity solution for all the sites of the lattice. Only indexes for site 1 readed.")
       call parse_input_variable(RotateHloc,"ROTATE_F",InputFile,default=.false.,comment="Solve the Fermionic impurity problem in the basis where H(R=0) is diagonal.")
       call parse_input_variable(RotateUloc,"ROTATE_B",InputFile,default=RotateHloc,comment="Solve the Bosonic impurity problem in the basis where H(R=0) is diagonal.")
       call parse_input_variable(AFMselfcons,"AFM",InputFile,default=.false.,comment="Flag to use the AFM self-consistency by flipping the spin. Requires input with doubled unit cell.")
-      allocate(LocalOrbs(Nsite))
-      do isite=1,Nsite
+      if(ExpandImpurity.or.AFMselfcons)then
+         Solver%Nimp = 1
+         Nsite_loc = Nsite
+      else
+         Nsite_loc = Solver%Nimp
+      endif
+      allocate(LocalOrbs(Nsite_loc))
+      do isite=1,Nsite_loc
          if( .not.(ExpandImpurity) .or. (ExpandImpurity.and.(isite.eq.1)) )then
             call parse_input_variable(LocalOrbs(isite)%Name,"NAME_"//str(isite),InputFile,default="El",comment="Chemical species (or 2-character tag) of the site number "//str(isite))
             call parse_input_variable(LocalOrbs(isite)%Norb,"NORB_"//str(isite),InputFile,default=1,comment="Number of orbitals in site number "//str(isite))
@@ -387,7 +403,7 @@ contains
             if(LocalOrbs(1)%Norb.gt.1)then
                if(abs(LocalOrbs(1)%Orbs(2)-LocalOrbs(1)%Orbs(1)).eq.1)then
                   LocalOrbs(isite)%Orbs = LocalOrbs(1)%Orbs + LocalOrbs(1)%Norb*(isite-1)
-               elseif(abs(LocalOrbs(1)%Orbs(2)-LocalOrbs(1)%Orbs(1)).eq.Nsite)then
+               elseif(abs(LocalOrbs(1)%Orbs(2)-LocalOrbs(1)%Orbs(1)).eq.Solver%Nimp)then
                   LocalOrbs(isite)%Orbs = LocalOrbs(1)%Orbs + isite-1
                endif
             else
@@ -404,7 +420,7 @@ contains
       endif
       call parse_input_variable(addCF,"ADD_CF",InputFile,default=.false.,comment="Flag to include additional crystal-fields.")
       if(addCF)then
-         do isite=1,Nsite
+         do isite=1,Solver%Nimp
             allocate(LocalOrbs(isite)%CrystalField(LocalOrbs(isite)%Norb));LocalOrbs(isite)%CrystalField=0d0
             call parse_input_variable(LocalOrbs(isite)%CrystalField,"CF_"//str(isite),InputFile,default=LocalOrbs(isite)%CrystalField,comment="Additional crystal-fields on diagonal orbitals of site number "//str(isite))
             if(ExpandImpurity)exit
@@ -656,57 +672,61 @@ contains
       endif
       !
       !Variables related to the impurity solver
-      call add_separator("Impurity solver")
-      Solver%Nimp = Nsite
-      if(ExpandImpurity.or.AFMselfcons) Solver%Nimp = 1
-      call append_to_input_list(Solver%Nimp,"NIMP","Number of impurities solved. User cannot set this as its deduced from NSITE and EXPAND.")
-      call parse_input_variable(Solver%NtauF,"NTAU_F_IMP",InputFile,default=int(2d0*pi*Nmats),comment="Number of points on the imaginary time axis for Fermionic impurity fields. Its gonna be made odd.")
-      if(mod(Solver%NtauF,2).eq.0)Solver%NtauF=Solver%NtauF+1
-      if(mod(Solver%NtauF-1,4).eq.0)Solver%NtauF=Solver%NtauF+mod(Solver%NtauF-1,4)
-      call parse_input_variable(Solver%NtauB,"NTAU_B_IMP",InputFile,default=int(2d0*pi*Nmats),comment="Number of points on the imaginary time axis for Bosonic impurity fields. Its gonna be made odd.")
-      if(mod(Solver%NtauB,2).eq.0)Solver%NtauB=Solver%NtauB+1
-      if(mod(Solver%NtauB-1,4).eq.0)Solver%NtauB=Solver%NtauB+mod(Solver%NtauB-1,4)
-      call parse_input_variable(Solver%NtauF_in,"NTAU_F_IMP_IN",InputFile,default=Solver%NtauF,comment="Number of points on the fermionic imaginary time axis used in the previous iteration.")
-      call parse_input_variable(Solver%NtauB_in,"NTAU_B_IMP_IN",InputFile,default=Solver%NtauB,comment="Number of points on the bosonic imaginary time axis used in the previous iteration.")
-      call parse_input_variable(Solver%NtauF_D,"NTAU_F_IMP_D",InputFile,default=int(2d0*pi*Nmats),comment="Number of points on the imaginary time axis for the hybridization function.")
-      if(mod(Solver%NtauF_D,2).eq.0)Solver%NtauF_D=Solver%NtauF_D+1
-      if(mod(Solver%NtauF_D-1,4).eq.0)Solver%NtauF_D=Solver%NtauF_D+mod(Solver%NtauF_D-1,4)
-      call parse_input_variable(Solver%NtauB_K,"NTAU_B_IMP_K",InputFile,default=int(2d0*pi*Nmats),comment="Number of points on the imaginary time axis for the screening function.")
-      if(mod(Solver%NtauB_K,2).eq.0)Solver%NtauB_K=Solver%NtauB_K+1
-      if(mod(Solver%NtauB_K-1,4).eq.0)Solver%NtauB_K=Solver%NtauB_K+mod(Solver%NtauB_K-1,4)
-      Solver%TargetDensity = look4dens%TargetDensity
-      if((ExpandImpurity.or.AFMselfcons).and.(.not.look4dens%local))Solver%TargetDensity = look4dens%TargetDensity/Nsite
-      call parse_input_variable(Solver%tau_uniform_D,"TAU_UNIF_D",InputFile,default=1,comment="Flag to use a uniform mesh on the imaginary time axis for the hybridization function.")
-      call parse_input_variable(Solver%tau_uniform_K,"TAU_UNIF_K",InputFile,default=1,comment="Flag to use a uniform mesh on the imaginary time axis for the screening function.")
-      call append_to_input_list(Solver%TargetDensity,"N_READ_IMP","Target density in the impurity list. User cannot set this as its the the same density on within the impurity orbitals if EXPAND=F otherwise its N_READ_LAT/NSITE.")
-      call parse_input_variable(Solver%Norder,"NORDER",InputFile,default=10,comment="Maximum perturbation order measured.")
-      call parse_input_variable(Solver%Gexp,"GEXPENSIVE",InputFile,default=0,comment="If =1 the impurity Green's function measurment is considered expensive (Needed at high Beta*Bandwidth).")
-      call parse_input_variable(Solver%Nmeas,"NMEAS",InputFile,default=1000,comment="Sweeps where expensive measurments are not performed.")
-      call parse_input_variable(Solver%Ntherm,"NTHERM",InputFile,default=100,comment="Thermalization cycles. Each cycle performs NMEAS sweeps.")
-      call parse_input_variable(Solver%Nshift,"NSHIFT",InputFile,default=1,comment="Proposed segment shifts at each sweep.")
-      call parse_input_variable(Solver%Nswap,"NSWAP",InputFile,default=1,comment="Proposed global spin swaps at each sweep.")
-      call parse_input_variable(Solver%Imprvd_F,"IMPRVD_F",InputFile,default=0,comment="If =1 the improved estimator for the self-energy will be computed.")
-      if(Dyson_Imprvd_F)Solver%Imprvd_F=1
-      call parse_input_variable(Solver%Imprvd_B,"IMPRVD_B",InputFile,default=0,comment="If =1 the improved estimator for the polarization will be computed (NOT IMPLEMENTED).")
-      if(Dyson_Imprvd_B)Solver%Imprvd_B=1
-      call parse_input_variable(Solver%N_nnt,"N_NNT",InputFile,default=1,comment="Measurment for <n_a(tau)n_b(0)> evaluation. Updated according to CALC_TYPE. Should be either =1 or 2*NTAU_B_IMP if =0 measurment avoided.")
-      if(.not.bosonicSC)Solver%N_nnt=0
-      call parse_input_variable(Solver%full_ntOrbSym,"NT_FULLSYM",InputFile,default=0,comment="If =1 and orbital symmetrization inside the solver is requested it averages <n_a(tau)> for all the orbitals.")
-      if(sym_mode.le.1)Solver%full_ntOrbSym=0
-      call parse_input_variable(Solver%PrintTime,"PRINT_TIME",InputFile,default=10,comment="Minutes that have to pass before observables are updated and stored.")
-      call parse_input_variable(Solver%binlength,"BINLENGTH",InputFile,default=4,comment="If >0 the Green's function at itau will be the average within +/-binlength.")
-      call parse_input_variable(Solver%binstart,"BINSTART",InputFile,default=100,comment="Tau points skipped at the beginning and end of the Green's function average.")
-      call append_to_input_list(Solver%retarded,"RETARDED","Integer flag to include the frequency dependent part of the interaction. User cannot set this as its deduced from CALC_TYPE.")
-      call parse_input_variable(Solver%removeUhalf,"REMOVE_UHALF",InputFile,default=0,comment="Integer flag to use the particle-hole symmetric interaction by removing the half-filling chemical potential inside the solver.")
-      !if(.not.Hmodel)Solver%removeUhalf=0
-      if(ExpandImpurity)then
-         allocate(Solver%Time(1));Solver%Time=0
-         call parse_input_variable(Solver%Time(1),"TIME_1",InputFile,default=15,comment="Minutes of solver runtime for site number 1")
-      else
-         allocate(Solver%Time(Nsite));Solver%Time=0
-         do isite=1,Nsite
-            call parse_input_variable(Solver%Time(isite),"TIME_"//str(isite),InputFile,default=15,comment="Minutes of solver runtime for site number "//str(isite))
-         enddo
+      if(solve_DMFT)then
+         !
+         call add_separator("Impurity solver")
+         !Solver%Nimp = Nsite
+         !if(ExpandImpurity.or.AFMselfcons) Solver%Nimp = 1
+         !call append_to_input_list(Solver%Nimp,"NIMP","Number of impurities solved. User cannot set this as its deduced from NSITE and EXPAND.")
+         call parse_input_variable(Solver%NtauF,"NTAU_F_IMP",InputFile,default=int(2d0*pi*Nmats),comment="Number of points on the imaginary time axis for Fermionic impurity fields. Its gonna be made odd.")
+         if(mod(Solver%NtauF,2).eq.0)Solver%NtauF=Solver%NtauF+1
+         if(mod(Solver%NtauF-1,4).eq.0)Solver%NtauF=Solver%NtauF+mod(Solver%NtauF-1,4)
+         call parse_input_variable(Solver%NtauB,"NTAU_B_IMP",InputFile,default=int(2d0*pi*Nmats),comment="Number of points on the imaginary time axis for Bosonic impurity fields. Its gonna be made odd.")
+         if(mod(Solver%NtauB,2).eq.0)Solver%NtauB=Solver%NtauB+1
+         if(mod(Solver%NtauB-1,4).eq.0)Solver%NtauB=Solver%NtauB+mod(Solver%NtauB-1,4)
+         call parse_input_variable(Solver%NtauF_in,"NTAU_F_IMP_IN",InputFile,default=Solver%NtauF,comment="Number of points on the fermionic imaginary time axis used in the previous iteration.")
+         call parse_input_variable(Solver%NtauB_in,"NTAU_B_IMP_IN",InputFile,default=Solver%NtauB,comment="Number of points on the bosonic imaginary time axis used in the previous iteration.")
+         call parse_input_variable(Solver%NtauF_D,"NTAU_F_IMP_D",InputFile,default=int(2d0*pi*Nmats),comment="Number of points on the imaginary time axis for the hybridization function.")
+         if(mod(Solver%NtauF_D,2).eq.0)Solver%NtauF_D=Solver%NtauF_D+1
+         if(mod(Solver%NtauF_D-1,4).eq.0)Solver%NtauF_D=Solver%NtauF_D+mod(Solver%NtauF_D-1,4)
+         call parse_input_variable(Solver%NtauB_K,"NTAU_B_IMP_K",InputFile,default=int(2d0*pi*Nmats),comment="Number of points on the imaginary time axis for the screening function.")
+         if(mod(Solver%NtauB_K,2).eq.0)Solver%NtauB_K=Solver%NtauB_K+1
+         if(mod(Solver%NtauB_K-1,4).eq.0)Solver%NtauB_K=Solver%NtauB_K+mod(Solver%NtauB_K-1,4)
+         Solver%TargetDensity = look4dens%TargetDensity
+         if((ExpandImpurity.or.AFMselfcons).and.(.not.look4dens%local))Solver%TargetDensity = look4dens%TargetDensity/Nsite
+         call parse_input_variable(Solver%tau_uniform_D,"TAU_UNIF_D",InputFile,default=1,comment="Flag to use a uniform mesh on the imaginary time axis for the hybridization function.")
+         call parse_input_variable(Solver%tau_uniform_K,"TAU_UNIF_K",InputFile,default=1,comment="Flag to use a uniform mesh on the imaginary time axis for the screening function.")
+         call append_to_input_list(Solver%TargetDensity,"N_READ_IMP","Target density in the impurity list. User cannot set this as its the the same density on within the impurity orbitals if EXPAND=F otherwise its N_READ_LAT/NSITE.")
+         call parse_input_variable(Solver%Norder,"NORDER",InputFile,default=10,comment="Maximum perturbation order measured.")
+         call parse_input_variable(Solver%Gexp,"GEXPENSIVE",InputFile,default=0,comment="If =1 the impurity Green's function measurment is considered expensive (Needed at high Beta*Bandwidth).")
+         call parse_input_variable(Solver%Nmeas,"NMEAS",InputFile,default=1000,comment="Sweeps where expensive measurments are not performed.")
+         call parse_input_variable(Solver%Ntherm,"NTHERM",InputFile,default=100,comment="Thermalization cycles. Each cycle performs NMEAS sweeps.")
+         call parse_input_variable(Solver%Nshift,"NSHIFT",InputFile,default=1,comment="Proposed segment shifts at each sweep.")
+         call parse_input_variable(Solver%Nswap,"NSWAP",InputFile,default=1,comment="Proposed global spin swaps at each sweep.")
+         call parse_input_variable(Solver%Imprvd_F,"IMPRVD_F",InputFile,default=0,comment="If =1 the improved estimator for the self-energy will be computed.")
+         if(Dyson_Imprvd_F)Solver%Imprvd_F=1
+         call parse_input_variable(Solver%Imprvd_B,"IMPRVD_B",InputFile,default=0,comment="If =1 the improved estimator for the polarization will be computed (NOT IMPLEMENTED).")
+         if(Dyson_Imprvd_B)Solver%Imprvd_B=1
+         call parse_input_variable(Solver%N_nnt,"N_NNT",InputFile,default=1,comment="Measurment for <n_a(tau)n_b(0)> evaluation. Updated according to CALC_TYPE. Should be either =1 or 2*NTAU_B_IMP if =0 measurment avoided.")
+         if(.not.bosonicSC)Solver%N_nnt=0
+         call parse_input_variable(Solver%full_ntOrbSym,"NT_FULLSYM",InputFile,default=0,comment="If =1 and orbital symmetrization inside the solver is requested it averages <n_a(tau)> for all the orbitals.")
+         if(sym_mode.le.1)Solver%full_ntOrbSym=0
+         call parse_input_variable(Solver%PrintTime,"PRINT_TIME",InputFile,default=10,comment="Minutes that have to pass before observables are updated and stored.")
+         call parse_input_variable(Solver%binlength,"BINLENGTH",InputFile,default=4,comment="If >0 the Green's function at itau will be the average within +/-binlength.")
+         call parse_input_variable(Solver%binstart,"BINSTART",InputFile,default=100,comment="Tau points skipped at the beginning and end of the Green's function average.")
+         call append_to_input_list(Solver%retarded,"RETARDED","Integer flag to include the frequency dependent part of the interaction. User cannot set this as its deduced from CALC_TYPE.")
+         call parse_input_variable(Solver%removeUhalf,"REMOVE_UHALF",InputFile,default=0,comment="Integer flag to use the particle-hole symmetric interaction by removing the half-filling chemical potential inside the solver.")
+         !if(.not.Hmodel)Solver%removeUhalf=0
+         if(ExpandImpurity)then
+            allocate(Solver%Time(1));Solver%Time=0
+            call parse_input_variable(Solver%Time(1),"TIME_1",InputFile,default=15,comment="Minutes of solver runtime for site number 1")
+         else
+            allocate(Solver%Time(Solver%Nimp));Solver%Time=0
+            do isite=1,Solver%Nimp
+               call parse_input_variable(Solver%Time(isite),"TIME_"//str(isite),InputFile,default=15,comment="Minutes of solver runtime for site number "//str(isite))
+            enddo
+         endif
+         !
       endif
       !
       if(TESTING)then
