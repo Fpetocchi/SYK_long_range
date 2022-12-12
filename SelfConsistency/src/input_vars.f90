@@ -298,7 +298,7 @@ contains
       !open(unit,file=reg("Nthread.used"),form="formatted",action="read",status="old")
       !read(unit,*)Nthread
       !close(unit)
-      !call omp_set_num_threads(Nthread) this was called in the main.
+      !call omp_set_num_threads(Nthread)
       !
       !Done in the submit file via " export OMP_NUM_THREADS= # "
       Nthread = omp_get_max_threads()
@@ -711,6 +711,7 @@ contains
          if(.not.bosonicSC)Solver%N_nnt=0
          call parse_input_variable(Solver%full_ntOrbSym,"NT_FULLSYM",InputFile,default=0,comment="If =1 and orbital symmetrization inside the solver is requested it averages <n_a(tau)> for all the orbitals.")
          if(sym_mode.le.1)Solver%full_ntOrbSym=0
+         if(RotateHloc.or.RotateUloc)Solver%full_ntOrbSym=1
          call parse_input_variable(Solver%PrintTime,"PRINT_TIME",InputFile,default=10,comment="Minutes that have to pass before observables are updated and stored.")
          call parse_input_variable(Solver%binlength,"BINLENGTH",InputFile,default=4,comment="If >0 the Green's function at itau will be the average within +/-binlength.")
          call parse_input_variable(Solver%binstart,"BINSTART",InputFile,default=100,comment="Tau points skipped at the beginning and end of the Green's function average.")
