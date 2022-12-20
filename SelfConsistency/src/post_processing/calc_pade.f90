@@ -47,8 +47,8 @@ subroutine padecoeff(fwout,wout,fwin,win)
    complex(8),intent(in)                 :: fwin(:)
    complex(8),intent(in)                 :: win(:)
    !
-   complex(8),allocatable                :: coeff(:,:)
-   complex(8),allocatable                :: a(:),b(:)
+   complex(16),allocatable               :: coeff(:,:)
+   complex(16),allocatable               :: a(:),b(:)
    integer                               :: Nin,Nout,i,j
    !
    !
@@ -67,10 +67,10 @@ subroutine padecoeff(fwout,wout,fwin,win)
    enddo
    do j=2,Nin
       do i=2,j
-         if (abs(win(j)-win(i-1)).lt.1.D-10) then
+         if (abs(win(j)-win(i-1)).lt.1.D-15) then
             stop "pade z=0"
          endif
-         if (abs(coeff(i-1,j)).lt.1.D-10) then
+         if (abs(coeff(i-1,j)).lt.1.D-15) then
             write(*,*)"i,j,coeff(i-1,j)",i,j,coeff(i-1,j)
             stop "coeff=0"
          endif

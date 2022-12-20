@@ -37,6 +37,7 @@ module parameters
       character(len=2)                      :: Name
       integer,allocatable                   :: Orbs(:)
       real(8),allocatable                   :: CrystalField(:)
+      real(8),allocatable                   :: tailFit(:,:)
       !local rotations
       complex(8),allocatable                :: Op(:,:)
       complex(8),allocatable                :: Rot(:,:)

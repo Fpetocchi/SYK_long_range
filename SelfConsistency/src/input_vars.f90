@@ -120,6 +120,8 @@ module input_vars
    logical,public                           :: AFMselfcons
    type(LocalOrbitals),allocatable,public   :: LocalOrbs(:)
    logical,public                           :: addCF
+   logical,public                           :: addE0
+   real(8),allocatable,public               :: E0(:)
    !
    !Equivalent lattice indexes
    integer,public                           :: sym_mode
@@ -418,13 +420,18 @@ contains
             call parse_input_variable(ucVec(:,isite),"UC_VEC_"//str(isite),InputFile,default=[0d0,0d0,0d0],comment="Position of site #"//str(isite)//" inside the unit cell.")
          enddo
       endif
-      call parse_input_variable(addCF,"ADD_CF",InputFile,default=.false.,comment="Flag to include additional crystal-fields.")
+      call parse_input_variable(addCF,"ADD_CF",InputFile,default=.false.,comment="Flag to include additional crystal-fields in Eloc.")
       if(addCF)then
          do isite=1,Solver%Nimp
             allocate(LocalOrbs(isite)%CrystalField(LocalOrbs(isite)%Norb));LocalOrbs(isite)%CrystalField=0d0
             call parse_input_variable(LocalOrbs(isite)%CrystalField,"CF_"//str(isite),InputFile,default=LocalOrbs(isite)%CrystalField,comment="Additional crystal-fields on diagonal orbitals of site number "//str(isite))
             if(ExpandImpurity)exit
          enddo
+      endif
+      call parse_input_variable(addE0,"ADD_E0",InputFile,default=.false.,comment="Flag to include local energy shifts to H(k). This switch also the orbital dependent WTAIL_SIMP variable.")
+      if(addE0)then
+         allocate(E0(Nsite));E0=0d0 !fix for the generic case this is going to go nuts if H(k) has multiple sites with different orbitals like the nickelate
+         call parse_input_variable(E0,"E0",InputFile,default=E0,comment="Additional local energy shift on H(k) diagonal (same shifts for all the orbitals on the same site).")
       endif
       !
       !Equivalent lattice indexes
@@ -586,7 +593,20 @@ contains
       !Variables for the fit
       call parse_input_variable(DeltaFit,"DELTA_FIT",InputFile,default="Analytic",comment="Fit to extract the local energy in GW+EDMFT calculations. Available: Analytic(best), Anaderson, Inf, Moments.")
       call parse_input_variable(Nfit,"NFIT",InputFile,default=8,comment="Number of bath levels (Analytic) or coefficient (automatic limit to NFIT=4).")
-      call parse_input_variable(ReplaceTail_Simp,"WTAIL_SIMP",InputFile,default=80d0,comment="Frequency value above which the tail of Simp is replaced. If =0d0 the tail is not replaced. Only via moments (automatic limit to NFIT=4).")
+      if(addE0)then
+         do isite=1,Solver%Nimp
+            allocate(LocalOrbs(isite)%tailFit(LocalOrbs(isite)%Norb,Nspin));LocalOrbs(isite)%tailFit=0d0
+            call parse_input_variable(LocalOrbs(isite)%tailFit(:,1),"WTAIL_SIMP_"//str(isite),InputFile,default=LocalOrbs(isite)%tailFit(:,1),comment="Orbital-dependent frequency values above which the tail of Simp of site number "//str(isite)//" is replaced. If =0d0 the tail is not replaced. Only via moments (automatic limit to NFIT=4).")
+            if(paramagnet)then
+               LocalOrbs(isite)%tailFit(:,Nspin) = LocalOrbs(isite)%tailFit(:,1)
+            elseif((.not.paramagnet).and.(Nspin.eq.2))then
+               call parse_input_variable(LocalOrbs(isite)%tailFit(:,Nspin),"WTAIL_SIMP_"//str(isite)//"_DW",InputFile,default=LocalOrbs(isite)%tailFit(:,1),comment="Orbital-dependent frequency values above which the tail of Simp(dw) of site number "//str(isite)//" is replaced. If =0d0 the tail is not replaced. Only via moments (automatic limit to NFIT=4).")
+            endif
+            if(ExpandImpurity)exit
+         enddo
+      else
+         call parse_input_variable(ReplaceTail_Simp,"WTAIL_SIMP",InputFile,default=0d0,comment="Frequency value above which the tail of Simp is replaced. If =0d0 the tail is not replaced. Only via moments (automatic limit to NFIT=4).")
+      endif
       call parse_input_variable(recalc_Hartree,"RECALC_HARTREE",InputFile,default=.false.,comment="Use the lattice density to compute the Hartree term of the impurity self-energy.")
       !
       !Paths and loop variables
@@ -771,13 +791,18 @@ contains
    subroutine read_Vnn()
       use utils_misc
       implicit none
-      integer                               :: unit,idum,idist,iorb
+      integer                               :: unit,idum,idist,iorb,N_Vnn_read
+      if(reg(long_range).eq."Explicit")then
+         N_Vnn_read = N_Vnn
+      else
+         N_Vnn_read = 1
+      endif
       unit=free_unit()
       open(unit,file=pathINPUT//"Vnn.DAT",form="formatted",status="old",position="rewind",action="read")
       read(unit,*)
       read(unit,*)idum !Number of orbitals
       if(idum.ne.Norb_model) stop "read_InputFile/read_Vnn: unexpected orbital dimension from file pathINPUT/Vnn.DAT"
-      do idist=1,N_Vnn
+      do idist=1,N_Vnn_read
          read(unit,*)
          read(unit,*)idum  !distance index
          if(idum.ne.idist) stop "read_InputFile/read_Vnn: unexpected distance index from file pathINPUT/Vnn.DAT"

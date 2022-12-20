@@ -517,12 +517,17 @@ contains
       complex(8),intent(inout)              :: O(:,:)
       logical,intent(in)                    :: Map(:,:)
       integer                               :: iorb,jorb
+      logical                               :: erase
+      !
       call assert_shape(Map,[size(O,dim=1),size(O,dim=2)],"clear_MatrixElements_Matrix","Map")
+      !
       do iorb=1,size(O,dim=1)
          do jorb=1,size(O,dim=2)
-            if(.not.Map(iorb,jorb)) O(iorb,jorb)=czero
+            erase = Map(iorb,jorb)
+            if(erase) O(iorb,jorb)=czero
          enddo
       enddo
+      !
    end subroutine clear_MatrixElements_Matrix
    !
    subroutine clear_MatrixElements_Fermion(G,Map,LocalOnly)
@@ -533,23 +538,28 @@ contains
       logical,intent(in)                    :: Map(:,:)
       logical,intent(in),optional           :: LocalOnly
       integer                               :: ispin,iorb,jorb
-      logical                               :: LocalOnly_
+      logical                               :: erase,LocalOnly_
+      !
       if(.not.G%status) stop "clear_MatrixElements_Fermion: field not properly initialized."
       call assert_shape(Map,[G%Norb,G%Norb],"clear_MatrixElements_Fermion","Map")
+      !
       LocalOnly_=.true.
       if(present(LocalOnly))LocalOnly_=LocalOnly
+      !
       do ispin=1,Nspin
          do iorb=1,G%Norb
             do jorb=1,G%Norb
-               if(allocated(G%N_s).and.(.not.Map(iorb,jorb))) G%N_s(iorb,jorb,ispin)=czero
-               if(allocated(G%ws).and.(.not.Map(iorb,jorb))) G%ws(iorb,jorb,:,ispin)=czero
+               erase = Map(iorb,jorb)
+               if(allocated(G%N_s).and.erase) G%N_s(iorb,jorb,ispin)=czero
+               if(allocated(G%ws).and.erase) G%ws(iorb,jorb,:,ispin)=czero
                if(.not.LocalOnly_)then
-                  if(allocated(G%N_ks).and.(.not.Map(iorb,jorb))) G%N_ks(iorb,jorb,:,ispin)=czero
-                  if(allocated(G%wks).and.(.not.Map(iorb,jorb))) G%wks(iorb,jorb,:,:,ispin)=czero
+                  if(allocated(G%N_ks).and.erase) G%N_ks(iorb,jorb,:,ispin)=czero
+                  if(allocated(G%wks).and.erase) G%wks(iorb,jorb,:,:,ispin)=czero
                endif
             enddo
          enddo
       enddo
+      !
    end subroutine clear_MatrixElements_Fermion
    !
    subroutine clear_MatrixElements_Boson(W,Map,LocalOnly)
@@ -560,21 +570,58 @@ contains
       logical,intent(in)                    :: Map(:,:)
       logical,intent(in),optional           :: LocalOnly
       integer                               :: ib1,ib2
-      logical                               :: LocalOnly_
+      integer                               :: iorb,jorb,korb,lorb,Norb
+      logical                               :: prod,erase,LocalOnly_
+      !
       if(.not.W%status) stop "clear_MatrixElements_Boson: field not properly initialized."
-      call assert_shape(Map,[W%Nbp,W%Nbp],"clear_MatrixElements_Boson","Map")
+      Norb = int(sqrt(dble(W%Nbp)))
+      if((size(Map,dim=1).eq.W%Nbp) .and. (size(Map,dim=2).eq.W%Nbp))then
+         prod = .true.
+      elseif((size(Map,dim=1).eq.Norb) .and. (size(Map,dim=2).eq.Norb))then
+         prod = .false.
+      else
+         stop "clear_MatrixElements_Boson: wrong Map dimensions."
+      endif
+      !
       LocalOnly_=.true.
       if(present(LocalOnly))LocalOnly_=LocalOnly
-      do ib1=1,W%Nbp
-         do ib2=1,W%Nbp
-            if(allocated(W%bare_local).and.(.not.Map(ib1,ib2))) W%bare_local(ib1,ib2)=czero
-            if(allocated(W%screened_local).and.(.not.Map(ib1,ib2))) W%screened_local(ib1,ib2,:)=czero
-            if(.not.LocalOnly_)then
-               if(allocated(W%bare).and.(.not.Map(ib1,ib2))) W%bare(ib1,ib2,:)=czero
-               if(allocated(W%screened).and.(.not.Map(ib1,ib2))) W%screened(ib1,ib2,:,:)=czero
-            endif
+      !
+      if(prod)then
+         do ib1=1,W%Nbp
+            do ib2=1,W%Nbp
+               erase = Map(ib1,ib2)
+               if(allocated(W%bare_local).and.erase) W%bare_local(ib1,ib2)=czero
+               if(allocated(W%screened_local).and.erase) W%screened_local(ib1,ib2,:)=czero
+               if(.not.LocalOnly_)then
+                  if(allocated(W%bare).and.erase) W%bare(ib1,ib2,:)=czero
+                  if(allocated(W%screened).and.erase) W%screened(ib1,ib2,:,:)=czero
+               endif
+            enddo
          enddo
-      enddo
+      else
+         do iorb=1,Norb
+            do jorb=1,Norb
+               do korb=1,Norb
+                  do lorb=1,Norb
+                     !
+                     erase = Map(iorb,jorb) .or. Map(korb,lorb) .or. &
+                             Map(iorb,korb) .or. Map(jorb,lorb) .or. &
+                             Map(iorb,lorb) .or. Map(jorb,korb)
+                     !
+                     call F2Bindex(Norb,[iorb,jorb],[korb,lorb],ib1,ib2)
+                     if(allocated(W%bare_local).and.erase) W%bare_local(ib1,ib2)=czero
+                     if(allocated(W%screened_local).and.erase) W%screened_local(ib1,ib2,:)=czero
+                     if(.not.LocalOnly_)then
+                        if(allocated(W%bare).and.erase) W%bare(ib1,ib2,:)=czero
+                        if(allocated(W%screened).and.erase) W%screened(ib1,ib2,:,:)=czero
+                     endif
+                  enddo
+               enddo
+            enddo
+         enddo
+
+      endif
+      !
    end subroutine clear_MatrixElements_Boson
 
 
@@ -2614,7 +2661,7 @@ contains
       integer                               :: iw,ik,isite,iorb,jorb
       integer                               :: ispin,Norb_imp
       integer                               :: i_loc,j_loc
-      integer                               :: Nkpt,Norb,Nmats,Nsite
+      integer                               :: Nkpt,Norb,Nmats,Nsite,Nimp
       logical                               :: impDC,OffDiag_
       !
       !
@@ -2627,20 +2674,20 @@ contains
       if(SigmaGW%Nkpt.eq.0) stop "Merge_SelfEnergy: SigmaGW k dependent attributes not properly initialized."
       if(SigmaImp%Nkpt.ne.0) stop "Merge_SelfEnergy: SigmaImp k dependent attributes are supposed to be unallocated."
       if(.not.allocated(LocalOrbs)) stop "Merge_SelfEnergy: LocalOrbs not properly initialized."
-      if(SigmaGW%Nsite.ne.size(LocalOrbs)) stop "Merge_SelfEnergy: number of SigmaGW sites does not match the number of sites in LocalOrbs list."
       !
       Norb = SigmaGW%Norb
       Nkpt = SigmaGW%Nkpt
       Beta = SigmaGW%Beta
       Nmats = SigmaGW%Npoints
       Nsite = SigmaGW%Nsite
+      Nimp = size(LocalOrbs)
       !
       if(SigmaImp%Norb.ne.Norb) stop "Merge_SelfEnergy: SigmaImp has different orbital dimension with respect to SigmaGW."
       if(SigmaImp%Beta.ne.Beta) stop "Merge_SelfEnergy: SigmaImp has different Beta with respect to SigmaGW."
       if(SigmaImp%Npoints.ne.Nmats) stop "Merge_SelfEnergy: SigmaImp has different number of Matsubara points with respect to SigmaGW."
       !
       Norb_imp=0
-      do isite=1,Nsite
+      do isite=1,Nimp
          Norb_imp = Norb_imp + LocalOrbs(isite)%Norb
       enddo
       if(Norb_imp.gt.Norb) stop "Merge_SelfEnergy: Number of orbital to be inserted is bigger than the total lattice orbital space."
@@ -2662,7 +2709,7 @@ contains
       call FermionicKsum(SigmaGW)
       !
       !all sites if(expand.or.AFM) otherwise only one site and the orbitals within orbs
-      do isite=1,Nsite
+      do isite=1,Nimp
          do iorb=1,LocalOrbs(isite)%Norb
             do jorb=1,LocalOrbs(isite)%Norb
                !
@@ -2722,7 +2769,7 @@ contains
       integer                               :: iorb,jorb,korb,lorb
       integer                               :: Norb_imp,ib_loc,jb_loc
       integer                               :: i_loc,j_loc,k_loc,l_loc
-      integer                               :: Nkpt,Norb,Nmats,Nsite
+      integer                               :: Nkpt,Norb,Nmats,Nsite,Nimp
       logical                               :: impDC,OffDiag_
       !
       !
@@ -2734,19 +2781,20 @@ contains
       if(.not.PiImp%status) stop "Merge_Polarization: PiImp not properly initialized."
       if(PiGW%Nkpt.eq.0) stop "Merge_Polarization: PiGW k dependent attributes not properly initialized."
       if(PiImp%Nkpt.ne.0) stop "Merge_Polarization: PiImp k dependent attributes are supposed to be unallocated."
-      if(PiGW%Nsite.ne.size(LocalOrbs)) stop "Merge_Polarization: number of PiGW sites does not match the number of sites in LocalOrbs list."
+      if(.not.allocated(LocalOrbs)) stop "Merge_Polarization: LocalOrbs not properly initialized."
       !
       Norb = int(sqrt(dble(PiGW%Nbp)))
       Nkpt = PiGW%Nkpt
       Beta = PiGW%Beta
       Nmats = PiGW%Npoints
       Nsite = PiGW%Nsite
+      Nimp = size(LocalOrbs)
       !
       if(PiImp%Beta.ne.Beta) stop "Merge_Polarization: PiImp has different Beta with respect to PiGW."
       if(PiImp%Npoints.ne.Nmats) stop "Merge_Polarization: PiImp has different number of Matsubara points with respect to PiGW."
       !
       Norb_imp=0
-      do isite=1,Nsite
+      do isite=1,Nimp
          Norb_imp = Norb_imp + LocalOrbs(isite)%Norb
       enddo
       if(Norb_imp.gt.Norb) stop "Merge_Polarization: Number of orbital to be inserted is bigger than the total lattice orbital space."
@@ -2768,7 +2816,7 @@ contains
       call BosonicKsum(PiGW)
       !
       !all sites if(expand) otherwise only one site and the orbitals within orbs
-      do isite=1,Nsite
+      do isite=1,Nimp
          !
          do iorb=1,LocalOrbs(isite)%Norb
             do jorb=1,LocalOrbs(isite)%Norb

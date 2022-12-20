@@ -1001,6 +1001,8 @@ contains
          enddo
       enddo
       !
+      Uelements%status=.true.
+      !
    end subroutine init_Uelements
 
 

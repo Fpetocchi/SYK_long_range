@@ -284,7 +284,8 @@ contains
          do ik=1,Nkpt
             ikx = int(ik/(Nkpt_Kside+0.001))+1 ; kx = (ikx-1)/dble(Nkpt_Kside-1) - 0.5d0
             iky = ik - (ikx-1)*Nkpt_Kside      ; ky = (iky-1)/dble(Nkpt_Kside-1) - 0.5d0
-            Bvec = kx*Blat(:,1) + ky*Blat(:,2)
+            !Bvec = kx*Blat(:,1) + ky*Blat(:,2)
+            Bvec = [kx*Blat(1,1)+Blat(1,2),ky*Blat(2,1)+Blat(2,2),0d0]
             write(unit,"(3I5,200E20.12)") ik,ikx,iky,Bvec(1),Bvec(2),(Akw_orb(iorb,wndx_cut,ik),iorb=1,Norb)
             if(iky.eq.Nkpt_Kside)write(unit,*)
          enddo
@@ -665,7 +666,8 @@ contains
          do iq=1,Nkpt
             ikx = int(iq/(Nkpt_Kside+0.001))+1 ; kx = (ikx-1)/dble(Nkpt_Kside-1) - 0.5d0
             iky = iq - (ikx-1)*Nkpt_Kside      ; ky = (iky-1)/dble(Nkpt_Kside-1) - 0.5d0
-            Bvec = kx*Blat(:,1) + ky*Blat(:,2)
+            !Bvec = kx*Blat(:,1) + ky*Blat(:,2)
+            Bvec = [kx*Blat(1,1)+Blat(1,2),ky*Blat(2,1)+Blat(2,2),0d0]
             write(unit,"(3I5,200E20.12)") iq,ikx,iky,Bvec(1),Bvec(2),(Akw_orb(iorb,wndx_cut,iq),iorb=1,Norb)
             if(iky.eq.Nkpt_Kside)write(unit,*)
          enddo

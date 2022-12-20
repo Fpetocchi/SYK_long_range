@@ -18,8 +18,6 @@ program SelfConsistency
    integer                                  :: isite
    integer                                  :: Iteration,ItStart,Itend
    !
-   logical                                  :: SGoWo_override=.false.
-   !
 #ifdef _akw
    character(len=20)                        :: InputFile="input.in.akw"
 #else
@@ -30,9 +28,6 @@ program SelfConsistency
    character(len=20)                        :: InputFile="input.in.gap"
 #endif
    !
-#ifdef _SE
-   SGoWo_override = .true.
-#endif
    !
    !
    !
@@ -101,13 +96,21 @@ program SelfConsistency
    call initialize_Fields(ItStart)
    if(solve_DMFT.and.(ItStart.gt.0))call show_Densities(ItStart-1)
    !
-   if(SGoWo_override)then
-      calc_Pk=.false.
-      calc_W=.false.
-      solve_DMFT=.false.
-      merge_Sigma=.false.
-      calc_Sigmak=.true.
-   endif
+   !
+   !PROJECT SPECIFIC>>>
+#ifdef _BP
+   !OrbMap contains the elements to remove
+   allocate(OrbMap(Crystal%Norb,Crystal%Norb));OrbMap=.false.
+   OrbMap(3:6,3:6)=.true.
+   OrbMap(3,3)=.false.
+   OrbMap(4,4)=.false.
+   OrbMap(5,5)=.false.
+   OrbMap(6,6)=.false.
+   call clear_MatrixElements(Ulat,OrbMap,LocalOnly=.false.)
+   deallocate(OrbMap)
+#endif
+   !>>>PROJECT SPECIFIC
+   !
    !
    do Iteration=ItStart,Itend,1
       !

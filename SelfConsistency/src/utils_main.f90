@@ -93,6 +93,7 @@ module utils_main
    integer                                  :: SigmaMaxMom=3
    !
    logical                                  :: MultiTier=.false.
+   logical,allocatable                      :: OrbMap(:,:)
    !
    character(len=255)                       :: ItFolder,PrevItFolder,MixItFolder
    character(len=256)                       :: MaxEnt_K
@@ -443,6 +444,12 @@ contains
          Lttc%Hk = Lttc%Hk * alphaHk
       else
          Lttc%Hk = Lttc%Hk * alphaHk * H2eV
+      endif
+      !
+      if(allocated(E0))then
+         do ik=1,Lttc%Nkpt
+            Lttc%Hk(:,:,ik) = Lttc%Hk(:,:,ik) + diag(E0)
+         enddo
       endif
       !
       if(allocated(Lttc%Hloc))deallocate(Lttc%Hloc)
@@ -2467,7 +2474,8 @@ contains
       !
       integer                               :: iorb,jorb,ispin,jspin
       integer                               :: ib1,ib2,isite,idum
-      integer                               :: unit,ndx,itau,iw,wndx,wndxOpt
+      integer                               :: unit,ndx,itau,iw
+      integer,allocatable                   :: wndx(:,:)
       real(8)                               :: taup
       real(8),allocatable                   :: tauF(:),tauB(:),wmats(:)
       real(8),allocatable                   :: ReadLine(:)
@@ -2547,7 +2555,7 @@ contains
          !
       enddo
       !
-      fitSigmaTail = (ReplaceTail_Simp.ne.0d0).and.(ReplaceTail_Simp.lt.wmatsMax)
+      !
       !
       !
       ! COLLECT IMPURITY OCCUPATION --------------------------------------------
@@ -2861,6 +2869,9 @@ contains
       !Self-energy manipulations
       do isite=1,Solver%Nimp
          !
+         fitSigmaTail = (.not.addE0).and.(ReplaceTail_Simp.gt.0d0).and.(ReplaceTail_Simp.lt.wmatsMax)
+         fitSigmaTail = addE0.and.all(LocalOrbs(isite)%tailFit.gt.0d0).and.all(LocalOrbs(isite)%tailFit.lt.wmatsMax)
+         !
          !Fit the impurity self-energy tail
          if(fitSigmaTail)then
             !
@@ -2870,13 +2881,24 @@ contains
             !
             !define the frequency index from which substitute the tail
             allocate(wmats(Nmats));wmats=FermionicFreqMesh(Beta,Nmats)
-            wndx = minloc(abs(wmats-ReplaceTail_Simp),dim=1)
-            wndxOpt = wndx
-            do ispin=1,Nspin
-               do iorb=1,LocalOrbs(isite)%Norb
-                  wndxOpt = min(wndxOpt,minloc(abs(Simp(isite)%ws(iorb,iorb,:,ispin)-0.3d0*minval(dimag(Simp(isite)%ws(iorb,iorb,:,ispin)))),dim=1))
+            allocate(wndx(LocalOrbs(isite)%Norb,Nspin));wndx=0
+            if(addE0)then
+               write(*,*)
+               do ispin=1,Nspin
+                  do iorb=1,LocalOrbs(isite)%Norb
+                     wndx(iorb,ispin) = minloc(abs(wmats-LocalOrbs(isite)%tailFit(iorb,ispin)),dim=1)
+                     write(*,"(A,F)") "     Replacing Sigma tail of orb #"//str(iorb)//" spin #"//str(ispin)//" in site #"//str(isite)//" starting from iw_["//str(wndx(iorb,ispin))//"]=",wmats(wndx(iorb,ispin))
+                  enddo
                enddo
-            enddo
+            else
+               do ispin=1,Nspin
+                  do iorb=1,LocalOrbs(isite)%Norb
+                     wndx(iorb,ispin) = minloc(abs(wmats-ReplaceTail_Simp),dim=1)
+                  enddo
+               enddo
+               write(*,"(A,F)") new_line("A")//"     Replacing Sigma tail starting from iw_["//str(wndx(1,1))//"]=",wmats(wndx(1,1))
+            endif
+            !
             !
             !perform the fit on the diagonal
             file = "SimpMom_"//reg(LocalOrbs(isite)%Name)//".DAT"
@@ -2889,22 +2911,20 @@ contains
                   Sfit(iorb,:,ispin) = Simp(isite)%ws(iorb,iorb,:,ispin)
                enddo
             enddo
-            call fit_moments(Sfit,Beta,reg(MomDir),reg(file),"Sigma",Moments,filename="Simp",Wlimit=wndx)
+            call fit_moments(Sfit,Beta,reg(MomDir),reg(file),"Sigma",Moments,filename="Simp",WlimitResolved=wndx)
             !
             allocate(SmatsTail(Nmats));SmatsTail=czero
-            write(*,"(A,F)") new_line("A")//"     Replacing Sigma tail starting from iw_["//str(wndx)//"]=",wmats(wndx)
-            if(abs(wmats(wndx)-wmats(wndxOpt)).gt.1d0)write(*,"(A,F)") "     Optimal would be iw_["//str(wndxOpt)//"]=",wmats(wndxOpt)
             do ispin=1,Nspin
                do iorb=1,LocalOrbs(isite)%Norb
                   SmatsTail = S_Moments(Moments(iorb,ispin,:),wmats)
-                  Simp(isite)%ws(iorb,iorb,wndx:Nmats,ispin) = SmatsTail(wndx:Nmats)
+                  Simp(isite)%ws(iorb,iorb,wndx(iorb,ispin):Nmats,ispin) = SmatsTail(wndx(iorb,ispin):Nmats)
                enddo
                if(paramagnet)then
                   Simp(isite)%ws(:,:,:,Nspin) = Simp(isite)%ws(:,:,:,1)
                   exit
                endif
             enddo
-            deallocate(wmats,Sfit,Moments,SmatsTail)
+            deallocate(wmats,wndx,Sfit,Moments,SmatsTail)
             !
          endif
          !
@@ -3459,7 +3479,7 @@ contains
                write(*,"("//str(Norb)//"F"//str(wn)//".4,"//str(ws)//"X)") (dreal(densityDMFT(iorb,iorb,1)-densityDMFT(iorb,iorb,2)),iorb=1,Norb)
             endif
             !
-            if(Nsite.gt.1)then
+            if(solve_DMFT)then
                do isite=1,Solver%Nimp
                   !
                   Norb_imp = LocalOrbs(isite)%Norb
@@ -3468,9 +3488,18 @@ contains
                   write(*,*)
                   if(Nspin.eq.1)write(*,"(A"//str(wn*Norb)//","//str(ws)//"X)")banner(trim(header3)//" up",wn*Norb)
                   if(Nspin.gt.1)write(*,"("//str(Nspin)//"(A"//str(wn*Norb)//","//str(ws)//"X))")banner(trim(header3)//" up",wn*Norb),banner(trim(header3)//" dw",wn*Norb)
-                  do iorb=1,Norb_imp
-                     write(*,"("//str(Nspin)//"("//str(wsi)//"X,"//str(Norb_imp)//"F"//str(wn)//".4,"//str(ws)//"X))") ((LocalOrbs(isite)%rho_OrbSpin(iorb,jorb,ispin),jorb=1,Norb_imp),ispin=1,Nspin)
-                  enddo
+                  !
+                  if(wsi.ne.0)then
+                     !standard case with iimp=isite
+                     do iorb=1,Norb_imp
+                        write(*,"("//str(Nspin)//"("//str(wsi)//"X,"//str(Norb_imp)//"F"//str(wn)//".4,"//str(ws)//"X))") ((LocalOrbs(isite)%rho_OrbSpin(iorb,jorb,ispin),jorb=1,Norb_imp),ispin=1,Nspin)
+                     enddo
+                  else
+                     !molecular orbtials
+                     do iorb=1,Norb_imp
+                        write(*,"("//str(Nspin)//"("//str(Norb_imp)//"F"//str(wn)//".4,"//str(ws)//"X))") ((LocalOrbs(isite)%rho_OrbSpin(iorb,jorb,ispin),jorb=1,Norb_imp),ispin=1,Nspin)
+                     enddo
+                  endif
                   !
                   if(ExpandImpurity.or.AFMselfcons)exit
                   !

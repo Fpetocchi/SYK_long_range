@@ -420,7 +420,7 @@ contains
    !PURPOSE: Fit a given function [Norn,Nfreq,Nspin] assuming an hybridization
    !         like functional form with an addtional shift.
    !---------------------------------------------------------------------------!
-   subroutine fit_Delta(funct,Beta,Nb,dirpath,paramFile,FitMode,Eloc,filename,Wlimit,coef01)
+   subroutine fit_Delta(funct,Beta,Nb,dirpath,paramFile,FitMode,Eloc,filename,Wlimit,WlimitResolved,coef01)
       !
       use parameters
       use utils_misc
@@ -436,6 +436,7 @@ contains
       real(8),intent(inout)                 :: Eloc(:,:)
       character(len=*),intent(in),optional  :: filename
       integer,intent(in),optional           :: Wlimit
+      integer,intent(in),optional           :: WlimitResolved(:,:)
       real(8),intent(inout),optional        :: coef01(:,:)
       !
       integer                               :: Norb,Niter,Wstart
@@ -450,16 +451,15 @@ contains
       !
       Nfit = Nb
       Norb = size(funct,dim=1)
-      Wstart = 1
-      if(present(Wlimit))Wstart = Wlimit
-      Nfreq = size(funct,dim=2) - Wstart + 1
       !
       call assert_shape(Eloc,[Norb,Nspin],"fit_Delta","Eloc")
       if(present(coef01))call assert_shape(coef01,[Norb,Nspin],"fit_Delta","coef01")
-      allocate(Component(Nfreq));Component=czero
       !
       call setupAndPrams(Norb,dirpath,paramFile)
       call dump_AndPrams(dirpath,"used."//paramFile)
+      !
+      if(present(WlimitResolved)) call assert_shape(WlimitResolved,[Norb,Nspin],"fit_moments","WlimitResolved")
+      if(present(Wlimit).and.present(WlimitResolved))write(*,"(A)")"     Warning: universal Wlimit overrides."
       !
       select case(reg(FitMode))
          case default
@@ -470,13 +470,21 @@ contains
             !
             write(*,"(A)")"     Fitting Delta(iw)."
             !
-            allocate(wmats(Nfreq));wmats=0d0
-            wmats = FermionicFreqMesh(Beta,Nfreq) + (Wstart-1)*2d0*pi/Beta
+
             allocate(ParamVec(2*Nfit));ParamVec=0d0
             !
             do ispin=1,Nspin
                do iorb=1,Norb
                   !
+                  Wstart = 1
+                  if(present(WlimitResolved))Wstart = WlimitResolved(iorb,ispin)
+                  if(present(Wlimit))Wstart = Wlimit
+                  Nfreq = size(funct,dim=2) - Wstart + 1
+                  !
+                  allocate(wmats(Nfreq));wmats=0d0
+                  wmats = FermionicFreqMesh(Beta,Nfreq) + (Wstart-1)*2d0*pi/Beta
+                  !
+                  allocate(Component(Nfreq));Component=czero
                   Component = funct(iorb,Wstart:Wstart+Nfreq-1,ispin)
                   ParamVec(1:Nfit) = AndPram%Epsk(iorb,:,ispin)
                   ParamVec(1+Nfit:2*Nfit) = AndPram%Vk(iorb,:,ispin)
@@ -489,6 +497,8 @@ contains
                   AndPram%Epsk(iorb,:,ispin) = ParamVec(1:Nfit)
                   AndPram%Vk(iorb,:,ispin) = ParamVec(1+Nfit:2*Nfit)
                   !
+                  deallocate(Component,wmats)
+                  !
                enddo
             enddo
             !
@@ -496,13 +506,20 @@ contains
             !
             write(*,"(A)")"     Fitting Eloc+Delta(iw)."
             !
-            allocate(wmats(Nfreq));wmats=0d0
-            wmats = FermionicFreqMesh(Beta,Nfreq) + (Wstart-1)*2d0*pi/Beta
             allocate(ParamVec(2*Nfit+1));ParamVec=0d0
             !
             do ispin=1,Nspin
                do iorb=1,Norb
                   !
+                  Wstart = 1
+                  if(present(WlimitResolved))Wstart = WlimitResolved(iorb,ispin)
+                  if(present(Wlimit))Wstart = Wlimit
+                  Nfreq = size(funct,dim=2) - Wstart + 1
+                  !
+                  allocate(wmats(Nfreq));wmats=0d0
+                  wmats = FermionicFreqMesh(Beta,Nfreq) + (Wstart-1)*2d0*pi/Beta
+                  !
+                  allocate(Component(Nfreq));Component=czero
                   Component = funct(iorb,Wstart:Wstart+Nfreq-1,ispin)
                   ParamVec(1:Nfit) = AndPram%Epsk(iorb,:,ispin)
                   ParamVec(1+Nfit:2*Nfit) = AndPram%Vk(iorb,:,ispin)
@@ -926,7 +943,7 @@ contains
    !PURPOSE: Fit a given function [Norn,Nfreq,Nspin] assuming a generic
    !         functional moment formulation.
    !---------------------------------------------------------------------------!
-   subroutine fit_moments(funct,Beta,dirpath,paramFile,FitMode,MomentsOut,filename,Wlimit,verb,refresh)
+   subroutine fit_moments(funct,Beta,dirpath,paramFile,FitMode,MomentsOut,filename,Wlimit,WlimitResolved,verb,refresh)
       !
       use parameters
       use utils_misc
@@ -941,6 +958,7 @@ contains
       real(8),intent(inout),allocatable     :: MomentsOut(:,:,:)
       character(len=*),intent(in),optional  :: filename
       integer,intent(in),optional           :: Wlimit
+      integer,intent(in),optional           :: WlimitResolved(:,:)
       logical,intent(in),optional           :: verb
       logical,intent(in),optional           :: refresh
       !
@@ -956,21 +974,18 @@ contains
       !
       !
       Nfit = size(MomentsOut,dim=3)
-      !if(Nfit.lt.5) stop "fit_moments: the fit will not work with less than five moments (min order is 4)."
       if(.not.allocated(MomentsOut)) stop "fit_moments: output moment container not allocated."
       MaxMom = Nfit - 1
       !
       Norb = size(funct,dim=1)
-      Wstart = 1
-      if(present(Wlimit))Wstart = Wlimit
-      Nfreq = size(funct,dim=2) - Wstart + 1
       !
       verb_=.true.
       if(present(verb))verb_=verb
       refresh_=.false.
       if(present(refresh))refresh_=refresh
       !
-      allocate(Component(Nfreq));Component=czero
+      if(present(WlimitResolved)) call assert_shape(WlimitResolved,[Norb,Nspin],"fit_moments","WlimitResolved")
+      if(present(Wlimit).and.present(WlimitResolved))write(*,"(A)")"     Warning: universal Wlimit overrides."
       !
       call setupMoments(Norb,dirpath,paramFile,refresh_)
       allocate(MomentsRebuilt(0:MaxMom));MomentsRebuilt=0d0
@@ -984,15 +999,22 @@ contains
             !
             if(verb_)write(*,"(A)")"     Fitting moments [2:"//str(MaxMom)//"]."
             !
-            allocate(wmats(Nfreq));wmats=0d0
-            wmats = FermionicFreqMesh(Beta,Nfreq) + (Wstart-1)*2d0*pi/Beta
             allocate(ParamVec(Nfit-4));ParamVec=0d0                             !starts from exponent -2 and interanlly reconstruct the last two
             !
             do ispin=1,Nspin
                do iorb=1,Norb
                   !
+                  Wstart = 1
+                  if(present(WlimitResolved))Wstart = WlimitResolved(iorb,ispin)
+                  if(present(Wlimit))Wstart = Wlimit
+                  Nfreq = size(funct,dim=2) - Wstart + 1
+                  !
+                  allocate(wmats(Nfreq));wmats=0d0
+                  wmats = FermionicFreqMesh(Beta,Nfreq) + (Wstart-1)*2d0*pi/Beta
+                  !
                   Moments(iorb,ispin,0) = 0d0
                   Moments(iorb,ispin,1) = 1d0
+                  allocate(Component(Nfreq));Component=czero
                   Component = funct(iorb,Wstart:Wstart+Nfreq-1,ispin)
                   ParamVec = Moments(iorb,ispin,2:MaxMom-2)                     !starts from exponent -2 and interanlly reconstruct the last two
                   ContinuityConstraint = [Component(1),dcmplx(wmats(1),0d0)]
@@ -1014,6 +1036,8 @@ contains
                   !
                   Moments(iorb,ispin,0:MaxMom)=MomentsRebuilt(0:MaxMom)
                   !
+                  deallocate(Component,wmats)
+                  !
                enddo
             enddo
             !
@@ -1021,13 +1045,20 @@ contains
             !
             if(verb_)write(*,"(A)")"     Fitting moments [0:"//str(MaxMom)//"]."
             !
-            allocate(wmats(Nfreq));wmats=0d0
-            wmats = FermionicFreqMesh(Beta,Nfreq) + (Wstart-1)*2*pi/Beta
             allocate(ParamVec(Nfit-2));ParamVec=0d0                             !starts from exponent 0 and interanlly reconstruct the last two
             !
             do ispin=1,Nspin
                do iorb=1,Norb
                   !
+                  Wstart = 1
+                  if(present(WlimitResolved))Wstart = WlimitResolved(iorb,ispin)
+                  if(present(Wlimit))Wstart = Wlimit
+                  Nfreq = size(funct,dim=2) - Wstart + 1
+                  !
+                  allocate(wmats(Nfreq));wmats=0d0
+                  wmats = FermionicFreqMesh(Beta,Nfreq) + (Wstart-1)*2d0*pi/Beta
+                  !
+                  allocate(Component(Nfreq));Component=czero
                   Component = funct(iorb,Wstart:Wstart+Nfreq-1,ispin)
                   ParamVec = Moments(iorb,ispin,0:MaxMom-2)                     !starts from exponent 0 and interanlly reconstruct the last two
                   ContinuityConstraint = [Component(1),dcmplx(wmats(1),0d0)]
@@ -1047,6 +1078,8 @@ contains
                   !
                   Moments(iorb,ispin,0:MaxMom)=MomentsRebuilt(0:MaxMom)
                   !
+                  deallocate(Component,wmats)
+                  !
                enddo
             enddo
             !
@@ -1054,13 +1087,20 @@ contains
             !
             if(verb_)write(*,"(A)")"     Fitting even moments [0:"//str(MaxMom)//"]."
             !
-            allocate(wmats(Nfreq));wmats=0d0
-            wmats = BosonicFreqMesh(Beta,Nfreq) + (Wstart-1)*2d0*pi/Beta
             allocate(ParamVec(Nfit-2));ParamVec=0d0                             !starts from exponent 0 and interanlly reconstruct the last two
             !
             do ispin=1,Nspin
                do iorb=1,Norb
                   !
+                  Wstart = 1
+                  if(present(WlimitResolved))Wstart = WlimitResolved(iorb,ispin)
+                  if(present(Wlimit))Wstart = Wlimit
+                  Nfreq = size(funct,dim=2) - Wstart + 1
+                  !
+                  allocate(wmats(Nfreq));wmats=0d0
+                  wmats = BosonicFreqMesh(Beta,Nfreq) + (Wstart-1)*2d0*pi/Beta
+                  !
+                  allocate(Component(Nfreq));Component=czero
                   Component = funct(iorb,Wstart:Wstart+Nfreq-1,ispin)
                   ParamVec = Moments(iorb,ispin,0:MaxMom-2)                     !starts from exponent 0 and interanlly reconstruct the last two
                   ContinuityConstraint = [Component(1),dcmplx(wmats(1),0d0)]
@@ -1080,12 +1120,15 @@ contains
                   !
                   Moments(iorb,ispin,0:MaxMom)=MomentsRebuilt(0:MaxMom)
                   !
+                  deallocate(Component,wmats)
+                  !
                enddo
             enddo
             !
       end select
       !
-      deallocate(Component,ParamVec,MomentsRebuilt,wmats)
+      deallocate(ParamVec,MomentsRebuilt)
+      !deallocate(Component,ParamVec,MomentsRebuilt,wmats)
       MomentsOut = Moments
       call dump_Moments(dirpath,paramFile)
       !
