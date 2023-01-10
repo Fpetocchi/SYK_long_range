@@ -3409,7 +3409,7 @@ contains
       integer                               :: ik,ikz,iorb,unit,ilayer
       integer                               :: Norb,Nkpt_Kside_,ikx,iky
       integer                               :: iw,ndx,Nreal_sigma
-      real(8)                               :: kp,kx,ky,Bvec(3)
+      real(8)                               :: kp,kx,ky,Bvec(3),Kvec(3)
       real(8)                               :: wrealMax,kz_cut,FermiLevel!,eta
       complex(8),allocatable                :: data_orig(:,:,:)
       complex(8),allocatable                :: invGf(:,:)
@@ -3849,9 +3849,9 @@ contains
             do ik=1,Lttc%Nkpt_Plane
                ikx = int(ik/(Nkpt_Kside_+0.001))+1 ; kx = (ikx-1)/dble(Nkpt_Kside_-1) - 0.5d0
                iky = ik - (ikx-1)*Nkpt_Kside_      ; ky = (iky-1)/dble(Nkpt_Kside_-1) - 0.5d0
-               !Bvec = kx*Blat(:,1) + ky*Blat(:,2)
+               Kvec = kx*Blat(:,1) + ky*Blat(:,2)
                Bvec = [kx*Blat(1,1)+Blat(1,2),ky*Blat(2,1)+Blat(2,2),0d0]
-               write(unit,"(3I5,200E20.12)") ik,ikx,iky,Bvec(1),Bvec(2),(Fk(iorb,iorb,ik),iorb=1,Norb)
+               write(unit,"(3I5,200E20.12)") ik,ikx,iky,Bvec(1),Bvec(2),Kvec(1),Kvec(2),(Fk(iorb,iorb,ik),iorb=1,Norb)
                if(iky.eq.Nkpt_Kside_)write(unit,*)
             enddo
             close(unit)
@@ -3876,9 +3876,9 @@ contains
                do ik=1,Lttc%Nkpt_Plane
                   ikx = int(ik/(Nkpt_Kside_+0.001))+1 ; kx = (ikx-1)/dble(Nkpt_Kside_-1) - 0.5d0
                   iky = ik - (ikx-1)*Nkpt_Kside_      ; ky = (iky-1)/dble(Nkpt_Kside_-1) - 0.5d0
-                  !Bvec = kx*Blat(:,1) + ky*Blat(:,2)
+                  Kvec = kx*Blat(:,1) + ky*Blat(:,2)
                   Bvec = [kx*Blat(1,1)+Blat(1,2),ky*Blat(2,1)+Blat(2,2),0d0]
-                  write(unit,"(3I5,200E20.12)") ik,ikx,iky,Bvec(1),Bvec(2),(dreal(Fk_kz(iorb,iorb,ik,ikz)),iorb=1,Hetero%Norb)
+                  write(unit,"(3I5,200E20.12)") ik,ikx,iky,Bvec(1),Bvec(2),Kvec(1),Kvec(2),(dreal(Fk_kz(iorb,iorb,ik,ikz)),iorb=1,Hetero%Norb)
                   if(iky.eq.Nkpt_Kside_)write(unit,*)
                enddo
                close(unit)
@@ -3893,9 +3893,9 @@ contains
                do ik=1,Lttc%Nkpt_Plane
                   ikx = int(ik/(Nkpt_Kside_+0.001))+1 ; kx = (ikx-1)/dble(Nkpt_Kside_-1) - 0.5d0
                   iky = ik - (ikx-1)*Nkpt_Kside_      ; ky = (iky-1)/dble(Nkpt_Kside_-1) - 0.5d0
-                  !Bvec = kx*Blat(:,1) + ky*Blat(:,2)
+                  Kvec = kx*Blat(:,1) + ky*Blat(:,2)
                   Bvec = [kx*Blat(1,1)+Blat(1,2),ky*Blat(2,1)+Blat(2,2),0d0]
-                  write(unit,"(3I5,200E20.12)") ik,ikx,iky,Bvec(1),Bvec(2),(dreal(Fk_kz(iorb,iorb,ik,ikz)),iorb=1,Hetero%Norb)
+                  write(unit,"(3I5,200E20.12)") ik,ikx,iky,Bvec(1),Bvec(2),Kvec(1),Kvec(2),(dreal(Fk_kz(iorb,iorb,ik,ikz)),iorb=1,Hetero%Norb)
                   if(iky.eq.Nkpt_Kside_)write(unit,*)
                enddo
                close(unit)
@@ -3910,9 +3910,9 @@ contains
                do ik=1,Lttc%Nkpt_Plane
                   ikx = int(ik/(Nkpt_Kside_+0.001))+1 ; kx = (ikx-1)/dble(Nkpt_Kside_-1) - 0.5d0
                   iky = ik - (ikx-1)*Nkpt_Kside_      ; ky = (iky-1)/dble(Nkpt_Kside_-1) - 0.5d0
-                  !Bvec = kx*Blat(:,1) + ky*Blat(:,2)
+                  Kvec = kx*Blat(:,1) + ky*Blat(:,2)
                   Bvec = [kx*Blat(1,1)+Blat(1,2),ky*Blat(2,1)+Blat(2,2),0d0]
-                  write(unit,"(3I5,200E20.12)") ik,ikx,iky,Bvec(1),Bvec(2),(dreal(Fk_kz(iorb,iorb,ik,ikz)),iorb=1,Hetero%Norb)
+                  write(unit,"(3I5,200E20.12)") ik,ikx,iky,Bvec(1),Bvec(2),Kvec(1),Kvec(2),(dreal(Fk_kz(iorb,iorb,ik,ikz)),iorb=1,Hetero%Norb)
                   if(iky.eq.Nkpt_Kside_)write(unit,*)
                enddo
                close(unit)

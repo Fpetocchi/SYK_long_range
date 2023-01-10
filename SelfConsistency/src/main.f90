@@ -28,6 +28,9 @@ program SelfConsistency
    character(len=20)                        :: InputFile="input.in.gap"
 #endif
    !
+   integer                                  :: iw
+   complex(8),allocatable                   :: Pnn(:,:,:)
+   !
    !
    !
    !
@@ -98,16 +101,300 @@ program SelfConsistency
    !
    !
    !PROJECT SPECIFIC>>>
-#ifdef _BP
+#ifdef _BP_Vnn
+   !
    !OrbMap contains the elements to remove
    allocate(OrbMap(Crystal%Norb,Crystal%Norb));OrbMap=.false.
    OrbMap(3:6,3:6)=.true.
+   OrbMap(1:2,1:2)=.true.
    OrbMap(3,3)=.false.
    OrbMap(4,4)=.false.
    OrbMap(5,5)=.false.
    OrbMap(6,6)=.false.
    call clear_MatrixElements(Ulat,OrbMap,LocalOnly=.false.)
    deallocate(OrbMap)
+   call dump_BosonicField(Ulat,reg(pathINPUT),"Uloc_mats_BP.DAT")
+   !
+   ! symmetry imposed by hand
+   if(ItStart.gt.0)then
+      !
+      !--------------------------- this is required ---------------------------!
+      !
+      S_DMFT%ws(1,1,:,:) = (S_DMFT%ws(1,1,:,:)+S_DMFT%ws(2,2,:,:))/2d0
+      S_DMFT%ws(2,2,:,:) = S_DMFT%ws(1,1,:,:)
+      S_DMFT%ws(1,2,:,:) = (S_DMFT%ws(1,2,:,:)+S_DMFT%ws(2,1,:,:))/2d0
+      S_DMFT%ws(2,1,:,:) = S_DMFT%ws(1,2,:,:)
+      !
+      S_DMFT%ws(3,3,:,:) = (S_DMFT%ws(3,3,:,:)+S_DMFT%ws(4,4,:,:))/2d0
+      S_DMFT%ws(4,4,:,:) = S_DMFT%ws(3,3,:,:)
+      S_DMFT%ws(3,4,:,:) = (S_DMFT%ws(3,4,:,:)+S_DMFT%ws(4,3,:,:))/2d0
+      S_DMFT%ws(4,3,:,:) = S_DMFT%ws(3,4,:,:)
+      !
+      S_DMFT%ws(5,5,:,:) = (S_DMFT%ws(5,5,:,:)+S_DMFT%ws(6,6,:,:))/2d0
+      S_DMFT%ws(6,6,:,:) = S_DMFT%ws(5,5,:,:)
+      S_DMFT%ws(5,6,:,:) = (S_DMFT%ws(5,6,:,:)+S_DMFT%ws(6,5,:,:))/2d0
+      S_DMFT%ws(6,5,:,:) = S_DMFT%ws(5,6,:,:)
+      !
+      S_DMFT%ws(4,5,:,:) = (S_DMFT%ws(4,5,:,:)+S_DMFT%ws(5,4,:,:))/2d0
+      S_DMFT%ws(5,4,:,:) = S_DMFT%ws(4,5,:,:)
+      S_DMFT%ws(3,6,:,:) = (S_DMFT%ws(3,6,:,:)+S_DMFT%ws(6,3,:,:))/2d0
+      S_DMFT%ws(6,3,:,:) = S_DMFT%ws(3,6,:,:)
+      !
+      S_DMFT%ws(1:2,3:6,:,:) = czero
+      S_DMFT%ws(3:6,1:2,:,:) = czero
+      S_DMFT%ws(3,5,:,:) = czero
+      S_DMFT%ws(5,3,:,:) = czero
+      S_DMFT%ws(4,6,:,:) = czero
+      S_DMFT%ws(6,4,:,:) = czero
+      !
+      call dump_FermionicField(S_DMFT,reg(PrevItFolder),"Simp_Clean_w",paramagnet)
+      !
+      !--------------------------- this is required ---------------------------!
+      !
+      S_DMFT%N_s(1,1,:) = (S_DMFT%N_s(1,1,:)+S_DMFT%N_s(2,2,:))/2d0
+      S_DMFT%N_s(2,2,:) = S_DMFT%N_s(1,1,:)
+      S_DMFT%N_s(1,2,:) = (S_DMFT%N_s(1,2,:)+S_DMFT%N_s(2,1,:))/2d0
+      S_DMFT%N_s(2,1,:) = S_DMFT%N_s(1,2,:)
+      !
+      S_DMFT%N_s(3,3,:) = (S_DMFT%N_s(3,3,:)+S_DMFT%N_s(4,4,:))/2d0
+      S_DMFT%N_s(4,4,:) = S_DMFT%N_s(3,3,:)
+      S_DMFT%N_s(3,4,:) = (S_DMFT%N_s(3,4,:)+S_DMFT%N_s(4,3,:))/2d0
+      S_DMFT%N_s(4,3,:) = S_DMFT%N_s(3,4,:)
+      !
+      S_DMFT%N_s(5,5,:) = (S_DMFT%N_s(5,5,:)+S_DMFT%N_s(6,6,:))/2d0
+      S_DMFT%N_s(6,6,:) = S_DMFT%N_s(5,5,:)
+      S_DMFT%N_s(5,6,:) = (S_DMFT%N_s(5,6,:)+S_DMFT%N_s(6,5,:))/2d0
+      S_DMFT%N_s(6,5,:) = S_DMFT%N_s(5,6,:)
+      !
+      S_DMFT%N_s(4,5,:) = (S_DMFT%N_s(4,5,:)+S_DMFT%N_s(5,4,:))/2d0
+      S_DMFT%N_s(5,4,:) = S_DMFT%N_s(4,5,:)
+      S_DMFT%N_s(3,6,:) = (S_DMFT%N_s(3,6,:)+S_DMFT%N_s(6,3,:))/2d0
+      S_DMFT%N_s(6,3,:) = S_DMFT%N_s(3,6,:)
+      !
+      S_DMFT%N_s(1:2,3:6,:) = czero
+      S_DMFT%N_s(3:6,1:2,:) = czero
+      S_DMFT%N_s(3,5,:) = czero
+      S_DMFT%N_s(5,3,:) = czero
+      S_DMFT%N_s(4,6,:) = czero
+      S_DMFT%N_s(6,4,:) = czero
+      !
+      call dump_Matrix(S_DMFT%N_s,reg(PrevItFolder),"Hartree_UNimp_Clean",paramagnet)
+      !
+      !--------------------------- this is to check ---------------------------!
+      !
+      call AllocateFermionicField(G_DMFT,Crystal%Norb,Nmats,Nsite=Nsite,Beta=Beta,mu=muQMC)
+      call read_FermionicField(G_DMFT,reg(PrevItFolder),"Gimp_w")
+      !
+      G_DMFT%ws(1,1,:,:) = (G_DMFT%ws(1,1,:,:)+G_DMFT%ws(2,2,:,:))/2d0
+      G_DMFT%ws(2,2,:,:) = G_DMFT%ws(1,1,:,:)
+      G_DMFT%ws(1,2,:,:) = (G_DMFT%ws(1,2,:,:)+G_DMFT%ws(2,1,:,:))/2d0
+      G_DMFT%ws(2,1,:,:) = G_DMFT%ws(1,2,:,:)
+      !
+      G_DMFT%ws(3,3,:,:) = (G_DMFT%ws(3,3,:,:)+G_DMFT%ws(4,4,:,:))/2d0
+      G_DMFT%ws(4,4,:,:) = G_DMFT%ws(3,3,:,:)
+      G_DMFT%ws(3,4,:,:) = (G_DMFT%ws(3,4,:,:)+G_DMFT%ws(4,3,:,:))/2d0
+      G_DMFT%ws(4,3,:,:) = G_DMFT%ws(3,4,:,:)
+      !
+      G_DMFT%ws(5,5,:,:) = (G_DMFT%ws(5,5,:,:)+G_DMFT%ws(6,6,:,:))/2d0
+      G_DMFT%ws(6,6,:,:) = G_DMFT%ws(5,5,:,:)
+      G_DMFT%ws(5,6,:,:) = (G_DMFT%ws(5,6,:,:)+G_DMFT%ws(6,5,:,:))/2d0
+      G_DMFT%ws(6,5,:,:) = G_DMFT%ws(5,6,:,:)
+      !
+      G_DMFT%ws(4,5,:,:) = (G_DMFT%ws(4,5,:,:)+G_DMFT%ws(5,4,:,:))/2d0
+      G_DMFT%ws(5,4,:,:) = G_DMFT%ws(4,5,:,:)
+      G_DMFT%ws(3,6,:,:) = (G_DMFT%ws(3,6,:,:)+G_DMFT%ws(6,3,:,:))/2d0
+      G_DMFT%ws(6,3,:,:) = G_DMFT%ws(3,6,:,:)
+      !
+      G_DMFT%ws(1:2,3:6,:,:) = czero
+      G_DMFT%ws(3:6,1:2,:,:) = czero
+      G_DMFT%ws(3,5,:,:) = czero
+      G_DMFT%ws(5,3,:,:) = czero
+      G_DMFT%ws(4,6,:,:) = czero
+      G_DMFT%ws(6,4,:,:) = czero
+      !
+      call dump_FermionicField(G_DMFT,reg(PrevItFolder),"Gimp_Clean_w",paramagnet)
+      call DeallocateFermionicField(G_DMFT)
+      !
+      !--------------------------- this is required ---------------------------!
+      !
+      allocate(Pnn(Crystal%Norb,Crystal%Norb,Nmats));Pnn=czero
+      do iw=1,Nmats
+         call product2NN(P_EDMFT%screened_local(:,:,iw),Pnn(:,:,iw))
+      enddo
+      call clear_attributes(P_EDMFT)
+      !
+      Pnn(1,1,:) = (Pnn(1,1,:)+Pnn(2,2,:)+Pnn(1,2,:)+Pnn(2,1,:))/4d0
+      Pnn(2,2,:) = Pnn(1,1,:)
+      Pnn(1,2,:) = Pnn(1,1,:)
+      Pnn(2,1,:) = Pnn(1,1,:)
+      !
+      Pnn(3,3,:) = (Pnn(3,3,:)+Pnn(4,4,:)+Pnn(3,4,:)+Pnn(4,3,:))/4d0
+      Pnn(4,4,:) = Pnn(3,3,:)
+      Pnn(3,4,:) = Pnn(3,3,:)
+      Pnn(4,3,:) = Pnn(3,3,:)
+      !
+      Pnn(5,5,:) = (Pnn(5,5,:)+Pnn(6,6,:)+Pnn(5,6,:)+Pnn(6,5,:))/4d0
+      Pnn(6,6,:) = Pnn(5,5,:)
+      Pnn(5,6,:) = Pnn(5,5,:)
+      Pnn(6,5,:) = Pnn(5,5,:)
+      !
+      Pnn(3,5,:) = (Pnn(3,5,:)+Pnn(3,6,:)+Pnn(4,5,:)+Pnn(4,6,:))/4d0
+      Pnn(3,6,:) = Pnn(3,5,:)
+      Pnn(4,5,:) = Pnn(3,5,:)
+      Pnn(4,6,:) = Pnn(4,5,:)
+      Pnn(5:6,3:4,:) = Pnn(3:4,5:6,:)
+      !
+      Pnn(1,3,:) = (Pnn(1,3,:)+Pnn(1,4,:)+Pnn(2,3,:)+Pnn(2,4,:))/4d0
+      Pnn(1,4,:) = Pnn(1,3,:)
+      Pnn(2,3,:) = Pnn(1,3,:)
+      Pnn(2,4,:) = Pnn(1,3,:)
+      Pnn(3:4,1:2,:) = Pnn(1:2,3:4,:)
+      !
+      Pnn(1,5,:) = (Pnn(1,5,:)+Pnn(1,6,:)+Pnn(2,5,:)+Pnn(2,6,:))/4d0
+      Pnn(1,6,:) = Pnn(1,5,:)
+      Pnn(2,5,:) = Pnn(1,5,:)
+      Pnn(2,6,:) = Pnn(1,5,:)
+      Pnn(5:6,1:2,:) = Pnn(1:2,5:6,:)
+      !
+      do iw=1,Nmats
+         call NN2product(Pnn(:,:,iw),P_EDMFT%screened_local(:,:,iw))
+      enddo
+      deallocate(Pnn)
+      !
+      call dump_BosonicField(P_EDMFT,reg(PrevItFolder),"Pimp_Clean_w.DAT")
+      !
+   endif
+   !
+#endif
+   !
+#ifdef _BP_eph
+   !
+   !OrbMap contains the elements to remove
+   allocate(OrbMap(Crystal%Norb,Crystal%Norb));OrbMap=.true.
+   OrbMap(1,1)=.false.
+   OrbMap(2,2)=.false.
+   OrbMap(3,3)=.false.
+   OrbMap(4,4)=.false.
+   call clear_MatrixElements(Ulat,OrbMap,LocalOnly=.false.)
+   deallocate(OrbMap)
+   call dump_BosonicField(Ulat,reg(pathINPUT),"Uloc_mats_BP.DAT")
+   !
+   ! symmetry imposed by hand
+   ! symmetry imposed by hand
+   if(ItStart.gt.0)then
+      !
+      !--------------------------- this is required ---------------------------!
+      !
+      S_DMFT%ws(1,1,:,:) = (S_DMFT%ws(1,1,:,:)+S_DMFT%ws(2,2,:,:))/2d0
+      S_DMFT%ws(2,2,:,:) = S_DMFT%ws(1,1,:,:)
+      S_DMFT%ws(1,2,:,:) = (S_DMFT%ws(1,2,:,:)+S_DMFT%ws(2,1,:,:))/2d0
+      S_DMFT%ws(2,1,:,:) = S_DMFT%ws(1,2,:,:)
+      !
+      S_DMFT%ws(3,3,:,:) = (S_DMFT%ws(3,3,:,:)+S_DMFT%ws(4,4,:,:))/2d0
+      S_DMFT%ws(4,4,:,:) = S_DMFT%ws(3,3,:,:)
+      S_DMFT%ws(3,4,:,:) = (S_DMFT%ws(3,4,:,:)+S_DMFT%ws(4,3,:,:))/2d0
+      S_DMFT%ws(4,3,:,:) = S_DMFT%ws(3,4,:,:)
+      !
+      S_DMFT%ws(1,4,:,:) = (S_DMFT%ws(1,4,:,:)+S_DMFT%ws(4,1,:,:))/2d0
+      S_DMFT%ws(4,1,:,:) = S_DMFT%ws(1,4,:,:)
+      !
+      S_DMFT%ws(2,3,:,:) = (S_DMFT%ws(2,3,:,:)+S_DMFT%ws(3,2,:,:))/2d0
+      S_DMFT%ws(3,2,:,:) = S_DMFT%ws(2,3,:,:)
+      !
+      S_DMFT%ws(1,3,:,:) = czero
+      S_DMFT%ws(3,1,:,:) = czero
+      S_DMFT%ws(2,4,:,:) = czero
+      S_DMFT%ws(4,2,:,:) = czero
+      !
+      call dump_FermionicField(S_DMFT,reg(PrevItFolder),"Simp_Clean_w",paramagnet)
+      !
+      !--------------------------- this is required ---------------------------!
+      !
+      S_DMFT%N_s(1,1,:) = (S_DMFT%N_s(1,1,:)+S_DMFT%N_s(2,2,:))/2d0
+      S_DMFT%N_s(2,2,:) = S_DMFT%N_s(1,1,:)
+      S_DMFT%N_s(1,2,:) = (S_DMFT%N_s(1,2,:)+S_DMFT%N_s(2,1,:))/2d0
+      S_DMFT%N_s(2,1,:) = S_DMFT%N_s(1,2,:)
+      !
+      S_DMFT%N_s(3,3,:) = (S_DMFT%N_s(3,3,:)+S_DMFT%N_s(4,4,:))/2d0
+      S_DMFT%N_s(4,4,:) = S_DMFT%N_s(3,3,:)
+      S_DMFT%N_s(3,4,:) = (S_DMFT%N_s(3,4,:)+S_DMFT%N_s(4,3,:))/2d0
+      S_DMFT%N_s(4,3,:) = S_DMFT%N_s(3,4,:)
+      !
+      S_DMFT%N_s(1,4,:) = (S_DMFT%N_s(1,4,:)+S_DMFT%N_s(4,1,:))/2d0
+      S_DMFT%N_s(4,1,:) = S_DMFT%N_s(1,4,:)
+      !
+      S_DMFT%N_s(2,3,:) = (S_DMFT%N_s(2,3,:)+S_DMFT%N_s(3,2,:))/2d0
+      S_DMFT%N_s(3,2,:) = S_DMFT%N_s(2,3,:)
+      !
+      S_DMFT%N_s(1,3,:) = czero
+      S_DMFT%N_s(3,1,:) = czero
+      S_DMFT%N_s(2,4,:) = czero
+      S_DMFT%N_s(4,2,:) = czero
+      !
+      call dump_Matrix(S_DMFT%N_s,reg(PrevItFolder),"Hartree_UNimp_Clean",paramagnet)
+      !
+      !--------------------------- this is to check ---------------------------!
+      !
+      call AllocateFermionicField(G_DMFT,Crystal%Norb,Nmats,Nsite=Nsite,Beta=Beta,mu=muQMC)
+      call read_FermionicField(G_DMFT,reg(PrevItFolder),"Gimp_w")
+      !
+      G_DMFT%ws(1,1,:,:) = (G_DMFT%ws(1,1,:,:)+G_DMFT%ws(2,2,:,:))/2d0
+      G_DMFT%ws(2,2,:,:) = G_DMFT%ws(1,1,:,:)
+      G_DMFT%ws(1,2,:,:) = (G_DMFT%ws(1,2,:,:)+G_DMFT%ws(2,1,:,:))/2d0
+      G_DMFT%ws(2,1,:,:) = G_DMFT%ws(1,2,:,:)
+      !
+      G_DMFT%ws(3,3,:,:) = (G_DMFT%ws(3,3,:,:)+G_DMFT%ws(4,4,:,:))/2d0
+      G_DMFT%ws(4,4,:,:) = G_DMFT%ws(3,3,:,:)
+      G_DMFT%ws(3,4,:,:) = (G_DMFT%ws(3,4,:,:)+G_DMFT%ws(4,3,:,:))/2d0
+      G_DMFT%ws(4,3,:,:) = G_DMFT%ws(3,4,:,:)
+      !
+      G_DMFT%ws(1,4,:,:) = (G_DMFT%ws(1,4,:,:)+G_DMFT%ws(4,1,:,:))/2d0
+      G_DMFT%ws(4,1,:,:) = G_DMFT%ws(1,4,:,:)
+      !
+      G_DMFT%ws(2,3,:,:) = (G_DMFT%ws(2,3,:,:)+G_DMFT%ws(3,2,:,:))/2d0
+      G_DMFT%ws(3,2,:,:) = G_DMFT%ws(2,3,:,:)
+      !
+      G_DMFT%ws(1,3,:,:) = czero
+      G_DMFT%ws(3,1,:,:) = czero
+      G_DMFT%ws(2,4,:,:) = czero
+      G_DMFT%ws(4,2,:,:) = czero
+      !
+      call dump_FermionicField(G_DMFT,reg(PrevItFolder),"Gimp_Clean_w",paramagnet)
+      call DeallocateFermionicField(G_DMFT)
+      !
+      !--------------------------- this is required ---------------------------!
+      !
+      allocate(Pnn(Crystal%Norb,Crystal%Norb,Nmats));Pnn=czero
+      do iw=1,Nmats
+         call product2NN(P_EDMFT%screened_local(:,:,iw),Pnn(:,:,iw))
+      enddo
+      call clear_attributes(P_EDMFT)
+      !
+      Pnn(1,1,:) = (Pnn(1,1,:)+Pnn(2,2,:)+Pnn(1,2,:)+Pnn(2,1,:))/4d0
+      Pnn(2,2,:) = Pnn(1,1,:)
+      Pnn(1,2,:) = Pnn(1,1,:)
+      Pnn(2,1,:) = Pnn(1,1,:)
+      !
+      Pnn(3,3,:) = (Pnn(3,3,:)+Pnn(4,4,:)+Pnn(3,4,:)+Pnn(4,3,:))/4d0
+      Pnn(4,4,:) = Pnn(3,3,:)
+      Pnn(3,4,:) = Pnn(3,3,:)
+      Pnn(4,3,:) = Pnn(3,3,:)
+      !
+      Pnn(1,3,:) = (Pnn(1,3,:)+Pnn(1,4,:)+Pnn(2,3,:)+Pnn(2,4,:))/4d0
+      Pnn(1,4,:) = Pnn(1,3,:)
+      Pnn(2,3,:) = Pnn(1,3,:)
+      Pnn(2,4,:) = Pnn(1,3,:)
+      Pnn(3:4,1:2,:) = Pnn(1:2,3:4,:)
+      !
+      do iw=1,Nmats
+         call NN2product(Pnn(:,:,iw),P_EDMFT%screened_local(:,:,iw))
+      enddo
+      deallocate(Pnn)
+      !
+      call dump_BosonicField(P_EDMFT,reg(PrevItFolder),"Pimp_Clean_w.DAT")
+      !
+   endif
+   !
 #endif
    !>>>PROJECT SPECIFIC
    !

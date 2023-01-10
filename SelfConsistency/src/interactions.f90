@@ -1372,7 +1372,8 @@ contains
       !
       type(BosonicField),intent(inout),target :: Umats
       real(8),intent(in)                    :: Uaa,Uab,J
-      real(8),intent(in)                    :: g_eph(:),wo_eph(:)
+      complex(8),intent(in)                 :: g_eph(:)
+      real(8),intent(in)                    :: wo_eph(:)
       type(Heterostructures),intent(in)     :: Hetero
       logical,intent(in),optional           :: LocalOnly
       logical,intent(in),optional           :: ScreenAll
@@ -1380,7 +1381,8 @@ contains
       integer                               :: Nbp,Norb,Nph
       integer                               :: ib1,ib2,ik
       integer                               :: iw,iw1,iw2,iph,iwp
-      real(8)                               :: RealU,ImagU
+      real(8)                               :: g,eta_g
+      real(8)                               :: dw,RealU,ImagU
       real(8),allocatable                   :: wreal(:),wmats(:)
       complex(8),allocatable                :: D(:,:),Utmp(:,:)
       type(BosonicField)                    :: Ureal
@@ -1402,7 +1404,7 @@ contains
       if(present(LocalOnly))LocalOnly_=LocalOnly
       if(LocalOnly_.and.(Umats%Nkpt.ne.0)) stop "build_Uret_singlParam_ph: Umats k dependent attributes are supposed to be unallocated."
       !
-      ScreenAll_=.true.
+      ScreenAll_=.false.
       if(present(ScreenAll))ScreenAll_=ScreenAll
       !
       Nph = size(g_eph)
@@ -1442,26 +1444,40 @@ contains
       enddo
       !
       !setting the phonons
+      dw = abs(wreal(3)-wreal(2))
       do ib1=1,Nbp
          do ib2=1,Nbp
             !
             Screen = ScreenAll_ .or. PhysicalUelements%Full_Uaa(ib1,ib2) .or. PhysicalUelements%Full_Uab(ib1,ib2)
             !
             do iph=1,Nph
-               iwp=minloc(abs(wreal-wo_eph(iph)),dim=1)
+               !
+               !phonon frequency index
+               iwp = minloc(abs(wreal-wo_eph(iph)),dim=1)
+               !electron-phonon coupling
+               g = dreal(g_eph(iph))
+               !electron-phonon broadening
+               eta_g = dimag(g_eph(iph))
+               !
                do iw=1,Nreal
                   !
-                  RealU = 2*(g_eph(iph)**2)*wo_eph(iph) / ( (wreal(iw)**2) - (wo_eph(iph)**2) )
+                  RealU = 2*(g**2)*wo_eph(iph) / ( (wreal(iw)**2) - (wo_eph(iph)**2) )
                   ImagU=0d0
-                  if(iw.eq.iwp) ImagU = -pi*(g_eph(iph)**2)/abs(wreal(3)-wreal(2))
+                  !
+                  !Dirac delta function
+                  if(iw.eq.iwp) ImagU = -pi*(g**2)/dw
+                  !Lorentzian
+                  if(eta_g.ne.0d0) ImagU = -pi*(g**2) * ( eta_g**2 / ( (wreal(iw)-wreal(iwp))**2 + eta_g**2 ) )/dw
                   !
                   Ureal%screened_local(ib1,ib2,iw) = Umats_ptr%bare_local(ib1,ib2)
                   if(Screen) Ureal%screened_local(ib1,ib2,iw) = Ureal%screened_local(ib1,ib2,iw) + dcmplx(RealU,ImagU)
                   !
                enddo
             enddo
+            !
          enddo
       enddo
+      call dump_BosonicField(Ureal,reg(pathINPUTtr),"Uloc_real.DAT",axis=wreal)
       !
       ! Allocate the temporary quantities needed by the Analytical continuation
       allocate(Utmp(Nbp,Nbp));Utmp=czero
@@ -1527,7 +1543,8 @@ contains
       !
       type(BosonicField),intent(inout),target :: Umats
       real(8),intent(in)                    :: Uaa(:),Uab(:,:),J(:,:)
-      real(8),intent(in)                    :: g_eph(:),wo_eph(:)
+      complex(8),intent(in)                 :: g_eph(:)
+      real(8),intent(in)                    :: wo_eph(:)
       type(Heterostructures),intent(in)     :: Hetero
       logical,intent(in),optional           :: LocalOnly
       logical,intent(in),optional           :: ScreenAll
@@ -1535,7 +1552,8 @@ contains
       integer                               :: Nbp,Norb,Nph
       integer                               :: ib1,ib2,iorb,jorb,ik
       integer                               :: iw,iw1,iw2,iph,iwp
-      real(8)                               :: RealU,ImagU
+      real(8)                               :: g,eta_g
+      real(8)                               :: dw,RealU,ImagU
       real(8),allocatable                   :: wreal(:),wmats(:)
       complex(8),allocatable                :: D(:,:),Utmp(:,:)
       type(BosonicField)                    :: Ureal
@@ -1557,7 +1575,7 @@ contains
       if(present(LocalOnly))LocalOnly_=LocalOnly
       if(LocalOnly_.and.(Umats%Nkpt.ne.0)) stop "build_Uret_multiParam_ph: Umats k dependent attributes are supposed to be unallocated."
       !
-      ScreenAll_=.true.
+      ScreenAll_=.false.
       if(present(ScreenAll))ScreenAll_=ScreenAll
       !
       Nph = size(g_eph)
@@ -1604,26 +1622,40 @@ contains
       enddo
       !
       !setting the phonons
+      dw = abs(wreal(3)-wreal(2))
       do ib1=1,Nbp
          do ib2=1,Nbp
             !
             Screen = ScreenAll_ .or. PhysicalUelements%Full_Uaa(ib1,ib2) .or. PhysicalUelements%Full_Uab(ib1,ib2)
             !
             do iph=1,Nph
-               iwp=minloc(abs(wreal-wo_eph(iph)),dim=1)
+               !
+               !phonon frequency index
+               iwp = minloc(abs(wreal-wo_eph(iph)),dim=1)
+               !electron-phonon coupling
+               g = dreal(g_eph(iph))
+               !electron-phonon broadening
+               eta_g = dimag(g_eph(iph))
+               !
                do iw=1,Nreal
                   !
-                  RealU = 2*(g_eph(iph)**2)*wo_eph(iph) / ( (wreal(iw)**2) - (wo_eph(iph)**2) )
+                  RealU = 2*(g**2)*wo_eph(iph) / ( (wreal(iw)**2) - (wo_eph(iph)**2) )
                   ImagU=0d0
-                  if(iw.eq.iwp) ImagU = -pi*(g_eph(iph)**2)/abs(wreal(3)-wreal(2))
+                  !
+                  !Dirac delta function
+                  if(iw.eq.iwp) ImagU = -pi*(g**2)/dw
+                  !Lorentzian
+                  if(eta_g.ne.0d0) ImagU = -pi*(g**2) * ( eta_g**2 / ( (wreal(iw)-wreal(iwp))**2 + eta_g**2 ) )/dw
                   !
                   Ureal%screened_local(ib1,ib2,iw) = Umats_ptr%bare_local(ib1,ib2)
                   if(Screen) Ureal%screened_local(ib1,ib2,iw) = Ureal%screened_local(ib1,ib2,iw) + dcmplx(RealU,ImagU)
                   !
                enddo
             enddo
+            !
          enddo
       enddo
+      call dump_BosonicField(Ureal,reg(pathINPUTtr),"Uloc_real.DAT",axis=wreal)
       !
       ! Allocate the temporary quantities needed by the Analytical continuation
       allocate(Utmp(Nbp,Nbp));Utmp=czero
@@ -1691,7 +1723,7 @@ contains
       use utils_fields
       use crystal
       use input_vars, only : pathINPUTtr, pathINPUT
-      use input_vars, only : long_range, structure, Nkpt_path
+      use input_vars, only : long_range, structure, Nkpt_path, attach_Coulomb
       implicit none
       !
       type(BosonicField),intent(inout)      :: Umats
@@ -1709,14 +1741,14 @@ contains
       integer                               :: iwig,iD,iR,unit
       complex(8),allocatable                :: EwaldShift(:)
       real(8)                               :: eta,den,V
-      logical                               :: LocalOnly_
+      logical                               :: LocalOnly_,CoulombTail
       real                                  :: start,finish
       !multi-site
       real(8),allocatable                   :: Ruc(:,:)
       integer                               :: isite,jsite
       integer                               :: ilayer,jlayer
       integer                               :: site_i,site_j
-      real(8)                               :: Rvec(3),Rdist
+      real(8)                               :: Rvec(3),Rdist,Rdist_last
       real(8),allocatable                   :: Rsorted(:,:),Rsorted_bkp(:,:)
       integer,allocatable                   :: Rorder(:),Dist(:,:),DistList(:)
       !
@@ -1885,7 +1917,8 @@ contains
          do iD=1,size(Dist,dim=1)
             !
             !iD=1 is the local, iD=2 is the nearest neighbor and so on
-            if((reg(long_range).ne."Ewald").and.((iD-1).gt.Vrange))exit
+            CoulombTail = (reg(long_range).eq."Explicit") .and. (attach_Coulomb.gt.Vrange) .and. ((iD-1).le.attach_Coulomb)
+            if((reg(long_range).ne."Ewald").and.((iD-1).gt.Vrange).and.(.not.CoulombTail))exit
             !
             !all the indexes within that range
             do iR=1,DistList(iD)
@@ -1927,7 +1960,12 @@ contains
                         !
                         !type of long-range interaction
                         if(reg(long_range).eq."Explicit")then
-                           V = Vnn(iorb,jorb,iD-1)
+                           if((iD-1).le.Vrange)then
+                              V = Vnn(iorb,jorb,iD-1)
+                              Rdist_last = Rdist
+                           else
+                              V = Vnn(iorb,jorb,Vrange)*Rdist_last/Rdist
+                           endif
                         elseif(reg(long_range).eq."Coulomb")then
                            V = Vnn(iorb,jorb,1)/Rdist
                         elseif(reg(long_range).eq."Ewald")then
@@ -1951,7 +1989,7 @@ contains
          call cpu_time(finish)
          write(*,"(A,F)") "     Calculation of U(R) cpu timing:", finish-start
          !
-         if(verbose)then
+         !if(verbose)then
             unit = free_unit()
             open(unit,file=reg(pathINPUTtr)//"Ur_report.DAT",form="formatted",status="unknown",position="rewind",action="write")
             do iD=1,size(Dist,dim=1)
@@ -1964,8 +2002,8 @@ contains
                   Rvec = Rvecwig(:,iwig) + Ruc(:,jsite) - Ruc(:,isite)
                   Rdist = sqrt(dble(dot_product(Rvec,Rvec)))
                   write(unit,"(I8,6I6,1F12.4)") iR,Nvecwig(:,iwig),iwig,jsite,isite,Rsorted(Dist(iD,iR),1)
-                  if(Rsorted(Dist(iD,iR),1).ne.Rdist)then
-                     write(unit,"(A,2F12.4)") "ERROR: Rsorted(Dist(iD,iR),1).ne.Rdist",Rsorted(Dist(iD,iR),1),Rdist
+                  if(abs(Rsorted(Dist(iD,iR),1)-Rdist).gt.eps)then
+                     write(unit,"(A,2E20.12)") "ERROR: Rsorted(Dist(iD,iR),1).ne.Rdist",Rsorted(Dist(iD,iR),1),Rdist
                      stop "build_Uret_singlParam_Vn: check Ur_report.DAT"
                   endif
                   do iorb=1,Norb
@@ -1977,7 +2015,7 @@ contains
                   enddo
                enddo
             enddo
-         endif
+         !endif
          deallocate(Rsorted,Dist,DistList)
          !
          !Set up the heterostructure
@@ -2065,7 +2103,8 @@ contains
                   do iD=1,size(Dist,dim=1)
                      !
                      !iD=1 is the local, iD=2 is the nearest neighbor and so on
-                     if((reg(long_range).ne."Ewald").and.((iD-1).gt.Vrange))exit
+                     CoulombTail = (reg(long_range).eq."Explicit") .and. (attach_Coulomb.gt.Vrange) .and. ((iD-1).le.attach_Coulomb)
+                     if((reg(long_range).ne."Ewald").and.((iD-1).gt.Vrange).and.(.not.CoulombTail))exit
                      !
                      !all the indexes within that range
                      do iR=1,DistList(iD)
@@ -2083,7 +2122,12 @@ contains
                                  !
                                  !type of long-range interaction
                                  if(reg(long_range).eq."Explicit")then
-                                    V = Vnn(iorb,jorb,iD-1)
+                                    if((iD-1).le.Vrange)then
+                                       V = Vnn(iorb,jorb,iD-1)
+                                       Rdist_last = Rdist
+                                    else
+                                       V = Vnn(iorb,jorb,Vrange)*Rdist_last/Rdist
+                                    endif
                                  elseif(reg(long_range).eq."Coulomb")then
                                     V = Vnn(iorb,jorb,1)/Rdist
                                  elseif(reg(long_range).eq."None")then
@@ -2107,7 +2151,7 @@ contains
                      enddo
                   enddo
                   !
-                  if(verbose)then
+                  !if(verbose)then
                      unit = free_unit()
                      open(unit,file=reg(pathINPUTtr)//"Ur_report_Hetero_layer"//str(site_i)//".DAT",form="formatted",status="unknown",position="rewind",action="write")
                      do iD=1,size(Dist,dim=1)
@@ -2120,8 +2164,8 @@ contains
                            Rvec = Rvecwig(:,iwig) + Ruc(:,jsite+Nsite_bulk*(jlayer-1)) - Ruc(:,isite+Nsite_bulk*(ilayer-1))
                            Rdist = sqrt(dble(dot_product(Rvec,Rvec)))
                            write(unit,"(I8,8I6,1F12.4)") iR,Nvecwig(:,iwig),iwig,ilayer,isite,jlayer,jsite,Rsorted(Dist(iD,iR),1)
-                           if(Rsorted(Dist(iD,iR),1).ne.Rdist)then
-                              write(unit,"(A,2F12.4)") "ERROR: Rsorted(Dist(iD,iR),1).ne.Rdist",Rsorted(Dist(iD,iR),1),Rdist
+                           if(abs(Rsorted(Dist(iD,iR),1)-Rdist).gt.eps)then
+                              write(unit,"(A,2E20.12)") "ERROR: Rsorted(Dist(iD,iR),1).ne.Rdist",Rsorted(Dist(iD,iR),1),Rdist
                               stop "build_Uret_multiParam_Vn:  check Ur_report_Hetero.DAT"
                            endif
                            do iorb=1,Norb
@@ -2133,7 +2177,7 @@ contains
                            enddo
                         enddo
                      enddo
-                  endif
+                  !endif
                   !
                   deallocate(Rsorted,Rsorted_bkp,Rorder,Dist,DistList)
                   !
@@ -2184,7 +2228,7 @@ contains
       use utils_fields
       use crystal
       use input_vars, only : pathINPUTtr, pathINPUT
-      use input_vars, only : long_range, structure, Nkpt_path
+      use input_vars, only : long_range, structure, Nkpt_path, attach_Coulomb
       implicit none
       !
       type(BosonicField),intent(inout)      :: Umats
@@ -2202,14 +2246,14 @@ contains
       integer                               :: iwig,iD,iR,unit
       complex(8),allocatable                :: EwaldShift(:)
       real(8)                               :: eta,den,V
-      logical                               :: LocalOnly_
+      logical                               :: LocalOnly_,CoulombTail
       real                                  :: start,finish
       !multi-site
       real(8),allocatable                   :: Ruc(:,:)
       integer                               :: isite,jsite
       integer                               :: ilayer,jlayer
       integer                               :: site_i,site_j
-      real(8)                               :: Rvec(3),Rdist
+      real(8)                               :: Rvec(3),Rdist,Rdist_last
       real(8),allocatable                   :: Rsorted(:,:),Rsorted_bkp(:,:)
       integer,allocatable                   :: Rorder(:),Dist(:,:),DistList(:)
       !
@@ -2382,7 +2426,8 @@ contains
          do iD=1,size(Dist,dim=1)
             !
             !iD=1 is the local, iD=2 is the nearest neighbor and so on
-            if((reg(long_range).ne."Ewald").and.((iD-1).gt.Vrange))exit
+            CoulombTail = (reg(long_range).eq."Explicit") .and. (attach_Coulomb.gt.Vrange) .and. ((iD-1).le.attach_Coulomb)
+            if((reg(long_range).ne."Ewald").and.((iD-1).gt.Vrange).and.(.not.CoulombTail))exit
             !
             !all the indexes within that range
             do iR=1,DistList(iD)
@@ -2424,7 +2469,12 @@ contains
                         !
                         !type of long-range interaction
                         if(reg(long_range).eq."Explicit")then
-                           V = Vnn(iorb,jorb,iD-1)
+                           if((iD-1).le.Vrange)then
+                              V = Vnn(iorb,jorb,iD-1)
+                              Rdist_last = Rdist
+                           else
+                              V = Vnn(iorb,jorb,Vrange)*Rdist_last/Rdist
+                           endif
                         elseif(reg(long_range).eq."Coulomb")then
                            V = Vnn(iorb,jorb,1)/Rdist
                         elseif(reg(long_range).eq."Ewald")then
@@ -2448,7 +2498,7 @@ contains
          call cpu_time(finish)
          write(*,"(A,F)") "     Calculation of U(R) cpu timing:", finish-start
          !
-         if(verbose)then
+         !if(verbose)then
             unit = free_unit()
             open(unit,file=reg(pathINPUTtr)//"Ur_report.DAT",form="formatted",status="unknown",position="rewind",action="write")
             do iD=1,size(Dist,dim=1)
@@ -2461,8 +2511,8 @@ contains
                   Rvec = Rvecwig(:,iwig) + Ruc(:,jsite) - Ruc(:,isite)
                   Rdist = sqrt(dble(dot_product(Rvec,Rvec)))
                   write(unit,"(I8,6I6,1F12.4)") iR,Nvecwig(:,iwig),iwig,jsite,isite,Rsorted(Dist(iD,iR),1)
-                  if(Rsorted(Dist(iD,iR),1).ne.Rdist)then
-                     write(unit,"(A,2F12.4)") "ERROR: Rsorted(Dist(iD,iR),1).ne.Rdist",Rsorted(Dist(iD,iR),1),Rdist
+                  if(abs(Rsorted(Dist(iD,iR),1)-Rdist).gt.eps)then
+                     write(unit,"(A,2E20.12)") "ERROR: Rsorted(Dist(iD,iR),1).ne.Rdist",Rsorted(Dist(iD,iR),1),Rdist
                      stop "build_Uret_singlParam_Vn:  check Ur_report.DAT"
                   endif
                   do iorb=1,Norb
@@ -2474,7 +2524,7 @@ contains
                   enddo
                enddo
             enddo
-         endif
+         !endif
          deallocate(Rsorted,Dist,DistList)
          !
          !Set up the heterostructure
@@ -2562,7 +2612,8 @@ contains
                   do iD=1,size(Dist,dim=1)
                      !
                      !iD=1 is the local, iD=2 is the nearest neighbor and so on
-                     if((reg(long_range).ne."Ewald").and.((iD-1).gt.Vrange))exit
+                     CoulombTail = (reg(long_range).eq."Explicit") .and. (attach_Coulomb.gt.Vrange) .and. ((iD-1).le.attach_Coulomb)
+                     if((reg(long_range).ne."Ewald").and.((iD-1).gt.Vrange).and.(.not.CoulombTail))exit
                      !
                      !all the indexes within that range
                      do iR=1,DistList(iD)
@@ -2580,7 +2631,12 @@ contains
                                  !
                                  !type of long-range interaction
                                  if(reg(long_range).eq."Explicit")then
-                                    V = Vnn(iorb,jorb,iD-1)
+                                    if((iD-1).le.Vrange)then
+                                       V = Vnn(iorb,jorb,iD-1)
+                                       Rdist_last = Rdist
+                                    else
+                                       V = Vnn(iorb,jorb,Vrange)*Rdist_last/Rdist
+                                    endif
                                  elseif(reg(long_range).eq."Coulomb")then
                                     V = Vnn(iorb,jorb,1)/Rdist
                                  elseif(reg(long_range).eq."None")then
@@ -2604,7 +2660,7 @@ contains
                      enddo
                   enddo
                   !
-                  if(verbose)then
+                  !if(verbose)then
                      unit = free_unit()
                      open(unit,file=reg(pathINPUTtr)//"Ur_report_Hetero_layer"//str(site_i)//".DAT",form="formatted",status="unknown",position="rewind",action="write")
                      do iD=1,size(Dist,dim=1)
@@ -2617,8 +2673,8 @@ contains
                            Rvec = Rvecwig(:,iwig) + Ruc(:,jsite+Nsite_bulk*(jlayer-1)) - Ruc(:,isite+Nsite_bulk*(ilayer-1))
                            Rdist = sqrt(dble(dot_product(Rvec,Rvec)))
                            write(unit,"(I8,8I6,1F12.4)") iR,Nvecwig(:,iwig),iwig,ilayer,isite,jlayer,jsite,Rsorted(Dist(iD,iR),1)
-                           if(Rsorted(Dist(iD,iR),1).ne.Rdist)then
-                              write(unit,"(A,2F12.4)") "ERROR: Rsorted(Dist(iD,iR),1).ne.Rdist",Rsorted(Dist(iD,iR),1),Rdist
+                           if(abs(Rsorted(Dist(iD,iR),1)-Rdist).gt.eps)then
+                              write(unit,"(A,2E20.12)") "ERROR: Rsorted(Dist(iD,iR),1).ne.Rdist",Rsorted(Dist(iD,iR),1),Rdist
                               stop "build_Uret_multiParam_Vn:  check Ur_report_Hetero.DAT"
                            endif
                            do iorb=1,Norb
@@ -2630,7 +2686,7 @@ contains
                            enddo
                         enddo
                      enddo
-                  endif
+                  !endif
                   !
                   deallocate(Rsorted,Rsorted_bkp,Rorder,Dist,DistList)
                   !

@@ -20,6 +20,9 @@ module self_energy
    !---------------------------------------------------------------------------!
    !PURPOSE: Module variables
    !---------------------------------------------------------------------------!
+   integer                                  :: ib1_UwanDFT,ib2_UwanDFT
+   complex(8),allocatable                   :: UwanDFT(:,:,:,:)
+   logical                                  :: Uwan_stored=.false.
 #ifdef _verb
    logical,private                          :: verbose=.true.
 #else
@@ -951,6 +954,12 @@ contains
          !In disentangled case only UWAN_NEW(ib_wan1:ib_wan1+nbasis-1,ibwan1:ibwan1+nbasis-1) is non-zero
          if(Lttc%UseDisentangledBS) ib_Uwan2 = ib_Uwan1 + Norb-1
          !
+         if(allocated(UwanDFT))deallocate(UwanDFT)
+         UwanDFT = Uwan
+         ib1_UwanDFT = ib_Uwan1
+         ib2_UwanDFT = ib_Uwan2
+         Uwan_stored = .true.
+         !
          ! Look for the Number of Sigma segments.
          SigmaSegments=0
          do iseg=1,99
@@ -1467,6 +1476,12 @@ contains
          !
          ! Bands in the energy window used for the disentangling procedure
          Nwan = abs(ib_Uwan2-ib_Uwan1+1)
+         !
+         if(allocated(UwanDFT))deallocate(UwanDFT)
+         UwanDFT = Uwan
+         ib1_UwanDFT = ib_Uwan1
+         ib2_UwanDFT = ib_Uwan2
+         Uwan_stored = .true.
          !
          ! Look for the Number of Sigma files and internal consistency.
          call cpu_time(start)
@@ -2145,7 +2160,7 @@ contains
       !
       type(FermionicField)                  :: S_G0W0,S_G0W0_interp
       type(FermionicField)                  :: S_G0W0dc,S_G0W0dc_interp
-      complex(8),allocatable                :: invGf(:,:),Smat(:,:,:)
+      complex(8),allocatable                :: invGf(:,:),Smat(:,:,:),Zk(:,:,:)
       real(8),allocatable                   :: wreal(:),wreal_read(:)
       real(8),allocatable                   :: Aloc(:,:,:)
       real(8)                               :: ReS,ImS,mu_
@@ -2162,9 +2177,12 @@ contains
       !
       if(.not.Lttc%status) stop "print_G0W0_dispersion: Lattice container not properly initialized."
       if(.not.Lttc%pathStored) stop "print_G0W0_dispersion: K-points along the path not stored."
-      if(.not.allocated(Lttc%Zk)) stop "print_G0W0_dispersion: rotation towards the LDA basis not stored."
+      if(.not.Uwan_stored) stop "print_G0W0_dispersion: rotation towards the DFT basis not stored."
       !
-      print_all = .true.
+      !Uwan rotation
+      if((ib2_UwanDFT-ib1_UwanDFT).ne.(Lttc%Norb-1)) stop "print_G0W0_dispersion: ib2_UwanDFT-ib1_UwanDFT does not match SGoWo dimension."
+      allocate(Zk(Lttc%Norb,Lttc%Norb,Lttc%Nkpt));Zk=czero
+      Zk = UwanDFT(ib1_UwanDFT:ib2_UwanDFT,:,:,1)
       !
       if(allocated(Vxc))call assert_shape(Vxc,[Lttc%Norb,Lttc%Norb,Lttc%Nkpt,Nspin],"print_G0W0_dispersion","Vxc")
       !
@@ -2200,7 +2218,7 @@ contains
             do ispin=1,Nspin
                !
                do iw2=1,Nreal_read
-                  Smat(:,:,iw2) = rotate(S_G0W0%wks(:,:,iw2,ik,ispin),Lttc%Zk(:,:,ik))
+                  Smat(:,:,iw2) = rotate(S_G0W0%wks(:,:,iw2,ik,ispin),dag(Zk(:,:,ik)))
                enddo
                !
                do iorb=1,Lttc%Norb
@@ -2210,7 +2228,7 @@ contains
                   S_G0W0_interp%wks(iorb,iorb,iw,ik,ispin) = dcmplx(ReS,ImS)
                enddo
                !
-               S_G0W0_interp%wks(:,:,iw,ik,ispin) = rotate(S_G0W0_interp%wks(:,:,iw,ik,ispin),transpose(conjg(Lttc%Zk(:,:,ik))))
+               S_G0W0_interp%wks(:,:,iw,ik,ispin) = rotate(S_G0W0_interp%wks(:,:,iw,ik,ispin),Zk(:,:,ik))
                if(paramagnet)then
                   S_G0W0_interp%wks(:,:,iw,ik,Nspin) = S_G0W0_interp%wks(:,:,iw,ik,1)
                   cycle
@@ -2307,7 +2325,7 @@ contains
                do ispin=1,Nspin
                   !
                   do iw2=1,Nreal_read
-                     Smat(:,:,iw2) = rotate(S_G0W0dc%wks(:,:,iw2,ik,ispin),Lttc%Zk(:,:,ik))
+                     Smat(:,:,iw2) = rotate(S_G0W0dc%wks(:,:,iw2,ik,ispin),dag(Zk(:,:,ik)))
                   enddo
                   !
                   do iorb=1,Lttc%Norb
@@ -2317,7 +2335,7 @@ contains
                      S_G0W0dc_interp%wks(iorb,iorb,iw,ik,ispin) = dcmplx(ReS,ImS)
                   enddo
                   !
-                  S_G0W0dc_interp%wks(:,:,iw,ik,ispin) = rotate(S_G0W0dc_interp%wks(:,:,iw,ik,ispin),transpose(conjg(Lttc%Zk(:,:,ik))))
+                  S_G0W0dc_interp%wks(:,:,iw,ik,ispin) = rotate(S_G0W0dc_interp%wks(:,:,iw,ik,ispin),Zk(:,:,ik))
                   if(paramagnet)then
                      S_G0W0dc_interp%wks(:,:,iw,ik,Nspin) = S_G0W0dc_interp%wks(:,:,iw,ik,1)
                      cycle
@@ -2342,7 +2360,7 @@ contains
          call DeallocateFermionicField(S_G0W0dc_interp)
          !
       endif
-      deallocate(wreal)
+      deallocate(wreal,Zk)
       !
    end subroutine print_G0W0_dispersion
 

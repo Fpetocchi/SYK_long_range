@@ -7,19 +7,19 @@ GENMAT=/home/petocchif/1_GW_EDMFT/GenericMaterial/Calculation_template
 
 declare -a dirindex=( "avg_all" "avg_opt"  )
 #for it in "${dirindex[@]}" ; do
-for it in `seq  20 1 33` ; do
+for it in `seq  33 1 49` ; do
    if [ -d "$it" ]; then
    #
    cd $it/Convergence
    cp ${GENMAT}/${MATERIAL}/MaxEnt/MaxEnt_SLURM.sh .
    chmod 700 MaxEnt_SLURM.sh
    #
-   ./MaxEnt_SLURM.sh -e 0.001 -w 8001 -W  200 -f G -o 1 -i lat -p ${GENMAT}
-   ./MaxEnt_SLURM.sh -e 0.001 -w 8001 -W  200 -f G -o 2 -i lat -p ${GENMAT}
-   ./MaxEnt_SLURM.sh -e 0.001 -w 8001 -W  200 -f G -o 3 -i lat -p ${GENMAT}
-   ./MaxEnt_SLURM.sh -e 0.001 -w 8001 -W  200 -f G -o 4 -i lat -p ${GENMAT}
-   ./MaxEnt_SLURM.sh -e 0.001 -w 8001 -W  200 -f G -o 5 -i lat -p ${GENMAT}
-   ./MaxEnt_SLURM.sh -e 0.001 -w 8001 -W  200 -f G -o 6 -i lat -p ${GENMAT}
+   ./MaxEnt_SLURM.sh -e 0.0005 -w 8001 -W  200 -f G -o 1 -i lat -p ${GENMAT}
+   ./MaxEnt_SLURM.sh -e 0.0005 -w 8001 -W  200 -f G -o 2 -i lat -p ${GENMAT}
+   ./MaxEnt_SLURM.sh -e 0.0005 -w 8001 -W  200 -f G -o 3 -i lat -p ${GENMAT}
+   ./MaxEnt_SLURM.sh -e 0.0005 -w 8001 -W  200 -f G -o 4 -i lat -p ${GENMAT}
+   ./MaxEnt_SLURM.sh -e 0.0005 -w 8001 -W  200 -f G -o 5 -i lat -p ${GENMAT}
+   ./MaxEnt_SLURM.sh -e 0.0005 -w 8001 -W  200 -f G -o 6 -i lat -p ${GENMAT}
 
  #  ./MaxEnt_SLURM.sh -e 0.005 -w 8001 -W  300 -f G -o 1 -i qmc_M1 -p ${GENMAT}
  #  ./MaxEnt_SLURM.sh -e 0.005 -w 8001 -W  300 -f G -o 2 -i qmc_M1 -p ${GENMAT}
@@ -37,15 +37,15 @@ done
 
 
 GENMAT=/home/petocchif/1_GW_EDMFT/GenericMaterial/Calculation_template
-for it in `seq  50 1 76` ; do
+for it in `seq  50 1 57` ; do
    if [ -d "$it" ]; then
    #
    cd $it/Convergence
    cp ${GENMAT}/${MATERIAL}/MaxEnt/MaxEnt_SLURM.sh .
    chmod 700 MaxEnt_SLURM.sh
    #
-   ./MaxEnt_SLURM.sh -e 0.005 -w 12001 -W 80 -f G -o 1 -i lat -p ${GENMAT}
-   ./MaxEnt_SLURM.sh -e 0.005 -w 12001 -W 80 -f G -o 1 -i qmc_S1 -p ${GENMAT}
+   ./MaxEnt_SLURM.sh -e 0.005 -w 8001 -W 80 -f G -o 1 -i lat -p ${GENMAT}
+   ./MaxEnt_SLURM.sh -e 0.005 -w 8001 -W 80 -f G -o 1 -i qmc_S1 -p ${GENMAT}
    #
    cd ../../
    #
@@ -92,10 +92,10 @@ for it in `seq  90 1 100` ; do
    cp ${GENMAT}/${MATERIAL}/MaxEnt/MaxEnt_SLURM.sh .
    chmod 700 MaxEnt_SLURM.sh
    #
-   ./MaxEnt_SLURM.sh -e 0.0005 -w 8001 -W  250 -f G -o 1 -i lat -p ${GENMAT}
-   ./MaxEnt_SLURM.sh -e 0.0005 -w 8001 -W  250 -f G -o 1 -i qmc_Ti -p ${GENMAT}
-   ./MaxEnt_SLURM.sh -e 0.0005 -w 8001 -W  250 -f G -o 2 -i qmc_Ti -p ${GENMAT}
-   ./MaxEnt_SLURM.sh -e 0.0005 -w 8001 -W  250 -f G -o 3 -i qmc_Ti -p ${GENMAT}
+   ./MaxEnt_SLURM.sh -e 0.001 -w 6001 -W  100 -f G -o 1 -i lat -p ${GENMAT}
+   ./MaxEnt_SLURM.sh -e 0.001 -w 6001 -W  100 -f G -o 1 -i qmc_Ti -p ${GENMAT}
+   ./MaxEnt_SLURM.sh -e 0.001 -w 6001 -W  100 -f G -o 2 -i qmc_Ti -p ${GENMAT}
+   ./MaxEnt_SLURM.sh -e 0.001 -w 6001 -W  100 -f G -o 3 -i qmc_Ti -p ${GENMAT}
    #
    cd ../../
    #

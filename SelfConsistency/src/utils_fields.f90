@@ -123,9 +123,9 @@ module utils_fields
    public :: join_SigmaCX
    public :: MergeFields
    public :: build_Potential
-   !functions
    public :: product2NN
    public :: NN2product
+   !functions
    public :: calc_Ek
    public :: calc_Ep
 
@@ -570,7 +570,7 @@ contains
       logical,intent(in)                    :: Map(:,:)
       logical,intent(in),optional           :: LocalOnly
       integer                               :: ib1,ib2
-      integer                               :: iorb,jorb,korb,lorb,Norb
+      integer                               :: iorb,jorb,Norb
       logical                               :: prod,erase,LocalOnly_
       !
       if(.not.W%status) stop "clear_MatrixElements_Boson: field not properly initialized."
@@ -587,6 +587,7 @@ contains
       if(present(LocalOnly))LocalOnly_=LocalOnly
       !
       if(prod)then
+         !this deletes all the possible elements
          do ib1=1,W%Nbp
             do ib2=1,W%Nbp
                erase = Map(ib1,ib2)
@@ -599,27 +600,19 @@ contains
             enddo
          enddo
       else
+         !this deletes only density density terms
          do iorb=1,Norb
             do jorb=1,Norb
-               do korb=1,Norb
-                  do lorb=1,Norb
-                     !
-                     erase = Map(iorb,jorb) .or. Map(korb,lorb) .or. &
-                             Map(iorb,korb) .or. Map(jorb,lorb) .or. &
-                             Map(iorb,lorb) .or. Map(jorb,korb)
-                     !
-                     call F2Bindex(Norb,[iorb,jorb],[korb,lorb],ib1,ib2)
-                     if(allocated(W%bare_local).and.erase) W%bare_local(ib1,ib2)=czero
-                     if(allocated(W%screened_local).and.erase) W%screened_local(ib1,ib2,:)=czero
-                     if(.not.LocalOnly_)then
-                        if(allocated(W%bare).and.erase) W%bare(ib1,ib2,:)=czero
-                        if(allocated(W%screened).and.erase) W%screened(ib1,ib2,:,:)=czero
-                     endif
-                  enddo
-               enddo
+               erase = Map(iorb,jorb)
+               call F2Bindex(Norb,[iorb,iorb],[jorb,jorb],ib1,ib2)
+               if(allocated(W%bare_local).and.erase) W%bare_local(ib1,ib2)=czero
+               if(allocated(W%screened_local).and.erase) W%screened_local(ib1,ib2,:)=czero
+               if(.not.LocalOnly_)then
+                  if(allocated(W%bare).and.erase) W%bare(ib1,ib2,:)=czero
+                  if(allocated(W%screened).and.erase) W%screened(ib1,ib2,:,:)=czero
+               endif
             enddo
          enddo
-
       endif
       !
    end subroutine clear_MatrixElements_Boson
@@ -2871,20 +2864,19 @@ contains
    !---------------------------------------------------------------------------!
    !PURPOSE: Resize matrix between full product basis and just NaNb components
    !---------------------------------------------------------------------------!
-   function product2NN(Mfull) result(Mnanb)
+   subroutine product2NN(Mfull,Mnanb)
       use parameters
       use utils_misc
       implicit none
       complex(8),intent(in)                 :: Mfull(:,:)
-      complex(8),allocatable                :: Mnanb(:,:)
+      complex(8),intent(inout)              :: Mnanb(:,:)
       integer                               :: Nbp,Norb
       integer                               :: i,j,ib,jb
       !
       if(size(Mfull,dim=1).ne.size(Mfull,dim=2)) stop "product2NN: input matrix not square."
-      !
       Nbp = size(Mfull,dim=1)
       Norb = int(sqrt(dble(Nbp)))
-      allocate(Mnanb(Norb,Norb));Mnanb=czero
+      call assert_shape(Mnanb,[Norb,Norb],"product2NN","Mnanb")
       !
       do i=1,Norb
          do j=1,Norb
@@ -2896,21 +2888,21 @@ contains
          enddo
       enddo
       !
-   end function product2NN
+   end subroutine product2NN
    !
-   function NN2product(Mnanb) result(Mfull)
+   subroutine NN2product(Mnanb,Mfull)
       use parameters
       use utils_misc
       implicit none
       complex(8),intent(in)                 :: Mnanb(:,:)
-      complex(8),allocatable                :: Mfull(:,:)
+      complex(8),intent(inout)              :: Mfull(:,:)
       integer                               :: Nbp,Norb
       integer                               :: i,j,ib,jb
       !
       if(size(Mnanb,dim=1).ne.size(Mnanb,dim=2)) stop "NN2product: input matrix not square."
       Norb = size(Mnanb,dim=1)
       Nbp = Norb**2
-      allocate(Mfull(Nbp,Nbp));Mfull=czero
+      call assert_shape(Mfull,[Nbp,Nbp],"NN2product","Mfull")
       !
       do i=1,Norb
          do j=1,Norb
@@ -2922,7 +2914,7 @@ contains
          enddo
       enddo
       !
-   end function NN2product
+   end subroutine NN2product
 
 
    !---------------------------------------------------------------------------!

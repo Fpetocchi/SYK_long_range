@@ -85,7 +85,7 @@ contains
       real(8),allocatable                   :: wreal(:),wreal_read(:),wreal_interp(:)
       real(8),allocatable                   :: Akw_orb(:,:,:),Akw_orb_interp(:,:,:)
       real(8)                               :: dw,fact
-      real(8)                               :: kx,ky,Bvec(3),Blat(3,3)
+      real(8)                               :: kx,ky,Bvec(3),Kvec(3),Blat(3,3)
       character(len=256)                    :: path,suffix_
       logical                               :: ik1st_read
       logical                               :: wr_interp=.false.
@@ -284,9 +284,9 @@ contains
          do ik=1,Nkpt
             ikx = int(ik/(Nkpt_Kside+0.001))+1 ; kx = (ikx-1)/dble(Nkpt_Kside-1) - 0.5d0
             iky = ik - (ikx-1)*Nkpt_Kside      ; ky = (iky-1)/dble(Nkpt_Kside-1) - 0.5d0
-            !Bvec = kx*Blat(:,1) + ky*Blat(:,2)
+            Kvec = kx*Blat(:,1) + ky*Blat(:,2)
             Bvec = [kx*Blat(1,1)+Blat(1,2),ky*Blat(2,1)+Blat(2,2),0d0]
-            write(unit,"(3I5,200E20.12)") ik,ikx,iky,Bvec(1),Bvec(2),(Akw_orb(iorb,wndx_cut,ik),iorb=1,Norb)
+            write(unit,"(3I5,200E20.12)") ik,ikx,iky,Bvec(1),Bvec(2),Kvec(1),Kvec(2),(Akw_orb(iorb,wndx_cut,ik),iorb=1,Norb)
             if(iky.eq.Nkpt_Kside)write(unit,*)
          enddo
          close(unit)
@@ -363,7 +363,7 @@ contains
       real(8),allocatable                   :: wreal(:),wreal_read(:)
       real(8),allocatable                   :: Akw_orb(:,:,:)
       real(8)                               :: dw,fact
-      real(8)                               :: kx,ky,Bvec(3),Blat(3,3)
+      real(8)                               :: kx,ky,Bvec(3),Kvec(3),Blat(3,3)
       character(len=256)                    :: path
       logical                               :: ik1st_read,orbsep_
       !
@@ -666,9 +666,9 @@ contains
          do iq=1,Nkpt
             ikx = int(iq/(Nkpt_Kside+0.001))+1 ; kx = (ikx-1)/dble(Nkpt_Kside-1) - 0.5d0
             iky = iq - (ikx-1)*Nkpt_Kside      ; ky = (iky-1)/dble(Nkpt_Kside-1) - 0.5d0
-            !Bvec = kx*Blat(:,1) + ky*Blat(:,2)
+            Kvec = kx*Blat(:,1) + ky*Blat(:,2)
             Bvec = [kx*Blat(1,1)+Blat(1,2),ky*Blat(2,1)+Blat(2,2),0d0]
-            write(unit,"(3I5,200E20.12)") iq,ikx,iky,Bvec(1),Bvec(2),(Akw_orb(iorb,wndx_cut,iq),iorb=1,Norb)
+            write(unit,"(3I5,200E20.12)") iq,ikx,iky,Bvec(1),Bvec(2),Kvec(1),Kvec(2),(Akw_orb(iorb,wndx_cut,iq),iorb=1,Norb)
             if(iky.eq.Nkpt_Kside)write(unit,*)
          enddo
          close(unit)

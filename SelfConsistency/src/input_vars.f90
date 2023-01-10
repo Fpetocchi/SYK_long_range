@@ -154,11 +154,12 @@ module input_vars
    real(8),public                           :: Uab=0d0
    real(8),public                           :: J=0d0
    integer,public                           :: Nphonons
-   real(8),allocatable,public               :: g_eph(:)
+   complex(8),allocatable,public            :: g_eph(:)
    real(8),allocatable,public               :: wo_eph(:)
    integer,public                           :: N_Vnn
    real(8),allocatable,public               :: Vnn(:,:,:),Vnn_diag(:,:)
    character(len=256),public                :: long_range
+   integer,public                           :: attach_Coulomb
    !
    !Double counting types, divergencies, scaling and self-consistency coefficients
    logical,public                           :: Vxc_in
@@ -194,6 +195,7 @@ module input_vars
    character(len=256),public                :: DeltaFit
    integer,public                           :: Nfit
    real(8),public                           :: ReplaceTail_Simp
+   logical,public                           :: CutTail_Simp
    !
    !Paths (directories must end with "/") and loop variables
    integer,public                           :: FirstIteration
@@ -292,6 +294,7 @@ contains
       integer                               :: isite,ilayer,iset,iph,irange
       integer                               :: isym_user,Nsite_loc
       logical                               :: readVnn
+      real(8)                               :: g_eph_read(2)
       !
       !OMP parallelization.
       !call execute_command_line(" lscpu | grep 'CPU(s):       ' | awk '{print $2}' > Nthread.used ")
@@ -507,13 +510,15 @@ contains
             call parse_input_variable(J,"JH",InputFile,default=0d0,comment="Hund's coupling (orbital independent).")
          endif
          !phononic model U
-         call parse_input_variable(Nphonons,"N_PH",InputFile,default=0,comment="Number of custom phononic modes.")
+         call parse_input_variable(Nphonons,"N_PH",InputFile,default=0,comment="Number of phononic modes.")
          if(Nphonons.gt.0)then
-            allocate(g_eph(Nphonons));g_eph=0d0
+            allocate(g_eph(Nphonons));g_eph=czero
             allocate(wo_eph(Nphonons));wo_eph=0d0
             do iph=1,Nphonons
-               call parse_input_variable(g_eph,"G_PH",InputFile,comment="Custom phononic couplings.")
-               call parse_input_variable(wo_eph,"WO_PH",InputFile,comment="Custom phononic energies.")
+               g_eph_read=0d0
+               call parse_input_variable(g_eph_read,"G_PH_"//str(iph),InputFile,default=[0d0,0d0],comment="Phononic coupling and broadening of mode #"//str(iph))
+               g_eph(iph) = dcmplx(g_eph_read(1),g_eph_read(2))
+               call parse_input_variable(wo_eph(iph),"WO_PH_"//str(iph),InputFile,default=0d0,comment="Phononic frequency of mode #"//str(iph))
             enddo
          endif
          !long-range model U
@@ -521,6 +526,7 @@ contains
          if(N_Vnn.gt.0)then
             !long-range coulombian
             call parse_input_variable(long_range,"LONG_RANGE",InputFile,default="Explicit",comment="Avalibale long range interaction: Explicit(reads VNN for each N_V), Coulomb(reads first VNN, max neighbor N_V), Ewald(reads first VNN, unrestricted range).")
+            if(reg(long_range).eq."Explicit") call parse_input_variable(attach_Coulomb,"ATTACH_COULOMB",InputFile,default=N_Vnn,comment="Maximum extension of a Coulomb tail starting from the farthest interaction of LONG_RANGE=Explicit mode.")
             allocate(Vnn(Norb_model,Norb_model,N_Vnn));Vnn=0d0
             call parse_input_variable(readVnn,"READ_LONG_RANGE",InputFile,default=.false.,comment="Flag to read the long-range interaction matrix [NORB,NORB] from file PATH_INPUT/Vnn.DAT. If False the diagonal entries are provided by the user.")
             if(readVnn)then
@@ -607,6 +613,7 @@ contains
       else
          call parse_input_variable(ReplaceTail_Simp,"WTAIL_SIMP",InputFile,default=0d0,comment="Frequency value above which the tail of Simp is replaced. If =0d0 the tail is not replaced. Only via moments (automatic limit to NFIT=4).")
       endif
+      call parse_input_variable(CutTail_Simp,"WTAIL_SIMP_CUT",InputFile,default=.false.,comment="Flag to directly cut the Simp tail instead of replacing it with the fit result.")
       call parse_input_variable(recalc_Hartree,"RECALC_HARTREE",InputFile,default=.false.,comment="Use the lattice density to compute the Hartree term of the impurity self-energy.")
       !
       !Paths and loop variables

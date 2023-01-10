@@ -514,7 +514,7 @@ contains
          !
          MultiTier = .true.
          if(Hetero%status) stop "MultiTier construction and Heterostructured setup are not allowed together."
-         if(RotateHloc.or.RotateUloc) stop "MultiTier construction and Rotations of the local space are not allowed together."
+         !if(RotateHloc.or.RotateUloc) stop "MultiTier construction and Rotations of the local space are not allowed together."
          !
       endif
       !
@@ -619,6 +619,8 @@ contains
          deallocate(oldSetOrbs)
          !
       endif
+      !
+      if(Nsite.ne.Solver%Nimp) EqvGWndx%Gfoffdiag=.false.
       !
       write(*,"(A)") new_line("A")//new_line("A")//"---- symmetrized orbital sets"
       write(*,"(A,1I3)") "     Provided sets: ",EqvGWndx%Nset
@@ -2916,7 +2918,7 @@ contains
             allocate(SmatsTail(Nmats));SmatsTail=czero
             do ispin=1,Nspin
                do iorb=1,LocalOrbs(isite)%Norb
-                  SmatsTail = S_Moments(Moments(iorb,ispin,:),wmats)
+                  if(.not.CutTail_Simp)SmatsTail = S_Moments(Moments(iorb,ispin,:),wmats)
                   Simp(isite)%ws(iorb,iorb,wndx(iorb,ispin):Nmats,ispin) = SmatsTail(wndx(iorb,ispin):Nmats)
                enddo
                if(paramagnet)then
