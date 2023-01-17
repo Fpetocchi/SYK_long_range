@@ -915,7 +915,7 @@ contains
       if(verbose)write(*,"(A)") "---- init_Uelements"
       !
       !
-      if(Uelements%status) write(*,"(A)") "Warning: the Physical interaction elements container is being reinitialized."
+      if(Uelements%status) write(*,"(A)") "     Warning: the Physical interaction elements container is being reinitialized."
       Nflavor = Norb*Nspin
       !
       ! Elements when the interaction is in the Norb*Nspin form

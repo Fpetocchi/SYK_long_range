@@ -96,6 +96,10 @@ done
 ./MaxEnt_Kresolved_SLURM.sh -e 0.00001 -w 15000 -W 300 -F G -N 750 -B 250 -m path -s _Tr
 ./MaxEnt_Kresolved_SLURM.sh -e 0.00001 -w 15000 -W 300 -F G -N 770 -B 110 -m path -s _Tr -i 751 -f 771
 
+#VERSION-3
+./MaxEnt_Kresolved_SLURM.sh -e 0.00002 -w 15000 -W 300 -F G -N 750 -B 250 -m path -s _Tr
+./MaxEnt_Kresolved_SLURM.sh -e 0.00002 -w 15000 -W 300 -F G -N 770 -B 110 -m path -s _Tr -i 751 -f 771
+
 
 
 a=1
@@ -108,7 +112,7 @@ for kp in `seq ${a} ${b}`; do
 done
 
 
-./MaxEnt_Kresolved_SLURM.sh -e 0.002 -w 6001 -W 100 -F G -N 161 -B 161 -m path -i 1 -f 161
+./MaxEnt_Kresolved_SLURM.sh -e 0.001 -w 8001 -W 300 -F G -N 161 -B 161 -m path -i 1 -f 161
 
 
 

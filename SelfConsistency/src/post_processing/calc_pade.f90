@@ -50,6 +50,7 @@ subroutine padecoeff(fwout,wout,fwin,win)
    complex(16),allocatable               :: coeff(:,:)
    complex(16),allocatable               :: a(:),b(:)
    integer                               :: Nin,Nout,i,j
+   logical                               :: padefail
    !
    !
    if(verbose)write(*,"(A)") "---- padecoeff"
@@ -65,18 +66,28 @@ subroutine padecoeff(fwout,wout,fwin,win)
    do j=1,Nin
       coeff(1,j)=fwin(j)
    enddo
-   do j=2,Nin
+   padefail = .false.
+   padeloop: do j=2,Nin
       do i=2,j
          if (abs(win(j)-win(i-1)).lt.1.D-15) then
-            stop "pade z=0"
+            padefail = .true.
+            write(*,"(A)")"     Warning: pade a.c. failed because |win(j)-win(i-1)|.lt.1e-15."
          endif
          if (abs(coeff(i-1,j)).lt.1.D-15) then
-            write(*,*)"i,j,coeff(i-1,j)",i,j,coeff(i-1,j)
-            stop "coeff=0"
+            padefail = .true.
+            write(*,"(A)")"     Warning: pade a.c. failed because |coeff(i-1,j)|.lt.1e-15."
+            !write(*,*)"i,j,coeff(i-1,j)",i,j,coeff(i-1,j)
          endif
-         coeff(i,j) = (coeff(i-1,i-1)-coeff(i-1,j)) / (win(j)-win(i-1)) / coeff(i-1,j)
+         !
+         if(padefail)then
+            coeff = czero
+            exit padeloop
+         else
+            coeff(i,j) = (coeff(i-1,i-1)-coeff(i-1,j)) / (win(j)-win(i-1)) / coeff(i-1,j)
+         endif
+         !
       enddo
-   enddo
+   enddo padeloop
    !
    fwout = czero
    allocate(a(0:Nin))

@@ -2213,7 +2213,7 @@ contains
       type(BosonicField)                    :: curlyUcorr
       type(physicalU)                       :: PhysicalUelements
       integer                               :: Norb,Norb_MultiTier,Nbp,unit
-      integer                               :: ib1,ib2,itau,iw
+      integer                               :: ib1,ib2,itau!,iw
       integer                               :: isitecheck
       real(8),allocatable                   :: Uinst(:,:),Ucheck(:,:)
       real(8),allocatable                   :: Kfunct(:,:,:),Kpfunct(:,:,:)
@@ -2315,10 +2315,12 @@ contains
                call dump_BosonicField(curlyU,reg(ItFolder)//"Solver_"//reg(LocalOrbs(isite)%Name)//"/","curlyU_noMix_"//reg(LocalOrbs(isite)%Name)//"_w.DAT")
                call AllocateBosonicField(curlyUold,Norb,Nmats,Crystal%iq_gamma,Beta=Beta)
                call read_BosonicField(curlyUold,reg(MixItFolder)//"Solver_"//reg(LocalOrbs(isite)%Name)//"/","curlyU_"//reg(LocalOrbs(isite)%Name)//"_w.DAT")
+               !
                curlyU%bare_local = (1d0-Mixing_curlyU)*curlyU%bare_local + Mixing_curlyU*curlyUold%bare_local
-               do iw=1,Nmats
-                  curlyU%screened_local(:,:,iw) = (1d0-Mixing_curlyU)*curlyU%screened_local(:,:,iw) + Mixing_curlyU*curlyUold%screened_local(:,:,iw)
-               enddo
+               curlyU%screened_local = (1d0-Mixing_curlyU)*curlyU%screened_local + Mixing_curlyU*curlyUold%screened_local
+               !do iw=1,Nmats
+               !   curlyU%screened_local(:,:,iw) = (1d0-Mixing_curlyU)*curlyU%screened_local(:,:,iw) + Mixing_curlyU*curlyUold%screened_local(:,:,iw)
+               !enddo
                call DeallocateBosonicField(curlyUold)
             endif
             !
@@ -2871,8 +2873,12 @@ contains
       !Self-energy manipulations
       do isite=1,Solver%Nimp
          !
-         fitSigmaTail = (.not.addE0).and.(ReplaceTail_Simp.gt.0d0).and.(ReplaceTail_Simp.lt.wmatsMax)
-         fitSigmaTail = addE0.and.all(LocalOrbs(isite)%tailFit.gt.0d0).and.all(LocalOrbs(isite)%tailFit.lt.wmatsMax)
+         fitSigmaTail = .false.
+         if(addE0)then
+            fitSigmaTail = all(LocalOrbs(isite)%tailFit.gt.0d0).and.all(LocalOrbs(isite)%tailFit.lt.wmatsMax)
+         else
+            fitSigmaTail = (ReplaceTail_Simp.gt.0d0).and.(ReplaceTail_Simp.lt.wmatsMax)
+         endif
          !
          !Fit the impurity self-energy tail
          if(fitSigmaTail)then
