@@ -1,15 +1,5 @@
 program SelfConsistency
    !
-   ! COMMENTS:
-   ! tengo collect_QMC_results(ItStart) separato perche forse in un futuro riscrivero il solver
-   ! e quindi potro semplicemnte sponstare collect_QMC_results(ItStart) in fondo e tenere
-   ! initialize_Fields(ItStart) invariato, Se metto dyson dentro initialize_Fields
-   ! dopo se cambio solver mi tocca riscriverlo.
-   ! quindi tengo separato collect_QMC_results che crea e scrive le self-energie e Pimp
-   ! oi dealloco e rileggo
-   ! tutta la roba che alloco qui e' solo temporaea e principalemtne dovuta la fatto che thengo seprate C e X componenti di sigmaGW
-
-
    use module_container
    use utils_main
    implicit none
@@ -395,45 +385,3 @@ program SelfConsistency
    endif
    !
 end program SelfConsistency
-!
-!
-!
-!------------------------------------------------------------------------------!
-!                                   COMMENTS                                   !
-!------------------------------------------------------------------------------!
-!
-!(*): the S_Full_exists flag is present because I need the full K dependent Wlat,
-!which is never stored, in ordeer to compute S_Full. If the gap equation is solved
-!then the calculation of the full k-dependent Wlat is required.
-!
-!(**): a bit redundant since there is no merge wihtout DMFT
-!
-!(***): NON MI DEVO PREOCCUPARE SE AGGIUNGO A S_DMFT ORBITALI CHE STANNO DENTRO
-!A TIER-2 TANTO QUANDO MI FACCIO IL DYSON PER CALCOLARE DELTA IMP2LOC MI ESTRAE DA
-!S_DMFT SOLO QUELLO CHE PARE A ME POI, DOPO calc_Delta, S_DMFT NON  È  MAI PIU USATA NEL  CODICE
-!For the case where the orbital subspaces for the EDMFT and GW calculations are
-!the same, DC reduces to the local projection (k sum) of the full GW self-energy.
-!If the orbital subspace for the EDMFT calculation is smaller than that of the GW
-!calculation the difference between DC and the local projection of the full GW self-energy is...
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-!

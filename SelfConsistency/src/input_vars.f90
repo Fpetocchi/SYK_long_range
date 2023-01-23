@@ -206,6 +206,7 @@ module input_vars
    integer,public                           :: LOGfile
    logical,public                           :: dump_Gk
    logical,public                           :: dump_Sigmak
+   logical,public                           :: dump_SigmaR
    !
    !Post-processing variables
    character(len=256),public                :: structure
@@ -529,9 +530,7 @@ contains
             if(reg(long_range).eq."Explicit") call parse_input_variable(attach_Coulomb,"ATTACH_COULOMB",InputFile,default=N_Vnn,comment="Maximum extension of a Coulomb tail starting from the farthest interaction of LONG_RANGE=Explicit mode.")
             allocate(Vnn(Norb_model,Norb_model,N_Vnn));Vnn=0d0
             call parse_input_variable(readVnn,"READ_LONG_RANGE",InputFile,default=.false.,comment="Flag to read the long-range interaction matrix [NORB,NORB] from file PATH_INPUT/Vnn.DAT. If False the diagonal entries are provided by the user.")
-            if(readVnn)then
-               call read_Vnn()
-            else
+            if(.not.readVnn)then
                allocate(Vnn_diag(Norb_model,N_Vnn));Vnn_diag=0d0
                if(reg(long_range).eq."Explicit")then
                   do irange=1,N_Vnn
@@ -629,6 +628,7 @@ contains
       if(reg(CalculationType).eq."scGW")dump_Gk=.true.
       if(reg(CalculationType).eq."GW+EDMFT")dump_Gk=.true.
       call parse_input_variable(dump_Sigmak,"PRINT_SIGMAK",InputFile,default=.false.,comment="Print the full k-dependent self-energy (binfmt) at each iteration (always optional).")
+      call parse_input_variable(dump_SigmaR,"PRINT_SIGMAR",InputFile,default=.false.,comment="Print the full self-energy in the [100],[010],[001] real-space directions.")
       !
       !Post-processing variables
       call add_separator("Post processing")
@@ -789,6 +789,9 @@ contains
       endif
       Beta_Match%Path=trim(Beta_Match%Path)//"/"
       !
+      !done only now that the correct path is stored
+      if(readVnn) call read_Vnn()
+      !
    end subroutine read_InputFile
 
 
@@ -805,12 +808,12 @@ contains
          N_Vnn_read = 1
       endif
       unit=free_unit()
-      open(unit,file=pathINPUT//"Vnn.DAT",form="formatted",status="old",position="rewind",action="read")
+      open(unit,file=reg(pathINPUT)//"Vnn.DAT",form="formatted",status="old",position="rewind",action="read")
       read(unit,*)
       read(unit,*)idum !Number of orbitals
+      read(unit,*)
       if(idum.ne.Norb_model) stop "read_InputFile/read_Vnn: unexpected orbital dimension from file pathINPUT/Vnn.DAT"
       do idist=1,N_Vnn_read
-         read(unit,*)
          read(unit,*)idum  !distance index
          if(idum.ne.idist) stop "read_InputFile/read_Vnn: unexpected distance index from file pathINPUT/Vnn.DAT"
          do iorb=1,Norb_model

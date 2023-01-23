@@ -1317,7 +1317,7 @@ contains
       integer                               :: ik,iw,ispin,iorb,jorb
       real(8),allocatable                   :: Z_qpsc(:,:,:)
       complex(8),allocatable                :: Vxc_loc(:,:,:)
-      type(FermionicField)                  :: S_EMB
+      type(FermionicField)                  :: S_EMB,S_Full_R
       !
       !
       write(*,"(A)") new_line("A")//new_line("A")//"---- join_SigmaFull"
@@ -1480,6 +1480,31 @@ contains
       enddo
       call dump_Matrix(Z_qpsc,reg(ItFolder),"Z_qpsc",paramagnet)
       deallocate(Z_qpsc)
+      !
+      !
+      !Compute the full self-energy in real space in the different directions
+      if(dump_SigmaR)then
+         call AllocateFermionicField(S_Full_R,Crystal%Norb,Nmats,Nkpt=3,Nsite=Nsite,Beta=Beta)
+         do ispin=1,Nspin
+            !FT to real space
+            call wannier_K2R_NN(Crystal%Nkpt3,Crystal%kpt,S_Full%wks(:,:,:,:,ispin),S_Full_R%wks(:,:,:,:,ispin))
+            ![100]
+            S_Full_R%ws(:,:,:,ispin) = S_Full_R%wks(:,:,:,1,ispin)
+            call dump_FermionicField(S_Full_R,reg(ItFolder),"Sfull_w_100",paramagnet)
+            call dump_MaxEnt(S_Full_R,"mats",reg(ItFolder)//"Convergence/","Sfull_w_100",EqvGWndx%SetOrbs,WmaxPade=PadeWlimit)
+            ![010]
+            S_Full_R%ws(:,:,:,ispin) = S_Full_R%wks(:,:,:,2,ispin)
+            call dump_FermionicField(S_Full_R,reg(ItFolder),"Sfull_w_010",paramagnet)
+            call dump_MaxEnt(S_Full_R,"mats",reg(ItFolder)//"Convergence/","Sfull_w_010",EqvGWndx%SetOrbs,WmaxPade=PadeWlimit)
+            ![001]
+            S_Full_R%ws(:,:,:,ispin) = S_Full_R%wks(:,:,:,3,ispin)
+            call dump_FermionicField(S_Full_R,reg(ItFolder),"Sfull_w_001",paramagnet)
+            call dump_MaxEnt(S_Full_R,"mats",reg(ItFolder)//"Convergence/","Sfull_w_001",EqvGWndx%SetOrbs,WmaxPade=PadeWlimit)
+            !
+            if(paramagnet)exit
+         enddo
+         call DeallocateFermionicField(S_Full_R)
+      endif
       !
       !
       !

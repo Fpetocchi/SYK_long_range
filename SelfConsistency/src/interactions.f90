@@ -867,7 +867,6 @@ contains
          Nbp_spex = Norb_spex**2
          allocate(Utmp(Nbp_spex,Nbp_spex));Utmp=czero
          allocate(wread(Nfreq));wread=0d0
-
          !
          ! Few checks
          if(Nspin_spex.ne.1) stop "read_U_spex_full: Nspin_spex.ne.1"
@@ -939,9 +938,9 @@ contains
          allocate(URnn(Umats%Nbp,Umats%Nbp,3));URnn=czero
          call wannier_K2R_NN(Nkpt3,kpt,Umats%screened(:,:,1,:),URnn)
          where(abs((URnn))<eps) URnn=czero
-         call dump_Matrix(URnn(:,:,1),reg(trim(pathOUTPUT_)),"Unn_Rx.DAT")
-         call dump_Matrix(URnn(:,:,2),reg(trim(pathOUTPUT_)),"Unn_Ry.DAT")
-         call dump_Matrix(URnn(:,:,3),reg(trim(pathOUTPUT_)),"Unn_Rz.DAT")
+         call dump_Matrix(URnn(:,:,1),reg(trim(pathOUTPUT_)),"Unn_100.DAT")
+         call dump_Matrix(URnn(:,:,2),reg(trim(pathOUTPUT_)),"Unn_010.DAT")
+         call dump_Matrix(URnn(:,:,3),reg(trim(pathOUTPUT_)),"Unn_001.DAT")
          deallocate(URnn)
       endif
       !
