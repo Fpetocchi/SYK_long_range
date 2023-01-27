@@ -108,9 +108,11 @@ module input_vars
    logical,public                           :: readHk
    real(8),public                           :: LatticeVec(3,3)
    real(8),allocatable,public               :: ucVec(:,:)
-   integer,public                           :: Norb_model !<== remove from public variables
+   integer,public                           :: Norb_model
    real(8),allocatable,public               :: hopping(:)
    type(Heterostructures),public            :: Hetero
+   integer,public                           :: Nkpt_path_default = 100
+   integer,public                           :: Nkpt_plane_default = 201
    !
    !Site and Orbital space
    integer,public                           :: Nsite

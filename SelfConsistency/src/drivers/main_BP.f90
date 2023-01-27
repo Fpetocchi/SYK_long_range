@@ -95,11 +95,10 @@ program SelfConsistency
    !
    !
    !PROJECT SPECIFIC>>>
-   !
    !Here I remove all the interaction within the plasmonic source, OrbMap contains the elements to remove
    allocate(OrbMap(Crystal%Norb,Crystal%Norb));OrbMap=.true.
-   OrbMap(1,2:5)=.false.
-   OrbMap(2:5,1)=.false.
+   OrbMap(5,1:4)=.false.
+   OrbMap(1:4,5)=.false.
    call clear_MatrixElements(Ulat,OrbMap,LocalOnly=.false.)
    deallocate(OrbMap)
    call dump_BosonicField(Ulat,reg(pathINPUT),"Uloc_mats_BP.DAT")
@@ -108,15 +107,6 @@ program SelfConsistency
    if(reg(structure).ne."None")then
       call interpolateHk2Path(Crystal,reg(structure),Crystal%Nkpt_path,pathOUTPUT=reg(pathINPUT),filename="Uk_BP",data_in=Ulat%bare)
    endif
-   !
-   !print the real-space nn interacion
-   allocate(URnn(Ulat%Nbp,Ulat%Nbp,3));URnn=czero
-   call wannier_K2R_NN(Crystal%Nkpt3,Crystal%kpt,Ulat%bare,URnn)
-   where(abs((URnn))<eps) URnn=czero
-   call dump_Matrix(URnn(:,:,1),reg(pathINPUT),"Unn_BP_100.DAT")
-   call dump_Matrix(URnn(:,:,2),reg(pathINPUT),"Unn_BP_010.DAT")
-   call dump_Matrix(URnn(:,:,3),reg(pathINPUT),"Unn_BP_001.DAT")
-   deallocate(URnn)
    !>>>PROJECT SPECIFIC
    !
    !

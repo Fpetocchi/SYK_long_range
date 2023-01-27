@@ -56,7 +56,8 @@ module module_container
    calc_Ewald                               ,&
    set_UserPath                             ,&
    get_Ruc,get_Rlat,get_Blat                ,&
-   interpolateHk2Path                       ,&
+   interpolate2Path                         ,&
+   interpolate2Plane                        ,&
    tetrahedron_integration
 
 

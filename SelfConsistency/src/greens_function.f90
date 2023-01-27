@@ -1084,14 +1084,14 @@ contains
                   if(printAkw)then
                      Akw = dimag(G_print_E(iorb,:))
                      Akw = Akw/(sum(Akw)*abs(axis(2)-axis(1)))
-                     call dump_FermionicField(Akw,reg(pathOUTPUT_),"Akw_Ek_"//str(iorb)//"_k"//str(ik)//".lda",axis)
+                     call dump_FermionicField(Akw,reg(pathOUTPUT_),"Aw_Ek_"//str(iorb)//"_k"//str(ik)//".lda",axis)
                   endif
                   do jorb=1,Norb
                      call dump_FermionicField(Gk_print_H(iorb,jorb,:,ik),reg(pathOUTPUT_),reg(name)//"_Hk_"//str(iorb)//str(jorb)//"_k"//str(ik)//".lda",axis)
                      if(printAkw)then
                         Akw = dimag(G_print_H(iorb,jorb,:))
                         Akw = Akw/(sum(Akw)*abs(axis(2)-axis(1)))
-                        call dump_FermionicField(Akw,reg(pathOUTPUT_),"Akw_Hk_"//str(iorb)//str(jorb)//"_k"//str(ik)//".lda",axis)
+                        call dump_FermionicField(Akw,reg(pathOUTPUT_),"Aw_Hk_"//str(iorb)//str(jorb)//"_k"//str(ik)//".lda",axis)
                      endif
                   enddo
                enddo
@@ -1116,14 +1116,14 @@ contains
             if(printAkw)then
                Akw = dimag(G_print_E(iorb,:))
                Akw = Akw/(sum(Akw)*abs(axis(2)-axis(1)))
-               call dump_FermionicField(Akw,reg(pathOUTPUT_),"Akw_Ek_"//str(iorb)//".lda",axis)
+               call dump_FermionicField(Akw,reg(pathOUTPUT_),"Aw_Ek_"//str(iorb)//".lda",axis)
             endif
             do jorb=1,Norb
                call dump_FermionicField(G_print_H(iorb,jorb,:),reg(pathOUTPUT_),reg(name)//"_Hk_"//str(iorb)//str(jorb)//".lda",axis)
                if(printAkw)then
                   Akw = dimag(G_print_H(iorb,jorb,:))
                   Akw = Akw/(sum(Akw)*abs(axis(2)-axis(1)))
-                  call dump_FermionicField(Akw,reg(pathOUTPUT_),"Akw_Hk_"//str(iorb)//str(jorb)//".lda",axis)
+                  call dump_FermionicField(Akw,reg(pathOUTPUT_),"Aw_Hk_"//str(iorb)//str(jorb)//".lda",axis)
                endif
             enddo
          enddo

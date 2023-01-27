@@ -457,7 +457,7 @@ contains
          !
          if(.not.Lttc%pathStored)then
             write(*,"(A)") "     calc_chi: re-initializing the K-path."
-            call interpolateHk2Path(Lttc,reg(structure),Nkpt_path)
+            call interpolate2Path(Lttc,Nkpt_path,"Hk",store=.true.)
          endif
          !
          allocate(Pwk_noG(Nbp,Nbp,Nmats,Nkpt));Pwk_noG=czero
@@ -2205,7 +2205,7 @@ contains
          !
          !print along path
          if(reg(structure).ne."None")then
-            call interpolateHk2Path(Lttc,reg(structure),Nkpt_path,pathOUTPUT=reg(pathINPUT),filename="Uk",data_in=Uk)
+            call interpolate2Path(Lttc,Nkpt_path,"Uk",pathOUTPUT=reg(pathINPUT),store=.false.,skipAkw=.true.,data_in=Uk)
          endif
          !
          !fill in the output
@@ -2714,7 +2714,7 @@ contains
          !
          !print along path
          if(reg(structure).ne."None")then
-            call interpolateHk2Path(Lttc,reg(structure),Nkpt_path,pathOUTPUT=reg(pathINPUT),filename="Uk",data_in=Uk)
+            call interpolate2Path(Lttc,Nkpt_path,"Uk",pathOUTPUT=reg(pathINPUT),store=.false.,skipAkw=.true.,data_in=Uk)
          endif
          !
          !fill in the output

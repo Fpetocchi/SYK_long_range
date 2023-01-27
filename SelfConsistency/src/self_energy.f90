@@ -2151,7 +2151,7 @@ contains
       use crystal
       use file_io
       use input_vars, only : paramagnet, Nreal, wrealMax, eta
-      use input_vars, only : Nkpt_path, structure, pathINPUTtr
+      use input_vars, only : Nkpt_path, pathINPUTtr
       implicit none
       !
       type(Lattice),intent(inout)           :: Lttc
@@ -2160,12 +2160,13 @@ contains
       !
       type(FermionicField)                  :: S_G0W0,S_G0W0_interp
       type(FermionicField)                  :: S_G0W0dc,S_G0W0dc_interp
-      complex(8),allocatable                :: invGf(:,:),Smat(:,:,:),Zk(:,:,:)
+      complex(8),allocatable                :: invGf(:,:),Zk(:,:,:),Smat(:,:,:,:)
+      real(8),allocatable                   :: QPpole(:,:),QPpolelist(:)
       real(8),allocatable                   :: wreal(:),wreal_read(:)
       real(8),allocatable                   :: Aloc(:,:,:)
       real(8)                               :: ReS,ImS,mu_
       real                                  :: start,finish
-      integer                               :: ik,iw,iw2
+      integer                               :: ik,iw,QPndx
       integer                               :: Nreal_read = 5000
       integer                               :: iorb,jorb,ispin
       logical                               :: S_G0W0exists
@@ -2179,10 +2180,13 @@ contains
       if(.not.Lttc%pathStored) stop "print_G0W0_dispersion: K-points along the path not stored."
       if(.not.Uwan_stored) stop "print_G0W0_dispersion: rotation towards the DFT basis not stored."
       !
-      !Uwan rotation
+      !Uwan rotation brings from LDA to Wannier
       if((ib2_UwanDFT-ib1_UwanDFT).ne.(Lttc%Norb-1)) stop "print_G0W0_dispersion: ib2_UwanDFT-ib1_UwanDFT does not match SGoWo dimension."
+      call assert_shape(UwanDFT(:,:,:,1),[Lttc%Norb,Lttc%Norb,Lttc%Nkpt],"print_G0W0_dispersion","UwanDFT")
       allocate(Zk(Lttc%Norb,Lttc%Norb,Lttc%Nkpt));Zk=czero
-      Zk = UwanDFT(ib1_UwanDFT:ib2_UwanDFT,:,:,1)
+      do ik=1,Lttc%Nkpt
+         Zk(:,:,ik) = dag(UwanDFT(ib1_UwanDFT:ib2_UwanDFT,:,ik,1))
+      enddo
       !
       if(allocated(Vxc))call assert_shape(Vxc,[Lttc%Norb,Lttc%Norb,Lttc%Nkpt,Nspin],"print_G0W0_dispersion","Vxc")
       !
@@ -2206,29 +2210,40 @@ contains
       write(*,"(A,1I6)") "     Frequency axis updated to: ",Nreal_read
       write(*,"(A)") "     Frequency boundaries "//str(wreal_read(1),4)//" - "//str(wreal_read(Nreal_read),4)
       !
-      !interpolate to input real-frequency mesh
+      !rotate G0W0 input to LDA basis
+      allocate(Smat(Lttc%Norb,Nreal_read,Lttc%Nkpt,Nspin));Smat=czero
+      do ispin=1,Nspin
+         !
+         do ik=1,Lttc%Nkpt
+            do iw=1,Nreal_read
+               Smat(:,iw,ik,ispin) = diagonal(rotate(S_G0W0%wks(:,:,iw,ik,ispin),Zk(:,:,ik)))
+            enddo
+         enddo
+         !
+         if(paramagnet)then
+            Smat(:,:,:,Nspin) = Smat(:,:,:,1)
+            exit
+         endif
+      enddo
+      !
+      !interpolate to input real-frequency mesh and rotate back to Wannier basis
       call cpu_time(start)
       call AllocateFermionicField(S_G0W0_interp,Lttc%Norb,Nreal,Nkpt=Lttc%Nkpt)
-      allocate(Smat(Lttc%Norb,Lttc%Norb,Nreal_read));Smat=czero
       !$OMP PARALLEL DEFAULT(SHARED),&
-      !$OMP PRIVATE(iw,ik,iorb,jorb,ispin,ReS,ImS,iw2,Smat)
+      !$OMP PRIVATE(iw,ik,iorb,jorb,ispin,ReS,ImS)
       !$OMP DO
       do iw=1,Nreal
          do ik=1,Lttc%Nkpt
             do ispin=1,Nspin
                !
-               do iw2=1,Nreal_read
-                  Smat(:,:,iw2) = rotate(S_G0W0%wks(:,:,iw2,ik,ispin),dag(Zk(:,:,ik)))
-               enddo
-               !
                do iorb=1,Lttc%Norb
-                  ReS = cubic_interp( wreal_read, dreal(Smat(iorb,iorb,1:Nreal_read)), wreal(iw) )
-                  ImS = cubic_interp( wreal_read, dimag(Smat(iorb,iorb,1:Nreal_read)), wreal(iw) )
+                  ReS = cubic_interp( wreal_read, dreal(Smat(iorb,1:Nreal_read,ik,ispin)), wreal(iw) )
+                  ImS = cubic_interp( wreal_read, dimag(Smat(iorb,1:Nreal_read,ik,ispin)), wreal(iw) )
                   if(ImS.gt.0d0)ImS=0d0
                   S_G0W0_interp%wks(iorb,iorb,iw,ik,ispin) = dcmplx(ReS,ImS)
                enddo
                !
-               S_G0W0_interp%wks(:,:,iw,ik,ispin) = rotate(S_G0W0_interp%wks(:,:,iw,ik,ispin),Zk(:,:,ik))
+               S_G0W0_interp%wks(:,:,iw,ik,ispin) = rotate(S_G0W0_interp%wks(:,:,iw,ik,ispin),dag(Zk(:,:,ik)))
                if(paramagnet)then
                   S_G0W0_interp%wks(:,:,iw,ik,Nspin) = S_G0W0_interp%wks(:,:,iw,ik,1)
                   cycle
@@ -2243,7 +2258,7 @@ contains
       call DeallocateFermionicField(S_G0W0)
       call FermionicKsum(S_G0W0_interp)
       call dump_FermionicField(S_G0W0_interp,reg(pathINPUTtr)//"G0W0plots/","SGoWo_wr_interp",.true.,axis=wreal)
-      if(print_all) call dump_FermionicField(S_G0W0_interp,reg(pathINPUTtr)//"G0W0plots/","SGoWo_wr_interp",.false.,Lttc%kpt,paramagnet,axis=wreal)
+      if(print_all) call dump_FermionicField(S_G0W0_interp,reg(pathINPUTtr)//"G0W0plots/SGoWo_wr_interp/","SGoWo_wr_interp",.false.,Lttc%kpt,paramagnet,axis=wreal)
       call cpu_time(finish)
       write(*,"(A,F)") "     Interpolation to input real frequency grid cpu timing:", finish-start
       !
@@ -2262,37 +2277,90 @@ contains
             enddo
          enddo
       enddo
-      if(print_all) call dump_FermionicField(S_G0W0_interp,reg(pathINPUTtr)//"G0W0plots/","SGoWo_Vxc_wr_interp",.false.,Lttc%kpt,paramagnet,axis=wreal)
+      if(print_all) call dump_FermionicField(S_G0W0_interp,reg(pathINPUTtr)//"G0W0plots/SGoWo_Vxc_wr_interp/","SGoWo_Vxc_wr_interp",.false.,Lttc%kpt,paramagnet,axis=wreal)
       !
-      !print G0W0 bandstructure
-      call interpolateHk2Path(Lttc,reg(structure),Nkpt_path,pathOUTPUT=reg(pathINPUTtr)//"G0W0plots/",Sigma=S_G0W0_interp%wks,Sigma_axis=wreal,corrname="G0W0",store=.false.)
-      !
-      !print G0W0 local spectral function
-      allocate(invGf(Lttc%Norb,Lttc%Norb));invGf=czero
+      allocate(Lttc%Ek_qp(Lttc%Norb,Lttc%Nkpt,Nspin));Lttc%Ek_qp=0d0
+      allocate(Lttc%Hk_qp(Lttc%Norb,Lttc%Norb,Lttc%Nkpt,Nspin));Lttc%Hk_qp=czero
+      !compute G0W0 spectral function
       do ispin=1,Nspin
          !
+         allocate(Smat(Lttc%Norb,Lttc%Norb,Nreal,Lttc%Nkpt));Smat=czero
          allocate(Aloc(Lttc%Norb,Lttc%Norb,Nreal));Aloc=0d0
+         allocate(invGf(Lttc%Norb,Lttc%Norb));invGf=czero
          do iw=1,Nreal
             do ik=1,Lttc%Nkpt
                !
-               invGf = zeye(Lttc%Norb)*dcmplx(wreal(iw)+mu_,eta) - Lttc%Hk(:,:,ik) - S_G0W0_interp%wks(:,:,iw,ik,ispin)
+               Smat(:,:,iw,ik) = Lttc%Hk(:,:,ik) + S_G0W0_interp%wks(:,:,iw,ik,ispin) - zeye(Lttc%Norb)*mu_
+               !
+               invGf = zeye(Lttc%Norb)*dcmplx(wreal(iw),eta) - Smat(:,:,iw,ik)
                !
                call inv(invGf)
                Aloc(:,:,iw) = Aloc(:,:,iw) - dimag(invGf)/Lttc%Nkpt
                !
             enddo
          enddo
+         deallocate(invGf)
          !
+         !print local G0W0 spectral function
          do iorb=1,Lttc%Norb
             Aloc(iorb,iorb,:) = Aloc(iorb,iorb,:)/(sum(Aloc(iorb,iorb,:))*abs(wreal(2)-wreal(1)))
-            call dump_Field_component(Aloc(iorb,iorb,:),reg(pathINPUTtr)//"G0W0plots/","Aw_Hk_Sigma_G0W0_o"//str(iorb)//"_s"//str(ispin)//".DAT",wreal)
+            call dump_Field_component(Aloc(iorb,iorb,:),reg(pathINPUTtr)//"G0W0plots/Aloc/","Aw_G0W0_o"//str(iorb)//"_s"//str(ispin)//".DAT",wreal)
          enddo
          deallocate(Aloc)
          !
-         if(paramagnet) exit
+         !print G0W0 spectral function along the path
+         call interpolate2Path(Lttc,Nkpt_path,"G0W0_s"//str(ispin),pathOUTPUT=reg(pathINPUTtr)//"G0W0plots/",dataw_in=Smat,store=.false.,skipAkw=.false.)
+         deallocate(Smat)
+         !
+         !solve the quasiparticle eqaution for each K-point
+         do ik=1,Lttc%Nkpt
+            !
+            !go to LDA basis and compute: w + mu - E(k) - Re{Sigma(k,w)}
+            allocate(QPpole(Lttc%Norb,Nreal));QPpole=0d0
+            do iw=1,Nreal
+               QPpole(:,iw) = wreal(iw) + mu_ - Lttc%Ek(:,ik) - diagonal(dreal(rotate(S_G0W0_interp%wks(:,:,iw,ik,ispin),Zk(:,:,ik))))
+            enddo
+            !
+            !find the zeros of the previous equation
+            do iorb=1,Lttc%Norb
+               !
+               !get a list of w corresponding to the zeros of the previous equation
+               if(allocated(QPpolelist))deallocate(QPpolelist)
+               allocate(QPpolelist(1));QPpolelist=0d0
+               do iw=1,Nreal-1
+                  if((QPpole(iorb,iw)*QPpole(iorb,iw+1)).lt.0d0)then
+                     if(allocated(QPpolelist))then
+                        QPpolelist = [ QPpolelist, wreal(iw) ]
+                     else
+                        QPpolelist(1) = wreal(iw)
+                     endif
+                  endif
+               enddo
+               if(size(QPpolelist).eq.0)stop"print_G0W0_dispersion: list of QP poles has zero size. Try to increase MAX_WREAL."
+               !
+               !select the pole closer to bare band
+               QPndx = minloc(abs(QPpolelist-Lttc%Ek(iorb,ik)),dim=1)
+               Lttc%Ek_qp(iorb,ik,ispin) = QPpolelist(QPndx)
+               !
+            enddo
+            deallocate(QPpole)
+            !
+            !rotate back to Wannier basis
+            Lttc%Hk_qp(:,:,ik,ispin) = rotate(diag(Lttc%Ek_qp(:,ik,ispin)),dag(Zk(:,:,ik)))
+            !
+         enddo
+         call dump_Hk(Lttc%Hk_qp(:,:,:,ispin),Lttc%kpt,reg(pathINPUTtr)//"G0W0plots/","Hk_qp_s"//str(ispin)//".DAT")
+         !
+         !print quasiparticle pole along the path
+         call interpolate2Path(Lttc,Nkpt_path,"Hk_G0W0_s"//str(ispin),pathOUTPUT=reg(pathINPUTtr)//"G0W0plots/",data_in=Lttc%Hk_qp(:,:,:,ispin),store=.false.,skipAkw=.true.)
+         !
+         if(paramagnet)then
+            Lttc%Ek_qp(:,:,Nspin) = Lttc%Ek_qp(:,:,1)
+            Lttc%Hk_qp(:,:,:,Nspin) = Lttc%Hk_qp(:,:,:,1)
+            exit
+         endif
          !
       enddo
-      deallocate(invGf)
       call DeallocateFermionicField(S_G0W0_interp)
       !
       !
@@ -2313,29 +2381,40 @@ contains
          write(*,"(A,1I6)") "     Frequency axis updated to: ",Nreal_read
          write(*,"(A)") "     Frequency boundaries "//str(wreal_read(1),4)//" - "//str(wreal_read(Nreal_read),4)
          !
-         !interpolate to input real-frequency mesh
+         !rotate G0W0 input to LDA basis
+         allocate(Smat(Lttc%Norb,Nreal_read,Lttc%Nkpt,Nspin));Smat=czero
+         do ispin=1,Nspin
+            !
+            do ik=1,Lttc%Nkpt
+               do iw=1,Nreal_read
+                  Smat(:,iw,ik,ispin) = diagonal(rotate(S_G0W0dc%wks(:,:,iw,ik,ispin),Zk(:,:,ik)))
+               enddo
+            enddo
+            !
+            if(paramagnet)then
+               Smat(:,:,:,Nspin) = Smat(:,:,:,1)
+               exit
+            endif
+         enddo
+         !
+         !interpolate to input real-frequency mesh and rotate back to Wannier basis
          call cpu_time(start)
          call AllocateFermionicField(S_G0W0dc_interp,Lttc%Norb,Nreal,Nkpt=Lttc%Nkpt)
-         allocate(Smat(Lttc%Norb,Lttc%Norb,Nreal_read));Smat=czero
          !$OMP PARALLEL DEFAULT(SHARED),&
-         !$OMP PRIVATE(iw,ik,iorb,jorb,ispin,ReS,ImS,iw2,Smat)
+         !$OMP PRIVATE(iw,ik,iorb,jorb,ispin,ReS,ImS)
          !$OMP DO
          do iw=1,Nreal
             do ik=1,Lttc%Nkpt
                do ispin=1,Nspin
                   !
-                  do iw2=1,Nreal_read
-                     Smat(:,:,iw2) = rotate(S_G0W0dc%wks(:,:,iw2,ik,ispin),dag(Zk(:,:,ik)))
-                  enddo
-                  !
                   do iorb=1,Lttc%Norb
-                     ReS = cubic_interp( wreal_read, dreal(Smat(iorb,iorb,1:Nreal_read)), wreal(iw) )
-                     ImS = cubic_interp( wreal_read, dimag(Smat(iorb,iorb,1:Nreal_read)), wreal(iw) )
+                     ReS = cubic_interp( wreal_read, dreal(Smat(iorb,1:Nreal_read,ik,ispin)), wreal(iw) )
+                     ImS = cubic_interp( wreal_read, dimag(Smat(iorb,1:Nreal_read,ik,ispin)), wreal(iw) )
                      if(ImS.gt.0d0)ImS=0d0
                      S_G0W0dc_interp%wks(iorb,iorb,iw,ik,ispin) = dcmplx(ReS,ImS)
                   enddo
                   !
-                  S_G0W0dc_interp%wks(:,:,iw,ik,ispin) = rotate(S_G0W0dc_interp%wks(:,:,iw,ik,ispin),Zk(:,:,ik))
+                  S_G0W0dc_interp%wks(:,:,iw,ik,ispin) = rotate(S_G0W0dc_interp%wks(:,:,iw,ik,ispin),dag(Zk(:,:,ik)))
                   if(paramagnet)then
                      S_G0W0dc_interp%wks(:,:,iw,ik,Nspin) = S_G0W0dc_interp%wks(:,:,iw,ik,1)
                      cycle
@@ -2350,7 +2429,7 @@ contains
          call DeallocateFermionicField(S_G0W0dc)
          call FermionicKsum(S_G0W0dc_interp)
          call dump_FermionicField(S_G0W0dc_interp,reg(pathINPUTtr)//"G0W0plots/","SGoWo_dc_wr_interp",.true.,axis=wreal)
-         if(print_all) call dump_FermionicField(S_G0W0dc_interp,reg(pathINPUTtr)//"G0W0plots/","SGoWo_dc_wr_interp",.false.,Lttc%kpt,paramagnet,axis=wreal)
+         if(print_all) call dump_FermionicField(S_G0W0dc_interp,reg(pathINPUTtr)//"G0W0plots/SGoWo_dc_wr_interp/","SGoWo_dc_wr_interp",.false.,Lttc%kpt,paramagnet,axis=wreal)
          call cpu_time(finish)
          write(*,"(A,F)") "     Interpolation to input real frequency grid cpu timing:", finish-start
          !

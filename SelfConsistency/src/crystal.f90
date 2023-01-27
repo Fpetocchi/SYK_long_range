@@ -124,7 +124,8 @@ module crystal
    public :: wannier_R2K
    public :: set_UserPath
    public :: get_Ruc,get_Rlat,get_Blat
-   public :: interpolateHk2Path
+   public :: interpolate2Path
+   public :: interpolate2Plane
    public :: calc_Kpath
    public :: calc_Kplane
    public :: calc_Ewald
@@ -503,7 +504,6 @@ contains
       open(unit,file=reg(path),form="formatted",status="old",position="rewind",action="read")
       read(unit,*) idum1,Nkpt,Norb
       !
-      write(*,"(A)") "     Reading "//reg(path)
       write(*,"(A)") "     Number of K-points from file: "//str(Nkpt)
       write(*,"(A)") "     Orbital space from file: "//str(Norb)
       !
@@ -551,8 +551,8 @@ contains
       use utils_misc
       implicit none
       !
-      complex(8),allocatable,intent(in)     :: Hk(:,:,:)
-      real(8),allocatable,intent(in)        :: kpt(:,:)
+      complex(8),intent(in)                 :: Hk(:,:,:)
+      real(8),intent(in)                    :: kpt(:,:)
       character(len=*),intent(in)           :: pathOUTPUT
       character(len=*),intent(in)           :: filename
       !
@@ -3374,213 +3374,207 @@ contains
 
 
    !---------------------------------------------------------------------------!
-   !PURPOSE: Interpolate to a user provided K-point path the Hamiltonian
+   !PURPOSE: Interpolate object along a Kpath/Kplane.
+   !         The interpolated object is always assumed to be like a self-energy
    !---------------------------------------------------------------------------!
-   subroutine interpolateHk2Path(Lttc,structure,Nkpt_path,pathOUTPUT           &
-                                                 ,filename,data_in,data_out    &
-                                                 ,corrname,correction          &
-                                                 ,doplane,Nkpt_Kside           &
-                                                 ,hetero,store                 &
-                                                 ,Sigma,Sigma_axis)
+   subroutine interpolate2Path(Lttc,Nkpt_path,label,pathOUTPUT,store,skipAkw   &
+                                                    ,data_in,dataw_in          &
+                                                    ,data_out,dataw_out)
       !
       use parameters !WHY IS THIS WORKING?
       use utils_misc
       use linalg, only : eigh, inv, zeye
-      use input_vars, only : eta, Nreal, FermiCut !WHY IS THIS WORKING?
+      use input_vars, only : eta, Nreal, wrealMax
+      use input_vars, only : Hetero
+      use input_vars, only : structure
       implicit none
       !
       type(Lattice),intent(inout)           :: Lttc
-      character(len=*),intent(in)           :: structure
       integer,intent(in)                    :: Nkpt_path
-      character(len=*),intent(in),optional  :: pathOUTPUT
-      character(len=*),intent(in),optional  :: filename
-      complex(8),intent(in),optional        :: data_in(:,:,:)
-      complex(8),intent(out),allocatable,optional :: data_out(:,:,:)
-      character(len=*),intent(in),optional  :: corrname
-      complex(8),intent(in),optional        :: correction(:,:,:)
-      logical,intent(in),optional           :: doplane
-      integer,intent(in),optional           :: Nkpt_Kside
+      character(len=*),intent(in)           :: label
       logical,intent(in),optional           :: store
-      type(Heterostructures),intent(inout),optional :: hetero
-      complex(8),intent(in),optional        :: Sigma(:,:,:,:,:)
-      real(8),intent(in),optional           :: Sigma_axis(:)
+      logical,intent(in),optional           :: skipAkw
+      character(len=*),intent(in),optional  :: pathOUTPUT
+      complex(8),intent(in),optional        :: data_in(:,:,:),dataw_in(:,:,:,:)
+      complex(8),intent(out),optional       :: data_out(:,:,:),dataw_out(:,:,:,:)
       !
-      character(len=256)                    :: path,label,filename_,corrname_
-      integer                               :: ik,ikz,iorb,unit,ilayer
-      integer                               :: Norb,Nkpt_Kside_,ikx,iky
-      integer                               :: iw,ndx,Nreal_sigma
-      real(8)                               :: kp,kx,ky,Bvec(3),Kvec(3)
-      real(8)                               :: wrealMax,kz_cut,FermiLevel!,eta
-      complex(8),allocatable                :: data_orig(:,:,:)
+      integer                               :: io,Ndim,unit,ilayer,ndx
+      integer                               :: iw,ik,ikz,Nkpt,Nkpt_path_tot
+      real(8)                               :: Bvec(3),kp
+      real(8),allocatable                   :: kptpath(:,:),Kpathaxis(:),KpathaxisPoints(:)
+      complex(8),allocatable                :: data_orig(:,:,:),dataw_orig(:,:,:,:)
+      complex(8),allocatable                :: data_intp(:,:,:),dataw_intp(:,:,:,:)
       complex(8),allocatable                :: invGf(:,:)
-      logical                               :: Hamiltonian,doplane_,hetero_,printout,store_,addSigma_
+      logical                               :: printout,store_,skipAkw_
+      logical                               :: freq_dep,compute_eigv,Hamiltonian
       real                                  :: start,finish
+      character(len=256)                    :: path
       !Interp
-      complex(8),allocatable                :: data_intp(:,:,:),dataZk(:,:,:)
-      complex(8),allocatable                :: Sigma_intp(:,:,:,:)
+      complex(8),allocatable                :: dataZk(:,:,:)
       real(8),allocatable                   :: dataEk(:,:)
       !Plots
-      real(8),allocatable                   :: Fk(:,:,:),Akw(:,:,:,:),wreal(:)
       complex(8),allocatable                :: zeta(:,:,:)
+      real(8),allocatable                   :: wreal(:),Akw(:,:,:,:),Akw_print(:,:,:),Akw_kz_print(:,:,:,:)
       !Hetero
       integer                               :: NbulkL,NbulkR
       integer                               :: Ln(2),Rn(2)
-      complex(8),allocatable                :: Fk_kz(:,:,:,:),Akw_kz(:,:,:,:,:)
+      complex(8),allocatable                :: Akw_kz(:,:,:,:,:)
       complex(8),allocatable                :: Potential_L(:,:,:,:,:),Potential_R(:,:,:,:,:)
-      real(8),allocatable                   :: Akw_print(:,:,:),Akw_kz_print(:,:,:,:)
       !
       !
-      write(*,"(A)") new_line("A")//new_line("A")//"---- interpolateHk2Path"
+      write(*,"(A)") new_line("A")//new_line("A")//"---- interpolate2Path"
       !
+      if(.not.Lttc%status) stop "interpolate2Path: Lttc not properly initialized."
+      if(present(data_in).and.present(dataw_in)) stop "interpolate2Path: both data_in and dataw_in are present."
       !
-      if(.not.Lttc%status) stop "interpolateHk2Path: Lttc not properly initialized."
+      printout = present(pathOUTPUT)
       !
-      printout=.false.
-      if(present(pathOUTPUT))printout=.true.
-      if(printout)call createDir(reg(pathOUTPUT),verb=verbose)
+      store_ = .false.
+      if(present(store))store_=store
       !
-      filename_="Bands"
-      if(present(filename))filename_=reg(filename)
+      skipAkw_ = .false.
+      if(present(skipAkw))skipAkw_=skipAkw
       !
-      !store_=.true.
-      !if(present(store))store_=store
+      Nkpt = Lttc%Nkpt
       !
       if(present(data_in))then
-         label=reg(filename_)
-         data_orig=data_in
-         Hamiltonian=.false.
-         store_=.false.
+         !
+         freq_dep = .false.
+         compute_eigv = .true.
+         Hamiltonian = .false.
+         data_orig = data_in
+         !
+         Ndim = size(data_orig,dim=1)
+         call assert_shape(data_orig,[Ndim,Ndim,Nkpt],"interpolate2Path","data_in")
+         if(store_)write(*,"(A)") "     Warning: storing only k-meshes along the K-path."
+         !
+      elseif(present(dataw_in))then
+         !
+         freq_dep = .true.
+         compute_eigv = .false. !because I want the rotation to be only k-dependent
+         Hamiltonian = .false.
+         dataw_orig = dataw_in
+         !
+         Ndim = size(dataw_orig,dim=1)
+         call assert_shape(dataw_orig,[Ndim,Ndim,Nreal,Nkpt],"interpolate2Path","dataw_orig")
+         if(store_)write(*,"(A)") "     Warning: storing only k-meshes along the K-path."
+         !
       else
-         label="Hk"
-         data_orig=Lttc%Hk
-         Hamiltonian=.true.
-         store_=.true.
+         !
+         freq_dep = .false.
+         compute_eigv = .true.
+         Hamiltonian = .true.
+         data_orig = Lttc%Hk
+         !
+         Ndim = Lttc%Norb
+         call assert_shape(data_orig,[Ndim,Ndim,Nkpt],"interpolate2Path","Hk")
+         !
       endif
-      !
-      doplane_=.false.
-      if(present(doplane))doplane_=doplane
-      !
-      hetero_=.false.
-      if(present(hetero))hetero_=Hetero%status
-      !
-      Norb = size(data_orig,dim=1)
-      call assert_shape(data_orig,[Norb,Norb,Lttc%Nkpt],"interpolateHk2Path",reg(label))
-      !
-      !static correction to the input data--------------------------------------
-      corrname_="nonInt"
-      if(present(correction))then
-         call assert_shape(correction,[Norb,Norb,Lttc%Nkpt],"interpolateHk2Path","correction")
-         data_orig = data_orig + correction
-         corrname_="Corrected"
-         if(present(corrname))corrname_=reg(corrname)
-         write(*,"(A)")"     Correction: "//reg(corrname_)
-         store_=.false.
-         hetero_=.false.
-      endif
-      !
-      !Self-energy on the real axis correction----------------------------------
-      addSigma_=.false.
-      if(present(Sigma).and.present(Sigma_axis))then
-         Nreal_sigma = size(Sigma_axis)
-         call assert_shape(Sigma,[Norb,Norb,Nreal_sigma,Lttc%Nkpt,Nspin],"interpolateHk2Path","Sigma")
-         corrname_="Sigma"
-         if(present(corrname))corrname_=reg(corrname_)//"_"//reg(corrname)
-         write(*,"(A)")"     Correction: "//reg(corrname_)
-         store_=.false.
-         addSigma_=.true.
-         if(.not.Lttc%pathStored)then
-            write(*,"(A)")"     Warning path not stored, ignoring subroutine call to Sigma interpolation."
-            addSigma_=.false.
-         endif
-      endif
-      !
-      ! if the user provides the store variable then it overrides all the previous checks
-      if(present(store))store_=store
-      if(store_) write(*,"(A)")"     Storing Lttc interpolated attributes."
       !
       !
       !Create path along high-symmetry points-----------------------------------
-      if(allocated(Lttc%kptpath))deallocate(Lttc%kptpath)
-      if(allocated(Lttc%Kpathaxis))deallocate(Lttc%Kpathaxis)
-      call calc_Kpath(Lttc%kptpath,reg(structure),Nkpt_path,Lttc%Kpathaxis,Lttc%KpathaxisPoints,hetero=hetero_)
+      call calc_Kpath(kptpath,reg(structure),Nkpt_path,Kpathaxis,KpathaxisPoints,hetero=Hetero%status)
+      Nkpt_path_tot = size(kptpath,dim=2)
       !
-      !path in the bulk
-      Lttc%Nkpt_path = size(Lttc%kptpath,dim=2)
-      !
-      !path for the Heterostructure: first Nkpt_path*SymmetryPoints then other Nkpt_path along Gamma-A
-      if(hetero_)then
-         if((Hetero%Norb*Lttc%Nsite).ne.Lttc%Norb) stop "interpolateHk2Path: Orbital dimension of Hk is not a multiple of the number of sites."
-         Lttc%Nkpt_path = Lttc%Nkpt_path - Nkpt_path
+      !store new meshes
+      if(store_)then
+         if(allocated(Lttc%kptpath))deallocate(Lttc%kptpath)
+         if(allocated(Lttc%Kpathaxis))deallocate(Lttc%Kpathaxis)
+         if(allocated(Lttc%KpathaxisPoints))deallocate(Lttc%KpathaxisPoints)
+         Lttc%kptpath = kptpath
+         Lttc%Kpathaxis = Kpathaxis
+         Lttc%KpathaxisPoints = KpathaxisPoints
+         Lttc%Nkpt_path = Nkpt_path_tot
       endif
       !
       !
       !Interpolate input data along path----------------------------------------
-      allocate(data_intp(Norb,Norb,Lttc%Nkpt_path));data_intp=czero
-      call cpu_time(start)
-      call wannierinterpolation(Lttc%Nkpt3,Lttc%kpt,Lttc%kptpath(:,1:Lttc%Nkpt_path),data_orig,data_intp)
-      call cpu_time(finish)
-      write(*,"(A,F)") "     "//reg(label)//"(fullBZ) --> "//reg(label)//"(Kpath) cpu timing:", finish-start
-      if(Hamiltonian.and.store_)then
-         if(allocated(Lttc%Hk_path))deallocate(Lttc%Hk_path)
-         Lttc%Hk_path = data_intp
-      endif
-      if(present(data_out))then
-         if(allocated(data_out))deallocate(data_out)
-         data_out = data_intp
+      if(freq_dep)then
+         !
+         allocate(dataw_intp(Ndim,Ndim,Nreal,Nkpt_path_tot));dataw_intp=czero
+         call cpu_time(start)
+         call wannierinterpolation(Lttc%Nkpt3,Lttc%kpt,kptpath(:,1:Nkpt_path_tot),dataw_orig,dataw_intp)
+         call cpu_time(finish)
+         write(*,"(A,F)") "     "//reg(label)//"(w,fullBZ) --> "//reg(label)//"(w,Kpath) cpu timing:", finish-start
+         !
+         if(present(dataw_out))then
+            call assert_shape(dataw_out,[Ndim,Ndim,Nreal,Nkpt_path_tot],"interpolate2Path","dataw_out")
+            dataw_out = dataw_intp
+         endif
+         !
+      else
+         !
+         allocate(data_intp(Ndim,Ndim,Nkpt_path_tot));data_intp=czero
+         call cpu_time(start)
+         call wannierinterpolation(Lttc%Nkpt3,Lttc%kpt,kptpath(:,1:Nkpt_path_tot),data_orig,data_intp)
+         call cpu_time(finish)
+         write(*,"(A,F)") "     "//reg(label)//"(fullBZ) --> "//reg(label)//"(Kpath) cpu timing:", finish-start
+         !
+         if(present(data_out))then
+            call assert_shape(data_out,[Ndim,Ndim,Nkpt_path_tot],"interpolate2Path","data_out")
+            data_out = data_intp
+         endif
+         !
       endif
       !
       !
       !Compute eigenvalues along path-------------------------------------------
-      allocate(dataEk(Norb,Lttc%Nkpt_path));dataEk=0d0
-      allocate(dataZk(Norb,Norb,Lttc%Nkpt_path));dataZk=czero
-      dataZk = data_intp
-      do ik=1,Lttc%Nkpt_path
-         call eigh(dataZk(:,:,ik),dataEk(:,ik))
-      enddo
-      if(Hamiltonian.and.store_)then
-         if(allocated(Lttc%Zk_path))deallocate(Lttc%Zk_path)
-         if(allocated(Lttc%Ek_path))deallocate(Lttc%Ek_path)
-         Lttc%Zk_path = dataZk
-         Lttc%Ek_path = dataEk
-         Lttc%pathStored = .true.
-      endif
-      deallocate(dataZk)
-      !
-      !Print eigenvalues along path
-      if(printout)then
-         path = reg(pathOUTPUT)//reg(filename_)//"_"//reg(corrname_)//".DAT"
-         unit = free_unit()
-         open(unit,file=reg(path),form="formatted",status="unknown",position="rewind",action="write")
-         do ik=1,Lttc%Nkpt_path
-            write(unit,"(1I5,10000E20.12)") ik,Lttc%Kpathaxis(ik)/Lttc%Kpathaxis(Lttc%Nkpt_path),(dataEk(iorb,ik),iorb=1,Norb)
-         enddo
-         close(unit)
-      endif
-      write(*,"(A,I)") "     Total number of K-points along path:",Lttc%Nkpt_path
-      wrealMax = 2.0*maxval(abs(dataEk))
-      deallocate(dataEk)
-      !
-      !
-      !Non-interacting spectral function along path-----------------------------
-      if(hamiltonian)then
+      if(compute_eigv.and.(.not.freq_dep))then
          !
-         !Default parameters on the real frequency axis
-         !Nreal = 2000
-         !eta = wrealMax/200
+         !diagonalize
+         allocate(dataEk(Ndim,Nkpt_path_tot));dataEk=0d0
+         allocate(dataZk(Ndim,Ndim,Nkpt_path_tot));dataZk=czero
+         dataZk = data_intp
+         do ik=1,Nkpt_path_tot
+            call eigh(dataZk(:,:,ik),dataEk(:,ik))
+         enddo
+         !
+         !store interpolated results
+         if(Hamiltonian.and.store_)then
+            if(allocated(Lttc%Hk_path))deallocate(Lttc%Hk_path)
+            if(allocated(Lttc%Zk_path))deallocate(Lttc%Zk_path)
+            if(allocated(Lttc%Ek_path))deallocate(Lttc%Ek_path)
+            Lttc%Hk_path = data_intp
+            Lttc%Zk_path = dataZk
+            Lttc%Ek_path = dataEk
+            Lttc%pathStored = .true.
+         endif
+         !
+         !print eigenvalues
+         if(printout)then
+            path = reg(pathOUTPUT)//"Eig_"//reg(label)//".DAT"
+            unit = free_unit()
+            open(unit,file=reg(path),form="formatted",status="unknown",position="rewind",action="write")
+            do ik=1,Nkpt_path_tot
+               write(unit,"(1I5,10000E20.12)") ik,Kpathaxis(ik)/Kpathaxis(Nkpt_path_tot),(dataEk(io,ik),io=1,Ndim)
+            enddo
+            close(unit)
+         endif
+         deallocate(dataZk,dataEk)
+         !
+      endif
+      !
+      !
+      !Compute non-interacting spectral function along path---------------------
+      if((.not.skipAkw_).and.printout)then
+         !
+         !compute diagonal
          allocate(wreal(Nreal));wreal=0d0
          wreal = linspace(-wrealMax,+wrealMax,Nreal)
-         !
-         allocate(zeta(Norb,Norb,Nreal));zeta=czero
-         do iorb=1,Norb
+         allocate(zeta(Ndim,Ndim,Nreal));zeta=czero
+         do io=1,Ndim
             do iw=1,Nreal
-               zeta(iorb,iorb,iw) = dcmplx(wreal(iw),eta)
+               zeta(io,io,iw) = dcmplx(wreal(iw),eta)
             enddo
          enddo
          !
-         !Interpolate longitudinal tz along the path and compute potentials
+         !The potentials are computed only if the Hamiltonian on the path is already stored
          Ln=0;Rn=0
-         if(hetero_)then
+         if(Hetero%status.and.Lttc%pathStored)then
             !
+            if(Ndim.ne.Lttc%Norb)stop "interpolate2Path: spectral function calculation with heterostructures is allowed only for fermionic objects."
+            !
+            !Interpolate longitudinal tz along the path
             if(allocated(Hetero%tkz_path))deallocate(Hetero%tkz_path)
             allocate(Hetero%tkz_path(Hetero%Norb,Hetero%Norb,Lttc%Nkpt_path,Hetero%tzIndex(1):Hetero%tzIndex(2)));Hetero%tkz_path=czero
             do ilayer = Hetero%tzIndex(1),Hetero%tzIndex(2)
@@ -3591,28 +3585,32 @@ contains
             if(Hetero%Explicit(1).ne.1)then
                allocate(Potential_L(Hetero%Norb,Hetero%Norb,Nreal,Lttc%Nkpt_path,Nspin));Potential_L=czero
                call build_Potential(Potential_L,Hetero,Ln,NbulkL,zeta,Lttc%Hk_path,Hetero%tkz_path,"left",.true.)
-               write(*,"(2(A,2I4))") "     Left potential (path) orbital lattice indexes: ",Ln(1),Ln(2)," thickness: ",NbulkL
+               write(*,"(2(A,2I4))") "     Left potential (Kpath) orbital lattice indexes: ",Ln(1),Ln(2)," thickness: ",NbulkL
             endif
             !
             !Non-interacting potential to the right/lower side of the Heterostructure
             if(Hetero%Explicit(2).ne.Hetero%Nslab)then
                allocate(Potential_R(Hetero%Norb,Hetero%Norb,Nreal,Lttc%Nkpt_path,Nspin));Potential_R=czero
                call build_Potential(Potential_R,Hetero,Rn,NbulkR,zeta,Lttc%Hk_path,Hetero%tkz_path,"right",.true.)
-               write(*,"(2(A,2I4))") "     Right potential (path) orbital lattice indexes: ",Rn(1),Rn(2)," thickness: ",NbulkR
+               write(*,"(2(A,2I4))") "     Right potential (Kpath) orbital lattice indexes: ",Rn(1),Rn(2)," thickness: ",NbulkR
             endif
             !
          endif
          !
          !Compute non-interacting spectral function along path
-         allocate(Akw(Norb,Norb,Nreal,Lttc%Nkpt_path));Akw=0d0
-         allocate(invGf(Norb,Norb));invGf=czero
+         allocate(Akw(Ndim,Ndim,Nreal,Nkpt_path_tot));Akw=0d0
+         allocate(invGf(Ndim,Ndim));invGf=czero
          !$OMP PARALLEL DEFAULT(SHARED),&
          !$OMP PRIVATE(ik,iw,invGf)
          !$OMP DO
-         do ik=1,Lttc%Nkpt_path
+         do ik=1,Nkpt_path_tot
             do iw=1,Nreal
                !
-               invGf = zeta(:,:,iw) - data_intp(:,:,ik)
+               if(freq_dep)then
+                  invGf = zeta(:,:,iw) - dataw_intp(:,:,iw,ik)
+               else
+                  invGf = zeta(:,:,iw) - data_intp(:,:,ik)
+               endif
                !
                if(allocated(Potential_L)) invGf(Ln(1):Ln(2),Ln(1):Ln(2)) = invGf(Ln(1):Ln(2),Ln(1):Ln(2)) - Potential_L(:,:,iw,ik,1)
                if(allocated(Potential_R)) invGf(Rn(1):Rn(2),Rn(1):Rn(2)) = invGf(Rn(1):Rn(2),Rn(1):Rn(2)) - Potential_R(:,:,iw,ik,1)
@@ -3628,34 +3626,31 @@ contains
          if(allocated(Potential_R))deallocate(Potential_R)
          deallocate(zeta,invGf)
          !
-         !Print non-interacting spectral function along path
-         if(printout)then
-            !
-            !Normalization
-            allocate(Akw_print(Norb,Nreal,Lttc%Nkpt_path));Akw_print=0d0
-            do ik=1,Lttc%Nkpt_path
-               do iorb=1,Norb
-                  Akw_print(iorb,:,ik) = Akw(iorb,iorb,:,ik)/(sum(Akw(iorb,iorb,:,ik))*abs(wreal(2)-wreal(1)))
-               enddo
+         !Normalization
+         allocate(Akw_print(Ndim,Nreal,Nkpt_path_tot));Akw_print=0d0
+         do ik=1,Nkpt_path_tot
+            do io=1,Ndim
+               Akw_print(io,:,ik) = Akw(io,io,:,ik)/(sum(Akw(io,io,:,ik))*abs(wreal(2)-wreal(1)))
             enddo
-            !
-            !print
-            path = reg(pathOUTPUT)//"Akw_"//reg(label)//"_"//reg(corrname_)//".DAT"
-            unit = free_unit()
-            open(unit,file=reg(path),form="formatted",status="unknown",position="rewind",action="write")
-            do ik=1,Lttc%Nkpt_path
-               do iw=1,Nreal
-                   write(unit,"(1I5,200E20.12)") ik,Lttc%Kpathaxis(ik)/Lttc%Kpathaxis(Lttc%Nkpt_path),wreal(iw),(Akw_print(iorb,iw,ik),iorb=1,Norb)
-               enddo
-               write(unit,*)
+         enddo
+         !
+         !print spectral function
+         path = reg(pathOUTPUT)//"Akw_"//reg(label)//".DAT"
+         unit = free_unit()
+         open(unit,file=reg(path),form="formatted",status="unknown",position="rewind",action="write")
+         do ik=1,Nkpt_path_tot
+            do iw=1,Nreal
+                write(unit,"(1I5,200E20.12)") ik,Kpathaxis(ik)/Kpathaxis(Nkpt_path_tot),wreal(iw),(Akw_print(io,iw,ik),io=1,Ndim)
             enddo
-            close(unit)
-            deallocate(Akw_print)
-            !
-         endif
+            write(unit,*)
+         enddo
+         close(unit)
+         deallocate(Akw_print)
          !
          !Compute non-interacting spectral function along the Gamma-A direction
-         if(hetero_)then
+         if(Hetero%status.and.Lttc%pathStored)then
+            !
+            if(Ndim.ne.Lttc%Norb)stop "interpolate2Path: spectral function calculation with heterostructures is allowed only for fermionic objects."
             !
             allocate(Akw_kz(Hetero%Norb,Hetero%Norb,Nreal,Lttc%Nkpt_path,0:Nkpt_path));Akw_kz=czero
             do iw=1,Nreal
@@ -3666,294 +3661,71 @@ contains
             allocate(Akw_kz_print(Hetero%Norb,Nreal,Lttc%Nkpt_path,0:Nkpt_path));Akw_kz_print=0d0
             do ik=1,Lttc%Nkpt_path
                do ikz=0,Nkpt_path
-                  do iorb=1,Hetero%Norb
-                     Akw_kz_print(iorb,:,ik,ikz) = Akw_kz(iorb,iorb,:,ik,ikz)/(sum(Akw_kz(iorb,iorb,:,ik,ikz))*abs(wreal(2)-wreal(1)))
+                  do io=1,Hetero%Norb
+                     Akw_kz_print(io,:,ik,ikz) = Akw_kz(io,io,:,ik,ikz)/(sum(Akw_kz(io,io,:,ik,ikz))*abs(wreal(2)-wreal(1)))
                   enddo
                enddo
             enddo
             deallocate(Akw_kz)
             !
             !Print non-interacting spectral function along path with the Gamma-A direction
-            if(printout)then
-               path = reg(pathOUTPUT)//"Akw_"//reg(label)//"_Hetero_"//reg(corrname_)//".DAT"
-               unit = free_unit()
-               open(unit,file=reg(path),form="formatted",status="unknown",position="rewind",action="write")
-               do ik=1,Lttc%Nkpt_path
-                  do iw=1,Nreal
-                      write(unit,"(1I5,200E20.12)") ik,Lttc%Kpathaxis(ik),wreal(iw),(Akw_kz_print(iorb,iw,ik,0),iorb=1,Hetero%Norb)
-                  enddo
-                  write(unit,*)
+            path = reg(pathOUTPUT)//"Akw_"//reg(label)//"_Hetero.DAT"
+            unit = free_unit()
+            open(unit,file=reg(path),form="formatted",status="unknown",position="rewind",action="write")
+            do ik=1,Lttc%Nkpt_path
+               do iw=1,Nreal
+                   write(unit,"(1I5,200E20.12)") ik,Lttc%Kpathaxis(ik),wreal(iw),(Akw_kz_print(io,iw,ik,0),io=1,Hetero%Norb)
                enddo
-               do ikz=1,Nkpt_path
-                  do iw=1,Nreal
-                      write(unit,"(1I5,200E20.12)") ik+ikz,Lttc%Kpathaxis(Lttc%Nkpt_path+ikz),wreal(iw),(Akw_kz_print(iorb,iw,Lttc%iq_gamma,ikz),iorb=1,Hetero%Norb)
-                  enddo
-                  write(unit,*)
+               write(unit,*)
+            enddo
+            do ikz=1,Nkpt_path
+               do iw=1,Nreal
+                   write(unit,"(1I5,200E20.12)") ik+ikz,Lttc%Kpathaxis(Lttc%Nkpt_path+ikz),wreal(iw),(Akw_kz_print(io,iw,Lttc%iq_gamma,ikz),io=1,Hetero%Norb)
                enddo
-               close(unit)
-            endif
+               write(unit,*)
+            enddo
+            close(unit)
             deallocate(Akw_kz_print)
             !
          endif
          deallocate(wreal,Akw)
          !
-         !Interpolate self-energy along the path - for now only spinless Sigma
-         if(addSigma_)then
-            !
-            allocate(Sigma_intp(Norb,Norb,Nreal_sigma,Lttc%Nkpt_path));Sigma_intp=czero
-            call cpu_time(start)
-            call wannierinterpolation(Lttc%Nkpt3,Lttc%kpt,Lttc%kptpath(:,1:Lttc%Nkpt_path),Sigma(:,:,:,:,1),Sigma_intp)
-            call cpu_time(finish)
-            write(*,"(A,F)") "     Sigma(w,fullBZ) --> Sigma(w,Kpath) cpu timing:", finish-start
-            write(*,"(A,1I6)") "     Nreal_sigma: ", Nreal_sigma
-            !
-            allocate(Akw(Norb,Norb,Nreal_sigma,Lttc%Nkpt_path));Akw=0d0
-            allocate(invGf(Norb,Norb));invGf=czero
-            !$OMP PARALLEL DEFAULT(SHARED),&
-            !$OMP PRIVATE(ik,iw,invGf)
-            !$OMP DO
-            do ik=1,Lttc%Nkpt_path
-               do iw=1,Nreal_sigma
-                  !
-                  invGf = zeye(Norb)*dcmplx(Sigma_axis(iw)+Lttc%mu,eta) - Lttc%Hk_path(:,:,ik) - Sigma_intp(:,:,iw,ik)
-                  !
-                  call inv(invGf)
-                  Akw(:,:,iw,ik) = dimag(invGf)
-                  !
-               enddo
-            enddo
-            !$OMP END DO
-            !$OMP END PARALLEL
-            deallocate(Sigma_intp,invGf)
-            !
-            !Normalization
-            allocate(Akw_print(Norb,Nreal_sigma,Lttc%Nkpt_path));Akw_print=0d0
-            do ik=1,Lttc%Nkpt_path
-               do iorb=1,Norb
-                  Akw_print(iorb,:,ik) = Akw(iorb,iorb,:,ik)/(sum(Akw(iorb,iorb,:,ik))*abs(Sigma_axis(2)-Sigma_axis(1)))
-               enddo
-            enddo
-            deallocate(Akw)
-            !
-            !print
-            path = reg(pathOUTPUT)//"Akw_"//reg(label)//"_"//reg(corrname_)//".DAT"
-            unit = free_unit()
-            open(unit,file=reg(path),form="formatted",status="unknown",position="rewind",action="write")
-            do ik=1,Lttc%Nkpt_path
-               do iw=1,Nreal_sigma
-                   write(unit,"(1I5,200E20.12)") ik,Lttc%Kpathaxis(ik)/Lttc%Kpathaxis(Lttc%Nkpt_path),Sigma_axis(iw),(Akw_print(iorb,iw,ik),iorb=1,Norb)
-               enddo
-               write(unit,*)
-            enddo
-            close(unit)
-            deallocate(Akw_print)
-            !
-         endif
-         !
       endif
-      deallocate(data_intp)
+      if(allocated(data_intp))deallocate(data_intp)
+      if(allocated(dataw_intp))deallocate(dataw_intp)
       !
       !
-      !Non-interacting Fermi surface--------------------------------------------
-      if(doplane_.and.hamiltonian)then
+      !Print position of High-symmetry points-----------------------------------
+      if(printout.and.store_)then
          !
-         !
-         !Create K-points inside the kx,ky plane
-         Nkpt_Kside_ = 201
-         if(present(Nkpt_Kside)) Nkpt_Kside_ = Nkpt_Kside
-         !
-         if(allocated(Lttc%kptPlane))deallocate(Lttc%kptPlane)
-         call calc_Kplane(Lttc%kptPlane,Nkpt_Kside_)
-         Lttc%Nkpt_Plane = size(Lttc%kptPlane,dim=2)
-         !
-         !
-         !Interpolate hamiltonian inside the kx,ky plane
-         allocate(data_intp(Norb,Norb,Lttc%Nkpt_Plane));data_intp=czero
-         call cpu_time(start)
-         call wannierinterpolation(Lttc%Nkpt3,Lttc%kpt,Lttc%kptPlane,data_orig,data_intp)
-         call cpu_time(finish)
-         write(*,"(A,F)") "     "//reg(label)//"(fullBZ) --> "//reg(label)//"(kx,ky) cpu timing:", finish-start
-         if(Hamiltonian.and.store_)then
-            if(allocated(Lttc%Hk_Plane))deallocate(Lttc%Hk_Plane)
-            Lttc%Hk_Plane = data_intp
-            Lttc%planeStored = .true.
-         endif
-         !
-         !Create zeta array for compatibility
-         FermiLevel = 0d0
-         if(corrname_.eq."nonInt")then
-            FermiLevel = FermiCut
-            corrname_ = reg(corrname_)//"_E"//str(FermiLevel,3)
-            write(*,"(A)")"     Updated Fk label: "//reg(corrname_)
-         endif
-         !eta = wrealMax/200 !same as before for Akw
-         allocate(zeta(Norb,Norb,1));zeta=czero
-         do iorb=1,Norb
-            zeta(iorb,iorb,1) = dcmplx(FermiLevel,eta)
-         enddo
-         !
-         !Interpolate longitudinal tz inside the kx,ky plane and compute potentials
-         Ln=0;Rn=0
-         if(hetero_)then
-            !
-            if(allocated(Hetero%tkz_Plane))deallocate(Hetero%tkz_Plane)
-            allocate(Hetero%tkz_Plane(Hetero%Norb,Hetero%Norb,Lttc%Nkpt_Plane,Hetero%tzIndex(1):Hetero%tzIndex(2)));Hetero%tkz_Plane=czero
-            do ilayer = Hetero%tzIndex(1),Hetero%tzIndex(2)
-               call wannierinterpolation(Lttc%Nkpt3,Lttc%kpt,Lttc%kptPlane,Hetero%tkz(:,:,:,ilayer),Hetero%tkz_Plane(:,:,:,ilayer))
-            enddo
-            !
-            !Non-interacting potential to the left/upper side of the Heterostructure
-            if(Hetero%Explicit(1).ne.1)then
-               allocate(Potential_L(Hetero%Norb,Hetero%Norb,1,Lttc%Nkpt_Plane,Nspin));Potential_L=czero
-               call build_Potential(Potential_L,Hetero,Ln,NbulkL,zeta,Lttc%Hk_Plane,Hetero%tkz_Plane,"left",.true.)
-               write(*,"(2(A,2I4))") "     Left potential (plane) orbital lattice indexes: ",Ln(1),Ln(2)," thickness: ",NbulkL
-            endif
-            !
-            !Non-interacting potential to the right/lower side of the Heterostructure
-            if(Hetero%Explicit(2).ne.Hetero%Nslab)then
-               allocate(Potential_R(Hetero%Norb,Hetero%Norb,1,Lttc%Nkpt_Plane,Nspin));Potential_R=czero
-               call build_Potential(Potential_R,Hetero,Rn,NbulkR,zeta,Lttc%Hk_Plane,Hetero%tkz_Plane,"right",.true.)
-               write(*,"(2(A,2I4))") "     Right potential (plane) orbital lattice indexes: ",Rn(1),Rn(2)," thickness: ",NbulkR
-            endif
-            !
-         endif
-         !
-         !Compute non-interacting Fermi surface
-         allocate(Fk(Norb,Norb,Lttc%Nkpt_Plane));Fk=0d0
-         allocate(invGf(Norb,Norb));invGf=czero
-         !$OMP PARALLEL DEFAULT(SHARED),&
-         !$OMP PRIVATE(ik,invGf)
-         !$OMP DO
-         do ik=1,Lttc%Nkpt_Plane
-            !
-            invGf = zeta(:,:,1) - data_intp(:,:,ik)
-            !
-            if(allocated(Potential_L)) invGf(Ln(1):Ln(2),Ln(1):Ln(2)) = invGf(Ln(1):Ln(2),Ln(1):Ln(2)) - Potential_L(:,:,1,ik,1)
-            if(allocated(Potential_R)) invGf(Rn(1):Rn(2),Rn(1):Rn(2)) = invGf(Rn(1):Rn(2),Rn(1):Rn(2)) - Potential_R(:,:,1,ik,1)
-            !
-            call inv(invGf)
-            Fk(:,:,ik) = -dimag(invGf)
-            !
-         enddo
-         !$OMP END DO
-         !$OMP END PARALLEL
-         if(allocated(Potential_L))deallocate(Potential_L)
-         if(allocated(Potential_R))deallocate(Potential_R)
-         deallocate(zeta,invGf,data_intp)
-         !
-         !Print non-interacting Fermi surface
-         if(printout)then
-            path = reg(pathOUTPUT)//"Fk_"//reg(label)//"_"//reg(corrname_)//".DAT"
-            unit = free_unit()
-            open(unit,file=reg(path),form="formatted",status="unknown",position="rewind",action="write")
-            do ik=1,Lttc%Nkpt_Plane
-               ikx = int(ik/(Nkpt_Kside_+0.001))+1 ; kx = (ikx-1)/dble(Nkpt_Kside_-1) - 0.5d0
-               iky = ik - (ikx-1)*Nkpt_Kside_      ; ky = (iky-1)/dble(Nkpt_Kside_-1) - 0.5d0
-               Kvec = kx*Blat(:,1) + ky*Blat(:,2)
-               Bvec = [kx*Blat(1,1)+Blat(1,2),ky*Blat(2,1)+Blat(2,2),0d0]
-               write(unit,"(3I5,200E20.12)") ik,ikx,iky,Bvec(1),Bvec(2),Kvec(1),Kvec(2),(Fk(iorb,iorb,ik),iorb=1,Norb)
-               if(iky.eq.Nkpt_Kside_)write(unit,*)
-            enddo
-            close(unit)
-         endif
-         !
-         !Compute non-interacting Fermi surface along the Gamma-A direction
-         if(hetero_)then
-            !
-            allocate(Fk_kz(Hetero%Norb,Hetero%Norb,Lttc%Nkpt_Plane,0:Nkpt_path));Fk_kz=czero
-            call fill_Gamma_A(Fk,Fk_kz)
-            !
-            !find the kz where to compute the Fermi-surface and print
-            if(printout)then
-               !
-               !Gamma
-               kz_cut = 0d0
-               ikz = minloc(abs(Lttc%kptpath(3,1+Lttc%Nkpt_path:Lttc%Nkpt_path+Nkpt_path)-kz_cut),dim=1)
-               !
-               path = reg(pathOUTPUT)//"Fk_"//reg(label)//"_Hetero_"//reg(corrname_)//"_kz"//str(kz_cut,3)//".DAT"
-               unit = free_unit()
-               open(unit,file=reg(path),form="formatted",status="unknown",position="rewind",action="write")
-               do ik=1,Lttc%Nkpt_Plane
-                  ikx = int(ik/(Nkpt_Kside_+0.001))+1 ; kx = (ikx-1)/dble(Nkpt_Kside_-1) - 0.5d0
-                  iky = ik - (ikx-1)*Nkpt_Kside_      ; ky = (iky-1)/dble(Nkpt_Kside_-1) - 0.5d0
-                  Kvec = kx*Blat(:,1) + ky*Blat(:,2)
-                  Bvec = [kx*Blat(1,1)+Blat(1,2),ky*Blat(2,1)+Blat(2,2),0d0]
-                  write(unit,"(3I5,200E20.12)") ik,ikx,iky,Bvec(1),Bvec(2),Kvec(1),Kvec(2),(dreal(Fk_kz(iorb,iorb,ik,ikz)),iorb=1,Hetero%Norb)
-                  if(iky.eq.Nkpt_Kside_)write(unit,*)
-               enddo
-               close(unit)
-               !
-               !A
-               kz_cut = 0.5d0
-               ikz = minloc(abs(Lttc%kptpath(3,1+Lttc%Nkpt_path:Lttc%Nkpt_path+Nkpt_path)-kz_cut),dim=1)
-               !
-               path = reg(pathOUTPUT)//"Fk_"//reg(label)//"_Hetero_"//reg(corrname_)//"_kz"//str(kz_cut,3)//".DAT"
-               unit = free_unit()
-               open(unit,file=reg(path),form="formatted",status="unknown",position="rewind",action="write")
-               do ik=1,Lttc%Nkpt_Plane
-                  ikx = int(ik/(Nkpt_Kside_+0.001))+1 ; kx = (ikx-1)/dble(Nkpt_Kside_-1) - 0.5d0
-                  iky = ik - (ikx-1)*Nkpt_Kside_      ; ky = (iky-1)/dble(Nkpt_Kside_-1) - 0.5d0
-                  Kvec = kx*Blat(:,1) + ky*Blat(:,2)
-                  Bvec = [kx*Blat(1,1)+Blat(1,2),ky*Blat(2,1)+Blat(2,2),0d0]
-                  write(unit,"(3I5,200E20.12)") ik,ikx,iky,Bvec(1),Bvec(2),Kvec(1),Kvec(2),(dreal(Fk_kz(iorb,iorb,ik,ikz)),iorb=1,Hetero%Norb)
-                  if(iky.eq.Nkpt_Kside_)write(unit,*)
-               enddo
-               close(unit)
-               !
-               !half-way between Gamma-A
-               kz_cut = 0.25d0
-               ikz = minloc(abs(Lttc%kptpath(3,1+Lttc%Nkpt_path:Lttc%Nkpt_path+Nkpt_path)-kz_cut),dim=1)
-               !
-               path = reg(pathOUTPUT)//"Fk_"//reg(label)//"_Hetero_"//reg(corrname_)//"_kz"//str(kz_cut,3)//".DAT"
-               unit = free_unit()
-               open(unit,file=reg(path),form="formatted",status="unknown",position="rewind",action="write")
-               do ik=1,Lttc%Nkpt_Plane
-                  ikx = int(ik/(Nkpt_Kside_+0.001))+1 ; kx = (ikx-1)/dble(Nkpt_Kside_-1) - 0.5d0
-                  iky = ik - (ikx-1)*Nkpt_Kside_      ; ky = (iky-1)/dble(Nkpt_Kside_-1) - 0.5d0
-                  Kvec = kx*Blat(:,1) + ky*Blat(:,2)
-                  Bvec = [kx*Blat(1,1)+Blat(1,2),ky*Blat(2,1)+Blat(2,2),0d0]
-                  write(unit,"(3I5,200E20.12)") ik,ikx,iky,Bvec(1),Bvec(2),Kvec(1),Kvec(2),(dreal(Fk_kz(iorb,iorb,ik,ikz)),iorb=1,Hetero%Norb)
-                  if(iky.eq.Nkpt_Kside_)write(unit,*)
-               enddo
-               close(unit)
-               !
-            endif
-            deallocate(Fk_kz)
-            !
-         endif
-         deallocate(Fk)
-         !
-      endif
-      deallocate(data_orig)
-      !
-      !Print position of High-symmetry points in the same folder where the function is
-      if(printout)then
          path = reg(pathOUTPUT)//"Kpoints_labels.DAT"
          unit = free_unit()
          open(unit,file=reg(path),form="formatted",status="unknown",position="rewind",action="write")
-         do ik=1,size(Lttc%KpathaxisPoints,dim=1)
-            write(unit,"(1I5,200E20.12)") ik,Lttc%KpathaxisPoints(ik)
+         do ik=1,size(KpathaxisPoints,dim=1)
+            write(unit,"(1I5,200E20.12)") ik,KpathaxisPoints(ik)
          enddo
          close(unit)
          !
          path = reg(pathOUTPUT)//"Kpoints_path.DAT"
          unit = free_unit()
          open(unit,file=reg(path),form="formatted",status="unknown",position="rewind",action="write")
-         do ik=1,size(Lttc%kptpath,dim=2)
-            kp = Lttc%Kpathaxis(ik)
-            Bvec = Lttc%kptpath(1,ik)*Blat(:,1) + Lttc%kptpath(2,ik)*Blat(:,2) + Lttc%kptpath(3,ik)*Blat(:,3)
-            if(any(abs(Lttc%KpathaxisPoints-kp).lt.eps))then
-               ndx = minloc(abs(Lttc%KpathaxisPoints-kp),dim=1)
-               write(unit,"(1I5,200E20.12)") ik,kp,Lttc%kptpath(:,ik),Bvec,Lttc%KpathaxisPoints(ndx)
+         do ik=1,Nkpt_path_tot
+            kp = Kpathaxis(ik)
+            Bvec = kptpath(1,ik)*Blat(:,1) + kptpath(2,ik)*Blat(:,2) + kptpath(3,ik)*Blat(:,3)
+            if(any(abs(KpathaxisPoints-kp).lt.eps))then
+               ndx = minloc(abs(KpathaxisPoints-kp),dim=1)
+               write(unit,"(1I5,200E20.12)") ik,kp,kptpath(:,ik),Bvec,KpathaxisPoints(ndx)
             else
-               write(unit,"(1I5,200E20.12)") ik,kp,Lttc%kptpath(:,ik),Bvec
+               write(unit,"(1I5,200E20.12)") ik,kp,kptpath(:,ik),Bvec
             endif
          enddo
          close(unit)
       endif
+      deallocate(kptpath,Kpathaxis,KpathaxisPoints)
       !
-      write(*,"(A,I)") "     Total number of High symmetry points:",size(Lttc%KpathaxisPoints,dim=1)
-      if(doplane_)write(*,"(A,I)") "     Total number of K-points along {kx,ky} plane:",Lttc%Nkpt_Plane
+      write(*,"(A,I)") "     Total number of high symmetry points:",size(KpathaxisPoints,dim=1)
+      write(*,"(A,I)") "     Number of K-points between high symmetry points:",Nkpt_path
+      write(*,"(A,I)") "     Total number of K-points along path:",Nkpt_path_tot
       !
       !
       !
@@ -4080,7 +3852,421 @@ contains
       !
       !
       !
-   end subroutine interpolateHk2Path
+   end subroutine interpolate2Path
+   !
+   subroutine interpolate2Plane(Lttc,Nkpt_plane,label,pathOUTPUT,store,skipFk  &
+                                                     ,data_in,dataw_in         &
+                                                     ,data_out,dataw_out)
+      !
+      use parameters !WHY IS THIS WORKING?
+      use utils_misc
+      use linalg, only : eigh, inv, zeye
+      use input_vars, only : eta, Nreal, wrealMax, FermiCut
+      use input_vars, only : Hetero
+      use input_vars, only : Nkpt_path ! this is just a mesh along the Gamma-A direction
+      implicit none
+      !
+      type(Lattice),intent(inout)           :: Lttc
+      integer,intent(in)                    :: Nkpt_plane
+      character(len=*),intent(in)           :: label
+      logical,intent(in),optional           :: store
+      logical,intent(in),optional           :: skipFk
+      character(len=*),intent(in),optional  :: pathOUTPUT
+      complex(8),intent(in),optional        :: data_in(:,:,:),dataw_in(:,:,:,:)
+      complex(8),intent(out),optional       :: data_out(:,:,:),dataw_out(:,:,:,:)
+      !
+      integer                               :: io,Ndim,unit,ilayer
+      integer                               :: iw,ik,ikz,Nkpt,Nkpt_plane_tot,ikx,iky
+      integer                               :: wndx,ikz_cut,nkz_cut=3
+      real(8)                               :: Bvec(3),kx,ky,Kvec(3),kz_cut,FermiCut_
+      real(8),allocatable                   :: kptPlane(:,:)
+      complex(8),allocatable                :: data_orig(:,:,:),dataw_orig(:,:,:,:)
+      complex(8),allocatable                :: data_intp(:,:,:),dataw_intp(:,:,:,:)
+      complex(8),allocatable                :: invGf(:,:)
+      logical                               :: printout,store_,skipFk_
+      logical                               :: freq_dep,Hamiltonian
+      real                                  :: start,finish
+      character(len=256)                    :: path
+      !Interp
+      complex(8),allocatable                :: dataZk(:,:,:)
+      real(8),allocatable                   :: dataEk(:,:)
+      !Plots
+      complex(8),allocatable                :: zeta(:,:,:)
+      real(8),allocatable                   :: wreal(:),Fk(:,:,:)
+      !Hetero
+      integer                               :: NbulkL,NbulkR
+      integer                               :: Ln(2),Rn(2)
+      complex(8),allocatable                :: Fk_kz(:,:,:,:)
+      complex(8),allocatable                :: Potential_L(:,:,:,:,:),Potential_R(:,:,:,:,:)
+      !
+      !
+      write(*,"(A)") new_line("A")//new_line("A")//"---- interpolate2Plane"
+      !
+      if(.not.Lttc%status) stop "interpolate2Plane: Lttc not properly initialized."
+      if(present(data_in).and.present(dataw_in)) stop "interpolate2Plane: both data_in and dataw_in are present."
+      !
+      printout = present(pathOUTPUT)
+      !
+      store_ = .false.
+      if(present(store))store_=store
+      !
+      skipFk_ = .false.
+      if(present(skipFk))skipFk_=skipFk
+      !
+      Nkpt = Lttc%Nkpt
+      !
+      if(present(data_in))then
+         !
+         freq_dep = .false.
+         Hamiltonian = .false.
+         data_orig = data_in
+         !
+         Ndim = size(data_orig,dim=1)
+         call assert_shape(data_orig,[Ndim,Ndim,Nkpt],"interpolate2Plane","data_in")
+         if(store_)write(*,"(A)") "     Warning: storing only k-meshes along the K-plane."
+         !
+      elseif(present(dataw_in))then
+         !
+         freq_dep = .true.
+         Hamiltonian = .false.
+         dataw_orig = dataw_in
+         !
+         Ndim = size(dataw_orig,dim=1)
+         call assert_shape(dataw_orig,[Ndim,Ndim,Nreal,Nkpt],"interpolate2Plane","dataw_orig")
+         if(store_)write(*,"(A)") "     Warning: storing only k-meshes along the K-plane."
+         !
+      else
+         !
+         freq_dep = .false.
+         Hamiltonian = .true.
+         data_orig = Lttc%Hk
+         !
+         Ndim = Lttc%Norb
+         call assert_shape(data_orig,[Ndim,Ndim,Nkpt],"interpolate2Plane","Hk")
+         !
+      endif
+      !
+      !
+      !Create path along high-symmetry points-----------------------------------
+      call calc_Kplane(kptplane,Nkpt_plane)
+      Nkpt_plane_tot = size(kptplane,dim=2)
+      !
+      !store new meshes
+      if(store_)then
+         if(allocated(Lttc%kptplane))deallocate(Lttc%kptplane)
+         Lttc%kptPlane = kptPlane
+         Lttc%Nkpt_plane = Nkpt_plane_tot
+      endif
+      !
+      !
+      !Interpolate input data along plane---------------------------------------
+      if(freq_dep)then
+         !
+         allocate(dataw_intp(Ndim,Ndim,Nreal,Nkpt_plane_tot));dataw_intp=czero
+         call cpu_time(start)
+         call wannierinterpolation(Lttc%Nkpt3,Lttc%kpt,kptplane,dataw_orig,dataw_intp)
+         call cpu_time(finish)
+         write(*,"(A,F)") "     "//reg(label)//"(w,fullBZ) --> "//reg(label)//"(w,Kplane) cpu timing:", finish-start
+         !
+         if(present(dataw_out))then
+            call assert_shape(dataw_out,[Ndim,Ndim,Nreal,Nkpt_plane_tot],"interpolate2Plane","dataw_out")
+            dataw_out = dataw_intp
+         endif
+         !
+      else
+         !
+         allocate(data_intp(Ndim,Ndim,Nkpt_plane_tot));data_intp=czero
+         call cpu_time(start)
+         call wannierinterpolation(Lttc%Nkpt3,Lttc%kpt,kptplane,data_orig,data_intp)
+         call cpu_time(finish)
+         write(*,"(A,F)") "     "//reg(label)//"(fullBZ) --> "//reg(label)//"(Kplane) cpu timing:", finish-start
+         !
+         if(present(data_out))then
+            call assert_shape(data_out,[Ndim,Ndim,Nkpt_plane_tot],"interpolate2Plane","data_out")
+            data_out = data_intp
+         endif
+         !
+      endif
+      !
+      !
+      !Compute eigenvalues along plane (not printed)----------------------------
+      if(Hamiltonian.and.(.not.freq_dep))then
+         !
+         !diagonalize
+         allocate(dataEk(Ndim,Nkpt_plane_tot));dataEk=0d0
+         allocate(dataZk(Ndim,Ndim,Nkpt_plane_tot));dataZk=czero
+         dataZk = data_intp
+         do ik=1,Nkpt_plane_tot
+            call eigh(dataZk(:,:,ik),dataEk(:,ik))
+         enddo
+         !
+         !store interpolated results
+         if(store_)then
+            if(allocated(Lttc%Hk_plane))deallocate(Lttc%Hk_plane)
+            if(allocated(Lttc%Zk_plane))deallocate(Lttc%Zk_plane)
+            if(allocated(Lttc%Ek_plane))deallocate(Lttc%Ek_plane)
+            Lttc%Hk_plane = data_intp
+            Lttc%Zk_plane = dataZk
+            Lttc%Ek_plane = dataEk
+            Lttc%planeStored = .true.
+         endif
+         deallocate(dataZk,dataEk)
+         !
+      endif
+      !
+      !
+      !Compute non-interacting Fermi surface------------------------------------
+      if((.not.skipFk_).and.printout)then
+         !
+         !compute diagonal
+         FermiCut_ = FermiCut
+         if(.not.Hamiltonian)FermiCut_ = 0d0
+         allocate(zeta(Ndim,Ndim,1));zeta=czero
+         do io=1,Ndim
+            zeta(io,io,1) = dcmplx(FermiCut_,eta)
+         enddo
+         allocate(wreal(Nreal));wreal=0d0
+         wreal = linspace(-wrealMax,+wrealMax,Nreal)
+         wndx = minloc(abs(wreal-FermiCut_),dim=1)
+         deallocate(wreal)
+         !
+         !The potentials are computed only if the Hamiltonian on the path is already stored
+         Ln=0;Rn=0
+         if(Hetero%status.and.Lttc%planeStored)then
+            !
+            if(Ndim.ne.Lttc%Norb)stop "interpolate2Path: spectral function calculation with heterostructures is allowed only for fermionic objects."
+            !
+            !Interpolate longitudinal tz along the plane
+            if(allocated(Hetero%tkz_Plane))deallocate(Hetero%tkz_Plane)
+            allocate(Hetero%tkz_Plane(Hetero%Norb,Hetero%Norb,Lttc%Nkpt_plane,Hetero%tzIndex(1):Hetero%tzIndex(2)));Hetero%tkz_Plane=czero
+            do ilayer = Hetero%tzIndex(1),Hetero%tzIndex(2)
+               call wannierinterpolation(Lttc%Nkpt3,Lttc%kpt,Lttc%kptPlane,Hetero%tkz(:,:,:,ilayer),Hetero%tkz_Plane(:,:,:,ilayer))
+            enddo
+            !
+            !Non-interacting potential to the left/upper side of the Heterostructure
+            if(Hetero%Explicit(1).ne.1)then
+               allocate(Potential_L(Hetero%Norb,Hetero%Norb,Nreal,Lttc%Nkpt_plane,Nspin));Potential_L=czero
+               call build_Potential(Potential_L,Hetero,Ln,NbulkL,zeta,Lttc%Hk_plane,Hetero%tkz_Plane,"left",.true.)
+               write(*,"(2(A,2I4))") "     Left potential (Kplane) orbital lattice indexes: ",Ln(1),Ln(2)," thickness: ",NbulkL
+            endif
+            !
+            !Non-interacting potential to the right/lower side of the Heterostructure
+            if(Hetero%Explicit(2).ne.Hetero%Nslab)then
+               allocate(Potential_R(Hetero%Norb,Hetero%Norb,Nreal,Lttc%Nkpt_plane,Nspin));Potential_R=czero
+               call build_Potential(Potential_R,Hetero,Rn,NbulkR,zeta,Lttc%Hk_plane,Hetero%tkz_Plane,"right",.true.)
+               write(*,"(2(A,2I4))") "     Right potential (Kplane) orbital lattice indexes: ",Rn(1),Rn(2)," thickness: ",NbulkR
+            endif
+            !
+         endif
+         !
+         !Compute non-interacting Fermi surface
+         allocate(Fk(Ndim,Ndim,Nkpt_plane_tot));Fk=0d0
+         allocate(invGf(Ndim,Ndim));invGf=czero
+         !$OMP PARALLEL DEFAULT(SHARED),&
+         !$OMP PRIVATE(iw,invGf)
+         !$OMP DO
+         do ik=1,Nkpt_plane_tot
+            !
+            if(freq_dep)then
+               invGf = zeta(:,:,1) - dataw_intp(:,:,wndx,ik)
+            else
+               invGf = zeta(:,:,1) - data_intp(:,:,ik)
+            endif
+            !
+            if(allocated(Potential_L)) invGf(Ln(1):Ln(2),Ln(1):Ln(2)) = invGf(Ln(1):Ln(2),Ln(1):Ln(2)) - Potential_L(:,:,iw,ik,1)
+            if(allocated(Potential_R)) invGf(Rn(1):Rn(2),Rn(1):Rn(2)) = invGf(Rn(1):Rn(2),Rn(1):Rn(2)) - Potential_R(:,:,iw,ik,1)
+            !
+            call inv(invGf)
+            Fk(:,:,ik) = -dimag(invGf)
+            !
+         enddo
+         !$OMP END DO
+         !$OMP END PARALLEL
+         if(allocated(Potential_L))deallocate(Potential_L)
+         if(allocated(Potential_R))deallocate(Potential_R)
+         deallocate(zeta,invGf)
+         !
+         !print Fermi surface
+         path = reg(pathOUTPUT)//"Fk_"//reg(label)//"_E"//str(FermiCut_,3)//".DAT"
+         unit = free_unit()
+         open(unit,file=reg(path),form="formatted",status="unknown",position="rewind",action="write")
+         do ik=1,Nkpt_plane_tot
+            ikx = int(ik/(Nkpt_plane+0.001))+1 ; kx = (ikx-1)/dble(Nkpt_plane-1) - 0.5d0
+            iky = ik - (ikx-1)*Nkpt_plane      ; ky = (iky-1)/dble(Nkpt_plane-1) - 0.5d0
+            Kvec = kx*Blat(:,1) + ky*Blat(:,2)
+            Bvec = [kx*Blat(1,1)+Blat(1,2),ky*Blat(2,1)+Blat(2,2),0d0]
+            write(unit,"(3I5,200E20.12)") ik,ikx,iky,Bvec(1),Bvec(2),Kvec(1),Kvec(2),(Fk(io,io,ik),io=1,Ndim)
+            if(iky.eq.Nkpt_plane)write(unit,*)
+         enddo
+         close(unit)
+         !
+         !Compute non-interacting Fermi surface along the Gamma-A direction
+         if(Hetero%status.and.Lttc%planeStored)then
+            !
+            if(Ndim.ne.Lttc%Norb)stop "interpolate2Plane: spectral function calculation with heterostructures is allowed only for fermionic objects."
+            !
+            allocate(Fk_kz(Hetero%Norb,Hetero%Norb,Lttc%Nkpt_Plane,0:Nkpt_path));Fk_kz=czero
+            call fill_Gamma_A(Fk,Fk_kz)
+            !
+            do ikz_cut=1,nkz_cut
+               !
+               kz_cut = (ikz_cut-1) * 0.5d0/(nkz_cut-1)
+               ikz = minloc(abs(Lttc%kptpath(3,1+Lttc%Nkpt_path:Lttc%Nkpt_path+Nkpt_path)-kz_cut),dim=1)
+               !
+               path = reg(pathOUTPUT)//"Fk_"//reg(label)//"_E"//str(FermiCut_,3)//"_Hetero_kz"//str(kz_cut,3)//".DAT"
+               unit = free_unit()
+               open(unit,file=reg(path),form="formatted",status="unknown",position="rewind",action="write")
+               do ik=1,Lttc%Nkpt_Plane
+                  ikx = int(ik/(Nkpt_plane+0.001))+1 ; kx = (ikx-1)/dble(Nkpt_plane-1) - 0.5d0
+                  iky = ik - (ikx-1)*Nkpt_plane      ; ky = (iky-1)/dble(Nkpt_plane-1) - 0.5d0
+                  Kvec = kx*Blat(:,1) + ky*Blat(:,2)
+                  Bvec = [kx*Blat(1,1)+Blat(1,2),ky*Blat(2,1)+Blat(2,2),0d0]
+                  write(unit,"(3I5,200E20.12)") ik,ikx,iky,Bvec(1),Bvec(2),Kvec(1),Kvec(2),(dreal(Fk_kz(io,io,ik,ikz)),io=1,Hetero%Norb)
+                  if(iky.eq.Nkpt_plane)write(unit,*)
+               enddo
+               close(unit)
+               !
+            enddo
+            !
+            deallocate(Fk_kz)
+            !
+         endif
+         deallocate(Fk)
+         !
+      endif
+      if(allocated(data_intp))deallocate(data_intp)
+      if(allocated(dataw_intp))deallocate(dataw_intp)
+      deallocate(kptPlane)
+      !
+      write(*,"(A,I)") "     Total number of K-points within the plane:",Nkpt_plane_tot
+      !
+      !
+      !
+   contains
+      !
+      !
+      !
+      subroutine fill_Gamma_A(data_in,data_out)
+         !
+         implicit none
+         !
+         real(8),intent(in)                 :: data_in(:,:,:)
+         complex(8),intent(inout)           :: data_out(:,:,:,0:)
+         !
+         integer                            :: ra,rb,ca,cb
+         integer                            :: isite,jsite
+         integer                            :: Nkpt_layer
+         real(8)                            :: kR
+         complex(8)                         :: cfac
+         !
+         Nkpt_layer = size(data_in,dim=3)
+         if(Nkpt_layer.ne.size(data_out,dim=3)) stop "fill_Gamma_A: planar K-mesh does not coincide between layer-resolved and kz integrated."
+         !
+         data_out=czero
+         !$OMP PARALLEL DEFAULT(PRIVATE),&
+         !$OMP SHARED(Lttc,Nkpt_layer,Nkpt_path,Hetero,data_out,data_in)
+         !$OMP DO
+         do ik=1,Nkpt_layer
+            do ikz=0,Nkpt_path
+               do isite=1,Lttc%Nsite
+                  do jsite=1,Lttc%Nsite
+                     !
+                     ra = 1+(isite-1)*Hetero%Norb ; rb = ra + Hetero%Norb-1
+                     ca = 1+(jsite-1)*Hetero%Norb ; cb = ca + Hetero%Norb-1
+                     !
+                     kR = 2*pi * Lttc%kptpath(3,Lttc%Nkpt_path+ikz) * (isite-jsite)
+                     cfac = dcmplx(cos(kR),+sin(kR))
+                     !
+                     data_out(:,:,ik,ikz) = data_out(:,:,ik,ikz) + data_in(ra:rb,ca:cb,ik)*cfac / Lttc%Nsite
+                     !
+                  enddo
+               enddo
+            enddo
+         enddo
+         !$OMP END DO
+         !$OMP END PARALLEL
+         !
+      end subroutine fill_Gamma_A
+      !
+      subroutine fill_Gamma_A_noPot(data_in,data_out)
+         !
+         implicit none
+         !
+         real(8),intent(in)                 :: data_in(:,:,:)
+         complex(8),intent(inout)           :: data_out(:,:,:,0:)
+         !
+         integer                            :: ra,rb,ca,cb
+         integer                            :: isite,jsite
+         integer                            :: idist,jdist
+         integer                            :: islab,jslab
+         integer                            :: Nkpt_layer
+         logical                            :: Explicit,BulkL,BulkR
+         real(8)                            :: kR
+         complex(8)                         :: cfac
+         !
+         Nkpt_layer = size(data_in,dim=3)
+         if(Nkpt_layer.ne.size(data_out,dim=3)) stop "fill_Gamma_A_noPot: planar K-mesh does not coincide between layer-resolved and kz integrated."
+         !
+         !$OMP PARALLEL DEFAULT(PRIVATE),&
+         !$OMP SHARED(Lttc,Nkpt_layer,Nkpt_path,Hetero,data_out,data_in)
+         !$OMP DO
+         do ik=1,Nkpt_layer
+            do ikz=0,Nkpt_path
+               !
+               do islab=1,Hetero%Nslab
+                  do jslab=1,Hetero%Nslab
+                     !
+                     Explicit = (islab.ge.Hetero%Explicit(1)) .and. (jslab.ge.Hetero%Explicit(1)) .and. &
+                                (islab.le.Hetero%Explicit(2)) .and. (jslab.le.Hetero%Explicit(2))
+                     if((.not.Explicit).and.abs(islab-jslab).gt.1)cycle
+                     BulkL = (.not.Explicit) .and. (islab.lt.Hetero%Explicit(1)) .and. (jslab.lt.Hetero%Explicit(1))
+                     BulkR = (.not.Explicit) .and. (islab.gt.Hetero%Explicit(2)) .and. (jslab.gt.Hetero%Explicit(2))
+                     !
+                     if(Explicit)then
+                        !
+                        isite = islab - (Hetero%Explicit(1)-1)
+                        jsite = jslab - (Hetero%Explicit(1)-1)
+                        !
+                     elseif(BulkL)then
+                        !
+                        idist = abs(islab-Hetero%Explicit(1))
+                        jdist = abs(jslab-Hetero%Explicit(1))
+                        !
+                        isite = islab + int((max(idist,jdist)+1)/2)*2
+                        jsite = jslab + int((max(idist,jdist)+1)/2)*2
+                        !
+                     elseif(BulkR)then
+                        !
+                        idist = abs(islab-Hetero%Explicit(2))
+                        jdist = abs(jslab-Hetero%Explicit(2))
+                        !
+                        isite = islab - int((max(idist,jdist)+1)/2)*2
+                        jsite = jslab - int((max(idist,jdist)+1)/2)*2
+                        !
+                     endif
+                     !
+                     ra = 1+(isite-1)*Hetero%Norb ; rb = ra + Hetero%Norb-1
+                     ca = 1+(jsite-1)*Hetero%Norb ; cb = ca + Hetero%Norb-1
+                     !
+                     kR = 2*pi * Lttc%kptpath(3,Lttc%Nkpt_path+ikz) * (islab-jslab)
+                     cfac = dcmplx(cos(kR),+sin(kR))
+                     !
+                     data_out(:,:,ik,ikz) = data_out(:,:,ik,ikz) + data_in(ra:rb,ca:cb,ik)*cfac / Hetero%Nslab
+                     !
+                  enddo
+               enddo
+               !
+            enddo
+         enddo
+         !$OMP END DO
+         !$OMP END PARALLEL
+         !
+      end subroutine fill_Gamma_A_noPot
+      !
+      !
+      !
+   end subroutine interpolate2Plane
+
 
 
    !---------------------------------------------------------------------------!

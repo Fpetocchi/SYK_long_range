@@ -8,7 +8,8 @@ subroutine interpolate2kpath_Fermionic(Sfull,Lttc,pathOUTPUT)
    use file_io
    use greens_function, only : calc_Gmats
    use fourier_transforms
-   use input_vars, only : structure, Nkpt_path, Nkpt_plane
+   use input_vars, only : Nkpt_path_default, Nkpt_plane_default
+   use input_vars, only : Nkpt_path, Nkpt_plane
    use input_vars, only : print_path_G, print_full_G , print_path_S, print_plane_G
    use input_vars, only : paramagnet, CalculationType, Hetero
    implicit none
@@ -29,7 +30,7 @@ subroutine interpolate2kpath_Fermionic(Sfull,Lttc,pathOUTPUT)
    integer                               :: Norb,Nmats,unit!,Ntau
    integer                               :: ik,ispin,iorb
    integer                               :: ikx,iky
-   real(8)                               :: kx,ky,Bvec(3),Blat(3,3)
+   real(8)                               :: kx,ky,Bvec(3),Kvec(3),Blat(3,3)
    character(len=256)                    :: path
    logical                               :: Kdependence
    real                                  :: start,finish
@@ -60,16 +61,20 @@ subroutine interpolate2kpath_Fermionic(Sfull,Lttc,pathOUTPUT)
    !---------------------- LDA Hamiltonian and corrections --------------------!
    !
    !non-interacting data (Bands, spectral function, Fermi-surface)
-   call interpolateHk2Path(Lttc,structure,Nkpt_path,pathOUTPUT=reg(pathOUTPUT),doplane=.true.,hetero=Hetero,store=.true.)
+   call interpolate2Path(Lttc,Nkpt_path_default,"Hk",pathOUTPUT=reg(pathOUTPUT),store=.false.,skipAkw=.false.)
+   call interpolate2Plane(Lttc,Nkpt_plane_default,"Hk",pathOUTPUT=reg(pathOUTPUT),store=.false.,skipFk=.false.)
    !
-   !correction to LDA given by the real part of the local self-energy in iw=0
+   !correction to LDA given by the real part of the local self-energy in iw=0.
    allocate(correction(Norb,Norb,Sfull%Nkpt));correction=czero
    do ispin=1,Nspin
       !
       do ik=1,Sfull%Nkpt
-         correction(:,:,ik) = dreal(Sfull%ws(:,:,1,ispin)) - zeye(Norb)*Sfull%mu
+         correction(:,:,ik) = Lttc%Hk(:,:,ik) + dreal(Sfull%ws(:,:,1,ispin)) - zeye(Norb)*Sfull%mu
       enddo
-      call interpolateHk2Path(Lttc,structure,Nkpt_path,pathOUTPUT=reg(pathOUTPUT),corrname="dmft_s"//str(ispin),correction=correction,doplane=.true.,hetero=Hetero)
+      !
+      call interpolate2Path(Lttc,Nkpt_path_default,"Hk_dmft_s"//str(ispin),pathOUTPUT=reg(pathOUTPUT),data_in=correction,store=.false.,skipAkw=.true.)   !Spectral function not computed as the correction is valid only at w=0
+      call interpolate2Plane(Lttc,Nkpt_plane_default,"Hk_dmft_s"//str(ispin),pathOUTPUT=reg(pathOUTPUT),data_in=correction,store=.false.,skipFk=.false.) !Fermi surface is computed as the correction is valid only at w=0
+      !
       if(paramagnet) exit
       !
    enddo
@@ -86,7 +91,10 @@ subroutine interpolate2kpath_Fermionic(Sfull,Lttc,pathOUTPUT)
          do iorb=1,Norb
             correction(iorb,iorb,:) = dcmplx(dreal(correction(iorb,iorb,:)),0d0)
          enddo
-         call interpolateHk2Path(Lttc,structure,Nkpt_path,pathOUTPUT=reg(pathOUTPUT),corrname="qpsc_s"//str(ispin),correction=correction,doplane=.true.,hetero=Hetero)
+         !
+         call interpolate2Path(Lttc,Nkpt_path_default,"Hk_qpsc_s"//str(ispin),pathOUTPUT=reg(pathOUTPUT),data_in=correction,store=.false.,skipAkw=.true.)   !Spectral function not computed as the correction is valid only at w=0
+         call interpolate2Plane(Lttc,Nkpt_plane_default,"Hk_qpsc_s"//str(ispin),pathOUTPUT=reg(pathOUTPUT),data_in=correction,store=.false.,skipFk=.false.) !Fermi surface is computed as the correction is valid only at w=0
+         !
          if(paramagnet) exit
          !
       enddo
@@ -98,12 +106,14 @@ subroutine interpolate2kpath_Fermionic(Sfull,Lttc,pathOUTPUT)
    !------------------- Interpolation of interacting solutuon -----------------!
    !
    !
-   !recalculate the internal K-meshes just for Nkpt_plane different from default
-   if(print_plane_G.and.(Nkpt_plane.ne.201))call interpolateHk2Path(Lttc,structure,Nkpt_path,doplane=print_plane_G,Nkpt_Kside=Nkpt_plane,hetero=Hetero,store=.true.)
-   !
-   !
-   ! print the Hamiltonian on the path used
-   if(print_path_G)call dump_Hk(Lttc%Hk_path,Lttc%kptpath,reg(pathOUTPUT),"Hk_path.DAT")
+   !recalculate the internal K-meshes
+   if(print_path_G.and.(.not.Lttc%pathStored))then
+      call interpolate2Path(Lttc,Nkpt_path,"Hk",store=.true.)
+      call dump_Hk(Lttc%Hk_path,Lttc%kptpath,reg(pathOUTPUT),"Hk_path.DAT")
+   endif
+   if(print_plane_G.and.(.not.Lttc%planeStored))then
+      call interpolate2Plane(Lttc,Nkpt_plane,"Hk",store=.true.)
+   endif
    !
    !
    !Interpolate the slef-energy along the path if its K-dependent otherwise duplicate the local one
@@ -201,8 +211,9 @@ subroutine interpolate2kpath_Fermionic(Sfull,Lttc,pathOUTPUT)
                do ik=1,Lttc%Nkpt_Plane
                   ikx = int(ik/(Nkpt_plane+0.001))+1 ; kx = (ikx-1)/dble(Nkpt_plane-1) - 0.5d0
                   iky = ik - (ikx-1)*Nkpt_plane      ; ky = (iky-1)/dble(Nkpt_plane-1) - 0.5d0
-                  Bvec = kx*Blat(:,1) + ky*Blat(:,2)
-                  write(unit,"(3I5,200E20.12)") ik,ikx,iky,Bvec(1),Bvec(2),(Zk(ik,iorb),iorb=1,Norb)
+                  Kvec = kx*Blat(:,1) + ky*Blat(:,2)
+                  Bvec = [kx*Blat(1,1)+Blat(1,2),ky*Blat(2,1)+Blat(2,2),0d0]
+                  write(unit,"(3I5,200E20.12)") ik,ikx,iky,Bvec(1),Bvec(2),Kvec(1),Kvec(2),(Zk(ik,iorb),iorb=1,Norb)
                   if(iky.eq.Nkpt_plane)write(unit,*)
                enddo
                close(unit)
@@ -502,8 +513,9 @@ contains
             do ik=1,Nkpt
                ikx = int(ik/(Nkpt_plane+0.001))+1 ; kx = (ikx-1)/dble(Nkpt_plane-1) - 0.5d0
                iky = ik - (ikx-1)*Nkpt_plane      ; ky = (iky-1)/dble(Nkpt_plane-1) - 0.5d0
-               Bvec = kx*Blat(:,1) + ky*Blat(:,2)
-               write(unit,"(3I5,200E20.12)") ik,ikx,iky,Bvec(1),Bvec(2),(Ak(ik,iorb),iorb=1,Norb)
+               Kvec = kx*Blat(:,1) + ky*Blat(:,2)
+               Bvec = [kx*Blat(1,1)+Blat(1,2),ky*Blat(2,1)+Blat(2,2),0d0]
+               write(unit,"(3I5,200E20.12)") ik,ikx,iky,Bvec(1),Bvec(2),Kvec(1),Kvec(2),(Ak(ik,iorb),iorb=1,Norb)
                if(iky.eq.Nkpt_plane)write(unit,*)
             enddo
          endif
@@ -661,7 +673,7 @@ subroutine interpolate2kpath_Bosonic(Wfull,Lttc,pathOUTPUT,name,remove_Gamma,NaN
    use file_io
    use greens_function, only : calc_Gmats
    use fourier_transforms
-   use input_vars, only : structure, Nkpt_path, Nkpt_plane
+   use input_vars, only : Nkpt_path, Nkpt_plane
    use input_vars, only : print_path_Chi, print_path_W, print_plane_W
    implicit none
    !
@@ -680,6 +692,7 @@ subroutine interpolate2kpath_Bosonic(Wfull,Lttc,pathOUTPUT,name,remove_Gamma,NaN
    integer                               :: Norb,Nmats,unit,Wdim
    integer                               :: iq,iw,iorb,jorb,ib1,ib2
    character(len=256)                    :: path
+   logical                               :: print_path,print_plane
    logical                               :: remove_Gamma_,NaNb_
    real                                  :: start,finish
    !
@@ -707,13 +720,22 @@ subroutine interpolate2kpath_Bosonic(Wfull,Lttc,pathOUTPUT,name,remove_Gamma,NaN
    Wdim = Wfull%Nbp
    if(NaNb_) Wdim = Norb
    !
+   print_path = print_path_Chi .or. print_path_W
+   print_plane = print_plane_W
+   !
    !
    !
    !------------------- Interpolation of interacting solutuon -----------------!
    !
    !
-   !recalculate the internal K-meshes just for Nkpt_plane different from default
-   if(print_plane_W.and.(Nkpt_plane.ne.201))call interpolateHk2Path(Lttc,structure,Nkpt_path,doplane=print_plane_W,Nkpt_Kside=Nkpt_plane,store=.true.)
+   !recalculate the internal K-meshes if not already stored
+   if(print_path.and.(.not.Lttc%pathStored))then
+      call interpolate2Path(Lttc,Nkpt_path,"Hk",store=.true.)
+      call dump_Hk(Lttc%Hk_path,Lttc%kptpath,reg(pathOUTPUT),"Hk_path.DAT")
+   endif
+   if(print_plane.and.(.not.Lttc%planeStored))then
+      call interpolate2Plane(Lttc,Nkpt_plane,"Hk",store=.true.)
+   endif
    !
    !
    !Optionally keep only the density-density terms
@@ -754,7 +776,7 @@ subroutine interpolate2kpath_Bosonic(Wfull,Lttc,pathOUTPUT,name,remove_Gamma,NaN
    !
    !
    !-------------------------- Boson along the path ---------------------------!
-   if(print_path_W.or.print_path_Chi)then
+   if(print_path)then
       !
       !Interpolate the boson along the path
       call cpu_time(start)
@@ -799,7 +821,7 @@ subroutine interpolate2kpath_Bosonic(Wfull,Lttc,pathOUTPUT,name,remove_Gamma,NaN
    !
    !
    !---------------------- Boson along the {kx,ky} plane ----------------------!
-   if(print_plane_W)then
+   if(print_plane)then
       !
       !Interpolate the boson along the plane
       call cpu_time(start)

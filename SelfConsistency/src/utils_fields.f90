@@ -250,7 +250,6 @@ contains
       if(allocated(lttc%kptPos))deallocate(lttc%kptPos)
       if(allocated(lttc%kptsum))deallocate(lttc%kptsum)
       if(allocated(lttc%kptdif))deallocate(lttc%kptdif)
-      if(allocated(lttc%kprint))deallocate(lttc%kprint)
       lttc%Nkpt3=0
       lttc%Nkpt=0
       lttc%Nkpt_irred=0

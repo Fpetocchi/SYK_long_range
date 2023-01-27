@@ -7,7 +7,6 @@ program Akw_builder
    integer                                  :: TimeStart
    integer                                  :: ItStart,Itend
    integer                                  :: ispin
-   logical                                  :: FermiSurf
    !
    !
    !
@@ -27,8 +26,11 @@ program Akw_builder
    !---------------------------------------------------------------------------!
    !
    !
-   FermiSurf = print_plane_G .or. (print_plane_W.and.print_path_W) .or. (print_plane_W.and.print_path_Chi)
-   call interpolateHk2Path(Crystal,reg(structure),Nkpt_path,pathOUTPUT=reg(MaxEnt_K),doplane=FermiSurf,Nkpt_Kside=Nkpt_plane,hetero=Hetero)
+   !FermiSurf = print_plane_G .or. (print_plane_W.and.print_path_W) .or. (print_plane_W.and.print_path_Chi)
+   !call interpolateHk2Path(Crystal,reg(structure),Nkpt_path,pathOUTPUT=reg(MaxEnt_K),doplane=FermiSurf,Nkpt_Kside=Nkpt_plane,hetero=Hetero)
+   call interpolate2Path(Crystal,Nkpt_path,"Hk",store=.true.)
+   call interpolate2Plane(Crystal,Nkpt_plane,"Hk",store=.true.)
+   !
    Crystal%Nkpt_path = Crystal%Nkpt_path !-1
    !
    !

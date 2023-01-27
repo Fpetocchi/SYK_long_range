@@ -77,19 +77,22 @@ module parameters
       !path along high-symmetry points
       integer                               :: Nkpt_path=0
       real(8),allocatable                   :: kptpath(:,:)                     ![3,Nkpt_path]
+      real(8),allocatable                   :: Kpathaxis(:)
+      real(8),allocatable                   :: KpathaxisPoints(:)
       complex(8),allocatable                :: Hk_path(:,:,:)                   ![Norb,Norb,Nkpt_path]
       complex(8),allocatable                :: Zk_path(:,:,:)                   ![Norb,Norb,Nkpt_path]
       real(8),allocatable                   :: Ek_path(:,:)                     ![Norb,Nkpt_path]
-      real(8),allocatable                   :: Kpathaxis(:)
-      real(8),allocatable                   :: KpathaxisPoints(:)
       logical                               :: pathStored=.false.
       !path along planar sheet on kx,ky
-      integer                               :: Nkpt_Plane=0
+      integer                               :: Nkpt_plane=0
       real(8),allocatable                   :: kptPlane(:,:)                    ![3,Nkpt_path]
-      complex(8),allocatable                :: Hk_Plane(:,:,:)                  ![Norb,Norb,Nkpt_Plane]
+      complex(8),allocatable                :: Hk_plane(:,:,:)                  ![Norb,Norb,Nkpt_plane]
+      complex(8),allocatable                :: Zk_plane(:,:,:)                  ![Norb,Norb,Nkpt_plane]
+      real(8),allocatable                   :: Ek_plane(:,:)                    ![Norb,Nkpt_plane]
       logical                               :: planeStored=.false.
-      !not used
-      integer,allocatable                   :: kprint(:)
+      !hamiltonian in the full BZ with G0W0 self-energy correction
+      complex(8),allocatable                :: Hk_qp(:,:,:,:)                   ![Norb,Norb,Nkpt,Nspin]
+      real(8),allocatable                   :: Ek_qp(:,:,:)                     ![Norb,Nkpt,Nspin]
    end type Lattice
 
 
@@ -272,7 +275,7 @@ module parameters
       real(8),allocatable                   :: tz(:,:,:)                        ![Norb,Nlayer,tzRange]
       complex(8),allocatable                :: tkz(:,:,:,:)                     ![Norb,Norb,Nkpt,Nlayer]
       complex(8),allocatable                :: tkz_path(:,:,:,:)                ![Norb,Norb,Nkpt,Nlayer]
-      complex(8),allocatable                :: tkz_Plane(:,:,:,:)               ![Norb,Norb,Nkpt,Nlayer]
+      complex(8),allocatable                :: tkz_plane(:,:,:,:)               ![Norb,Norb,Nkpt,Nlayer]
       complex(8),allocatable                :: P_L(:,:,:,:)                     ![Norb,Norb,Npoints,Nspin]
       complex(8),allocatable                :: P_R(:,:,:,:)                     ![Norb,Norb,Npoints,Nspin]
       logical                               :: status=.false.

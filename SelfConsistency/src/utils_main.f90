@@ -354,6 +354,8 @@ contains
       ! This subroutine does somethig only for scGW calculations
       if(reg(CalculationType).eq."scGW")then
          !
+         call read_InputFile("input.in")
+         !
          call inquireDir(reg(pathDATA)//str(Iteration-1),PrvItexist,hardstop=.false.,verb=.false.)
          call inquireDir(reg(pathDATA)//str(0),ZeroItexist,hardstop=.false.,verb=.false.)
          !
@@ -460,9 +462,9 @@ contains
       if(allocated(Lttc%Ek))deallocate(Lttc%Ek)
       allocate(Lttc%Zk(Lttc%Norb,Lttc%Norb,Lttc%Nkpt));Lttc%Zk=czero
       allocate(Lttc%Ek(Lttc%Norb,Lttc%Nkpt));Lttc%Ek=0d0
+      !
+      Lttc%Zk = Lttc%Hk
       do ik=1,Lttc%Nkpt
-         Lttc%Ek(:,ik) = 0d0
-         Lttc%Zk(:,:,ik) = Lttc%Hk(:,:,ik)
          call eigh(Lttc%Zk(:,:,ik),Lttc%Ek(:,ik))
       enddo
       !
@@ -506,16 +508,18 @@ contains
       !print some info
       write(*,"(A)") new_line("A")//new_line("A")//"---- site and orbital structure"
       write(*,"(A,1I3)") "     Number of inequivalent sites: ",Nsite
-      write(*,"(A,1I3)") "     Number of solved impurities : ",Solver%Nimp
-      do isite=1,size(LocalOrbs)
-         write(*,"(2(A,I3),A,10I3)")"     site: ",isite,", orbital space: ",LocalOrbs(isite)%Norb,", orbital indexes: ",LocalOrbs(isite)%Orbs
-      enddo
-      if(sum(LocalOrbs(:)%Norb).ne.Lttc%Norb)then
-         !
-         MultiTier = .true.
-         if(Hetero%status) stop "MultiTier construction and Heterostructured setup are not allowed together."
-         !if(RotateHloc.or.RotateUloc) stop "MultiTier construction and Rotations of the local space are not allowed together."
-         !
+      if(solve_DMFT)then
+         write(*,"(A,1I3)") "     Number of solved impurities : ",Solver%Nimp
+         do isite=1,size(LocalOrbs)
+            write(*,"(2(A,I3),A,10I3)")"     site: ",isite,", orbital space: ",LocalOrbs(isite)%Norb,", orbital indexes: ",LocalOrbs(isite)%Orbs
+         enddo
+         if(sum(LocalOrbs(:)%Norb).ne.Lttc%Norb)then
+            !
+            MultiTier = .true.
+            if(Hetero%status) stop "MultiTier construction and Heterostructured setup are not allowed together."
+            !if(RotateHloc.or.RotateUloc) stop "MultiTier construction and Rotations of the local space are not allowed together."
+            !
+         endif
       endif
       !
       !
@@ -646,7 +650,10 @@ contains
          call tetrahedron_integration(reg(pathINPUT),Lttc%Hk,Lttc%Nkpt3,Lttc%kpt,Egrid,fact_intp=2,pathOUTPUT=reg(pathINPUT))
          deallocate(Egrid)
          !
-         if(reg(structure).ne."None")call interpolateHk2Path(Lttc,reg(structure),Nkpt_path,pathOUTPUT=reg(pathINPUT),doplane=.true.,hetero=Hetero)
+         if(reg(structure).ne."None")then
+            call interpolate2Path(Lttc,Nkpt_path_default,"Hk",pathOUTPUT=reg(pathINPUT),store=.true.,skipAkw=.false.)
+            call interpolate2Plane(Lttc,Nkpt_plane_default,"Hk",pathOUTPUT=reg(pathINPUT),store=.true.,skipFk=.false.)
+         endif
          !
       endif
       !
