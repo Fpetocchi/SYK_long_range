@@ -359,7 +359,6 @@ contains
             allocate(Hetero%tz(Norb_model,Hetero%Nlayer,Hetero%tzRange));Hetero%tz=0d0
             do irange=1,Hetero%tzRange
                do ilayer=1,Hetero%Nlayer
-                  !call parse_input_variable(Hetero%tz(:,ilayer,irange),"TZ"//str(irange)//"_"//str(ilayer),InputFile,comment="Longitudinal hopping for each orbital at distance "//str(irange)//" between layer #"//str(ilayer)//" and layer #"//str(ilayer+1))
                   call parse_input_variable(Hetero%tz(:,ilayer,irange),"TZ"//str(irange)//"_"//str(ilayer),InputFile,comment="Longitudinal hopping for each orbital at distance "//str(irange)//" starting from layer #"//str(ilayer))
                enddo
             enddo

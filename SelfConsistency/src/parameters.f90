@@ -66,6 +66,8 @@ module parameters
       integer                               :: Norb=0
       real(8)                               :: mu=0d0
       real(8)                               :: density=0d0
+      real(8)                               :: D_lower=0d0
+      real(8)                               :: D_upper=0d0
       logical                               :: UseDisentangledBS=.false.
       logical                               :: status=.false.
       !full BZ

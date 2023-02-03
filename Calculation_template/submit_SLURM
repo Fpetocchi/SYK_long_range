@@ -1,12 +1,12 @@
 #!/bin/bash
 
-#SBATCH --job-name=***
-#SBATCH --nodes=1
-#SBATCH --ntasks=128
-#SBATCH --ntasks-per-node=128
-#SBATCH --time=10-24:00:00
-#SBATCH --partition=amd
-#SBATCH --mem-per-cpu=1800M
+#SBATCH --job-name=___
+#SBATCH --nodes=___
+#SBATCH --ntasks=___
+#SBATCH --ntasks-per-node=___
+#SBATCH --time=7-24:00:00
+#SBATCH --partition=___
+#SBATCH --mem-per-cpu=___
 
 export OMP_NUM_THREADS=$SLURM_NTASKS_PER_NODE
 ulimit -c 0
@@ -18,25 +18,26 @@ ulimit -c 0
 #                                 USER SETTINGS                                #
 ################################################################################
 #----------------------------------COMPULSORY----------------------------------#
-GENMAT=/home/petocchif/1_GW_EDMFT/GenericMaterial
+GENMAT=/path/to/GenericMaterial
 
-PATH_INPUT=GWinput_***
-PATH_DATA=Results_beta***
+PATH_INPUT=GWinput
+PATH_DATA=Results
 
-START_IT=***
-END_IT=***
+START_IT=___
+END_IT=___
 
 EXE_SC=SelfConsistency
 EXE_QMC=ct_hyb
 EXE_AKW=Akw_builder
 
 #-----------------------------------OPTIONAL-----------------------------------#
-PATH_INPUT_TR=GWinput_beta***
+PATH_INPUT_TR=GWinput_beta___
 ####SKIP_FIRST_SC="T"
-####SKIP_ALL_QMC="T"
+#SKIP_ALL_QMC="T"
 ####REPLACE_QMC_RES="T"
 ####CHANGE_BETA_IT=1
 ####COLLECT_AKW="T"
+####PREP_MAXENT="T"
 
 
 
@@ -53,6 +54,7 @@ if [ -z ${SKIP_FIRST_SC+x}   ]; then SKIP_FIRST_SC="F"           ; fi
 if [ -z ${SKIP_ALL_QMC+x}    ]; then SKIP_ALL_QMC="F"            ; fi
 if [ -z ${REPLACE_QMC_RES+x} ]; then REPLACE_QMC_RES="F"         ; fi
 if [ -z ${COLLECT_AKW+x}     ]; then COLLECT_AKW="F"             ; fi
+if [ -z ${PREP_MAXENT+x}     ]; then PREP_MAXENT="F"             ; fi
 
 export l0=`grep -n "PATH_INPUT=" input.in    | awk -F  ":" '{print $1}'`
 export l1=`grep -n "PATH_INPUT_TR=" input.in | awk -F  ":" '{print $1}'`
@@ -65,6 +67,11 @@ sed -i ${l0}'s/'"PATH_INPUT=.*!"'/'"PATH_INPUT=${PATH_INPUT}           !"'/' inp
 sed -i ${l1}'s/'"PATH_INPUT_TR=.*!"'/'"PATH_INPUT_TR=${PATH_INPUT_TR}  !"'/' input.in
 sed -i ${l2}'s/'"PATH_DATA=.*!"'/'"PATH_DATA=${PATH_DATA}              !"'/' input.in
 sed -i ${l4}'s/'"LAST_IT=.*!"'/'"LAST_IT=${END_IT}                     !"'/' input.in
+
+if [ "${PREP_MAXENT}" == "T" ] || [ "${COLLECT_AKW}" == "T" ] ; then 
+   EXE_SC=${EXE_SC}_akw
+   SKIP_ALL_QMC="T"
+fi
 
 
 
@@ -84,6 +91,7 @@ do
    if [ ! -z ${CHANGE_BETA_IT+x} ] && [ ${CHANGE_BETA_IT} == ${IT} ] ; then
       sed -i ${l5}'s/'"MATCH_BETA=.*!"'/'"MATCH_BETA=T                                 !"'/' input.in
    fi
+   if [ "${PREP_MAXENT}" == "T" ] ; then cp input.in input.in.akw  ; fi
    sleep 2
 
    #
@@ -103,7 +111,7 @@ do
       touch doSolver
    else
       srun --ntasks=1 ${BINsc}/${EXE_SC} > report_sc_it${IT} 2> err_sc_it${IT}
-      mv {report_sc_it${IT},err_sc_it${IT}} ${IT_DATA}
+      if [ "${PREP_MAXENT}" == "F" ] ; then mv {report_sc_it${IT},err_sc_it${IT}} ${IT_DATA}  ; fi
    fi
    sleep 2
 

@@ -1060,7 +1060,7 @@ contains
          !
          if(Hetero%Explicit(1).ne.1)then
             !
-            ilayer = Hetero%Explicit(1) + 1
+            ilayer = 2
             na = 1 + (ilayer-1)*Norb*Nsite_bulk
             nb = ilayer*Norb*Nsite_bulk
             !
@@ -1071,7 +1071,7 @@ contains
          endif
          if(Hetero%Explicit(2).ne.Hetero%Nslab)then
             !
-            ilayer = Hetero%Explicit(2) - 2
+            ilayer = Hetero%Nlayer - 2
             na = 1 + (ilayer-1)*Norb*Nsite_bulk
             nb = ilayer*Norb*Nsite_bulk
             !
@@ -3476,6 +3476,11 @@ contains
       call calc_Kpath(kptpath,reg(structure),Nkpt_path,Kpathaxis,KpathaxisPoints,hetero=Hetero%status)
       Nkpt_path_tot = size(kptpath,dim=2)
       !
+      if(Hetero%status)then
+         if((Hetero%Norb*Lttc%Nsite).ne.Lttc%Norb) stop "interpolate2Path: Orbital dimension of Hk is not a multiple of the number of sites."
+         Nkpt_path_tot = Nkpt_path_tot - Nkpt_path
+      endif
+      !
       !store new meshes
       if(store_)then
          if(allocated(Lttc%kptpath))deallocate(Lttc%kptpath)
@@ -3696,7 +3701,7 @@ contains
       !
       !
       !Print position of High-symmetry points-----------------------------------
-      if(printout.and.store_)then
+      if(printout)then
          !
          path = reg(pathOUTPUT)//"Kpoints_labels.DAT"
          unit = free_unit()
@@ -4045,14 +4050,14 @@ contains
             !
             !Non-interacting potential to the left/upper side of the Heterostructure
             if(Hetero%Explicit(1).ne.1)then
-               allocate(Potential_L(Hetero%Norb,Hetero%Norb,Nreal,Lttc%Nkpt_plane,Nspin));Potential_L=czero
+               allocate(Potential_L(Hetero%Norb,Hetero%Norb,1,Lttc%Nkpt_plane,Nspin));Potential_L=czero
                call build_Potential(Potential_L,Hetero,Ln,NbulkL,zeta,Lttc%Hk_plane,Hetero%tkz_Plane,"left",.true.)
                write(*,"(2(A,2I4))") "     Left potential (Kplane) orbital lattice indexes: ",Ln(1),Ln(2)," thickness: ",NbulkL
             endif
             !
             !Non-interacting potential to the right/lower side of the Heterostructure
             if(Hetero%Explicit(2).ne.Hetero%Nslab)then
-               allocate(Potential_R(Hetero%Norb,Hetero%Norb,Nreal,Lttc%Nkpt_plane,Nspin));Potential_R=czero
+               allocate(Potential_R(Hetero%Norb,Hetero%Norb,1,Lttc%Nkpt_plane,Nspin));Potential_R=czero
                call build_Potential(Potential_R,Hetero,Rn,NbulkR,zeta,Lttc%Hk_plane,Hetero%tkz_Plane,"right",.true.)
                write(*,"(2(A,2I4))") "     Right potential (Kplane) orbital lattice indexes: ",Rn(1),Rn(2)," thickness: ",NbulkR
             endif
@@ -4661,7 +4666,7 @@ contains
       type(Heterostructures),intent(inout)  :: Hetero
       complex(8),intent(in)                 :: zeta(:,:,:)
       complex(8),intent(in)                 :: Hk(:,:,:)
-      complex(8),intent(in)                 :: tz(:,:,:,:)
+      complex(8),allocatable,intent(in)     :: tz(:,:,:,:)
       character(len=*),intent(in)           :: mode
       logical,intent(in)                    :: paramagnet
       complex(8),intent(in),optional        :: Smats(:,:,:,:,:)

@@ -20,7 +20,6 @@ module self_energy
    !---------------------------------------------------------------------------!
    !PURPOSE: Module variables
    !---------------------------------------------------------------------------!
-   integer                                  :: ib1_UwanDFT,ib2_UwanDFT
    complex(8),allocatable                   :: UwanDFT(:,:,:,:)
    logical                                  :: Uwan_stored=.false.
 #ifdef _verb
@@ -115,7 +114,6 @@ contains
       allocate(Gitau(Norb,Norb,Ntau,Nkpt,Nspin));Gitau=czero
       do ispin=1,Nspin
          call Fmats2itau_mat(Beta,Gmats%wks(:,:,:,:,ispin),Gitau(:,:,:,:,ispin),asympt_corr=.true.,tau_uniform=tau_uniform)
-        !if(.not.Gtau_K) call Fmats2itau_mat(Beta,Gmats%wks(:,:,:,:,ispin),Gitau(:,:,:,:,ispin),asympt_corr=.true.,tau_uniform=tau_uniform,nkpt3=Lttc%Nkpt3,kpt=Lttc%kpt)
          if(paramagnet)then
             Gitau(:,:,:,:,Nspin) = Gitau(:,:,:,:,1)
             exit
@@ -955,9 +953,8 @@ contains
          if(Lttc%UseDisentangledBS) ib_Uwan2 = ib_Uwan1 + Norb-1
          !
          if(allocated(UwanDFT))deallocate(UwanDFT)
-         UwanDFT = Uwan
-         ib1_UwanDFT = ib_Uwan1
-         ib2_UwanDFT = ib_Uwan2
+         allocate(UwanDFT(Norb,Norb,Nkpt,Nspin_Uwan))
+         UwanDFT = Uwan(ib_Uwan1:ib_Uwan2,:,:,:)
          Uwan_stored = .true.
          !
          ! Look for the Number of Sigma segments.
@@ -1478,9 +1475,8 @@ contains
          Nwan = abs(ib_Uwan2-ib_Uwan1+1)
          !
          if(allocated(UwanDFT))deallocate(UwanDFT)
-         UwanDFT = Uwan
-         ib1_UwanDFT = ib_Uwan1
-         ib2_UwanDFT = ib_Uwan2
+         allocate(UwanDFT(Norb,Norb,Nkpt,Nspin_Uwan))
+         UwanDFT = Uwan(ib_Uwan1:ib_Uwan2,:,:,:)
          Uwan_stored = .true.
          !
          ! Look for the Number of Sigma files and internal consistency.
@@ -2161,12 +2157,12 @@ contains
       type(FermionicField)                  :: S_G0W0,S_G0W0_interp
       type(FermionicField)                  :: S_G0W0dc,S_G0W0dc_interp
       complex(8),allocatable                :: invGf(:,:),Zk(:,:,:),Smat(:,:,:,:)
-      real(8),allocatable                   :: QPpole(:,:),QPpolelist(:)
+      real(8),allocatable                   :: QPpole(:,:),QPpolelist(:),QPpolelist_tmp(:)
       real(8),allocatable                   :: wreal(:),wreal_read(:)
       real(8),allocatable                   :: Aloc(:,:,:)
-      real(8)                               :: ReS,ImS,mu_
+      real(8)                               :: ReS,ImS,wr_point,mu_
       real                                  :: start,finish
-      integer                               :: ik,iw,QPndx
+      integer                               :: ik,iw,QPndx,Ntmp
       integer                               :: Nreal_read = 5000
       integer                               :: iorb,jorb,ispin
       logical                               :: S_G0W0exists
@@ -2181,11 +2177,10 @@ contains
       if(.not.Uwan_stored) stop "print_G0W0_dispersion: rotation towards the DFT basis not stored."
       !
       !Uwan rotation brings from LDA to Wannier
-      if((ib2_UwanDFT-ib1_UwanDFT).ne.(Lttc%Norb-1)) stop "print_G0W0_dispersion: ib2_UwanDFT-ib1_UwanDFT does not match SGoWo dimension."
       call assert_shape(UwanDFT(:,:,:,1),[Lttc%Norb,Lttc%Norb,Lttc%Nkpt],"print_G0W0_dispersion","UwanDFT")
       allocate(Zk(Lttc%Norb,Lttc%Norb,Lttc%Nkpt));Zk=czero
       do ik=1,Lttc%Nkpt
-         Zk(:,:,ik) = dag(UwanDFT(ib1_UwanDFT:ib2_UwanDFT,:,ik,1))
+         Zk(:,:,ik) = dag(UwanDFT(:,:,ik,1))
       enddo
       !
       if(allocated(Vxc))call assert_shape(Vxc,[Lttc%Norb,Lttc%Norb,Lttc%Nkpt,Nspin],"print_G0W0_dispersion","Vxc")
@@ -2318,35 +2313,52 @@ contains
             !go to LDA basis and compute: w + mu - E(k) - Re{Sigma(k,w)}
             allocate(QPpole(Lttc%Norb,Nreal));QPpole=0d0
             do iw=1,Nreal
-               QPpole(:,iw) = wreal(iw) + mu_ - Lttc%Ek(:,ik) - diagonal(dreal(rotate(S_G0W0_interp%wks(:,:,iw,ik,ispin),Zk(:,:,ik))))
+               QPpole(:,iw) = wreal(iw) + mu_ - dreal(diagonal(rotate((Lttc%Hk(:,:,ik) + S_G0W0_interp%wks(:,:,iw,ik,ispin)),Lttc%Zk(:,:,ik))))
+               !Zk from Uwan may bring S_G0W0_interp in a different ordering in the diagonal basis with respect to Lttc%Ek
+               !QPpole(:,iw) = wreal(iw) + mu_ - Lttc%Ek(:,ik) - diagonal(dreal(rotate(S_G0W0_interp%wks(:,:,iw,ik,ispin),Zk(:,:,ik))))
             enddo
             !
             !find the zeros of the previous equation
             do iorb=1,Lttc%Norb
                !
                !get a list of w corresponding to the zeros of the previous equation
-               if(allocated(QPpolelist))deallocate(QPpolelist)
-               allocate(QPpolelist(1));QPpolelist=0d0
                do iw=1,Nreal-1
                   if((QPpole(iorb,iw)*QPpole(iorb,iw+1)).lt.0d0)then
+                     !
+                     wr_point = linear_interp_2x( [wreal(iw),QPpole(iorb,iw)], [wreal(iw+1),QPpole(iorb,iw+1)], 0d0 )
+                     !
                      if(allocated(QPpolelist))then
-                        QPpolelist = [ QPpolelist, wreal(iw) ]
+                        !
+                        !QPpolelist = [ QPpolelist, wreal(iw) ] <-this is nicer but apparently screws up the array bounds
+                        !
+                        Ntmp = size(QPpolelist,dim=1)
+                        allocate(QPpolelist_tmp(Ntmp));QPpolelist_tmp = QPpolelist
+                        deallocate(QPpolelist)
+                        allocate(QPpolelist(Ntmp+1));QPpolelist(1:Ntmp) = QPpolelist_tmp
+                        deallocate(QPpolelist_tmp)
+                        QPpolelist(Ntmp+1) = wr_point
+                        !
                      else
-                        QPpolelist(1) = wreal(iw)
+                        !
+                        allocate(QPpolelist(1))
+                        QPpolelist(1) = wr_point
+                        !
                      endif
                   endif
                enddo
-               if(size(QPpolelist).eq.0)stop"print_G0W0_dispersion: list of QP poles has zero size. Try to increase MAX_WREAL."
+               if(.not.allocated(QPpolelist))stop"print_G0W0_dispersion: list of QP poles has zero size. Try to increase MAX_WREAL."
                !
                !select the pole closer to bare band
                QPndx = minloc(abs(QPpolelist-Lttc%Ek(iorb,ik)),dim=1)
                Lttc%Ek_qp(iorb,ik,ispin) = QPpolelist(QPndx)
                !
+               deallocate(QPpolelist)
+               !
             enddo
             deallocate(QPpole)
             !
             !rotate back to Wannier basis
-            Lttc%Hk_qp(:,:,ik,ispin) = rotate(diag(Lttc%Ek_qp(:,ik,ispin)),dag(Zk(:,:,ik)))
+            Lttc%Hk_qp(:,:,ik,ispin) = rotate(diag(Lttc%Ek_qp(:,ik,ispin)),dag(Lttc%Zk(:,:,ik)))
             !
          enddo
          call dump_Hk(Lttc%Hk_qp(:,:,:,ispin),Lttc%kpt,reg(pathINPUTtr)//"G0W0plots/","Hk_qp_s"//str(ispin)//".DAT")

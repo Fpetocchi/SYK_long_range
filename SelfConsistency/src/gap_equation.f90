@@ -785,8 +785,8 @@ contains
                !linear interpolation of Wee between the two points on the matsubara grid enclosing wm
                wndx_a = floor(wm/MatsStep) + 1
                wndx_b = wndx_a + 1
-               ReW_wm_intp = linear_interp( [wmats(wndx_a),dreal(Wee(wndx_a))] , [wmats(wndx_b),dreal(Wee(wndx_b))] , wm )
-               ImW_wm_intp = linear_interp( [wmats(wndx_a),dimag(Wee(wndx_a))] , [wmats(wndx_b),dimag(Wee(wndx_b))] , wm )
+               ReW_wm_intp = linear_interp_2y( [wmats(wndx_a),dreal(Wee(wndx_a))] , [wmats(wndx_b),dreal(Wee(wndx_b))] , wm )
+               ImW_wm_intp = linear_interp_2y( [wmats(wndx_a),dimag(Wee(wndx_a))] , [wmats(wndx_b),dimag(Wee(wndx_b))] , wm )
                W_wm_i = dcmplx(ReW_wm_intp,ImW_wm_intp)
                !
                !continous frequency correspnding to iy-1
@@ -794,8 +794,8 @@ contains
                !linear interpolation of Wee between the two points on the matsubara grid enclosing wm
                wndx_a = floor(wm/MatsStep) + 1
                wndx_b = wndx_a + 1
-               ReW_wm_intp = linear_interp( [wmats(wndx_a),dreal(Wee(wndx_a))] , [wmats(wndx_b),dreal(Wee(wndx_b))] , wm )
-               ImW_wm_intp = linear_interp( [wmats(wndx_a),dimag(Wee(wndx_a))] , [wmats(wndx_b),dimag(Wee(wndx_b))] , wm )
+               ReW_wm_intp = linear_interp_2y( [wmats(wndx_a),dreal(Wee(wndx_a))] , [wmats(wndx_b),dreal(Wee(wndx_b))] , wm )
+               ImW_wm_intp = linear_interp_2y( [wmats(wndx_a),dimag(Wee(wndx_a))] , [wmats(wndx_b),dimag(Wee(wndx_b))] , wm )
                W_wm_j = dcmplx(ReW_wm_intp,ImW_wm_intp)
                !
                !integrand for iy and iy-1
@@ -817,8 +817,8 @@ contains
                !linear interpolation of Wee between the two points on the matsubara grid enclosing wm
                wndx_a = floor(wm/MatsStep) + 1
                wndx_b = wndx_a + 1
-               ReW_wm_intp = linear_interp( [wmats(wndx_a),dreal(Wee(wndx_a))] , [wmats(wndx_b),dreal(Wee(wndx_b))] , wm )
-               ImW_wm_intp = linear_interp( [wmats(wndx_a),dimag(Wee(wndx_a))] , [wmats(wndx_b),dimag(Wee(wndx_b))] , wm )
+               ReW_wm_intp = linear_interp_2y( [wmats(wndx_a),dreal(Wee(wndx_a))] , [wmats(wndx_b),dreal(Wee(wndx_b))] , wm )
+               ImW_wm_intp = linear_interp_2y( [wmats(wndx_a),dimag(Wee(wndx_a))] , [wmats(wndx_b),dimag(Wee(wndx_b))] , wm )
                W_wm_i = dcmplx(ReW_wm_intp,ImW_wm_intp)
                !
                !continous frequency correspnding to iy-1
@@ -826,8 +826,8 @@ contains
                !linear interpolation of Wee between the two points on the matsubara grid enclosing wm
                wndx_a = floor(wm/MatsStep) + 1
                wndx_b = wndx_a + 1
-               ReW_wm_intp = linear_interp( [wmats(wndx_a),dreal(Wee(wndx_a))] , [wmats(wndx_b),dreal(Wee(wndx_b))] , wm )
-               ImW_wm_intp = linear_interp( [wmats(wndx_a),dimag(Wee(wndx_a))] , [wmats(wndx_b),dimag(Wee(wndx_b))] , wm )
+               ReW_wm_intp = linear_interp_2y( [wmats(wndx_a),dreal(Wee(wndx_a))] , [wmats(wndx_b),dreal(Wee(wndx_b))] , wm )
+               ImW_wm_intp = linear_interp_2y( [wmats(wndx_a),dimag(Wee(wndx_a))] , [wmats(wndx_b),dimag(Wee(wndx_b))] , wm )
                W_wm_j = dcmplx(ReW_wm_intp,ImW_wm_intp)
                !
                !integrand for iy and iy-1

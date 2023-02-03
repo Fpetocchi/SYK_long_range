@@ -72,7 +72,7 @@ module utils_main
    !
    logical                                  :: calc_Pk=.false.
    logical                                  :: merge_P=.false.
-   logical                                  :: calc_W=.false.
+   logical                                  :: calc_Wk=.false.
    logical                                  :: calc_Wfull=.false.
    logical                                  :: calc_Wedmft=.false.
    logical                                  :: calc_Sigmak=.false.
@@ -354,12 +354,12 @@ contains
       ! This subroutine does somethig only for scGW calculations
       if(reg(CalculationType).eq."scGW")then
          !
-         call read_InputFile("input.in")
+         !call read_InputFile("input.in")
          !
          call inquireDir(reg(pathDATA)//str(Iteration-1),PrvItexist,hardstop=.false.,verb=.false.)
          call inquireDir(reg(pathDATA)//str(0),ZeroItexist,hardstop=.false.,verb=.false.)
          !
-         Itpath = reg(pathDATA)//str(Iteration)
+         Itpath = reg(pathDATA)//str(Iteration)//"/"
          !
          if(Iteration.ne.0)then
             if(.not.PrvItexist)then
@@ -379,16 +379,22 @@ contains
          endif
          !
          !Calculations using large amount of memory result in a crash when the system() is called
-         call createDir(reg(Itpath)//"/Convergence/Glat",verb=verbose)
-         call createDir(reg(Itpath)//"/Convergence/Slat",verb=verbose)
-         call createDir(reg(Itpath)//"/Convergence/Sful",verb=verbose)
-         call createDir(reg(Itpath)//"/Convergence/Sful_Gamma",verb=verbose)
-         call createDir(reg(Itpath)//"/Convergence/Ulat",verb=verbose)
-         call createDir(reg(Itpath)//"/Convergence/Wlat",verb=verbose)
-         call createDir(reg(Itpath)//"/Convergence/Plat",verb=verbose)
+         call createDir(reg(Itpath)//"Convergence/Glat",verb=verbose)
+         call createDir(reg(Itpath)//"Convergence/Slat",verb=verbose)
+         call createDir(reg(Itpath)//"Convergence/Sful",verb=verbose)
+         call createDir(reg(Itpath)//"Convergence/Sful_Gamma",verb=verbose)
+         call createDir(reg(Itpath)//"Convergence/Ulat",verb=verbose)
+         call createDir(reg(Itpath)//"Convergence/Wlat",verb=verbose)
+         call createDir(reg(Itpath)//"Convergence/Plat",verb=verbose)
+         !
+         call dump_MaxEnt(Ulat,"mats",reg(Itpath)//"Convergence/","Ulat",EqvGWndx%SetOrbs)
          !
          !Print info to user
-         if(Iteration.gt.0)write(*,"(A)") new_line("A")//"     Initializing "//reg(Itpath)
+         if(Iteration.gt.0)then
+            write(*,"(A)") new_line("A")//"     Initializing "//reg(Itpath)
+         else
+            call execute_command_line(" cp used.input.in "//reg(Itpath))
+         endif
          !
          !These are used throughout the whole calculation
          ItFolder = reg(pathDATA)//str(Iteration)//"/"
@@ -488,13 +494,16 @@ contains
          Lttc%iq_gamma = iq_gamma_Hk
       endif
       !
-      Lttc%status=.true.
-      !
       if(Lttc%Nkpt.ne.(Nkpt3(1)*Nkpt3(2)*Nkpt3(3)))stop "Total number of K-points does not match with number of K-points per dimension."
-      if(XEPSisread)write(*,"(A,1I4)")"     Number of irreducible K-points: ",Lttc%Nkpt_irred
       !
       !Estimate of the bandwidth plus
-      if(wrealMax.eq.0d0)wrealMax = 1.5*maxval(abs(Lttc%Ek))
+      Lttc%D_lower = minval(Lttc%Ek)
+      Lttc%D_upper = maxval(Lttc%Ek)
+      if(wrealMax.eq.0d0) wrealMax = 1.5*maxval(abs(Lttc%Ek))
+      !
+      Lttc%status=.true.
+      !
+      if(XEPSisread)write(*,"(A,1I4)")"     Number of irreducible K-points: ",Lttc%Nkpt_irred
       !
       !Store the local Hamiltonian
       call dump_Matrix(Lttc%Hloc,reg(pathINPUT),"Hloc.DAT")
@@ -1198,7 +1207,7 @@ contains
          !
       endif
       !
-      calc_W = calc_Wedmft .or. calc_Wfull
+      calc_Wk = calc_Wedmft .or. calc_Wfull
       !
       !
       !Allocate and initialize different density matrices
@@ -1375,16 +1384,16 @@ contains
                      !
                      if(Iteration.eq.0)then
                         !
-                        !Keep only single-shot GW: G0W0 - Vxc + VH
+                        !Keep only single-shot GW: G0W0 - Vxc
                         if(addTierIII)then
-                           S_Full%wks(:,:,iw,ik,ispin) = S_G0W0%wks(:,:,iw,ik,ispin) - Vxc(:,:,ik,ispin) + VH(:,:)
+                           S_Full%wks(:,:,iw,ik,ispin) = S_G0W0%wks(:,:,iw,ik,ispin) - Vxc(:,:,ik,ispin)
                         else
                            S_Full%wks(:,:,iw,ik,ispin) = S_G0W0%wks(:,:,iw,ik,ispin)
                         endif
                         !
                      else
                         !
-                        !Put together all the terms: G0W0(already with removed DC) + scGW(already containing Simp)
+                        !Put together all the terms: G0W0(already with removed DC) + scGW(already containing Simp) - Vxc + VH
                         if(addTierIII)then
                            S_Full%wks(:,:,iw,ik,ispin) = S_G0W0%wks(:,:,iw,ik,ispin) + S_GW%wks(:,:,iw,ik,ispin) - Vxc(:,:,ik,ispin) + VH(:,:)
                         else
@@ -2350,9 +2359,7 @@ contains
                !
                curlyU%bare_local = (1d0-Mixing_curlyU)*curlyU%bare_local + Mixing_curlyU*curlyUold%bare_local
                curlyU%screened_local = (1d0-Mixing_curlyU)*curlyU%screened_local + Mixing_curlyU*curlyUold%screened_local
-               !do iw=1,Nmats
-               !   curlyU%screened_local(:,:,iw) = (1d0-Mixing_curlyU)*curlyU%screened_local(:,:,iw) + Mixing_curlyU*curlyUold%screened_local(:,:,iw)
-               !enddo
+               !
                call DeallocateBosonicField(curlyUold)
             endif
             !
@@ -2508,7 +2515,7 @@ contains
       !
       implicit none
       !
-      integer                               :: iorb,jorb,ispin,jspin
+      integer                               :: iorb,jorb,korb,lorb,ispin,jspin
       integer                               :: ib1,ib2,isite,idum
       integer                               :: unit,ndx,itau,iw
       integer,allocatable                   :: wndx(:,:)
@@ -2981,13 +2988,17 @@ contains
                do ispin=1,Nspin
                   do iorb=1,LocalOrbs(isite)%Norb
                      do jorb=1,LocalOrbs(isite)%Norb
-                        call F2Bindex(LocalOrbs(isite)%Norb,[iorb,iorb],[jorb,jorb],ib1,ib2)
-                        Simp(isite)%N_s(iorb,iorb,ispin) = Simp(isite)%N_s(iorb,iorb,ispin) + curlyU%screened_local(ib1,ib2,1)*LocalOrbs(isite)%rho_OrbSpin(jorb,jorb,ispin)
-                        !
+                        do korb=1,LocalOrbs(isite)%Norb
+                           do lorb=1,LocalOrbs(isite)%Norb
+                              !
+                              call F2Bindex(LocalOrbs(isite)%Norb,[iorb,jorb],[korb,lorb],ib1,ib2)
+                              Simp(isite)%N_s(iorb,jorb,ispin) = Simp(isite)%N_s(iorb,jorb,ispin) + curlyU%screened_local(ib1,ib2,1)*LocalOrbs(isite)%rho_OrbSpin(korb,lorb,ispin)
+                              !
+                           enddo
+                        enddo
                      enddo
                   enddo
                enddo
-               call DeallocateBosonicField(curlyU)
                !
                !The magnetization will be given only by the self-energy beyond Hartree
                Simp(isite)%N_s(:,:,1) = (Simp(isite)%N_s(:,:,1)+Simp(isite)%N_s(:,:,Nspin))
@@ -2997,14 +3008,13 @@ contains
                !
                allocate(Uinst(LocalOrbs(isite)%Nflavor,LocalOrbs(isite)%Nflavor));Uinst=0d0
                call calc_QMCinteractions(curlyU,Uinst)
-               call DeallocateBosonicField(curlyU)
                !
                Simp(isite)%N_s = czero
                do ib1=1,LocalOrbs(isite)%Nflavor
                   iorb = (ib1+mod(ib1,2))/2
                   ispin = abs(mod(ib1,2)-2)
                   do ib2=1,LocalOrbs(isite)%Nflavor
-                     if(ib1.eq.ib2) cycle !Simp(isite)%N_s(iorb,iorb,ispin) = Simp(isite)%N_s(iorb,iorb,ispin) + Uinst(2*iorb-1,2*iorb)*LocalOrbs(isite)%rho_Flav(ib2)
+                     if(ib1.eq.ib2) cycle
                      Simp(isite)%N_s(iorb,iorb,ispin) = Simp(isite)%N_s(iorb,iorb,ispin) + Uinst(ib1,ib2)*LocalOrbs(isite)%rho_Flav(ib2)
                   enddo
                enddo
@@ -3015,6 +3025,7 @@ contains
                Simp(isite)%N_s(:,:,Nspin) = Simp(isite)%N_s(:,:,1)
                !
          end select
+         call DeallocateBosonicField(curlyU)
          !
          !Hartree term in the Solver basis
          call dump_Matrix(Simp(isite)%N_s,reg(PrevItFolder),"Solver_"//reg(LocalOrbs(isite)%Name)//"/Hartree_UNimp_"//reg(LocalOrbs(isite)%Name),paramagnet)
@@ -3034,6 +3045,10 @@ contains
       call dump_FermionicField(S_DMFT,reg(PrevItFolder),"Simp_w",paramagnet)
       call dump_MaxEnt(S_DMFT,"mats",reg(PrevItFolder)//"Convergence/","Simp",EqvGWndx%SetOrbs,WmaxPade=PadeWlimit)
       call dump_Matrix(S_DMFT%N_s,reg(PrevItFolder),"Hartree_UNimp",paramagnet)
+      !
+      !I tested that rotating the Hartree computed in the Solver basis to the orbital basis
+      !gives the same result by computng the Hartree directly with the curlyU and densityDMFT
+      !already in the orbtial basis
       !
       !Compute local EDMFT quasiparticle weigth in the Wannier basis
       allocate(Z_dmft(S_DMFT%Norb,S_DMFT%Norb,Nspin));Z_dmft=0d0

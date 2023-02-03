@@ -155,7 +155,7 @@ class ct_hyb
          {
             path Dcomp = "Delta["+str(ifl)+"]";
             int Ntau_D =  Delta[ifl].size();
-            if(Ntau_D!=NtauF) mpi.report(" The Number of tau points in "+Dcomp+" is: "+str(Ntau_D)+" different from NtauF: "+str(NtauF));
+            //if(Ntau_D!=NtauF) mpi.report(" The Number of tau points in "+Dcomp+" is: "+str(Ntau_D)+" different from NtauF: "+str(NtauF));
             for(int itau=0; itau < Ntau_D; itau++)
             {
                if(Delta[ifl][itau]<0.0) mpi.StopError( " ->"+Dcomp+" at tau "+str(itau)+" is positive - Exiting.");
@@ -192,7 +192,7 @@ class ct_hyb
                {
                   int Ntau_K = K_table[ifl][jfl].size();
                   path Kcomp = "K["+str(ifl)+"]["+str(jfl)+"]";
-                  if(Ntau_K!=NtauB) mpi.report(" The Number of tau points in "+Kcomp+" is: "+str(Ntau_K)+" different from NtauB: "+str(NtauB));
+                  //if(Ntau_K!=NtauB) mpi.report(" The Number of tau points in "+Kcomp+" is: "+str(Ntau_K)+" different from NtauB: "+str(NtauB));
                   //
                   double K_zero =  K_table[ifl][jfl].front();
                   double K_beta =  K_table[ifl][jfl].back();
@@ -212,7 +212,7 @@ class ct_hyb
                   {
                      int Ntau_K = Kp_table[ifl][jfl].size();
                      path Kcomp = "Kp["+str(ifl)+"]["+str(jfl)+"]";
-                     if(Ntau_K!=NtauB) mpi.report(" The Number of tau points in "+Kcomp+" is: "+str(Ntau_K)+" different from NtauB: "+str(NtauB));
+                     //if(Ntau_K!=NtauB) mpi.report(" The Number of tau points in "+Kcomp+" is: "+str(Ntau_K)+" different from NtauB: "+str(NtauB));
                      //
                      double Kp_zero =  Kp_table[ifl][jfl].front();
                      double Kp_beta =  Kp_table[ifl][jfl].back();

@@ -144,6 +144,7 @@ contains
       real(8),allocatable                   :: wmats(:)
       integer                               :: iw,itau
       integer                               :: Nmats,Ntau
+      logical                               :: abort
       !
       !
       if(verbose)write(*,"(A)") "---- mats2itau_FermionicCoeff"
@@ -231,6 +232,31 @@ contains
       enddo !itau
       deallocate(wmats,Ae,Ao)
       !
+      abort=.false.
+      do itau=1,Ntau
+         do iw=1,Nmats
+            if(coswt(iw,itau).ne.coswt(iw,itau))then
+               !NaN condition
+               write(*,"(A)")"mats2itau_FermionicCoeff: coswt["//str(iw)//","//str(itau)//"] is NaN."
+               abort=.true.
+            elseif(abs(coswt(iw,itau)).ge.huge(1d0))then
+               !Infinity condition
+               write(*,"(A)")"mats2itau_FermionicCoeff: coswt["//str(iw)//","//str(itau)//"] is Infinity."
+               abort=.true.
+            endif
+            if(sinwt(iw,itau).ne.sinwt(iw,itau))then
+               !NaN condition
+               write(*,"(A)")"mats2itau_FermionicCoeff: sinwt["//str(iw)//","//str(itau)//"] is NaN."
+               abort=.true.
+            elseif(abs(sinwt(iw,itau)).ge.huge(1d0))then
+               !Infinity condition
+               write(*,"(A)")"mats2itau_FermionicCoeff: sinwt["//str(iw)//","//str(itau)//"] is Infinity."
+               abort=.true.
+            endif
+         enddo
+      enddo
+      if(abort) stop "mats2itau_FermionicCoeff: coefficient error."
+      !
    end subroutine mats2itau_FermionicCoeff
 
 
@@ -310,6 +336,7 @@ contains
       real(8)                               :: wb1,x
       integer                               :: iw,itau
       integer                               :: Nmats,Ntau
+      logical                               :: abort
       !
       !
       if(verbose)write(*,"(A)") "---- mats2itau_BosonicCoeff"
@@ -349,6 +376,22 @@ contains
          endif
          !
       enddo
+      !
+      abort=.false.
+      do itau=1,Ntau
+         do iw=1,Nmats
+            if(coswt(iw,itau).ne.coswt(iw,itau))then
+               !NaN condition
+               write(*,"(A)")"mats2itau_BosonicCoeff: coswt["//str(iw)//","//str(itau)//"] is NaN."
+               abort=.true.
+            elseif(abs(coswt(iw,itau)).ge.huge(1d0))then
+               !Infinity condition
+               write(*,"(A)")"mats2itau_BosonicCoeff: coswt["//str(iw)//","//str(itau)//"] is Infinity."
+               abort=.true.
+            endif
+         enddo
+      enddo
+      if(abort) stop "mats2itau_BosonicCoeff: coefficient error."
       !
    end subroutine mats2itau_BosonicCoeff
 

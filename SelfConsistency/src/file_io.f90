@@ -1044,15 +1044,15 @@ contains
             read(unit) idum1,idum2,kvec
             !if (idum1.ne.ispin) stop "read_FermionicField_Kdep: ispin does not match."
             if (idum2.ne.ik) stop "read_FermionicField_Kdep: ik does not match."
-            if(abs(kvec(1)-kpt(1,ik)).gt.eps)then
+            if(abs(kvec(1)-kpt(1,ik)).gt.1e-4)then !eps
                write(*,"(A,1I5,2F)")"     Kx error in reading: "//reg(filename)//"_k_s"//str(ispin)//".DAT",ik,kvec(1),kpt(1,ik)
                stop "read_FermionicField_Kdep: kvec(1) does not match."
             endif
-            if(abs(kvec(2)-kpt(2,ik)).gt.eps)then
+            if(abs(kvec(2)-kpt(2,ik)).gt.1e-4)then !eps
                write(*,"(A,1I5,2F)")"     Ky error in reading: "//reg(filename)//"_k_s"//str(ispin)//".DAT",ik,kvec(2),kpt(2,ik)
                stop "read_FermionicField_Kdep: kvec(2) does not match."
             endif
-            if(abs(kvec(3)-kpt(3,ik)).gt.eps)then
+            if(abs(kvec(3)-kpt(3,ik)).gt.1e-4)then !eps
                write(*,"(A,1I5,2F)")"     Kz error in reading: "//reg(filename)//"_k_s"//str(ispin)//".DAT",ik,kvec(3),kpt(3,ik)
                stop "read_FermionicField_Kdep: kvec(3) does not match."
             endif

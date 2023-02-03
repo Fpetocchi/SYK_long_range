@@ -109,8 +109,9 @@ subroutine interpolate2kpath_Fermionic(Sfull,Lttc,pathOUTPUT)
    !recalculate the internal K-meshes
    if(print_path_G.and.(.not.Lttc%pathStored))then
       call interpolate2Path(Lttc,Nkpt_path,"Hk",store=.true.)
-      call dump_Hk(Lttc%Hk_path,Lttc%kptpath,reg(pathOUTPUT),"Hk_path.DAT")
    endif
+   call dump_Hk(Lttc%Hk_path,Lttc%kptpath,reg(pathOUTPUT),"Hk_path.DAT")
+   !
    if(print_plane_G.and.(.not.Lttc%planeStored))then
       call interpolate2Plane(Lttc,Nkpt_plane,"Hk",store=.true.)
    endif

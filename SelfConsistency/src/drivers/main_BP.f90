@@ -23,7 +23,7 @@ program SelfConsistency
    integer                                  :: a,b,c,d
    integer                                  :: a_,b_,c_,d_
    type(BosonicField)                       :: Ucrpa
-   complex(8),allocatable                   :: URnn(:,:,:)
+   logical                                  :: dumpUcrpa
    !>>>PROJECT SPECIFIC
    !
    !
@@ -105,8 +105,11 @@ program SelfConsistency
    !
    !update the FT with the cleared items
    if(reg(structure).ne."None")then
-      call interpolateHk2Path(Crystal,reg(structure),Crystal%Nkpt_path,pathOUTPUT=reg(pathINPUT),filename="Uk_BP",data_in=Ulat%bare)
+      call interpolate2Path(Crystal,Nkpt_path,"Uk_BP",pathOUTPUT=reg(pathINPUT),store=.false.,skipAkw=.true.,data_in=Ulat%bare)
    endif
+   !
+   !if true this variable prints the screened interaction on BP
+   call parse_input_variable(dumpUcrpa,"DUMP_CRPA",reg(InputFile),default=.false.,comment="Print the cRPA interaction inside BP.")
    !>>>PROJECT SPECIFIC
    !
    !
@@ -149,10 +152,10 @@ program SelfConsistency
             if(reg(DC_type_P).eq."GlocGloc")then
                call AllocateBosonicField(P_GGdc,Crystal%Norb,Nmats,Crystal%iq_gamma,Nsite=Nsite,no_bare=.true.,Beta=Beta)
                call calc_PiGGdc(P_GGdc,Glat)
-               call MergeFields(Plat,P_EDMFT,alphaPi,LocalOrbs,RotateHloc,PiGG_DC=P_GGdc)
+               call MergeFields(Plat,P_EDMFT,alphaPi,LocalOrbs,OffDiag=RotateHloc,PiGG_DC=P_GGdc)
                call DeallocateBosonicField(P_GGdc)
             elseif(reg(DC_type_P).eq."Ploc")then
-               call MergeFields(Plat,P_EDMFT,alphaPi,LocalOrbs,RotateHloc)
+               call MergeFields(Plat,P_EDMFT,alphaPi,LocalOrbs,OffDiag=RotateHloc)
             endif
             call dump_BosonicField(Plat,reg(ItFolder),"Plat_merged_w.DAT")
          elseif(calc_Pguess)then
@@ -169,17 +172,19 @@ program SelfConsistency
       !
       !PROJECT SPECIFIC>>>
       !Here I remove from the polarization all the indexes related to BP
-      !do a=3,4
-      !   do b=3,4
-      !      do c=3,4
-      !         do d=3,4
-      !            call F2Bindex(Crystal%Norb,[a,b],[c,d],ip1,ip2)
-      !            Plat%screened(ip1,ip2,:,:) = czero
-      !            Plat%screened_local(ip1,ip2,:) = czero
-      !         enddo
-      !      enddo
-      !   enddo
-      !enddo
+      if(dumpUcrpa)then
+         do a=1,4
+            do b=1,4
+               do c=1,4
+                  do d=1,4
+                     call F2Bindex(Crystal%Norb,[a,b],[c,d],ip1,ip2)
+                     Plat%screened(ip1,ip2,:,:) = czero
+                     Plat%screened_local(ip1,ip2,:) = czero
+                  enddo
+               enddo
+            enddo
+         enddo
+      endif
       !>>>PROJECT SPECIFIC
       !
       !Fully screened interaction - only G0W0,scGW,GW+EDMFT,EDMFT
@@ -195,32 +200,29 @@ program SelfConsistency
       !
       !PROJECT SPECIFIC>>>
       !Here I print the screened interaction
-      !call AllocateBosonicField(Ucrpa,4,Nmats,Crystal%iq_gamma,Nkpt=Crystal%Nkpt,Nsite=4,Beta=Beta)
-      !do a=3,4
-      !   do b=3,4
-      !      do c=3,4
-      !         do d=3,4
-      !            !
-      !            a_ = a - 2
-      !            b_ = b - 2
-      !            c_ = c - 2
-      !            d_ = d - 2
-      !            !
-      !            call F2Bindex(Crystal%Norb,[a,b],[c,d],ip1,ip2)
-      !            call F2Bindex(4,[a_,b_],[c_,d_],iu1,iu2)
-      !            !
-      !            Ucrpa%screened(iu1,iu2,:,:) = Wlat%screened(ip1,ip2,:,:)
-      !            Ucrpa%bare(iu1,iu2,:) = Wlat%bare(ip1,ip2,:)
-      !            Ucrpa%screened_local(iu1,iu2,:) = Wlat%screened_local(ip1,ip2,:)
-      !            Ucrpa%bare_local(iu1,iu2) = Wlat%bare_local(ip1,ip2)
-      !            !
-      !         enddo
-      !      enddo
-      !   enddo
-      !enddo
-      !call dump_BosonicField(Ucrpa,reg(pathINPUTtr),"Ucrpa_w_N"//str(look4dens%TargetDensity,4)//".DAT")
-      !call dump_BosonicField(Ucrpa,reg(pathINPUTtr)//"VW_imag_N"//str(look4dens%TargetDensity,4)//"/",.true.)
-      !stop
+      if(dumpUcrpa)then
+         call AllocateBosonicField(Ucrpa,4,Nmats,Crystal%iq_gamma,Nkpt=Crystal%Nkpt,Nsite=4,Beta=Beta)
+         do a=1,4
+            do b=1,4
+               do c=1,4
+                  do d=1,4
+                     !
+                     call F2Bindex(Crystal%Norb,[a,b],[c,d],ip1,ip2)
+                     call F2Bindex(4           ,[a,b],[c,d],iu1,iu2)
+                     !
+                     Ucrpa%screened(iu1,iu2,:,:) = Wlat%screened(ip1,ip2,:,:)
+                     Ucrpa%bare(iu1,iu2,:) = Wlat%bare(ip1,ip2,:)
+                     Ucrpa%screened_local(iu1,iu2,:) = Wlat%screened_local(ip1,ip2,:)
+                     Ucrpa%bare_local(iu1,iu2) = Wlat%bare_local(ip1,ip2)
+                     !
+                  enddo
+               enddo
+            enddo
+         enddo
+         call dump_BosonicField(Ucrpa,reg(pathINPUTtr),"Ucrpa_w_N"//str(look4dens%TargetDensity,4)//".DAT")
+         call dump_BosonicField(Ucrpa,reg(pathINPUTtr)//"VW_imag_N"//str(look4dens%TargetDensity,4)//"/",.true.)
+         stop
+      endif
       !>>>PROJECT SPECIFIC
       !
       !Causality correction on curlyU

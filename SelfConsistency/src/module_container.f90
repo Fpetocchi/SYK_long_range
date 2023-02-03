@@ -31,7 +31,8 @@ module module_container
    get_moments_F                            ,&
    assert_shape                             ,&
    splint,nspline                           ,&
-   cubic_interp,linear_interp               ,&
+   cubic_interp                             ,&
+   linear_interp_2y,linear_interp_2x        ,&
    trapezoid_integration                    ,&
    get_pattern,sort_array,flip_array
 
@@ -100,6 +101,7 @@ module module_container
    join_SigmaCX                             ,&
    product2NN,NN2product                    ,&
    calc_Ek,calc_Ep                          ,&
+   check_QP_poles                           ,&
    build_Potential
 
 

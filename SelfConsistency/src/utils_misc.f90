@@ -164,7 +164,8 @@ module utils_misc
    public :: str
    public :: reg
    public :: cubic_interp
-   public :: linear_interp
+   public :: linear_interp_2y
+   public :: linear_interp_2x
    public :: trapezoid_integration
 
    !===========================================================================!
@@ -2030,7 +2031,7 @@ contains
    !---------------------------------------------------------------------------!
    !PURPOSE: function which gives the line passing throughout 2 points
    !---------------------------------------------------------------------------!
-   function linear_interp(A,B,xp) result(yp)
+   function linear_interp_2y(A,B,xp) result(yp)
       implicit none
       real(8),intent(in)                    :: A(2)
       real(8),intent(in)                    :: B(2)
@@ -2040,9 +2041,27 @@ contains
       xA = A(1); yA = A(2)
       xB = B(1); yB = B(2)
       !
+      if(xA.eq.xB)stop "linear_interp_2y: denominator is zero."
+      !
       yp = (xp-xB) * (yA-yB)/(xA-xB) + yB
       !
-   end function linear_interp
+   end function linear_interp_2y
+   !
+   function linear_interp_2x(A,B,yp) result(xp)
+      implicit none
+      real(8),intent(in)                    :: A(2)
+      real(8),intent(in)                    :: B(2)
+      real(8),intent(in)                    :: yp
+      real(8)                               :: xp,xA,yA,xB,yB
+      !
+      xA = A(1); yA = A(2)
+      xB = B(1); yB = B(2)
+      !
+      if(yA.eq.yB)stop "linear_interp_2x: denominator is zero."
+      !
+      xp = (yp-yB) * (xA-xB)/(yA-yB) + xB
+      !
+   end function linear_interp_2x
 
 
    !---------------------------------------------------------------------------!
@@ -2198,7 +2217,8 @@ contains
       real(8),intent(in)                    :: q
       real(8),intent(in)                    :: x(:)
       real(8),intent(in)                    :: fx(:)
-      real(8),intent(out)                   :: wcos,wsin
+      real(8),intent(out)                   :: wcos
+      real(8),intent(out)                   :: wsin
       !
       integer                               :: npoints,nseg
       integer                               :: n,n2
@@ -2207,6 +2227,8 @@ contains
       real(8)                               :: c0,c2,s1,oh,oh2
       real(8)                               :: a,b,c,bb,yy
       real(8)                               :: expbh1,expbh2,scos,ssin
+      logical                               :: abort
+      real(8),parameter                     :: precision=1d-9
       !
       npoints = size(x)
       if(mod(npoints,2).eq.0) stop "FermionicFilon: npoints is even."
@@ -2231,8 +2253,7 @@ contains
          ! check that fx is not "zero"
          scos = ( fx(n2-1) + 4.d0*fx(n2) + fx(n2+1) )*h/3.d0
          !
-         !if(dabs(scos).lt.1d-9) cycle !goto 1111
-         if(dabs(scos).lt.1e3*tiny(1d0)) cycle !goto 1111
+         if(dabs(scos).lt.precision) cycle
          !
          h2    = h * h
          oh    = 1.d0/h
@@ -2281,6 +2302,27 @@ contains
          wsin = wsin + coskx*ssin + sinkx*scos
          !1111   continue
       enddo
+      !
+      abort=.false.
+      if(wcos.ne.wcos)then
+         !NaN condition
+         write(*,"(A)")"FermionicFilon: wcos is NaN."
+         abort=.true.
+      elseif(abs(wcos).ge.huge(1d0))then
+         !Infinity condition
+         write(*,"(A)")"FermionicFilon: wcos is Infinity."
+         abort=.true.
+      endif
+      if(wsin.ne.wsin)then
+         !NaN condition
+         write(*,"(A)")"FermionicFilon: wsin is NaN."
+         abort=.true.
+      elseif(abs(wsin).ge.huge(1d0))then
+         !Infinity condition
+         write(*,"(A)")"FermionicFilon: wsin is Infinity."
+         abort=.true.
+      endif
+      if(abort) stop "FermionicFilon: coefficient error. Increase precision and recompile."
       !
    end subroutine FermionicFilon
 
@@ -2380,21 +2422,27 @@ contains
       implicit none
       real(8),intent(in)                    :: q
       real(8),intent(in)                    :: x(:)
-      real(8),intent(inout)                 :: wcos(:),wsin(:)
+      real(8),intent(inout)                 :: wcos(:)
+      real(8),intent(inout)                 :: wsin(:)
       !
       integer                               :: npoints,nseg
       integer                               :: n,n2
       real(8)                               :: oq,oq2,oq3,h,h2,h3
       real(8)                               :: coskh,sinkh,coskx,sinkx
       real(8)                               :: c0,c2,s1,oh,oh2,qh,qh2,qh3,qh4,qh5,qh6
+      logical                               :: abort
+      real(8),parameter                     :: precision=1d-9
       !
       npoints = size(x)
       if(mod(npoints,2).eq.0) stop "BosonicFilon: npoints is even."
       nseg = (npoints-1)/2
       !
+      call assert_shape(wcos,[npoints],"BosonicFilon","wcos")
+      call assert_shape(wsin,[npoints],"BosonicFilon","wsin")
+      !
       wcos=0d0;wsin=0d0
       !
-      if(dabs(q).lt.1d-15) then !if(dabs(q).lt.1.d-2) then !if(dabs(q).lt.1.d-4) then
+      if(dabs(q).lt.precision)then
          !
          !Small q
          do n=1,nseg
@@ -2485,6 +2533,29 @@ contains
          enddo
          !
       endif
+      !
+      abort=.false.
+      do n=1,npoints
+         if(wcos(n).ne.wcos(n))then
+            !NaN condition
+            write(*,"(A)")"BosonicFilon: wcos["//str(n)//"] is NaN."
+            abort=.true.
+         elseif(abs(wcos(n)).ge.huge(1d0))then
+            !Infinity condition
+            write(*,"(A)")"BosonicFilon: wcos["//str(n)//"] is Infinity."
+            abort=.true.
+         endif
+         if(wsin(n).ne.wsin(n))then
+            !NaN condition
+            write(*,"(A)")"BosonicFilon: wsin["//str(n)//"] is NaN."
+            abort=.true.
+         elseif(abs(wsin(n)).ge.huge(1d0))then
+            !Infinity condition
+            write(*,"(A)")"BosonicFilon: wsin["//str(n)//"] is Infinity."
+            abort=.true.
+         endif
+      enddo
+      if(abort) stop "BosonicFilon: coefficient error. Increase precision and recompile."
       !
    end subroutine BosonicFilon
 

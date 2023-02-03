@@ -125,6 +125,7 @@ module utils_fields
    public :: build_Potential
    public :: product2NN
    public :: NN2product
+   public :: check_QP_poles
    !functions
    public :: calc_Ek
    public :: calc_Ep
@@ -725,7 +726,7 @@ contains
       if(size(orbs).gt.Gloc%Norb) stop "loc2imp_Fermionic: number of requested orbitals greater than Gloc size."
       if(present(U))then
          call assert_shape(U,[size(orbs),size(orbs)],"loc2imp_Fermionic","U")
-         if(size(U,dim=1).ne.3) write(*,"(A)") "     Warning: The local orbital space rotation is well defined only for a t2g sub-shell."
+         !if(size(U,dim=1).ne.3) write(*,"(A)") "     Warning: The local orbital space rotation is well defined only for a t2g sub-shell."
          write(*,"(A)") "     The local orbital space will be rotated during extraction."
       endif
       !
@@ -787,7 +788,7 @@ contains
       if(size(orbs).gt.size(Oloc,dim=1)) stop "loc2imp_Matrix: number of requested orbitals greater than Oloc size."
       if(present(U))then
          call assert_shape(U,[size(orbs),size(orbs)],"loc2imp_Matrix","U")
-         if(size(U,dim=1).ne.3) write(*,"(A)") "     Warning: The local orbital space rotation is well defined only for a t2g sub-shell."
+         !if(size(U,dim=1).ne.3) write(*,"(A)") "     Warning: The local orbital space rotation is well defined only for a t2g sub-shell."
          write(*,"(A)") "     The local orbital space will be rotated during extraction."
       endif
       !
@@ -861,7 +862,7 @@ contains
          if(present(type))type_=reg(type)
          if(.not.present(Map)) stop "loc2imp_Bosonic: requested orbital rotation but map not provided."
          call assert_shape(U,[size(orbs),size(orbs)],"loc2imp_Bosonic","U")
-         if(size(U,dim=1).ne.3) write(*,"(A)") "     Warning: The local orbital space rotation is well defined only for a t2g sub-shell."
+         !if(size(U,dim=1).ne.3) write(*,"(A)") "     Warning: The local orbital space rotation is well defined only for a t2g sub-shell."
          write(*,"(A)") "     The local orbital space will be rotated during extraction."
       endif
       if(present(Map))then
@@ -2920,9 +2921,11 @@ contains
    !PURPOSE: compute the kinetic and potential energy
    !---------------------------------------------------------------------------!
    function calc_Ek(Gmats,Lttc) result(Ek)
+      !
       use parameters
       use linalg, only : dag
       implicit none
+      !
       type(FermionicField),intent(in)       :: Gmats
       type(Lattice),intent(in)              :: Lttc
       real(8)                               :: Ek(Gmats%Norb,Gmats%Norb)
@@ -2963,9 +2966,11 @@ contains
    end function calc_Ek
    !
    function calc_Ep(Gmats,Smats) result(Ep)
+      !
       use parameters
       use linalg, only : dag, deye
       implicit none
+      !
       type(FermionicField),intent(in)       :: Gmats
       type(FermionicField),intent(in)       :: Smats
       real(8)                               :: Ep(Gmats%Norb,Gmats%Norb)
@@ -3008,6 +3013,54 @@ contains
 
 
    !---------------------------------------------------------------------------!
+   !PURPOSE: check if the quasiparticle equatin has solutions in w=0
+   !---------------------------------------------------------------------------!
+   subroutine check_QP_poles(Lttc,Smats)
+      !
+      use parameters
+      use utils_misc
+      use linalg, only : diagonal, rotate
+      implicit none
+      !
+      type(Lattice),intent(in)              :: Lttc
+      type(FermionicField),intent(in)       :: Smats
+      integer                               :: ispin,ik,iorb
+      real(8),allocatable                   :: mu_ReSigma0(:)
+      logical                               :: pole
+      !
+      if(.not.Lttc%status) stop "check_QP_poles: Lttc not properly initialized."
+      if(.not.Smats%status) stop "check_QP_poles: Smats not properly initialized."
+      if(Lttc%Nkpt.ne.Smats%Nkpt) stop "check_QP_poles: number of K-points does not match between Lttc and Smats."
+      if(Lttc%Norb.ne.Smats%Norb) stop "check_QP_poles: orbital dimension does not match between Lttc and Smats."
+      !
+      if(Smats%mu.eq.0d0)write(*,"(A)")"     check_QP_poles: warning, the chemical potential is exactly zero."
+      !
+      allocate(mu_ReSigma0(Lttc%Norb));mu_ReSigma0=0d0
+      do ispin=1,Nspin
+         kloop: do ik=1,Lttc%Nkpt
+            !
+            mu_ReSigma0 = Smats%mu - dreal(diagonal(rotate(Smats%wks(:,:,1,ik,ispin),Lttc%Zk(:,:,ik))))
+            !
+            do iorb=1,Lttc%Norb
+               pole = (Lttc%D_lower.lt.mu_ReSigma0(iorb)) .and. (mu_ReSigma0(iorb).lt.Lttc%D_upper)
+               if(pole) exit kloop
+            enddo
+            !
+         enddo kloop
+         !
+         if(pole)then
+            write(*,"(A)")"     Spin #"//str(ispin)//" is a metal."
+         else
+            write(*,"(A)")"     Spin #"//str(ispin)//" is an insulator."
+         endif
+         !
+      enddo
+      deallocate(mu_ReSigma0)
+      !
+   end subroutine check_QP_poles
+
+
+   !---------------------------------------------------------------------------!
    !PURPOSE: Interface with the potential subroutine in utils_mist.
    !         This subroutine takes the frequency mesh, Hk, vertical hoppig array
    !         and optionally the self-energy of the whole heterostructure and
@@ -3028,7 +3081,7 @@ contains
       type(Heterostructures),intent(inout)  :: Hetero
       complex(8),intent(in)                 :: zeta(:,:,:)
       complex(8),intent(in)                 :: Hk(:,:,:)
-      complex(8),intent(in)                 :: tz(:,:,:,:)
+      complex(8),allocatable,intent(in)     :: tz(:,:,:,:)
       character(len=*),intent(in)           :: mode
       logical,intent(in)                    :: paramagnet
       type(FermionicField),intent(in),optional :: Smats
@@ -3139,7 +3192,7 @@ contains
       type(Heterostructures),intent(inout)  :: Hetero
       complex(8),intent(in)                 :: zeta(:,:,:)
       complex(8),intent(in)                 :: Hk(:,:,:)
-      complex(8),intent(in)                 :: tz(:,:,:,:)
+      complex(8),allocatable,intent(in)     :: tz(:,:,:,:)
       character(len=*),intent(in)           :: mode
       logical,intent(in)                    :: paramagnet
       complex(8),intent(in),optional        :: Smats(:,:,:,:,:)

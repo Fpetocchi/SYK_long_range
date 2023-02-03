@@ -110,7 +110,7 @@ program SelfConsistency
          if(Wlat_exists.and.(.not.gap_equation%status))then !(*)
             write(*,"(A)") new_line("A")//new_line("A")//"---- skipping Plat and Wlat calculations."
             calc_Pk=.false.
-            calc_W=.false.
+            calc_Wk=.false.
             call read_BosonicField(Wlat,reg(ItFolder),"Wlat_w.DAT")
          endif
          !
@@ -148,7 +148,7 @@ program SelfConsistency
       !
       !
       !Fully screened interaction - only G0W0,scGW,GW+EDMFT,EDMFT
-      if(calc_W)then
+      if(calc_Wk)then
          !
          if(calc_Wfull)  call calc_W_full(Wlat,Ulat,Plat,Crystal)
          if(calc_Wedmft) call calc_W_edmft(Wlat,Ulat,P_EDMFT,Crystal)
@@ -180,6 +180,7 @@ program SelfConsistency
          !
          !Hartree shift between G0W0 and scGW
          if(addTierIII)then
+            if(Iteration.gt.0)VN_type="None"
             call calc_VH(VH_Nlat,densityLDA,densityGW,Ulat)
             call calc_VH(VH_Nimp,densityLDA,densityDMFT,Ulat)
             select case(reg(VN_type))
@@ -323,6 +324,7 @@ program SelfConsistency
       write(*,"(A,F)")"     Potential energy [eV]:",trace(Ep)
       call dump_Matrix(Ek,reg(ItFolder),"Ek.DAT")
       call dump_Matrix(Ep,reg(ItFolder),"Ep.DAT")
+      call check_QP_poles(Crystal,S_Full)
       !
       !
       !Print Gf: local readable and k-dep binfmt
