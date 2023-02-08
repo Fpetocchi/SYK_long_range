@@ -107,14 +107,12 @@ subroutine interpolate2kpath_Fermionic(Sfull,Lttc,pathOUTPUT)
    !
    !
    !recalculate the internal K-meshes
-   if(print_path_G.and.(.not.Lttc%pathStored))then
+   if(print_path_G)then
       call interpolate2Path(Lttc,Nkpt_path,"Hk",store=.true.)
+      call dump_Hk(Lttc%Hk_path,Lttc%kptpath,reg(pathOUTPUT),"Hk_path.DAT")
    endif
-   call dump_Hk(Lttc%Hk_path,Lttc%kptpath,reg(pathOUTPUT),"Hk_path.DAT")
    !
-   if(print_plane_G.and.(.not.Lttc%planeStored))then
-      call interpolate2Plane(Lttc,Nkpt_plane,"Hk",store=.true.)
-   endif
+   if(print_plane_G)call interpolate2Plane(Lttc,Nkpt_plane,"Hk",store=.true.)
    !
    !
    !Interpolate the slef-energy along the path if its K-dependent otherwise duplicate the local one
@@ -293,6 +291,7 @@ contains
    !
    subroutine dump_MaxEnt_on_G_K(Gmats_in,mode)
       !
+      use input_vars, only : PadeWlimit, Nreal, wrealMax
       use input_vars, only : Ntau_MaxEnt, Nmats_MaxEnt, Solver
       use utils_misc
       implicit none
@@ -310,6 +309,12 @@ contains
       integer                               :: Norb_layer,ikz
       complex(8),allocatable                :: Gmats_kz(:,:,:,:,:,:),Gmats_kz_diag(:,:,:,:,:)
       complex(8),allocatable                :: Gitau_kpkz_diag(:,:,:,:,:)
+      !Pade
+      integer                               :: PadeWlimit_ndx
+      real(8),allocatable                   :: wreal(:)
+      complex(8),allocatable                :: Gpade(:,:)
+      !
+      logical                               :: doPade=.false.
       !
       !
       if(verbose) write(*,"(A)") new_line("A")//new_line("A")//"---- dump_MaxEnt_on_G_K"
@@ -445,7 +450,7 @@ contains
                Gitau_diag(iorb,NtauFT,ik,ispin) = Gitau_diag(iorb,NtauFT,ik,ispin)/abs(Gmax)
             enddo
             !
-            !print on imaginary time axis
+            !print all diagonal elements on imaginary time axis
             path = reg(pathOUTPUT)//"MaxEnt_Gk_"//reg(mode)//"_s"//str(ispin)//"/Gk_t_k"//str(ik)//".DAT"
             unit = free_unit()
             open(unit,file=reg(path),form="formatted",status="unknown",position="rewind",action="write")
@@ -454,7 +459,7 @@ contains
             enddo
             close(unit)
             !
-            !print on imaginary frequency axis
+            !print all diagonal elements on imaginary frequency axis
             path = reg(pathOUTPUT)//"MaxEnt_Gk_"//reg(mode)//"_s"//str(ispin)//"/Gk_w_k"//str(ik)//".DAT"
             unit = free_unit()
             open(unit,file=reg(path),form="formatted",status="unknown",position="rewind",action="write")
@@ -463,12 +468,37 @@ contains
             enddo
             close(unit)
             !
+            !print all diagonal elements on real frequency axis
+            if((PadeWlimit.gt.0d0).and.doPade)then
+               !
+               allocate(wreal(Nreal));wreal=linspace(-wrealMax,+wrealMax,Nreal)
+               PadeWlimit_ndx = minloc(abs(wmats-PadeWlimit),dim=1)
+               !
+               allocate(Gpade(Norb,Nreal));Gpade=czero
+               do iorb=1,Norb
+                  Gpade(iorb,:) = pade(Gmats_diag(iorb,:,ik,ispin),"Fermionic",wlimit=PadeWlimit_ndx)
+               enddo
+               !
+               path = reg(pathOUTPUT)//"MaxEnt_Gk_"//reg(mode)//"_s"//str(ispin)//"/Gk_w_k"//str(ik)//".DAT_pade.dat"
+               unit = free_unit()
+               open(unit,file=reg(path),form="formatted",status="unknown",position="rewind",action="write")
+               do iw=1,Nreal
+                   write(unit,"(200E20.12)") wreal(iw),(abs(dimag(Gpade(iorb,iw))),iorb=1,Norb)
+               enddo
+               close(unit)
+               !
+               deallocate(wreal,Gpade)
+               !
+            endif
+            !
             if(Norb.gt.1)then
                !
+               !end-point correction if -G(0)-G(beta) != -1
                Gmax = - (dreal(Gitau_trace(ik,1,ispin)) + dreal(Gitau_trace(ik,NtauFT,ispin)))
                Gitau_trace(ik,1,ispin) = Gitau_trace(ik,1,ispin)/abs(Gmax)
                Gitau_trace(ik,NtauFT,ispin) = Gitau_trace(ik,NtauFT,ispin)/abs(Gmax)
                !
+               !print trace on imaginary time axis
                path = reg(pathOUTPUT)//"MaxEnt_Gk_"//reg(mode)//"_s"//str(ispin)//"/Gk_t_k"//str(ik)//"_Tr.DAT"
                unit = free_unit()
                open(unit,file=reg(path),form="formatted",status="unknown",position="rewind",action="write")
@@ -477,6 +507,7 @@ contains
                enddo
                close(unit)
                !
+               !print trace on imaginary frequency axis
                path = reg(pathOUTPUT)//"MaxEnt_Gk_"//reg(mode)//"_s"//str(ispin)//"/Gk_w_k"//str(ik)//"_Tr.DAT"
                unit = free_unit()
                open(unit,file=reg(path),form="formatted",status="unknown",position="rewind",action="write")
@@ -484,6 +515,27 @@ contains
                    write(unit,"(200E20.12)") wmats(iw),Gmats_trace(ik,iw,ispin)
                enddo
                close(unit)
+               !
+               !print all diagonal elements on real frequency axis
+               if((PadeWlimit.gt.0d0).and.doPade)then
+                  !
+                  allocate(wreal(Nreal));wreal=linspace(-wrealMax,+wrealMax,Nreal)
+                  PadeWlimit_ndx = minloc(abs(wmats-PadeWlimit),dim=1)
+                  !
+                  allocate(Gpade(1,Nreal));Gpade=czero
+                  Gpade(1,:) = pade(Gmats_trace(ik,:,ispin),"Fermionic",wlimit=PadeWlimit_ndx)
+                  !
+                  path = reg(pathOUTPUT)//"MaxEnt_Gk_"//reg(mode)//"_s"//str(ispin)//"/Gk_w_k"//str(ik)//"_Tr.DAT_pade.dat"
+                  unit = free_unit()
+                  open(unit,file=reg(path),form="formatted",status="unknown",position="rewind",action="write")
+                  do iw=1,Nreal
+                      write(unit,"(200E20.12)") wreal(iw),abs(dimag(Gpade(1,iw)))
+                  enddo
+                  close(unit)
+                  !
+                  deallocate(wreal,Gpade)
+                  !
+               endif
                !
             endif
             !

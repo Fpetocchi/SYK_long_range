@@ -180,7 +180,10 @@ program SelfConsistency
          !
          !Hartree shift between G0W0 and scGW
          if(addTierIII)then
-            if(Iteration.gt.0)VN_type="None"
+            !
+            if(Iteration.eq.0)VN_type="None"
+            if(MultiTier)VN_type="Nlat"
+            !
             call calc_VH(VH_Nlat,densityLDA,densityGW,Ulat)
             call calc_VH(VH_Nimp,densityLDA,densityDMFT,Ulat)
             select case(reg(VN_type))

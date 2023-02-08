@@ -3,6 +3,7 @@
 
 verbose=False
 #muthres=1.0
+#muthres=0.01
 muthres=0.001
 
 
@@ -53,6 +54,7 @@ class Bryan:
         if any(initA==None):
             initA=np.array([1.0/(np.sqrt(2*np.pi)*0.5)*np.exp(-((x)/0.5)**2*0.5)+1e-3 for x in self.omegaMesh],np.float64)
         print("Calculating maxent with alpha=%s"%alpha)
+        if alpha!=alpha: sys.exit(1)
         A=np.copy(initA)
         A+=1e-8
         u=np.dot(self.TU.transpose(),np.log(A*self.oneovermodel))

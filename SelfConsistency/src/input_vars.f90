@@ -525,6 +525,7 @@ contains
          endif
          !long-range model U
          call parse_input_variable(N_Vnn,"N_V",InputFile,default=0,comment="Range of the non-local interaction in real space (orbital independent).")
+         readVnn=.false.
          if(N_Vnn.gt.0)then
             !long-range coulombian
             call parse_input_variable(long_range,"LONG_RANGE",InputFile,default="Explicit",comment="Avalibale long range interaction: Explicit(reads VNN for each N_V), Coulomb(reads first VNN, max neighbor N_V), Ewald(reads first VNN, unrestricted range).")
@@ -791,7 +792,7 @@ contains
       Beta_Match%Path=trim(Beta_Match%Path)//"/"
       !
       !done only now that the correct path is stored
-      if(readVnn) call read_Vnn()
+      if(Umodel.and.readVnn) call read_Vnn()
       !
    end subroutine read_InputFile
 

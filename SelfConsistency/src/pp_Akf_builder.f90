@@ -37,14 +37,28 @@ program Akw_builder
    do ispin=1,Nspin
       !
       if(print_path_G)then
+         !
          call rebuild_G("path")
          call rebuild_G("path",suffix="Tr")
          if(Hetero%status)call rebuild_G("path",suffix="Hetero")
+         !
+         if(PadeWlimit.gt.0d0)then
+            call rebuild_G("path",pedix="_pade.dat",ax="w")
+            call rebuild_G("path",suffix="Tr",pedix="_pade.dat",ax="w")
+            if(Hetero%status)call rebuild_G("path",suffix="Hetero",pedix="_pade.dat",ax="w")
+         endif
+         !
       endif
       !
-      if(print_full_G) call rebuild_G("full")
+      if(print_full_G)then
+         call rebuild_G("full")
+         if(PadeWlimit.gt.0d0)call rebuild_G("full",pedix="_pade.dat",ax="w")
+      endif
       !
-      if(print_plane_G) call rebuild_G("plane")
+      if(print_plane_G)then
+         call rebuild_G("plane")
+         if(PadeWlimit.gt.0d0)call rebuild_G("plane",pedix="_pade.dat",ax="w")
+      endif
       !
       if(paramagnet)exit
    enddo
@@ -70,7 +84,7 @@ contains
    !
    !
    !
-   subroutine rebuild_G(mode,suffix)
+   subroutine rebuild_G(mode,suffix,pedix,ax)
       !
       use input_vars, only : Nreal, wrealMax
       use utils_misc
@@ -78,6 +92,8 @@ contains
       !
       character(len=*),intent(in)           :: mode
       character(len=*),intent(in),optional  :: suffix
+      character(len=*),intent(in),optional  :: pedix
+      character(len=*),intent(in),optional  :: ax
       integer                               :: ik,Nkpt,Nkpt_Kside,Norb
       integer                               :: iw,iorb,ikx,iky,wndx_cut
       integer                               :: unit,ierr
@@ -88,7 +104,7 @@ contains
       real(8),allocatable                   :: Akw_orb(:,:,:),Akw_orb_interp(:,:,:)
       real(8)                               :: dw,fact
       real(8)                               :: kx,ky,Bvec(3),Kvec(3),Blat(3,3)
-      character(len=256)                    :: path,suffix_
+      character(len=256)                    :: path,suffix_,pedix_,ax_
       logical                               :: ik1st_read
       logical                               :: wr_interp=.false.
       !
@@ -134,6 +150,12 @@ contains
             !
       end select
       !
+      pedix_="_dos.dat"
+      if(present(pedix))pedix_=reg(pedix)
+      !
+      ax_="t"
+      if(present(ax))ax_=reg(ax)
+      !
       !
       if(allocated(Kmask))deallocate(Kmask)
       allocate(Kmask(Nkpt));Kmask=.false.
@@ -142,7 +164,7 @@ contains
       ik1st_read=.false.
       do ik=1,Nkpt
          !
-         path = reg(MaxEnt_K)//"MaxEnt_Gk_"//reg(mode)//"_s"//str(ispin)//"/Gk_t_k"//str(ik)//reg(suffix_)//".DAT_dos.dat"
+         path = reg(MaxEnt_K)//"MaxEnt_Gk_"//reg(mode)//"_s"//str(ispin)//"/Gk_"//reg(ax_)//"_k"//str(ik)//reg(suffix_)//".DAT"//reg(pedix_)
          !
          call inquireFile(reg(path),Kmask(ik),hardstop=.false.,verb=.true.)
          if(.not.Kmask(ik))then
@@ -186,7 +208,7 @@ contains
          !
          if(.not.Kmask(ik)) cycle
          !
-         path = reg(MaxEnt_K)//"MaxEnt_Gk_"//reg(mode)//"_s"//str(ispin)//"/Gk_t_k"//str(ik)//reg(suffix_)//".DAT_dos.dat"
+         path = reg(MaxEnt_K)//"MaxEnt_Gk_"//reg(mode)//"_s"//str(ispin)//"/Gk_"//reg(ax_)//"_k"//str(ik)//reg(suffix_)//".DAT"//reg(pedix_)
          unit = free_unit()
          open(unit,file=reg(path),form="formatted",status="unknown",position="rewind",action="read")
          do iw=1,Nreal_read
@@ -352,11 +374,12 @@ contains
    !
    !
    !
-   subroutine rebuild_W(name,mode,orbsep)
+   subroutine rebuild_W(name,mode,orbsep,pedix)
       implicit none
       character(len=*),intent(in)           :: name
       character(len=*),intent(in)           :: mode
       logical,intent(in),optional           :: orbsep
+      character(len=*),intent(in),optional  :: pedix
       integer                               :: iq,Nkpt,Nkpt_Kside,Norb
       integer                               :: iw,iorb,ikx,iky,wndx_cut
       integer                               :: unit,ierr
@@ -366,7 +389,7 @@ contains
       real(8),allocatable                   :: Akw_orb(:,:,:)
       real(8)                               :: dw,fact
       real(8)                               :: kx,ky,Bvec(3),Kvec(3),Blat(3,3)
-      character(len=256)                    :: path
+      character(len=256)                    :: path,pedix_
       logical                               :: ik1st_read,orbsep_
       !
       real(8),allocatable                   :: ImW_read(:,:,:)
@@ -398,6 +421,9 @@ contains
             !
       end select
       !
+      pedix_="_dos.dat"
+      if(present(pedix))pedix_=reg(pedix)
+      !
       ! this will be removed as soon as I find a better MaxEnt procedure
       orbsep_ = .true.
       if(present(orbsep))orbsep_=orbsep
@@ -413,7 +439,7 @@ contains
             ik1st_read=.false.
             do iq=1,Nkpt
                !
-               path = reg(MaxEnt_K)//"MaxEnt_"//reg(name)//"k_"//reg(mode)//"/"//reg(name)//"k_w_k"//str(iq)//"_o"//str(iorb)//".DAT_dos.dat"
+               path = reg(MaxEnt_K)//"MaxEnt_"//reg(name)//"k_"//reg(mode)//"/"//reg(name)//"k_w_k"//str(iq)//"_o"//str(iorb)//".DAT"//reg(pedix_)
                !
                call inquireFile(reg(path),Kmask(iq),hardstop=.false.,verb=.true.)
                if(.not.Kmask(iq))then
@@ -458,7 +484,7 @@ contains
                !
                if(.not.Kmask(iq)) cycle
                !
-               path = reg(MaxEnt_K)//"MaxEnt_"//reg(name)//"k_"//reg(mode)//"/"//reg(name)//"k_w_k"//str(iq)//"_o"//str(iorb)//".DAT_dos.dat"
+               path = reg(MaxEnt_K)//"MaxEnt_"//reg(name)//"k_"//reg(mode)//"/"//reg(name)//"k_w_k"//str(iq)//"_o"//str(iorb)//".DAT"//reg(pedix_)
                unit = free_unit()
                open(unit,file=reg(path),form="formatted",status="unknown",position="rewind",action="read")
                do iw=1,Nreal_read
@@ -523,7 +549,7 @@ contains
          ik1st_read=.false.
          do iq=1,Nkpt
             !
-            path = reg(MaxEnt_K)//"MaxEnt_"//reg(name)//"k_"//reg(mode)//"/"//reg(name)//"k_w_k"//str(iq)//".DAT_dos.dat"
+            path = reg(MaxEnt_K)//"MaxEnt_"//reg(name)//"k_"//reg(mode)//"/"//reg(name)//"k_w_k"//str(iq)//".DAT"//reg(pedix_)
             !
             call inquireFile(reg(path),Kmask(iq),hardstop=.false.,verb=.true.)
             if(.not.Kmask(iq))then
@@ -567,7 +593,7 @@ contains
             !
             if(.not.Kmask(iq)) cycle
             !
-            path = reg(MaxEnt_K)//"MaxEnt_"//reg(name)//"k_"//reg(mode)//"/"//reg(name)//"k_w_k"//str(iq)//".DAT_dos.dat"
+            path = reg(MaxEnt_K)//"MaxEnt_"//reg(name)//"k_"//reg(mode)//"/"//reg(name)//"k_w_k"//str(iq)//".DAT"//reg(pedix_)
             unit = free_unit()
             open(unit,file=reg(path),form="formatted",status="unknown",position="rewind",action="read")
             do iw=1,Nreal_read

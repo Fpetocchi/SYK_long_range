@@ -24,6 +24,9 @@ program SelfConsistency
    integer                                  :: a_,b_,c_,d_
    type(BosonicField)                       :: Ucrpa
    logical                                  :: dumpUcrpa
+   logical                                  :: localUcrpa
+   real(8)                                  :: Vo
+   real(8),allocatable                      :: Vrloc(:,:)
    !>>>PROJECT SPECIFIC
    !
    !
@@ -101,15 +104,46 @@ program SelfConsistency
    OrbMap(1:4,5)=.false.
    call clear_MatrixElements(Ulat,OrbMap,LocalOnly=.false.)
    deallocate(OrbMap)
-   call dump_BosonicField(Ulat,reg(pathINPUT),"Uloc_mats_BP.DAT")
-   !
-   !update the FT with the cleared items
-   if(reg(structure).ne."None")then
-      call interpolate2Path(Crystal,Nkpt_path,"Uk_BP",pathOUTPUT=reg(pathINPUT),store=.false.,skipAkw=.true.,data_in=Ulat%bare)
-   endif
    !
    !if true this variable prints the screened interaction on BP
    call parse_input_variable(dumpUcrpa,"DUMP_CRPA",reg(InputFile),default=.false.,comment="Print the cRPA interaction inside BP.")
+   call parse_input_variable(localUcrpa,"LOCAL_U",reg(InputFile),default=.false.,comment="Print the cRPA interaction inside BP.")
+   !
+   Vo = Vnn_diag(1,1)
+   write(*,"(A,F)")"     Using Vo:",Vo
+   !
+   if(localUcrpa)then
+      write(*,"(A)")"     Setting local U"
+      allocate(Vrloc(Crystal%Norb,Crystal%Norb));Vrloc=0d0
+      do a=1,4
+         !
+         write(*,"(A)")"     V between site 5 and "//str(a)
+         write(*,"(A,F)")"     Rz[5]: ",ucVec(3,5)
+         write(*,"(A,F)")"     Rz["//str(a)//"]: ",ucVec(3,a)
+         write(*,"(A,F)")"     |R|: ",abs(ucVec(3,a)-ucVec(3,5))
+         !
+         Vrloc(5,a) = Vo / abs(ucVec(3,a)-ucVec(3,5))
+         Vrloc(a,5) = Vo / abs(ucVec(3,a)-ucVec(3,5))
+         !
+      enddo
+      !
+      call clear_attributes(Ulat)
+      !
+      do a=1,5
+         do b=1,5
+            call F2Bindex(Crystal%Norb,[a,a],[b,b],iu1,iu2)
+            Ulat%bare(iu1,iu2,:) = Vrloc(a,b)
+            Ulat%bare_local(iu1,iu2) = Vrloc(a,b)
+         enddo
+      enddo
+      !
+   endif
+   !
+   !update the output with the cleared/modified components
+   call dump_BosonicField(Ulat,reg(pathINPUT),"Uloc_mats_BP.DAT")
+   if(reg(structure).ne."None")then
+      call interpolate2Path(Crystal,Nkpt_path,"Uk_BP",pathOUTPUT=reg(pathINPUT),store=.false.,skipAkw=.true.,data_in=Ulat%bare)
+   endif
    !>>>PROJECT SPECIFIC
    !
    !
@@ -134,7 +168,7 @@ program SelfConsistency
          if(Wlat_exists.and.(.not.gap_equation%status))then !(*)
             write(*,"(A)") new_line("A")//new_line("A")//"---- skipping Plat and Wlat calculations."
             calc_Pk=.false.
-            calc_W=.false.
+            calc_Wk=.false.
             call read_BosonicField(Wlat,reg(ItFolder),"Wlat_w.DAT")
          endif
          !
@@ -152,10 +186,10 @@ program SelfConsistency
             if(reg(DC_type_P).eq."GlocGloc")then
                call AllocateBosonicField(P_GGdc,Crystal%Norb,Nmats,Crystal%iq_gamma,Nsite=Nsite,no_bare=.true.,Beta=Beta)
                call calc_PiGGdc(P_GGdc,Glat)
-               call MergeFields(Plat,P_EDMFT,alphaPi,LocalOrbs,OffDiag=RotateHloc,PiGG_DC=P_GGdc)
+               call MergeFields(Plat,P_EDMFT,alphaPi,LocalOrbs,RotateHloc,PiGG_DC=P_GGdc)
                call DeallocateBosonicField(P_GGdc)
             elseif(reg(DC_type_P).eq."Ploc")then
-               call MergeFields(Plat,P_EDMFT,alphaPi,LocalOrbs,OffDiag=RotateHloc)
+               call MergeFields(Plat,P_EDMFT,alphaPi,LocalOrbs,RotateHloc)
             endif
             call dump_BosonicField(Plat,reg(ItFolder),"Plat_merged_w.DAT")
          elseif(calc_Pguess)then
@@ -188,7 +222,7 @@ program SelfConsistency
       !>>>PROJECT SPECIFIC
       !
       !Fully screened interaction - only G0W0,scGW,GW+EDMFT,EDMFT
-      if(calc_W)then
+      if(calc_Wk)then
          !
          if(calc_Wfull)  call calc_W_full(Wlat,Ulat,Plat,Crystal)
          if(calc_Wedmft) call calc_W_edmft(Wlat,Ulat,P_EDMFT,Crystal)
@@ -236,7 +270,6 @@ program SelfConsistency
          !Compute local effective interaction
          do isite=1,Solver%Nimp
             call calc_Interaction(isite,Iteration,ExpandImpurity)
-            !if(ExpandImpurity.or.AFMselfcons)exit
          enddo
          call DeallocateBosonicField(P_EDMFT)
          !
@@ -248,6 +281,7 @@ program SelfConsistency
          !
          !Hartree shift between G0W0 and scGW
          if(addTierIII)then
+            if(Iteration.gt.0)VN_type="None"
             call calc_VH(VH_Nlat,densityLDA,densityGW,Ulat)
             call calc_VH(VH_Nimp,densityLDA,densityDMFT,Ulat)
             select case(reg(VN_type))
@@ -276,7 +310,8 @@ program SelfConsistency
          if(addTierIII) then
             !
             !G0W0 self-energy: used as self-energy in the 0th iteration or in model calculations
-            call read_Sigma_spex(SpexVersion,S_G0W0,Crystal,verbose,RecomputeG0W0,Vxc) !call read_Sigma_spex(SpexVersion,S_G0W0,Crystal,.true.,RecomputeG0W0,Vxc)
+            call read_Sigma_spex(SpexVersion,S_G0W0,Crystal,verbose,RecomputeG0W0,Vxc)
+            !call read_Sigma_spex(SpexVersion,S_G0W0,Crystal,.true.,RecomputeG0W0,Vxc)
             !
             !G0W0 double counting: this is used only for ab-initio calculations
             call AllocateFermionicField(S_G0W0dc,Crystal%Norb,Nmats,Nkpt=Crystal%Nkpt,Nsite=Nsite,Beta=Beta)
@@ -294,7 +329,8 @@ program SelfConsistency
                   call dump_FermionicField(S_G0W0dc,reg(pathINPUTtr),"SGoWo_dc_w",paramagnet)
                elseif(spex_S_G0W0dc)then
                   write(*,"(A,F)")"     Reading dc between G0W0 and scGW from SPEX_VERSION: "//reg(SpexVersion)
-                  call read_Sigma_spex(SpexVersion,S_G0W0dc,Crystal,verbose,RecomputeG0W0,Vxc,DC=.true.) !call read_Sigma_spex(SpexVersion,S_G0W0dc,Crystal,.true.,RecomputeG0W0,Vxc,DC=.true.)
+                  call read_Sigma_spex(SpexVersion,S_G0W0dc,Crystal,verbose,RecomputeG0W0,Vxc,DC=.true.)
+                  !call read_Sigma_spex(SpexVersion,S_G0W0dc,Crystal,.true.,RecomputeG0W0,Vxc,DC=.true.)
                endif
             endif
             !
@@ -341,8 +377,7 @@ program SelfConsistency
       if(calc_Sguess) call calc_SigmaGuess()
       !
       !
-      !Put together all the contributions to the full self-energy
-      !and deallocate all non-local components: S_G0W0, S_G0W0dc, S_GW
+      !Put together all the contributions to the full self-energy and deallocate all non-local components: S_G0W0, S_G0W0dc, S_GW
       if(.not.S_Full_exists) call join_SigmaFull(Iteration)
       !
       !
@@ -390,6 +425,7 @@ program SelfConsistency
       write(*,"(A,F)")"     Potential energy [eV]:",trace(Ep)
       call dump_Matrix(Ek,reg(ItFolder),"Ek.DAT")
       call dump_Matrix(Ep,reg(ItFolder),"Ep.DAT")
+      call check_QP_poles(Crystal,S_Full)
       !
       !
       !Print Gf: local readable and k-dep binfmt
@@ -433,7 +469,6 @@ program SelfConsistency
          !Extract the hybridization functions and local energies (always diagonal)
          do isite=1,Solver%Nimp
             call calc_Delta(isite,Iteration)
-            !if(ExpandImpurity.or.AFMselfcons)exit
          enddo
          !
       endif
@@ -453,45 +488,3 @@ program SelfConsistency
    endif
    !
 end program SelfConsistency
-!
-!
-!
-!------------------------------------------------------------------------------!
-!                                   COMMENTS                                   !
-!------------------------------------------------------------------------------!
-!
-!(*): the S_Full_exists flag is present because I need the full K dependent Wlat,
-!which is never stored, in ordeer to compute S_Full. If the gap equation is solved
-!then the calculation of the full k-dependent Wlat is required.
-!
-!(**): a bit redundant since there is no merge wihtout DMFT
-!
-!(***): NON MI DEVO PREOCCUPARE SE AGGIUNGO A S_DMFT ORBITALI CHE STANNO DENTRO
-!A TIER-2 TANTO QUANDO MI FACCIO IL DYSON PER CALCOLARE DELTA IMP2LOC MI ESTRAE DA
-!S_DMFT SOLO QUELLO CHE PARE A ME POI, DOPO calc_Delta, S_DMFT NON  È  MAI PIU USATA NEL  CODICE
-!For the case where the orbital subspaces for the EDMFT and GW calculations are
-!the same, DC reduces to the local projection (k sum) of the full GW self-energy.
-!If the orbital subspace for the EDMFT calculation is smaller than that of the GW
-!calculation the difference between DC and the local projection of the full GW self-energy is...
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-!
