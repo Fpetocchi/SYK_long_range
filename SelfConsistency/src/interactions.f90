@@ -959,7 +959,7 @@ contains
       use input_vars, only : pathINPUT
       implicit none
       !
-      real(8),allocatable,intent(inout)     :: Umat(:,:)
+      complex(8),allocatable,intent(inout)  :: Umat(:,:)
       character(len=*),intent(in),optional  :: pathOUTPUT
       !
       logical                               :: Umatsxists,Urealxists,SPEXxists
@@ -1249,15 +1249,13 @@ contains
       use file_io
       use utils_misc
       use utils_fields
-      use input_vars, only : Hetero
       implicit none
       !
-      real(8),intent(inout)                 :: Umat(:,:)
+      complex(8),intent(inout)              :: Umat(:,:)
       real(8),intent(in)                    :: Uaa,Uab,J
       !
-      integer                               :: Nbp,Norb,Nflavor
+      integer                               :: Nbp,Norb
       integer                               :: ib1,ib2
-      integer                               :: shift,isite,Nsite
       type(physicalU)                       :: PhysicalUelements
       !
       !
@@ -1266,8 +1264,95 @@ contains
       !
       ! Check on the input matrices
       Nbp = size(Umat,dim=1)
-      if((Nspin.eq.2).and.(mod(Nbp,2).ne.0.0)) stop "build_Umat_singlParam: Wrong matrix dimension."
       call assert_shape(Umat,[Nbp,Nbp],"build_Umat_singlParam","Umat")
+      !
+      Norb = int(sqrt(dble(Nbp)))
+      call init_Uelements(Norb,PhysicalUelements)
+      !
+      do ib1=1,Nbp
+         do ib2=1,Nbp
+            !
+            if(PhysicalUelements%Full_Uaa(ib1,ib2)) Umat(ib1,ib2) = dcmplx(Uaa,0d0)
+            if(PhysicalUelements%Full_Uab(ib1,ib2)) Umat(ib1,ib2) = dcmplx(Uab,0d0)
+            if(PhysicalUelements%Full_Jsf(ib1,ib2)) Umat(ib1,ib2) = dcmplx(J,0d0)
+            if(PhysicalUelements%Full_Jph(ib1,ib2)) Umat(ib1,ib2) = dcmplx(J,0d0)
+            !
+         enddo
+      enddo
+      !
+   end subroutine build_Umat_singlParam
+   !
+   subroutine build_Umat_multiParam(Umat,Uaa,Uab,J)
+      !
+      use parameters
+      use file_io
+      use utils_misc
+      use utils_fields
+      implicit none
+      !
+      complex(8),intent(inout)              :: Umat(:,:)
+      real(8),intent(in)                    :: Uaa(:),Uab(:,:),J(:,:)
+      !
+      integer                               :: Nbp,Norb
+      integer                               :: ib1,ib2,iorb,jorb
+      type(physicalU)                       :: PhysicalUelements
+      !
+      !
+      if(verbose)write(*,"(A)") "---- build_Umat_multiParam"
+      !
+      !
+      ! Check on the input matrices
+      Nbp = size(Umat,dim=1)
+      call assert_shape(Umat,[Nbp,Nbp],"build_Umat_singlParam","Umat")
+      !
+      Norb = int(sqrt(dble(Nbp)))
+      call init_Uelements(Norb,PhysicalUelements)
+      !
+      call assert_shape(Uaa,[Norb],"build_Umat_multiParam","Uaa")
+      call assert_shape(Uab,[Norb,Norb],"build_Umat_multiParam","Uab")
+      call assert_shape(J,[Norb,Norb],"build_Umat_multiParam","J")
+      !
+      do ib1=1,Nbp
+         do ib2=1,Nbp
+            !
+            iorb = PhysicalUelements%Flav_Map(ib1,ib2,1)
+            jorb = PhysicalUelements%Flav_Map(ib1,ib2,3)
+            !
+            if(PhysicalUelements%Full_Uaa(ib1,ib2)) Umat(ib1,ib2) = dcmplx(Uaa(iorb),0d0)
+            if(PhysicalUelements%Full_Uab(ib1,ib2)) Umat(ib1,ib2) = dcmplx(Uab(iorb,jorb),0d0)
+            if(PhysicalUelements%Full_Jsf(ib1,ib2)) Umat(ib1,ib2) = dcmplx(J(iorb,jorb),0d0)
+            if(PhysicalUelements%Full_Jph(ib1,ib2)) Umat(ib1,ib2) = dcmplx(J(iorb,jorb),0d0)
+            !
+         enddo
+      enddo
+      !
+   end subroutine build_Umat_multiParam
+   !
+   subroutine build_Umat_singlParam_Flav(Umat,Uaa,Uab,J)
+      !
+      use parameters
+      use file_io
+      use utils_misc
+      use utils_fields
+      use input_vars, only : Hetero
+      implicit none
+      !
+      complex(8),intent(inout)              :: Umat(:,:)
+      real(8),intent(in)                    :: Uaa,Uab,J
+      !
+      integer                               :: Nbp,Norb,Nflavor
+      integer                               :: ib1,ib2
+      integer                               :: shift,isite,Nsite
+      type(physicalU)                       :: PhysicalUelements
+      !
+      !
+      if(verbose)write(*,"(A)") "---- build_Umat_singlParam_Flav"
+      !
+      !
+      ! Check on the input matrices
+      Nbp = size(Umat,dim=1)
+      if((Nspin.eq.2).and.(mod(Nbp,2).ne.0.0)) stop "build_Umat_singlParam_Flav: Wrong matrix dimension."
+      call assert_shape(Umat,[Nbp,Nbp],"build_Umat_singlParam_Flav","Umat")
       !
       Norb = Nbp/Nspin
       if(Hetero%status) Norb = Hetero%Norb
@@ -1294,9 +1379,9 @@ contains
          enddo
       endif
       !
-   end subroutine build_Umat_singlParam
+   end subroutine build_Umat_singlParam_Flav
    !
-   subroutine build_Umat_multiParam(Umat,Uaa,Uab,J)
+   subroutine build_Umat_multiParam_Flav(Umat,Uaa,Uab,J)
       !
       use parameters
       use file_io
@@ -1305,7 +1390,7 @@ contains
       use input_vars, only : Hetero
       implicit none
       !
-      real(8),intent(inout)                 :: Umat(:,:)
+      complex(8),intent(inout)              :: Umat(:,:)
       real(8),intent(in)                    :: Uaa(:),Uab(:,:),J(:,:)
       !
       integer                               :: Nbp,Norb,Nflavor
@@ -1314,20 +1399,20 @@ contains
       type(physicalU)                       :: PhysicalUelements
       !
       !
-      if(verbose)write(*,"(A)") "---- build_Umat_multiParam"
+      if(verbose)write(*,"(A)") "---- build_Umat_multiParam_Flav"
       !
       !
       ! Check on the input matrices
       Nbp = size(Umat,dim=1)
-      if((Nspin.eq.2).and.(mod(Nbp,2).ne.0.0)) stop "build_Umat_multiParam: Wrong matrix dimension."
-      call assert_shape(Umat,[Nbp,Nbp],"build_Umat_multiParam","Umat")
+      if((Nspin.eq.2).and.(mod(Nbp,2).ne.0.0)) stop "build_Umat_multiParam_Flav: Wrong matrix dimension."
+      call assert_shape(Umat,[Nbp,Nbp],"build_Umat_multiParam_Flav","Umat")
       !
       Norb = Nbp/Nspin
       if(Hetero%status) Norb = Hetero%Norb
       call init_Uelements(Norb,PhysicalUelements)
-      call assert_shape(Uaa,[Norb],"build_Umat_multiParam","Uaa")
-      call assert_shape(Uab,[Norb,Norb],"build_Umat_multiParam","Uab")
-      call assert_shape(J,[Norb,Norb],"build_Umat_multiParam","J")
+      call assert_shape(Uaa,[Norb],"build_Umat_multiParam_Flav","Uaa")
+      call assert_shape(Uab,[Norb,Norb],"build_Umat_multiParam_Flav","Uab")
+      call assert_shape(J,[Norb,Norb],"build_Umat_multiParam_Flav","J")
       !
       Nflavor = Norb*Nspin
       !
@@ -1353,7 +1438,7 @@ contains
          enddo
       endif
       !
-   end subroutine build_Umat_multiParam
+   end subroutine build_Umat_multiParam_Flav
 
 
    !---------------------------------------------------------------------------!
@@ -2863,17 +2948,16 @@ contains
          enddo
       enddo
       !
-      !save exact screening
-      Screening_ = -Kaux(:,:,1)
-      if(Ktilda_) Screening_ = Kaux(:,:,Umats%Npoints)
-      !
-      if(sym_)then
-         call check_Symmetry(Screening_,eps,enforce=.true.,hardstop=.false.,name="Screening_")
-         call check_Symmetry(Uinst,eps,enforce=.true.,hardstop=.false.,name="Uinst")
-      endif
+      if(sym_) call check_Symmetry(Uinst,eps,enforce=.true.,hardstop=.false.,name="Uinst")
       !
       !computing the screening function and first derivative
       if(retarded)then
+         !
+         !save exact screening
+         Screening_ = -Kaux(:,:,1)
+         if(Ktilda_) Screening_ = Kaux(:,:,Umats%Npoints)
+         !
+         if(sym_) call check_Symmetry(Screening_,eps,enforce=.true.,hardstop=.false.,name="Screening_")
          !
          !This is the D(iw)-D(0)/iw^2 screening function
          do iw=2,Umats%Npoints

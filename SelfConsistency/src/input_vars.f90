@@ -235,6 +235,7 @@ module input_vars
    type(SCDFT),public                       :: gap_equation
    !
    !Variables related to the impurity solver
+   logical,public                           :: collect_QMC=.false.
    type(QMC),public                         :: Solver
    !
    !Variables not to be readed but used in utils_main
@@ -354,8 +355,6 @@ contains
             Hetero%tzIndex(2) = Hetero%Explicit(2) - 1
             if(Hetero%Explicit(1).ne.1) Hetero%tzIndex(1) = Hetero%tzIndex(1) - 1              ! hopping to the left potential
             if(Hetero%Explicit(2).ne.Hetero%Nslab) Hetero%tzIndex(2) = Hetero%tzIndex(2) + 1   ! hopping to the right potential
-            !allocate(Hetero%tz(Norb_model,Hetero%tzIndex(1):Hetero%tzIndex(2),Hetero%tzRange));Hetero%tz=0d0
-            !do ilayer=Hetero%tzIndex(1),Hetero%tzIndex(2)
             allocate(Hetero%tz(Norb_model,Hetero%Nlayer,Hetero%tzRange));Hetero%tz=0d0
             do irange=1,Hetero%tzRange
                do ilayer=1,Hetero%Nlayer
@@ -704,9 +703,7 @@ contains
       if(solve_DMFT)then
          !
          call add_separator("Impurity solver")
-         !Solver%Nimp = Nsite
-         !if(ExpandImpurity.or.AFMselfcons) Solver%Nimp = 1
-         !call append_to_input_list(Solver%Nimp,"NIMP","Number of impurities solved. User cannot set this as its deduced from NSITE and EXPAND.")
+         call parse_input_variable(collect_QMC,"COLLECT_QMC",InputFile,default=.true.,comment="Flag to reconstruct local slef-energy and polarization from Solver output.")
          call parse_input_variable(Solver%NtauF,"NTAU_F_IMP",InputFile,default=int(2d0*pi*Nmats),comment="Number of points on the imaginary time axis for Fermionic impurity fields. Its gonna be made odd.")
          if(mod(Solver%NtauF,2).eq.0)Solver%NtauF=Solver%NtauF+1
          if(mod(Solver%NtauF-1,4).eq.0)Solver%NtauF=Solver%NtauF+mod(Solver%NtauF-1,4)
@@ -737,7 +734,7 @@ contains
          call parse_input_variable(Solver%Imprvd_B,"IMPRVD_B",InputFile,default=0,comment="If =1 the improved estimator for the polarization will be computed (NOT IMPLEMENTED).")
          if(Dyson_Imprvd_B)Solver%Imprvd_B=1
          call parse_input_variable(Solver%N_nnt,"N_NNT",InputFile,default=1,comment="Measurment for <n_a(tau)n_b(0)> evaluation. Updated according to CALC_TYPE. Should be either =1 or 2*NTAU_B_IMP if =0 measurment avoided.")
-         if(.not.bosonicSC)Solver%N_nnt=0
+         !if(.not.bosonicSC)Solver%N_nnt=0
          call parse_input_variable(Solver%full_ntOrbSym,"NT_FULLSYM",InputFile,default=0,comment="If =1 and orbital symmetrization inside the solver is requested it averages <n_a(tau)> for all the orbitals.")
          if(sym_mode.le.1)Solver%full_ntOrbSym=0
          if(RotateHloc.or.RotateUloc)Solver%full_ntOrbSym=1

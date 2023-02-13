@@ -73,7 +73,7 @@ program SelfConsistency
       if(Beta_Match%status)then
          call interpolate_from_oldBeta()
       else
-         if(solve_DMFT) call collect_QMC_results()
+         if(collect_QMC) call collect_QMC_results()
       endif
    endif
    !

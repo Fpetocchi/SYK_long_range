@@ -111,6 +111,7 @@ module utils_fields
    public :: DeallocateBosonicField
    public :: DeallocateField
    public :: TransformBosonicField
+   public :: TransformMatrix
    public :: clear_attributes
    public :: clear_MatrixElements
    public :: duplicate
@@ -439,12 +440,12 @@ contains
       complex(8),allocatable                :: UR_(:,:)
       character(len=2)                      :: type_
       !
-      if(.not.W%status) stop "TransformLocalBosonicField: field not properly initialized."
-      call assert_shape(Map,[W%Nbp,W%Nbp,4],"TransformLocalBosonicField","Map")
+      if(.not.W%status) stop "TransformBosonicField: field not properly initialized."
+      call assert_shape(Map,[W%Nbp,W%Nbp,4],"TransformBosonicField","Map")
       Norb = int(sqrt(dble(W%Nbp)))
-      call assert_shape(UL,[Norb,Norb],"TransformLocalBosonicField","UL")
+      call assert_shape(UL,[Norb,Norb],"TransformBosonicField","UL")
       if(present(UR))then
-         call assert_shape(UR,[Norb,Norb],"TransformLocalBosonicField","UR")
+         call assert_shape(UR,[Norb,Norb],"TransformBosonicField","UR")
          UR_ = UR
       else
          UR_ = UL
@@ -462,6 +463,43 @@ contains
       deallocate(UR_)
       !
    end subroutine TransformBosonicField
+   !
+   subroutine TransformMatrix(W,Map,UL,UR,type)
+      !
+      use parameters
+      use utils_misc
+      use linalg, only : tensor_transform
+      implicit none
+      !
+      complex(8),intent(inout)              :: W(:,:)
+      integer,intent(in)                    :: Map(:,:,:)
+      complex(8),intent(in)                 :: UL(:,:)
+      complex(8),intent(in),optional        :: UR(:,:)
+      character(len=2),intent(in),optional  :: type
+      !
+      integer                               :: Norb,Nbp
+      complex(8),allocatable                :: UR_(:,:)
+      character(len=2)                      :: type_
+      !
+      Nbp = size(W,dim=1)
+      call assert_shape(W,[Nbp,Nbp],"TransformMatrix","Map")
+      call assert_shape(Map,[Nbp,Nbp,4],"TransformMatrix","Map")
+      Norb = int(sqrt(dble(Nbp)))
+      call assert_shape(UL,[Norb,Norb],"TransformMatrix","UL")
+      if(present(UR))then
+         call assert_shape(UR,[Norb,Norb],"TransformMatrix","UR")
+         UR_ = UR
+      else
+         UR_ = UL
+      endif
+      !
+      type_="NN"
+      if(present(type))type_=reg(type)
+      !
+      call tensor_transform(reg(type_),W,Map,UL,UR_)
+      deallocate(UR_)
+      !
+   end subroutine TransformMatrix
 
 
    !---------------------------------------------------------------------------!
@@ -761,7 +799,7 @@ contains
       !
    end subroutine loc2imp_Fermionic
    !
-   subroutine loc2imp_Matrix(Oimp,Oloc,orbs,sitename,U)
+   subroutine loc2imp_Matrix(Oimp,Oloc,orbs,sitename,U,bosonlike)
       !
       use parameters
       use utils_misc
@@ -773,39 +811,83 @@ contains
       integer,intent(in)                    :: orbs(:)
       character(len=*),intent(in),optional  :: sitename
       complex(8),intent(in),optional        :: U(:,:)
+      logical,intent(in),optional           :: bosonlike
       !
-      integer                               :: i_loc,j_loc
-      integer                               :: i_imp,j_imp
+      integer                               :: Norb_imp,Norb_loc
+      integer                               :: ib_imp,jb_imp,ib_loc,jb_loc
+      integer                               :: i_loc,j_loc,k_loc,l_loc
+      integer                               :: i_imp,j_imp,k_imp,l_imp
+      logical                               :: bosonlike_
       !
       !
       if(verbose)write(*,"(A)") "---- loc2imp_Matrix"
       !
       !
+      bosonlike_=.false.
+      if(present(bosonlike))bosonlike_=bosonlike
+      !
       if(present(sitename)) write(*,"(A)") "     Extraction of Operator for site: "//trim(sitename)
       if(size(Oloc,dim=1).ne.size(Oloc,dim=2)) stop "loc2imp_Matrix: Oloc not square."
       if(size(Oimp,dim=1).ne.size(Oimp,dim=2)) stop "loc2imp_Matrix: Oimp not square."
-      if(size(orbs).ne.size(Oimp,dim=1)) stop "loc2imp_Matrix: can't fit the requested orbitals inside Oimp."
-      if(size(orbs).gt.size(Oloc,dim=1)) stop "loc2imp_Matrix: number of requested orbitals greater than Oloc size."
+      if(.not.bosonlike_)then
+         if(size(orbs).ne.size(Oimp,dim=1)) stop "loc2imp_Matrix: can't fit the requested orbitals inside Oimp."
+         if(size(orbs).gt.size(Oloc,dim=1)) stop "loc2imp_Matrix: number of requested orbitals greater than Oloc size."
+      endif
       if(present(U))then
          call assert_shape(U,[size(orbs),size(orbs)],"loc2imp_Matrix","U")
          !if(size(U,dim=1).ne.3) write(*,"(A)") "     Warning: The local orbital space rotation is well defined only for a t2g sub-shell."
          write(*,"(A)") "     The local orbital space will be rotated during extraction."
       endif
       !
+      Norb_imp = size(orbs)
+      !
       Oimp=czero
-      !
-      do i_imp=1,size(orbs)
-         do j_imp=1,size(orbs)
-            !
-            i_loc = orbs(i_imp)
-            j_loc = orbs(j_imp)
-            !
-            Oimp(i_imp,j_imp) = Oloc(i_loc,j_loc)
-            !
+      if(bosonlike_)then
+         !
+         Norb_loc = int(sqrt(dble(size(Oloc,dim=1))))
+         !
+         do i_imp=1,Norb_imp
+            do j_imp=1,Norb_imp
+               do k_imp=1,Norb_imp
+                  do l_imp=1,Norb_imp
+                     !
+                     ! bosonic indexes of the impurity
+                     ib_imp = j_imp + Norb_imp*(i_imp-1)
+                     jb_imp = l_imp + Norb_imp*(k_imp-1)
+                     !
+                     ! mapping
+                     i_loc = orbs(i_imp)
+                     j_loc = orbs(j_imp)
+                     k_loc = orbs(k_imp)
+                     l_loc = orbs(l_imp)
+                     !
+                     ! corresponding bosonic indexes on the lattice
+                     call F2Bindex(Norb_loc,[i_loc,j_loc],[k_loc,l_loc],ib_loc,jb_loc)
+                     !
+                     Oimp(ib_imp,jb_imp) =  Oloc(ib_loc,jb_loc)
+                     !
+                  enddo
+               enddo
+            enddo
          enddo
-      enddo
-      !
-      if(present(U)) Oimp = rotate(Oimp,U)
+         !
+         if(present(U)) stop " loc2imp_Matrix: rotation for bosonic modes not yet implemented. Use tensor transform outside."
+         !
+      else
+         !
+         do i_imp=1,Norb_imp
+            do j_imp=1,Norb_imp
+               !
+               i_loc = orbs(i_imp)
+               j_loc = orbs(j_imp)
+               !
+               Oimp(i_imp,j_imp) = Oloc(i_loc,j_loc)
+               !
+            enddo
+         enddo
+         if(present(U)) Oimp = rotate(Oimp,U)
+         !
+      endif
       !
    end subroutine loc2imp_Matrix
    !

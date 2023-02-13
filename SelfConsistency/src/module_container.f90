@@ -90,6 +90,7 @@ module module_container
    DeallocateBosonicField                   ,&
    DeallocateField                          ,&
    TransformBosonicField                    ,&
+   TransformMatrix                          ,&
    clear_attributes                         ,&
    clear_MatrixElements                     ,&
    isReal                                   ,&

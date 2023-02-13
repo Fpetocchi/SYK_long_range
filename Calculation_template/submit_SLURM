@@ -33,10 +33,12 @@ EXE_AKW=Akw_builder
 #-----------------------------------OPTIONAL-----------------------------------#
 PATH_INPUT_TR=GWinput_beta___
 ####SKIP_FIRST_SC="T"
-#SKIP_ALL_QMC="T"
-####REPLACE_QMC_RES="T"
+####SKIP_FIRST_COLLECT="T"
+####SKIP_ALL_QMC="T"
 ####CHANGE_BETA_IT=1
 ####COLLECT_AKW="T"
+####TO BE REMOVED:
+####REPLACE_QMC_RES="T"
 ####PREP_MAXENT="T"
 
 
@@ -49,12 +51,13 @@ LOCAL=$(pwd)
 BINqmc=${GENMAT}/Solver/bin
 BINsc=${GENMAT}/SelfConsistency/bin
 
-if [ -z ${PATH_INPUT_TR+x}   ]; then PATH_INPUT_TR=${PATH_INPUT} ; fi
-if [ -z ${SKIP_FIRST_SC+x}   ]; then SKIP_FIRST_SC="F"           ; fi
-if [ -z ${SKIP_ALL_QMC+x}    ]; then SKIP_ALL_QMC="F"            ; fi
-if [ -z ${REPLACE_QMC_RES+x} ]; then REPLACE_QMC_RES="F"         ; fi
-if [ -z ${COLLECT_AKW+x}     ]; then COLLECT_AKW="F"             ; fi
-if [ -z ${PREP_MAXENT+x}     ]; then PREP_MAXENT="F"             ; fi
+if [ -z ${PATH_INPUT_TR+x}      ]; then PATH_INPUT_TR=${PATH_INPUT} ; fi
+if [ -z ${SKIP_FIRST_SC+x}      ]; then SKIP_FIRST_SC="F"           ; fi
+if [ -z ${SKIP_FIRST_COLLECT+x} ]; then SKIP_FIRST_COLLECT="F"      ; fi
+if [ -z ${SKIP_ALL_QMC+x}       ]; then SKIP_ALL_QMC="F"            ; fi
+if [ -z ${COLLECT_AKW+x}        ]; then COLLECT_AKW="F"             ; fi
+if [ -z ${REPLACE_QMC_RES+x}    ]; then REPLACE_QMC_RES="F"         ; fi
+if [ -z ${PREP_MAXENT+x}        ]; then PREP_MAXENT="F"             ; fi
 
 export l0=`grep -n "PATH_INPUT=" input.in    | awk -F  ":" '{print $1}'`
 export l1=`grep -n "PATH_INPUT_TR=" input.in | awk -F  ":" '{print $1}'`
@@ -62,13 +65,14 @@ export l2=`grep -n "PATH_DATA=" input.in     | awk -F  ":" '{print $1}'`
 export l3=`grep -n "START_IT=" input.in      | awk -F  ":" '{print $1}'`
 export l4=`grep -n "LAST_IT=" input.in       | awk -F  ":" '{print $1}'`
 export l5=`grep -n "MATCH_BETA=" input.in    | awk -F  ":" '{print $1}'`
+export l6=`grep -n "COLLECT_QMC=" input.in   | awk -F  ":" '{print $1}'`
 
 sed -i ${l0}'s/'"PATH_INPUT=.*!"'/'"PATH_INPUT=${PATH_INPUT}           !"'/' input.in
 sed -i ${l1}'s/'"PATH_INPUT_TR=.*!"'/'"PATH_INPUT_TR=${PATH_INPUT_TR}  !"'/' input.in
 sed -i ${l2}'s/'"PATH_DATA=.*!"'/'"PATH_DATA=${PATH_DATA}              !"'/' input.in
 sed -i ${l4}'s/'"LAST_IT=.*!"'/'"LAST_IT=${END_IT}                     !"'/' input.in
 
-if [ "${PREP_MAXENT}" == "T" ] || [ "${COLLECT_AKW}" == "T" ] ; then 
+if [ "${PREP_MAXENT}" == "T" ] || [ "${COLLECT_AKW}" == "T" ] ; then
    EXE_SC=${EXE_SC}_akw
    SKIP_ALL_QMC="T"
 fi
@@ -88,8 +92,12 @@ do
    IT_DATA=${LOCAL}/${PATH_DATA}/${IT}/
    sed -i ${l3}'s/'"START_IT=.*!"'/'"START_IT=${IT}         !"'/' input.in
    sed -i ${l5}'s/'"MATCH_BETA=.*!"'/'"MATCH_BETA=F                                 !"'/' input.in
+   sed -i ${l6}'s/'"COLLECT_QMC=.*!"'/'"COLLECT_QMC=T                                !"'/' input.in
    if [ ! -z ${CHANGE_BETA_IT+x} ] && [ ${CHANGE_BETA_IT} == ${IT} ] ; then
       sed -i ${l5}'s/'"MATCH_BETA=.*!"'/'"MATCH_BETA=T                                 !"'/' input.in
+   fi
+   if [ "${SKIP_FIRST_COLLECT}" == "T" ] && [ ${IT} == ${START_IT} ] ; then
+      sed -i ${l6}'s/'"COLLECT_QMC=.*!"'/'"COLLECT_QMC=F                                !"'/' input.in
    fi
    if [ "${PREP_MAXENT}" == "T" ] ; then cp input.in input.in.akw  ; fi
    sleep 2
