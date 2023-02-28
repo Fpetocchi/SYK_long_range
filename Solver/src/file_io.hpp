@@ -513,7 +513,6 @@ void print_Vec( std::string path, std::vector<double> &Vec, double mu=0.0, doubl
    fclose(printFile);
 }
 
-
 void print_VecVec( std::string path, std::vector<std::vector<double>> &VecVec, double Beta=0.0, double Norm=1.0)
 {
    //
@@ -539,7 +538,6 @@ void print_VecVec( std::string path, std::vector<std::vector<double>> &VecVec, d
    }
    fclose(printFile);
 }
-
 
 void print_VecVecVec( std::string path, std::vector<std::vector<std::vector<double>>> &VecVecVec, double Beta=0.0, double Norm=1.0)
 {
@@ -570,6 +568,22 @@ void print_VecVecVec( std::string path, std::vector<std::vector<std::vector<doub
    fclose(printFile);
 }
 
+void print_EigenMat( std::string path, Eigen::MatrixXd &Mat)
+{
+   //
+   FILE * printFile;
+   const char * file=path.c_str();
+   printFile = fopen(file ,"w");
+   int Ncols = Mat.cols();
+   int Nrows = Mat.rows();
+   //
+   for(int irow=0; irow<Nrows; irow++)
+   {
+      for (int icol=0; icol<Ncols; icol++) fprintf (printFile , "%.20e\t", Mat(irow,icol) );
+      fprintf (printFile , "\n");
+   }
+   fclose(printFile);
+}
 
 //============================================================================//
 

@@ -2960,6 +2960,7 @@ contains
       Norb = int(sqrt(dble(Nbp)))
       call assert_shape(Mnanb,[Norb,Norb],"product2NN","Mnanb")
       !
+      Mnanb = czero
       do i=1,Norb
          do j=1,Norb
             !
@@ -2986,6 +2987,7 @@ contains
       Nbp = Norb**2
       call assert_shape(Mfull,[Nbp,Nbp],"NN2product","Mfull")
       !
+      Mfull = czero
       do i=1,Norb
          do j=1,Norb
             !

@@ -112,6 +112,7 @@ module crystal
    public :: read_Hk
    public :: dump_Hk
    public :: build_Hk
+   public :: build_Hk_from_Hr
    public :: calc_irredBZ
    public :: fill_ksumkdiff
    public :: fill_smallk
@@ -590,14 +591,14 @@ contains
    !---------------------------------------------------------------------------!
    !PURPOSE: Read the Hamiltonian and wigner seiz indexes
    !---------------------------------------------------------------------------!
-   subroutine read_Hr(Hr,Norb,path)
+   subroutine read_Hr(Hr,path,Norb)
       !
       use utils_misc
       implicit none
       !
       complex(8),allocatable,intent(out)    :: Hr(:,:,:)
-      integer,intent(in)                    :: Norb
       character(len=*),intent(in)           :: path
+      integer,intent(out),optional          :: Norb
       !
       integer,parameter                     :: W90NumCol=15
       integer                               :: unit,Num_wann,Nrpts
@@ -626,8 +627,7 @@ contains
       read(unit,*) Num_wann !Number of Wannier orbitals
       read(unit,*) Nrpts    !Number of Wigner-Seitz vectors
       !
-      if(Norb.ne.Num_wann) stop "read_Hr: Hr.DAT does not have the correct dimension."
-      allocate(Hr(Norb,Norb,Nwig));Hr=czero
+      allocate(Hr(Num_wann,Num_wann,Nwig));Hr=czero
       !
       Qst = int(Nrpts/W90NumCol)
       Rst = mod(Nrpts,W90NumCol)
@@ -654,6 +654,8 @@ contains
       enddo
       close(unit)
       deallocate(Ndegen)
+      !
+      if(present(Norb))Norb=Num_wann
       !
    end subroutine read_Hr
 
@@ -722,7 +724,7 @@ contains
          elseif(size(Hk,dim=1).ne.(Nsite*Norb))then
              write(*,"(A)")"     Hk_built.DAT has the wrong orbital dimension. Rebuilding."
              rebuild=.true.
-          endif
+         endif
          !
       endif
       !
@@ -749,7 +751,7 @@ contains
             path=reg(pathOUTPUT)//"Hr.DAT"
             call inquireFile(reg(path),filexists)
             !
-            call read_Hr(Hr_bulk,Norb*Nsite_bulk,reg(path))
+            call read_Hr(Hr_bulk,reg(path))
             !
          else
             !
@@ -869,11 +871,11 @@ contains
                path=reg(pathOUTPUT)//"Hr_"//str(ilayer)//".DAT"
                call inquireFile(reg(path),filexists,hardstop=.false.)
                if(filexists)then
-                  call read_Hr(Hr_bulk,Norb*Nsite_bulk,reg(path))
+                  call read_Hr(Hr_bulk,reg(path))
                else
                   path=reg(pathOUTPUT)//"Hr.DAT"
                   call inquireFile(reg(path),filexists)
-                  call read_Hr(Hr_bulk,Norb*Nsite_bulk,reg(path))
+                  call read_Hr(Hr_bulk,reg(path))
                endif
                !
                do isite=1,Nsite_bulk
@@ -1094,6 +1096,84 @@ contains
       if(present(pathOUTPUT)) call dump_Hk(Hk,kpt,pathOUTPUT,"Hk_built.DAT")
       !
    end subroutine build_Hk
+   !
+   subroutine build_Hk_from_Hr(Hk,kpt,Nkpt3,pathOUTPUT)
+      !
+      use utils_misc
+      use parameters, only : Heterostructures !WHY IS THIS WORKING?
+      use linalg, only : zeye, diagonal, diag, eigh, dag
+      implicit none
+      !
+      complex(8),allocatable,intent(out)    :: Hk(:,:,:)
+      real(8),allocatable,intent(out)       :: kpt(:,:)
+      integer,intent(in)                    :: Nkpt3(3)
+      character(len=*),intent(in),optional  :: pathOUTPUT
+      !
+      integer                               :: Nkpt,Norb,ik
+      complex(8),allocatable                :: Hr(:,:,:)
+      character(len=256)                    :: path
+      logical                               :: filexists,rebuild
+      !
+      !
+      if(verbose)write(*,"(A)") "---- build_Hk_from_Hr"
+      !
+      !
+      path=reg(pathOUTPUT)//"Hk_built.DAT"
+      call inquireFile(reg(path),filexists,hardstop=.false.)
+      !
+      Nkpt = product(Nkpt3)
+      !
+      if(filexists)then
+         !
+         rebuild=.false.
+         write(*,"(A)")"     Reading Hk_built.DAT from "//reg(pathOUTPUT)
+         call read_Hk(Hk,kpt,reg(pathOUTPUT),filename="Hk_built.DAT")
+         if(size(Hk,dim=3).ne.Nkpt)then
+            write(*,"(A)")"     Hk_built.DAT has the wrong number of K-points. Rebuilding."
+            rebuild=.true.
+         endif
+         !
+      endif
+      !
+      if((.not.filexists).or.rebuild)then
+         !
+         write(*,"(A)")"     Building Hk.DAT from Hr.DAT."
+         if(.not.Lat_stored) stop "build_Hk_from_Hr: Lattice vectors not stored."
+         if(.not.present(pathOUTPUT)) stop "build_Hk_from_Hr: reading of Hr.DAT requested but missing path."
+         !
+         if(allocated(kpt))deallocate(kpt)
+         allocate(kpt(3,Nkpt));kpt=0d0
+         !
+         call build_kpt(Nkpt3,kpt,pathOUTPUT=reg(pathOUTPUT))
+         !
+         !build the vectors in real space if needed
+         if(.not.Wig_stored)call calc_wignerseiz(Nkpt3)
+         !
+         ! Look for Hr.DAT
+         path=reg(pathOUTPUT)//"Hr.DAT"
+         call inquireFile(reg(path),filexists)
+         !
+         call read_Hr(Hr,reg(path),Norb=Norb)
+         !
+         !FT Hr-->Hk
+         if(allocated(Hk))deallocate(Hk)
+         allocate(Hk(Norb,Norb,Nkpt));Hk=czero
+         call wannier_R2K(Nkpt3,kpt,Hr,Hk)
+         deallocate(Hr)
+         !
+      endif
+      !
+      !Check the computed Hk
+      where(abs((Hk)).lt.eps) Hk=czero
+      if(size(Hk,dim=1).gt.1)then
+         do ik=1,nkpt
+            call check_Hermiticity(Hk(:,:,ik),eps,name="Hk_k"//str(ik))
+         enddo
+      endif
+      !
+      if(present(pathOUTPUT)) call dump_Hk(Hk,kpt,pathOUTPUT,"Hk_built.DAT")
+      !
+   end subroutine build_Hk_from_Hr
 
 
    !---------------------------------------------------------------------------!
@@ -3531,6 +3611,7 @@ contains
          allocate(dataZk(Ndim,Ndim,Nkpt_path_tot));dataZk=czero
          dataZk = data_intp
          do ik=1,Nkpt_path_tot
+            if(Hamiltonian) dataZk(:,:,ik) = dataZk(:,:,ik) - Lttc%mu*zeye(Ndim)
             call eigh(dataZk(:,:,ik),dataEk(:,ik))
          enddo
          !
@@ -3571,6 +3652,7 @@ contains
             do iw=1,Nreal
                zeta(io,io,iw) = dcmplx(wreal(iw),eta)
             enddo
+            if(Hamiltonian) zeta(io,io,:) = zeta(io,io,:) + Lttc%mu
          enddo
          !
          !The potentials are computed only if the Hamiltonian on the path is already stored
@@ -4029,6 +4111,7 @@ contains
          allocate(zeta(Ndim,Ndim,1));zeta=czero
          do io=1,Ndim
             zeta(io,io,1) = dcmplx(FermiCut_,eta)
+            if(Hamiltonian) zeta(io,io,1) = zeta(io,io,1) + Lttc%mu
          enddo
          allocate(wreal(Nreal));wreal=0d0
          wreal = linspace(-wrealMax,+wrealMax,Nreal)

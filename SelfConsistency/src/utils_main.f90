@@ -88,7 +88,6 @@ module utils_main
    logical                                  :: interp_Chi=.false.
    logical                                  :: interp_W=.false.
    !
-   character(len=255)                       :: HartreeType="GW" ! "GW" "DMFT"
    real(8)                                  :: HartreeFact=1d0
    logical                                  :: update_curlyG=.true.
    integer                                  :: SigmaMaxMom=3
@@ -190,7 +189,7 @@ contains
       if(AFMselfcons.and.(Nsite.ne.2)) stop "AFM self-consistency is implemented only for lattices with 2 sites."
       if(RotateUloc.and.(.not.RotateHloc)) stop "Rotate the Bosonic impurity problem without rotating the Ferminic one is not allowed."
       !
-      if(.not.RemoveHartree)HartreeFact=0d0
+      if(reg(DC_type).eq."None")HartreeFact=0d0
       !
       calc_Sguess = calc_Sguess .and. (FirstIteration.eq.0) .and. solve_DMFT
       calc_Pguess = calc_Pguess .and. (FirstIteration.eq.0) .and. solve_DMFT
@@ -200,7 +199,7 @@ contains
       causal_D = causal_D .and. ((FirstIteration.ne.0).or.calc_Sguess)
       causal_U = causal_U .and. ((FirstIteration.ne.0).or.calc_Pguess)
       !
-      if(Hmodel.or.Umodel)addTierIII=.false.
+      if(Hmodel)addTierIII=.false.
       !
       mu_scan = (look4dens%mu_scan.eq.1) .and. (look4dens%TargetDensity.gt.0d0)
       !
@@ -242,7 +241,7 @@ contains
             if(ItStart.ne.0) stop "CalculationType is G0W0 but the starting iteration is not 0."
             call createDir(reg(Itpath),verb=verbose)
             !
-            if(Uspex)then
+            if((reg(Utensor).eq."Spex"))then
                call createDir(reg(pathINPUTtr)//"VW_imag",verb=verbose)
                if(verbose)then
                   call createDir(reg(pathINPUTtr)//"VW_imag_readable",verb=verbose)
@@ -263,7 +262,7 @@ contains
             call createDir(reg(Itpath),verb=verbose)
             !
             ! I'm keeping this here in case the folder has to be re-filled at non-0 iteration
-            if(Uspex)then
+            if((reg(Utensor).eq."Spex"))then
                call createDir(reg(pathINPUTtr)//"VW_imag",verb=verbose)
                if(verbose)then
                   call createDir(reg(pathINPUTtr)//"VW_imag_readable",verb=verbose)
@@ -283,7 +282,7 @@ contains
             endif
             !
             ! I'm keeping this here in case the folder has to be re-filled at non-0 iteration
-            if(Uspex)then
+            if((reg(Utensor).eq."Spex"))then
                call createDir(reg(pathINPUTtr)//"VW_imag",verb=verbose)
                if(verbose)then
                   call createDir(reg(pathINPUTtr)//"VW_imag_readable",verb=verbose)
@@ -371,7 +370,7 @@ contains
          call createDir(reg(Itpath),verb=verbose)
          !
          ! I'm keeping this here in case the folder has to be re-filled at non-0 iteration
-         if(Uspex)then
+         if((reg(Utensor).eq."Spex"))then
             call createDir(reg(pathINPUTtr)//"VW_imag",verb=verbose)
             if(verbose)then
                call createDir(reg(pathINPUTtr)//"VW_imag_readable",verb=verbose)
@@ -422,6 +421,7 @@ contains
       integer                               :: iq_gamma_Hk,iq_gamma_XEPS
       integer                               :: shift
       logical                               :: present
+      logical                               :: FLLcond_1,FLLcond_2,FLLcond_3,FLLcond
       integer,allocatable                   :: oldSetNorb(:),oldSetOrbs(:,:)
       real(8),allocatable                   :: Egrid(:)
       !
@@ -429,16 +429,21 @@ contains
       write(*,"(A)") new_line("A")//new_line("A")//"---- initialize_Lattice"
       !
       !
-      if(Hmodel)then
-         call set_lattice(LatticeVec,ucVec)
-      else
+      call inquireFile(reg(pathINPUT)//"LATTC.DAT",present,verb=verbose,hardstop=.false.)
+      if(present)then
          call read_lattice(reg(pathINPUT))
+      else
+         call set_lattice(LatticeVec,ucVec)
       endif
       !
       if(readHk)then
          call read_Hk(Lttc%Hk,Lttc%kpt,pathINPUT)
       else
-         call build_Hk(Lttc%Hk,Lttc%kpt,hopping,Nkpt3,readHr,Hetero,pathOUTPUT=reg(pathINPUT))
+         if(Hmodel)then
+            call build_Hk(Lttc%Hk,Lttc%kpt,hopping,Nkpt3,readHr,Hetero,pathOUTPUT=reg(pathINPUT))
+         else
+            call build_Hk_from_Hr(Lttc%Hk,Lttc%kpt,Nkpt3,pathOUTPUT=reg(pathINPUT))
+         endif
       endif
       !
       !Filling the Lattice attributes
@@ -452,12 +457,15 @@ contains
       if(Hmodel)then
          Lttc%Hk = Lttc%Hk * alphaHk
       else
-         Lttc%Hk = Lttc%Hk * alphaHk * H2eV
+         Lttc%Hk = Lttc%Hk * alphaHk
+         if(readHk) Lttc%Hk = Lttc%Hk * H2eV ! this will be removed comes from old implementation
       endif
       !
       if(allocated(E0))then
          do ik=1,Lttc%Nkpt
-            Lttc%Hk(:,:,ik) = Lttc%Hk(:,:,ik) + diag(E0)
+            do iorb=1,Lttc%Norb
+               Lttc%Hk(iorb,iorb,ik) = Lttc%Hk(iorb,iorb,ik) + E0(iorb)
+            enddo
          enddo
       endif
       !
@@ -480,7 +488,7 @@ contains
       if(Lttc%Nkpt.gt.1) iq_gamma_Hk = find_vec([0d0,0d0,0d0],Lttc%kpt,eps)
       write(*,"(A)")"     Gamma point index: "//str(iq_gamma_Hk)
       !
-      if(.not.Hmodel)then
+      if((.not.Hmodel).and.(reg(Utensor)=="Spex"))then
          allocate(Lttc%kptPos(Lttc%Nkpt));Lttc%kptPos=0
          call read_xeps(pathINPUT,Lttc%kpt,Nkpt3,UseXepsKorder, &
          Lttc%kptPos,Lttc%Nkpt_irred,Lttc%UseDisentangledBS,iq_gamma_XEPS,paramagneticSPEX)
@@ -527,9 +535,18 @@ contains
             !
             MultiTier = .true.
             if(Hetero%status) stop "MultiTier construction and Heterostructured setup are not allowed together."
-            !if(RotateHloc.or.RotateUloc) stop "MultiTier construction and Rotations of the local space are not allowed together."
             !
          endif
+      endif
+      !
+      if((reg(DC_type).eq."FLL_Nimp").or.(reg(DC_type).eq."FLL_Nlat"))then
+         !
+         FLLcond_1 = Solver%Nimp .eq. Nsite !one impurity for each site
+         FLLcond_2 =  (Solver%Nimp.eq.1) .and. (sum(LocalOrbs(:)%Norb).eq.Lttc%Norb) !one impurity for all the sites
+         FLLcond_3 =  (Solver%Nimp.eq.1) .and. (ExpandImpurity.or.AFMselfcons)       !one impurity copied to all the sites
+         FLLcond = FLLcond_1 .or. FLLcond_2 .or. FLLcond_3
+         if(.not.FLLcond) stop "The available conditions to employ FLL DC are not fulfilled"
+         !
       endif
       !
       !
@@ -652,18 +669,10 @@ contains
       if(reg(structure).eq."User") call set_UserPath(UserPath)
       if(ItStart.eq.0)then
          !
-         call calc_Glda(0d0,Beta,Lttc)
-         if(Hetero%status)call print_potentials(pathINPUT)
-         !
          allocate(Egrid(Nreal));Egrid=0d0
          Egrid = linspace(-wrealMax,+wrealMax,Nreal)
          call tetrahedron_integration(reg(pathINPUT),Lttc%Hk,Lttc%Nkpt3,Lttc%kpt,Egrid,fact_intp=2,pathOUTPUT=reg(pathINPUT))
          deallocate(Egrid)
-         !
-         if(reg(structure).ne."None")then
-            call interpolate2Path(Lttc,Nkpt_path_default,"Hk",pathOUTPUT=reg(pathINPUT),store=.true.,skipAkw=.false.)
-            call interpolate2Plane(Lttc,Nkpt_plane_default,"Hk",pathOUTPUT=reg(pathINPUT),store=.true.,skipFk=.false.)
-         endif
          !
       endif
       !
@@ -947,21 +956,28 @@ contains
          case("G0W0","scGW")
             !
             !Unscreened interaction
-            if(Uspex)then
+            if((reg(Utensor).eq."Spex"))then
+               !
                call AllocateBosonicField(Ulat,Crystal%Norb,Nmats,Crystal%iq_gamma,Nkpt=Crystal%Nkpt,Nsite=Nsite,Beta=Beta)
                call read_U_spex(Ulat,save2readable=verbose,kpt=Crystal%kpt,doAC=U_AC,pathOUTPUT=reg(pathINPUTtr))
-               call dump_MaxEnt(Ulat,"mats",reg(ItFolder)//"Convergence/","Ulat",EqvGWndx%SetOrbs)
-            elseif(Umodel)then
+               !
+            elseif((reg(Utensor).eq."Vasp"))then
+               !
+               call AllocateBosonicField(Ulat,Crystal%Norb,1,Crystal%iq_gamma,Nkpt=Crystal%Nkpt,Nsite=Nsite,Beta=Beta)
+               call read_U_vasp(Ulat,Crystal)
+               !
+            elseif((reg(Utensor).eq."Model"))then
+               !
                if(Nphonons.gt.0)then
                   write(*,"(A)")"     Warning: the model interaction built with phononic modes is K-independent."
                   call AllocateBosonicField(Ulat,Crystal%Norb,Nmats,Crystal%iq_gamma,Nkpt=Crystal%Nkpt,Nsite=Nsite,Beta=Beta)
                   call build_Uret(Ulat,Uaa,Uab,J,g_eph,wo_eph,Hetero,LocalOnly=.false.)
-                  call dump_MaxEnt(Ulat,"mats",reg(ItFolder)//"Convergence/","Ulat",EqvGWndx%SetOrbs)
                else
                   write(*,"(A)")"     Warning: the model interaction built with long-range couplings is frequency-independent."
                   call AllocateBosonicField(Ulat,Crystal%Norb,1,Crystal%iq_gamma,Nkpt=Crystal%Nkpt,Nsite=Nsite,Beta=Beta)
                   call build_Uret(Ulat,Uaa,Uab,J,Vnn,Crystal,Hetero)
                endif
+               !
             endif
             !
             !Fully screened interaction
@@ -978,7 +994,7 @@ contains
                call read_FermionicField(Glat,reg(PrevItFolder),"Glat_w",Crystal%kpt)
             else
                Glat%mu = look4dens%mu
-               if(mu_scan.and.Hmodel) call set_density(Glat%mu,Beta,Crystal,look4dens)
+               if(mu_scan) call set_density(Glat%mu,Beta,Crystal,look4dens)
                call calc_Gmats(Glat,Crystal)
             endif
             call calc_density(Glat,Crystal,Glat%N_ks)
@@ -993,15 +1009,16 @@ contains
             !
             !Hubbard interaction
             allocate(Umat(Crystal%Norb**2,Crystal%Norb**2));Umat=czero
-            if(Uspex)then
-               call read_U_spex(Umat)
-            elseif(Umodel)then
-               call inquireFile(reg(pathINPUT)//"Umat_model.DAT",filexists,hardstop=.false.,verb=verbose)
-               if(filexists)then
-                  call read_Matrix(Umat,reg(pathINPUT)//"Umat_model.DAT")
-               else
+            call inquireFile(reg(pathINPUT)//"Umat_model.DAT",filexists,hardstop=.false.,verb=verbose)
+            if(filexists)then
+               call read_Matrix(Umat,reg(pathINPUT)//"Umat_model.DAT")
+            else
+               if((reg(Utensor).eq."Spex"))then
+                  call read_U_spex(Umat)
+               elseif((reg(Utensor).eq."Vasp"))then
+                  call read_U_vasp(Umat,Crystal)
+               elseif((reg(Utensor).eq."Model"))then
                   call build_Umat(Umat,Uaa,Uab,J)
-                  call dump_Matrix(Umat,reg(pathINPUT),"Umat_model.DAT")
                endif
             endif
             !
@@ -1015,7 +1032,7 @@ contains
                call read_FermionicField(Glat,reg(PrevItFolder),"Glat_w")
             else
                Glat%mu = look4dens%mu
-               if(mu_scan.and.Hmodel) call set_density(Glat%mu,Beta,Crystal,look4dens)
+               if(mu_scan) call set_density(Glat%mu,Beta,Crystal,look4dens)
                call calc_Gmats(Glat,Crystal)
             endif
             call calc_density(Glat,Glat%N_s)
@@ -1023,11 +1040,18 @@ contains
          case("DMFT+dynU")
             !
             !Unscreened interaction
-            if(Uspex)then
+            if((reg(Utensor).eq."Spex"))then
+               !
                call AllocateBosonicField(Ulat,Crystal%Norb,Nmats,Crystal%iq_gamma,Nsite=Nsite,Beta=Beta)
                call read_U_spex(Ulat,save2readable=verbose,doAC=U_AC,pathOUTPUT=reg(pathINPUTtr))
-               call dump_MaxEnt(Ulat,"mats",reg(ItFolder)//"Convergence/","Ulat",EqvGWndx%SetOrbs)
-            elseif(Umodel)then
+               !
+            elseif((reg(Utensor).eq."Vasp"))then
+               !
+               call AllocateBosonicField(Ulat,Crystal%Norb,1,Crystal%iq_gamma,Nkpt=Crystal%Nkpt,Nsite=Nsite,Beta=Beta)
+               call read_U_vasp(Ulat,Crystal)
+               !
+            elseif((reg(Utensor).eq."Model"))then
+               !
                if(Nphonons.gt.0)then
                   write(*,"(A)")"     Warning: the model interaction built with phononic modes is K-independent."
                   call AllocateBosonicField(Ulat,Crystal%Norb,Nmats,Crystal%iq_gamma,Nsite=Nsite,Beta=Beta)
@@ -1037,12 +1061,12 @@ contains
                   else
                      call build_Uret(Ulat,Uaa,Uab,J,g_eph,wo_eph,Hetero)
                   endif
-                  call dump_MaxEnt(Ulat,"mats",reg(ItFolder)//"Convergence/","Ulat",EqvGWndx%SetOrbs)
                else
                   write(*,"(A)")"     Warning: the model interaction built with long-range couplings is frequency-independent."
                   call AllocateBosonicField(Ulat,Crystal%Norb,1,Crystal%iq_gamma,Nsite=Nsite,Beta=Beta)
                   call build_Uret(Ulat,Uaa,Uab,J,Vnn,Crystal,Hetero,LocalOnly=.true.)
                endif
+               !
             endif
             !
             !Impurity Self-energy
@@ -1055,7 +1079,7 @@ contains
                call read_FermionicField(Glat,reg(PrevItFolder),"Glat_w")
             else
                Glat%mu = look4dens%mu
-               if(mu_scan.and.Hmodel) call set_density(Glat%mu,Beta,Crystal,look4dens)
+               if(mu_scan) call set_density(Glat%mu,Beta,Crystal,look4dens)
                call calc_Gmats(Glat,Crystal)
             endif
             call calc_density(Glat,Glat%N_s)
@@ -1063,21 +1087,28 @@ contains
          case("EDMFT")
             !
             !Unscreened interaction
-            if(Uspex)then
+            if((reg(Utensor).eq."Spex"))then
+               !
                call AllocateBosonicField(Ulat,Crystal%Norb,Nmats,Crystal%iq_gamma,Nkpt=Crystal%Nkpt,Nsite=Nsite,Beta=Beta)
                call read_U_spex(Ulat,save2readable=verbose,kpt=Crystal%kpt,doAC=U_AC,pathOUTPUT=reg(pathINPUTtr))
-               call dump_MaxEnt(Ulat,"mats",reg(ItFolder)//"Convergence/","Ulat",EqvGWndx%SetOrbs)
-            elseif(Umodel)then
+               !
+            elseif((reg(Utensor).eq."Vasp"))then
+               !
+               call AllocateBosonicField(Ulat,Crystal%Norb,1,Crystal%iq_gamma,Nkpt=Crystal%Nkpt,Nsite=Nsite,Beta=Beta)
+               call read_U_vasp(Ulat,Crystal)
+               !
+            elseif((reg(Utensor).eq."Model"))then
+               !
                if(Nphonons.gt.0)then
                   write(*,"(A)")"     Warning: the model interaction built with phononic modes is K-independent."
                   call AllocateBosonicField(Ulat,Crystal%Norb,Nmats,Crystal%iq_gamma,Nkpt=Crystal%Nkpt,Nsite=Nsite,Beta=Beta)
                   call build_Uret(Ulat,Uaa,Uab,J,g_eph,wo_eph,Hetero,LocalOnly=.false.)
-                  call dump_MaxEnt(Ulat,"mats",reg(ItFolder)//"Convergence/","Ulat",EqvGWndx%SetOrbs)
                else
                   write(*,"(A)")"     Warning: the model interaction built with long-range couplings is frequency-independent."
                   call AllocateBosonicField(Ulat,Crystal%Norb,1,Crystal%iq_gamma,Nkpt=Crystal%Nkpt,Nsite=Nsite,Beta=Beta)
                   call build_Uret(Ulat,Uaa,Uab,J,Vnn,Crystal,Hetero)
                endif
+               !
             endif
             !
             !Fully screened interaction
@@ -1107,7 +1138,7 @@ contains
                call read_FermionicField(Glat,reg(PrevItFolder),"Glat_w")
             else
                Glat%mu = look4dens%mu
-               if(mu_scan.and.Hmodel) call set_density(Glat%mu,Beta,Crystal,look4dens)
+               if(mu_scan) call set_density(Glat%mu,Beta,Crystal,look4dens)
                call calc_Gmats(Glat,Crystal)
             endif
             call calc_density(Glat,Glat%N_s)
@@ -1125,11 +1156,18 @@ contains
          case("GW+EDMFT")
             !
             !Unscreened interaction
-            if(Uspex)then
+            if((reg(Utensor).eq."Spex"))then
+               !
                call AllocateBosonicField(Ulat,Crystal%Norb,Nmats,Crystal%iq_gamma,Nkpt=Crystal%Nkpt,Nsite=Nsite,Beta=Beta)
                call read_U_spex(Ulat,save2readable=verbose,kpt=Crystal%kpt,doAC=U_AC,pathOUTPUT=reg(pathINPUTtr))
-               call dump_MaxEnt(Ulat,"mats",reg(ItFolder)//"Convergence/","Ulat",EqvGWndx%SetOrbs)
-            elseif(Umodel)then
+               !
+            elseif((reg(Utensor).eq."Vasp"))then
+               !
+               call AllocateBosonicField(Ulat,Crystal%Norb,1,Crystal%iq_gamma,Nkpt=Crystal%Nkpt,Nsite=Nsite,Beta=Beta)
+               call read_U_vasp(Ulat,Crystal)
+               !
+            elseif((reg(Utensor).eq."Model"))then
+               !
                if(Nphonons.gt.0)then
                   write(*,"(A)")"     Warning: the model interaction built with phononic modes is K-independent."
                   call AllocateBosonicField(Ulat,Crystal%Norb,Nmats,Crystal%iq_gamma,Nkpt=Crystal%Nkpt,Nsite=Nsite,Beta=Beta)
@@ -1140,6 +1178,7 @@ contains
                   call AllocateBosonicField(Ulat,Crystal%Norb,1,Crystal%iq_gamma,Nkpt=Crystal%Nkpt,Nsite=Nsite,Beta=Beta)
                   call build_Uret(Ulat,Uaa,Uab,J,Vnn,Crystal,Hetero)
                endif
+               !
             endif
             !
             !Fully screened interaction
@@ -1165,19 +1204,17 @@ contains
                call read_FermionicField(Glat,reg(PrevItFolder),"Glat_w",Crystal%kpt)
             else
                Glat%mu = look4dens%mu
-               if(mu_scan.and.Hmodel) call set_density(Glat%mu,Beta,Crystal,look4dens)
+               if(mu_scan) call set_density(Glat%mu,Beta,Crystal,look4dens)
                call calc_Gmats(Glat,Crystal)
             endif
             call calc_density(Glat,Crystal,Glat%N_ks)
             call calc_density(Glat,Glat%N_s)
-            !
             !
             !just a sanity check
             do ik=1,Glat%Nkpt
                call check_Hermiticity(Glat%N_ks(:,:,ik,1),eps,enforce=.false.,hardstop=.false.,name="Nlat_k"//str(ik)//"_s1",verb=.true.)
                if(.not.paramagnet)call check_Hermiticity(Glat%N_ks(:,:,ik,Nspin),eps,enforce=.false.,hardstop=.false.,name="Nlat_k"//str(ik)//"_s"//str(Nspin),verb=.true.)
             enddo
-            !
             !
             !Logical Flags
             calc_Pk = .true.
@@ -1189,6 +1226,21 @@ contains
             endif
             !
       end select
+      !
+      if(Ulat%status)call dump_MaxEnt(Ulat,"mats",reg(ItFolder)//"Convergence/","Ulat",EqvGWndx%SetOrbs)
+      !
+      if(ItStart.eq.0)then
+         !
+         call calc_Glda(Glat%mu,Beta,Crystal)
+         if(Hetero%status)call print_potentials(pathINPUT)
+         !
+         Crystal%mu = Glat%mu
+         if(reg(structure).ne."None")then
+            call interpolate2Path(Crystal,Nkpt_path_default,"Hk",pathOUTPUT=reg(pathINPUT),store=.true.,skipAkw=.false.)
+            call interpolate2Plane(Crystal,Nkpt_plane_default,"Hk",pathOUTPUT=reg(pathINPUT),store=.true.,skipFk=.false.)
+         endif
+         !
+      endif
       !
       !
       if(calc_Sigmak)then
@@ -1439,6 +1491,7 @@ contains
                enddo
                S_Full%N_s(:,:,ispin) = HartreeFact*S_DMFT%N_s(:,:,int(Nspin/ispin))
                if(paramagnet)then
+                  S_Full%N_s(:,:,Nspin) = S_Full%N_s(:,:,1)
                   S_Full%wks(:,:,:,:,Nspin) = S_Full%wks(:,:,:,:,1)
                   exit
                endif
@@ -2305,7 +2358,6 @@ contains
             !
             if(.not.P_EDMFT%status) stop "calc_Interaction: P_EDMFT not properly initialized."
             if(.not.Wlat%status) stop "calc_Interaction: Wlat not properly initialized."
-            call AllocateBosonicField(curlyU,Norb,Nmats,Crystal%iq_gamma,Beta=Beta)
             !
             if(Ustart)then
                !
@@ -2538,6 +2590,7 @@ contains
       integer                               :: iorb,jorb,korb,lorb,ispin,jspin
       integer                               :: ib1,ib2,isite,idum
       integer                               :: unit,ndx,itau,iw
+      integer                               :: io,jo,is,js
       integer,allocatable                   :: wndx(:,:)
       real(8)                               :: taup
       real(8),allocatable                   :: tauF(:),tauB(:),wmats(:)
@@ -2555,11 +2608,13 @@ contains
       type(FermionicField),allocatable      :: G0imp(:)
       type(BosonicField)                    :: curlyU
       complex(8),allocatable                :: Sfit(:,:,:),SmatsTail(:)
+      !Hartree shift and DC
+      real(8)                               :: N_FLL,U_FLL,J_FLL,Np_FLL,Up_FLL
       real(8),allocatable                   :: Uinst(:,:)
+      complex(8),allocatable                :: rho(:,:,:),rho_Flav(:)
       !Impurity susceptibilities
       real(8),allocatable                   :: nt(:,:,:),nt_av(:,:)
       real(8),allocatable                   :: nnt(:,:,:),NNitau(:,:,:,:,:)
-      !complex(8),allocatable                :: ChiMitau_tot(:),ChiMmats(:)
       type(BosonicField)                    :: ChiCitau,ChiCmats
       type(BosonicField)                    :: ChiMitau,ChiMmats
       !Impurity polarization and bosonic Dyson equation
@@ -2680,6 +2735,7 @@ contains
             !
             ReadLine=0d0
             read(unit,*) taup,ReadLine
+            where(ReadLine.eq.0d0) ReadLine = -eps
             if(abs(taup-tauF(itau)).gt.eps) stop "Reading Gimp_t.DAT from previous iteration: Impurity fermionic tau mesh does not coincide."
             !
             ndx=1
@@ -2801,6 +2857,7 @@ contains
             do itau=1,Solver%NtauF_in
                ReadLine=0d0
                read(unit,*) taup,ReadLine
+               where(ReadLine.eq.0d0) ReadLine = -eps
                if(abs(taup-tauF(itau)).gt.eps) stop "Reading Fimp_S_t.DAT from previous iteration: Impurity fermionic tau mesh does not coincide."
                !
                ndx=1
@@ -2856,6 +2913,7 @@ contains
             do itau=1,Solver%NtauF_in
                ReadLine=0d0
                read(unit,*) taup,ReadLine
+               where(ReadLine.eq.0d0) ReadLine = eps
                if(abs(taup-tauF(itau)).gt.eps) stop "Reading Fimp_R_t.DAT from previous iteration: Impurity fermionic tau mesh does not coincide."
                !
                ndx=1
@@ -2936,7 +2994,7 @@ contains
       do isite=1,Solver%Nimp
          !
          fitSigmaTail = .false.
-         if(addE0)then
+         if(addE0.gt.0)then
             fitSigmaTail = all(LocalOrbs(isite)%tailFit.gt.0d0).and.all(LocalOrbs(isite)%tailFit.lt.wmatsMax)
          else
             fitSigmaTail = (ReplaceTail_Simp.gt.0d0).and.(ReplaceTail_Simp.lt.wmatsMax)
@@ -2952,7 +3010,7 @@ contains
             !define the frequency index from which substitute the tail
             allocate(wmats(Nmats));wmats=FermionicFreqMesh(Beta,Nmats)
             allocate(wndx(LocalOrbs(isite)%Norb,Nspin));wndx=0
-            if(addE0)then
+            if(addE0.gt.0)then
                write(*,*)
                do ispin=1,Nspin
                   do iorb=1,LocalOrbs(isite)%Norb
@@ -2998,14 +3056,27 @@ contains
             !
          endif
          !
-         !Fill up the N_s attribute that correspond to the Hartree term of the
-         !self-energy always diagonal in the solver basis
+         !Fill up the N_s attribute that correspond to the Hartree term of the self-energy always diagonal in the solver basis
          call AllocateBosonicField(curlyU,LocalOrbs(isite)%Norb,Nmats,Crystal%iq_gamma,Beta=Beta)
          call read_BosonicField(curlyU,reg(PrevItFolder)//"Solver_"//reg(LocalOrbs(isite)%Name)//"/","curlyU_"//reg(LocalOrbs(isite)%Name)//"_w.DAT")
-         select case(reg(HartreeType))
+         select case(reg(DC_type))
             case default
-               stop "collect_QMC_results: Available HartreeT types: GW or DMFT."
-            case("GW")
+               !
+               stop "collect_QMC_results: Available DC_type: Hartree_GW_Nimp, Hartree_GW_Nlat, Hartree_DMFT_Nimp, Hartree_DMFT_Nlat, FLL_Nimp, FLL_Nlat, None."
+               !
+            case("None")
+               !
+               write(*,"(A)")"     Nothing will be removed from the impurity self-energy."
+               Simp(isite)%N_s = czero
+               !
+            case("Hartree_GW_Nimp","Hartree_GW_Nlat")
+               !
+               allocate(rho(LocalOrbs(isite)%Norb,LocalOrbs(isite)%Norb,Nspin));rho=0d0
+               if(reg(DC_type).eq."Hartree_GW_Nimp")then
+                  rho = LocalOrbs(isite)%rho_OrbSpin
+               elseif(reg(DC_type).eq."Hartree_GW_Nlat")then
+                  call read_Matrix(rho,reg(PrevItFolder)//"Solver_"//reg(LocalOrbs(isite)%Name)//"/Nloc_"//reg(LocalOrbs(isite)%Name),paramagnet)
+               endif
                !
                Simp(isite)%N_s = czero
                do ispin=1,Nspin
@@ -3015,19 +3086,34 @@ contains
                            do lorb=1,LocalOrbs(isite)%Norb
                               !
                               call F2Bindex(LocalOrbs(isite)%Norb,[iorb,jorb],[korb,lorb],ib1,ib2)
-                              Simp(isite)%N_s(iorb,jorb,ispin) = Simp(isite)%N_s(iorb,jorb,ispin) + curlyU%screened_local(ib1,ib2,1)*LocalOrbs(isite)%rho_OrbSpin(korb,lorb,ispin)
+                              Simp(isite)%N_s(iorb,jorb,ispin) = Simp(isite)%N_s(iorb,jorb,ispin) + curlyU%screened_local(ib1,ib2,1)*rho(korb,lorb,ispin)
                               !
                            enddo
                         enddo
                      enddo
                   enddo
                enddo
+               deallocate(rho)
                !
                !The magnetization will be given only by the self-energy beyond Hartree
                Simp(isite)%N_s(:,:,1) = (Simp(isite)%N_s(:,:,1)+Simp(isite)%N_s(:,:,Nspin))
                Simp(isite)%N_s(:,:,Nspin) = Simp(isite)%N_s(:,:,1)
                !
-            case("DMFT")
+            case("Hartree_DMFT_Nimp","Hartree_DMFT_Nlat")
+               !
+               allocate(rho_Flav(LocalOrbs(isite)%Nflavor));rho_Flav=0d0
+               if(reg(DC_type).eq."Hartree_DMFT_Nimp")then
+                  rho_Flav = LocalOrbs(isite)%rho_Flav
+               elseif(reg(DC_type).eq."Hartree_DMFT_Nlat")then
+                  allocate(rho(LocalOrbs(isite)%Norb,LocalOrbs(isite)%Norb,Nspin));rho=0d0
+                  call read_Matrix(rho,reg(PrevItFolder)//"Solver_"//reg(LocalOrbs(isite)%Name)//"/Nloc_"//reg(LocalOrbs(isite)%Name),paramagnet)
+                  do ib1=1,LocalOrbs(isite)%Nflavor
+                     iorb = (ib1+mod(ib1,2))/2
+                     ispin = abs(mod(ib1,2)-2)
+                     rho_Flav(ib1) = rho(iorb,iorb,ispin)
+                  enddo
+                  deallocate(rho)
+               endif
                !
                allocate(Uinst(LocalOrbs(isite)%Nflavor,LocalOrbs(isite)%Nflavor));Uinst=0d0
                call calc_QMCinteractions(curlyU,Uinst)
@@ -3041,11 +3127,108 @@ contains
                      Simp(isite)%N_s(iorb,iorb,ispin) = Simp(isite)%N_s(iorb,iorb,ispin) + Uinst(ib1,ib2)*LocalOrbs(isite)%rho_Flav(ib2)
                   enddo
                enddo
-               deallocate(Uinst)
+               deallocate(Uinst,rho_Flav)
                !
                !The magnetization will be given only by the self-energy beyond Hartree
                Simp(isite)%N_s(:,:,1) = (Simp(isite)%N_s(:,:,1)+Simp(isite)%N_s(:,:,Nspin))/2d0
                Simp(isite)%N_s(:,:,Nspin) = Simp(isite)%N_s(:,:,1)
+               !
+            case("FLL_Nimp","FLL_Nlat")
+               !
+               allocate(rho(LocalOrbs(isite)%Norb,LocalOrbs(isite)%Norb,Nspin));rho=0d0
+               if(reg(DC_type).eq."FLL_Nimp")then
+                  rho = LocalOrbs(isite)%rho_OrbSpin
+               elseif(reg(DC_type).eq."FLL_Nlat")then
+                  call read_Matrix(rho,reg(PrevItFolder)//"Solver_"//reg(LocalOrbs(isite)%Name)//"/Nloc_"//reg(LocalOrbs(isite)%Name),paramagnet)
+               endif
+               !
+               !all the additional safety checks are done in initialize_Lattice
+               Simp(isite)%N_s = czero
+               if(Solver%Nimp.gt.1)then
+                  !
+                  !local calculations: local DC is fully diagonal
+                  N_FLL=0d0; U_FLL=0d0; J_FLL=0d0
+                  N_FLL = trace(rho(:,:,1)) + trace(rho(:,:,Nspin))
+                  do iorb=1,LocalOrbs(isite)%Norb
+                     call F2Bindex(LocalOrbs(isite)%Norb,[iorb,iorb],[iorb,iorb],ib1,ib2)
+                     U_FLL = U_FLL + curlyU%screened_local(ib1,ib2,FLL_wm)
+                     do jorb=1,LocalOrbs(isite)%Norb
+                        if(iorb.eq.jorb) cycle
+                        call F2Bindex(LocalOrbs(isite)%Norb,[iorb,jorb],[jorb,iorb],ib1,ib2)
+                        J_FLL = J_FLL + curlyU%screened_local(ib1,ib2,FLL_wm)
+                     enddo
+                  enddo
+                  U_FLL = U_FLL/LocalOrbs(isite)%Norb
+                  J_FLL = J_FLL/(LocalOrbs(isite)%Norb**2-LocalOrbs(isite)%Norb)
+                  !non-local DC is the deviation from the LDA values
+                  !>>>TODO<<<
+                  !
+                  do ispin=1,Nspin
+                     do iorb=1,LocalOrbs(isite)%Norb
+                        Simp(isite)%N_s(iorb,iorb,ispin) = U_FLL * ( N_FLL-0.5d0 ) - J_FLL * ( N_FLL-1d0 )/2d0
+                     enddo
+                  enddo
+                  !
+               else
+                  !the matrix has to be built according to SiteOrbs
+                  if(.not.allocated(SiteOrbs))stop "collect_QMC_results: SiteOrbs not allocated for FLL DC calculation."
+                  do is=1,Nsite
+                     !
+                     !DC diagonal on the site
+                     N_FLL=0d0; U_FLL=0d0; J_FLL=0d0
+                     do io=1,SiteOrbs(is)%Norb
+                        iorb = SiteOrbs(is)%Orbs(io)
+                        !density on the site "is"
+                        N_FLL = N_FLL + rho(iorb,iorb,1) + rho(iorb,iorb,2)
+                        call F2Bindex(Crystal%Norb,[iorb,iorb],[iorb,iorb],ib1,ib2)
+                        !local U on the site "is"
+                        U_FLL = U_FLL + curlyU%screened_local(ib1,ib2,FLL_wm)
+                        !local J on the site "is"
+                        do jo=1,SiteOrbs(is)%Norb
+                           jorb = SiteOrbs(is)%Orbs(jo)
+                           if(iorb.eq.jorb) cycle
+                           call F2Bindex(Crystal%Norb,[iorb,jorb],[jorb,iorb],ib1,ib2)
+                           J_FLL = J_FLL + curlyU%screened_local(ib1,ib2,FLL_wm)
+                        enddo
+                     enddo
+                     U_FLL = U_FLL/SiteOrbs(is)%Norb
+                     J_FLL = J_FLL/(SiteOrbs(is)%Norb**2-SiteOrbs(is)%Norb)
+                     !
+                     do ispin=1,Nspin
+                        do io=1,SiteOrbs(is)%Norb
+                           iorb = SiteOrbs(is)%Orbs(io)
+                           Simp(isite)%N_s(iorb,iorb,ispin) = U_FLL * ( N_FLL-0.5d0 ) - J_FLL * ( N_FLL-1d0 )/2d0
+                        enddo
+                     enddo
+                     !
+                     !DC off-diagonal on the site (between is and js if different)
+                     do js=1,Nsite
+                        if(is.eq.js) cycle
+                        Np_FLL=0d0; Up_FLL=0d0
+                        do jo=1,SiteOrbs(js)%Norb
+                           jorb = SiteOrbs(js)%Orbs(jo)
+                           !density on the site "js"
+                           Np_FLL = Np_FLL + rho(jorb,jorb,1) + rho(jorb,jorb,2)
+                           !local Uij between the site "is" and site "js"
+                           do io=1,SiteOrbs(is)%Norb
+                              iorb = SiteOrbs(is)%Orbs(io)
+                              call F2Bindex(Crystal%Norb,[iorb,iorb],[jorb,jorb],ib1,ib2)
+                              Up_FLL = Up_FLL + curlyU%screened_local(ib1,ib2,FLL_wm)
+                           enddo
+                        enddo
+                        Up_FLL = Up_FLL/(SiteOrbs(is)%Norb*SiteOrbs(js)%Norb)
+                        do ispin=1,Nspin
+                           do io=1,SiteOrbs(is)%Norb
+                              iorb = SiteOrbs(is)%Orbs(io)
+                              Simp(isite)%N_s(iorb,iorb,ispin) = Simp(isite)%N_s(iorb,iorb,ispin) + Up_FLL*Np_FLL*FLL_non_loc_mltp
+                           enddo
+                        enddo
+                     enddo
+                     !
+                  enddo
+                  !
+               endif
+               deallocate(rho)
                !
          end select
          call DeallocateBosonicField(curlyU)

@@ -120,17 +120,21 @@ program SelfConsistency
       !K-dependent Polarization - only G0W0,scGW,GW+EDMFT
       if(calc_Pk)then
          !
-         call calc_PiGG(Plat,Glat,Crystal)
-         call dump_BosonicField(Plat,reg(ItFolder),"Plat_w.DAT")
-         call dump_MaxEnt(Plat,"mats",reg(ItFolder)//"Convergence/","Plat",EqvGWndx%SetOrbs)
+         if(Uscreen)then
+            call calc_PiGG(Plat,Glat,Crystal)
+            call dump_BosonicField(Plat,reg(ItFolder),"Plat_w.DAT")
+            call dump_MaxEnt(Plat,"mats",reg(ItFolder)//"Convergence/","Plat",EqvGWndx%SetOrbs)
+         else
+            DC_type_GG = "Ploc"
+         endif
          !
          if(merge_P)then
-            if(reg(DC_type_P).eq."GlocGloc")then
+            if(reg(DC_type_GG).eq."GlocGloc")then
                call AllocateBosonicField(P_GGdc,Crystal%Norb,Nmats,Crystal%iq_gamma,Nsite=Nsite,no_bare=.true.,Beta=Beta)
                call calc_PiGGdc(P_GGdc,Glat)
                call MergeFields(Plat,P_EDMFT,alphaPi,LocalOrbs,RotateHloc,PiGG_DC=P_GGdc)
                call DeallocateBosonicField(P_GGdc)
-            elseif(reg(DC_type_P).eq."Ploc")then
+            elseif(reg(DC_type_GG).eq."Ploc")then
                call MergeFields(Plat,P_EDMFT,alphaPi,LocalOrbs,RotateHloc)
             endif
             call dump_BosonicField(Plat,reg(ItFolder),"Plat_merged_w.DAT")
@@ -151,7 +155,7 @@ program SelfConsistency
       if(calc_Wk)then
          !
          if(calc_Wfull)  call calc_W_full(Wlat,Ulat,Plat,Crystal)
-         if(calc_Wedmft) call calc_W_edmft(Wlat,Ulat,P_EDMFT,Crystal)
+         if(calc_Wedmft) call calc_W_edmft(Wlat,Ulat,P_EDMFT,Crystal,alpha=alphaPi)
          if(interp_W) call interpolate2kpath(Wlat,Crystal,reg(MaxEnt_K),"W")
          call dump_BosonicField(Wlat,reg(ItFolder),"Wlat_w.DAT")
          call dump_MaxEnt(Wlat,"mats",reg(ItFolder)//"Convergence/","Wlat",EqvGWndx%SetOrbs)
@@ -260,12 +264,12 @@ program SelfConsistency
          !Merge GW and EDMFT
          if(merge_Sigma)then
             !
-            if(reg(DC_type_S).eq."GlocWloc")then
+            if(reg(DC_type_GW).eq."GlocWloc")then
                call AllocateFermionicField(S_GWdc,Crystal%Norb,Nmats,Nsite=Nsite,Beta=Beta)
                call calc_sigmaGWdc(S_GWdc,Glat,Wlat)
                call MergeFields(S_GW,S_DMFT,[alphaSigma,HartreeFact],LocalOrbs,SigmaGW_DC=S_GWdc)
                call DeallocateFermionicField(S_GWdc)
-            elseif(reg(DC_type_S).eq."Sloc")then
+            elseif(reg(DC_type_GW).eq."Sloc")then
                call MergeFields(S_GW,S_DMFT,[alphaSigma,HartreeFact],LocalOrbs)
             endif
             call dump_FermionicField(S_GW,reg(ItFolder),"Slat_merged_w",paramagnet)

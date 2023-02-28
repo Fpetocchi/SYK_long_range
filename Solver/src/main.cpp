@@ -316,6 +316,14 @@ int main(int argc, char *argv[])
                   ImpurityList[isite].solve( muTime, true );
                   Ntmp[isite]=ImpurityList[isite].get_Density();
                   mpi.report(" Site density: "+str(Ntmp[isite]));
+                  {
+                     std::vector<double>Ntmp_loc;
+                     Ntmp_loc=ImpurityList[isite].get_Nloc();
+                     for(int io=0; io < (int)Ntmp_loc.size()/2; io++)
+                     {
+                        mpi.report(" Orb#"+str(io)+" s1: "+str(Ntmp_loc[2*io])+" s2: "+str(Ntmp_loc[2*io+1]));
+                     }
+                  }
                }
                trial_density = std::accumulate(Ntmp.begin(), Ntmp.end(), 0.0);
                mpi.report(" Total density: "+str(trial_density));
@@ -360,6 +368,14 @@ int main(int argc, char *argv[])
                      ImpurityList[isite].solve( muTime, true );
                      Ntmp[isite]=ImpurityList[isite].get_Density();
                      mpi.report(" Site density: "+str(Ntmp[isite]));
+                     {
+                        std::vector<double>Ntmp_loc;
+                        Ntmp_loc=ImpurityList[isite].get_Nloc();
+                        for(int io=0; io < (int)Ntmp_loc.size()/2; io++)
+                        {
+                           mpi.report(" Orb#"+str(io)+" s1: "+str(Ntmp_loc[2*io])+" s2: "+str(Ntmp_loc[2*io+1]));
+                        }
+                     }
                   }
                   trial_density = std::accumulate(Ntmp.begin(), Ntmp.end(), 0.0);
                   mpi.report(" Total density: "+str(trial_density)+" relative error: "+str(fabs(trial_density-density)/density));

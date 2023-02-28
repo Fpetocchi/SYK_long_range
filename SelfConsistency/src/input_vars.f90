@@ -121,8 +121,9 @@ module input_vars
    logical,public                           :: RotateUloc
    logical,public                           :: AFMselfcons
    type(LocalOrbitals),allocatable,public   :: LocalOrbs(:)
+   type(LocalOrbitals),allocatable,public   :: SiteOrbs(:)
    logical,public                           :: addCF
-   logical,public                           :: addE0
+   integer,public                           :: addE0
    real(8),allocatable,public               :: E0(:)
    !
    !Equivalent lattice indexes
@@ -147,10 +148,10 @@ module input_vars
    !
    !Interaction variables
    logical,public                           :: UfullStructure
-   logical,public                           :: Umodel
-   logical,public                           :: Uspex
+   character(len=256),public                :: Utensor
    logical,public                           :: Ustart
-   logical,public                           :: U_AC
+   logical,public                           :: U_AC=.false.
+   logical,public                           :: Uscreen
    real(8),public                           :: Uthresh
    real(8),public                           :: Uaa=0d0
    real(8),public                           :: Uab=0d0
@@ -168,8 +169,9 @@ module input_vars
    character(len=256),public                :: SpexVersion
    character(len=256),public                :: VH_type
    character(len=256),public                :: VN_type
-   character(len=256),public                :: DC_type_S
-   character(len=256),public                :: DC_type_P
+   character(len=256),public                :: DC_type
+   character(len=256),public                :: DC_type_GW
+   character(len=256),public                :: DC_type_GG
    character(len=256),public                :: Embedding
    logical,public                           :: addTierIII
    logical,public                           :: RecomputeG0W0
@@ -177,20 +179,20 @@ module input_vars
    logical,public                           :: calc_Sguess
    logical,public                           :: calc_Pguess
    logical,public                           :: GoWoDC_loc
-   logical,public                           :: RemoveHartree
    logical,public                           :: Dyson_Imprvd_F
    logical,public                           :: Dyson_Imprvd_B
    real(8),public                           :: alphaChi
    real(8),public                           :: alphaPi
    real(8),public                           :: alphaSigma
    real(8),public                           :: alphaHk
+   integer,public                           :: FLL_non_loc_mltp
+   integer,public                           :: FLL_wm
    logical,public                           :: Mixing_Delta_tau
    real(8),public                           :: Mixing_Delta
    real(8),public                           :: Mixing_curlyU
    integer,public                           :: Mixing_period
    logical,public                           :: causal_D
    logical,public                           :: causal_U
-   logical,public                           :: recalc_Hartree
    character(len=256),public                :: causal_U_type
    !
    !Variables for the fit on Delta, Gimp, Simp
@@ -328,14 +330,15 @@ contains
       call add_separator("K-points and hopping")
       call parse_input_variable(Nkpt3,"NKPT3",InputFile,default=[8,8,8],comment="Number of K-points per dimension.")
       !
-      !model H(k)
+      !bare Hamiltonian
+      call parse_input_variable(readHk,"READ_HK",InputFile,default=.true.,comment="Read W90 K-space Hamiltonian (Hk.DAT) from PATH_INPUT.")
+      call parse_input_variable(readHr,"READ_HR",InputFile,default=.false.,comment="Read W90 real space Hamiltonian (Hr.DAT) from PATH_INPUT.")
+      if(readHr.and.readHk) stop "read_InputFile: Make up your mind, READ_HR or READ_HK?"
+      if((.not.readHr).and.(.not.readHk)) stop "read_InputFile: Make up your mind, READ_HR or READ_HK?"
       call parse_input_variable(Hmodel,"H_MODEL",InputFile,default=.false.,comment="Flag to build a model non-interacting Hamiltonian.")
       if(Hmodel)then
          call parse_input_variable(Norb_model,"NORB_MODEL",InputFile,default=1,comment="Orbitals in the model non-interacting Hamiltonian (in Hr/Hk if read).")
-         call parse_input_variable(readHr,"READ_HR",InputFile,default=.false.,comment="Read W90 real space Hamiltonian (Hr.DAT) from PATH_INPUT.")
-         call parse_input_variable(readHk,"READ_HK",InputFile,default=.false.,comment="Read W90 K-space Hamiltonian (Hk.DAT) from PATH_INPUT.")
          call parse_input_variable(Hetero%status,"HETERO",InputFile,default=.false.,comment="Flag to build an heterostructured setup from model the non-interacting Hamiltonian.")
-         if(readHr.and.readHk) stop "read_InputFile: Make up your mind, READ_HR or READ_HK?"
          call parse_input_variable(LatticeVec(:,1),"LAT_VEC_1",InputFile,default=[1d0,0d0,0d0],comment="Unit cell vector #1 of the model lattice.")
          call parse_input_variable(LatticeVec(:,2),"LAT_VEC_2",InputFile,default=[0d0,1d0,0d0],comment="Unit cell vector #2 of the model lattice.")
          call parse_input_variable(LatticeVec(:,3),"LAT_VEC_3",InputFile,default=[0d0,0d0,1d0],comment="Unit cell vector #3 of the model lattice.")
@@ -364,7 +367,6 @@ contains
          endif
       else
          call parse_input_variable(UseXepsKorder,"XEPS_KORDER",InputFile,default=.true.,comment="Flag to use the K-point ordering of XEPS.DAT if present.")
-         readHk=.true.
       endif
       !
       !Site and Orbital space
@@ -397,11 +399,11 @@ contains
       allocate(LocalOrbs(Nsite_loc))
       do isite=1,Nsite_loc
          if( .not.(ExpandImpurity) .or. (ExpandImpurity.and.(isite.eq.1)) )then
-            call parse_input_variable(LocalOrbs(isite)%Name,"NAME_"//str(isite),InputFile,default="El",comment="Chemical species (or 2-character tag) of the site number "//str(isite))
-            call parse_input_variable(LocalOrbs(isite)%Norb,"NORB_"//str(isite),InputFile,default=1,comment="Number of orbitals in site number "//str(isite))
+            call parse_input_variable(LocalOrbs(isite)%Name,"NAME_"//str(isite),InputFile,default="El",comment="Chemical species (or 2-character tag) of the impurity number "//str(isite))
+            call parse_input_variable(LocalOrbs(isite)%Norb,"NORB_"//str(isite),InputFile,default=1,comment="Number of orbitals in impurity number "//str(isite))
             LocalOrbs(isite)%Nflavor = LocalOrbs(isite)%Norb*Nspin
             allocate(LocalOrbs(isite)%Orbs(LocalOrbs(isite)%Norb));LocalOrbs(isite)%Orbs=0
-            call parse_input_variable(LocalOrbs(isite)%Orbs,"ORBS_"//str(isite),InputFile,default=LocalOrbs(isite)%Orbs,comment="Lattice orbital indexes of site number "//str(isite))
+            call parse_input_variable(LocalOrbs(isite)%Orbs,"ORBS_"//str(isite),InputFile,default=LocalOrbs(isite)%Orbs,comment="Lattice orbital indexes of impurity number "//str(isite))
          elseif(ExpandImpurity.and.(isite.gt.1))then
             LocalOrbs(isite)%Name = LocalOrbs(1)%Name
             LocalOrbs(isite)%Norb = LocalOrbs(1)%Norb
@@ -432,9 +434,9 @@ contains
             if(ExpandImpurity)exit
          enddo
       endif
-      call parse_input_variable(addE0,"ADD_E0",InputFile,default=.false.,comment="Flag to include local energy shifts to H(k). This switch also the orbital dependent WTAIL_SIMP variable.")
-      if(addE0)then
-         allocate(E0(Nsite));E0=0d0 !fix for the generic case this is going to go nuts if H(k) has multiple sites with different orbitals like the nickelate
+      call parse_input_variable(addE0,"ADD_E0",InputFile,default=0,comment="Number of local energy shifts to H(k) equals its dimension. This switch also the orbital dependent WTAIL_SIMP variable. 0 to avoid.")
+      if(addE0.gt.0)then
+         allocate(E0(addE0));E0=0d0
          call parse_input_variable(E0,"E0",InputFile,default=E0,comment="Additional local energy shift on H(k) diagonal (same shifts for all the orbitals on the same site).")
       endif
       !
@@ -497,13 +499,12 @@ contains
       !Interaction variables
       call add_separator("Interaction")
       call parse_input_variable(UfullStructure,"U_FULL",InputFile,default=.true.,comment="Flag to use all the off-diagonal components of SPEX Ucrpa or only the physical ones.")
-      call parse_input_variable(Umodel,"U_MODEL",InputFile,default=.false.,comment="Flag to build a model interaction.")
-      call parse_input_variable(Uspex,"U_SPEX",InputFile,default=.true.,comment="Flag to read SPEX Ucrpa.")
+      call parse_input_variable(Utensor,"U_TENSOR",InputFile,default="Spex",comment="Interaction tensor mode. Available: Spex, Model, Vasp.")
       call parse_input_variable(Ustart,"U_START",InputFile,default=.true.,comment="Flag to use the local Ucrpa interaction as the effetive interaction in the 0th iteration.")
-      call parse_input_variable(U_AC,"U_AC",InputFile,default=.false.,comment="Flag to force the analytic continuation on the SPEX interaction.")
       call parse_input_variable(Uthresh,"U_THRES",InputFile,default=0.001d0,comment="Lowest magnitude considered in SPEX Ucrpa bare interaction (only for local interactions).")
-      if((Umodel.and.Uspex).or.((.not.Umodel).and.(.not.Uspex))) stop "read_InputFile: Make up your mind, U_MODEL or U_SPEX?"
-      if(Umodel)then
+      if((reg(CalculationType).eq."GW+EDMFT").or.(reg(CalculationType).eq."scGW"))call parse_input_variable(Uscreen,"U_SCREEN",InputFile,default=.true.,comment="Screen the bare interaction with the non-local polarization.")
+      if(reg(Utensor).eq."Spex") call parse_input_variable(U_AC,"U_AC",InputFile,default=.false.,comment="Flag to force the analytic continuation on the SPEX interaction.")
+      if(reg(Utensor).eq."Model")then
          call parse_input_variable(Uaa,"UAA",InputFile,default=0d0,comment="Interaction between same orbital and opposite spin electrons (orbital independent).")
          if(Norb_model.gt.1)then
             !cahnge this if you want to have them orbital dependent
@@ -548,31 +549,56 @@ contains
          endif
          if((Nphonons.gt.0).and.(N_Vnn.gt.0)) stop "read_InputFile: Model interaction with both phonons and non-local couplings not implemented."
          !if((Nphonons.eq.0).and.(N_Vnn.eq.0)) stop "read_InputFile: Model interaction requested buth neither phonons nor long-range couplings provided."
+      elseif(reg(Utensor).eq."Vasp")then
+         call add_separator("Vasp variables")
+         call parse_input_variable(LatticeVec(:,1),"LAT_VEC_1",InputFile,default=[1d0,0d0,0d0],comment="Unit cell vector #1 of the model lattice.")
+         call parse_input_variable(LatticeVec(:,2),"LAT_VEC_2",InputFile,default=[0d0,1d0,0d0],comment="Unit cell vector #2 of the model lattice.")
+         call parse_input_variable(LatticeVec(:,3),"LAT_VEC_3",InputFile,default=[0d0,0d0,1d0],comment="Unit cell vector #3 of the model lattice.")
+         allocate(ucVec(3,Nsite))
+         ucVec=czero
+         do isite=1,Nsite
+            call parse_input_variable(ucVec(:,isite),"UC_VEC_"//str(isite),InputFile,default=[0d0,0d0,0d0],comment="Position of site #"//str(isite)//" inside the unit cell.")
+         enddo
+         allocate(SiteOrbs(Nsite))
+         do isite=1,Nsite
+            call parse_input_variable(SiteOrbs(isite)%Norb,"SITE_NORB_"//str(isite),InputFile,default=1,comment="Number of orbitals in lattice site number "//str(isite))
+            allocate(SiteOrbs(isite)%Orbs(SiteOrbs(isite)%Norb));SiteOrbs(isite)%Orbs=0
+            call parse_input_variable(SiteOrbs(isite)%Orbs,"SITE_ORBS_"//str(isite),InputFile,default=SiteOrbs(isite)%Orbs,comment="Indexes of orbitals on lattice site number "//str(isite))
+         enddo
       endif
       !
       !Double counting types, divergencies, scaling coefficients
-      call add_separator("Double counting and rescaling coeff")
+      call add_separator("Double counting and rescaling coeffs")
       call parse_input_variable(addTierIII,"TIER_III",InputFile,default=.true.,comment="Flag to include the Tier-III contribution for ab-initio calculations.")
       if(addTierIII)then
          call parse_input_variable(SpexVersion,"SPEX_VERSION",InputFile,default="Julich",comment="Version of SPEX with which the G0W0 self-energy is computed. Available: Julich, Lund.")
          call parse_input_variable(VH_type,"VH_TYPE",InputFile,default="Ustatic_SPEX",comment="Hartree term mismatch between GoWo and scGW. Available: Ubare, Ustatic, Ubare_SPEX(V_nodiv.DAT required), Ustatic_SPEX(V_nodiv.DAT required).")
-         if(Umodel)VH_type="Ustatic"
+         if(reg(Utensor).eq."Model")VH_type="Ustatic"
          call parse_input_variable(VN_type,"VN_TYPE",InputFile,default="Nlat",comment="Density matrix used to compute the Hartree term mismatch between GoWo and scGW. Available: Nlat, Nimp, None to set VH to zero.")
          call parse_input_variable(Vxc_in,"VXC_IN",InputFile,default=.true.,comment="Flag to include the Vxc potential inside the SigmaG0W0.")
          call parse_input_variable(RecomputeG0W0,"RECOMP_G0W0",InputFile,default=.false.,comment="Flag to recompute the G0W0 self-energy from the SPEX input.")
          if(Hmodel)RecomputeG0W0=.false.
          call parse_input_variable(GoWoDC_loc,"G0W0DC_LOC",InputFile,default=.true.,comment="Keep the local contribution of Tier-III. Automatically removed if non-causal.")
       endif
-      call parse_input_variable(RemoveHartree,"REMOVE_HARTREE",InputFile,default=(.not.Hmodel),comment="Remove the Hartree term (curlyU(0)*Nimp/2) from the Impurity self-energy and perform the self-consistency only with the remaining part.")
+      call parse_input_variable(DC_type,"DC_TYPE",InputFile,default="Hartree_GW_Nimp",comment="Term removed from the impurity self-energy. Available: Hartree_[GW,DMFT]_[Nimp,Nlat], FLL_[Nimp,Nlat], None to avoid.") !GW (H_ab = Sum_s curlyU_abcd(0)*Nimp_cd,s), DMFT (H_a = 0.5 * Sum_s Uinst_ab*Nflav_b,s)
+      if(addTierIII)DC_type="Hartree_GW_Nimp"
+      if((reg(DC_type).eq."FLL_Nimp").or.(reg(DC_type).eq."FLL_Nlat"))then
+         call parse_input_variable(FLL_non_loc_mltp,"FLL_MLTP",InputFile,default=1,comment="Multiplicity of the non-local FLL DC correction. 0 to avoid.")
+         if(Solver%retarded.eq.1)then
+            call parse_input_variable(FLL_wm,"FLL_WM",InputFile,default=1,comment="Matsubara frequency where the interaction is averaged.")
+         else
+            FLL_wm = Nmats
+         endif
+      endif
+      call parse_input_variable(DC_type_GW,"DC_TYPE_GW",InputFile,default="GlocWloc",comment="Local GW self-energy which is replaced by the DMFT one. Avalibale: GlocWloc, Sloc.")
+      call parse_input_variable(DC_type_GG,"DC_TYPE_GG",InputFile,default="GlocGloc",comment="Local GG polarization which is replaced by the DMFT one. Avalibale: GlocGloc, Ploc.")
       call parse_input_variable(Dyson_Imprvd_F,"DYSON_F_IMPRVD",InputFile,default=.false.,comment="Perform the fermionic Dyson equation using the improved estimators.") !See PRB,85,205106
       Dyson_Imprvd_B=.false.
       call append_to_input_list(Dyson_Imprvd_B,"DYSON_B_IMPRVD","Perform the bosonic Dyson equation using the improved estimators (NOT IMPLEMENTED).")
-      call parse_input_variable(DC_type_S,"DC_TYPE_S",InputFile,default="GlocWloc",comment="Local GW self-energy which is replaced by the DMFT one. Avalibale: GlocWloc, Sloc.")
-      call parse_input_variable(DC_type_P,"DC_TYPE_P",InputFile,default="GlocGloc",comment="Local GG polarization which is replaced by the DMFT one. Avalibale: GlocGloc, Ploc.")
       call parse_input_variable(Embedding,"ADD_EMBEDDING",InputFile,default="None",comment="Constant embedding self-energy stored in PATH_INPUT. Avalibale: loc (filename: Semb_w_s[1,2].DAT), nonloc (filename: Semb_w_k_s[1,2].DAT), None to avoid.")
-      if(Hmodel.or.Umodel)addTierIII=.false.
+      if(Hmodel)addTierIII=.false.
       call parse_input_variable(HandleGammaPoint,"SMEAR_GAMMA",InputFile,default=1,comment="If >0 the dielectric function will be averaged on the SMEAR_GAMMA nearest K-points close to Gamma. If <0 the UcRPA will be rescaled like a Lorentzian in the SMEAR_GAMMA nearest K-points close to Gamma. Inactive if =0.")
-      if(Umodel)HandleGammaPoint=0
+      if(reg(Utensor).eq."Model")HandleGammaPoint=0
       call parse_input_variable(calc_Sguess,"S_GUESS",InputFile,default=.true.,comment="Use G0W0_loc as a first guess for the DMFT self-energy.")
       call parse_input_variable(calc_Pguess,"P_GUESS",InputFile,default=.false.,comment="Use GG_loc as a first guess for the DMFT polarization. If =T it sets U_START=T.")
       if(.not.solve_DMFT)then
@@ -595,6 +621,17 @@ contains
          call parse_input_variable(causal_U_type,"CAUSAL_U_TYPE",InputFile,default="curlyU",comment="Correction mode for generalized bosonic cavity construction. Available: curlyU, Ploc.")
          if((reg(causal_U_type).eq."Ploc").and.((Nsite.gt.1).or.(maxval(LocalOrbs(:)%Norb).gt.1)))causal_U_type="curlyU"
       endif
+      if((reg(DC_type).eq."FLL_Nimp").or.(reg(DC_type).eq."FLL_Nlat"))then
+         if(.not.allocated(SiteOrbs))then
+            call add_separator("DC variables")
+            allocate(SiteOrbs(Nsite))
+            do isite=1,Nsite
+               call parse_input_variable(SiteOrbs(isite)%Norb,"SITE_NORB_"//str(isite),InputFile,default=1,comment="Number of orbitals in lattice site number "//str(isite))
+               allocate(SiteOrbs(isite)%Orbs(SiteOrbs(isite)%Norb));SiteOrbs(isite)%Orbs=0
+               call parse_input_variable(SiteOrbs(isite)%Orbs,"SITE_ORBS_"//str(isite),InputFile,default=SiteOrbs(isite)%Orbs,comment="Indexes of orbitals on lattice site number "//str(isite))
+            enddo
+         endif
+      endif
       !
       !Variables for the fit
       call parse_input_variable(DeltaFit,"DELTA_FIT",InputFile,default="Analytic",comment="Fit to extract the local energy in GW+EDMFT calculations. Available: Analytic(best), Anaderson, Inf, Moments.")
@@ -614,7 +651,6 @@ contains
          call parse_input_variable(ReplaceTail_Simp,"WTAIL_SIMP",InputFile,default=0d0,comment="Frequency value above which the tail of Simp is replaced. If =0d0 the tail is not replaced. Only via moments (automatic limit to NFIT=4).")
       endif
       call parse_input_variable(CutTail_Simp,"WTAIL_SIMP_CUT",InputFile,default=.false.,comment="Flag to directly cut the Simp tail instead of replacing it with the fit result.")
-      call parse_input_variable(recalc_Hartree,"RECALC_HARTREE",InputFile,default=.false.,comment="Use the lattice density to compute the Hartree term of the impurity self-energy.")
       !
       !Paths and loop variables
       call add_separator("Paths")
@@ -789,7 +825,7 @@ contains
       Beta_Match%Path=trim(Beta_Match%Path)//"/"
       !
       !done only now that the correct path is stored
-      if(Umodel.and.readVnn) call read_Vnn()
+      if(reg(Utensor).eq."Model".and.readVnn) call read_Vnn()
       !
    end subroutine read_InputFile
 

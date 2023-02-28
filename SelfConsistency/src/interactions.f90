@@ -17,9 +17,14 @@ module interactions
       module procedure read_U_spex_Uloc0                                        ![Matrix,pathOUTPUT(optional to change output path)]
    end interface read_U_spex
 
+   interface read_U_vasp
+      module procedure read_U_vasp_full                                         ![BosonicField,LocalOnly,save2readable,pathOUTPUT(optional to change output path),doAC(optional to override AC)]
+      module procedure read_U_vasp_Uloc0                                        ![Matrix,pathOUTPUT(optional to change output path)]
+   end interface read_U_vasp
+
    interface build_Umat
-      module procedure build_Umat_singlParam                 ! (Nflavor Format) ![Matrix,Uaa_screened,Uab_screened,J_screened]
-      module procedure build_Umat_multiParam                 ! (Nflavor Format) ![Matrix,Vector,Matrix,Matrix]
+      module procedure build_Umat_singlParam                 ! (GW Format)      ![Matrix,Uaa_screened,Uab_screened,J_screened]
+      module procedure build_Umat_multiParam                 ! (GW Format)      ![Matrix,Vector,Matrix,Matrix]
    end interface build_Umat
 
    interface build_Uret
@@ -46,6 +51,7 @@ module interactions
    public :: calc_W_edmft
    public :: calc_chi
    public :: read_U_spex
+   public :: read_U_vasp
    public :: build_Umat
    public :: build_Uret
    public :: calc_QMCinteractions
@@ -68,7 +74,7 @@ contains
       use utils_fields
       use file_io
       use crystal
-      use input_vars, only : HandleGammaPoint, Umodel
+      use input_vars, only : HandleGammaPoint
       implicit none
       !
       type(BosonicField),intent(inout)      :: Wmats
@@ -102,7 +108,7 @@ contains
       symQ_=.false.
       if(present(symQ))symQ_=symQ
       Ustatic=.false.
-      if(Umodel.and.(Umats%Npoints.eq.1))Ustatic=.true.
+      if(Umats%Npoints.eq.1) Ustatic=.true.
       if(Ustatic)write(*,"(A)")"     Static U bare."
       smear = HandleGammaPoint.gt.0
       !
@@ -216,7 +222,7 @@ contains
    !---------------------------------------------------------------------------!
    !PURPOSE: Lattice inversion to get fully screened interaction - EDMFT
    !---------------------------------------------------------------------------!
-   subroutine calc_W_edmft(Wmats,Umats,Pmats,Lttc,symQ)
+   subroutine calc_W_edmft(Wmats,Umats,Pmats,Lttc,symQ,alpha)
       !
       use parameters
       use linalg, only : zeye, inv
@@ -224,7 +230,7 @@ contains
       use utils_fields
       use file_io
       use crystal
-      use input_vars, only : HandleGammaPoint, Umodel
+      use input_vars, only : HandleGammaPoint
       implicit none
       !
       type(BosonicField),intent(inout)      :: Wmats
@@ -232,11 +238,12 @@ contains
       type(BosonicField),intent(in)         :: Pmats
       type(Lattice),intent(in)              :: Lttc
       logical,intent(in),optional           :: symQ
+      real(8),intent(in),optional           :: alpha
       !
       complex(8),allocatable                :: invW(:,:),W_q(:,:)
       complex(8),allocatable                :: epsGamma(:,:,:)
       integer,allocatable                   :: AverageList(:)
-      real(8)                               :: Beta
+      real(8)                               :: Beta,alpha_
       integer                               :: Nbp,Nkpt,Nmats
       integer                               :: iq,iw,iwU
       integer                               :: iavg,Navg
@@ -257,8 +264,10 @@ contains
       !
       symQ_=.false.
       if(present(symQ))symQ_=symQ
+      alpha_=1d0
+      if(present(alpha))alpha_=alpha
       Ustatic=.false.
-      if(Umodel.and.(Umats%Npoints.eq.1))Ustatic=.true.
+      if(Umats%Npoints.eq.1) Ustatic=.true.
       if(Ustatic)write(*,"(A)")"     Static U bare."
       smear = HandleGammaPoint.gt.0
       !
@@ -287,7 +296,7 @@ contains
       Wmats%bare_local = Umats%bare_local
       !
       !$OMP PARALLEL DEFAULT(NONE),&
-      !$OMP SHARED(Pmats,Umats,Wmats,Lttc,Ustatic,symQ_),&
+      !$OMP SHARED(Pmats,Umats,Wmats,Lttc,Ustatic,symQ_,alpha_),&
       !$OMP SHARED(small_ik,epsGamma,HandleGammaPoint,smear,AverageList,Navg),&
       !$OMP PRIVATE(iw,iwU,iq,invW,W_q,iavg,add_iq)
       !$OMP DO
@@ -303,7 +312,7 @@ contains
             if((iq.eq.Umats%iq_gamma).and.smear)cycle
             !
             ! [ 1 - Pi*U ]
-            invW = zeye(Umats%Nbp) - matmul(Pmats%screened_local(:,:,iw),Umats%screened(:,:,iwU,iq))
+            invW = zeye(Umats%Nbp) - matmul(alpha_*Pmats%screened_local(:,:,iw),Umats%screened(:,:,iwU,iq))
             !
             ! [ 1 - U*Pi ]^-1
             call inv(invW)
@@ -376,7 +385,7 @@ contains
       use utils_fields
       use crystal
       use linalg, only : zeye, inv
-      use input_vars, only : Umodel, structure, Nkpt_path
+      use input_vars, only : structure, Nkpt_path
       implicit none
       !
       type(BosonicField),intent(inout)      :: Chi
@@ -408,7 +417,7 @@ contains
       if(Umats%iq_gamma.lt.0) stop "calc_chi: Umats iq_gamma not defined."
       !
       Ustatic=.false.
-      if(Umodel.and.(Umats%Npoints.eq.1))Ustatic=.true.
+      if(Umats%Npoints.eq.1) Ustatic=.true.
       if(Ustatic)write(*,"(A)")"     Static U bare."
       !
       Norb = int(sqrt(dble(Chi%Nbp)))
@@ -490,7 +499,7 @@ contains
 
 
    !---------------------------------------------------------------------------!
-   !PURPOSE: Read frequancy dependent interactions from SPEX files.
+   !PURPOSE: Read momentum and frequency dependent interaction from SPEX files.
    !---------------------------------------------------------------------------!
    subroutine read_U_spex_full(Umats,save2readable,kpt,pathOUTPUT,doAC)
       !
@@ -517,7 +526,7 @@ contains
       integer                               :: ib1,ib2,iw1,iw2
       real(8),allocatable                   :: wread(:),wmats(:)
       complex(8),allocatable                :: D1(:,:),D2(:,:),D3(:,:)
-      complex(8),allocatable                :: Utmp(:,:),URnn(:,:,:)
+      complex(8),allocatable                :: Utmp(:,:),UR(:,:,:),URnn(:,:)
       type(BosonicField)                    :: Ureal
       type(physicalU)                       :: PhysicalUelements
       real                                  :: start,finish
@@ -935,21 +944,30 @@ contains
       !
       ! Print the nn non local interaction
       if((.not.LocalOnly).and.doAC_)then
-         allocate(URnn(Umats%Nbp,Umats%Nbp,3));URnn=czero
-         call wannier_K2R_NN(Nkpt3,kpt,Umats%screened(:,:,1,:),URnn)
-         where(abs((URnn))<eps) URnn=czero
-         call dump_Matrix(URnn(:,:,1),reg(trim(pathOUTPUT_)),"Unn_100.DAT")
-         call dump_Matrix(URnn(:,:,2),reg(trim(pathOUTPUT_)),"Unn_010.DAT")
-         call dump_Matrix(URnn(:,:,3),reg(trim(pathOUTPUT_)),"Unn_001.DAT")
-         deallocate(URnn)
+         !
+         allocate(URnn(int(sqrt(dble(Umats%Nbp))),int(sqrt(dble(Umats%Nbp)))));URnn=czero
+         allocate(UR(Umats%Nbp,Umats%Nbp,3));UR=czero
+         call wannier_K2R_NN(Nkpt3,kpt,Umats%screened(:,:,1,:),UR)
+         where(abs((UR))<eps) UR=czero
+         !
+         call dump_Matrix(UR(:,:,1),reg(trim(pathOUTPUT_)),"U_100.DAT")
+         call product2NN(UR(:,:,1),URnn)
+         call dump_Matrix(URnn,reg(trim(pathOUTPUT_)),"Unn_100.DAT")
+         !
+         call dump_Matrix(UR(:,:,2),reg(trim(pathOUTPUT_)),"U_010.DAT")
+         call product2NN(UR(:,:,2),URnn)
+         call dump_Matrix(URnn,reg(trim(pathOUTPUT_)),"Unn_010.DAT")
+         !
+         call dump_Matrix(UR(:,:,3),reg(trim(pathOUTPUT_)),"U_001.DAT")
+         call product2NN(UR(:,:,3),URnn)
+         call dump_Matrix(URnn,reg(trim(pathOUTPUT_)),"Unn_001.DAT")
+         !
+         deallocate(UR,URnn)
+         !
       endif
       !
    end subroutine read_U_spex_full
-
-
-   !---------------------------------------------------------------------------!
-   !PURPOSE: Read screened interaction tensor from Ucrpa(0)
-   !---------------------------------------------------------------------------!
+   !
    subroutine read_U_spex_Uloc0(Umat,pathOUTPUT)
       !
       use parameters
@@ -1048,6 +1066,365 @@ contains
       endif
       !
    end subroutine read_U_spex_Uloc0
+
+
+   !---------------------------------------------------------------------------!
+   !PURPOSE: Create momentum dependent interaction from VASP files.
+   !---------------------------------------------------------------------------!
+   subroutine read_U_vasp_full(Umats,Lttc)
+      !
+      use parameters
+      use file_io
+      use utils_misc
+      use utils_fields
+      use crystal
+      use input_vars, only : Nkpt_path, structure, SiteOrbs
+      use input_vars, only : pathINPUTtr, pathINPUT
+      implicit none
+      !
+      type(BosonicField),intent(inout)      :: Umats
+      type(Lattice),intent(inout)           :: Lttc
+      !
+      integer                               :: i,j,isite,jsite
+      integer                               :: iorb,jorb,ib1,ib2
+      integer                               :: Norb,Nbp
+      integer                               :: iD,iR,iwig,ik,unit,idum
+      real(8)                               :: Rdist
+      real(8),allocatable                   :: Ruc(:,:),ReadLine(:),Rvec(:)
+      integer,allocatable                   :: Rorder(:),Dist(:,:),DistList(:)
+      real(8),allocatable                   :: Rsorted(:,:),Rsorted_bkp(:,:)
+      real(8),allocatable                   :: U_iijj(:,:),U_ijji(:,:),U_ijij(:,:)
+      complex(8),allocatable                :: Ur(:,:,:),Uk(:,:,:),URnn(:,:)
+      character(len=255)                    :: file
+      real                                  :: start,finish
+      logical                               :: filexists
+      !
+      !
+      if(verbose)write(*,"(A)") "---- read_U_vasp_full"
+      !
+      !
+      ! Check on the input field
+      if(.not.Lttc%status) stop "read_U_vasp_full: Lattice not properly initialized."
+      if(.not.Umats%status) stop "read_U_vasp_full: BosonicField not properly initialized."
+      if(Umats%Npoints.ne.1) stop "read_U_vasp_full: Number of matsubara points in Umats is supposed to be equal to 1."
+      if(Umats%Nbp.ne.(Lttc%Norb**2)) stop "read_U_vasp_full: Umats has different orbital dimension with respect to Lttc."
+      !
+      !recover the vectors in real space
+      if(.not.Wig_stored)call calc_wignerseiz(Lttc%Nkpt3)
+      call get_Ruc(Ruc)
+      !
+      Norb = Lttc%Norb
+      Nbp = Umats%Nbp
+      !
+      allocate(ReadLine(Norb));ReadLine=0d0
+      allocate(U_iijj(Norb,Norb));U_iijj=0d0
+      allocate(U_ijji(Norb,Norb));U_ijji=0d0
+      allocate(U_ijij(Norb,Norb));U_ijij=0d0
+      !
+      file = reg(pathINPUT)//"Vasp/U_ijkl.DAT"
+      call inquireFile(reg(file),filexists,verb=verbose)
+      unit = free_unit()
+      open(unit,file=reg(file),form="formatted",status="old",position="rewind",action="read")
+      call skip_header(unit,3)
+      do iorb=1,Norb
+         ReadLine=0d0
+         read(unit,*) idum,ReadLine
+         if(idum.ne.iorb) stop "read_U_vasp_full: wrong index in U_iijj."
+         U_iijj(iorb,:) = ReadLine
+      enddo
+      call skip_header(unit,3)
+      do iorb=1,Norb
+         ReadLine=0d0
+         read(unit,*) idum,ReadLine
+         if(idum.ne.iorb) stop "read_U_vasp_full: wrong index in U_ijji."
+         U_ijji(iorb,:) = ReadLine
+      enddo
+      call skip_header(unit,3)
+      do iorb=1,Norb
+         ReadLine=0d0
+         read(unit,*) idum,ReadLine
+         if(idum.ne.iorb) stop "read_U_vasp_full: wrong index in U_ijij."
+         U_ijij(iorb,:) = ReadLine
+      enddo
+      deallocate(ReadLine)
+      !
+      if(sum(abs(U_ijji-U_ijij)).gt.eps) write(*,"(A)") "     Warning(read_U_vasp_full): non-invariant Hund's coupling."
+      !
+      allocate(Ur(Nbp,Nbp,Nwig));Ur=czero
+      do isite=1,Lttc%Nsite
+         do jsite=1,Lttc%Nsite
+            !
+            do i=1,SiteOrbs(isite)%Norb
+               do j=1,SiteOrbs(jsite)%Norb
+                  !
+                  iorb = SiteOrbs(isite)%Orbs(i)
+                  jorb = SiteOrbs(jsite)%Orbs(j)
+                  !
+                  !U_iijj
+                  call F2Bindex(Norb,[iorb,iorb],[jorb,jorb],ib1,ib2)
+                  Ur(ib1,ib2,wig0) = dcmplx(U_iijj(iorb,jorb),0d0)
+                  !
+                  !U_ijji
+                  call F2Bindex(Norb,[iorb,jorb],[jorb,iorb],ib1,ib2)
+                  Ur(ib1,ib2,wig0) = dcmplx(U_ijji(iorb,jorb),0d0)
+                  !
+                  !U_ijij
+                  call F2Bindex(Norb,[iorb,jorb],[iorb,jorb],ib1,ib2)
+                  Ur(ib1,ib2,wig0) = dcmplx(U_ijij(iorb,jorb),0d0)
+                  !
+               enddo
+            enddo
+            !
+         enddo
+      enddo
+      deallocate(U_iijj,U_ijji,U_ijij)
+      !
+      !build long range part of the interaction
+      if(Lttc%Nsite.gt.1)then
+         !
+         !Get all the possible positions
+         call cpu_time(start)
+         allocate(Rvec(3));Rvec=0d0
+         allocate(Rsorted(Nwig*Lttc%Nsite*Lttc%Nsite,4));Rsorted=0d0
+         iR=0
+         do iwig=1,Nwig
+            do jsite=1,Lttc%Nsite
+               do isite=1,Lttc%Nsite
+                  !
+                  Rvec = Rvecwig(:,iwig) + Ruc(:,jsite) - Ruc(:,isite)
+                  Rdist = sqrt(dble(dot_product(Rvec,Rvec)))
+                  !
+                  iR = iR +1
+                  !
+                  Rsorted(iR,1) = Rdist
+                  Rsorted(iR,2) = iwig
+                  Rsorted(iR,3) = jsite
+                  Rsorted(iR,4) = isite
+                  !
+               enddo
+            enddo
+         enddo
+         deallocate(Rvec)
+         !
+         !Sorting the positions according to distance
+         allocate(Rorder(Nwig*Lttc%Nsite*Lttc%Nsite));Rorder=0
+         allocate(Rsorted_bkp(Nwig*Lttc%Nsite*Lttc%Nsite,4));Rsorted_bkp=0d0
+         Rsorted_bkp = Rsorted
+         call sort_array(Rsorted(:,1),Rorder)
+         Rsorted=0d0
+         do iR=1,Nwig*Lttc%Nsite*Lttc%Nsite
+            Rsorted(iR,:) = Rsorted_bkp(Rorder(iR),:)
+         enddo
+         deallocate(Rsorted_bkp,Rorder)
+         !
+         !Regroup according to distance. The list contains the indexes of all the positions with a given distance
+         call get_pattern(Dist,Rsorted(:,1),1e4*eps,listDim=DistList,IncludeSingle=.true.)
+         !
+         !all the possible ranges: iD=1 is the local(already done), iD=2 is the nearest neighbor (already done)
+         do iD=3,size(Dist,dim=1)
+            !
+            !beyond becomes undefined for more than 2 sites in the uc
+            if(iD.gt.3) exit
+            !
+            !all the indexes within that range
+            do iR=1,DistList(iD)
+               !
+               !retrieve indexes from sorted list
+               iwig = Rsorted(Dist(iD,iR),2)
+               jsite = Rsorted(Dist(iD,iR),3)
+               isite = Rsorted(Dist(iD,iR),4)
+               !
+               !sites are different because iD=2
+               do i=1,SiteOrbs(isite)%Norb
+                  do j=1,SiteOrbs(jsite)%Norb
+                     !
+                     iorb = SiteOrbs(isite)%Orbs(i)
+                     jorb = SiteOrbs(jsite)%Orbs(j)
+                     !
+                     !U_iijj
+                     call F2Bindex(Norb,[iorb,iorb],[jorb,jorb],ib1,ib2)
+                     Ur(ib1,ib2,iwig) = Ur(ib1,ib2,wig0)
+                     !
+                     !U_ijji
+                     call F2Bindex(Norb,[iorb,jorb],[jorb,iorb],ib1,ib2)
+                     Ur(ib1,ib2,iwig) = Ur(ib1,ib2,wig0)
+                     !
+                     !U_ijij
+                     call F2Bindex(Norb,[iorb,jorb],[iorb,jorb],ib1,ib2)
+                     Ur(ib1,ib2,iwig) = Ur(ib1,ib2,wig0)
+                     !
+                  enddo
+               enddo
+               !
+            enddo
+            !
+         enddo
+         deallocate(Rsorted,Dist,DistList)
+         call cpu_time(finish)
+         write(*,"(A,F)") "     Calculation of U(R) cpu timing:", finish-start
+         !
+         !FT to K-space
+         call cpu_time(start)
+         allocate(Uk(Nbp,Nbp,Lttc%Nkpt));Uk=czero
+         if(Lttc%Nkpt.gt.1)then
+            call wannier_R2K(Lttc%Nkpt3,Lttc%kpt,Ur,Uk)
+         else
+            Uk(:,:,1) = Ur(:,:,wig0)
+         endif
+         deallocate(Ur)
+         where(abs((Uk))<eps) Uk=czero
+         call cpu_time(finish)
+         write(*,"(A,F)") "     U(R) --> U(K) cpu timing:", finish-start
+         !
+         !print along path
+         if(reg(structure).ne."None")then
+            call interpolate2Path(Lttc,Nkpt_path,"Uk",pathOUTPUT=reg(pathINPUT),store=.false.,skipAkw=.true.,data_in=Uk)
+         endif
+         !
+         !fill in the output
+         Umats%screened(:,:,1,:) = Uk
+         if(allocated(Umats%bare)) Umats%bare = Uk
+         !
+      else
+         !
+         !fill in the output
+         do ik=1,Lttc%Nkpt
+            Umats%screened(:,:,1,ik) = Ur(:,:,wig0)
+            if(allocated(Umats%bare)) Umats%bare(:,:,ik) = Ur(:,:,wig0)
+         enddo
+         deallocate(Ur)
+         !
+      endif
+      !
+      call BosonicKsum(Umats)
+      call dump_BosonicField(Umats,reg(pathINPUTtr),"Uloc_mats.DAT")
+      !
+      ! Print the nn non local interaction
+      if(Lttc%Nsite.gt.1)then
+         !
+         allocate(URnn(int(sqrt(dble(Umats%Nbp))),int(sqrt(dble(Umats%Nbp)))));URnn=czero
+         allocate(UR(Umats%Nbp,Umats%Nbp,3));UR=czero
+         call wannier_K2R_NN(Lttc%Nkpt3,Lttc%kpt,Umats%screened(:,:,1,:),UR)
+         where(abs((UR))<eps) UR=czero
+         !
+         call dump_Matrix(UR(:,:,1),reg(pathINPUTtr),"U_100.DAT")
+         call product2NN(UR(:,:,1),URnn)
+         call dump_Matrix(URnn,reg(pathINPUTtr),"Unn_100.DAT")
+         !
+         call dump_Matrix(UR(:,:,2),reg(pathINPUTtr),"U_010.DAT")
+         call product2NN(UR(:,:,2),URnn)
+         call dump_Matrix(URnn,reg(pathINPUTtr),"Unn_010.DAT")
+         !
+         call dump_Matrix(UR(:,:,3),reg(pathINPUTtr),"U_001.DAT")
+         call product2NN(UR(:,:,3),URnn)
+         call dump_Matrix(URnn,reg(pathINPUTtr),"Unn_001.DAT")
+         !
+         deallocate(UR,URnn)
+         !
+      endif
+      !
+   end subroutine read_U_vasp_full
+   !
+   subroutine read_U_vasp_Uloc0(Umat,Lttc)
+      !
+      use parameters
+      use file_io
+      use utils_misc
+      use utils_fields
+      use crystal
+      use input_vars, only : pathINPUT, SiteOrbs
+      implicit none
+      !
+      complex(8),allocatable,intent(inout)  :: Umat(:,:)
+      type(Lattice),intent(inout)           :: Lttc
+      !
+      integer                               :: i,j,isite,jsite
+      integer                               :: iorb,jorb,ib1,ib2
+      integer                               :: Norb,Nbp
+      integer                               :: unit,idum
+      real(8),allocatable                   :: Ruc(:,:),ReadLine(:)
+      real(8),allocatable                   :: U_iijj(:,:),U_ijji(:,:),U_ijij(:,:)
+      character(len=255)                    :: file
+      logical                               :: filexists
+      !
+      !
+      if(verbose)write(*,"(A)") "---- read_U_vasp_Uloc0"
+      !
+      !
+      ! Check on the input field
+      Nbp = size(Umat,dim=1)
+      Norb = int(sqrt(dble(Nbp)))
+      !
+      call assert_shape(Umat,[Nbp,Nbp],"read_U_vasp_Uloc0","Umat")
+      !
+      !recover the vectors in real space
+      if(.not.Wig_stored)call calc_wignerseiz(Lttc%Nkpt3)
+      call get_Ruc(Ruc)
+      !
+      allocate(ReadLine(Norb));ReadLine=0d0
+      allocate(U_iijj(Norb,Norb));U_iijj=0d0
+      allocate(U_ijji(Norb,Norb));U_ijji=0d0
+      allocate(U_ijij(Norb,Norb));U_ijij=0d0
+      !
+      file = reg(pathINPUT)//"Vasp/U_ijkl.DAT"
+      call inquireFile(reg(file),filexists,verb=verbose)
+      unit = free_unit()
+      open(unit,file=reg(file),form="formatted",status="old",position="rewind",action="read")
+      call skip_header(unit,3)
+      do iorb=1,Norb
+         ReadLine=0d0
+         read(unit,*) idum,ReadLine
+         if(idum.ne.iorb) stop "read_U_vasp_Uloc0: wrong index in U_iijj."
+         U_iijj(iorb,:) = ReadLine
+      enddo
+      call skip_header(unit,3)
+      do iorb=1,Norb
+         ReadLine=0d0
+         read(unit,*) idum,ReadLine
+         if(idum.ne.iorb) stop "read_U_vasp_Uloc0: wrong index in U_ijji."
+         U_ijji(iorb,:) = ReadLine
+      enddo
+      call skip_header(unit,3)
+      do iorb=1,Norb
+         ReadLine=0d0
+         read(unit,*) idum,ReadLine
+         if(idum.ne.iorb) stop "read_U_vasp_Uloc0: wrong index in U_ijij."
+         U_ijij(iorb,:) = ReadLine
+      enddo
+      deallocate(ReadLine)
+      !
+      if(sum(abs(U_ijji-U_ijij)).gt.eps) write(*,"(A)") "     Warning(read_U_vasp_Uloc0): non-invariant Hund's coupling."
+      !
+      Umat=czero
+      do isite=1,Lttc%Nsite
+         do jsite=1,Lttc%Nsite
+            !
+            do i=1,SiteOrbs(isite)%Norb
+               do j=1,SiteOrbs(jsite)%Norb
+                  !
+                  iorb = SiteOrbs(isite)%Orbs(i)
+                  jorb = SiteOrbs(jsite)%Orbs(j)
+                  !
+                  !U_iijj
+                  call F2Bindex(Norb,[iorb,iorb],[jorb,jorb],ib1,ib2)
+                  Umat(ib1,ib2) = dcmplx(U_iijj(iorb,jorb),0d0)
+                  !
+                  !U_ijji
+                  call F2Bindex(Norb,[iorb,jorb],[jorb,iorb],ib1,ib2)
+                  Umat(ib1,ib2) = dcmplx(U_ijji(iorb,jorb),0d0)
+                  !
+                  !U_ijij
+                  call F2Bindex(Norb,[iorb,jorb],[iorb,jorb],ib1,ib2)
+                  Umat(ib1,ib2) = dcmplx(U_ijij(iorb,jorb),0d0)
+                  !
+               enddo
+            enddo
+            !
+         enddo
+      enddo
+      deallocate(U_iijj,U_ijji,U_ijij)
+      !
+   end subroutine read_U_vasp_Uloc0
 
 
    !---------------------------------------------------------------------------!
@@ -1442,7 +1819,7 @@ contains
 
 
    !---------------------------------------------------------------------------!
-   !PURPOSE: Create the freq. dependent interaction tensor from user-given
+   !PURPOSE: Create the frequency dependent interaction tensor from user-given
    !         phononic modes.
    !---------------------------------------------------------------------------!
    subroutine build_Uret_singlParam_ph(Umats,Uaa,Uab,J,g_eph,wo_eph,Hetero,LocalOnly,ScreenAll)
@@ -1818,7 +2195,7 @@ contains
       logical,intent(in),optional           :: LocalOnly
       !
       complex(8),allocatable                :: Ur_bulk(:,:,:),Ur(:,:,:)
-      complex(8),allocatable                :: Uk(:,:,:)
+      complex(8),allocatable                :: Uk(:,:,:),URnn(:,:)
       integer                               :: Norb,Nsite_bulk,Vrange
       integer                               :: ib1,ib2,ib1_l,ib2_l
       integer                               :: iorb,jorb,io,jo,io_l,jo_l
@@ -2302,6 +2679,26 @@ contains
       !
       call dump_BosonicField(Umats,reg(pathINPUTtr),"Uloc_mats.DAT")
       !
+      ! Print the nn non local interaction
+      allocate(URnn(int(sqrt(dble(Umats%Nbp))),int(sqrt(dble(Umats%Nbp)))));URnn=czero
+      allocate(UR(Umats%Nbp,Umats%Nbp,3));UR=czero
+      call wannier_K2R_NN(Lttc%Nkpt3,Lttc%kpt,Umats%screened(:,:,1,:),UR)
+      where(abs((UR))<eps) UR=czero
+      !
+      call dump_Matrix(UR(:,:,1),reg(pathINPUTtr),"U_100.DAT")
+      call product2NN(UR(:,:,1),URnn)
+      call dump_Matrix(URnn,reg(pathINPUTtr),"Unn_100.DAT")
+      !
+      call dump_Matrix(UR(:,:,2),reg(pathINPUTtr),"U_010.DAT")
+      call product2NN(UR(:,:,2),URnn)
+      call dump_Matrix(URnn,reg(pathINPUTtr),"Unn_010.DAT")
+      !
+      call dump_Matrix(UR(:,:,3),reg(pathINPUTtr),"U_001.DAT")
+      call product2NN(UR(:,:,3),URnn)
+      call dump_Matrix(URnn,reg(pathINPUTtr),"Unn_001.DAT")
+      !
+      deallocate(UR,URnn)
+      !
    end subroutine build_Uret_singlParam_Vn
    !
    subroutine build_Uret_multiParam_Vn(Umats,Uaa,Uab,J,Vnn,Lttc,Hetero,LocalOnly)
@@ -2323,7 +2720,7 @@ contains
       logical,intent(in),optional           :: LocalOnly
       !
       complex(8),allocatable                :: Ur_bulk(:,:,:),Ur(:,:,:)
-      complex(8),allocatable                :: Uk(:,:,:)
+      complex(8),allocatable                :: Uk(:,:,:),URnn(:,:)
       integer                               :: Norb,Nsite_bulk,Vrange
       integer                               :: ib1,ib2,ib1_l,ib2_l
       integer                               :: iorb,jorb,io,jo,io_l,jo_l
@@ -2811,8 +3208,27 @@ contains
       !
       call dump_BosonicField(Umats,reg(pathINPUTtr),"Uloc_mats.DAT")
       !
+      ! Print the nn non local interaction
+      allocate(URnn(int(sqrt(dble(Umats%Nbp))),int(sqrt(dble(Umats%Nbp)))));URnn=czero
+      allocate(UR(Umats%Nbp,Umats%Nbp,3));UR=czero
+      call wannier_K2R_NN(Lttc%Nkpt3,Lttc%kpt,Umats%screened(:,:,1,:),UR)
+      where(abs((UR))<eps) UR=czero
+      !
+      call dump_Matrix(UR(:,:,1),reg(pathINPUTtr),"U_100.DAT")
+      call product2NN(UR(:,:,1),URnn)
+      call dump_Matrix(URnn,reg(pathINPUTtr),"Unn_100.DAT")
+      !
+      call dump_Matrix(UR(:,:,2),reg(pathINPUTtr),"U_010.DAT")
+      call product2NN(UR(:,:,2),URnn)
+      call dump_Matrix(URnn,reg(pathINPUTtr),"Unn_010.DAT")
+      !
+      call dump_Matrix(UR(:,:,3),reg(pathINPUTtr),"U_001.DAT")
+      call product2NN(UR(:,:,3),URnn)
+      call dump_Matrix(URnn,reg(pathINPUTtr),"Unn_001.DAT")
+      !
+      deallocate(UR,URnn)
+      !
    end subroutine build_Uret_multiParam_Vn
-
 
 
    !---------------------------------------------------------------------------!

@@ -368,11 +368,7 @@ void measure_G( Vec &G, segment_container_t &segment, Mat &M, double &Beta )
             double argument = it1->t_end()-it2->t_start();
             double bubble_sign=1;
             //
-            if (argument > 0)
-            {
-               bubble_sign = 1;
-            }
-            else
+            if (argument <= 0)
             {
                bubble_sign = -1;
                argument += Beta;
@@ -430,11 +426,7 @@ void measure_G( VecVec &Gvec, std::vector<segment_container_t> &segments, VecMat
                   double argument = it1->t_end()-it2->t_start();
                   double bubble_sign=1;
                   //
-                  if (argument > 0)
-                  {
-                     bubble_sign = 1;
-                  }
-                  else
+                  if (argument <= 0)
                   {
                      bubble_sign = -1;
                      argument += Beta;
@@ -556,15 +548,15 @@ VecVec measure_nt( std::vector<segment_container_t> &segments, std::vector<int> 
 //----------------------------------------------------------------------------//
 //                     IMPROVED ESTIMATOR FOR THE SELF-ENERGY                 //
 //----------------------------------------------------------------------------//
-void measure_GF( VecVec &Gvec, VecVec &Fvec_S, VecVec &Fvec_R, std::vector<segment_container_t> &segments, VecMat &Mvec, double &Beta,
-                 Mat &Uloc, VecVecVec &Kp_table, bool &removeUhalf )
+void measure_GF( VecVec &Gvec, VecVec &Fvec_S, VecVec &Fvec_R, std::vector<segment_container_t> &segments,
+                 std::vector<int> &full_line, VecMat &Mvec, double &Beta, Mat &Uloc, VecVecVec &Kp_table, bool &removeUhalf )
 {
    //
    std::set<times>::iterator it1, it2, itn;
    int Nflavor = Gvec.size();
    int Ntau = Gvec[0].size();
 
-   bool retared = Kp_table.size() > 0;
+   bool retarded = Kp_table.size() > 0;
 
    //
    for (int ifl=0; ifl<Nflavor; ++ifl)
@@ -583,13 +575,21 @@ void measure_GF( VecVec &Gvec, VecVec &Fvec_S, VecVec &Fvec_R, std::vector<segme
             //
             // get corrections for the improved estimator
             double tie = it1->t_end();
-            Vec nj(Nflavor,0.0);
-            Vec Ij(Nflavor,0.0);
+            //
+            double Fpref_Sta = 0.0;
+            double Fpref_Ret = 0.0;
             for (int jfl=0; jfl<Nflavor; ++jfl)
             {
-               if(retared)
+               //
+               double nj = 0.0;
+               double Ij = 0.0;
+               //
+               if(jfl!=ifl) nj = get_nj( segments[jfl], full_line[jfl], tie );
+               //
+               if(retarded)
                {
-                  int fl1  = std::max(jfl,ifl);
+                  //
+                  int fl1 = std::max(jfl,ifl);
                   int fl2 = std::min(jfl,ifl);
                   //
                   for (itn=segments[jfl].begin(); itn!=segments[jfl].end(); itn++)
@@ -598,53 +598,19 @@ void measure_GF( VecVec &Gvec, VecVec &Fvec_S, VecVec &Fvec_R, std::vector<segme
                      double tjs = itn->t_start();
                      double tje = itn->t_end();
                      //
-                     if(jfl!=ifl)
-                     {
-                        if( (tje-tjs)>0 )
-                        {
-                           // non-wrapping segments
-                           if( (tjs <= tie) && (tie<tje) )  nj[jfl]=1.0;
-                        }
-                        else
-                        {
-                           // segments exiting the end of the line and entering in the beginning
-                           if( (tjs <= tie) || (tie<tje) )  nj[jfl]=1.0;
-                        }
-                     }
-                     //
-                     Ij[jfl] -= ( -H(tje-tie  , Beta, Kp_table[fl1][fl2]) +H(tjs-tie, Beta, Kp_table[fl1][fl2]) );
+                     Ij -= ( -H(tje-tie  , Beta, Kp_table[fl1][fl2]) +H(tjs-tie, Beta, Kp_table[fl1][fl2]) );
                      //
                      bool selfseg = ( (tie == tje) || (tie == tjs) ) && (jfl==ifl);
-                     if(selfseg) Ij[jfl] -= 2 * Kp_table[fl1][fl2][0];
+                     if(selfseg) Ij -= 2 * Kp_table[fl1][fl2][0];
                      //
                   }
                }
-               else
-               {
-                  if(jfl==ifl) continue;
-                  for (itn=segments[jfl].begin(); itn!=segments[jfl].end(); itn++)
-                  {
-                     //
-                     double tjs = itn->t_start();
-                     double tje = itn->t_end();
-                     //
-                     if(jfl!=ifl)
-                     {
-                        if( (tje-tjs)>0 )
-                        {
-                           // non-wrapping segments
-                           if( (tjs <= tie) && (tie<tje) )  nj[jfl]=1.0;
-                        }
-                        else
-                        {
-                           // segments exiting the end of the line and entering in the beginning
-                           if( (tjs <= tie) || (tie<tje) )  nj[jfl]=1.0;
-                        }
-                     }
-                     if(nj[jfl]==1.0) break;
-                  }
-               }
-
+               //
+               // prefactors
+               double hf_fact = ( removeUhalf ? 0.5 : 0.0 );
+               Fpref_Sta += 0.5 * (Uloc(jfl,ifl)+Uloc(ifl,jfl)) * ( nj-hf_fact );
+               if(retarded) Fpref_Ret += Ij;
+               //
             }
             //
             for (int k=0; k<M.rows(); k++)
@@ -655,38 +621,20 @@ void measure_GF( VecVec &Gvec, VecVec &Fvec_S, VecVec &Fvec_R, std::vector<segme
                if (M(k,i)!=0)
                {
                   double argument = it1->t_end()-it2->t_start();
-                  double bubble_sign=1;
+                  double bubble_sign = 1;
                   //
-                  if (argument > 0)
-                  {
-                     bubble_sign = 1;
-                  }
-                  else
+                  if (argument <= 0)
                   {
                      bubble_sign = -1;
                      argument += Beta;
                   }
                   //
-                  int index = argument/Beta*(Ntau-1)+0.5;
-                  Gvec[ifl][index] -= M(k,i)*bubble_sign/(Beta*Beta);
+                  double g = M(k,i)*bubble_sign/(Beta*Beta);
                   //
-                  double Fval_Sta = 0.0;
-                  double Fval_Ret = 0.0;
-                  for (int jfl=0; jfl<Nflavor; ++jfl)
-                  {
-                     double hf_fact = ( removeUhalf ? 0.5 : 0.0 );
-                     if(retared)
-                     {
-                        Fval_Sta += Uloc(jfl,ifl) * ( nj[jfl]-hf_fact ) * M(k,i)*bubble_sign/(Beta*Beta);
-                        Fval_Ret += Ij[jfl] * M(k,i)*bubble_sign/(Beta*Beta);
-                     }
-                     else
-                     {
-                        Fval_Sta += Uloc(jfl,ifl) * ( nj[jfl]-hf_fact ) * M(k,i)*bubble_sign/(Beta*Beta);
-                     }
-                  }
-                  Fvec_S[ifl][index] -= Fval_Sta;
-                  if(retared) Fvec_R[ifl][index] -= Fval_Ret;
+                  int index = (int)(argument/Beta*(Ntau-1)+0.5);
+                  Gvec[ifl][index] -= g;
+                  Fvec_S[ifl][index] -= Fpref_Sta*g;
+                  if(retarded) Fvec_R[ifl][index] -= Fpref_Ret*g;
                   //
                }
             }
@@ -869,7 +817,6 @@ void accumulate_Nhist( Vec &nhist, VecVec &n_tau)
       if(ntmp<nhist.size())nhist[(int)ntmp]+=1./Ntau;
    }
 }
-
 
 void accumulate_Szhist( Vec &szhist, VecVec &n_tau)
 {

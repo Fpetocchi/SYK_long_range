@@ -895,6 +895,43 @@ template <class S> double nonlocal_shift(double te_ins, double te_rem, S &other_
 }
 
 
+//------------------------------------------------------------------------------
+
+
+double get_nj( segment_container_t &segment, int &full_line, double &tau )
+{
+   double nj = 0.0;
+
+
+   if(segment.size()==0)
+   {
+      nj = ( full_line==1 ? 1.0 : 0.0 );
+   }
+   else
+   {
+      //this is the segment that starts after tau
+      std::set<times>::const_iterator it_after = segment.upper_bound( times(tau,0.0) );
+      if( it_after==segment.end() ) it_after = segment.begin();
+
+      //this is the segment that has the start time before tau
+      std::set<times>::const_iterator it_before = it_after;
+      if( it_before==segment.begin() ) it_before = segment.end();
+      it_before--;
+
+      //standard overlap
+      bool overlap_std = (it_before->t_end() > it_before->t_start()) && ( tau > it_before->t_start() && tau < it_before->t_end() );
+      //wrapped overlap
+      bool overlap_wrp = (it_before->t_end() < it_before->t_start()) && ( tau > it_before->t_start() || tau < it_before->t_end() );
+
+      //
+      nj = ( overlap_std||overlap_wrp ? 1.0 : 0.0 );
+   }
+
+   //
+   return nj;
+}
+
+
 //============================================================================//
 
 

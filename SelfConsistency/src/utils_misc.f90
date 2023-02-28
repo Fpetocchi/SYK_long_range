@@ -382,7 +382,9 @@ contains
       !
       hardstop_=.true.
       if(present(hardstop))hardstop_=hardstop
+      if(size(list,dim=2).eq.0)stop "find_vec_i: 0 lenght list."
       !
+      ivec=0
       do i=1,size(list,dim=2)
          l1 = vec(1) .eq. list(1,i)
          l2 = vec(2) .eq. list(2,i)
@@ -392,7 +394,7 @@ contains
             exit
          endif
       enddo
-      if(i.eq.size(list,dim=2))then
+      if((i.eq.size(list,dim=2)).or.(ivec.eq.0))then
          ivec=0
          if(hardstop_)then
             write(*,"(A,3I)")"find_vec_i: vec=",vec
@@ -413,7 +415,9 @@ contains
       !
       hardstop_=.true.
       if(present(hardstop))hardstop_=hardstop
+      if(size(list,dim=2).eq.0)stop "find_vec_i: 0 lenght list."
       !
+      ivec=0
       do i=1,size(list,dim=2)
          l1 = dabs(vec(1)-list(1,i)) .le. tol
          l2 = dabs(vec(2)-list(2,i)) .le. tol
@@ -423,7 +427,7 @@ contains
             exit
          endif
       enddo
-      if(i.eq.size(list,dim=2))then
+      if((i.eq.size(list,dim=2)).or.(ivec.eq.0))then
          ivec=0
          if(hardstop_)then
             write(*,"(A,3F20.12)")"find_vec_d: vec=",vec

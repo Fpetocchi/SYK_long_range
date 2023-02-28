@@ -261,8 +261,13 @@ class ct_hyb
          {
             print_Vec(inputDir+"/used.Eloc.DAT", Eloc, mu);
             print_VecVec(inputDir+"/used.Delta_t.DAT", Delta);
-            if(retarded)print_VecVecVec(inputDir+"/used.K_t.DAT", K_table);
-            if(retarded&&Improved_F)print_VecVecVec(inputDir+"/used.Kp_t.DAT", Kp_table);
+            print_EigenMat(inputDir+"/used.Umat.DAT", Uloc);
+            if(retarded)
+            {
+               print_VecVecVec(inputDir+"/used.K_t.DAT", K_table);
+               print_EigenMat(inputDir+"/used.Screening.DAT", Screening_Mat);
+               if(Improved_F)print_VecVecVec(inputDir+"/used.Kp_t.DAT", Kp_table);
+            }
          }
 
          //
@@ -382,6 +387,8 @@ class ct_hyb
                   mpi.report(" Partial sweeps: "+str( (debug == true) ? RankSweeps : WorldSweeps ));
                   mpi.report(" Average sign: "+str( (debug == true) ? RankSign : WorldSign ));
                   mpi.report(" Density: "+str(get_Density(debug))+" mu: "+str(mu,6) );
+                  for (int ifl=0; ifl<Nflavor; ifl++)
+                     if (full_line[ifl]==1) mpi.report(" Flavor #"+str(ifl)+" has a full segment.");
                   //
                   path pad = "_T"+str(printTime*(TimeStamp-1))+".DAT";
                   print_observables(pad,bins);
@@ -589,7 +596,7 @@ class ct_hyb
             {
                if(Improved_F)
                {
-                  measure_GF( G_tmp, F_tmp_S, F_tmp_R, segments, M, Beta, Uloc, Kp_table, removeUhalf );
+                  measure_GF( G_tmp, F_tmp_S, F_tmp_R, segments, full_line, M, Beta, Uloc, Kp_table, removeUhalf );
                }
                else
                {
@@ -619,7 +626,7 @@ class ct_hyb
          {
             if(Improved_F)
             {
-               measure_GF( G_tmp, F_tmp_S, F_tmp_R, segments, M, Beta, Uloc, Kp_table, removeUhalf );
+               measure_GF( G_tmp, F_tmp_S, F_tmp_R, segments, full_line, M, Beta, Uloc, Kp_table, removeUhalf );
             }
             else
             {
@@ -891,8 +898,6 @@ class ct_hyb
                   binAverageVecVec( bins, F_R, Err );
                   dump_data( Err, "Ferr_S", pad, Nflavor, NtauF, Beta );
                }
-
-
             }
             //
             // fix endpoints

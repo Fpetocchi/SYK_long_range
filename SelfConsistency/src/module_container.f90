@@ -46,6 +46,7 @@ module module_container
    dump_Hk                                  ,&
    build_kpt                                ,&
    build_Hk                                 ,&
+   build_Hk_from_Hr                         ,&
    fill_ksumkdiff                           ,&
    fill_smallk                              ,&
    wannierinterpolation                     ,&
@@ -130,6 +131,7 @@ module module_container
    !(l) Interactions container. Depends on (b),(c),(d),(e),(f),(g),(h)
    use interactions, only:                   &
    read_U_spex                              ,&
+   read_U_vasp                              ,&
    calc_W_full                              ,&
    calc_W_edmft                             ,&
    calc_chi                                 ,&
