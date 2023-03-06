@@ -1251,14 +1251,14 @@ contains
             unit = free_unit()
             open(unit,file=reg(printpath),form="unformatted",status="unknown",position="rewind",action="write")
             write(unit) iq,1,Norb,Naxis,.true.
-            write(unit) axis_/H2eV
+            write(unit) axis_ !/H2eV
             if(allocated(U%bare))then
-               write(unit) U%bare(:,:,iq)*U%Nkpt*U%Nkpt/H2eV
+               write(unit) U%bare(:,:,iq)*U%Nkpt*U%Nkpt !/H2eV
             else
                write(unit) Utmp
             endif
             do iaxis=1,Naxis
-               write(unit) U%screened(:,:,iaxis,iq)*U%Nkpt*U%Nkpt/H2eV
+               write(unit) U%screened(:,:,iaxis,iq)*U%Nkpt*U%Nkpt !/H2eV
             enddo
             close(unit)
             !

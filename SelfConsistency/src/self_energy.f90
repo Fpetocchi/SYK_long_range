@@ -2147,7 +2147,7 @@ contains
       use crystal
       use file_io
       use input_vars, only : paramagnet, Nreal, wrealMax, eta
-      use input_vars, only : Nkpt_path, pathINPUTtr
+      use input_vars, only : Nkpt_path, pathINPUTtr, pathINPUT
       implicit none
       !
       type(Lattice),intent(inout)           :: Lttc
@@ -2159,7 +2159,7 @@ contains
       complex(8),allocatable                :: invGf(:,:),Zk(:,:,:),Smat(:,:,:,:)
       real(8),allocatable                   :: QPpole(:,:),QPpolelist(:),QPpolelist_tmp(:)
       real(8),allocatable                   :: wreal(:),wreal_read(:)
-      real(8),allocatable                   :: Aloc(:,:,:)
+      real(8),allocatable                   :: Aloc(:,:,:),Egrid(:)
       real(8)                               :: ReS,ImS,wr_point,mu_
       real                                  :: start,finish
       integer                               :: ik,iw,QPndx,Ntmp
@@ -2374,6 +2374,11 @@ contains
          !
       enddo
       call DeallocateFermionicField(S_G0W0_interp)
+      !
+      allocate(Egrid(Nreal));Egrid=0d0
+      Egrid = linspace(-wrealMax,+wrealMax,Nreal)
+      call tetrahedron_integration(reg(pathINPUT),Lttc%Hk_qp(:,:,:,ispin),Lttc%Nkpt3,Lttc%kpt,Egrid,fact_intp=2,pathOUTPUT=reg(pathINPUTtr)//"G0W0plots/")
+      deallocate(Egrid)
       !
       !
       !check if also the DC in real frequency exists

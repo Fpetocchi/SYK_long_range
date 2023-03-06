@@ -2609,6 +2609,7 @@ contains
       type(BosonicField)                    :: curlyU
       complex(8),allocatable                :: Sfit(:,:,:),SmatsTail(:)
       !Hartree shift and DC
+      integer                               :: ij1,ij2
       real(8)                               :: N_FLL,U_FLL,J_FLL,Np_FLL,Up_FLL
       real(8),allocatable                   :: Uinst(:,:)
       complex(8),allocatable                :: rho(:,:,:),rho_Flav(:)
@@ -3180,19 +3181,21 @@ contains
                         iorb = SiteOrbs(is)%Orbs(io)
                         !density on the site "is"
                         N_FLL = N_FLL + rho(iorb,iorb,1) + rho(iorb,iorb,2)
-                        call F2Bindex(Crystal%Norb,[iorb,iorb],[iorb,iorb],ib1,ib2)
-                        !local U on the site "is"
-                        U_FLL = U_FLL + curlyU%screened_local(ib1,ib2,FLL_wm)
-                        !local J on the site "is"
                         do jo=1,SiteOrbs(is)%Norb
                            jorb = SiteOrbs(is)%Orbs(jo)
-                           if(iorb.eq.jorb) cycle
-                           call F2Bindex(Crystal%Norb,[iorb,jorb],[jorb,iorb],ib1,ib2)
-                           J_FLL = J_FLL + curlyU%screened_local(ib1,ib2,FLL_wm)
+                           !local Uab on the site "is"
+                           call F2Bindex(Crystal%Norb,[iorb,iorb],[jorb,jorb],ib1,ib2)
+                           U_FLL = U_FLL + curlyU%screened_local(ib1,ib2,FLL_wm)
+                           !local J on the site "is"
+                           if(iorb.ne.jorb)then
+                              call F2Bindex(Crystal%Norb,[iorb,jorb],[jorb,iorb],ij1,ij2)
+                              J_FLL = J_FLL + (curlyU%screened_local(ib1,ib2,FLL_wm)-curlyU%screened_local(ij1,ij2,FLL_wm))
+                           endif
                         enddo
                      enddo
-                     U_FLL = U_FLL/SiteOrbs(is)%Norb
-                     J_FLL = J_FLL/(SiteOrbs(is)%Norb**2-SiteOrbs(is)%Norb)
+                     U_FLL = U_FLL/(SiteOrbs(is)%Norb**2)
+                     J_FLL = U_FLL - J_FLL/(SiteOrbs(is)%Norb**2-SiteOrbs(is)%Norb)
+                     write(*,"(A)")"     Site("//str(is)//"): FLL(U)= "//str(U_FLL,3)//" FLL(J)= "//str(J_FLL,3)
                      !
                      do ispin=1,Nspin
                         do io=1,SiteOrbs(is)%Norb
@@ -3217,6 +3220,7 @@ contains
                            enddo
                         enddo
                         Up_FLL = Up_FLL/(SiteOrbs(is)%Norb*SiteOrbs(js)%Norb)
+                        if(FLL_non_loc_mltp.ne.0) write(*,"(A)")"     Site("//str(is)//"-"//str(js)//"): FLL(V)= "//str(Up_FLL,3)
                         do ispin=1,Nspin
                            do io=1,SiteOrbs(is)%Norb
                               iorb = SiteOrbs(is)%Orbs(io)

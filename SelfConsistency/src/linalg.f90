@@ -126,10 +126,15 @@ module linalg
    end interface s3_product
 
    interface tensor_transform
-      module procedure tensor_transform_NNNN_d
-      module procedure tensor_transform_NNNN_c
-      module procedure tensor_transform_NN_d
-      module procedure tensor_transform_NN_c
+      module procedure tensor_transform_NNNN_loc_d
+      module procedure tensor_transform_NNNN_loc_c
+      module procedure tensor_transform_NN_loc_d
+      module procedure tensor_transform_NN_loc_c
+      !
+      module procedure tensor_transform_NNNN_gen_d
+      module procedure tensor_transform_NNNN_gen_c
+      module procedure tensor_transform_NN_gen_d
+      module procedure tensor_transform_NN_gen_c
    end interface tensor_transform
 
    !NOT PUBLIC:

@@ -49,18 +49,6 @@ program SelfConsistency
    call execute_command_line(" touch doSolver ")
    stop
    !
-#elif defined _gap
-   !
-   call inquireFile(reg(ItFolder)//"Sfull_w_k_s1.DAT",S_Full_exists,hardstop=.false.,verb=verbose)
-   if(S_Full_exists)then
-      call AllocateFermionicField(S_Full,Crystal%Norb,Nmats,Nkpt=Crystal%Nkpt,Nsite=Nsite,Beta=Beta)
-      call read_FermionicField(S_Full,reg(ItFolder),"Sfull_w",Crystal%kpt)
-      call calc_Tc(reg(ItFolder),gap_equation,Crystal,Wlat=Ulat,Sfull=S_Full)
-   else
-      call calc_Tc(reg(ItFolder),gap_equation,Crystal,Wlat=Ulat)
-   endif
-   stop
-   !
 #endif
    !
    !
@@ -288,13 +276,7 @@ program SelfConsistency
       !
       !
       !Solve the Gap equation
-      if(gap_equation%status)then
-         if(gap_equation%HkRenorm)then
-            call calc_Tc(reg(ItFolder),gap_equation,Crystal,Wlat=Wlat,Sfull=S_Full)
-         else
-            call calc_Tc(reg(ItFolder),gap_equation,Crystal,Wlat=Wlat)
-         endif
-      endif
+      if(gap_equation%status) call calc_Tc(reg(ItFolder),gap_equation,Crystal,Wlat=Wlat)
       if(solve_DMFT) call DeallocateBosonicField(Wlat)
       !
       !

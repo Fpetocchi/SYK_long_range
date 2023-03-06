@@ -1,4 +1,4 @@
-subroutine calc_Tc(pathOUTPUT,Inputs,Lttc,Wlat,Sfull)
+subroutine calc_Tc(pathOUTPUT,Inputs,Lttc,Wlat)
    !
    use parameters
    use linalg, only : zeye
@@ -7,14 +7,13 @@ subroutine calc_Tc(pathOUTPUT,Inputs,Lttc,Wlat,Sfull)
    use crystal
    use file_io
    use gap_equation
-   use input_vars, only : Nreal, wrealMax, pathINPUT
+   use input_vars, only : Nreal, wrealMax, pathINPUT, pathINPUTtr
    implicit none
    !
    character(len=*),intent(in)           :: pathOUTPUT
    type(SCDFT),intent(in)                :: Inputs
    type(Lattice),intent(in)              :: Lttc
    type(BosonicField),intent(in),optional   :: Wlat
-   type(FermionicField),intent(in),optional :: Sfull
    !
    real(8)                               :: Beta_input,dE
    integer                               :: iorb,ik,iE,iE1,iE2
@@ -29,9 +28,9 @@ subroutine calc_Tc(pathOUTPUT,Inputs,Lttc,Wlat,Sfull)
    integer                               :: iloop,iT
    real(8)                               :: Temp,Beta,errDelta
    real(8)                               :: tanh_b,tanh_f
-   real(8),allocatable                   :: ED(:)
+   real(8),allocatable                   :: ED(:),kpt_QP(:,:)
    complex(8),allocatable                :: Delta(:),oldDelta(:),newDelta(:)
-   logical                               :: converged
+   logical                               :: converged,filexists
    !
    write(*,"(A)") new_line("A")//new_line("A")//"---- calc_Tc"
    !
@@ -51,29 +50,28 @@ subroutine calc_Tc(pathOUTPUT,Inputs,Lttc,Wlat,Sfull)
    if(present(Wlat))then
       !
       Beta_input = Wlat%Beta
+
+
+      Temp = 1d0 / (K2eV*eV2DFTgrid*Beta)
+
+
       !
       if(.not.Wlat%status) stop "calc_Tc: Wlat not properly initialized."
       if(Wlat%Nkpt.eq.Nkpt) stop "calc_Tc: Wlat has different number of k-points with respect to Lttc."
       if(Wlat%Nbp.ne.(Norb**2)) stop "calc_Tc: Wlat has different orbital dimension with respect to Lttc."
       !
-      !Adding the renormalization from the Self-energy at iw=0
-      if(present(Sfull))then
+      !Use the QP bandstructure
+      if(Inputs%HkRenorm)then
          !
-         if(.not.Sfull%status) stop "calc_Tc: Sfull not properly initialized."
-         if(Sfull%Nkpt.eq.Nkpt) stop "calc_Tc: Sfull has different number of k-points with respect to Lttc."
-         if(Sfull%Norb.ne.Norb) stop "calc_Tc: Sfull has different orbital dimension with respect to Lttc."
-         if(Sfull%Beta.ne.Beta_input) stop "calc_Tc: Sfull has different orbital dimension with respect to Wlat."
-         !
-         allocate(SfullCorr(Norb,Norb,Nkpt));SfullCorr=czero
-         SfullCorr = Sfull%wks(:,:,1,:,1)
-         do iorb=1,Norb
-            SfullCorr(iorb,iorb,:) = dcmplx(dreal(SfullCorr(iorb,iorb,:)),0d0)
-         enddo
-         !
-         do ik=1,Nkpt
-            Hk_used(:,:,ik) = Lttc%Hk(:,:,ik) + SfullCorr(:,:,ik) - Sfull%mu*zeye(Norb)
-         enddo
-         deallocate(SfullCorr)
+         if(.not.allocated(Lttc%Hk_qp))then
+            write(*,"(A)")"     calc_Tc: QP bandstructure not allocated."
+            call inquireFile(reg(pathINPUTtr)//"G0W0plots/Hk_qp_s1.DAT",filexists,hardstop=.true.,verb=.true.)
+            if(filexists) call read_Hk(Hk_used,kpt_QP,reg(pathINPUTtr)//"G0W0plots/","Hk_qp_s1.DAT")
+            if(.not.all(kpt_QP.eq.Lttc%kpt)) stop "calc_Tc: Lttc k-grid and Hk_qp_s1.DAT one do not coincide."
+            deallocate(kpt_QP)
+         else
+            Hk_used = Lttc%Hk_qp(:,:,:,1)
+         endif
          !
       endif
       !
@@ -188,6 +186,11 @@ subroutine calc_Tc(pathOUTPUT,Inputs,Lttc,Wlat,Sfull)
               if(ED(iE2-1).ne.0d0) tanh_b = (tanh(Beta/2d0*ED(iE2-1))/ED(iE2-1))
               if(ED(iE2).ne.0d0)   tanh_f = (tanh(Beta/2d0*ED(iE2))  /ED(iE2)  )
               !
+              SPLIT IT UP IN 2 SUMS ONE FOR THE KPHONON WHERE THE DOS FROM DFT IS USED AND THE ELECTRONINC ONE WHERE I CAN USE MINE
+              AND
+
+
+
               Kint = Kint + ( DoS_Hk(iE2-1) * K(iE1,iE2-1) * tanh_b * Delta(iE2-1) + &
                               DoS_Hk(iE2)   * K(iE1,iE2)   * tanh_f * Delta(iE2)   ) * (dE/2d0)
               !

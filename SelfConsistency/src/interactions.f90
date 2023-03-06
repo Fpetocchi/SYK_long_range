@@ -911,7 +911,7 @@ contains
             if (iq.ne.iqread) stop "read_U_spex_full: iqread.ne.iq"
             !
             read(unit) wread
-            wread = H2eV*wread
+            wread = wread !H2eV*
             do iw=1,Umats%Npoints
                if(dabs(wread(iw)-wmats(iw)).gt.eps) Then
                   write(*,"(F)")dabs(wread(iw)-wmats(iw)),iw,iq
@@ -923,11 +923,11 @@ contains
                read(unit) Utmp
                if(iw.le.Umats%Npoints)then
                   if(iw.eq.0) then
-                     Umats%bare_local = Umats%bare_local + H2eV*Utmp/(Nkpt**3)
-                     if(.not.LocalOnly) Umats%bare(:,:,iq) = H2eV*Utmp/(Nkpt**2)
+                     Umats%bare_local = Umats%bare_local +Utmp/(Nkpt**3) ! H2eV*
+                     if(.not.LocalOnly) Umats%bare(:,:,iq) = Utmp/(Nkpt**2) !H2eV*
                   else
-                     Umats%screened_local(:,:,iw) = Umats%screened_local(:,:,iw) + H2eV*Utmp/(Nkpt**3)
-                     if(.not.LocalOnly) Umats%screened(:,:,iw,iq) = H2eV*Utmp/(Nkpt**2)
+                     Umats%screened_local(:,:,iw) = Umats%screened_local(:,:,iw) + Utmp/(Nkpt**3) !H2eV*
+                     if(.not.LocalOnly) Umats%screened(:,:,iw,iq) = Utmp/(Nkpt**2) !H2eV*
                   endif
                endif
             enddo

@@ -87,6 +87,16 @@ module utils_fields
       module procedure build_Potential_Mat
    end interface build_Potential
 
+   interface TransformBosonicField
+      module procedure TransformBosonicField_loc
+      module procedure TransformBosonicField_gen
+   end interface TransformBosonicField
+
+   interface TransformMatrix
+      module procedure TransformMatrix_loc
+      module procedure TransformMatrix_gen
+   end interface TransformMatrix
+
    !---------------------------------------------------------------------------!
    !PURPOSE: Module variables
    !---------------------------------------------------------------------------!
@@ -423,7 +433,7 @@ contains
    !PURPOSE: This is just a wrapper around tensor_transform defined in linalg
    !         in order to deal with the frequency axis
    !---------------------------------------------------------------------------!
-   subroutine TransformBosonicField(W,Map,UL,UR,type)
+   subroutine TransformBosonicField_loc(W,Map,UL,UR,type)
       !
       use parameters
       use utils_misc
@@ -440,12 +450,12 @@ contains
       complex(8),allocatable                :: UR_(:,:)
       character(len=2)                      :: type_
       !
-      if(.not.W%status) stop "TransformBosonicField: field not properly initialized."
-      call assert_shape(Map,[W%Nbp,W%Nbp,4],"TransformBosonicField","Map")
+      if(.not.W%status) stop "TransformBosonicField_loc: field not properly initialized."
+      call assert_shape(Map,[W%Nbp,W%Nbp,4],"TransformBosonicField_loc","Map")
       Norb = int(sqrt(dble(W%Nbp)))
-      call assert_shape(UL,[Norb,Norb],"TransformBosonicField","UL")
+      call assert_shape(UL,[Norb,Norb],"TransformBosonicField_loc","UL")
       if(present(UR))then
-         call assert_shape(UR,[Norb,Norb],"TransformBosonicField","UR")
+         call assert_shape(UR,[Norb,Norb],"TransformBosonicField_loc","UR")
          UR_ = UR
       else
          UR_ = UL
@@ -462,9 +472,47 @@ contains
       endif
       deallocate(UR_)
       !
-   end subroutine TransformBosonicField
+   end subroutine TransformBosonicField_loc
    !
-   subroutine TransformMatrix(W,Map,UL,UR,type)
+   subroutine TransformBosonicField_gen(W,Map,UA,UB,UC,UD,type)
+      !
+      use parameters
+      use utils_misc
+      use linalg, only : tensor_transform
+      implicit none
+      !
+      type(BosonicField),intent(inout)      :: W
+      integer,intent(in)                    :: Map(:,:,:)
+      complex(8),intent(in)                 :: UA(:,:)
+      complex(8),intent(in)                 :: UB(:,:)
+      complex(8),intent(in)                 :: UC(:,:)
+      complex(8),intent(in)                 :: UD(:,:)
+      character(len=2),intent(in),optional  :: type
+      !
+      integer                               :: iw,Norb
+      character(len=2)                      :: type_
+      !
+      if(.not.W%status) stop "TransformBosonicField_gen: field not properly initialized."
+      call assert_shape(Map,[W%Nbp,W%Nbp,4],"TransformBosonicField_gen","Map")
+      Norb = int(sqrt(dble(W%Nbp)))
+      call assert_shape(UA,[Norb,Norb],"TransformBosonicField_gen","UA")
+      call assert_shape(UB,[Norb,Norb],"TransformBosonicField_gen","UB")
+      call assert_shape(UC,[Norb,Norb],"TransformBosonicField_gen","UC")
+      call assert_shape(UD,[Norb,Norb],"TransformBosonicField_gen","UD")
+      !
+      type_="NN"
+      if(present(type))type_=reg(type)
+      !
+      if(allocated(W%bare_local))call tensor_transform(reg(type_),W%bare_local,Map,UA,UB,UC,UD)
+      if(allocated(W%screened_local))then
+         do iw=1,W%Npoints
+            call tensor_transform(reg(type_),W%screened_local(:,:,iw),Map,UA,UB,UC,UD)
+         enddo
+      endif
+      !
+   end subroutine TransformBosonicField_gen
+   !
+   subroutine TransformMatrix_loc(W,Map,UL,UR,type)
       !
       use parameters
       use utils_misc
@@ -482,12 +530,12 @@ contains
       character(len=2)                      :: type_
       !
       Nbp = size(W,dim=1)
-      call assert_shape(W,[Nbp,Nbp],"TransformMatrix","Map")
-      call assert_shape(Map,[Nbp,Nbp,4],"TransformMatrix","Map")
+      call assert_shape(W,[Nbp,Nbp],"TransformMatrix_loc","Map")
+      call assert_shape(Map,[Nbp,Nbp,4],"TransformMatrix_loc","Map")
       Norb = int(sqrt(dble(Nbp)))
-      call assert_shape(UL,[Norb,Norb],"TransformMatrix","UL")
+      call assert_shape(UL,[Norb,Norb],"TransformMatrix_loc","UL")
       if(present(UR))then
-         call assert_shape(UR,[Norb,Norb],"TransformMatrix","UR")
+         call assert_shape(UR,[Norb,Norb],"TransformMatrix_loc","UR")
          UR_ = UR
       else
          UR_ = UL
@@ -499,7 +547,42 @@ contains
       call tensor_transform(reg(type_),W,Map,UL,UR_)
       deallocate(UR_)
       !
-   end subroutine TransformMatrix
+   end subroutine TransformMatrix_loc
+   !
+   subroutine TransformMatrix_gen(W,Map,UA,UB,UC,UD,type)
+      !
+      use parameters
+      use utils_misc
+      use linalg, only : tensor_transform
+      implicit none
+      !
+      complex(8),intent(inout)              :: W(:,:)
+      integer,intent(in)                    :: Map(:,:,:)
+      complex(8),intent(in)                 :: UA(:,:)
+      complex(8),intent(in)                 :: UB(:,:)
+      complex(8),intent(in)                 :: UC(:,:)
+      complex(8),intent(in)                 :: UD(:,:)
+      character(len=2),intent(in),optional  :: type
+      !
+      integer                               :: Norb,Nbp
+      complex(8),allocatable                :: UR_(:,:)
+      character(len=2)                      :: type_
+      !
+      Nbp = size(W,dim=1)
+      call assert_shape(W,[Nbp,Nbp],"TransformMatrix_gen","Map")
+      call assert_shape(Map,[Nbp,Nbp,4],"TransformMatrix_gen","Map")
+      Norb = int(sqrt(dble(Nbp)))
+      call assert_shape(UA,[Norb,Norb],"TransformMatrix_gen","UA")
+      call assert_shape(UB,[Norb,Norb],"TransformMatrix_gen","UB")
+      call assert_shape(UC,[Norb,Norb],"TransformMatrix_gen","UC")
+      call assert_shape(UD,[Norb,Norb],"TransformMatrix_gen","UD")
+      !
+      type_="NN"
+      if(present(type))type_=reg(type)
+      !
+      call tensor_transform(reg(type_),W,Map,UA,UB,UC,UD)
+      !
+   end subroutine TransformMatrix_gen
 
 
    !---------------------------------------------------------------------------!

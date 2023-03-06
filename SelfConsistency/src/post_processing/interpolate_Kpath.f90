@@ -60,9 +60,9 @@ subroutine interpolate2kpath_Fermionic(Sfull,Lttc,pathOUTPUT)
    !
    !---------------------- LDA Hamiltonian and corrections --------------------!
    !
-   !non-interacting data (Bands, spectral function, Fermi-surface)
-   call interpolate2Path(Lttc,Nkpt_path_default,"Hk",pathOUTPUT=reg(pathOUTPUT),store=.false.,skipAkw=.false.)
-   call interpolate2Plane(Lttc,Nkpt_plane_default,"Hk",pathOUTPUT=reg(pathOUTPUT),store=.false.,skipFk=.false.)
+   !non-interacting data (Bands, spectral function, Fermi-surface). This has the wrong chemical potential stored in Lttc. Kee the data stored in GWinput
+   !call interpolate2Path(Lttc,Nkpt_path_default,"Hk",pathOUTPUT=reg(pathOUTPUT),store=.false.,skipAkw=.false.)
+   !call interpolate2Plane(Lttc,Nkpt_plane_default,"Hk",pathOUTPUT=reg(pathOUTPUT),store=.false.,skipFk=.false.)
    !
    !correction to LDA given by the real part of the local self-energy in iw=0.
    allocate(correction(Norb,Norb,Sfull%Nkpt));correction=czero
@@ -86,7 +86,7 @@ subroutine interpolate2kpath_Fermionic(Sfull,Lttc,pathOUTPUT)
       do ispin=1,Nspin
          !
          do ik=1,Sfull%Nkpt
-            correction(:,:,ik) = Sfull%wks(:,:,1,ik,ispin) - zeye(Norb)*Sfull%mu
+            correction(:,:,ik) = Lttc%Hk(:,:,ik) + Sfull%wks(:,:,1,ik,ispin) - zeye(Norb)*Sfull%mu
          enddo
          do iorb=1,Norb
             correction(iorb,iorb,:) = dcmplx(dreal(correction(iorb,iorb,:)),0d0)
