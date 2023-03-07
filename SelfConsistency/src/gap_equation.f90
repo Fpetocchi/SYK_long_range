@@ -25,9 +25,6 @@ module gap_equation
    real(8),allocatable,private              :: omega(:)                         !Phonon energy on logarithmic grid
    real(8),allocatable,private              :: a2F(:)                           !alpha^2*F(\Omega) function
    !
-   real(8),private                          :: eV2DFTgrid=1d0                   !this converts eV to the DFT grid
-   real(8),private                          :: DFTgrid2eV=1d0
-   !
    integer,private                          :: Nkpt3_orig(3)
    real(8),allocatable,private              :: kpt_orig(:,:)
    complex(8),allocatable,private           :: Hk_orig(:,:,:)
@@ -36,27 +33,30 @@ module gap_equation
    real(8),allocatable,private              :: kpt_Hk(:,:),kpt_Wk(:,:)
    integer,allocatable,private              :: kptdif_Wk(:,:)
    !
-   logical,private                          :: interpolate_Wk=.false.
-   complex(8),allocatable,private           :: Zk(:,:,:)
-   !
    real(8),allocatable,target,private       :: weights_1(:,:,:),DoS_1(:)
    real(8),allocatable,target,private       :: weights_2(:,:,:),DoS_2(:)
    !
+   complex(8),allocatable,private           :: Zk(:,:,:)
    complex(8),allocatable,private           :: Wk(:,:,:,:)
    !
    logical,private                          :: initialized=.false.
    logical,private                          :: Phonons_stored=.false.
    logical,private                          :: DFT_DoS_stored=.false.
+   logical,private                          :: interpolate_Wk=.false.
    logical,private                          :: Wk_stored=.false.
    !
    !public
-   real(8),allocatable,public,protected     :: Egrid(:)
+   real(8),public,protected                 :: eV2DFTgrid=1d0                   !this converts eV to the DFT grid
+   real(8),public,protected                 :: DFTgrid2eV=1d0
+   !
+   real(8),allocatable,public,protected     :: Egrid(:)                         !this is the dft one if phonons are present, custom otherwise
    real(8),allocatable,public,protected     :: DoS_DFT(:)
-   real(8),pointer,public,protected         :: weights_Hk(:,:,:),DoS_Hk(:)
-   real(8),pointer,public,protected         :: weights_Wk(:,:,:),DoS_Wk(:)
+   real(8),pointer,public,protected         :: weights_Hk(:,:,:),DoS_Hk(:)      !this is for the gap equation integral of the electronic part
+   real(8),pointer,public,protected         :: weights_Wk(:,:,:),DoS_Wk(:)      !this is to go from W(k,k') to W(e,e')
+   !
    logical,public,protected                 :: calc_phonons=.false.
    logical,public,protected                 :: calc_Int_static=.false.
-   logical,public,protected                 :: calc_Int_full=.false.
+   logical,public,protected                 :: calc_Int_dynamic=.false.
    !
 #ifdef _verb
    logical,private                          :: verbose=.true.
@@ -85,7 +85,7 @@ contains
    !---------------------------------------------------------------------------!
    !PURPOSE: Read phonons and initialize only mesh and energy grids
    !---------------------------------------------------------------------------!
-   subroutine Initialize_inputs(pathINPUT,mode_ph,mode_el,Nkpt3,kpt,Hk,Nreal,wrealMax,Nkpt3_intp_Hk,Nkpt3_intp_Wk)
+   subroutine Initialize_inputs(pathINPUT,Inputs,Lttc,Nreal,wrealMax,Hk_input)
       !
       use parameters
       use utils_misc
@@ -95,23 +95,23 @@ contains
       character(len=*),intent(in)           :: pathINPUT
       type(SCDFT),intent(in)                :: Inputs
       type(Lattice),intent(in)              :: Lttc
-
-
       integer,intent(in)                    :: Nreal
       real(8),intent(in)                    :: wrealMax
       complex(8),intent(in)                 :: Hk_input(:,:,:)
       !
-      integer                               :: Norb,Ngrid,Nkpti_dum
+      integer                               :: Norb,Ngrid,Nkpt,Nkpti_dum
       integer,allocatable                   :: kptp_dum(:)
       integer,allocatable                   :: pkpt_dum(:,:,:)
       real(8),allocatable                   :: nkstar_dum(:)
-      real(8),allocatable                   :: Ek(:,:)
       complex(8),allocatable                :: Hk_intp(:,:,:)
+      logical                               :: Interpolate_Hk
       real                                  :: start,finish
       !
       !
       if(verbose)write(*,"(A)") "---- Initialize_inputs"
       !
+      !
+      if(.not.Inputs%status)stop "Initialize_inputs: input container not properly initialized."
       !
       !setting up global flags
       select case(reg(Inputs%mode_ph))
@@ -131,7 +131,7 @@ contains
          case("Elk","QEspresso")
             !
             calc_phonons=.true.
-            call read_a2F(reg(pathINPUT),reg(mode_ph))
+            call read_a2F(reg(pathINPUT),reg(Inputs%mode_ph))
             call read_DoS_DFT(reg(pathINPUT))
             !
       end select
@@ -149,9 +149,14 @@ contains
             !
             calc_Int_static=.true.
             !
+         case("dynamic")
+            !
+            calc_Int_dynamic=.true.
+            !
          case("static+dynamic")
             !
-            calc_Int_full=.true.
+            calc_Int_static=.true.
+            calc_Int_dynamic=.true.
             !
       end select
       !
@@ -160,14 +165,14 @@ contains
       !
       !compute the interpolated K-grid for Hk and the corresponding weights
       write(*,"(A)")"     Weights calculation for electronic energy integrals."
-      Interpolate_Hk = (.not.(any(Inputs%Nkpt3_intp_Hk.eq.0))) .and. &
-                       (.not.(all(Inputs%Nkpt3_intp_Hk.eq.Lttc%Nkpt3)))
       !
+      Interpolate_Hk = (.not.(any(Inputs%Nkpt3_intp_Hk.eq.0))) .and. (.not.(all(Inputs%Nkpt3_intp_Hk.eq.Lttc%Nkpt3)))
       if(Interpolate_Hk)then
          !
          Nkpt3_Hk = Inputs%Nkpt3_intp_Hk
-         allocate(Hk_intp(Norb,Norb,product(Nkpt3_Hk)));Hk_intp=czero
-         allocate(kpt_Hk(3,product(Nkpt3_Hk)));kpt_Hk=0d0
+         Nkpt = product(Nkpt3_Hk)
+         allocate(Hk_intp(Norb,Norb,Nkpt));Hk_intp=czero
+         allocate(kpt_Hk(3,Nkpt));kpt_Hk=0d0
          !
          call calc_irredBZ(reg(pathINPUT),Nkpt3_Hk,Nkpti_dum,kptp_dum,pkpt_dum,nkstar_dum,kpt_out=kpt_Hk)
          deallocate(kptp_dum,pkpt_dum,nkstar_dum)
@@ -175,198 +180,86 @@ contains
          call cpu_time(start)
          call wannierinterpolation(Lttc%Nkpt3,Lttc%kpt,kpt_Hk,(Hk_input*eV2DFTgrid),Hk_intp)
          call cpu_time(finish)
-         write(*,"(A,F)") "     interpolation to new ["//str(Nkpt3_Hk(1))//","//str(Nkpt3_Hk(2))//","//str(Nkpt3_Hk(3))//"] K-grid cpu timing:", finish-start
+         write(*,"(A,F)") "     Interpolation to new ["//str(Nkpt3_Hk(1))//","//str(Nkpt3_Hk(2))//","//str(Nkpt3_Hk(3))//"] K-grid cpu timing:", finish-start
          !
       else
          !
          Nkpt3_Hk = Lttc%Nkpt3
-         allocate(Hk_intp(Norb,Norb,product(Nkpt3_Hk)));Hk_intp=czero
-         allocate(kpt_Hk(3,product(Nkpt3_Hk)));kpt_Hk=0d0
+         Nkpt = product(Nkpt3_Hk)
+         allocate(Hk_intp(Norb,Norb,Nkpt));Hk_intp=czero
+         allocate(kpt_Hk(3,Nkpt));kpt_Hk=0d0
          !
          kpt_Hk = Lttc%kpt
          Hk_intp = Hk_input * eV2DFTgrid
-         !
          write(*,"(A)")"     Interpolation of Hk skipped."
          !
       endif
       !
-      allocate(weights_1(Ngrid,Norb,product(Nkpt3_Hk)));weights_1=0d0
+      allocate(weights_1(Ngrid,Norb,Nkpt));weights_1=0d0
       allocate(DoS_1(Ngrid));DoS_1=0d0
       !
       call cpu_time(start)
       call tetrahedron_integration(reg(pathINPUT),Hk_intp,Nkpt3_Hk,kpt_Hk,Egrid,weights_out=weights_1,DoS_out=DoS_1)
       call cpu_time(finish)
-      write(*,"(A,F)") "     tetrahedron integration cpu timing:", finish-start
-      deallocate(Hk_intp)
+      write(*,"(A,F)") "     Tetrahedron integration cpu timing:", finish-start
+      !deallocate(Hk_intp)
       !
       DoS_Hk => DoS_1
       weights_Hk => weights_1
       !
       !compute the interpolated K-grid for Wk and the corresponding weights
-      if(calc_Int_static.or.calc_Int_full)then
+      if(calc_Int_static.or.calc_Int_dynamic)then
          !
          write(*,"(A)")"     Weights calculation for bosonic energy integrals."
-         Interpolate_Wk = (.not.(any(Inputs%Nkpt3_intp_Wk.eq.0))) .and. &
-                          (.not.(all(Inputs%Nkpt3_intp_Wk.eq.Lttc%Nkpt3)))
          !
+         Interpolate_Wk = (.not.(any(Inputs%Nkpt3_intp_Wk.eq.0))) .and. (.not.(all(Inputs%Nkpt3_intp_Wk.eq.Lttc%Nkpt3)))
          if(Interpolate_Wk)then
-            !
             Nkpt3_Wk = Inputs%Nkpt3_intp_Wk
-            allocate(Hk_intp(Norb,Norb,product(Nkpt3_Wk)));Hk_intp=czero
-            allocate(kpt_Wk(3,product(Nkpt3_Wk)));kpt_Wk=0d0
-            !
-            if(all(Nkpt3_Wk.eq.Nkpt3_Hk))then
-               !
-               kpt_Wk = kpt_Hk
-               write(*,"(A)")"     Interpolation of Hk skipped."
-               !
-               DoS_Wk => DoS_1
-               weights_Wk => weights_1
-               write(*,"(A)") "     Tetrahedron integration skipped."
-               !
-            else
-               !
-               call calc_irredBZ(reg(pathINPUT),Nkpt3_Wk,Nkpti_dum,kptp_dum,pkpt_dum,nkstar_dum,kpt_out=kpt_Wk)
-               deallocate(kptp_dum,pkpt_dum,nkstar_dum)
-               !
-               allocate(Hk_intp(Norb,Norb,product(Nkpt3_Wk)));Hk_intp=czero
-               call cpu_time(start)
-               call wannierinterpolation(Lttc%Nkpt3,Lttc%kpt,kpt_Wk,(Hk_input*eV2DFTgrid),Hk_intp)
-               call cpu_time(finish)
-               write(*,"(A,F)") "     interpolation to ["//str(Nkpt3_Wk(1))//","//str(Nkpt3_Wk(2))//","//str(Nkpt3_Wk(3))//"] K-grid cpu timing:", finish-start
-               !
-               allocate(weights_2(Ngrid,Norb,product(Nkpt3_Wk)));weights_2=0d0
-               allocate(DoS_2(Ngrid));DoS_2=0d0
-               !
-               call cpu_time(start)
-               call tetrahedron_integration(reg(pathINPUT),Hk_intp,Nkpt3_Wk,kpt_Wk,Egrid,weights_out=weights_2,DoS_out=DoS_2)
-               call cpu_time(finish)
-               write(*,"(A,F)") "     tetrahedron integration cpu timing:", finish-start
-               deallocate(Hk_intp)
-               !
-               DoS_Wk => DoS_2
-               weights_Wk => weights_2
-               !
-            endif
-            !
          else
-            !
             Nkpt3_Wk = Lttc%Nkpt3
-            allocate(Hk_intp(Norb,Norb,product(Nkpt3_Wk)));Hk_intp=czero
-            allocate(kpt_Wk(3,product(Nkpt3_Wk)));kpt_Wk=0d0
+         endif
+         Nkpt = product(Nkpt3_Wk)
+         allocate(kpt_Wk(3,Nkpt));kpt_Wk=0d0
+         !
+         if(all(Nkpt3_Wk.eq.Nkpt3_Hk))then
             !
-            kpt_Wk = Lttc%kpt
-            Hk_intp = Hk_input * eV2DFTgrid
-            !
+            kpt_Wk = kpt_Hk
+            !Hk_intp = the same as before not deallocated
             write(*,"(A)")"     Interpolation of Hk skipped."
-
-            kpt_Wk = Lttc%kpt
-            Hk_intp = Hk_input * eV2DFTgrid
             !
             DoS_Wk => DoS_1
             weights_Wk => weights_1
-            !
-         endif
-
-
-         !keep all the results from Hk
-         DoS_Wk => DoS_1
-         weights_Wk => weights_1
-         call calc_rotation(Hk_intp,Zk)
-
-
-
-         if(any(Inputs%Nkpt3_intp_Wk.eq.0))then
-            !
-            write(*,"(A)")"     Interpolation grid for Hk provided but one dimension has Nk=0. Interpolation skipped."
-            Nkpt3_Wk = Lttc%Nkpt3
-            kpt_Wk = Lttc%kpt
-            Hk_intp = Hk_input * eV2DFTgrid
-            !
-         elseif(all(Inputs%Nkpt3_intp_Wk.eq.Lttc%Nkpt3))then
-            !
-            write(*,"(A)")"     Interpolation grid for Hk provided but equal to the original. Interpolation skipped."
-            Nkpt3_Wk = Lttc%Nkpt3
-            kpt_Wk = Lttc%kpt
-            Hk_intp = Hk_input * eV2DFTgrid
+            write(*,"(A)") "     Tetrahedron integration skipped."
             !
          else
             !
-            !compute interpolated kpt for Hk
-            Nkpt3_Wk = Inputs%Nkpt3_intp_Wk
+            deallocate(Hk_intp)
+            allocate(Hk_intp(Norb,Norb,Nkpt));Hk_intp=czero
+            !
             call calc_irredBZ(reg(pathINPUT),Nkpt3_Wk,Nkpti_dum,kptp_dum,pkpt_dum,nkstar_dum,kpt_out=kpt_Wk)
             deallocate(kptp_dum,pkpt_dum,nkstar_dum)
             !
-            allocate(Hk_intp(Norb,Norb,product(Nkpt3_Wk)));Hk_intp=czero
             call cpu_time(start)
-            call wannierinterpolation(Nkpt3_orig,kpt_orig,kpt_Wk,Hk_orig,Hk_intp)
+            call wannierinterpolation(Lttc%Nkpt3,Lttc%kpt,kpt_Wk,(Hk_input*eV2DFTgrid),Hk_intp)
             call cpu_time(finish)
-            write(*,"(A,F)") "     interpolation to ["//str(Nkpt3_Wk(1))//","//str(Nkpt3_Wk(2))//","//str(Nkpt3_Wk(3))//"] K-grid cpu timing:", finish-start
-
-            interpolate_Wk=.true.
+            write(*,"(A,F)") "     Interpolation to new ["//str(Nkpt3_Wk(1))//","//str(Nkpt3_Wk(2))//","//str(Nkpt3_Wk(3))//"] K-grid cpu timing:", finish-start
             !
-         endif
-         call calc_dispersion(Hk_intp,Ek,Z=Zk)
-
-
-
-
-
-         Nkpt3_Wk = Nkpt3_orig
-         if(present(Nkpt3_intp_Wk))then
-            !
-            if(any(Nkpt3_intp_Wk.eq.0))then
-               !
-
-            else
-               !
-               !compute interpolated kpt for Hk
-               Nkpt3_Wk = Nkpt3_intp_Wk
-               call calc_irredBZ(reg(pathINPUT),Nkpt3_Wk,Nkpti_dum,kptp_dum,pkpt_dum,nkstar_dum,kpt_out=kpt_Wk)
-               deallocate(kptp_dum,pkpt_dum,nkstar_dum)
-               !
-               allocate(Hk_intp(Norb,Norb,product(Nkpt3_Wk)));Hk_intp=czero
-               call cpu_time(start)
-               call wannierinterpolation(Nkpt3_orig,kpt_orig,kpt_Wk,Hk_orig,Hk_intp)
-               call cpu_time(finish)
-               write(*,"(A,F)") "     interpolation to ["//str(Nkpt3_Wk(1))//","//str(Nkpt3_Wk(2))//","//str(Nkpt3_Wk(3))//"] K-grid cpu timing:", finish-start
-               call calc_dispersion(Hk_intp,Ek,Z=Zk)
-               interpolate_Wk=.true.
-               !
-            endif
-            !
-         else
-            !
-            Nkpt3_Wk = Nkpt3_orig
-            kpt_Wk = kpt_orig
-            Hk_intp = Hk_orig* SPECIFIC DFT GRID CONVERSION FACTOR EVERYWHERE
-            call calc_dispersion(Hk_intp,Ek,Z=Zk)
-            !
-         endif
-         !
-         if(all(Nkpt3_Hk.eq.Nkpt3_Wk))then
-            !
-            write(*,"(A)") "     tetrahedron integration skipped:"
-            deallocate(Ek)
-            !
-            DoS_Wk => DoS_1
-            weights_Wk => weights_1
-            !
-         else
-            !
-            allocate(weights_2(Ngrid,Norb,product(Nkpt3_Wk)));weights_2=0d0
+            allocate(weights_2(Ngrid,Norb,Nkpt));weights_2=0d0
             allocate(DoS_2(Ngrid));DoS_2=0d0
             !
             call cpu_time(start)
             call tetrahedron_integration(reg(pathINPUT),Hk_intp,Nkpt3_Wk,kpt_Wk,Egrid,weights_out=weights_2,DoS_out=DoS_2)
             call cpu_time(finish)
-            write(*,"(A,F)") "     tetrahedron integration cpu timing:", finish-start
-            deallocate(Hk_intp,Ek)
+            write(*,"(A,F)") "     Tetrahedron integration cpu timing:", finish-start
+            deallocate(Hk_intp)
             !
             DoS_Wk => DoS_2
             weights_Wk => weights_2
             !
          endif
+         !
+         allocate(Zk(Norb,Norb,Nkpt));Zk=czero
+         call calc_rotation(Hk_intp,Zk)
          !
       endif
       deallocate(Hk_intp)
@@ -379,29 +272,35 @@ contains
       !
       !
       !
-      subroutine calc_dispersion(H,E,Z)
+      subroutine calc_rotation(H,Z)
+         !
          use linalg, only : eigh
+         use utils_misc, only : assert_shape
          implicit none
          complex(8),intent(in)              :: H(:,:,:)
-         real(8),allocatable,intent(out)    :: E(:,:)
-         complex(8),allocatable,intent(out),optional :: Z(:,:,:)
-         integer                            :: ik
+         complex(8),intent(out)             :: Z(:,:,:)
+         !
+         integer                            :: ik,Ndim,Nk
+         real(8),allocatable                :: E_(:,:)
          complex(8),allocatable             :: Z_(:,:,:)
          !
-         if(allocated(E))deallocate(E)
-         allocate(E(size(H,dim=1),size(H,dim=3))); E=0d0
+         Ndim = size(H,dim=1)
+         Nk = size(H,dim=3)
+         call assert_shape(H,[Ndim,Ndim,Nk],"calc_rotation","H")
+         call assert_shape(Z,[Ndim,Ndim,Nk],"calc_rotation","Z")
+         !
+         allocate(E_(Ndim,Nk)); E_=0d0
+         allocate(Z_(Ndim,Ndim,Nk)); Z_=0d0
          !
          Z_ = H
-         do ik=1,size(H,dim=3)
-            call eigh(Z_(:,:,ik),Ek(:,ik))
+         do ik=1,Nk
+            call eigh(Z_(:,:,ik),E_(:,ik))
          enddo
          !
-         if(present(Z))then
-            if(allocated(Z))deallocate(Z)
-            Z = Z_
-         endif
+         Z = Z_
+         deallocate(E_,Z_)
          !
-      end subroutine calc_dispersion
+      end subroutine calc_rotation
       !
       !
       !
@@ -424,7 +323,6 @@ contains
       integer                               :: Header,Footer
       integer                               :: ierr,Nlines
       integer                               :: iomega,Nomega
-      real(8)                               :: dwf,dwb
       logical                               :: filexists
       !
       !
@@ -502,8 +400,7 @@ contains
       !
       character(len=*),intent(in)           :: pathINPUT
       !
-      integer                               :: ih,unit
-      integer                               :: ierr,Nlines
+      integer                               :: unit,ierr,Nlines
       integer                               :: iE,Ngrid
       logical                               :: filexists
       !
@@ -549,13 +446,14 @@ contains
 
    !---------------------------------------------------------------------------!
    !PURPOSE: Store the interpolated and rotated NaNb components of the fully
-   !         screened interaction
+   !         screened interaction. This is the only subroutine where beta is in 1/eV
    !---------------------------------------------------------------------------!
    subroutine store_Wk(Wk_orig,Beta,cutoff,pathOUTPUT)
       !
       use parameters
       use utils_misc
       use utils_fields
+      use file_io
       use linalg, only : tensor_transform
       use crystal, only : fill_ksumkdiff, wannierinterpolation
       implicit none
@@ -607,7 +505,7 @@ contains
       wndx = Nmats
       if(cutoff.lt.wmats(Nmats))then
          wndx = minloc(abs(wmats-cutoff),dim=1)
-         write(*,"(A,F)") "     Interaction frequency cut at iw_["//str(wndx)//"]=",wmats(wndx)*DFTgrid2eV
+         write(*,"(A,F)") "     Interaction frequency cut at iw_["//str(wndx)//"]=",wmats(wndx)
       endif
       deallocate(wmats)
       !
@@ -695,27 +593,27 @@ contains
 
    !---------------------------------------------------------------------------!
    !PURPOSE: Compute the electronic kernel averaged on an energy grid considering
-   !         only the static limit of the fully screened interaction. Minimal use
-   !         of shared variables in order to be able to try different grid/meshes.
+   !         only the static limit of the fully screened interaction. The grid is
+   !         set by Initialize_inputs and it is the DFT one if phonons are present
+   !         custom otherwise.
    !---------------------------------------------------------------------------!
-   subroutine calc_Kel_stat_e(Beta,Egrid,weights,Kel_stat_e,printKpath,printmode)
+   subroutine calc_Kel_stat_e(Beta,Kel_stat_e,printKpath,printmode)
       !
       use parameters
       use utils_misc
       implicit none
       !
       real(8),intent(in)                    :: Beta
-      real(8),intent(in)                    :: Egrid(:)
-      real(8),intent(in)                    :: weights(:,:,:)
       complex(8),intent(out)                :: Kel_stat_e(:,:)
       character(len=*),intent(in),optional  :: printKpath
       character(len=*),intent(in),optional  :: printmode
       !
       integer                               :: Efermi_ndx
-      integer                               :: iE,iE1,iE2,Ngrid
+      integer                               :: iE1,iE2,Ngrid
       integer                               :: iorb,jorb,Norb
       integer                               :: ik1,ik2,iq,Nkpt,Nmats
-      real(8)                               :: DoSnorm,dE,Temp
+      real(8)                               :: Temp,DoS0
+      complex(8)                            :: Kee
       real(8),allocatable                   :: DoS(:)
       complex(8),allocatable                :: Wk_pvt(:,:,:)
       character(len=12)                     :: printmode_used
@@ -725,39 +623,22 @@ contains
       write(*,"(A)") new_line("A")//"---- calc_Kel_stat_e"
       !
       !
+      if(.not.calc_Int_static)stop "calc_Kel_stat_e: inputs not initialized. call Initialize_inputs."
       if(.not.Wk_stored)stop "calc_Kel_stat_e: fully screened interaction not stored. call store_Wk."
       !
-      !Various checks
+      Efermi_ndx = minloc(abs(Egrid),dim=1)
+      DoS0 = DoS_Wk(Efermi_ndx)
+      write(*,"(A,F)") "     calc_Kel_stat_e: Model DoS at the Fermi level:",DoS0
+      if(Egrid(Efermi_ndx).ne.0d0) stop "calc_Kel_dyn_e: the energy grid requires the E=0 point."
+      !
       Ngrid = size(Egrid)
       Norb = size(Wk,dim=1)
       Nmats = size(Wk,dim=3)
       Nkpt = product(Nkpt3_Wk)
       call assert_shape(Wk,[Norb,Norb,Nmats,Nkpt],"calc_Kel_stat_e","Wk")
-      call assert_shape(weights,[Ngrid,Norb,Nkpt],"calc_weights","weights")
       call assert_shape(Kel_stat_e,[Ngrid,Ngrid],"calc_Kph_e","Kel_stat_e")
-      if(.not.allocated(kptdif_Wk)) stop"calc_Kel_stat_e: kptdif_Wk not allocated"
+      !
       Kel_stat_e=czero
-      !
-      Efermi_ndx = minloc(abs(Egrid),dim=1)
-      if(Egrid(Efermi_ndx).ne.0d0) stop "calc_Kel_dyn_e: the energy grid requires the E=0 point."
-      !
-      DoSnorm=0
-      allocate(DoS(Ngrid));DoS=0d0
-      do iE=1,Ngrid
-         do iorb=1,Norb
-            DoS(iE) = DoS(iE) + sum(weights(iE,iorb,:))
-         enddo
-      enddo
-      do iE=2,Ngrid
-         dE = abs(Egrid(iE)-Egrid(iE-1))
-         DoSnorm = DoSnorm + ( DoS(iE-1)+DoS(iE) ) * (dE/2d0)
-         if(iE.eq.Efermi_ndx)then
-            write(*,"(A,F)") "     total occupation from DoS:",DoSnorm
-            write(*,"(A,F)") "     DoS at the Fermi level:",DoS(iE)
-         endif
-      enddo
-      write(*,"(A,F)") "     DoS normalization:",DoSnorm
-      !
       call cpu_time(start)
       !$OMP PARALLEL DEFAULT(SHARED),&
       !$OMP PRIVATE(iE1,iE2,ik1,ik2,iq,iorb,jorb,Wk_pvt)
@@ -767,10 +648,11 @@ contains
       !
       !$OMP DO SCHEDULE(DYNAMIC)
       do iE1=1,Ngrid
-         if(DoS(iE1).lt.1d-10)cycle
+         if(DoS_Wk(iE1).lt.1d-10)cycle
          do iE2=1,Ngrid
-            if(DoS(iE2).lt.1d-10)cycle
+            if(DoS_Wk(iE2).lt.1d-10)cycle
             !
+            Kee=czero
             do iorb=1,Norb
                do jorb=1,Norb
                   do ik1=1,Nkpt
@@ -778,12 +660,14 @@ contains
                         !
                         iq = kptdif_Wk(ik1,ik2)
                         !
-                        Kel_stat_e(iE1,iE2) = Kel_stat_e(iE1,iE2) + (weights(iE1,iorb,ik1)/DoS(iE1)) * (weights(iE2,jorb,ik2)/DoS(iE2)) * Wk_pvt(iorb,jorb,iq)
+                        Kee = Kee + Wk_pvt(iorb,jorb,iq) * (weights_Wk(iE1,iorb,ik1)/DoS_Wk(iE1)) &
+                                                         * (weights_Wk(iE2,jorb,ik2)/DoS_Wk(iE2))
                         !
                      enddo
                   enddo
                enddo
             enddo
+            Kel_stat_e(iE1,iE2) = Kee
             !
          enddo
       enddo
@@ -799,7 +683,7 @@ contains
          Temp = 1d0 / (K2eV*eV2DFTgrid*Beta)
          printmode_used="E0"
          if(present(printmode))printmode_used=reg(printmode)
-         call print_Kernel("electronic",printmode_used,reg(printKpath),"Kel_stat",Temp,Egrid,Kel_stat_e)
+         call print_Kernel("electronic",printmode_used,reg(printKpath),"Kel_stat",Temp,Egrid,Egrid,Kel_stat_e)
          !
       endif
       !
@@ -808,18 +692,16 @@ contains
 
    !---------------------------------------------------------------------------!
    !PURPOSE: Compute the electronic kernel averaged on an energy grid considering
-   !         only the static limit of the fully screened interaction. Minimal use
-   !         of shared variables in order to be able to try different grid/meshes.
+   !         the fully screened interaction. The grid is set by Initialize_inputs
+   !         and it is the DFT one if phonons are present custom otherwise.
    !---------------------------------------------------------------------------!
-   subroutine calc_Kel_dyn_e(Beta,Egrid,weights,Kel_dyn_e,printKpath,printmode)
+   subroutine calc_Kel_dyn_e(Beta,Kel_dyn_e,printKpath,printmode)
       !
       use parameters
       use utils_misc
       implicit none
       !
       real(8),intent(in)                    :: Beta
-      real(8),intent(in)                    :: Egrid(:)
-      real(8),intent(in)                    :: weights(:,:,:)
       complex(8),intent(out)                :: Kel_dyn_e(:,:)
       character(len=*),intent(in),optional  :: printKpath
       character(len=*),intent(in),optional  :: printmode
@@ -827,9 +709,9 @@ contains
       integer                               :: Efermi_ndx
       integer                               :: iorb,jorb,Norb
       integer                               :: ik1,ik2,iq,Nkpt,Nmats
-      integer                               :: iE,iE1,iE2,iy,Ngrid
+      integer                               :: iE1,iE2,iy,Ngrid
       integer                               :: wndx_a,wndx_b
-      real(8)                               :: DoSnorm,Temp,MatsStep
+      real(8)                               :: DoS0,Temp,MatsStep
       real(8)                               :: wmax,ymax
       real(8)                               :: E1,E2,DE,DE_m,DE_p
       real(8)                               :: dy,dy_m,dy_p
@@ -837,8 +719,7 @@ contains
       real(8)                               :: wm,ReW_wm_intp,ImW_wm_intp
       complex(8)                            :: W_wm_i,W_wm_j,Int_i,Int_j
       complex(8)                            :: Kel_dyn_e_p,Kel_dyn_e_m
-      real(8),allocatable                   :: DoS(:),wmats(:)
-      real(8),allocatable                   :: ygrid_m(:),ygrid_p(:)
+      real(8),allocatable                   :: wmats(:),ygrid_m(:),ygrid_p(:)
       complex(8),allocatable                :: Wee(:)
       complex(8),allocatable                :: Wk_pvt(:,:,:,:)
       character(len=12)                     :: printmode_used
@@ -849,49 +730,33 @@ contains
       !
       !
       if(.not.Wk_stored)stop "calc_Kel_dyn_e: fully screened interaction not stored. call store_Wk."
+
+      if(.not.calc_Int_dynamic)stop "calc_Kel_dyn_e: inputs not initialized. call Initialize_inputs."
+      if(.not.Wk_stored)stop "calc_Kel_dyn_e: fully screened interaction not stored. call store_Wk."
       !
-      !Various checks
+      Efermi_ndx = minloc(abs(Egrid),dim=1)
+      DoS0 = DoS_Wk(Efermi_ndx)
+      write(*,"(A,F)") "     calc_Kel_stat_e: Model DoS at the Fermi level:",DoS0
+      if(Egrid(Efermi_ndx).ne.0d0) stop "calc_Kel_dyn_e: the energy grid requires the E=0 point."
+      !
       Ngrid = size(Egrid)
       Norb = size(Wk,dim=1)
       Nmats = size(Wk,dim=3)
       Nkpt = product(Nkpt3_Wk)
       call assert_shape(Wk,[Norb,Norb,Nmats,Nkpt],"calc_Kel_dyn_e","Wk")
-      call assert_shape(weights,[Ngrid,Norb,Nkpt],"calc_weights","weights")
       call assert_shape(Kel_dyn_e,[Ngrid,Ngrid],"calc_Kph_e","Kel_dyn_e")
-      if(.not.allocated(kptdif_Wk)) stop"calc_Kel_dyn_e: kptdif_Wk not allocated"
-      Kel_dyn_e=czero
-      !
-      Efermi_ndx = minloc(abs(Egrid),dim=1)
-      if(Egrid(Efermi_ndx).ne.0d0) stop "calc_Kel_dyn_e: the energy grid requires the E=0 point."
-      !
-      DoSnorm=0
-      allocate(DoS(Ngrid));DoS=0d0
-      do iE=1,Ngrid
-         do iorb=1,Norb
-            DoS(iE) = DoS(iE) + sum(weights(iE,iorb,:))
-         enddo
-      enddo
-      do iE=2,Ngrid
-         dE = abs(Egrid(iE)-Egrid(iE-1))
-         DoSnorm = DoSnorm + ( DoS(iE-1)+DoS(iE) ) * (dE/2d0)
-         if(iE.eq.Efermi_ndx)then
-            write(*,"(A,F)") "     total occupation from DoS:",DoSnorm
-            write(*,"(A,F)") "     DoS at the Fermi level:",DoS(iE)
-         endif
-      enddo
-      write(*,"(A,F)") "     DoS normalization:",DoSnorm
       !
       allocate(wmats(Nmats));wmats=BosonicFreqMesh(Beta,Nmats)
       wmax = wmats(Nmats)
-      !
       MatsStep = abs(wmats(2)-wmats(1))
       write(*,"(A,F)") "     Bosonic frequency step:",MatsStep
       !
       call cpu_time(start)
+      Kel_dyn_e=czero
       !$OMP PARALLEL DEFAULT(PRIVATE),&
-      !$OMP SHARED(Wk,Ngrid,DoS,Norb,Nmats,Nkpt,weights,wmats,MatsStep)
+      !$OMP SHARED(Wk,Ngrid,DoS_Wk,Norb,Nmats,Nkpt,weights_Wk,wmats,MatsStep)
       !
-      allocate(Wee(Nmats));Wee=0d0
+      allocate(Wee(Nmats))
       allocate(Wk_pvt(Norb,Norb,Nmats,Nkpt));Wk_pvt=czero
       Wk_pvt = Wk
       !
@@ -900,9 +765,9 @@ contains
       !
       !$OMP DO SCHEDULE(DYNAMIC)
       do iE1=1,Ngrid
-         if(DoS(iE1).lt.1d-10)cycle
+         if(DoS_Wk(iE1).lt.1d-10)cycle
          do iE2=1,Ngrid
-            if(DoS(iE2).lt.1d-10)cycle
+            if(DoS_Wk(iE2).lt.1d-10)cycle
             !
             E1=Egrid(iE1)
             E2=Egrid(iE2)
@@ -913,6 +778,7 @@ contains
             if((iE1.eq.Efermi_ndx).or.(iE2.eq.Efermi_ndx))cycle
             !
             !bring interaction on the energy gird
+            Wee=czero
             do iorb=1,Norb
                do jorb=1,Norb
                   do ik1=1,Nkpt
@@ -920,7 +786,8 @@ contains
                         !
                         iq = kptdif_Wk(ik1,ik2)
                         !
-                        Wee = Wee + (weights(iE1,iorb,ik1)/DoS(iE1)) * (weights(iE2,jorb,ik2)/DoS(iE2)) * (Wk_pvt(iorb,jorb,:,iq)-Wk_pvt(iorb,jorb,1,iq))
+                        Wee = Wee + (Wk_pvt(iorb,jorb,:,iq)-Wk_pvt(iorb,jorb,1,iq)) * (weights_Wk(iE1,iorb,ik1)/DoS_Wk(iE1)) &
+                                                                                    * (weights_Wk(iE2,jorb,ik2)/DoS_Wk(iE2))
                         !
                      enddo
                   enddo
@@ -1026,7 +893,7 @@ contains
       !$OMP END DO
       deallocate(Wk_pvt,Wee)
       !$OMP END PARALLEL
-      deallocate(DoS,wmats,ygrid_m,ygrid_p)
+      deallocate(wmats,ygrid_m,ygrid_p)
       !
       !Filling the Fermi lines
       call interpFermi(Kel_dyn_e,Egrid,Egrid,Efermi_ndx,Efermi_ndx)
@@ -1039,7 +906,7 @@ contains
          Temp = 1d0 / (K2eV*eV2DFTgrid*Beta)
          printmode_used="E0"
          if(present(printmode))printmode_used=reg(printmode)
-         call print_Kernel("electronic",printmode_used,reg(printKpath),"Kel_dyn",Temp,Egrid,Kel_dyn_e)
+         call print_Kernel("electronic",printmode_used,reg(printKpath),"Kel_dyn",Temp,Egrid,Egrid,Kel_dyn_e)
          !
       endif
       !
@@ -1048,17 +915,15 @@ contains
 
    !---------------------------------------------------------------------------!
    !PURPOSE: Compute the phononic renormalization factor averaged on an energy
-   !         grid. Minimal use of shared variables in order to be able to try
-   !         different grid/meshes.
+   !         grid. This works only if the DFT DOS and energy grid are provided.
    !---------------------------------------------------------------------------!
-   subroutine calc_Zph_e(Beta,Egrid,Zph_e,mode,printZpath)
+   subroutine calc_Zph_e(Beta,Zph_e,mode,printZpath)
       !
       use parameters, only : K2eV
       use utils_misc
       implicit none
       !
       real(8),intent(in)                    :: Beta
-      real(8),intent(in)                    :: Egrid(:)
       real(8),intent(out)                   :: Zph_e(:)
       character(len=*),intent(in),optional  :: mode
       character(len=*),intent(in),optional  :: printZpath
@@ -1066,29 +931,28 @@ contains
       integer                               :: Efermi_ndx,unit
       integer                               :: iE,iE1,iE2,Ngrid
       integer                               :: iomega,Nomega
-      real(8)                               :: E1,E2,dE,dw,Temp
+      real(8)                               :: E1,E2,dE,dw,Temp,DoS0_DFT
       real(8),allocatable                   :: a2F_tmp(:),a2F_int(:)
       character(len=12)                     :: mode_used
+      real                                  :: start,finish
       !
       !
       if(verbose)write(*,"(A)") "---- calc_Zph_e"
       !
       !
       if(.not.Phonons_stored)stop "calc_Zph_e: a2F(omega) is not stored. call read_a2F."
+      if(.not.DFT_DoS_stored)stop "calc_Zph_e: DoS_DFT is not stored. call read_DoS_DFT."
       !
       Efermi_ndx = minloc(abs(Egrid),dim=1)
+      DoS0_DFT = DoS_DFT(Efermi_ndx)
+      write(*,"(A,F)") "     calc_Zph_e: DoS_DFT at the Fermi level:",DoS0_DFT
+      !
       Ngrid = size(Egrid)
       Nomega = size(omega)
       call assert_shape(Zph_e,[Ngrid],"calc_Zph_e","Zph_e")
       !
       mode_used="symrenorm"
       if(present(mode))mode_used=reg(mode)
-      !
-      if(reg(mode_used).eq."asym")then
-         if(.not.allocated(DoS_DFT))stop "calc_Zph_e: DoS_DFT is not stored. call read_a2F."
-         if(.not.all(Egrid.eq.Egrid_DFT))stop "calc_Zph_e: mode is asym but the provided Egrid is different than Egrid_DFT."
-         if(DoS_DFT(Efermi_ndx).ne.DoS0_DFT)stop "calc_Zph_e: mismatch between DoS_DFT(0) and DoS0_DFT."
-      endif
       !
       select case(reg(mode_used))
          case default
@@ -1097,7 +961,7 @@ contains
             !
          case("symrenorm")
             !
-            if(verbose)write (*,"(A)") "     Zph_e: Renormalized term assuming symmetrical DoS around Ef. See PhysRevB 72 024545 eqs. 79-81 for details."
+            if(verbose)write (*,"(A)") "     Zph_e: Renormalized term assuming symmetrical DoS around Ef. See PhysRevB 72.024545 eqs. 79-81 for details."
             !
          case("asym")
             !
@@ -1105,10 +969,11 @@ contains
             !
          case("sym")
             !
-            if(verbose)write (*,"(A)") "     Zph_e: Full term assuming symmetrical DOS around Ef. See PhysRevB 72 024545 eqs. 77-78 for details."
+            if(verbose)write (*,"(A)") "     Zph_e: Full term assuming symmetrical DOS around Ef. See PhysRevB 72.024545 eqs. 77-78 for details."
             !
       end select
       !
+      call cpu_time(start)
       Zph_e=0d0
       allocate(a2F_tmp(Nomega));a2F_tmp=0d0
       allocate(a2F_int(Ngrid));a2F_int=0d0
@@ -1163,8 +1028,7 @@ contains
             !
          enddo
          !
-         !extra minus compared to PhysRevB.72.024545 where they have dropped it
-         !compare to PhysRevB.88.014514 instead where they have it
+         !extra minus compared to PhysRevB.72.024545 where they have dropped it compared to PhysRevB.88.014514 where they have it
          if(E1.ne.0d0)Zph_e(iE1) = -Zph_e(iE1)/tanh(Beta/2d0*E1)
          !
       enddo !iE1
@@ -1176,6 +1040,9 @@ contains
       call interpFermi(Zph_e,Egrid,Efermi_ndx)
       !
       write(*,"(A,1E20.10)")"     lambda(Zph): ",Zph_e(Efermi_ndx)
+      !
+      call cpu_time(finish)
+      write(*,"(A,F)") "     Calculation of phononic Z cpu timing:", finish-start
       !
       if(present(printZpath))then
          !
@@ -1196,43 +1063,42 @@ contains
    !PURPOSE: Compute the phononic kernel averaged on an energy grid. Minimal use
    !         of shared variables in order to be able to try different grid/meshes.
    !---------------------------------------------------------------------------!
-   subroutine calc_Kph_e(Beta,Egrid,DoS,Kph_e,printKpath,printmode)
+   subroutine calc_Kph_e(Beta,Kph_e,printmode,printKpath)
       !
       use parameters, only : K2eV
       use utils_misc
       implicit none
       !
       real(8),intent(in)                    :: Beta
-      real(8),intent(in)                    :: Egrid(:)
-      real(8),intent(in)                    :: DoS(:)
       real(8),intent(out)                   :: Kph_e(:,:)
-      character(len=*),intent(in),optional  :: printKpath
       character(len=*),intent(in),optional  :: printmode
+      character(len=*),intent(in),optional  :: printKpath
       !
-      integer                               :: Efermi_ndx1,Efermi_ndx2
-      integer                               :: iE1,iE2,Ngrid
+      integer                               :: Efermi_ndx,iE1,iE2,Ngrid
       integer                               :: iomega,Nomega
-      real(8)                               :: E1,E2,dw,Temp
+      real(8)                               :: E1,E2,dw,Temp,DoS0_DFT
       real(8)                               :: a2F_int
       real(8),allocatable                   :: a2F_tmp(:)
       character(len=12)                     :: printmode_used
+      real                                  :: start,finish
       !
       !
       if(verbose)write(*,"(A)") "---- calc_Kph_e"
       !
       !
       if(.not.Phonons_stored)stop "calc_Kph_e: a2F(omega) is not stored. call read_a2F."
+      if(.not.DFT_DoS_stored)stop "calc_Zph_e: DoS_DFT is not stored. call read_DoS_DFT."
       !
-      Nomega = size(omega)
+      Efermi_ndx = minloc(abs(Egrid),dim=1)
+      DoS0_DFT = DoS_DFT(Efermi_ndx)
+      write(*,"(A,F)") "     calc_Zph_e: DoS_DFT at the Fermi level:",DoS0_DFT
+      !
       Ngrid = size(Egrid)
-      call assert_shape(DoS,[Ngrid],"calc_Kph_e","DoS")
+      Nomega = size(omega)
       call assert_shape(Kph_e,[Ngrid,Ngrid],"calc_Kph_e","Kph_e")
+      !
+      call cpu_time(start)
       Kph_e=0d0
-      !
-      Efermi_ndx1 = minloc(abs(Egrid),dim=1)
-      Efermi_ndx2 = minloc(abs(Egrid_DFT),dim=1)
-      if(verbose)write(*,"(A,F)") "     calc_Kph_e: DoS_DFT at the Fermi level:",DoS0_DFT
-      !
       allocate(a2F_tmp(Nomega));a2F_int=0d0
       !$OMP PARALLEL DEFAULT(SHARED),&
       !$OMP PRIVATE(iE1,iE2,E1,E2,a2F_tmp,a2F_int,iomega,dw)
@@ -1241,7 +1107,7 @@ contains
          do iE2=1,Ngrid
             !
             E1=Egrid(iE1)
-            E2=Egrid_DFT(iE2)
+            E2=Egrid(iE2)
             !
             !multiply a2F by the proper J function
             a2F_tmp=0d0
@@ -1249,7 +1115,7 @@ contains
               a2F_tmp(iomega) = a2F(iomega) * ( I(E1,E2,omega(iomega),Beta) - I(E1,-E2,omega(iomega),Beta) )
             enddo
             !
-            !Integral over phononic frequency - same scheme regargless from Phonons_grid type
+            !Integral over phononic frequency
             a2F_int=0d0
             do iomega=2,Nomega
                dw = abs(omega(iomega)-omega(iomega-1))
@@ -1265,16 +1131,19 @@ contains
       deallocate(a2F_tmp)
       !
       !Filling the Fermi lines
-      call interpFermi(Kph_e,Egrid,Egrid_DFT,Efermi_ndx1,Efermi_ndx2)
+      call interpFermi(Kph_e,Egrid,Egrid,Efermi_ndx,Efermi_ndx)
       !
-      write(*,"(2(A,1E20.10))")"     lambda(Kph): ",-Kph_e(Efermi_ndx1,Efermi_ndx2)*DoS0_DFT,"    DoS_DFT(E=0): ",DoS0_DFT
+      write(*,"(A,1E20.10)")"     lambda(Kph): ",-Kph_e(Efermi_ndx,Efermi_ndx)*DoS0_DFT
+      !
+      call cpu_time(finish)
+      write(*,"(A,F)") "     Calculation of static phononic Kernel cpu timing:", finish-start
       !
       if(present(printKpath).and.(reg(printmode).ne."None"))then
          !
          Temp = 1d0 / (K2eV*eV2DFTgrid*Beta)
          printmode_used="E0"
          if(present(printmode))printmode_used=reg(printmode)
-         call print_Kernel("phononic",printmode_used,reg(printKpath),"Kph",Temp,Egrid,Egrid_DFT,dcmplx(Kph_e,0d0))
+         call print_Kernel("phononic",printmode_used,reg(printKpath),"Kph",Temp,Egrid,Egrid,dcmplx(Kph_e,0d0))
          !
       endif
       !
@@ -1673,7 +1542,7 @@ contains
       integer,intent(in)              :: iE1o,iE2o
       integer,intent(in),optional     :: shift
       !
-      integer                         :: iE,NE,shift_
+      integer                         :: iE,NE1,NE2,shift_
       real(8)                         :: yA,yB,xA,xB
       real(8)                         :: y_N,y_S,y_E,y_W
       !
@@ -1761,7 +1630,7 @@ contains
       integer,intent(in)              :: iE1o,iE2o
       integer,intent(in),optional     :: shift
       !
-      integer                         :: iE,NE,shift_
+      integer                         :: iE,NE1,NE2,shift_
       complex(8)                      :: yA,yB
       real(8)                         :: xA,xB
       real(8)                         :: Rey_N,Rey_S,Rey_E,Rey_W

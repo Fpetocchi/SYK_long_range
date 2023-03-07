@@ -565,7 +565,6 @@ contains
       character(len=2),intent(in),optional  :: type
       !
       integer                               :: Norb,Nbp
-      complex(8),allocatable                :: UR_(:,:)
       character(len=2)                      :: type_
       !
       Nbp = size(W,dim=1)
