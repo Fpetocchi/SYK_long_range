@@ -67,10 +67,11 @@ subroutine calc_Tc(pathOUTPUT,Inputs,Lttc,Wlat)
    call Initialize_inputs(reg(pathINPUT),Inputs,Lttc,Nreal,wrealMax,Hk_used)
    deallocate(Hk_used)
    !
-   call dump_Field_component(DoS_Hk,reg(printpath),"DoS_Hk.DAT",Egrid)
-   if (calc_Int_static.or.calc_Int_dynamic)then
-      call dump_Field_component(DoS_Wk,reg(printpath),"DoS_Wk.DAT",Egrid)
-      call store_Wk(Wlat%screened,Beta,Inputs%Wk_cutoff,reg(printpath))
+   call dump_Field_component(DoS_DFT,reg(printpath),"DoS_DFT.DAT",Egrid)
+   call dump_Field_component(DoS_Model,reg(printpath),"DoS_Model.DAT",Egrid)
+   !
+   if (calc_Int_static.or.calc_Int_dynamic) then
+      call store_Wk4gap(Wlat%screened,Lttc,Beta,Inputs%Wk_cutoff,reg(printpath))
    endif
    !
    !Allocating delta here so as to imply annealing between temperatures
@@ -145,7 +146,7 @@ subroutine calc_Tc(pathOUTPUT,Inputs,Lttc,Wlat)
          enddo
          !
          !$OMP PARALLEL DEFAULT(PRIVATE),&
-         !$OMP SHARED(Ngrid,Egrid,Beta_DFT,DoS_Hk,DoS_DFT,Zph,Kph,K,EDsq,Delta,newDelta)
+         !$OMP SHARED(Ngrid,Egrid,Beta_DFT,DoS_Model,DoS_DFT,Zph,Kph,K,EDsq,Delta,newDelta)
          newDelta = czero
          !$OMP DO SCHEDULE(DYNAMIC)
          do iE1=1,Ngrid
@@ -169,8 +170,8 @@ subroutine calc_Tc(pathOUTPUT,Inputs,Lttc,Wlat)
               !
               !Integral of the electronic Kernel done with the custom DoS
               if(calc_Int_static.or.calc_Int_dynamic)then
-                 Kint = Kint + ( DoS_Hk(iE2-1) * K(iE1,iE2-1) * tanh_b * Delta(iE2-1) + &
-                                 DoS_Hk(iE2)   * K(iE1,iE2)   * tanh_f * Delta(iE2)   ) * (dE/2d0)
+                 Kint = Kint + ( DoS_Model(iE2-1) * K(iE1,iE2-1) * tanh_b * Delta(iE2-1) + &
+                                 DoS_Model(iE2)   * K(iE1,iE2)   * tanh_f * Delta(iE2)   ) * (dE/2d0)
               endif
               !
             enddo

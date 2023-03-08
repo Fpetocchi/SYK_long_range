@@ -10,14 +10,11 @@ program SelfConsistency
    !
 #ifdef _akw
    character(len=20)                        :: InputFile="input.in.akw"
+#elif defined _gap
+   character(len=20)                        :: InputFile="input.in.gap"
 #else
    character(len=20)                        :: InputFile="input.in"
 #endif
-   !
-#ifdef _gap
-   character(len=20)                        :: InputFile="input.in.gap"
-#endif
-   !
    !
    !
    !
@@ -49,7 +46,14 @@ program SelfConsistency
    call execute_command_line(" touch doSolver ")
    stop
    !
+#elif defined _gap
+   !
+   call AllocateBosonicField(Wlat,Crystal%Norb,Nmats,Crystal%iq_gamma,Nkpt=Crystal%Nkpt,Nsite=Nsite,Beta=Beta)
+   call calc_Tc(reg(ItFolder),gap_equation,Crystal,Wlat)
+   stop
+   !
 #endif
+   !
    !
    !
    !
@@ -64,6 +68,7 @@ program SelfConsistency
          if(collect_QMC) call collect_QMC_results()
       endif
    endif
+   !
    !
    !
    !
@@ -147,6 +152,15 @@ program SelfConsistency
          if(interp_W) call interpolate2kpath(Wlat,Crystal,reg(MaxEnt_K),"W")
          call dump_BosonicField(Wlat,reg(ItFolder),"Wlat_w.DAT")
          call dump_MaxEnt(Wlat,"mats",reg(ItFolder)//"Convergence/","Wlat",EqvGWndx%SetOrbs)
+         !
+         !Solve the Gap equation
+         if(gap_equation%status)then
+            if(gap_equation%calc_Tc)then
+               call calc_Tc(reg(ItFolder),gap_equation,Crystal,Wlat)
+            else
+               call store_Wk4gap(Wlat%screened,Crystal,Beta,gap_equation%Wk_cutoff,reg(ItFolder)//"Gap_Equation/")
+            endif
+         endif
          !
       endif
       !
@@ -265,6 +279,7 @@ program SelfConsistency
          endif
          !
       endif
+      if(solve_DMFT) call DeallocateBosonicField(Wlat)
       !
       !
       !Initial Guess for the impurity self-energy only in the 0th iteration
@@ -273,11 +288,6 @@ program SelfConsistency
       !
       !Put together all the contributions to the full self-energy and deallocate all non-local components: S_G0W0, S_G0W0dc, S_GW
       if(.not.S_Full_exists) call join_SigmaFull(Iteration)
-      !
-      !
-      !Solve the Gap equation
-      if(gap_equation%status) call calc_Tc(reg(ItFolder),gap_equation,Crystal,Wlat=Wlat)
-      if(solve_DMFT) call DeallocateBosonicField(Wlat)
       !
       !
       !Compute the Full Green's function and set the density

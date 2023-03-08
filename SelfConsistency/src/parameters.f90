@@ -267,6 +267,7 @@ module parameters
       real(8)                               :: Wk_cutoff=0d0
       character(len=255)                    :: printmode_ph
       character(len=255)                    :: printmode_el
+      logical                               :: calc_Tc=.false.
       logical                               :: status=.false.
    end type SCDFT
 

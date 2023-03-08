@@ -174,7 +174,7 @@ module module_container
    remove_CDW                               ,&
    interpolate2Beta                         ,&
    interpolate2kpath                        ,&
-   calc_Tc
+   calc_Tc,store_Wk4gap
    !calc_OptCond,calc_HallCond
 
 

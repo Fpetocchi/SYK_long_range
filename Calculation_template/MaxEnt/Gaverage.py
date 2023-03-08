@@ -31,7 +31,20 @@ def average(G,tlimit,window,log,orblist=None):
         Gout = np.convolve(Gin[tlimit:Ntau-1-tlimit,iorb], np.ones(window), 'valid') / window
         G[tbound:tbound+len(Gout),iorb] = -np.exp(Gout) if log else Gout.copy()
 
-# --------------------------------------------------------------------------- #
+# ================================= EXAMPLES ================================= #
+#
+# to print observable average:
+# python Gaverage.py --field Obs --itlist it_start..it_end
+#
+# to print Glat average:
+# python Gaverage.py --field Gw --pad lat --orbs 1,2,3,.. --itlist it_start..it_end
+#
+# to print Gqmc_El average:
+# python Gaverage.py --field Gw --pad qmc_El --orbs 1,2,3,.. --itlist it_start..it_end
+#
+# to print Wlat average:
+# python Gaverage.py --field Ww --pad lat --orbs 1,2,3,.. --itlist it_start..it_end
+# ============================================================================ #
 
 # Default arguments
 spins = [1]; orbs = [1]; dirs=[]
@@ -47,24 +60,19 @@ parser.add_option("--Krol"  , dest="Krol"   , default="None"  )                 
 (options, args) = parser.parse_args()
 #
 #
-alldirs = [d for d in os.listdir('./') if os.path.isdir(os.path.join('./', d))]
-if "0" in alldirs: alldirs.remove("0")
-if "avg" in alldirs: alldirs.remove("avg")
-#
-#
-if options.itlist != "0":
+if options.itlist != "None":
+    #
     checklist = options.itlist
     checkrang = options.itlist
-    #check if the user provided the list
+    #
     if len(checklist.split(","))>1:
-        dirs = [ i for i in alldirs if i in options.itlist.split(",") ]
+        dirs = [ str(i) for i in options.itlist.split(",") if os.path.isdir(str(i)) ]
     elif len(checkrang.split(".."))==2:
-        itrng = range( int(options.itlist.split("..")[0]) , int(options.itlist.split("..")[1])+1 )
-        dirs = [ i for i in alldirs if i in map(str,itrng) ]
+        dirs = [ str(i) for i in range( int(options.itlist.split("..")[0]) , int(options.itlist.split("..")[1])+1 ) if os.path.isdir(str(i)) ]
     else:
         sys.exit("--itlist error. Exiting.")
 else:
-    dirs = alldirs
+    sys.exit("--itlist error. Exiting.")
 #
 #
 if options.skip != "0":
@@ -126,7 +134,6 @@ if (stat == "Observables"):
     for st in ['dmft','qpsc']:
         Zmat[st] = np.loadtxt('%s/Z_%s_s%s.DAT'%(dir,st,spin))/Nit
     for dir in dirs[1:]:
-        print("reading Z in it=%s"%dir)
         for st in ['dmft','qpsc']:
             Zmat[st] += np.loadtxt('%s/Z_%s_s%s.DAT'%(dir,st,spin))/Nit
     for st in ['dmft','qpsc']:np.savetxt('./avg/Z_%s_s%s.DAT'%(st,spin), Zmat[st])
@@ -138,7 +145,6 @@ if (stat == "Observables"):
     for st in ['imp','lat']:
         rho[st] = np.loadtxt('%s/N%s_s%s.DAT'%(dir,st,spin))/Nit
     for dir in dirs[1:]:
-        print("reading N in it=%s"%dir)
         for st in ['imp','lat']:
             rho[st] += np.loadtxt('%s/N%s_s%s.DAT'%(dir,st,spin))/Nit
     for st in ['imp','lat']:np.savetxt('./avg/N%s_s%s.DAT'%(st,spin), rho[st])
@@ -154,7 +160,6 @@ if (stat == "Observables"):
         Umat[st] = np.loadtxt('%s/%s/Umat.DAT'%(dir,st))/Nit
         Eloc[st] = np.loadtxt('%s/%s/Eloc.DAT'%(dir,st))/Nit
     for dir in dirs[1:]:
-        print("reading Eloc and Umat in it=%s"%dir)
         for st in SolverDirs:
             Umat[st] += np.loadtxt('%s/%s/Umat.DAT'%(dir,st))/Nit
             Eloc[st] += np.loadtxt('%s/%s/Eloc.DAT'%(dir,st))/Nit
@@ -183,7 +188,6 @@ if (stat != "Observables") and local:
         data = read_Convergence(path)/Nit
         for dir in dirs[1:]:
             path = '%s/Convergence/%s/%s'%(dir,Folder,File)
-            print(path)
             data += read_Convergence(path)/Nit
         #
         np.savetxt('./avg/Convergence/%s/%s'%(Folder,File), np.c_[ axis, data ] , delimiter='\t')
