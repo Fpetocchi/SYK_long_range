@@ -15,6 +15,7 @@ module self_energy
    interface calc_VH
       module procedure calc_VH_G
       module procedure calc_VH_N
+      module procedure calc_VH_SPEX
    end interface calc_VH
 
    !---------------------------------------------------------------------------!
@@ -762,6 +763,104 @@ contains
          !
       !
    end subroutine calc_VH_N
+   !
+   subroutine calc_VH_SPEX(VH,density_spin)
+      !
+      use parameters
+      use file_io
+      use utils_misc
+      use input_vars, only : LocalOrbs
+      use input_vars, only : pathINPUT, VH_type
+      implicit none
+      !
+      complex(8),intent(inout)              :: VH(:,:)
+      complex(8),intent(in)                 :: density_spin(:,:,:)
+      !
+      complex(8),allocatable                :: density(:,:)
+      complex(8),allocatable                :: Vgamma(:,:)
+      integer                               :: Nsite,Norb,Nbp
+      integer                               :: ib1,ib2
+      integer                               :: i,j,k,l
+      logical                               :: filexists
+      character(len=256)                    :: path
+      !
+      !
+      if(verbose)write(*,"(A)") "---- calc_VH_SPEX"
+      !
+      !
+      ! Check on the input Field
+      if(.not.allocated(LocalOrbs)) stop "calc_VH_SPEX: LocalOrbs not properly initialized."
+      !
+      Nsite = size(LocalOrbs)
+      Norb = size(density_spin,dim=1)
+      Nbp = Norb**2
+      !
+      call assert_shape(density_spin,[Norb,Norb,Nspin],"calc_VH_SPEX","density_spin")
+      call assert_shape(VH,[Norb,Norb],"calc_VH_SPEX","VH")
+      !
+      allocate(density(Norb,Norb));density=czero
+      density = sum(density_spin,dim=3)
+      !
+      allocate(Vgamma(Nbp,Nbp));Vgamma=czero
+      path = reg(pathINPUT)//"V_nodiv.DAT"
+      call inquireFile(reg(path),filexists,verb=verbose)
+      call read_Vgamma(0)
+      !
+      call dump_matrix(Vgamma,reg(pathINPUT),"Vgamma_"//reg(VH_type)//".DAT")
+      !
+      VH=czero
+      do i=1,Norb
+         do j=1,Norb
+            do k=1,Norb
+               do l=1,Norb
+                  !
+                  call F2Bindex(Norb,[i,j],[k,l],ib1,ib2)
+                  !
+                  VH(i,j) = VH(i,j) + dreal(Vgamma(ib1,ib2)) * density(k,l)
+                  !
+               enddo
+            enddo
+         enddo
+      enddo
+      deallocate(density,Vgamma)
+      !
+      contains
+         !
+         subroutine read_Vgamma(Vtype)
+            use utils_misc
+            implicit none
+            integer,intent(in)                 :: Vtype
+            integer                            :: unit
+            real(8)                            :: rdum1,rdum2,rdum3,rdum4
+            integer                            :: idum1,idum2,idum3,idum4
+            integer                            :: iwan1,iwan2,iwan3,iwan4
+            integer                            :: indx1,indx2,limits
+            unit = free_unit()
+            open(unit,file=reg(path),position="rewind",action="read")
+            read(unit,*) idum1 !,'Number of Wannier functions:'
+            if(idum1.ne.Norb) stop "read_Vgamma(calc_VH_SPEX): wrong index Norb."
+            do limits=1,2
+               do iwan1=1,Norb
+                  do iwan2=1,Norb
+                     do iwan3=1,Norb
+                       do iwan4=1,Norb
+                          call F2Bindex(Norb,[iwan1,iwan2],[iwan3,iwan4],indx1,indx2)
+                          read(unit,*) rdum1,rdum2,idum1,idum2,idum3,idum4,rdum3,rdum4
+                          if (idum1.ne.iwan1) stop "read_Vgamma(calc_VH_SPEX): wrong index iwan1."
+                          if (idum2.ne.iwan2) stop "read_Vgamma(calc_VH_SPEX): wrong index iwan2."
+                          if (idum3.ne.iwan3) stop "read_Vgamma(calc_VH_SPEX): wrong index iwan3."
+                          if (idum4.ne.iwan4) stop "read_Vgamma(calc_VH_SPEX): wrong index iwan4."
+                          if(dble(Vtype).eq.rdum1) Vgamma(indx1,indx2) = dcmplx(rdum3,rdum4) * H2eV
+                       enddo
+                     enddo
+                  enddo
+               enddo
+               if(Vtype.eq.-1) exit
+            enddo
+         end subroutine read_Vgamma
+         !
+      !
+   end subroutine calc_VH_SPEX
 
 
    !---------------------------------------------------------------------------!

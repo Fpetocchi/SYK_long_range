@@ -44,6 +44,13 @@ def average(G,tlimit,window,log,orblist=None):
 #
 # to print Wlat average:
 # python Gaverage.py --field Ww --pad lat --orbs 1,2,3,.. --itlist it_start..it_end
+#
+# to print curlyUimp average:
+# python Gaverage.py --field curlyUw --pad imp --orbs 1,2,3,.. --itlist it_start..it_end
+#
+# to print Gk average:
+# python Gaverage.py --field Gkw --itlist it_start..it_endv
+#
 # ============================================================================ #
 
 # Default arguments
@@ -103,7 +110,7 @@ kresolved = "k" in options.field
 local =  not kresolved
 #
 #
-Field = options.field.rstrip("k").rstrip("w")
+Field = options.field.rstrip("kw")
 #
 #
 if(Field=="G" or Field=="S"): stat = "Fermion"
@@ -111,7 +118,7 @@ if(Field=="W" or Field=="curlyU" or Field=="C" or Field=="M"): stat = "Boson"
 if(Field=="Obs"): stat = "Observables"
 #
 Kfolder = "K_resolved"
-Kfolder_out = "K_resolved_rol"
+Kfolder_out = "K_resolved"
 #
 #
 # --------------------------------------------------------------------------- #
@@ -132,10 +139,12 @@ if (stat == "Observables"):
     dir = dirs[0]
     Zmat = cllct.defaultdict(dict)
     for st in ['dmft','qpsc']:
-        Zmat[st] = np.loadtxt('%s/Z_%s_s%s.DAT'%(dir,st,spin))/Nit
+        File = '%s/Z_%s_s%s.DAT'%(dir,st,spin)
+        if os.path.isfile(File): Zmat[st] = np.loadtxt(File)/Nit
     for dir in dirs[1:]:
         for st in ['dmft','qpsc']:
-            Zmat[st] += np.loadtxt('%s/Z_%s_s%s.DAT'%(dir,st,spin))/Nit
+            File = '%s/Z_%s_s%s.DAT'%(dir,st,spin)
+            if os.path.isfile(File): Zmat[st] += np.loadtxt(File)/Nit
     for st in ['dmft','qpsc']:np.savetxt('./avg/Z_%s_s%s.DAT'%(st,spin), Zmat[st])
     #
     #

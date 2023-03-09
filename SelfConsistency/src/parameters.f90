@@ -261,8 +261,7 @@ module parameters
       character(len=255)                    :: mode_ph                          !Elk or QEspresso
       character(len=255)                    :: mode_Zph="symrenorm"
       character(len=255)                    :: mode_el                          !static or static+dynamic
-      integer                               :: Nkpt3_intp_Hk(3)=0
-      integer                               :: Nkpt3_intp_Wk(3)=0
+      integer                               :: Nkpt3_Model(3)=0
       real(8)                               :: wstep=0d0
       real(8)                               :: Wk_cutoff=0d0
       character(len=255)                    :: printmode_ph

@@ -820,11 +820,12 @@ contains
       type(FermionicField),intent(in)       :: Gloc
       integer,allocatable,intent(in)        :: orbs(:)
       character(len=*),intent(in),optional  :: sitename
-      complex(8),allocatable,optional       :: U(:,:)
+      complex(8),intent(in),optional        :: U(:,:)
       !
       integer                               :: ip,ispin
       integer                               :: i_loc,j_loc
       integer                               :: i_imp,j_imp
+      logical                               :: rotfield
       !
       !
       if(verbose)write(*,"(A)") "---- loc2imp_Fermionic"
@@ -844,9 +845,9 @@ contains
       if(.not.allocated(Gimp%ws)) stop "loc2imp_Fermionic: Gimp local projection not allocated."
       if(size(orbs).ne.Gimp%Norb) stop "loc2imp_Fermionic: can't fit the requested orbitals inside Gimp."
       if(size(orbs).gt.Gloc%Norb) stop "loc2imp_Fermionic: number of requested orbitals greater than Gloc size."
-      if(present(U))then
+      rotfield = present(U)
+      if(rotfield)then
          call assert_shape(U,[size(orbs),size(orbs)],"loc2imp_Fermionic","U")
-         !if(size(U,dim=1).ne.3) write(*,"(A)") "     Warning: The local orbital space rotation is well defined only for a t2g sub-shell."
          write(*,"(A)") "     The local orbital space will be rotated during extraction."
       endif
       !
@@ -868,7 +869,7 @@ contains
          enddo
       enddo
       !
-      if(present(U))then
+      if(rotfield)then
          do ispin=1,Nspin
             Gimp%N_s(:,:,ispin) = rotate(Gimp%N_s(:,:,ispin),U)
             do ip=1,Gimp%Npoints
@@ -899,7 +900,7 @@ contains
       integer                               :: ib_imp,jb_imp,ib_loc,jb_loc
       integer                               :: i_loc,j_loc,k_loc,l_loc
       integer                               :: i_imp,j_imp,k_imp,l_imp
-      logical                               :: bosonlike_
+      logical                               :: bosonlike_,rotmat
       !
       !
       if(verbose)write(*,"(A)") "---- loc2imp_Matrix"
@@ -915,9 +916,9 @@ contains
          if(size(orbs).ne.size(Oimp,dim=1)) stop "loc2imp_Matrix: can't fit the requested orbitals inside Oimp."
          if(size(orbs).gt.size(Oloc,dim=1)) stop "loc2imp_Matrix: number of requested orbitals greater than Oloc size."
       endif
-      if(present(U))then
+      rotmat = present(U)
+      if(rotmat)then
          call assert_shape(U,[size(orbs),size(orbs)],"loc2imp_Matrix","U")
-         !if(size(U,dim=1).ne.3) write(*,"(A)") "     Warning: The local orbital space rotation is well defined only for a t2g sub-shell."
          write(*,"(A)") "     The local orbital space will be rotated during extraction."
       endif
       !
@@ -953,7 +954,7 @@ contains
             enddo
          enddo
          !
-         if(present(U)) stop " loc2imp_Matrix: rotation for bosonic modes not yet implemented. Use tensor transform outside."
+         if(rotmat) stop " loc2imp_Matrix: rotation for bosonic modes not yet implemented. Use tensor transform outside."
          !
       else
          !
@@ -967,7 +968,7 @@ contains
                !
             enddo
          enddo
-         if(present(U)) Oimp = rotate(Oimp,U)
+         if(rotmat) Oimp = rotate(Oimp,U)
          !
       endif
       !
@@ -984,8 +985,8 @@ contains
       type(BosonicField),intent(in)         :: Wloc
       integer,allocatable,intent(in)        :: orbs(:)
       character(len=*),intent(in),optional  :: sitename
-      complex(8),allocatable,optional       :: U(:,:)
-      integer,allocatable,optional          :: Map(:,:,:)
+      complex(8),intent(in),optional        :: U(:,:)
+      integer,intent(in),optional           :: Map(:,:,:)
       character(len=2),intent(in),optional  :: type
       !
       integer                               :: ip,ip_loc
@@ -993,7 +994,7 @@ contains
       integer                               :: ib_imp,jb_imp,ib_loc,jb_loc
       integer                               :: i_loc,j_loc,k_loc,l_loc
       integer                               :: i_imp,j_imp,k_imp,l_imp
-      logical                               :: doBare,rot,WlocStatic
+      logical                               :: doBare,rotfield,WlocStatic
       character(len=2)                      :: type_
       !
       !
@@ -1021,20 +1022,15 @@ contains
       !
       if(size(orbs).ne.Norb_imp) stop "loc2imp_Bosonic: can't fit the requested orbitals inside Wimp."
       if(size(orbs).gt.Norb_loc) stop "loc2imp_Bosonic: number of requested orbitals greater than Wloc size."
-      if(present(U))then
+      !
+      rotfield = present(U) .and. present(Map)
+      if(rotfield)then
          type_="NN"
          if(present(type))type_=reg(type)
-         if(.not.present(Map)) stop "loc2imp_Bosonic: requested orbital rotation but map not provided."
          call assert_shape(U,[size(orbs),size(orbs)],"loc2imp_Bosonic","U")
-         !if(size(U,dim=1).ne.3) write(*,"(A)") "     Warning: The local orbital space rotation is well defined only for a t2g sub-shell."
+         call assert_shape(Map,[Wimp%Nbp,Wimp%Nbp,4],"loc2imp_Bosonic","Map")
          write(*,"(A)") "     The local orbital space will be rotated during extraction."
       endif
-      if(present(Map))then
-         if(.not.present(U)) stop "loc2imp_Bosonic: Also the rotation must be provided."
-         call assert_shape(Map,[Wimp%Nbp,Wimp%Nbp,4],"loc2imp_Bosonic","Map")
-      endif
-      rot=.false.
-      if(present(U).and.present(Map))rot=.true.
       !
       call clear_attributes(Wimp)
       !
@@ -1068,7 +1064,7 @@ contains
          enddo
       enddo
       !
-      if(rot)then
+      if(rotfield)then
          if(doBare) call tensor_transform(reg(type_),Wimp%bare_local,Map,U,U)
          do ip=1,Wimp%Npoints
             call tensor_transform(reg(type_),Wimp%screened_local(:,:,ip),Map,U,U)

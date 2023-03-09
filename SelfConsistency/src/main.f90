@@ -154,13 +154,8 @@ program SelfConsistency
          call dump_MaxEnt(Wlat,"mats",reg(ItFolder)//"Convergence/","Wlat",EqvGWndx%SetOrbs)
          !
          !Solve the Gap equation
-         if(gap_equation%status)then
-            if(gap_equation%calc_Tc)then
-               call calc_Tc(reg(ItFolder),gap_equation,Crystal,Wlat)
-            else
-               call store_Wk4gap(Wlat%screened,Crystal,Beta,gap_equation%Wk_cutoff,reg(ItFolder)//"Gap_Equation/")
-            endif
-         endif
+         !call dump_BosonicField(Wlat,reg(ItFolder)//"VW_imag/",.true.)
+         if(gap_equation%status)call calc_Tc(reg(ItFolder),gap_equation,Crystal,Wlat)
          !
       endif
       !
@@ -210,6 +205,11 @@ program SelfConsistency
                   write(*,"(A)")"     VH not used."
             end select
             deallocate(VH_Nlat,VH_Nimp)
+            !
+            call calc_VH(Hartree_lat,densityGW)
+            call dump_Matrix(Hartree_lat,reg(ItFolder),"Hartree_lat.DAT")
+            deallocate(Hartree_lat)
+            !
          endif
          if(solve_DMFT.and.bosonicSC.and.(.not.Ustart))call DeallocateBosonicField(Ulat)
          !

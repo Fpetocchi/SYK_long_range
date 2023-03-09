@@ -580,8 +580,7 @@ contains
          if(Hmodel)RecomputeG0W0=.false.
          call parse_input_variable(GoWoDC_loc,"G0W0DC_LOC",InputFile,default=.true.,comment="Keep the local contribution of Tier-III. Automatically removed if non-causal.")
       endif
-      call parse_input_variable(DC_type,"DC_TYPE",InputFile,default="Hartree_GW_Nimp",comment="Term removed from the impurity self-energy. Available: Hartree_[GW,DMFT]_[Nimp,Nlat], FLL_[Nimp,Nlat], None to avoid.") !GW (H_ab = Sum_s curlyU_abcd(0)*Nimp_cd,s), DMFT (H_a = 0.5 * Sum_s Uinst_ab*Nflav_b,s)
-      if(addTierIII)DC_type="Hartree_GW_Nimp"
+      call parse_input_variable(DC_type,"DC_TYPE",InputFile,default="Hartree_lat_Nlat",comment="Term removed from the impurity self-energy. Available: Hartree_[lat,DMFT]_[Nimp,Nlat], FLL_[Nimp,Nlat], None to avoid.") !GW (H_ab = Sum_s curlyU_abcd(0)*Nimp_cd,s), DMFT (H_a = 0.5 * Sum_s Uinst_ab*Nflav_b,s)
       if((reg(DC_type).eq."FLL_Nimp").or.(reg(DC_type).eq."FLL_Nlat"))then
          call parse_input_variable(FLL_non_loc_mltp,"FLL_MLTP",InputFile,default=1,comment="Multiplicity of the non-local FLL DC correction. 0 to avoid.")
          if(Solver%retarded.eq.1)then
@@ -730,9 +729,8 @@ contains
             call parse_input_variable(gap_equation%mode_ph,"MODE_PH",InputFile,default="None",comment="Whether to include phononic Kernel. Available modes: Elk, QEspresso. None to avoid.")
             call parse_input_variable(gap_equation%mode_Zph,"MODE_ZPH",InputFile,default="symrenorm",comment="Low energy limit of Zph. Available modes: symrenorm, sym, asym.")
             if((reg(gap_equation%mode_ph).eq."None").and.(reg(gap_equation%mode_el).eq."None"))stop "read_InputFile: Tc requested but no mode is choosen."
-            call parse_input_variable(gap_equation%Nkpt3_intp_Hk,"NKPT3_HK",InputFile,default=Nkpt3,comment="New interpolation grid for Hk.")
-            call parse_input_variable(gap_equation%Nkpt3_intp_Wk,"NKPT3_WK",InputFile,default=Nkpt3,comment="New interpolation grid for Wk.")
-            call parse_input_variable(gap_equation%Wk_cutoff,"WK_CUTOFF",InputFile,default=0.98*wmatsMax,comment="Bosonic frequency cutoff for MODE_EL=static+dynamic calculations.")
+            call parse_input_variable(gap_equation%Nkpt3_Model,"NKPT3_MODEL",InputFile,default=Nkpt3,comment="Interpolated K-grid. Equal to NKPT3 to avoid.")
+            call parse_input_variable(gap_equation%Wk_cutoff,"WK_CUTOFF",InputFile,default=wmatsMax,comment="Bosonic frequency cutoff for MODE_EL=static+dynamic calculations.")
             call parse_input_variable(gap_equation%printmode_ph,"PRINT_KPH",InputFile,default="None",comment="Printing mode of the phononic Kernel. Available modes: E0, diag, surf, all. None to avoid.")
             call parse_input_variable(gap_equation%printmode_el,"PRINT_KEL",InputFile,default="None",comment="Printing mode of the electronic Kernel. Available modes: E0, 0E, diag, surf, all. None to avoid.")
          else

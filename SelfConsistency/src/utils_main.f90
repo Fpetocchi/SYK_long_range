@@ -64,6 +64,7 @@ module utils_main
    complex(8),allocatable                   :: VH(:,:)
    complex(8),allocatable                   :: VH_Nlat(:,:)
    complex(8),allocatable                   :: VH_Nimp(:,:)
+   complex(8),allocatable                   :: Hartree_lat(:,:)
    !
    complex(8),allocatable                   :: Umat(:,:)
    real(8),allocatable                      :: Kfunct(:,:)
@@ -1129,7 +1130,7 @@ contains
             call AllocateFermionicField(S_DMFT,Crystal%Norb,Nmats,Nsite=Nsite,Beta=Beta)
             if(ItStart.ne.0)then
                call read_FermionicField(S_DMFT,reg(PrevItFolder),"Simp_w")
-               call read_Matrix(S_DMFT%N_s,reg(PrevItFolder)//"Hartree_UNimp",paramagnet)
+               call read_Matrix(S_DMFT%N_s,reg(PrevItFolder)//"Hartree_term",paramagnet)
             endif
             !
             !Lattice local Gf
@@ -1195,7 +1196,7 @@ contains
             call AllocateFermionicField(S_DMFT,Crystal%Norb,Nmats,Nsite=Nsite,Beta=Beta)
             if(ItStart.ne.0)then
                call read_FermionicField(S_DMFT,reg(PrevItFolder),"Simp_w")
-               call read_Matrix(S_DMFT%N_s,reg(PrevItFolder)//"Hartree_UNimp",paramagnet)
+               call read_Matrix(S_DMFT%N_s,reg(PrevItFolder)//"Hartree_term",paramagnet)
             endif
             !
             !Lattice Gf
@@ -1251,6 +1252,9 @@ contains
          allocate(VH(Crystal%Norb,Crystal%Norb));VH=czero
          allocate(VH_Nlat(Crystal%Norb,Crystal%Norb));VH_Nlat=czero
          allocate(VH_Nimp(Crystal%Norb,Crystal%Norb));VH_Nimp=czero
+         !
+         if(allocated(Hartree_lat))deallocate(Hartree_lat)
+         allocate(Hartree_lat(Crystal%Norb,Crystal%Norb));Hartree_lat=czero
          !
          if(allocated(Vxc))deallocate(Vxc)
          if(.not.Vxc_in)then
@@ -1935,6 +1939,7 @@ contains
          call clear_attributes(Gloc)
          call clear_attributes(SigmaImp)
          if(causal_D)call clear_attributes(DeltaCorr)
+         !
          if(RotateHloc)then
             !
             call loc2imp(Gloc,Glat,LocalOrbs(isite)%Orbs,U=LocalOrbs(isite)%Rot)
@@ -2380,7 +2385,7 @@ contains
                      call calc_curlyU(curlyU_EDMFT,Wlat,P_EDMFT)
                   endif
                   !
-                  !LocalOrbs are extracted
+                  !LocalOrbs are extracted.
                   call loc2imp(curlyU,curlyU_EDMFT,LocalOrbs(isite)%Orbs)
                   call DeallocateBosonicField(curlyU_EDMFT)
                   !
@@ -2391,6 +2396,7 @@ contains
                   call AllocateBosonicField(Pimp,Norb,Nmats,Crystal%iq_gamma,no_bare=.true.,Beta=Beta)
                   call AllocateBosonicField(Wloc,Norb,Nmats,Crystal%iq_gamma,Beta=Beta)
                   !
+                  !No rotation here because the Bosonic Dyson is performed in the Wannier basis
                   call loc2imp(Pimp,P_EDMFT,LocalOrbs(isite)%Orbs)
                   call loc2imp(Wloc,Wlat,LocalOrbs(isite)%Orbs)
                   !
@@ -3063,42 +3069,63 @@ contains
          select case(reg(DC_type))
             case default
                !
-               stop "collect_QMC_results: Available DC_type: Hartree_GW_Nimp, Hartree_GW_Nlat, Hartree_DMFT_Nimp, Hartree_DMFT_Nlat, FLL_Nimp, FLL_Nlat, None."
+               stop "collect_QMC_results: Available DC_type: Hartree_lat_Nimp, Hartree_lat_Nlat, Hartree_DMFT_Nimp, Hartree_DMFT_Nlat, FLL_Nimp, FLL_Nlat, None."
                !
             case("None")
                !
                write(*,"(A)")"     Nothing will be removed from the impurity self-energy."
                Simp(isite)%N_s = czero
                !
-            case("Hartree_GW_Nimp","Hartree_GW_Nlat")
+            case("Hartree_lat_Nimp","Hartree_lat_Nlat")
                !
-               allocate(rho(LocalOrbs(isite)%Norb,LocalOrbs(isite)%Norb,Nspin));rho=0d0
-               if(reg(DC_type).eq."Hartree_GW_Nimp")then
-                  rho = LocalOrbs(isite)%rho_OrbSpin
-               elseif(reg(DC_type).eq."Hartree_GW_Nlat")then
-                  call read_Matrix(rho,reg(PrevItFolder)//"Solver_"//reg(LocalOrbs(isite)%Name)//"/Nloc_"//reg(LocalOrbs(isite)%Name),paramagnet)
-               endif
-               !
-               Simp(isite)%N_s = czero
-               do ispin=1,Nspin
-                  do iorb=1,LocalOrbs(isite)%Norb
-                     do jorb=1,LocalOrbs(isite)%Norb
-                        do korb=1,LocalOrbs(isite)%Norb
-                           do lorb=1,LocalOrbs(isite)%Norb
-                              !
-                              call F2Bindex(LocalOrbs(isite)%Norb,[iorb,jorb],[korb,lorb],ib1,ib2)
-                              Simp(isite)%N_s(iorb,jorb,ispin) = Simp(isite)%N_s(iorb,jorb,ispin) + curlyU%screened_local(ib1,ib2,1)*rho(korb,lorb,ispin)
-                              !
+               !try to see if the SPEX Hartree is present otherwise use curlyU(0)
+               call inquireFile(reg(PrevItFolder)//"Hartree_lat.DAT",filexists,hardstop=.false.,verb=verbose)
+               if(filexists)then
+                  !
+                  if(allocated(Hartree_lat))deallocate(Hartree_lat)
+                  allocate(Hartree_lat(Crystal%Norb,Crystal%Norb));Hartree_lat=czero
+                  call read_Matrix(Hartree_lat,reg(PrevItFolder)//"Hartree_lat.DAT")
+                  do ispin=1,Nspin
+                     call loc2imp(Simp(isite)%N_s(:,:,ispin),Hartree_lat,LocalOrbs(isite)%Orbs,U=LocalOrbs(isite)%Rot)
+                  enddo
+                  deallocate(Hartree_lat)
+                  !
+               else
+                  !
+                  allocate(rho(LocalOrbs(isite)%Norb,LocalOrbs(isite)%Norb,Nspin));rho=0d0
+                  if(reg(DC_type).eq."Hartree_lat_Nimp")then
+                     rho = LocalOrbs(isite)%rho_OrbSpin
+                  elseif(reg(DC_type).eq."Hartree_lat_Nlat")then
+                     call read_Matrix(rho,reg(PrevItFolder)//"Solver_"//reg(LocalOrbs(isite)%Name)//"/Nloc_"//reg(LocalOrbs(isite)%Name),paramagnet)
+                  endif
+                  !
+                  Simp(isite)%N_s = czero
+                  do ispin=1,Nspin
+                     do iorb=1,LocalOrbs(isite)%Norb
+                        do jorb=1,LocalOrbs(isite)%Norb
+                           do korb=1,LocalOrbs(isite)%Norb
+                              do lorb=1,LocalOrbs(isite)%Norb
+                                 !
+                                 call F2Bindex(LocalOrbs(isite)%Norb,[iorb,jorb],[korb,lorb],ib1,ib2)
+                                 Simp(isite)%N_s(iorb,jorb,ispin) = Simp(isite)%N_s(iorb,jorb,ispin) + curlyU%screened_local(ib1,ib2,1)*rho(korb,lorb,ispin)
+                                 !
+                              enddo
                            enddo
                         enddo
                      enddo
                   enddo
-               enddo
-               deallocate(rho)
+                  deallocate(rho)
+                  !
+                  !The magnetization will be given only by the self-energy beyond Hartree
+                  Simp(isite)%N_s(:,:,1) = (Simp(isite)%N_s(:,:,1)+Simp(isite)%N_s(:,:,Nspin))
+                  Simp(isite)%N_s(:,:,Nspin) = Simp(isite)%N_s(:,:,1)
+                  !
+               endif
                !
-               !The magnetization will be given only by the self-energy beyond Hartree
-               Simp(isite)%N_s(:,:,1) = (Simp(isite)%N_s(:,:,1)+Simp(isite)%N_s(:,:,Nspin))
-               Simp(isite)%N_s(:,:,Nspin) = Simp(isite)%N_s(:,:,1)
+               !the self-energy in the solver basis is always diagonal
+               do ispin=1,Nspin
+                  Simp(isite)%N_s(:,:,ispin) = diag(diagonal(Simp(isite)%N_s(:,:,ispin)))
+               enddo
                !
             case("Hartree_DMFT_Nimp","Hartree_DMFT_Nlat")
                !
@@ -3238,7 +3265,7 @@ contains
          call DeallocateBosonicField(curlyU)
          !
          !Hartree term in the Solver basis
-         call dump_Matrix(Simp(isite)%N_s,reg(PrevItFolder),"Solver_"//reg(LocalOrbs(isite)%Name)//"/Hartree_UNimp_"//reg(LocalOrbs(isite)%Name),paramagnet)
+         call dump_Matrix(Simp(isite)%N_s,reg(PrevItFolder),"Solver_"//reg(LocalOrbs(isite)%Name)//"/Hartree_term_"//reg(LocalOrbs(isite)%Name),paramagnet)
          !
          !Insert or Expand to the Lattice basis
          if(sym_mode.gt.1) call symmetrize_GW(Simp(isite),EqvImpndxF(isite))
@@ -3254,7 +3281,7 @@ contains
       !
       call dump_FermionicField(S_DMFT,reg(PrevItFolder),"Simp_w",paramagnet)
       call dump_MaxEnt(S_DMFT,"mats",reg(PrevItFolder)//"Convergence/","Simp",EqvGWndx%SetOrbs,WmaxPade=PadeWlimit)
-      call dump_Matrix(S_DMFT%N_s,reg(PrevItFolder),"Hartree_UNimp",paramagnet)
+      call dump_Matrix(S_DMFT%N_s,reg(PrevItFolder),"Hartree_term",paramagnet)
       !
       !I tested that rotating the Hartree computed in the Solver basis to the orbital basis
       !gives the same result by computng the Hartree directly with the curlyU and densityDMFT
@@ -3879,8 +3906,8 @@ contains
             !
             !Read&write instead of execute_command
             allocate(HartreeU(Crystal%Norb,Crystal%Norb,Nspin));HartreeU=czero
-            call read_Matrix(HartreeU,reg(Beta_Match%Path)//"Hartree_UNimp",paramagnet)
-            call dump_Matrix(HartreeU,reg(PrevItFolder),"Hartree_UNimp",paramagnet)
+            call read_Matrix(HartreeU,reg(Beta_Match%Path)//"Hartree_term",paramagnet)
+            call dump_Matrix(HartreeU,reg(PrevItFolder),"Hartree_term",paramagnet)
             deallocate(HartreeU)
             allocate(Nimp(Crystal%Norb,Crystal%Norb,Nspin));Nimp=czero
             call read_Matrix(Nimp,reg(Beta_Match%Path)//"Nimp",paramagnet)
@@ -3925,8 +3952,8 @@ contains
             !
             !Read&write instead of execute_command
             allocate(HartreeU(Crystal%Norb,Crystal%Norb,Nspin));HartreeU=czero
-            call read_Matrix(HartreeU,reg(Beta_Match%Path)//"Hartree_UNimp",paramagnet)
-            call dump_Matrix(HartreeU,reg(PrevItFolder),"Hartree_UNimp",paramagnet)
+            call read_Matrix(HartreeU,reg(Beta_Match%Path)//"Hartree_term",paramagnet)
+            call dump_Matrix(HartreeU,reg(PrevItFolder),"Hartree_term",paramagnet)
             deallocate(HartreeU)
             allocate(Nimp(Crystal%Norb,Crystal%Norb,Nspin));Nimp=czero
             call read_Matrix(Nimp,reg(Beta_Match%Path)//"Nimp",paramagnet)

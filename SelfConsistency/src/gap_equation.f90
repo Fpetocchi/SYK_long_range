@@ -168,10 +168,10 @@ contains
       !compute the interpolated K-grid for Hk and the corresponding weights
       write(*,"(A)")"     Weights calculation for electronic energy integrals."
       !
-      Interpolate2Model = (.not.(any(Inputs%Nkpt3_intp_Hk.eq.0))) .and. (.not.(all(Inputs%Nkpt3_intp_Hk.eq.Lttc%Nkpt3)))
+      Interpolate2Model = (.not.(any(Inputs%Nkpt3_Model.eq.0))) .and. (.not.(all(Inputs%Nkpt3_Model.eq.Lttc%Nkpt3)))
       if(Interpolate2Model)then
          !
-         Nkpt3_Model = Inputs%Nkpt3_intp_Hk
+         Nkpt3_Model = Inputs%Nkpt3_Model
          Nkpt = product(Nkpt3_Model)
          allocate(Hk_intp(Norb,Norb,Nkpt));Hk_intp=czero
          allocate(kpt_Model(3,Nkpt));kpt_Model=0d0
