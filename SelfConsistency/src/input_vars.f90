@@ -721,6 +721,8 @@ contains
          if(gap_equation%calc_Tc.and.(reg(gap_equation%mode_el).ne."None"))then
             call parse_input_variable(gap_equation%Tbounds,"T_BOUNDS",InputFile,default=[0.1d0,10d0],comment="Lower and upper boundaries (Kelvin) of the temperature scan.")
             call parse_input_variable(gap_equation%Tsteps,"T_STEPS",InputFile,default=10,comment="Number of points in the temperature scan.")
+            call parse_input_variable(gap_equation%Ngrid,"NGRID",InputFile,default=500,comment="Energy grid mesh.")
+            call parse_input_variable(gap_equation%wrealMax,"EMAX",InputFile,default=10d0,comment="Energy grid boundaries [eV].")
             call parse_input_variable(gap_equation%loops,"LOOPS",InputFile,default=100,comment="Maximum number of iteration per each Temperature point.")
             call parse_input_variable(gap_equation%DeltaErr,"DELTA_ERR",InputFile,default=1d-5,comment="Convergence threshold on Delta.")
             call parse_input_variable(gap_equation%DeltaInit,"DELTA_INIT",InputFile,default=0.1d0,comment="Initial guess for Delta[eV].")

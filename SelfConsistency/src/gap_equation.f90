@@ -78,7 +78,7 @@ contains
    !---------------------------------------------------------------------------!
    !PURPOSE: Read phonons and initialize only mesh and energy grids
    !---------------------------------------------------------------------------!
-   subroutine Initialize_inputs(pathINPUT,Inputs,Lttc,Nreal,wrealMax,Hk_input)
+   subroutine Initialize_inputs(pathINPUT,Inputs,Lttc,Hk_input)
       !
       use parameters
       use utils_misc
@@ -88,11 +88,10 @@ contains
       character(len=*),intent(in)           :: pathINPUT
       type(SCDFT),intent(in)                :: Inputs
       type(Lattice),intent(in)              :: Lttc
-      integer,intent(in)                    :: Nreal
-      real(8),intent(in)                    :: wrealMax
       complex(8),intent(in)                 :: Hk_input(:,:,:)
       !
       integer                               :: Norb,Ngrid,Nkpt,Nkpti_dum
+      real(8)                               :: wrealMax
       integer,allocatable                   :: kptp_dum(:)
       integer,allocatable                   :: pkpt_dum(:,:,:)
       real(8),allocatable                   :: nkstar_dum(:)
@@ -105,11 +104,12 @@ contains
       !
       if(.not.Inputs%status)stop "Initialize_inputs: input container not properly initialized."
       !
-      Ngrid=Nreal
+      wrealMax = Inputs%wrealMax
+      Ngrid = Inputs%Ngrid
       if(mod(Ngrid,2).eq.0)Ngrid=Ngrid+1
       if(mod(Ngrid-1,4).ne.0)Ngrid=Ngrid+mod(Ngrid-1,4)
       allocate(Egrid(Ngrid));Egrid=0d0
-      Egrid=denspace(2d0*wrealMax*eV2DFTgrid,Ngrid,center=.true.)
+      Egrid=denspace(wrealMax,Ngrid,center=.true.)
       if(Egrid(minloc(abs(Egrid),dim=1)).ne.0d0) stop "Initialize_inputs: the energy grid requires the E=0 point."
       !
       !setting up global flags
@@ -132,16 +132,18 @@ contains
                DFTgrid2eV = Ry2eV
             endif
             !
+            Egrid = Egrid*eV2DFTgrid
+            !
             calc_phonons=.true.
             call read_a2F_DFT(reg(pathINPUT),reg(Inputs%mode_ph))
-            call read_DoS_DFT(reg(pathINPUT),wrealMax*eV2DFTgrid)
+            call read_DoS_DFT(reg(pathINPUT))
             !
       end select
       !
       select case(reg(Inputs%mode_el))
          case default
             !
-            stop "Available electronic modes in gap equation: static, static+dynamic, None."
+            stop "Available electronic modes in gap equation: static, dynamic, static+dynamic, None."
             !
          case("None")
             !
@@ -161,12 +163,13 @@ contains
             calc_Int_dynamic=.true.
             !
       end select
+      write(*,"(A)")"     eV->DFTgrid conversion factor:"//str(eV2DFTgrid,5)
       !
       !setting up shared original K-mesh and Hk
       Norb = size(Hk_input,dim=1)
       !
       !compute the interpolated K-grid for Hk and the corresponding weights
-      write(*,"(A)")"     Weights calculation for electronic energy integrals."
+      write(*,"(A)")new_line("A")//"     Weights calculation for electronic energy integrals."
       !
       Interpolate2Model = (.not.(any(Inputs%Nkpt3_Model.eq.0))) .and. (.not.(all(Inputs%Nkpt3_Model.eq.Lttc%Nkpt3)))
       if(Interpolate2Model)then
@@ -333,18 +336,17 @@ contains
       !
    end subroutine read_a2F_DFT
    !
-   subroutine read_DoS_DFT(pathINPUT,Ewindow)
+   subroutine read_DoS_DFT(pathINPUT)
       !
       use parameters
       use utils_misc
       implicit none
       !
       character(len=*),intent(in)           :: pathINPUT
-      real(8)                               :: Ewindow
       !
       integer                               :: unit,ierr,Nlines
       integer                               :: iE,Ngrid_read,Ngrid
-      real(8)                               :: Efermi,Edum,Ddum,DoS0_DFT
+      real(8)                               :: Efermi,Edum,Rdum,Ddum,DoS0_DFT
       real(8),allocatable                   :: Egrid_read(:),DoS_DFT_read(:)
       logical                               :: filexists
       !
@@ -358,10 +360,10 @@ contains
       open(unit,file=reg(pathINPUT)//"DoS_DFT.DAT",form="formatted",action="read",position="rewind")
       ierr=0
       Nlines=0
-      read(unit,*,iostat=ierr) !first line is the Fermi level
+      read(unit,*,iostat=ierr) Efermi
       do while (ierr.eq.0)
-         read(unit,*,iostat=ierr)Edum,Ddum
-         if((ierr.eq.0).and.(abs(Edum).le.1.5*Ewindow))Nlines = Nlines + 1
+         read(unit,*,iostat=ierr)Edum,Ddum,Rdum
+         if(ierr.eq.0)Nlines = Nlines + 1
       enddo
       close(unit)
       Ngrid_read = Nlines
@@ -375,17 +377,19 @@ contains
       open(unit,file=reg(pathINPUT)//"DoS_DFT.DAT",form="formatted",action="read",position="rewind")
       read(unit,*) Efermi
       do iE=1,Ngrid_read
-        read(unit,*)Edum,Ddum
-        if(abs(Edum).le.1.5*Ewindow)then
-           Egrid_read(iE) = Edum
-           DoS_DFT_read(iE) = Ddum
-        endif
+         read(unit,*)Egrid_read(iE),DoS_DFT_read(iE),Rdum
       enddo
       close(unit)
-      DoS0_DFT = DoS_DFT_read(minloc(abs((Egrid_read - Efermi)),dim=1))
-      write(*,"(A,F)") "     Fermi Energy (DFT): ",Efermi
-      write(*,"(A,F)") "     DFT DoS at Fermi: ",DoS0_DFT
+      !
+      DoS0_DFT = DoS_DFT_read(minloc(abs(Egrid_read - Efermi),dim=1))
+      write(*,"(A,F10.5)") "     Fermi Energy (DFT): ",Efermi
+      write(*,"(A,F10.5)") "     DoS at Fermi (DFT): ",DoS0_DFT
+      !
       Egrid_read = (Egrid_read - Efermi) * eV2DFTgrid
+      DoS_DFT_read = DoS_DFT_read / eV2DFTgrid
+      DoS0_DFT = DoS_DFT_read(minloc(abs(Egrid_read),dim=1))
+      if(verbose)write(*,"(A,F)") "     Fermi Energy (Ph): ",Egrid_read(minloc(abs(Egrid_read),dim=1))
+      if(verbose)write(*,"(A,F)") "     DoS at Fermi (Ph): ",DoS0_DFT
       !
       !interpolation to the custom grid
       Ngrid = size(Egrid)
@@ -396,8 +400,8 @@ contains
       where(DoS_DFT.lt.0d0)DoS_DFT=0d0
       deallocate(Egrid_read,DoS_DFT_read)
       !
-      write(*,"(A,F)") "     Fermi Energy: ",Egrid(minloc(abs(Egrid),dim=1))
-      write(*,"(A,F)") "     Fitted DFT DoS at Fermi: ",DoS_DFT(minloc(abs(Egrid),dim=1))
+      write(*,"(A,F)") "     Fermi Energy (interp): ",Egrid(minloc(abs(Egrid),dim=1))
+      write(*,"(A,F)") "     DoS at Fermi (interp): ",DoS_DFT(minloc(abs(Egrid),dim=1))
       DoS_DFT(minloc(abs(Egrid),dim=1)) = DoS0_DFT
       !
       DFT_DoS_stored=.true.
@@ -429,7 +433,7 @@ contains
       integer                               :: iorb,jorb,ib1,ib2
       integer                               :: iw,wndx,Nmats
       integer                               :: ik1,ik2,iq,Nkpt
-      integer,allocatable                   :: kptsum(:,:)
+      integer,allocatable                   :: kptsum(:,:),kptdif(:,:)
       real(8),allocatable                   :: wmats(:)
       complex(8),allocatable                :: Wk_w(:,:,:),Wk_wq(:,:)
       type(physicalU)                       :: PhysicalUelements
@@ -448,8 +452,8 @@ contains
       Nbp = size(Wk_orig,dim=1)
       Norb = int(sqrt(dble(Nbp)))
       Nmats = size(Wk_orig,dim=3)
-      Nkpt = size(Wk_orig,dim=4)
-      call assert_shape(Wk_orig,[Nbp,Nbp,Nmats,Nkpt],"store_Wk4gap","Wk_orig")
+      Nkpt = size(kpt_Model,dim=2)
+      call assert_shape(Wk_orig,[Nbp,Nbp,Nmats,Lttc%Nkpt],"store_Wk4gap","Wk_orig")
       call assert_shape(kpt_Model,[3,Nkpt],"store_Wk4gap","kpt_Model")
       !
       if(Interpolate2Model)then
@@ -458,8 +462,16 @@ contains
          if(Nkpt.ne.Lttc%Nkpt)stop "store_Wk4gap: something is wrong with the K-point dimension."
       endif
       !
-      call fill_ksumkdiff(kpt_Model,kptsum,kptdif_Model)
-      deallocate(kptsum)
+      call fill_ksumkdiff(kpt_Model,kptsum,kptdif)
+      allocate(kptdif_Model(Nkpt,2));kptdif_Model=0
+      do ik1=1,Nkpt
+         do ik2=1,Nkpt
+            iq = kptdif(ik1,ik2)
+            kptdif_Model(iq,1) = ik1
+            kptdif_Model(iq,2) = ik2
+         enddo
+      enddo
+      deallocate(kptsum,kptdif)
       !
       allocate(wmats(Nmats));wmats=BosonicFreqMesh(Beta,Nmats)
       wndx = Nmats
@@ -491,6 +503,9 @@ contains
          call cpu_time(start)
          do iw=1,wndx
             !
+            !if(verbose)
+            write(*,"(A,2I6)")"     Wk interpolation for iw:",iw,wndx
+            !
             Wk_w=czero
             if(Interpolate2Model)then
                call wannierinterpolation(Lttc%Nkpt3,Lttc%kpt,kpt_Model,Wk_orig(:,:,iw,:),Wk_w)
@@ -502,28 +517,28 @@ contains
             !$OMP PRIVATE(ik1,ik2,iq,iorb,jorb,ib1,ib2,Wk_wq)
             allocate(Wk_wq(Nbp,Nbp));Wk_wq=czero
             !$OMP DO
-            do ik1=1,Nkpt
-               do ik2=1,Nkpt
-                  !
-                  !rotations corresponding to q = (k - k')
-                  iq = kptdif_Model(ik1,ik2)
-                  Wk_wq = Wk_w(:,:,iq)
-                  call tensor_transform("NN",Wk_wq,PhysicalUelements%Full_Map,Zk_Model(:,:,ik1), &
-                                                                              Zk_Model(:,:,ik2), &
-                                                                              Zk_Model(:,:,ik2), &
-                                                                              Zk_Model(:,:,ik1))
-                  !
-                  !pick out W_abba in the new basis
-                  do iorb=1,Norb
-                     do jorb=1,Norb
-                        !
-                        call F2Bindex(Norb,[iorb,jorb],[jorb,iorb],ib1,ib2)
-                        Wk(iorb,jorb,iw,iq) = Wk_wq(ib1,ib2)
-                        !
-                     enddo
+            do iq=1,Nkpt
+               !
+               !rotations corresponding to q = (k - k')
+               ik1 = kptdif_Model(iq,1)
+               ik2 = kptdif_Model(iq,2)
+               !
+               Wk_wq = Wk_w(:,:,iq)
+               call tensor_transform("NN",Wk_wq,PhysicalUelements%Full_Map,Zk_Model(:,:,ik1), &
+                                                                           Zk_Model(:,:,ik2), &
+                                                                           Zk_Model(:,:,ik2), &
+                                                                           Zk_Model(:,:,ik1))
+               !
+               !pick out W_abba in the new basis
+               do iorb=1,Norb
+                  do jorb=1,Norb
+                     !
+                     call F2Bindex(Norb,[iorb,jorb],[jorb,iorb],ib1,ib2)
+                     Wk(iorb,jorb,iw,iq) = Wk_wq(ib1,ib2)
+                     !
                   enddo
-                  !
                enddo
+               !
             enddo
             !$OMP END DO
             deallocate(Wk_wq)
@@ -611,23 +626,24 @@ contains
       !
       !$OMP DO SCHEDULE(DYNAMIC)
       do iE1=1,Ngrid
-         if((DoS_Model(iE1).lt.1d-10).or.(iE1.eq.Efermi_ndx))cycle
+         if((DoS_Model(iE1).lt.eps).or.(iE1.eq.Efermi_ndx))cycle
          do iE2=1,Ngrid
-            if((DoS_Model(iE2).lt.1d-10).or.(iE2.eq.Efermi_ndx))cycle
+            if((DoS_Model(iE2).lt.eps).or.(iE2.eq.Efermi_ndx))cycle
             !
             Kee=czero
             do iorb=1,Norb
                do jorb=1,Norb
-                  do ik1=1,Nkpt
-                     do ik2=1,Nkpt
-                        !
-                        iq = kptdif_Model(ik1,ik2)
-                        !
-                        Kee = Kee + Wk_pvt(iorb,jorb,iq) * (weights_Model(iE1,iorb,ik1)/DoS_Model(iE1)) &
-                                                         * (weights_Model(iE2,jorb,ik2)/DoS_Model(iE2))
-                        !
-                     enddo
+                  !
+                  do iq=1,Nkpt
+                     !
+                     ik1 = kptdif_Model(iq,1)
+                     ik2 = kptdif_Model(iq,2)
+                     !
+                     Kee = Kee + Wk_pvt(iorb,jorb,iq) * (weights_Model(iE1,iorb,ik1)/DoS_Model(iE1)) &
+                                                      * (weights_Model(iE2,jorb,ik2)/DoS_Model(iE2))
+                     !
                   enddo
+                  !
                enddo
             enddo
             Kel_stat_e(iE1,iE2) = Kee
@@ -728,9 +744,9 @@ contains
       !
       !$OMP DO SCHEDULE(DYNAMIC)
       do iE1=1,Ngrid
-         if((DoS_Model(iE1).lt.1d-10).or.(iE1.eq.Efermi_ndx))cycle
+         if((DoS_Model(iE1).lt.eps).or.(iE1.eq.Efermi_ndx))cycle
          do iE2=1,Ngrid
-            if((DoS_Model(iE2).lt.1d-10).or.(iE2.eq.Efermi_ndx))cycle
+            if((DoS_Model(iE2).lt.eps).or.(iE2.eq.Efermi_ndx))cycle
             !
             E1=Egrid(iE1)
             E2=Egrid(iE2)
@@ -744,15 +760,14 @@ contains
             Wee=czero
             do iorb=1,Norb
                do jorb=1,Norb
-                  do ik1=1,Nkpt
-                     do ik2=1,Nkpt
-                        !
-                        iq = kptdif_Model(ik1,ik2)
-                        !
-                        Wee = Wee + (Wk_pvt(iorb,jorb,:,iq)-Wk_pvt(iorb,jorb,1,iq)) * (weights_Model(iE1,iorb,ik1)/DoS_Model(iE1)) &
-                                                                                    * (weights_Model(iE2,jorb,ik2)/DoS_Model(iE2))
-                        !
-                     enddo
+                  do iq=1,Nkpt
+                     !
+                     ik1 = kptdif_Model(iq,1)
+                     ik2 = kptdif_Model(iq,2)
+                     !
+                     Wee = Wee + (Wk_pvt(iorb,jorb,:,iq)-Wk_pvt(iorb,jorb,1,iq)) * (weights_Model(iE1,iorb,ik1)/DoS_Model(iE1)) &
+                                                                                 * (weights_Model(iE2,jorb,ik2)/DoS_Model(iE2))
+                     !
                   enddo
                enddo
             enddo

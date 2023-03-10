@@ -254,6 +254,8 @@ module parameters
       real(8)                               :: Tbounds(2)=0d0
       integer                               :: Tsteps=0
       integer                               :: loops=0
+      integer                               :: Ngrid=0
+      real(8)                               :: wrealMax=0d0
       real(8)                               :: DeltaErr=0d0
       real(8)                               :: DeltaInit=0d0
       real(8)                               :: DeltaMix=0d0

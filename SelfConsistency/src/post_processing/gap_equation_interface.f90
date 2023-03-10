@@ -7,7 +7,7 @@ subroutine calc_Tc(pathOUTPUT,Inputs,Lttc,Wlat)
    use crystal
    use file_io
    use gap_equation
-   use input_vars, only : Nreal, wrealMax, pathINPUT, pathINPUTtr
+   use input_vars, only : pathINPUT, pathINPUTtr
    implicit none
    !
    character(len=*),intent(in)           :: pathOUTPUT
@@ -64,14 +64,14 @@ subroutine calc_Tc(pathOUTPUT,Inputs,Lttc,Wlat)
       !
    endif
    !
-   call Initialize_inputs(reg(pathINPUT),Inputs,Lttc,Nreal,wrealMax,Hk_used)
+   call Initialize_inputs(reg(pathINPUT),Inputs,Lttc,Hk_used)
    deallocate(Hk_used)
    !
    call dump_Field_component(DoS_DFT,reg(printpath),"DoS_DFT.DAT",Egrid)
    call dump_Field_component(DoS_Model,reg(printpath),"DoS_Model.DAT",Egrid)
    !
    if (calc_Int_static.or.calc_Int_dynamic) then
-      call store_Wk4gap(Wlat%screened,Lttc,Beta,Inputs%Wk_cutoff,reg(printpath))
+      call store_Wk4gap(Wlat%screened,Lttc,Wlat%Beta,Inputs%Wk_cutoff,reg(printpath))
    endif
    !
    if(Inputs%calc_Tc)then
@@ -80,7 +80,7 @@ subroutine calc_Tc(pathOUTPUT,Inputs,Lttc,Wlat)
       Ngrid = size(Egrid)
       allocate(Delta(Ngrid));Delta = Inputs%DeltaInit*eV2DFTgrid
       do iE=1,Ngrid
-         if(abs(Egrid(iE)).gt.(0.1d0*wrealMax*eV2DFTgrid))Delta(iE)=czero
+         if(abs(Egrid(iE)).gt.(0.1d0*Inputs%wrealMax*eV2DFTgrid))Delta(iE)=czero
       enddo
       allocate(EDsq(Ngrid)); EDsq = czero
       !

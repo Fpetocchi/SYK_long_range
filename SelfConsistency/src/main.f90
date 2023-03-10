@@ -49,6 +49,7 @@ program SelfConsistency
 #elif defined _gap
    !
    call AllocateBosonicField(Wlat,Crystal%Norb,Nmats,Crystal%iq_gamma,Nkpt=Crystal%Nkpt,Nsite=Nsite,Beta=Beta)
+   call read_U_spex(Wlat,.false.,kpt=Crystal%kpt,pathOUTPUT=reg(ItFolder))
    call calc_Tc(reg(ItFolder),gap_equation,Crystal,Wlat)
    stop
    !
