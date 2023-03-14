@@ -27,7 +27,6 @@ module gap_equation
    !
    integer,private                          :: Nkpt3_Model(3)
    real(8),allocatable,private              :: kpt_Model(:,:)
-   integer,allocatable,private              :: kptdif_Model(:,:)
    real(8),allocatable,private              :: weights_Model(:,:,:)
    !
    complex(8),allocatable,private           :: Zk_Model(:,:,:)
@@ -40,6 +39,7 @@ module gap_equation
    logical,private                          :: Wk_stored=.false.
    !
    !public
+   character(len=2),public,protected        :: DFTgrid="eV"
    real(8),public,protected                 :: eV2DFTgrid=1d0                   !this converts eV to the DFT grid
    real(8),public,protected                 :: DFTgrid2eV=1d0
    !
@@ -109,7 +109,7 @@ contains
       if(mod(Ngrid,2).eq.0)Ngrid=Ngrid+1
       if(mod(Ngrid-1,4).ne.0)Ngrid=Ngrid+mod(Ngrid-1,4)
       allocate(Egrid(Ngrid));Egrid=0d0
-      Egrid=denspace(wrealMax,Ngrid,center=.true.)
+      Egrid=denspace(wrealMax,Ngrid,center=.true.,expfact=Inputs%expfact)
       if(Egrid(minloc(abs(Egrid),dim=1)).ne.0d0) stop "Initialize_inputs: the energy grid requires the E=0 point."
       !
       !setting up global flags
@@ -125,9 +125,11 @@ contains
          case("Elk","QEspresso")
             !
             if(reg(Inputs%mode_ph).eq."Elk")then
+               DFTgrid="Hr"
                eV2DFTgrid = eV2H
                DFTgrid2eV = H2eV
             elseif(reg(Inputs%mode_ph).eq."QEspresso")then
+               DFTgrid="Ry"
                eV2DFTgrid = eV2Ry
                DFTgrid2eV = Ry2eV
             endif
@@ -163,7 +165,7 @@ contains
             calc_Int_dynamic=.true.
             !
       end select
-      write(*,"(A)")"     eV->DFTgrid conversion factor:"//str(eV2DFTgrid,5)
+      write(*,"(A)")"     eV->DFTgrid conversion factor: "//str(eV2DFTgrid,5)
       !
       !setting up shared original K-mesh and Hk
       Norb = size(Hk_input,dim=1)
@@ -223,7 +225,7 @@ contains
       subroutine calc_rotation(H,Z)
          !
          use linalg, only : eigh
-         use utils_misc, only : assert_shape
+         use utils_misc, only : assert_shape, F2Bindex
          implicit none
          complex(8),intent(in)              :: H(:,:,:)
          complex(8),intent(out)             :: Z(:,:,:)
@@ -321,7 +323,7 @@ contains
          read(unit,*)
       enddo
       do iomega=1,Nomega
-        read(unit,"(2G18.10)") omega(iomega),a2F(iomega)
+        read(unit,*) omega(iomega),a2F(iomega)
         if(omega(iomega).lt.0d0) a2F(iomega)=0d0
       enddo
       close(unit)
@@ -381,15 +383,18 @@ contains
       enddo
       close(unit)
       !
+      !we need the dos per spin
+      DoS_DFT_read = DoS_DFT_read/2d0
+      !
       DoS0_DFT = DoS_DFT_read(minloc(abs(Egrid_read - Efermi),dim=1))
-      write(*,"(A,F10.5)") "     Fermi Energy (DFT): ",Efermi
-      write(*,"(A,F10.5)") "     DoS at Fermi (DFT): ",DoS0_DFT
+      write(*,"(A,F10.5)") "     Fermi Energy (DFT-eV): ",Efermi
+      write(*,"(A,F10.5)") "     DoS at Fermi (DFT-1/eV): ",DoS0_DFT
       !
       Egrid_read = (Egrid_read - Efermi) * eV2DFTgrid
       DoS_DFT_read = DoS_DFT_read / eV2DFTgrid
       DoS0_DFT = DoS_DFT_read(minloc(abs(Egrid_read),dim=1))
-      if(verbose)write(*,"(A,F)") "     Fermi Energy (Ph): ",Egrid_read(minloc(abs(Egrid_read),dim=1))
-      if(verbose)write(*,"(A,F)") "     DoS at Fermi (Ph): ",DoS0_DFT
+      write(*,"(A,F10.5)") "     Fermi Energy (DFT-"//DFTgrid//"): ",Egrid_read(minloc(abs(Egrid_read),dim=1))
+      write(*,"(A,F10.5)") "     DoS at Fermi (DFT-1/"//DFTgrid//"): ",DoS0_DFT
       !
       !interpolation to the custom grid
       Ngrid = size(Egrid)
@@ -400,8 +405,8 @@ contains
       where(DoS_DFT.lt.0d0)DoS_DFT=0d0
       deallocate(Egrid_read,DoS_DFT_read)
       !
-      write(*,"(A,F)") "     Fermi Energy (interp): ",Egrid(minloc(abs(Egrid),dim=1))
-      write(*,"(A,F)") "     DoS at Fermi (interp): ",DoS_DFT(minloc(abs(Egrid),dim=1))
+      write(*,"(A,F10.5)") "     Fermi Energy (interp-"//DFTgrid//"): ",Egrid(minloc(abs(Egrid),dim=1))
+      write(*,"(A,F10.5)") "     DoS at Fermi (interp-1/"//DFTgrid//"): ",DoS_DFT(minloc(abs(Egrid),dim=1))
       DoS_DFT(minloc(abs(Egrid),dim=1)) = DoS0_DFT
       !
       DFT_DoS_stored=.true.
@@ -430,16 +435,18 @@ contains
       character(len=*),intent(in)           :: pathOUTPUT
       !
       integer                               :: Ngrid,Norb,Nbp
-      integer                               :: iorb,jorb,ib1,ib2
+      integer                               :: iorb,jorb,ib1,ib2,a,b,c,d
       integer                               :: iw,wndx,Nmats
-      integer                               :: ik1,ik2,iq,Nkpt
+      integer                               :: ik1,ik2,iq,iqndx,Nkpt
       integer,allocatable                   :: kptsum(:,:),kptdif(:,:)
+      real(8),allocatable                   :: kpt_Model_io(:,:)
       real(8),allocatable                   :: wmats(:)
       complex(8),allocatable                :: Wk_w(:,:,:),Wk_wq(:,:)
       type(physicalU)                       :: PhysicalUelements
       type(FermionicField)                  :: Wk_io
       real                                  :: start,finish
       logical                               :: Wkexists
+      logical                               :: FullRot=.false.
       !
       !
       write(*,"(A)") new_line("A")//"---- calc_Wk"
@@ -463,15 +470,11 @@ contains
       endif
       !
       call fill_ksumkdiff(kpt_Model,kptsum,kptdif)
-      allocate(kptdif_Model(Nkpt,2));kptdif_Model=0
-      do ik1=1,Nkpt
-         do ik2=1,Nkpt
-            iq = kptdif(ik1,ik2)
-            kptdif_Model(iq,1) = ik1
-            kptdif_Model(iq,2) = ik2
-         enddo
-      enddo
-      deallocate(kptsum,kptdif)
+      deallocate(kptsum)
+      !
+      allocate(kpt_Model_io(3,Nkpt*Nkpt));kpt_Model_io=0d0
+      kpt_Model_io(:,1:Nkpt) = kpt_Model
+      kpt_Model_io(:,1+Nkpt:2*Nkpt) = kpt_Model
       !
       allocate(wmats(Nmats));wmats=BosonicFreqMesh(Beta,Nmats)
       wndx = Nmats
@@ -485,11 +488,11 @@ contains
       call inquireFile(reg(pathOUTPUT)//"Wk_gap_w_k_s1.DAT",Wkexists,hardstop=.false.,verb=verbose)
       !
       if(allocated(Wk))deallocate(Wk)
-      allocate(Wk(Norb,Norb,wndx,Nkpt));Wk=czero
+      allocate(Wk(Norb,Norb,wndx,Nkpt*Nkpt));Wk=czero
       if(Wkexists)then
          !
-         call AllocateFermionicField(Wk_io,Norb,wndx,Nkpt=Nkpt)
-         call read_FermionicField(Wk_io,reg(pathOUTPUT),"Wk_gap_w",kpt_Model)
+         call AllocateFermionicField(Wk_io,Norb,wndx,Nkpt=Nkpt*Nkpt)
+         call read_FermionicField(Wk_io,reg(pathOUTPUT),"Wk_gap_w",kpt_Model_io)
          Wk = Wk_io%wks(:,:,:,:,1)
          call DeallocateField(Wk_io)
          !
@@ -514,50 +517,85 @@ contains
             endif
             !
             !$OMP PARALLEL DEFAULT(SHARED),&
-            !$OMP PRIVATE(ik1,ik2,iq,iorb,jorb,ib1,ib2,Wk_wq)
+            !$OMP PRIVATE(ik1,ik2,iq,iqndx,iorb,jorb,a,b,c,d,ib1,ib2,Wk_wq)
             allocate(Wk_wq(Nbp,Nbp));Wk_wq=czero
             !$OMP DO
-            do iq=1,Nkpt
-               !
-               !rotations corresponding to q = (k - k')
-               ik1 = kptdif_Model(iq,1)
-               ik2 = kptdif_Model(iq,2)
-               !
-               Wk_wq = Wk_w(:,:,iq)
-               call tensor_transform("NN",Wk_wq,PhysicalUelements%Full_Map,Zk_Model(:,:,ik1), &
-                                                                           Zk_Model(:,:,ik2), &
-                                                                           Zk_Model(:,:,ik2), &
-                                                                           Zk_Model(:,:,ik1))
-               !
-               !pick out W_abba in the new basis
-               do iorb=1,Norb
-                  do jorb=1,Norb
+            do ik1=1,Nkpt
+               do ik2=1,Nkpt
+                  !
+                  iq = kptdif(ik1,ik2)
+                  iqndx = ik2 + (ik1-1)*Nkpt
+                  !
+                  !rotations corresponding to q = (k - k')
+                  if(FullRot)then
                      !
-                     call F2Bindex(Norb,[iorb,jorb],[jorb,iorb],ib1,ib2)
-                     Wk(iorb,jorb,iw,iq) = Wk_wq(ib1,ib2)
+                     Wk_wq = Wk_w(:,:,iq)
+                     call tensor_transform("NN",Wk_wq,PhysicalUelements%Full_Map,Zk_Model(:,:,ik1), &
+                                                                                 Zk_Model(:,:,ik2), &
+                                                                                 Zk_Model(:,:,ik2), &
+                                                                                 Zk_Model(:,:,ik1))
                      !
-                  enddo
+                     !pick out W_abba in the new basis for each k,k' pair
+                     do iorb=1,Norb
+                        do jorb=1,Norb
+                           !
+                           call F2Bindex(Norb,[iorb,jorb],[jorb,iorb],ib1,ib2)
+                           Wk(iorb,jorb,iw,iqndx) = Wk_wq(ib1,ib2)
+                           !
+                        enddo
+                     enddo
+                     !
+                  else
+                     !
+                     do iorb=1,Norb
+                        do jorb=iorb,Norb
+                           !
+                           do a=1,Norb
+                              do b=1,Norb
+                                 do c=1,Norb
+                                    do d=1,Norb
+                                       !
+                                       call F2Bindex(Norb,[a,b],[c,d],ib1,ib2)
+                                       !
+                                       Wk(iorb,jorb,iw,iqndx) = Wk(iorb,jorb,iw,iqndx) + Wk_w(ib1,ib2,iq)             &
+                                                              * conjg(Zk_Model(a,iorb,ik1)) * Zk_Model(b,jorb,ik2)    &
+                                                              * conjg(Zk_Model(c,jorb,ik2)) * Zk_Model(d,iorb,ik1)
+                                       !
+                                    enddo
+                                 enddo
+                              enddo
+                           enddo
+                           !
+                           if(iorb.ne.jorb)then
+                              Wk(jorb,iorb,iw,iqndx) = conjg(Wk(iorb,jorb,iw,iqndx))
+                           endif
+                           !
+                        enddo
+                     enddo
+                     !
+                  endif
+
                enddo
-               !
             enddo
             !$OMP END DO
             deallocate(Wk_wq)
             !$OMP END PARALLEL
             !
          enddo
-         deallocate(Wk_w,Wk_wq)
+         deallocate(Wk_w)
          call cpu_time(finish)
          write(*,"(A,F)") "     Wk preparation cpu timing:", finish-start
          !
          Wk = Wk * eV2DFTgrid
          !
          !this looks orbitally like a Green's function container
-         call AllocateFermionicField(Wk_io,Norb,wndx,Nkpt=Nkpt)
+         call AllocateFermionicField(Wk_io,Norb,wndx,Nkpt=Nkpt*Nkpt)
          Wk_io%wks(:,:,:,:,1) = Wk
          call dump_FermionicField(Wk_io,reg(pathOUTPUT),"Wk_gap_w",.true.,kpt_Model,.true.)
          call DeallocateField(Wk_io)
          !
       endif
+      deallocate(kptdif)
       !
       Wk_stored=.true.
       !
@@ -591,14 +629,11 @@ contains
       integer                               :: iorb,jorb,Norb
       integer                               :: ik1,ik2,iq,Nkpt,Nmats
       real(8)                               :: Temp,DoS0
-      complex(8)                            :: Kee
-      real(8),allocatable                   :: DoS(:)
-      complex(8),allocatable                :: Wk_pvt(:,:,:)
       character(len=12)                     :: printmode_used
       real                                  :: start,finish
       !
       !
-      write(*,"(A)") new_line("A")//"---- calc_Kel_stat_e"
+      if(verbose)write(*,"(A)") "---- calc_Kel_stat_e"
       !
       !
       if(.not.calc_Int_static)stop "calc_Kel_stat_e: inputs not initialized. call Initialize_inputs."
@@ -606,54 +641,47 @@ contains
       !
       Efermi_ndx = minloc(abs(Egrid),dim=1)
       DoS0 = DoS_Model(Efermi_ndx)
-      write(*,"(A,F)") "     calc_Kel_stat_e: Model DoS at the Fermi level:",DoS0
-      if(Egrid(Efermi_ndx).ne.0d0) stop "calc_Kel_dyn_e: the energy grid requires the E=0 point."
+      write(*,"(A,F10.5)") new_line("A")//"     calc_Kel_stat_e: Model DoS at the Fermi level:",DoS0
+      if(Egrid(Efermi_ndx).ne.0d0) stop "calc_Kel_stat_e: the energy grid requires the E=0 point."
       !
       Ngrid = size(Egrid)
       Norb = size(Wk,dim=1)
       Nmats = size(Wk,dim=3)
       Nkpt = product(Nkpt3_Model)
       call assert_shape(Wk,[Norb,Norb,Nmats,Nkpt],"calc_Kel_stat_e","Wk")
-      call assert_shape(Kel_stat_e,[Ngrid,Ngrid],"calc_Kph_e","Kel_stat_e")
+      call assert_shape(Kel_stat_e,[Ngrid,Ngrid],"calc_Kel_stat_e","Kel_stat_e")
       !
       Kel_stat_e=czero
       call cpu_time(start)
       !$OMP PARALLEL DEFAULT(SHARED),&
-      !$OMP PRIVATE(iE1,iE2,ik1,ik2,iq,iorb,jorb,Wk_pvt)
-      !
-      allocate(Wk_pvt(Norb,Norb,Nkpt));Wk_pvt=czero
-      Wk_pvt = Wk(:,:,1,:)
-      !
+      !$OMP PRIVATE(iE1,iE2,ik1,ik2,iq,iorb,jorb)
       !$OMP DO SCHEDULE(DYNAMIC)
       do iE1=1,Ngrid
          if((DoS_Model(iE1).lt.eps).or.(iE1.eq.Efermi_ndx))cycle
          do iE2=1,Ngrid
             if((DoS_Model(iE2).lt.eps).or.(iE2.eq.Efermi_ndx))cycle
             !
-            Kee=czero
             do iorb=1,Norb
                do jorb=1,Norb
                   !
-                  do iq=1,Nkpt
-                     !
-                     ik1 = kptdif_Model(iq,1)
-                     ik2 = kptdif_Model(iq,2)
-                     !
-                     Kee = Kee + Wk_pvt(iorb,jorb,iq) * (weights_Model(iE1,iorb,ik1)/DoS_Model(iE1)) &
-                                                      * (weights_Model(iE2,jorb,ik2)/DoS_Model(iE2))
-                     !
+                  do ik1=1,Nkpt
+                     do ik2=1,Nkpt
+                        !
+                        iq = ik2 + (ik1-1)*Nkpt
+                        !
+                        Kel_stat_e(iE1,iE2) = Kel_stat_e(iE1,iE2) + Wk(iorb,jorb,1,iq) * (weights_Model(iE1,iorb,ik1)/DoS_Model(iE1)) &
+                                                                                       * (weights_Model(iE2,jorb,ik2)/DoS_Model(iE2))
+                        !
+                     enddo
                   enddo
                   !
                enddo
             enddo
-            Kel_stat_e(iE1,iE2) = Kee
             !
          enddo
       enddo
       !$OMP END DO
-      deallocate(Wk_pvt)
       !$OMP END PARALLEL
-      deallocate(DoS)
       call cpu_time(finish)
       write(*,"(A,F)") "     Calculation of static electronic Kernel cpu timing:", finish-start
       !
@@ -676,6 +704,7 @@ contains
    !---------------------------------------------------------------------------!
    subroutine calc_Kel_dyn_e(Beta,Kel_dyn_e,printKpath,printmode)
       !
+      use omp_lib
       use parameters
       use utils_misc
       implicit none
@@ -690,6 +719,7 @@ contains
       integer                               :: ik1,ik2,iq,Nkpt,Nmats
       integer                               :: iE1,iE2,iy,Ngrid
       integer                               :: wndx_a,wndx_b
+      integer                               :: thread_id
       real(8)                               :: DoS0,Temp,MatsStep
       real(8)                               :: wmax,ymax
       real(8)                               :: E1,E2,DE,DE_m,DE_p
@@ -705,17 +735,16 @@ contains
       real                                  :: start,finish
       !
       !
-      write(*,"(A)") new_line("A")//"---- calc_Kel_dyn_e"
+      if(verbose)write(*,"(A)") "---- calc_Kel_dyn_e"
       !
       !
       if(.not.Wk_stored)stop "calc_Kel_dyn_e: fully screened interaction not stored. call store_Wk4gap."
-
       if(.not.calc_Int_dynamic)stop "calc_Kel_dyn_e: inputs not initialized. call Initialize_inputs."
       if(.not.Wk_stored)stop "calc_Kel_dyn_e: fully screened interaction not stored. call store_Wk4gap."
       !
       Efermi_ndx = minloc(abs(Egrid),dim=1)
       DoS0 = DoS_Model(Efermi_ndx)
-      write(*,"(A,F)") "     calc_Kel_stat_e: Model DoS at the Fermi level:",DoS0
+      write(*,"(A,F10.5)") new_line("A")//"     calc_Kel_dyn_e: Model DoS at the Fermi level:",DoS0
       if(Egrid(Efermi_ndx).ne.0d0) stop "calc_Kel_dyn_e: the energy grid requires the E=0 point."
       !
       Ngrid = size(Egrid)
@@ -723,19 +752,19 @@ contains
       Nmats = size(Wk,dim=3)
       Nkpt = product(Nkpt3_Model)
       call assert_shape(Wk,[Norb,Norb,Nmats,Nkpt],"calc_Kel_dyn_e","Wk")
-      call assert_shape(Kel_dyn_e,[Ngrid,Ngrid],"calc_Kph_e","Kel_dyn_e")
+      call assert_shape(Kel_dyn_e,[Ngrid,Ngrid],"calc_Kel_dyn_e","Kel_dyn_e")
       !
       allocate(wmats(Nmats));wmats=BosonicFreqMesh(Beta,Nmats)
       wmax = wmats(Nmats)
       MatsStep = abs(wmats(2)-wmats(1))
-      write(*,"(A,F)") "     Bosonic frequency step:",MatsStep
+      write(*,"(A,F10.5)") "     Bosonic frequency step:",MatsStep
       !
       call cpu_time(start)
       Kel_dyn_e=czero
       !$OMP PARALLEL DEFAULT(PRIVATE),&
-      !$OMP SHARED(Wk,Ngrid,DoS_Model,Norb,Nmats,Nkpt,weights_Model,wmats,MatsStep)
-      !
-      allocate(Wee(Nmats))
+      !$OMP SHARED(Wk,Ngrid,Egrid,DoS_Model,weights_Model,Norb,Nmats,Nkpt),&
+      !$OMP SHARED(wmats,MatsStep,Beta,Kel_dyn_e)
+      allocate(Wee(Nmats));Wee=czero
       allocate(Wk_pvt(Norb,Norb,Nmats,Nkpt));Wk_pvt=czero
       Wk_pvt = Wk
       !
@@ -745,30 +774,34 @@ contains
       !$OMP DO SCHEDULE(DYNAMIC)
       do iE1=1,Ngrid
          if((DoS_Model(iE1).lt.eps).or.(iE1.eq.Efermi_ndx))cycle
+         !
+         !thread_id = omp_get_thread_num()
+         !print *,iE1,thread_id
+         !
          do iE2=1,Ngrid
             if((DoS_Model(iE2).lt.eps).or.(iE2.eq.Efermi_ndx))cycle
             !
+            !if(thread_id.eq.1)print *,iE1,iE2,thread_id
+            !
             E1=Egrid(iE1)
             E2=Egrid(iE2)
-            !
-            !avoid the divergence coming from 1/tanh(0) = 1/0
-            if((E1.eq.0d0).or.(E2.eq.0d0))cycle
-            !avoid the Fermi level since it is interpolated later on
-            if((iE1.eq.Efermi_ndx).or.(iE2.eq.Efermi_ndx))cycle
             !
             !bring interaction on the energy gird
             Wee=czero
             do iorb=1,Norb
                do jorb=1,Norb
-                  do iq=1,Nkpt
-                     !
-                     ik1 = kptdif_Model(iq,1)
-                     ik2 = kptdif_Model(iq,2)
-                     !
-                     Wee = Wee + (Wk_pvt(iorb,jorb,:,iq)-Wk_pvt(iorb,jorb,1,iq)) * (weights_Model(iE1,iorb,ik1)/DoS_Model(iE1)) &
-                                                                                 * (weights_Model(iE2,jorb,ik2)/DoS_Model(iE2))
-                     !
+                  !
+                  do ik1=1,Nkpt
+                     do ik2=1,Nkpt
+                        !
+                        iq = ik2 + (ik1-1)*Nkpt
+                        !
+                        Wee = Wee + (Wk_pvt(iorb,jorb,:,iq)-Wk_pvt(iorb,jorb,1,iq)) * (weights_Model(iE1,iorb,ik1)/DoS_Model(iE1)) &
+                                                                                    * (weights_Model(iE2,jorb,ik2)/DoS_Model(iE2))
+                        !
+                     enddo
                   enddo
+                  !
                enddo
             enddo
             !
@@ -869,15 +902,16 @@ contains
          enddo
       enddo
       !$OMP END DO
-      deallocate(Wk_pvt,Wee)
+      !$OMP BARRIER
+      deallocate(Wk_pvt,Wee,ygrid_m,ygrid_p)
       !$OMP END PARALLEL
-      deallocate(wmats,ygrid_m,ygrid_p)
+      deallocate(wmats)
       !
       !Filling the Fermi lines
       !call interpFermi(Kel_dyn_e,Egrid,Egrid,Efermi_ndx,Efermi_ndx)
       !
       call cpu_time(finish)
-      write(*,"(A,F)") "     Calculation of static electronic Kernel cpu timing:", finish-start
+      write(*,"(A,F)") "     Calculation of dynamic electronic Kernel cpu timing:", finish-start
       !
       if(present(printKpath).and.(reg(printmode).ne."None"))then
          !
@@ -923,7 +957,7 @@ contains
       !
       Efermi_ndx = minloc(abs(Egrid),dim=1)
       DoS0_DFT = DoS_DFT(Efermi_ndx)
-      write(*,"(A,F)") "     calc_Zph_e: DoS_DFT at the Fermi level:",DoS0_DFT
+      write(*,"(A,F10.5)") new_line("A")//"     calc_Zph_e: DoS_DFT at the Fermi level:",DoS0_DFT
       !
       Ngrid = size(Egrid)
       Nomega = size(omega)
@@ -1013,13 +1047,14 @@ contains
          !
       enddo !iE1
       !$OMP END DO
+      !$OMP BARRIER
       !$OMP END PARALLEL
       deallocate(a2F_tmp,a2F_int)
       !
       !Filling the Fermi line
       call interpFermi(Zph_e,Egrid,Efermi_ndx)
       !
-      write(*,"(A,1E20.10)")"     lambda(Zph): ",Zph_e(Efermi_ndx)
+      write(*,"(A,F10.5)")"     lambda(Zph): ",Zph_e(Efermi_ndx)
       !
       call cpu_time(finish)
       write(*,"(A,F)") "     Calculation of phononic Z cpu timing:", finish-start
@@ -1067,11 +1102,11 @@ contains
       !
       !
       if(.not.Phonons_stored)stop "calc_Kph_e: a2F(omega) is not stored. call read_a2F."
-      if(.not.DFT_DoS_stored)stop "calc_Zph_e: DoS_DFT is not stored. call read_DoS_DFT."
+      if(.not.DFT_DoS_stored)stop "calc_Kph_e: DoS_DFT is not stored. call read_DoS_DFT."
       !
       Efermi_ndx = minloc(abs(Egrid),dim=1)
       DoS0_DFT = DoS_DFT(Efermi_ndx)
-      write(*,"(A,F)") "     calc_Zph_e: DoS_DFT at the Fermi level:",DoS0_DFT
+      write(*,"(A,F10.5)") new_line("A")//"     calc_Kph_e: DoS_DFT at the Fermi level:",DoS0_DFT
       !
       Ngrid = size(Egrid)
       Nomega = size(omega)
@@ -1115,10 +1150,10 @@ contains
       !Filling the Fermi lines
       call interpFermi(Kph_e,Egrid,Egrid,Efermi_ndx,Efermi_ndx)
       !
-      write(*,"(A,1E20.10)")"     lambda(Kph): ",-Kph_e(Efermi_ndx,Efermi_ndx)*DoS0_DFT
+      write(*,"(A,F10.5)")"     lambda(Kph): ",-Kph_e(Efermi_ndx,Efermi_ndx)*DoS0_DFT
       !
       call cpu_time(finish)
-      write(*,"(A,F)") "     Calculation of static phononic Kernel cpu timing:", finish-start
+      write(*,"(A,F)") "     Calculation of phononic Kernel cpu timing:", finish-start
       !
       if(present(printKpath).and.(reg(printmode).ne."None"))then
          !
@@ -1155,13 +1190,13 @@ contains
       !
       integer                               :: Ngrid1,Ngrid2,iE,iE1,iE2
       integer                               :: Efermi_ndx1,Efermi_ndx2,unit
-      logical                               :: ReK,ImK
+      logical                               :: RealK,CmplxK
       !
       if((reg(Kerneltype).ne."electronic").and.(reg(Kerneltype).ne."phononic"))then
          stop "print_Kernel: available Kerneltype are only electronic or phononic."
       endif
       if((reg(Kerneltype).eq."phononic").and.(reg(printmode).eq."0E"))then
-         write(*,"(A)") "     Available print modes of phononic Kernel doen not include 0E, ssetting to E0."
+         write(*,"(A)") "     Available print modes of phononic Kernel does not include 0E, setting to E0."
          printmode="E0"
       endif
       !
@@ -1171,9 +1206,9 @@ contains
       Efermi_ndx1 = minloc(abs(Egrid1),dim=1)
       Efermi_ndx2 = minloc(abs(Egrid2),dim=1)
       !
-      ImK=.false.
-      if(reg(Kerneltype).eq."phononic")ImK=.true.
-      ReK = .not.ImK
+      CmplxK=.true.
+      if(reg(Kerneltype).eq."phononic")CmplxK=.false.
+      RealK = .not.CmplxK
       !
       write(*,"(A)") "     Printing "//reg(Kerneltype)//" Kernel with mode "//reg(printmode)//" in "//reg(printpath)
       !
@@ -1181,15 +1216,15 @@ contains
          case default
             !
             if(reg(Kerneltype).eq."phononic")stop "Available print modes for phononic Kernel: E0, surf, all."
-            if(reg(Kerneltype).eq."electronic")stop "Available print modes for electronic Kernel: E0, 0E, surf, all."
+            if(reg(Kerneltype).eq."electronic")stop "Available print modes for electronic Kernel: E0, 0E, diag, surf, all."
             !
          case("E0")
             !
             unit = free_unit()
             open(unit,file=reg(printpath)//reg(filename)//"_e_E0_T"//str(T,2)//".DAT",form="formatted",status="unknown",position="rewind",action="write")
             do iE=1,Ngrid1
-               if(ReK) write(unit,"(3F20.10)")Egrid(iE),dreal(Kernel(iE,Efermi_ndx2))
-               if(ImK) write(unit,"(3F20.10)")Egrid(iE),dreal(Kernel(iE,Efermi_ndx2)),dimag(Kernel(iE,Efermi_ndx2))
+               if(RealK) write(unit,"(3F20.10)")Egrid(iE),dreal(Kernel(iE,Efermi_ndx2))
+               if(CmplxK) write(unit,"(3F20.10)")Egrid(iE),dreal(Kernel(iE,Efermi_ndx2)),dimag(Kernel(iE,Efermi_ndx2))
             enddo
             close(unit)
             !
@@ -1198,8 +1233,18 @@ contains
             unit = free_unit()
             open(unit,file=reg(printpath)//reg(filename)//"_e_0E_T"//str(T,2)//".DAT",form="formatted",status="unknown",position="rewind",action="write")
             do iE=1,Ngrid2
-               if(ReK) write(unit,"(3F20.10)")Egrid(iE),dreal(Kernel(Efermi_ndx1,iE))
-               if(ImK) write(unit,"(3F20.10)")Egrid(iE),dreal(Kernel(Efermi_ndx1,iE)),dimag(Kernel(Efermi_ndx1,iE))
+               if(RealK) write(unit,"(3F20.10)")Egrid(iE),dreal(Kernel(Efermi_ndx1,iE))
+               if(CmplxK) write(unit,"(3F20.10)")Egrid(iE),dreal(Kernel(Efermi_ndx1,iE)),dimag(Kernel(Efermi_ndx1,iE))
+            enddo
+            close(unit)
+            !
+         case("diag")
+            !
+            unit = free_unit()
+            open(unit,file=reg(printpath)//reg(filename)//"_e_diag_T"//str(T,2)//".DAT",form="formatted",status="unknown",position="rewind",action="write")
+            do iE=1,Ngrid2
+               if(RealK) write(unit,"(3F20.10)")Egrid(iE),dreal(Kernel(iE,iE))
+               if(CmplxK) write(unit,"(3F20.10)")Egrid(iE),dreal(Kernel(iE,iE)),dimag(Kernel(iE,iE))
             enddo
             close(unit)
             !
@@ -1214,7 +1259,7 @@ contains
                write(unit,*)
             enddo
             close(unit)
-            if(ImK) then
+            if(CmplxK) then
                unit = free_unit()
                open(unit,file=reg(printpath)//reg(filename)//"_e_surf_I_T"//str(T,2)//".DAT",form="formatted",status="unknown",position="rewind",action="write")
                do iE1=1,Ngrid1
@@ -1231,19 +1276,26 @@ contains
             unit = free_unit()
             open(unit,file=reg(printpath)//reg(filename)//"_e_E0_T"//str(T,2)//".DAT",form="formatted",status="unknown",position="rewind",action="write")
             do iE=1,Ngrid1
-               if(ReK) write(unit,"(3F20.10)")Egrid(iE),dreal(Kernel(iE,Efermi_ndx2))
-               if(ImK) write(unit,"(3F20.10)")Egrid(iE),dreal(Kernel(iE,Efermi_ndx2)),dimag(Kernel(iE,Efermi_ndx2))
+               if(RealK) write(unit,"(3F20.10)")Egrid(iE),dreal(Kernel(iE,Efermi_ndx2))
+               if(CmplxK) write(unit,"(3F20.10)")Egrid(iE),dreal(Kernel(iE,Efermi_ndx2)),dimag(Kernel(iE,Efermi_ndx2))
             enddo
             close(unit)
             if(reg(Kerneltype).eq."electronic")then
                unit = free_unit()
                open(unit,file=reg(printpath)//reg(filename)//"_e_0E_T"//str(T,2)//".DAT",form="formatted",status="unknown",position="rewind",action="write")
                do iE=1,Ngrid2
-                  if(ReK) write(unit,"(3F20.10)")Egrid(iE),dreal(Kernel(Efermi_ndx1,iE))
-                  if(ImK) write(unit,"(3F20.10)")Egrid(iE),dreal(Kernel(Efermi_ndx1,iE)),dimag(Kernel(Efermi_ndx1,iE))
+                  if(RealK) write(unit,"(3F20.10)")Egrid(iE),dreal(Kernel(Efermi_ndx1,iE))
+                  if(CmplxK) write(unit,"(3F20.10)")Egrid(iE),dreal(Kernel(Efermi_ndx1,iE)),dimag(Kernel(Efermi_ndx1,iE))
                enddo
                close(unit)
             endif
+            unit = free_unit()
+            open(unit,file=reg(printpath)//reg(filename)//"_e_diag_T"//str(T,2)//".DAT",form="formatted",status="unknown",position="rewind",action="write")
+            do iE=1,Ngrid2
+               if(RealK) write(unit,"(3F20.10)")Egrid(iE),dreal(Kernel(iE,iE))
+               if(CmplxK) write(unit,"(3F20.10)")Egrid(iE),dreal(Kernel(iE,iE)),dimag(Kernel(iE,iE))
+            enddo
+            close(unit)
             unit = free_unit()
             open(unit,file=reg(printpath)//reg(filename)//"_e_surf_R_T"//str(T,2)//".DAT",form="formatted",status="unknown",position="rewind",action="write")
             do iE1=1,Ngrid1
@@ -1253,7 +1305,7 @@ contains
                write(unit,*)
             enddo
             close(unit)
-            if(ImK) then
+            if(CmplxK) then
                unit = free_unit()
                open(unit,file=reg(printpath)//reg(filename)//"_e_surf_I_T"//str(T,2)//".DAT",form="formatted",status="unknown",position="rewind",action="write")
                do iE1=1,Ngrid1

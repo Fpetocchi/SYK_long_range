@@ -527,11 +527,12 @@ contains
    ! nseg = number of segments, must be even.
    ! nsimp fixed to 2
    !---------------------------------------------------------------------------!
-   function denspace(end,num,center) result(array)
+   function denspace(end,num,center,expfact) result(array)
       implicit none
       real(8),intent(in)                    :: end
       integer,intent(in)                    :: num
       logical,intent(in),optional           :: center
+      real(8),intent(in),optional           :: expfact
       real(8)                               :: array(num)
       !
       integer                               :: nsimp=2
@@ -539,7 +540,9 @@ contains
       integer                               :: i,n,n2,nseg2
       real(8)                               :: mesh,de,a,b
       logical                               :: center_
-      data de /1.0d0/
+      !data de /1.0d0/
+      de = 1.0d0
+      if(present(expfact))de=expfact
       !
       nseg=(num-1)/nsimp
       if (nseg .lt. 1) stop "denspace: nseg < 1"

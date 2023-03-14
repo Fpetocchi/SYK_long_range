@@ -718,26 +718,23 @@ contains
       if(gap_equation%status)then
          call parse_input_variable(gap_equation%calc_Tc,"CALC_TC",InputFile,default=.false.,comment="Solve the gap equation to compute the critical Temperature. If F sores Wlat in the band basis.")
          call parse_input_variable(gap_equation%mode_el,"MODE_EL",InputFile,default="None",comment="Whether to include electronic Kernel. Available modes: static, dynamic, static+dynamic. None to avoid.")
-         if(gap_equation%calc_Tc.and.(reg(gap_equation%mode_el).ne."None"))then
-            call parse_input_variable(gap_equation%Tbounds,"T_BOUNDS",InputFile,default=[0.1d0,10d0],comment="Lower and upper boundaries (Kelvin) of the temperature scan.")
-            call parse_input_variable(gap_equation%Tsteps,"T_STEPS",InputFile,default=10,comment="Number of points in the temperature scan.")
-            call parse_input_variable(gap_equation%Ngrid,"NGRID",InputFile,default=500,comment="Energy grid mesh.")
-            call parse_input_variable(gap_equation%wrealMax,"EMAX",InputFile,default=10d0,comment="Energy grid boundaries [eV].")
-            call parse_input_variable(gap_equation%loops,"LOOPS",InputFile,default=100,comment="Maximum number of iteration per each Temperature point.")
-            call parse_input_variable(gap_equation%DeltaErr,"DELTA_ERR",InputFile,default=1d-5,comment="Convergence threshold on Delta.")
-            call parse_input_variable(gap_equation%DeltaInit,"DELTA_INIT",InputFile,default=0.1d0,comment="Initial guess for Delta[eV].")
-            call parse_input_variable(gap_equation%DeltaMix,"DELTA_MIX",InputFile,default=0.5d0,comment="Fraction of the old iteration Delta.")
-            call parse_input_variable(gap_equation%HkRenorm,"HK_RENORM",InputFile,default=.true.,comment="Correct the LDA DoS with the self-energy matrix at zero frequency.")
-            call parse_input_variable(gap_equation%mode_ph,"MODE_PH",InputFile,default="None",comment="Whether to include phononic Kernel. Available modes: Elk, QEspresso. None to avoid.")
-            call parse_input_variable(gap_equation%mode_Zph,"MODE_ZPH",InputFile,default="symrenorm",comment="Low energy limit of Zph. Available modes: symrenorm, sym, asym.")
-            if((reg(gap_equation%mode_ph).eq."None").and.(reg(gap_equation%mode_el).eq."None"))stop "read_InputFile: Tc requested but no mode is choosen."
-            call parse_input_variable(gap_equation%Nkpt3_Model,"NKPT3_MODEL",InputFile,default=Nkpt3,comment="Interpolated K-grid. Equal to NKPT3 to avoid.")
-            call parse_input_variable(gap_equation%Wk_cutoff,"WK_CUTOFF",InputFile,default=wmatsMax,comment="Bosonic frequency cutoff for MODE_EL=static+dynamic calculations.")
-            call parse_input_variable(gap_equation%printmode_ph,"PRINT_KPH",InputFile,default="None",comment="Printing mode of the phononic Kernel. Available modes: E0, diag, surf, all. None to avoid.")
-            call parse_input_variable(gap_equation%printmode_el,"PRINT_KEL",InputFile,default="None",comment="Printing mode of the electronic Kernel. Available modes: E0, 0E, diag, surf, all. None to avoid.")
-         else
-            call parse_input_variable(gap_equation%Wk_cutoff,"WK_CUTOFF",InputFile,default=wmatsMax,comment="Bosonic frequency cutoff for MODE_EL=static+dynamic calculations.")
-         endif
+         call parse_input_variable(gap_equation%Tbounds,"T_BOUNDS",InputFile,default=[0.1d0,10d0],comment="Lower and upper boundaries (Kelvin) of the temperature scan.")
+         call parse_input_variable(gap_equation%Tsteps,"T_STEPS",InputFile,default=10,comment="Number of points in the temperature scan.")
+         call parse_input_variable(gap_equation%Ngrid,"NGRID",InputFile,default=500,comment="Energy grid mesh.")
+         call parse_input_variable(gap_equation%expfact,"EXPFACT",InputFile,default=1d0,comment="Exponential factor for dense energy grid.")
+         call parse_input_variable(gap_equation%wrealMax,"EMAX",InputFile,default=10d0,comment="Energy grid boundaries [eV].")
+         call parse_input_variable(gap_equation%loops,"LOOPS",InputFile,default=100,comment="Maximum number of iteration per each Temperature point.")
+         call parse_input_variable(gap_equation%DeltaErr,"DELTA_ERR",InputFile,default=1d-5,comment="Convergence threshold on Delta.")
+         call parse_input_variable(gap_equation%DeltaInit,"DELTA_INIT",InputFile,default=0.1d0,comment="Initial guess for Delta[eV].")
+         call parse_input_variable(gap_equation%DeltaMix,"DELTA_MIX",InputFile,default=0.5d0,comment="Fraction of the old iteration Delta.")
+         call parse_input_variable(gap_equation%HkRenorm,"HK_RENORM",InputFile,default=.true.,comment="Correct the LDA DoS with the self-energy matrix at zero frequency.")
+         call parse_input_variable(gap_equation%mode_ph,"MODE_PH",InputFile,default="None",comment="Whether to include phononic Kernel. Available modes: Elk, QEspresso. None to avoid.")
+         call parse_input_variable(gap_equation%mode_Zph,"MODE_ZPH",InputFile,default="symrenorm",comment="Low energy limit of Zph. Available modes: symrenorm, sym, asym.")
+         if((reg(gap_equation%mode_ph).eq."None").and.(reg(gap_equation%mode_el).eq."None"))stop "read_InputFile: Tc requested but no mode is choosen."
+         call parse_input_variable(gap_equation%Nkpt3_Model,"NKPT3_MODEL",InputFile,default=Nkpt3,comment="Interpolated K-grid. Equal to NKPT3 to avoid.")
+         call parse_input_variable(gap_equation%Wk_cutoff,"WK_CUTOFF",InputFile,default=wmatsMax,comment="Bosonic frequency cutoff for MODE_EL=static+dynamic calculations.")
+         call parse_input_variable(gap_equation%printmode_ph,"PRINT_KPH",InputFile,default="None",comment="Printing mode of the phononic Kernel. Available modes: E0, diag, surf, all. None to avoid.")
+         call parse_input_variable(gap_equation%printmode_el,"PRINT_KEL",InputFile,default="None",comment="Printing mode of the electronic Kernel. Available modes: E0, 0E, diag, surf, all. None to avoid.")
       endif
       !
       !Variables related to the impurity solver

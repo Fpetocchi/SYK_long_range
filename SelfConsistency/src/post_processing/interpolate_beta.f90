@@ -231,7 +231,7 @@ subroutine interpolate2Beta_Bosonic(W,Beta_Match,mode,offDiag,wmats_in)
          !$OMP PARALLEL DEFAULT(SHARED),&
          !$OMP PRIVATE(isite,i,j,k,l,i_lat,j_lat,k_lat,l_lat,ib1,ib2,replace,iw,ReD,ReW)
          !$OMP DO
-         do isite=1,W%Nsite
+         do isite=1,Nsite
             !
             do i=1,LocalOrbs(isite)%Norb
                do j=1,LocalOrbs(isite)%Norb

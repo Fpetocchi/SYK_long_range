@@ -78,11 +78,11 @@ subroutine calc_Tc(pathOUTPUT,Inputs,Lttc,Wlat)
       !
       !Allocating delta here so as to imply annealing between temperatures
       Ngrid = size(Egrid)
-      allocate(Delta(Ngrid));Delta = Inputs%DeltaInit*eV2DFTgrid
+      allocate(Delta(Ngrid));Delta = Inputs%DeltaInit
       do iE=1,Ngrid
          if(abs(Egrid(iE)).gt.(0.1d0*Inputs%wrealMax*eV2DFTgrid))Delta(iE)=czero
       enddo
-      allocate(EDsq(Ngrid)); EDsq = czero
+      allocate(oldDelta(Ngrid));oldDelta=Delta
       !
       !
       !============================ TEMPERATURE LOOP =============================!
@@ -90,13 +90,13 @@ subroutine calc_Tc(pathOUTPUT,Inputs,Lttc,Wlat)
       write(*,"(A)") new_line("A")//"---- Starting temperature scan"
       do iT=1,Inputs%Tsteps
          !
-         Temp = Inputs%Tbounds(2) - (iT-1)*abs(Inputs%Tbounds(2)-Inputs%Tbounds(1))/dble(Inputs%Tsteps-1)
+         Temp = Inputs%Tbounds(1) + (iT-1)*abs(Inputs%Tbounds(2)-Inputs%Tbounds(1))/dble(Inputs%Tsteps-1)
          Beta = 1d0 / (Temp*K2eV)
          Beta_DFT = 1d0 / (Temp*K2eV*eV2DFTgrid)
          !
          write(*,"(A)") new_line("A")//"     ...................................."//new_line("A")
-         write(*,"(A,1F15.3)") "     T:   ",Temp
-         write(*,"(2(A,1F15.3))") "     Beta:",Beta," Beta(DFT):",Beta_DFT
+         write(*,"(A,1F10.5)") "     T(K): ",Temp
+         write(*,"(2(A,1F12.5))") "     Beta(1/eV): ",Beta,"    Beta(1/"//DFTgrid//"): ",Beta_DFT
          !
          write(*,"(A)") new_line("A")//"     Computing Kernels."
          !
@@ -138,8 +138,8 @@ subroutine calc_Tc(pathOUTPUT,Inputs,Lttc,Wlat)
          !Convergence loop over Delta(e)
          write(*,"(A)") new_line("A")//"     Solving gap equation."
          !
+         allocate(EDsq(Ngrid)); EDsq = czero
          allocate(newDelta(Ngrid));newDelta = czero
-         allocate(oldDelta(Ngrid));oldDelta = Delta
          converged=.false.
          SCloop: do iloop=1,Inputs%loops
             !
@@ -148,7 +148,8 @@ subroutine calc_Tc(pathOUTPUT,Inputs,Lttc,Wlat)
             enddo
             !
             !$OMP PARALLEL DEFAULT(PRIVATE),&
-            !$OMP SHARED(Ngrid,Egrid,Beta_DFT,DoS_Model,DoS_DFT,Zph,Kph,K,EDsq,Delta,newDelta)
+            !$OMP SHARED(EDsq,Ngrid,Egrid,Beta_DFT,DoS_Model,DoS_DFT,Zph,Kph,K,Delta,newDelta),&
+            !$OMP SHARED(calc_phonons,calc_Int_static,calc_Int_dynamic)
             newDelta = czero
             !$OMP DO SCHEDULE(DYNAMIC)
             do iE1=1,Ngrid
@@ -202,9 +203,12 @@ subroutine calc_Tc(pathOUTPUT,Inputs,Lttc,Wlat)
             oldDelta = Delta
             !
          enddo SCloop !iloop
-         deallocate(EDsq,newDelta,oldDelta)
-         if(calc_phonons)deallocate(Zph,Kph)
+         deallocate(EDsq,newDelta)
          if(associated(K))nullify(K)
+         if(allocated(Zph))deallocate(Zph)
+         if(allocated(Kph))deallocate(Kph)
+         if(allocated(Kel_stat))deallocate(Kel_stat)
+         if(allocated(Kel_dyn))deallocate(Kel_dyn)
          !
          if(.not.converged)write(*,"(A)")"     Warning: Delta is not converged."
          call dump_Field_component(Delta,reg(pathOUTPUT)//"Gap_Equation/","Delta_T"//str(Temp,2)//".DAT",Egrid)

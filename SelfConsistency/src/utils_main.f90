@@ -3086,7 +3086,11 @@ contains
                   allocate(Hartree_lat(Crystal%Norb,Crystal%Norb));Hartree_lat=czero
                   call read_Matrix(Hartree_lat,reg(PrevItFolder)//"Hartree_lat.DAT")
                   do ispin=1,Nspin
-                     call loc2imp(Simp(isite)%N_s(:,:,ispin),Hartree_lat,LocalOrbs(isite)%Orbs,U=LocalOrbs(isite)%Rot)
+                     if(RotateHloc)then
+                        call loc2imp(Simp(isite)%N_s(:,:,ispin),Hartree_lat,LocalOrbs(isite)%Orbs,U=LocalOrbs(isite)%Rot)
+                     else
+                        call loc2imp(Simp(isite)%N_s(:,:,ispin),Hartree_lat,LocalOrbs(isite)%Orbs)
+                     endif
                   enddo
                   deallocate(Hartree_lat)
                   !
@@ -3903,6 +3907,14 @@ contains
             call interpolate2Beta(S_DMFT,Beta_Match,"imp",ExpandImpurity)
             call dump_FermionicField(S_DMFT,reg(PrevItFolder),"Simp_w",paramagnet)
             call DeallocateFermionicField(S_DMFT)
+            !
+            !Lattice Gf local
+            write(*,"(A)") "     Interpolating lattice Green function from Beta="//str(Beta_Match%Beta_old,2)//" to Beta="//str(Beta_Match%Beta_new,2)
+            call AllocateFermionicField(Glat,Crystal%Norb,Beta_Match%Nmats_old,Nkpt=Crystal%Nkpt,Nsite=Nsite,Beta=Beta_Match%Beta_old)
+            call read_FermionicField(Glat,reg(Beta_Match%Path),"Glat_w")
+            call interpolate2Beta(Glat,Beta_Match,"lat",.true.)
+            call dump_FermionicField(Glat,reg(PrevItFolder),"Glat_w",paramagnet)
+            call DeallocateFermionicField(Glat)
             !
             !Read&write instead of execute_command
             allocate(HartreeU(Crystal%Norb,Crystal%Norb,Nspin));HartreeU=czero
