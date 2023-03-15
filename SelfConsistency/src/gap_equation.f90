@@ -613,7 +613,7 @@ contains
    !         set by Initialize_inputs and it is the DFT one if phonons are present
    !         custom otherwise.
    !---------------------------------------------------------------------------!
-   subroutine calc_Kel_stat_e(Beta,Kel_stat_e,printKpath,printmode)
+   subroutine calc_Kel_stat_e(Beta,Kel_stat_e,printmode,printKpath)
       !
       use parameters
       use utils_misc
@@ -621,15 +621,14 @@ contains
       !
       real(8),intent(in)                    :: Beta
       complex(8),intent(out)                :: Kel_stat_e(:,:)
-      character(len=*),intent(in),optional  :: printKpath
-      character(len=*),intent(in),optional  :: printmode
+      character(len=*),intent(in)           :: printmode
+      character(len=*),intent(in)           :: printKpath
       !
       integer                               :: Efermi_ndx
       integer                               :: iE1,iE2,Ngrid
       integer                               :: iorb,jorb,Norb
       integer                               :: ik1,ik2,iq,Nkpt,Nmats
       real(8)                               :: Temp,DoS0
-      character(len=12)                     :: printmode_used
       real                                  :: start,finish
       !
       !
@@ -685,13 +684,10 @@ contains
       call cpu_time(finish)
       write(*,"(A,F)") "     Calculation of static electronic Kernel cpu timing:", finish-start
       !
-      if(present(printKpath).and.(reg(printmode).ne."None"))then
-         !
+      !Print Kernel
+      if(reg(printmode).ne."None")then
          Temp = 1d0 / (K2eV*eV2DFTgrid*Beta)
-         printmode_used="E0"
-         if(present(printmode))printmode_used=reg(printmode)
-         call print_Kernel("electronic",printmode_used,reg(printKpath),"Kel_stat",Temp,Egrid,Egrid,Kel_stat_e)
-         !
+         call print_Kernel("electronic",reg(printmode),reg(printKpath),"Kel_stat",Temp,Egrid,Egrid,Kel_stat_e)
       endif
       !
    end subroutine calc_Kel_stat_e
@@ -702,7 +698,7 @@ contains
    !         the fully screened interaction. The grid is set by Initialize_inputs
    !         and it is the DFT one if phonons are present custom otherwise.
    !---------------------------------------------------------------------------!
-   subroutine calc_Kel_dyn_e(Beta,Kel_dyn_e,printKpath,printmode)
+   subroutine calc_Kel_dyn_e(Beta,Kel_dyn_e,printmode,printKpath)
       !
       use omp_lib
       use parameters
@@ -711,8 +707,8 @@ contains
       !
       real(8),intent(in)                    :: Beta
       complex(8),intent(out)                :: Kel_dyn_e(:,:)
-      character(len=*),intent(in),optional  :: printKpath
-      character(len=*),intent(in),optional  :: printmode
+      character(len=*),intent(in)           :: printmode
+      character(len=*),intent(in)           :: printKpath
       !
       integer                               :: Efermi_ndx
       integer                               :: iorb,jorb,Norb
@@ -731,7 +727,6 @@ contains
       real(8),allocatable                   :: wmats(:),ygrid_m(:),ygrid_p(:)
       complex(8),allocatable                :: Wee(:)
       complex(8),allocatable                :: Wk_pvt(:,:,:,:)
-      character(len=12)                     :: printmode_used
       real                                  :: start,finish
       !
       !
@@ -913,13 +908,10 @@ contains
       call cpu_time(finish)
       write(*,"(A,F)") "     Calculation of dynamic electronic Kernel cpu timing:", finish-start
       !
-      if(present(printKpath).and.(reg(printmode).ne."None"))then
-         !
+      !Print Kernel
+      if(reg(printmode).ne."None")then
          Temp = 1d0 / (K2eV*eV2DFTgrid*Beta)
-         printmode_used="E0"
-         if(present(printmode))printmode_used=reg(printmode)
-         call print_Kernel("electronic",printmode_used,reg(printKpath),"Kel_dyn",Temp,Egrid,Egrid,Kel_dyn_e)
-         !
+         call print_Kernel("electronic",reg(printmode),reg(printKpath),"Kel_dyn",Temp,Egrid,Egrid,Kel_dyn_e)
       endif
       !
    end subroutine calc_Kel_dyn_e
@@ -937,15 +929,14 @@ contains
       !
       real(8),intent(in)                    :: Beta
       real(8),intent(out)                   :: Zph_e(:)
-      character(len=*),intent(in),optional  :: mode
-      character(len=*),intent(in),optional  :: printZpath
+      character(len=*),intent(in)           :: mode
+      character(len=*),intent(in)           :: printZpath
       !
       integer                               :: Efermi_ndx,unit
       integer                               :: iE,iE1,iE2,Ngrid
       integer                               :: iomega,Nomega
       real(8)                               :: E1,E2,dE,dw,Temp,DoS0_DFT
       real(8),allocatable                   :: a2F_tmp(:),a2F_int(:)
-      character(len=12)                     :: mode_used
       real                                  :: start,finish
       !
       !
@@ -963,10 +954,7 @@ contains
       Nomega = size(omega)
       call assert_shape(Zph_e,[Ngrid],"calc_Zph_e","Zph_e")
       !
-      mode_used="symrenorm"
-      if(present(mode))mode_used=reg(mode)
-      !
-      select case(reg(mode_used))
+      select case(reg(mode))
          case default
             !
             stop "Available E->0 liumits for Zph_e: symrenorm, asym, sym."
@@ -1006,15 +994,15 @@ contains
             a2F_tmp=0d0
             do iomega=1,Nomega
                !
-               if(reg(mode_used).eq."symrenorm")then
+               if(reg(mode).eq."symrenorm")then
                   !
                   a2F_tmp(iomega) = a2F(iomega) * ( J(E1,E2,omega(iomega),Beta) + J(E1,-E2,omega(iomega),Beta) )
                   !
-               elseif(reg(mode_used).eq."asym")then
+               elseif(reg(mode).eq."asym")then
                   !
                   a2F_tmp(iomega) = a2F(iomega) * ( 2d0*Jasym(E1,E2,omega(iomega),Beta) - Iasym(E1,E2,omega(iomega),Beta) )
                   !
-               elseif (reg(mode_used).eq."sym") then
+               elseif (reg(mode).eq."sym") then
                   !
                   a2F_tmp(iomega) = a2F(iomega) * ( Iprime(E1,E2,omega(iomega),Beta) + Iprime(E1,-E2,omega(iomega),Beta) )
                   !
@@ -1034,7 +1022,7 @@ contains
          do iE2=2,Ngrid
             !
             dE = abs(Egrid(iE2)-Egrid(iE2-1))
-            if(reg(mode_used).eq."asym")then
+            if(reg(mode).eq."asym")then
                Zph_e(iE1) = Zph_e(iE1) + ( a2F_int(iE2-1) + a2F_int(iE2) ) * (dE/2d0) * (DoS_DFT(iE2)/DoS0_DFT)
             else
                Zph_e(iE1) = Zph_e(iE1) + ( a2F_int(iE2-1) + a2F_int(iE2) ) * (dE/2d0)
@@ -1059,17 +1047,14 @@ contains
       call cpu_time(finish)
       write(*,"(A,F)") "     Calculation of phononic Z cpu timing:", finish-start
       !
-      if(present(printZpath))then
-         !
-         Temp = 1d0 / (K2eV*eV2DFTgrid*Beta)
-         unit = free_unit()
-         open(unit,file=reg(printZpath)//"Zph_e_T"//str(Temp,2)//".DAT",form="formatted",status="unknown",position="rewind",action="write")
-         do iE=1,Ngrid
-            write(unit,"(2F20.10)")Egrid(iE),Zph_e(iE)
-         enddo
-         close(unit)
-         !
-      endif
+      !Print Z phonon
+      Temp = 1d0 / (K2eV*eV2DFTgrid*Beta)
+      unit = free_unit()
+      open(unit,file=reg(printZpath)//"Zph_e_T"//str(Temp,2)//".DAT",form="formatted",status="unknown",position="rewind",action="write")
+      do iE=1,Ngrid
+         write(unit,"(2F20.10)")Egrid(iE),Zph_e(iE)
+      enddo
+      close(unit)
       !
    end subroutine calc_Zph_e
 
@@ -1086,15 +1071,14 @@ contains
       !
       real(8),intent(in)                    :: Beta
       real(8),intent(out)                   :: Kph_e(:,:)
-      character(len=*),intent(in),optional  :: printmode
-      character(len=*),intent(in),optional  :: printKpath
+      character(len=*),intent(in)           :: printmode
+      character(len=*),intent(in)           :: printKpath
       !
       integer                               :: Efermi_ndx,iE1,iE2,Ngrid
       integer                               :: iomega,Nomega
       real(8)                               :: E1,E2,dw,Temp,DoS0_DFT
       real(8)                               :: a2F_int
       real(8),allocatable                   :: a2F_tmp(:)
-      character(len=12)                     :: printmode_used
       real                                  :: start,finish
       !
       !
@@ -1155,13 +1139,10 @@ contains
       call cpu_time(finish)
       write(*,"(A,F)") "     Calculation of phononic Kernel cpu timing:", finish-start
       !
-      if(present(printKpath).and.(reg(printmode).ne."None"))then
-         !
+      !Print Kernel
+      if(reg(printmode).ne."None")then
          Temp = 1d0 / (K2eV*eV2DFTgrid*Beta)
-         printmode_used="E0"
-         if(present(printmode))printmode_used=reg(printmode)
-         call print_Kernel("phononic",printmode_used,reg(printKpath),"Kph",Temp,Egrid,Egrid,dcmplx(Kph_e,0d0))
-         !
+         call print_Kernel("phononic",reg(printmode),reg(printKpath),"Kph",Temp,Egrid,Egrid,dcmplx(Kph_e,0d0))
       endif
       !
    end subroutine calc_Kph_e
@@ -1181,7 +1162,7 @@ contains
       implicit none
       !
       character(len=*),intent(in)           :: Kerneltype
-      character(len=*),intent(inout)        :: printmode
+      character(len=*),intent(in)           :: printmode
       character(len=*),intent(in)           :: printpath
       character(len=*),intent(in)           :: filename
       real(8),intent(in)                    :: T
@@ -1194,10 +1175,6 @@ contains
       !
       if((reg(Kerneltype).ne."electronic").and.(reg(Kerneltype).ne."phononic"))then
          stop "print_Kernel: available Kerneltype are only electronic or phononic."
-      endif
-      if((reg(Kerneltype).eq."phononic").and.(reg(printmode).eq."0E"))then
-         write(*,"(A)") "     Available print modes of phononic Kernel does not include 0E, setting to E0."
-         printmode="E0"
       endif
       !
       Ngrid1 = size(Egrid1)
@@ -1215,7 +1192,7 @@ contains
       select case(reg(printmode))
          case default
             !
-            if(reg(Kerneltype).eq."phononic")stop "Available print modes for phononic Kernel: E0, surf, all."
+            if(reg(Kerneltype).eq."phononic")stop "Available print modes for phononic Kernel: E0, diag, surf, all."
             if(reg(Kerneltype).eq."electronic")stop "Available print modes for electronic Kernel: E0, 0E, diag, surf, all."
             !
          case("E0")

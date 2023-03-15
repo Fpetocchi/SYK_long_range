@@ -15,7 +15,7 @@ subroutine calc_Tc(pathOUTPUT,Inputs,Lttc,Wlat)
    type(Lattice),intent(in)              :: Lttc
    type(BosonicField),intent(in)         :: Wlat
    !
-   real(8)                               :: dE
+   real(8)                               :: dE,dT
    integer                               :: iE,iE1,iE2
    integer                               :: Norb,Nkpt,Ngrid
    complex(8)                            :: Kint
@@ -76,13 +76,14 @@ subroutine calc_Tc(pathOUTPUT,Inputs,Lttc,Wlat)
    !
    if(Inputs%calc_Tc)then
       !
-      !Allocating delta here so as to imply annealing between temperatures
       Ngrid = size(Egrid)
-      allocate(Delta(Ngrid));Delta = Inputs%DeltaInit
+      allocate(Delta(Ngrid));Delta = czero
       do iE=1,Ngrid
-         if(abs(Egrid(iE)).gt.(0.1d0*Inputs%wrealMax*eV2DFTgrid))Delta(iE)=czero
+         Delta(iE) = -diff_fermidirac(Egrid(iE),0d0,(50d0/(Inputs%wrealMax*eV2DFTgrid)))
       enddo
+      Delta = Delta * Inputs%DeltaInit * eV2DFTgrid / Delta(minloc(abs(Egrid),dim=1))
       allocate(oldDelta(Ngrid));oldDelta=Delta
+      call dump_Field_component(Delta,reg(pathOUTPUT)//"Gap_Equation/","Delta_init.DAT",Egrid)
       !
       !
       !============================ TEMPERATURE LOOP =============================!
@@ -90,33 +91,35 @@ subroutine calc_Tc(pathOUTPUT,Inputs,Lttc,Wlat)
       write(*,"(A)") new_line("A")//"---- Starting temperature scan"
       do iT=1,Inputs%Tsteps
          !
-         Temp = Inputs%Tbounds(1) + (iT-1)*abs(Inputs%Tbounds(2)-Inputs%Tbounds(1))/dble(Inputs%Tsteps-1)
+         dT=0d0
+         if(Inputs%Tsteps.gt.1) dT = (iT-1)*abs(Inputs%Tbounds(2)-Inputs%Tbounds(1))/dble(Inputs%Tsteps-1)
+         !
+         Temp = Inputs%Tbounds(1) + dT
          Beta = 1d0 / (Temp*K2eV)
          Beta_DFT = 1d0 / (Temp*K2eV*eV2DFTgrid)
          !
-         write(*,"(A)") new_line("A")//"     ...................................."//new_line("A")
-         write(*,"(A,1F10.5)") "     T(K): ",Temp
-         write(*,"(2(A,1F12.5))") "     Beta(1/eV): ",Beta,"    Beta(1/"//DFTgrid//"): ",Beta_DFT
+         write(*,"(A)") new_line("A")//"     ................................................"//new_line("A")
+         write(*,"(3(A,1F12.5))") "     T(K): ",Temp,"    Beta(1/eV): ",Beta,"    Beta(1/"//DFTgrid//"): ",Beta_DFT
          !
          write(*,"(A)") new_line("A")//"     Computing Kernels."
          !
          if(calc_phonons)then
             !
             allocate(Zph(Ngrid));Zph=0d0
-            call calc_Zph_e(Beta_DFT,Zph,mode=reg(Inputs%mode_Zph),printZpath=reg(printpath))
+            call calc_Zph_e(Beta_DFT,Zph,reg(Inputs%mode_Zph),reg(printpath))
             !
             allocate(Kph(Ngrid,Ngrid));Kph=0d0
-            call calc_Kph_e(Beta_DFT,Kph,printmode=reg(Inputs%printmode_ph),printKpath=reg(printpath))
+            call calc_Kph_e(Beta_DFT,Kph,reg(Inputs%printmode_ph),reg(printpath))
             !
          endif
          !
          if(calc_Int_static.and.calc_Int_dynamic)then
             !
             allocate(Kel_stat(Ngrid,Ngrid));Kel_stat=czero
-            call calc_Kel_stat_e(Beta_DFT,Kel_stat,printKpath=reg(printpath),printmode=reg(Inputs%printmode_el))
+            call calc_Kel_stat_e(Beta_DFT,Kel_stat,reg(Inputs%printmode_el),reg(printpath))
             !
             allocate(Kel_dyn(Ngrid,Ngrid));Kel_dyn=czero
-            call calc_Kel_dyn_e(Beta_DFT,Kel_dyn,printKpath=reg(printpath),printmode=reg(Inputs%printmode_el))
+            call calc_Kel_dyn_e(Beta_DFT,Kel_dyn,reg(Inputs%printmode_el),reg(printpath))
             !
             Kel_dyn = Kel_stat + Kel_dyn
             K => Kel_dyn
@@ -124,13 +127,13 @@ subroutine calc_Tc(pathOUTPUT,Inputs,Lttc,Wlat)
          elseif(calc_Int_static) then
             !
             allocate(Kel_stat(Ngrid,Ngrid));Kel_stat=czero
-            call calc_Kel_stat_e(Beta_DFT,Kel_stat,printKpath=reg(printpath),printmode=reg(Inputs%printmode_el))
+            call calc_Kel_stat_e(Beta_DFT,Kel_stat,reg(Inputs%printmode_el),reg(printpath))
             K => Kel_stat
             !
          elseif(calc_Int_dynamic) then
             !
             allocate(Kel_dyn(Ngrid,Ngrid));Kel_dyn=czero
-            call calc_Kel_dyn_e(Beta_DFT,Kel_dyn,printKpath=reg(printpath),printmode=reg(Inputs%printmode_el))
+            call calc_Kel_dyn_e(Beta_DFT,Kel_dyn,reg(Inputs%printmode_el),reg(printpath))
             K => Kel_dyn
             !
          endif
@@ -147,11 +150,7 @@ subroutine calc_Tc(pathOUTPUT,Inputs,Lttc,Wlat)
               EDsq(iE) = sqrt( Egrid(iE)**2 + conjg(Delta(iE))*Delta(iE) )
             enddo
             !
-            !$OMP PARALLEL DEFAULT(PRIVATE),&
-            !$OMP SHARED(EDsq,Ngrid,Egrid,Beta_DFT,DoS_Model,DoS_DFT,Zph,Kph,K,Delta,newDelta),&
-            !$OMP SHARED(calc_phonons,calc_Int_static,calc_Int_dynamic)
             newDelta = czero
-            !$OMP DO SCHEDULE(DYNAMIC)
             do iE1=1,Ngrid
                !
                !integral over E2
@@ -183,9 +182,6 @@ subroutine calc_Tc(pathOUTPUT,Inputs,Lttc,Wlat)
                if(calc_phonons) newDelta(iE1) = newDelta(iE1) - Zph(iE1)*Delta(iE1)
                !
             enddo
-            !$OMP END DO
-            !$OMP BARRIER
-            !$OMP END PARALLEL
             !
             !Convergence check
             errDelta = maxval(abs(Delta-newDelta))
@@ -202,6 +198,8 @@ subroutine calc_Tc(pathOUTPUT,Inputs,Lttc,Wlat)
             Delta = (1d0-Inputs%DeltaMix)*newDelta + Inputs%DeltaMix*oldDelta
             oldDelta = Delta
             !
+            call dump_Field_component(Delta,reg(pathOUTPUT)//"Gap_Equation/loops_T"//str(Temp,2)//"/",str(iloop)//"_Delta.DAT",Egrid)
+            !
          enddo SCloop !iloop
          deallocate(EDsq,newDelta)
          if(associated(K))nullify(K)
@@ -211,6 +209,7 @@ subroutine calc_Tc(pathOUTPUT,Inputs,Lttc,Wlat)
          if(allocated(Kel_dyn))deallocate(Kel_dyn)
          !
          if(.not.converged)write(*,"(A)")"     Warning: Delta is not converged."
+         Delta = Delta*DFTgrid2eV
          call dump_Field_component(Delta,reg(pathOUTPUT)//"Gap_Equation/","Delta_T"//str(Temp,2)//".DAT",Egrid)
          !
       enddo !iT

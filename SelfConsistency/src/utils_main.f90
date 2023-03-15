@@ -1874,7 +1874,7 @@ contains
       complex(8),allocatable                :: invCurlyG(:,:,:),invCurlyG_MultiTier(:,:,:)
       real(8),allocatable                   :: tauF(:),ReadLine(:),DitauOld(:,:,:)
       character(len=255)                    :: file,MomDir
-      logical                               :: filexists
+      logical                               :: filexists,MultiTier_
       !
       !
       write(*,"(A)") new_line("A")//new_line("A")//"---- calc_Delta of "//reg(LocalOrbs(isite)%Name)
@@ -1899,7 +1899,9 @@ contains
          enddo
       enddo
       !
-      if(MultiTier.and.(Nsite.eq.1))then
+      MultiTier_ = MultiTier.and.(Nsite.eq.1)
+      !
+      if(MultiTier_)then
          !
          !The Dyson equation occurs inside all the local space. Rotations not allowed here.
          Norb_MultiTier = Glat%Norb
@@ -2089,7 +2091,7 @@ contains
             DeltaSym%ws(iorb,iorb,:,:) = Dmats(iorb,:,:)
          enddo
          call symmetrize_GW(DeltaSym,EqvImpndxF(isite))
-         if(causal_D)call symmetrize_GW(DeltaCorr,EqvImpndxF(isite))
+         if(causal_D.and.(.not.MultiTier_))call symmetrize_GW(DeltaCorr,EqvImpndxF(isite))
          do iorb=1,Norb
             Dmats(iorb,:,:) = DeltaSym%ws(iorb,iorb,:,:)
          enddo
@@ -2251,7 +2253,7 @@ contains
       call dump_FermionicField(FermiPrint,reg(ItFolder)//"Solver_"//reg(LocalOrbs(isite)%Name)//"/","Delta_"//reg(LocalOrbs(isite)%Name)//"_w",paramagnet)
       !
       !Delta(iw) without causality correction
-      if(causal_D)then
+      if(causal_D.and.(.not.MultiTier_))then
          call clear_attributes(FermiPrint)
          do ispin=1,Nspin
             do iorb=1,Norb

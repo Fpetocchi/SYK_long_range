@@ -10,7 +10,7 @@
 
 export OMP_NUM_THREADS=$SLURM_NTASKS_PER_NODE
 ulimit -c 0
-
+ulimit -s unlimited
 
 
 
@@ -37,7 +37,6 @@ PATH_INPUT_TR=GWinput_beta___
 ####SKIP_ALL_QMC="T"
 ####CHANGE_BETA_IT=1
 ####COLLECT_AKW="T"
-####TO BE REMOVED:
 ####REPLACE_QMC_RES="T"
 ####PREP_MAXENT="T"
 
