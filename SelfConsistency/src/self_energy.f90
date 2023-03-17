@@ -291,7 +291,7 @@ contains
       use utils_fields
       use crystal
       use fourier_transforms
-      use input_vars, only : Ntau, tau_uniform, paramagnet
+      use input_vars, only : Ntau, tau_uniform, paramagnet, DC_remove_self
       implicit none
       !
       type(FermionicField),intent(inout)    :: Smats_dc
@@ -305,11 +305,12 @@ contains
       complex(8),allocatable                :: Sitau_loc(:,:,:,:)
       complex(8),allocatable                :: Gitau_loc(:,:,:,:)
       complex(8),allocatable                :: Witau_loc(:,:,:)
-      !complex(8),allocatable                :: Gmats_lda(:,:),Gitau_lda(:,:)
       real(8)                               :: Beta
       integer                               :: Nbp,Nkpt,Norb,Nmats
       integer                               :: itau,ispin!,iw
       integer                               :: i,j,k,l,ib1,ib2
+      type(physicalU)                       :: PhysicalUelements
+      logical                               :: rmvDiagram
       real                                  :: start,finish
       !
       !
@@ -393,13 +394,14 @@ contains
       call cpu_time(finish)
       write(*,"(A,F)") "     Sigma_Cdc(iw) cpu timing:", finish-start
       !
+      call init_Uelements(Norb,PhysicalUelements)
+      !
       !Sigmax_nm(q) = Sum_kij V_{ni,jm}(q-k)G_ij(k,beta) <=> sigmax(r,r')=-g(r,r',tau=0-)*v(r-r')
       call cpu_time(start)
       call clear_attributes(Smats_Xdc_)
       do ispin=1,Nspin
-         !$OMP PARALLEL DEFAULT(NONE),&
-         !$OMP SHARED(Norb,Ntau,ispin,Smats_Xdc_,Gitau_loc,Wmats),&
-         !$OMP PRIVATE(i,j,k,l,ib1,ib2)
+         !$OMP PARALLEL DEFAULT(SHARED),&
+         !$OMP PRIVATE(i,j,k,l,ib1,ib2,rmvDiagram)
          !$OMP DO
          do k=1,Norb
             do i=1,Norb
@@ -409,7 +411,8 @@ contains
                      !
                      call F2Bindex(Norb,[i,j],[k,l],ib1,ib2)
                      !
-                     Smats_Xdc_%N_s(i,k,ispin) = Smats_Xdc_%N_s(i,k,ispin) + Gitau_loc(j,l,Ntau,ispin)*Wmats%bare_local(ib1,ib2)
+                     rmvDiagram = DC_remove_self .and. (PhysicalUelements%Full_Uaa(ib1,ib2).or.PhysicalUelements%Full_Jph(ib1,ib2))
+                     if(.not.rmvDiagram) Smats_Xdc_%N_s(i,k,ispin) = Smats_Xdc_%N_s(i,k,ispin) + Gitau_loc(j,l,Ntau,ispin)*Wmats%bare_local(ib1,ib2)
                      !
                   enddo
                enddo

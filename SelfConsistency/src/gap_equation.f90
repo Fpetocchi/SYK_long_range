@@ -31,6 +31,7 @@ module gap_equation
    !
    complex(8),allocatable,private           :: Zk_Model(:,:,:)
    complex(8),allocatable,private           :: Wk(:,:,:,:)
+   complex(8),allocatable,private           :: Wee_dyn(:,:,:)
    !
    logical,private                          :: initialized=.false.
    logical,private                          :: Phonons_stored=.false.
@@ -418,7 +419,7 @@ contains
    !PURPOSE: Store the interpolated and rotated NaNb components of the fully
    !         screened interaction. This is the only subroutine where beta is in 1/eV
    !---------------------------------------------------------------------------!
-   subroutine store_Wk4gap(Wk_orig,Lttc,Beta,cutoff,pathOUTPUT)
+   subroutine store_Wk4gap(Wk_orig,Lttc,Beta,cutoff,pathOUTPUT,printWk)
       !
       use parameters
       use utils_misc
@@ -433,17 +434,16 @@ contains
       real(8),intent(in)                    :: Beta
       real(8),intent(in)                    :: cutoff
       character(len=*),intent(in)           :: pathOUTPUT
+      logical,intent(in)                    :: printWk
       !
       integer                               :: Ngrid,Norb,Nbp
       integer                               :: iorb,jorb,ib1,ib2,a,b,c,d
       integer                               :: iw,wndx,Nmats
       integer                               :: ik1,ik2,iq,iqndx,Nkpt
       integer,allocatable                   :: kptsum(:,:),kptdif(:,:)
-      real(8),allocatable                   :: kpt_Model_io(:,:)
       real(8),allocatable                   :: wmats(:)
       complex(8),allocatable                :: Wk_w(:,:,:),Wk_wq(:,:)
       type(physicalU)                       :: PhysicalUelements
-      type(FermionicField)                  :: Wk_io
       real                                  :: start,finish
       logical                               :: Wkexists
       logical                               :: FullRot=.false.
@@ -469,13 +469,6 @@ contains
          if(Nkpt.ne.Lttc%Nkpt)stop "store_Wk4gap: something is wrong with the K-point dimension."
       endif
       !
-      call fill_ksumkdiff(kpt_Model,kptsum,kptdif)
-      deallocate(kptsum)
-      !
-      allocate(kpt_Model_io(3,Nkpt*Nkpt));kpt_Model_io=0d0
-      kpt_Model_io(:,1:Nkpt) = kpt_Model
-      kpt_Model_io(:,1+Nkpt:2*Nkpt) = kpt_Model
-      !
       allocate(wmats(Nmats));wmats=BosonicFreqMesh(Beta,Nmats)
       wndx = Nmats
       if(cutoff.lt.wmats(Nmats))then
@@ -485,20 +478,22 @@ contains
       deallocate(wmats)
       !
       !check if Wk is already printed
-      call inquireFile(reg(pathOUTPUT)//"Wk_gap_w_k_s1.DAT",Wkexists,hardstop=.false.,verb=verbose)
+      call inquireFile(reg(pathOUTPUT)//"Wk_gap_w_k.DAT",Wkexists,hardstop=.false.,verb=verbose)
       !
       if(allocated(Wk))deallocate(Wk)
       allocate(Wk(Norb,Norb,wndx,Nkpt*Nkpt));Wk=czero
       if(Wkexists)then
          !
-         call AllocateFermionicField(Wk_io,Norb,wndx,Nkpt=Nkpt*Nkpt)
-         call read_FermionicField(Wk_io,reg(pathOUTPUT),"Wk_gap_w",kpt_Model_io)
-         Wk = Wk_io%wks(:,:,:,:,1)
-         call DeallocateField(Wk_io)
+         call cpu_time(start)
+         call read_Wk4gap("Wk_gap_w_k.DAT")
+         call cpu_time(finish)
+         write(*,"(A,F)") "     Wk read from disk cpu timing:", finish-start
          !
       else
          !
          call init_Uelements(Norb,PhysicalUelements)
+         call fill_ksumkdiff(kpt_Model,kptsum,kptdif)
+         deallocate(kptsum)
          !
          !Interpolate Wk to new K-grid - this is done separately for each frequency
          !so we dont need to store another full Wk before the orbital rotation
@@ -550,19 +545,24 @@ contains
                      do iorb=1,Norb
                         do jorb=iorb,Norb
                            !
-                           do a=1,Norb
-                              do b=1,Norb
-                                 do c=1,Norb
-                                    do d=1,Norb
-                                       !
-                                       call F2Bindex(Norb,[a,b],[c,d],ib1,ib2)
-                                       !
-                                       Wk(iorb,jorb,iw,iqndx) = Wk(iorb,jorb,iw,iqndx) + Wk_w(ib1,ib2,iq)             &
-                                                              * conjg(Zk_Model(a,iorb,ik1)) * Zk_Model(b,jorb,ik2)    &
-                                                              * conjg(Zk_Model(c,jorb,ik2)) * Zk_Model(d,iorb,ik1)
-                                       !
-                                    enddo
-                                 enddo
+                           do ib1=1,Nbp
+                              do ib2=ib1,Nbp
+                                 !
+                                 a = PhysicalUelements%Full_Map(ib1,ib2,1)
+                                 b = PhysicalUelements%Full_Map(ib1,ib2,2)
+                                 c = PhysicalUelements%Full_Map(ib1,ib2,3)
+                                 d = PhysicalUelements%Full_Map(ib1,ib2,4)
+                                 !
+                                 Wk(iorb,jorb,iw,iqndx) = Wk(iorb,jorb,iw,iqndx) + Wk_w(ib1,ib2,iq)             &
+                                                        * conjg(Zk_Model(a,iorb,ik1)) * Zk_Model(b,jorb,ik2)    &
+                                                        * conjg(Zk_Model(c,jorb,ik2)) * Zk_Model(d,iorb,ik1)
+                                 !
+                                 if(ib1.ne.ib2)then
+                                    Wk(iorb,jorb,iw,iqndx) = Wk(iorb,jorb,iw,iqndx) + Wk_w(ib2,ib1,iq)             &
+                                                           * conjg(Zk_Model(c,iorb,ik1)) * Zk_Model(d,jorb,ik2)    &
+                                                           * conjg(Zk_Model(a,jorb,ik2)) * Zk_Model(b,iorb,ik1)
+                                 endif
+                                 !
                               enddo
                            enddo
                            !
@@ -582,22 +582,123 @@ contains
             !$OMP END PARALLEL
             !
          enddo
-         deallocate(Wk_w)
+         deallocate(Wk_w,kptdif)
          call cpu_time(finish)
          write(*,"(A,F)") "     Wk preparation cpu timing:", finish-start
          !
-         Wk = Wk * eV2DFTgrid
-         !
-         !this looks orbitally like a Green's function container
-         call AllocateFermionicField(Wk_io,Norb,wndx,Nkpt=Nkpt*Nkpt)
-         Wk_io%wks(:,:,:,:,1) = Wk
-         call dump_FermionicField(Wk_io,reg(pathOUTPUT),"Wk_gap_w",.true.,kpt_Model,.true.)
-         call DeallocateField(Wk_io)
+         if(printWk) call dump_Wk4gap("Wk_gap_w_k.DAT")
          !
       endif
-      deallocate(kptdif)
+      !
+      Wk = Wk * eV2DFTgrid
       !
       Wk_stored=.true.
+      !
+      !
+      !
+   contains
+      !
+      !
+      !
+      subroutine dump_Wk4gap(filename)
+         !
+         use utils_misc
+         implicit none
+         !
+         character(len=*),intent(in)        :: filename
+         integer                            :: unit
+         integer                            :: D1,D2,D3,D4
+         integer                            :: iD1,iD2,iD3,iD4
+         character(len=256)                 :: printpath
+         !
+         !
+         if(verbose)write(*,"(A)") "---- dump_Wk4gap"
+         !
+         !
+         D1 = size(Wk,dim=1) !Norb
+         D2 = size(Wk,dim=2) !Norb
+         D3 = size(Wk,dim=3) !wndx
+         D4 = size(Wk,dim=4) !Nkpt
+         !
+         printpath = reg(pathOUTPUT)//reg(filename)
+         write(*,"(A)") "     Dump "//reg(printpath)//" (binary)"
+         unit = free_unit()
+         open(unit,file=reg(printpath),form="unformatted",status="unknown",position="rewind",action="write")
+         !
+         write(unit) D1,D2,D3,D4
+         do iD4=1,D4
+            write(unit) iD4
+            do iD3=1,D3
+               write(unit) iD3
+               do iD2=1,D2
+                  do iD1=1,D1
+                     write(unit) iD1,iD2,dreal(Wk(iD1,iD2,iD3,iD4)),dimag(Wk(iD1,iD2,iD3,iD4))
+                  enddo
+               enddo
+            enddo
+         enddo
+         close(unit)
+         !
+      end subroutine dump_Wk4gap
+      !
+      subroutine read_Wk4gap(filename)
+         !
+         use utils_misc
+         implicit none
+         !
+         character(len=*),intent(in)        :: filename
+         integer                            :: unit
+         integer                            :: D1,D2,D3,D4
+         integer                            :: D1_,D2_,D3_,D4_
+         integer                            :: iD1,iD2,iD3,iD4
+         integer                            :: iD1_,iD2_,iD3_,iD4_
+         real(8)                            :: ReW,ImW
+         character(len=256)                 :: printpath
+         !
+         !
+         if(verbose)write(*,"(A)") "---- read_Wk4gap"
+         !
+         !
+         if(.not.allocated(Wk))stop "read_Wk4gap: Wk is not allocated."
+         D1 = size(Wk,dim=1) !Norb
+         D2 = size(Wk,dim=2) !Norb
+         D3 = size(Wk,dim=3) !wndx
+         D4 = size(Wk,dim=4) !Nkpt
+         !
+         printpath = reg(pathOUTPUT)//reg(filename)
+         write(*,"(A)") "     Read "//reg(printpath)
+         unit = free_unit()
+         open(unit,file=reg(printpath),form="unformatted",status="unknown",position="rewind",action="read")
+         !
+         read(unit) D1_,D2_,D3_,D4_
+         if(D1_.ne.D1) stop "read_Wk4gap: Wk from file has wrong 1st dimension."
+         if(D2_.ne.D2) stop "read_Wk4gap: Wk from file has wrong 2nd dimension."
+         if(D3_.ne.D3) stop "read_Wk4gap: Wk from file has wrong 3rd dimension."
+         if(D4_.ne.D4) stop "read_Wk4gap: Wk from file has wrong 4th dimension."
+         !
+         do iD4=1,D4
+            read(unit) iD4_
+            if(iD4_.ne.iD4) stop "read_Wk4gap: wrong iD4 index."
+            do iD3=1,D3
+               read(unit) iD3_
+               if(iD3_.ne.iD3) stop "read_Wk4gap: wrong iD3 index."
+               do iD2=1,D2
+                  do iD1=1,D1
+                     read(unit) iD1_,iD2_,ReW,ImW
+                     if(all([iD1_,iD2_].eq.[iD1,iD2]))then
+                        Wk(iD1,iD2,iD3,iD4) = dcmplx(ReW,ImW)
+                     else
+                        stop "read_Wk4gap: wrong iD1 and/or iD2 index."
+                     endif
+                  enddo
+               enddo
+            enddo
+         enddo
+         close(unit)
+         !
+      end subroutine read_Wk4gap
+      !
+      !
       !
    end subroutine store_Wk4gap
 
@@ -615,6 +716,7 @@ contains
    !---------------------------------------------------------------------------!
    subroutine calc_Kel_stat_e(Beta,Kel_stat_e,printmode,printKpath)
       !
+      use omp_lib
       use parameters
       use utils_misc
       implicit none
@@ -624,11 +726,11 @@ contains
       character(len=*),intent(in)           :: printmode
       character(len=*),intent(in)           :: printKpath
       !
-      integer                               :: Efermi_ndx
+      integer                               :: Efermi_ndx,thread_id
       integer                               :: iE1,iE2,Ngrid
       integer                               :: iorb,jorb,Norb
       integer                               :: ik1,ik2,iq,Nkpt,Nmats
-      real(8)                               :: Temp,DoS0
+      real(8)                               :: Temp,DoS0,DosWeights
       real                                  :: start,finish
       !
       !
@@ -647,13 +749,17 @@ contains
       Norb = size(Wk,dim=1)
       Nmats = size(Wk,dim=3)
       Nkpt = product(Nkpt3_Model)
-      call assert_shape(Wk,[Norb,Norb,Nmats,Nkpt],"calc_Kel_stat_e","Wk")
+      call assert_shape(Wk,[Norb,Norb,Nmats,Nkpt*Nkpt],"calc_Kel_stat_e","Wk")
       call assert_shape(Kel_stat_e,[Ngrid,Ngrid],"calc_Kel_stat_e","Kel_stat_e")
+      !
+      if(calc_Int_dynamic)then
+         allocate(Wee_dyn(Ngrid,Ngrid,Nmats));Wee_dyn=czero
+      endif
       !
       Kel_stat_e=czero
       call cpu_time(start)
       !$OMP PARALLEL DEFAULT(SHARED),&
-      !$OMP PRIVATE(iE1,iE2,ik1,ik2,iq,iorb,jorb)
+      !$OMP PRIVATE(iE1,iE2,ik1,ik2,iq,iorb,jorb,DosWeights,thread_id)
       !$OMP DO SCHEDULE(DYNAMIC)
       do iE1=1,Ngrid
          if((DoS_Model(iE1).lt.eps).or.(iE1.eq.Efermi_ndx))cycle
@@ -661,15 +767,22 @@ contains
             if((DoS_Model(iE2).lt.eps).or.(iE2.eq.Efermi_ndx))cycle
             !
             do iorb=1,Norb
-               do jorb=1,Norb
+               do jorb=iorb,Norb
                   !
                   do ik1=1,Nkpt
                      do ik2=1,Nkpt
                         !
                         iq = ik2 + (ik1-1)*Nkpt
                         !
-                        Kel_stat_e(iE1,iE2) = Kel_stat_e(iE1,iE2) + Wk(iorb,jorb,1,iq) * (weights_Model(iE1,iorb,ik1)/DoS_Model(iE1)) &
-                                                                                       * (weights_Model(iE2,jorb,ik2)/DoS_Model(iE2))
+                        DosWeights = (weights_Model(iE1,iorb,ik1)/DoS_Model(iE1)) * (weights_Model(iE2,jorb,ik2)/DoS_Model(iE2))
+                        Kel_stat_e(iE1,iE2) = Kel_stat_e(iE1,iE2) + Wk(iorb,jorb,1,iq) * DosWeights
+                        if(calc_Int_dynamic) Wee_dyn(iE1,iE2,:) = Wee_dyn(iE1,iE2,:) + (Wk(iorb,jorb,:,iq)-Wk(iorb,jorb,1,iq)) * DosWeights
+                        !
+                        if(iorb.ne.jorb)then
+                           DosWeights = (weights_Model(iE1,jorb,ik1)/DoS_Model(iE1)) * (weights_Model(iE2,iorb,ik2)/DoS_Model(iE2))
+                           Kel_stat_e(iE1,iE2) = Kel_stat_e(iE1,iE2) + Wk(jorb,iorb,1,iq) * DosWeights
+                           if(calc_Int_dynamic) Wee_dyn(iE1,iE2,:) = Wee_dyn(iE1,iE2,:) + (Wk(jorb,iorb,:,iq)-Wk(jorb,iorb,1,iq)) * DosWeights
+                        endif
                         !
                      enddo
                   enddo
@@ -678,6 +791,8 @@ contains
             enddo
             !
          enddo
+         thread_id = omp_get_thread_num()
+         print *,iE1,thread_id,"done"
       enddo
       !$OMP END DO
       !$OMP END PARALLEL
@@ -715,8 +830,7 @@ contains
       integer                               :: ik1,ik2,iq,Nkpt,Nmats
       integer                               :: iE1,iE2,iy,Ngrid
       integer                               :: wndx_a,wndx_b
-      integer                               :: thread_id
-      real(8)                               :: DoS0,Temp,MatsStep
+      real(8)                               :: DosWeights,DoS0,Temp,MatsStep
       real(8)                               :: wmax,ymax
       real(8)                               :: E1,E2,DE,DE_m,DE_p
       real(8)                               :: dy,dy_m,dy_p
@@ -726,7 +840,6 @@ contains
       complex(8)                            :: Kel_dyn_e_p,Kel_dyn_e_m
       real(8),allocatable                   :: wmats(:),ygrid_m(:),ygrid_p(:)
       complex(8),allocatable                :: Wee(:)
-      complex(8),allocatable                :: Wk_pvt(:,:,:,:)
       real                                  :: start,finish
       !
       !
@@ -746,7 +859,7 @@ contains
       Norb = size(Wk,dim=1)
       Nmats = size(Wk,dim=3)
       Nkpt = product(Nkpt3_Model)
-      call assert_shape(Wk,[Norb,Norb,Nmats,Nkpt],"calc_Kel_dyn_e","Wk")
+      call assert_shape(Wk,[Norb,Norb,Nmats,Nkpt*Nkpt],"calc_Kel_dyn_e","Wk")
       call assert_shape(Kel_dyn_e,[Ngrid,Ngrid],"calc_Kel_dyn_e","Kel_dyn_e")
       !
       allocate(wmats(Nmats));wmats=BosonicFreqMesh(Beta,Nmats)
@@ -759,55 +872,69 @@ contains
       !$OMP PARALLEL DEFAULT(PRIVATE),&
       !$OMP SHARED(Wk,Ngrid,Egrid,DoS_Model,weights_Model,Norb,Nmats,Nkpt),&
       !$OMP SHARED(wmats,MatsStep,Beta,Kel_dyn_e)
-      allocate(Wee(Nmats));Wee=czero
-      allocate(Wk_pvt(Norb,Norb,Nmats,Nkpt));Wk_pvt=czero
-      Wk_pvt = Wk
       !
+      allocate(Wee(Nmats));Wee=czero
       allocate(ygrid_m(Ngrid));ygrid_m=0d0
       allocate(ygrid_p(Ngrid));ygrid_p=0d0
       !
       !$OMP DO SCHEDULE(DYNAMIC)
       do iE1=1,Ngrid
          if((DoS_Model(iE1).lt.eps).or.(iE1.eq.Efermi_ndx))cycle
-         !
          !thread_id = omp_get_thread_num()
          !print *,iE1,thread_id
-         !
          do iE2=1,Ngrid
             if((DoS_Model(iE2).lt.eps).or.(iE2.eq.Efermi_ndx))cycle
-            !
             !if(thread_id.eq.1)print *,iE1,iE2,thread_id
+            !
+            Wee=czero
+            if(allocated(Wee_dyn))then
+               !
+               Wee = Wee_dyn(iE1,iE2,:)
+               !
+            else
+               !
+               do iorb=1,Norb
+                  do jorb=iorb,Norb
+                     !
+                     do ik1=1,Nkpt
+                        do ik2=1,Nkpt
+                           !
+                           iq = ik2 + (ik1-1)*Nkpt
+                           DosWeights = (weights_Model(iE1,iorb,ik1)/DoS_Model(iE1)) * (weights_Model(iE2,jorb,ik2)/DoS_Model(iE2))
+                           Wee = Wee + (Wk(iorb,jorb,:,iq)-Wk(iorb,jorb,1,iq)) * DosWeights
+                           !
+                        enddo
+                     enddo
+                     !
+                     if(iorb.ne.jorb)then
+                        do ik1=1,Nkpt
+                           do ik2=1,Nkpt
+                              !
+                              iq = ik2 + (ik1-1)*Nkpt
+                              DosWeights = (weights_Model(iE1,jorb,ik1)/DoS_Model(iE1)) * (weights_Model(iE2,iorb,ik2)/DoS_Model(iE2))
+                              Wee = Wee + (Wk(jorb,iorb,:,iq)-Wk(jorb,iorb,1,iq)) * DosWeights
+                              !
+                           enddo
+                        enddo
+                     endif
+                     !
+                  enddo
+               enddo
+               !
+            endif
             !
             E1=Egrid(iE1)
             E2=Egrid(iE2)
             !
-            !bring interaction on the energy gird
-            Wee=czero
-            do iorb=1,Norb
-               do jorb=1,Norb
-                  !
-                  do ik1=1,Nkpt
-                     do ik2=1,Nkpt
-                        !
-                        iq = ik2 + (ik1-1)*Nkpt
-                        !
-                        Wee = Wee + (Wk_pvt(iorb,jorb,:,iq)-Wk_pvt(iorb,jorb,1,iq)) * (weights_Model(iE1,iorb,ik1)/DoS_Model(iE1)) &
-                                                                                    * (weights_Model(iE2,jorb,ik2)/DoS_Model(iE2))
-                        !
-                     enddo
-                  enddo
-                  !
-               enddo
-            enddo
-            !
-            !integral over auxiliary variable y for DE_m = E1-E2 and DE_p = E1+E2
+            !integral over auxiliary variable y for DE_m = E1-E2
             DE_m = E1 - E2
             ymax = (wmax-DE_m) / (wmax+DE_m)
             if(ymax.eq.1d0) stop "calc_Kel_dyn_e: divergence will occur for ymax(E1-E2) = 1."
             ygrid_m = linspace(-1d0,ymax,Ngrid)
             dy_m = abs(ygrid_m(2)-ygrid_m(1))
             !
-            DE_p = E1 - E2
+            !integral over auxiliary variable y for DE_p = E1+E2
+            DE_p = E1 + E2
             ymax = (wmax-DE_p) / (wmax+DE_p)
             if(ymax.eq.1d0) stop "calc_Kel_dyn_e: divergence will occur for ymax(E1+E2) = 1."
             ygrid_p = linspace(-1d0,ymax,Ngrid)
@@ -898,7 +1025,7 @@ contains
       enddo
       !$OMP END DO
       !$OMP BARRIER
-      deallocate(Wk_pvt,Wee,ygrid_m,ygrid_p)
+      deallocate(Wee,ygrid_m,ygrid_p)
       !$OMP END PARALLEL
       deallocate(wmats)
       !

@@ -172,6 +172,7 @@ module input_vars
    character(len=256),public                :: DC_type
    character(len=256),public                :: DC_type_GW
    character(len=256),public                :: DC_type_GG
+   logical,public                           :: DC_remove_self
    character(len=256),public                :: Embedding
    logical,public                           :: addTierIII
    logical,public                           :: RecomputeG0W0
@@ -572,7 +573,7 @@ contains
       call parse_input_variable(addTierIII,"TIER_III",InputFile,default=.true.,comment="Flag to include the Tier-III contribution for ab-initio calculations.")
       if(addTierIII)then
          call parse_input_variable(SpexVersion,"SPEX_VERSION",InputFile,default="Julich",comment="Version of SPEX with which the G0W0 self-energy is computed. Available: Julich, Lund.")
-         call parse_input_variable(VH_type,"VH_TYPE",InputFile,default="Ustatic_SPEX",comment="Hartree term mismatch between GoWo and scGW. Available: Ubare, Ustatic, Ubare_SPEX(V_nodiv.DAT required), Ustatic_SPEX(V_nodiv.DAT required).")
+         call parse_input_variable(VH_type,"VH_TYPE",InputFile,default="Ubare_SPEX",comment="Hartree term mismatch between GoWo and scGW. Available: Ubare, Ustatic, Ubare_SPEX(V_nodiv.DAT required), Ustatic_SPEX(V_nodiv.DAT required).")
          if(reg(Utensor).eq."Model")VH_type="Ustatic"
          call parse_input_variable(VN_type,"VN_TYPE",InputFile,default="Nlat",comment="Density matrix used to compute the Hartree term mismatch between GoWo and scGW. Available: Nlat, Nimp, None to set VH to zero.")
          call parse_input_variable(Vxc_in,"VXC_IN",InputFile,default=.true.,comment="Flag to include the Vxc potential inside the SigmaG0W0.")
@@ -580,7 +581,7 @@ contains
          if(Hmodel)RecomputeG0W0=.false.
          call parse_input_variable(GoWoDC_loc,"G0W0DC_LOC",InputFile,default=.true.,comment="Keep the local contribution of Tier-III. Automatically removed if non-causal.")
       endif
-      call parse_input_variable(DC_type,"DC_TYPE",InputFile,default="Hartree_lat_Nlat",comment="Term removed from the impurity self-energy. Available: Hartree_[lat,DMFT]_[Nimp,Nlat], FLL_[Nimp,Nlat], None to avoid.") !GW (H_ab = Sum_s curlyU_abcd(0)*Nimp_cd,s), DMFT (H_a = 0.5 * Sum_s Uinst_ab*Nflav_b,s)
+      call parse_input_variable(DC_type,"DC_TYPE",InputFile,default="Hartree_DMFT_Nimp",comment="Term removed from the impurity self-energy. Available: Hartree_[lat,DMFT]_[Nimp,Nlat], FLL_[Nimp,Nlat], None to avoid.")
       if((reg(DC_type).eq."FLL_Nimp").or.(reg(DC_type).eq."FLL_Nlat"))then
          call parse_input_variable(FLL_non_loc_mltp,"FLL_MLTP",InputFile,default=1,comment="Multiplicity of the non-local FLL DC correction. 0 to avoid.")
          if(Solver%retarded.eq.1)then
@@ -591,7 +592,8 @@ contains
       endif
       call parse_input_variable(DC_type_GW,"DC_TYPE_GW",InputFile,default="GlocWloc",comment="Local GW self-energy which is replaced by the DMFT one. Avalibale: GlocWloc, Sloc.")
       call parse_input_variable(DC_type_GG,"DC_TYPE_GG",InputFile,default="GlocGloc",comment="Local GG polarization which is replaced by the DMFT one. Avalibale: GlocGloc, Ploc.")
-      call parse_input_variable(Dyson_Imprvd_F,"DYSON_F_IMPRVD",InputFile,default=.false.,comment="Perform the fermionic Dyson equation using the improved estimators.") !See PRB,85,205106
+      call parse_input_variable(DC_remove_self,"DC_RMV_SELF",InputFile,default=.true.,comment="Keep the Fock diagrams which are removing the self-interaction and adding the Hund contribution to the Hartree term.")
+      call parse_input_variable(Dyson_Imprvd_F,"DYSON_F_IMPRVD",InputFile,default=.false.,comment="Perform the fermionic Dyson equation using the improved estimators.") !See PRB,85.205106
       Dyson_Imprvd_B=.false.
       call append_to_input_list(Dyson_Imprvd_B,"DYSON_B_IMPRVD","Perform the bosonic Dyson equation using the improved estimators (NOT IMPLEMENTED).")
       call parse_input_variable(Embedding,"ADD_EMBEDDING",InputFile,default="None",comment="Constant embedding self-energy stored in PATH_INPUT. Avalibale: loc (filename: Semb_w_s[1,2].DAT), nonloc (filename: Semb_w_k_s[1,2].DAT), None to avoid.")
@@ -732,7 +734,8 @@ contains
          call parse_input_variable(gap_equation%mode_Zph,"MODE_ZPH",InputFile,default="symrenorm",comment="Low energy limit of Zph. Available modes: symrenorm, sym, asym.")
          if((reg(gap_equation%mode_ph).eq."None").and.(reg(gap_equation%mode_el).eq."None"))stop "read_InputFile: Tc requested but no mode is choosen."
          call parse_input_variable(gap_equation%Nkpt3_Model,"NKPT3_MODEL",InputFile,default=Nkpt3,comment="Interpolated K-grid. Equal to NKPT3 to avoid.")
-         call parse_input_variable(gap_equation%Wk_cutoff,"WK_CUTOFF",InputFile,default=wmatsMax,comment="Bosonic frequency cutoff for MODE_EL=static+dynamic calculations.")
+         call parse_input_variable(gap_equation%Wk_cutoff,"CUTOFF_WK_EE",InputFile,default=wmatsMax,comment="Bosonic frequency cutoff for MODE_EL=static+dynamic calculations.")
+         call parse_input_variable(gap_equation%printWk,"PRINT_WK_EE",InputFile,default=.false.,comment="Store to file the interaction in the LDA basis.")
          call parse_input_variable(gap_equation%printmode_ph,"PRINT_KPH",InputFile,default="None",comment="Printing mode of the phononic Kernel. Available modes: E0, diag, surf, all. None to avoid.")
          call parse_input_variable(gap_equation%printmode_el,"PRINT_KEL",InputFile,default="None",comment="Printing mode of the electronic Kernel. Available modes: E0, 0E, diag, surf, all. None to avoid.")
       endif

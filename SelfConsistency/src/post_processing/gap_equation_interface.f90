@@ -19,6 +19,8 @@ subroutine calc_Tc(pathOUTPUT,Inputs,Lttc,Wlat)
    integer                               :: iE,iE1,iE2
    integer                               :: Norb,Nkpt,Ngrid
    complex(8)                            :: Kint
+   real(8),allocatable                   :: Egrid_print(:)
+   real(8),allocatable                   :: Tlist(:),Delta_T(:)
    real(8),allocatable                   :: Zph(:),Kph(:,:)
    complex(8),allocatable,target         :: Kel_stat(:,:),Kel_dyn(:,:)
    complex(8),pointer                    :: K(:,:)
@@ -35,9 +37,6 @@ subroutine calc_Tc(pathOUTPUT,Inputs,Lttc,Wlat)
    write(*,"(A)") new_line("A")//new_line("A")//"---- calc_Tc"
    !
    !
-   printpath=reg(pathOUTPUT)//"Gap_Equation/"
-   call createDir(reg(printpath),verb=verbose)
-   !
    Norb = Lttc%Norb
    Nkpt = Lttc%Nkpt
    !
@@ -48,6 +47,7 @@ subroutine calc_Tc(pathOUTPUT,Inputs,Lttc,Wlat)
    allocate(Hk_used(Norb,Norb,Nkpt));Hk_used=czero
    if(Inputs%HkRenorm)then
       !
+      printpath=reg(pathOUTPUT)//"Gap_Equation_QP/"
       if(.not.allocated(Lttc%Hk_qp))then
          write(*,"(A)")"     calc_Tc: QP bandstructure not allocated."
          call inquireFile(reg(pathINPUTtr)//"G0W0plots/Hk_qp_s1.DAT",filexists,hardstop=.true.,verb=.true.)
@@ -60,9 +60,11 @@ subroutine calc_Tc(pathOUTPUT,Inputs,Lttc,Wlat)
       !
    else
       !
+      printpath=reg(pathOUTPUT)//"Gap_Equation/"
       Hk_used = Lttc%Hk
       !
    endif
+   call createDir(reg(printpath),verb=verbose)
    !
    call Initialize_inputs(reg(pathINPUT),Inputs,Lttc,Hk_used)
    deallocate(Hk_used)
@@ -71,7 +73,7 @@ subroutine calc_Tc(pathOUTPUT,Inputs,Lttc,Wlat)
    call dump_Field_component(DoS_Model,reg(printpath),"DoS_Model.DAT",Egrid)
    !
    if (calc_Int_static.or.calc_Int_dynamic) then
-      call store_Wk4gap(Wlat%screened,Lttc,Wlat%Beta,Inputs%Wk_cutoff,reg(printpath))
+      call store_Wk4gap(Wlat%screened,Lttc,Wlat%Beta,Inputs%Wk_cutoff,reg(printpath),Inputs%printWk)
    endif
    !
    if(Inputs%calc_Tc)then
@@ -83,7 +85,9 @@ subroutine calc_Tc(pathOUTPUT,Inputs,Lttc,Wlat)
       enddo
       Delta = Delta * Inputs%DeltaInit * eV2DFTgrid / Delta(minloc(abs(Egrid),dim=1))
       allocate(oldDelta(Ngrid));oldDelta=Delta
-      call dump_Field_component(Delta,reg(pathOUTPUT)//"Gap_Equation/","Delta_init.DAT",Egrid)
+      !
+      allocate(Tlist(Inputs%Tsteps));Tlist=0d0
+      allocate(Delta_T(Inputs%Tsteps));Delta_T=0d0
       !
       !
       !============================ TEMPERATURE LOOP =============================!
@@ -141,6 +145,8 @@ subroutine calc_Tc(pathOUTPUT,Inputs,Lttc,Wlat)
          !Convergence loop over Delta(e)
          write(*,"(A)") new_line("A")//"     Solving gap equation."
          !
+         call dump_Field_component(oldDelta,reg(printpath)//"loops_T"//str(Temp,2)//"/","0_Delta.DAT",Egrid)
+         !
          allocate(EDsq(Ngrid)); EDsq = czero
          allocate(newDelta(Ngrid));newDelta = czero
          converged=.false.
@@ -187,9 +193,10 @@ subroutine calc_Tc(pathOUTPUT,Inputs,Lttc,Wlat)
             errDelta = maxval(abs(Delta-newDelta))
             if(errDelta.lt.Inputs%DeltaErr)then
                write(*,"(2(A,1E20.10),A3,1E20.10)")"     loop #"//str(iloop)//" Delta(0): ",abs(newDelta(minloc(abs(Egrid),dim=1))),"   error: ",errDelta," < ",Inputs%DeltaErr
-               write(*,"(A)")"     Delta is converged moving to next Temperature."
+               write(*,"(A)")"     Delta at T "//str(Temp,2)//"K is converged. Moving to next Temperature."
                converged=.true.
                oldDelta = Delta
+
                exit SCloop
             else
                write(*,"(2(A,1E20.10),A3,1E20.10)")"     loop #"//str(iloop)//" Delta(0): ",abs(newDelta(minloc(abs(Egrid),dim=1))),"   error: ",errDelta," > ",Inputs%DeltaErr
@@ -198,7 +205,7 @@ subroutine calc_Tc(pathOUTPUT,Inputs,Lttc,Wlat)
             Delta = (1d0-Inputs%DeltaMix)*newDelta + Inputs%DeltaMix*oldDelta
             oldDelta = Delta
             !
-            call dump_Field_component(Delta,reg(pathOUTPUT)//"Gap_Equation/loops_T"//str(Temp,2)//"/",str(iloop)//"_Delta.DAT",Egrid)
+            call dump_Field_component(Delta,reg(printpath)//"loops_T"//str(Temp,2)//"/",str(iloop)//"_Delta.DAT",Egrid)
             !
          enddo SCloop !iloop
          deallocate(EDsq,newDelta)
@@ -210,9 +217,16 @@ subroutine calc_Tc(pathOUTPUT,Inputs,Lttc,Wlat)
          !
          if(.not.converged)write(*,"(A)")"     Warning: Delta is not converged."
          Delta = Delta*DFTgrid2eV
-         call dump_Field_component(Delta,reg(pathOUTPUT)//"Gap_Equation/","Delta_T"//str(Temp,2)//".DAT",Egrid)
+         allocate(Egrid_print(Ngrid));Egrid_print = Egrid*DFTgrid2eV
+         call dump_Field_component(Delta,reg(printpath),"Delta_e_T"//str(Temp,2)//".DAT",Egrid_print)
+         Tlist(iT) = Temp
+         Delta_T(iT) = abs(Delta(minloc(abs(Egrid_print),dim=1)))
+         deallocate(Egrid_print)
          !
       enddo !iT
+      !
+      call dump_Field_component(Delta_T,reg(printpath),"Delta_T.DAT",Tlist)
+      deallocate(Tlist,Delta_T)
       !
    endif
    !
