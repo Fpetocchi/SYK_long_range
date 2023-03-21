@@ -23,7 +23,7 @@ subroutine calc_Tc(pathOUTPUT,Inputs,Lttc,Wlat)
    real(8),allocatable                   :: Tlist(:),Delta_T(:)
    real(8),allocatable                   :: Zph(:),Kph(:,:)
    complex(8),allocatable,target         :: Kel_stat(:,:),Kel_dyn(:,:)
-   complex(8),pointer                    :: K(:,:)
+   complex(8),pointer                    :: Kel(:,:)
    complex(8),allocatable                :: Hk_used(:,:,:)
    character(len=255)                    :: printpath
    !
@@ -74,6 +74,8 @@ subroutine calc_Tc(pathOUTPUT,Inputs,Lttc,Wlat)
    !
    if (calc_Int_static.or.calc_Int_dynamic) then
       call store_Wk4gap(Wlat%screened,Lttc,Wlat%Beta,Inputs%Wk_cutoff,reg(printpath),Inputs%printWk)
+      !QUI CAMBIA TUTTO INVECE CHE STORARE WK STORA I DUE INTEGRALI SU E ED EPRIMO TANTO QUELLO CHE DIPENDE DALLA TEMPERATURA É SOLO KELDYN
+      !QUI DEVI CAMBIARE PROPRIO TUTTO
    endif
    !
    if(Inputs%calc_Tc)then
@@ -126,19 +128,19 @@ subroutine calc_Tc(pathOUTPUT,Inputs,Lttc,Wlat)
             call calc_Kel_dyn_e(Beta_DFT,Kel_dyn,reg(Inputs%printmode_el),reg(printpath))
             !
             Kel_dyn = Kel_stat + Kel_dyn
-            K => Kel_dyn
+            Kel => Kel_dyn
             !
          elseif(calc_Int_static) then
             !
             allocate(Kel_stat(Ngrid,Ngrid));Kel_stat=czero
             call calc_Kel_stat_e(Beta_DFT,Kel_stat,reg(Inputs%printmode_el),reg(printpath))
-            K => Kel_stat
+            Kel => Kel_stat
             !
          elseif(calc_Int_dynamic) then
             !
             allocate(Kel_dyn(Ngrid,Ngrid));Kel_dyn=czero
             call calc_Kel_dyn_e(Beta_DFT,Kel_dyn,reg(Inputs%printmode_el),reg(printpath))
-            K => Kel_dyn
+            Kel => Kel_dyn
             !
          endif
          !
@@ -178,8 +180,8 @@ subroutine calc_Tc(pathOUTPUT,Inputs,Lttc,Wlat)
                  !
                  !Integral of the electronic Kernel done with the custom DoS
                  if(calc_Int_static.or.calc_Int_dynamic)then
-                    Kint = Kint + ( DoS_Model(iE2-1) * K(iE1,iE2-1) * tanh_b * Delta(iE2-1) + &
-                                    DoS_Model(iE2)   * K(iE1,iE2)   * tanh_f * Delta(iE2)   ) * (dE/2d0)
+                    Kint = Kint + ( DoS_Model(iE2-1) * Kel(iE1,iE2-1) * tanh_b * Delta(iE2-1) + &
+                                    DoS_Model(iE2)   * Kel(iE1,iE2)   * tanh_f * Delta(iE2)   ) * (dE/2d0)
                  endif
                  !
                enddo
@@ -209,7 +211,7 @@ subroutine calc_Tc(pathOUTPUT,Inputs,Lttc,Wlat)
             !
          enddo SCloop !iloop
          deallocate(EDsq,newDelta)
-         if(associated(K))nullify(K)
+         if(associated(Kel))nullify(Kel)
          if(allocated(Zph))deallocate(Zph)
          if(allocated(Kph))deallocate(Kph)
          if(allocated(Kel_stat))deallocate(Kel_stat)

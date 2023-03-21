@@ -134,13 +134,12 @@ contains
       call cpu_time(start)
       call clear_attributes(Smats_C_)
       allocate(Sitau(Norb,Norb,Ntau))
-      spinloopGW: do ispin=1,Nspin
+      spinloopGW_C: do ispin=1,Nspin
          do iq=1,Lttc%Nkpt_irred
             !
             Sitau=czero
             !
-            !$OMP PARALLEL DEFAULT(NONE),&
-            !$OMP SHARED(Norb,iq,ispin,Ntau,Lttc,Nkpt,Sitau,Gitau,Witau),&
+            !$OMP PARALLEL DEFAULT(SHARED),&
             !$OMP PRIVATE(itau,ik1,ik2,i,j,k,l,ib1,ib2)
             !$OMP DO
             do itau=1,Ntau
@@ -149,6 +148,7 @@ contains
                      !
                      do ik1=1,Nkpt
                         ik2=Lttc%kptdif(iq,ik1)
+                        !
                         do l=1,Norb
                            do j=1,Norb
                               !
@@ -158,6 +158,7 @@ contains
                               !
                            enddo
                         enddo
+                        !
                      enddo
                      !
                   enddo
@@ -169,11 +170,13 @@ contains
             call Fitau2mats_mat(Beta,Sitau,Smats_C_%wks(:,:,:,iq,ispin),tau_uniform=tau_uniform)
             !
          enddo
+         !
          if(paramagnet)then
             Smats_C_%wks(:,:,:,:,Nspin) = Smats_C_%wks(:,:,:,:,1)
-            exit spinloopGW
+            exit spinloopGW_C
          endif
-      enddo spinloopGW
+         !
+      enddo spinloopGW_C
       deallocate(Witau,Sitau)
       call cpu_time(finish)
       write(*,"(A,F)") "     Sigma_C(k,iw) cpu timing:", finish-start
@@ -181,18 +184,18 @@ contains
       !Sigmax_nm(q) = Sum_kij V_{ni,jm}(q-k)G_ij(k,beta) <=> sigmax(r,r')=-g(r,r',tau=0-)*v(r-r')
       call cpu_time(start)
       call clear_attributes(Smats_X_)
-      !$OMP PARALLEL DEFAULT(NONE),&
-      !$OMP SHARED(Norb,Ntau,Lttc,Nkpt,Smats_X_,Gitau,Wmats),&
-      !$OMP PRIVATE(iq,ispin,ik1,ik2,i,j,k,l,ib1,ib2)
-      !$OMP DO
-      do iq=1,Lttc%Nkpt_irred
-         do ispin=1,Nspin
-            !
+      spinloopGW_X: do ispin=1,Nspin
+         !
+         !$OMP PARALLEL DEFAULT(SHARED),&
+         !$OMP PRIVATE(iq,ik1,ik2,i,j,k,l,ib1,ib2)
+         !$OMP DO
+         do iq=1,Lttc%Nkpt_irred
             do k=1,Norb
                do i=1,Norb
                   !
                   do ik1=1,Nkpt
                      ik2=Lttc%kptdif(iq,ik1)
+                     !
                      do l=1,Norb
                         do j=1,Norb
                            !
@@ -202,15 +205,21 @@ contains
                            !
                         enddo
                      enddo
+                     !
                   enddo
                   !
                enddo
             enddo
-            !
          enddo
-      enddo
-      !$OMP END DO
-      !$OMP END PARALLEL
+         !$OMP END DO
+         !$OMP END PARALLEL
+         !
+         if(paramagnet)then
+            Smats_X_%N_ks(:,:,:,Nspin) = Smats_X_%N_ks(:,:,:,1)
+            exit spinloopGW_X
+         endif
+         !
+      enddo spinloopGW_X
       deallocate(Gitau)
       call cpu_time(finish)
       write(*,"(A,F)") "     Sigma_X(k) cpu timing:", finish-start
@@ -219,11 +228,8 @@ contains
          !sigma(ik)=sigma(kptp(ik))
          write(*,"(A)") "     Transformation to lda eigenbasis and back."
          if(.not.LDAoffdiag_) write(*,"(A)") "     Removing off-diagonal elements in lda eigenbasis."
-         !$OMP PARALLEL DEFAULT(NONE),&
-         !$OMP SHARED(Nmats,Lttc,Nkpt,Smats_X_,Smats_C_,LDAoffdiag_),&
-         !$OMP PRIVATE(ispin,iw,iq)
-         !$OMP DO
-         do ispin=1,Nspin
+         !
+         spinloopGW_rot: do ispin=1,Nspin
             !
             !rotation to lda eigenbasis
             do iq=1,Lttc%Nkpt_irred
@@ -259,9 +265,13 @@ contains
                enddo
             enddo
             !
-         enddo
-         !$OMP END DO
-         !$OMP END PARALLEL
+            if(paramagnet)then
+               Smats_X_%N_ks(:,:,:,Nspin) = Smats_X_%N_ks(:,:,:,1)
+               Smats_C_%wks(:,:,:,:,Nspin) = Smats_C_%wks(:,:,:,:,1)
+               exit spinloopGW_rot
+            endif
+            !
+         enddo spinloopGW_rot
          !
       endif
       !
@@ -291,7 +301,7 @@ contains
       use utils_fields
       use crystal
       use fourier_transforms
-      use input_vars, only : Ntau, tau_uniform, paramagnet, DC_remove_self
+      use input_vars, only : Ntau, tau_uniform, paramagnet, DC_remove_self, LocalOrbs
       implicit none
       !
       type(FermionicField),intent(inout)    :: Smats_dc
@@ -302,12 +312,13 @@ contains
       !
       type(FermionicField)                  :: Smats_Cdc_
       type(FermionicField)                  :: Smats_Xdc_
-      complex(8),allocatable                :: Sitau_loc(:,:,:,:)
+      complex(8),allocatable                :: Sitau_loc(:,:,:)
       complex(8),allocatable                :: Gitau_loc(:,:,:,:)
       complex(8),allocatable                :: Witau_loc(:,:,:)
       real(8)                               :: Beta
       integer                               :: Nbp,Nkpt,Norb,Nmats
       integer                               :: itau,ispin!,iw
+      integer                               :: indx,jndx,kndx,lndx,isite
       integer                               :: i,j,k,l,ib1,ib2
       type(physicalU)                       :: PhysicalUelements
       logical                               :: rmvDiagram
@@ -354,43 +365,47 @@ contains
       !
       !Sigma_{m,n}(q,tau) = -Sum_{k,mp,np} W_{(m,mp);(n,np)}(q-k;tau)G_{mp,np}(k,tau)
       call cpu_time(start)
-      allocate(Sitau_loc(Norb,Norb,Ntau,Nspin));Sitau_loc=czero
-      spinloopGWdc: do ispin=1,Nspin
-         !$OMP PARALLEL DEFAULT(NONE),&
-         !$OMP SHARED(Norb,Ntau,ispin,Sitau_loc,Gitau_loc,Witau_loc),&
-         !$OMP PRIVATE(itau,i,j,k,l,ib1,ib2)
-         !$OMP DO
-         do itau=1,Ntau
-            do k=1,Norb
-               do i=1,Norb
-                  !
-                  do l=1,Norb
-                     do j=1,Norb
-                        !
-                        call F2Bindex(Norb,[i,j],[k,l],ib1,ib2)
-                        !
-                        Sitau_loc(i,k,itau,ispin) = Sitau_loc(i,k,itau,ispin) - Gitau_loc(j,l,itau,ispin)*Witau_loc(ib1,ib2,itau)
-                        !
+      call clear_attributes(Smats_Cdc_)
+      allocate(Sitau_loc(Norb,Norb,Ntau));Sitau_loc=czero
+      spinloopGWdc_C: do ispin=1,Nspin
+         do isite=1,size(LocalOrbs)
+            !
+            !$OMP PARALLEL DEFAULT(SHARED),&
+            !$OMP PRIVATE(itau,indx,jndx,kndx,lndx,i,j,k,l,ib1,ib2)
+            !$OMP DO
+            do itau=1,Ntau
+               do indx=1,LocalOrbs(isite)%Norb
+                  do jndx=1,LocalOrbs(isite)%Norb
+                     do kndx=1,LocalOrbs(isite)%Norb
+                        do lndx=1,LocalOrbs(isite)%Norb
+                           !
+                           i = LocalOrbs(isite)%Orbs(indx)
+                           j = LocalOrbs(isite)%Orbs(jndx)
+                           k = LocalOrbs(isite)%Orbs(kndx)
+                           l = LocalOrbs(isite)%Orbs(lndx)
+                           !
+                           call F2Bindex(LocalOrbs(isite)%Norb,[i,j],[k,l],ib1,ib2)
+                           !
+                           Sitau_loc(i,k,itau) = Sitau_loc(i,k,itau) - Gitau_loc(j,l,itau,ispin)*Witau_loc(ib1,ib2,itau)
+                           !
+                        enddo
                      enddo
                   enddo
-                  !
                enddo
             enddo
+            !$OMP END DO
+            !$OMP END PARALLEL
          enddo
-         !$OMP END DO
-         !$OMP END PARALLEL
+         !
+         call Fitau2mats_mat(Beta,Sitau_loc,Smats_Cdc_%ws(:,:,:,ispin),tau_uniform=tau_uniform)
+         !
          if(paramagnet)then
-            Sitau_loc(:,:,:,Nspin) = Sitau_loc(:,:,:,1)
-            exit spinloopGWdc
+            Smats_Cdc_%ws(:,:,:,Nspin) = Smats_Cdc_%ws(:,:,:,1)
+            exit spinloopGWdc_C
          endif
-      enddo spinloopGWdc
-      deallocate(Witau_loc)
-      !
-      call clear_attributes(Smats_Cdc_)
-      do ispin=1,Nspin
-         call Fitau2mats_mat(Beta,Sitau_loc(:,:,:,ispin),Smats_Cdc_%ws(:,:,:,ispin),tau_uniform=tau_uniform)
-      enddo
-      deallocate(Sitau_loc)
+         !
+      enddo spinloopGWdc_C
+      deallocate(Witau_loc,Sitau_loc)
       call cpu_time(finish)
       write(*,"(A,F)") "     Sigma_Cdc(iw) cpu timing:", finish-start
       !
@@ -399,29 +414,41 @@ contains
       !Sigmax_nm(q) = Sum_kij V_{ni,jm}(q-k)G_ij(k,beta) <=> sigmax(r,r')=-g(r,r',tau=0-)*v(r-r')
       call cpu_time(start)
       call clear_attributes(Smats_Xdc_)
-      do ispin=1,Nspin
-         !$OMP PARALLEL DEFAULT(SHARED),&
-         !$OMP PRIVATE(i,j,k,l,ib1,ib2,rmvDiagram)
-         !$OMP DO
-         do k=1,Norb
-            do i=1,Norb
-               !
-               do l=1,Norb
-                  do j=1,Norb
-                     !
-                     call F2Bindex(Norb,[i,j],[k,l],ib1,ib2)
-                     !
-                     rmvDiagram = DC_remove_self .and. (PhysicalUelements%Full_Uaa(ib1,ib2).or.PhysicalUelements%Full_Jph(ib1,ib2))
-                     if(.not.rmvDiagram) Smats_Xdc_%N_s(i,k,ispin) = Smats_Xdc_%N_s(i,k,ispin) + Gitau_loc(j,l,Ntau,ispin)*Wmats%bare_local(ib1,ib2)
-                     !
+      spinloopGWdc_X: do ispin=1,Nspin
+         do isite=1,size(LocalOrbs)
+            !
+            !$OMP PARALLEL DEFAULT(SHARED),&
+            !$OMP PRIVATE(indx,jndx,kndx,lndx,i,j,k,l,ib1,ib2)
+            !$OMP DO
+            do indx=1,LocalOrbs(isite)%Norb
+               do jndx=1,LocalOrbs(isite)%Norb
+                  do kndx=1,LocalOrbs(isite)%Norb
+                     do lndx=1,LocalOrbs(isite)%Norb
+                        !
+                        i = LocalOrbs(isite)%Orbs(indx)
+                        j = LocalOrbs(isite)%Orbs(jndx)
+                        k = LocalOrbs(isite)%Orbs(kndx)
+                        l = LocalOrbs(isite)%Orbs(lndx)
+                        !
+                        call F2Bindex(Norb,[i,j],[k,l],ib1,ib2)
+                        !
+                        rmvDiagram = DC_remove_self .and. (PhysicalUelements%Full_Uaa(ib1,ib2).or.PhysicalUelements%Full_Jph(ib1,ib2))
+                        if(.not.rmvDiagram) Smats_Xdc_%N_s(i,k,ispin) = Smats_Xdc_%N_s(i,k,ispin) + Gitau_loc(j,l,Ntau,ispin)*Wmats%bare_local(ib1,ib2)
+                        !
+                     enddo
                   enddo
                enddo
-               !
             enddo
+            !$OMP END DO
+            !$OMP END PARALLEL
          enddo
-         !$OMP END DO
-         !$OMP END PARALLEL
-      enddo
+         !
+         if(paramagnet)then
+            Smats_Xdc_%N_s(:,:,Nspin) = Smats_Xdc_%N_s(:,:,1)
+            exit spinloopGWdc_X
+         endif
+         !
+      enddo spinloopGWdc_X
       deallocate(Gitau_loc)
       call cpu_time(finish)
       write(*,"(A,F)") "     Sigma_Xdc cpu timing:", finish-start

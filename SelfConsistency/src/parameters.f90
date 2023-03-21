@@ -255,6 +255,7 @@ module parameters
       integer                               :: loops=0
       integer                               :: Ngrid=0
       real(8)                               :: expfact=1d0
+      real(8)                               :: DoSthresh=0d0
       real(8)                               :: wrealMax=0d0
       real(8)                               :: DeltaErr=0d0
       real(8)                               :: DeltaInit=0d0

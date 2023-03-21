@@ -798,6 +798,18 @@ class ct_hyb
          {
             if(OrbSym) orb_symm( PrintNloc, SetsOrbs );
             print_Vec(resultsDir+"/Nqmc"+pad, PrintNloc, mu);
+            //
+            Vec tail(Nflavor,0.0);
+            for (int ifl=0; ifl<Nflavor; ifl++)
+            {
+               if(retarded) tail[ifl] -= Screening_Mat(ifl,ifl)*PrintNloc[ifl];
+               for (int jfl=0; jfl<Nflavor; jfl++)
+               {
+                  tail[ifl] += Uloc(ifl,jfl)*PrintNloc[jfl];
+               }
+            }
+            print_Vec(resultsDir+"/Stail"+pad, tail);
+            //
          }
          mpi.report(" Nqmc"+pad+" is printed.");
          //
@@ -862,6 +874,7 @@ class ct_hyb
          //
          //
          // double occupations: n(0)n(0)----------------------------------------
+         /*
          if(NnntMeas>0)
          {
             VecVec nntD = nnt;
@@ -878,6 +891,7 @@ class ct_hyb
             }
             dump_data( Dimp, "Dimp", pad, Nflavor, Nflavor );
          }
+         */
          //
          //
          // Improved estimator for the self-energy------------------------------

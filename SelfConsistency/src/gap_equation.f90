@@ -28,6 +28,7 @@ module gap_equation
    integer,private                          :: Nkpt3_Model(3)
    real(8),allocatable,private              :: kpt_Model(:,:)
    real(8),allocatable,private              :: weights_Model(:,:,:)
+   integer,allocatable,private              :: finite_weights_Model(:,:)
    !
    complex(8),allocatable,private           :: Zk_Model(:,:,:)
    complex(8),allocatable,private           :: Wk(:,:,:,:)
@@ -92,11 +93,13 @@ contains
       complex(8),intent(in)                 :: Hk_input(:,:,:)
       !
       integer                               :: Norb,Ngrid,Nkpt,Nkpti_dum
+      integer                               :: iorb,iE,ik,Nweights
       real(8)                               :: wrealMax
       integer,allocatable                   :: kptp_dum(:)
       integer,allocatable                   :: pkpt_dum(:,:,:)
       real(8),allocatable                   :: nkstar_dum(:)
       complex(8),allocatable                :: Hk_intp(:,:,:)
+      logical                               :: keep_weight
       real                                  :: start,finish
       !
       !
@@ -156,16 +159,13 @@ contains
             !
             calc_Int_static=.true.
             !
-         case("dynamic")
-            !
-            calc_Int_dynamic=.true.
-            !
          case("static+dynamic")
             !
             calc_Int_static=.true.
             calc_Int_dynamic=.true.
             !
       end select
+      if(calc_Int_dynamic) calc_Int_static=.true. !redundant
       write(*,"(A)")"     eV->DFTgrid conversion factor: "//str(eV2DFTgrid,5)
       !
       !setting up shared original K-mesh and Hk
@@ -215,6 +215,39 @@ contains
       write(*,"(A,F)") "     Tetrahedron integration cpu timing:", finish-start
       deallocate(Hk_intp)
       !
+      call cpu_time(start)
+      Nweights=0
+      do iE=1,Ngrid
+         do iorb=1,Norb
+            do ik=1,Nkpt
+               keep_weight = ( abs(weights_Model(iE,iorb,ik)).gt.Inputs%DoSthresh )! .and. ( Egrid(iE).ne.0d0 ) .and. ( DoS_Model(iE).ne.0d0 )
+               if(keep_weight) Nweights = Nweights + 1
+            enddo
+         enddo
+      enddo
+      !
+      allocate(finite_weights_Model(Nweights,3));finite_weights_Model=0
+      Nweights=0
+      do iE=1,Ngrid
+         do iorb=1,Norb
+            do ik=1,Nkpt
+               keep_weight = ( abs(weights_Model(iE,iorb,ik)).gt.Inputs%DoSthresh )! .and. ( Egrid(iE).ne.0d0 ) .and. ( DoS_Model(iE).ne.0d0 )
+               if(keep_weight)then
+                  Nweights = Nweights + 1
+                  finite_weights_Model(Nweights,1) = iE
+                  finite_weights_Model(Nweights,2) = iorb
+                  finite_weights_Model(Nweights,3) = ik
+               endif
+            enddo
+         enddo
+      enddo
+      call cpu_time(finish)
+      write(*,*)Ngrid
+      write(*,*)Norb
+      write(*,*)Nkpt
+      write(*,"(A,F)") "     Reduction of DoS integration points from "//str(Ngrid*Norb*Nkpt)//" to "//str(Nweights)
+      write(*,"(A,F)") "     Cpu timing:", finish-start
+      !
       initialized=.true.
       !
       !
@@ -231,7 +264,7 @@ contains
          complex(8),intent(in)              :: H(:,:,:)
          complex(8),intent(out)             :: Z(:,:,:)
          !
-         integer                            :: ik,Ndim,Nk
+         integer                            :: i,Ndim,Nk
          real(8),allocatable                :: E_(:,:)
          complex(8),allocatable             :: Z_(:,:,:)
          !
@@ -244,8 +277,8 @@ contains
          allocate(Z_(Ndim,Ndim,Nk)); Z_=0d0
          !
          Z_ = H
-         do ik=1,Nk
-            call eigh(Z_(:,:,ik),E_(:,ik))
+         do i=1,Nk
+            call eigh(Z_(:,:,i),E_(:,i))
          enddo
          !
          Z = Z_
@@ -501,9 +534,6 @@ contains
          call cpu_time(start)
          do iw=1,wndx
             !
-            !if(verbose)
-            write(*,"(A,2I6)")"     Wk interpolation for iw:",iw,wndx
-            !
             Wk_w=czero
             if(Interpolate2Model)then
                call wannierinterpolation(Lttc%Nkpt3,Lttc%kpt,kpt_Model,Wk_orig(:,:,iw,:),Wk_w)
@@ -514,7 +544,7 @@ contains
             !$OMP PARALLEL DEFAULT(SHARED),&
             !$OMP PRIVATE(ik1,ik2,iq,iqndx,iorb,jorb,a,b,c,d,ib1,ib2,Wk_wq)
             allocate(Wk_wq(Nbp,Nbp));Wk_wq=czero
-            !$OMP DO
+            !$OMP DO COLLAPSE(2)
             do ik1=1,Nkpt
                do ik2=1,Nkpt
                   !
@@ -580,6 +610,9 @@ contains
             !$OMP END DO
             deallocate(Wk_wq)
             !$OMP END PARALLEL
+            !
+            !if(verbose)
+            write(*,"(2(A,I6))")"     Stored Wk for iw:",iw,"/",wndx
             !
          enddo
          deallocate(Wk_w,kptdif)
@@ -726,8 +759,8 @@ contains
       character(len=*),intent(in)           :: printmode
       character(len=*),intent(in)           :: printKpath
       !
-      integer                               :: Efermi_ndx,thread_id
-      integer                               :: iE1,iE2,Ngrid
+      integer                               :: Efermi_ndx
+      integer                               :: iweig,jweig,iE1,iE2,Ngrid
       integer                               :: iorb,jorb,Norb
       integer                               :: ik1,ik2,iq,Nkpt,Nmats
       real(8)                               :: Temp,DoS0,DosWeights
@@ -756,43 +789,29 @@ contains
          allocate(Wee_dyn(Ngrid,Ngrid,Nmats));Wee_dyn=czero
       endif
       !
-      Kel_stat_e=czero
       call cpu_time(start)
+      Kel_stat_e=czero
       !$OMP PARALLEL DEFAULT(SHARED),&
-      !$OMP PRIVATE(iE1,iE2,ik1,ik2,iq,iorb,jorb,DosWeights,thread_id)
-      !$OMP DO SCHEDULE(DYNAMIC)
-      do iE1=1,Ngrid
-         if((DoS_Model(iE1).lt.eps).or.(iE1.eq.Efermi_ndx))cycle
-         do iE2=1,Ngrid
-            if((DoS_Model(iE2).lt.eps).or.(iE2.eq.Efermi_ndx))cycle
+      !$OMP PRIVATE(iweig,jweig,iE1,iE2,iorb,jorb,ik1,ik2,iq,DosWeights)
+      !$OMP DO COLLAPSE(2) SCHEDULE(DYNAMIC)
+      do iweig=1,size(finite_weights_Model,dim=1)
+         do jweig=1,size(finite_weights_Model,dim=1)
             !
-            do iorb=1,Norb
-               do jorb=iorb,Norb
-                  !
-                  do ik1=1,Nkpt
-                     do ik2=1,Nkpt
-                        !
-                        iq = ik2 + (ik1-1)*Nkpt
-                        !
-                        DosWeights = (weights_Model(iE1,iorb,ik1)/DoS_Model(iE1)) * (weights_Model(iE2,jorb,ik2)/DoS_Model(iE2))
-                        Kel_stat_e(iE1,iE2) = Kel_stat_e(iE1,iE2) + Wk(iorb,jorb,1,iq) * DosWeights
-                        if(calc_Int_dynamic) Wee_dyn(iE1,iE2,:) = Wee_dyn(iE1,iE2,:) + (Wk(iorb,jorb,:,iq)-Wk(iorb,jorb,1,iq)) * DosWeights
-                        !
-                        if(iorb.ne.jorb)then
-                           DosWeights = (weights_Model(iE1,jorb,ik1)/DoS_Model(iE1)) * (weights_Model(iE2,iorb,ik2)/DoS_Model(iE2))
-                           Kel_stat_e(iE1,iE2) = Kel_stat_e(iE1,iE2) + Wk(jorb,iorb,1,iq) * DosWeights
-                           if(calc_Int_dynamic) Wee_dyn(iE1,iE2,:) = Wee_dyn(iE1,iE2,:) + (Wk(jorb,iorb,:,iq)-Wk(jorb,iorb,1,iq)) * DosWeights
-                        endif
-                        !
-                     enddo
-                  enddo
-                  !
-               enddo
-            enddo
+            iE1 = finite_weights_Model(iweig,1)
+            iorb = finite_weights_Model(iweig,2)
+            ik1 = finite_weights_Model(iweig,3)
+            !
+            iE2 = finite_weights_Model(jweig,1)
+            jorb = finite_weights_Model(jweig,2)
+            ik2 = finite_weights_Model(jweig,3)
+            !
+            iq = ik2 + (ik1-1)*Nkpt
+            !
+            DosWeights = (weights_Model(iE1,iorb,ik1)/DoS_Model(iE1)) * (weights_Model(iE2,jorb,ik2)/DoS_Model(iE2))
+            Kel_stat_e(iE1,iE2) = Kel_stat_e(iE1,iE2) + Wk(iorb,jorb,1,iq) * DosWeights
+            if(calc_Int_dynamic) Wee_dyn(iE1,iE2,:) = Wee_dyn(iE1,iE2,:) + (Wk(iorb,jorb,:,iq)-Wk(iorb,jorb,1,iq)) * DosWeights
             !
          enddo
-         thread_id = omp_get_thread_num()
-         print *,iE1,thread_id,"done"
       enddo
       !$OMP END DO
       !$OMP END PARALLEL
@@ -826,11 +845,10 @@ contains
       character(len=*),intent(in)           :: printKpath
       !
       integer                               :: Efermi_ndx
-      integer                               :: iorb,jorb,Norb
-      integer                               :: ik1,ik2,iq,Nkpt,Nmats
+      integer                               :: Norb,Nkpt,Nmats
       integer                               :: iE1,iE2,iy,Ngrid
       integer                               :: wndx_a,wndx_b
-      real(8)                               :: DosWeights,DoS0,Temp,MatsStep
+      real(8)                               :: DoS0,Temp,MatsStep
       real(8)                               :: wmax,ymax
       real(8)                               :: E1,E2,DE,DE_m,DE_p
       real(8)                               :: dy,dy_m,dy_p
@@ -839,7 +857,6 @@ contains
       complex(8)                            :: W_wm_i,W_wm_j,Int_i,Int_j
       complex(8)                            :: Kel_dyn_e_p,Kel_dyn_e_m
       real(8),allocatable                   :: wmats(:),ygrid_m(:),ygrid_p(:)
-      complex(8),allocatable                :: Wee(:)
       real                                  :: start,finish
       !
       !
@@ -849,6 +866,7 @@ contains
       if(.not.Wk_stored)stop "calc_Kel_dyn_e: fully screened interaction not stored. call store_Wk4gap."
       if(.not.calc_Int_dynamic)stop "calc_Kel_dyn_e: inputs not initialized. call Initialize_inputs."
       if(.not.Wk_stored)stop "calc_Kel_dyn_e: fully screened interaction not stored. call store_Wk4gap."
+      if(.not.allocated(Wee_dyn)) stop "calc_Kel_dyn_e: the current implementation requires the static Kernel."
       !
       Efermi_ndx = minloc(abs(Egrid),dim=1)
       DoS0 = DoS_Model(Efermi_ndx)
@@ -861,6 +879,7 @@ contains
       Nkpt = product(Nkpt3_Model)
       call assert_shape(Wk,[Norb,Norb,Nmats,Nkpt*Nkpt],"calc_Kel_dyn_e","Wk")
       call assert_shape(Kel_dyn_e,[Ngrid,Ngrid],"calc_Kel_dyn_e","Kel_dyn_e")
+      call assert_shape(Wee_dyn,[Ngrid,Ngrid,Nmats],"calc_Kel_dyn_e","Kel_dyn_e")
       !
       allocate(wmats(Nmats));wmats=BosonicFreqMesh(Beta,Nmats)
       wmax = wmats(Nmats)
@@ -870,58 +889,16 @@ contains
       call cpu_time(start)
       Kel_dyn_e=czero
       !$OMP PARALLEL DEFAULT(PRIVATE),&
-      !$OMP SHARED(Wk,Ngrid,Egrid,DoS_Model,weights_Model,Norb,Nmats,Nkpt),&
-      !$OMP SHARED(wmats,MatsStep,Beta,Kel_dyn_e)
+      !$OMP SHARED(Ngrid,Egrid,Nmats,wmats,MatsStep,Beta,Kel_dyn_e,Wee_dyn)
       !
-      allocate(Wee(Nmats));Wee=czero
       allocate(ygrid_m(Ngrid));ygrid_m=0d0
       allocate(ygrid_p(Ngrid));ygrid_p=0d0
       !
       !$OMP DO SCHEDULE(DYNAMIC)
       do iE1=1,Ngrid
-         if((DoS_Model(iE1).lt.eps).or.(iE1.eq.Efermi_ndx))cycle
-         !thread_id = omp_get_thread_num()
-         !print *,iE1,thread_id
+         if(iE1.eq.Efermi_ndx)cycle
          do iE2=1,Ngrid
-            if((DoS_Model(iE2).lt.eps).or.(iE2.eq.Efermi_ndx))cycle
-            !if(thread_id.eq.1)print *,iE1,iE2,thread_id
-            !
-            Wee=czero
-            if(allocated(Wee_dyn))then
-               !
-               Wee = Wee_dyn(iE1,iE2,:)
-               !
-            else
-               !
-               do iorb=1,Norb
-                  do jorb=iorb,Norb
-                     !
-                     do ik1=1,Nkpt
-                        do ik2=1,Nkpt
-                           !
-                           iq = ik2 + (ik1-1)*Nkpt
-                           DosWeights = (weights_Model(iE1,iorb,ik1)/DoS_Model(iE1)) * (weights_Model(iE2,jorb,ik2)/DoS_Model(iE2))
-                           Wee = Wee + (Wk(iorb,jorb,:,iq)-Wk(iorb,jorb,1,iq)) * DosWeights
-                           !
-                        enddo
-                     enddo
-                     !
-                     if(iorb.ne.jorb)then
-                        do ik1=1,Nkpt
-                           do ik2=1,Nkpt
-                              !
-                              iq = ik2 + (ik1-1)*Nkpt
-                              DosWeights = (weights_Model(iE1,jorb,ik1)/DoS_Model(iE1)) * (weights_Model(iE2,iorb,ik2)/DoS_Model(iE2))
-                              Wee = Wee + (Wk(jorb,iorb,:,iq)-Wk(jorb,iorb,1,iq)) * DosWeights
-                              !
-                           enddo
-                        enddo
-                     endif
-                     !
-                  enddo
-               enddo
-               !
-            endif
+            if(iE1.eq.Efermi_ndx)cycle
             !
             E1=Egrid(iE1)
             E2=Egrid(iE2)
@@ -929,7 +906,10 @@ contains
             !integral over auxiliary variable y for DE_m = E1-E2
             DE_m = E1 - E2
             ymax = (wmax-DE_m) / (wmax+DE_m)
-            if(ymax.eq.1d0) stop "calc_Kel_dyn_e: divergence will occur for ymax(E1-E2) = 1."
+            if(ymax.eq.1d0)then
+               stop "calc_Kel_dyn_e: divergence will occur for ymax(E1-E2) = 1."
+               !printa tutto qui sotto
+            endif
             ygrid_m = linspace(-1d0,ymax,Ngrid)
             dy_m = abs(ygrid_m(2)-ygrid_m(1))
             !
@@ -948,6 +928,7 @@ contains
                !-------------------- first term of the sum ---------------------
                DE = DE_m
                dy = dy_m
+               !METTERE UNA FUNZIONE QUI (-1d0,ymax,Ngrid,iy) DI INVECE CHE UN ARRAY CONDIVISO
                y_i = ygrid_m(iy)
                y_j = ygrid_m(iy-1)
                !
@@ -956,8 +937,8 @@ contains
                !linear interpolation of Wee between the two points on the matsubara grid enclosing wm
                wndx_a = floor(wm/MatsStep) + 1
                wndx_b = wndx_a + 1
-               ReW_wm_intp = linear_interp_2y( [wmats(wndx_a),dreal(Wee(wndx_a))] , [wmats(wndx_b),dreal(Wee(wndx_b))] , wm )
-               ImW_wm_intp = linear_interp_2y( [wmats(wndx_a),dimag(Wee(wndx_a))] , [wmats(wndx_b),dimag(Wee(wndx_b))] , wm )
+               ReW_wm_intp = linear_interp_2y( [wmats(wndx_a),dreal(Wee_dyn(iE1,iE2,wndx_a))] , [wmats(wndx_b),dreal(Wee_dyn(iE1,iE2,wndx_b))] , wm )
+               ImW_wm_intp = linear_interp_2y( [wmats(wndx_a),dimag(Wee_dyn(iE1,iE2,wndx_a))] , [wmats(wndx_b),dimag(Wee_dyn(iE1,iE2,wndx_b))] , wm )
                W_wm_i = dcmplx(ReW_wm_intp,ImW_wm_intp)
                !
                !continous frequency correspnding to iy-1
@@ -965,8 +946,8 @@ contains
                !linear interpolation of Wee between the two points on the matsubara grid enclosing wm
                wndx_a = floor(wm/MatsStep) + 1
                wndx_b = wndx_a + 1
-               ReW_wm_intp = linear_interp_2y( [wmats(wndx_a),dreal(Wee(wndx_a))] , [wmats(wndx_b),dreal(Wee(wndx_b))] , wm )
-               ImW_wm_intp = linear_interp_2y( [wmats(wndx_a),dimag(Wee(wndx_a))] , [wmats(wndx_b),dimag(Wee(wndx_b))] , wm )
+               ReW_wm_intp = linear_interp_2y( [wmats(wndx_a),dreal(Wee_dyn(iE1,iE2,wndx_a))] , [wmats(wndx_b),dreal(Wee_dyn(iE1,iE2,wndx_b))] , wm )
+               ImW_wm_intp = linear_interp_2y( [wmats(wndx_a),dimag(Wee_dyn(iE1,iE2,wndx_a))] , [wmats(wndx_b),dimag(Wee_dyn(iE1,iE2,wndx_b))] , wm )
                W_wm_j = dcmplx(ReW_wm_intp,ImW_wm_intp)
                !
                !integrand for iy and iy-1
@@ -988,8 +969,8 @@ contains
                !linear interpolation of Wee between the two points on the matsubara grid enclosing wm
                wndx_a = floor(wm/MatsStep) + 1
                wndx_b = wndx_a + 1
-               ReW_wm_intp = linear_interp_2y( [wmats(wndx_a),dreal(Wee(wndx_a))] , [wmats(wndx_b),dreal(Wee(wndx_b))] , wm )
-               ImW_wm_intp = linear_interp_2y( [wmats(wndx_a),dimag(Wee(wndx_a))] , [wmats(wndx_b),dimag(Wee(wndx_b))] , wm )
+               ReW_wm_intp = linear_interp_2y( [wmats(wndx_a),dreal(Wee_dyn(iE1,iE2,wndx_a))] , [wmats(wndx_b),dreal(Wee_dyn(iE1,iE2,wndx_b))] , wm )
+               ImW_wm_intp = linear_interp_2y( [wmats(wndx_a),dimag(Wee_dyn(iE1,iE2,wndx_a))] , [wmats(wndx_b),dimag(Wee_dyn(iE1,iE2,wndx_b))] , wm )
                W_wm_i = dcmplx(ReW_wm_intp,ImW_wm_intp)
                !
                !continous frequency correspnding to iy-1
@@ -997,8 +978,8 @@ contains
                !linear interpolation of Wee between the two points on the matsubara grid enclosing wm
                wndx_a = floor(wm/MatsStep) + 1
                wndx_b = wndx_a + 1
-               ReW_wm_intp = linear_interp_2y( [wmats(wndx_a),dreal(Wee(wndx_a))] , [wmats(wndx_b),dreal(Wee(wndx_b))] , wm )
-               ImW_wm_intp = linear_interp_2y( [wmats(wndx_a),dimag(Wee(wndx_a))] , [wmats(wndx_b),dimag(Wee(wndx_b))] , wm )
+               ReW_wm_intp = linear_interp_2y( [wmats(wndx_a),dreal(Wee_dyn(iE1,iE2,wndx_a))] , [wmats(wndx_b),dreal(Wee_dyn(iE1,iE2,wndx_b))] , wm )
+               ImW_wm_intp = linear_interp_2y( [wmats(wndx_a),dimag(Wee_dyn(iE1,iE2,wndx_a))] , [wmats(wndx_b),dimag(Wee_dyn(iE1,iE2,wndx_b))] , wm )
                W_wm_j = dcmplx(ReW_wm_intp,ImW_wm_intp)
                !
                !integrand for iy and iy-1
@@ -1011,8 +992,8 @@ contains
             enddo
             !
             !adding the tail to w-->inf limit of the interaction
-            Kel_dyn_e_m = Kel_dyn_e_m + Wee(Nmats) * ( pi/2d0 - atan2(wmats(Nmats),DE_m) )
-            Kel_dyn_e_p = Kel_dyn_e_p + Wee(Nmats) * ( pi/2d0 - atan2(wmats(Nmats),DE_p) )
+            Kel_dyn_e_m = Kel_dyn_e_m + Wee_dyn(iE1,iE2,Nmats) * ( pi/2d0 - atan2(wmats(Nmats),DE_m) )
+            Kel_dyn_e_p = Kel_dyn_e_p + Wee_dyn(iE1,iE2,Nmats) * ( pi/2d0 - atan2(wmats(Nmats),DE_p) )
             !
             !adding the fermi function differences
             Kel_dyn_e_m = Kel_dyn_e_m * ( fermidirac(+E1,Beta) - fermidirac(+E2,Beta) )*(4d0/pi)
@@ -1025,7 +1006,7 @@ contains
       enddo
       !$OMP END DO
       !$OMP BARRIER
-      deallocate(Wee,ygrid_m,ygrid_p)
+      deallocate(ygrid_m,ygrid_p)
       !$OMP END PARALLEL
       deallocate(wmats)
       !
@@ -1327,8 +1308,8 @@ contains
             unit = free_unit()
             open(unit,file=reg(printpath)//reg(filename)//"_e_E0_T"//str(T,2)//".DAT",form="formatted",status="unknown",position="rewind",action="write")
             do iE=1,Ngrid1
-               if(RealK) write(unit,"(3F20.10)")Egrid(iE),dreal(Kernel(iE,Efermi_ndx2))
-               if(CmplxK) write(unit,"(3F20.10)")Egrid(iE),dreal(Kernel(iE,Efermi_ndx2)),dimag(Kernel(iE,Efermi_ndx2))
+               if(RealK) write(unit,"(3E20.12)")Egrid(iE),dreal(Kernel(iE,Efermi_ndx2))
+               if(CmplxK) write(unit,"(3E20.12)")Egrid(iE),dreal(Kernel(iE,Efermi_ndx2)),dimag(Kernel(iE,Efermi_ndx2))
             enddo
             close(unit)
             !
@@ -1337,8 +1318,8 @@ contains
             unit = free_unit()
             open(unit,file=reg(printpath)//reg(filename)//"_e_0E_T"//str(T,2)//".DAT",form="formatted",status="unknown",position="rewind",action="write")
             do iE=1,Ngrid2
-               if(RealK) write(unit,"(3F20.10)")Egrid(iE),dreal(Kernel(Efermi_ndx1,iE))
-               if(CmplxK) write(unit,"(3F20.10)")Egrid(iE),dreal(Kernel(Efermi_ndx1,iE)),dimag(Kernel(Efermi_ndx1,iE))
+               if(RealK) write(unit,"(3E20.12)")Egrid(iE),dreal(Kernel(Efermi_ndx1,iE))
+               if(CmplxK) write(unit,"(3E20.12)")Egrid(iE),dreal(Kernel(Efermi_ndx1,iE)),dimag(Kernel(Efermi_ndx1,iE))
             enddo
             close(unit)
             !
@@ -1347,8 +1328,8 @@ contains
             unit = free_unit()
             open(unit,file=reg(printpath)//reg(filename)//"_e_diag_T"//str(T,2)//".DAT",form="formatted",status="unknown",position="rewind",action="write")
             do iE=1,Ngrid2
-               if(RealK) write(unit,"(3F20.10)")Egrid(iE),dreal(Kernel(iE,iE))
-               if(CmplxK) write(unit,"(3F20.10)")Egrid(iE),dreal(Kernel(iE,iE)),dimag(Kernel(iE,iE))
+               if(RealK) write(unit,"(3E20.12)")Egrid(iE),dreal(Kernel(iE,iE))
+               if(CmplxK) write(unit,"(3E20.12)")Egrid(iE),dreal(Kernel(iE,iE)),dimag(Kernel(iE,iE))
             enddo
             close(unit)
             !
@@ -1358,7 +1339,7 @@ contains
             open(unit,file=reg(printpath)//reg(filename)//"_e_surf_R_T"//str(T,2)//".DAT",form="formatted",status="unknown",position="rewind",action="write")
             do iE1=1,Ngrid1
                do iE2=1,Ngrid2
-                  write(unit,"(3F20.10)")Egrid(iE1),Egrid(iE2),dreal(Kernel(iE1,iE2))
+                  write(unit,"(3E20.12)")Egrid(iE1),Egrid(iE2),dreal(Kernel(iE1,iE2))
                enddo
                write(unit,*)
             enddo
@@ -1368,7 +1349,7 @@ contains
                open(unit,file=reg(printpath)//reg(filename)//"_e_surf_I_T"//str(T,2)//".DAT",form="formatted",status="unknown",position="rewind",action="write")
                do iE1=1,Ngrid1
                   do iE2=1,Ngrid2
-                     write(unit,"(3F20.10)")Egrid(iE1),Egrid(iE2),dimag(Kernel(iE1,iE2))
+                     write(unit,"(3E20.12)")Egrid(iE1),Egrid(iE2),dimag(Kernel(iE1,iE2))
                   enddo
                   write(unit,*)
                enddo
@@ -1380,31 +1361,31 @@ contains
             unit = free_unit()
             open(unit,file=reg(printpath)//reg(filename)//"_e_E0_T"//str(T,2)//".DAT",form="formatted",status="unknown",position="rewind",action="write")
             do iE=1,Ngrid1
-               if(RealK) write(unit,"(3F20.10)")Egrid(iE),dreal(Kernel(iE,Efermi_ndx2))
-               if(CmplxK) write(unit,"(3F20.10)")Egrid(iE),dreal(Kernel(iE,Efermi_ndx2)),dimag(Kernel(iE,Efermi_ndx2))
+               if(RealK) write(unit,"(3E20.12)")Egrid(iE),dreal(Kernel(iE,Efermi_ndx2))
+               if(CmplxK) write(unit,"(3E20.12)")Egrid(iE),dreal(Kernel(iE,Efermi_ndx2)),dimag(Kernel(iE,Efermi_ndx2))
             enddo
             close(unit)
             if(reg(Kerneltype).eq."electronic")then
                unit = free_unit()
                open(unit,file=reg(printpath)//reg(filename)//"_e_0E_T"//str(T,2)//".DAT",form="formatted",status="unknown",position="rewind",action="write")
                do iE=1,Ngrid2
-                  if(RealK) write(unit,"(3F20.10)")Egrid(iE),dreal(Kernel(Efermi_ndx1,iE))
-                  if(CmplxK) write(unit,"(3F20.10)")Egrid(iE),dreal(Kernel(Efermi_ndx1,iE)),dimag(Kernel(Efermi_ndx1,iE))
+                  if(RealK) write(unit,"(3E20.12)")Egrid(iE),dreal(Kernel(Efermi_ndx1,iE))
+                  if(CmplxK) write(unit,"(3E20.12)")Egrid(iE),dreal(Kernel(Efermi_ndx1,iE)),dimag(Kernel(Efermi_ndx1,iE))
                enddo
                close(unit)
             endif
             unit = free_unit()
             open(unit,file=reg(printpath)//reg(filename)//"_e_diag_T"//str(T,2)//".DAT",form="formatted",status="unknown",position="rewind",action="write")
             do iE=1,Ngrid2
-               if(RealK) write(unit,"(3F20.10)")Egrid(iE),dreal(Kernel(iE,iE))
-               if(CmplxK) write(unit,"(3F20.10)")Egrid(iE),dreal(Kernel(iE,iE)),dimag(Kernel(iE,iE))
+               if(RealK) write(unit,"(3E20.12)")Egrid(iE),dreal(Kernel(iE,iE))
+               if(CmplxK) write(unit,"(3E20.12)")Egrid(iE),dreal(Kernel(iE,iE)),dimag(Kernel(iE,iE))
             enddo
             close(unit)
             unit = free_unit()
             open(unit,file=reg(printpath)//reg(filename)//"_e_surf_R_T"//str(T,2)//".DAT",form="formatted",status="unknown",position="rewind",action="write")
             do iE1=1,Ngrid1
                do iE2=1,Ngrid2
-                  write(unit,"(3F20.10)")Egrid(iE1),Egrid(iE2),dreal(Kernel(iE1,iE2))
+                  write(unit,"(3E20.12)")Egrid(iE1),Egrid(iE2),dreal(Kernel(iE1,iE2))
                enddo
                write(unit,*)
             enddo
@@ -1414,7 +1395,7 @@ contains
                open(unit,file=reg(printpath)//reg(filename)//"_e_surf_I_T"//str(T,2)//".DAT",form="formatted",status="unknown",position="rewind",action="write")
                do iE1=1,Ngrid1
                   do iE2=1,Ngrid2
-                     write(unit,"(3F20.10)")Egrid(iE1),Egrid(iE2),dimag(Kernel(iE1,iE2))
+                     write(unit,"(3E20.12)")Egrid(iE1),Egrid(iE2),dimag(Kernel(iE1,iE2))
                   enddo
                   write(unit,*)
                enddo

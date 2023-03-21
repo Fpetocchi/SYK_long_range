@@ -581,37 +581,26 @@ void measure_GF( VecVec &Gvec, VecVec &Fvec_S, VecVec &Fvec_R, std::vector<segme
             for (int jfl=0; jfl<Nflavor; ++jfl)
             {
                //
-               double nj = 0.0;
-               double Ij = 0.0;
+               int fl1 = std::max(jfl,ifl);
+               int fl2 = std::min(jfl,ifl);
                //
+               double nj = 0.0;
                if(jfl!=ifl) nj = get_nj( segments[jfl], full_line[jfl], tie );
+               double hf_fact = ( removeUhalf ? 0.5 : 0.0 );
+               Fpref_Sta += 0.5 * (Uloc(jfl,ifl)+Uloc(ifl,jfl)) * ( nj-hf_fact );
+
                //
                if(retarded)
                {
-                  //
-                  int fl1 = std::max(jfl,ifl);
-                  int fl2 = std::min(jfl,ifl);
-                  //
                   for (itn=segments[jfl].begin(); itn!=segments[jfl].end(); itn++)
                   {
-                     //
-                     double tjs = itn->t_start();
-                     double tje = itn->t_end();
-                     //
-                     Ij -= ( -H(tje-tie  , Beta, Kp_table[fl1][fl2]) +H(tjs-tie, Beta, Kp_table[fl1][fl2]) );
-                     //
-                     bool selfseg = ( (tie == tje) || (tie == tjs) ) && (jfl==ifl);
-                     if(selfseg) Ij -= 2 * Kp_table[fl1][fl2][0];
-                     //
+                     Fpref_Ret += ( H( itn->t_end()-tie  , Beta, Kp_table[fl1][fl2]) - H( itn->t_start()-tie, Beta, Kp_table[fl1][fl2]) );
                   }
                }
-               //
-               // prefactors
-               double hf_fact = ( removeUhalf ? 0.5 : 0.0 );
-               Fpref_Sta += 0.5 * (Uloc(jfl,ifl)+Uloc(ifl,jfl)) * ( nj-hf_fact );
-               if(retarded) Fpref_Ret += Ij;
-               //
             }
+            //this below is dubious according to the paper is not there if Uloc is the screened one
+            if(retarded)Fpref_Ret -= 2*Kp_table[ifl][ifl][0];
+
             //
             for (int k=0; k<M.rows(); k++)
             {

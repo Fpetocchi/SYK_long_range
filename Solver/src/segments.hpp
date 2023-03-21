@@ -783,7 +783,7 @@ template <class G, class S> double det_rat_shift(times &new_segment, int k, Mat 
 //------------------------------------------------------------------------------
 
 
-inline double H(double tau, double Beta, std::vector<double>& Kab)
+inline double H(double tau, double Beta, std::vector<double>& Kab )
 {
    if (tau<0) tau += Beta;
 
@@ -900,8 +900,8 @@ template <class S> double nonlocal_shift(double te_ins, double te_rem, S &other_
 
 double get_nj( segment_container_t &segment, int &full_line, double &tau )
 {
+   //
    double nj = 0.0;
-
 
    if(segment.size()==0)
    {
