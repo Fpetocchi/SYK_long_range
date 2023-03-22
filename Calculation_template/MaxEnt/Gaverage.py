@@ -17,9 +17,17 @@ def path_exists(path):
         if exception.errno != errno.EEXIST:
             raise
 
-def read_Convergence(path,):
-    data = np.genfromtxt(path, dtype='double', usecols=(1), unpack=True, comments='#')
-    return data
+def read_Convergence(path,axs):
+    #
+    if axs=="t":
+        Data = np.genfromtxt(path, dtype='double', usecols=(1), unpack=True, comments='#')
+        return Data
+    elif axs=="w":
+        ReData = np.genfromtxt(path, dtype='double', usecols=(1), unpack=True, comments='#')
+        ImData = np.genfromtxt(path, dtype='double', usecols=(2), unpack=True, comments='#')
+        Data = ReData+1j*ImData
+    #
+    return Data
 
 def average(G,tlimit,window,log,orblist=None):
     Gin = np.log(np.abs(G-(1e-15))) if log else G.copy()
@@ -38,6 +46,12 @@ def average(G,tlimit,window,log,orblist=None):
 #
 # to print Glat average:
 # python Gaverage.py --field Gw --pad lat --orbs 1,2,3,.. --itlist it_start..it_end
+#
+# to print Slat average:
+# python Gaverage.py --field Sw --pad lat --orbs 1,2,3,.. --axis w --itlist it_start..it_end
+#
+# to print Simp average:
+# python Gaverage.py --field Sw --pad imp --orbs 1,2,3,.. --axis w --itlist it_start..it_end
 #
 # to print Gqmc_El average:
 # python Gaverage.py --field Gw --pad qmc_El --orbs 1,2,3,.. --itlist it_start..it_end
@@ -59,6 +73,7 @@ spins = [1]; orbs = [1]; dirs=[]
 parser = OptionParser()
 parser.add_option("--field" , dest="field"  , default="Gw"    )                 # [G,W]kw, [G,W]w, Obs
 parser.add_option("--pad"   , dest="pad"    , default="None"  )                 # local: lat, imp, qmc_* kresolved: _Tr, _Hetero
+parser.add_option("--axis"  , dest="axis"   , default="t"     )                 # local: lat, imp, qmc_* kresolved: _Tr, _Hetero
 parser.add_option("--orbs"  , dest="orbs"   , default="1"     )                 # list of orbitals separated by comma
 parser.add_option("--itlist", dest="itlist" , default="0"     )                 # list of iterations separated by comma or initial and final iteration separated by ".."
 parser.add_option("--skip"  , dest="skip"   , default="0"     )                 # list of iteration to be ignored separated by comma
@@ -101,6 +116,9 @@ if options.orbs != "1":
         sys.exit("--orbs error. Exiting.")
 else:
     orbs = [1]
+#
+#
+ax = options.axis
 #
 #
 spin = int(options.spin)
@@ -187,20 +205,22 @@ if (stat != "Observables") and local:
     #
     for o in orbs:
         #
-        File = Folder + "_t_o%s"%o + "_s%s.DAT"%spin if (stat == "Fermion") else Folder + "_w_(%s,%s)(%s,%s).DAT"%(o,o,o,o)
+        File = Folder + "_%s_o%s"%(ax,o) + "_s%s.DAT"%spin if (stat == "Fermion") else Folder + "_w_(%s,%s)(%s,%s).DAT"%(o,o,o,o)
         print("Averaging file: %s"%File)
         #
         dir = dirs[0]
         #
         path = '%s/Convergence/%s/%s'%(dir,Folder,File)
         axis = np.genfromtxt(path, dtype='double', usecols=(0), unpack=True, comments='#')
-        data = read_Convergence(path)/Nit
+        data = read_Convergence(path,ax)/Nit
         for dir in dirs[1:]:
             path = '%s/Convergence/%s/%s'%(dir,Folder,File)
-            data += read_Convergence(path)/Nit
+            data += read_Convergence(path,ax)/Nit
         #
-        np.savetxt('./avg/Convergence/%s/%s'%(Folder,File), np.c_[ axis, data ] , delimiter='\t')
-        data*=0.0
+        if ax=="t":
+            np.savetxt('./avg/Convergence/%s/%s'%(Folder,File), np.c_[ axis, data ] , delimiter='\t')
+        elif ax=="w":
+            np.savetxt('./avg/Convergence/%s/%s'%(Folder,File), np.c_[ axis, data.real, data.imag ] , delimiter='\t')
 #
 #
 #

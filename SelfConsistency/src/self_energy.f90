@@ -384,7 +384,7 @@ contains
                            k = LocalOrbs(isite)%Orbs(kndx)
                            l = LocalOrbs(isite)%Orbs(lndx)
                            !
-                           call F2Bindex(LocalOrbs(isite)%Norb,[i,j],[k,l],ib1,ib2)
+                           call F2Bindex(Norb,[i,j],[k,l],ib1,ib2)
                            !
                            Sitau_loc(i,k,itau) = Sitau_loc(i,k,itau) - Gitau_loc(j,l,itau,ispin)*Witau_loc(ib1,ib2,itau)
                            !

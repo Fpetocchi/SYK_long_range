@@ -271,6 +271,7 @@ program SelfConsistency
                call AllocateFermionicField(S_GWdc,Crystal%Norb,Nmats,Nsite=Nsite,Beta=Beta)
                call calc_sigmaGWdc(S_GWdc,Glat,Wlat)
                call MergeFields(S_GW,S_DMFT,[alphaSigma,HartreeFact],LocalOrbs,SigmaGW_DC=S_GWdc)
+               call dump_FermionicField(S_G0W0dc,reg(ItFolder),"Slat_dc_w",paramagnet)
                call DeallocateFermionicField(S_GWdc)
             elseif(reg(DC_type_GW).eq."Sloc")then
                call MergeFields(S_GW,S_DMFT,[alphaSigma,HartreeFact],LocalOrbs)

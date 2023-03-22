@@ -73,7 +73,7 @@ subroutine calc_Tc(pathOUTPUT,Inputs,Lttc,Wlat)
    call dump_Field_component(DoS_Model,reg(printpath),"DoS_Model.DAT",Egrid)
    !
    if (calc_Int_static.or.calc_Int_dynamic) then
-      call store_Wk4gap(Wlat%screened,Lttc,Wlat%Beta,Inputs%Wk_cutoff,reg(printpath),Inputs%printWk)
+      call store_Wk4gap(Wlat%screened,Lttc,Wlat%Beta,Inputs%Wk_cutoff,reg(printpath),.true.)
       !QUI CAMBIA TUTTO INVECE CHE STORARE WK STORA I DUE INTEGRALI SU E ED EPRIMO TANTO QUELLO CHE DIPENDE DALLA TEMPERATURA É SOLO KELDYN
       !QUI DEVI CAMBIARE PROPRIO TUTTO
    endif

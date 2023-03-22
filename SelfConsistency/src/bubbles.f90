@@ -605,7 +605,7 @@ contains
       use crystal
       use fourier_transforms
       use file_io
-      use input_vars, only : Ntau, tau_uniform, paramagnet
+      use input_vars, only : Ntau, tau_uniform, paramagnet, LocalOrbs
       implicit none
       !
       type(BosonicField),intent(inout)      :: Pout
@@ -617,6 +617,7 @@ contains
       real(8)                               :: Beta,tau2
       integer                               :: Nbp,Norb,itau,ispin,ip
       integer                               :: i,j,k,l,ib1,ib2
+      integer                               :: isite,indx,jndx,kndx,lndx
       logical                               :: OD
       type(physicalU)                       :: PhysicalUelements
       real                                  :: start,finish
@@ -675,33 +676,34 @@ contains
       !
       Ptau_dc=czero
       !$OMP PARALLEL DEFAULT(SHARED),&
-      !$OMP PRIVATE(itau,tau2,ispin,i,j,k,l,ib1,ib2,OD)
+      !$OMP PRIVATE(itau,tau2,ispin,i,j,k,l,ib1,ib2,OD),&
+      !$OMP PRIVATE(isite,indx,jndx,kndx,lndx)
       !$OMP DO
       do itau=1,Ntau
          !
          tau2=tau(Ntau)-tau(itau)
          if (dabs(tau2-tau(Ntau-itau+1)).gt.eps) stop "calc_PiGGdc: itau2 not found."
          !
-         do ib1=1,Nbp
-            do ib2=ib1,Nbp
-               !
-               OD = ib1.ne.ib2
-               !
-               i = PhysicalUelements%Full_Map(ib1,ib2,1)
-               j = PhysicalUelements%Full_Map(ib1,ib2,2)
-               k = PhysicalUelements%Full_Map(ib1,ib2,3)
-               l = PhysicalUelements%Full_Map(ib1,ib2,4)
-               !
-               do ispin=1,Nspin
-                  !
-                  !Pi_(i,j)(k,l)(q,tau) = - sum_k G_ik(k,tau) * G_lj(q-k,beta-tau)
-                  Ptau_dc(ib1,ib2,itau) = Ptau_dc(ib1,ib2,itau) - ( Gitau(i,k,itau,ispin) * Gitau(l,j,Ntau-itau+1,ispin) )
-                  !
-                  !Pi_(k,l)(i,j)(q,tau) = - sum_k G_ki(k,tau) * G_jl(q-k,beta-tau)
-                  if(OD)Ptau_dc(ib2,ib1,itau) = Ptau_dc(ib2,ib1,itau) - ( Gitau(k,i,itau,ispin) * Gitau(j,l,Ntau-itau+1,ispin) )
-                  !
+         do isite=1,size(LocalOrbs)
+            do indx=1,LocalOrbs(isite)%Norb
+               do jndx=1,LocalOrbs(isite)%Norb
+                  do kndx=1,LocalOrbs(isite)%Norb
+                     do lndx=1,LocalOrbs(isite)%Norb
+                        !
+                        i = LocalOrbs(isite)%Orbs(indx)
+                        j = LocalOrbs(isite)%Orbs(jndx)
+                        k = LocalOrbs(isite)%Orbs(kndx)
+                        l = LocalOrbs(isite)%Orbs(lndx)
+                        !
+                        call F2Bindex(Norb,[i,j],[k,l],ib1,ib2)
+                        !
+                        do ispin=1,Nspin
+                           Ptau_dc(ib1,ib2,itau) = Ptau_dc(ib1,ib2,itau) - ( Gitau(i,k,itau,ispin) * Gitau(l,j,Ntau-itau+1,ispin) )
+                        enddo
+                        !
+                     enddo
+                  enddo
                enddo
-               !
             enddo
          enddo
          !

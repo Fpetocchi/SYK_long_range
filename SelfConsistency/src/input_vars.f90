@@ -736,7 +736,6 @@ contains
          if((reg(gap_equation%mode_ph).eq."None").and.(reg(gap_equation%mode_el).eq."None"))stop "read_InputFile: Tc requested but no mode is choosen."
          call parse_input_variable(gap_equation%Nkpt3_Model,"NKPT3_MODEL",InputFile,default=Nkpt3,comment="Interpolated K-grid. Equal to NKPT3 to avoid.")
          call parse_input_variable(gap_equation%Wk_cutoff,"CUTOFF_WK_EE",InputFile,default=wmatsMax,comment="Bosonic frequency cutoff for MODE_EL=static+dynamic calculations.")
-         call parse_input_variable(gap_equation%printWk,"PRINT_WK_EE",InputFile,default=.false.,comment="Store to file the interaction in the LDA basis.")
          call parse_input_variable(gap_equation%printmode_ph,"PRINT_KPH",InputFile,default="None",comment="Printing mode of the phononic Kernel. Available modes: E0, diag, surf, all. None to avoid.")
          call parse_input_variable(gap_equation%printmode_el,"PRINT_KEL",InputFile,default="None",comment="Printing mode of the electronic Kernel. Available modes: E0, 0E, diag, surf, all. None to avoid.")
       endif
