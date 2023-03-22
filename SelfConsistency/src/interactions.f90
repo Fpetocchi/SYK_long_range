@@ -153,13 +153,17 @@ contains
             if((iq.eq.Umats%iq_gamma).and.smear)cycle
             !
             ! [ 1 - Pi*U ]
-            invW = zeye(Wmats%Nbp) - matmul(Pmats%screened(:,:,iw,iq),Umats%screened(:,:,iwU,iq))
+            !invW = zeye(Wmats%Nbp) - matmul(Pmats%screened(:,:,iw,iq),Umats%screened(:,:,iwU,iq))
+            ! [ 1 - U*Pi ]
+            invW = zeye(Wmats%Nbp) - matmul(Umats%screened(:,:,iwU,iq),Pmats%screened(:,:,iw,iq))
             !
-            ! [ 1 - Pi*U ]^-1
+            ! [ 1 - Pi*U ]^-1 or [ 1 - U*Pi ]
             call inv(invW)
             !
             ! U*[ 1 - Pi*U ]^-1
-            Wmats%screened(:,:,iw,iq) = matmul(Umats%screened(:,:,iwU,iq),invW)
+            !Wmats%screened(:,:,iw,iq) = matmul(Umats%screened(:,:,iwU,iq),invW)
+            ! [ 1 - U*Pi ]^-1*U
+            Wmats%screened(:,:,iw,iq) = matmul(invW,Umats%screened(:,:,iwU,iq))
             !
             !Hermiticity check - print if error is bigger than 1e-3
             if(symQ_) call check_Hermiticity(Wmats%screened(:,:,iw,iq),1e7*eps,enforce=.false.,hardstop=.false.,name="Wlat_w"//str(iw)//"_q"//str(iq),verb=.true.)
@@ -194,7 +198,8 @@ contains
          do iw=1,Nmats
             iwU = iw
             if(Ustatic)iwU = 1
-            Wmats%screened(:,:,iw,Umats%iq_gamma) = dreal(matmul(Umats%screened(:,:,iwU,Umats%iq_gamma),epsGamma(:,:,iw)))
+            !Wmats%screened(:,:,iw,Umats%iq_gamma) = dreal(matmul(Umats%screened(:,:,iwU,Umats%iq_gamma),epsGamma(:,:,iw)))
+            Wmats%screened(:,:,iw,Umats%iq_gamma) = dreal(matmul(epsGamma(:,:,iw),Umats%screened(:,:,iwU,Umats%iq_gamma)))
             call check_Symmetry(Wmats%screened(:,:,iw,Umats%iq_gamma),eps,enforce=.true.,hardstop=.false.,name="Wlat_w"//str(iw)//"_q"//str(Umats%iq_gamma),verb=.false.)
          enddo
          !
@@ -211,10 +216,6 @@ contains
       do iw=1,Nmats
          call check_Hermiticity(Wmats%screened_local(:,:,iw),1e7*eps,enforce=.true.,hardstop=.false.,name="Wlat_loc_w"//str(iw),verb=.true.)
       enddo
-      !
-      !call dump_BosonicField(Umats,"./Ulat_readable/",.false.)
-      !call dump_BosonicField(Wmats,"./Wlat_readable_"//str(HandleGammaPoint)//"/",.false.)
-      !call dump_BosonicField(Umats,"./Ulat_readable_"//str(HandleGammaPoint)//"/",.false.)
       !
    end subroutine calc_W_full
 
@@ -312,13 +313,17 @@ contains
             if((iq.eq.Umats%iq_gamma).and.smear)cycle
             !
             ! [ 1 - Pi*U ]
-            invW = zeye(Umats%Nbp) - matmul(alpha_*Pmats%screened_local(:,:,iw),Umats%screened(:,:,iwU,iq))
+            !invW = zeye(Umats%Nbp) - matmul(alpha_*Pmats%screened_local(:,:,iw),Umats%screened(:,:,iwU,iq))
+            ! [ 1 - U*Pi ]
+            invW = zeye(Umats%Nbp) - matmul(Umats%screened(:,:,iwU,iq),alpha_*Pmats%screened_local(:,:,iw))
             !
-            ! [ 1 - U*Pi ]^-1
+            ! [ 1 - Pi*U ]^-1 or [ 1 - U*Pi ]
             call inv(invW)
             !
             !  U*[ 1 - U*Pi ]^-1
-            W_q = matmul(Umats%screened(:,:,iwU,iq),invW)
+            !W_q = matmul(Umats%screened(:,:,iwU,iq),invW)
+            !  [ 1 - U*Pi ]^-1*U
+            W_q = matmul(invW,Umats%screened(:,:,iwU,iq))
             !
             !Hermiticity check - print if error is bigger than 1e-3
             if(symQ_) call check_Hermiticity(W_q,1e7*eps,enforce=.true.,hardstop=.false.,name="Wlat_w"//str(iw)//"_q"//str(iq),verb=.true.)
@@ -356,7 +361,8 @@ contains
          do iw=1,Nmats
             iwU = iw
             if(Ustatic)iwU = 1
-            W_q = dreal(matmul(Umats%screened(:,:,iwU,Umats%iq_gamma),epsGamma(:,:,iw)))
+            !W_q = dreal(matmul(Umats%screened(:,:,iwU,Umats%iq_gamma),epsGamma(:,:,iw)))
+            W_q = dreal(matmul(epsGamma(:,:,iw),Umats%screened(:,:,iwU,Umats%iq_gamma)))
             call check_Symmetry(W_q,eps,enforce=.true.,hardstop=.false.,name="Wlat_w"//str(iw)//"_q"//str(Umats%iq_gamma),verb=.false.)
             Wmats%screened_local(:,:,iw) = Wmats%screened_local(:,:,iw) + W_q/Nkpt
          enddo
@@ -445,12 +451,16 @@ contains
          do iq=1,Chi%Nkpt
             !
             ! [ 1 - U*Pi ]
-            invW = zeye(Chi%Nbp) - matmul(Umats%screened(:,:,iwU,iq),Pmats%screened(:,:,iw,iq))
+            !invW = zeye(Chi%Nbp) - matmul(Umats%screened(:,:,iwU,iq),Pmats%screened(:,:,iw,iq))
+            ! [ 1 - Pi*U ]
+            invW = zeye(Chi%Nbp) - matmul(Pmats%screened(:,:,iw,iq),Umats%screened(:,:,iwU,iq))
             !
-            ! [ 1 - U*Pi ]^-1
+            ! [ 1 - U*Pi ]^-1 or [ 1 - Pi*U ]^-1
             call inv(invW)
             !
             ! [ 1 - U*Pi ]^-1 * Pi
+            !Chi%screened(:,:,iw,iq) = matmul(invW,Pmats%screened(:,:,iw,iq))
+            ! [ 1 - Pi*U ]^-1 * Pi
             Chi%screened(:,:,iw,iq) = matmul(invW,Pmats%screened(:,:,iw,iq))
             !
          enddo

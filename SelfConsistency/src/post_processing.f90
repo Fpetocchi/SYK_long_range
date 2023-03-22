@@ -1,6 +1,5 @@
 module post_processing
 
-   use gap_equation, only: store_Wk4gap
    implicit none
    private
 
@@ -50,7 +49,6 @@ module post_processing
    public :: interpolate2Beta
    public :: interpolate2kpath
    public :: calc_Tc
-   public :: store_Wk4gap
 
    !===========================================================================!
 

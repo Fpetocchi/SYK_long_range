@@ -164,7 +164,7 @@ module module_container
    calc_sigmaGWdc                           ,&
    read_Sigma_spex                          ,&
    calc_VH                                  ,&
-   print_G0W0_dispersion
+   print_G0W0_dispersion,Uwan_stored
 
 
    !(p) post-processing container. Depends on (a),(b),(c),(d),(e),(f),(g),(h)
@@ -174,7 +174,7 @@ module module_container
    remove_CDW                               ,&
    interpolate2Beta                         ,&
    interpolate2kpath                        ,&
-   calc_Tc,store_Wk4gap
+   calc_Tc
    !calc_OptCond,calc_HallCond
 
 

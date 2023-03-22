@@ -22,10 +22,9 @@ subroutine calc_Tc(pathOUTPUT,Inputs,Lttc,Wlat)
    real(8),allocatable                   :: Egrid_print(:)
    real(8),allocatable                   :: Tlist(:),Delta_T(:)
    real(8),allocatable                   :: Zph(:),Kph(:,:)
-   complex(8),allocatable,target         :: Kel_stat(:,:),Kel_dyn(:,:)
-   complex(8),pointer                    :: Kel(:,:)
+   complex(8),allocatable                :: Kel(:,:)
    complex(8),allocatable                :: Hk_used(:,:,:)
-   character(len=255)                    :: printpath
+   character(len=255)                    :: printpath,printpath_T
    !
    integer                               :: iloop,iT
    real(8)                               :: Temp,Beta,Beta_DFT,errDelta
@@ -72,11 +71,8 @@ subroutine calc_Tc(pathOUTPUT,Inputs,Lttc,Wlat)
    call dump_Field_component(DoS_DFT,reg(printpath),"DoS_DFT.DAT",Egrid)
    call dump_Field_component(DoS_Model,reg(printpath),"DoS_Model.DAT",Egrid)
    !
-   if (calc_Int_static.or.calc_Int_dynamic) then
-      call store_Wk4gap(Wlat%screened,Lttc,Wlat%Beta,Inputs%Wk_cutoff,reg(printpath),.true.)
-      !QUI CAMBIA TUTTO INVECE CHE STORARE WK STORA I DUE INTEGRALI SU E ED EPRIMO TANTO QUELLO CHE DIPENDE DALLA TEMPERATURA É SOLO KELDYN
-      !QUI DEVI CAMBIARE PROPRIO TUTTO
-   endif
+   !Store inside the module the required energy averages
+   if(calc_Kel) call calc_energy_averages(Wlat%screened,Lttc,Wlat%Beta,Inputs%Wk_cutoff,reg(printpath),reg(Inputs%printmode_el))
    !
    if(Inputs%calc_Tc)then
       !
@@ -104,11 +100,14 @@ subroutine calc_Tc(pathOUTPUT,Inputs,Lttc,Wlat)
          Beta = 1d0 / (Temp*K2eV)
          Beta_DFT = 1d0 / (Temp*K2eV*eV2DFTgrid)
          !
+         printpath_T = reg(printpath)//"loops_T"//str(Temp,2)//"/"
+         !
          write(*,"(A)") new_line("A")//"     ................................................"//new_line("A")
          write(*,"(3(A,1F12.5))") "     T(K): ",Temp,"    Beta(1/eV): ",Beta,"    Beta(1/"//DFTgrid//"): ",Beta_DFT
          !
          write(*,"(A)") new_line("A")//"     Computing Kernels."
          !
+         !phononic Kernels
          if(calc_phonons)then
             !
             allocate(Zph(Ngrid));Zph=0d0
@@ -119,35 +118,16 @@ subroutine calc_Tc(pathOUTPUT,Inputs,Lttc,Wlat)
             !
          endif
          !
-         if(calc_Int_static.and.calc_Int_dynamic)then
-            !
-            allocate(Kel_stat(Ngrid,Ngrid));Kel_stat=czero
-            call calc_Kel_stat_e(Beta_DFT,Kel_stat,reg(Inputs%printmode_el),reg(printpath))
-            !
-            allocate(Kel_dyn(Ngrid,Ngrid));Kel_dyn=czero
-            call calc_Kel_dyn_e(Beta_DFT,Kel_dyn,reg(Inputs%printmode_el),reg(printpath))
-            !
-            Kel_dyn = Kel_stat + Kel_dyn
-            Kel => Kel_dyn
-            !
-         elseif(calc_Int_static) then
-            !
-            allocate(Kel_stat(Ngrid,Ngrid));Kel_stat=czero
-            call calc_Kel_stat_e(Beta_DFT,Kel_stat,reg(Inputs%printmode_el),reg(printpath))
-            Kel => Kel_stat
-            !
-         elseif(calc_Int_dynamic) then
-            !
-            allocate(Kel_dyn(Ngrid,Ngrid));Kel_dyn=czero
-            call calc_Kel_dyn_e(Beta_DFT,Kel_dyn,reg(Inputs%printmode_el),reg(printpath))
-            Kel => Kel_dyn
-            !
+         !get the electronic Kernel depending on the input specifications
+         if(calc_Kel)then
+            allocate(Kel(Ngrid,Ngrid));Kel=0d0
+            call get_Kel(Kel,Beta_DFT,reg(Inputs%printmode_el),reg(printpath_T))
          endif
          !
          !Convergence loop over Delta(e)
          write(*,"(A)") new_line("A")//"     Solving gap equation."
          !
-         call dump_Field_component(oldDelta,reg(printpath)//"loops_T"//str(Temp,2)//"/","0_Delta.DAT",Egrid)
+         call dump_Field_component(oldDelta,reg(printpath_T)//"loops_T"//str(Temp,2)//"/","0_Delta.DAT",Egrid)
          !
          allocate(EDsq(Ngrid)); EDsq = czero
          allocate(newDelta(Ngrid));newDelta = czero
@@ -179,7 +159,7 @@ subroutine calc_Tc(pathOUTPUT,Inputs,Lttc,Wlat)
                  endif
                  !
                  !Integral of the electronic Kernel done with the custom DoS
-                 if(calc_Int_static.or.calc_Int_dynamic)then
+                 if(calc_Kel)then
                     Kint = Kint + ( DoS_Model(iE2-1) * Kel(iE1,iE2-1) * tanh_b * Delta(iE2-1) + &
                                     DoS_Model(iE2)   * Kel(iE1,iE2)   * tanh_f * Delta(iE2)   ) * (dE/2d0)
                  endif
@@ -207,20 +187,18 @@ subroutine calc_Tc(pathOUTPUT,Inputs,Lttc,Wlat)
             Delta = (1d0-Inputs%DeltaMix)*newDelta + Inputs%DeltaMix*oldDelta
             oldDelta = Delta
             !
-            call dump_Field_component(Delta,reg(printpath)//"loops_T"//str(Temp,2)//"/",str(iloop)//"_Delta.DAT",Egrid)
+            call dump_Field_component(Delta,reg(printpath_T)//"loops_T"//str(Temp,2)//"/",str(iloop)//"_Delta.DAT",Egrid)
             !
          enddo SCloop !iloop
          deallocate(EDsq,newDelta)
-         if(associated(Kel))nullify(Kel)
          if(allocated(Zph))deallocate(Zph)
          if(allocated(Kph))deallocate(Kph)
-         if(allocated(Kel_stat))deallocate(Kel_stat)
-         if(allocated(Kel_dyn))deallocate(Kel_dyn)
+         if(allocated(Kel))deallocate(Kel)
          !
          if(.not.converged)write(*,"(A)")"     Warning: Delta is not converged."
          Delta = Delta*DFTgrid2eV
          allocate(Egrid_print(Ngrid));Egrid_print = Egrid*DFTgrid2eV
-         call dump_Field_component(Delta,reg(printpath),"Delta_e_T"//str(Temp,2)//".DAT",Egrid_print)
+         call dump_Field_component(Delta,reg(printpath_T),"Delta_e_T"//str(Temp,2)//".DAT",Egrid_print)
          Tlist(iT) = Temp
          Delta_T(iT) = abs(Delta(minloc(abs(Egrid_print),dim=1)))
          deallocate(Egrid_print)

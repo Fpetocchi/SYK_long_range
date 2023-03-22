@@ -155,7 +155,6 @@ program SelfConsistency
          call dump_MaxEnt(Wlat,"mats",reg(ItFolder)//"Convergence/","Wlat",EqvGWndx%SetOrbs)
          !
          !Solve the Gap equation
-         !call dump_BosonicField(Wlat,reg(ItFolder)//"VW_imag/",.true.)
          if(gap_equation%status)call calc_Tc(reg(ItFolder),gap_equation,Crystal,Wlat)
          !
       endif
@@ -315,7 +314,7 @@ program SelfConsistency
       !
       !
       !Print G0W0 bandstructure - Crystal%mu is used by default
-      if(dump_G0W0_bands)call print_G0W0_dispersion(Crystal,Vxc)
+      if(dump_G0W0_bands.and.Uwan_stored)call print_G0W0_dispersion(Crystal,Vxc)
       !
       !
       !Total energy calculation

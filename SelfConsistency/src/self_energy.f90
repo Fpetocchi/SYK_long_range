@@ -22,7 +22,7 @@ module self_energy
    !PURPOSE: Module variables
    !---------------------------------------------------------------------------!
    complex(8),allocatable                   :: UwanDFT(:,:,:,:)
-   logical                                  :: Uwan_stored=.false.
+   logical,public,protected                 :: Uwan_stored=.false.
 #ifdef _verb
    logical,private                          :: verbose=.true.
 #else
