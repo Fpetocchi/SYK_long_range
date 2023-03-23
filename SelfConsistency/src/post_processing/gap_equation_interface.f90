@@ -65,6 +65,16 @@ subroutine calc_Tc(pathOUTPUT,Inputs,Lttc,Wlat)
    endif
    call createDir(reg(printpath),verb=verbose)
    !
+   !super shitty but the create dir command results in system hang
+   if(Inputs%calc_Tc)then
+      do iT=1,Inputs%Tsteps
+         dT=0d0
+         if(Inputs%Tsteps.gt.1) dT = (iT-1)*abs(Inputs%Tbounds(2)-Inputs%Tbounds(1))/dble(Inputs%Tsteps-1)
+         Temp = Inputs%Tbounds(1) + dT
+         call createDir(reg(printpath)//"loops_T"//str(Temp,2)//"/",verb=verbose)
+      enddo
+   endif
+   !
    call Initialize_inputs(reg(pathINPUT),Inputs,Lttc,Hk_used)
    deallocate(Hk_used)
    !
@@ -111,10 +121,10 @@ subroutine calc_Tc(pathOUTPUT,Inputs,Lttc,Wlat)
          if(calc_phonons)then
             !
             allocate(Zph(Ngrid));Zph=0d0
-            call calc_Zph_e(Beta_DFT,Zph,reg(Inputs%mode_Zph),reg(printpath))
+            call calc_Zph_e(Beta_DFT,Zph,reg(Inputs%mode_Zph),reg(printpath_T))
             !
             allocate(Kph(Ngrid,Ngrid));Kph=0d0
-            call calc_Kph_e(Beta_DFT,Kph,reg(Inputs%printmode_ph),reg(printpath))
+            call calc_Kph_e(Beta_DFT,Kph,reg(Inputs%printmode_ph),reg(printpath_T))
             !
          endif
          !
@@ -127,7 +137,7 @@ subroutine calc_Tc(pathOUTPUT,Inputs,Lttc,Wlat)
          !Convergence loop over Delta(e)
          write(*,"(A)") new_line("A")//"     Solving gap equation."
          !
-         call dump_Field_component(oldDelta,reg(printpath_T)//"loops_T"//str(Temp,2)//"/","0_Delta.DAT",Egrid)
+         call dump_Field_component(oldDelta,reg(printpath_T),"0_Delta.DAT",Egrid)
          !
          allocate(EDsq(Ngrid)); EDsq = czero
          allocate(newDelta(Ngrid));newDelta = czero
@@ -187,7 +197,7 @@ subroutine calc_Tc(pathOUTPUT,Inputs,Lttc,Wlat)
             Delta = (1d0-Inputs%DeltaMix)*newDelta + Inputs%DeltaMix*oldDelta
             oldDelta = Delta
             !
-            call dump_Field_component(Delta,reg(printpath_T)//"loops_T"//str(Temp,2)//"/",str(iloop)//"_Delta.DAT",Egrid)
+            call dump_Field_component(Delta,reg(printpath_T),str(iloop)//"_Delta.DAT",Egrid)
             !
          enddo SCloop !iloop
          deallocate(EDsq,newDelta)

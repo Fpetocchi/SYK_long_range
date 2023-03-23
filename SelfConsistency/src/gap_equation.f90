@@ -610,11 +610,6 @@ contains
          !
          Wk = Wk * eV2DFTgrid
          !
-         allocate(Kel_stat(Ngrid,Ngrid));Kel_stat=czero
-         if(calc_Int_dynamic)then
-            allocate(Wee_dyn(Ngrid,Ngrid,wndx));Wee_dyn=czero
-         endif
-         !
          call cpu_time(start)
          !$OMP PARALLEL DEFAULT(SHARED),&
          !$OMP PRIVATE(iweig,jweig,iE1,iE2,iorb,jorb,ik1,ik2,iq,DosWeights)
@@ -646,13 +641,14 @@ contains
          if(calc_Int_static)call dump_Kel("Kel_stat.DAT","stat")
          if(calc_Int_dynamic)call dump_Kel("Wee_w.DAT","dyn")
          !
-         if(calc_Int_static.and.(reg(printmode).ne."None"))then
-            call print_Kernel("electronic",reg(printmode),reg(pathOUTPUT),"Kel_stat",Egrid,Egrid,Kel_stat)
-         endif
-         !
+      endif
+      !
+      if(calc_Int_static.and.(reg(printmode).ne."None"))then
+         call print_Kernel("electronic",reg(printmode),reg(pathOUTPUT),"Kel_stat",Egrid,Egrid,Kel_stat)
       endif
       !
       Kernels_stored = .true.
+      !
       !
       !
    contains
@@ -833,13 +829,12 @@ contains
       integer                               :: Nmats,wndx_a,wndx_b
       real(8)                               :: DoS0,Temp,MatsStep
       real(8)                               :: wmax,ymax
-      real(8)                               :: E1,E2,DE,DE_m,DE_p
-      real(8)                               :: dy,dy_m,dy_p
-      real(8)                               :: y_i,y_j
+      real(8)                               :: E1,E2,DE
+      real(8)                               :: dy,y_i,y_j
       real(8)                               :: wm,ReW_wm_intp,ImW_wm_intp
       complex(8)                            :: W_wm_i,W_wm_j,Int_i,Int_j
       complex(8)                            :: Kel_dyn_e_p,Kel_dyn_e_m
-      real(8),allocatable                   :: wmats(:),ygrid_m(:),ygrid_p(:)
+      real(8),allocatable                   :: wmats(:)
       real                                  :: start,finish
       !
       !
@@ -856,6 +851,7 @@ contains
       write(*,"(A,F10.5)") new_line("A")//"     get_Kel: Model DoS at the Fermi level:",DoS0
       if(Egrid(Efermi_ndx).ne.0d0) stop "get_Kel: the energy grid requires the E=0 point."
       !
+      Nmats = size(Wee_dyn,dim=3)
       Ngrid = size(Egrid)
       call assert_shape(Kel,[Ngrid,Ngrid],"get_Kel","Kel")
       !
@@ -870,11 +866,7 @@ contains
       if(calc_Int_dynamic)then
          !
          !$OMP PARALLEL DEFAULT(PRIVATE),&
-         !$OMP SHARED(Ngrid,Egrid,Nmats,wmats,MatsStep,Beta,Kel,Wee_dyn)
-         !
-         allocate(ygrid_m(Ngrid));ygrid_m=0d0
-         allocate(ygrid_p(Ngrid));ygrid_p=0d0
-         !
+         !$OMP SHARED(Ngrid,Egrid,Efermi_ndx,Nmats,wmats,MatsStep,Beta,Kel,Wee_dyn)
          !$OMP DO
          do iE1=1,Ngrid
             if(iE1.eq.Efermi_ndx)cycle
@@ -884,97 +876,91 @@ contains
                E1=Egrid(iE1)
                E2=Egrid(iE2)
                !
-               !integral over auxiliary variable y for DE_m = E1-E2
-               DE_m = E1 - E2
-               ymax = (wmax-DE_m) / (wmax+DE_m)
-               if(ymax.eq.1d0)then
-                  stop "get_Kel: divergence will occur for ymax(E1-E2) = 1."
-                  !printa tutto qui sotto
-               endif
-               ygrid_m = linspace(-1d0,ymax,Ngrid)
-               dy_m = abs(ygrid_m(2)-ygrid_m(1))
-               !
-               !integral over auxiliary variable y for DE_p = E1+E2
-               DE_p = E1 + E2
-               ymax = (wmax-DE_p) / (wmax+DE_p)
-               if(ymax.eq.1d0) stop "get_Kel: divergence will occur for ymax(E1+E2) = 1."
-               ygrid_p = linspace(-1d0,ymax,Ngrid)
-               dy_p = abs(ygrid_p(2)-ygrid_p(1))
-               !
                !one loop for both auxiliary y variables
                Kel_dyn_e_m=czero
                Kel_dyn_e_p=czero
                do iy=2,Ngrid
                   !
                   !-------------------- first term of the sum ---------------------
-                  DE = DE_m
-                  dy = dy_m
-                  !METTERE UNA FUNZIONE QUI (-1d0,ymax,Ngrid,iy) DI INVECE CHE UN ARRAY CONDIVISO
-                  y_i = ygrid_m(iy)
-                  y_j = ygrid_m(iy-1)
+                  DE = E1 - E2
+                  ymax = (wmax-DE) / (wmax+DE)
                   !
-                  !continous frequency correspnding to iy
-                  wm = abs(DE) * (1+y_i)/(1-y_i)
-                  !linear interpolation of Wee between the two points on the matsubara grid enclosing wm
-                  wndx_a = floor(wm/MatsStep) + 1
-                  wndx_b = wndx_a + 1
-                  ReW_wm_intp = linear_interp_2y( [wmats(wndx_a),dreal(Wee_dyn(iE1,iE2,wndx_a))] , [wmats(wndx_b),dreal(Wee_dyn(iE1,iE2,wndx_b))] , wm )
-                  ImW_wm_intp = linear_interp_2y( [wmats(wndx_a),dimag(Wee_dyn(iE1,iE2,wndx_a))] , [wmats(wndx_b),dimag(Wee_dyn(iE1,iE2,wndx_b))] , wm )
-                  W_wm_i = dcmplx(ReW_wm_intp,ImW_wm_intp)
-                  !
-                  !continous frequency correspnding to iy-1
-                  wm = abs(DE) * (1+y_j)/(1-y_j)
-                  !linear interpolation of Wee between the two points on the matsubara grid enclosing wm
-                  wndx_a = floor(wm/MatsStep) + 1
-                  wndx_b = wndx_a + 1
-                  ReW_wm_intp = linear_interp_2y( [wmats(wndx_a),dreal(Wee_dyn(iE1,iE2,wndx_a))] , [wmats(wndx_b),dreal(Wee_dyn(iE1,iE2,wndx_b))] , wm )
-                  ImW_wm_intp = linear_interp_2y( [wmats(wndx_a),dimag(Wee_dyn(iE1,iE2,wndx_a))] , [wmats(wndx_b),dimag(Wee_dyn(iE1,iE2,wndx_b))] , wm )
-                  W_wm_j = dcmplx(ReW_wm_intp,ImW_wm_intp)
-                  !
-                  !integrand for iy and iy-1
-                  Int_i = W_wm_i / ( 1d0 + y_i**2 )
-                  Int_j = W_wm_j / ( 1d0 + y_j**2 )
-                  !
-                  !trapezoidal integration
-                  Kel_dyn_e_m = Kel_dyn_e_m + (Int_i+Int_j)*(dy/2d0)
+                  if((DE.ne.0d0).and.(ymax.ne.1d0))then
+                     !
+                     dy = abs(ygrid(ymax,Ngrid,2)-ygrid(ymax,Ngrid,1))
+                     y_i = ygrid(ymax,Ngrid,iy)
+                     y_j = ygrid(ymax,Ngrid,iy-1)
+                     !
+                     !continous frequency correspnding to iy
+                     wm = abs(DE) * (1+y_i)/(1-y_i)
+                     !linear interpolation of Wee between the two points on the matsubara grid enclosing wm
+                     wndx_a = floor(wm/MatsStep) + 1
+                     wndx_b = wndx_a + 1
+                     ReW_wm_intp = linear_interp_2y( [wmats(wndx_a),dreal(Wee_dyn(iE1,iE2,wndx_a))] , [wmats(wndx_b),dreal(Wee_dyn(iE1,iE2,wndx_b))] , wm )
+                     ImW_wm_intp = linear_interp_2y( [wmats(wndx_a),dimag(Wee_dyn(iE1,iE2,wndx_a))] , [wmats(wndx_b),dimag(Wee_dyn(iE1,iE2,wndx_b))] , wm )
+                     W_wm_i = dcmplx(ReW_wm_intp,ImW_wm_intp)
+                     !
+                     !continous frequency correspnding to iy-1
+                     wm = abs(DE) * (1+y_j)/(1-y_j)
+                     !linear interpolation of Wee between the two points on the matsubara grid enclosing wm
+                     wndx_a = floor(wm/MatsStep) + 1
+                     wndx_b = wndx_a + 1
+                     ReW_wm_intp = linear_interp_2y( [wmats(wndx_a),dreal(Wee_dyn(iE1,iE2,wndx_a))] , [wmats(wndx_b),dreal(Wee_dyn(iE1,iE2,wndx_b))] , wm )
+                     ImW_wm_intp = linear_interp_2y( [wmats(wndx_a),dimag(Wee_dyn(iE1,iE2,wndx_a))] , [wmats(wndx_b),dimag(Wee_dyn(iE1,iE2,wndx_b))] , wm )
+                     W_wm_j = dcmplx(ReW_wm_intp,ImW_wm_intp)
+                     !
+                     !integrand for iy and iy-1
+                     Int_i = W_wm_i / ( 1d0 + y_i**2 )
+                     Int_j = W_wm_j / ( 1d0 + y_j**2 )
+                     !
+                     !trapezoidal integration
+                     Kel_dyn_e_m = Kel_dyn_e_m + (Int_i+Int_j)*(dy/2d0)
+                     !
+                  endif
                   !
                   !
                   !------------------- second term of the sum ---------------------
-                  DE = DE_p
-                  dy = dy_p
-                  y_i = ygrid_p(iy)
-                  y_j = ygrid_p(iy-1)
+                  DE = E1 + E2
+                  ymax = (wmax-DE) / (wmax+DE)
                   !
-                  !continous frequency correspnding to iy
-                  wm = abs(DE) * (1+y_i)/(1-y_i)
-                  !linear interpolation of Wee between the two points on the matsubara grid enclosing wm
-                  wndx_a = floor(wm/MatsStep) + 1
-                  wndx_b = wndx_a + 1
-                  ReW_wm_intp = linear_interp_2y( [wmats(wndx_a),dreal(Wee_dyn(iE1,iE2,wndx_a))] , [wmats(wndx_b),dreal(Wee_dyn(iE1,iE2,wndx_b))] , wm )
-                  ImW_wm_intp = linear_interp_2y( [wmats(wndx_a),dimag(Wee_dyn(iE1,iE2,wndx_a))] , [wmats(wndx_b),dimag(Wee_dyn(iE1,iE2,wndx_b))] , wm )
-                  W_wm_i = dcmplx(ReW_wm_intp,ImW_wm_intp)
-                  !
-                  !continous frequency correspnding to iy-1
-                  wm = abs(DE) * (1+y_j)/(1-y_j)
-                  !linear interpolation of Wee between the two points on the matsubara grid enclosing wm
-                  wndx_a = floor(wm/MatsStep) + 1
-                  wndx_b = wndx_a + 1
-                  ReW_wm_intp = linear_interp_2y( [wmats(wndx_a),dreal(Wee_dyn(iE1,iE2,wndx_a))] , [wmats(wndx_b),dreal(Wee_dyn(iE1,iE2,wndx_b))] , wm )
-                  ImW_wm_intp = linear_interp_2y( [wmats(wndx_a),dimag(Wee_dyn(iE1,iE2,wndx_a))] , [wmats(wndx_b),dimag(Wee_dyn(iE1,iE2,wndx_b))] , wm )
-                  W_wm_j = dcmplx(ReW_wm_intp,ImW_wm_intp)
-                  !
-                  !integrand for iy and iy-1
-                  Int_i = W_wm_i / ( 1d0 + y_i**2 )
-                  Int_j = W_wm_j / ( 1d0 + y_j**2 )
-                  !
-                  !trapezoidal integration
-                  Kel_dyn_e_p = Kel_dyn_e_p + (Int_i+Int_j)*(dy/2d0)
+                  if((DE.ne.0d0).and.(ymax.ne.1d0))then
+                     !
+                     dy = abs(ygrid(ymax,Ngrid,2)-ygrid(ymax,Ngrid,1))
+                     y_i = ygrid(ymax,Ngrid,iy)
+                     y_j = ygrid(ymax,Ngrid,iy-1)
+                     !
+                     !continous frequency correspnding to iy
+                     wm = abs(DE) * (1+y_i)/(1-y_i)
+                     !linear interpolation of Wee between the two points on the matsubara grid enclosing wm
+                     wndx_a = floor(wm/MatsStep) + 1
+                     wndx_b = wndx_a + 1
+                     ReW_wm_intp = linear_interp_2y( [wmats(wndx_a),dreal(Wee_dyn(iE1,iE2,wndx_a))] , [wmats(wndx_b),dreal(Wee_dyn(iE1,iE2,wndx_b))] , wm )
+                     ImW_wm_intp = linear_interp_2y( [wmats(wndx_a),dimag(Wee_dyn(iE1,iE2,wndx_a))] , [wmats(wndx_b),dimag(Wee_dyn(iE1,iE2,wndx_b))] , wm )
+                     W_wm_i = dcmplx(ReW_wm_intp,ImW_wm_intp)
+                     !
+                     !continous frequency correspnding to iy-1
+                     wm = abs(DE) * (1+y_j)/(1-y_j)
+                     !linear interpolation of Wee between the two points on the matsubara grid enclosing wm
+                     wndx_a = floor(wm/MatsStep) + 1
+                     wndx_b = wndx_a + 1
+                     ReW_wm_intp = linear_interp_2y( [wmats(wndx_a),dreal(Wee_dyn(iE1,iE2,wndx_a))] , [wmats(wndx_b),dreal(Wee_dyn(iE1,iE2,wndx_b))] , wm )
+                     ImW_wm_intp = linear_interp_2y( [wmats(wndx_a),dimag(Wee_dyn(iE1,iE2,wndx_a))] , [wmats(wndx_b),dimag(Wee_dyn(iE1,iE2,wndx_b))] , wm )
+                     W_wm_j = dcmplx(ReW_wm_intp,ImW_wm_intp)
+                     !
+                     !integrand for iy and iy-1
+                     Int_i = W_wm_i / ( 1d0 + y_i**2 )
+                     Int_j = W_wm_j / ( 1d0 + y_j**2 )
+                     !
+                     !trapezoidal integration
+                     Kel_dyn_e_p = Kel_dyn_e_p + (Int_i+Int_j)*(dy/2d0)
+                     !
+                  endif
                   !
                enddo
                !
                !adding the tail to w-->inf limit of the interaction
-               Kel_dyn_e_m = Kel_dyn_e_m + Wee_dyn(iE1,iE2,Nmats) * ( pi/2d0 - atan2(wmats(Nmats),DE_m) )
-               Kel_dyn_e_p = Kel_dyn_e_p + Wee_dyn(iE1,iE2,Nmats) * ( pi/2d0 - atan2(wmats(Nmats),DE_p) )
+               Kel_dyn_e_m = Kel_dyn_e_m + Wee_dyn(iE1,iE2,Nmats) * ( pi/2d0 - atan2(wmats(Nmats),(E1-E2)) )
+               Kel_dyn_e_p = Kel_dyn_e_p + Wee_dyn(iE1,iE2,Nmats) * ( pi/2d0 - atan2(wmats(Nmats),(E1+E2)) )
                !
                !adding the fermi function differences
                Kel_dyn_e_m = Kel_dyn_e_m * ( fermidirac(+E1,Beta) - fermidirac(+E2,Beta) )*(4d0/pi)
@@ -986,7 +972,6 @@ contains
             enddo
          enddo
          !$OMP END DO
-         deallocate(ygrid_m,ygrid_p)
          !$OMP END PARALLEL
          deallocate(wmats)
          !
@@ -1005,6 +990,29 @@ contains
          Kel = Kel + Kel_stat
          !
       endif
+      !
+      !
+      !
+   contains
+      !
+      !
+      !
+      function ygrid(stop,num,ndx) result(yval)
+         implicit none
+         real(8),intent(in)                    :: stop
+         integer,intent(in)                    :: num,ndx
+         real(8)                               :: yval
+         real(8)                               :: start,step
+         !
+         if(num.lt.0)stop "ygrid: N<0, abort."
+         if(ndx.le.0)stop "ygrid: ndx<=0, abort."
+         start = -1d0
+         step = (stop-start)/(dble(num)+1d0)
+         yval = start + dble(ndx)*step
+         !
+      end function ygrid
+      !
+      !
       !
    end subroutine get_Kel
 
@@ -1140,6 +1148,7 @@ contains
       write(*,"(A,F)") "     Calculation of phononic Z cpu timing:", finish-start
       !
       !Print Z phonon
+      call createDir(reg(printZpath),verb=verbose)
       Temp = 1d0 / (K2eV*eV2DFTgrid*Beta)
       unit = free_unit()
       open(unit,file=reg(printZpath)//"Zph_e_T"//str(Temp,2)//".DAT",form="formatted",status="unknown",position="rewind",action="write")
@@ -1264,6 +1273,10 @@ contains
       integer                               :: Efermi_ndx1,Efermi_ndx2,unit
       logical                               :: RealK,CmplxK
       !
+      !
+      if(verbose)write(*,"(A)") "---- print_Kernel"
+      !
+      !
       if((reg(Kerneltype).ne."electronic").and.(reg(Kerneltype).ne."phononic"))then
          stop "print_Kernel: available Kerneltype are only electronic or phononic."
       endif
@@ -1278,6 +1291,7 @@ contains
       if(reg(Kerneltype).eq."phononic")CmplxK=.false.
       RealK = .not.CmplxK
       !
+      call createDir(reg(printpath),verb=verbose)
       write(*,"(A)") "     Printing "//reg(Kerneltype)//" Kernel with mode "//reg(printmode)//" in "//reg(printpath)
       !
       select case(reg(printmode))

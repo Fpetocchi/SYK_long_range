@@ -505,7 +505,8 @@ contains
          step = (stop-start)/(dble(num)+1d0)
          forall(i=1:num)array(i)=start + dble(i)*step
       endif
-       if(present(mesh))mesh=step
+      if(present(mesh))mesh=step
+      !
    end function linspace_d
 
 
@@ -690,7 +691,8 @@ contains
          mkdirCmd = "mkdir -p "//reg(dirpath)
          if(verbose_)write(*,"(A)") "     Creating new directory: "//reg(dirpath)
          if(verbose_)write(*,"(A)") "     "//reg(mkdirCmd)
-         call system(reg(mkdirCmd)) !call execute_command_line(reg(mkdirCmd))
+         !call system(reg(mkdirCmd))
+         call execute_command_line(reg(mkdirCmd))
       endif
       !
    end subroutine createDir
