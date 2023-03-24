@@ -65,16 +65,6 @@ subroutine calc_Tc(pathOUTPUT,Inputs,Lttc,Wlat)
    endif
    call createDir(reg(printpath),verb=verbose)
    !
-   !super shitty but the create dir command results in system hang
-   if(Inputs%calc_Tc)then
-      do iT=1,Inputs%Tsteps
-         dT=0d0
-         if(Inputs%Tsteps.gt.1) dT = (iT-1)*abs(Inputs%Tbounds(2)-Inputs%Tbounds(1))/dble(Inputs%Tsteps-1)
-         Temp = Inputs%Tbounds(1) + dT
-         call createDir(reg(printpath)//"loops_T"//str(Temp,2)//"/",verb=verbose)
-      enddo
-   endif
-   !
    call Initialize_inputs(reg(pathINPUT),Inputs,Lttc,Hk_used)
    deallocate(Hk_used)
    !

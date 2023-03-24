@@ -91,23 +91,12 @@ program SelfConsistency
       !
       !
       !Check if needed fields are already present
-      call inquireFile(reg(ItFolder)//"Wlat_w.DAT",Wlat_exists,hardstop=.false.,verb=verbose)
       call inquireFile(reg(ItFolder)//"Sfull_w_k_s1.DAT",S_Full_exists,hardstop=.false.,verb=verbose) !add spin2 ?
-      !
       if(S_Full_exists)then
-         !
          write(*,"(A)") new_line("A")//new_line("A")//"---- skipping S_Full calculation."
          calc_Sigmak=.false.
          call AllocateFermionicField(S_Full,Crystal%Norb,Nmats,Nkpt=Crystal%Nkpt,Nsite=Nsite,Beta=Beta)
          call read_FermionicField(S_Full,reg(ItFolder),"Sfull_w",Crystal%kpt)
-         !
-         if(Wlat_exists.and.(.not.gap_equation%status))then !(*)
-            write(*,"(A)") new_line("A")//new_line("A")//"---- skipping Plat and Wlat calculations."
-            calc_Pk=.false.
-            calc_Wk=.false.
-            call read_BosonicField(Wlat,reg(ItFolder),"Wlat_w.DAT")
-         endif
-         !
       endif
       !
       !
@@ -148,11 +137,14 @@ program SelfConsistency
       !Fully screened interaction - only G0W0,scGW,GW+EDMFT,EDMFT
       if(calc_Wk)then
          !
-         if(calc_Wfull)  call calc_W_full(Wlat,Ulat,Plat,Crystal)
-         if(calc_Wedmft) call calc_W_edmft(Wlat,Ulat,P_EDMFT,Crystal,alpha=alphaPi)
-         if(interp_W) call interpolate2kpath(Wlat,Crystal,reg(MaxEnt_K),"W")
+         if(calc_Wfull)  call calc_W_full(Wlat,Ulat,Plat,Einv,Crystal)
+         if(calc_Wedmft) call calc_W_edmft(Wlat,Ulat,P_EDMFT,Einv,Crystal,alpha=alphaPi)
          call dump_BosonicField(Wlat,reg(ItFolder),"Wlat_w.DAT")
          call dump_MaxEnt(Wlat,"mats",reg(ItFolder)//"Convergence/","Wlat",EqvGWndx%SetOrbs)
+         !
+         if(interp_W) call interpolate2kpath(Wlat,Crystal,reg(MaxEnt_K),"W")
+         if(interp_E) call interpolate2kpath(Einv,Crystal,reg(MaxEnt_K),"E",NaNb=.false.)
+         call DeallocateBosonicField(Einv)
          !
          !Solve the Gap equation
          if(gap_equation%status)call calc_Tc(reg(ItFolder),gap_equation,Crystal,Wlat)

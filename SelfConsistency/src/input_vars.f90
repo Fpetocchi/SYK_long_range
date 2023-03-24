@@ -222,9 +222,9 @@ module input_vars
    logical,public                           :: print_path_G
    logical,public                           :: print_path_Chi
    logical,public                           :: print_path_W
+   logical,public                           :: print_path_E
    integer,public                           :: Nkpt_path
    logical,public                           :: print_plane_G
-   logical,public                           :: print_plane_W
    integer,public                           :: Nkpt_plane
    real(8),public                           :: FermiCut
    real(8),public                           :: KKcutoff
@@ -581,7 +581,7 @@ contains
          if(Hmodel)RecomputeG0W0=.false.
          call parse_input_variable(GoWoDC_loc,"G0W0DC_LOC",InputFile,default=.true.,comment="Keep the local contribution of Tier-III. Automatically removed if non-causal.")
       endif
-      call parse_input_variable(DC_type,"DC_TYPE",InputFile,default="Hartree_DMFT_Nimp",comment="Term removed from the impurity self-energy. Available: Hartree_[lat,DMFT]_[Nimp,Nlat], FLL_[Nimp,Nlat], None to avoid.")
+      call parse_input_variable(DC_type,"DC_TYPE",InputFile,default="Hartree_DMFT_Nimp",comment="Term removed from the impurity self-energy. Available: Hartree_[lat,DMFT]_[Nimp,Nlat], FLL_[Nimp,Nlat], Full_Tail. None to avoid.")
       if((reg(DC_type).eq."FLL_Nimp").or.(reg(DC_type).eq."FLL_Nlat"))then
          call parse_input_variable(FLL_non_loc_mltp,"FLL_MLTP",InputFile,default=1,comment="Multiplicity of the non-local FLL DC correction. 0 to avoid.")
          if(Solver%retarded.eq.1)then
@@ -684,10 +684,10 @@ contains
       call parse_input_variable(print_path_G,"PRINT_PATH_G",InputFile,default=.false.,comment="Print the k-dependent Green's function along the K-path on the imaginary time axis.")
       call parse_input_variable(print_path_Chi,"PRINT_PATH_CHI",InputFile,default=.false.,comment="Print the k-dependent charge susceptibility along the K-path on the imaginary frequency axis.")
       call parse_input_variable(print_path_W,"PRINT_PATH_W",InputFile,default=.false.,comment="Print the k-dependent screened interaction along the K-path on the imaginary frequency axis.")
+      call parse_input_variable(print_path_E,"PRINT_PATH_EINV",InputFile,default=.false.,comment="Print the k-dependent inverse dielectric function along the K-path on the imaginary frequency axis.")
       call parse_input_variable(Nkpt_path,"NK_PATH",InputFile,default=50,comment="Number of K-points between two hig-symmetry Kpoints.")
       !Fermi surfaces
       call parse_input_variable(print_plane_G,"PRINT_PLANE_G",InputFile,default=.false.,comment="Flag to compute the Green's function on the planar {kx,ky} sheet.")
-      call parse_input_variable(print_plane_W,"PRINT_PLANE_W",InputFile,default=.false.,comment="Flag to compute the screened interaction and/or charge susceptibility on the planar {kx,ky} sheet.")
       call parse_input_variable(Nkpt_plane,"NK_PLANE",InputFile,default=50,comment="Number of K-points in the side of the planar {kx,ky} sheet.")
       call parse_input_variable(FermiCut,"FERMI_CUT",InputFile,default=0d0,comment="Energy level at which the Fermi surface is computed. Used only in Akf_builder.")
       call parse_input_variable(KKcutoff,"KK_CUTOFF",InputFile,default=50d0,comment="Real frequency cutoff for Kramers Kronig integrals, should be twice the region of interest.")

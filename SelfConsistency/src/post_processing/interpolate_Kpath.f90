@@ -721,13 +721,13 @@ subroutine interpolate2kpath_Bosonic(Wfull,Lttc,pathOUTPUT,name,remove_Gamma,NaN
    use parameters
    use utils_misc
    use utils_fields
-   use linalg, only : eigh, inv, zeye, det
+   use linalg, only : eigh, inv, zeye, det, trace
    use crystal
    use file_io
    use greens_function, only : calc_Gmats
    use fourier_transforms
    use input_vars, only : Nkpt_path, Nkpt_plane
-   use input_vars, only : print_path_Chi, print_path_W, print_plane_W
+   use input_vars, only : print_path_Chi, print_path_W, print_path_E
    implicit none
    !
    type(BosonicField),intent(in)         :: Wfull
@@ -740,6 +740,7 @@ subroutine interpolate2kpath_Bosonic(Wfull,Lttc,pathOUTPUT,name,remove_Gamma,NaN
    complex(8),allocatable                :: W_orig(:,:,:,:)
    complex(8),allocatable                :: W_intp(:,:,:,:)
    complex(8),allocatable                :: Wgamma(:,:,:)
+   complex(8),allocatable                :: Wtrace(:,:)
    real(8),allocatable                   :: wmats(:)
    !
    integer                               :: Norb,Nmats,unit,Wdim
@@ -773,8 +774,12 @@ subroutine interpolate2kpath_Bosonic(Wfull,Lttc,pathOUTPUT,name,remove_Gamma,NaN
    Wdim = Wfull%Nbp
    if(NaNb_) Wdim = Norb
    !
-   print_path = print_path_Chi .or. print_path_W
-   print_plane = print_plane_W
+   print_path = print_path_Chi .or. print_path_W .or. print_path_E
+   !
+   !removed from input_vars
+   print_plane = .false. !print_plane_W
+   !
+   call createDir(reg(pathOUTPUT),verb=verbose)
    !
    !
    !
@@ -838,35 +843,63 @@ subroutine interpolate2kpath_Bosonic(Wfull,Lttc,pathOUTPUT,name,remove_Gamma,NaN
       call cpu_time(finish)
       write(*,"(A,F)") new_line("A")//new_line("A")//"     "//reg(name)//"(fullBZ,iw) --> "//reg(name)//"(Kpath,iw) cpu timing:", finish-start
       !
-      !Print along path
-      path = reg(pathOUTPUT)//"MaxEnt_"//reg(name)//"k_path/"
-      call createDir(reg(path),verb=verbose)
-      allocate(wmats(Nmats))
-      wmats = BosonicFreqMesh(Wfull%Beta,Nmats)
-      do iq=1,Lttc%Nkpt_path
-         unit = free_unit()
-         open(unit,file=reg(path)//reg(name)//"k_w_k"//str(iq)//".DAT",form="formatted",status="unknown",position="rewind",action="write")
-         do iw=1,Nmats-1
-             write(unit,"(200E20.12)") wmats(iw),(dreal(W_intp(iorb,iorb,iw,iq)+Wgamma(iorb,iorb,iw)),iorb=1,Wdim)
-         enddo
-         close(unit)
-      enddo
-      !
-      !TEST>>>
-      !temporary for the time-being I have a shitty maxent
-      do iorb=1,Wdim
+      if(NaNb_)then
+         !
+         !Print along path all components
          path = reg(pathOUTPUT)//"MaxEnt_"//reg(name)//"k_path/"
          call createDir(reg(path),verb=verbose)
+         allocate(wmats(Nmats))
+         wmats = BosonicFreqMesh(Wfull%Beta,Nmats)
          do iq=1,Lttc%Nkpt_path
             unit = free_unit()
-            open(unit,file=reg(path)//reg(name)//"k_w_k"//str(iq)//"_o"//str(iorb)//".DAT",form="formatted",status="unknown",position="rewind",action="write")
+            open(unit,file=reg(path)//reg(name)//"k_w_k"//str(iq)//".DAT",form="formatted",status="unknown",position="rewind",action="write")
             do iw=1,Nmats-1
-                write(unit,"(200E20.12)") wmats(iw),dreal(W_intp(iorb,iorb,iw,iq)+Wgamma(iorb,iorb,iw))
+                write(unit,"(200E20.12)") wmats(iw),(dreal(W_intp(iorb,iorb,iw,iq)+Wgamma(iorb,iorb,iw)),iorb=1,Wdim)
             enddo
             close(unit)
          enddo
-      enddo
-      !>>>TEST
+         !
+         !TEST>>>
+         !temporary for the time-being I have a shitty maxent
+         do iorb=1,Wdim
+            path = reg(pathOUTPUT)//"MaxEnt_"//reg(name)//"k_path/"
+            call createDir(reg(path),verb=verbose)
+            do iq=1,Lttc%Nkpt_path
+               unit = free_unit()
+               open(unit,file=reg(path)//reg(name)//"k_w_k"//str(iq)//"_o"//str(iorb)//".DAT",form="formatted",status="unknown",position="rewind",action="write")
+               do iw=1,Nmats-1
+                   write(unit,"(200E20.12)") wmats(iw),dreal(W_intp(iorb,iorb,iw,iq)+Wgamma(iorb,iorb,iw))
+               enddo
+               close(unit)
+            enddo
+         enddo
+         !>>>TEST
+      else
+         !
+         !Print along path only the trace since the full tensor is too big
+         allocate(Wtrace(Nmats,Lttc%Nkpt_path));Wtrace=czero
+         do iq=1,Lttc%Nkpt_path
+            do iw=1,Nmats
+               Wtrace = trace(W_intp(:,:,iw,iq)+Wgamma(:,:,iw))
+            enddo
+         enddo
+         !
+         path = reg(pathOUTPUT)//"MaxEnt_"//reg(name)//"k_path/"
+         call createDir(reg(path),verb=verbose)
+         allocate(wmats(Nmats))
+         wmats = BosonicFreqMesh(Wfull%Beta,Nmats)
+         do iq=1,Lttc%Nkpt_path
+            unit = free_unit()
+            open(unit,file=reg(path)//reg(name)//"k_w_k"//str(iq)//"_Tr.DAT",form="formatted",status="unknown",position="rewind",action="write")
+            do iw=1,Nmats-1
+                write(unit,"(200E20.12)") wmats(iw),dreal(Wtrace(iw,iq)),dimag(Wtrace(iw,iq))
+            enddo
+            close(unit)
+         enddo
+         deallocate(Wtrace)
+         !
+      endif
+      !
       deallocate(wmats,W_intp)
       !
    endif
@@ -883,35 +916,64 @@ subroutine interpolate2kpath_Bosonic(Wfull,Lttc,pathOUTPUT,name,remove_Gamma,NaN
       call cpu_time(finish)
       write(*,"(A,F)") new_line("A")//new_line("A")//"     "//reg(name)//"(fullBZ,iw) --> "//reg(name)//"(kx,ky,iw) cpu timing:", finish-start
       !
-      !Print along plane
-      path = reg(pathOUTPUT)//"MaxEnt_"//reg(name)//"k_plane/"
-      call createDir(reg(path),verb=verbose)
-      allocate(wmats(Nmats))
-      wmats = BosonicFreqMesh(Wfull%Beta,Nmats)
-      do iq=1,Lttc%Nkpt_Plane
-         unit = free_unit()
-         open(unit,file=reg(path)//reg(name)//"k_w_k"//str(iq)//".DAT",form="formatted",status="unknown",position="rewind",action="write")
-         do iw=1,Nmats-1
-             write(unit,"(200E20.12)") wmats(iw),(dreal(W_intp(iorb,iorb,iw,iq)+Wgamma(iorb,iorb,iw)),iorb=1,Wdim)
-         enddo
-         close(unit)
-      enddo
-      !
-      !TEST>>>
-      !temporary for the time-being I have a shitty maxent
-      do iorb=1,Wdim
+      if(NaNb_)then
+         !
+         !Print along plane all components
          path = reg(pathOUTPUT)//"MaxEnt_"//reg(name)//"k_plane/"
          call createDir(reg(path),verb=verbose)
+         allocate(wmats(Nmats))
+         wmats = BosonicFreqMesh(Wfull%Beta,Nmats)
          do iq=1,Lttc%Nkpt_Plane
             unit = free_unit()
-            open(unit,file=reg(path)//reg(name)//"k_w_k"//str(iq)//"_o"//str(iorb)//".DAT",form="formatted",status="unknown",position="rewind",action="write")
+            open(unit,file=reg(path)//reg(name)//"k_w_k"//str(iq)//".DAT",form="formatted",status="unknown",position="rewind",action="write")
             do iw=1,Nmats-1
-                write(unit,"(200E20.12)") wmats(iw),dreal(W_intp(iorb,iorb,iw,iq)+Wgamma(iorb,iorb,iw))
+                write(unit,"(200E20.12)") wmats(iw),(dreal(W_intp(iorb,iorb,iw,iq)+Wgamma(iorb,iorb,iw)),iorb=1,Wdim)
             enddo
             close(unit)
          enddo
-      enddo
-      !>>>TEST
+         !
+         !TEST>>>
+         !temporary for the time-being I have a shitty maxent
+         do iorb=1,Wdim
+            path = reg(pathOUTPUT)//"MaxEnt_"//reg(name)//"k_plane/"
+            call createDir(reg(path),verb=verbose)
+            do iq=1,Lttc%Nkpt_Plane
+               unit = free_unit()
+               open(unit,file=reg(path)//reg(name)//"k_w_k"//str(iq)//"_o"//str(iorb)//".DAT",form="formatted",status="unknown",position="rewind",action="write")
+               do iw=1,Nmats-1
+                   write(unit,"(200E20.12)") wmats(iw),dreal(W_intp(iorb,iorb,iw,iq)+Wgamma(iorb,iorb,iw))
+               enddo
+               close(unit)
+            enddo
+         enddo
+         !>>>TEST
+         !
+      else
+         !
+         !Print along path only the trace since the full tensor is too big
+         allocate(Wtrace(Nmats,Lttc%Nkpt_Plane));Wtrace=czero
+         do iq=1,Lttc%Nkpt_Plane
+            do iw=1,Nmats
+               Wtrace = trace(W_intp(:,:,iw,iq)+Wgamma(:,:,iw))
+            enddo
+         enddo
+         !
+         path = reg(pathOUTPUT)//"MaxEnt_"//reg(name)//"k_plane/"
+         call createDir(reg(path),verb=verbose)
+         allocate(wmats(Nmats))
+         wmats = BosonicFreqMesh(Wfull%Beta,Nmats)
+         do iq=1,Lttc%Nkpt_Plane
+            unit = free_unit()
+            open(unit,file=reg(path)//reg(name)//"k_w_k"//str(iq)//"_Tr.DAT",form="formatted",status="unknown",position="rewind",action="write")
+            do iw=1,Nmats-1
+                write(unit,"(200E20.12)") wmats(iw),dreal(Wtrace(iw,iq)),dimag(Wtrace(iw,iq))
+            enddo
+            close(unit)
+         enddo
+         deallocate(Wtrace)
+         !
+      endif
+      !
       deallocate(wmats,W_intp)
       !
    endif

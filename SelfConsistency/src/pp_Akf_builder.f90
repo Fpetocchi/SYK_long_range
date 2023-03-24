@@ -66,12 +66,17 @@ program Akw_builder
    !
    if(print_path_Chi)then
       call rebuild_W("C","path")
-      if(print_plane_W) call rebuild_W("C","plane")
+      !if(print_plane_W) call rebuild_W("C","plane")
    endif
    !
    if(print_path_W)then
       call rebuild_W("W","path")
-      if(print_plane_W) call rebuild_W("W","plane")
+      !if(print_plane_W) call rebuild_W("W","plane")
+   endif
+   !
+   if(print_path_E)then
+      call rebuild_W("E","path")
+      !if(print_plane_E) call rebuild_W("E","plane")
    endif
    !
    !

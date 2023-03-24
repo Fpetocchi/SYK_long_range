@@ -459,7 +459,7 @@ contains
       use crystal, only : fill_ksumkdiff, wannierinterpolation
       implicit none
       !
-      complex(8),intent(in)                 :: Wk_orig(:,:,:,:)
+      complex(8),intent(in),target          :: Wk_orig(:,:,:,:)
       type(Lattice),intent(in)              :: Lttc
       real(8),intent(in)                    :: Beta
       real(8),intent(in)                    :: cutoff
@@ -469,12 +469,14 @@ contains
       integer                               :: Ngrid,Norb,Nbp
       integer                               :: iorb,jorb,ib1,ib2,a,b,c,d
       integer                               :: iw,wndx,Nmats
-      integer                               :: ik1,ik2,iq,iqndx,Nkpt
+      integer                               :: ik1,ik2,iq,Nkpt
       integer                               :: iweig,jweig,iE1,iE2
       real(8)                               :: DosWeights
       integer,allocatable                   :: kptsum(:,:),kptdif(:,:)
       real(8),allocatable                   :: wmats(:)
-      complex(8),allocatable                :: Wk(:,:,:,:),Wk_w(:,:,:)
+      complex(8),allocatable                :: Wk(:)
+      complex(8),allocatable,target         :: Wk_interp(:,:,:,:)
+      complex(8),pointer                    :: Wk_used(:,:,:,:)
       type(physicalU)                       :: PhysicalUelements
       real                                  :: start,finish
       logical                               :: calcKernels,Kstat_exists,Kdyn_exists
@@ -542,77 +544,36 @@ contains
          call cpu_time(start)
          write(*,"(A)") "     One of the required Kernels is missing. Starting operations on screened interacion in Wannier basis."
          !
+         if(Interpolate2Model)then
+            !
+            allocate(Wk_interp(Nbp,Nbp,wndx,size(kpt_Model,dim=2)));Wk_interp=czero
+            call cpu_time(start)
+            do iw=1,wndx
+               call wannierinterpolation(Lttc%Nkpt3,Lttc%kpt,kpt_Model,Wk_orig(:,:,iw,:),Wk_interp(:,:,iw,:))
+            enddo
+            call cpu_time(finish)
+            write(*,"(A,F)") "     Interpolating Wk to the new k grid cpu timing:", finish-start
+            !
+            Wk_used => Wk_interp
+            !
+         else
+            !
+            write(*,"(A)") "     Interpolation skipped, linking to original Wk."
+            Wk_used => Wk_orig
+            !
+         endif
+         !
          call init_Uelements(Norb,PhysicalUelements)
          call fill_ksumkdiff(kpt_Model,kptsum,kptdif)
          deallocate(kptsum)
          !
-         allocate(Wk(Norb,Norb,wndx,Nkpt*Nkpt));Wk=czero
-         !Interpolate Wk to new K-grid - this is done separately for each frequency
-         !so we dont need to store another full Wk before the orbital rotation
-         allocate(Wk_w(Nbp,Nbp,Nkpt));Wk_w=czero
-         call cpu_time(start)
-         do iw=1,wndx
-            !
-            Wk_w=czero
-            if(Interpolate2Model)then
-               call wannierinterpolation(Lttc%Nkpt3,Lttc%kpt,kpt_Model,Wk_orig(:,:,iw,:),Wk_w)
-            else
-               Wk_w = Wk_orig(:,:,iw,:)
-            endif
-            !
-            !$OMP PARALLEL DEFAULT(SHARED),&
-            !$OMP PRIVATE(ik1,ik2,iq,iqndx,iorb,jorb,a,b,c,d,ib1,ib2)
-            !$OMP DO
-            do ik1=1,Nkpt
-               do ik2=1,Nkpt
-                  !
-                  iq = kptdif(ik1,ik2)
-                  iqndx = ik2 + (ik1-1)*Nkpt
-                  !
-                  !rotations corresponding to q = (k - k')
-                  do iorb=1,Norb
-                     do jorb=iorb,Norb
-                        !
-                        do ib1=1,Nbp
-                           do ib2=1,Nbp
-                              !
-                              a = PhysicalUelements%Full_Map(ib1,ib2,1)
-                              b = PhysicalUelements%Full_Map(ib1,ib2,2)
-                              c = PhysicalUelements%Full_Map(ib1,ib2,3)
-                              d = PhysicalUelements%Full_Map(ib1,ib2,4)
-                              !
-                              Wk(iorb,jorb,iw,iqndx) = Wk(iorb,jorb,iw,iqndx) + Wk_w(ib1,ib2,iq)             &
-                                                     * conjg(Zk_Model(a,iorb,ik1)) * Zk_Model(b,jorb,ik2)    &
-                                                     * conjg(Zk_Model(c,jorb,ik2)) * Zk_Model(d,iorb,ik1)
-                              !
-                           enddo
-                        enddo
-                        !
-                        if(iorb.ne.jorb)then
-                           Wk(jorb,iorb,iw,iqndx) = conjg(Wk(iorb,jorb,iw,iqndx))
-                        endif
-                        !
-                     enddo
-                  enddo
-                  !
-               enddo
-            enddo
-            !$OMP END DO
-            !$OMP END PARALLEL
-            !
-            !if(verbose)
-            write(*,"(2(A,I6))")"     Rotation to Wab(k,k',iw) for iw:",iw,"/",wndx
-            !
-         enddo
-         deallocate(Wk_w,kptdif)
-         call cpu_time(finish)
-         write(*,"(A,F)") "     Wk preparation cpu timing:", finish-start
-         !
-         Wk = Wk * eV2DFTgrid
-         !
+         if(calc_Int_static) Kel_stat=czero
+         if(calc_Int_dynamic) Wee_dyn=czero
          call cpu_time(start)
          !$OMP PARALLEL DEFAULT(SHARED),&
-         !$OMP PRIVATE(iweig,jweig,iE1,iE2,iorb,jorb,ik1,ik2,iq,DosWeights)
+         !$OMP PRIVATE(iweig,jweig,iE1,iE2,DosWeights,Wk),&
+         !$OMP PRIVATE(iorb,jorb,ik1,ik2,iq,a,b,c,d,ib1,ib2)
+         allocate(Wk(wndx));Wk=czero
          !$OMP DO
          do iweig=1,size(finite_weights_Model,dim=1)
             do jweig=1,size(finite_weights_Model,dim=1)
@@ -625,16 +586,36 @@ contains
                jorb = finite_weights_Model(jweig,2)
                ik2 = finite_weights_Model(jweig,3)
                !
-               iq = ik2 + (ik1-1)*Nkpt
+               iq = kptdif(ik1,ik2)
+               !
+               !rotation performed only for the requested indexes
+               Wk=czero
+               do ib1=1,Nbp
+                  do ib2=1,Nbp
+                     !
+                     a = PhysicalUelements%Full_Map(ib1,ib2,1)
+                     b = PhysicalUelements%Full_Map(ib1,ib2,2)
+                     c = PhysicalUelements%Full_Map(ib1,ib2,3)
+                     d = PhysicalUelements%Full_Map(ib1,ib2,4)
+                     !
+                     Wk = Wk + (Wk_used(ib1,ib2,:,iq)*eV2DFTgrid) * conjg(Zk_Model(a,iorb,ik1)) * Zk_Model(b,jorb,ik2)    &
+                                                                  * conjg(Zk_Model(c,jorb,ik2)) * Zk_Model(d,iorb,ik1)
+                     !
+                  enddo
+               enddo
                !
                DosWeights = (weights_Model(iE1,iorb,ik1)/DoS_Model(iE1)) * (weights_Model(iE2,jorb,ik2)/DoS_Model(iE2))
-               if(calc_Int_static)  Kel_stat(iE1,iE2) = Kel_stat(iE1,iE2) + Wk(iorb,jorb,1,iq) * DosWeights
-               if(calc_Int_dynamic) Wee_dyn(iE1,iE2,:) = Wee_dyn(iE1,iE2,:) + (Wk(iorb,jorb,:,iq)-Wk(iorb,jorb,1,iq)) * DosWeights
+               if(calc_Int_static)  Kel_stat(iE1,iE2) = Kel_stat(iE1,iE2) + Wk(1) * DosWeights
+               if(calc_Int_dynamic) Wee_dyn(iE1,iE2,:) = Wee_dyn(iE1,iE2,:) + (Wk-Wk(1)) * DosWeights
                !
             enddo
          enddo
          !$OMP END DO
+         deallocate(Wk)
          !$OMP END PARALLEL
+         deallocate(kptdif)
+         nullify(Wk_used)
+         if(allocated(Wk_interp))deallocate(Wk_interp)
          call cpu_time(finish)
          write(*,"(A,F)") "     Calculation of static electronic Kernel cpu timing:", finish-start
          !

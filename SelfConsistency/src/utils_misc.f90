@@ -691,8 +691,8 @@ contains
          mkdirCmd = "mkdir -p "//reg(dirpath)
          if(verbose_)write(*,"(A)") "     Creating new directory: "//reg(dirpath)
          if(verbose_)write(*,"(A)") "     "//reg(mkdirCmd)
-         !call system(reg(mkdirCmd))
-         call execute_command_line(reg(mkdirCmd))
+         call system(reg(mkdirCmd))
+         !call execute_command_line(reg(mkdirCmd))
       endif
       !
    end subroutine createDir

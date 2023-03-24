@@ -34,6 +34,11 @@ module interactions
       module procedure build_Uret_multiParam_Vn              !      (GW Format) ![BosonicField,Vector,Matrix,Matrix,vector_g,vector_w0,LocalOnly(optional)]      !NOT USED: the input is not formatted for interactions with different matrix elements
    end interface build_Uret
 
+   interface calc_QMCinteractions
+      module procedure calc_QMCinteractions_static
+      module procedure calc_QMCinteractions_retarded
+   end interface calc_QMCinteractions
+
    !---------------------------------------------------------------------------!
    !PURPOSE: Module variables
    !---------------------------------------------------------------------------!
@@ -66,7 +71,7 @@ contains
    !---------------------------------------------------------------------------!
    !PURPOSE: Lattice inversion to get fully screened interaction - GW+EDMFT
    !---------------------------------------------------------------------------!
-   subroutine calc_W_full(Wmats,Umats,Pmats,Lttc,symQ)
+   subroutine calc_W_full(Wmats,Umats,Pmats,Emats,Lttc,symQ)
       !
       use parameters
       use linalg, only : zeye, inv
@@ -80,6 +85,7 @@ contains
       type(BosonicField),intent(inout)      :: Wmats
       type(BosonicField),intent(in)         :: Umats
       type(BosonicField),intent(in)         :: Pmats
+      type(BosonicField),intent(inout)      :: Emats
       type(Lattice),intent(in)              :: Lttc
       logical,intent(in),optional           :: symQ
       !
@@ -121,6 +127,7 @@ contains
       if(all([Umats%Nkpt-Nkpt,Pmats%Nkpt-Nkpt].ne.[0,0])) stop "calc_W_full: Either Umats and/or Pmats have different number of k-points with respect to Wmats."
       if(all([Umats%Beta-Beta,Pmats%Beta-Beta].ne.[0d0,0d0])) stop "calc_W_full: Either Umats and/or Pmats have different Beta with respect to Wmats."
       if(Pmats%Npoints.ne.Nmats) stop "calc_W_full: Pmats has different number of Matsubara points with respect to Wmats."
+      if(Emats%status) call assert_shape(Emats%screened,[Nbp,Nbp,Nmats,Nkpt],"calc_W_edmft","Emats%screened")
       !
       allocate(invW(Nbp,Nbp));invW=czero
       call clear_attributes(Wmats)
@@ -136,9 +143,7 @@ contains
       ! Assuming that the Polarization vanishes at iw-->inf
       Wmats%bare = Umats%bare
       !
-      !$OMP PARALLEL DEFAULT(NONE),&
-      !$OMP SHARED(Pmats,Umats,Wmats,Lttc,Ustatic,symQ_),&
-      !$OMP SHARED(small_ik,epsGamma,HandleGammaPoint,smear,AverageList,Navg),&
+      !$OMP PARALLEL DEFAULT(SHARED),&
       !$OMP PRIVATE(iw,iwU,iq,invW,iavg,add_iq)
       !$OMP DO
       do iw=1,Wmats%Npoints
@@ -157,8 +162,9 @@ contains
             ! [ 1 - U*Pi ]
             invW = zeye(Wmats%Nbp) - matmul(Umats%screened(:,:,iwU,iq),Pmats%screened(:,:,iw,iq))
             !
-            ! [ 1 - Pi*U ]^-1 or [ 1 - U*Pi ]
+            ! [ 1 - Pi*U ]^-1 or [ 1 - U*Pi ]^-1
             call inv(invW)
+            if(Emats%status)Emats%screened(:,:,iw,iq) = invW
             !
             ! U*[ 1 - Pi*U ]^-1
             !Wmats%screened(:,:,iw,iq) = matmul(Umats%screened(:,:,iwU,iq),invW)
@@ -202,6 +208,7 @@ contains
             Wmats%screened(:,:,iw,Umats%iq_gamma) = dreal(matmul(epsGamma(:,:,iw),Umats%screened(:,:,iwU,Umats%iq_gamma)))
             call check_Symmetry(Wmats%screened(:,:,iw,Umats%iq_gamma),eps,enforce=.true.,hardstop=.false.,name="Wlat_w"//str(iw)//"_q"//str(Umats%iq_gamma),verb=.false.)
          enddo
+         if(Emats%status)Emats%screened(:,:,:,Umats%iq_gamma) = epsGamma
          !
          deallocate(epsGamma,AverageList)
          !
@@ -223,7 +230,7 @@ contains
    !---------------------------------------------------------------------------!
    !PURPOSE: Lattice inversion to get fully screened interaction - EDMFT
    !---------------------------------------------------------------------------!
-   subroutine calc_W_edmft(Wmats,Umats,Pmats,Lttc,symQ,alpha)
+   subroutine calc_W_edmft(Wmats,Umats,Pmats,Emats,Lttc,symQ,alpha)
       !
       use parameters
       use linalg, only : zeye, inv
@@ -237,6 +244,7 @@ contains
       type(BosonicField),intent(inout)      :: Wmats
       type(BosonicField),intent(in)         :: Umats
       type(BosonicField),intent(in)         :: Pmats
+      type(BosonicField),intent(inout)      :: Emats
       type(Lattice),intent(in)              :: Lttc
       logical,intent(in),optional           :: symQ
       real(8),intent(in),optional           :: alpha
@@ -280,6 +288,7 @@ contains
       if(all([Umats%Nbp-Nbp,Pmats%Nbp-Nbp].ne.[0,0])) stop "calc_W_edmft: Either Umats and/or Pmats have different orbital dimension with respect to Wmats."
       if(all([Umats%Beta-Beta,Pmats%Beta-Beta].ne.[0d0,0d0])) stop "calc_W_edmft: Either Umats and/or Pmats have different Beta with respect to Wmats."
       if(Pmats%Npoints.ne.Nmats) stop "calc_W_edmft: Pmats has different number of Matsubara points with respect to Wmats."
+      if(Emats%status) call assert_shape(Emats%screened,[Nbp,Nbp,Nmats,Nkpt],"calc_W_edmft","Emats%screened")
       !
       allocate(invW(Nbp,Nbp));invW=czero
       allocate(W_q(Nbp,Nbp));W_q=czero
@@ -296,9 +305,7 @@ contains
       ! Assuming that the Polarization vanishes at iw-->inf
       Wmats%bare_local = Umats%bare_local
       !
-      !$OMP PARALLEL DEFAULT(NONE),&
-      !$OMP SHARED(Pmats,Umats,Wmats,Lttc,Ustatic,symQ_,alpha_),&
-      !$OMP SHARED(small_ik,epsGamma,HandleGammaPoint,smear,AverageList,Navg),&
+      !$OMP PARALLEL DEFAULT(SHARED),&
       !$OMP PRIVATE(iw,iwU,iq,invW,W_q,iavg,add_iq)
       !$OMP DO
       do iw=1,Wmats%Npoints
@@ -317,8 +324,9 @@ contains
             ! [ 1 - U*Pi ]
             invW = zeye(Umats%Nbp) - matmul(Umats%screened(:,:,iwU,iq),alpha_*Pmats%screened_local(:,:,iw))
             !
-            ! [ 1 - Pi*U ]^-1 or [ 1 - U*Pi ]
+            ! [ 1 - Pi*U ]^-1 or [ 1 - U*Pi ]^-1
             call inv(invW)
+            if(Emats%status)Emats%screened(:,:,iw,iq) = invW
             !
             !  U*[ 1 - U*Pi ]^-1
             !W_q = matmul(Umats%screened(:,:,iwU,iq),invW)
@@ -366,6 +374,7 @@ contains
             call check_Symmetry(W_q,eps,enforce=.true.,hardstop=.false.,name="Wlat_w"//str(iw)//"_q"//str(Umats%iq_gamma),verb=.false.)
             Wmats%screened_local(:,:,iw) = Wmats%screened_local(:,:,iw) + W_q/Nkpt
          enddo
+         if(Emats%status)Emats%screened(:,:,:,Umats%iq_gamma) = epsGamma
          !
          deallocate(epsGamma,AverageList)
          !
@@ -1020,7 +1029,6 @@ contains
          Umat = Uread%screened_local(:,:,1)
          call dump_matrix(Umat,reg(pathINPUT),"Umat.DAT")
          call DeallocateBosonicField(Uread)
-         return
          !
       else if(Urealxists)then
          !
@@ -1030,7 +1038,6 @@ contains
          Umat = Uread%screened_local(:,:,1)
          call dump_matrix(Umat,reg(pathINPUT),"Umat.DAT")
          call DeallocateBosonicField(Uread)
-         return
          !
       else if(SPEXxists)then
          !
@@ -1068,12 +1075,12 @@ contains
             !
          enddo !iq
          Umat = Umat/(Nkpt**3)
-         call dump_matrix(Umat,reg(pathOUTPUT_),"Umat.DAT")
-         return
          !
       else
          stop "read_U_spex_Uloc0: No useful interaction file found."
       endif
+      !
+      call dump_matrix(Umat,reg(pathOUTPUT_),"Umat.DAT")
       !
    end subroutine read_U_spex_Uloc0
 
@@ -3245,7 +3252,68 @@ contains
    !PURPOSE: Given the Bosonic Field it extracts the screened interaction and
    ! retardation function.
    !---------------------------------------------------------------------------!
-   subroutine calc_QMCinteractions(Umats,Uinst,Kfunct,Ktilda,Screening,Kpfunct,sym)
+   subroutine calc_QMCinteractions_static(Uimp,Uinst)
+      !
+      use parameters
+      use file_io
+      use utils_misc
+      use fourier_transforms
+      implicit none
+      !
+      real(8),intent(in)                    :: Uimp(:,:)
+      real(8),intent(inout)                 :: Uinst(:,:)
+      !
+      integer                               :: Nbp,Norb,Nflavor
+      integer                               :: ib1,ib2,iorb,jorb
+      integer                               :: iu1,iu2,ix1,ix2,ip1,ip2
+      logical                               :: Uloc,U1st,U2nd
+      type(physicalU)                       :: PhysicalUelements
+      !
+      !
+      if(verbose)write(*,"(A)") "---- calc_QMCinteractions_static"
+      !
+      !
+      Nbp = size(Uimp,dim=1)
+      Norb = int(sqrt(dble(Nbp)))
+      Nflavor = Norb*Nspin
+      !
+      call assert_shape(Uinst,[Nflavor,Nflavor],"calc_QMCinteractions_static","Uinst")
+      call assert_shape(Uimp,[Nbp,Nbp],"calc_QMCinteractions_static","Uimp")
+      !
+      !computing the screened interaction
+      Uinst=0d0
+      do ib1=1,Nflavor
+         do ib2=1,Nflavor
+            !
+            !This is just for a more compact coding
+            Uloc = PhysicalUelements%Flav_Uloc(ib1,ib2)
+            U1st = PhysicalUelements%Flav_U1st(ib1,ib2)
+            U2nd = PhysicalUelements%Flav_U2nd(ib1,ib2)
+            !
+            !Orbital indexes
+            iorb = PhysicalUelements%Flav_Map(ib1,ib2,1)
+            jorb = PhysicalUelements%Flav_Map(ib1,ib2,2)
+            !
+            ! (iorb,iorb)(jorb,jorb) indexes in the Norb^2 representaion
+            call F2Bindex(Norb,[iorb,iorb],[jorb,jorb],iu1,iu2)
+            !
+            ! (iorb,jorb)(jorb,iorb) indexes
+            call F2Bindex(Norb,[iorb,jorb],[jorb,iorb],ix1,ix2)
+            !
+            ! (iorb,jorb)(iorb,jorb) indexes
+            call F2Bindex(Norb,[iorb,jorb],[iorb,jorb],ip1,ip2)
+            !
+            if(Uloc) Uinst(ib1,ib2) = Uimp(iu1,iu2)
+            if(U1st) Uinst(ib1,ib2) = Uimp(iu1,iu2)
+            if(U2nd) Uinst(ib1,ib2) = Uimp(iu1,iu2) - (Uimp(ix1,ix2)+Uimp(ip1,ip2))/2d0
+            !
+         enddo
+      enddo
+      call check_Symmetry(Uinst,eps,enforce=.true.,hardstop=.false.,name="Uinst")
+      !
+   end subroutine calc_QMCinteractions_static
+   !
+   subroutine calc_QMCinteractions_retarded(Umats,Uinst,Kfunct,Ktilda,Screening,Kpfunct,sym)
       !
       use parameters
       use file_io
@@ -3276,10 +3344,10 @@ contains
       logical                               :: sym_,Ktilda_
       !
       !
-      if(verbose)write(*,"(A)") "---- calc_QMCinteractions"
+      if(verbose)write(*,"(A)") "---- calc_QMCinteractions_retarded"
       !
       !
-      if(.not.Umats%status) stop "calc_QMCinteractions: Umats not properly initialized."
+      if(.not.Umats%status) stop "calc_QMCinteractions_retarded: Umats not properly initialized."
       !
       retarded=.false.
       if(present(Kfunct))retarded=.true.
@@ -3302,14 +3370,15 @@ contains
       Norb = int(sqrt(dble(Nbp)))
       Nflavor = Norb*Nspin
       !
+      call assert_shape(Uinst,[Nflavor,Nflavor],"calc_QMCinteractions_retarded","Uinst")
+      !
       call init_Uelements(Norb,PhysicalUelements)
       !
-      call assert_shape(Uinst,[Nflavor,Nflavor],"calc_QMCinteractions","Uinst")
       Uinst=0d0
       if(retarded)then
-         call assert_shape(Kfunct,[Nflavor,Nflavor,Solver%NtauB_K],"calc_QMCinteractions","Kfunct")
-         if(Kp_out)call assert_shape(Kpfunct,[Nflavor,Nflavor,Solver%NtauB_K],"calc_QMCinteractions","Kpfunct")
-         if(Scr_out)call assert_shape(Screening,[Nflavor,Nflavor],"calc_QMCinteractions","Screening")
+         call assert_shape(Kfunct,[Nflavor,Nflavor,Solver%NtauB_K],"calc_QMCinteractions_retarded","Kfunct")
+         if(Kp_out)call assert_shape(Kpfunct,[Nflavor,Nflavor,Solver%NtauB_K],"calc_QMCinteractions_retarded","Kpfunct")
+         if(Scr_out)call assert_shape(Screening,[Nflavor,Nflavor],"calc_QMCinteractions_retarded","Screening")
          allocate(Kaux(Nflavor,Nflavor,Umats%Npoints));Kaux=czero
          allocate(Ktmp(Nflavor,Nflavor,Solver%NtauB_K));Ktmp=czero
          allocate(Screening_(Nflavor,Nflavor));Screening_=0d0
@@ -3437,7 +3506,7 @@ contains
          deallocate(Ktmp,tau,wmats,Screening_)
       endif
       !
-   end subroutine calc_QMCinteractions
+   end subroutine calc_QMCinteractions_retarded
 
 
    !---------------------------------------------------------------------------!
