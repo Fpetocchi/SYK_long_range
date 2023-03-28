@@ -127,7 +127,7 @@ program SelfConsistency
          !
          if(interp_Chi) then
             call calc_chi(Chi,Ulat,Plat,Crystal)!,pathPk=reg(MaxEnt_K)//"/MaxEnt_Chik_path_t")
-            call interpolate2kpath(Chi,Crystal,reg(MaxEnt_K),"C")
+            call interpolate2kpath(Chi,Crystal,reg(MaxEnt_K),name="C",mode="Trace_NaNa")
             call DeallocateBosonicField(Chi)
          endif
          !
@@ -142,8 +142,11 @@ program SelfConsistency
          call dump_BosonicField(Wlat,reg(ItFolder),"Wlat_w.DAT")
          call dump_MaxEnt(Wlat,"mats",reg(ItFolder)//"Convergence/","Wlat",EqvGWndx%SetOrbs)
          !
-         if(interp_W) call interpolate2kpath(Wlat,Crystal,reg(MaxEnt_K),"W")
-         if(interp_E) call interpolate2kpath(Einv,Crystal,reg(MaxEnt_K),"E",NaNb=.false.)
+         if(interp_W) call interpolate2kpath(Wlat,Crystal,reg(MaxEnt_K),name="W",mode="Trace_NaNa")
+         if(interp_E) call interpolate2kpath(Einv,Crystal,reg(MaxEnt_K),name="E",mode="Trace_NaNa")
+         !if(interp_E) call interpolate2kpath(Einv,Crystal,reg(MaxEnt_K),name="E",mode="Loss",invert=.true.)
+         !call execute_command_line(" touch doSolver ")
+         !stop
          call DeallocateBosonicField(Einv)
          !
          !Solve the Gap equation
@@ -178,7 +181,7 @@ program SelfConsistency
             if(MultiTier)VN_type="Nlat"
             !
             call calc_VH(VH_Nlat,densityLDA,densityGW,Ulat)
-            call calc_VH(VH_Nimp,densityLDA,densityDMFT,Ulat)
+            call calc_VH(VH_Nimp,densityLDA,densityDMFT,Ulat,local=.true.)
             select case(reg(VN_type))
                case default
                   stop "Wrong entry for VN_TYPE. Available: Nlat, Nimp, None."

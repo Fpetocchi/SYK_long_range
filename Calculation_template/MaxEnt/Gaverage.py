@@ -63,7 +63,10 @@ def average(G,tlimit,window,log,orblist=None):
 # python Gaverage.py --field curlyUw --pad imp --orbs 1,2,3,.. --itlist it_start..it_end
 #
 # to print Gk average:
-# python Gaverage.py --field Gkw --itlist it_start..it_endv
+# python Gaverage.py --field Gkw --itlist it_start..it_end
+#
+# to print Ek average:
+# python Gaverage.py --field Ekw --pad _Tr --itlist it_start..it_end
 #
 # ============================================================================ #
 
@@ -71,14 +74,14 @@ def average(G,tlimit,window,log,orblist=None):
 spins = [1]; orbs = [1]; dirs=[]
 # Optional parsing
 parser = OptionParser()
-parser.add_option("--field" , dest="field"  , default="Gw"    )                 # [G,W]kw, [G,W]w, Obs
-parser.add_option("--pad"   , dest="pad"    , default="None"  )                 # local: lat, imp, qmc_* kresolved: _Tr, _Hetero
-parser.add_option("--axis"  , dest="axis"   , default="t"     )                 # local: lat, imp, qmc_* kresolved: _Tr, _Hetero
-parser.add_option("--orbs"  , dest="orbs"   , default="1"     )                 # list of orbitals separated by comma
-parser.add_option("--itlist", dest="itlist" , default="0"     )                 # list of iterations separated by comma or initial and final iteration separated by ".."
-parser.add_option("--skip"  , dest="skip"   , default="0"     )                 # list of iteration to be ignored separated by comma
-parser.add_option("--spin"  , dest="spin"   , default="1"     )                 # spin index
-parser.add_option("--Krol"  , dest="Krol"   , default="None"  )                 # string of 3 parameters separated by comma in dicating tau_max and tau_window for rolling average, if last one is ==1 then the rolling average is done in log scale
+parser.add_option("--field" , dest="field"  , default="Gw"    )                # [G,W]kw, [G,W]w, Obs
+parser.add_option("--pad"   , dest="pad"    , default="None"  )                # local: lat, imp, qmc_* kresolved: _Tr, _Hetero
+parser.add_option("--axis"  , dest="axis"   , default="t"     )                # local: lat, imp, qmc_* kresolved: _Tr, _Hetero
+parser.add_option("--orbs"  , dest="orbs"   , default="1"     )                # list of orbitals separated by comma
+parser.add_option("--itlist", dest="itlist" , default="0"     )                # list of iterations separated by comma or initial and final iteration separated by ".."
+parser.add_option("--skip"  , dest="skip"   , default="0"     )                # list of iteration to be ignored separated by comma
+parser.add_option("--spin"  , dest="spin"   , default="1"     )                # spin index
+parser.add_option("--Krol"  , dest="Krol"   , default="None"  )                # string of 3 parameters separated by comma in dicating tau_max and tau_window for rolling average, if last one is ==1 then the rolling average is done in log scale
 (options, args) = parser.parse_args()
 #
 #
@@ -132,7 +135,7 @@ Field = options.field.rstrip("kw")
 #
 #
 if(Field=="G" or Field=="S"): stat = "Fermion"
-if(Field=="W" or Field=="curlyU" or Field=="C" or Field=="M"): stat = "Boson"
+if(Field=="W" or Field=="curlyU" or Field=="C" or Field=="M" or Field=="E"): stat = "Boson"
 if(Field=="Obs"): stat = "Observables"
 #
 Kfolder = "K_resolved"
@@ -227,7 +230,7 @@ if (stat != "Observables") and local:
 if (stat != "Observables") and kresolved:
     #
     pad = "" if options.pad == "None" else options.pad
-    Folder = "MaxEnt_%sk_path_s%s"%(Field,spin) if (stat == "Fermion") else "MaxEnt_%sk_path%s"%Field
+    Folder = "MaxEnt_%sk_path_s%s"%(Field,spin) if (stat == "Fermion") else "MaxEnt_%sk_path"%Field
     path_exists("./avg/%s/%s/"%(Kfolder_out,Folder))
     #
     # Check for Nkpt consistency between iterations
@@ -273,8 +276,7 @@ if (stat != "Observables") and kresolved:
             #
         #
         # remove positive G(tau)
-        if (stat == "Fermion"):
-            Datak[ Datak>0.0 ] = -1e-9
+        if (stat == "Fermion"): Datak[ Datak>0.0 ] = -1e-9
         #
         #store the averaged K-point
         np.savetxt("./avg/%s/%s/%s"%(Kfolder_out,Folder,Filek),np.c_[axis,Datak])

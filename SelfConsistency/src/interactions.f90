@@ -3279,6 +3279,7 @@ contains
       !
       call assert_shape(Uinst,[Nflavor,Nflavor],"calc_QMCinteractions_static","Uinst")
       call assert_shape(Uimp,[Nbp,Nbp],"calc_QMCinteractions_static","Uimp")
+      call init_Uelements(Norb,PhysicalUelements)
       !
       !computing the screened interaction
       Uinst=0d0
@@ -3371,7 +3372,6 @@ contains
       Nflavor = Norb*Nspin
       !
       call assert_shape(Uinst,[Nflavor,Nflavor],"calc_QMCinteractions_retarded","Uinst")
-      !
       call init_Uelements(Norb,PhysicalUelements)
       !
       Uinst=0d0

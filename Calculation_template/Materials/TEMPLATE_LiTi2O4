@@ -1,0 +1,147 @@
+################################################################################
+#                                USER SETTINGS                                 #
+################################################################################
+
+GENMAT=/home/petocchif/1_GW_EDMFT/GenericMaterial/Calculation_template
+
+declare -a dirindex=( "avg"  )
+for it in "${dirindex[@]}" ; do
+#for it in `seq  46 1 48` ; do
+   #
+   cd $it/Convergence
+   cp ${GENMAT}/${MATERIAL}/MaxEnt/MaxEnt_SLURM.sh .
+   chmod 700 MaxEnt_SLURM.sh
+   #
+   PARAM="-e 0.0005 -w 15001 -W 300"
+   for orb in `seq  1 1 12` ; do
+      ./MaxEnt_SLURM.sh ${PARAM} -f G -o ${orb} -i lat -p ${GENMAT} -q amd
+   done
+   PARAM="-e 0.0005 -w 15001 -W 300"
+   ./MaxEnt_SLURM.sh ${PARAM} -f G -o 1 -i qmc_Ti -p ${GENMAT} -q amd
+   ./MaxEnt_SLURM.sh ${PARAM} -f G -o 2 -i qmc_Ti -p ${GENMAT} -q amd
+   ./MaxEnt_SLURM.sh ${PARAM} -f G -o 3 -i qmc_Ti -p ${GENMAT} -q amd
+   #
+   PARAM="-e 0.02 -w 9000 -W 600"
+  # ./MaxEnt_SLURM.sh ${PARAM} -f W -o 1 -i lat -p ${GENMAT} -q amd
+   #
+   #PARAM="-e 0.01 -w 9000 -W 600"
+   #./MaxEnt_SLURM.sh ${PARAM} -f C -o 1 -i imp -p ${GENMAT} -q amd
+   ##
+   #PARAM="-e 0.01 -w 9000 -W 600"
+   #./MaxEnt_SLURM.sh ${PARAM} -f P -o 1 -i imp -p ${GENMAT} -q amd
+   #
+   PARAM="-e 0.01 -w 9000 -W 600"
+  # ./MaxEnt_SLURM.sh ${PARAM} -f curlyU -o 1 -i imp -p ${GENMAT} -q amd
+   #
+   cd ../../
+done
+
+
+
+
+
+
+for it in "${dirindex[@]}" ; do
+
+GENMAT=/home/petocchif/1_GW_EDMFT/nobackup/1_production/Calculation_template
+for it in `seq 83 1 88` ; do
+   ## LATTICE----------------------------------------
+   cd $it/Convergence
+   cp ${GENMAT}/${MATERIAL}/MaxEnt/MaxEnt.sh .
+   #
+   chmod 700 MaxEnt.sh
+   #
+   PARAM="-e 0.0005 -w 18001 -W 300"
+   ./MaxEnt.sh ${PARAM} -f G -o 1 -i lat -p ${GENMAT}
+   ./MaxEnt.sh ${PARAM} -f G -o 2 -i lat -p ${GENMAT}
+   ./MaxEnt.sh ${PARAM} -f G -o 3 -i lat -p ${GENMAT}
+   #
+   PARAM="-e 0.02   -w 10000 -W 400"
+   ./MaxEnt.sh ${PARAM} -f W -o 1 -i lat -p ${GENMAT}
+   ./MaxEnt.sh ${PARAM} -f W -o 2 -i lat -p ${GENMAT}
+   ./MaxEnt.sh ${PARAM} -f W -o 3 -i lat -p ${GENMAT}
+   #
+   cd ../../
+
+
+   ## IMPURITY---------------------------------------
+   cd $it/Convergence
+   cp ${GENMAT}/${MATERIAL}/MaxEnt/MaxEnt.sh .
+   chmod 700 MaxEnt.sh
+   #
+   PARAM="-e 0.001 -w 10000 -W 400"
+   ./MaxEnt.sh ${PARAM} -f G -o 1 -i qmc_Ti -p ${GENMAT}
+   ./MaxEnt.sh ${PARAM} -f G -o 2 -i qmc_Ti -p ${GENMAT}
+   ./MaxEnt.sh ${PARAM} -f G -o 3 -i qmc_Ti -p ${GENMAT}
+   #
+   PARAM="-e 0.01 -w 2000 -W 50"
+   ./MaxEnt.sh ${PARAM} -f C -o 1 -i imp -p ${GENMAT}
+
+   cd ../../
+
+done
+
+
+################################################################################
+#                   PASTE THE FOLLOWING WITHIN IT/K_resolved                   #
+################################################################################
+#VERSION-1
+./MaxEnt_Kresolved_SLURM.sh -e 0.00010 -w 15000 -W 300 -F G -N 770 -B 110 -m path -s _Tr -i 501 -f 771
+
+#VERSION-2
+./MaxEnt_Kresolved_SLURM.sh -e 0.00005 -w 15000 -W 300 -F G -N 750 -B 250 -m path -s _Tr
+./MaxEnt_Kresolved_SLURM.sh -e 0.00005 -w 15000 -W 300 -F G -N 770 -B 110 -m path -s _Tr -i 751 -f 771
+
+#VERSION-3
+./MaxEnt_Kresolved_SLURM.sh -e 0.00001 -w 15000 -W 300 -F G -N 750 -B 250 -m path -s _Tr
+./MaxEnt_Kresolved_SLURM.sh -e 0.00001 -w 15000 -W 300 -F G -N 770 -B 110 -m path -s _Tr -i 751 -f 771
+
+#VERSION-3
+./MaxEnt_Kresolved_SLURM.sh -e 0.00002 -w 15000 -W 300 -F G -N 750 -B 250 -m path -s _Tr
+./MaxEnt_Kresolved_SLURM.sh -e 0.00002 -w 15000 -W 300 -F G -N 770 -B 110 -m path -s _Tr -i 751 -f 771
+
+
+
+a=1
+b=771
+for kp in `seq ${a} ${b}`; do
+   if [ ! -f MaxEnt_Gk_path_s1/Gk_t_k${kp}_Tr.DAT_dos.dat ]; then
+       echo $kp absent
+       ./MaxEnt_Kresolved_SLURM.sh -e 0.000015 -w 15000 -W 300 -F G -N 770 -B 110 -m path -s _Tr -i $kp -f $kp
+   fi
+done
+
+
+./MaxEnt_Kresolved_SLURM.sh -e 0.001 -w 8001 -W 300 -F G -N 161 -B 161 -m path -i 1 -f 161
+
+
+
+ymin=-2
+ymax=4
+zmin=0
+zmax=100
+set yrange [ymin:ymax];set zrange [zmin:zmax];set ytics 0.5; set grid; set pm3d map
+set xrange [0:1];unset xtics; set xtics format " ";
+set xtics("G"  0.000000000000, "X"  0.141052949370, "W"  0.211874505089, "K"  0.264262927759, "G"  0.414828755383, "L"  0.537495288159, "U"  0.624007201668, "W"  0.675388154672, "L"  0.775865170661, "K"  0.863114603154, "U"  0.949626516664, "X"  1.00000000000)
+set arrow from 0.1410,ymin to 0.1410,ymax nohead front lw 0.2 lc rgb "black"
+set arrow from 0.2118,ymin to 0.2118,ymax nohead front lw 0.2 lc rgb "black"
+set arrow from 0.2642,ymin to 0.2642,ymax nohead front lw 0.2 lc rgb "black"
+set arrow from 0.4148,ymin to 0.4148,ymax nohead front lw 0.2 lc rgb "black"
+set arrow from 0.5374,ymin to 0.5374,ymax nohead front lw 0.2 lc rgb "black"
+set arrow from 0.6240,ymin to 0.6240,ymax nohead front lw 0.2 lc rgb "black"
+set arrow from 0.6753,ymin to 0.6753,ymax nohead front lw 0.2 lc rgb "black"
+set arrow from 0.7758,ymin to 0.7758,ymax nohead front lw 0.2 lc rgb "black"
+set arrow from 0.8631,ymin to 0.8631,ymax nohead front lw 0.2 lc rgb "black"
+set arrow from 0.9496,ymin to 0.9496,ymax nohead front lw 0.2 lc rgb "black"
+set palette defined ( 0 "blue", 4 "white", 15 "red", 100 "black" )
+set palette defined ( 0 "blue", 0.2 "white", 0.5 "red", 10 "black" )
+
+#splot '../../GWinput_beta30/G0W0plots/Akw_Hk_Sigma_G0W0.DAT' u 2:3:($4+$5+$6+$7+$8+$9+$10+$11+$12+$13+$14+$15) pal
+#splot 'Akw_Gk_Tr_s1.DAT' u 2:3:4 pal
+#rep for [i=3:15] 'Bands_nonInt.DAT' u 2:i:(10) w l lw 2 lc rgb 'green' notitle
+
+
+splot 'Akw_Gk_Tr_s1.DAT' u 2:3:4 pal
+
+
+#

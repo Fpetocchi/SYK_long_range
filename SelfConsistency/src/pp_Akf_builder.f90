@@ -64,19 +64,17 @@ program Akw_builder
    enddo
    !
    !
-   if(print_path_Chi)then
-      call rebuild_W("C","path")
-      !if(print_plane_W) call rebuild_W("C","plane")
-   endif
+   if(print_path_Chi) call rebuild_W("C","path")
+   !if(print_plane_W) call rebuild_W("C","plane")
    !
    if(print_path_W)then
       call rebuild_W("W","path")
-      !if(print_plane_W) call rebuild_W("W","plane")
+      call rebuild_W("W","path",pedix="_Trace_NaNa.DAT_dos.dat",Traced=.true.)
    endif
    !
    if(print_path_E)then
-      call rebuild_W("E","path")
-      !if(print_plane_E) call rebuild_W("E","plane")
+      call rebuild_W("E","path",pedix="_Trace_NaNa.DAT_dos.dat",Traced=.true.)
+      call rebuild_W("E","path",pedix="_Loss.DAT_dos.dat",Traced=.true.)
    endif
    !
    !
@@ -379,11 +377,12 @@ contains
    !
    !
    !
-   subroutine rebuild_W(name,mode,orbsep,pedix)
+   subroutine rebuild_W(name,mode,orbsep,pedix,Traced)
       implicit none
       character(len=*),intent(in)           :: name
       character(len=*),intent(in)           :: mode
       logical,intent(in),optional           :: orbsep
+      logical,intent(in),optional           :: Traced
       character(len=*),intent(in),optional  :: pedix
       integer                               :: iq,Nkpt,Nkpt_Kside,Norb
       integer                               :: iw,iorb,ikx,iky,wndx_cut
@@ -395,7 +394,7 @@ contains
       real(8)                               :: dw,fact
       real(8)                               :: kx,ky,Bvec(3),Kvec(3),Blat(3,3)
       character(len=256)                    :: path,pedix_
-      logical                               :: ik1st_read,orbsep_
+      logical                               :: ik1st_read,orbsep_,Traced_
       !
       real(8),allocatable                   :: ImW_read(:,:,:)
       !
@@ -426,12 +425,19 @@ contains
             !
       end select
       !
-      pedix_="_dos.dat"
+      pedix_=".DAT_dos.dat"
       if(present(pedix))pedix_=reg(pedix)
       !
       ! this will be removed as soon as I find a better MaxEnt procedure
       orbsep_ = .true.
       if(present(orbsep))orbsep_=orbsep
+      !
+      Traced_ = .true.
+      if(present(Traced))Traced_=Traced
+      if(Traced_)then
+         Norb=1
+         orbsep_=.false.
+      endif
       !
       if(orbsep_)then
          !
@@ -444,7 +450,7 @@ contains
             ik1st_read=.false.
             do iq=1,Nkpt
                !
-               path = reg(MaxEnt_K)//"MaxEnt_"//reg(name)//"k_"//reg(mode)//"/"//reg(name)//"k_w_k"//str(iq)//"_o"//str(iorb)//".DAT"//reg(pedix_)
+               path = reg(MaxEnt_K)//"MaxEnt_"//reg(name)//"k_"//reg(mode)//"/"//reg(name)//"k_w_k"//str(iq)//"_o"//str(iorb)//reg(pedix_)
                !
                call inquireFile(reg(path),Kmask(iq),hardstop=.false.,verb=.true.)
                if(.not.Kmask(iq))then
@@ -489,7 +495,7 @@ contains
                !
                if(.not.Kmask(iq)) cycle
                !
-               path = reg(MaxEnt_K)//"MaxEnt_"//reg(name)//"k_"//reg(mode)//"/"//reg(name)//"k_w_k"//str(iq)//"_o"//str(iorb)//".DAT"//reg(pedix_)
+               path = reg(MaxEnt_K)//"MaxEnt_"//reg(name)//"k_"//reg(mode)//"/"//reg(name)//"k_w_k"//str(iq)//"_o"//str(iorb)//reg(pedix_)
                unit = free_unit()
                open(unit,file=reg(path),form="formatted",status="unknown",position="rewind",action="read")
                do iw=1,Nreal_read
@@ -534,8 +540,8 @@ contains
                   if((Nreal_max-(iw-1)).lt.Nreal_min)stop "chunking issue."
                enddo
                !
-               !Fix normalization
-               Akw_orb(iorb,:,iq) = Akw_orb(iorb,:,iq) / abs(sum(Akw_orb(iorb,:,iq))*dw)
+               !Fix normalization ---> WHY THIS GIVES SHITTY STUFF???
+               !Akw_orb(iorb,:,iq) = Akw_orb(iorb,:,iq) / abs(sum(Akw_orb(iorb,:,iq))*dw)
                !
             enddo
             !
@@ -554,7 +560,7 @@ contains
          ik1st_read=.false.
          do iq=1,Nkpt
             !
-            path = reg(MaxEnt_K)//"MaxEnt_"//reg(name)//"k_"//reg(mode)//"/"//reg(name)//"k_w_k"//str(iq)//".DAT"//reg(pedix_)
+            path = reg(MaxEnt_K)//"MaxEnt_"//reg(name)//"k_"//reg(mode)//"/"//reg(name)//"k_w_k"//str(iq)//reg(pedix_)
             !
             call inquireFile(reg(path),Kmask(iq),hardstop=.false.,verb=.true.)
             if(.not.Kmask(iq))then
@@ -598,7 +604,7 @@ contains
             !
             if(.not.Kmask(iq)) cycle
             !
-            path = reg(MaxEnt_K)//"MaxEnt_"//reg(name)//"k_"//reg(mode)//"/"//reg(name)//"k_w_k"//str(iq)//".DAT"//reg(pedix_)
+            path = reg(MaxEnt_K)//"MaxEnt_"//reg(name)//"k_"//reg(mode)//"/"//reg(name)//"k_w_k"//str(iq)//reg(pedix_)
             unit = free_unit()
             open(unit,file=reg(path),form="formatted",status="unknown",position="rewind",action="read")
             do iw=1,Nreal_read
@@ -645,8 +651,8 @@ contains
                   if((Nreal_max-(iw-1)).lt.Nreal_min)stop "chunking issue."
                enddo
                !
-               !Fix normalization
-               Akw_orb(iorb,:,iq) = Akw_orb(iorb,:,iq) / abs(sum(Akw_orb(iorb,:,iq))*dw)
+               !Fix normalization ---> WHY THIS GIVES SHITTY STUFF???
+               !Akw_orb(iorb,:,iq) = Akw_orb(iorb,:,iq) / abs(sum(Akw_orb(iorb,:,iq))*dw)
                !
             enddo
          enddo

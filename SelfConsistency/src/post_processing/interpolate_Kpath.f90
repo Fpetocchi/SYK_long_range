@@ -716,7 +716,7 @@ contains
    !
 end subroutine interpolate2kpath_Fermionic
 
-subroutine interpolate2kpath_Bosonic(Wfull,Lttc,pathOUTPUT,name,remove_Gamma,NaNb)
+subroutine interpolate2kpath_Bosonic(Wfull,Lttc,pathOUTPUT,name,mode,invert,remove_Gamma)
    !
    use parameters
    use utils_misc
@@ -734,20 +734,22 @@ subroutine interpolate2kpath_Bosonic(Wfull,Lttc,pathOUTPUT,name,remove_Gamma,NaN
    type(Lattice),intent(inout)           :: Lttc
    character(len=*),intent(in)           :: pathOUTPUT
    character(len=*),intent(in)           :: name
+   character(len=*),intent(in)           :: mode
+   logical,intent(in),optional           :: invert
    logical,intent(in),optional           :: remove_Gamma
-   logical,intent(in),optional           :: NaNb
    !
-   complex(8),allocatable                :: W_orig(:,:,:,:)
-   complex(8),allocatable                :: W_intp(:,:,:,:)
+   complex(8),allocatable                :: W_orig(:,:,:,:),W_intp(:,:,:,:)
    complex(8),allocatable                :: Wgamma(:,:,:)
-   complex(8),allocatable                :: Wtrace(:,:)
-   real(8),allocatable                   :: wmats(:)
+   complex(8),allocatable                :: TrW_orig(:,:),TrW_intp(:,:)
+   complex(8),allocatable                :: TrWgamma(:)
+   complex(8),allocatable                :: invW(:,:)
+   real(8),allocatable                   :: wmats(:),EigW(:)
    !
    integer                               :: Norb,Nmats,unit,Wdim
    integer                               :: iq,iw,iorb,jorb,ib1,ib2
    character(len=256)                    :: path
    logical                               :: print_path,print_plane
-   logical                               :: remove_Gamma_,NaNb_
+   logical                               :: remove_Gamma_,invert_
    real                                  :: start,finish
    !
    !
@@ -767,12 +769,8 @@ subroutine interpolate2kpath_Bosonic(Wfull,Lttc,pathOUTPUT,name,remove_Gamma,NaN
    remove_Gamma_ = .true.
    if(present(remove_Gamma)) remove_Gamma_ = remove_Gamma
    !
-   !this is to restrict the printing to the density-density terms only
-   NaNb_ = .true.
-   if(present(NaNb)) NaNb_ = NaNb
-   !
-   Wdim = Wfull%Nbp
-   if(NaNb_) Wdim = Norb
+   invert_ = .false.
+   if(present(invert)) invert_ = invert
    !
    print_path = print_path_Chi .or. print_path_W .or. print_path_E
    !
@@ -780,11 +778,6 @@ subroutine interpolate2kpath_Bosonic(Wfull,Lttc,pathOUTPUT,name,remove_Gamma,NaN
    print_plane = .false. !print_plane_W
    !
    call createDir(reg(pathOUTPUT),verb=verbose)
-   !
-   !
-   !
-   !------------------- Interpolation of interacting solutuon -----------------!
-   !
    !
    !recalculate the internal K-meshes if not already stored
    if(print_path.and.(.not.Lttc%pathStored))then
@@ -795,112 +788,250 @@ subroutine interpolate2kpath_Bosonic(Wfull,Lttc,pathOUTPUT,name,remove_Gamma,NaN
       call interpolate2Plane(Lttc,Nkpt_plane,"Hk",store=.true.)
    endif
    !
-   !
-   !Optionally keep only the density-density terms
-   allocate(W_orig(Wdim,Wdim,Nmats,Lttc%Nkpt));W_orig=czero
-   allocate(Wgamma(Wdim,Wdim,Nmats));Wgamma=czero
-   if(NaNb_)then
-      !
-      do iorb=1,Norb
-         do jorb=1,Norb
-            !
-            call F2Bindex(Norb,[iorb,iorb],[jorb,jorb],ib1,ib2)
-            !
-            W_orig(iorb,jorb,:,:) = Wfull%screened(ib1,ib2,:,:)
-            !
-            if(remove_Gamma_) then
-               Wgamma(iorb,jorb,:) = Wfull%screened(ib1,ib2,:,Wfull%iq_gamma)
+   select case(reg(mode))
+      case default
+         stop "interpolate2kpath_Bosonic: Available modes are: NaNb, Trace, Trace_NaNa, Loss."
+      case("NaNb")
+         !
+         Wdim = Norb
+         !
+         allocate(W_orig(Wdim,Wdim,Nmats,Lttc%Nkpt));W_orig=czero
+         allocate(Wgamma(Wdim,Wdim,Nmats));Wgamma=czero
+         !
+         do iorb=1,Norb
+            do jorb=1,Norb
+               call F2Bindex(Norb,[iorb,iorb],[jorb,jorb],ib1,ib2)
+               W_orig(iorb,jorb,:,:) = Wfull%screened(ib1,ib2,:,:)
+            enddo
+         enddo
+         !
+         if(invert_)then
+            allocate(invW(Wdim,Wdim));invW=czero
+            do iw=1,Nmats
                do iq=1,Wfull%Nkpt
-                  W_orig(iorb,jorb,:,iq) = W_orig(iorb,jorb,:,iq) - Wgamma(iorb,jorb,:)
+                  invW = W_orig(:,:,iw,iq)
+                  call inv(invW)
+                  W_orig(:,:,iw,iq) = invW
                enddo
-            endif
-            !
-         enddo
-      enddo
-      !
-   else
-      !
-      W_orig = Wfull%screened
-      !
-      if(remove_Gamma_) then
-         Wgamma = Wfull%screened(:,:,:,Wfull%iq_gamma)
-         do iq=1,Wfull%Nkpt
-            W_orig(:,:,:,iq) = W_orig(:,:,:,iq) - Wgamma
-         enddo
-      endif
-      !
-   endif
+            enddo
+            deallocate(invW)
+         endif
+         !
+         if(remove_Gamma_) then
+            do iorb=1,Norb
+               do jorb=1,Norb
+                  call F2Bindex(Norb,[iorb,iorb],[jorb,jorb],ib1,ib2)
+                  Wgamma(iorb,jorb,:) = Wfull%screened(ib1,ib2,:,Wfull%iq_gamma)
+                  do iq=1,Wfull%Nkpt
+                     W_orig(iorb,jorb,:,iq) = W_orig(iorb,jorb,:,iq) - Wgamma(iorb,jorb,:)
+                  enddo
+               enddo
+            enddo
+         endif
+         !
+      case("Trace","Trace_NaNa","Loss")
+         !
+         Wdim = Wfull%Nbp
+         !
+         allocate(W_orig(Wdim,Wdim,Nmats,Lttc%Nkpt));W_orig=czero
+         allocate(Wgamma(Wdim,Wdim,Nmats));Wgamma=czero
+         !
+         W_orig = Wfull%screened
+         !
+         if(invert_)then
+            allocate(invW(Wdim,Wdim));invW=czero
+            do iw=1,Nmats
+               do iq=1,Wfull%Nkpt
+                  invW = W_orig(:,:,iw,iq)
+                  call inv(invW)
+                  W_orig(:,:,iw,iq) = invW
+               enddo
+            enddo
+            deallocate(invW)
+         endif
+         !
+         if(remove_Gamma_) then
+            Wgamma = Wfull%screened(:,:,:,Wfull%iq_gamma)
+            do iq=1,Wfull%Nkpt
+               W_orig(:,:,:,iq) = W_orig(:,:,:,iq) - Wgamma
+            enddo
+         endif
+         !
+   end select
    !
    !
    !
    !-------------------------- Boson along the path ---------------------------!
    if(print_path)then
       !
-      !Interpolate the boson along the path
-      call cpu_time(start)
-      allocate(W_intp(Wdim,Wdim,Nmats,Lttc%Nkpt_path));W_intp=czero
-      call wannierinterpolation(Lttc%Nkpt3,Lttc%kpt,Lttc%kptpath(:,1:Lttc%Nkpt_path),W_orig,W_intp)
-      call cpu_time(finish)
-      write(*,"(A,F)") new_line("A")//new_line("A")//"     "//reg(name)//"(fullBZ,iw) --> "//reg(name)//"(Kpath,iw) cpu timing:", finish-start
-      !
-      if(NaNb_)then
+      select case(reg(mode))
          !
-         !Print along path all components
-         path = reg(pathOUTPUT)//"MaxEnt_"//reg(name)//"k_path/"
-         call createDir(reg(path),verb=verbose)
-         allocate(wmats(Nmats))
-         wmats = BosonicFreqMesh(Wfull%Beta,Nmats)
-         do iq=1,Lttc%Nkpt_path
-            unit = free_unit()
-            open(unit,file=reg(path)//reg(name)//"k_w_k"//str(iq)//".DAT",form="formatted",status="unknown",position="rewind",action="write")
-            do iw=1,Nmats-1
-                write(unit,"(200E20.12)") wmats(iw),(dreal(W_intp(iorb,iorb,iw,iq)+Wgamma(iorb,iorb,iw)),iorb=1,Wdim)
-            enddo
-            close(unit)
-         enddo
-         !
-         !TEST>>>
-         !temporary for the time-being I have a shitty maxent
-         do iorb=1,Wdim
+         case("NaNb")
+            !
+            !Interpolate the boson in NaNb format along the path
+            call cpu_time(start)
+            allocate(W_intp(Wdim,Wdim,Nmats,Lttc%Nkpt_path));W_intp=czero
+            call wannierinterpolation(Lttc%Nkpt3,Lttc%kpt,Lttc%kptpath(:,1:Lttc%Nkpt_path),W_orig,W_intp)
+            call cpu_time(finish)
+            write(*,"(A,F)") "     "//reg(name)//"_NaNb(fullBZ,iw) --> "//reg(name)//"_NaNb(Kpath,iw) cpu timing:", finish-start
+            !
+            !Print along path all NaNb components
             path = reg(pathOUTPUT)//"MaxEnt_"//reg(name)//"k_path/"
             call createDir(reg(path),verb=verbose)
+            allocate(wmats(Nmats))
+            wmats = BosonicFreqMesh(Wfull%Beta,Nmats)
             do iq=1,Lttc%Nkpt_path
                unit = free_unit()
-               open(unit,file=reg(path)//reg(name)//"k_w_k"//str(iq)//"_o"//str(iorb)//".DAT",form="formatted",status="unknown",position="rewind",action="write")
+               open(unit,file=reg(path)//reg(name)//"k_w_k"//str(iq)//"_NaNb.DAT",form="formatted",status="unknown",position="rewind",action="write")
                do iw=1,Nmats-1
-                   write(unit,"(200E20.12)") wmats(iw),dreal(W_intp(iorb,iorb,iw,iq)+Wgamma(iorb,iorb,iw))
+                   write(unit,"(200E20.12)") wmats(iw),(dreal(W_intp(iorb,iorb,iw,iq)+Wgamma(iorb,iorb,iw)),iorb=1,Wdim)
                enddo
                close(unit)
             enddo
-         enddo
-         !>>>TEST
-      else
-         !
-         !Print along path only the trace since the full tensor is too big
-         allocate(Wtrace(Nmats,Lttc%Nkpt_path));Wtrace=czero
-         do iq=1,Lttc%Nkpt_path
+            !
+            !TEST>>>
+            !temporary for the time-being I have a shitty maxent
+            do iorb=1,Wdim
+               path = reg(pathOUTPUT)//"MaxEnt_"//reg(name)//"k_path/"
+               call createDir(reg(path),verb=verbose)
+               do iq=1,Lttc%Nkpt_path
+                  unit = free_unit()
+                  open(unit,file=reg(path)//reg(name)//"k_w_k"//str(iq)//"_o"//str(iorb)//".DAT",form="formatted",status="unknown",position="rewind",action="write")
+                  do iw=1,Nmats-1
+                      write(unit,"(200E20.12)") wmats(iw),dreal(W_intp(iorb,iorb,iw,iq)+Wgamma(iorb,iorb,iw))
+                  enddo
+                  close(unit)
+               enddo
+            enddo
+            !>>>TEST
+            !
+            deallocate(W_intp)
+            !
+         case("Trace")
+            !
+            !Print along path only the trace since the full tensor is too big
+            allocate(TrW_orig(Nmats,Wfull%Nkpt));TrW_orig=czero
+            allocate(TrWgamma(Nmats));TrWgamma=czero
             do iw=1,Nmats
-               Wtrace = trace(W_intp(:,:,iw,iq)+Wgamma(:,:,iw))
+               do iq=1,Wfull%Nkpt
+                  TrW_orig(iw,iq) = trace(W_orig(:,:,iw,iq))/Wdim
+               enddo
+               TrWgamma(iw) = trace(Wgamma(:,:,iw))/Wdim
             enddo
-         enddo
-         !
-         path = reg(pathOUTPUT)//"MaxEnt_"//reg(name)//"k_path/"
-         call createDir(reg(path),verb=verbose)
-         allocate(wmats(Nmats))
-         wmats = BosonicFreqMesh(Wfull%Beta,Nmats)
-         do iq=1,Lttc%Nkpt_path
-            unit = free_unit()
-            open(unit,file=reg(path)//reg(name)//"k_w_k"//str(iq)//"_Tr.DAT",form="formatted",status="unknown",position="rewind",action="write")
-            do iw=1,Nmats-1
-                write(unit,"(200E20.12)") wmats(iw),dreal(Wtrace(iw,iq)),dimag(Wtrace(iw,iq))
+            !
+            !Interpolate the boson trace along the path
+            call cpu_time(start)
+            allocate(TrW_intp(Nmats,Lttc%Nkpt_path));TrW_intp=czero
+            call wannierinterpolation(Lttc%Nkpt3,Lttc%kpt,Lttc%kptpath(:,1:Lttc%Nkpt_path),TrW_orig,TrW_intp)
+            call cpu_time(finish)
+            write(*,"(A,F)") "     "//reg(name)//"_Trace(fullBZ,iw) --> "//reg(name)//"_Trace(Kpath,iw) cpu timing:", finish-start
+            !
+            !Print along path the components of the trace
+            path = reg(pathOUTPUT)//"MaxEnt_"//reg(name)//"k_path/"
+            call createDir(reg(path),verb=verbose)
+            allocate(wmats(Nmats))
+            wmats = BosonicFreqMesh(Wfull%Beta,Nmats)
+            do iq=1,Lttc%Nkpt_path
+               unit = free_unit()
+               open(unit,file=reg(path)//reg(name)//"k_w_k"//str(iq)//"_Trace.DAT",form="formatted",status="unknown",position="rewind",action="write")
+               do iw=1,Nmats-1
+                  write(unit,"(200E20.12)") wmats(iw),dreal(TrW_intp(iw,iq)+TrWgamma(iw)),dimag(TrW_intp(iw,iq)+TrWgamma(iw))
+               enddo
+               close(unit)
             enddo
-            close(unit)
-         enddo
-         deallocate(Wtrace)
-         !
-      endif
+            deallocate(TrW_orig,TrW_intp,TrWgamma)
+            !
+         case("Trace_NaNa")
+            !
+            !Print along path only the trace of the NaNa elements since the full tensor is too big
+            allocate(TrW_orig(Nmats,Wfull%Nkpt));TrW_orig=czero
+            allocate(TrWgamma(Nmats));TrWgamma=czero
+            do iw=1,Nmats
+               do iq=1,Wfull%Nkpt
+                  do iorb=1,Norb
+                     call F2Bindex(Norb,[iorb,iorb],[iorb,iorb],ib1,ib1)
+                     TrW_orig(iw,iq) = TrW_orig(iw,iq) + W_orig(ib1,ib1,iw,iq)/Norb
+                  enddo
+               enddo
+               do iorb=1,Norb
+                  call F2Bindex(Norb,[iorb,iorb],[iorb,iorb],ib1,ib1)
+                  TrWgamma(iw) = TrWgamma(iw) + Wgamma(ib1,ib1,iw)/Norb
+               enddo
+            enddo
+            !
+            !Interpolate the boson trace along the path
+            call cpu_time(start)
+            allocate(TrW_intp(Nmats,Lttc%Nkpt_path));TrW_intp=czero
+            call wannierinterpolation(Lttc%Nkpt3,Lttc%kpt,Lttc%kptpath(:,1:Lttc%Nkpt_path),TrW_orig,TrW_intp)
+            call cpu_time(finish)
+            write(*,"(A,F)") "     "//reg(name)//"_Trace_NaNa(fullBZ,iw) --> "//reg(name)//"_Trace_NaNa(Kpath,iw) cpu timing:", finish-start
+            !
+            !Print along path the components of the trace
+            path = reg(pathOUTPUT)//"MaxEnt_"//reg(name)//"k_path/"
+            call createDir(reg(path),verb=verbose)
+            allocate(wmats(Nmats))
+            wmats = BosonicFreqMesh(Wfull%Beta,Nmats)
+            do iq=1,Lttc%Nkpt_path
+               unit = free_unit()
+               open(unit,file=reg(path)//reg(name)//"k_w_k"//str(iq)//"_Trace_NaNa.DAT",form="formatted",status="unknown",position="rewind",action="write")
+               do iw=1,Nmats-1
+                  write(unit,"(200E20.12)") wmats(iw),dreal(TrW_intp(iw,iq)+TrWgamma(iw)),dimag(TrW_intp(iw,iq)+TrWgamma(iw))
+               enddo
+               close(unit)
+            enddo
+            deallocate(TrW_orig,TrW_intp,TrWgamma)
+            !
+         case("Loss")
+            !
+            !Interpolate the full boson along the path
+            call cpu_time(start)
+            allocate(W_intp(Wdim,Wdim,Nmats,Lttc%Nkpt_path));W_intp=czero
+            call wannierinterpolation(Lttc%Nkpt3,Lttc%kpt,Lttc%kptpath(:,1:Lttc%Nkpt_path),W_orig,W_intp)
+            call cpu_time(finish)
+            write(*,"(A,F)") "     "//reg(name)//"_Loss(fullBZ,iw) --> "//reg(name)//"_Loss(Kpath,iw) cpu timing:", finish-start
+            !
+            !extract the eigenvalues along the path
+            allocate(TrW_intp(Nmats,Lttc%Nkpt_path));TrW_intp=czero
+            allocate(invW(Wdim,Wdim));invW=czero
+            allocate(EigW(Wdim));EigW=0d0
+            do iw=1,Nmats
+               do iq=1,Lttc%Nkpt_path
+                  !
+                  !get the full Field with also Gamma
+                  invW = W_intp(:,:,iw,iq) + Wgamma(:,:,iw)
+                  !
+                  !get the eigenvalues
+                  call eigh(invW,EigW)
+                  !
+                  !Loss function is the product of all eigenvalues
+                  do ib1=1,Wdim
+                     TrW_intp(iw,iq) = TrW_intp(iw,iq)*EigW(ib1)
+                  enddo
+                  !
+                  if(invert_) TrW_intp(iw,iq) = 1d0/TrW_intp(iw,iq)
+                  !
+               enddo
+            enddo
+            deallocate(invW,EigW)
+            !
+            !Print along path the components of the Loss function
+            path = reg(pathOUTPUT)//"MaxEnt_"//reg(name)//"k_path/"
+            call createDir(reg(path),verb=verbose)
+            allocate(wmats(Nmats))
+            wmats = BosonicFreqMesh(Wfull%Beta,Nmats)
+            do iq=1,Lttc%Nkpt_path
+               unit = free_unit()
+               open(unit,file=reg(path)//reg(name)//"k_w_k"//str(iq)//"_Loss.DAT",form="formatted",status="unknown",position="rewind",action="write")
+               do iw=1,Nmats-1
+                  write(unit,"(200E20.12)") wmats(iw),dreal(TrW_intp(iw,iq)),dimag(TrW_intp(iw,iq))
+               enddo
+               close(unit)
+            enddo
+            deallocate(TrW_intp)
+            !
+      end select
       !
-      deallocate(wmats,W_intp)
+      deallocate(wmats)
       !
    endif
    !
@@ -909,72 +1040,174 @@ subroutine interpolate2kpath_Bosonic(Wfull,Lttc,pathOUTPUT,name,remove_Gamma,NaN
    !---------------------- Boson along the {kx,ky} plane ----------------------!
    if(print_plane)then
       !
-      !Interpolate the boson along the plane
-      call cpu_time(start)
-      allocate(W_intp(Wdim,Wdim,Nmats,Lttc%Nkpt_Plane));W_intp=czero
-      call wannierinterpolation(Lttc%Nkpt3,Lttc%kpt,Lttc%kptPlane,W_orig,W_intp)
-      call cpu_time(finish)
-      write(*,"(A,F)") new_line("A")//new_line("A")//"     "//reg(name)//"(fullBZ,iw) --> "//reg(name)//"(kx,ky,iw) cpu timing:", finish-start
-      !
-      if(NaNb_)then
+      select case(reg(mode))
          !
-         !Print along plane all components
-         path = reg(pathOUTPUT)//"MaxEnt_"//reg(name)//"k_plane/"
-         call createDir(reg(path),verb=verbose)
-         allocate(wmats(Nmats))
-         wmats = BosonicFreqMesh(Wfull%Beta,Nmats)
-         do iq=1,Lttc%Nkpt_Plane
-            unit = free_unit()
-            open(unit,file=reg(path)//reg(name)//"k_w_k"//str(iq)//".DAT",form="formatted",status="unknown",position="rewind",action="write")
-            do iw=1,Nmats-1
-                write(unit,"(200E20.12)") wmats(iw),(dreal(W_intp(iorb,iorb,iw,iq)+Wgamma(iorb,iorb,iw)),iorb=1,Wdim)
-            enddo
-            close(unit)
-         enddo
-         !
-         !TEST>>>
-         !temporary for the time-being I have a shitty maxent
-         do iorb=1,Wdim
+         case("NaNb")
+            !
+            !Interpolate the boson in NaNb format along the plane
+            call cpu_time(start)
+            allocate(W_intp(Wdim,Wdim,Nmats,Lttc%Nkpt_Plane));W_intp=czero
+            call wannierinterpolation(Lttc%Nkpt3,Lttc%kpt,Lttc%kptPlane,W_orig,W_intp)
+            call cpu_time(finish)
+            write(*,"(A,F)") "     "//reg(name)//"_NaNb(fullBZ,iw) --> "//reg(name)//"_NaNb(kx,ky,iw) cpu timing:", finish-start
+            !
+            !Print along plane all components
             path = reg(pathOUTPUT)//"MaxEnt_"//reg(name)//"k_plane/"
             call createDir(reg(path),verb=verbose)
+            allocate(wmats(Nmats))
+            wmats = BosonicFreqMesh(Wfull%Beta,Nmats)
             do iq=1,Lttc%Nkpt_Plane
                unit = free_unit()
-               open(unit,file=reg(path)//reg(name)//"k_w_k"//str(iq)//"_o"//str(iorb)//".DAT",form="formatted",status="unknown",position="rewind",action="write")
+               open(unit,file=reg(path)//reg(name)//"k_w_k"//str(iq)//"_NaNb.DAT",form="formatted",status="unknown",position="rewind",action="write")
                do iw=1,Nmats-1
-                   write(unit,"(200E20.12)") wmats(iw),dreal(W_intp(iorb,iorb,iw,iq)+Wgamma(iorb,iorb,iw))
+                   write(unit,"(200E20.12)") wmats(iw),(dreal(W_intp(iorb,iorb,iw,iq)+Wgamma(iorb,iorb,iw)),iorb=1,Wdim)
                enddo
                close(unit)
             enddo
-         enddo
-         !>>>TEST
-         !
-      else
-         !
-         !Print along path only the trace since the full tensor is too big
-         allocate(Wtrace(Nmats,Lttc%Nkpt_Plane));Wtrace=czero
-         do iq=1,Lttc%Nkpt_Plane
+            !
+            !TEST>>>
+            !temporary for the time-being I have a shitty maxent
+            do iorb=1,Wdim
+               path = reg(pathOUTPUT)//"MaxEnt_"//reg(name)//"k_plane/"
+               call createDir(reg(path),verb=verbose)
+               do iq=1,Lttc%Nkpt_Plane
+                  unit = free_unit()
+                  open(unit,file=reg(path)//reg(name)//"k_w_k"//str(iq)//"_o"//str(iorb)//".DAT",form="formatted",status="unknown",position="rewind",action="write")
+                  do iw=1,Nmats-1
+                      write(unit,"(200E20.12)") wmats(iw),dreal(W_intp(iorb,iorb,iw,iq)+Wgamma(iorb,iorb,iw))
+                  enddo
+                  close(unit)
+               enddo
+            enddo
+            !>>>TEST
+            !
+            deallocate(W_intp)
+            !
+         case("Trace")
+            !
+            !Print along path only the trace since the full tensor is too big
+            allocate(TrW_orig(Nmats,Wfull%Nkpt));TrW_orig=czero
+            allocate(TrWgamma(Nmats));TrWgamma=czero
             do iw=1,Nmats
-               Wtrace = trace(W_intp(:,:,iw,iq)+Wgamma(:,:,iw))
+               do iq=1,Wfull%Nkpt
+                  TrW_orig(iw,iq) = trace(W_orig(:,:,iw,iq))/Wdim
+               enddo
+               TrWgamma(iw) = trace(Wgamma(:,:,iw))/Wdim
             enddo
-         enddo
-         !
-         path = reg(pathOUTPUT)//"MaxEnt_"//reg(name)//"k_plane/"
-         call createDir(reg(path),verb=verbose)
-         allocate(wmats(Nmats))
-         wmats = BosonicFreqMesh(Wfull%Beta,Nmats)
-         do iq=1,Lttc%Nkpt_Plane
-            unit = free_unit()
-            open(unit,file=reg(path)//reg(name)//"k_w_k"//str(iq)//"_Tr.DAT",form="formatted",status="unknown",position="rewind",action="write")
-            do iw=1,Nmats-1
-                write(unit,"(200E20.12)") wmats(iw),dreal(Wtrace(iw,iq)),dimag(Wtrace(iw,iq))
+            !
+            !Interpolate the boson trace along the plane
+            call cpu_time(start)
+            allocate(TrW_intp(Nmats,Lttc%Nkpt_Plane));TrW_intp=czero
+            call wannierinterpolation(Lttc%Nkpt3,Lttc%kpt,Lttc%kptPlane,TrW_orig,TrW_intp)
+            call cpu_time(finish)
+            write(*,"(A,F)") "     "//reg(name)//"_Trace(fullBZ,iw) --> "//reg(name)//"_Trace(kx,ky,iw) cpu timing:", finish-start
+            !
+            !Print along plane the components of the trace
+            path = reg(pathOUTPUT)//"MaxEnt_"//reg(name)//"k_plane/"
+            call createDir(reg(path),verb=verbose)
+            allocate(wmats(Nmats))
+            wmats = BosonicFreqMesh(Wfull%Beta,Nmats)
+            do iq=1,Lttc%Nkpt_Plane
+               unit = free_unit()
+               open(unit,file=reg(path)//reg(name)//"k_w_k"//str(iq)//"_Trace.DAT",form="formatted",status="unknown",position="rewind",action="write")
+               do iw=1,Nmats-1
+                   write(unit,"(200E20.12)") wmats(iw),dreal(TrW_intp(iw,iq)+TrWgamma(iw)),dimag(TrW_intp(iw,iq)+TrWgamma(iw))
+               enddo
+               close(unit)
             enddo
-            close(unit)
-         enddo
-         deallocate(Wtrace)
-         !
-      endif
+            deallocate(TrW_orig,TrW_intp,TrWgamma)
+            !
+         case("Trace_NaNa")
+            !
+            !Print along path only the trace of the NaNa elements since the full tensor is too big
+            allocate(TrW_orig(Nmats,Wfull%Nkpt));TrW_orig=czero
+            allocate(TrWgamma(Nmats));TrWgamma=czero
+            do iw=1,Nmats
+               do iq=1,Wfull%Nkpt
+                  do iorb=1,Norb
+                     call F2Bindex(Norb,[iorb,iorb],[iorb,iorb],ib1,ib1)
+                     TrW_orig(iw,iq) = TrW_orig(iw,iq) + W_orig(ib1,ib1,iw,iq)/Norb
+                  enddo
+               enddo
+               do iorb=1,Norb
+                  call F2Bindex(Norb,[iorb,iorb],[iorb,iorb],ib1,ib1)
+                  TrWgamma(iw) = TrWgamma(iw) + Wgamma(ib1,ib1,iw)/Norb
+               enddo
+            enddo
+            !
+            !Interpolate the boson trace along the plane
+            call cpu_time(start)
+            allocate(TrW_intp(Nmats,Lttc%Nkpt_Plane));TrW_intp=czero
+            call wannierinterpolation(Lttc%Nkpt3,Lttc%kpt,Lttc%kptPlane,TrW_orig,TrW_intp)
+            call cpu_time(finish)
+            write(*,"(A,F)") "     "//reg(name)//"_Trace_NaNa(fullBZ,iw) --> "//reg(name)//"_Trace_NaNa(kx,ky,iw) cpu timing:", finish-start
+            !
+            !Print along plane the components of the trace
+            path = reg(pathOUTPUT)//"MaxEnt_"//reg(name)//"k_plane/"
+            call createDir(reg(path),verb=verbose)
+            allocate(wmats(Nmats))
+            wmats = BosonicFreqMesh(Wfull%Beta,Nmats)
+            do iq=1,Lttc%Nkpt_Plane
+               unit = free_unit()
+               open(unit,file=reg(path)//reg(name)//"k_w_k"//str(iq)//"_Trace_NaNa.DAT",form="formatted",status="unknown",position="rewind",action="write")
+               do iw=1,Nmats-1
+                   write(unit,"(200E20.12)") wmats(iw),dreal(TrW_intp(iw,iq)+TrWgamma(iw)),dimag(TrW_intp(iw,iq)+TrWgamma(iw))
+               enddo
+               close(unit)
+            enddo
+            deallocate(TrW_orig,TrW_intp,TrWgamma)
+            !
+         case("Loss")
+            !
+            !Interpolate the full boson along the path
+            call cpu_time(start)
+            allocate(W_intp(Wdim,Wdim,Nmats,Lttc%Nkpt_Plane));W_intp=czero
+            call wannierinterpolation(Lttc%Nkpt3,Lttc%kpt,Lttc%kptPlane,W_orig,W_intp)
+            call cpu_time(finish)
+            write(*,"(A,F)") "     "//reg(name)//"_Loss(fullBZ,iw) --> "//reg(name)//"_Loss(Kpath,iw) cpu timing:", finish-start
+            !
+            !extract the eigenvalues along the path
+            allocate(TrW_intp(Nmats,Lttc%Nkpt_Plane));TrW_intp=czero
+            allocate(invW(Wdim,Wdim));invW=czero
+            allocate(EigW(Wdim));EigW=0d0
+            do iw=1,Nmats
+               do iq=1,Lttc%Nkpt_Plane
+                  !
+                  !get the full Field with also Gamma
+                  invW = W_intp(:,:,iw,iq) + Wgamma(:,:,iw)
+                  !
+                  !get the eigenvalues
+                  call eigh(invW,EigW)
+                  !
+                  !Loss function is the product of all eigenvalues
+                  do ib1=1,Wdim
+                     TrW_intp(iw,iq) = TrW_intp(iw,iq)*EigW(ib1)
+                  enddo
+                  !
+                  if(invert_) TrW_intp(iw,iq) = 1d0/TrW_intp(iw,iq)
+                  !
+               enddo
+            enddo
+            deallocate(invW,EigW)
+            !
+            !Print along path the components of the Loss function
+            path = reg(pathOUTPUT)//"MaxEnt_"//reg(name)//"k_plane/"
+            call createDir(reg(path),verb=verbose)
+            allocate(wmats(Nmats))
+            wmats = BosonicFreqMesh(Wfull%Beta,Nmats)
+            do iq=1,Lttc%Nkpt_Plane
+               unit = free_unit()
+               open(unit,file=reg(path)//reg(name)//"k_w_k"//str(iq)//"_Loss.DAT",form="formatted",status="unknown",position="rewind",action="write")
+               do iw=1,Nmats-1
+                   write(unit,"(200E20.12)") wmats(iw),dreal(TrW_intp(iw,iq)),dimag(TrW_intp(iw,iq))
+               enddo
+               close(unit)
+            enddo
+            deallocate(TrW_intp)
+            !
+      end select
       !
-      deallocate(wmats,W_intp)
+      deallocate(wmats)
       !
    endif
    !

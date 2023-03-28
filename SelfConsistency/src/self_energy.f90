@@ -321,7 +321,7 @@ contains
       integer                               :: indx,jndx,kndx,lndx,isite
       integer                               :: i,j,k,l,ib1,ib2
       type(physicalU)                       :: PhysicalUelements
-      logical                               :: rmvDiagram
+      logical                               :: rmvDiagram,rmvSigma_X
       real                                  :: start,finish
       !
       !
@@ -333,6 +333,8 @@ contains
       if(.not.Gmats%status) stop "calc_sigmaGWdc: Gmats not properly initialized."
       if(.not.Wmats%status) stop "calc_sigmaGWdc: Wmats not properly initialized."
       if(Smats_dc%Nkpt.ne.0) stop "calc_sigmaGWdc: Smats_dc k dependent attributes are supposed to be unallocated."
+      !
+      rmvSigma_X=.false.
       !
       Norb = Smats_dc%Norb
       Nkpt = Smats_dc%Nkpt
@@ -412,46 +414,51 @@ contains
       call init_Uelements(Norb,PhysicalUelements)
       !
       !Sigmax_nm(q) = Sum_kij V_{ni,jm}(q-k)G_ij(k,beta) <=> sigmax(r,r')=-g(r,r',tau=0-)*v(r-r')
-      call cpu_time(start)
       call clear_attributes(Smats_Xdc_)
-      spinloopGWdc_X: do ispin=1,Nspin
-         do isite=1,size(LocalOrbs)
-            !
-            !$OMP PARALLEL DEFAULT(SHARED),&
-            !$OMP PRIVATE(indx,jndx,kndx,lndx,i,j,k,l,ib1,ib2)
-            !$OMP DO
-            do indx=1,LocalOrbs(isite)%Norb
-               do jndx=1,LocalOrbs(isite)%Norb
-                  do kndx=1,LocalOrbs(isite)%Norb
-                     do lndx=1,LocalOrbs(isite)%Norb
-                        !
-                        i = LocalOrbs(isite)%Orbs(indx)
-                        j = LocalOrbs(isite)%Orbs(jndx)
-                        k = LocalOrbs(isite)%Orbs(kndx)
-                        l = LocalOrbs(isite)%Orbs(lndx)
-                        !
-                        call F2Bindex(Norb,[i,j],[k,l],ib1,ib2)
-                        !
-                        rmvDiagram = DC_remove_self .and. (PhysicalUelements%Full_Uaa(ib1,ib2).or.PhysicalUelements%Full_Jph(ib1,ib2))
-                        if(.not.rmvDiagram) Smats_Xdc_%N_s(i,k,ispin) = Smats_Xdc_%N_s(i,k,ispin) + Gitau_loc(j,l,Ntau,ispin)*Wmats%bare_local(ib1,ib2)
-                        !
+      if(rmvSigma_X)then
+         !
+         call cpu_time(start)
+         spinloopGWdc_X: do ispin=1,Nspin
+            do isite=1,size(LocalOrbs)
+               !
+               !$OMP PARALLEL DEFAULT(SHARED),&
+               !$OMP PRIVATE(indx,jndx,kndx,lndx,i,j,k,l,ib1,ib2)
+               !$OMP DO
+               do indx=1,LocalOrbs(isite)%Norb
+                  do jndx=1,LocalOrbs(isite)%Norb
+                     do kndx=1,LocalOrbs(isite)%Norb
+                        do lndx=1,LocalOrbs(isite)%Norb
+                           !
+                           i = LocalOrbs(isite)%Orbs(indx)
+                           j = LocalOrbs(isite)%Orbs(jndx)
+                           k = LocalOrbs(isite)%Orbs(kndx)
+                           l = LocalOrbs(isite)%Orbs(lndx)
+                           !
+                           call F2Bindex(Norb,[i,j],[k,l],ib1,ib2)
+                           !
+                           rmvDiagram = DC_remove_self .and. (PhysicalUelements%Full_Uaa(ib1,ib2).or.PhysicalUelements%Full_Jph(ib1,ib2))
+                           if(.not.rmvDiagram) Smats_Xdc_%N_s(i,k,ispin) = Smats_Xdc_%N_s(i,k,ispin) + Gitau_loc(j,l,Ntau,ispin)*Wmats%bare_local(ib1,ib2)
+                           !
+                        enddo
                      enddo
                   enddo
                enddo
+               !$OMP END DO
+               !$OMP END PARALLEL
             enddo
-            !$OMP END DO
-            !$OMP END PARALLEL
-         enddo
+            !
+            if(paramagnet)then
+               Smats_Xdc_%N_s(:,:,Nspin) = Smats_Xdc_%N_s(:,:,1)
+               exit spinloopGWdc_X
+            endif
+            !
+         enddo spinloopGWdc_X
          !
-         if(paramagnet)then
-            Smats_Xdc_%N_s(:,:,Nspin) = Smats_Xdc_%N_s(:,:,1)
-            exit spinloopGWdc_X
-         endif
+         call cpu_time(finish)
+         write(*,"(A,F)") "     Sigma_Xdc cpu timing:", finish-start
          !
-      enddo spinloopGWdc_X
+      endif
       deallocate(Gitau_loc)
-      call cpu_time(finish)
-      write(*,"(A,F)") "     Sigma_Xdc cpu timing:", finish-start
       !
       call join_SigmaCX(Smats_dc,Smats_Cdc_,Smats_Xdc_)
       !
@@ -633,7 +640,7 @@ contains
       !
    end subroutine calc_VH_G
    !
-   subroutine calc_VH_N(VH,density_LDA_spin,density_spin,Umats)
+   subroutine calc_VH_N(VH,density_LDA_spin,density_spin,Umats,local)
       !
       use parameters
       use linalg
@@ -649,15 +656,17 @@ contains
       complex(8),intent(in)                 :: density_LDA_spin(:,:,:)
       complex(8),intent(in)                 :: density_spin(:,:,:)
       type(BosonicField),intent(in)         :: Umats
+      logical,intent(in),optional           :: local
       !
       complex(8),allocatable                :: density_LDA(:,:)
       complex(8),allocatable                :: density(:,:)
       complex(8),allocatable                :: Vgamma(:,:),Vevec(:,:)
       real(8),allocatable                   :: Veval(:)
       integer                               :: Nsite,Norb,Nbp
-      integer                               :: ib1,ib2
+      integer                               :: ib1,ib2,isite
       integer                               :: i,j,k,l
-      logical                               :: filexists
+      integer                               :: indx,jndx,kndx,lndx
+      logical                               :: filexists,local_
       character(len=256)                    :: path
       !
       !
@@ -678,6 +687,9 @@ contains
       call assert_shape(density_LDA_spin,[Norb,Norb,Nspin],"calc_VH_N","density_LDA_spin")
       call assert_shape(density_spin,[Norb,Norb,Nspin],"calc_VH_N","density_spin")
       call assert_shape(VH,[Norb,Norb],"calc_VH_N","VH")
+      !
+      local_=.false.
+      if(present(local))local_=local
       !
       allocate(density(Norb,Norb));density=czero
       density = sum(density_spin,dim=3)
@@ -741,19 +753,42 @@ contains
       call dump_matrix(Vgamma,reg(pathINPUT),"Vgamma_"//reg(VH_type)//".DAT")
       !
       VH=czero
-      do i=1,Norb
-         do j=1,Norb
-            do k=1,Norb
-               do l=1,Norb
-                  !
-                  call F2Bindex(Norb,[i,j],[k,l],ib1,ib2)
-                  !
-                  VH(i,j) = VH(i,j) + dreal(Vgamma(ib1,ib2)) * dreal(density(k,l)-density_LDA(k,l))
-                  !
+      if(local_)then
+         do isite=1,Nsite
+            do indx=1,LocalOrbs(isite)%Norb
+               do jndx=1,LocalOrbs(isite)%Norb
+                  do kndx=1,LocalOrbs(isite)%Norb
+                     do lndx=1,LocalOrbs(isite)%Norb
+                        !
+                        i = LocalOrbs(isite)%Orbs(indx)
+                        j = LocalOrbs(isite)%Orbs(jndx)
+                        k = LocalOrbs(isite)%Orbs(kndx)
+                        l = LocalOrbs(isite)%Orbs(lndx)
+                        !
+                        call F2Bindex(Norb,[i,j],[k,l],ib1,ib2)
+                        !
+                        VH(i,j) = VH(i,j) + dreal(Vgamma(ib1,ib2)) * dreal(density(k,l)-density_LDA(k,l))
+                        !
+                     enddo
+                  enddo
                enddo
             enddo
          enddo
-      enddo
+      else
+         do i=1,Norb
+            do j=1,Norb
+               do k=1,Norb
+                  do l=1,Norb
+                     !
+                     call F2Bindex(Norb,[i,j],[k,l],ib1,ib2)
+                     !
+                     VH(i,j) = VH(i,j) + dreal(Vgamma(ib1,ib2)) * dreal(density(k,l)-density_LDA(k,l))
+                     !
+                  enddo
+               enddo
+            enddo
+         enddo
+      endif
       deallocate(density_LDA,density,Vgamma)
       !
       contains
