@@ -301,7 +301,9 @@ contains
       use utils_fields
       use crystal
       use fourier_transforms
-      use input_vars, only : Ntau, tau_uniform, paramagnet, DC_remove_self, LocalOrbs
+      use input_vars, only : Ntau, tau_uniform, paramagnet, DC_remove_self
+      use input_vars, only : RotateHloc, ExpandImpurity, AFMselfcons
+      use input_vars, only : LocalOrbs, EqvImpndxF, sym_mode
       implicit none
       !
       type(FermionicField),intent(inout)    :: Smats_dc
@@ -312,16 +314,15 @@ contains
       !
       type(FermionicField)                  :: Smats_Cdc_
       type(FermionicField)                  :: Smats_Xdc_
+      type(FermionicField)                  :: Smats_Imp
       complex(8),allocatable                :: Sitau_loc(:,:,:)
       complex(8),allocatable                :: Gitau_loc(:,:,:,:)
       complex(8),allocatable                :: Witau_loc(:,:,:)
       real(8)                               :: Beta
       integer                               :: Nbp,Nkpt,Norb,Nmats
-      integer                               :: itau,ispin!,iw
+      integer                               :: itau,ispin,iw
       integer                               :: indx,jndx,kndx,lndx,isite
       integer                               :: i,j,k,l,ib1,ib2
-      type(physicalU)                       :: PhysicalUelements
-      logical                               :: rmvDiagram,rmvSigma_X
       real                                  :: start,finish
       !
       !
@@ -333,8 +334,6 @@ contains
       if(.not.Gmats%status) stop "calc_sigmaGWdc: Gmats not properly initialized."
       if(.not.Wmats%status) stop "calc_sigmaGWdc: Wmats not properly initialized."
       if(Smats_dc%Nkpt.ne.0) stop "calc_sigmaGWdc: Smats_dc k dependent attributes are supposed to be unallocated."
-      !
-      rmvSigma_X=.false.
       !
       Norb = Smats_dc%Norb
       Nkpt = Smats_dc%Nkpt
@@ -411,11 +410,9 @@ contains
       call cpu_time(finish)
       write(*,"(A,F)") "     Sigma_Cdc(iw) cpu timing:", finish-start
       !
-      call init_Uelements(Norb,PhysicalUelements)
-      !
       !Sigmax_nm(q) = Sum_kij V_{ni,jm}(q-k)G_ij(k,beta) <=> sigmax(r,r')=-g(r,r',tau=0-)*v(r-r')
       call clear_attributes(Smats_Xdc_)
-      if(rmvSigma_X)then
+      if(.not.DC_remove_self)then
          !
          call cpu_time(start)
          spinloopGWdc_X: do ispin=1,Nspin
@@ -436,8 +433,7 @@ contains
                            !
                            call F2Bindex(Norb,[i,j],[k,l],ib1,ib2)
                            !
-                           rmvDiagram = DC_remove_self .and. (PhysicalUelements%Full_Uaa(ib1,ib2).or.PhysicalUelements%Full_Jph(ib1,ib2))
-                           if(.not.rmvDiagram) Smats_Xdc_%N_s(i,k,ispin) = Smats_Xdc_%N_s(i,k,ispin) + Gitau_loc(j,l,Ntau,ispin)*Wmats%bare_local(ib1,ib2)
+                           Smats_Xdc_%N_s(i,k,ispin) = Smats_Xdc_%N_s(i,k,ispin) + Gitau_loc(j,l,Ntau,ispin)*Wmats%bare_local(ib1,ib2)
                            !
                         enddo
                      enddo
@@ -461,6 +457,56 @@ contains
       deallocate(Gitau_loc)
       !
       call join_SigmaCX(Smats_dc,Smats_Cdc_,Smats_Xdc_)
+      !
+      !preserving the symmetries of the DMFT self-energy
+      if(sym_mode.gt.0)then
+         !
+         if(ExpandImpurity.or.AFMselfcons)then
+            !
+            !symmetrize only site 1 and then expand according to rotations
+            call AllocateFermionicField(Smats_Imp,LocalOrbs(1)%Norb,Nmats,Nsite=1,Beta=Beta)
+            !extract and optionally rotate
+            if(RotateHloc)then
+               call loc2imp(Smats_Imp,Smats_dc,LocalOrbs(1)%Orbs,U=LocalOrbs(1)%Rot)
+            else
+               call loc2imp(Smats_Imp,Smats_dc,LocalOrbs(1)%Orbs)
+            endif
+            !remove accidental off-diagonal stuff
+            do ispin=1,Nspin
+               Smats_Imp%N_s(:,:,ispin) = diag(diagonal(Smats_Imp%N_s(:,:,ispin)))
+               do iw=1,Nmats
+                  Smats_Imp%ws(:,:,iw,ispin) = diag(diagonal(Smats_Imp%ws(:,:,iw,ispin)))
+               enddo
+            enddo
+            !symmetrize with the appropriate set
+            call symmetrize_GW(Smats_Imp,EqvImpndxF(1))
+            !put back the symmetrized local quantity
+            call imp2loc(Smats_dc,Smats_Imp,1,LocalOrbs,ExpandImpurity,AFMselfcons,RotateHloc,name="S_GWdc")
+            call DeallocateFermionicField(Smats_Imp)
+            !
+         else
+            !
+            !symmetrize every site
+            do isite=1,size(LocalOrbs)
+               call AllocateFermionicField(Smats_Imp,LocalOrbs(isite)%Norb,Nmats,Nsite=1,Beta=Beta)
+               !extract and optionally rotate
+               if(RotateHloc)then
+                  call loc2imp(Smats_Imp,Smats_dc,LocalOrbs(isite)%Orbs,U=LocalOrbs(isite)%Rot)
+               else
+                  call loc2imp(Smats_Imp,Smats_dc,LocalOrbs(isite)%Orbs)
+               endif
+               !symmetrize with the appropriate set
+               call symmetrize_GW(Smats_Imp,EqvImpndxF(isite))
+               !put back the symmetrized local quantity
+               call imp2loc(Smats_dc,Smats_Imp,isite,LocalOrbs,ExpandImpurity,AFMselfcons,RotateHloc,name="S_GWdc")
+               call DeallocateFermionicField(Smats_Imp)
+            enddo
+            !
+         endif
+         !
+         if(present(Smats_Cdc).or.present(Smats_Xdc)) write(*,"(A)")"     Warning: Smats_[C,X]dc separately requested are not symmetrized."
+         !
+      endif
       !
       if(present(Smats_Cdc)) call duplicate(Smats_Cdc,Smats_Cdc_)
       if(present(Smats_Xdc)) call duplicate(Smats_Xdc,Smats_Xdc_)

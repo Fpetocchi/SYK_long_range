@@ -8,8 +8,9 @@ python Gaverage.py --field  Sw --pad imp --orbs 1,2,3,4,5 --axis w --itlist ${a}
 python Gaverage.py --field  Ww --pad lat --orbs 1,4 --itlist ${a}..${b} ;
 python Gaverage.py --field  curlyUw --pad imp --orbs 1,4 --itlist ${a}..${b} ;
 python Gaverage.py --field Gkw --itlist 260..281 ;
-python Gaverage.py --field Ekw --pad _Tr --itlist 262..281 ;
-python Gaverage.py --field Wkw --pad _Tr --itlist 261..282 ;
+python Gaverage.py --field Ekw --pad _Trace_NaNa --itlist 261..281 ;
+python Gaverage.py --field Ekw --pad _Loss --itlist 261..268 ;
+python Gaverage.py --field Wkw --pad _Trace_NaNa --itlist 261..282 ;
 ################################################################################
 #3band
 a=99 ; b=149
@@ -61,9 +62,10 @@ done
 ################################################################################
 ################################################################################
 #MaxEnt on E
-./MaxEnt_Kresolved_SLURM.sh -e 0.0005 -w 10001 -W 500 -F E -N 550 -B 110 -m path -s _Trace_NaNa -i 1 -f 351
+./MaxEnt_Kresolved_SLURM.sh -e 0.0005 -w 15000 -W 600 -F E -N 550 -B 110 -m path -s _Trace_NaNa -i 1 -f 351
+./MaxEnt_Kresolved_SLURM.sh -e 0.0010 -w 15000 -W 600 -F E -N 550 -B 110 -m path -s _Loss -i 1 -f 351
 #MaxEnt on W
-./MaxEnt_Kresolved_SLURM.sh -e 0.0500 -w 6001 -W 300 -F W -N 550 -B 110 -m path -s _Trace_NaNa -i 1 -f 351
+./MaxEnt_Kresolved_SLURM.sh -e 0.0600 -w 6001 -W 400 -F W -N 550 -B 110 -m path -s _Trace_NaNa -i 1 -f 351
 #
 #MaxEnt on t2g
 ./MaxEnt_Kresolved_SLURM.sh -e 0.00005 -w 6001 -W 300 -F G -N 550 -B 110 -m path -i 250 -f 351
@@ -120,13 +122,37 @@ set xtics( "G" 0.0, "X" 0.1168, "M" 0.2341, "G" 0.3996, "R" 0.6016, "X" 0.7663, 
 
 set zrange [0:40]
 set pm3d map
-set palette defined ( 0 "blue", 0.2 "white", 2 "red", 30 "black" )
+set palette defined ( 0 "blue", 0.1 "white", 2 "red", 30 "black" );rep
 
-splot 'K_resolved/Akw_Gk_s1.DAT' u 2:3:($4+$5+$6+$7+$8)
+splot 'Akw_Gk_s1.DAT' u 2:3:($4+$5+$6+$7+$8)
 
+#
+#
+#
+#
+#
+#
+#
+################################################################################
+################################################################################
+reset
+ymin=0;ymax=7
+set yrange [ymin:ymax]
+set terminal x11 1 size 1600,800
+set grid
+set arrow from 0.1168,ymin to 0.1168,ymax nohead front lw 0.2 lc rgb 'black'
+set arrow from 0.2341,ymin to 0.2341,ymax nohead front lw 0.2 lc rgb 'black'
+set arrow from 0.3996,ymin to 0.3996,ymax nohead front lw 0.2 lc rgb 'black'
+set arrow from 0.6016,ymin to 0.6016,ymax nohead front lw 0.2 lc rgb 'black'
+set arrow from 0.7663,ymin to 0.7663,ymax nohead front lw 0.2 lc rgb 'black'
+set arrow from 0.8831,ymin to 0.8831,ymax nohead front lw 0.2 lc rgb 'black'
+set xtics( "G" 0.0, "X" 0.1168, "M" 0.2341, "G" 0.3996, "R" 0.6016, "X" 0.7663, "M" 0.8831, "R" 1.0 )
 
+set zrange [0:3]
+set pm3d map
+set palette defined ( 0 "blue", 0.2 "white", 0.5 "red", 5 "black" );rep
 
-
+splot 'Akw_Ek.DAT' u 2:3:4
 
 
 

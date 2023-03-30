@@ -2797,7 +2797,7 @@ contains
    !         + Replace PiImp in PiGW at the indexes contained in orbs
    !         + The only difference between v1 and v2 is the optional SigmaGW_DC
    !---------------------------------------------------------------------------!
-   subroutine Merge_SelfEnergy(SigmaGW,SigmaImp,coeff,LocalOrbs,OffDiag,SigmaGW_DC)
+   subroutine Merge_SelfEnergy(SigmaGW,SigmaImp,SigmaGW_DC,alpha,OffDiag,LocalOrbs)
       !
       use parameters
       use utils_misc
@@ -2805,17 +2805,16 @@ contains
       !
       type(FermionicField),intent(inout)    :: SigmaGW
       type(FermionicField),intent(in)       :: SigmaImp
-      real(8),intent(in)                    :: coeff(2)
+      type(FermionicField),intent(in)       :: SigmaGW_DC
+      real(8),intent(in)                    :: alpha
+      logical,intent(in)                    :: OffDiag
       type(LocalOrbitals),allocatable,intent(in):: LocalOrbs(:)
-      logical,intent(in),optional           :: OffDiag
-      type(FermionicField),intent(in),optional :: SigmaGW_DC
       !
       real(8)                               :: Beta
       integer                               :: iw,ik,isite,iorb,jorb
       integer                               :: ispin,Norb_imp
       integer                               :: i_loc,j_loc
       integer                               :: Nkpt,Norb,Nmats,Nsite,Nimp
-      logical                               :: impDC,OffDiag_
       !
       !
       write(*,"(A)") new_line("A")//new_line("A")//"---- Merge_SelfEnergy"
@@ -2839,34 +2838,25 @@ contains
       if(SigmaImp%Beta.ne.Beta) stop "Merge_SelfEnergy: SigmaImp has different Beta with respect to SigmaGW."
       if(SigmaImp%Npoints.ne.Nmats) stop "Merge_SelfEnergy: SigmaImp has different number of Matsubara points with respect to SigmaGW."
       !
+      if(.not.SigmaGW_DC%status) stop "Merge_SelfEnergy: SigmaGW_DC not properly initialized."
+      if(SigmaGW_DC%Nkpt.ne.0) stop "Merge_SelfEnergy: SigmaGW_DC k dependent attributes are supposed to be unallocated."
+      if(SigmaGW_DC%Norb.ne.Norb) stop "Merge_SelfEnergy: SigmaGW_DC has different orbital dimension with respect to SigmaGW."
+      if(SigmaGW_DC%Beta.ne.Beta) stop "Merge_SelfEnergy: SigmaGW_DC has different Beta with respect to SigmaGW."
+      if(SigmaGW_DC%Npoints.ne.Nmats) stop "Merge_SelfEnergy: SigmaGW_DC has different number of Matsubara points with respect to SigmaGW."
+      !
       Norb_imp=0
       do isite=1,Nimp
          Norb_imp = Norb_imp + LocalOrbs(isite)%Norb
       enddo
       if(Norb_imp.gt.Norb) stop "Merge_SelfEnergy: Number of orbital to be inserted is bigger than the total lattice orbital space."
       !
-      impDC = .true.
-      if(present(SigmaGW_DC))then
-         if(.not.SigmaGW_DC%status) stop "Merge_SelfEnergy: SigmaGW_DC not properly initialized."
-         if(SigmaGW_DC%Nkpt.ne.0) stop "Merge_SelfEnergy: SigmaGW_DC k dependent attributes are supposed to be unallocated."
-         if(SigmaGW_DC%Norb.ne.Norb) stop "Merge_SelfEnergy: SigmaGW_DC has different orbital dimension with respect to SigmaGW."
-         if(SigmaGW_DC%Beta.ne.Beta) stop "Merge_SelfEnergy: SigmaGW_DC has different Beta with respect to SigmaGW."
-         if(SigmaGW_DC%Npoints.ne.Nmats) stop "Merge_SelfEnergy: SigmaGW_DC has different number of Matsubara points with respect to SigmaGW."
-         impDC = .false.
-      endif
-      !
-      OffDiag_=.true.
-      if(present(OffDiag)) OffDiag_=OffDiag
-      !
-      !Fill the local attributes so as to fully replace the local GW contibution
-      call FermionicKsum(SigmaGW)
-      !
       !all sites if(expand.or.AFM) otherwise only one site and the orbitals within orbs
       do isite=1,Nimp
          do iorb=1,LocalOrbs(isite)%Norb
             do jorb=1,LocalOrbs(isite)%Norb
                !
-               if((.not.OffDiag_).and.(iorb.ne.jorb))cycle
+               !this refers to the components different than (aa)
+               if((.not.OffDiag).and.(iorb.ne.jorb))cycle
                !
                !SigmaGW, SigmaImp and SigmaGW_DC have the same arrangements
                i_loc = LocalOrbs(isite)%Orbs(iorb)
@@ -2879,15 +2869,9 @@ contains
                   do ik=1,Nkpt
                      do ispin=1,Nspin
                         !
-                        if(impDC)then
-                           SigmaGW%wks(i_loc,j_loc,iw,ik,ispin) = SigmaGW%wks(i_loc,j_loc,iw,ik,ispin)                 &
-                                                                - coeff(1)*SigmaGW%ws(i_loc,j_loc,iw,ispin)            &
-                                                                + coeff(1)*(SigmaImp%ws(i_loc,j_loc,iw,ispin)-coeff(2)*SigmaImp%N_s(i_loc,j_loc,ispin))
-                        else
-                           SigmaGW%wks(i_loc,j_loc,iw,ik,ispin) = SigmaGW%wks(i_loc,j_loc,iw,ik,ispin)                 &
-                                                                - coeff(1)*SigmaGW_DC%ws(i_loc,j_loc,iw,ispin)         &
-                                                                + coeff(1)*(SigmaImp%ws(i_loc,j_loc,iw,ispin)-coeff(2)*SigmaImp%N_s(i_loc,j_loc,ispin))
-                        endif
+                        SigmaGW%wks(i_loc,j_loc,iw,ik,ispin) = SigmaGW%wks(i_loc,j_loc,iw,ik,ispin)        &
+                                                             - alpha*SigmaGW_DC%ws(i_loc,j_loc,iw,ispin)   & !DC computed outside (depends on the difference between intermediate and correlated spces)
+                                                             + alpha*(SigmaImp%ws(i_loc,j_loc,iw,ispin) - SigmaImp%N_s(i_loc,j_loc,ispin)) !DMFT self-energy without the Hartree term
                         !
                      enddo
                   enddo
@@ -2904,7 +2888,7 @@ contains
       !
    end subroutine Merge_SelfEnergy
    !
-   subroutine Merge_Polarization(PiGW,PiImp,coeff,LocalOrbs,OffDiag,PiGG_DC)
+   subroutine Merge_Polarization(PiGW,PiImp,PiGG_DC,alpha,OffDiag,LocalOrbs)
       !
       use parameters
       use utils_misc
@@ -2912,10 +2896,10 @@ contains
       !
       type(BosonicField),intent(inout)      :: PiGW
       type(BosonicField),intent(in)         :: PiImp
-      real(8),intent(in)                    :: coeff
+      type(BosonicField),intent(in)         :: PiGG_DC
+      real(8),intent(in)                    :: alpha
+      logical,intent(in)                    :: OffDiag
       type(LocalOrbitals),allocatable,intent(in):: LocalOrbs(:)
-      logical,intent(in),optional            :: OffDiag
-      type(BosonicField),intent(in),optional :: PiGG_DC
       !
       real(8)                               :: Beta
       integer                               :: iw,ik,isite
@@ -2923,7 +2907,6 @@ contains
       integer                               :: Norb_imp,ib_loc,jb_loc
       integer                               :: i_loc,j_loc,k_loc,l_loc
       integer                               :: Nkpt,Norb,Nmats,Nsite,Nimp
-      logical                               :: impDC,OffDiag_
       !
       !
       write(*,"(A)") new_line("A")//new_line("A")//"---- Merge_Polarization"
@@ -2946,27 +2929,17 @@ contains
       if(PiImp%Beta.ne.Beta) stop "Merge_Polarization: PiImp has different Beta with respect to PiGW."
       if(PiImp%Npoints.ne.Nmats) stop "Merge_Polarization: PiImp has different number of Matsubara points with respect to PiGW."
       !
+      if(.not.PiGG_DC%status) stop "Merge_Polarization: PiGG_DC not properly initialized."
+      if(PiGG_DC%Nkpt.ne.0) stop "Merge_Polarization: PiGG_DC k dependent attributes are supposed to be unallocated."
+      if(PiGG_DC%Nbp.ne.PiGW%Nbp) stop "Merge_Polarization: PiGG_DC has different orbital dimension with respect to PiGG."
+      if(PiGG_DC%Beta.ne.Beta) stop "Merge_Polarization: PiGG_DC has different Beta with respect to PiGG."
+      if(PiGG_DC%Npoints.ne.Nmats) stop "Merge_Polarization: PiGG_DC has different number of Matsubara points with respect to PiGG."
+      !
       Norb_imp=0
       do isite=1,Nimp
          Norb_imp = Norb_imp + LocalOrbs(isite)%Norb
       enddo
       if(Norb_imp.gt.Norb) stop "Merge_Polarization: Number of orbital to be inserted is bigger than the total lattice orbital space."
-      !
-      impDC = .true.
-      if(present(PiGG_DC))then
-         if(.not.PiGG_DC%status) stop "Merge_Polarization: PiGG_DC not properly initialized."
-         if(PiGG_DC%Nkpt.ne.0) stop "Merge_Polarization: PiGG_DC k dependent attributes are supposed to be unallocated."
-         if(PiGG_DC%Nbp.ne.PiGW%Nbp) stop "Merge_Polarization: PiGG_DC has different orbital dimension with respect to PiGG."
-         if(PiGG_DC%Beta.ne.Beta) stop "Merge_Polarization: PiGG_DC has different Beta with respect to PiGG."
-         if(PiGG_DC%Npoints.ne.Nmats) stop "Merge_Polarization: PiGG_DC has different number of Matsubara points with respect to PiGG."
-         impDC = .false.
-      endif
-      !
-      OffDiag_=.false. ! this refers to the components different than (aa)(bb)
-      if(present(OffDiag)) OffDiag_=OffDiag
-      !
-      !Fill the local attributes so as to fully replace the local GW contibution
-      call BosonicKsum(PiGW)
       !
       !all sites if(expand) otherwise only one site and the orbitals within orbs
       do isite=1,Nimp
@@ -2984,8 +2957,8 @@ contains
                      !
                      call F2Bindex(Norb,[i_loc,j_loc],[k_loc,l_loc],ib_loc,jb_loc)
                      !
-                     if((.not.OffDiag_).and.(.not.((i_loc.eq.j_loc).and.(k_loc.eq.l_loc))))cycle
-                     !if(.not.((i_loc.eq.k_loc).and.(l_loc.eq.j_loc)))cycle
+                     !this refers to the components different than (aa)(bb)
+                     if((.not.OffDiag).and.(.not.((i_loc.eq.j_loc).and.(k_loc.eq.l_loc))))cycle
                      !
                      !$OMP PARALLEL DEFAULT(SHARED),&
                      !$OMP PRIVATE(iw,ik)
@@ -2993,15 +2966,9 @@ contains
                      do iw=1,Nmats
                         do ik=1,Nkpt
                            !
-                           if(impDC)then
-                              PiGW%screened(ib_loc,jb_loc,iw,ik) = PiGW%screened(ib_loc,jb_loc,iw,ik)                &
-                                                                 - coeff*PiGW%screened_local(ib_loc,jb_loc,iw)       &
-                                                                 + coeff*PiImp%screened_local(ib_loc,jb_loc,iw)
-                           else
-                              PiGW%screened(ib_loc,jb_loc,iw,ik) = PiGW%screened(ib_loc,jb_loc,iw,ik)                &
-                                                                 - coeff*PiGG_DC%screened_local(ib_loc,jb_loc,iw)    &
-                                                                 + coeff*PiImp%screened_local(ib_loc,jb_loc,iw)
-                           endif
+                           PiGW%screened(ib_loc,jb_loc,iw,ik) = PiGW%screened(ib_loc,jb_loc,iw,ik)                &
+                                                              - alpha*PiGG_DC%screened_local(ib_loc,jb_loc,iw)    &
+                                                              + alpha*PiImp%screened_local(ib_loc,jb_loc,iw)
                            !
                         enddo
                      enddo

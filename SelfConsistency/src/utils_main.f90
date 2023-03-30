@@ -357,8 +357,6 @@ contains
       !
       MaxEnt_K = reg(ItFolder)//"K_resolved/"
       !
-      write(*,"(A)") "     HartreeFact: "//str(HartreeFact,2)
-      !
       !Save changes to the inputfile
       call save_InputFile("input.in")
       !
@@ -1509,14 +1507,14 @@ contains
             !
             if(.not.S_DMFT%status) stop "join_SigmaFull: S_DMFT not properly initialized."
             !
-            !Put together all the terms
+            !Put together all the terms. In this case S_DMFT%N_s contains the chosen DC
+            S_Full%N_s = S_DMFT%N_s
             do ispin=1,Nspin
                do ik=1,S_Full%Nkpt
                   do iw=1,S_Full%Npoints
                      S_Full%wks(:,:,iw,ik,ispin) = S_DMFT%ws(:,:,iw,ispin) - HartreeFact*S_DMFT%N_s(:,:,int(Nspin/ispin))
                   enddo
                enddo
-               S_Full%N_s(:,:,ispin) = HartreeFact*S_DMFT%N_s(:,:,int(Nspin/ispin))
                if(paramagnet)then
                   S_Full%N_s(:,:,Nspin) = S_Full%N_s(:,:,1)
                   S_Full%wks(:,:,:,:,Nspin) = S_Full%wks(:,:,:,:,1)
