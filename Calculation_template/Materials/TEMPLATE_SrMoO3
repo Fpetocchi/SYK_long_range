@@ -1,16 +1,15 @@
 #5band
-a=258 ; b=280
-cp /home/petocchif/1_GW_EDMFT/GenericMaterial/Calculation_template/MaxEnt/Gaverage.py .
-python Gaverage.py --field Obs --itlist ${a}..${b} ;
-python Gaverage.py --field  Gw --pad lat --orbs 1,2,3,4,5 --itlist ${a}..${b} ;
-python Gaverage.py --field  Gw --pad qmc_Mo --orbs 1,2,3,4,5 --itlist ${a}..${b} ;
-python Gaverage.py --field  Sw --pad imp --orbs 1,2,3,4,5 --axis w --itlist ${a}..${b} ;
-python Gaverage.py --field  Ww --pad lat --orbs 1,4 --itlist ${a}..${b} ;
-python Gaverage.py --field  curlyUw --pad imp --orbs 1,4 --itlist ${a}..${b} ;
-python Gaverage.py --field Gkw --itlist 260..281 ;
-python Gaverage.py --field Ekw --pad _Trace_NaNa --itlist 261..281 ;
-python Gaverage.py --field Ekw --pad _Loss --itlist 261..268 ;
-python Gaverage.py --field Wkw --pad _Trace_NaNa --itlist 261..282 ;
+#a=258 ; b=280
+#cp /home/petocchif/1_GW_EDMFT/GenericMaterial/Calculation_template/MaxEnt/Gaverage.py .
+itlist_refined="260,261,263,264,272,277,279,282,283,284,286,287,291"
+python Gaverage.py --field Obs --itlist ${itlist_refined} ;
+python Gaverage.py --field  Gw --pad lat --orbs 1,2,3,4,5 --itlist ${itlist_refined} ;
+python Gaverage.py --field  Gw --pad qmc_Mo --orbs 1,2,3,4,5 --itlist ${itlist_refined} ;
+python Gaverage.py --field  Sw --pad imp --orbs 1,2,3,4,5 --axis w --itlist ${itlist_refined} ;
+python Gaverage.py --field  Ww --pad lat --orbs 1,4 --itlist ${itlist_refined} ;
+python Gaverage.py --field  curlyUw --pad imp --orbs 1,4 --itlist ${itlist_refined} ;
+python Gaverage.py --field Gkw --itlist 261,263,264,272,277,279,282,283,284,286,287,291 ;
+python Gaverage.py --field Ekw --pad _Trace_NaNa --itlist 261,263,264,272,277,279,282,283,284,286,287,291 ;
 ################################################################################
 #3band
 a=99 ; b=149
@@ -32,21 +31,21 @@ python Gaverage.py --field Gkw --itlist ${a}..${b} ;
 GENMAT=/home/petocchif/1_GW_EDMFT/GenericMaterial/Calculation_template
 declare -a dirindex=( "avg" )
 for it in "${dirindex[@]}" ; do
-#for it in `seq  180 1 189` ; do
+#for it in `seq  282 1 291` ; do
    if [ -d "$it" ]; then
    #
    cd $it/Convergence
    cp ${GENMAT}/${MATERIAL}/MaxEnt/MaxEnt_SLURM.sh .
    chmod 700 MaxEnt_SLURM.sh
    #
-   ./MaxEnt_SLURM.sh -e 0.0001 -w 8001 -W  300 -f G -o 1 -i lat -p ${GENMAT} -q new
-   ./MaxEnt_SLURM.sh -e 0.0001 -w 8001 -W  300 -f G -o 4 -i lat -p ${GENMAT} -q new
+   ./MaxEnt_SLURM.sh -e 0.0002 -w 8001 -W  300 -f G -o 1 -i lat -p ${GENMAT} -q new
+   ./MaxEnt_SLURM.sh -e 0.0002 -w 8001 -W  300 -f G -o 4 -i lat -p ${GENMAT} -q new
    #
    ./MaxEnt_SLURM.sh -e 0.0001 -w 8001 -W  300 -f G -o 1 -i qmc_Mo -p ${GENMAT} -q new
    ./MaxEnt_SLURM.sh -e 0.0001 -w 8001 -W  300 -f G -o 4 -i qmc_Mo -p ${GENMAT} -q new
    #
- #  ./MaxEnt_SLURM.sh -e 0.01    -w 4000 -W  300 -f W -o 1 -i lat -p ${GENMAT} -q new
- #  ./MaxEnt_SLURM.sh -e 0.01    -w 4000 -W  300 -f W -o 4 -i lat -p ${GENMAT} -q new
+   ./MaxEnt_SLURM.sh -e 0.01    -w 4000 -W  300 -f W -o 1 -i lat -p ${GENMAT} -q new
+   ./MaxEnt_SLURM.sh -e 0.01    -w 4000 -W  300 -f W -o 4 -i lat -p ${GENMAT} -q new
    #
    cd ../../
    #
@@ -62,23 +61,22 @@ done
 ################################################################################
 ################################################################################
 #MaxEnt on E
-./MaxEnt_Kresolved_SLURM.sh -e 0.0005 -w 15000 -W 600 -F E -N 550 -B 110 -m path -s _Trace_NaNa -i 1 -f 351
-./MaxEnt_Kresolved_SLURM.sh -e 0.0010 -w 15000 -W 600 -F E -N 550 -B 110 -m path -s _Loss -i 1 -f 351
+./MaxEnt_Kresolved_SLURM.sh -e 0.0002 -w 18000 -W 900 -F E -N 550 -B 110 -m path -s _Trace_NaNa -i 1 -f 351
 #MaxEnt on W
 ./MaxEnt_Kresolved_SLURM.sh -e 0.0600 -w 6001 -W 400 -F W -N 550 -B 110 -m path -s _Trace_NaNa -i 1 -f 351
 #
 #MaxEnt on t2g
-./MaxEnt_Kresolved_SLURM.sh -e 0.00005 -w 6001 -W 300 -F G -N 550 -B 110 -m path -i 250 -f 351
+./MaxEnt_Kresolved_SLURM.sh -e 0.00005 -w 6001 -W 300 -F G -N 550 -B 110 -m path -i 109 -f 150
 #MaxEnt on eg
-./MaxEnt_Kresolved_SLURM.sh -e 0.0005 -w 6001 -W 300 -F G -N 550 -B 110 -m path -i 251 -f 351
+./MaxEnt_Kresolved_SLURM.sh -e 0.0005 -w 6001 -W 300 -F G -N 550 -B 110 -m path -i 248 -f 351
 #
 #Missing K-points
 a=1
 b=351
 for kp in `seq ${a} ${b}`; do
-   if [ ! -f MaxEnt_Gk_path_s1/Gk_t_k${kp}.DAT_dos.dat ]; then
+   if [ ! -f MaxEnt_Ek_path/Ek_w_k${kp}_Trace_NaNa.DAT_dos.dat ]; then
        echo $kp absent
-       ./MaxEnt_Kresolved_SLURM.sh -e 0.0005 -w 6001 -W 300 -F G -N 550 -B 110 -m path -i $kp -f $kp
+       #./MaxEnt_Kresolved_SLURM.sh -e 0.0002 -w 18000 -W 900 -F E -N 550 -B 110 -m path -s _Trace_NaNa -i $kp -f $kp
    fi
 done
 #
@@ -124,7 +122,8 @@ set zrange [0:40]
 set pm3d map
 set palette defined ( 0 "blue", 0.1 "white", 2 "red", 30 "black" );rep
 
-splot 'Akw_Gk_s1.DAT' u 2:3:($4+$5+$6+$7+$8)
+splot 'Akw_Gk_s1.DAT' u 2:3:($4+$5+$6) #+$7+$8)
+rep for [b=3:7] '/flash/petocchif/1_SrMoO3/5band/beta_20/GWinput_beta20/G0W0plots/Eig_Hk_G0W0_s1.DAT' u 2:b:(30) w l lw 3 lc rgb 'black' t ''
 
 #
 #

@@ -286,7 +286,6 @@ contains
       allocate(Gitau(Norb,Norb,Ntau_,Nkpt,Nspin));Gitau=czero
       do ispin=1,Nspin
          call Fmats2itau_mat(Beta,Gmats%wks(:,:,:,:,ispin),Gitau(:,:,:,:,ispin),asympt_corr=.true.,tau_uniform=tau_uniform)
-        !if(.not.Gtau_K) call Fmats2itau_mat(Beta,Gmats%wks(:,:,:,:,ispin),Gitau(:,:,:,:,ispin),asympt_corr=.true.,tau_uniform=tau_uniform,nkpt3=Lttc%Nkpt3,kpt=Lttc%kpt)
          if(paramagnet)then
             Gitau(:,:,:,:,Nspin) = Gitau(:,:,:,:,1)
             exit

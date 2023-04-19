@@ -36,6 +36,7 @@ module self_energy
    !subroutines
    public :: calc_sigmaGW
    public :: calc_sigmaGWdc
+   public :: calc_sigmaGWdc_GlocWloc
    public :: read_Sigma_spex
    public :: calc_VH
    public :: print_G0W0_dispersion
@@ -293,7 +294,266 @@ contains
    !---------------------------------------------------------------------------!
    !PURPOSE: Compute the two local GW self-energy components as Gloc*Wloc.
    !---------------------------------------------------------------------------!
-   subroutine calc_sigmaGWdc(Smats_dc,Gmats,Wmats,Smats_Cdc,Smats_Xdc)
+   subroutine calc_sigmaGWdc(Smats_dc,Gmats,Wmats,Smats)
+      !
+      use parameters
+      use linalg
+      use utils_misc
+      use utils_fields
+      use crystal
+      use fourier_transforms
+      use input_vars, only : Ntau, tau_uniform, paramagnet, DC_remove_self
+      use input_vars, only : RotateHloc, ExpandImpurity, AFMselfcons
+      use input_vars, only : LocalOrbs, EqvImpndxF, sym_mode
+      implicit none
+      !
+      type(FermionicField),intent(inout)    :: Smats_dc
+      type(FermionicField),intent(in)       :: Gmats
+      type(BosonicField),intent(in)         :: Wmats
+      type(FermionicField),intent(in)       :: Smats
+      !
+      type(FermionicField)                  :: Smats_Cdc_
+      type(FermionicField)                  :: Smats_Xdc_
+      type(FermionicField)                  :: Smats_Imp
+      complex(8),allocatable                :: Sitau_loc(:,:,:)
+      complex(8),allocatable                :: Gitau_loc(:,:,:,:)
+      complex(8),allocatable                :: Witau_loc(:,:,:)
+      real(8)                               :: Beta
+      integer                               :: Nbp,Nkpt,Norb,Nmats
+      integer                               :: itau,ispin,iw
+      integer                               :: indx,kndx,isite
+      integer                               :: i,j,k,l,ib1,ib2
+      integer                               :: j_found,l_found
+      real                                  :: start,finish
+      !
+      !
+      if(verbose)write(*,"(A)") "---- calc_sigmaGWdc"
+      !
+      !
+      ! Check on the input Fields
+      if(.not.Smats_dc%status) stop "calc_sigmaGWdc: Smats_dc not properly initialized."
+      if(.not.Gmats%status) stop "calc_sigmaGWdc: Gmats not properly initialized."
+      if(.not.Wmats%status) stop "calc_sigmaGWdc: Wmats not properly initialized."
+      if(.not.Smats%status) stop "calc_sigmaGWdc: Smats not properly initialized."
+      if(Smats_dc%Nkpt.ne.0) stop "calc_sigmaGWdc: Smats_dc k dependent attributes are supposed to be unallocated."
+      !
+      Norb = Smats_dc%Norb
+      Nkpt = Smats_dc%Nkpt
+      Beta = Smats_dc%Beta
+      Nmats = Smats_dc%Npoints
+      Nbp = Norb**2
+      !
+      if(all([Gmats%Norb-Norb,Wmats%Nbp-Nbp,Smats%Norb-Norb].ne.[0,0,0])) stop "calc_sigmaGWdc: Either Gmats, Wmats or Smats have different orbital dimension with respect to Smats_dc."
+      if(all([Gmats%Beta-Beta,Wmats%Beta-Beta,Smats%Beta-Beta].ne.[0d0,0d0,0d0])) stop "calc_sigmaGWdc: Either Gmats, Wmats or Smats have different Beta with respect to Smats_dc."
+      if(all([Gmats%Npoints-Nmats,Wmats%Npoints-Nmats,Smats%Npoints-Nmats].ne.[0,0,0])) stop "calc_sigmaGWdc: Either Gmats or Wmats have different number of Matsubara points with respect to Smats_dc."
+      !
+      call AllocateFermionicField(Smats_Cdc_,Norb,Nmats,Nsite=Smats_dc%Nsite,Beta=Beta)
+      call AllocateFermionicField(Smats_Xdc_,Norb,0,Nsite=Smats_dc%Nsite,Beta=Beta)
+      !
+      ! Compute Glat(tau) - FT all components
+      call cpu_time(start)
+      allocate(Gitau_loc(Norb,Norb,Ntau,Nspin));Gitau_loc=czero
+      do ispin=1,Nspin
+         call Fmats2itau_mat(Beta,Gmats%ws(:,:,:,ispin),Gitau_loc(:,:,:,ispin),asympt_corr=.true.,tau_uniform=tau_uniform)
+      enddo
+      call cpu_time(finish)
+      write(*,"(A,F)") "     Glat(iw), --> Glat(tau) cpu timing:", finish-start
+      !
+      ! Compute Wlat(tau)
+      call cpu_time(start)
+      allocate(Witau_loc(Nbp,Nbp,Ntau));Witau_loc=czero
+      call Bmats2itau(Beta,Wmats%screened_local,Witau_loc,asympt_corr=.true.,tau_uniform=tau_uniform,Umats_bare=Wmats%bare_local)
+      call cpu_time(finish)
+      write(*,"(A,F)") "     Wlat(iw) --> Wlat(tau) cpu timing:", finish-start
+      !
+      !Sigma_{m,n}(q,tau) = -Sum_{k,mp,np} W_{(m,mp);(n,np)}(q-k;tau)G_{mp,np}(k,tau)
+      j_found = 0
+      l_found = 0
+      call cpu_time(start)
+      call clear_attributes(Smats_Cdc_)
+      allocate(Sitau_loc(Norb,Norb,Ntau))
+      spinloopGWdc_C: do ispin=1,Nspin
+         Sitau_loc=czero
+         !
+         do j=1,Norb
+            !
+            !look for j index in the correlated space
+            j_loopGWdc_C: do isite=1,size(LocalOrbs)
+               if(any(LocalOrbs(isite)%Orbs.eq.j))then
+                  j_found = isite
+                  exit j_loopGWdc_C
+               endif
+            enddo j_loopGWdc_C
+            !
+            do l=1,Norb
+               !
+               !look for l index in the correlated space
+               l_loopGWdc_C: do isite=1,size(LocalOrbs)
+                  if(any(LocalOrbs(isite)%Orbs.eq.l))then
+                     l_found = isite
+                     exit l_loopGWdc_C
+                  endif
+               enddo l_loopGWdc_C
+               !
+               !add the self-energy term only if its outside or between different correlated spaces
+               if(j_found.ne.l_found)then
+                  !
+                  !the indexes of the outer self-energy are only those of the correlated space
+                  do itau=1,Ntau
+                     do indx=1,LocalOrbs(isite)%Norb
+                        do kndx=1,LocalOrbs(isite)%Norb
+                           !
+                           i = LocalOrbs(isite)%Orbs(indx)
+                           k = LocalOrbs(isite)%Orbs(kndx)
+                           !
+                           call F2Bindex(Norb,[i,j],[k,l],ib1,ib2)
+                           !
+                           Sitau_loc(i,k,itau) = Sitau_loc(i,k,itau) - Gitau_loc(j,l,itau,ispin)*Witau_loc(ib1,ib2,itau)
+                           !
+                        enddo
+                     enddo
+                  enddo
+                  !
+               endif
+               !
+            enddo
+         enddo
+         !
+         call Fitau2mats_mat(Beta,Sitau_loc,Smats_Cdc_%ws(:,:,:,ispin),tau_uniform=tau_uniform)
+         !
+         if(paramagnet)then
+            Smats_Cdc_%ws(:,:,:,Nspin) = Smats_Cdc_%ws(:,:,:,1)
+            exit spinloopGWdc_C
+         endif
+         !
+      enddo spinloopGWdc_C
+      deallocate(Witau_loc,Sitau_loc)
+      call cpu_time(finish)
+      write(*,"(A,F)") "     Sigma_Cdc(iw) cpu timing:", finish-start
+      !
+      !Sigmax_nm(q) = Sum_kij V_{ni,jm}(q-k)G_ij(k,beta) <=> sigmax(r,r')=-g(r,r',tau=0-)*v(r-r')
+      call clear_attributes(Smats_Xdc_)
+      if(.not.DC_remove_self)then
+         !
+         j_found = 0
+         l_found = 0
+         call cpu_time(start)
+         spinloopGWdc_X: do ispin=1,Nspin
+            !
+            do j=1,Norb
+               !
+               !look for j index in the correlated space
+               j_loopGWdc_X: do isite=1,size(LocalOrbs)
+                  if(any(LocalOrbs(isite)%Orbs.eq.j))then
+                     j_found = isite
+                     exit j_loopGWdc_X
+                  endif
+               enddo j_loopGWdc_X
+               !
+               do l=1,Norb
+                  !
+                  !look for l index in the correlated space
+                  l_loopGWdc_X: do isite=1,size(LocalOrbs)
+                     if(any(LocalOrbs(isite)%Orbs.eq.l))then
+                        l_found = isite
+                        exit l_loopGWdc_X
+                     endif
+                  enddo l_loopGWdc_X
+                  !
+                  !add the self-energy term only if its outside or between different correlated spaces
+                  if(j_found.ne.l_found)then
+                     !
+                     !the indexes of the outer self-energy are only those of the correlated space
+                     do indx=1,LocalOrbs(isite)%Norb
+                        do kndx=1,LocalOrbs(isite)%Norb
+                           !
+                           i = LocalOrbs(isite)%Orbs(indx)
+                           k = LocalOrbs(isite)%Orbs(kndx)
+                           !
+                           call F2Bindex(Norb,[i,j],[k,l],ib1,ib2)
+                           !
+                           Smats_Xdc_%N_s(i,k,ispin) = Smats_Xdc_%N_s(i,k,ispin) + Gitau_loc(j,l,Ntau,ispin)*Wmats%bare_local(ib1,ib2)
+                           !
+                        enddo
+                     enddo
+                     !
+                  endif
+                  !
+               enddo
+            enddo
+            !
+            if(paramagnet)then
+               Smats_Xdc_%N_s(:,:,Nspin) = Smats_Xdc_%N_s(:,:,1)
+               exit spinloopGWdc_X
+            endif
+            !
+         enddo spinloopGWdc_X
+         !
+         call cpu_time(finish)
+         write(*,"(A,F)") "     Sigma_Xdc cpu timing:", finish-start
+         !
+      endif
+      deallocate(Gitau_loc)
+      !
+      call join_SigmaCX(Smats_dc,Smats_Cdc_,Smats_Xdc_)
+      !
+      !Eq.36 of PRM 1, 043803 (2017)
+      Smats_dc%ws = Smats%ws - Smats_dc%ws
+      !
+      !preserving the symmetries of the DMFT self-energy
+      if(sym_mode.gt.0)then
+         !
+         if(ExpandImpurity.or.AFMselfcons)then
+            !
+            !symmetrize only site 1 and then expand according to rotations
+            call AllocateFermionicField(Smats_Imp,LocalOrbs(1)%Norb,Nmats,Nsite=1,Beta=Beta)
+            !extract and optionally rotate
+            if(RotateHloc)then
+               call loc2imp(Smats_Imp,Smats_dc,LocalOrbs(1)%Orbs,U=LocalOrbs(1)%Rot)
+            else
+               call loc2imp(Smats_Imp,Smats_dc,LocalOrbs(1)%Orbs)
+            endif
+            !remove accidental off-diagonal stuff
+            do ispin=1,Nspin
+               Smats_Imp%N_s(:,:,ispin) = diag(diagonal(Smats_Imp%N_s(:,:,ispin)))
+               do iw=1,Nmats
+                  Smats_Imp%ws(:,:,iw,ispin) = diag(diagonal(Smats_Imp%ws(:,:,iw,ispin)))
+               enddo
+            enddo
+            !symmetrize with the appropriate set
+            call symmetrize_GW(Smats_Imp,EqvImpndxF(1))
+            !put back the symmetrized local quantity
+            call imp2loc(Smats_dc,Smats_Imp,1,LocalOrbs,ExpandImpurity,AFMselfcons,RotateHloc,name="S_GWdc")
+            call DeallocateFermionicField(Smats_Imp)
+            !
+         else
+            !
+            !symmetrize every site
+            do isite=1,size(LocalOrbs)
+               call AllocateFermionicField(Smats_Imp,LocalOrbs(isite)%Norb,Nmats,Nsite=1,Beta=Beta)
+               !extract and optionally rotate
+               if(RotateHloc)then
+                  call loc2imp(Smats_Imp,Smats_dc,LocalOrbs(isite)%Orbs,U=LocalOrbs(isite)%Rot)
+               else
+                  call loc2imp(Smats_Imp,Smats_dc,LocalOrbs(isite)%Orbs)
+               endif
+               !symmetrize with the appropriate set
+               call symmetrize_GW(Smats_Imp,EqvImpndxF(isite))
+               !put back the symmetrized local quantity
+               call imp2loc(Smats_dc,Smats_Imp,isite,LocalOrbs,ExpandImpurity,AFMselfcons,RotateHloc,name="S_GWdc")
+               call DeallocateFermionicField(Smats_Imp)
+            enddo
+            !
+         endif
+         !
+      endif
+      !
+      call DeallocateFermionicField(Smats_Cdc_)
+      call DeallocateFermionicField(Smats_Xdc_)
+      !
+   end subroutine calc_sigmaGWdc
+   !
+   subroutine calc_sigmaGWdc_GlocWloc(Smats_dc,Gmats,Wmats,Smats_Cdc,Smats_Xdc)
       !
       use parameters
       use linalg
@@ -326,14 +586,14 @@ contains
       real                                  :: start,finish
       !
       !
-      if(verbose)write(*,"(A)") "---- calc_sigmaGWdc"
+      if(verbose)write(*,"(A)") "---- calc_sigmaGWdc_GlocWloc"
       !
       !
       ! Check on the input Fields
-      if(.not.Smats_dc%status) stop "calc_sigmaGWdc: Smats_dc not properly initialized."
-      if(.not.Gmats%status) stop "calc_sigmaGWdc: Gmats not properly initialized."
-      if(.not.Wmats%status) stop "calc_sigmaGWdc: Wmats not properly initialized."
-      if(Smats_dc%Nkpt.ne.0) stop "calc_sigmaGWdc: Smats_dc k dependent attributes are supposed to be unallocated."
+      if(.not.Smats_dc%status) stop "calc_sigmaGWdc_GlocWloc: Smats_dc not properly initialized."
+      if(.not.Gmats%status) stop "calc_sigmaGWdc_GlocWloc: Gmats not properly initialized."
+      if(.not.Wmats%status) stop "calc_sigmaGWdc_GlocWloc: Wmats not properly initialized."
+      if(Smats_dc%Nkpt.ne.0) stop "calc_sigmaGWdc_GlocWloc: Smats_dc k dependent attributes are supposed to be unallocated."
       !
       Norb = Smats_dc%Norb
       Nkpt = Smats_dc%Nkpt
@@ -341,9 +601,9 @@ contains
       Nmats = Smats_dc%Npoints
       Nbp = Norb**2
       !
-      if(all([Gmats%Norb-Norb,Wmats%Nbp-Nbp].ne.[0,0])) stop "calc_sigmaGWdc: Either Gmats or Wmats have different orbital dimension with respect to Smats_dc."
-      if(all([Gmats%Beta-Beta,Wmats%Beta-Beta].ne.[0d0,0d0])) stop "calc_sigmaGWdc: Either Gmats or Wmats have different Beta with respect to Smats_dc."
-      if(all([Gmats%Npoints-Nmats,Wmats%Npoints-Nmats].ne.[0,0])) stop "calc_sigmaGWdc: Either Gmats or Wmats have different number of Matsubara points with respect to Smats_dc."
+      if(all([Gmats%Norb-Norb,Wmats%Nbp-Nbp].ne.[0,0])) stop "calc_sigmaGWdc_GlocWloc: Either Gmats or Wmats have different orbital dimension with respect to Smats_dc."
+      if(all([Gmats%Beta-Beta,Wmats%Beta-Beta].ne.[0d0,0d0])) stop "calc_sigmaGWdc_GlocWloc: Either Gmats or Wmats have different Beta with respect to Smats_dc."
+      if(all([Gmats%Npoints-Nmats,Wmats%Npoints-Nmats].ne.[0,0])) stop "calc_sigmaGWdc_GlocWloc: Either Gmats or Wmats have different number of Matsubara points with respect to Smats_dc."
       !
       call AllocateFermionicField(Smats_Cdc_,Norb,Nmats,Nsite=Smats_dc%Nsite,Beta=Beta)
       call AllocateFermionicField(Smats_Xdc_,Norb,0,Nsite=Smats_dc%Nsite,Beta=Beta)
@@ -367,8 +627,9 @@ contains
       !Sigma_{m,n}(q,tau) = -Sum_{k,mp,np} W_{(m,mp);(n,np)}(q-k;tau)G_{mp,np}(k,tau)
       call cpu_time(start)
       call clear_attributes(Smats_Cdc_)
-      allocate(Sitau_loc(Norb,Norb,Ntau));Sitau_loc=czero
+      allocate(Sitau_loc(Norb,Norb,Ntau))
       spinloopGWdc_C: do ispin=1,Nspin
+         Sitau_loc=czero
          do isite=1,size(LocalOrbs)
             !
             !$OMP PARALLEL DEFAULT(SHARED),&
@@ -514,7 +775,7 @@ contains
       call DeallocateFermionicField(Smats_Cdc_)
       call DeallocateFermionicField(Smats_Xdc_)
       !
-   end subroutine calc_sigmaGWdc
+   end subroutine calc_sigmaGWdc_GlocWloc
 
 
    !---------------------------------------------------------------------------!

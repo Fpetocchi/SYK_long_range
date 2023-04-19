@@ -162,6 +162,7 @@ module module_container
    use self_energy, only:                    &
    calc_sigmaGW                             ,&
    calc_sigmaGWdc                           ,&
+   calc_sigmaGWdc_GlocWloc                  ,&
    read_Sigma_spex                          ,&
    calc_VH                                  ,&
    print_G0W0_dispersion,Uwan_stored

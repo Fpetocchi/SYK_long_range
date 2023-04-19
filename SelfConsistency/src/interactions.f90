@@ -79,7 +79,7 @@ contains
       use utils_fields
       use file_io
       use crystal
-      use input_vars, only : HandleGammaPoint
+      use input_vars, only : HandleGammaPoint, alphaGamma
       implicit none
       !
       type(BosonicField),intent(inout)      :: Wmats
@@ -205,7 +205,7 @@ contains
             iwU = iw
             if(Ustatic)iwU = 1
             !Wmats%screened(:,:,iw,Umats%iq_gamma) = dreal(matmul(Umats%screened(:,:,iwU,Umats%iq_gamma),epsGamma(:,:,iw)))
-            Wmats%screened(:,:,iw,Umats%iq_gamma) = dreal(matmul(epsGamma(:,:,iw),Umats%screened(:,:,iwU,Umats%iq_gamma)))
+            Wmats%screened(:,:,iw,Umats%iq_gamma) = alphaGamma * dreal(matmul(epsGamma(:,:,iw),Umats%screened(:,:,iwU,Umats%iq_gamma)))
             call check_Symmetry(Wmats%screened(:,:,iw,Umats%iq_gamma),eps,enforce=.true.,hardstop=.false.,name="Wlat_w"//str(iw)//"_q"//str(Umats%iq_gamma),verb=.false.)
          enddo
          if(Emats%status)Emats%screened(:,:,:,Umats%iq_gamma) = epsGamma
@@ -238,7 +238,7 @@ contains
       use utils_fields
       use file_io
       use crystal
-      use input_vars, only : HandleGammaPoint
+      use input_vars, only : HandleGammaPoint, alphaGamma
       implicit none
       !
       type(BosonicField),intent(inout)      :: Wmats
@@ -370,7 +370,7 @@ contains
             iwU = iw
             if(Ustatic)iwU = 1
             !W_q = dreal(matmul(Umats%screened(:,:,iwU,Umats%iq_gamma),epsGamma(:,:,iw)))
-            W_q = dreal(matmul(epsGamma(:,:,iw),Umats%screened(:,:,iwU,Umats%iq_gamma)))
+            W_q = alphaGamma * dreal(matmul(epsGamma(:,:,iw),Umats%screened(:,:,iwU,Umats%iq_gamma)))
             call check_Symmetry(W_q,eps,enforce=.true.,hardstop=.false.,name="Wlat_w"//str(iw)//"_q"//str(Umats%iq_gamma),verb=.false.)
             Wmats%screened_local(:,:,iw) = Wmats%screened_local(:,:,iw) + W_q/Nkpt
          enddo

@@ -455,6 +455,7 @@ contains
       use utils_misc
       use utils_fields
       use file_io
+      use omp_lib
       use linalg, only : tensor_transform
       use crystal, only : fill_ksumkdiff, wannierinterpolation
       implicit none
@@ -468,13 +469,14 @@ contains
       !
       integer                               :: Ngrid,Norb,Nbp
       integer                               :: iorb,jorb,ib1,ib2,a,b,c,d
-      integer                               :: iw,wndx,Nmats
+      integer                               :: iw,wndx,Nmats!,WkDim
       integer                               :: ik1,ik2,iq,Nkpt
       integer                               :: iweig,jweig,iE1,iE2
+      integer                               :: ithread,Nthread
       real(8)                               :: DosWeights
       integer,allocatable                   :: kptsum(:,:),kptdif(:,:)
       real(8),allocatable                   :: wmats(:)
-      complex(8),allocatable                :: Wk(:)
+      complex(8),allocatable                :: Wk(:)!Wk(:,:,:,:,:)!,
       complex(8),allocatable,target         :: Wk_interp(:,:,:,:)
       complex(8),pointer                    :: Wk_used(:,:,:,:)
       type(physicalU)                       :: PhysicalUelements
@@ -528,7 +530,7 @@ contains
       !
       if(calc_Int_dynamic)then
          !
-         allocate(Wee_dyn(Ngrid,Ngrid,wndx));Wee_dyn=czero
+         allocate(Wee_dyn(wndx,Ngrid,Ngrid));Wee_dyn=czero
          !
          call inquireFile(reg(pathOUTPUT)//"Wee_w.DAT",Kdyn_exists,hardstop=.false.,verb=verbose)
          if(Kdyn_exists)then
@@ -567,20 +569,28 @@ contains
          call fill_ksumkdiff(kpt_Model,kptsum,kptdif)
          deallocate(kptsum)
          !
+         Nthread = omp_get_num_threads()
+         !
          if(calc_Int_static) Kel_stat=czero
          if(calc_Int_dynamic) Wee_dyn=czero
          call cpu_time(start)
-         !$OMP PARALLEL DEFAULT(SHARED),&
-         !$OMP PRIVATE(iweig,jweig,iE1,iE2,DosWeights,Wk),&
-         !$OMP PRIVATE(iorb,jorb,ik1,ik2,iq,a,b,c,d,ib1,ib2)
+         !
          allocate(Wk(wndx));Wk=czero
+         !$OMP PARALLEL DEFAULT(SHARED) COPYIN(Wk),&
+         !$OMP PRIVATE(iweig,jweig,iE1,iE2,DosWeights,ithread),&
+         !$OMP PRIVATE(iorb,jorb,ik1,ik2),&
+         !$OMP PRIVATE(iq,a,b,c,d,ib1,ib2,Wk)
          !$OMP DO
          do iweig=1,size(finite_weights_Model,dim=1)
+            !
+            ithread = omp_get_thread_num()
+            print *, "thread", ithread, " / ", Nthread, " iweig: ", iweig
+            !
+            iE1 = finite_weights_Model(iweig,1)
+            iorb = finite_weights_Model(iweig,2)
+            ik1 = finite_weights_Model(iweig,3)
+            !
             do jweig=1,size(finite_weights_Model,dim=1)
-               !
-               iE1 = finite_weights_Model(iweig,1)
-               iorb = finite_weights_Model(iweig,2)
-               ik1 = finite_weights_Model(iweig,3)
                !
                iE2 = finite_weights_Model(jweig,1)
                jorb = finite_weights_Model(jweig,2)
@@ -591,28 +601,45 @@ contains
                !rotation performed only for the requested indexes
                Wk=czero
                do ib1=1,Nbp
-                  do ib2=1,Nbp
+                  !
+                  !Diagonal elements
+                  a = PhysicalUelements%Full_Map(ib1,ib1,1)
+                  b = PhysicalUelements%Full_Map(ib1,ib1,2)
+                  c = PhysicalUelements%Full_Map(ib1,ib1,3)
+                  d = PhysicalUelements%Full_Map(ib1,ib1,4)
+                  !
+                  Wk = Wk + Wk_used(ib1,ib1,:,iq) * conjg(Zk_Model(a,iorb,ik1)) * Zk_Model(b,jorb,ik2)     &
+                                                  * conjg(Zk_Model(c,jorb,ik2)) * Zk_Model(d,iorb,ik1)
+                  !
+                  do ib2=ib1+1,Nbp
                      !
                      a = PhysicalUelements%Full_Map(ib1,ib2,1)
                      b = PhysicalUelements%Full_Map(ib1,ib2,2)
                      c = PhysicalUelements%Full_Map(ib1,ib2,3)
                      d = PhysicalUelements%Full_Map(ib1,ib2,4)
                      !
-                     Wk = Wk + (Wk_used(ib1,ib2,:,iq)*eV2DFTgrid) * conjg(Zk_Model(a,iorb,ik1)) * Zk_Model(b,jorb,ik2)    &
-                                                                  * conjg(Zk_Model(c,jorb,ik2)) * Zk_Model(d,iorb,ik1)
+                     !off-diag elements
+                     Wk = Wk + Wk_used(ib1,ib2,:,iq) * conjg(Zk_Model(a,iorb,ik1)) * Zk_Model(b,jorb,ik2)  &
+                                                     * conjg(Zk_Model(c,jorb,ik2)) * Zk_Model(d,iorb,ik1)  &
+                             + Wk_used(ib2,ib1,:,iq) * conjg(Zk_Model(c,iorb,ik1)) * Zk_Model(d,jorb,ik2)  &
+                                                     * conjg(Zk_Model(a,jorb,ik2)) * Zk_Model(b,iorb,ik1)
                      !
                   enddo
                enddo
                !
                DosWeights = (weights_Model(iE1,iorb,ik1)/DoS_Model(iE1)) * (weights_Model(iE2,jorb,ik2)/DoS_Model(iE2))
                if(calc_Int_static)  Kel_stat(iE1,iE2) = Kel_stat(iE1,iE2) + Wk(1) * DosWeights
-               if(calc_Int_dynamic) Wee_dyn(iE1,iE2,:) = Wee_dyn(iE1,iE2,:) + (Wk-Wk(1)) * DosWeights
+               if(calc_Int_dynamic) Wee_dyn(:,iE1,iE2) = Wee_dyn(:,iE1,iE2) + (Wk(:)-Wk(1)) * DosWeights
                !
             enddo
          enddo
          !$OMP END DO
-         deallocate(Wk)
          !$OMP END PARALLEL
+         !
+         if(calc_Int_static)  Kel_stat = Kel_stat * eV2DFTgrid
+         if(calc_Int_dynamic) Wee_dyn = Wee_dyn * eV2DFTgrid
+         !
+         deallocate(Wk)
          deallocate(kptdif)
          nullify(Wk_used)
          if(allocated(Wk_interp))deallocate(Wk_interp)
@@ -795,7 +822,6 @@ contains
    !---------------------------------------------------------------------------!
    subroutine get_Kel(Kel,Beta,printmode,printKpath)
       !
-      use omp_lib
       use parameters
       use utils_misc
       implicit none
@@ -832,7 +858,7 @@ contains
       write(*,"(A,F10.5)") new_line("A")//"     get_Kel: Model DoS at the Fermi level:",DoS0
       if(Egrid(Efermi_ndx).ne.0d0) stop "get_Kel: the energy grid requires the E=0 point."
       !
-      Nmats = size(Wee_dyn,dim=3)
+      Nmats = size(Wee_dyn,dim=1)
       Ngrid = size(Egrid)
       call assert_shape(Kel,[Ngrid,Ngrid],"get_Kel","Kel")
       !
@@ -877,8 +903,8 @@ contains
                      !linear interpolation of Wee between the two points on the matsubara grid enclosing wm
                      wndx_a = floor(wm/MatsStep) + 1
                      wndx_b = wndx_a + 1
-                     ReW_wm_intp = linear_interp_2y( [wmats(wndx_a),dreal(Wee_dyn(iE1,iE2,wndx_a))] , [wmats(wndx_b),dreal(Wee_dyn(iE1,iE2,wndx_b))] , wm )
-                     ImW_wm_intp = linear_interp_2y( [wmats(wndx_a),dimag(Wee_dyn(iE1,iE2,wndx_a))] , [wmats(wndx_b),dimag(Wee_dyn(iE1,iE2,wndx_b))] , wm )
+                     ReW_wm_intp = linear_interp_2y( [wmats(wndx_a),dreal(Wee_dyn(wndx_a,iE1,iE2))] , [wmats(wndx_b),dreal(Wee_dyn(wndx_b,iE1,iE2))] , wm )
+                     ImW_wm_intp = linear_interp_2y( [wmats(wndx_a),dimag(Wee_dyn(wndx_a,iE1,iE2))] , [wmats(wndx_b),dimag(Wee_dyn(wndx_b,iE1,iE2))] , wm )
                      W_wm_i = dcmplx(ReW_wm_intp,ImW_wm_intp)
                      !
                      !continous frequency correspnding to iy-1
@@ -886,8 +912,8 @@ contains
                      !linear interpolation of Wee between the two points on the matsubara grid enclosing wm
                      wndx_a = floor(wm/MatsStep) + 1
                      wndx_b = wndx_a + 1
-                     ReW_wm_intp = linear_interp_2y( [wmats(wndx_a),dreal(Wee_dyn(iE1,iE2,wndx_a))] , [wmats(wndx_b),dreal(Wee_dyn(iE1,iE2,wndx_b))] , wm )
-                     ImW_wm_intp = linear_interp_2y( [wmats(wndx_a),dimag(Wee_dyn(iE1,iE2,wndx_a))] , [wmats(wndx_b),dimag(Wee_dyn(iE1,iE2,wndx_b))] , wm )
+                     ReW_wm_intp = linear_interp_2y( [wmats(wndx_a),dreal(Wee_dyn(wndx_a,iE1,iE2))] , [wmats(wndx_b),dreal(Wee_dyn(wndx_b,iE1,iE2))] , wm )
+                     ImW_wm_intp = linear_interp_2y( [wmats(wndx_a),dimag(Wee_dyn(wndx_a,iE1,iE2))] , [wmats(wndx_b),dimag(Wee_dyn(wndx_b,iE1,iE2))] , wm )
                      W_wm_j = dcmplx(ReW_wm_intp,ImW_wm_intp)
                      !
                      !integrand for iy and iy-1
@@ -915,8 +941,8 @@ contains
                      !linear interpolation of Wee between the two points on the matsubara grid enclosing wm
                      wndx_a = floor(wm/MatsStep) + 1
                      wndx_b = wndx_a + 1
-                     ReW_wm_intp = linear_interp_2y( [wmats(wndx_a),dreal(Wee_dyn(iE1,iE2,wndx_a))] , [wmats(wndx_b),dreal(Wee_dyn(iE1,iE2,wndx_b))] , wm )
-                     ImW_wm_intp = linear_interp_2y( [wmats(wndx_a),dimag(Wee_dyn(iE1,iE2,wndx_a))] , [wmats(wndx_b),dimag(Wee_dyn(iE1,iE2,wndx_b))] , wm )
+                     ReW_wm_intp = linear_interp_2y( [wmats(wndx_a),dreal(Wee_dyn(wndx_a,iE1,iE2))] , [wmats(wndx_b),dreal(Wee_dyn(wndx_b,iE1,iE2))] , wm )
+                     ImW_wm_intp = linear_interp_2y( [wmats(wndx_a),dimag(Wee_dyn(wndx_a,iE1,iE2))] , [wmats(wndx_b),dimag(Wee_dyn(wndx_b,iE1,iE2))] , wm )
                      W_wm_i = dcmplx(ReW_wm_intp,ImW_wm_intp)
                      !
                      !continous frequency correspnding to iy-1
@@ -924,8 +950,8 @@ contains
                      !linear interpolation of Wee between the two points on the matsubara grid enclosing wm
                      wndx_a = floor(wm/MatsStep) + 1
                      wndx_b = wndx_a + 1
-                     ReW_wm_intp = linear_interp_2y( [wmats(wndx_a),dreal(Wee_dyn(iE1,iE2,wndx_a))] , [wmats(wndx_b),dreal(Wee_dyn(iE1,iE2,wndx_b))] , wm )
-                     ImW_wm_intp = linear_interp_2y( [wmats(wndx_a),dimag(Wee_dyn(iE1,iE2,wndx_a))] , [wmats(wndx_b),dimag(Wee_dyn(iE1,iE2,wndx_b))] , wm )
+                     ReW_wm_intp = linear_interp_2y( [wmats(wndx_a),dreal(Wee_dyn(wndx_a,iE1,iE2))] , [wmats(wndx_b),dreal(Wee_dyn(wndx_b,iE1,iE2))] , wm )
+                     ImW_wm_intp = linear_interp_2y( [wmats(wndx_a),dimag(Wee_dyn(wndx_a,iE1,iE2))] , [wmats(wndx_b),dimag(Wee_dyn(wndx_b,iE1,iE2))] , wm )
                      W_wm_j = dcmplx(ReW_wm_intp,ImW_wm_intp)
                      !
                      !integrand for iy and iy-1
@@ -940,8 +966,8 @@ contains
                enddo
                !
                !adding the tail to w-->inf limit of the interaction
-               Kel_dyn_e_m = Kel_dyn_e_m + Wee_dyn(iE1,iE2,Nmats) * ( pi/2d0 - atan2(wmats(Nmats),(E1-E2)) )
-               Kel_dyn_e_p = Kel_dyn_e_p + Wee_dyn(iE1,iE2,Nmats) * ( pi/2d0 - atan2(wmats(Nmats),(E1+E2)) )
+               Kel_dyn_e_m = Kel_dyn_e_m + Wee_dyn(Nmats,iE1,iE2) * ( pi/2d0 - atan2(wmats(Nmats),(E1-E2)) )
+               Kel_dyn_e_p = Kel_dyn_e_p + Wee_dyn(Nmats,iE1,iE2) * ( pi/2d0 - atan2(wmats(Nmats),(E1+E2)) )
                !
                !adding the fermi function differences
                Kel_dyn_e_m = Kel_dyn_e_m * ( fermidirac(+E1,Beta) - fermidirac(+E2,Beta) )*(4d0/pi)

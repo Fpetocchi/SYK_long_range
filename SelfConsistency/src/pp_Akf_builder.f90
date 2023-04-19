@@ -89,7 +89,6 @@ contains
    !
    subroutine rebuild_G(mode,suffix,pedix,ax)
       !
-      use input_vars, only : Nreal, wrealMax
       use utils_misc
       implicit none
       !
@@ -103,13 +102,12 @@ contains
       integer                               :: Nreal_read,Nreal_old,ik1st
       integer                               :: Nreal_MaxEnt,Nreal_min,Nreal_max
       logical,allocatable                   :: Kmask(:)
-      real(8),allocatable                   :: wreal(:),wreal_read(:),wreal_interp(:)
-      real(8),allocatable                   :: Akw_orb(:,:,:),Akw_orb_interp(:,:,:)
+      real(8),allocatable                   :: wreal(:),wreal_read(:)
+      real(8),allocatable                   :: Akw_orb(:,:,:),Rkw_orb(:,:,:)
       real(8)                               :: dw,fact
       real(8)                               :: kx,ky,Bvec(3),Kvec(3),Blat(3,3)
       character(len=256)                    :: path,suffix_,pedix_,ax_
       logical                               :: ik1st_read
-      logical                               :: wr_interp=.false.
       !
       real(8),allocatable                   :: ImG_read(:,:,:)
       !
@@ -269,6 +267,18 @@ contains
       write(*,"(A)") "     MaxEnt output is Normalized."
       !
       !
+      !Use KK relations to rebuild the Real part - turned off for Fermionic spectra
+      !if(rebuildRealPart)then
+      !   allocate(Rkw_orb(Norb,Nreal,Nkpt));Rkw_orb=0d0
+      !   do iorb=1,Norb
+      !      do iq=1,Nkpt
+      !         call KK_Im2Re(Rkw_orb(iorb,:,iq),Akw_orb(iorb,:,iq),wreal,KKcutoff,BareVal=0d0,symmetric=.false.)
+      !      enddo
+      !      write(*,"(A)") "     KK on orb ["//str(iorb)//"] is done."
+      !   enddo
+      !endif
+      !
+      !
       !Print each K-point separately
       call createDir(reg(MaxEnt_K)//"Akw_Gk_"//reg(mode)//"_s"//str(ispin),verb=verbose)
       do ik=1,Nkpt
@@ -280,6 +290,17 @@ contains
          enddo
          close(unit)
       enddo
+      if(rebuildRealPart)then
+         do ik=1,Nkpt
+            path = reg(MaxEnt_K)//"Rkw_Gk_"//reg(mode)//"_s"//str(ispin)//"/Akw"//reg(suffix_)//"_k"//str(ik)//".DAT"
+            unit = free_unit()
+            open(unit,file=reg(path),form="formatted",status="unknown",position="rewind",action="write")
+            do iw=1,Nreal_MaxEnt
+               write(unit,"(200E20.12)") wreal(iw),(Rkw_orb(iorb,iw,ik),iorb=1,Norb)
+            enddo
+            close(unit)
+         enddo
+      endif
       !
       !
       !Print in gnuplot pm3d map format
@@ -300,6 +321,22 @@ contains
          enddo
          close(unit)
          !
+         if(rebuildRealPart)then
+            path = reg(MaxEnt_K)//"Rkw_Gk"//reg(suffix_)//"_s"//str(ispin)//".DAT"
+            unit = free_unit()
+            open(unit,file=reg(path),form="formatted",status="unknown",position="rewind",action="write")
+            fact=Crystal%Kpathaxis(Crystal%Nkpt_path)
+            if(present(suffix).and.(reg(suffix_).eq."_Hetero"))fact=1d0
+            do ik=1,Nkpt
+               do iw=1,Nreal_MaxEnt
+                  if(abs(wreal(iw)).gt.0.5*KKcutoff)cycle
+                  write(unit,"(1I5,200E20.12)") ik,Crystal%Kpathaxis(ik)/fact,wreal(iw),(Rkw_orb(iorb,iw,ik),iorb=1,Norb)
+               enddo
+               write(unit,*)
+            enddo
+            close(unit)
+         endif
+         !
       elseif(reg(mode).eq."plane")then
          !
          !Print cut at energy FermiCut in the {kx,ky} plane
@@ -318,58 +355,21 @@ contains
          enddo
          close(unit)
          !
-      endif
-      !
-      !
-      !Print interpolate on the user-provided real frequency mesh
-      if(wr_interp.and.(Nreal.ne.Nreal_MaxEnt).and.(reg(mode).eq."path"))then
-         !
-         write(*,"(A)") "     Interpolating on the input real frequency mesh."
-         !
-         allocate(wreal_interp(Nreal));wreal_interp=linspace(-wrealMax,+wrealMax,Nreal)
-         allocate(Akw_orb_interp(Norb,Nreal,Nkpt));Akw_orb_interp=0d0
-         !
-         !$OMP PARALLEL DEFAULT(SHARED),&
-         !$OMP PRIVATE(ik,iorb,iw)
-         !$OMP DO
-         do ik=1,Nkpt
-            do iorb=1,Norb
-               do iw=1,Nreal
-                  !
-                  Akw_orb_interp(iorb,iw,ik) = cubic_interp( wreal, Akw_orb(iorb,:,ik), wreal_interp(iw) )
-                  !
-               enddo
-            enddo
-         enddo
-         !$OMP END DO
-         !$OMP END PARALLEL
-         !
-         !Print each K-point separately
-         do ik=1,Nkpt
-            path = reg(MaxEnt_K)//"Akw_Gk_path_s"//str(ispin)//"/Akw"//reg(suffix_)//"_k"//str(ik)//"_interp.DAT"
+         if(rebuildRealPart)then
+            path = reg(MaxEnt_K)//"rFk_Gk"//reg(suffix_)//"_s"//str(ispin)//"_E"//str(FermiCut,3)//".DAT"
             unit = free_unit()
             open(unit,file=reg(path),form="formatted",status="unknown",position="rewind",action="write")
-            do iw=1,Nreal
-               write(unit,"(200E20.12)") wreal_interp(iw),(Akw_orb_interp(iorb,iw,ik),iorb=1,Norb)
+            do ik=1,Nkpt
+               ikx = int(ik/(Nkpt_Kside+0.001))+1 ; kx = (ikx-1)/dble(Nkpt_Kside-1) - 0.5d0
+               iky = ik - (ikx-1)*Nkpt_Kside      ; ky = (iky-1)/dble(Nkpt_Kside-1) - 0.5d0
+               Kvec = kx*Blat(:,1) + ky*Blat(:,2)
+               Bvec = [kx*Blat(1,1)+Blat(1,2),ky*Blat(2,1)+Blat(2,2),0d0]
+               write(unit,"(3I5,200E20.12)") ik,ikx,iky,Bvec(1),Bvec(2),Kvec(1),Kvec(2),(Rkw_orb(iorb,wndx_cut,ik),iorb=1,Norb)
+               if(iky.eq.Nkpt_Kside)write(unit,*)
             enddo
             close(unit)
-         enddo
+         endif
          !
-         !Print in gnuplot pm3d map format
-         path = reg(MaxEnt_K)//"Akw_Gk"//reg(suffix_)//"_s"//str(ispin)//"_interp.DAT"
-         unit = free_unit()
-         open(unit,file=reg(path),form="formatted",status="unknown",position="rewind",action="write")
-         fact=Crystal%Kpathaxis(Crystal%Nkpt_path)
-         if(present(suffix).and.(reg(suffix_).eq."_Hetero"))fact=1d0
-         do ik=1,Nkpt
-            do iw=1,Nreal
-               write(unit,"(1I5,200E20.12)") ik,Crystal%Kpathaxis(ik)/fact,wreal_interp(iw),(Akw_orb_interp(iorb,iw,ik),iorb=1,Norb)
-            enddo
-            write(unit,*)
-         enddo
-         close(unit)
-         !
-         deallocate(wreal_interp,Akw_orb_interp)
       endif
       deallocate(wreal,Akw_orb)
       !
@@ -390,7 +390,7 @@ contains
       integer                               :: Nreal_min,Nreal_max,Nreal_read,Nreal_old,ik1st
       logical,allocatable                   :: Kmask(:)
       real(8),allocatable                   :: wreal(:),wreal_read(:)
-      real(8),allocatable                   :: Akw_orb(:,:,:)
+      real(8),allocatable                   :: Akw_orb(:,:,:),Rkw_orb(:,:,:)
       real(8)                               :: dw,fact
       real(8)                               :: kx,ky,Bvec(3),Kvec(3),Blat(3,3)
       character(len=256)                    :: path,pedix_
@@ -507,26 +507,12 @@ contains
             dw = abs(wreal_read(10)-wreal_read(9))
             write(*,"(A)") "     MaxEnt output on "//reg(name)//" function is read."
             !
-            !Define a smaller frequency array
-            if(wreal_read(Nreal_read).gt.KKcutoff)then
-               Nreal_min = minloc(abs(wreal_read+KKcutoff),dim=1)
-               Nreal_max = minloc(abs(wreal_read-KKcutoff),dim=1)
-               Nreal = size(wreal_read(Nreal_min:Nreal_max))
-               if(iorb.eq.1)allocate(wreal(Nreal))
-               wreal=wreal_read(Nreal_min:Nreal_max)
-               write(*,"(A,F)") "     Reduced real frequency mesh (old_min): iw_["//str(Nreal_min)//"]=",wreal_read(Nreal_min)
-               write(*,"(A,F)") "     Reduced real frequency mesh (old_max): iw_["//str(Nreal_max)//"]=",wreal_read(Nreal_max)
-               write(*,"(A,F)") "     Reduced real frequency mesh (new_min): iw_["//str(1)//"]=",wreal(1)
-               write(*,"(A,F)") "     Reduced real frequency mesh (new_max): iw_["//str(Nreal)//"]=",wreal(Nreal)
-               write(*,"(A,F)") "     dw(old): "//str(dw)
-               write(*,"(A,F)") "     dw(new): "//str(abs(wreal(2)-wreal(1)))
-            else
-               Nreal_min = 1
-               Nreal_max = Nreal_read
-               Nreal = Nreal_read
-               if(iorb.eq.1)allocate(wreal(Nreal))
-               wreal=wreal_read
-            endif
+            !Smaller frequency array is not defined because itscrews up the normalization
+            Nreal_min = 1
+            Nreal_max = Nreal_read
+            Nreal = Nreal_read
+            if(iorb.eq.1)allocate(wreal(Nreal))
+            wreal=wreal_read
             deallocate(wreal_read)
             !
             !Manipulate MaxEnt output
@@ -540,8 +526,8 @@ contains
                   if((Nreal_max-(iw-1)).lt.Nreal_min)stop "chunking issue."
                enddo
                !
-               !Fix normalization ---> WHY THIS GIVES SHITTY STUFF???
-               !Akw_orb(iorb,:,iq) = Akw_orb(iorb,:,iq) / abs(sum(Akw_orb(iorb,:,iq))*dw)
+               !Fix normalization
+               Akw_orb(iorb,:,iq) = Akw_orb(iorb,:,iq) / abs(sum(Akw_orb(iorb,:,iq))*dw)
                !
             enddo
             !
@@ -616,30 +602,16 @@ contains
          dw = abs(wreal_read(10)-wreal_read(9))
          write(*,"(A)") "     MaxEnt output on "//reg(name)//" function is read."
          !
-         !Define a smaller frequency array
-         if(wreal_read(Nreal_read).gt.KKcutoff)then
-            Nreal_min = minloc(abs(wreal_read+KKcutoff),dim=1)
-            Nreal_max = minloc(abs(wreal_read-KKcutoff),dim=1)
-            Nreal = size(wreal_read(Nreal_min:Nreal_max))
-            allocate(wreal(Nreal));wreal=wreal_read(Nreal_min:Nreal_max)
-            write(*,"(A,F)") "     Reduced real frequency mesh (old_min): iw_["//str(Nreal_min)//"]=",wreal_read(Nreal_min)
-            write(*,"(A,F)") "     Reduced real frequency mesh (old_max): iw_["//str(Nreal_max)//"]=",wreal_read(Nreal_max)
-            write(*,"(A,F)") "     Reduced real frequency mesh (new_min): iw_["//str(1)//"]=",wreal(1)
-            write(*,"(A,F)") "     Reduced real frequency mesh (new_max): iw_["//str(Nreal)//"]=",wreal(Nreal)
-            write(*,"(A,F)") "     dw(old): "//str(dw)
-            write(*,"(A,F)") "     dw(new): "//str(abs(wreal(2)-wreal(1)))
-         else
-            Nreal_min = 1
-            Nreal_max = Nreal_read
-            Nreal = Nreal_read
-            allocate(wreal(Nreal));wreal=wreal_read
-         endif
+         !Smaller frequency array is not defined because itscrews up the normalization
+         Nreal_min = 1
+         Nreal_max = Nreal_read
+         Nreal = Nreal_read
+         allocate(wreal(Nreal));wreal=wreal_read
          deallocate(wreal_read)
          !
          !Manipulate MaxEnt output
          allocate(Akw_orb(Norb,Nreal,Nkpt));Akw_orb=0d0
-         !$OMP PARALLEL DEFAULT(NONE),&
-         !$OMP SHARED(Nkpt,Crystal,Norb,wreal,Nreal,Nreal_max,Nreal_min,dw,KKcutoff,Akw_orb,ImW_read),&
+         !$OMP PARALLEL DEFAULT(SHARED),&
          !$OMP PRIVATE(iq,iorb,iw)
          !$OMP DO
          do iq=1,Nkpt
@@ -651,8 +623,8 @@ contains
                   if((Nreal_max-(iw-1)).lt.Nreal_min)stop "chunking issue."
                enddo
                !
-               !Fix normalization ---> WHY THIS GIVES SHITTY STUFF???
-               !Akw_orb(iorb,:,iq) = Akw_orb(iorb,:,iq) / abs(sum(Akw_orb(iorb,:,iq))*dw)
+               !Fix normalization
+               Akw_orb(iorb,:,iq) = Akw_orb(iorb,:,iq) / abs(sum(Akw_orb(iorb,:,iq))*dw)
                !
             enddo
          enddo
@@ -662,6 +634,18 @@ contains
          where(abs((Akw_orb))<1.d-12)Akw_orb=0d0
          write(*,"(A)") "     MaxEnt output is Normalized."
          !
+      endif
+      !
+      !
+      !Use KK relations to rebuild the Real part
+      if(rebuildRealPart)then
+         allocate(Rkw_orb(Norb,Nreal,Nkpt));Rkw_orb=0d0
+         do iorb=1,Norb
+            do iq=1,Nkpt
+               call KK_Im2Re(Rkw_orb(iorb,:,iq),Akw_orb(iorb,:,iq),wreal,KKcutoff,BareVal=1d0,symmetric=.true.)
+            enddo
+            write(*,"(A)") "     KK on orb ["//str(iorb)//"] is done."
+         enddo
       endif
       !
       !
@@ -676,6 +660,17 @@ contains
          enddo
          close(unit)
       enddo
+      if(rebuildRealPart)then
+         do iq=1,Nkpt
+            path = reg(MaxEnt_K)//"Akw_"//reg(name)//"k_"//reg(mode)//"/Rkw_k"//str(iq)//".DAT"
+            unit = free_unit()
+            open(unit,file=reg(path),form="formatted",status="unknown",position="rewind",action="write")
+            do iw=1,Nreal
+               write(unit,"(200E20.12)") wreal(iw),(Rkw_orb(iorb,iw,iq),iorb=1,Norb)
+            enddo
+            close(unit)
+         enddo
+      endif
       !
       !
       !Print in gnuplot pm3d map format
@@ -693,6 +688,21 @@ contains
             write(unit,*)
          enddo
          close(unit)
+         !
+         if(rebuildRealPart)then
+            path = reg(MaxEnt_K)//"Rkw_"//reg(name)//"k.DAT"
+            unit = free_unit()
+            open(unit,file=reg(path),form="formatted",status="unknown",position="rewind",action="write")
+            fact=Crystal%Kpathaxis(Crystal%Nkpt_path)
+            do iq=1,Nkpt
+               do iw=1,Nreal
+                  if(abs(wreal(iw)).gt.0.5*KKcutoff)cycle
+                  write(unit,"(1I5,200E20.12)") iq,Crystal%Kpathaxis(iq)/fact,wreal(iw),(Rkw_orb(iorb,iw,iq),iorb=1,Norb)
+               enddo
+               write(unit,*)
+            enddo
+            close(unit)
+         endif
          !
       elseif(reg(mode).eq."plane")then
          !
@@ -712,8 +722,24 @@ contains
          enddo
          close(unit)
          !
+         if(rebuildRealPart)then
+            path = reg(MaxEnt_K)//"rFk_"//reg(name)//"k_E"//str(FermiCut,3)//".DAT"
+            unit = free_unit()
+            open(unit,file=reg(path),form="formatted",status="unknown",position="rewind",action="write")
+            do iq=1,Nkpt
+               ikx = int(iq/(Nkpt_Kside+0.001))+1 ; kx = (ikx-1)/dble(Nkpt_Kside-1) - 0.5d0
+               iky = iq - (ikx-1)*Nkpt_Kside      ; ky = (iky-1)/dble(Nkpt_Kside-1) - 0.5d0
+               Kvec = kx*Blat(:,1) + ky*Blat(:,2)
+               Bvec = [kx*Blat(1,1)+Blat(1,2),ky*Blat(2,1)+Blat(2,2),0d0]
+               write(unit,"(3I5,200E20.12)") iq,ikx,iky,Bvec(1),Bvec(2),Kvec(1),Kvec(2),(Rkw_orb(iorb,wndx_cut,iq),iorb=1,Norb)
+               if(iky.eq.Nkpt_Kside)write(unit,*)
+            enddo
+            close(unit)
+         endif
+         !
       endif
       deallocate(Kmask,Akw_orb,wreal)
+      if(allocated(Rkw_orb))deallocate(Rkw_orb)
       !
    end subroutine rebuild_W
    !

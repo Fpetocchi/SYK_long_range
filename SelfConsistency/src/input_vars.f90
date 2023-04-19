@@ -186,6 +186,7 @@ module input_vars
    real(8),public                           :: alphaPi
    real(8),public                           :: alphaSigma
    real(8),public                           :: alphaHk
+   real(8),public                           :: alphaGamma
    integer,public                           :: FLL_non_loc_mltp
    integer,public                           :: FLL_wm
    logical,public                           :: Mixing_Delta_tau
@@ -228,6 +229,7 @@ module input_vars
    integer,public                           :: Nkpt_plane
    real(8),public                           :: FermiCut
    real(8),public                           :: KKcutoff
+   logical,public                           :: rebuildRealPart
    logical,public                           :: print_full_G
    logical,public                           :: print_path_S
    !
@@ -610,6 +612,7 @@ contains
       call parse_input_variable(alphaPi,"ALPHA_PI",InputFile,default=1d0,comment="Fraction of the EDMFT polarization substituted within the lattice one.")
       call parse_input_variable(alphaSigma,"ALPHA_SIGMA",InputFile,default=1d0,comment="Fraction of the EDMFT self-energy substituted within the lattice one.")
       call parse_input_variable(alphaHk,"ALPHA_HK",InputFile,default=1d0,comment="Rescaling of the non-interacting Hamiltonian.")
+      call parse_input_variable(alphaGamma,"ALPHA_GAMMA",InputFile,default=1d0,comment="Rescaling of coefficient for the Gamma point.")
       call parse_input_variable(Mixing_Delta_tau,"MIX_D_TAU",InputFile,default=.false.,comment="Flag to mix Delta(tau). If false the mix is done with Delta(iw).")
       call parse_input_variable(Mixing_Delta,"MIX_D",InputFile,default=0.5d0,comment="Fraction of the old iteration Delta.")
       call parse_input_variable(Mixing_curlyU,"MIX_U",InputFile,default=0.5d0,comment="Fraction of the old iteration curlyU.")
@@ -692,6 +695,7 @@ contains
       call parse_input_variable(FermiCut,"FERMI_CUT",InputFile,default=0d0,comment="Energy level at which the Fermi surface is computed. Used only in Akf_builder.")
       call parse_input_variable(KKcutoff,"KK_CUTOFF",InputFile,default=50d0,comment="Real frequency cutoff for Kramers Kronig integrals, should be twice the region of interest.")
       KKcutoff=abs(KKcutoff)
+      call parse_input_variable(rebuildRealPart,"REBUILD_REAL",InputFile,default=.false.,comment="Rebuild the real part of the requested  k-resolved spectra.")
       call parse_input_variable(print_full_G,"PRINT_FULL_G",InputFile,default=.false.,comment="Print the k-dependent Green's function in the full BZ on the imaginary time axis.")
       call parse_input_variable(print_path_S,"PRINT_PATH_S",InputFile,default=.false.,comment="Print the k-dependent self-energy function along the K-path on the imaginary frequency axis. Not used for MaxEnt.")
       !

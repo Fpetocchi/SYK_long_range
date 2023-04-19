@@ -253,8 +253,13 @@ program SelfConsistency
          !Merge GW and EDMFT
          if(merge_Sigma)then
             call AllocateFermionicField(S_GWdc,Crystal%Norb,Nmats,Nsite=Nsite,Beta=Beta)
-            call calc_sigmaGWdc(S_GWdc,Glat,Wlat)
-            call dump_FermionicField(S_G0W0dc,reg(ItFolder),"Slat_dc_w",paramagnet)
+            !TEST>>>
+            call calc_sigmaGWdc_GlocWloc(S_GWdc,Glat,Wlat)
+            call dump_FermionicField(S_GWdc,reg(ItFolder),"GlocWloc_w",paramagnet)
+            call clear_attributes(S_GWdc)
+            !>>>TEST
+            call calc_sigmaGWdc(S_GWdc,Glat,Wlat,S_GW)
+            call dump_FermionicField(S_GWdc,reg(ItFolder),"Slat_dc_w",paramagnet)
             call MergeFields(S_GW,S_DMFT,S_GWdc,alphaSigma,RotateHloc,LocalOrbs)
             call dump_FermionicField(S_GW,reg(ItFolder),"Slat_merged_w",paramagnet)
             call DeallocateFermionicField(S_GWdc)
