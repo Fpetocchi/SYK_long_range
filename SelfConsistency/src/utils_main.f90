@@ -1267,7 +1267,7 @@ contains
       if(interp_E.and.calc_Wk) call AllocateBosonicField(Einv,Crystal%Norb,Nmats,Crystal%iq_gamma,Nkpt=Crystal%Nkpt,Nsite=Nsite,no_bare=.true.,Beta=Beta)
       !
       !
-      if(calc_Sigmak)then
+      if(addTierIII)then
          !
          if(allocated(VH))deallocate(VH)
          if(allocated(VH_Nlat))deallocate(VH_Nlat)
@@ -1419,6 +1419,7 @@ contains
       !
       call AllocateFermionicField(S_Full,Crystal%Norb,Nmats,Nkpt=Crystal%Nkpt,Nsite=Nsite,Beta=Beta,mu=Glat%mu)
       !
+      if(.not.allocated(VH)) stop "join_SigmaFull: VH not allocated."
       select case(reg(CalculationType))
          case default
             !
@@ -1432,7 +1433,6 @@ contains
             if(.not.S_G0W0%status) stop "join_SigmaFull: S_G0W0 not properly initialized."
             if((Iteration.gt.0).and.(.not.S_GW%status)) stop "join_SigmaFull: S_GW not properly initialized."
             if((Iteration.gt.0).and.addTierIII.and.(.not.S_G0W0dc%status)) stop "join_SigmaFull: S_G0W0dc not properly initialized."
-            if(.not.allocated(VH)) stop "join_SigmaFull: VH not allocated."
             if(.not.allocated(Vxc))then !stop "join_SigmaFull: Vxc not allocated."
                if(addTierIII)write(*,"(A)")"     Allocating empty Vxc ( enclosed in SigmaGoWo(k,iw) )"
                allocate(Vxc(Crystal%Norb,Crystal%Norb,Crystal%Nkpt,Nspin))
@@ -1512,7 +1512,7 @@ contains
             do ispin=1,Nspin
                do ik=1,S_Full%Nkpt
                   do iw=1,S_Full%Npoints
-                     S_Full%wks(:,:,iw,ik,ispin) = S_DMFT%ws(:,:,iw,ispin) - HartreeFact*S_DMFT%N_s(:,:,int(Nspin/ispin))
+                     S_Full%wks(:,:,iw,ik,ispin) = S_DMFT%ws(:,:,iw,ispin) - HartreeFact*S_DMFT%N_s(:,:,int(Nspin/ispin)) + VH(:,:)
                   enddo
                enddo
                if(paramagnet)then
@@ -3060,10 +3060,8 @@ contains
                close(unit)
                !
                !for spin resolved calculations the two Hartree are different
-               if(paramagnet)then
-                  Simp(isite)%N_s(:,:,1) = (Simp(isite)%N_s(:,:,1)+Simp(isite)%N_s(:,:,Nspin))/2d0
-                  Simp(isite)%N_s(:,:,Nspin) = Simp(isite)%N_s(:,:,1)
-               endif
+               Simp(isite)%N_s(:,:,1) = (Simp(isite)%N_s(:,:,1)+Simp(isite)%N_s(:,:,Nspin))/2d0
+               Simp(isite)%N_s(:,:,Nspin) = Simp(isite)%N_s(:,:,1)
                !
             case("Hartree_lat_Nimp","Hartree_lat_Nlat")
                !
@@ -3151,10 +3149,8 @@ contains
                deallocate(Uinst,rho_Flav)
                !
                !for spin resolved calculations the two Hartree are different
-               if(paramagnet)then
-                  Simp(isite)%N_s(:,:,1) = (Simp(isite)%N_s(:,:,1)+Simp(isite)%N_s(:,:,Nspin))/2d0
-                  Simp(isite)%N_s(:,:,Nspin) = Simp(isite)%N_s(:,:,1)
-               endif
+               Simp(isite)%N_s(:,:,1) = (Simp(isite)%N_s(:,:,1)+Simp(isite)%N_s(:,:,Nspin))/2d0
+               Simp(isite)%N_s(:,:,Nspin) = Simp(isite)%N_s(:,:,1)
                !
             case("FLL_Nimp","FLL_Nlat")
                !
