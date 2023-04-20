@@ -400,21 +400,28 @@ contains
                Ginout = j_found .ne. l_found                ! Gf indexes connecting intermediate and correlated spaces
                if(Gouter.or.Ginout)then
                   !
-                  !the indexes of the outer self-energy are only those of the correlated space
+                  !the outer self-energy indexes are only those of the correlated space
+                  !$OMP PARALLEL DEFAULT(SHARED),&
+                  !$OMP PRIVATE(itau,isite,indx,kndx,i,k,ib1,ib2)
+                  !$OMP DO
                   do itau=1,Ntau
-                     do indx=1,LocalOrbs(isite)%Norb
-                        do kndx=1,LocalOrbs(isite)%Norb
-                           !
-                           i = LocalOrbs(isite)%Orbs(indx)
-                           k = LocalOrbs(isite)%Orbs(kndx)
-                           !
-                           call F2Bindex(Norb,[i,j],[k,l],ib1,ib2)
-                           !
-                           Sitau_loc(i,k,itau) = Sitau_loc(i,k,itau) - Gitau_loc(j,l,itau,ispin)*Witau_loc(ib1,ib2,itau)
-                           !
+                     do isite=1,size(LocalOrbs)
+                        do indx=1,LocalOrbs(isite)%Norb
+                           do kndx=1,LocalOrbs(isite)%Norb
+                              !
+                              i = LocalOrbs(isite)%Orbs(indx)
+                              k = LocalOrbs(isite)%Orbs(kndx)
+                              !
+                              call F2Bindex(Norb,[i,j],[k,l],ib1,ib2)
+                              !
+                              Sitau_loc(i,k,itau) = Sitau_loc(i,k,itau) - Gitau_loc(j,l,itau,ispin)*Witau_loc(ib1,ib2,itau)
+                              !
+                           enddo
                         enddo
                      enddo
                   enddo
+                  !$OMP END DO
+                  !$OMP END PARALLEL
                   !
                endif
                !
@@ -467,17 +474,19 @@ contains
                   Ginout = j_found .ne. l_found                ! Gf indexes connecting intermediate and correlated spaces
                   if(Gouter.or.Ginout)then
                      !
-                     !the indexes of the outer self-energy are only those of the correlated space
-                     do indx=1,LocalOrbs(isite)%Norb
-                        do kndx=1,LocalOrbs(isite)%Norb
-                           !
-                           i = LocalOrbs(isite)%Orbs(indx)
-                           k = LocalOrbs(isite)%Orbs(kndx)
-                           !
-                           call F2Bindex(Norb,[i,j],[k,l],ib1,ib2)
-                           !
-                           Smats_Xdc_%N_s(i,k,ispin) = Smats_Xdc_%N_s(i,k,ispin) + Gitau_loc(j,l,Ntau,ispin)*Wmats%bare_local(ib1,ib2)
-                           !
+                     !the outer self-energy indexes are only those of the correlated space
+                     do isite=1,size(LocalOrbs)
+                        do indx=1,LocalOrbs(isite)%Norb
+                           do kndx=1,LocalOrbs(isite)%Norb
+                              !
+                              i = LocalOrbs(isite)%Orbs(indx)
+                              k = LocalOrbs(isite)%Orbs(kndx)
+                              !
+                              call F2Bindex(Norb,[i,j],[k,l],ib1,ib2)
+                              !
+                              Smats_Xdc_%N_s(i,k,ispin) = Smats_Xdc_%N_s(i,k,ispin) + Gitau_loc(j,l,Ntau,ispin)*Wmats%bare_local(ib1,ib2)
+                              !
+                           enddo
                         enddo
                      enddo
                      !
