@@ -320,6 +320,7 @@ contains
       integer                               :: indx,kndx,isite
       integer                               :: i,j,k,l,ib1,ib2
       integer                               :: j_found,l_found
+      logical                               :: Gouter,Ginout
       real                                  :: start,finish
       !
       !
@@ -364,8 +365,6 @@ contains
       write(*,"(A,F)") "     Wlat(iw) --> Wlat(tau) cpu timing:", finish-start
       !
       !Sigma_{m,n}(q,tau) = -Sum_{k,mp,np} W_{(m,mp);(n,np)}(q-k;tau)G_{mp,np}(k,tau)
-      j_found = 0
-      l_found = 0
       call cpu_time(start)
       call clear_attributes(Smats_Cdc_)
       allocate(Sitau_loc(Norb,Norb,Ntau))
@@ -375,6 +374,7 @@ contains
          do j=1,Norb
             !
             !look for j index in the correlated space
+            j_found = 0
             j_loopGWdc_C: do isite=1,size(LocalOrbs)
                if(any(LocalOrbs(isite)%Orbs.eq.j))then
                   j_found = isite
@@ -385,6 +385,7 @@ contains
             do l=1,Norb
                !
                !look for l index in the correlated space
+               l_found = 0
                l_loopGWdc_C: do isite=1,size(LocalOrbs)
                   if(any(LocalOrbs(isite)%Orbs.eq.l))then
                      l_found = isite
@@ -393,7 +394,9 @@ contains
                enddo l_loopGWdc_C
                !
                !add the self-energy term only if its outside or between different correlated spaces
-               if(j_found.ne.l_found)then
+               Gouter = (j_found.eq.0) .and. (l_found.eq.0) ! both Gf indexes outside
+               Ginout = j_found .ne. l_found                ! Gf indexes connecting intermediate and correlated spaces
+               if(Gouter.or.Ginout)then
                   !
                   !the indexes of the outer self-energy are only those of the correlated space
                   do itau=1,Ntau
@@ -432,14 +435,13 @@ contains
       call clear_attributes(Smats_Xdc_)
       if(.not.DC_remove_self)then
          !
-         j_found = 0
-         l_found = 0
          call cpu_time(start)
          spinloopGWdc_X: do ispin=1,Nspin
             !
             do j=1,Norb
                !
                !look for j index in the correlated space
+               j_found = 0
                j_loopGWdc_X: do isite=1,size(LocalOrbs)
                   if(any(LocalOrbs(isite)%Orbs.eq.j))then
                      j_found = isite
@@ -450,6 +452,7 @@ contains
                do l=1,Norb
                   !
                   !look for l index in the correlated space
+                  l_found = 0
                   l_loopGWdc_X: do isite=1,size(LocalOrbs)
                      if(any(LocalOrbs(isite)%Orbs.eq.l))then
                         l_found = isite
@@ -458,7 +461,9 @@ contains
                   enddo l_loopGWdc_X
                   !
                   !add the self-energy term only if its outside or between different correlated spaces
-                  if(j_found.ne.l_found)then
+                  Gouter = (j_found.eq.0) .and. (l_found.eq.0) ! both Gf indexes outside
+                  Ginout = j_found .ne. l_found                ! Gf indexes connecting intermediate and correlated spaces
+                  if(Gouter.or.Ginout)then
                      !
                      !the indexes of the outer self-energy are only those of the correlated space
                      do indx=1,LocalOrbs(isite)%Norb
