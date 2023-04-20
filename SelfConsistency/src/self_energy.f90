@@ -106,8 +106,10 @@ contains
       if(all([Gmats%Beta-Beta,Wmats%Beta-Beta].ne.[0d0,0d0])) stop "calc_sigmaGW: Either Gmats or Wmats have different Beta with respect to Smats."
       if(all([Gmats%Npoints-Nmats,Wmats%Npoints-Nmats].ne.[0,0])) stop "calc_sigmaGW: Either Gmats or Wmats have different number of Matsubara points with respect to Smats."
       !
-      if(.not.Smats_C_stored%status) call AllocateFermionicField(Smats_C_stored,Norb,Nmats,Nkpt=Nkpt,Nsite=Smats%Nsite,Beta=Beta)
-      if(.not.Smats_X_stored%status) call AllocateFermionicField(Smats_X_stored,Norb,0,Nkpt=Nkpt,Nsite=Smats%Nsite,Beta=Beta)
+      if(Smats_C_stored%status) call DeallocateFermionicField(Smats_C_stored)
+      if(Smats_X_stored%status) call DeallocateFermionicField(Smats_X_stored)
+      call AllocateFermionicField(Smats_C_stored,Norb,Nmats,Nkpt=Nkpt,Nsite=Smats%Nsite,Beta=Beta)
+      call AllocateFermionicField(Smats_X_stored,Norb,0,Nkpt=Nkpt,Nsite=Smats%Nsite,Beta=Beta)
       !
       LDAoffdiag_=.true.
       if(present(LDAoffdiag))LDAoffdiag_=LDAoffdiag
@@ -505,9 +507,10 @@ contains
       !
       !choose which local self-energy is going to be used
       call AllocateFermionicField(Smats_loc,Norb,Nmats,Nsite=Smats_dc%Nsite,Beta=Beta)
-      if(DC_remove_self)then
+      if(.not.DC_remove_self)then
          !
-         !if Sigma_Xdc is removed, the local self-energy must contain Sigma_C and Sigma_X
+         !if Sigma_Xdc is added to the DC, the local self-energy must contain Sigma_C and Sigma_X
+         Smats_C_stored%Nkpt=0; Smats_X_stored%Nkpt=0 ! this is for internal consistency in join_SigmaCX
          call join_SigmaCX(Smats_loc,Smats_C_stored,Smats_X_stored)
          !
       else
@@ -516,6 +519,8 @@ contains
          call duplicate(Smats_loc,Smats_C_stored)
          !
       endif
+      call DeallocateFermionicField(Smats_C_stored)
+      call DeallocateFermionicField(Smats_X_stored)
       !
       !Eq.36 of PRM 1, 043803 (2017)
       Smats_dc%ws = Smats_loc%ws - Smats_outer%ws
