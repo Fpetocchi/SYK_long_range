@@ -600,7 +600,7 @@ contains
       use utils_fields
       use crystal
       use fourier_transforms
-      use input_vars, only : Ntau, tau_uniform, paramagnet!, DC_remove_self
+      use input_vars, only : Ntau, tau_uniform, paramagnet, DC_remove_self
       use input_vars, only : RotateHloc, ExpandImpurity, AFMselfcons
       use input_vars, only : LocalOrbs, EqvImpndxF, sym_mode
       implicit none
@@ -710,7 +710,7 @@ contains
       write(*,"(A,F)") "     Sigma_Cdc(iw) cpu timing:", finish-start
       !
       !Sigmax_nm(q) = Sum_kij V_{ni,jm}(q-k)G_ij(k,beta) <=> sigmax(r,r')=-g(r,r',tau=0-)*v(r-r')
-      DC_remove_self_=.false.
+      DC_remove_self_=DC_remove_self
       call clear_attributes(Smats_Xdc_)
       if(.not.DC_remove_self_)then
          !

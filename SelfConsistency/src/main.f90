@@ -165,42 +165,41 @@ program SelfConsistency
       endif
       !
       !
-      !Hartree shift between G0W0 and scGW
-      if(addTierIII)then
-         !
-         if(Iteration.eq.0)VN_type="None"
-         if(MultiTier)VN_type="Nlat"
-         !
-         call calc_VH(VH_Nlat,densityLDA,densityGW,Ulat)
-         call calc_VH(VH_Nimp,densityLDA,densityDMFT,Ulat,local=.true.)
-         select case(reg(VN_type))
-            case default
-               stop "Wrong entry for VN_TYPE. Available: Nlat, Nimp, None."
-            case("Nlat")
-               VH = VH_Nlat
-               call dump_Matrix(VH_Nlat,reg(ItFolder),"VH_Nlat_used.DAT")
-               call dump_Matrix(VH_Nimp,reg(ItFolder),"VH_Nimp.DAT")
-            case("Nimp")
-               VH = VH_Nimp
-               call dump_Matrix(VH_Nlat,reg(ItFolder),"VH_Nlat.DAT")
-               call dump_Matrix(VH_Nimp,reg(ItFolder),"VH_Nimp_used.DAT")
-            case("None")
-               VH = czero
-               call dump_Matrix(VH_Nlat,reg(ItFolder),"VH_Nlat.DAT")
-               call dump_Matrix(VH_Nimp,reg(ItFolder),"VH_Nimp.DAT")
-               write(*,"(A)")"     VH not used."
-         end select
-         deallocate(VH_Nlat,VH_Nimp)
-         !
-         call calc_VH(Hartree_lat,densityGW)
-         call dump_Matrix(Hartree_lat,reg(ItFolder),"Hartree_lat.DAT")
-         deallocate(Hartree_lat)
-         !
-      endif
-      !
-      !
       !K-dependent self-energy - only G0W0,scGW,GW+EDMFT
       if(calc_Sigmak)then
+         !
+         !Hartree shift between G0W0 and scGW
+         if(addTierIII)then
+            !
+            if(Iteration.eq.0)VN_type="None"
+            if(MultiTier)VN_type="Nlat"
+            !
+            call calc_VH(VH_Nlat,densityLDA,densityGW,Ulat)
+            call calc_VH(VH_Nimp,densityLDA,densityDMFT,Ulat,local=.true.)
+            select case(reg(VN_type))
+               case default
+                  stop "Wrong entry for VN_TYPE. Available: Nlat, Nimp, None."
+               case("Nlat")
+                  VH = VH_Nlat
+                  call dump_Matrix(VH_Nlat,reg(ItFolder),"VH_Nlat_used.DAT")
+                  call dump_Matrix(VH_Nimp,reg(ItFolder),"VH_Nimp.DAT")
+               case("Nimp")
+                  VH = VH_Nimp
+                  call dump_Matrix(VH_Nlat,reg(ItFolder),"VH_Nlat.DAT")
+                  call dump_Matrix(VH_Nimp,reg(ItFolder),"VH_Nimp_used.DAT")
+               case("None")
+                  VH = czero
+                  call dump_Matrix(VH_Nlat,reg(ItFolder),"VH_Nlat.DAT")
+                  call dump_Matrix(VH_Nimp,reg(ItFolder),"VH_Nimp.DAT")
+                  write(*,"(A)")"     VH not used."
+            end select
+            deallocate(VH_Nlat,VH_Nimp)
+            !
+            call calc_VH(Hartree_lat,densityGW)
+            call dump_Matrix(Hartree_lat,reg(ItFolder),"Hartree_lat.DAT")
+            deallocate(Hartree_lat)
+            !
+         endif
          !
          if(solve_DMFT.and.bosonicSC.and.(.not.Ustart))call DeallocateBosonicField(Ulat)
          !
@@ -255,12 +254,14 @@ program SelfConsistency
          !Merge GW and EDMFT
          if(merge_Sigma)then
             call AllocateFermionicField(S_GWdc,Crystal%Norb,Nmats,Nsite=Nsite,Beta=Beta)
-            !TEST>>>
-            call calc_sigmaGWdc_GlocWloc(S_GWdc,Glat,Wlat)
-            call dump_FermionicField(S_GWdc,reg(ItFolder),"GlocWloc_w",paramagnet)
-            call clear_attributes(S_GWdc)
-            !>>>TEST
-            call calc_sigmaGWdc(S_GWdc,Glat,Wlat)
+            select case(reg(DC_type_GW))
+               case default
+                  stop "Wrong entry for DC_TYPE_GW. Available: GlocWloc, Sloc."
+               case("GlocWloc")
+                  call calc_sigmaGWdc_GlocWloc(S_GWdc,Glat,Wlat)
+               case("Slocs")
+                  call calc_sigmaGWdc(S_GWdc,Glat,Wlat)
+            end select
             call dump_FermionicField(S_GWdc,reg(ItFolder),"Slat_dc_w",paramagnet)
             call MergeFields(S_GW,S_DMFT,S_GWdc,alphaSigma,RotateHloc,LocalOrbs)
             call dump_FermionicField(S_GW,reg(ItFolder),"Slat_merged_w",paramagnet)
