@@ -1636,20 +1636,24 @@ contains
 
    !---------------------------------------------------------------------------!
    !PURPOSE: Create the static interaction tensor from user-given parameters
+   !TO DO: extend this subroutine to multi-site version with different local
+   !       interactions for each site
    !---------------------------------------------------------------------------!
-   subroutine build_Umat_singlParam(Umat,Uaa,Uab,J)
+   subroutine build_Umat_singlParam(Umat,Uaa,Uab,Jh)
       !
       use parameters
       use file_io
       use utils_misc
       use utils_fields
+      use input_vars, only : LocalOrbs
       implicit none
       !
       complex(8),intent(inout)              :: Umat(:,:)
-      real(8),intent(in)                    :: Uaa,Uab,J
+      real(8),intent(in)                    :: Uaa,Uab,Jh
       !
-      integer                               :: Nbp,Norb
-      integer                               :: ib1,ib2
+      integer                               :: Nbp,Norb,isite
+      integer                               :: indx,jndx,kndx,lndx,ib1ndx,ib2ndx
+      integer                               :: i,j,k,l,ib1,ib2
       type(physicalU)                       :: PhysicalUelements
       !
       !
@@ -1661,18 +1665,44 @@ contains
       call assert_shape(Umat,[Nbp,Nbp],"build_Umat_singlParam","Umat")
       !
       Norb = int(sqrt(dble(Nbp)))
-      call init_Uelements(Norb,PhysicalUelements)
       !
-      do ib1=1,Nbp
-         do ib2=1,Nbp
-            !
-            if(PhysicalUelements%Full_Uaa(ib1,ib2)) Umat(ib1,ib2) = dcmplx(Uaa,0d0)
-            if(PhysicalUelements%Full_Uab(ib1,ib2)) Umat(ib1,ib2) = dcmplx(Uab,0d0)
-            if(PhysicalUelements%Full_Jsf(ib1,ib2)) Umat(ib1,ib2) = dcmplx(J,0d0)
-            if(PhysicalUelements%Full_Jph(ib1,ib2)) Umat(ib1,ib2) = dcmplx(J,0d0)
-            !
+      do isite=1,size(LocalOrbs)
+         call init_Uelements(LocalOrbs(isite)%Norb,PhysicalUelements)
+         do indx=1,LocalOrbs(isite)%Norb
+            do jndx=1,LocalOrbs(isite)%Norb
+               do kndx=1,LocalOrbs(isite)%Norb
+                  do lndx=1,LocalOrbs(isite)%Norb
+                     !
+                     call F2Bindex(LocalOrbs(isite)%Norb,[indx,jndx],[kndx,lndx],ib1ndx,ib2ndx)
+                     !
+                     i = LocalOrbs(isite)%Orbs(indx)
+                     j = LocalOrbs(isite)%Orbs(jndx)
+                     k = LocalOrbs(isite)%Orbs(kndx)
+                     l = LocalOrbs(isite)%Orbs(lndx)
+                     call F2Bindex(Norb,[i,j],[k,l],ib1,ib2)
+                     !
+                     if(PhysicalUelements%Full_Uaa(ib1ndx,ib2ndx)) Umat(ib1,ib2) = dcmplx(Uaa,0d0)
+                     if(PhysicalUelements%Full_Uab(ib1ndx,ib2ndx)) Umat(ib1,ib2) = dcmplx(Uab,0d0)
+                     if(PhysicalUelements%Full_J(ib1ndx,ib2ndx))   Umat(ib1,ib2) = dcmplx(Jh,0d0)
+                     !
+                  enddo
+               enddo
+            enddo
          enddo
       enddo
+      !
+      !
+      !call init_Uelements(Norb,PhysicalUelements)
+      !do ib1=1,Nbp
+      !   do ib2=1,Nbp
+      !      !
+      !      if(PhysicalUelements%Full_Uaa(ib1,ib2)) Umat(ib1,ib2) = dcmplx(Uaa,0d0)
+      !      if(PhysicalUelements%Full_Uab(ib1,ib2)) Umat(ib1,ib2) = dcmplx(Uab,0d0)
+      !      if(PhysicalUelements%Full_Jsf(ib1,ib2)) Umat(ib1,ib2) = dcmplx(J,0d0)
+      !      if(PhysicalUelements%Full_Jph(ib1,ib2)) Umat(ib1,ib2) = dcmplx(J,0d0)
+      !      !
+      !   enddo
+      !enddo
       !
    end subroutine build_Umat_singlParam
    !

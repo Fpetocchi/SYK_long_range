@@ -990,7 +990,7 @@ contains
                   write(*,"(A)")"     Warning: the model interaction built with phononic modes is K-independent."
                   call AllocateBosonicField(Ulat,Crystal%Norb,Nmats,Crystal%iq_gamma,Nkpt=Crystal%Nkpt,Nsite=Nsite,Beta=Beta)
                   call build_Uret(Ulat,Uaa,Uab,J,g_eph,wo_eph,Hetero,LocalOnly=.false.)
-               else
+               elseif(N_Vnn.gt.0)then
                   write(*,"(A)")"     Warning: the model interaction built with long-range couplings is frequency-independent."
                   call AllocateBosonicField(Ulat,Crystal%Norb,1,Crystal%iq_gamma,Nkpt=Crystal%Nkpt,Nsite=Nsite,Beta=Beta)
                   call build_Uret(Ulat,Uaa,Uab,J,Vnn,Crystal,Hetero)
@@ -1079,7 +1079,7 @@ contains
                   else
                      call build_Uret(Ulat,Uaa,Uab,J,g_eph,wo_eph,Hetero)
                   endif
-               else
+               elseif(N_Vnn.gt.0)then
                   write(*,"(A)")"     Warning: the model interaction built with long-range couplings is frequency-independent."
                   call AllocateBosonicField(Ulat,Crystal%Norb,1,Crystal%iq_gamma,Nsite=Nsite,Beta=Beta)
                   call build_Uret(Ulat,Uaa,Uab,J,Vnn,Crystal,Hetero,LocalOnly=.true.)
@@ -1121,7 +1121,7 @@ contains
                   write(*,"(A)")"     Warning: the model interaction built with phononic modes is K-independent."
                   call AllocateBosonicField(Ulat,Crystal%Norb,Nmats,Crystal%iq_gamma,Nkpt=Crystal%Nkpt,Nsite=Nsite,Beta=Beta)
                   call build_Uret(Ulat,Uaa,Uab,J,g_eph,wo_eph,Hetero,LocalOnly=.false.)
-               else
+               elseif(N_Vnn.gt.0)then
                   write(*,"(A)")"     Warning: the model interaction built with long-range couplings is frequency-independent."
                   call AllocateBosonicField(Ulat,Crystal%Norb,1,Crystal%iq_gamma,Nkpt=Crystal%Nkpt,Nsite=Nsite,Beta=Beta)
                   call build_Uret(Ulat,Uaa,Uab,J,Vnn,Crystal,Hetero)
@@ -1191,7 +1191,7 @@ contains
                   call AllocateBosonicField(Ulat,Crystal%Norb,Nmats,Crystal%iq_gamma,Nkpt=Crystal%Nkpt,Nsite=Nsite,Beta=Beta)
                   call build_Uret(Ulat,Uaa,Uab,J,g_eph,wo_eph,Hetero,LocalOnly=.false.)
                   call dump_MaxEnt(Ulat,"mats",reg(ItFolder)//"Convergence/","Ulat",EqvGWndx%SetOrbs)
-               else
+               elseif(N_Vnn.gt.0)then
                   write(*,"(A)")"     Warning: the model interaction built with long-range couplings is frequency-independent."
                   call AllocateBosonicField(Ulat,Crystal%Norb,1,Crystal%iq_gamma,Nkpt=Crystal%Nkpt,Nsite=Nsite,Beta=Beta)
                   call build_Uret(Ulat,Uaa,Uab,J,Vnn,Crystal,Hetero)
@@ -3039,14 +3039,14 @@ contains
          call inquireFile(reg(PrevItFolder)//"Solver_"//reg(LocalOrbs(isite)%Name)//"/Umat_prod.DAT",filexists,verb=verbose,hardstop=.false.)
          if(filexists)then
             !
-            if(reg(CalculationType).ne."DMFT+statU") stop "Umat_prod.DAT is present even if CalculationType == DMFT+statU. Somethig is wrong."
+            if(reg(CalculationType).ne."DMFT+statU") stop "Umat_prod.DAT is present even if CalculationType == DMFT+statU. Something is wrong."
             call read_Matrix(Uinst,reg(PrevItFolder)//"Solver_"//reg(LocalOrbs(isite)%Name)//"/Umat_prod.DAT")
             !
          else
             !
             call AllocateBosonicField(curlyU,LocalOrbs(isite)%Norb,Nmats,Crystal%iq_gamma,Beta=Beta)
             call read_BosonicField(curlyU,reg(PrevItFolder)//"Solver_"//reg(LocalOrbs(isite)%Name)//"/","curlyU_"//reg(LocalOrbs(isite)%Name)//"_w.DAT")
-            Uinst_prod = curlyU%screened_local(ib1,ib2,FLL_wm)
+            Uinst_prod = curlyU%screened_local(:,:,FLL_wm)
             call DeallocateBosonicField(curlyU)
             !
          endif
@@ -3128,7 +3128,7 @@ contains
                !
                !all the additional safety checks are done in initialize_Lattice
                Simp(isite)%N_s = czero
-               if(Solver%Nimp.gt.1)then
+               if((Solver%Nimp.gt.1).or.ExpandImpurity.or.AFMselfcons)then
                   !
                   !local calculations: local DC is fully diagonal
                   N_FLL=0d0; U_FLL=0d0; J_FLL=0d0
@@ -3154,7 +3154,8 @@ contains
                   enddo
                   !
                else
-                  !the matrix has to be built according to SiteOrbs
+                  !
+                  !This only occurs for molecular orbitals (the matrix has to be built according to SiteOrbs)
                   if(.not.allocated(SiteOrbs))stop "collect_QMC_results: SiteOrbs not allocated for FLL DC calculation."
                   do is=1,Nsite
                      !
