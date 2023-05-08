@@ -2307,6 +2307,7 @@ contains
       real(8),allocatable                   :: Uinst(:,:),Ucheck(:,:)
       real(8),allocatable                   :: Kfunct(:,:,:),Kpfunct(:,:,:)
       real(8),allocatable                   :: ScreeningMat(:,:)
+      logical                               :: updatedU
       character(len=255)                    :: file
       !
       !
@@ -2318,6 +2319,7 @@ contains
       !
       Norb = LocalOrbs(isite)%Norb
       Nbp = Norb**2
+      updatedU = .false.
       !
       call init_Uelements(Norb,PhysicalUelements)
       !
@@ -2335,6 +2337,7 @@ contains
             allocate(Uimp(Nbp,Nbp));Uimp=czero
             call loc2imp(Uimp,Umat,LocalOrbs(isite)%Orbs,bosonlike=.true.)
             if(RotateUloc) call tensor_transform("NN",Uimp,PhysicalUelements%Full_Map,LocalOrbs(isite)%Rot,LocalOrbs(isite)%Rot)
+            call dump_Matrix(Uimp,reg(ItFolder)//"Solver_"//reg(LocalOrbs(isite)%Name)//"/","Umat_prod.DAT")
             !
          case("DMFT+dynU")
             !
@@ -2345,6 +2348,7 @@ contains
             !
             if(.not.P_EDMFT%status) stop "calc_Interaction: P_EDMFT not properly initialized."
             if(.not.Wlat%status) stop "calc_Interaction: Wlat not properly initialized."
+            updatedU = .true.
             !
             if(Ustart)then
                !
@@ -2400,8 +2404,8 @@ contains
             !
       end select
       !
-      !Symmetrizations - If sets are defined curlyU is always symmetrized
-      if(sym_mode.gt.0) call symmetrize_GW(curlyU,EqvImpndxB(isite))
+      !Symmetrizations - If sets are defined curlyU is always symmetrized, Uimp does not change
+      if((sym_mode.gt.0).and.curlyU%status) call symmetrize_GW(curlyU,EqvImpndxB(isite))
       !
       !Extract istantaneous interaction and screening function
       select case(reg(CalculationType))
@@ -2442,7 +2446,7 @@ contains
       endif
       !
       !Check if the screened effective local interaction at iw=0 is the same for all the sites. Same Orbital dimension assumed.
-      if(checkInvariance)then
+      if(checkInvariance.and.updatedU)then
          !
          do isitecheck=1,size(LocalOrbs)
             !
@@ -2555,7 +2559,7 @@ contains
       !
       implicit none
       !
-      integer                               :: iorb,jorb,korb,lorb,ispin,jspin
+      integer                               :: iorb,jorb,ispin,jspin
       integer                               :: ib1,ib2,isite,idum
       integer                               :: unit,ndx,itau,iw
       integer                               :: io,jo,is,js
@@ -2580,7 +2584,7 @@ contains
       integer                               :: ij1,ij2
       real(8)                               :: Stail
       real(8)                               :: N_FLL,U_FLL,J_FLL,Np_FLL,Up_FLL
-      real(8),allocatable                   :: Uinst(:,:)
+      real(8),allocatable                   :: Uinst(:,:),Uinst_prod(:,:)
       complex(8),allocatable                :: rho(:,:,:),rho_Flav(:)
       !Impurity susceptibilities
       real(8),allocatable                   :: nt(:,:,:),nt_av(:,:)
@@ -3026,9 +3030,28 @@ contains
             !
          endif
          !
+         !get istantaneous interactions
+         !this is in Nflavor*Nflavor format, always present
+         allocate(Uinst(LocalOrbs(isite)%Nflavor,LocalOrbs(isite)%Nflavor));Uinst=0d0
+         call read_Matrix(Uinst,reg(PrevItFolder)//"Solver_"//reg(LocalOrbs(isite)%Name)//"/Umat.DAT")
+         !this is in Nbp*Nbp format
+         allocate(Uinst_prod(LocalOrbs(isite)%Norb**2,LocalOrbs(isite)%Norb**2));Uinst_prod=0d0
+         call inquireFile(reg(PrevItFolder)//"Solver_"//reg(LocalOrbs(isite)%Name)//"/Umat_prod.DAT",filexists,verb=verbose,hardstop=.false.)
+         if(filexists)then
+            !
+            if(reg(CalculationType).ne."DMFT+statU") stop "Umat_prod.DAT is present even if CalculationType == DMFT+statU. Somethig is wrong."
+            call read_Matrix(Uinst,reg(PrevItFolder)//"Solver_"//reg(LocalOrbs(isite)%Name)//"/Umat_prod.DAT")
+            !
+         else
+            !
+            call AllocateBosonicField(curlyU,LocalOrbs(isite)%Norb,Nmats,Crystal%iq_gamma,Beta=Beta)
+            call read_BosonicField(curlyU,reg(PrevItFolder)//"Solver_"//reg(LocalOrbs(isite)%Name)//"/","curlyU_"//reg(LocalOrbs(isite)%Name)//"_w.DAT")
+            Uinst_prod = curlyU%screened_local(ib1,ib2,FLL_wm)
+            call DeallocateBosonicField(curlyU)
+            !
+         endif
+         !
          !Fill up the N_s attribute that correspond to the Hartree term of the self-energy always diagonal in the solver basis
-         call AllocateBosonicField(curlyU,LocalOrbs(isite)%Norb,Nmats,Crystal%iq_gamma,Beta=Beta)
-         call read_BosonicField(curlyU,reg(PrevItFolder)//"Solver_"//reg(LocalOrbs(isite)%Name)//"/","curlyU_"//reg(LocalOrbs(isite)%Name)//"_w.DAT")
          Simp(isite)%N_s = czero
          select case(reg(DC_type))
             case default
@@ -3040,7 +3063,7 @@ contains
                write(*,"(A)")"     Nothing will be removed from the impurity self-energy."
                Simp(isite)%N_s = czero
                !
-            case("Full_Tail")
+            case("Full_Tail") ! urlyUfree
                !
                !Read the self-energy tail
                file = reg(PrevItFolder)//"Solver_"//reg(LocalOrbs(isite)%Name)//"/resultsQMC/Stail.DAT"
@@ -3063,62 +3086,7 @@ contains
                Simp(isite)%N_s(:,:,1) = (Simp(isite)%N_s(:,:,1)+Simp(isite)%N_s(:,:,Nspin))/2d0
                Simp(isite)%N_s(:,:,Nspin) = Simp(isite)%N_s(:,:,1)
                !
-            case("Hartree_lat_Nimp","Hartree_lat_Nlat")
-               !
-               !try to see if the SPEX Hartree is present otherwise use curlyU(0)
-               call inquireFile(reg(PrevItFolder)//"Hartree_lat.DAT",filexists,hardstop=.false.,verb=verbose)
-               if(filexists)then
-                  !
-                  if(allocated(Hartree_lat))deallocate(Hartree_lat)
-                  allocate(Hartree_lat(Crystal%Norb,Crystal%Norb));Hartree_lat=czero
-                  call read_Matrix(Hartree_lat,reg(PrevItFolder)//"Hartree_lat.DAT")
-                  do ispin=1,Nspin
-                     if(RotateHloc)then
-                        call loc2imp(Simp(isite)%N_s(:,:,ispin),Hartree_lat,LocalOrbs(isite)%Orbs,U=LocalOrbs(isite)%Rot)
-                     else
-                        call loc2imp(Simp(isite)%N_s(:,:,ispin),Hartree_lat,LocalOrbs(isite)%Orbs)
-                     endif
-                  enddo
-                  deallocate(Hartree_lat)
-                  !
-               else
-                  !
-                  allocate(rho(LocalOrbs(isite)%Norb,LocalOrbs(isite)%Norb,Nspin));rho=0d0
-                  if(reg(DC_type).eq."Hartree_lat_Nimp")then
-                     rho = LocalOrbs(isite)%rho_OrbSpin
-                  elseif(reg(DC_type).eq."Hartree_lat_Nlat")then
-                     call read_Matrix(rho,reg(PrevItFolder)//"Solver_"//reg(LocalOrbs(isite)%Name)//"/Nloc_"//reg(LocalOrbs(isite)%Name),paramagnet)
-                  endif
-                  !
-                  Simp(isite)%N_s = czero
-                  do ispin=1,Nspin
-                     do iorb=1,LocalOrbs(isite)%Norb
-                        do jorb=1,LocalOrbs(isite)%Norb
-                           do korb=1,LocalOrbs(isite)%Norb
-                              do lorb=1,LocalOrbs(isite)%Norb
-                                 !
-                                 call F2Bindex(LocalOrbs(isite)%Norb,[iorb,jorb],[korb,lorb],ib1,ib2)
-                                 Simp(isite)%N_s(iorb,jorb,ispin) = Simp(isite)%N_s(iorb,jorb,ispin) + curlyU%screened_local(ib1,ib2,1)*rho(korb,lorb,ispin)
-                                 !
-                              enddo
-                           enddo
-                        enddo
-                     enddo
-                  enddo
-                  deallocate(rho)
-                  !
-                  !The magnetization will be given only by the self-energy beyond Hartree
-                  Simp(isite)%N_s(:,:,1) = (Simp(isite)%N_s(:,:,1)+Simp(isite)%N_s(:,:,Nspin))
-                  Simp(isite)%N_s(:,:,Nspin) = Simp(isite)%N_s(:,:,1)
-                  !
-               endif
-               !
-               !the self-energy in the solver basis is always diagonal
-               do ispin=1,Nspin
-                  Simp(isite)%N_s(:,:,ispin) = diag(diagonal(Simp(isite)%N_s(:,:,ispin)))
-               enddo
-               !
-            case("Hartree_DMFT_Nimp","Hartree_DMFT_Nlat")
+            case("Hartree_DMFT_Nimp","Hartree_DMFT_Nlat") ! DEPRECATED - curlyUfree
                !
                allocate(rho_Flav(LocalOrbs(isite)%Nflavor));rho_Flav=0d0
                if(reg(DC_type).eq."Hartree_DMFT_Nimp")then
@@ -3134,9 +3102,6 @@ contains
                   deallocate(rho)
                endif
                !
-               allocate(Uinst(LocalOrbs(isite)%Nflavor,LocalOrbs(isite)%Nflavor));Uinst=0d0
-               call calc_QMCinteractions(curlyU,Uinst)
-               !
                Simp(isite)%N_s = czero
                do ib1=1,LocalOrbs(isite)%Nflavor
                   iorb = (ib1+mod(ib1,2))/2
@@ -3146,13 +3111,13 @@ contains
                      Simp(isite)%N_s(iorb,iorb,ispin) = Simp(isite)%N_s(iorb,iorb,ispin) + Uinst(ib1,ib2)*LocalOrbs(isite)%rho_Flav(ib2)
                   enddo
                enddo
-               deallocate(Uinst,rho_Flav)
+               deallocate(rho_Flav)
                !
                !for spin resolved calculations the two Hartree are different
                Simp(isite)%N_s(:,:,1) = (Simp(isite)%N_s(:,:,1)+Simp(isite)%N_s(:,:,Nspin))/2d0
                Simp(isite)%N_s(:,:,Nspin) = Simp(isite)%N_s(:,:,1)
                !
-            case("FLL_Nimp","FLL_Nlat")
+            case("FLL_Nimp","FLL_Nlat") ! curlyUfree
                !
                allocate(rho(LocalOrbs(isite)%Norb,LocalOrbs(isite)%Norb,Nspin));rho=0d0
                if(reg(DC_type).eq."FLL_Nimp")then
@@ -3170,17 +3135,17 @@ contains
                   N_FLL = trace(rho(:,:,1)) + trace(rho(:,:,Nspin))
                   do iorb=1,LocalOrbs(isite)%Norb
                      call F2Bindex(LocalOrbs(isite)%Norb,[iorb,iorb],[iorb,iorb],ib1,ib2)
-                     U_FLL = U_FLL + curlyU%screened_local(ib1,ib2,FLL_wm)
+                     U_FLL = U_FLL + Uinst_prod(ib1,ib2)
                      do jorb=1,LocalOrbs(isite)%Norb
                         if(iorb.eq.jorb) cycle
                         call F2Bindex(LocalOrbs(isite)%Norb,[iorb,jorb],[jorb,iorb],ib1,ib2)
-                        J_FLL = J_FLL + curlyU%screened_local(ib1,ib2,FLL_wm)
+                        J_FLL = J_FLL + Uinst_prod(ib1,ib2)
                      enddo
                   enddo
                   U_FLL = U_FLL/LocalOrbs(isite)%Norb
                   J_FLL = J_FLL/(LocalOrbs(isite)%Norb**2-LocalOrbs(isite)%Norb)
                   !non-local DC is the deviation from the LDA values
-                  !>>>TODO<<<
+                  !>>>TODO<<< READ FROM ULAT
                   !
                   do ispin=1,Nspin
                      do iorb=1,LocalOrbs(isite)%Norb
@@ -3203,11 +3168,11 @@ contains
                            jorb = SiteOrbs(is)%Orbs(jo)
                            !local Uab on the site "is"
                            call F2Bindex(Crystal%Norb,[iorb,iorb],[jorb,jorb],ib1,ib2)
-                           U_FLL = U_FLL + curlyU%screened_local(ib1,ib2,FLL_wm)
+                           U_FLL = U_FLL + Uinst_prod(ib1,ib2)
                            !local J on the site "is"
                            if(iorb.ne.jorb)then
                               call F2Bindex(Crystal%Norb,[iorb,jorb],[jorb,iorb],ij1,ij2)
-                              J_FLL = J_FLL + (curlyU%screened_local(ib1,ib2,FLL_wm)-curlyU%screened_local(ij1,ij2,FLL_wm))
+                              J_FLL = J_FLL + (Uinst_prod(ib1,ib2)-Uinst_prod(ij1,ij2))
                            endif
                         enddo
                      enddo
@@ -3234,7 +3199,7 @@ contains
                            do io=1,SiteOrbs(is)%Norb
                               iorb = SiteOrbs(is)%Orbs(io)
                               call F2Bindex(Crystal%Norb,[iorb,iorb],[jorb,jorb],ib1,ib2)
-                              Up_FLL = Up_FLL + curlyU%screened_local(ib1,ib2,FLL_wm)
+                              Up_FLL = Up_FLL + Uinst_prod(ib1,ib2)
                            enddo
                         enddo
                         Up_FLL = Up_FLL/(SiteOrbs(is)%Norb*SiteOrbs(js)%Norb)
@@ -3253,7 +3218,6 @@ contains
                deallocate(rho)
                !
          end select
-         call DeallocateBosonicField(curlyU)
          !
          !Hartree term in the Solver basis
          call dump_Matrix(Simp(isite)%N_s,reg(PrevItFolder),"Solver_"//reg(LocalOrbs(isite)%Name)//"/Hartree_term_"//reg(LocalOrbs(isite)%Name),paramagnet)

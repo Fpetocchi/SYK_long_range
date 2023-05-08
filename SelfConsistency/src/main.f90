@@ -121,7 +121,7 @@ program SelfConsistency
          !
          if(interp_Chi) then
             call calc_chi(Chi,Ulat,Plat,Crystal)!,pathPk=reg(MaxEnt_K)//"/MaxEnt_Chik_path_t")
-            call interpolate2kpath(Chi,Crystal,reg(MaxEnt_K),name="C",mode="Trace_NaNa")
+            call interpolate2kpath(Chi,Crystal,reg(MaxEnt_K),name="C",mode="Na")
             call DeallocateBosonicField(Chi)
          endif
          !
@@ -136,8 +136,8 @@ program SelfConsistency
          call dump_BosonicField(Wlat,reg(ItFolder),"Wlat_w.DAT")
          call dump_MaxEnt(Wlat,"mats",reg(ItFolder)//"Convergence/","Wlat",EqvGWndx%SetOrbs)
          !
-         if(interp_W) call interpolate2kpath(Wlat,Crystal,reg(MaxEnt_K),name="W",mode="Trace_NaNa")
-         if(interp_E) call interpolate2kpath(Einv,Crystal,reg(MaxEnt_K),name="E",mode="Trace_NaNa")
+         if(interp_W) call interpolate2kpath(Wlat,Crystal,reg(MaxEnt_K),name="W",mode="Na")
+         if(interp_E) call interpolate2kpath(Einv,Crystal,reg(MaxEnt_K),name="E",mode="Na")
          !if(interp_E) call interpolate2kpath(Einv,Crystal,reg(MaxEnt_K),name="E",mode="Loss",invert=.true.)
          !call execute_command_line(" touch doSolver ")
          !stop

@@ -791,8 +791,8 @@ subroutine interpolate2kpath_Bosonic(Wfull,Lttc,pathOUTPUT,name,mode,invert,remo
    !
    select case(reg(mode))
       case default
-         stop "interpolate2kpath_Bosonic: Available modes are: NaNb, Trace, Trace_NaNa, Loss."
-      case("NaNb")
+         stop "interpolate2kpath_Bosonic: Available modes are: NaNb, Trace_NaNa, Na, Trace, Loss."
+      case("NaNb","Trace_NaNa","Na")
          !
          Wdim = Norb
          !
@@ -830,7 +830,7 @@ subroutine interpolate2kpath_Bosonic(Wfull,Lttc,pathOUTPUT,name,mode,invert,remo
             enddo
          endif
          !
-      case("Trace","Trace_NaNa","Loss")
+      case("Trace","Loss")
          !
          Wdim = Wfull%Nbp
          !
@@ -908,6 +908,86 @@ subroutine interpolate2kpath_Bosonic(Wfull,Lttc,pathOUTPUT,name,mode,invert,remo
             !
             deallocate(W_intp)
             !
+         case("Trace_NaNa")
+            !
+            !Print along path only the trace of the NaNa elements since the full tensor is too big
+            allocate(TrW_orig(Nmats,Wfull%Nkpt));TrW_orig=czero
+            allocate(TrWgamma(Nmats));TrWgamma=czero
+            do iw=1,Nmats
+               do iq=1,Wfull%Nkpt
+                  do iorb=1,Norb
+                     TrW_orig(iw,iq) = TrW_orig(iw,iq) + W_orig(iorb,iorb,iw,iq)/Norb
+                  enddo
+               enddo
+               do iorb=1,Norb
+                  TrWgamma(iw) = TrWgamma(iw) + Wgamma(iorb,iorb,iw)/Norb
+               enddo
+            enddo
+            !
+            !Interpolate the boson trace along the path
+            call cpu_time(start)
+            allocate(TrW_intp(Nmats,Lttc%Nkpt_path));TrW_intp=czero
+            call wannierinterpolation(Lttc%Nkpt3,Lttc%kpt,Lttc%kptpath(:,1:Lttc%Nkpt_path),TrW_orig,TrW_intp)
+            call cpu_time(finish)
+            write(*,"(A,F)") "     "//reg(name)//"_Trace_NaNa(fullBZ,iw) --> "//reg(name)//"_Trace_NaNa(Kpath,iw) cpu timing:", finish-start
+            !
+            !Print along path the components of the trace
+            path = reg(pathOUTPUT)//"MaxEnt_"//reg(name)//"k_path/"
+            call createDir(reg(path),verb=verbose)
+            allocate(wmats(Nmats))
+            wmats = BosonicFreqMesh(Wfull%Beta,Nmats)
+            do iq=1,Lttc%Nkpt_path
+               unit = free_unit()
+               open(unit,file=reg(path)//reg(name)//"k_w_k"//str(iq)//"_Trace_NaNa.DAT",form="formatted",status="unknown",position="rewind",action="write")
+               do iw=1,Nmats-1
+                  write(unit,"(200E20.12)") wmats(iw),dreal(TrW_intp(iw,iq)+TrWgamma(iw)),dimag(TrW_intp(iw,iq)+TrWgamma(iw))
+               enddo
+               close(unit)
+            enddo
+            deallocate(TrW_orig,TrW_intp,TrWgamma)
+            !
+         case("Na")
+            !
+            !Print along path the sum of all the off-diag components for each orbial
+            do jorb=1,Norb
+               !
+               allocate(TrW_orig(Nmats,Wfull%Nkpt));TrW_orig=czero
+               allocate(TrWgamma(Nmats));TrWgamma=czero
+               do iw=1,Nmats
+                  do iq=1,Wfull%Nkpt
+                     do iorb=1,Norb
+                        TrW_orig(iw,iq) = TrW_orig(iw,iq) + W_orig(jorb,iorb,iw,iq)/Norb
+                     enddo
+                  enddo
+                  do iorb=1,Norb
+                     TrWgamma(iw) = TrWgamma(iw) + Wgamma(jorb,iorb,iw)/Norb
+                  enddo
+               enddo
+               !
+               !Interpolate the boson trace along the path
+               call cpu_time(start)
+               allocate(TrW_intp(Nmats,Lttc%Nkpt_path));TrW_intp=czero
+               call wannierinterpolation(Lttc%Nkpt3,Lttc%kpt,Lttc%kptpath(:,1:Lttc%Nkpt_path),TrW_orig,TrW_intp)
+               call cpu_time(finish)
+               write(*,"(A,F)") "     "//reg(name)//"_Na(fullBZ,iw) --> "//reg(name)//"_Na(Kpath,iw) cpu timing:", finish-start
+               !
+               !Print along path the components of the trace
+               path = reg(pathOUTPUT)//"MaxEnt_"//reg(name)//"k_path/"
+               call createDir(reg(path),verb=verbose)
+               allocate(wmats(Nmats))
+               wmats = BosonicFreqMesh(Wfull%Beta,Nmats)
+               do iq=1,Lttc%Nkpt_path
+                  unit = free_unit()
+                  open(unit,file=reg(path)//reg(name)//"k_w_k"//str(iq)//"_Na_o"//str(jorb)//".DAT",form="formatted",status="unknown",position="rewind",action="write")
+                  do iw=1,Nmats-1
+                     write(unit,"(200E20.12)") wmats(iw),dreal(TrW_intp(iw,iq)+TrWgamma(iw)),dimag(TrW_intp(iw,iq)+TrWgamma(iw))
+                  enddo
+                  close(unit)
+               enddo
+               deallocate(TrW_orig,TrW_intp,TrWgamma,wmats)
+               !
+            enddo
+            !
          case("Trace")
             !
             !Print along path only the trace since the full tensor is too big
@@ -942,45 +1022,6 @@ subroutine interpolate2kpath_Bosonic(Wfull,Lttc,pathOUTPUT,name,mode,invert,remo
             enddo
             deallocate(TrW_orig,TrW_intp,TrWgamma)
             !
-         case("Trace_NaNa")
-            !
-            !Print along path only the trace of the NaNa elements since the full tensor is too big
-            allocate(TrW_orig(Nmats,Wfull%Nkpt));TrW_orig=czero
-            allocate(TrWgamma(Nmats));TrWgamma=czero
-            do iw=1,Nmats
-               do iq=1,Wfull%Nkpt
-                  do iorb=1,Norb
-                     call F2Bindex(Norb,[iorb,iorb],[iorb,iorb],ib1,ib1)
-                     TrW_orig(iw,iq) = TrW_orig(iw,iq) + W_orig(ib1,ib1,iw,iq)/Norb
-                  enddo
-               enddo
-               do iorb=1,Norb
-                  call F2Bindex(Norb,[iorb,iorb],[iorb,iorb],ib1,ib1)
-                  TrWgamma(iw) = TrWgamma(iw) + Wgamma(ib1,ib1,iw)/Norb
-               enddo
-            enddo
-            !
-            !Interpolate the boson trace along the path
-            call cpu_time(start)
-            allocate(TrW_intp(Nmats,Lttc%Nkpt_path));TrW_intp=czero
-            call wannierinterpolation(Lttc%Nkpt3,Lttc%kpt,Lttc%kptpath(:,1:Lttc%Nkpt_path),TrW_orig,TrW_intp)
-            call cpu_time(finish)
-            write(*,"(A,F)") "     "//reg(name)//"_Trace_NaNa(fullBZ,iw) --> "//reg(name)//"_Trace_NaNa(Kpath,iw) cpu timing:", finish-start
-            !
-            !Print along path the components of the trace
-            path = reg(pathOUTPUT)//"MaxEnt_"//reg(name)//"k_path/"
-            call createDir(reg(path),verb=verbose)
-            allocate(wmats(Nmats))
-            wmats = BosonicFreqMesh(Wfull%Beta,Nmats)
-            do iq=1,Lttc%Nkpt_path
-               unit = free_unit()
-               open(unit,file=reg(path)//reg(name)//"k_w_k"//str(iq)//"_Trace_NaNa.DAT",form="formatted",status="unknown",position="rewind",action="write")
-               do iw=1,Nmats-1
-                  write(unit,"(200E20.12)") wmats(iw),dreal(TrW_intp(iw,iq)+TrWgamma(iw)),dimag(TrW_intp(iw,iq)+TrWgamma(iw))
-               enddo
-               close(unit)
-            enddo
-            deallocate(TrW_orig,TrW_intp,TrWgamma)
             !
          case("Loss")
             !

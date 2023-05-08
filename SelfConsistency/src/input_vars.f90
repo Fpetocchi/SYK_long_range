@@ -592,7 +592,7 @@ contains
             FLL_wm = Nmats
          endif
       endif
-      call parse_input_variable(DC_type_GW,"DC_TYPE_GW",InputFile,default="GlocWloc",comment="Local GW self-energy which is replaced by the DMFT one. Avalibale: GlocWloc, Sloc.")
+      call parse_input_variable(DC_type_GW,"DC_TYPE_GW",InputFile,default="Sloc",comment="Local GW self-energy which is replaced by the DMFT one. Avalibale: GlocWloc, Sloc.")
       !call parse_input_variable(DC_type_GG,"DC_TYPE_GG",InputFile,default="GlocGloc",comment="Local GG polarization which is replaced by the DMFT one. Avalibale: GlocGloc, Ploc.")
       call parse_input_variable(DC_remove_self,"DC_RMV_SELF",InputFile,default=.true.,comment="Keep the Fock diagrams which are removing the self-interaction and adding the Hund contribution to the Hartree term.")
       call parse_input_variable(Dyson_Imprvd_F,"DYSON_F_IMPRVD",InputFile,default=.false.,comment="Perform the fermionic Dyson equation using the improved estimators.") !See PRB,85.205106
