@@ -969,7 +969,7 @@ subroutine interpolate2kpath_Bosonic(Wfull,Lttc,pathOUTPUT,name,mode,invert,remo
                allocate(TrW_intp(Nmats,Lttc%Nkpt_path));TrW_intp=czero
                call wannierinterpolation(Lttc%Nkpt3,Lttc%kpt,Lttc%kptpath(:,1:Lttc%Nkpt_path),TrW_orig,TrW_intp)
                call cpu_time(finish)
-               write(*,"(A,F)") "     "//reg(name)//"_Na(fullBZ,iw) --> "//reg(name)//"_Na(Kpath,iw) cpu timing:", finish-start
+               write(*,"(A,F)") "     "//reg(name)//"_Na_o"//str(jorb)//"(fullBZ,iw) --> "//reg(name)//"_Na_o"//str(jorb)//"(Kpath,iw) cpu timing:", finish-start
                !
                !Print along path the components of the trace
                path = reg(pathOUTPUT)//"MaxEnt_"//reg(name)//"k_path/"
