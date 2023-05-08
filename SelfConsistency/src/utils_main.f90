@@ -1419,7 +1419,7 @@ contains
       !
       call AllocateFermionicField(S_Full,Crystal%Norb,Nmats,Nkpt=Crystal%Nkpt,Nsite=Nsite,Beta=Beta,mu=Glat%mu)
       !
-      if(.not.allocated(VH)) stop "join_SigmaFull: VH not allocated."
+      if(.not.allocated(VH).and.addTierIII) stop "join_SigmaFull: VH not allocated."
       select case(reg(CalculationType))
          case default
             !
@@ -1491,9 +1491,9 @@ contains
             enddo
             call FermionicKsum(S_Full)
             !
-            do ispin=1,Nspin
-               S_Full%N_s(:,:,ispin) = Vxc_loc(:,:,ispin) - VH
-            enddo
+            !do ispin=1,Nspin
+            !   S_Full%N_s(:,:,ispin) = Vxc_loc(:,:,ispin) - VH
+            !enddo
             !
             !deallocate(VH,Vxc) scGW needs these
             deallocate(Vxc_loc)
@@ -1512,7 +1512,7 @@ contains
             do ispin=1,Nspin
                do ik=1,S_Full%Nkpt
                   do iw=1,S_Full%Npoints
-                     S_Full%wks(:,:,iw,ik,ispin) = S_DMFT%ws(:,:,iw,ispin) - HartreeFact*S_DMFT%N_s(:,:,int(Nspin/ispin)) + VH(:,:)
+                     S_Full%wks(:,:,iw,ik,ispin) = S_DMFT%ws(:,:,iw,ispin) - HartreeFact*S_DMFT%N_s(:,:,int(Nspin/ispin))! + VH(:,:)
                   enddo
                enddo
                if(paramagnet)then
@@ -2324,7 +2324,7 @@ contains
       call init_Uelements(Norb,PhysicalUelements)
       !
       allocate(Uinst(LocalOrbs(isite)%Nflavor,LocalOrbs(isite)%Nflavor));Uinst=0d0
-      call AllocateBosonicField(curlyU,Norb,Nmats,Crystal%iq_gamma,Beta=Beta)
+
       !
       !get interaction
       select case(reg(CalculationType))
@@ -2341,6 +2341,7 @@ contains
             !
          case("DMFT+dynU")
             !
+            call AllocateBosonicField(curlyU,Norb,Nmats,Crystal%iq_gamma,Beta=Beta)
             call loc2imp(curlyU,Ulat,LocalOrbs(isite)%Orbs)
             if(RotateUloc) call TransformBosonicField(curlyU,PhysicalUelements%Full_Map,LocalOrbs(isite)%Rot)
             !
@@ -2348,6 +2349,7 @@ contains
             !
             if(.not.P_EDMFT%status) stop "calc_Interaction: P_EDMFT not properly initialized."
             if(.not.Wlat%status) stop "calc_Interaction: Wlat not properly initialized."
+            call AllocateBosonicField(curlyU,Norb,Nmats,Crystal%iq_gamma,Beta=Beta)
             updatedU = .true.
             !
             if(Ustart)then

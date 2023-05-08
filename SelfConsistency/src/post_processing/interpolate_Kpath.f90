@@ -865,6 +865,8 @@ subroutine interpolate2kpath_Bosonic(Wfull,Lttc,pathOUTPUT,name,mode,invert,remo
    !-------------------------- Boson along the path ---------------------------!
    if(print_path)then
       !
+      allocate(wmats(Nmats));wmats = BosonicFreqMesh(Wfull%Beta,Nmats)
+      !
       select case(reg(mode))
          !
          case("NaNb")
@@ -879,8 +881,6 @@ subroutine interpolate2kpath_Bosonic(Wfull,Lttc,pathOUTPUT,name,mode,invert,remo
             !Print along path all NaNb components
             path = reg(pathOUTPUT)//"MaxEnt_"//reg(name)//"k_path/"
             call createDir(reg(path),verb=verbose)
-            allocate(wmats(Nmats))
-            wmats = BosonicFreqMesh(Wfull%Beta,Nmats)
             do iq=1,Lttc%Nkpt_path
                unit = free_unit()
                open(unit,file=reg(path)//reg(name)//"k_w_k"//str(iq)//"_NaNb.DAT",form="formatted",status="unknown",position="rewind",action="write")
@@ -934,8 +934,6 @@ subroutine interpolate2kpath_Bosonic(Wfull,Lttc,pathOUTPUT,name,mode,invert,remo
             !Print along path the components of the trace
             path = reg(pathOUTPUT)//"MaxEnt_"//reg(name)//"k_path/"
             call createDir(reg(path),verb=verbose)
-            allocate(wmats(Nmats))
-            wmats = BosonicFreqMesh(Wfull%Beta,Nmats)
             do iq=1,Lttc%Nkpt_path
                unit = free_unit()
                open(unit,file=reg(path)//reg(name)//"k_w_k"//str(iq)//"_Trace_NaNa.DAT",form="formatted",status="unknown",position="rewind",action="write")
@@ -974,17 +972,15 @@ subroutine interpolate2kpath_Bosonic(Wfull,Lttc,pathOUTPUT,name,mode,invert,remo
                !Print along path the components of the trace
                path = reg(pathOUTPUT)//"MaxEnt_"//reg(name)//"k_path/"
                call createDir(reg(path),verb=verbose)
-               allocate(wmats(Nmats))
-               wmats = BosonicFreqMesh(Wfull%Beta,Nmats)
                do iq=1,Lttc%Nkpt_path
                   unit = free_unit()
-                  open(unit,file=reg(path)//reg(name)//"k_w_k"//str(iq)//"_Na_o"//str(jorb)//".DAT",form="formatted",status="unknown",position="rewind",action="write")
+                  open(unit,file=reg(path)//reg(name)//"k_w_k"//str(iq)//"_o"//str(jorb)//"_Na.DAT",form="formatted",status="unknown",position="rewind",action="write")
                   do iw=1,Nmats-1
                      write(unit,"(200E20.12)") wmats(iw),dreal(TrW_intp(iw,iq)+TrWgamma(iw)),dimag(TrW_intp(iw,iq)+TrWgamma(iw))
                   enddo
                   close(unit)
                enddo
-               deallocate(TrW_orig,TrW_intp,TrWgamma,wmats)
+               deallocate(TrW_orig,TrW_intp,TrWgamma)
                !
             enddo
             !
@@ -1010,8 +1006,6 @@ subroutine interpolate2kpath_Bosonic(Wfull,Lttc,pathOUTPUT,name,mode,invert,remo
             !Print along path the components of the trace
             path = reg(pathOUTPUT)//"MaxEnt_"//reg(name)//"k_path/"
             call createDir(reg(path),verb=verbose)
-            allocate(wmats(Nmats))
-            wmats = BosonicFreqMesh(Wfull%Beta,Nmats)
             do iq=1,Lttc%Nkpt_path
                unit = free_unit()
                open(unit,file=reg(path)//reg(name)//"k_w_k"//str(iq)//"_Trace.DAT",form="formatted",status="unknown",position="rewind",action="write")
@@ -1074,8 +1068,6 @@ subroutine interpolate2kpath_Bosonic(Wfull,Lttc,pathOUTPUT,name,mode,invert,remo
             !Print along path the components of the Loss function
             path = reg(pathOUTPUT)//"MaxEnt_"//reg(name)//"k_path/"
             call createDir(reg(path),verb=verbose)
-            allocate(wmats(Nmats))
-            wmats = BosonicFreqMesh(Wfull%Beta,Nmats)
             do iq=1,Lttc%Nkpt_path
                unit = free_unit()
                open(unit,file=reg(path)//reg(name)//"k_w_k"//str(iq)//"_Loss.DAT",form="formatted",status="unknown",position="rewind",action="write")

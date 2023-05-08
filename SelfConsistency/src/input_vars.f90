@@ -509,11 +509,8 @@ contains
       if(reg(Utensor).eq."Spex") call parse_input_variable(U_AC,"U_AC",InputFile,default=.false.,comment="Flag to force the analytic continuation on the SPEX interaction.")
       if(reg(Utensor).eq."Model")then
          call parse_input_variable(Uaa,"UAA",InputFile,default=0d0,comment="Interaction between same orbital and opposite spin electrons (orbital independent).")
-         if(Norb_model.gt.1)then
-            !cahnge this if you want to have them orbital dependent
-            call parse_input_variable(Uab,"UAB",InputFile,default=0d0,comment="Interaction between different orbital and opposite spin electrons (orbital independent).")
-            call parse_input_variable(J,"JH",InputFile,default=0d0,comment="Hund's coupling (orbital independent).")
-         endif
+         call parse_input_variable(Uab,"UAB",InputFile,default=0d0,comment="Interaction between different orbital and opposite spin electrons (orbital independent).")
+         call parse_input_variable(J,"JH",InputFile,default=0d0,comment="Hund's coupling (orbital independent).")
          !phononic model U
          call parse_input_variable(Nphonons,"N_PH",InputFile,default=0,comment="Number of phononic modes.")
          if(Nphonons.gt.0)then

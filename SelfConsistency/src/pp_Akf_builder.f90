@@ -64,17 +64,23 @@ program Akw_builder
    enddo
    !
    !
-   if(print_path_Chi) call rebuild_W("C","path")
-   !if(print_plane_W) call rebuild_W("C","plane")
+   if(print_path_Chi)then
+      call rebuild_W("C","path")
+      call rebuild_W("C","path",pedix="_Trace_NaNa.DAT_dos.dat",Traced=.true.)
+      call rebuild_W("C","path",pedix="_Na.DAT_dos.dat",Traced=.False.)
+   endif
    !
    if(print_path_W)then
       call rebuild_W("W","path")
       call rebuild_W("W","path",pedix="_Trace_NaNa.DAT_dos.dat",Traced=.true.)
+      call rebuild_W("W","path",pedix="_Na.DAT_dos.dat",Traced=.False.)
    endif
    !
    if(print_path_E)then
+      call rebuild_W("E","path")
       call rebuild_W("E","path",pedix="_Trace_NaNa.DAT_dos.dat",Traced=.true.)
-      call rebuild_W("E","path",pedix="_Loss.DAT_dos.dat",Traced=.true.)
+      call rebuild_W("E","path",pedix="_Na.DAT_dos.dat",Traced=.False.)
+      !call rebuild_W("E","path",pedix="_Loss.DAT_dos.dat",Traced=.true.)
    endif
    !
    !
