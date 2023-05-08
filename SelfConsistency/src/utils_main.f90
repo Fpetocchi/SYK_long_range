@@ -3455,62 +3455,71 @@ contains
             !
             !
             !BOSONIC DYSON -----------------------------------------------------
+            if(bosonicSC)then
+               !
+               !recollect curlyU
+               call AllocateBosonicField(curlyU,LocalOrbs(isite)%Norb,Nmats,Crystal%iq_gamma,Beta=Beta)
+               call read_BosonicField(curlyU,reg(PrevItFolder)//"Solver_"//reg(LocalOrbs(isite)%Name)//"/","curlyU_"//reg(LocalOrbs(isite)%Name)//"_w.DAT")
+               !
+               !Bosonic Dyson equation in the solver basis
+               write(*,"(A)") new_line("A")//"     Solving bosonic Dyson of site "//reg(LocalOrbs(isite)%Name)
+               call AllocateBosonicField(Pimp,LocalOrbs(isite)%Norb,Nmats,Crystal%iq_gamma,no_bare=.true.,Beta=Beta)
+               call calc_Pimp(Pimp,curlyU,ChiCmats,NaNb=Pimp_NaNb)
+               if(sym_mode.gt.1) call symmetrize_GW(Pimp,EqvImpndxF(isite))!here I'm using the fermionic indexes because chi depbends on the basis
+               call dump_BosonicField(Pimp,reg(PrevItFolder)//"Solver_"//reg(LocalOrbs(isite)%Name)//"/","Pimp_"//reg(LocalOrbs(isite)%Name)//"_w.DAT")
+               !
+               !Compute convergence benchmark for the interaction
+               call AllocateBosonicField(Wimp,LocalOrbs(isite)%Norb,Nmats,Crystal%iq_gamma,Beta=Beta)
+               call calc_Wimp(Wimp,curlyU,ChiCmats)
+               !
+               !Expand to the Lattice basis
+               call imp2loc(P_EDMFT,Pimp,isite,LocalOrbs,ExpandImpurity,AFMselfcons,RotateHloc,name="Pimp")
+               call imp2loc(W_EDMFT,Wimp,isite,LocalOrbs,ExpandImpurity,AFMselfcons,RotateHloc,name="Wimp")
+               call imp2loc(curlyU_EDMFT,curlyU,isite,LocalOrbs,ExpandImpurity,AFMselfcons,RotateUloc,name="curlyU")
+               call DeallocateBosonicField(curlyU)
+               call DeallocateBosonicField(Pimp)
+               call DeallocateBosonicField(Wimp)
+               !
+            endif
             !
-            !recollect curlyU
-            call AllocateBosonicField(curlyU,LocalOrbs(isite)%Norb,Nmats,Crystal%iq_gamma,Beta=Beta)
-            call read_BosonicField(curlyU,reg(PrevItFolder)//"Solver_"//reg(LocalOrbs(isite)%Name)//"/","curlyU_"//reg(LocalOrbs(isite)%Name)//"_w.DAT")
-            !
-            !Bosonic Dyson equation in the solver basis
-            write(*,"(A)") new_line("A")//"     Solving bosonic Dyson of site "//reg(LocalOrbs(isite)%Name)
-            call AllocateBosonicField(Pimp,LocalOrbs(isite)%Norb,Nmats,Crystal%iq_gamma,no_bare=.true.,Beta=Beta)
-            call calc_Pimp(Pimp,curlyU,ChiCmats,NaNb=Pimp_NaNb)
-            if(sym_mode.gt.1) call symmetrize_GW(Pimp,EqvImpndxF(isite))!here I'm using the fermionic indexes because chi depbends on the basis
-            call dump_BosonicField(Pimp,reg(PrevItFolder)//"Solver_"//reg(LocalOrbs(isite)%Name)//"/","Pimp_"//reg(LocalOrbs(isite)%Name)//"_w.DAT")
-            !
-            !Compute convergence benchmark for the interaction
-            call AllocateBosonicField(Wimp,LocalOrbs(isite)%Norb,Nmats,Crystal%iq_gamma,Beta=Beta)
-            call calc_Wimp(Wimp,curlyU,ChiCmats)
-            !
-            !Expand to the Lattice basis
             call imp2loc(C_EDMFT,ChiCmats,isite,LocalOrbs,ExpandImpurity,AFMselfcons,RotateHloc,name="Cimp")
-            call imp2loc(P_EDMFT,Pimp,isite,LocalOrbs,ExpandImpurity,AFMselfcons,RotateHloc,name="Pimp")
-            call imp2loc(W_EDMFT,Wimp,isite,LocalOrbs,ExpandImpurity,AFMselfcons,RotateHloc,name="Wimp")
-            call imp2loc(curlyU_EDMFT,curlyU,isite,LocalOrbs,ExpandImpurity,AFMselfcons,RotateUloc,name="curlyU")
-            !
             call DeallocateBosonicField(ChiCmats)
-            call DeallocateBosonicField(curlyU)
-            call DeallocateBosonicField(Pimp)
-            call DeallocateBosonicField(Wimp)
             !
             if(ExpandImpurity.or.AFMselfcons)exit
             !
          enddo
          !
-         !symmetrize and print
-         if(verbose)call dump_BosonicField(P_EDMFT,reg(PrevItFolder),"Pimp_noSym_w.DAT")
-         call symmetrize_GW(P_EDMFT,EqvGWndx)
-         !
-         !Remove the iw=0 divergency of local polarization
-         if(removeCDW_P)then
-            write(*,"(A)") new_line("A")//"     Divergency removal in Pimp(iw=0)."
-            call dump_BosonicField(P_EDMFT,reg(PrevItFolder),"Pimp_CDW_w.DAT")
-            if(RotateUloc)then
-               call remove_CDW(P_EDMFT,"lat")
-            else
-               call remove_CDW(P_EDMFT,"imp_exp")
+         !Print Bosonic fields related to self-consistency
+         if(bosonicSC)then
+            !
+            !symmetrize and print
+            if(verbose)call dump_BosonicField(P_EDMFT,reg(PrevItFolder),"Pimp_noSym_w.DAT")
+            call symmetrize_GW(P_EDMFT,EqvGWndx)
+            !
+            !Remove the iw=0 divergency of local polarization
+            if(removeCDW_P)then
+               write(*,"(A)") new_line("A")//"     Divergency removal in Pimp(iw=0)."
+               call dump_BosonicField(P_EDMFT,reg(PrevItFolder),"Pimp_CDW_w.DAT")
+               if(RotateUloc)then
+                  call remove_CDW(P_EDMFT,"lat")
+               else
+                  call remove_CDW(P_EDMFT,"imp_exp")
+               endif
             endif
+            !
+            !Print
+            call dump_BosonicField(P_EDMFT,reg(PrevItFolder),"Pimp_w.DAT")
+            call dump_BosonicField(W_EDMFT,reg(PrevItFolder),"Wimp_w.DAT")
+            call dump_BosonicField(curlyU_EDMFT,reg(PrevItFolder),"curlyUimp_w.DAT")
+            call dump_MaxEnt(P_EDMFT,"mats",reg(PrevItFolder)//"Convergence/","Pimp",EqvGWndx%SetOrbs)
+            call dump_MaxEnt(W_EDMFT,"mats",reg(PrevItFolder)//"Convergence/","Wimp",EqvGWndx%SetOrbs)
+            call dump_MaxEnt(curlyU_EDMFT,"mats",reg(PrevItFolder)//"Convergence/","curlyUimp",EqvGWndx%SetOrbs)
+            !
          endif
          !
          !Print
-         call dump_BosonicField(P_EDMFT,reg(PrevItFolder),"Pimp_w.DAT")
-         call dump_BosonicField(W_EDMFT,reg(PrevItFolder),"Wimp_w.DAT")
          call dump_BosonicField(C_EDMFT,reg(PrevItFolder),"Cimp_w.DAT")
          call dump_BosonicField(M_EDMFT,reg(PrevItFolder),"Mimp_w.DAT")
-         call dump_BosonicField(curlyU_EDMFT,reg(PrevItFolder),"curlyUimp_w.DAT")
-         !
-         call dump_MaxEnt(P_EDMFT,"mats",reg(PrevItFolder)//"Convergence/","Pimp",EqvGWndx%SetOrbs)
-         call dump_MaxEnt(W_EDMFT,"mats",reg(PrevItFolder)//"Convergence/","Wimp",EqvGWndx%SetOrbs)
-         call dump_MaxEnt(curlyU_EDMFT,"mats",reg(PrevItFolder)//"Convergence/","curlyUimp",EqvGWndx%SetOrbs)
          call dump_MaxEnt(C_EDMFT,"mats",reg(PrevItFolder)//"Convergence/","Cimp",EqvGWndx%SetOrbs)
          call dump_MaxEnt(M_EDMFT,"mats",reg(PrevItFolder)//"Convergence/","Mimp",EqvGWndx%SetOrbs)
          !
