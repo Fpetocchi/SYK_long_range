@@ -775,7 +775,7 @@ subroutine interpolate2kpath_Bosonic(Wfull,Lttc,pathOUTPUT,name,mode,invert,remo
    !
    print_path = print_path_Chi .or. print_path_W .or. print_path_E
    !
-   !removed from input_vars
+   !flag removed from input_vars
    print_plane = .false. !print_plane_W
    !
    call createDir(reg(pathOUTPUT),verb=verbose)
@@ -792,7 +792,9 @@ subroutine interpolate2kpath_Bosonic(Wfull,Lttc,pathOUTPUT,name,mode,invert,remo
    select case(reg(mode))
       case default
          stop "interpolate2kpath_Bosonic: Available modes are: NaNb, Trace_NaNa, Na, Trace, Loss."
-      case("NaNb","Trace_NaNa","Na")
+      case("NaNb","Trace_NaNa","Na","Loss")
+         !
+         !Loss function computed only with density-density terms, too heavy otherwise.
          !
          Wdim = Norb
          !
@@ -830,7 +832,7 @@ subroutine interpolate2kpath_Bosonic(Wfull,Lttc,pathOUTPUT,name,mode,invert,remo
             enddo
          endif
          !
-      case("Trace","Loss")
+      case("Trace")
          !
          Wdim = Wfull%Nbp
          !
@@ -1020,22 +1022,11 @@ subroutine interpolate2kpath_Bosonic(Wfull,Lttc,pathOUTPUT,name,mode,invert,remo
          case("Loss")
             !
             !Interpolate the full boson along the path
+            call cpu_time(start)
             allocate(W_intp(Wdim,Wdim,Nmats,Lttc%Nkpt_path));W_intp=czero
-            allocate(Wcomp_orig(Nmats,Lttc%Nkpt_path));Wcomp_orig=czero
-            allocate(Wcomp_intp(Nmats,Lttc%Nkpt_path));Wcomp_intp=czero
-            do ib1=1,Wdim
-               do ib2=ib1,Wdim
-                  call cpu_time(start)
-                  Wcomp_orig=W_orig(ib1,ib2,:,:)
-                  call wannierinterpolation(Lttc%Nkpt3,Lttc%kpt,Lttc%kptpath(:,1:Lttc%Nkpt_path),Wcomp_orig,Wcomp_intp)
-                  W_intp(ib1,ib2,:,:) = Wcomp_intp
-                  if(ib1.ne.ib2)W_intp(ib2,ib1,:,:)=conjg(Wcomp_intp)
-                  call cpu_time(finish)
-                  !if(verbose)
-                  write(*,"(A,F)") "     "//reg(name)//"_Loss(fullBZ,iw) --> "//reg(name)//"_Loss(Kpath,iw) ["//str(ib1)//","//str(ib2)//"] cpu timing:", finish-start
-               enddo
-            enddo
-            deallocate(Wcomp_orig,Wcomp_intp)
+            call wannierinterpolation(Lttc%Nkpt3,Lttc%kpt,Lttc%kptpath(:,1:Lttc%Nkpt_path),W_orig,W_intp)
+            call cpu_time(finish)
+            write(*,"(A,F)") "     "//reg(name)//"_Loss(fullBZ,iw) --> "//reg(name)//"_Loss(Kpath,iw) ["//str(ib1)//","//str(ib2)//"] cpu timing:", finish-start
             !
             !extract the eigenvalues along the path
             allocate(TrW_intp(Nmats,Lttc%Nkpt_path));TrW_intp=czero
@@ -1057,9 +1048,6 @@ subroutine interpolate2kpath_Bosonic(Wfull,Lttc,pathOUTPUT,name,mode,invert,remo
                   enddo
                   !
                   if(invert_) TrW_intp(iw,iq) = 1d0/TrW_intp(iw,iq)
-                  !TEST>>>
-                  write(*,"(3I6,2F)")iw,iq,dreal(TrW_intp(iw,iq)),dimag(TrW_intp(iw,iq))
-                  !>>>TEST
                   !
                enddo
             enddo

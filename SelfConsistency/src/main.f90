@@ -121,7 +121,7 @@ program SelfConsistency
          !
          if(interp_Chi) then
             call calc_chi(Chi,Ulat,Plat,Crystal)!,pathPk=reg(MaxEnt_K)//"/MaxEnt_Chik_path_t")
-            call interpolate2kpath(Chi,Crystal,reg(MaxEnt_K),name="C",mode="Na")
+            call interpolate2kpath(Chi,Crystal,reg(MaxEnt_K),name="C",mode="NaNb")
             call DeallocateBosonicField(Chi)
          endif
          !
@@ -136,11 +136,8 @@ program SelfConsistency
          call dump_BosonicField(Wlat,reg(ItFolder),"Wlat_w.DAT")
          call dump_MaxEnt(Wlat,"mats",reg(ItFolder)//"Convergence/","Wlat",EqvGWndx%SetOrbs)
          !
-         if(interp_W) call interpolate2kpath(Wlat,Crystal,reg(MaxEnt_K),name="W",mode="Na")
-         if(interp_E) call interpolate2kpath(Einv,Crystal,reg(MaxEnt_K),name="E",mode="Na")
-         !if(interp_E) call interpolate2kpath(Einv,Crystal,reg(MaxEnt_K),name="E",mode="Loss",invert=.true.)
-         !call execute_command_line(" touch doSolver ")
-         !stop
+         if(interp_W) call interpolate2kpath(Wlat,Crystal,reg(MaxEnt_K),name="W",mode="NaNb")
+         if(interp_E) call interpolate2kpath(Einv,Crystal,reg(MaxEnt_K),name="E",mode="Loss",invert=.true.)
          call DeallocateBosonicField(Einv)
          !
          !Solve the Gap equation
@@ -259,7 +256,7 @@ program SelfConsistency
                   stop "Wrong entry for DC_TYPE_GW. Available: GlocWloc, Sloc."
                case("GlocWloc")
                   call calc_sigmaGWdc_GlocWloc(S_GWdc,Glat,Wlat)
-               case("Slocs")
+               case("Sloc")
                   call calc_sigmaGWdc(S_GWdc,Glat,Wlat)
             end select
             call dump_FermionicField(S_GWdc,reg(ItFolder),"Slat_dc_w",paramagnet)
