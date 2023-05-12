@@ -1047,7 +1047,9 @@ subroutine interpolate2kpath_Bosonic(Wfull,Lttc,pathOUTPUT,name,mode,invert,remo
                      TrW_intp(iw,iq) = TrW_intp(iw,iq)*EigW(ib1)
                   enddo
                   !
-                  if(invert_) TrW_intp(iw,iq) = 1d0/TrW_intp(iw,iq)
+                  !>>>TEST
+                  !if(invert_) TrW_intp(iw,iq) = 1d0/TrW_intp(iw,iq)
+                  !>>>TEST
                   !
                enddo
             enddo
