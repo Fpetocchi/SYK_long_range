@@ -1037,6 +1037,8 @@ contains
                   call read_U_vasp(Umat,Crystal)
                elseif((reg(Utensor).eq."Model"))then
                   call build_Umat(Umat,Uaa,Uab,J)
+               elseif((reg(Utensor).eq."File"))then
+                  call read_U(Umat)
                endif
             endif
             !
@@ -1302,11 +1304,11 @@ contains
          densityGW = Glat%N_s
          densityDMFT=czero
          !
-         call dump_Matrix(densityLDA,reg(pathINPUT),"Nlda",paramagnet)
+         call dump_Matrix(densityLDA,reg(pathINPUT),"Nlda_N"//str(look4dens%TargetDensity,3),paramagnet)
          !
       else
          !
-         if(addTierIII)call read_Matrix(densityLDA,reg(pathINPUT)//"Nlda",paramagnet)
+         if(addTierIII)call read_Matrix(densityLDA,reg(pathINPUT)//"Nlda_N"//str(look4dens%TargetDensity,3),paramagnet)
          if(solve_DMFT)call read_Matrix(densityDMFT,reg(PrevItFolder)//"Nimp",paramagnet)
          densityGW=Glat%N_s
          !

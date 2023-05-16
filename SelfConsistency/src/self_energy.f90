@@ -326,7 +326,7 @@ contains
       real                                  :: start,finish
       !
       !
-      if(verbose)write(*,"(A)") "---- calc_sigmaGWdc"
+      write(*,"(A)") new_line("A")//new_line("A")//"---- calc_sigmaGWdc"
       !
       !
       ! Check on the input Fields
@@ -624,7 +624,7 @@ contains
       logical                               :: DC_remove_self_
       !
       !
-      if(verbose)write(*,"(A)") "---- calc_sigmaGWdc_GlocWloc"
+      write(*,"(A)") new_line("A")//new_line("A")//"---- calc_sigmaGWdc_GlocWloc"
       !
       !
       ! Check on the input Fields

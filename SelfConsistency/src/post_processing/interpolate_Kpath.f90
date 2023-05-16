@@ -741,7 +741,7 @@ subroutine interpolate2kpath_Bosonic(Wfull,Lttc,pathOUTPUT,name,mode,invert,remo
    complex(8),allocatable                :: W_orig(:,:,:,:),W_intp(:,:,:,:)
    complex(8),allocatable                :: Wgamma(:,:,:)
    complex(8),allocatable                :: TrW_orig(:,:),TrW_intp(:,:)
-   complex(8),allocatable                :: Wcomp_orig(:,:),Wcomp_intp(:,:)
+   !complex(8),allocatable                :: Wcomp_orig(:,:),Wcomp_intp(:,:)
    complex(8),allocatable                :: TrWgamma(:)
    complex(8),allocatable                :: invW(:,:)
    real(8),allocatable                   :: wmats(:),EigW(:)
@@ -792,7 +792,7 @@ subroutine interpolate2kpath_Bosonic(Wfull,Lttc,pathOUTPUT,name,mode,invert,remo
    select case(reg(mode))
       case default
          stop "interpolate2kpath_Bosonic: Available modes are: NaNb, Trace_NaNa, Na, Trace, Loss."
-      case("NaNb","Trace_NaNa","Na","Loss")
+      case("NaNb","Trace_NaNa","Na")
          !
          !Loss function computed only with density-density terms, too heavy otherwise.
          !
@@ -829,6 +829,47 @@ subroutine interpolate2kpath_Bosonic(Wfull,Lttc,pathOUTPUT,name,mode,invert,remo
                      W_orig(iorb,jorb,:,iq) = W_orig(iorb,jorb,:,iq) - Wgamma(iorb,jorb,:)
                   enddo
                enddo
+            enddo
+         endif
+         !
+      case("Loss")
+         !
+         !Loss function computed only with density-density terms, too heavy otherwise.
+         !
+         Wdim = Norb
+         !
+         allocate(W_orig(Wdim,Wdim,Nmats,Lttc%Nkpt));W_orig=czero
+         allocate(Wgamma(Wdim,Wdim,Nmats));Wgamma=czero
+         !
+         do iorb=1,Norb
+            do jorb=1,Norb
+               call F2Bindex(Norb,[iorb,iorb],[jorb,jorb],ib1,ib2)
+               W_orig(iorb,jorb,:,:) = Wfull%screened(ib1,ib2,:,:)
+            enddo
+         enddo
+         !
+         allocate(invW(Wfull%Nbp,Wfull%Nbp));invW=czero
+         do iw=1,Nmats
+            do iq=1,Wfull%Nkpt
+               !inversion to get Eps
+               invW = Wfull%screened(:,:,iw,iq)
+               call inv(invW)
+               !store only (aa)(bb) elements
+               do iorb=1,Norb
+                  do jorb=1,Norb
+                     call F2Bindex(Norb,[iorb,iorb],[jorb,jorb],ib1,ib2)
+                     W_orig(iorb,jorb,iw,iq) = invW(ib1,ib2)
+                     !store the inverted Gamma point
+                     if(remove_Gamma_.and.(iq.eq.Wfull%iq_gamma)) Wgamma(iorb,jorb,iw) = invW(ib1,ib2)
+                  enddo
+               enddo
+            enddo
+         enddo
+         deallocate(invW)
+         !
+         if(remove_Gamma_) then
+            do iq=1,Wfull%Nkpt
+               W_orig(:,:,:,iq) = W_orig(:,:,:,iq) - Wgamma
             enddo
          endif
          !

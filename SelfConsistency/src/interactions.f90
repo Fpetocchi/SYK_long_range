@@ -57,6 +57,7 @@ module interactions
    public :: calc_chi
    public :: read_U_spex
    public :: read_U_vasp
+   public :: read_U
    public :: build_Umat
    public :: build_Uret
    public :: calc_QMCinteractions
@@ -1442,6 +1443,96 @@ contains
       deallocate(U_iijj,U_ijji,U_ijij)
       !
    end subroutine read_U_vasp_Uloc0
+
+
+   !---------------------------------------------------------------------------!
+   !PURPOSE: Read local interaction in product basis format.
+   !---------------------------------------------------------------------------!
+   subroutine read_U(Umat)
+      !
+      use parameters
+      use file_io
+      use utils_misc
+      use utils_fields
+      use crystal
+      use input_vars, only : pathINPUT
+      implicit none
+      !
+      complex(8),allocatable,intent(inout)  :: Umat(:,:)
+      !
+      integer                               :: iorb,jorb,ib1,ib2
+      integer                               :: Norb,Nbp
+      integer                               :: unit,idum
+      real(8),allocatable                   :: ReadLine(:)
+      real(8),allocatable                   :: U_iijj(:,:),U_ijji(:,:),U_ijij(:,:)
+      character(len=255)                    :: file
+      logical                               :: filexists
+      !
+      !
+      if(verbose)write(*,"(A)") "---- read_U"
+      !
+      !
+      ! Check on the input field
+      Nbp = size(Umat,dim=1)
+      Norb = int(sqrt(dble(Nbp)))
+      !
+      call assert_shape(Umat,[Nbp,Nbp],"read_U","Umat")
+      !
+      allocate(ReadLine(Norb));ReadLine=0d0
+      allocate(U_iijj(Norb,Norb));U_iijj=0d0
+      allocate(U_ijji(Norb,Norb));U_ijji=0d0
+      allocate(U_ijij(Norb,Norb));U_ijij=0d0
+      !
+      file = reg(pathINPUT)//"U_ijkl.DAT"
+      call inquireFile(reg(file),filexists,verb=verbose)
+      unit = free_unit()
+      open(unit,file=reg(file),form="formatted",status="old",position="rewind",action="read")
+      call skip_header(unit,3)
+      do iorb=1,Norb
+         ReadLine=0d0
+         read(unit,*) idum,ReadLine
+         if(idum.ne.iorb) stop "read_U: wrong index in U_iijj."
+         U_iijj(iorb,:) = ReadLine
+      enddo
+      call skip_header(unit,3)
+      do iorb=1,Norb
+         ReadLine=0d0
+         read(unit,*) idum,ReadLine
+         if(idum.ne.iorb) stop "read_U: wrong index in U_ijji."
+         U_ijji(iorb,:) = ReadLine
+      enddo
+      call skip_header(unit,3)
+      do iorb=1,Norb
+         ReadLine=0d0
+         read(unit,*) idum,ReadLine
+         if(idum.ne.iorb) stop "read_U: wrong index in U_ijij."
+         U_ijij(iorb,:) = ReadLine
+      enddo
+      deallocate(ReadLine)
+      !
+      if(sum(abs(U_ijji-U_ijij)).gt.eps) write(*,"(A)") "     Warning(read_U): non-invariant Hund's coupling."
+      !
+      Umat=czero
+      do iorb=1,Norb
+         do jorb=1,Norb
+            !
+            !U_iijj
+            call F2Bindex(Norb,[iorb,iorb],[jorb,jorb],ib1,ib2)
+            Umat(ib1,ib2) = dcmplx(U_iijj(iorb,jorb),0d0)
+            !
+            !U_ijji
+            call F2Bindex(Norb,[iorb,jorb],[jorb,iorb],ib1,ib2)
+            Umat(ib1,ib2) = dcmplx(U_ijji(iorb,jorb),0d0)
+            !
+            !U_ijij
+            call F2Bindex(Norb,[iorb,jorb],[iorb,jorb],ib1,ib2)
+            Umat(ib1,ib2) = dcmplx(U_ijij(iorb,jorb),0d0)
+            !
+         enddo
+      enddo
+      deallocate(U_iijj,U_ijji,U_ijij)
+      !
+   end subroutine read_U
 
 
    !---------------------------------------------------------------------------!

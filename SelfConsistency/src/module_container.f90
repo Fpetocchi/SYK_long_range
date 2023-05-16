@@ -132,6 +132,7 @@ module module_container
    use interactions, only:                   &
    read_U_spex                              ,&
    read_U_vasp                              ,&
+   read_U                                   ,&
    calc_W_full                              ,&
    calc_W_edmft                             ,&
    calc_chi                                 ,&

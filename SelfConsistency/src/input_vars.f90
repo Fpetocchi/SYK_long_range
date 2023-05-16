@@ -502,7 +502,7 @@ contains
       !Interaction variables
       call add_separator("Interaction")
       call parse_input_variable(UfullStructure,"U_FULL",InputFile,default=.true.,comment="Flag to use all the off-diagonal components of SPEX Ucrpa or only the physical ones.")
-      call parse_input_variable(Utensor,"U_TENSOR",InputFile,default="Spex",comment="Interaction tensor mode. Available: Spex, Model, Vasp.")
+      call parse_input_variable(Utensor,"U_TENSOR",InputFile,default="Spex",comment="Interaction tensor mode. Available: Spex, Model, Vasp, File (only for CALC_TYPE=DMFT+statU).")
       call parse_input_variable(Ustart,"U_START",InputFile,default=.true.,comment="Flag to use the local Ucrpa interaction as the effetive interaction in the 0th iteration.")
       call parse_input_variable(Uthresh,"U_THRES",InputFile,default=0.001d0,comment="Lowest magnitude considered in SPEX Ucrpa bare interaction (only for local interactions).")
       if((reg(CalculationType).eq."GW+EDMFT").or.(reg(CalculationType).eq."scGW"))call parse_input_variable(Uscreen,"U_SCREEN",InputFile,default=.true.,comment="Screen the bare interaction with the non-local polarization.")
@@ -564,6 +564,8 @@ contains
             allocate(SiteOrbs(isite)%Orbs(SiteOrbs(isite)%Norb));SiteOrbs(isite)%Orbs=0
             call parse_input_variable(SiteOrbs(isite)%Orbs,"SITE_ORBS_"//str(isite),InputFile,default=SiteOrbs(isite)%Orbs,comment="Indexes of orbitals on lattice site number "//str(isite))
          enddo
+         elseif(reg(Utensor).eq."File")then
+            if(reg(CalculationType).ne."DMFT+statU") stop "Interactio read from file allowed only for CALC_TYPE=DMFT+statU."
       endif
       !
       !Double counting types, divergencies, scaling coefficients
