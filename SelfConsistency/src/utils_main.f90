@@ -3223,6 +3223,7 @@ contains
                deallocate(rho)
                !
          end select
+         deallocate(Uinst,Uinst_prod)
          !
          !Hartree term in the Solver basis
          call dump_Matrix(Simp(isite)%N_s,reg(PrevItFolder),"Solver_"//reg(LocalOrbs(isite)%Name)//"/Hartree_term_"//reg(LocalOrbs(isite)%Name),paramagnet)

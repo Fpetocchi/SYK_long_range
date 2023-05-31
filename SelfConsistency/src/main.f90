@@ -190,11 +190,10 @@ program SelfConsistency
                   call dump_Matrix(VH_Nimp,reg(ItFolder),"VH_Nimp.DAT")
                   write(*,"(A)")"     VH not used."
             end select
-            deallocate(VH_Nlat,VH_Nimp)
             !
             call calc_VH(Hartree_lat,densityGW)
             call dump_Matrix(Hartree_lat,reg(ItFolder),"Hartree_lat.DAT")
-            deallocate(Hartree_lat)
+            if(solve_DMFT)deallocate(VH_Nlat,VH_Nimp,Hartree_lat)
             !
          endif
          !
