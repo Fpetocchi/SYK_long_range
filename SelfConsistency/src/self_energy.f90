@@ -58,11 +58,12 @@ contains
       !
       use parameters
       use linalg
+      use file_io
       use utils_misc
       use utils_fields
       use crystal
       use fourier_transforms
-      use input_vars, only : Ntau, tau_uniform, paramagnet
+      use input_vars, only : Ntau, tau_uniform, paramagnet, pathINPUT
       implicit none
       !
       type(FermionicField),intent(inout)    :: Smats
@@ -74,12 +75,14 @@ contains
       complex(8),allocatable                :: Sitau(:,:,:)
       complex(8),allocatable                :: Gitau(:,:,:,:,:)
       complex(8),allocatable                :: Witau(:,:,:,:)
+      complex(8),allocatable                :: Zk_sigma(:,:,:)
       real(8)                               :: Beta
       integer                               :: Nbp,Nkpt,Norb,Nmats
       integer                               :: ik1,ik2,iq,iw,itau,ispin
       integer                               :: i,j,k,l,ib1,ib2
       real                                  :: start,finish
       logical                               :: LDAoffdiag_
+      logical                               :: ZkfromHk=.true.
       !
       !
       write(*,"(A)") new_line("A")//new_line("A")//"---- calc_sigmaGW"
@@ -229,6 +232,29 @@ contains
       write(*,"(A,F)") "     Sigma_X(k) cpu timing:", finish-start
       !
       if(Lttc%Nkpt_irred.lt.Nkpt) then
+         !
+         allocate(Zk_sigma(Lttc%Norb,Lttc%Norb,Lttc%Nkpt));Zk_sigma=czero
+         if(ZkfromHk)then
+            !
+            Zk_sigma = Lttc%Zk
+            !
+         else
+            !
+            !Uwan rotation brings from LDA to Wannier
+            if(.not.Uwan_stored)then
+               if(allocated(UwanDFT)) deallocate(UwanDFT)
+               allocate(UwanDFT(Lttc%Norb,Lttc%Norb,Lttc%Nkpt,1));UwanDFT=czero
+               call read_matrix(UwanDFT(:,:,:,1),reg(pathINPUT)//"UWAN_used_k_s1.DAT")
+            else
+               call assert_shape(UwanDFT(:,:,:,1),[Lttc%Norb,Lttc%Norb,Lttc%Nkpt],"print_G0W0_dispersion","UwanDFT")
+            endif
+            !
+            do iq=1,Lttc%Nkpt
+               Zk_sigma(:,:,iq) = dag(UwanDFT(:,:,iq,1))
+            enddo
+            !
+         endif
+         !
          !sigma(ik)=sigma(kptp(ik))
          write(*,"(A)") "     Transformation to lda eigenbasis and back."
          if(.not.LDAoffdiag_) write(*,"(A)") "     Removing off-diagonal elements in lda eigenbasis."
@@ -237,9 +263,9 @@ contains
             !
             !rotation to lda eigenbasis
             do iq=1,Lttc%Nkpt_irred
-               Smats_X_stored%N_ks(:,:,iq,ispin) = rotate(Smats_X_stored%N_ks(:,:,iq,ispin),Lttc%Zk(:,:,iq))
+               Smats_X_stored%N_ks(:,:,iq,ispin) = rotate(Smats_X_stored%N_ks(:,:,iq,ispin),Zk_sigma(:,:,iq))
                do iw=1,Nmats
-                  Smats_C_stored%wks(:,:,iw,iq,ispin) = rotate(Smats_C_stored%wks(:,:,iw,iq,ispin),Lttc%Zk(:,:,iq))
+                  Smats_C_stored%wks(:,:,iw,iq,ispin) = rotate(Smats_C_stored%wks(:,:,iw,iq,ispin),Zk_sigma(:,:,iq))
                enddo
             enddo
             !
@@ -263,9 +289,9 @@ contains
             !
             !rotate back
             do iq=1,Nkpt
-               Smats_X_stored%N_ks(:,:,iq,ispin) = rotate(Smats_X_stored%N_ks(:,:,iq,ispin),transpose(conjg(Lttc%Zk(:,:,iq))))
+               Smats_X_stored%N_ks(:,:,iq,ispin) = rotate(Smats_X_stored%N_ks(:,:,iq,ispin),transpose(conjg(Zk_sigma(:,:,iq))))
                do iw=1,Nmats
-                  Smats_C_stored%wks(:,:,iw,iq,ispin) = rotate(Smats_C_stored%wks(:,:,iw,iq,ispin),transpose(conjg(Lttc%Zk(:,:,iq))))
+                  Smats_C_stored%wks(:,:,iw,iq,ispin) = rotate(Smats_C_stored%wks(:,:,iw,iq,ispin),transpose(conjg(Zk_sigma(:,:,iq))))
                enddo
             enddo
             !
@@ -1460,6 +1486,9 @@ contains
          if(allocated(UwanDFT))deallocate(UwanDFT)
          allocate(UwanDFT(Norb,Norb,Nkpt,Nspin_Uwan))
          UwanDFT = Uwan(ib_Uwan1:ib_Uwan2,:,:,:)
+         do ispin=1,Nspin_Uwan
+            call dump_matrix(UwanDFT(:,:,:,ispin),.true.,reg(pathINPUT),"UWAN_used",ispin=ispin)
+         enddo
          Uwan_stored = .true.
          !
          ! Look for the Number of Sigma segments.
@@ -1982,6 +2011,9 @@ contains
          if(allocated(UwanDFT))deallocate(UwanDFT)
          allocate(UwanDFT(Norb,Norb,Nkpt,Nspin_Uwan))
          UwanDFT = Uwan(ib_Uwan1:ib_Uwan2,:,:,:)
+         do ispin=1,Nspin_Uwan
+            call dump_matrix(UwanDFT(:,:,:,ispin),.true.,reg(pathINPUT),"UWAN_used",ispin=ispin)
+         enddo
          Uwan_stored = .true.
          !
          ! Look for the Number of Sigma files and internal consistency.
@@ -2679,10 +2711,15 @@ contains
       !
       if(.not.Lttc%status) stop "print_G0W0_dispersion: Lattice container not properly initialized."
       if(.not.Lttc%pathStored) stop "print_G0W0_dispersion: K-points along the path not stored."
-      if(.not.Uwan_stored) stop "print_G0W0_dispersion: rotation towards the DFT basis not stored."
       !
       !Uwan rotation brings from LDA to Wannier
-      call assert_shape(UwanDFT(:,:,:,1),[Lttc%Norb,Lttc%Norb,Lttc%Nkpt],"print_G0W0_dispersion","UwanDFT")
+      if(.not.Uwan_stored)then
+         if(allocated(UwanDFT)) deallocate(UwanDFT)
+         allocate(UwanDFT(Lttc%Norb,Lttc%Norb,Lttc%Nkpt,1));UwanDFT=czero
+         call read_matrix(UwanDFT(:,:,:,1),reg(pathINPUT)//"UWAN_used_k_s1.DAT")
+      else
+         call assert_shape(UwanDFT(:,:,:,1),[Lttc%Norb,Lttc%Norb,Lttc%Nkpt],"print_G0W0_dispersion","UwanDFT")
+      endif
       allocate(Zk(Lttc%Norb,Lttc%Norb,Lttc%Nkpt));Zk=czero
       do ik=1,Lttc%Nkpt
          Zk(:,:,ik) = dag(UwanDFT(:,:,ik,1))

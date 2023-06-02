@@ -1046,7 +1046,7 @@ contains
          path = reg(pathINPUT)//"VW_real/"
          do iq=1,200000
             !
-            file_spex = reg(path)//"VW_real/VW.Q"//str(iq,4)//".DAT"        !write(fn,"(a,a,i4.4,a)") reg(path),"VW_real/VW.Q",iq,".DAT"
+            file_spex = reg(path)//"VW.Q"//str(iq,4)//".DAT"        !write(fn,"(a,a,i4.4,a)") reg(path),"VW_real/VW.Q",iq,".DAT"
             call inquireFile(reg(file_spex),SPEXxists,hardstop=.false.,verb=verbose)
             !
             ! This mathod looks uglier than the previous but here I don't
