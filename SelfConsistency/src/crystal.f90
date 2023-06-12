@@ -3461,6 +3461,7 @@ contains
          ! Generic B1,B2,B3
          allocate(kpt_plane(3,Nkpt_Kside**3))
          !
+         ik=0
          do ik1=1,Nkpt_Kside
             do ik2=1,Nkpt_Kside
                do ik3=1,Nkpt_Kside
@@ -4213,20 +4214,21 @@ contains
             ikx = int(ik/(Nkpt_plane+0.001))+1
             iky = ik - (ikx-1)*Nkpt_plane
             !
-            k1 = Lttc%kptPlane(1,ik)
-            k2 = Lttc%kptPlane(2,ik)
-            k3 = Lttc%kptPlane(3,ik)
+            k1 = kptPlane(1,ik)
+            k2 = kptPlane(2,ik)
+            k3 = kptPlane(3,ik)
             !
             Bx = k1*Blat(1,1) + k2*Blat(1,2) + k3*Blat(1,3) ; if(ik.eq.1) Bx_old = Bx
             By = k1*Blat(2,1) + k2*Blat(2,2) + k3*Blat(2,3)
             Bz = k1*Blat(3,1) + k2*Blat(3,2) + k3*Blat(3,3)
             !
-            write(unit,"(3I5,200E20.12)") ik,ikx,iky,k1,k2,k3,Bx,By,Bz,(Fk(io,io,ik),io=1,Ndim)
-            !if(iky.eq.Nkpt_plane)write(unit,*)
             if(Bx.ne.Bx_old)then
                write(unit,*)
                Bx_old = Bx
             endif
+            !
+            write(unit,"(3I10,200E20.12)") ik,ikx,iky,k1,k2,k3,Bx,By,Bz,(Fk(io,io,ik),io=1,Ndim)
+            !if(iky.eq.Nkpt_plane)write(unit,*)
             !
          enddo
          close(unit)
@@ -4252,20 +4254,21 @@ contains
                   ikx = int(ik/(Nkpt_plane+0.001))+1
                   iky = ik - (ikx-1)*Nkpt_plane
                   !
-                  k1 = Lttc%kptPlane(1,ik)
-                  k2 = Lttc%kptPlane(2,ik)
-                  k3 = Lttc%kptPlane(3,ik)
+                  k1 = kptPlane(1,ik)
+                  k2 = kptPlane(2,ik)
+                  k3 = kptPlane(3,ik)
                   !
                   Bx = k1*Blat(1,1) + k2*Blat(1,2) + k3*Blat(1,3) ; if(ik.eq.1) Bx_old = Bx
                   By = k1*Blat(2,1) + k2*Blat(2,2) + k3*Blat(2,3)
                   Bz = k1*Blat(3,1) + k2*Blat(3,2) + k3*Blat(3,3)
                   !
-                  write(unit,"(3I5,200E20.12)") ik,ikx,iky,k1,k2,k3,Bx,By,Bz,(dreal(Fk_kz(io,io,ik,ikz)),io=1,Hetero%Norb)
-                  !if(iky.eq.Nkpt_plane)write(unit,*)
                   if(Bx.ne.Bx_old)then
                      write(unit,*)
                      Bx_old = Bx
                   endif
+                  !
+                  write(unit,"(3I10,200E20.12)") ik,ikx,iky,k1,k2,k3,Bx,By,Bz,(dreal(Fk_kz(io,io,ik,ikz)),io=1,Hetero%Norb)
+                  !if(iky.eq.Nkpt_plane)write(unit,*)
                   !
                enddo
                close(unit)
