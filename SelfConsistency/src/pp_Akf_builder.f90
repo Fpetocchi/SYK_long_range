@@ -113,7 +113,7 @@ contains
       real(8),allocatable                   :: wreal(:),wreal_read(:)
       real(8),allocatable                   :: Akw_orb(:,:,:),Rkw_orb(:,:,:)
       real(8)                               :: dw,fact
-      real(8)                               :: kx,ky,Bvec(3),Kvec(3),Blat(3,3)
+      real(8)                               :: k1,k2,k3,Bx,By,Bz,Bx_old,Blat(3,3)
       character(len=256)                    :: path,suffix_,pedix_,ax_
       logical                               :: ik1st_read
       !
@@ -354,12 +354,25 @@ contains
          unit = free_unit()
          open(unit,file=reg(path),form="formatted",status="unknown",position="rewind",action="write")
          do ik=1,Nkpt
-            ikx = int(ik/(Nkpt_Kside+0.001))+1 ; kx = (ikx-1)/dble(Nkpt_Kside-1) - 0.5d0
-            iky = ik - (ikx-1)*Nkpt_Kside      ; ky = (iky-1)/dble(Nkpt_Kside-1) - 0.5d0
-            Kvec = kx*Blat(:,1) + ky*Blat(:,2)
-            Bvec = [kx*Blat(1,1)+Blat(1,2),ky*Blat(2,1)+Blat(2,2),0d0]
-            write(unit,"(3I5,200E20.12)") ik,ikx,iky,Bvec(1),Bvec(2),Kvec(1),Kvec(2),(Akw_orb(iorb,wndx_cut,ik),iorb=1,Norb)
-            if(iky.eq.Nkpt_Kside)write(unit,*)
+            !
+            ikx = int(ik/(Nkpt_plane+0.001))+1
+            iky = ik - (ikx-1)*Nkpt_plane
+            !
+            k1 = Crystal%kptPlane(1,ik)
+            k2 = Crystal%kptPlane(2,ik)
+            k3 = Crystal%kptPlane(3,ik)
+            !
+            Bx = k1*Blat(1,1) + k2*Blat(1,2) + k3*Blat(1,3) ; if(ik.eq.1) Bx_old = Bx
+            By = k1*Blat(2,1) + k2*Blat(2,2) + k3*Blat(2,3)
+            Bz = k1*Blat(3,1) + k2*Blat(3,2) + k3*Blat(3,3)
+            !
+            write(unit,"(3I5,200E20.12)") ik,ikx,iky,k1,k2,k3,Bx,By,Bz,(Akw_orb(iorb,wndx_cut,ik),iorb=1,Norb)
+            !if(iky.eq.Nkpt_plane)write(unit,*)
+            if(Bx.ne.Bx_old)then
+               write(unit,*)
+               Bx_old = Bx
+            endif
+            !
          enddo
          close(unit)
          !
@@ -368,12 +381,25 @@ contains
             unit = free_unit()
             open(unit,file=reg(path),form="formatted",status="unknown",position="rewind",action="write")
             do ik=1,Nkpt
-               ikx = int(ik/(Nkpt_Kside+0.001))+1 ; kx = (ikx-1)/dble(Nkpt_Kside-1) - 0.5d0
-               iky = ik - (ikx-1)*Nkpt_Kside      ; ky = (iky-1)/dble(Nkpt_Kside-1) - 0.5d0
-               Kvec = kx*Blat(:,1) + ky*Blat(:,2)
-               Bvec = [kx*Blat(1,1)+Blat(1,2),ky*Blat(2,1)+Blat(2,2),0d0]
-               write(unit,"(3I5,200E20.12)") ik,ikx,iky,Bvec(1),Bvec(2),Kvec(1),Kvec(2),(Rkw_orb(iorb,wndx_cut,ik),iorb=1,Norb)
-               if(iky.eq.Nkpt_Kside)write(unit,*)
+               !
+               ikx = int(ik/(Nkpt_plane+0.001))+1
+               iky = ik - (ikx-1)*Nkpt_plane
+               !
+               k1 = Crystal%kptPlane(1,ik)
+               k2 = Crystal%kptPlane(2,ik)
+               k3 = Crystal%kptPlane(3,ik)
+               !
+               Bx = k1*Blat(1,1) + k2*Blat(1,2) + k3*Blat(1,3) ; if(ik.eq.1) Bx_old = Bx
+               By = k1*Blat(2,1) + k2*Blat(2,2) + k3*Blat(2,3)
+               Bz = k1*Blat(3,1) + k2*Blat(3,2) + k3*Blat(3,3)
+               !
+               write(unit,"(3I5,200E20.12)") ik,ikx,iky,k1,k2,k3,Bx,By,Bz,(Rkw_orb(iorb,wndx_cut,ik),iorb=1,Norb)
+               !if(iky.eq.Nkpt_plane)write(unit,*)
+               if(Bx.ne.Bx_old)then
+                  write(unit,*)
+                  Bx_old = Bx
+               endif
+               !
             enddo
             close(unit)
          endif
@@ -400,7 +426,7 @@ contains
       real(8),allocatable                   :: wreal(:),wreal_read(:)
       real(8),allocatable                   :: Akw_orb(:,:,:),Rkw_orb(:,:,:)
       real(8)                               :: dw,fact
-      real(8)                               :: kx,ky,Bvec(3),Kvec(3),Blat(3,3)
+      real(8)                               :: k1,k2,k3,Bx,By,Bz,Bx_old,Blat(3,3)
       character(len=256)                    :: path,pedix_
       logical                               :: ik1st_read,orbsep_,Traced_
       !
@@ -721,12 +747,25 @@ contains
          unit = free_unit()
          open(unit,file=reg(path),form="formatted",status="unknown",position="rewind",action="write")
          do iq=1,Nkpt
-            ikx = int(iq/(Nkpt_Kside+0.001))+1 ; kx = (ikx-1)/dble(Nkpt_Kside-1) - 0.5d0
-            iky = iq - (ikx-1)*Nkpt_Kside      ; ky = (iky-1)/dble(Nkpt_Kside-1) - 0.5d0
-            Kvec = kx*Blat(:,1) + ky*Blat(:,2)
-            Bvec = [kx*Blat(1,1)+Blat(1,2),ky*Blat(2,1)+Blat(2,2),0d0]
-            write(unit,"(3I5,200E20.12)") iq,ikx,iky,Bvec(1),Bvec(2),Kvec(1),Kvec(2),(Akw_orb(iorb,wndx_cut,iq),iorb=1,Norb)
-            if(iky.eq.Nkpt_Kside)write(unit,*)
+            !
+            ikx = int(iq/(Nkpt_plane+0.001))+1
+            iky = iq - (ikx-1)*Nkpt_plane
+            !
+            k1 = Crystal%kptPlane(1,iq)
+            k2 = Crystal%kptPlane(2,iq)
+            k3 = Crystal%kptPlane(3,iq)
+            !
+            Bx = k1*Blat(1,1) + k2*Blat(1,2) + k3*Blat(1,3) ; if(iq.eq.1) Bx_old = Bx
+            By = k1*Blat(2,1) + k2*Blat(2,2) + k3*Blat(2,3)
+            Bz = k1*Blat(3,1) + k2*Blat(3,2) + k3*Blat(3,3)
+            !
+            write(unit,"(3I5,200E20.12)") iq,ikx,iky,k1,k2,k3,Bx,By,Bz,(Akw_orb(iorb,wndx_cut,iq),iorb=1,Norb)
+            !if(iky.eq.Nkpt_plane)write(unit,*)
+            if(Bx.ne.Bx_old)then
+               write(unit,*)
+               Bx_old = Bx
+            endif
+            !
          enddo
          close(unit)
          !
@@ -735,12 +774,25 @@ contains
             unit = free_unit()
             open(unit,file=reg(path),form="formatted",status="unknown",position="rewind",action="write")
             do iq=1,Nkpt
-               ikx = int(iq/(Nkpt_Kside+0.001))+1 ; kx = (ikx-1)/dble(Nkpt_Kside-1) - 0.5d0
-               iky = iq - (ikx-1)*Nkpt_Kside      ; ky = (iky-1)/dble(Nkpt_Kside-1) - 0.5d0
-               Kvec = kx*Blat(:,1) + ky*Blat(:,2)
-               Bvec = [kx*Blat(1,1)+Blat(1,2),ky*Blat(2,1)+Blat(2,2),0d0]
-               write(unit,"(3I5,200E20.12)") iq,ikx,iky,Bvec(1),Bvec(2),Kvec(1),Kvec(2),(Rkw_orb(iorb,wndx_cut,iq),iorb=1,Norb)
-               if(iky.eq.Nkpt_Kside)write(unit,*)
+               !
+               ikx = int(iq/(Nkpt_plane+0.001))+1
+               iky = iq - (ikx-1)*Nkpt_plane
+               !
+               k1 = Crystal%kptPlane(1,iq)
+               k2 = Crystal%kptPlane(2,iq)
+               k3 = Crystal%kptPlane(3,iq)
+               !
+               Bx = k1*Blat(1,1) + k2*Blat(1,2) + k3*Blat(1,3) ; if(iq.eq.1) Bx_old = Bx
+               By = k1*Blat(2,1) + k2*Blat(2,2) + k3*Blat(2,3)
+               Bz = k1*Blat(3,1) + k2*Blat(3,2) + k3*Blat(3,3)
+               !
+               write(unit,"(3I5,200E20.12)") iq,ikx,iky,k1,k2,k3,Bx,By,Bz,(Rkw_orb(iorb,wndx_cut,iq),iorb=1,Norb)
+               !if(iky.eq.Nkpt_plane)write(unit,*)
+               if(Bx.ne.Bx_old)then
+                  write(unit,*)
+                  Bx_old = Bx
+               endif
+               !
             enddo
             close(unit)
          endif

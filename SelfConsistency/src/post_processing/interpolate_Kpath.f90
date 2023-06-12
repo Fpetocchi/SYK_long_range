@@ -30,7 +30,7 @@ subroutine interpolate2kpath_Fermionic(Sfull,Lttc,pathOUTPUT)
    integer                               :: Norb,Nmats,unit!,Ntau
    integer                               :: ik,ispin,iorb
    integer                               :: ikx,iky
-   real(8)                               :: kx,ky,Bvec(3),Kvec(3),Blat(3,3)
+   real(8)                               :: k1,k2,k3,Bx,By,Bz,Bx_old,Blat(3,3)
    character(len=256)                    :: path
    logical                               :: Kdependence
    real                                  :: start,finish
@@ -208,12 +208,25 @@ subroutine interpolate2kpath_Fermionic(Sfull,Lttc,pathOUTPUT)
                unit = free_unit()
                open(unit,file=reg(path),form="formatted",status="unknown",position="rewind",action="write")
                do ik=1,Lttc%Nkpt_Plane
-                  ikx = int(ik/(Nkpt_plane+0.001))+1 ; kx = (ikx-1)/dble(Nkpt_plane-1) - 0.5d0
-                  iky = ik - (ikx-1)*Nkpt_plane      ; ky = (iky-1)/dble(Nkpt_plane-1) - 0.5d0
-                  Kvec = kx*Blat(:,1) + ky*Blat(:,2)
-                  Bvec = [kx*Blat(1,1)+Blat(1,2),ky*Blat(2,1)+Blat(2,2),0d0]
-                  write(unit,"(3I5,200E20.12)") ik,ikx,iky,Bvec(1),Bvec(2),Kvec(1),Kvec(2),(Zk(ik,iorb),iorb=1,Norb)
-                  if(iky.eq.Nkpt_plane)write(unit,*)
+                  !
+                  ikx = int(ik/(Nkpt_plane+0.001))+1
+                  iky = ik - (ikx-1)*Nkpt_plane
+                  !
+                  k1 = Lttc%kptPlane(1,ik)
+                  k2 = Lttc%kptPlane(2,ik)
+                  k3 = Lttc%kptPlane(3,ik)
+                  !
+                  Bx = k1*Blat(1,1) + k2*Blat(1,2) + k3*Blat(1,3) ; if(ik.eq.1) Bx_old = Bx
+                  By = k1*Blat(2,1) + k2*Blat(2,2) + k3*Blat(2,3)
+                  Bz = k1*Blat(3,1) + k2*Blat(3,2) + k3*Blat(3,3)
+                  !
+                  write(unit,"(3I5,200E20.12)") ik,ikx,iky,k1,k2,k3,Bx,By,Bz,(Zk(ik,iorb),iorb=1,Norb)
+                  !if(iky.eq.Nkpt_plane)write(unit,*)
+                  if(Bx.ne.Bx_old)then
+                     write(unit,*)
+                     Bx_old = Bx
+                  endif
+                  !
                enddo
                close(unit)
                deallocate(Zk)
@@ -564,12 +577,25 @@ contains
             enddo
          elseif(reg(mode).eq."plane")then
             do ik=1,Nkpt
-               ikx = int(ik/(Nkpt_plane+0.001))+1 ; kx = (ikx-1)/dble(Nkpt_plane-1) - 0.5d0
-               iky = ik - (ikx-1)*Nkpt_plane      ; ky = (iky-1)/dble(Nkpt_plane-1) - 0.5d0
-               Kvec = kx*Blat(:,1) + ky*Blat(:,2)
-               Bvec = [kx*Blat(1,1)+Blat(1,2),ky*Blat(2,1)+Blat(2,2),0d0]
-               write(unit,"(3I5,200E20.12)") ik,ikx,iky,Bvec(1),Bvec(2),Kvec(1),Kvec(2),(Ak(ik,iorb),iorb=1,Norb)
-               if(iky.eq.Nkpt_plane)write(unit,*)
+               !
+               ikx = int(ik/(Nkpt_plane+0.001))+1
+               iky = ik - (ikx-1)*Nkpt_plane
+               !
+               k1 = Lttc%kptPlane(1,ik)
+               k2 = Lttc%kptPlane(2,ik)
+               k3 = Lttc%kptPlane(3,ik)
+               !
+               Bx = k1*Blat(1,1) + k2*Blat(1,2) + k3*Blat(1,3) ; if(ik.eq.1) Bx_old = Bx
+               By = k1*Blat(2,1) + k2*Blat(2,2) + k3*Blat(2,3)
+               Bz = k1*Blat(3,1) + k2*Blat(3,2) + k3*Blat(3,3)
+               !
+               write(unit,"(3I5,200E20.12)") ik,ikx,iky,k1,k2,k3,Bx,By,Bz,(Ak(ik,iorb),iorb=1,Norb)
+               !if(iky.eq.Nkpt_plane)write(unit,*)
+               if(Bx.ne.Bx_old)then
+                  write(unit,*)
+                  Bx_old = Bx
+               endif
+               !
             enddo
          endif
          close(unit)

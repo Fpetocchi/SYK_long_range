@@ -277,7 +277,7 @@ program SelfConsistency
       !
       !
       !Compute the Full Green's function and set the density
-      if(mu_scan)then
+      if(look4dens%mu_scan.eq.1)then
          call calc_Gmats(Glat,Crystal,S_Full)
          if(Hetero%status)then
             call set_density(Glat,Crystal,look4dens,S_Full)

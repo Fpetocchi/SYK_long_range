@@ -112,7 +112,7 @@ module input_vars
    real(8),allocatable,public               :: hopping(:)
    type(Heterostructures),public            :: Hetero
    integer,public                           :: Nkpt_path_default = 100
-   integer,public                           :: Nkpt_plane_default = 201
+   integer,public                           :: Nkpt_plane_default = 101
    !
    !Site and Orbital space
    integer,public                           :: Nsite

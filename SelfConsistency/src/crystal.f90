@@ -3423,32 +3423,61 @@ contains
       real(8),allocatable,intent(out)       :: kpt_plane(:,:)
       integer,intent(in)                    :: Nkpt_Kside
       !
-      integer                               :: ikx,iky,ik
+      integer                               :: ik1,ik2,ik3,ik
       real(8)                               :: Kmax=1d0
-      real(8)                               :: kx,ky,dK
+      real(8)                               :: k1,k2,k3,dK
       !
       !
       if(verbose)write(*,"(A)") "---- calc_Kplane"
       !
       !
-      if(allocated(kpt_plane))deallocate(kpt_plane)
-      allocate(kpt_plane(3,Nkpt_Kside**2))
+      if(.not.Lat_stored)stop "calc_Kplane: lattice vectors are not stored."
       !
       dk=Kmax/(Nkpt_Kside-1)
+      if(allocated(kpt_plane))deallocate(kpt_plane)
       !
-      ik=0
-      do ikx=1,Nkpt_Kside
-         do iky=1,Nkpt_Kside
-            !
-            ik=ik+1
-            !
-            kx = (ikx-1)*dk - Kmax/2d0
-            ky = (iky-1)*dk - Kmax/2d0
-            !
-            kpt_plane(:,ik) = [kx,ky,0d0]
-            !
+      if((Blat(3,1).eq.0d0).and.(Blat(3,2).eq.0d0))then
+         !
+         ! B1 and B2 have no component out of the plane
+         allocate(kpt_plane(3,Nkpt_Kside**2))
+         !
+         ik=0
+         do ik1=1,Nkpt_Kside
+            do ik2=1,Nkpt_Kside
+               !
+               ik=ik+1
+               !
+               k1 = (ik1-1)*dk - Kmax/2d0
+               k2 = (ik2-1)*dk - Kmax/2d0
+               !
+               kpt_plane(:,ik) = [k1,k2,0d0]
+               !
+            enddo
          enddo
-      enddo
+         !
+      else
+         !
+         if(Blat(3,3).eq.0d0) stop "calc_Kplane: divergence in k3 will occur."
+         ! Generic B1,B2,B3
+         allocate(kpt_plane(3,Nkpt_Kside**3))
+         !
+         do ik1=1,Nkpt_Kside
+            do ik2=1,Nkpt_Kside
+               do ik3=1,Nkpt_Kside
+                  !
+                  ik=ik+1
+                  !
+                  k1 = (ik1-1)*dk - Kmax/2d0
+                  k2 = (ik2-1)*dk - Kmax/2d0
+                  k3 = -(k1*Blat(3,1)+k2*Blat(3,2)) / Blat(3,3)
+                  !
+                  kpt_plane(:,ik) = [k1,k2,k3]
+                  !
+               enddo
+            enddo
+         enddo
+         !
+      endif
       !
    end subroutine calc_Kplane
 
@@ -3965,7 +3994,8 @@ contains
       integer                               :: io,Ndim,unit,ilayer
       integer                               :: iw,ik,ikz,Nkpt,Nkpt_plane_tot,ikx,iky
       integer                               :: wndx,ikz_cut,nkz_cut=3
-      real(8)                               :: Bvec(3),kx,ky,Kvec(3),kz_cut,FermiCut_
+      real(8)                               :: k1,k2,k3,Bx,By,Bz,Bx_old
+      real(8)                               :: kz_cut,FermiCut_
       real(8),allocatable                   :: kptPlane(:,:)
       complex(8),allocatable                :: data_orig(:,:,:),dataw_orig(:,:,:,:)
       complex(8),allocatable                :: data_intp(:,:,:),dataw_intp(:,:,:,:)
@@ -4179,12 +4209,25 @@ contains
          unit = free_unit()
          open(unit,file=reg(path),form="formatted",status="unknown",position="rewind",action="write")
          do ik=1,Nkpt_plane_tot
-            ikx = int(ik/(Nkpt_plane+0.001))+1 ; kx = (ikx-1)/dble(Nkpt_plane-1) - 0.5d0
-            iky = ik - (ikx-1)*Nkpt_plane      ; ky = (iky-1)/dble(Nkpt_plane-1) - 0.5d0
-            Kvec = kx*Blat(:,1) + ky*Blat(:,2)
-            Bvec = [kx*Blat(1,1)+Blat(1,2),ky*Blat(2,1)+Blat(2,2),0d0]
-            write(unit,"(3I5,200E20.12)") ik,ikx,iky,Bvec(1),Bvec(2),Kvec(1),Kvec(2),(Fk(io,io,ik),io=1,Ndim)
-            if(iky.eq.Nkpt_plane)write(unit,*)
+            !
+            ikx = int(ik/(Nkpt_plane+0.001))+1
+            iky = ik - (ikx-1)*Nkpt_plane
+            !
+            k1 = Lttc%kptPlane(1,ik)
+            k2 = Lttc%kptPlane(2,ik)
+            k3 = Lttc%kptPlane(3,ik)
+            !
+            Bx = k1*Blat(1,1) + k2*Blat(1,2) + k3*Blat(1,3) ; if(ik.eq.1) Bx_old = Bx
+            By = k1*Blat(2,1) + k2*Blat(2,2) + k3*Blat(2,3)
+            Bz = k1*Blat(3,1) + k2*Blat(3,2) + k3*Blat(3,3)
+            !
+            write(unit,"(3I5,200E20.12)") ik,ikx,iky,k1,k2,k3,Bx,By,Bz,(Fk(io,io,ik),io=1,Ndim)
+            !if(iky.eq.Nkpt_plane)write(unit,*)
+            if(Bx.ne.Bx_old)then
+               write(unit,*)
+               Bx_old = Bx
+            endif
+            !
          enddo
          close(unit)
          !
@@ -4205,12 +4248,25 @@ contains
                unit = free_unit()
                open(unit,file=reg(path),form="formatted",status="unknown",position="rewind",action="write")
                do ik=1,Lttc%Nkpt_Plane
-                  ikx = int(ik/(Nkpt_plane+0.001))+1 ; kx = (ikx-1)/dble(Nkpt_plane-1) - 0.5d0
-                  iky = ik - (ikx-1)*Nkpt_plane      ; ky = (iky-1)/dble(Nkpt_plane-1) - 0.5d0
-                  Kvec = kx*Blat(:,1) + ky*Blat(:,2)
-                  Bvec = [kx*Blat(1,1)+Blat(1,2),ky*Blat(2,1)+Blat(2,2),0d0]
-                  write(unit,"(3I5,200E20.12)") ik,ikx,iky,Bvec(1),Bvec(2),Kvec(1),Kvec(2),(dreal(Fk_kz(io,io,ik,ikz)),io=1,Hetero%Norb)
-                  if(iky.eq.Nkpt_plane)write(unit,*)
+                  !
+                  ikx = int(ik/(Nkpt_plane+0.001))+1
+                  iky = ik - (ikx-1)*Nkpt_plane
+                  !
+                  k1 = Lttc%kptPlane(1,ik)
+                  k2 = Lttc%kptPlane(2,ik)
+                  k3 = Lttc%kptPlane(3,ik)
+                  !
+                  Bx = k1*Blat(1,1) + k2*Blat(1,2) + k3*Blat(1,3) ; if(ik.eq.1) Bx_old = Bx
+                  By = k1*Blat(2,1) + k2*Blat(2,2) + k3*Blat(2,3)
+                  Bz = k1*Blat(3,1) + k2*Blat(3,2) + k3*Blat(3,3)
+                  !
+                  write(unit,"(3I5,200E20.12)") ik,ikx,iky,k1,k2,k3,Bx,By,Bz,(dreal(Fk_kz(io,io,ik,ikz)),io=1,Hetero%Norb)
+                  !if(iky.eq.Nkpt_plane)write(unit,*)
+                  if(Bx.ne.Bx_old)then
+                     write(unit,*)
+                     Bx_old = Bx
+                  endif
+                  !
                enddo
                close(unit)
                !
