@@ -82,7 +82,7 @@ contains
       integer                               :: i,j,k,l,ib1,ib2
       real                                  :: start,finish
       logical                               :: LDAoffdiag_
-      logical                               :: ZkfromHk=.true.
+      logical                               :: ZkfromHk=.false.
       !
       !
       write(*,"(A)") new_line("A")//new_line("A")//"---- calc_sigmaGW"
@@ -246,7 +246,7 @@ contains
                allocate(UwanDFT(Lttc%Norb,Lttc%Norb,Lttc%Nkpt,1));UwanDFT=czero
                call read_matrix(UwanDFT(:,:,:,1),reg(pathINPUT)//"UWAN_used_k_s1.DAT")
             else
-               call assert_shape(UwanDFT(:,:,:,1),[Lttc%Norb,Lttc%Norb,Lttc%Nkpt],"print_G0W0_dispersion","UwanDFT")
+               call assert_shape(UwanDFT(:,:,:,1),[Lttc%Norb,Lttc%Norb,Lttc%Nkpt],"calc_sigmaGW","UwanDFT")
             endif
             !
             do iq=1,Lttc%Nkpt

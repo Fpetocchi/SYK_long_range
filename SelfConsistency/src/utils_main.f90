@@ -80,7 +80,7 @@ module utils_main
    logical                                  :: calc_Wedmft=.false.
    logical                                  :: calc_Sigmak=.false.
    logical                                  :: merge_Sigma=.false.
-   logical                                  :: mu_scan=.false.
+   logical                                  :: mu_scan_it0=.false.
    !
    logical                                  :: S_G0W0dc_exist=.false.
    logical                                  :: calc_S_G0W0dc=.false.
@@ -208,7 +208,7 @@ contains
       !
       if(Hmodel)addTierIII=.false.
       !
-      mu_scan = (look4dens%mu_scan.eq.1) .and. (look4dens%TargetDensity.gt.0d0)
+      mu_scan_it0 = (look4dens%mu_scan.eq.1) .and. (look4dens%TargetDensity.gt.0d0) .and. (.not.addTierIII)
       !
       if(addTierIII)then
          !
@@ -1012,7 +1012,7 @@ contains
                call read_FermionicField(Glat,reg(PrevItFolder),"Glat_w",Crystal%kpt)
             else
                Glat%mu = look4dens%mu
-               if(mu_scan) call set_density(Glat%mu,Beta,Crystal,look4dens)
+               if(mu_scan_it0) call set_density(Glat%mu,Beta,Crystal,look4dens)
                call calc_Gmats(Glat,Crystal)
             endif
             call calc_density(Glat,Crystal,Glat%N_ks)
@@ -1052,7 +1052,7 @@ contains
                call read_FermionicField(Glat,reg(PrevItFolder),"Glat_w")
             else
                Glat%mu = look4dens%mu
-               if(mu_scan) call set_density(Glat%mu,Beta,Crystal,look4dens)
+               if(mu_scan_it0) call set_density(Glat%mu,Beta,Crystal,look4dens)
                call calc_Gmats(Glat,Crystal)
             endif
             call calc_density(Glat,Glat%N_s)
@@ -1099,7 +1099,7 @@ contains
                call read_FermionicField(Glat,reg(PrevItFolder),"Glat_w")
             else
                Glat%mu = look4dens%mu
-               if(mu_scan) call set_density(Glat%mu,Beta,Crystal,look4dens)
+               if(mu_scan_it0) call set_density(Glat%mu,Beta,Crystal,look4dens)
                call calc_Gmats(Glat,Crystal)
             endif
             call calc_density(Glat,Glat%N_s)
@@ -1158,7 +1158,7 @@ contains
                call read_FermionicField(Glat,reg(PrevItFolder),"Glat_w")
             else
                Glat%mu = look4dens%mu
-               if(mu_scan) call set_density(Glat%mu,Beta,Crystal,look4dens)
+               if(mu_scan_it0) call set_density(Glat%mu,Beta,Crystal,look4dens)
                call calc_Gmats(Glat,Crystal)
             endif
             call calc_density(Glat,Glat%N_s)
@@ -1224,7 +1224,7 @@ contains
                call read_FermionicField(Glat,reg(PrevItFolder),"Glat_w",Crystal%kpt)
             else
                Glat%mu = look4dens%mu
-               if(mu_scan) call set_density(Glat%mu,Beta,Crystal,look4dens)
+               if(mu_scan_it0) call set_density(Glat%mu,Beta,Crystal,look4dens)
                call calc_Gmats(Glat,Crystal)
             endif
             call calc_density(Glat,Crystal,Glat%N_ks)
@@ -1304,11 +1304,13 @@ contains
          densityGW = Glat%N_s
          densityDMFT=czero
          !
-         call dump_Matrix(densityLDA,reg(pathINPUT),"Nlda_N"//str(look4dens%TargetDensity,3),paramagnet)
+         !call dump_Matrix(densityLDA,reg(pathINPUT),"Nlda_N"//str(look4dens%TargetDensity,3),paramagnet)
+         call dump_Matrix(densityLDA,reg(pathINPUT),"Nlda",paramagnet)
          !
       else
          !
-         if(addTierIII)call read_Matrix(densityLDA,reg(pathINPUT)//"Nlda_N"//str(look4dens%TargetDensity,3),paramagnet)
+         !if(addTierIII)call read_Matrix(densityLDA,reg(pathINPUT)//"Nlda_N"//str(look4dens%TargetDensity,3),paramagnet)
+         if(addTierIII)call read_Matrix(densityLDA,reg(pathINPUT)//"Nlda",paramagnet)
          if(solve_DMFT)call read_Matrix(densityDMFT,reg(PrevItFolder)//"Nimp",paramagnet)
          densityGW=Glat%N_s
          !
