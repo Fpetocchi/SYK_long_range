@@ -3435,12 +3435,11 @@ contains
       !
       dk=Kmax/(Nkpt_Kside-1)
       if(allocated(kpt_plane))deallocate(kpt_plane)
+      allocate(kpt_plane(3,Nkpt_Kside**2))
       !
       if((Blat(3,1).eq.0d0).and.(Blat(3,2).eq.0d0))then
          !
          ! B1 and B2 have no component out of the plane
-         allocate(kpt_plane(3,Nkpt_Kside**2))
-         !
          ik=0
          do ik1=1,Nkpt_Kside
             do ik2=1,Nkpt_Kside
@@ -3459,22 +3458,18 @@ contains
          !
          if(Blat(3,3).eq.0d0) stop "calc_Kplane: divergence in k3 will occur."
          ! Generic B1,B2,B3
-         allocate(kpt_plane(3,Nkpt_Kside**3))
-         !
          ik=0
          do ik1=1,Nkpt_Kside
             do ik2=1,Nkpt_Kside
-               do ik3=1,Nkpt_Kside
-                  !
-                  ik=ik+1
-                  !
-                  k1 = (ik1-1)*dk - Kmax/2d0
-                  k2 = (ik2-1)*dk - Kmax/2d0
-                  k3 = -(k1*Blat(3,1)+k2*Blat(3,2)) / Blat(3,3)
-                  !
-                  kpt_plane(:,ik) = [k1,k2,k3]
-                  !
-               enddo
+               !
+               ik=ik+1
+               !
+               k1 = (ik1-1)*dk - Kmax/2d0
+               k2 = (ik2-1)*dk - Kmax/2d0
+               k3 = -(k1*Blat(3,1)+k2*Blat(3,2)) / Blat(3,3) ! this is to ensure Bz=0
+               !
+               kpt_plane(:,ik) = [k1,k2,k3]
+               !
             enddo
          enddo
          !
