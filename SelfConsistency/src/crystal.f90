@@ -2552,7 +2552,7 @@ contains
       if(size(mat_K,dim=1).ne.size(mat_K,dim=2)) stop "wannier_K2R_NN_D3: mat_K not square."
       Nsize = size(mat_K,dim=1)
       call assert_shape(mat_K,[Nsize,Nsize,Nkpt_orig],"wannier_K2R_NN_D3","mat_K")
-      call assert_shape(mat_R_nn,[Nsize,Nsize,3],"wannier_K2R_NN_D3","mat_R_nn")
+      call assert_shape(mat_R_nn,[Nsize,Nsize,6],"wannier_K2R_NN_D3","mat_R_nn")
       !
       ! M(R)=\sum_{k} M(k)*exp[-ik*R]
       !$OMP PARALLEL DEFAULT(NONE),&
@@ -2566,9 +2566,9 @@ contains
                Rx = all(Nvecwig(:,ir).eq.[1,0,0])
                Ry = all(Nvecwig(:,ir).eq.[0,1,0])
                Rz = all(Nvecwig(:,ir).eq.[0,0,1])
-               Ryz= all(Nvecwig(:,ir).eq.[0,1,1])
-               Rxz= all(Nvecwig(:,ir).eq.[1,0,1])
-               Rxy= all(Nvecwig(:,ir).eq.[1,1,0])
+               Ryz= all(Nvecwig(:,ir).eq.[0,-1,0])
+               Rxz= all(Nvecwig(:,ir).eq.[-1,1,1])
+               Rxy= all(Nvecwig(:,ir).eq.[1,1,-1])
                !
                if(Rx)then
                   ir2 = 1
@@ -2637,7 +2637,7 @@ contains
       if(size(mat_K,dim=1).ne.size(mat_K,dim=2)) stop "wannier_K2R_NN_D4: mat_K not square."
       Nsize = size(mat_K,dim=1)
       call assert_shape(mat_K,[Nsize,Nsize,Npoints,Nkpt_orig],"wannier_K2R_NN_D4","mat_K")
-      call assert_shape(mat_R_nn,[Nsize,Nsize,Npoints,3],"wannier_K2R_NN_D4","mat_R_nn")
+      call assert_shape(mat_R_nn,[Nsize,Nsize,Npoints,6],"wannier_K2R_NN_D4","mat_R_nn")
       !
       ! M(R)=\sum_{k} M(k)*exp[-ik*R]
       !$OMP PARALLEL DEFAULT(NONE),&
@@ -2652,9 +2652,9 @@ contains
                   Rx = all(Nvecwig(:,ir).eq.[1,0,0])
                   Ry = all(Nvecwig(:,ir).eq.[0,1,0])
                   Rz = all(Nvecwig(:,ir).eq.[0,0,1])
-                  Ryz= all(Nvecwig(:,ir).eq.[0,1,1])
-                  Rxz= all(Nvecwig(:,ir).eq.[1,0,1])
-                  Rxy= all(Nvecwig(:,ir).eq.[1,1,0])
+                  Ryz= all(Nvecwig(:,ir).eq.[0,-1,0])
+                  Rxz= all(Nvecwig(:,ir).eq.[-1,1,1])
+                  Rxy= all(Nvecwig(:,ir).eq.[1,1,-1])
                   !
                   if(Rx)then
                      ir2 = 1
