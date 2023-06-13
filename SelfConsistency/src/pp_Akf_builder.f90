@@ -366,13 +366,13 @@ contains
             By = k1*Blat(2,1) + k2*Blat(2,2) + k3*Blat(2,3)
             Bz = k1*Blat(3,1) + k2*Blat(3,2) + k3*Blat(3,3)
             !
-            if(Bx.ne.Bx_old)then
-               write(unit,*)
-               Bx_old = Bx
-            endif
+            !if(Bx.ne.Bx_old)then
+            !   write(unit,*)
+            !   Bx_old = Bx
+            !endif
             !
             write(unit,"(3I10,200E20.12)") ik,ikx,iky,k1,k2,k3,Bx,By,Bz,(Akw_orb(iorb,wndx_cut,ik),iorb=1,Norb)
-            !if(iky.eq.Nkpt_plane)write(unit,*)
+            if(iky.eq.Nkpt_plane)write(unit,*)
             !
          enddo
          close(unit)
@@ -394,13 +394,13 @@ contains
                By = k1*Blat(2,1) + k2*Blat(2,2) + k3*Blat(2,3)
                Bz = k1*Blat(3,1) + k2*Blat(3,2) + k3*Blat(3,3)
                !
-               if(Bx.ne.Bx_old)then
-                  write(unit,*)
-                  Bx_old = Bx
-               endif
+               !if(Bx.ne.Bx_old)then
+               !   write(unit,*)
+               !   Bx_old = Bx
+               !endif
                !
                write(unit,"(3I10,200E20.12)") ik,ikx,iky,k1,k2,k3,Bx,By,Bz,(Rkw_orb(iorb,wndx_cut,ik),iorb=1,Norb)
-               !if(iky.eq.Nkpt_plane)write(unit,*)
+               if(iky.eq.Nkpt_plane)write(unit,*)
                !
             enddo
             close(unit)
@@ -761,13 +761,13 @@ contains
             By = k1*Blat(2,1) + k2*Blat(2,2) + k3*Blat(2,3)
             Bz = k1*Blat(3,1) + k2*Blat(3,2) + k3*Blat(3,3)
             !
-            if(Bx.ne.Bx_old)then
-               write(unit,*)
-               Bx_old = Bx
-            endif
+            !if(Bx.ne.Bx_old)then
+            !   write(unit,*)
+            !   Bx_old = Bx
+            !endif
             !
             write(unit,"(3I10,200E20.12)") iq,ikx,iky,k1,k2,k3,Bx,By,Bz,(Akw_orb(iorb,wndx_cut,iq),iorb=1,Norb)
-            !if(iky.eq.Nkpt_plane)write(unit,*)
+            if(iky.eq.Nkpt_plane)write(unit,*)
             !
          enddo
          close(unit)
@@ -789,13 +789,13 @@ contains
                By = k1*Blat(2,1) + k2*Blat(2,2) + k3*Blat(2,3)
                Bz = k1*Blat(3,1) + k2*Blat(3,2) + k3*Blat(3,3)
                !
-               if(Bx.ne.Bx_old)then
-                  write(unit,*)
-                  Bx_old = Bx
-               endif
+               !if(Bx.ne.Bx_old)then
+               !   write(unit,*)
+               !   Bx_old = Bx
+               !endif
                !
                write(unit,"(3I10,200E20.12)") iq,ikx,iky,k1,k2,k3,Bx,By,Bz,(Rkw_orb(iorb,wndx_cut,iq),iorb=1,Norb)
-               !if(iky.eq.Nkpt_plane)write(unit,*)
+               if(iky.eq.Nkpt_plane)write(unit,*)
                !
             enddo
             close(unit)

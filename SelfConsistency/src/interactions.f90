@@ -966,7 +966,7 @@ contains
       if((.not.LocalOnly).and.doAC_)then
          !
          allocate(URnn(int(sqrt(dble(Umats%Nbp))),int(sqrt(dble(Umats%Nbp)))));URnn=czero
-         allocate(UR(Umats%Nbp,Umats%Nbp,3));UR=czero
+         allocate(UR(Umats%Nbp,Umats%Nbp,6));UR=czero
          call wannier_K2R_NN(Nkpt3,kpt,Umats%screened(:,:,1,:),UR)
          where(abs((UR))<eps) UR=czero
          !
@@ -1321,7 +1321,7 @@ contains
       if(Lttc%Nsite.gt.1)then
          !
          allocate(URnn(int(sqrt(dble(Umats%Nbp))),int(sqrt(dble(Umats%Nbp)))));URnn=czero
-         allocate(UR(Umats%Nbp,Umats%Nbp,3));UR=czero
+         allocate(UR(Umats%Nbp,Umats%Nbp,6));UR=czero
          call wannier_K2R_NN(Lttc%Nkpt3,Lttc%kpt,Umats%screened(:,:,1,:),UR)
          where(abs((UR))<eps) UR=czero
          !
@@ -2819,7 +2819,7 @@ contains
       !
       ! Print the nn non local interaction
       allocate(URnn(int(sqrt(dble(Umats%Nbp))),int(sqrt(dble(Umats%Nbp)))));URnn=czero
-      allocate(UR(Umats%Nbp,Umats%Nbp,3));UR=czero
+      allocate(UR(Umats%Nbp,Umats%Nbp,6));UR=czero
       call wannier_K2R_NN(Lttc%Nkpt3,Lttc%kpt,Umats%screened(:,:,1,:),UR)
       where(abs((UR))<eps) UR=czero
       !
@@ -3348,7 +3348,7 @@ contains
       !
       ! Print the nn non local interaction
       allocate(URnn(int(sqrt(dble(Umats%Nbp))),int(sqrt(dble(Umats%Nbp)))));URnn=czero
-      allocate(UR(Umats%Nbp,Umats%Nbp,3));UR=czero
+      allocate(UR(Umats%Nbp,Umats%Nbp,6));UR=czero
       call wannier_K2R_NN(Lttc%Nkpt3,Lttc%kpt,Umats%screened(:,:,1,:),UR)
       where(abs((UR))<eps) UR=czero
       !

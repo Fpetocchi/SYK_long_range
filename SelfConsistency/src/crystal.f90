@@ -2532,7 +2532,7 @@ contains
       integer                               :: Nkpt_orig,Nsize
       integer                               :: ik,ir,i1,i2,ir2
       real(8)                               :: kR
-      logical                               :: Rx,Ry,Rz
+      logical                               :: Rx,Ry,Rz,Rxy,Ryz,Rxz
       complex(8)                            :: cfac
       !
       !
@@ -2557,7 +2557,7 @@ contains
       ! M(R)=\sum_{k} M(k)*exp[-ik*R]
       !$OMP PARALLEL DEFAULT(NONE),&
       !$OMP SHARED(Nwig,Nkpt_orig,Nsize,kpt_orig,Nvecwig,mat_K,mat_R_nn),&
-      !$OMP PRIVATE(Rx,Ry,Rz,ir2,ir,ik,i1,i2,kR,cfac)
+      !$OMP PRIVATE(Rx,Ry,Rz,Rxy,Ryz,Rxz,ir2,ir,ik,i1,i2,kR,cfac)
       !$OMP DO
       do i1=1,Nsize
          do i2=1,Nsize
@@ -2566,6 +2566,9 @@ contains
                Rx = all(Nvecwig(:,ir).eq.[1,0,0])
                Ry = all(Nvecwig(:,ir).eq.[0,1,0])
                Rz = all(Nvecwig(:,ir).eq.[0,0,1])
+               Ryz= all(Nvecwig(:,ir).eq.[0,1,1])
+               Rxz= all(Nvecwig(:,ir).eq.[1,0,1])
+               Rxy= all(Nvecwig(:,ir).eq.[1,1,0])
                !
                if(Rx)then
                   ir2 = 1
@@ -2573,6 +2576,12 @@ contains
                   ir2 = 2
                elseif(Rz)then
                   ir2 = 3
+               elseif(Ryz)then
+                  ir2 = 4
+               elseif(Rxz)then
+                  ir2 = 5
+               elseif(Rxy)then
+                  ir2 = 6
                else
                   cycle
                endif
@@ -2607,7 +2616,7 @@ contains
       integer                               :: Nkpt_orig,Nsize,Npoints
       integer                               :: ik,ir,id,i1,i2,ir2
       real(8)                               :: kR
-      logical                               :: Rx,Ry,Rz
+      logical                               :: Rx,Ry,Rz,Rxy,Ryz,Rxz
       complex(8)                            :: cfac
       !
       !
@@ -2633,7 +2642,7 @@ contains
       ! M(R)=\sum_{k} M(k)*exp[-ik*R]
       !$OMP PARALLEL DEFAULT(NONE),&
       !$OMP SHARED(Nwig,Nkpt_orig,Npoints,Nsize,kpt_orig,Nvecwig,mat_K,mat_R_nn),&
-      !$OMP PRIVATE(Rx,Ry,Rz,ir2,ir,ik,id,i1,i2,kR,cfac)
+      !$OMP PRIVATE(Rx,Ry,Rz,Rxy,Ryz,Rxz,ir2,ir,ik,id,i1,i2,kR,cfac)
       !$OMP DO
       do i1=1,Nsize
          do i2=1,Nsize
@@ -2643,6 +2652,9 @@ contains
                   Rx = all(Nvecwig(:,ir).eq.[1,0,0])
                   Ry = all(Nvecwig(:,ir).eq.[0,1,0])
                   Rz = all(Nvecwig(:,ir).eq.[0,0,1])
+                  Ryz= all(Nvecwig(:,ir).eq.[0,1,1])
+                  Rxz= all(Nvecwig(:,ir).eq.[1,0,1])
+                  Rxy= all(Nvecwig(:,ir).eq.[1,1,0])
                   !
                   if(Rx)then
                      ir2 = 1
@@ -2650,6 +2662,12 @@ contains
                      ir2 = 2
                   elseif(Rz)then
                      ir2 = 3
+                  elseif(Ryz)then
+                     ir2 = 4
+                  elseif(Rxz)then
+                     ir2 = 5
+                  elseif(Rxy)then
+                     ir2 = 6
                   else
                      cycle
                   endif
@@ -4217,13 +4235,13 @@ contains
             By = k1*Blat(2,1) + k2*Blat(2,2) + k3*Blat(2,3)
             Bz = k1*Blat(3,1) + k2*Blat(3,2) + k3*Blat(3,3)
             !
-            if(Bx.ne.Bx_old)then
-               write(unit,*)
-               Bx_old = Bx
-            endif
+            !if(Bx.ne.Bx_old)then
+            !   write(unit,*)
+            !   Bx_old = Bx
+            !endif
             !
             write(unit,"(3I10,200E20.12)") ik,ikx,iky,k1,k2,k3,Bx,By,Bz,(Fk(io,io,ik),io=1,Ndim)
-            !if(iky.eq.Nkpt_plane)write(unit,*)
+            if(iky.eq.Nkpt_plane)write(unit,*)
             !
          enddo
          close(unit)
@@ -4257,13 +4275,13 @@ contains
                   By = k1*Blat(2,1) + k2*Blat(2,2) + k3*Blat(2,3)
                   Bz = k1*Blat(3,1) + k2*Blat(3,2) + k3*Blat(3,3)
                   !
-                  if(Bx.ne.Bx_old)then
-                     write(unit,*)
-                     Bx_old = Bx
-                  endif
+                  !if(Bx.ne.Bx_old)then
+                  !   write(unit,*)
+                  !   Bx_old = Bx
+                  !endif
                   !
                   write(unit,"(3I10,200E20.12)") ik,ikx,iky,k1,k2,k3,Bx,By,Bz,(dreal(Fk_kz(io,io,ik,ikz)),io=1,Hetero%Norb)
-                  !if(iky.eq.Nkpt_plane)write(unit,*)
+                  if(iky.eq.Nkpt_plane)write(unit,*)
                   !
                enddo
                close(unit)

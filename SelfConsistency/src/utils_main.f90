@@ -3549,6 +3549,46 @@ contains
 
 
    !---------------------------------------------------------------------------!
+   !PURPOSE: compute the hopping expectaion in real space
+   !---------------------------------------------------------------------------!
+   subroutine calc_Treal(Lttc,Gmats,path)
+      !
+      implicit none
+      !
+      type(Lattice),intent(in)              :: Lttc
+      type(FermionicField),intent(in)       :: Gmats
+      character(len=*),intent(in)           :: path
+      !
+      integer                               :: ispin
+      complex(8),allocatable                :: TR(:,:,:)
+      !
+      if(.not.Lttc%status) stop "calc_Treal: Lttc not properly initialized."
+      if(.not.Gmats%status) stop "calc_Treal: Smats not properly initialized."
+      if(Lttc%Nkpt.ne.Gmats%Nkpt) stop "calc_Treal: number of K-points does not match between Lttc and Gmats."
+      if(Lttc%Norb.ne.Gmats%Norb) stop "calc_Treal: orbital dimension does not match between Lttc and Gmats."
+      !
+      allocate(TR(Gmats%Norb,Gmats%Norb,6));TR=czero
+      do ispin=1,Nspin
+         !
+         TR=czero
+         call wannier_K2R_NN(Lttc%Nkpt3,Lttc%kpt,Gmats%N_ks(:,:,:,ispin),TR)
+         !
+         call dump_Matrix(TR(:,:,1),reg(trim(path)),"Treal_100.DAT")
+         call dump_Matrix(TR(:,:,2),reg(trim(path)),"Treal_010.DAT")
+         call dump_Matrix(TR(:,:,3),reg(trim(path)),"Treal_001.DAT")
+         call dump_Matrix(TR(:,:,4),reg(trim(path)),"Treal_011.DAT")
+         call dump_Matrix(TR(:,:,5),reg(trim(path)),"Treal_101.DAT")
+         call dump_Matrix(TR(:,:,6),reg(trim(path)),"Treal_110.DAT")
+         !
+         if(paramagnet)exit
+         !
+      enddo
+      deallocate(TR)
+      !
+   end subroutine calc_Treal
+
+
+   !---------------------------------------------------------------------------!
    !PURPOSE: Print heterostructure embedding potentials
    !---------------------------------------------------------------------------!
    subroutine print_potentials(printpath)

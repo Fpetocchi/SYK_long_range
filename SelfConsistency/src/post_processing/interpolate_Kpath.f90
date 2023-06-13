@@ -220,13 +220,13 @@ subroutine interpolate2kpath_Fermionic(Sfull,Lttc,pathOUTPUT)
                   By = k1*Blat(2,1) + k2*Blat(2,2) + k3*Blat(2,3)
                   Bz = k1*Blat(3,1) + k2*Blat(3,2) + k3*Blat(3,3)
                   !
-                  if(Bx.ne.Bx_old)then
-                     write(unit,*)
-                     Bx_old = Bx
-                  endif
+                  !if(Bx.ne.Bx_old)then
+                  !   write(unit,*)
+                  !   Bx_old = Bx
+                  !endif
                   !
                   write(unit,"(3I10,200E20.12)") ik,ikx,iky,k1,k2,k3,Bx,By,Bz,(Zk(ik,iorb),iorb=1,Norb)
-                  !if(iky.eq.Nkpt_plane)write(unit,*)
+                  if(iky.eq.Nkpt_plane)write(unit,*)
                   !
                enddo
                close(unit)
@@ -590,13 +590,13 @@ contains
                By = k1*Blat(2,1) + k2*Blat(2,2) + k3*Blat(2,3)
                Bz = k1*Blat(3,1) + k2*Blat(3,2) + k3*Blat(3,3)
                !
-               if(Bx.ne.Bx_old)then
-                  write(unit,*)
-                  Bx_old = Bx
-               endif
+               !if(Bx.ne.Bx_old)then
+               !   write(unit,*)
+               !   Bx_old = Bx
+               !endif
                !
                write(unit,"(3I10,200E20.12)") ik,ikx,iky,k1,k2,k3,Bx,By,Bz,(Ak(ik,iorb),iorb=1,Norb)
-               !if(iky.eq.Nkpt_plane)write(unit,*)
+               if(iky.eq.Nkpt_plane)write(unit,*)
                !
             enddo
          endif

@@ -310,6 +310,7 @@ program SelfConsistency
       call dump_Matrix(Ek,reg(ItFolder),"Ek.DAT")
       call dump_Matrix(Ep,reg(ItFolder),"Ep.DAT")
       call check_QP_poles(Crystal,S_Full)
+      call calc_Treal(Crystal,Glat,reg(ItFolder))
       !
       !
       !Print Gf: local readable and k-dep binfmt
