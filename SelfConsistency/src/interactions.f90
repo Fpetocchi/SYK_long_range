@@ -128,7 +128,7 @@ contains
       if(all([Umats%Nkpt-Nkpt,Pmats%Nkpt-Nkpt].ne.[0,0])) stop "calc_W_full: Either Umats and/or Pmats have different number of k-points with respect to Wmats."
       if(all([Umats%Beta-Beta,Pmats%Beta-Beta].ne.[0d0,0d0])) stop "calc_W_full: Either Umats and/or Pmats have different Beta with respect to Wmats."
       if(Pmats%Npoints.ne.Nmats) stop "calc_W_full: Pmats has different number of Matsubara points with respect to Wmats."
-      if(Emats%status) call assert_shape(Emats%screened,[Nbp,Nbp,Nmats,Nkpt],"calc_W_edmft","Emats%screened")
+      if(Emats%status) call assert_shape(Emats%screened,[Nbp,Nbp,Nmats,Nkpt],"calc_W_full","Emats%screened")
       !
       allocate(invW(Nbp,Nbp));invW=czero
       call clear_attributes(Wmats)
@@ -162,10 +162,10 @@ contains
             !invW = zeye(Wmats%Nbp) - matmul(Pmats%screened(:,:,iw,iq),Umats%screened(:,:,iwU,iq))
             ! [ 1 - U*Pi ]
             invW = zeye(Wmats%Nbp) - matmul(Umats%screened(:,:,iwU,iq),Pmats%screened(:,:,iw,iq))
+            if(Emats%status)Emats%screened(:,:,iw,iq) = invW
             !
             ! [ 1 - Pi*U ]^-1 or [ 1 - U*Pi ]^-1
             call inv(invW)
-            if(Emats%status)Emats%screened(:,:,iw,iq) = invW
             !
             ! U*[ 1 - Pi*U ]^-1
             !Wmats%screened(:,:,iw,iq) = matmul(Umats%screened(:,:,iwU,iq),invW)
@@ -209,7 +209,13 @@ contains
             Wmats%screened(:,:,iw,Umats%iq_gamma) = alphaGamma * dreal(matmul(epsGamma(:,:,iw),Umats%screened(:,:,iwU,Umats%iq_gamma)))
             call check_Symmetry(Wmats%screened(:,:,iw,Umats%iq_gamma),eps,enforce=.true.,hardstop=.false.,name="Wlat_w"//str(iw)//"_q"//str(Umats%iq_gamma),verb=.false.)
          enddo
-         if(Emats%status)Emats%screened(:,:,:,Umats%iq_gamma) = epsGamma
+         !
+         if(Emats%status)then
+            do iw=1,Nmats
+               Emats%screened(:,:,iw,Umats%iq_gamma) = epsGamma(:,:,iw)
+               call inv(Emats%screened(:,:,iw,Umats%iq_gamma))
+            enddo
+         endif
          !
          deallocate(epsGamma,AverageList)
          !
@@ -324,10 +330,10 @@ contains
             !invW = zeye(Umats%Nbp) - matmul(alpha_*Pmats%screened_local(:,:,iw),Umats%screened(:,:,iwU,iq))
             ! [ 1 - U*Pi ]
             invW = zeye(Umats%Nbp) - matmul(Umats%screened(:,:,iwU,iq),alpha_*Pmats%screened_local(:,:,iw))
+            if(Emats%status)Emats%screened(:,:,iw,iq) = invW
             !
             ! [ 1 - Pi*U ]^-1 or [ 1 - U*Pi ]^-1
             call inv(invW)
-            if(Emats%status)Emats%screened(:,:,iw,iq) = invW
             !
             !  U*[ 1 - U*Pi ]^-1
             !W_q = matmul(Umats%screened(:,:,iwU,iq),invW)
@@ -375,7 +381,13 @@ contains
             call check_Symmetry(W_q,eps,enforce=.true.,hardstop=.false.,name="Wlat_w"//str(iw)//"_q"//str(Umats%iq_gamma),verb=.false.)
             Wmats%screened_local(:,:,iw) = Wmats%screened_local(:,:,iw) + W_q/Nkpt
          enddo
-         if(Emats%status)Emats%screened(:,:,:,Umats%iq_gamma) = epsGamma
+         !
+         if(Emats%status)then
+            do iw=1,Nmats
+               Emats%screened(:,:,iw,Umats%iq_gamma) = epsGamma(:,:,iw)
+               call inv(Emats%screened(:,:,iw,Umats%iq_gamma))
+            enddo
+         endif
          !
          deallocate(epsGamma,AverageList)
          !
@@ -528,7 +540,7 @@ contains
       use utils_misc
       use utils_fields
       use crystal
-      use input_vars, only : Nkpt3
+      use input_vars, only : Nkpt3, RealPrint
       use input_vars, only : pathINPUT, UfullStructure, Uthresh, HandleGammaPoint
       implicit none
       !
@@ -544,6 +556,7 @@ contains
       integer                               :: iq,iw,iqread,Nbp_spex
       integer                               :: idum,Nspin_spex,Norb_spex,Nfreq
       integer                               :: ib1,ib2,iw1,iw2
+      integer                               :: iprint,Nprint
       real(8),allocatable                   :: wread(:),wmats(:)
       complex(8),allocatable                :: D1(:,:),D2(:,:),D3(:,:)
       complex(8),allocatable                :: Utmp(:,:),UR(:,:,:),URnn(:,:)
@@ -965,23 +978,16 @@ contains
       ! Print the nn non local interaction
       if((.not.LocalOnly).and.doAC_)then
          !
+         Nprint = size(RealPrint,dim=2)
          allocate(URnn(int(sqrt(dble(Umats%Nbp))),int(sqrt(dble(Umats%Nbp)))));URnn=czero
-         allocate(UR(Umats%Nbp,Umats%Nbp,6));UR=czero
-         call wannier_K2R_NN(Nkpt3,kpt,Umats%screened(:,:,1,:),UR)
+         allocate(UR(Umats%Nbp,Umats%Nbp,Nprint));UR=czero
+         call wannier_K2R_NN(RealPrint,Nkpt3,kpt,Umats%screened(:,:,1,:),UR)
          where(abs((UR))<eps) UR=czero
-         !
-         call dump_Matrix(UR(:,:,1),reg(trim(pathOUTPUT_)),"U_100.DAT")
-         call product2NN(UR(:,:,1),URnn)
-         call dump_Matrix(URnn,reg(trim(pathOUTPUT_)),"Unn_100.DAT")
-         !
-         call dump_Matrix(UR(:,:,2),reg(trim(pathOUTPUT_)),"U_010.DAT")
-         call product2NN(UR(:,:,2),URnn)
-         call dump_Matrix(URnn,reg(trim(pathOUTPUT_)),"Unn_010.DAT")
-         !
-         call dump_Matrix(UR(:,:,3),reg(trim(pathOUTPUT_)),"U_001.DAT")
-         call product2NN(UR(:,:,3),URnn)
-         call dump_Matrix(URnn,reg(trim(pathOUTPUT_)),"Unn_001.DAT")
-         !
+         do iprint=1,Nprint
+            call dump_Matrix(UR(:,:,iprint),reg(trim(pathOUTPUT_)),"U_"//str(RealPrint(1,iprint))//str(RealPrint(2,iprint))//str(RealPrint(3,iprint))//".DAT")
+            call product2NN(UR(:,:,iprint),URnn)
+            call dump_Matrix(URnn,reg(trim(pathOUTPUT_)),"Unn_"//str(RealPrint(1,iprint))//str(RealPrint(2,iprint))//str(RealPrint(3,iprint))//".DAT")
+         enddo
          deallocate(UR,URnn)
          !
       endif
@@ -1096,7 +1102,7 @@ contains
       use utils_misc
       use utils_fields
       use crystal
-      use input_vars, only : Nkpt_path, structure, SiteOrbs
+      use input_vars, only : RealPrint, Nkpt_path, structure, SiteOrbs
       use input_vars, only : pathINPUTtr, pathINPUT
       implicit none
       !
@@ -1107,6 +1113,7 @@ contains
       integer                               :: iorb,jorb,ib1,ib2
       integer                               :: Norb,Nbp
       integer                               :: iD,iR,iwig,ik,unit,idum
+      integer                               :: iprint,Nprint
       real(8)                               :: Rdist
       real(8),allocatable                   :: Ruc(:,:),ReadLine(:),Rvec(:)
       integer,allocatable                   :: Rorder(:),Dist(:,:),DistList(:)
@@ -1320,23 +1327,16 @@ contains
       ! Print the nn non local interaction
       if(Lttc%Nsite.gt.1)then
          !
+         Nprint = size(RealPrint,dim=2)
          allocate(URnn(int(sqrt(dble(Umats%Nbp))),int(sqrt(dble(Umats%Nbp)))));URnn=czero
-         allocate(UR(Umats%Nbp,Umats%Nbp,6));UR=czero
-         call wannier_K2R_NN(Lttc%Nkpt3,Lttc%kpt,Umats%screened(:,:,1,:),UR)
+         allocate(UR(Umats%Nbp,Umats%Nbp,Nprint));UR=czero
+         call wannier_K2R_NN(RealPrint,Lttc%Nkpt3,Lttc%kpt,Umats%screened(:,:,1,:),UR)
          where(abs((UR))<eps) UR=czero
-         !
-         call dump_Matrix(UR(:,:,1),reg(pathINPUTtr),"U_100.DAT")
-         call product2NN(UR(:,:,1),URnn)
-         call dump_Matrix(URnn,reg(pathINPUTtr),"Unn_100.DAT")
-         !
-         call dump_Matrix(UR(:,:,2),reg(pathINPUTtr),"U_010.DAT")
-         call product2NN(UR(:,:,2),URnn)
-         call dump_Matrix(URnn,reg(pathINPUTtr),"Unn_010.DAT")
-         !
-         call dump_Matrix(UR(:,:,3),reg(pathINPUTtr),"U_001.DAT")
-         call product2NN(UR(:,:,3),URnn)
-         call dump_Matrix(URnn,reg(pathINPUTtr),"Unn_001.DAT")
-         !
+         do iprint=1,Nprint
+            call dump_Matrix(UR(:,:,iprint),reg(trim(pathINPUTtr)),"U_"//str(RealPrint(1,iprint))//str(RealPrint(2,iprint))//str(RealPrint(3,iprint))//".DAT")
+            call product2NN(UR(:,:,iprint),URnn)
+            call dump_Matrix(URnn,reg(trim(pathINPUTtr)),"Unn_"//str(RealPrint(1,iprint))//str(RealPrint(2,iprint))//str(RealPrint(3,iprint))//".DAT")
+         enddo
          deallocate(UR,URnn)
          !
       endif
@@ -2322,7 +2322,7 @@ contains
       use utils_fields
       use crystal
       use input_vars, only : pathINPUTtr, pathINPUT
-      use input_vars, only : long_range, structure, Nkpt_path, attach_Coulomb
+      use input_vars, only : RealPrint, long_range, structure, Nkpt_path, attach_Coulomb
       implicit none
       !
       type(BosonicField),intent(inout)      :: Umats
@@ -2338,6 +2338,7 @@ contains
       integer                               :: ib1,ib2,ib1_l,ib2_l
       integer                               :: iorb,jorb,io,jo,io_l,jo_l
       integer                               :: iwig,iD,iR,unit
+      integer                               :: iprint,Nprint
       complex(8),allocatable                :: EwaldShift(:)
       real(8)                               :: eta,den,V
       logical                               :: LocalOnly_,CoulombTail
@@ -2818,23 +2819,16 @@ contains
       call dump_BosonicField(Umats,reg(pathINPUTtr),"Uloc_mats.DAT")
       !
       ! Print the nn non local interaction
+      Nprint = size(RealPrint,dim=2)
       allocate(URnn(int(sqrt(dble(Umats%Nbp))),int(sqrt(dble(Umats%Nbp)))));URnn=czero
-      allocate(UR(Umats%Nbp,Umats%Nbp,6));UR=czero
-      call wannier_K2R_NN(Lttc%Nkpt3,Lttc%kpt,Umats%screened(:,:,1,:),UR)
+      allocate(UR(Umats%Nbp,Umats%Nbp,Nprint));UR=czero
+      call wannier_K2R_NN(RealPrint,Lttc%Nkpt3,Lttc%kpt,Umats%screened(:,:,1,:),UR)
       where(abs((UR))<eps) UR=czero
-      !
-      call dump_Matrix(UR(:,:,1),reg(pathINPUTtr),"U_100.DAT")
-      call product2NN(UR(:,:,1),URnn)
-      call dump_Matrix(URnn,reg(pathINPUTtr),"Unn_100.DAT")
-      !
-      call dump_Matrix(UR(:,:,2),reg(pathINPUTtr),"U_010.DAT")
-      call product2NN(UR(:,:,2),URnn)
-      call dump_Matrix(URnn,reg(pathINPUTtr),"Unn_010.DAT")
-      !
-      call dump_Matrix(UR(:,:,3),reg(pathINPUTtr),"U_001.DAT")
-      call product2NN(UR(:,:,3),URnn)
-      call dump_Matrix(URnn,reg(pathINPUTtr),"Unn_001.DAT")
-      !
+      do iprint=1,Nprint
+         call dump_Matrix(UR(:,:,iprint),reg(trim(pathINPUTtr)),"U_"//str(RealPrint(1,iprint))//str(RealPrint(2,iprint))//str(RealPrint(3,iprint))//".DAT")
+         call product2NN(UR(:,:,iprint),URnn)
+         call dump_Matrix(URnn,reg(trim(pathINPUTtr)),"Unn_"//str(RealPrint(1,iprint))//str(RealPrint(2,iprint))//str(RealPrint(3,iprint))//".DAT")
+      enddo
       deallocate(UR,URnn)
       !
    end subroutine build_Uret_singlParam_Vn
@@ -2847,7 +2841,7 @@ contains
       use utils_fields
       use crystal
       use input_vars, only : pathINPUTtr, pathINPUT
-      use input_vars, only : long_range, structure, Nkpt_path, attach_Coulomb
+      use input_vars, only : RealPrint, long_range, structure, Nkpt_path, attach_Coulomb
       implicit none
       !
       type(BosonicField),intent(inout)      :: Umats
@@ -2863,6 +2857,7 @@ contains
       integer                               :: ib1,ib2,ib1_l,ib2_l
       integer                               :: iorb,jorb,io,jo,io_l,jo_l
       integer                               :: iwig,iD,iR,unit
+      integer                               :: iprint,Nprint
       complex(8),allocatable                :: EwaldShift(:)
       real(8)                               :: eta,den,V
       logical                               :: LocalOnly_,CoulombTail
@@ -3347,23 +3342,16 @@ contains
       call dump_BosonicField(Umats,reg(pathINPUTtr),"Uloc_mats.DAT")
       !
       ! Print the nn non local interaction
+      Nprint = size(RealPrint,dim=2)
       allocate(URnn(int(sqrt(dble(Umats%Nbp))),int(sqrt(dble(Umats%Nbp)))));URnn=czero
-      allocate(UR(Umats%Nbp,Umats%Nbp,6));UR=czero
-      call wannier_K2R_NN(Lttc%Nkpt3,Lttc%kpt,Umats%screened(:,:,1,:),UR)
+      allocate(UR(Umats%Nbp,Umats%Nbp,Nprint));UR=czero
+      call wannier_K2R_NN(RealPrint,Lttc%Nkpt3,Lttc%kpt,Umats%screened(:,:,1,:),UR)
       where(abs((UR))<eps) UR=czero
-      !
-      call dump_Matrix(UR(:,:,1),reg(pathINPUTtr),"U_100.DAT")
-      call product2NN(UR(:,:,1),URnn)
-      call dump_Matrix(URnn,reg(pathINPUTtr),"Unn_100.DAT")
-      !
-      call dump_Matrix(UR(:,:,2),reg(pathINPUTtr),"U_010.DAT")
-      call product2NN(UR(:,:,2),URnn)
-      call dump_Matrix(URnn,reg(pathINPUTtr),"Unn_010.DAT")
-      !
-      call dump_Matrix(UR(:,:,3),reg(pathINPUTtr),"U_001.DAT")
-      call product2NN(UR(:,:,3),URnn)
-      call dump_Matrix(URnn,reg(pathINPUTtr),"Unn_001.DAT")
-      !
+      do iprint=1,Nprint
+         call dump_Matrix(UR(:,:,iprint),reg(trim(pathINPUTtr)),"U_"//str(RealPrint(1,iprint))//str(RealPrint(2,iprint))//str(RealPrint(3,iprint))//".DAT")
+         call product2NN(UR(:,:,iprint),URnn)
+         call dump_Matrix(URnn,reg(trim(pathINPUTtr)),"Unn_"//str(RealPrint(1,iprint))//str(RealPrint(2,iprint))//str(RealPrint(3,iprint))//".DAT")
+      enddo
       deallocate(UR,URnn)
       !
    end subroutine build_Uret_multiParam_Vn

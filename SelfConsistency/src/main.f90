@@ -131,14 +131,14 @@ program SelfConsistency
       !Fully screened interaction - only G0W0,scGW,GW+EDMFT,EDMFT
       if(calc_Wk)then
          !
-         if(calc_Wfull)  call calc_W_full(Wlat,Ulat,Plat,Einv,Crystal)
-         if(calc_Wedmft) call calc_W_edmft(Wlat,Ulat,P_EDMFT,Einv,Crystal,alpha=alphaPi)
+         if(calc_Wfull)  call calc_W_full(Wlat,Ulat,Plat,Epsilon,Crystal)
+         if(calc_Wedmft) call calc_W_edmft(Wlat,Ulat,P_EDMFT,Epsilon,Crystal,alpha=alphaPi)
          call dump_BosonicField(Wlat,reg(ItFolder),"Wlat_w.DAT")
          call dump_MaxEnt(Wlat,"mats",reg(ItFolder)//"Convergence/","Wlat",EqvGWndx%SetOrbs)
          !
-         if(interp_W) call interpolate2kpath(Wlat,Crystal,reg(MaxEnt_K),name="W",mode="NaNb")
-         if(interp_E) call interpolate2kpath(Einv,Crystal,reg(MaxEnt_K),name="E",mode="Loss",invert=.true.)
-         call DeallocateBosonicField(Einv)
+         if(interp_W) call interpolate2kpath(Wlat,Crystal,reg(MaxEnt_K),name="W",mode="NaNa")
+         if(interp_E) call interpolate2kpath(Epsilon,Crystal,reg(MaxEnt_K),name="E",mode="EigvProd_NaNb")
+         call DeallocateBosonicField(Epsilon)
          !
          !Solve the Gap equation
          if(gap_equation%status)call calc_Tc(reg(ItFolder),gap_equation,Crystal,Wlat)

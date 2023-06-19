@@ -38,7 +38,7 @@ module utils_main
    type(FermionicField)                     :: S_GWdc,S_GW_Cdc,S_GW_Xdc
    type(FermionicField)                     :: S_DMFT
    !
-   type(BosonicField)                       :: Einv
+   type(BosonicField)                       :: Epsilon
    type(BosonicField)                       :: Wlat
    type(BosonicField)                       :: W_EDMFT
    !
@@ -1266,7 +1266,7 @@ contains
       !
       !
       calc_Wk = calc_Wedmft .or. calc_Wfull
-      if(interp_E.and.calc_Wk) call AllocateBosonicField(Einv,Crystal%Norb,Nmats,Crystal%iq_gamma,Nkpt=Crystal%Nkpt,Nsite=Nsite,no_bare=.true.,Beta=Beta)
+      if(interp_E.and.calc_Wk) call AllocateBosonicField(Epsilon,Crystal%Norb,Nmats,Crystal%iq_gamma,Nkpt=Crystal%Nkpt,Nsite=Nsite,no_bare=.true.,Beta=Beta)
       !
       !
       if(addTierIII)then
@@ -1413,6 +1413,7 @@ contains
       implicit none
       integer,intent(in)                    :: Iteration
       integer                               :: ik,iw,ispin,iorb,jorb
+      integer                               :: iprint,Nprint
       real(8),allocatable                   :: Z_qpsc(:,:,:)
       complex(8),allocatable                :: Vxc_loc(:,:,:)
       type(FermionicField)                  :: S_EMB,S_Full_R
@@ -1583,22 +1584,17 @@ contains
       !
       !Compute the full self-energy in real space in the different directions
       if(dump_SigmaR)then
-         call AllocateFermionicField(S_Full_R,Crystal%Norb,Nmats,Nkpt=3,Nsite=Nsite,Beta=Beta)
+         Nprint = size(RealPrint,dim=2)
+         call AllocateFermionicField(S_Full_R,Crystal%Norb,Nmats,Nkpt=Nprint,Nsite=Nsite,Beta=Beta)
          do ispin=1,Nspin
             !FT to real space
-            call wannier_K2R_NN(Crystal%Nkpt3,Crystal%kpt,S_Full%wks(:,:,:,:,ispin),S_Full_R%wks(:,:,:,:,ispin))
-            ![100]
-            S_Full_R%ws(:,:,:,ispin) = S_Full_R%wks(:,:,:,1,ispin)
-            call dump_FermionicField(S_Full_R,reg(ItFolder),"Sfull_w_100",paramagnet)
-            call dump_MaxEnt(S_Full_R,"mats",reg(ItFolder)//"Convergence/","Sfull_w_100",EqvGWndx%SetOrbs,WmaxPade=PadeWlimit)
-            ![010]
-            S_Full_R%ws(:,:,:,ispin) = S_Full_R%wks(:,:,:,2,ispin)
-            call dump_FermionicField(S_Full_R,reg(ItFolder),"Sfull_w_010",paramagnet)
-            call dump_MaxEnt(S_Full_R,"mats",reg(ItFolder)//"Convergence/","Sfull_w_010",EqvGWndx%SetOrbs,WmaxPade=PadeWlimit)
-            ![001]
-            S_Full_R%ws(:,:,:,ispin) = S_Full_R%wks(:,:,:,3,ispin)
-            call dump_FermionicField(S_Full_R,reg(ItFolder),"Sfull_w_001",paramagnet)
-            call dump_MaxEnt(S_Full_R,"mats",reg(ItFolder)//"Convergence/","Sfull_w_001",EqvGWndx%SetOrbs,WmaxPade=PadeWlimit)
+            call wannier_K2R_NN(RealPrint,Crystal%Nkpt3,Crystal%kpt,S_Full%wks(:,:,:,:,ispin),S_Full_R%wks(:,:,:,:,ispin))
+            !
+            do iprint=1,Nprint
+               S_Full_R%ws(:,:,:,ispin) = S_Full_R%wks(:,:,:,iprint,ispin)
+               call dump_FermionicField(S_Full_R,reg(ItFolder),"Sfull_w_"//str(RealPrint(1,iprint))//str(RealPrint(2,iprint))//str(RealPrint(3,iprint)),paramagnet)
+               call dump_MaxEnt(S_Full_R,"mats",reg(ItFolder)//"Convergence/","Sfull_w_"//str(RealPrint(1,iprint))//str(RealPrint(2,iprint))//str(RealPrint(3,iprint)),EqvGWndx%SetOrbs,WmaxPade=PadeWlimit)
+            enddo
             !
             if(paramagnet)exit
          enddo
@@ -3089,8 +3085,8 @@ contains
                close(unit)
                !
                !for spin resolved calculations the two Hartree are different
-               Simp(isite)%N_s(:,:,1) = (Simp(isite)%N_s(:,:,1)+Simp(isite)%N_s(:,:,Nspin))/2d0
-               Simp(isite)%N_s(:,:,Nspin) = Simp(isite)%N_s(:,:,1)
+               !Simp(isite)%N_s(:,:,1) = (Simp(isite)%N_s(:,:,1)+Simp(isite)%N_s(:,:,Nspin))/2d0
+               !Simp(isite)%N_s(:,:,Nspin) = Simp(isite)%N_s(:,:,1)
                !
             case("Hartree_DMFT_Nimp","Hartree_DMFT_Nlat") ! DEPRECATED - curlyUfree
                !
@@ -3120,8 +3116,8 @@ contains
                deallocate(rho_Flav)
                !
                !for spin resolved calculations the two Hartree are different
-               Simp(isite)%N_s(:,:,1) = (Simp(isite)%N_s(:,:,1)+Simp(isite)%N_s(:,:,Nspin))/2d0
-               Simp(isite)%N_s(:,:,Nspin) = Simp(isite)%N_s(:,:,1)
+               !Simp(isite)%N_s(:,:,1) = (Simp(isite)%N_s(:,:,1)+Simp(isite)%N_s(:,:,Nspin))/2d0
+               !Simp(isite)%N_s(:,:,Nspin) = Simp(isite)%N_s(:,:,1)
                !
             case("FLL_Nimp","FLL_Nlat") ! curlyUfree
                !
@@ -3559,26 +3555,25 @@ contains
       type(FermionicField),intent(in)       :: Gmats
       character(len=*),intent(in)           :: path
       !
-      integer                               :: ispin
+      integer                               :: ispin,iprint,Nprint
       complex(8),allocatable                :: TR(:,:,:)
       !
       if(.not.Lttc%status) stop "calc_Treal: Lttc not properly initialized."
       if(.not.Gmats%status) stop "calc_Treal: Smats not properly initialized."
       if(Lttc%Nkpt.ne.Gmats%Nkpt) stop "calc_Treal: number of K-points does not match between Lttc and Gmats."
       if(Lttc%Norb.ne.Gmats%Norb) stop "calc_Treal: orbital dimension does not match between Lttc and Gmats."
+      if(.not.allocated(RealPrint)) stop "calc_Treal: RealPrint list not allocated."
       !
-      allocate(TR(Gmats%Norb,Gmats%Norb,6));TR=czero
+      Nprint = size(RealPrint,dim=2)
+      allocate(TR(Gmats%Norb,Gmats%Norb,Nprint));TR=czero
       do ispin=1,Nspin
          !
          TR=czero
-         call wannier_K2R_NN(Lttc%Nkpt3,Lttc%kpt,Gmats%N_ks(:,:,:,ispin),TR)
+         call wannier_K2R_NN(RealPrint,Lttc%Nkpt3,Lttc%kpt,Gmats%N_ks(:,:,:,ispin),TR)
          !
-         call dump_Matrix(TR(:,:,1),reg(trim(path)),"Treal_100.DAT")
-         call dump_Matrix(TR(:,:,2),reg(trim(path)),"Treal_010.DAT")
-         call dump_Matrix(TR(:,:,3),reg(trim(path)),"Treal_001.DAT")
-         call dump_Matrix(TR(:,:,4),reg(trim(path)),"Treal_011.DAT")
-         call dump_Matrix(TR(:,:,5),reg(trim(path)),"Treal_101.DAT")
-         call dump_Matrix(TR(:,:,6),reg(trim(path)),"Treal_110.DAT")
+         do iprint=1,Nprint
+            call dump_Matrix(TR(:,:,iprint),reg(trim(path)),"Treal_"//str(RealPrint(1,iprint))//str(RealPrint(2,iprint))//str(RealPrint(3,iprint))//".DAT")
+         enddo
          !
          if(paramagnet)exit
          !
@@ -3671,6 +3666,10 @@ contains
       if(S_DMFT%status)then
          write(*,"(A)") "     Deallocating S_DMFT"
          call DeallocateFermionicField(S_DMFT)
+      endif
+      if(Epsilon%status)then
+         write(*,"(A)") "     Deallocating Epsilon"
+         call DeallocateBosonicField(Epsilon)
       endif
       if(Wlat%status)then
          write(*,"(A)") "     Deallocating Wlat"

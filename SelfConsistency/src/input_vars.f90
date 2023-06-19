@@ -232,6 +232,7 @@ module input_vars
    logical,public                           :: rebuildRealPart
    logical,public                           :: print_full_G
    logical,public                           :: print_path_S
+   integer,allocatable,public               :: RealPrint(:,:)
    !
    !Variables for the matching beta
    type(OldBeta),public                     :: Beta_Match
@@ -696,6 +697,7 @@ contains
       call parse_input_variable(rebuildRealPart,"REBUILD_REAL",InputFile,default=.false.,comment="Rebuild the real part of the requested  k-resolved spectra.")
       call parse_input_variable(print_full_G,"PRINT_FULL_G",InputFile,default=.false.,comment="Print the k-dependent Green's function in the full BZ on the imaginary time axis.")
       call parse_input_variable(print_path_S,"PRINT_PATH_S",InputFile,default=.false.,comment="Print the k-dependent self-energy function along the K-path on the imaginary frequency axis. Not used for MaxEnt.")
+      call read_RealPrint()
       !
       !Variables for the matching beta
       call add_separator("Matching beta")
@@ -771,7 +773,7 @@ contains
          call parse_input_variable(Solver%Nmeas,"NMEAS",InputFile,default=1000,comment="Sweeps where expensive measurments are not performed.")
          call parse_input_variable(Solver%Ntherm,"NTHERM",InputFile,default=100,comment="Thermalization cycles. Each cycle performs NMEAS sweeps.")
          call parse_input_variable(Solver%Nshift,"NSHIFT",InputFile,default=1,comment="Proposed segment shifts at each sweep.")
-         call parse_input_variable(Solver%Nswap,"NSWAP",InputFile,default=1,comment="Proposed global spin swaps at each sweep.")
+         call parse_input_variable(Solver%Nswap,"NSWAP",InputFile,default=1,comment="Frequency of spin during NMEAS. =0 to avoid.")
          call parse_input_variable(Solver%Imprvd_F,"IMPRVD_F",InputFile,default=0,comment="If =1 the improved estimator for the self-energy will be computed.")
          if(Dyson_Imprvd_F)Solver%Imprvd_F=1
          call parse_input_variable(Solver%Imprvd_B,"IMPRVD_B",InputFile,default=0,comment="If =1 the improved estimator for the polarization will be computed (NOT IMPLEMENTED).")
@@ -864,6 +866,39 @@ contains
       enddo
       close(unit)
    end subroutine read_Vnn
+
+
+   !---------------------------------------------------------------------------!
+   !PURPOSE: Read the indexes of the real-space vectors to be printed
+   !---------------------------------------------------------------------------!
+   subroutine read_RealPrint()
+      use utils_misc
+      implicit none
+      logical                               :: filexists
+      integer                               :: unit,iprint,Nprint
+      integer                               :: idum,nx,ny,nz
+      if(allocated(RealPrint))deallocate(RealPrint)
+      call inquireFile(reg(pathINPUT)//"RealPrint.DAT",filexists,verb=verbose,hardstop=.false.)
+      if(filexists)then
+         unit=free_unit()
+         open(unit,file=reg(pathINPUT)//"RealPrint.DAT",form="formatted",status="old",position="rewind",action="read")
+         read(unit,*)
+         read(unit,*)Nprint !Number of orbitals
+         read(unit,*)
+         allocate(RealPrint(3,Nprint));RealPrint=0
+         do iprint=1,Nprint
+            read(unit,*) idum,nx,ny,nz
+            if(idum.ne.iprint) stop "read_InputFile/RealPrint: unexpected index from file pathINPUT/RealPrint.DAT"
+            RealPrint(:,iprint) = [nx,ny,nz]
+         enddo
+         close(unit)
+      else
+         allocate(RealPrint(3,3));RealPrint=0
+         RealPrint(:,1) = [1,0,0]
+         RealPrint(:,2) = [0,1,0]
+         RealPrint(:,3) = [0,0,1]
+      endif
+   end subroutine read_RealPrint
 
 
    !---------------------------------------------------------------------------!

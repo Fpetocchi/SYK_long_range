@@ -168,9 +168,9 @@ contains
       close(unit)
       vol = dot_product(cross_product(Rlat(:,1),Rlat(:,2)),Rlat(:,3))
       if(verbose)write(*,"(A,F)")"     Unit cell volume: ",vol
-      Blat(:,1) = cross_product(Rlat(:,2),Rlat(:,3))/vol
-      Blat(:,2) = cross_product(Rlat(:,3),Rlat(:,1))/vol
-      Blat(:,3) = cross_product(Rlat(:,1),Rlat(:,2))/vol
+      Blat(:,1) = 2*pi*cross_product(Rlat(:,2),Rlat(:,3))/vol
+      Blat(:,2) = 2*pi*cross_product(Rlat(:,3),Rlat(:,1))/vol
+      Blat(:,3) = 2*pi*cross_product(Rlat(:,1),Rlat(:,2))/vol
       !
       write(*,"(A)")new_line("A")//"     Unit cell vectors: "
       do ir=1,3
@@ -178,7 +178,7 @@ contains
       enddo
       write(*,"(A)")new_line("A")//"     Reciprocal lattice vectors: "
       do ir=1,3
-         write(*,"(A)")"     B_"//str(ir)//": [ "//str(Blat(1,ir),3)//" , "//str(Blat(2,ir),3)//" , "//str(Blat(3,ir),3)//" ]*2pi"
+         write(*,"(A)")"     B_"//str(ir)//": [ "//str(Blat(1,ir),3)//" , "//str(Blat(2,ir),3)//" , "//str(Blat(3,ir),3)//" ]"
       enddo
       !
       Lat_stored=.true.
@@ -208,9 +208,9 @@ contains
       Rlat(:,3) = Rlat_input(:,3)
       vol = dot_product(cross_product(Rlat(:,1),Rlat(:,2)),Rlat(:,3))
       if(verbose)write(*,"(A,F)")"     Unit cell volume: ",vol
-      Blat(:,1) = cross_product(Rlat(:,2),Rlat(:,3))/vol
-      Blat(:,2) = cross_product(Rlat(:,3),Rlat(:,1))/vol
-      Blat(:,3) = cross_product(Rlat(:,1),Rlat(:,2))/vol
+      Blat(:,1) = 2*pi*cross_product(Rlat(:,2),Rlat(:,3))/vol
+      Blat(:,2) = 2*pi*cross_product(Rlat(:,3),Rlat(:,1))/vol
+      Blat(:,3) = 2*pi*cross_product(Rlat(:,1),Rlat(:,2))/vol
       !
       if(allocated(Ruc))deallocate(Ruc)
       allocate(Ruc(3,size(Ruc_input,dim=2)));Ruc=0d0
@@ -226,7 +226,7 @@ contains
       enddo
       write(*,"(A)")new_line("A")//"     Reciprocal lattice vectors: "
       do ir=1,3
-         write(*,"(A)")"     B_"//str(ir)//": [ "//str(Blat(1,ir),3)//" , "//str(Blat(2,ir),3)//" , "//str(Blat(3,ir),3)//" ]*2pi"
+         write(*,"(A)")"     B_"//str(ir)//": [ "//str(Blat(1,ir),3)//" , "//str(Blat(2,ir),3)//" , "//str(Blat(3,ir),3)//" ]"
       enddo
       !
       Lat_stored=.true.
@@ -647,7 +647,16 @@ contains
                !
                iwig = find_vec([nx,ny,nz],Nvecwig,hardstop=.false.)
                !
-               if(iwig.ne.0)Hr(iorb,jorb,iwig) = dcmplx(ReHr,ImHr)/Ndegen(ir)
+               if(Ndegen(ir).ne.nrdegwig(iwig))then
+                  write(*,"(A)") "     Warning: internal Wigner-Seiz degeneracy does not correspond to the one in Hr.DAT. Internal["//str(iwig)//"]="//str(nrdegwig(iwig))//" from file["//str(ir)//"]="//str(Ndegen(ir))
+               endif
+               !
+               if(iwig.ne.0)then
+                  Hr(iorb,jorb,iwig) = dcmplx(ReHr,ImHr)
+               else
+                  write(*,"(A)") "read_Hr: Wigner-Seiz vector ["//str(nx)//","//str(ny)//","//str(nz)//"] not found in internal list."
+                  stop "read_Hr: Wigner-Seiz vector not found in internal list."
+               endif
                !
             enddo
          enddo
@@ -2519,20 +2528,20 @@ contains
    !---------------------------------------------------------------------------!
    !PURPOSE: Extract from a K-dependent matrix the next-neighbor components
    !---------------------------------------------------------------------------!
-   subroutine wannier_K2R_NN_D3(nkpt3_orig,kpt_orig,mat_K,mat_R_nn)
+   subroutine wannier_K2R_NN_D3(RealPrint,nkpt3_orig,kpt_orig,mat_K,mat_R_nn)
       !
       use utils_misc
       implicit none
       !
+      integer,intent(in)                    :: RealPrint(:,:)
       integer,intent(in)                    :: nkpt3_orig(:)
       real(8),intent(in)                    :: kpt_orig(:,:)
       complex(8),intent(in)                 :: mat_K(:,:,:)
       complex(8),intent(inout)              :: mat_R_nn(:,:,:)
       !
-      integer                               :: Nkpt_orig,Nsize
+      integer                               :: Nkpt_orig,Nsize,Nprint
       integer                               :: ik,ir,i1,i2,ir2
       real(8)                               :: kR
-      logical                               :: Rx,Ry,Rz,Rxy,Ryz,Rxz
       complex(8)                            :: cfac
       !
       !
@@ -2548,50 +2557,35 @@ contains
       Nkpt_orig = size(kpt_orig,dim=2)
       !if (Nkpt_orig.ne.size(nrdegwig)/2) stop "nkpt"
       !
+      Nprint = size(RealPrint,dim=2)
+      call assert_shape(RealPrint,[3,Nprint],"wannier_K2R_NN_D3","RealPrint")
+      !
       ! Size checks on Matrices
       if(size(mat_K,dim=1).ne.size(mat_K,dim=2)) stop "wannier_K2R_NN_D3: mat_K not square."
       Nsize = size(mat_K,dim=1)
       call assert_shape(mat_K,[Nsize,Nsize,Nkpt_orig],"wannier_K2R_NN_D3","mat_K")
-      call assert_shape(mat_R_nn,[Nsize,Nsize,6],"wannier_K2R_NN_D3","mat_R_nn")
+      call assert_shape(mat_R_nn,[Nsize,Nsize,Nprint],"wannier_K2R_NN_D3","mat_R_nn")
       !
       ! M(R)=\sum_{k} M(k)*exp[-ik*R]
-      !$OMP PARALLEL DEFAULT(NONE),&
-      !$OMP SHARED(Nwig,Nkpt_orig,Nsize,kpt_orig,Nvecwig,mat_K,mat_R_nn),&
-      !$OMP PRIVATE(Rx,Ry,Rz,Rxy,Ryz,Rxz,ir2,ir,ik,i1,i2,kR,cfac)
+      !$OMP PARALLEL DEFAULT(SHARED),&
+      !$OMP PRIVATE(ir2,ir,ik,i1,i2,kR,cfac)
       !$OMP DO
       do i1=1,Nsize
          do i2=1,Nsize
             do ir=1,Nwig
                !
-               Rx = all(Nvecwig(:,ir).eq.[1,0,0])
-               Ry = all(Nvecwig(:,ir).eq.[0,1,0])
-               Rz = all(Nvecwig(:,ir).eq.[0,0,1])
-               Ryz= all(Nvecwig(:,ir).eq.[0,-1,0])
-               Rxz= all(Nvecwig(:,ir).eq.[-1,1,1])
-               Rxy= all(Nvecwig(:,ir).eq.[1,1,-1])
-               !
-               if(Rx)then
-                  ir2 = 1
-               elseif(Ry)then
-                  ir2 = 2
-               elseif(Rz)then
-                  ir2 = 3
-               elseif(Ryz)then
-                  ir2 = 4
-               elseif(Rxz)then
-                  ir2 = 5
-               elseif(Rxy)then
-                  ir2 = 6
-               else
-                  cycle
-               endif
-               !
-               do ik=1,Nkpt_orig
+               do ir2=1,Nprint
                   !
-                  kR=2*pi*dot_product(kpt_orig(:,ik),Nvecwig(:,ir))
-                  cfac=dcmplx(cos(kR),-sin(kR))
-                  !
-                  mat_R_nn(i1,i2,ir2) = mat_R_nn(i1,i2,ir2) + mat_K(i1,i2,ik)*cfac/Nkpt_orig
+                  if(all(Nvecwig(:,ir).eq.RealPrint(:,ir2)))then
+                     do ik=1,Nkpt_orig
+                        !
+                        kR=2*pi*dot_product(kpt_orig(:,ik),Nvecwig(:,ir))
+                        cfac=dcmplx(cos(kR),-sin(kR))
+                        !
+                        mat_R_nn(i1,i2,ir2) = mat_R_nn(i1,i2,ir2) + mat_K(i1,i2,ik)*cfac/Nkpt_orig
+                        !
+                     enddo
+                  endif
                   !
                enddo
                !
@@ -2603,20 +2597,20 @@ contains
       !
    end subroutine wannier_K2R_NN_D3
    !
-   subroutine wannier_K2R_NN_D4(nkpt3_orig,kpt_orig,mat_K,mat_R_nn)
+   subroutine wannier_K2R_NN_D4(RealPrint,nkpt3_orig,kpt_orig,mat_K,mat_R_nn)
       !
       use utils_misc
       implicit none
       !
+      integer,intent(in)                    :: RealPrint(:,:)
       integer,intent(in)                    :: nkpt3_orig(:)
       real(8),intent(in)                    :: kpt_orig(:,:)
       complex(8),intent(in)                 :: mat_K(:,:,:,:)
       complex(8),intent(inout)              :: mat_R_nn(:,:,:,:)
       !
-      integer                               :: Nkpt_orig,Nsize,Npoints
+      integer                               :: Nkpt_orig,Nsize,Npoints,Nprint
       integer                               :: ik,ir,id,i1,i2,ir2
       real(8)                               :: kR
-      logical                               :: Rx,Ry,Rz,Rxy,Ryz,Rxz
       complex(8)                            :: cfac
       !
       !
@@ -2632,52 +2626,37 @@ contains
       Nkpt_orig = size(kpt_orig,dim=2)
       !if (Nkpt_orig.ne.size(nrdegwig)/2) stop "nkpt"
       !
+      Nprint = size(RealPrint,dim=2)
+      call assert_shape(RealPrint,[3,Nprint],"wannier_K2R_NN_D4","RealPrint")
+      !
       ! Size checks on Matrices
       Npoints = size(mat_K,dim=3)
       if(size(mat_K,dim=1).ne.size(mat_K,dim=2)) stop "wannier_K2R_NN_D4: mat_K not square."
       Nsize = size(mat_K,dim=1)
       call assert_shape(mat_K,[Nsize,Nsize,Npoints,Nkpt_orig],"wannier_K2R_NN_D4","mat_K")
-      call assert_shape(mat_R_nn,[Nsize,Nsize,Npoints,6],"wannier_K2R_NN_D4","mat_R_nn")
+      call assert_shape(mat_R_nn,[Nsize,Nsize,Npoints,Nprint],"wannier_K2R_NN_D4","mat_R_nn")
       !
       ! M(R)=\sum_{k} M(k)*exp[-ik*R]
-      !$OMP PARALLEL DEFAULT(NONE),&
-      !$OMP SHARED(Nwig,Nkpt_orig,Npoints,Nsize,kpt_orig,Nvecwig,mat_K,mat_R_nn),&
-      !$OMP PRIVATE(Rx,Ry,Rz,Rxy,Ryz,Rxz,ir2,ir,ik,id,i1,i2,kR,cfac)
+      !$OMP PARALLEL DEFAULT(SHARED),&
+      !$OMP PRIVATE(ir2,ir,ik,id,i1,i2,kR,cfac)
       !$OMP DO
       do i1=1,Nsize
          do i2=1,Nsize
             do ir=1,Nwig
                do id=1,Npoints
                   !
-                  Rx = all(Nvecwig(:,ir).eq.[1,0,0])
-                  Ry = all(Nvecwig(:,ir).eq.[0,1,0])
-                  Rz = all(Nvecwig(:,ir).eq.[0,0,1])
-                  Ryz= all(Nvecwig(:,ir).eq.[0,-1,0])
-                  Rxz= all(Nvecwig(:,ir).eq.[-1,1,1])
-                  Rxy= all(Nvecwig(:,ir).eq.[1,1,-1])
-                  !
-                  if(Rx)then
-                     ir2 = 1
-                  elseif(Ry)then
-                     ir2 = 2
-                  elseif(Rz)then
-                     ir2 = 3
-                  elseif(Ryz)then
-                     ir2 = 4
-                  elseif(Rxz)then
-                     ir2 = 5
-                  elseif(Rxy)then
-                     ir2 = 6
-                  else
-                     cycle
-                  endif
-                  !
-                  do ik=1,Nkpt_orig
+                  do ir2=1,Nprint
                      !
-                     kR=2*pi*dot_product(kpt_orig(:,ik),Nvecwig(:,ir))
-                     cfac=dcmplx(cos(kR),-sin(kR))
-                     !
-                     mat_R_nn(i1,i2,id,ir2) = mat_R_nn(i1,i2,id,ir2) + mat_K(i1,i2,id,ik)*cfac/Nkpt_orig
+                     if(all(Nvecwig(:,ir).eq.RealPrint(:,ir2)))then
+                        do ik=1,Nkpt_orig
+                           !
+                           kR=2*pi*dot_product(kpt_orig(:,ik),Nvecwig(:,ir))
+                           cfac=dcmplx(cos(kR),-sin(kR))
+                           !
+                           mat_R_nn(i1,i2,id,ir2) = mat_R_nn(i1,i2,id,ir2) + mat_K(i1,i2,id,ik)*cfac/Nkpt_orig
+                           !
+                        enddo
+                     endif
                      !
                   enddo
                   !
@@ -3441,7 +3420,7 @@ contains
       real(8),allocatable,intent(out)       :: kpt_plane(:,:)
       integer,intent(in)                    :: Nkpt_Kside
       !
-      integer                               :: ik1,ik2,ik3,ik
+      integer                               :: ik1,ik2,ik
       real(8)                               :: Kmax=1d0
       real(8)                               :: k1,k2,k3,dK
       !

@@ -606,13 +606,16 @@ class ct_hyb
 
             //
             // global spin flip (does not require overlap calculation)
-            for (int iswap=0; iswap<NspinSwap; iswap++) // if(imeas%NspinSwap==1)
+            if(NspinSwap!=0)
             {
-               bool SpinSwap;
-               for (int ifl=0; ifl<Nflavor; ifl++) SpinSwap = ( M[ifl].rows() == 0 ) ? false : true;
-               if(SpinSwap) swap_spins( Beta, Delta, segments, full_line, sign, M );
+               if(imeas%NspinSwap==1) // for (int iswap=0; iswap<NspinSwap; iswap++)
+               {
+                  bool SpinSwap;
+                  for (int ifl=0; ifl<Nflavor; ifl++) SpinSwap = ( M[ifl].rows() == 0 ) ? false : true;
+                  if(SpinSwap) swap_spins( Beta, Delta, segments, full_line, sign, M );
+               }
             }
-
+            //
          }
 
          //
@@ -702,14 +705,17 @@ class ct_hyb
                //...............................................................
             }
             //
-            //global spin flip (does not require overlap calculation)
-            for (int iswap=0; iswap<NspinSwap; iswap++) // if(imeas%NspinSwap==1)
+            // global spin flip (does not require overlap calculation)
+            if(NspinSwap!=0)
             {
-               bool SpinSwap;
-               for (int ifl=0; ifl<Nflavor; ifl++) SpinSwap = ( M[ifl].rows() == 0 ) ? false : true;
-               if(SpinSwap) swap_spins( Beta, Delta, segments, full_line, sign, M );
+               if(imeas%NspinSwap==1) // for (int iswap=0; iswap<NspinSwap; iswap++)
+               {
+                  bool SpinSwap;
+                  for (int ifl=0; ifl<Nflavor; ifl++) SpinSwap = ( M[ifl].rows() == 0 ) ? false : true;
+                  if(SpinSwap) swap_spins( Beta, Delta, segments, full_line, sign, M );
+               }
             }
-
+            //
          }
       }
 
