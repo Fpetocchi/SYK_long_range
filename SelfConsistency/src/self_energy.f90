@@ -81,7 +81,7 @@ contains
       integer                               :: ik1,ik2,iq,iw,itau,ispin
       integer                               :: i,j,k,l,ib1,ib2
       real                                  :: start,finish
-      logical                               :: LDAoffdiag_
+      logical                               :: filexists,LDAoffdiag_
       logical                               :: ZkfromHk=.false.
       !
       !
@@ -244,6 +244,8 @@ contains
             if(.not.Uwan_stored)then
                if(allocated(UwanDFT)) deallocate(UwanDFT)
                allocate(UwanDFT(Lttc%Norb,Lttc%Norb,Lttc%Nkpt,1));UwanDFT=czero
+               call inquireFile(reg(pathINPUT)//"UWAN_used_k_s1.DAT",filexists,verb=verbose,hardstop=.false.)
+               if(.not.filexists) stop "calc_sigmaGW: UWAN is not stored nor printed. Re-run 0th iteration removing SGoWo_w_k_s1.DAT."
                call read_matrix(UwanDFT(:,:,:,1),reg(pathINPUT)//"UWAN_used_k_s1.DAT")
             else
                call assert_shape(UwanDFT(:,:,:,1),[Lttc%Norb,Lttc%Norb,Lttc%Nkpt],"calc_sigmaGW","UwanDFT")

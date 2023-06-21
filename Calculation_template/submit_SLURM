@@ -13,7 +13,6 @@ export OMP_NUM_THREADS=$SLURM_NTASKS_PER_NODE
 ulimit -c 0           #The maximum size of core files created
 ulimit -s unlimited   #The maximum stack size
 ulimit -v unlimited   #The maximum amount of virtual  memory  available  to  the shell
-ulimit -u unlimited   #The  maximum number of processes available to a single user
 ulimit -f unlimited   #The  maximum size of files written by the shell and its children
 
 
