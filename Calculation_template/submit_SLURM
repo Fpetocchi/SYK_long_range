@@ -23,6 +23,7 @@ ulimit -f unlimited   #The  maximum size of files written by the shell and its c
 ################################################################################
 #----------------------------------COMPULSORY----------------------------------#
 GENMAT=/path/to/GenericMaterial
+ALPS=/path/to/CT-HYB/build
 
 PATH_INPUT=GWinput
 PATH_DATA=Results
@@ -31,7 +32,7 @@ START_IT=___
 END_IT=___
 
 EXE_SC=SelfConsistency
-EXE_QMC=ct_hyb
+EXE_QMC=ct_hyb # hybmat
 EXE_AKW=Akw_builder
 
 #-----------------------------------OPTIONAL-----------------------------------#
@@ -51,8 +52,9 @@ PATH_INPUT_TR=GWinput_beta___
 #                             AUTO-SETUP SETTINGS                              #
 ################################################################################
 LOCAL=$(pwd)
-BINqmc=${GENMAT}/Solver/bin
 BINsc=${GENMAT}/SelfConsistency/bin
+BINqmc=${GENMAT}/Solver/bin
+if [ "${EXE_QMC}" == "hybmat" ]; then  BINqmc=${ALPS}/bin  ; fi
 
 if [ -z ${PATH_INPUT_TR+x}      ]; then PATH_INPUT_TR=${PATH_INPUT} ; fi
 if [ -z ${SKIP_FIRST_SC+x}      ]; then SKIP_FIRST_SC="F"           ; fi
@@ -137,9 +139,17 @@ do
    if [ "${SKIP_ALL_QMC}" == "F" ] ; then
       if [ -f "doSolver" ]; then
          rm doSolver
-         srun --mpi=pmi2 ${BINqmc}/${EXE_QMC} used.input.in ${IT_DATA} > report_qmc_it${IT} 2> err_qmc_it${IT}
-         #mpirun -np $SLURM_NTASKS_PER_NODE ${BINqmc}/${EXE_QMC} used.input.in ${IT_DATA} > report_qmc_it${IT} 2> err_qmc_it${IT}
-         mv {report_qmc_it${IT},err_qmc_it${IT}} ${IT_DATA}
+         #
+         if [ "${EXE_QMC}" == "ct_hyb" ]; then
+            srun --mpi=pmi2 ${BINqmc}/${EXE_QMC} used.input.in ${IT_DATA} > report_qmc_it${IT} 2> err_qmc_it${IT}
+            #mpirun -np $SLURM_NTASKS_PER_NODE ${BINqmc}/${EXE_QMC} used.input.in ${IT_DATA} > report_qmc_it${IT} 2> err_qmc_it${IT}
+            mv {report_qmc_it${IT},err_qmc_it${IT}} ${IT_DATA}
+         else
+            python3.6 make_ini.py
+            questo in sostanza deve solo leggere quante impurity ci sono lanciare una serie di job e raccattare dopo l'output dal hdf5
+            cd ${IT}/Solver_*
+         fi
+         #
       else
          break
       fi

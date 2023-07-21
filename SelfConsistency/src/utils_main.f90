@@ -1886,6 +1886,7 @@ contains
       integer                               :: Norb,unit
       integer                               :: ispin,iorb,iw
       integer                               :: itau,ndx,wndx,im
+      integer                               :: ifl,jfl
       real(8),allocatable                   :: wmats(:),tau(:)
       real(8),allocatable                   :: Moments_Fit(:,:,:),Moments_An(:,:)
       real(8),allocatable                   :: Eloc(:,:),ElocOld(:,:),Eloc_s(:,:,:),PrintLine(:)
@@ -2206,7 +2207,7 @@ contains
          PrintLine=0d0
          do iorb=1,Norb
             do ispin=1,Nspin
-               PrintLine(ndx) = real(Ditau(iorb,itau,ispin))
+               PrintLine(ndx) = dreal(Ditau(iorb,itau,ispin))
                ndx=ndx+1
             enddo
          enddo
@@ -2214,6 +2215,47 @@ contains
       enddo
       close(unit)
       deallocate(PrintLine)
+      !
+      !Write Eloc and Delta(tau) in the ALPS solver format
+      if(Solver%type.eq."CTHYB")then
+         !
+         file = reg(ItFolder)//"Solver_"//reg(LocalOrbs(isite)%Name)//"/hopping.txt"
+         unit = free_unit()
+         open(unit,file=reg(file),form="formatted",status="unknown",position="rewind",action="write")
+         CrystalField=0d0
+         do ifl=1,LocalOrbs(isite)%Nflavor
+            do jfl=1,LocalOrbs(isite)%Nflavor
+               if(ifl.eq.jfl)then
+                  iorb = (ifl+mod(ifl,2))/2
+                  ispin = abs(mod(ifl,2)-2)
+                  if(addCF) CrystalField = LocalOrbs(isite)%CrystalField(iorb)
+                  write(unit,"(2I6,2E20.12)") ifl-1,jfl-1,Eloc(iorb,ispin)-EqvGWndx%hseed*(-1)**(ispin-1)+CrystalField-Glat%mu,0d0
+               else
+                  write(unit,"(2I6,2E20.12)") ifl-1,jfl-1,0d0,0d0
+               endif
+            enddo
+         enddo
+         close(unit)
+         !
+         file = reg(ItFolder)//"Solver_"//reg(LocalOrbs(isite)%Name)//"/delta.txt"
+         unit = free_unit()
+         open(unit,file=reg(file),form="formatted",status="unknown",position="rewind",action="write")
+         do itau=1,Solver%NtauF_D
+            do ifl=1,LocalOrbs(isite)%Nflavor
+               do jfl=1,LocalOrbs(isite)%Nflavor
+                  if(ifl.eq.jfl)then
+                     iorb = (ifl+mod(ifl,2))/2
+                     ispin = abs(mod(ifl,2)-2)
+                     write(unit,"(3I6,2E20.12)") itau,ifl-1,jfl-1,dreal(Ditau(iorb,itau,ispin)),0d0
+                  else
+                     write(unit,"(3I6,2E20.12)") itau,ifl-1,jfl-1,0d0,0d0
+                  endif
+               enddo
+            enddo
+         enddo
+         close(unit)
+         !
+      endif
       !
       !fields that are going to be needed in the following iterations
       call AllocateFermionicField(FermiPrint,Norb,Nmats,Beta=Beta)
@@ -2302,6 +2344,7 @@ contains
       type(physicalU)                       :: PhysicalUelements
       integer                               :: Norb,Nbp,unit
       integer                               :: ib1,ib2,itau
+      integer                               :: i,j,k,l,ndx,ispin,jspin
       integer                               :: isitecheck
       complex(8),allocatable                :: Uimp(:,:)
       real(8),allocatable                   :: Uinst(:,:),Ucheck(:,:)
@@ -2324,7 +2367,6 @@ contains
       call init_Uelements(Norb,PhysicalUelements)
       !
       allocate(Uinst(LocalOrbs(isite)%Nflavor,LocalOrbs(isite)%Nflavor));Uinst=0d0
-
       !
       !get interaction
       select case(reg(CalculationType))
@@ -2414,7 +2456,43 @@ contains
          case("DMFT+statU")
             !
             call calc_QMCinteractions(dreal(Uimp),Uinst)
-            deallocate(Uimp,Umat)
+            !
+            ! write the interaction in the ALPS format
+            if(Solver%type.eq."CTHYB")then
+               !
+               ! note that the ALPS ordering is C+_{i,up},C+_{j,dw},C_{k,dw},C_{l,up}
+               ! while ours is C+_{i,up},C_{l,up},C+_{j,dw},C_{k,dw}
+               ! double flip -> same sign
+               file = reg(ItFolder)//"Solver_"//reg(LocalOrbs(isite)%Name)//"/Uijkl.txt"
+               unit = free_unit()
+               open(unit,file=reg(file),form="formatted",status="unknown",position="rewind",action="write")
+               ndx=0
+               do i=1,LocalOrbs(isite)%Norb
+                  do j=1,LocalOrbs(isite)%Norb
+                     do k=1,LocalOrbs(isite)%Norb
+                        do l=1,LocalOrbs(isite)%Norb
+                           !
+                           !the index flip occurs here: [i,l],[j,k] instad of [i,j],[k,l]
+                           call F2Bindex(LocalOrbs(isite)%Norb,[i,l],[j,k],ib1,ib2)
+                           !
+                           if(abs(Uimp(ib1,ib2)).ne.0d0)then
+                              do ispin=1,2
+                                 do jspin=1,2
+                                    write(unit,"(1I6,A,4I6,2E20.12)") ndx, "   ", 2*(i-1)+ispin, 2*(j-1)+jspin, 2*(k-1)+jspin, 2*(l-1)+ispin, dreal(Uimp(ib1,ib2)), dimag(Uimp(ib1,ib2))
+                                 enddo
+                              enddo
+                              ndx=ndx+1
+                           endif
+                           !
+                        enddo
+                     enddo
+                  enddo
+               enddo
+               close(unit)
+               !
+            endif
+            !
+            deallocate(Uimp)
             !
          case("DMFT+dynU","EDMFT","GW+EDMFT")
             !

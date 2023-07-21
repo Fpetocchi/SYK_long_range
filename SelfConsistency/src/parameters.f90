@@ -232,6 +232,7 @@ module parameters
       integer                               :: full_ntOrbSym=0
       integer                               :: tau_uniform_D=1
       integer                               :: tau_uniform_K=1
+      character(len=5)                      :: type ! "CTHYB","SGMNT"
    end type QMC
 
    !---------------------------------------------------------------------------!
@@ -283,6 +284,7 @@ module parameters
       integer                               :: Norb=0
       integer                               :: Explicit(2)=[1,1]
       integer                               :: tzIndex(2)=[0,0]
+      logical                               :: HrStack=.false.
       integer                               :: tzRange=0
       real(8),allocatable                   :: tz(:,:,:)                        ![Norb,Nlayer,tzRange]
       complex(8),allocatable                :: tkz(:,:,:,:)                     ![Norb,Norb,Nkpt,Nlayer]
@@ -291,7 +293,7 @@ module parameters
       complex(8),allocatable                :: P_L(:,:,:,:)                     ![Norb,Norb,Npoints,Nspin]
       complex(8),allocatable                :: P_R(:,:,:,:)                     ![Norb,Norb,Npoints,Nspin]
       logical                               :: status=.false.
-      logical                               :: offDiagEk=.false.
+      logical                               :: fill_Gamma_A=.false.
    end type Heterostructures
 
 

@@ -342,19 +342,18 @@ contains
       call parse_input_variable(Hmodel,"H_MODEL",InputFile,default=.false.,comment="Flag to build a model non-interacting Hamiltonian.")
       if(Hmodel)then
          call parse_input_variable(Norb_model,"NORB_MODEL",InputFile,default=1,comment="Orbitals in the model non-interacting Hamiltonian (in Hr/Hk if read).")
-         call parse_input_variable(Hetero%status,"HETERO",InputFile,default=.false.,comment="Flag to build an heterostructured setup from model the non-interacting Hamiltonian.")
          call parse_input_variable(LatticeVec(:,1),"LAT_VEC_1",InputFile,default=[1d0,0d0,0d0],comment="Unit cell vector #1 of the model lattice.")
          call parse_input_variable(LatticeVec(:,2),"LAT_VEC_2",InputFile,default=[0d0,1d0,0d0],comment="Unit cell vector #2 of the model lattice.")
          call parse_input_variable(LatticeVec(:,3),"LAT_VEC_3",InputFile,default=[0d0,0d0,1d0],comment="Unit cell vector #3 of the model lattice.")
          allocate(hopping(Norb_model));hopping=0d0
          if((.not.readHr).and.(.not.readHk))call parse_input_variable(hopping,"HOPPING",InputFile,comment="NN hopping for each orbital of the non-interacting Hamiltonian.")
          !Heterostructured setup
+         call parse_input_variable(Hetero%status,"HETERO",InputFile,default=.false.,comment="Flag to build an heterostructured setup from model the non-interacting Hamiltonian.")
          if(Hetero%status)then
             if(Nkpt3(3).ne.1) stop "read_InputFile: requested Heterostructured non-interacting Hamiltonian but Nk_z is not 1."
             Hetero%Norb = Norb_model
             call parse_input_variable(Hetero%Nslab,"NSLAB",InputFile,default=20,comment="Global dimension fo the slab.")
             call parse_input_variable(Hetero%Explicit,"EXPLICIT",InputFile,default=[1,10],comment="Index boundaries of the impurities explicitly solved.")
-            call parse_input_variable(Hetero%tzRange,"TZ_RANGE",InputFile,default=1,comment="Range of the longitudinal hopping.")
             Hetero%Nlayer = Hetero%Explicit(2)-Hetero%Explicit(1)+1
             if(Hetero%Nlayer.le.1) stop "read_InputFile: a single layer heterostructure does not make sense."
             !setting up the indexes of the longitudinal hopping: t_1 is the hopping connecting layer #1 and #2
@@ -362,12 +361,16 @@ contains
             Hetero%tzIndex(2) = Hetero%Explicit(2) - 1
             if(Hetero%Explicit(1).ne.1) Hetero%tzIndex(1) = Hetero%tzIndex(1) - 1              ! hopping to the left potential
             if(Hetero%Explicit(2).ne.Hetero%Nslab) Hetero%tzIndex(2) = Hetero%tzIndex(2) + 1   ! hopping to the right potential
-            allocate(Hetero%tz(Norb_model,Hetero%Nlayer,Hetero%tzRange));Hetero%tz=0d0
-            do irange=1,Hetero%tzRange
-               do ilayer=1,Hetero%Nlayer
-                  call parse_input_variable(Hetero%tz(:,ilayer,irange),"TZ"//str(irange)//"_"//str(ilayer),InputFile,comment="Longitudinal hopping for each orbital at distance "//str(irange)//" starting from layer #"//str(ilayer))
+            call parse_input_variable(Hetero%HrStack,"HR_STACK",InputFile,default=.false.,comment="Stack the input Hr according to UC_VEC and add inter-layer hopping according to TZ_RANGE.")
+            if(Hetero%HrStack)then
+               call parse_input_variable(Hetero%tzRange,"TZ_RANGE",InputFile,default=1,comment="Range of the longitudinal hopping.")
+               allocate(Hetero%tz(Norb_model,Hetero%Nlayer,Hetero%tzRange));Hetero%tz=0d0
+               do irange=1,Hetero%tzRange
+                  do ilayer=1,Hetero%Nlayer
+                     call parse_input_variable(Hetero%tz(:,ilayer,irange),"TZ"//str(irange)//"_"//str(ilayer),InputFile,comment="Longitudinal hopping for each orbital at distance "//str(irange)//" starting from layer #"//str(ilayer))
+                  enddo
                enddo
-            enddo
+            endif
          endif
       else
          call parse_input_variable(UseXepsKorder,"XEPS_KORDER",InputFile,default=.true.,comment="Flag to use the K-point ordering of XEPS.DAT if present.")
@@ -566,7 +569,7 @@ contains
             call parse_input_variable(SiteOrbs(isite)%Orbs,"SITE_ORBS_"//str(isite),InputFile,default=SiteOrbs(isite)%Orbs,comment="Indexes of orbitals on lattice site number "//str(isite))
          enddo
          elseif(reg(Utensor).eq."File")then
-            if(reg(CalculationType).ne."DMFT+statU") stop "Interactio read from file allowed only for CALC_TYPE=DMFT+statU."
+            if(reg(CalculationType).ne."DMFT+statU") stop "read_InputFile: Interaction read from file allowed only for CALC_TYPE=DMFT+statU."
       endif
       !
       !Double counting types, divergencies, scaling coefficients
@@ -688,6 +691,10 @@ contains
       call parse_input_variable(print_path_W,"PRINT_PATH_W",InputFile,default=.false.,comment="Print the k-dependent screened interaction along the K-path on the imaginary frequency axis.")
       call parse_input_variable(print_path_E,"PRINT_PATH_EINV",InputFile,default=.false.,comment="Print the k-dependent inverse dielectric function along the K-path on the imaginary frequency axis.")
       call parse_input_variable(Nkpt_path,"NK_PATH",InputFile,default=50,comment="Number of K-points between two hig-symmetry Kpoints.")
+      if(Hetero%status)then
+         call parse_input_variable(Hetero%fill_Gamma_A,"FILL_GAMMA_A",InputFile,default=.false.,comment="Fill the Gamma-A direction for heterostructured inputs.")
+         if(reg(structure).eq."User")Hetero%fill_Gamma_A=.false.
+      endif
       !Fermi surfaces
       call parse_input_variable(print_plane_G,"PRINT_PLANE_G",InputFile,default=.false.,comment="Flag to compute the Green's function on the planar {kx,ky} sheet.")
       call parse_input_variable(Nkpt_plane,"NK_PLANE",InputFile,default=50,comment="Number of K-points in the side of the planar {kx,ky} sheet.")
@@ -749,6 +756,8 @@ contains
          !
          call add_separator("Impurity solver")
          call parse_input_variable(collect_QMC,"COLLECT_QMC",InputFile,default=.true.,comment="Flag to reconstruct local slef-energy and polarization from Solver output.")
+         call parse_input_variable(Solver%type,"SOLVER_TYPE",InputFile,default="SGMNT",comment="SGMNT= retarded solver in the segment picture, CTHYB= alps solver.")
+         if((Solver%type.eq."CTHYB").and.(reg(CalculationType).ne."DMFT+statU")) stop "read_InputFile: alps CTHYB solver allowed only for CALC_TYPE=DMFT+statU."
          call parse_input_variable(Solver%NtauF,"NTAU_F_IMP",InputFile,default=int(2d0*pi*Nmats),comment="Number of points on the imaginary time axis for Fermionic impurity fields. Its gonna be made odd.")
          if(mod(Solver%NtauF,2).eq.0)Solver%NtauF=Solver%NtauF+1
          if(mod(Solver%NtauF-1,4).eq.0)Solver%NtauF=Solver%NtauF+mod(Solver%NtauF-1,4)

@@ -4,6 +4,7 @@
 CC = gcc
 CXX = mpicxx
 
+
 CFLAGS = -std=c++11 -lstdc++ -lm #-std=c++0x -stdlib=libc++ -lgsl -lgslcblas
 DBGCFLAGS = -O0 -Wall -Wextra -fmax-errors=1000 -pedantic -ggdb -D_verb
 RELCFLAGS = -O3 -fpermissive -DNDEBUG

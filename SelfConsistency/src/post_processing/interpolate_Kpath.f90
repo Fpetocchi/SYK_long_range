@@ -247,36 +247,45 @@ subroutine interpolate2kpath_Fermionic(Sfull,Lttc,pathOUTPUT)
          !
          !
          !
-         ! store a local self-energy
-         call AllocateFermionicField(Sloc,Norb,Nmats,Nkpt=Lttc%Nkpt_path,Nsite=Sfull%Nsite,Beta=Sfull%Beta,mu=Sfull%mu)
-         do ik=1,Lttc%Nkpt_path
-            Sloc%wks(:,:,:,ik,:) = Sfull%ws
-         enddo
-         !
-         !
-         !
          !------------------ Green's function in the full BZ ------------------!
          if(print_full_G)then
             call AllocateFermionicField(Gfull,Norb,Nmats,Nkpt=Lttc%Nkpt,Nsite=Sfull%Nsite,Beta=Sfull%Beta,mu=Sfull%mu)
-            call calc_Gmats(Gfull,Lttc,Smats=Sloc,along_path=.false.)
+            call calc_Gmats(Gfull,Lttc,Smats=Sfull,along_path=.false.)
          endif
          !
          !
          !
          !------------------ Green's function along the path ------------------!
          if(print_path_G)then
+            !
+            call AllocateFermionicField(Sloc,Norb,Nmats,Nkpt=Lttc%Nkpt_path,Nsite=Sfull%Nsite,Beta=Sfull%Beta,mu=Sfull%mu)
+            do ik=1,Lttc%Nkpt_path
+               Sloc%wks(:,:,:,ik,:) = Sfull%ws
+            enddo
+            !
             call AllocateFermionicField(Gpath,Norb,Nmats,Nkpt=Lttc%Nkpt_path,Nsite=Sfull%Nsite,Beta=Sfull%Beta,mu=Sfull%mu)
             call calc_Gmats(Gpath,Lttc,Smats=Sloc,along_path=.true.)
+            !
+            call DeallocateFermionicField(Sloc)
+            !
          endif
          !
          !
          !
          !-------------- Green's function along the {kx,ky} plane -------------!
          if(print_plane_G)then
+            !
+            call AllocateFermionicField(Sloc,Norb,Nmats,Nkpt=Lttc%Nkpt_Plane,Nsite=Sfull%Nsite,Beta=Sfull%Beta,mu=Sfull%mu)
+            do ik=1,Lttc%Nkpt_Plane
+               Sloc%wks(:,:,:,ik,:) = Sfull%ws
+            enddo
+            !
             call AllocateFermionicField(Gfermi,Norb,Nmats,Nkpt=Lttc%Nkpt_Plane,Nsite=Sfull%Nsite,Beta=Sfull%Beta,mu=Sfull%mu)
             call calc_Gmats(Gfermi,Lttc,Smats=Sloc,along_plane=.true.)
+            !
+            call DeallocateFermionicField(Sloc)
+            !
          endif
-         call DeallocateFermionicField(Sloc)
          !
          !
          !
@@ -608,7 +617,7 @@ contains
       deallocate(Gitau_diag)
       !
       !Add the dispersion along the Gamma-A direction
-      if(Hetero%status)then
+      if(Hetero%status.and.Hetero%fill_Gamma_A)then
          !
          Norb_layer = Hetero%Norb
          if(Norb_layer.ne.int(Lttc%Norb/Lttc%Nsite)) stop "dump_MaxEnt_on_G_K: wrong hetero orbital dimension."

@@ -174,11 +174,11 @@ contains
       !
       write(*,"(A)")new_line("A")//"     Unit cell vectors: "
       do ir=1,3
-         write(*,"(A)")"     R_"//str(ir)//": [ "//str(Rlat(1,ir),3)//" , "//str(Rlat(2,ir),3)//" , "//str(Rlat(3,ir),3)//" ]"
+         write(*,"(A)")"     R_"//str(ir)//": [ "//str(Rlat(1,ir),6)//" , "//str(Rlat(2,ir),6)//" , "//str(Rlat(3,ir),6)//" ]"
       enddo
       write(*,"(A)")new_line("A")//"     Reciprocal lattice vectors: "
       do ir=1,3
-         write(*,"(A)")"     B_"//str(ir)//": [ "//str(Blat(1,ir),3)//" , "//str(Blat(2,ir),3)//" , "//str(Blat(3,ir),3)//" ]"
+         write(*,"(A)")"     B_"//str(ir)//": [ "//str(Blat(1,ir),6)//" , "//str(Blat(2,ir),6)//" , "//str(Blat(3,ir),6)//" ]"
       enddo
       !
       Lat_stored=.true.
@@ -218,15 +218,15 @@ contains
       !
       write(*,"(A)")new_line("A")//"     Unit cell vectors: "
       do ir=1,3
-         write(*,"(A)")"     R_"//str(ir)//": [ "//str(Rlat(1,ir),3)//" , "//str(Rlat(2,ir),3)//" , "//str(Rlat(3,ir),3)//" ]"
+         write(*,"(A)")"     R_"//str(ir)//": [ "//str(Rlat(1,ir),6)//" , "//str(Rlat(2,ir),6)//" , "//str(Rlat(3,ir),6)//" ]"
       enddo
       write(*,"(A)")new_line("A")//"     Positions inside the unit cell: "
       do ir=1,size(Ruc,dim=2)
-         write(*,"(A)")"     r_"//str(ir)//": [ "//str(Ruc(1,ir),3)//" , "//str(Ruc(2,ir),3)//" , "//str(Ruc(3,ir),3)//" ]"
+         write(*,"(A)")"     r_"//str(ir)//": [ "//str(Ruc(1,ir),6)//" , "//str(Ruc(2,ir),6)//" , "//str(Ruc(3,ir),6)//" ]"
       enddo
       write(*,"(A)")new_line("A")//"     Reciprocal lattice vectors: "
       do ir=1,3
-         write(*,"(A)")"     B_"//str(ir)//": [ "//str(Blat(1,ir),3)//" , "//str(Blat(2,ir),3)//" , "//str(Blat(3,ir),3)//" ]"
+         write(*,"(A)")"     B_"//str(ir)//": [ "//str(Blat(1,ir),6)//" , "//str(Blat(2,ir),6)//" , "//str(Blat(3,ir),6)//" ]"
       enddo
       !
       Lat_stored=.true.
@@ -647,15 +647,12 @@ contains
                !
                iwig = find_vec([nx,ny,nz],Nvecwig,hardstop=.false.)
                !
-               if(Ndegen(ir).ne.nrdegwig(iwig))then
-                  write(*,"(A)") "     Warning: internal Wigner-Seiz degeneracy does not correspond to the one in Hr.DAT. Internal["//str(iwig)//"]="//str(nrdegwig(iwig))//" from file["//str(ir)//"]="//str(Ndegen(ir))
-               endif
-               !
                if(iwig.ne.0)then
+                  if(Ndegen(ir).ne.nrdegwig(iwig)) write(*,"(A)") "     Warning: internal Wigner-Seiz degeneracy does not correspond to the one in Hr.DAT. Internal["//str(iwig)//"]="//str(nrdegwig(iwig))//" from file["//str(ir)//"]="//str(Ndegen(ir))
                   Hr(iorb,jorb,iwig) = dcmplx(ReHr,ImHr)
                else
-                  write(*,"(A)") "read_Hr: Wigner-Seiz vector ["//str(nx)//","//str(ny)//","//str(nz)//"] not found in internal list."
-                  stop "read_Hr: Wigner-Seiz vector not found in internal list."
+                  write(*,"(A)") "read_Hr: Wigner-Seiz vector ["//str(nx)//","//str(ny)//","//str(nz)//"] not found in internal list. Increase number of K-points."
+                  stop "read_Hr: Wigner-Seiz vector not found in internal list. Increase number of K-points."
                endif
                !
             enddo
@@ -869,7 +866,7 @@ contains
          endif
          !
          !Set up the heterostructure
-         if(Hetero%status)then
+         if(Hetero%status.and.Hetero%HrStack)then
             !
             allocate(Hr(Norb*Nsite,Norb*Nsite,Nwig));Hr=czero
             !
@@ -1902,7 +1899,7 @@ contains
       deallocate(dist)
       !
       if (abs(sum(1d0/nrdegwig_tmp(1:iwig))-nkpt).gt.epsWig) then
-         write(*,"(A,F)") "Error: sum(1/nrdeg(:))=",sum(1d0/nrdegwig_tmp(1:iwig))
+         write(*,"(A,F)") "     Error: sum(1/nrdeg(:))=",sum(1d0/nrdegwig_tmp(1:iwig))
          stop "calc_wignerseiz: nrdeg failed one of the lattice vectors might be wrong."
       endif
       !
@@ -1935,7 +1932,6 @@ contains
       Wig_stored=.false.
       !
    end subroutine clear_wignerseiz
-
 
 
    !---------------------------------------------------------------------------!
@@ -3434,7 +3430,7 @@ contains
       if(allocated(kpt_plane))deallocate(kpt_plane)
       allocate(kpt_plane(3,Nkpt_Kside**2))
       !
-      if((Blat(3,1).eq.0d0).and.(Blat(3,2).eq.0d0))then
+      if((Blat(3,1).eq.0d0).or.(Blat(3,2).eq.0d0))then
          !
          ! B1 and B2 have no component out of the plane
          ik=0
@@ -3473,6 +3469,68 @@ contains
       endif
       !
    end subroutine calc_Kplane
+   !
+   subroutine calc_Kplane_GM(kpt_plane,Nkpt_Kside)
+      !
+      use utils_misc
+      implicit none
+      !
+      real(8),allocatable,intent(out)       :: kpt_plane(:,:)
+      integer,intent(in)                    :: Nkpt_Kside
+      !
+      integer                               :: ik1,ik2,ik
+      real(8)                               :: Kmax=2d0
+      real(8)                               :: k1,k2,k3,dK
+      !
+      !
+      if(verbose)write(*,"(A)") "---- calc_Kplane"
+      !
+      !
+      if(.not.Lat_stored)stop "calc_Kplane: lattice vectors are not stored."
+      !
+      dk=Kmax/(Nkpt_Kside-1)
+      if(allocated(kpt_plane))deallocate(kpt_plane)
+      allocate(kpt_plane(3,Nkpt_Kside**2))
+      !
+      if((Blat(3,1).eq.0d0).or.(Blat(3,2).eq.0d0))then
+         !
+         ! B1 and B2 have no component out of the plane
+         ik=0
+         do ik1=1,Nkpt_Kside
+            do ik2=1,Nkpt_Kside
+               !
+               ik=ik+1
+               !
+               k1 = (ik1-1)*dk - Kmax/2d0
+               k2 = (ik2-1)*dk - Kmax/2d0
+               !
+               kpt_plane(:,ik) = [k1,k2,0d0]
+               !
+            enddo
+         enddo
+         !
+      else
+         !
+         if(Blat(3,3).eq.0d0) stop "calc_Kplane: divergence in k3 will occur."
+         ! Generic B1,B2,B3
+         ik=0
+         do ik1=1,Nkpt_Kside
+            do ik2=1,Nkpt_Kside
+               !
+               ik=ik+1
+               !
+               k1 = 0d0
+               k2 = (ik2-1)*dk - Kmax/2d0
+               k3 = (ik1-1)*dk - Kmax/2d0  - k2*Blat(3,2)/Blat(3,3) ! this is to ensure k3 corrects the z component of B2
+               !
+               kpt_plane(:,ik) = [k1,k2,k3]
+               !
+            enddo
+         enddo
+         !
+      endif
+      !
+   end subroutine calc_Kplane_GM
 
 
    !---------------------------------------------------------------------------!
@@ -3575,12 +3633,12 @@ contains
       !
       !
       !Create path along high-symmetry points-----------------------------------
-      call calc_Kpath(kptpath,reg(structure),Nkpt_path,Kpathaxis,KpathaxisPoints,hetero=Hetero%status)
+      call calc_Kpath(kptpath,reg(structure),Nkpt_path,Kpathaxis,KpathaxisPoints,hetero=(Hetero%status.and.Hetero%fill_Gamma_A))
       Nkpt_path_tot = size(kptpath,dim=2)
       !
       if(Hetero%status)then
          if((Hetero%Norb*Lttc%Nsite).ne.Lttc%Norb) stop "interpolate2Path: Orbital dimension of Hk is not a multiple of the number of sites."
-         Nkpt_path_tot = Nkpt_path_tot - Nkpt_path
+         if(Hetero%fill_Gamma_A) Nkpt_path_tot = Nkpt_path_tot - Nkpt_path
       endif
       !
       !store new meshes
@@ -3757,7 +3815,7 @@ contains
          deallocate(Akw_print)
          !
          !Compute non-interacting spectral function along the Gamma-A direction
-         if(Hetero%status.and.Lttc%pathStored)then
+         if(Hetero%status.and.Hetero%fill_Gamma_A.and.Lttc%pathStored)then
             !
             if(Ndim.ne.Lttc%Norb)stop "interpolate2Path: spectral function calculation with heterostructures is allowed only for fermionic objects."
             !
@@ -3797,9 +3855,26 @@ contains
             deallocate(Akw_kz_print)
             !
          endif
-         deallocate(wreal,Akw)
+         !
+      else
+         !
+         if(Hetero%status.and.Lttc%pathStored)then
+            !
+            if(Ndim.ne.Lttc%Norb)stop "interpolate2Path: spectral function calculation with heterostructures is allowed only for fermionic objects."
+            !
+            !Interpolate longitudinal tz along the path
+            if(allocated(Hetero%tkz_path))deallocate(Hetero%tkz_path)
+            allocate(Hetero%tkz_path(Hetero%Norb,Hetero%Norb,Lttc%Nkpt_path,Hetero%tzIndex(1):Hetero%tzIndex(2)));Hetero%tkz_path=czero
+            do ilayer = Hetero%tzIndex(1),Hetero%tzIndex(2)
+               call wannierinterpolation(Lttc%Nkpt3,Lttc%kpt,Lttc%kptpath(:,1:Lttc%Nkpt_path),Hetero%tkz(:,:,:,ilayer),Hetero%tkz_path(:,:,:,ilayer))
+            enddo
+            !
+         endif
          !
       endif
+      !
+      if(allocated(wreal))deallocate(wreal)
+      if(allocated(Akw))deallocate(Akw)
       if(allocated(data_intp))deallocate(data_intp)
       if(allocated(dataw_intp))deallocate(dataw_intp)
       !
@@ -4145,7 +4220,7 @@ contains
          Ln=0;Rn=0
          if(Hetero%status.and.Lttc%planeStored)then
             !
-            if(Ndim.ne.Lttc%Norb)stop "interpolate2Path: spectral function calculation with heterostructures is allowed only for fermionic objects."
+            if(Ndim.ne.Lttc%Norb)stop "interpolate2Plane: spectral function calculation with heterostructures is allowed only for fermionic objects."
             !
             !Interpolate longitudinal tz along the plane
             if(allocated(Hetero%tkz_Plane))deallocate(Hetero%tkz_Plane)
@@ -4168,7 +4243,23 @@ contains
                write(*,"(2(A,2I4))") "     Right potential (Kplane) orbital lattice indexes: ",Rn(1),Rn(2)," thickness: ",NbulkR
             endif
             !
+         else
+            !
+            if(Hetero%status.and.Lttc%planeStored)then
+               !
+               if(Ndim.ne.Lttc%Norb)stop "interpolate2Plane: spectral function calculation with heterostructures is allowed only for fermionic objects."
+               !
+               !Interpolate longitudinal tz along the plane
+               if(allocated(Hetero%tkz_Plane))deallocate(Hetero%tkz_Plane)
+               allocate(Hetero%tkz_Plane(Hetero%Norb,Hetero%Norb,Lttc%Nkpt_plane,Hetero%tzIndex(1):Hetero%tzIndex(2)));Hetero%tkz_Plane=czero
+               do ilayer = Hetero%tzIndex(1),Hetero%tzIndex(2)
+                  call wannierinterpolation(Lttc%Nkpt3,Lttc%kpt,Lttc%kptPlane,Hetero%tkz(:,:,:,ilayer),Hetero%tkz_Plane(:,:,:,ilayer))
+               enddo
+               !
+            endif
+            !
          endif
+
          !
          !Compute non-interacting Fermi surface
          allocate(Fk(Ndim,Ndim,Nkpt_plane_tot));Fk=0d0
@@ -4214,11 +4305,6 @@ contains
             By = k1*Blat(2,1) + k2*Blat(2,2) + k3*Blat(2,3)
             Bz = k1*Blat(3,1) + k2*Blat(3,2) + k3*Blat(3,3)
             !
-            !if(Bx.ne.Bx_old)then
-            !   write(unit,*)
-            !   Bx_old = Bx
-            !endif
-            !
             write(unit,"(3I10,200E20.12)") ik,ikx,iky,k1,k2,k3,Bx,By,Bz,(Fk(io,io,ik),io=1,Ndim)
             if(iky.eq.Nkpt_plane)write(unit,*)
             !
@@ -4226,7 +4312,7 @@ contains
          close(unit)
          !
          !Compute non-interacting Fermi surface along the Gamma-A direction
-         if(Hetero%status.and.Lttc%planeStored)then
+         if(Hetero%status.and.Hetero%fill_Gamma_A.and.Lttc%planeStored)then
             !
             if(Ndim.ne.Lttc%Norb)stop "interpolate2Plane: spectral function calculation with heterostructures is allowed only for fermionic objects."
             !
@@ -4254,11 +4340,6 @@ contains
                   By = k1*Blat(2,1) + k2*Blat(2,2) + k3*Blat(2,3)
                   Bz = k1*Blat(3,1) + k2*Blat(3,2) + k3*Blat(3,3)
                   !
-                  !if(Bx.ne.Bx_old)then
-                  !   write(unit,*)
-                  !   Bx_old = Bx
-                  !endif
-                  !
                   write(unit,"(3I10,200E20.12)") ik,ikx,iky,k1,k2,k3,Bx,By,Bz,(dreal(Fk_kz(io,io,ik,ikz)),io=1,Hetero%Norb)
                   if(iky.eq.Nkpt_plane)write(unit,*)
                   !
@@ -4266,13 +4347,13 @@ contains
                close(unit)
                !
             enddo
-            !
             deallocate(Fk_kz)
             !
          endif
-         deallocate(Fk)
          !
       endif
+      !
+      if(allocated(Fk))deallocate(Fk)
       if(allocated(data_intp))deallocate(data_intp)
       if(allocated(dataw_intp))deallocate(dataw_intp)
       deallocate(kptPlane)
