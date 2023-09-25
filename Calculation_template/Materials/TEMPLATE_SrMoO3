@@ -30,8 +30,8 @@ python Gaverage.py --field Gkw --itlist ${a}..${b} ;
 ################################################################################
 GENMAT=/home/petocchif/1_GW_EDMFT/GenericMaterial/Calculation_template
 declare -a dirindex=( "avg" )
-for it in "${dirindex[@]}" ; do
-#for it in `seq  282 1 291` ; do
+#for it in "${dirindex[@]}" ; do
+for it in `seq  104 1 114` ; do
    if [ -d "$it" ]; then
    #
    cd $it/Convergence

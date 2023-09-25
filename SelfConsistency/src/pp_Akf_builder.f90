@@ -116,9 +116,13 @@ contains
       real(8)                               :: dw,fact
       real(8)                               :: k1,k2,k3,Bx,By,Bz,Bx_old,Blat(3,3)
       character(len=256)                    :: path,suffix_,pedix_,ax_
-      logical                               :: ik1st_read
-      !
+      logical                               :: ik1st_read,rebuildRealPart_
       real(8),allocatable                   :: ImG_read(:,:,:)
+      !
+      !TEST>>>
+      integer                               :: icut
+      real(8)                               :: FermiCut_
+      !>>>TEST
       !
       select case(reg(mode))
          case default
@@ -170,7 +174,8 @@ contains
       if(allocated(Kmask))deallocate(Kmask)
       allocate(Kmask(Nkpt));Kmask=.false.
       !
-      !First check that all the files contains the same number of real frequecies
+      !
+      ! First check that all the files contains the same number of real frequecies
       ik1st_read=.false.
       do ik=1,Nkpt
          !
@@ -230,7 +235,8 @@ contains
       dw = abs(wreal_read(10)-wreal_read(9))
       write(*,"(A)") "     MaxEnt output on Green's function is read."
       !
-      !Define a smaller frequency array
+      !
+      ! Define a smaller frequency array
       if(wreal_read(Nreal_read).gt.KKcutoff)then
          Nreal_min = minloc(abs(wreal_read+KKcutoff),dim=1)
          Nreal_max = minloc(abs(wreal_read-KKcutoff),dim=1)
@@ -250,7 +256,8 @@ contains
       endif
       deallocate(wreal_read,Kmask)
       !
-      !Manipulate MaxEnt output
+      !
+      ! Manipulate MaxEnt output
       allocate(Akw_orb(Norb,Nreal_MaxEnt,Nkpt));Akw_orb=0d0
       !$OMP PARALLEL DEFAULT(SHARED),&
       !$OMP PRIVATE(ik,iorb,iw)
@@ -276,19 +283,7 @@ contains
       write(*,"(A)") "     MaxEnt output is Normalized."
       !
       !
-      !Use KK relations to rebuild the Real part - turned off for Fermionic spectra
-      !if(rebuildRealPart)then
-      !   allocate(Rkw_orb(Norb,Nreal,Nkpt));Rkw_orb=0d0
-      !   do iorb=1,Norb
-      !      do iq=1,Nkpt
-      !         call KK_Im2Re(Rkw_orb(iorb,:,iq),Akw_orb(iorb,:,iq),wreal,KKcutoff,BareVal=0d0,symmetric=.false.)
-      !      enddo
-      !      write(*,"(A)") "     KK on orb ["//str(iorb)//"] is done."
-      !   enddo
-      !endif
-      !
-      !
-      !Print each K-point separately
+      ! Print each K-point separately
       call createDir(reg(MaxEnt_K)//"Akw_Gk_"//reg(mode)//"_s"//str(ispin),verb=verbose)
       do ik=1,Nkpt
          path = reg(MaxEnt_K)//"Akw_Gk_"//reg(mode)//"_s"//str(ispin)//"/Akw"//reg(suffix_)//"_k"//str(ik)//".DAT"
@@ -299,20 +294,9 @@ contains
          enddo
          close(unit)
       enddo
-      if(rebuildRealPart)then
-         do ik=1,Nkpt
-            path = reg(MaxEnt_K)//"Rkw_Gk_"//reg(mode)//"_s"//str(ispin)//"/Akw"//reg(suffix_)//"_k"//str(ik)//".DAT"
-            unit = free_unit()
-            open(unit,file=reg(path),form="formatted",status="unknown",position="rewind",action="write")
-            do iw=1,Nreal_MaxEnt
-               write(unit,"(200E20.12)") wreal(iw),(Rkw_orb(iorb,iw,ik),iorb=1,Norb)
-            enddo
-            close(unit)
-         enddo
-      endif
       !
       !
-      !Print in gnuplot pm3d map format
+      ! Print in gnuplot pm3d map format
       if(reg(mode).eq."path")then
          !
          !Write down spectral function on the path in usual format - orbital basis
@@ -329,22 +313,6 @@ contains
             write(unit,*)
          enddo
          close(unit)
-         !
-         if(rebuildRealPart)then
-            path = reg(MaxEnt_K)//"Rkw_Gk"//reg(suffix_)//"_s"//str(ispin)//".DAT"
-            unit = free_unit()
-            open(unit,file=reg(path),form="formatted",status="unknown",position="rewind",action="write")
-            fact=Crystal%Kpathaxis(Crystal%Nkpt_path)
-            if(present(suffix).and.(reg(suffix_).eq."_Hetero"))fact=1d0
-            do ik=1,Nkpt
-               do iw=1,Nreal_MaxEnt
-                  if(abs(wreal(iw)).gt.0.5*KKcutoff)cycle
-                  write(unit,"(1I5,200E20.12)") ik,Crystal%Kpathaxis(ik)/fact,wreal(iw),(Rkw_orb(iorb,iw,ik),iorb=1,Norb)
-               enddo
-               write(unit,*)
-            enddo
-            close(unit)
-         endif
          !
       elseif(reg(mode).eq."plane")then
          !
@@ -367,18 +335,87 @@ contains
             By = k1*Blat(2,1) + k2*Blat(2,2) + k3*Blat(2,3)
             Bz = k1*Blat(3,1) + k2*Blat(3,2) + k3*Blat(3,3)
             !
-            !if(Bx.ne.Bx_old)then
-            !   write(unit,*)
-            !   Bx_old = Bx
-            !endif
-            !
             write(unit,"(3I10,200E20.12)") ik,ikx,iky,k1,k2,k3,Bx,By,Bz,(Akw_orb(iorb,wndx_cut,ik),iorb=1,Norb)
             if(iky.eq.Nkpt_plane)write(unit,*)
             !
          enddo
          close(unit)
          !
-         if(rebuildRealPart)then
+         !TEST>>>
+         do icut=1,10
+            FermiCut_ = -(0.02*icut)
+            wndx_cut = minloc(abs(wreal - (0.02*icut) ),dim=1)
+            write(*,"(A,F)") "     Cutting Fermi surface at w_["//str(wndx_cut)//"]=",wreal(wndx_cut)
+            path = reg(MaxEnt_K)//"Fk_Gk"//reg(suffix_)//"_s"//str(ispin)//"_E"//str(FermiCut_,3)//".DAT"
+            unit = free_unit()
+            open(unit,file=reg(path),form="formatted",status="unknown",position="rewind",action="write")
+            do ik=1,Nkpt
+               !
+               ikx = int(ik/(Nkpt_plane+0.001))+1
+               iky = ik - (ikx-1)*Nkpt_plane
+               !
+               k1 = Crystal%kptPlane(1,ik)
+               k2 = Crystal%kptPlane(2,ik)
+               k3 = Crystal%kptPlane(3,ik)
+               !
+               Bx = k1*Blat(1,1) + k2*Blat(1,2) + k3*Blat(1,3) ; if(ik.eq.1) Bx_old = Bx
+               By = k1*Blat(2,1) + k2*Blat(2,2) + k3*Blat(2,3)
+               Bz = k1*Blat(3,1) + k2*Blat(3,2) + k3*Blat(3,3)
+               !
+               write(unit,"(3I10,200E20.12)") ik,ikx,iky,k1,k2,k3,Bx,By,Bz,(Akw_orb(iorb,wndx_cut,ik),iorb=1,Norb)
+               if(iky.eq.Nkpt_plane)write(unit,*)
+               !
+            enddo
+            close(unit)
+         enddo
+         !>>>TEST
+         !
+      endif
+      !
+      !
+      ! Use KK relations to rebuild the Real part - turned off for Fermionic spectra
+      rebuildRealPart_=.false.
+      if(rebuildRealPart_)then
+         !
+         ! Compute real part with KK relations
+         allocate(Rkw_orb(Norb,Nreal,Nkpt));Rkw_orb=0d0
+         do iorb=1,Norb
+            do ik=1,Nkpt
+               call KK_Im2Re(Rkw_orb(iorb,:,ik),Akw_orb(iorb,:,ik),wreal,KKcutoff,BareVal=0d0,symmetric=.false.)
+            enddo
+            write(*,"(A)") "     KK on orb ["//str(iorb)//"] is done."
+         enddo
+         !
+         ! Print each K-point separately
+         do ik=1,Nkpt
+            path = reg(MaxEnt_K)//"Akw_Gk_"//reg(mode)//"_s"//str(ispin)//"/Rkw"//reg(suffix_)//"_k"//str(ik)//".DAT"
+            unit = free_unit()
+            open(unit,file=reg(path),form="formatted",status="unknown",position="rewind",action="write")
+            do iw=1,Nreal_MaxEnt
+               write(unit,"(200E20.12)") wreal(iw),(Rkw_orb(iorb,iw,ik),iorb=1,Norb)
+            enddo
+            close(unit)
+         enddo
+         !
+         ! Print in gnuplot pm3d map format
+         if(reg(mode).eq."path")then
+            !
+            path = reg(MaxEnt_K)//"Rkw_Gk"//reg(suffix_)//"_s"//str(ispin)//".DAT"
+            unit = free_unit()
+            open(unit,file=reg(path),form="formatted",status="unknown",position="rewind",action="write")
+            fact=Crystal%Kpathaxis(Crystal%Nkpt_path)
+            if(present(suffix).and.(reg(suffix_).eq."_Hetero"))fact=1d0
+            do ik=1,Nkpt
+               do iw=1,Nreal_MaxEnt
+                  if(abs(wreal(iw)).gt.0.5*KKcutoff)cycle
+                  write(unit,"(1I5,200E20.12)") ik,Crystal%Kpathaxis(ik)/fact,wreal(iw),(Rkw_orb(iorb,iw,ik),iorb=1,Norb)
+               enddo
+               write(unit,*)
+            enddo
+            close(unit)
+            !
+         elseif(reg(mode).eq."plane")then
+            !
             path = reg(MaxEnt_K)//"rFk_Gk"//reg(suffix_)//"_s"//str(ispin)//"_E"//str(FermiCut,3)//".DAT"
             unit = free_unit()
             open(unit,file=reg(path),form="formatted",status="unknown",position="rewind",action="write")
@@ -395,19 +432,19 @@ contains
                By = k1*Blat(2,1) + k2*Blat(2,2) + k3*Blat(2,3)
                Bz = k1*Blat(3,1) + k2*Blat(3,2) + k3*Blat(3,3)
                !
-               !if(Bx.ne.Bx_old)then
-               !   write(unit,*)
-               !   Bx_old = Bx
-               !endif
-               !
                write(unit,"(3I10,200E20.12)") ik,ikx,iky,k1,k2,k3,Bx,By,Bz,(Rkw_orb(iorb,wndx_cut,ik),iorb=1,Norb)
                if(iky.eq.Nkpt_plane)write(unit,*)
                !
             enddo
             close(unit)
+            !
          endif
          !
+         deallocate(Rkw_orb)
+         !
       endif
+      !
+      !
       deallocate(wreal,Akw_orb)
       !
    end subroutine rebuild_G
@@ -466,6 +503,7 @@ contains
       if(present(pedix))pedix_=reg(pedix)
       !
       ! this will be removed as soon as I find a better MaxEnt procedure
+      ! but by default I'm going to try both orbsep and Traced simultaneously
       orbsep_ = .true.
       if(present(orbsep))orbsep_=orbsep
       !
@@ -480,10 +518,9 @@ contains
          !
          do iorb=1,Norb
             !
+            !First check that all the files contains the same number of real frequecies
             if(allocated(Kmask))deallocate(Kmask)
             allocate(Kmask(Nkpt));Kmask=.false.
-            !
-            !First check that all the files contains the same number of real frequecies
             ik1st_read=.false.
             do iq=1,Nkpt
                !
@@ -544,13 +581,13 @@ contains
             dw = abs(wreal_read(10)-wreal_read(9))
             write(*,"(A)") "     MaxEnt output on "//reg(name)//" function is read."
             !
-            !Smaller frequency array is not defined because itscrews up the normalization
+            !Smaller frequency array is not defined because it screws up the normalization
             Nreal_min = 1
             Nreal_max = Nreal_read
             Nreal = Nreal_read
             if(iorb.eq.1)allocate(wreal(Nreal))
             wreal=wreal_read
-            deallocate(wreal_read)
+            deallocate(wreal_read,Kmask)
             !
             !Manipulate MaxEnt output
             if(iorb.eq.1) allocate(Akw_orb(Norb,Nreal,Nkpt))
@@ -576,10 +613,9 @@ contains
          !
       else
          !
+         !First check that all the files contains the same number of real frequecies
          if(allocated(Kmask))deallocate(Kmask)
          allocate(Kmask(Nkpt));Kmask=.false.
-         !
-         !First check that all the files contains the same number of real frequecies
          ik1st_read=.false.
          do iq=1,Nkpt
             !
@@ -639,12 +675,12 @@ contains
          dw = abs(wreal_read(10)-wreal_read(9))
          write(*,"(A)") "     MaxEnt output on "//reg(name)//" function is read."
          !
-         !Smaller frequency array is not defined because itscrews up the normalization
+         !Smaller frequency array is not defined because its crews up the normalization
          Nreal_min = 1
          Nreal_max = Nreal_read
          Nreal = Nreal_read
          allocate(wreal(Nreal));wreal=wreal_read
-         deallocate(wreal_read)
+         deallocate(wreal_read,Kmask)
          !
          !Manipulate MaxEnt output
          allocate(Akw_orb(Norb,Nreal,Nkpt));Akw_orb=0d0
@@ -674,18 +710,6 @@ contains
       endif
       !
       !
-      !Use KK relations to rebuild the Real part
-      if(rebuildRealPart)then
-         allocate(Rkw_orb(Norb,Nreal,Nkpt));Rkw_orb=0d0
-         do iorb=1,Norb
-            do iq=1,Nkpt
-               call KK_Im2Re(Rkw_orb(iorb,:,iq),Akw_orb(iorb,:,iq),wreal,KKcutoff,BareVal=1d0,symmetric=.true.)
-            enddo
-            write(*,"(A)") "     KK on orb ["//str(iorb)//"] is done."
-         enddo
-      endif
-      !
-      !
       !Print each K-point separately
       call createDir(reg(MaxEnt_K)//"Akw_"//reg(name)//"k_"//reg(mode),verb=verbose)
       do iq=1,Nkpt
@@ -697,17 +721,6 @@ contains
          enddo
          close(unit)
       enddo
-      if(rebuildRealPart)then
-         do iq=1,Nkpt
-            path = reg(MaxEnt_K)//"Akw_"//reg(name)//"k_"//reg(mode)//"/Rkw_k"//str(iq)//".DAT"
-            unit = free_unit()
-            open(unit,file=reg(path),form="formatted",status="unknown",position="rewind",action="write")
-            do iw=1,Nreal
-               write(unit,"(200E20.12)") wreal(iw),(Rkw_orb(iorb,iw,iq),iorb=1,Norb)
-            enddo
-            close(unit)
-         enddo
-      endif
       !
       !
       !Print in gnuplot pm3d map format
@@ -725,21 +738,6 @@ contains
             write(unit,*)
          enddo
          close(unit)
-         !
-         if(rebuildRealPart)then
-            path = reg(MaxEnt_K)//"Rkw_"//reg(name)//"k.DAT"
-            unit = free_unit()
-            open(unit,file=reg(path),form="formatted",status="unknown",position="rewind",action="write")
-            fact=Crystal%Kpathaxis(Crystal%Nkpt_path)
-            do iq=1,Nkpt
-               do iw=1,Nreal
-                  if(abs(wreal(iw)).gt.0.5*KKcutoff)cycle
-                  write(unit,"(1I5,200E20.12)") iq,Crystal%Kpathaxis(iq)/fact,wreal(iw),(Rkw_orb(iorb,iw,iq),iorb=1,Norb)
-               enddo
-               write(unit,*)
-            enddo
-            close(unit)
-         endif
          !
       elseif(reg(mode).eq."plane")then
          !
@@ -762,18 +760,56 @@ contains
             By = k1*Blat(2,1) + k2*Blat(2,2) + k3*Blat(2,3)
             Bz = k1*Blat(3,1) + k2*Blat(3,2) + k3*Blat(3,3)
             !
-            !if(Bx.ne.Bx_old)then
-            !   write(unit,*)
-            !   Bx_old = Bx
-            !endif
-            !
             write(unit,"(3I10,200E20.12)") iq,ikx,iky,k1,k2,k3,Bx,By,Bz,(Akw_orb(iorb,wndx_cut,iq),iorb=1,Norb)
             if(iky.eq.Nkpt_plane)write(unit,*)
             !
          enddo
          close(unit)
          !
-         if(rebuildRealPart)then
+      endif
+      !
+      !
+      ! Use KK relations to rebuild the Real part
+      if(rebuildRealPart)then
+         !
+         ! Compute real part with KK relations - Be careful with the BareVal entry!!!
+         allocate(Rkw_orb(Norb,Nreal,Nkpt));Rkw_orb=0d0
+         do iorb=1,Norb
+            do iq=1,Nkpt
+               call KK_Im2Re(Rkw_orb(iorb,:,iq),Akw_orb(iorb,:,iq),wreal,KKcutoff,BareVal=1d0,symmetric=.true.)
+            enddo
+            write(*,"(A)") "     KK on orb ["//str(iorb)//"] is done."
+         enddo
+         !
+         ! Print each K-point separately
+         do iq=1,Nkpt
+            path = reg(MaxEnt_K)//"Akw_"//reg(name)//"k_"//reg(mode)//"/Rkw_k"//str(iq)//".DAT"
+            unit = free_unit()
+            open(unit,file=reg(path),form="formatted",status="unknown",position="rewind",action="write")
+            do iw=1,Nreal
+               write(unit,"(200E20.12)") wreal(iw),(Rkw_orb(iorb,iw,iq),iorb=1,Norb)
+            enddo
+            close(unit)
+         enddo
+         !
+         ! Print in gnuplot pm3d map format
+         if(reg(mode).eq."path")then
+            !
+            path = reg(MaxEnt_K)//"Rkw_"//reg(name)//"k.DAT"
+            unit = free_unit()
+            open(unit,file=reg(path),form="formatted",status="unknown",position="rewind",action="write")
+            fact=Crystal%Kpathaxis(Crystal%Nkpt_path)
+            do iq=1,Nkpt
+               do iw=1,Nreal
+                  if(abs(wreal(iw)).gt.0.5*KKcutoff)cycle
+                  write(unit,"(1I5,200E20.12)") iq,Crystal%Kpathaxis(iq)/fact,wreal(iw),(Rkw_orb(iorb,iw,iq),iorb=1,Norb)
+               enddo
+               write(unit,*)
+            enddo
+            close(unit)
+            !
+         elseif(reg(mode).eq."plane")then
+            !
             path = reg(MaxEnt_K)//"rFk_"//reg(name)//"k_E"//str(FermiCut,3)//".DAT"
             unit = free_unit()
             open(unit,file=reg(path),form="formatted",status="unknown",position="rewind",action="write")
@@ -790,21 +826,20 @@ contains
                By = k1*Blat(2,1) + k2*Blat(2,2) + k3*Blat(2,3)
                Bz = k1*Blat(3,1) + k2*Blat(3,2) + k3*Blat(3,3)
                !
-               !if(Bx.ne.Bx_old)then
-               !   write(unit,*)
-               !   Bx_old = Bx
-               !endif
-               !
                write(unit,"(3I10,200E20.12)") iq,ikx,iky,k1,k2,k3,Bx,By,Bz,(Rkw_orb(iorb,wndx_cut,iq),iorb=1,Norb)
                if(iky.eq.Nkpt_plane)write(unit,*)
                !
             enddo
             close(unit)
+            !
          endif
          !
+         deallocate(Rkw_orb)
+         !
       endif
-      deallocate(Kmask,Akw_orb,wreal)
-      if(allocated(Rkw_orb))deallocate(Rkw_orb)
+      !
+      !
+      deallocate(wreal,Akw_orb)
       !
    end subroutine rebuild_W
    !

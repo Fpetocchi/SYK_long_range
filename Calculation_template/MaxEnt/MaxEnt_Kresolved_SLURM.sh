@@ -1,7 +1,10 @@
 #!/bin/bash
 #
 QUEUE="new"
-MEM="1G"
+MEM="3G"
+MAXTIME="2-00:00:00"
+SLEEPT=0.1
+BATCHMODE_REPLACE="F"
 #
 ################################################################################
 #                              DEFAULT ARGUMENTS                               #
@@ -174,7 +177,7 @@ for ispin in `seq 1 1 ${Nspin}` ; do
 #SBATCH --job-name=${NAME}_s${ispin}_B${btndx}${SUFFIX}
 #SBATCH --output=%x-%j.out
 #SBATCH --error=%x-%j.err
-#SBATCH --time=1-00:00:00
+#SBATCH --time=${MAXTIME}
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=1
 #SBATCH --mem-per-cpu=${MEM}
@@ -186,19 +189,25 @@ export OMP_NUM_THREADS=1
 
 for i in \`seq  ${startk} ${stopk}\`; do
    #
-   if [ "$MODEL"  != "0" ]; then
+   if [ "${MODEL}"  != "0" ]; then
       #
-      if [ "$MODEL"  == "-1" ] ; then
+      if [ "${MODEL}"  == "-1" ] ; then
          export MODELOPTIONS= -m ../${Fsource}/Models/${FIELD}k_${AXIS}_k\${i}${SUFFIX}.DAT_dos.dat
       else
          export MODELOPTIONS= -M ${MODEL}
       fi
-      srun python3.6  ${BIN}/bryan.py ${RUNOPTIONS} \${MODELOPTIONS} ../${Fsource}/${FIELD}k_${AXIS}_k\${i}${SUFFIX}.DAT > job_Kb_\${i}${SUFFIX}.out
-      #
    else
-      #
-      srun python3.6  ${BIN}/bryan.py ${RUNOPTIONS} ../${Fsource}/${FIELD}k_${AXIS}_k\${i}${SUFFIX}.DAT > job_Kb_\${i}${SUFFIX}.out
-      #
+      MODELOPTIONS=" "
+   fi
+   #
+   if [ "${BATCHMODE_REPLACE}"  == "F" ] ; then
+      if [ ! -f ../${Fsource}/${FIELD}k_${AXIS}_k\${i}${SUFFIX}.DAT_dos.dat ]; then
+         srun python3.6  ${BIN}/bryan.py ${RUNOPTIONS} \${MODELOPTIONS} ../${Fsource}/${FIELD}k_${AXIS}_k\${i}${SUFFIX}.DAT > job_Kb_\${i}${SUFFIX}.out
+      else
+         echo "\${i}" skipped > job_Kb_\${i}${SUFFIX}.out
+      fi
+   else
+      srun python3.6  ${BIN}/bryan.py ${RUNOPTIONS} \${MODELOPTIONS} ../${Fsource}/${FIELD}k_${AXIS}_k\${i}${SUFFIX}.DAT > job_Kb_\${i}${SUFFIX}.out
    fi
    #
 done
@@ -209,7 +218,7 @@ EOF
       #submit all batches
       for btndx in `seq 1 1 ${Nbatch}` ; do
          sbatch submit_MaxEnt_${NAME}_B_${btndx}
-         sleep 0.5
+         sleep ${SLEEPT}
       done
       #
       #
@@ -237,7 +246,7 @@ EOF
 #SBATCH --job-name=${NAME}_s${ispin}_K${kp}${SUFFIX}
 #SBATCH --output=%x-%j.out
 #SBATCH --error=%x-%j.err
-#SBATCH --time=1-00:00:00
+#SBATCH --time=${MAXTIME}
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=1
 #SBATCH --mem-per-cpu=${MEM}
@@ -256,7 +265,7 @@ EOF
       #submit all the user-provided K-points
       for kp in `seq ${STARTK} ${STOPK}`; do # -w
          sbatch submit_MaxEnt_${NAME}_K_${kp}
-         sleep 0.5
+         sleep ${SLEEPT}
       done
       #
       #

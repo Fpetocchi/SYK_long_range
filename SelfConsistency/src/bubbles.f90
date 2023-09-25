@@ -44,25 +44,26 @@ contains
    !COMMENT: For some reason this gives a bit more wiggling W.
    !         Using calc_Pi_scGkGk from the Glda seems to work better.
    !---------------------------------------------------------------------------!
-   subroutine calc_Pi_GoGo(Pmats,Lttc)
+   subroutine calc_Pi_GoGo(Pmats,Lttc,axis)
       !
       use parameters
       use utils_misc
       use utils_fields
       use crystal
+      use input_vars, only : UfullStructure
       implicit none
       !
       type(BosonicField),intent(inout)      :: Pmats
       type(Lattice),intent(in)              :: Lttc
+      complex(8),intent(in),optional        :: axis(:)
       !
       complex(8),allocatable                :: cprod(:,:,:,:,:)
-      complex(8),allocatable                :: alpha(:)
-      real(8),allocatable                   :: wmats(:)
+      complex(8),allocatable                :: alpha(:),wfreq(:)
       real(8)                               :: Beta
-      integer                               :: Nbp,Nkpt,Nmats,Norb
+      integer                               :: Nbp,Nkpt,Nfreq,Norb
       integer                               :: ik1,ik2,iq,iw
       integer                               :: iwan1,iwan2,iwan3,iwan4,ib1,ib2
-      logical                               :: clear
+      type(physicalU)                       :: PhysicalUelements
       real                                  :: start,finish
       !
       !
@@ -77,19 +78,24 @@ contains
       Nbp = Pmats%Nbp
       Nkpt = Pmats%Nkpt
       Beta = Pmats%Beta
-      Nmats = Pmats%Npoints
+      Nfreq = Pmats%Npoints
       Norb = int(sqrt(dble(Nbp)))
       if(Lttc%Norb.ne.Norb) stop "calc_Pi_GoGo: Pmats and Lattice have different orbital dimension."
       if(.not.allocated(Lttc%kptsum)) stop "calc_Pi_GoGo: kptsum not allocated."
       if(.not.allocated(Lttc%Zk)) stop "calc_Pi_GoGo: Zk not allocated."
       if(.not.allocated(Lttc%Ek)) stop "calc_Pi_GoGo: Ek not allocated."
-      allocate(wmats(Nmats));wmats=0d0
-      wmats = BosonicFreqMesh(Beta,Nmats)
+      !
+      allocate(wfreq(Nfreq));wfreq=czero
+      if(present(axis))then
+         if(size(axis).ne.Nfreq) stop "calc_Pi_GoGo: the frequency axis has wrong length."
+         wfreq = axis
+      else
+         wfreq = img*BosonicFreqMesh(Beta,Nfreq)
+      endif
       !
       !cprod(alpha,i,n,ik)= < B_q,alpha Psi_kn |Psi_q+k,i>
       allocate(cprod(Nbp,Norb,Norb,Nkpt,Nkpt));cprod=czero
-      !$OMP PARALLEL DEFAULT(NONE),&
-      !$OMP SHARED(Nkpt,Nmats,Norb,Lttc,cprod,beta),&
+      !$OMP PARALLEL DEFAULT(SHARED),&
       !$OMP PRIVATE(iq,ik1,ik2,ib1,iwan1,iwan2,iwan3,iwan4)
       !$OMP DO
       do iq=1,Nkpt
@@ -117,14 +123,14 @@ contains
       !$OMP END PARALLEL
       !
       !
-      allocate(alpha(Nmats));alpha=czero
+      allocate(alpha(Nfreq));alpha=czero
       call clear_attributes(Pmats)
       !$OMP PARALLEL DEFAULT(SHARED),&
       !$OMP PRIVATE(iq,ik1,ik2,iwan1,iwan2,alpha)
       !$OMP DO
       do iq=1,Nkpt
          alpha=czero
-         do iw=1,Nmats
+         do iw=1,Nfreq
             !
             do ik1=1,Nkpt
                ik2 = Lttc%kptsum(ik1,iq)
@@ -139,7 +145,7 @@ contains
                      else
                         !
                         alpha(iw) = -2.d0 * ( fermidirac(Lttc%Ek(iwan1,ik1),Lttc%mu,Pmats%Beta) - fermidirac(Lttc%Ek(iwan2,ik2),Lttc%mu,Pmats%Beta) ) &
-                                          / ( dcmplx(0d0,1d0) * wmats(iw) - Lttc%Ek(iwan1,ik1) + Lttc%Ek(iwan2,ik2) ) / nkpt
+                                          / ( wfreq(iw) - Lttc%Ek(iwan1,ik1) + Lttc%Ek(iwan2,ik2) ) / nkpt
                         !
                      endif
                      !
@@ -154,25 +160,20 @@ contains
       enddo !iq
       !$OMP END DO
       !$OMP END PARALLEL
-      deallocate(cprod,alpha,wmats)
+      deallocate(cprod,alpha,wfreq)
       !
-      !Clean up numerical noise
-      !$OMP PARALLEL DEFAULT(SHARED),&
-      !$OMP PRIVATE(iq,ib1,ib2,clear)
-      !$OMP DO
-      do iq=1,Nkpt
+      !Remove unwanted components
+      if(.not.UfullStructure)then
+         write(*,"(A)") "     Removing non-physical components from Plat."
+         call init_Uelements(Norb,PhysicalUelements)
          do ib1=1,Nbp
-            do ib2=ib1,Nbp
-               clear = sum(abs(Pmats%screened(ib1,ib2,:,iq))) .lt. eps
-               if(clear)then
-                  Pmats%screened(ib1,ib2,:,iq)=czero
-                  Pmats%screened(ib2,ib1,:,iq)=czero
+            do ib2=1,Nbp
+               if(.not.PhysicalUelements%Full_All(ib1,ib2))then
+                  Pmats%screened(ib1,ib2,:,:)=czero
                endif
             enddo
          enddo
-      enddo
-      !$OMP END DO
-      !$OMP END PARALLEL
+      endif
       !
       call BosonicKsum(Pmats)
       !
@@ -197,12 +198,12 @@ contains
       logical,intent(in),optional           :: tau_output
       logical                               :: tau_output_
       !
-      logical                               :: cmplxHyb=.false.
+      logical                               :: PiReal=.false.
       !
       tau_output_=.false.
       if(present(tau_output)) tau_output_ = tau_output
       !
-      if(cmplxHyb)then
+      if(PiReal)then
          call calc_Pi_scGrGr(Pout,Gmats,Lttc,tau_output=tau_output_)
       else
          call calc_Pi_scGkGk(Pout,Gmats,Lttc,tau_output=tau_output_)
@@ -225,7 +226,7 @@ contains
       use crystal
       use fourier_transforms
       use file_io
-      use input_vars, only : Ntau, tau_uniform, paramagnet
+      use input_vars, only : Ntau, tau_uniform, paramagnet, UfullStructure
       implicit none
       !
       type(BosonicField),intent(inout)      :: Pout
@@ -368,6 +369,18 @@ contains
          !
       enddo !iq
       deallocate(tau,Gitau,Pq_tau)
+      !
+      !Remove unwanted components
+      if(.not.UfullStructure)then
+         write(*,"(A)") "     Removing non-physical components from Plat."
+         do ib1=1,Nbp
+            do ib2=1,Nbp
+               if(.not.PhysicalUelements%Full_All(ib1,ib2))then
+                  Pout%screened(ib1,ib2,:,:)=czero
+               endif
+            enddo
+         enddo
+      endif
       !
       ! Fill the local attributes
       call BosonicKsum(Pout)

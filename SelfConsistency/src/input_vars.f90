@@ -119,6 +119,7 @@ module input_vars
    logical,public                           :: ExpandImpurity
    logical,public                           :: RotateHloc
    logical,public                           :: RotateUloc
+   real(8),public                           :: RotPrecision
    logical,public                           :: AFMselfcons
    type(LocalOrbitals),allocatable,public   :: LocalOrbs(:)
    type(LocalOrbitals),allocatable,public   :: SiteOrbs(:)
@@ -153,6 +154,7 @@ module input_vars
    logical,public                           :: U_AC=.false.
    logical,public                           :: Uscreen
    real(8),public                           :: Uthresh
+   real(8),public                           :: RespackRthresh
    real(8),public                           :: Uaa=0d0
    real(8),public                           :: Uab=0d0
    real(8),public                           :: J=0d0
@@ -162,6 +164,7 @@ module input_vars
    integer,public                           :: N_Vnn
    real(8),allocatable,public               :: Vnn(:,:,:),Vnn_diag(:,:)
    character(len=256),public                :: long_range
+   logical,private                          :: readVnn
    integer,public                           :: attach_Coulomb
    !
    !Double counting types, divergencies, scaling and self-consistency coefficients
@@ -227,6 +230,7 @@ module input_vars
    integer,public                           :: Nkpt_path
    logical,public                           :: print_plane_G
    integer,public                           :: Nkpt_plane
+   real(8),public                           :: KplaneMax
    real(8),public                           :: FermiCut
    real(8),public                           :: KKcutoff
    logical,public                           :: rebuildRealPart
@@ -303,7 +307,6 @@ contains
       character(len=*)                      :: InputFile
       integer                               :: isite,ilayer,iset,iph,irange
       integer                               :: isym_user,Nsite_loc
-      logical                               :: readVnn
       real(8)                               :: g_eph_read(2)
       !
       !OMP parallelization.
@@ -353,6 +356,7 @@ contains
             if(Nkpt3(3).ne.1) stop "read_InputFile: requested Heterostructured non-interacting Hamiltonian but Nk_z is not 1."
             Hetero%Norb = Norb_model
             call parse_input_variable(Hetero%Nslab,"NSLAB",InputFile,default=20,comment="Global dimension fo the slab.")
+            if(Hetero%Nslab.ge.3)call parse_input_variable(Hetero%doubled_uc,"EMB_2UC",InputFile,default=.false.,comment="Embedding potential built resolving two hopping inside the heterostructure.")
             call parse_input_variable(Hetero%Explicit,"EXPLICIT",InputFile,default=[1,10],comment="Index boundaries of the impurities explicitly solved.")
             Hetero%Nlayer = Hetero%Explicit(2)-Hetero%Explicit(1)+1
             if(Hetero%Nlayer.le.1) stop "read_InputFile: a single layer heterostructure does not make sense."
@@ -396,6 +400,7 @@ contains
       call parse_input_variable(ExpandImpurity,"EXPAND",InputFile,default=.false.,comment="Flag to use a single impurity solution for all the sites of the lattice. Only indexes for site 1 readed.")
       call parse_input_variable(RotateHloc,"ROTATE_F",InputFile,default=.false.,comment="Solve the Fermionic impurity problem in the basis where H(R=0) is diagonal.")
       call parse_input_variable(RotateUloc,"ROTATE_B",InputFile,default=RotateHloc,comment="Solve the Bosonic impurity problem in the basis where H(R=0) is diagonal.")
+      if(RotateHloc.or.RotateUloc) call parse_input_variable(RotPrecision,"ROT_PRECISION",InputFile,default=1e4*eps,comment="Degeneracy precision over the Hloc eigenvalues.")
       call parse_input_variable(AFMselfcons,"AFM",InputFile,default=.false.,comment="Flag to use the AFM self-consistency by flipping the spin. Requires input with doubled unit cell.")
       if(ExpandImpurity.or.AFMselfcons)then
          Solver%Nimp = 1
@@ -506,11 +511,12 @@ contains
       !Interaction variables
       call add_separator("Interaction")
       call parse_input_variable(UfullStructure,"U_FULL",InputFile,default=.true.,comment="Flag to use all the off-diagonal components of SPEX Ucrpa or only the physical ones.")
-      call parse_input_variable(Utensor,"U_TENSOR",InputFile,default="Spex",comment="Interaction tensor mode. Available: Spex, Model, Vasp, File (only for CALC_TYPE=DMFT+statU).")
+      call parse_input_variable(Utensor,"U_TENSOR",InputFile,default="Spex",comment="Interaction tensor mode. Available: Spex, Respack, Model, Vasp, File (only for CALC_TYPE=DMFT+statU).")
       call parse_input_variable(Ustart,"U_START",InputFile,default=.true.,comment="Flag to use the local Ucrpa interaction as the effetive interaction in the 0th iteration.")
       call parse_input_variable(Uthresh,"U_THRES",InputFile,default=0.001d0,comment="Lowest magnitude considered in SPEX Ucrpa bare interaction (only for local interactions).")
+      if(reg(Utensor).eq."Respack")call parse_input_variable(RespackRthresh,"RESPACK_RTHRES",InputFile,default=4d0,comment="Radius threshold for long-range interaction (respack only).")
       if((reg(CalculationType).eq."GW+EDMFT").or.(reg(CalculationType).eq."scGW"))call parse_input_variable(Uscreen,"U_SCREEN",InputFile,default=.true.,comment="Screen the bare interaction with the non-local polarization.")
-      if(reg(Utensor).eq."Spex") call parse_input_variable(U_AC,"U_AC",InputFile,default=.false.,comment="Flag to force the analytic continuation on the SPEX interaction.")
+      if((reg(Utensor).eq."Spex").or.(reg(Utensor).eq."Respack")) call parse_input_variable(U_AC,"U_AC",InputFile,default=.false.,comment="Flag to force the analytic continuation on the SPEX interaction.")
       if(reg(Utensor).eq."Model")then
          call parse_input_variable(Uaa,"UAA",InputFile,default=0d0,comment="Interaction between same orbital and opposite spin electrons (orbital independent).")
          call parse_input_variable(Uab,"UAB",InputFile,default=0d0,comment="Interaction between different orbital and opposite spin electrons (orbital independent).")
@@ -529,7 +535,6 @@ contains
          endif
          !long-range model U
          call parse_input_variable(N_Vnn,"N_V",InputFile,default=0,comment="Range of the non-local interaction in real space (orbital independent).")
-         readVnn=.false.
          if(N_Vnn.gt.0)then
             !long-range coulombian
             call parse_input_variable(long_range,"LONG_RANGE",InputFile,default="Explicit",comment="Avalibale long range interaction: Explicit(reads VNN for each N_V), Coulomb(reads first VNN, max neighbor N_V), Ewald(reads first VNN, unrestricted range).")
@@ -684,7 +689,7 @@ contains
          enddo
       endif
       call parse_input_variable(Ntau_MaxEnt,"NTAU_MAXENT",InputFile,default=Ntau,comment="Number of tau-points of the interpolated Field. Ignored otherwise.")
-      call parse_input_variable(Nmats_MaxEnt,"NMATS_MAXENT",InputFile,default=Nmats,comment="If >NMATS a tail will be attached before the FT to get G(tau).")
+      call parse_input_variable(Nmats_MaxEnt,"NMATS_MAXENT",InputFile,default=0,comment="If >NMATS a tail will be attached before the FT to get G(tau), if =0 data will not be printed.")
       !high-symmetry paths
       call parse_input_variable(print_path_G,"PRINT_PATH_G",InputFile,default=.false.,comment="Print the k-dependent Green's function along the K-path on the imaginary time axis.")
       call parse_input_variable(print_path_Chi,"PRINT_PATH_CHI",InputFile,default=.false.,comment="Print the k-dependent charge susceptibility along the K-path on the imaginary frequency axis.")
@@ -698,6 +703,7 @@ contains
       !Fermi surfaces
       call parse_input_variable(print_plane_G,"PRINT_PLANE_G",InputFile,default=.false.,comment="Flag to compute the Green's function on the planar {kx,ky} sheet.")
       call parse_input_variable(Nkpt_plane,"NK_PLANE",InputFile,default=50,comment="Number of K-points in the side of the planar {kx,ky} sheet.")
+      call parse_input_variable(KplaneMax,"KPLANE_MAX",InputFile,default=1d0,comment="Maximum value of the momentum in the {kx,ky} sheet.")
       call parse_input_variable(FermiCut,"FERMI_CUT",InputFile,default=0d0,comment="Energy level at which the Fermi surface is computed. Used only in Akf_builder.")
       call parse_input_variable(KKcutoff,"KK_CUTOFF",InputFile,default=50d0,comment="Real frequency cutoff for Kramers Kronig integrals, should be twice the region of interest.")
       KKcutoff=abs(KKcutoff)
@@ -788,7 +794,7 @@ contains
          call parse_input_variable(Solver%Imprvd_B,"IMPRVD_B",InputFile,default=0,comment="If =1 the improved estimator for the polarization will be computed (NOT IMPLEMENTED).")
          if(Dyson_Imprvd_B)Solver%Imprvd_B=1
          call parse_input_variable(Solver%N_nnt,"N_NNT",InputFile,default=1,comment="Measurment for <n_a(tau)n_b(0)> evaluation. Updated according to CALC_TYPE. Should be either =1 or 2*NTAU_B_IMP if =0 measurment avoided.")
-         !if(.not.bosonicSC)Solver%N_nnt=0
+         if(bosonicSC)Solver%N_nnt=1
          call parse_input_variable(Solver%full_ntOrbSym,"NT_FULLSYM",InputFile,default=0,comment="If =1 and orbital symmetrization inside the solver is requested it averages <n_a(tau)> for all the orbitals.")
          if(sym_mode.le.1)Solver%full_ntOrbSym=0
          if(RotateHloc.or.RotateUloc)Solver%full_ntOrbSym=1
@@ -843,7 +849,7 @@ contains
       Beta_Match%Path=trim(Beta_Match%Path)//"/"
       !
       !done only now that the correct path is stored
-      if(reg(Utensor).eq."Model".and.readVnn) call read_Vnn()
+      if((reg(Utensor).eq."Model").and.(N_Vnn.gt.0).and.readVnn) call read_Vnn()
       !
    end subroutine read_InputFile
 
@@ -855,6 +861,7 @@ contains
       use utils_misc
       implicit none
       integer                               :: unit,idum,idist,iorb,N_Vnn_read
+      if(verbose)write(*,"(A)") "---- read_Vnn"
       if(reg(long_range).eq."Explicit")then
          N_Vnn_read = N_Vnn
       else

@@ -288,6 +288,8 @@ class ct_hyb
          sign_meas=0.0;
          sign.resize( Nflavor, 1.0 );
          Order.resize( Nflavor, Vec( Norder, 0.0 ) );
+         OrderNorm.resize( Nflavor, 0.0 );
+         Ekin.resize( Nflavor, 0.0 );
          Nloc.resize( Nflavor, 0.0 );
          Nhist.resize( Nflavor+1, 0.0 );
          Szhist.resize( Nflavor/2+1, 0.0 );
@@ -493,6 +495,8 @@ class ct_hyb
       Vec                                 sign;                                 // Sign per flavor
       Vec                                 Nloc;                                 // Density per flavor
       VecVec                              Order;                                // Perturbation order
+      Vec                                 OrderNorm;                            // Perturbation order
+      Vec                                 Ekin;                                 // Perturbation order
       VecVec                              Dimp;                                 // Double occupation matrix
       Vec                                 Nhist;                                //
       Vec                                 Szhist;                               //
@@ -822,6 +826,19 @@ class ct_hyb
          //
          // perturbation order--------------------------------------------------
          dump_data( Order, "Order", pad, Nflavor, Norder );
+         //
+         //
+         // kinetic energy------------------------------------------------------
+         for (int ifl=0; ifl<Nflavor; ifl++)
+         {
+            for (int o=0; o<Norder; o++)
+            {
+               OrderNorm[ifl] += Order[ifl][o];
+               Ekin[ifl] -= o * Order[ifl][o]/Beta;
+            }
+         }
+         print_Vec(resultsDir+"/OrderNorm"+pad, OrderNorm);
+         print_Vec(resultsDir+"/Ekin"+pad, Ekin);
          //
          //
          // charge configuration Histogram--------------------------------------

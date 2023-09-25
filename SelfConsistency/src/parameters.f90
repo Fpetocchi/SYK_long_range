@@ -292,8 +292,9 @@ module parameters
       complex(8),allocatable                :: tkz_plane(:,:,:,:)               ![Norb,Norb,Nkpt,Nlayer]
       complex(8),allocatable                :: P_L(:,:,:,:)                     ![Norb,Norb,Npoints,Nspin]
       complex(8),allocatable                :: P_R(:,:,:,:)                     ![Norb,Norb,Npoints,Nspin]
-      logical                               :: status=.false.
+      logical                               :: doubled_uc=.false.
       logical                               :: fill_Gamma_A=.false.
+      logical                               :: status=.false.
    end type Heterostructures
 
 

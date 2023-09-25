@@ -21,7 +21,7 @@ subroutine interpolate2kpath_Fermionic(Sfull,Lttc,pathOUTPUT)
    type(FermionicField)                  :: Spath
    type(FermionicField)                  :: Sfermi
    type(FermionicField)                  :: Sloc
-   type(FermionicField)                  :: Gpath
+   type(FermionicField)                  :: Gpath,Gpath_auxkz
    type(FermionicField)                  :: Gfull
    type(FermionicField)                  :: Gfermi
    !
@@ -34,6 +34,12 @@ subroutine interpolate2kpath_Fermionic(Sfull,Lttc,pathOUTPUT)
    character(len=256)                    :: path
    logical                               :: Kdependence
    real                                  :: start,finish
+   !
+   !TEST>>>
+   integer                               :: Nkz,Nkz_,ikz
+   real(8)                               :: kz,kzfact,Bz_thresh
+   real(8),allocatable                   :: kptpath_auxkz(:,:)
+   !>>>TEST
    !
    !
    write(*,"(A)") new_line("A")//new_line("A")//"---- interpolate2kpath_Fermionic"
@@ -61,8 +67,8 @@ subroutine interpolate2kpath_Fermionic(Sfull,Lttc,pathOUTPUT)
    !---------------------- LDA Hamiltonian and corrections --------------------!
    !
    !non-interacting data (Bands, spectral function, Fermi-surface). This has the wrong chemical potential stored in Lttc. Kee the data stored in GWinput
-   !call interpolate2Path(Lttc,Nkpt_path_default,"Hk",pathOUTPUT=reg(pathOUTPUT),store=.false.,skipAkw=.false.)
-   !call interpolate2Plane(Lttc,Nkpt_plane_default,"Hk",pathOUTPUT=reg(pathOUTPUT),store=.false.,skipFk=.false.)
+   call interpolate2Path(Lttc,Nkpt_path_default,"Hk",pathOUTPUT=reg(pathOUTPUT),store=.false.,skipAkw=.false.)
+   call interpolate2Plane(Lttc,Nkpt_plane_default,"Hk",pathOUTPUT=reg(pathOUTPUT),store=.false.,skipFk=.false.)
    !
    !correction to LDA given by the real part of the local self-energy in iw=0.
    allocate(correction(Norb,Norb,Sfull%Nkpt));correction=czero
@@ -220,11 +226,6 @@ subroutine interpolate2kpath_Fermionic(Sfull,Lttc,pathOUTPUT)
                   By = k1*Blat(2,1) + k2*Blat(2,2) + k3*Blat(2,3)
                   Bz = k1*Blat(3,1) + k2*Blat(3,2) + k3*Blat(3,3)
                   !
-                  !if(Bx.ne.Bx_old)then
-                  !   write(unit,*)
-                  !   Bx_old = Bx
-                  !endif
-                  !
                   write(unit,"(3I10,200E20.12)") ik,ikx,iky,k1,k2,k3,Bx,By,Bz,(Zk(ik,iorb),iorb=1,Norb)
                   if(iky.eq.Nkpt_plane)write(unit,*)
                   !
@@ -265,6 +266,63 @@ subroutine interpolate2kpath_Fermionic(Sfull,Lttc,pathOUTPUT)
             !
             call AllocateFermionicField(Gpath,Norb,Nmats,Nkpt=Lttc%Nkpt_path,Nsite=Sfull%Nsite,Beta=Sfull%Beta,mu=Sfull%mu)
             call calc_Gmats(Gpath,Lttc,Smats=Sloc,along_path=.true.)
+            !
+            !TEST>>>
+            !
+            !call get_Blat(Blat)
+            !allocate(kptpath_auxkz(3,Lttc%Nkpt_path));kptpath_auxkz=0d0
+            !!
+            !Bz_thresh = 5.1
+            !Nkz = 100
+            !Nkz_ = Nkz
+            !!
+            !do ikz=1,Nkz
+            !   !
+            !   kptpath_auxkz = Lttc%kptpath(:,1:Lttc%Nkpt_path)
+            !   !
+            !   kz = (ikz-1)*1d0/Nkz - 0.5d0
+            !   kptpath_auxkz(3,:) = kptpath_auxkz(3,:) + kz
+            !   !
+            !   unit = free_unit()
+            !   open(unit,file="Ktest_"//str(ikz)//".DAT",form="formatted",status="unknown",position="rewind",action="write")
+            !   do ik=1,Lttc%Nkpt_path
+            !      !
+            !      k1 = kptpath_auxkz(1,ik)
+            !      k2 = kptpath_auxkz(2,ik)
+            !      k3 = kptpath_auxkz(3,ik)
+            !      !
+            !      Bx = k1*Blat(1,1) + k2*Blat(1,2) + k3*Blat(1,3)
+            !      By = k1*Blat(2,1) + k2*Blat(2,2) + k3*Blat(2,3)
+            !      Bz = k1*Blat(3,1) + k2*Blat(3,2) + k3*Blat(3,3)
+            !      !
+            !      write(unit,"(1I5,200E20.12)") ik,0d0,kptpath_auxkz(:,ik),Bx,By,Bz
+            !      !
+            !   enddo
+            !   close(unit)
+            !   !
+            !   kzfact = 1d0
+            !   if(abs(Bz).gt.Bz_thresh)then
+            !      kzfact = 0d0
+            !      Nkz_ = Nkz_ - 1
+            !   endif
+            !   write(*,*)ikz,"Bz",Bz,abs(Bz),kzfact,Nkz_
+            !   !
+            !   call cpu_time(start)
+            !   Lttc%Hk_path = czero
+            !   call wannierinterpolation(Lttc%Nkpt3,Lttc%kpt,kptpath_auxkz(:,1:Lttc%Nkpt_path),Lttc%Hk,Lttc%Hk_path)
+            !   call cpu_time(finish)
+            !   !write(*,"(A,F)") "     (fullBZ) --> (Kpath,kz="//str(ikz)//") cpu timing:", finish-start
+            !   !
+            !   call AllocateFermionicField(Gpath_auxkz,Norb,Nmats,Nkpt=Lttc%Nkpt_path,Nsite=Sfull%Nsite,Beta=Sfull%Beta,mu=Sfull%mu)
+            !   call calc_Gmats(Gpath_auxkz,Lttc,Smats=Sloc,along_path=.true.)
+            !   !
+            !   Gpath%wks = Gpath%wks + kzfact*Gpath_auxkz%wks
+            !   !
+            !   call DeallocateFermionicField(Gpath_auxkz)
+            !   !
+            !enddo
+            !Gpath%wks = Gpath%wks/Nkz_
+            !>>>TEST
             !
             call DeallocateFermionicField(Sloc)
             !
@@ -337,13 +395,15 @@ contains
       real(8),allocatable                   :: wreal(:)
       complex(8),allocatable                :: Gpade(:,:)
       !
-      logical                               :: doPade=.false.
+      logical                               :: printGmats,doPade=.false.
       !
       !
       if(verbose) write(*,"(A)") new_line("A")//new_line("A")//"---- dump_MaxEnt_on_G_K"
       !
       !
       NtauFT = Ntau_MaxEnt
+      !
+      printGmats = Nmats_MaxEnt.gt.0
       !
       !
       if(.not.Gmats_in%status) stop "dump_MaxEnt_on_G_K: Gmats_in not properly allocated."
@@ -483,13 +543,15 @@ contains
             close(unit)
             !
             !print all diagonal elements on imaginary frequency axis
-            path = reg(pathOUTPUT)//"MaxEnt_Gk_"//reg(mode)//"_s"//str(ispin)//"/Gk_w_k"//str(ik)//".DAT"
-            unit = free_unit()
-            open(unit,file=reg(path),form="formatted",status="unknown",position="rewind",action="write")
-            do iw=1,Nmats_MaxEnt
-                write(unit,"(200E20.12)") wmats(iw),(Gmats_diag(iorb,iw,ik,ispin),iorb=1,Norb)
-            enddo
-            close(unit)
+            if(printGmats)then
+               path = reg(pathOUTPUT)//"MaxEnt_Gk_"//reg(mode)//"_s"//str(ispin)//"/Gk_w_k"//str(ik)//".DAT"
+               unit = free_unit()
+               open(unit,file=reg(path),form="formatted",status="unknown",position="rewind",action="write")
+               do iw=1,Nmats_MaxEnt
+                   write(unit,"(200E20.12)") wmats(iw),(Gmats_diag(iorb,iw,ik,ispin),iorb=1,Norb)
+               enddo
+               close(unit)
+            endif
             !
             !print all diagonal elements on real frequency axis
             if((PadeWlimit.gt.0d0).and.doPade)then
@@ -598,11 +660,6 @@ contains
                Bx = k1*Blat(1,1) + k2*Blat(1,2) + k3*Blat(1,3) ; if(ik.eq.1) Bx_old = Bx
                By = k1*Blat(2,1) + k2*Blat(2,2) + k3*Blat(2,3)
                Bz = k1*Blat(3,1) + k2*Blat(3,2) + k3*Blat(3,3)
-               !
-               !if(Bx.ne.Bx_old)then
-               !   write(unit,*)
-               !   Bx_old = Bx
-               !endif
                !
                write(unit,"(3I10,200E20.12)") ik,ikx,iky,k1,k2,k3,Bx,By,Bz,(Ak(ik,iorb),iorb=1,Norb)
                if(iky.eq.Nkpt_plane)write(unit,*)

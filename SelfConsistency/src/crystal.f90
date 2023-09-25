@@ -42,6 +42,12 @@ module crystal
       module procedure wannier_K2R_NN_D4
    end interface wannier_K2R_NN
 
+   interface calc_Kplane
+      module procedure calc_Kplane_std
+      !module procedure calc_Kplane_GMkz
+   end interface calc_Kplane
+
+
    !---------------------------------------------------------------------------!
    !PURPOSE: Module custom types
    !---------------------------------------------------------------------------!
@@ -1068,7 +1074,11 @@ contains
          !
          if(Hetero%Explicit(1).ne.1)then
             !
-            ilayer = 2
+            if(Hetero%doubled_uc)then
+               ilayer = 2
+            else
+               ilayer = 1
+            endif
             na = 1 + (ilayer-1)*Norb*Nsite_bulk
             nb = ilayer*Norb*Nsite_bulk
             !
@@ -1079,7 +1089,11 @@ contains
          endif
          if(Hetero%Explicit(2).ne.Hetero%Nslab)then
             !
-            ilayer = Hetero%Nlayer - 2
+            if(Hetero%doubled_uc)then
+               ilayer = Hetero%Nlayer - 2
+            else
+               ilayer = Hetero%Nlayer - 1
+            endif
             na = 1 + (ilayer-1)*Norb*Nsite_bulk
             nb = ilayer*Norb*Nsite_bulk
             !
@@ -3408,25 +3422,25 @@ contains
    !---------------------------------------------------------------------------!
    !PURPOSE: generates a uniform K mesh in the kx,ky plane
    !---------------------------------------------------------------------------!
-   subroutine calc_Kplane(kpt_plane,Nkpt_Kside)
+   subroutine calc_Kplane_std(kpt_plane,Nkpt_Kside)
       !
       use utils_misc
+      use input_vars, only : KplaneMax
       implicit none
       !
       real(8),allocatable,intent(out)       :: kpt_plane(:,:)
       integer,intent(in)                    :: Nkpt_Kside
       !
       integer                               :: ik1,ik2,ik
-      real(8)                               :: Kmax=1d0
       real(8)                               :: k1,k2,k3,dK
       !
       !
-      if(verbose)write(*,"(A)") "---- calc_Kplane"
+      if(verbose)write(*,"(A)") "---- calc_Kplane_std"
       !
       !
-      if(.not.Lat_stored)stop "calc_Kplane: lattice vectors are not stored."
+      if(.not.Lat_stored)stop "calc_Kplane_std: lattice vectors are not stored."
       !
-      dk=Kmax/(Nkpt_Kside-1)
+      dk=KplaneMax/(Nkpt_Kside-1)
       if(allocated(kpt_plane))deallocate(kpt_plane)
       allocate(kpt_plane(3,Nkpt_Kside**2))
       !
@@ -3439,8 +3453,8 @@ contains
                !
                ik=ik+1
                !
-               k1 = (ik1-1)*dk - Kmax/2d0
-               k2 = (ik2-1)*dk - Kmax/2d0
+               k1 = (ik1-1)*dk - KplaneMax/2d0
+               k2 = (ik2-1)*dk - KplaneMax/2d0
                !
                kpt_plane(:,ik) = [k1,k2,0d0]
                !
@@ -3449,7 +3463,7 @@ contains
          !
       else
          !
-         if(Blat(3,3).eq.0d0) stop "calc_Kplane: divergence in k3 will occur."
+         if(Blat(3,3).eq.0d0) stop "calc_Kplane_std: divergence in k3 will occur."
          ! Generic B1,B2,B3
          ik=0
          do ik1=1,Nkpt_Kside
@@ -3457,8 +3471,8 @@ contains
                !
                ik=ik+1
                !
-               k1 = (ik1-1)*dk - Kmax/2d0
-               k2 = (ik2-1)*dk - Kmax/2d0
+               k1 = (ik1-1)*dk - KplaneMax/2d0
+               k2 = (ik2-1)*dk - KplaneMax/2d0
                k3 = -(k1*Blat(3,1)+k2*Blat(3,2)) / Blat(3,3) ! this is to ensure Bz=0
                !
                kpt_plane(:,ik) = [k1,k2,k3]
@@ -3468,27 +3482,27 @@ contains
          !
       endif
       !
-   end subroutine calc_Kplane
+   end subroutine calc_Kplane_std
    !
-   subroutine calc_Kplane_GM(kpt_plane,Nkpt_Kside)
+   subroutine calc_Kplane_GMkz(kpt_plane,Nkpt_Kside)
       !
       use utils_misc
+      use input_vars, only : KplaneMax
       implicit none
       !
       real(8),allocatable,intent(out)       :: kpt_plane(:,:)
       integer,intent(in)                    :: Nkpt_Kside
       !
       integer                               :: ik1,ik2,ik
-      real(8)                               :: Kmax=2d0
       real(8)                               :: k1,k2,k3,dK
       !
       !
-      if(verbose)write(*,"(A)") "---- calc_Kplane"
+      if(verbose)write(*,"(A)") "---- calc_Kplane_GMkz"
       !
       !
-      if(.not.Lat_stored)stop "calc_Kplane: lattice vectors are not stored."
+      if(.not.Lat_stored)stop "calc_Kplane_GMkz: lattice vectors are not stored."
       !
-      dk=Kmax/(Nkpt_Kside-1)
+      dk=KplaneMax/(Nkpt_Kside-1)
       if(allocated(kpt_plane))deallocate(kpt_plane)
       allocate(kpt_plane(3,Nkpt_Kside**2))
       !
@@ -3501,8 +3515,8 @@ contains
                !
                ik=ik+1
                !
-               k1 = (ik1-1)*dk - Kmax/2d0
-               k2 = (ik2-1)*dk - Kmax/2d0
+               k1 = (ik1-1)*dk - KplaneMax/2d0
+               k2 = (ik2-1)*dk - KplaneMax/2d0
                !
                kpt_plane(:,ik) = [k1,k2,0d0]
                !
@@ -3511,7 +3525,7 @@ contains
          !
       else
          !
-         if(Blat(3,3).eq.0d0) stop "calc_Kplane: divergence in k3 will occur."
+         if(Blat(3,3).eq.0d0) stop "calc_Kplane_GMkz: divergence in k3 will occur."
          ! Generic B1,B2,B3
          ik=0
          do ik1=1,Nkpt_Kside
@@ -3520,8 +3534,8 @@ contains
                ik=ik+1
                !
                k1 = 0d0
-               k2 = (ik2-1)*dk - Kmax/2d0
-               k3 = (ik1-1)*dk - Kmax/2d0  - k2*Blat(3,2)/Blat(3,3) ! this is to ensure k3 corrects the z component of B2
+               k2 = (ik2-1)*dk - KplaneMax/2d0
+               k3 = (ik1-1)*dk - KplaneMax/2d0  - k2*Blat(3,2)/Blat(3,3) ! this is to ensure k3 corrects the z component of B2
                !
                kpt_plane(:,ik) = [k1,k2,k3]
                !
@@ -3530,7 +3544,7 @@ contains
          !
       endif
       !
-   end subroutine calc_Kplane_GM
+   end subroutine calc_Kplane_GMkz
 
 
    !---------------------------------------------------------------------------!
@@ -4243,23 +4257,7 @@ contains
                write(*,"(2(A,2I4))") "     Right potential (Kplane) orbital lattice indexes: ",Rn(1),Rn(2)," thickness: ",NbulkR
             endif
             !
-         else
-            !
-            if(Hetero%status.and.Lttc%planeStored)then
-               !
-               if(Ndim.ne.Lttc%Norb)stop "interpolate2Plane: spectral function calculation with heterostructures is allowed only for fermionic objects."
-               !
-               !Interpolate longitudinal tz along the plane
-               if(allocated(Hetero%tkz_Plane))deallocate(Hetero%tkz_Plane)
-               allocate(Hetero%tkz_Plane(Hetero%Norb,Hetero%Norb,Lttc%Nkpt_plane,Hetero%tzIndex(1):Hetero%tzIndex(2)));Hetero%tkz_Plane=czero
-               do ilayer = Hetero%tzIndex(1),Hetero%tzIndex(2)
-                  call wannierinterpolation(Lttc%Nkpt3,Lttc%kpt,Lttc%kptPlane,Hetero%tkz(:,:,:,ilayer),Hetero%tkz_Plane(:,:,:,ilayer))
-               enddo
-               !
-            endif
-            !
          endif
-
          !
          !Compute non-interacting Fermi surface
          allocate(Fk(Ndim,Ndim,Nkpt_plane_tot));Fk=0d0
@@ -4348,6 +4346,21 @@ contains
                !
             enddo
             deallocate(Fk_kz)
+            !
+         endif
+         !
+      else
+         !
+         if(Hetero%status.and.Lttc%planeStored)then
+            !
+            if(Ndim.ne.Lttc%Norb)stop "interpolate2Plane: spectral function calculation with heterostructures is allowed only for fermionic objects."
+            !
+            !Interpolate longitudinal tz along the plane
+            if(allocated(Hetero%tkz_Plane))deallocate(Hetero%tkz_Plane)
+            allocate(Hetero%tkz_Plane(Hetero%Norb,Hetero%Norb,Lttc%Nkpt_plane,Hetero%tzIndex(1):Hetero%tzIndex(2)));Hetero%tkz_Plane=czero
+            do ilayer = Hetero%tzIndex(1),Hetero%tzIndex(2)
+               call wannierinterpolation(Lttc%Nkpt3,Lttc%kpt,Lttc%kptPlane,Hetero%tkz(:,:,:,ilayer),Hetero%tkz_Plane(:,:,:,ilayer))
+            enddo
             !
          endif
          !
@@ -4934,12 +4947,17 @@ contains
             Nbulk = Hetero%Explicit(1)-1
             !
             !Connection-to and self-energy-of the first layer explicitly solved
-            ta = tz(:,:,:,Hetero%Explicit(1)-1)
+            ta = tz(:,:,:,Hetero%tzIndex(1))
             if(present(Smats)) Sa = Smats(ndx(1):ndx(2),ndx(1):ndx(2),:,:,:)
             !
             !Connection-to and self-energy-of the second layer explicitly solved
-            tb = tz(:,:,:,Hetero%Explicit(1))
-            if(present(Smats)) Sb = Smats(ndx(1)+Hetero%Norb:ndx(2)+Hetero%Norb,ndx(1)+Hetero%Norb:ndx(2)+Hetero%Norb,:,:,:)
+            if(Hetero%doubled_uc)then
+               tb = tz(:,:,:,Hetero%tzIndex(1)+1)
+               if(present(Smats)) Sb = Smats(ndx(1)+Hetero%Norb:ndx(2)+Hetero%Norb,ndx(1)+Hetero%Norb:ndx(2)+Hetero%Norb,:,:,:)
+            else
+               tb = ta
+               if(present(Smats)) Sb = Sa
+            endif
             !
          case("right")
             !
@@ -4949,16 +4967,21 @@ contains
             Nbulk = Hetero%Nslab-Hetero%Explicit(2)
             !
             !Connection-to and self-energy-of the last layer explicitly solved
-            ta = tz(:,:,:,Hetero%Explicit(2))
+            ta = tz(:,:,:,Hetero%tzIndex(2))
             if(present(Smats)) Sa = Smats(ndx(1):ndx(2),ndx(1):ndx(2),:,:,:)
             !
             !Connection-to and self-energy-of the semi-last layer explicitly solved
-            tb = tz(:,:,:,Hetero%Explicit(2)-1)
-            if(present(Smats)) Sb = Smats(ndx(1)-Hetero%Norb:ndx(2)-Hetero%Norb,ndx(1)-Hetero%Norb:ndx(2)-Hetero%Norb,:,:,:)
+            if(Hetero%doubled_uc)then
+               tb = tz(:,:,:,Hetero%tzIndex(2)-1)
+               if(present(Smats)) Sb = Smats(ndx(1)-Hetero%Norb:ndx(2)-Hetero%Norb,ndx(1)-Hetero%Norb:ndx(2)-Hetero%Norb,:,:,:)
+            else
+               tb = ta
+               if(present(Smats)) Sb = Sa
+            endif
             !
       end select
       !
-      if(mod(Nbulk,2).ne.0)Nbulk=Nbulk+1
+      if((Hetero%doubled_uc).and.(mod(Nbulk,2).ne.0))Nbulk=Nbulk+1
       !
       !Diagonal arrays of the first/last layer explicitly solved
       allocate(zeta_(Hetero%Norb,Hetero%Norb,Nmats));  zeta_ = zeta(ndx(1):ndx(2),ndx(1):ndx(2),:)

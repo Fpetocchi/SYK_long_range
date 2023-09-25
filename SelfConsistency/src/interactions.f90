@@ -17,6 +17,11 @@ module interactions
       module procedure read_U_spex_Uloc0                                        ![Matrix,pathOUTPUT(optional to change output path)]
    end interface read_U_spex
 
+   interface read_U_respack
+      module procedure read_U_respack_full                                      ![BosonicField,LocalOnly,save2readable,pathOUTPUT(optional to change output path),doAC(optional to override AC)]
+      module procedure read_U_respack_Uloc0                                     ![Matrix,pathOUTPUT(optional to change output path)]
+   end interface read_U_respack
+
    interface read_U_vasp
       module procedure read_U_vasp_full                                         ![BosonicField,LocalOnly,save2readable,pathOUTPUT(optional to change output path),doAC(optional to override AC)]
       module procedure read_U_vasp_Uloc0                                        ![Matrix,pathOUTPUT(optional to change output path)]
@@ -56,6 +61,7 @@ module interactions
    public :: calc_W_edmft
    public :: calc_chi
    public :: read_U_spex
+   public :: read_U_respack
    public :: read_U_vasp
    public :: read_U
    public :: build_Umat
@@ -173,7 +179,7 @@ contains
             Wmats%screened(:,:,iw,iq) = matmul(invW,Umats%screened(:,:,iwU,iq))
             !
             !Hermiticity check - print if error is bigger than 1e-3
-            if(symQ_) call check_Hermiticity(Wmats%screened(:,:,iw,iq),1e7*eps,enforce=.false.,hardstop=.false.,name="Wlat_w"//str(iw)//"_q"//str(iq),verb=.true.)
+            if(symQ_) call check_Hermiticity(Wmats%screened(:,:,iw,iq),1e7*eps,enforce=.true.,hardstop=.false.,name="Wlat_w"//str(iw)//"_q"//str(iq),verb=.true.)
             !
             !average the dielectric function around the Gamma point
             if(smear)then
@@ -533,7 +539,7 @@ contains
    !---------------------------------------------------------------------------!
    !PURPOSE: Read momentum and frequency dependent interaction from SPEX files.
    !---------------------------------------------------------------------------!
-   subroutine read_U_spex_full(Umats,save2readable,kpt,pathOUTPUT,doAC)
+   subroutine read_U_spex_full(Umats,save2readable,kpt,pathOUTPUT,doAC,HartreeData,correctU0)
       !
       use parameters
       use file_io
@@ -549,14 +555,18 @@ contains
       real(8),intent(in),optional           :: kpt(:,:)
       character(len=*),intent(in),optional  :: pathOUTPUT
       logical,intent(in),optional           :: doAC
+      logical,intent(in),optional           :: HartreeData
+      logical,intent(in),optional           :: correctU0
       !
-      logical                               :: LocalOnly,filexists,ACdone,doAC_,warn,smear
+      logical                               :: LocalOnly,filexists,ACdone,doAC_
+      logical                               :: warn,smear,enforceAll,HartreeData_,correctU0_
       character(len=256)                    :: file_spex,path,pathOUTPUT_
       integer                               :: unit,Nkpt
       integer                               :: iq,iw,iqread,Nbp_spex
       integer                               :: idum,Nspin_spex,Norb_spex,Nfreq
       integer                               :: ib1,ib2,iw1,iw2
       integer                               :: iprint,Nprint
+      real(8)                               :: UnitConversion
       real(8),allocatable                   :: wread(:),wmats(:)
       complex(8),allocatable                :: D1(:,:),D2(:,:),D3(:,:)
       complex(8),allocatable                :: Utmp(:,:),UR(:,:,:),URnn(:,:)
@@ -566,10 +576,20 @@ contains
       !
       !
       write(*,"(A)") new_line("A")//new_line("A")//"---- read_U_spex_full"
+      !
+      !
       pathOUTPUT_ = pathINPUT
       if(present(pathOUTPUT)) pathOUTPUT_ = pathOUTPUT
       LocalOnly = .not.present(kpt)
-      smear = HandleGammaPoint.lt.0
+      smear = .false.
+      !
+      HartreeData_=.true.
+      if(present(HartreeData)) HartreeData_ = HartreeData
+      UnitConversion = 1d0
+      if(HartreeData_) UnitConversion = H2eV
+      !
+      correctU0_=.false.
+      if(present(correctU0)) correctU0_ = correctU0
       !
       ! Check on the input Boson
       if(.not.Umats%status) stop "read_U_spex_full: BosonicField not properly initialized."
@@ -581,12 +601,10 @@ contains
       allocate(wmats(Umats%Npoints));wmats=0d0
       wmats = BosonicFreqMesh(Umats%Beta,Umats%Npoints)
       !
-      !
       ! for memory demanding calculations the execute_command_line does not work
       ! so I have to create the VW_imag directory before (but I'm keeping it here).
       ! In the end instead of checking for the existence of the VW_imag folder
       ! I will check for the first Q point file within the folder.
-      !
       !
       ! Check if the data on the Matsubara axis are present
       path = reg(pathOUTPUT_)//"VW_imag"
@@ -601,7 +619,7 @@ contains
          call createDir(reg(trim(pathOUTPUT_)//"VW_imag"),verb=verbose)
          if(save2readable)then
             call createDir(reg(trim(pathOUTPUT_)//"VW_imag_readable"),verb=verbose)
-            call createDir(reg(trim(pathOUTPUT_)//"VW_real_readable"),verb=verbose)
+            call createDir(reg(trim(pathINPUT)//"VW_real_readable"),verb=verbose)
          endif
       endif
       !
@@ -641,7 +659,7 @@ contains
          !
          ! Look for the Number of SPEX files. Which are supposed to be ordered.
          Nkpt = 0
-         do iq=1,200000
+         do iq=1,9999
             file_spex = reg(pathINPUT)//"VW_real/VW.Q"//str(iq,4)//".DAT"
             call inquireFile(reg(file_spex),filexists,hardstop=.false.,verb=verbose)
             if(.not.filexists) exit
@@ -670,7 +688,7 @@ contains
             if (iq.ne.iqread) stop "read_U_spex_full: iqread.ne.iq"
             !
             read(unit) wread
-            wread = H2eV*wread
+            wread = UnitConversion*wread
             if (dabs(wread(1)).gt.eps) stop "read_U_spex_full: wread(1) not zero"
             !
             do iw=0,Nfreq
@@ -678,12 +696,12 @@ contains
                if(iw.eq.0) then
                   !V(:,:,iq)=vwtmp(:,:)/Nkpt/Nkpt
                   !bare values on Matsubara are the same so no need to use bare attributes of Ureal
-                  Umats%bare_local = Umats%bare_local + H2eV*Utmp/(Nkpt**3)
-                  if(.not.LocalOnly) Umats%bare(:,:,iq) = H2eV*Utmp/(Nkpt**2)
+                  Umats%bare_local = Umats%bare_local + UnitConversion*Utmp/(Nkpt**3)
+                  if(.not.LocalOnly) Umats%bare(:,:,iq) = UnitConversion*Utmp/(Nkpt**2)
                else
                   !Ur(:,:,iw,iq)=vwtmp(:,:)/Nkpt/Nkpt
-                  Ureal%screened_local(:,:,iw) = Ureal%screened_local(:,:,iw) + H2eV*Utmp/(Nkpt**3)
-                  if(.not.LocalOnly) Ureal%screened(:,:,iw,iq) = H2eV*Utmp/(Nkpt**2)
+                  Ureal%screened_local(:,:,iw) = Ureal%screened_local(:,:,iw) + UnitConversion*Utmp/(Nkpt**3)
+                  if(.not.LocalOnly) Ureal%screened(:,:,iw,iq) = UnitConversion*Utmp/(Nkpt**2)
                endif
             enddo
             !
@@ -694,7 +712,7 @@ contains
          ! Print out the transformed Ucrpa - local
          write(*,"(A)")
          call dump_BosonicField(Ureal,reg(pathOUTPUT_),"Uloc_real.DAT",wread)
-         if((.not.LocalOnly).and.save2readable) call dump_BosonicField(Ureal,reg(pathOUTPUT_)//"VW_real_readable/",.not.save2readable)
+         if((.not.LocalOnly).and.save2readable) call dump_BosonicField(Ureal,reg(pathINPUT)//"VW_real_readable/",.not.save2readable,axis=wread)
          !
          !
          if(LocalOnly)then
@@ -738,6 +756,12 @@ contains
             call cpu_time(finish)
             deallocate(D1,D2,D3)
             !
+            if(correctU0_)then
+               do iw1=Umats%Npoints,1,-1
+                  Umats%screened_local(:,:,iw1) = Umats%screened_local(:,:,iw1) - Umats%screened_local(:,:,1) + Ureal%screened_local(:,:,1)
+               enddo
+            endif
+            !
             ! Remove unwanted components
             if(.not.UfullStructure)then
                do ib1=1,Nbp_spex
@@ -762,7 +786,7 @@ contains
             ! Analytical continuation of all the K-points to imag axis using spectral rep
             call cpu_time(start)
             !$OMP PARALLEL DEFAULT(NONE),&
-            !$OMP SHARED(Nbp_spex,wmats,wread,Nfreq,Ureal,Umats,verbose),&
+            !$OMP SHARED(Nbp_spex,wmats,wread,Nfreq,Ureal,Umats,correctU0_,verbose),&
             !$OMP PRIVATE(iq,ib1,ib2,iw1,iw2,D1,D2,D3,Utmp)
             !$OMP DO
             do iq=1,Umats%Nkpt
@@ -793,6 +817,12 @@ contains
                   !
                enddo !iw1
                !
+               if(correctU0_)then
+                  do iw1=Umats%Npoints,1,-1
+                     Umats%screened(:,:,iw1,iq) = Umats%screened(:,:,iw1,iq) - Umats%screened(:,:,1,iq) + Ureal%screened(:,:,1,iq)
+                  enddo
+               endif
+               !
                if(verbose)print *, "     UcRPA(q,iw) - done iq: ",iq
             enddo !iq
             !$OMP END DO
@@ -821,20 +851,22 @@ contains
          write(*,"(A)")
          if(.not.LocalOnly)then
             !
+            enforceAll=.true.
             write(*,"(A)") "     Symmetry check on bare Ucrpa - should be Hermitian at all iq."
             do iq=1,Umats%Nkpt
-               call check_Hermiticity(Umats%bare(:,:,iq),eps,enforce=.true.,hardstop=.false.,name="Urpa_bare_q"//str(iq))
+               call check_Hermiticity(Umats%bare(:,:,iq),eps,enforce=enforceAll,hardstop=.false.,name="Ucrpa_bare_q"//str(iq))
             enddo
             !
             write(*,"(A)") "     Symmetry check on screened Ucrpa - should be Hermitian at all iw and all iq."
             do iw=1,Umats%Npoints
                do iq=1,Umats%Nkpt
-                  call check_Hermiticity(Umats%screened(:,:,iw,iq),eps,enforce=.true.,hardstop=.false.,name="Urpa_screened_w"//str(iw)//"_q"//str(iq))
+                  call check_Hermiticity(Umats%screened(:,:,iw,iq),eps,enforce=enforceAll,hardstop=.false.,name="Ucrpa_screened_w"//str(iw)//"_q"//str(iq))
                enddo
             enddo
             !
             !Removal of the divergence at Gamma
             if(smear)then
+               write(*,"(A)") "     Smearing UcRPA."
                if(.not.small_ik_stored)call fill_smallk(kpt)
                call correct_Gamma(Umats,abs(HandleGammaPoint))
             endif
@@ -848,11 +880,11 @@ contains
          call check_Hermiticity(Umats%screened_local(:,:,1),eps,enforce=.false.,hardstop=.false.,name="Uinst")
          !
          write(*,"(A)") "     Symmetry check on local bare Ucrpa - should be Hermitian."
-         call check_Hermiticity(Umats%bare_local,eps,enforce=.false.,hardstop=.false.,name="Urpa_bare_local")
+         call check_Hermiticity(Umats%bare_local,eps,enforce=.false.,hardstop=.false.,name="Ucrpa_bare_local")
          !
          write(*,"(A)") "     Symmetry check on local screened Ucrpa - should be Hermitian at all iw."
          do iw=1,Umats%Npoints
-            call check_Hermiticity(Umats%screened_local(:,:,iw),eps,enforce=.false.,hardstop=.false.,name="Urpa_screened_local_w"//str(iw))
+            call check_Hermiticity(Umats%screened_local(:,:,iw),eps,enforce=.false.,hardstop=.false.,name="Ucrpa_screened_local_w"//str(iw))
          enddo
          !
          !Remove local components under threshold and check for inverted Im/Re symmetry
@@ -922,7 +954,7 @@ contains
          !
          ! Look for the Number of SPEX files. Which are supposed to be ordered.
          Nkpt = 0
-         do iq=1,200000
+         do iq=1,9999
             file_spex = reg(pathOUTPUT_)//"VW_imag/VW.Q"//str(iq,4)//".DAT"
             call inquireFile(reg(file_spex),filexists,hardstop=.false.,verb=verbose)
             if(.not.filexists) exit
@@ -944,7 +976,7 @@ contains
             if (iq.ne.iqread) stop "read_U_spex_full: iqread.ne.iq"
             !
             read(unit) wread
-            wread = wread !H2eV*
+            wread = wread
             do iw=1,Umats%Npoints
                if(dabs(wread(iw)-wmats(iw)).gt.eps) Then
                   write(*,"(F)")dabs(wread(iw)-wmats(iw)),iw,iq
@@ -956,11 +988,11 @@ contains
                read(unit) Utmp
                if(iw.le.Umats%Npoints)then
                   if(iw.eq.0) then
-                     Umats%bare_local = Umats%bare_local +Utmp/(Nkpt**3) ! H2eV*
-                     if(.not.LocalOnly) Umats%bare(:,:,iq) = Utmp/(Nkpt**2) !H2eV*
+                     Umats%bare_local = Umats%bare_local +Utmp/(Nkpt**3)
+                     if(.not.LocalOnly) Umats%bare(:,:,iq) = Utmp/(Nkpt**2)
                   else
-                     Umats%screened_local(:,:,iw) = Umats%screened_local(:,:,iw) + Utmp/(Nkpt**3) !H2eV*
-                     if(.not.LocalOnly) Umats%screened(:,:,iw,iq) = Utmp/(Nkpt**2) !H2eV*
+                     Umats%screened_local(:,:,iw) = Umats%screened_local(:,:,iw) + Utmp/(Nkpt**3)
+                     if(.not.LocalOnly) Umats%screened(:,:,iw,iq) = Utmp/(Nkpt**2)
                   endif
                endif
             enddo
@@ -994,7 +1026,7 @@ contains
       !
    end subroutine read_U_spex_full
    !
-   subroutine read_U_spex_Uloc0(Umat,pathOUTPUT)
+   subroutine read_U_spex_Uloc0(Umat,pathOUTPUT,HartreeData)
       !
       use parameters
       use file_io
@@ -1005,9 +1037,11 @@ contains
       !
       complex(8),allocatable,intent(inout)  :: Umat(:,:)
       character(len=*),intent(in),optional  :: pathOUTPUT
+      logical,intent(in),optional           :: HartreeData
       !
-      logical                               :: Umatsxists,Urealxists,SPEXxists
+      logical                               :: Umatsxists,Urealxists,SPEXxists,HartreeData_
       character(len=256)                    :: file_spex,path,pathOUTPUT_
+      real(8)                               :: UnitConversion
       integer                               :: unit
       integer                               :: iq,iw,Nbp_spex,Nkpt
       integer                               :: iqread,Nspin_spex,Norb_spex,Nfreq
@@ -1016,9 +1050,15 @@ contains
       !
       !
       write(*,"(A)") new_line("A")//new_line("A")//"---- read_U_spex_Uloc0"
+      !
+      !
       pathOUTPUT_ = pathINPUT
       if(present(pathOUTPUT)) pathOUTPUT_ = pathOUTPUT
       !
+      HartreeData_=.true.
+      if(present(HartreeData)) HartreeData_ = HartreeData
+      UnitConversion = 1d0
+      if(HartreeData_) UnitConversion = H2eV
       !
       ! Look for Uloc_mats.DAT and Uloc_real.DAT
       path=reg(pathINPUT)//"Uloc_mats.DAT"
@@ -1050,7 +1090,7 @@ contains
          !
          Nkpt=0
          path = reg(pathINPUT)//"VW_real/"
-         do iq=1,200000
+         do iq=1,9999
             !
             file_spex = reg(path)//"VW.Q"//str(iq,4)//".DAT"        !write(fn,"(a,a,i4.4,a)") reg(path),"VW_real/VW.Q",iq,".DAT"
             call inquireFile(reg(file_spex),SPEXxists,hardstop=.false.,verb=verbose)
@@ -1073,7 +1113,7 @@ contains
             do iw=0,1
                read(unit) Utmp
                if(iw.eq.1) then
-                  Umat = Umat + H2eV*Utmp
+                  Umat = Umat + UnitConversion*Utmp
                endif
             enddo
             !
@@ -1093,7 +1133,536 @@ contains
 
 
    !---------------------------------------------------------------------------!
-   !PURPOSE: Create momentum dependent interaction from VASP files.
+   !PURPOSE: Read space and real frequency dependent fully screened interaction
+   !         from custom respack files, un-screen with GG
+   !---------------------------------------------------------------------------!
+   subroutine read_U_respack_full(Umats,LocalOnly,Lttc,pathOUTPUT)
+      !
+      use parameters
+      use file_io
+      use utils_misc
+      use utils_fields
+      use crystal
+      use linalg, only : dag
+      use input_vars, only : pathINPUT, U_AC, RespackRthresh
+      use input_vars, only : Nkpt_path, structure
+      implicit none
+      !
+      type(BosonicField),intent(inout)      :: Umats
+      logical,intent(in)                    :: LocalOnly
+      type(Lattice),intent(inout)           :: Lttc
+      character(len=*),intent(in),optional  :: pathOUTPUT
+      !
+      logical                               :: filexists,exitRloop,FTdone
+      character(len=256)                    :: file_respack,pathOUTPUT_
+      integer                               :: unit,NRW,NRJ
+      integer                               :: iR,iw,iRread,iq
+      integer                               :: Nspin_respack,Norb_respack,Nfreq
+      integer                               :: ib1,ib2,Nbp,iorb,jorb,Norb
+      integer                               :: NwigMat,iwigMat,iwig,iwig_
+      integer                               :: nx,ny,nz,Nvec(3)
+      integer,allocatable                   :: wigdone(:)
+      real(8),allocatable                   :: wread(:)
+      complex(8),allocatable                :: Rmat(:,:),Vr(:,:,:),Ur(:,:,:,:)
+      type(BosonicField)                    :: Ureal
+      !
+      !
+      write(*,"(A)") new_line("A")//new_line("A")//"---- read_U_respack_full"
+      pathOUTPUT_ = pathINPUT
+      if(present(pathOUTPUT)) pathOUTPUT_ = pathOUTPUT
+      !
+      ! Check on the input Boson
+      if(.not.Umats%status) stop "read_U_respack_full: BosonicField not properly initialized."
+      if((.not.LocalOnly).and.(.not.allocated(Umats%bare))) stop "read_U_respack_full: Requested k-dependence but bare non-local attribute not allocated."
+      if((.not.LocalOnly).and.(.not.allocated(Umats%screened))) stop "read_U_respack_full: Requested k-dependence but screened non-local attribute not allocated."
+      if(LocalOnly.and.allocated(Umats%bare)) stop "read_U_respack_full: Bare K-dependent attributes is present but not used."
+      if(LocalOnly.and.allocated(Umats%screened)) stop "read_U_respack_full: Screened K-dependent attributes is present but not used."
+      if(.not.Lttc%status) stop "read_U_respack_full: Lattice not properly initialized."
+      if(Umats%Nbp.ne.(Lttc%Norb**2)) stop "read_U_respack_full: Umats has different orbital dimension with respect to Lttc."
+      !
+      Norb = Lttc%Norb
+      Nbp = Umats%Nbp
+      !
+      call inquireFile(reg(pathINPUT)//"VW_real/VW.Q0001.DAT",FTdone,hardstop=.false.,verb=verbose)
+      if(.not.FTdone)then
+         !
+         !recover the vectors in real space
+         if(.not.Wig_stored)call calc_wignerseiz(Lttc%Nkpt3)
+         !
+         ! Look for the Number of respack files. Which are supposed to be ordered.
+         NRW = 0
+         do iR=1,9999
+            file_respack = reg(pathINPUT)//"Respack/dir-intW_R/VW.R."//str(iR,4)
+            call inquireFile(reg(file_respack),filexists,hardstop=.false.,verb=verbose)
+            if(.not.filexists) cycle
+            NRW = NRW + 1
+         enddo
+         if(NRW.eq.0) stop "read_U_respack_full: no dir-intW_R/VW.R* file found."
+         write(*,"(A,I)") "     The number of RESPACK files (NRW) in dir-intW_R is: ",NRW
+         !
+         NRJ = 0
+         do iR=1,9999
+            file_respack = reg(pathINPUT)//"Respack/dir-intJ_R/XJ.R."//str(iR,4)
+            call inquireFile(reg(file_respack),filexists,hardstop=.false.,verb=verbose)
+            if(.not.filexists) cycle
+            NRJ = NRJ + 1
+         enddo
+         write(*,"(A,I)") "     The number of RESPACK files (NRJ) in dir-intJ_R is: ",NRJ
+         !
+         !
+         NwigMat = Nwig
+         if(LocalOnly) NwigMat = 1
+         !
+         ! Read respack files to product basis form
+         allocate(Rmat(Norb,Norb));Rmat=czero
+         allocate(Vr(Nbp,Nbp,NwigMat));Vr=czero
+         !
+         ! Read density-density interaction
+         exitRloop=.false.
+         intWRloop: do iR=1,NRW
+            !
+            ! File containing density-density components
+            file_respack = reg(pathINPUT)//"Respack/dir-intW_R/VW.R."//str(iR,4)
+            call inquireFile(reg(file_respack),filexists,hardstop=.false.,verb=verbose)
+            if(.not.filexists) cycle intWRloop
+            unit = free_unit()
+            open(unit,file=reg(file_respack),form="unformatted",action="read")
+            !
+            ! Get wigner-seitz vector
+            read(unit) nx,ny,nz
+            iwig = find_vec([nx,ny,nz],Nvecwig,hardstop=.false.)
+            !
+            ! Allocate real-frequency dependent arrays
+            read(unit) iRread,Nspin_respack,Norb_respack,Nfreq
+            if(iR.ne.iRread) stop "read_U_respack_full: dir-intW_R, iR.ne.iRread"
+            if(Norb.ne.Norb_respack) stop "read_U_respack_full: dir-intW_R, Norb.ne.Norb_respack"
+            if(iR.eq.1)then
+               allocate(Ur(Nbp,Nbp,Nfreq,NwigMat));Ur=czero
+               allocate(wread(Nfreq));wread=0d0
+            endif
+            read(unit) wread
+            !
+            ! Cycle conditions
+            iwigMat = iwig
+            if(iwig.eq.0)then
+               if(verbose)write(*,"(A)")"     file: "//reg(file_respack)//" correspond to: ["//str(nx)//","//str(ny)//","//str(nz)//"], not available."
+               cycle intWRloop
+            endif
+            !
+            if(LocalOnly)then
+               if(iwig.eq.wig0)then
+                  if(any([nx,ny,nz].ne.[0,0,0])) stop "read_U_respack_full: wrong index of R=0 vector (intW_R)." !redundant
+                  iwigMat = 1
+                  exitRloop = .true.
+                  write(*,"(A)")"     read_U_respack_full in LocalOnly mode, found W(R=0) in file: "//reg(file_respack)
+               else
+                  write(*,"(A)")"     read_U_respack_full in LocalOnly mode, skipping file: "//reg(file_respack)
+                  cycle intWRloop
+               endif
+            else
+               if(radiuswig(iwigMat).gt.RespackRthresh)then
+                  if(verbose)write(*,"(A)")"     file: "//reg(file_respack)//" is beyond radius threshold ("//str(radiuswig(iwigMat))//")"
+                  cycle intWRloop
+               else
+                  write(*,"(A)")"     file: "//reg(file_respack)//" correspond to: ["//str(nx)//","//str(ny)//","//str(nz)//"] iwig:"//str(iwigMat)
+               endif
+            endif
+            !
+            ! Read data from file
+            do iw=0,Nfreq
+               !
+               Rmat=czero
+               read(unit) Rmat
+               !
+               if(iw.eq.0) then
+                  ! Fill in bare limit
+                  do iorb=1,Norb
+                     do jorb=1,Norb
+                        call F2Bindex(Norb,[iorb,iorb],[jorb,jorb],ib1,ib2)
+                        Vr(ib1,ib2,iwigMat) = Rmat(iorb,jorb)
+                     enddo
+                  enddo
+               else
+                  ! Fill in screened part
+                  do iorb=1,Norb
+                     do jorb=1,Norb
+                        call F2Bindex(Norb,[iorb,iorb],[jorb,jorb],ib1,ib2)
+                        Ur(ib1,ib2,iw,iwigMat) = Rmat(iorb,jorb)
+                     enddo
+                  enddo
+               endif
+               !
+            enddo
+            !
+            if(exitRloop)then
+               write(*,"(A)")"     Local density-density interaction matrix stored."
+               exit intWRloop
+            endif
+            !
+         enddo intWRloop
+         !
+         ! Read exchange interaction
+         exitRloop=.false.
+         intJRloop: do iR=1,NRJ
+            !
+            ! File containing exchange components
+            file_respack = reg(pathINPUT)//"Respack/dir-intJ_R/XJ.R."//str(iR,4)
+            call inquireFile(reg(file_respack),filexists,hardstop=.false.,verb=verbose)
+            if(.not.filexists) cycle intJRloop
+            unit = free_unit()
+            open(unit,file=reg(file_respack),form="unformatted",action="read")
+            !
+            ! Fet wigner-seitz vector
+            read(unit) nx,ny,nz
+            iwig = find_vec([nx,ny,nz],Nvecwig,hardstop=.false.)
+            !
+            ! Allocate real-frequency dependent arrays
+            read(unit) iRread,Nspin_respack,Norb_respack,Nfreq
+            if(iR.ne.iRread) stop "read_U_respack_full: dir-intJ_R, iR.ne.iRread"
+            if(Norb.ne.Norb_respack) stop "read_U_respack_full: dir-intJ_R, Norb.ne.Norb_respack"
+            read(unit) wread
+            !
+            ! Cycle conditions
+            iwigMat = iwig
+            if(iwig.eq.0)then
+               if(verbose)write(*,"(A)")"     file: "//reg(file_respack)//" correspond to: ["//str(nx)//","//str(ny)//","//str(nz)//"], not available."
+               cycle intJRloop
+            endif
+            !
+            if(LocalOnly)then
+               if(iwig.eq.wig0)then
+                  if(any([nx,ny,nz].ne.[0,0,0])) stop "read_U_respack_full: wrong index of R=0 vector (intJ_R)." !redundant
+                  iwigMat = 1
+                  exitRloop = .true.
+                  write(*,"(A)")"     read_U_respack_full in LocalOnly mode, found J(R=0) in file: "//reg(file_respack)
+               else
+                  write(*,"(A)")"     read_U_respack_full in LocalOnly mode, skipping file: "//reg(file_respack)
+                  cycle intJRloop
+               endif
+            else
+               if(radiuswig(iwigMat).gt.RespackRthresh)then
+                  if(verbose)write(*,"(A)")"     file: "//reg(file_respack)//" is beyond radius threshold ("//str(radiuswig(iwigMat))//")"
+                  cycle intJRloop
+               else
+                  write(*,"(A)")"     file: "//reg(file_respack)//" correspond to: ["//str(nx)//","//str(ny)//","//str(nz)//"] iwig:"//str(iwigMat)
+               endif
+            endif
+            !
+            ! Read data from file
+            do iw=0,Nfreq
+               !
+               Rmat=czero
+               read(unit) Rmat
+               !
+               if(iw.eq.0) then
+                  ! Fill in bare limit
+                  do iorb=1,Norb
+                     do jorb=1,Norb
+                        if(iorb.ne.jorb)then
+                           call F2Bindex(Norb,[iorb,jorb],[iorb,jorb],ib1,ib2)
+                           Vr(ib1,ib2,iwigMat) = Rmat(iorb,jorb)
+                           call F2Bindex(Norb,[iorb,jorb],[jorb,iorb],ib1,ib2)
+                           Vr(ib1,ib2,iwigMat) = Rmat(iorb,jorb)
+                        endif
+                     enddo
+                  enddo
+               else
+                  ! Fill in screened part
+                  do iorb=1,Norb
+                     do jorb=1,Norb
+                        if(iorb.ne.jorb)then
+                           call F2Bindex(Norb,[iorb,jorb],[iorb,jorb],ib1,ib2)
+                           Ur(ib1,ib2,iw,iwigMat) = Rmat(iorb,jorb)
+                           call F2Bindex(Norb,[iorb,jorb],[jorb,iorb],ib1,ib2)
+                           Ur(ib1,ib2,iw,iwigMat) = Rmat(iorb,jorb)
+                        endif
+                     enddo
+                  enddo
+               endif
+               !
+            enddo
+            !
+            if(exitRloop)then
+               write(*,"(A)")"     Local exchange interaction matrix stored."
+               exit intJRloop
+            endif
+            !
+         enddo intJRloop
+         deallocate(Rmat)
+         !
+         ! FT transform to momentum space
+         if(LocalOnly)then
+            !
+            ! Cleanup respack data: U_ab(0,w) = U_ba(0,w)
+            Ur(:,:,1,1) = dcmplx(dreal(Ur(:,:,1,wig0)),0d0)
+            call check_Symmetry(Vr(:,:,1),eps,enforce=.true.,hardstop=.false.,verb=.false.)
+            do iw=1,Nfreq
+               call check_Symmetry(Ur(:,:,iw,1),eps,enforce=.true.,hardstop=.false.,verb=.false.)
+            enddo
+            !
+            call AllocateBosonicField(Ureal,Norb,Nfreq,1)
+            !
+            Ureal%screened_local = Ur(:,:,:,1)
+            Ureal%bare_local = Vr(:,:,1)
+            !
+         else
+            !
+            ! Cleanup respack data: U_ab(0,w) = U_ba(0,w)
+            Ur(:,:,1,wig0) = dcmplx(dreal(Ur(:,:,1,wig0)),0d0)
+            call check_Symmetry(Vr(:,:,wig0),eps,enforce=.true.,hardstop=.false.,verb=.false.)
+            do iw=1,Nfreq
+               call check_Symmetry(Ur(:,:,iw,wig0),eps,enforce=.true.,hardstop=.false.,verb=.false.)
+            enddo
+            !
+            ! Cleanup respack data
+            allocate(wigdone(NwigMat));wigdone=-1
+            fixUloop: do iwig=1,NwigMat
+               !
+               ! Given R retrieve -R
+               Nvec = Nvecwig(:,iwig)
+               iwig_ = find_vec(-1*Nvec,Nvecwig,hardstop=.false.)
+               !
+               if(iwig_.eq.0) cycle fixUloop
+               !
+               if(iwig.eq.1)then
+                  !
+                  ! Store -R index in wigdone
+                  wigdone(iwig) = iwig_
+                  !
+                  ! Symmetrize
+                  Vr(:,:,iwig) = dcmplx(dreal(Vr(:,:,iwig)),-dimag(Vr(:,:,iwig))) !phase fix
+                  call check_Symmetry(Vr(:,:,iwig),eps,enforce=.true.,hardstop=.false.,verb=.false.) ! U_ab(R,w) = U_ba(R,w)
+                  Vr(:,:,iwig_) = dag(Vr(:,:,iwig)) ! U_ab(-R,w) = U_ba*(R,w)
+                  do iw=1,Nfreq
+                     Ur(:,:,iw,iwig) = dcmplx(dreal(Ur(:,:,iw,iwig)),-dimag(Ur(:,:,iw,iwig))) !phase fix
+                     call check_Symmetry(Ur(:,:,iw,iwig),eps,enforce=.true.,hardstop=.false.,verb=.false.) ! U_ab(R,w) = U_ba(R,w)
+                     Ur(:,:,iw,iwig_) = dag(Ur(:,:,iw,iwig)) ! U_ab(-R,w) = U_ba*(R,w)
+                  enddo
+                  !
+               else
+                  !
+                  ! Look if R in -R has already been treated
+                  if(any(wigdone.eq.iwig))then
+                     cycle fixUloop
+                  else
+                     !
+                     ! Store -R index in wigdone
+                     wigdone(iwig) = iwig_
+                     !
+                     ! Symmetrize
+                     Vr(:,:,iwig) = dcmplx(dreal(Vr(:,:,iwig)),-dimag(Vr(:,:,iwig))) !phase fix
+                     call check_Symmetry(Vr(:,:,iwig),eps,enforce=.true.,hardstop=.false.,verb=.false.) ! U_ab(R,w) = U_ba(R,w)
+                     Vr(:,:,iwig_) = dag(Vr(:,:,iwig)) ! U_ab(-R,w) = U_ba*(R,w)
+                     do iw=1,Nfreq
+                        Ur(:,:,iw,iwig) = dcmplx(dreal(Ur(:,:,iw,iwig)),-dimag(Ur(:,:,iw,iwig))) !phase fix
+                        call check_Symmetry(Ur(:,:,iw,iwig),eps,enforce=.true.,hardstop=.false.,verb=.false.) ! U_ab(R,w) = U_ba(R,w)
+                        Ur(:,:,iw,iwig_) = dag(Ur(:,:,iw,iwig)) ! U_ab(-R,w) = U_ba*(R,w)
+                     enddo
+                     !
+                  endif
+                  !
+               endif
+               !
+            enddo fixUloop
+            deallocate(wigdone)
+            !
+            call AllocateBosonicField(Ureal,Norb,Nfreq,1,Nkpt=Lttc%Nkpt)
+            !
+            call wannier_R2K(Lttc%Nkpt3,Lttc%kpt,Vr,Ureal%bare)
+            call wannier_R2K(Lttc%Nkpt3,Lttc%kpt,Ur,Ureal%screened)
+            !
+            call BosonicKsum(Ureal)
+            !
+            write(*,"(A)") "     Symmetry check on bare Ucrpa_respack - should be symmetric at all iq."
+            do iq=1,Ureal%Nkpt
+               call check_Symmetry(Ureal%bare(:,:,iq),eps,enforce=.false.,hardstop=.false.,name="Ucrpa_respack_bare_q"//str(iq))
+            enddo
+            !
+            write(*,"(A)") "     Symmetry check on screened Ucrpa_respack - should be symmetric at all w and all iq."
+            do iw=1,Ureal%Npoints
+               do iq=1,Ureal%Nkpt
+                  call check_Symmetry(Ureal%screened(:,:,iw,iq),eps,enforce=.false.,hardstop=.false.,name="Ucrpa_respack_screened_w"//str(iw)//"_q"//str(iq))
+               enddo
+            enddo
+            !
+         endif
+         !
+         write(*,"(A)") "     Symmetry check on Uinst_respack - should be symmetric."
+         call check_Symmetry(Ureal%screened_local(:,:,1),eps,enforce=.false.,hardstop=.false.,name="Uinst")
+         !
+         write(*,"(A)") "     Symmetry check on local bare Ucrpa_respack - should be symmetric."
+         call check_Symmetry(Ureal%bare_local,eps,enforce=.false.,hardstop=.false.,name="Ucrpa_respack_bare_local")
+         !
+         write(*,"(A)") "     Symmetry check on local screened Ucrpa_respack - should be symmetric at all iw."
+         do iw=1,Ureal%Npoints
+            call check_Symmetry(Ureal%screened_local(:,:,iw),eps,enforce=.false.,hardstop=.false.,name="Ucrpa_respack_screened_local_w"//str(iw))
+         enddo
+         !
+         deallocate(Vr,Ur)
+         !
+         ! Store interaction on real-frequency axis
+         call dump_BosonicField(Ureal,reg(pathINPUT)//"VW_real/",.true.,axis=wread)
+         if(verbose)call dump_BosonicField(Ureal,reg(pathINPUT)//"VW_real_readable/",.false.,axis=wread)
+         call DeallocateBosonicField(Ureal)
+         deallocate(wread)
+         write(*,"(A)")"     Momentum-dependent interaction on the real frequency axis written to file (SPEX format)."
+         !
+      endif
+      !
+      ! Calling spex subroutine
+      call read_U_spex(Umats,save2readable=verbose,kpt=Lttc%kpt,doAC=U_AC,pathOUTPUT=reg(pathOUTPUT_),HartreeData=.false.,correctU0=.true.)
+      !
+      !print along path
+      if(reg(structure).ne."None")then
+         call interpolate2Path(Lttc,Nkpt_path,"Uk",pathOUTPUT=reg(pathINPUT),store=.false.,skipAkw=.true.,data_in=Umats%screened(:,:,1,:))
+      endif
+      !
+   end subroutine read_U_respack_full
+   !
+   subroutine read_U_respack_Uloc0(Umat)
+      !
+      use parameters
+      use file_io
+      use utils_misc
+      use utils_fields
+      use crystal
+      use input_vars, only : pathINPUT
+      implicit none
+      !
+      complex(8),allocatable,intent(inout)  :: Umat(:,:)
+      !
+      logical                               :: filexists
+      character(len=256)                    :: file_respack
+      integer                               :: unit,NRW,NRJ
+      integer                               :: iR,iw,iRread
+      integer                               :: Nspin_respack,Norb_respack,Nfreq
+      integer                               :: ib1,ib2,Nbp,iorb,jorb,Norb
+      integer                               :: nx,ny,nz
+      real(8),allocatable                   :: wread(:)
+      complex(8),allocatable                :: Rmat(:,:)
+      !
+      !
+      if(verbose)write(*,"(A)") "---- read_U_respack_Uloc0"
+      !
+      !
+      ! Check on the input field
+      Nbp = size(Umat,dim=1)
+      Norb = int(sqrt(dble(Nbp)))
+      !
+      call assert_shape(Umat,[Nbp,Nbp],"read_U_respack_Uloc0","Umat")
+      !
+      ! Look for the Number of respack files. Which are supposed to be ordered.
+      NRW = 0
+      do iR=1,9999
+         file_respack = reg(pathINPUT)//"Respack/dir-intW_R/VW.R."//str(iR,4)
+         call inquireFile(reg(file_respack),filexists,hardstop=.false.,verb=verbose)
+         if(.not.filexists) exit
+         NRW = NRW + 1
+      enddo
+      if(NRW.eq.0) stop "read_U_respack_Uloc0: no dir-intW_R/VW.R* file found."
+      write(*,"(A,I)") "     The number of RESPACK files (NRW) in dir-intW_R is: ",NRW
+      !
+      NRJ = 0
+      do iR=1,9999
+         file_respack = reg(pathINPUT)//"Respack/dir-intJ_R/XJ.R."//str(iR,4)
+         call inquireFile(reg(file_respack),filexists,hardstop=.false.,verb=verbose)
+         if(.not.filexists) exit
+         NRJ = NRJ + 1
+      enddo
+      write(*,"(A,I)") "     The number of RESPACK files (NRJ) in dir-intJ_R is: ",NRJ
+      !
+      allocate(Rmat(Norb,Norb));Rmat=czero
+      !
+      ! Read density-density interaction
+      do iR=1,NRW
+         !
+         ! File containing density-density components
+         file_respack = reg(pathINPUT)//"Respack/dir-intW_R/VW.R."//str(iR,4)
+         call inquireFile(reg(file_respack),filexists,verb=verbose) !redundant control
+         unit = free_unit()
+         open(unit,file=reg(file_respack),form="unformatted",action="read")
+         !
+         ! Get wigner-seitz vector
+         read(unit) nx,ny,nz
+         if(any([nx,ny,nz].ne.[0,0,0])) cycle
+         !
+         read(unit) iRread,Nspin_respack,Norb_respack,Nfreq
+         !if(iR.ne.iRread) stop "read_U_respack_Uloc0: dir-intW_R, iR.ne.iRread"
+         if(Norb.ne.Norb_respack) stop "read_U_respack_Uloc0: dir-intW_R, Norb.ne.Norb_respack"
+         read(unit) wread
+         !
+         ! Read data from file
+         do iw=0,1
+            !
+            Rmat=czero
+            read(unit) Rmat
+            !
+            ! Take only the w=0 value
+            if(iw.eq.1) then
+               ! Fill in bare limit
+               do iorb=1,Norb
+                  do jorb=1,Norb
+                     call F2Bindex(Norb,[iorb,iorb],[jorb,jorb],ib1,ib2)
+                     Umat(ib1,ib2) = Rmat(iorb,jorb)
+                  enddo
+               enddo
+            endif
+            !
+         enddo
+         !
+      enddo
+      !
+      !
+      ! Read exchange interaction
+      do iR=1,NRJ
+         !
+         ! file containing exchange components
+         file_respack = reg(pathINPUT)//"Respack/dir-intJ_R/XJ.R."//str(iR,4)
+         call inquireFile(reg(file_respack),filexists,verb=verbose) !redundant control
+         unit = free_unit()
+         open(unit,file=reg(file_respack),form="unformatted",action="read")
+         !
+         ! Get wigner-seitz vector
+         read(unit) nx,ny,nz
+         if(any([nx,ny,nz].ne.[0,0,0])) cycle
+         !
+         ! Allocate real-frequency dependent arrays
+         read(unit) iRread,Nspin_respack,Norb_respack,Nfreq
+         !if(iR.ne.iRread) stop "read_U_respack_full: dir-intJ_R, iR.ne.iRread"
+         if(Norb.ne.Norb_respack) stop "read_U_respack_full: dir-intJ_R, Norb.ne.Norb_respack"
+         read(unit) wread
+         !
+         ! Read data from file
+         do iw=0,1
+            !
+            Rmat=czero
+            read(unit) Rmat
+            !
+            ! Take only the w=0 value
+            if(iw.eq.1) then
+               ! Fill in bare limit
+               do iorb=1,Norb
+                  do jorb=1,Norb
+                     if(iorb.ne.jorb)then
+                        call F2Bindex(Norb,[iorb,jorb],[iorb,jorb],ib1,ib2)
+                        Umat(ib1,ib2) = Rmat(iorb,jorb)
+                        call F2Bindex(Norb,[iorb,jorb],[jorb,iorb],ib1,ib2)
+                        Umat(ib1,ib2) = Rmat(iorb,jorb)
+                     endif
+                  enddo
+               enddo
+            endif
+            !
+         enddo
+         !
+      enddo
+      deallocate(Rmat)
+      !
+   end subroutine read_U_respack_Uloc0
+
+
+   !---------------------------------------------------------------------------!
+   !PURPOSE: Compute momentum dependent interaction from VASP files.
    !---------------------------------------------------------------------------!
    subroutine read_U_vasp_full(Umats,Lttc)
       !
@@ -3552,7 +4121,7 @@ contains
          enddo
       enddo
       !
-      if(sym_) call check_Symmetry(Uinst,eps,enforce=.true.,hardstop=.false.,name="Uinst")
+      if(sym_) call check_Symmetry(Uinst,1e7*eps,enforce=.true.,hardstop=.false.,name="Uinst")
       !
       !computing the screening function and first derivative
       if(retarded)then
@@ -3561,7 +4130,7 @@ contains
          Screening_ = -Kaux(:,:,1)
          if(Ktilda_) Screening_ = Kaux(:,:,Umats%Npoints)
          !
-         if(sym_) call check_Symmetry(Screening_,eps,enforce=.true.,hardstop=.false.,name="Screening_")
+         if(sym_) call check_Symmetry(Screening_,1e7*eps,enforce=.true.,hardstop=.false.,name="Screening_")
          !
          !This is the D(iw)-D(0)/iw^2 screening function
          do iw=2,Umats%Npoints
@@ -3574,7 +4143,7 @@ contains
          Kfunct=0d0
          do itau=2,Solver%NtauB_K-1
             Kfunct(:,:,itau) = dreal(Ktmp(:,:,itau) - Ktmp(:,:,1))
-            if(sym_)call check_Symmetry(Kfunct(:,:,itau),eps,enforce=.true.,hardstop=.false.,name="K_t"//str(itau))
+            if(sym_)call check_Symmetry(Kfunct(:,:,itau),1e7*eps,enforce=.true.,hardstop=.false.,name="K_t"//str(itau))
          enddo
          deallocate(Ktmp,Kaux)
          !
@@ -3604,7 +4173,7 @@ contains
          if(Kp_out)then
             Kpfunct = dreal(Ktmp)
             do itau=1,Solver%NtauB_K
-               if(sym_)call check_Symmetry(Kpfunct(:,:,itau),eps,enforce=.true.,hardstop=.false.,name="Kp_t"//str(itau))
+               if(sym_)call check_Symmetry(Kpfunct(:,:,itau),1e7*eps,enforce=.true.,hardstop=.false.,name="Kp_t"//str(itau))
             enddo
             !cumbersome but exact
             Kpfunct(:,:,1) = Screening_/2d0

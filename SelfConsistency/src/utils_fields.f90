@@ -3070,26 +3070,35 @@ contains
       Ek=0d0
       allocate(E(Gmats%Norb,Gmats%Norb));E=czero
       allocate(G(Gmats%Norb,Gmats%Norb));G=czero
-      !$OMP PARALLEL DEFAULT(NONE),&
-      !$OMP SHARED(Gmats,Lttc,Ek),&
-      !$OMP PRIVATE(iw,ik,ispin,E,G,Ek_T)
-      !$OMP DO
-      do iw=1,Gmats%Npoints
-         Ek_T=0d0
+      if(.not.allocated(Gmats%N_ks))then
+         write(*,"(A)") "     Ek calculation via Matsubara integral (expect noisy results)."
+         do iw=1,Gmats%Npoints
+            Ek_T=0d0
+            do ik=1,Gmats%Nkpt
+               do ispin=1,Nspin
+                  !
+                  E = Lttc%Hk(:,:,ik) !beware here you need the correct chemical potential
+                  G = Gmats%wks(:,:,iw,ik,ispin)
+                  !
+                  Ek_T = Ek_T + (matmul(E,G) + matmul(E,dag(G))) / (Gmats%Nkpt*Nspin)
+                  !
+               enddo
+            enddo
+            Ek = Ek + Ek_T / Gmats%Beta
+         enddo
+      else
+         write(*,*) shape(Lttc%Hk(:,:,1))
          do ik=1,Gmats%Nkpt
             do ispin=1,Nspin
                !
-               E = Lttc%Hk(:,:,ik)
-               G = Gmats%wks(:,:,iw,ik,ispin)
+               E = Lttc%Hk(:,:,ik) - 9.7127875d0 !beware here you need the correct chemical potential
+               G = Gmats%N_ks(:,:,ik,ispin)
                !
-               Ek_T = Ek_T + ( matmul(E,G) + matmul(dag(G),dag(E)) ) / (Gmats%Nkpt*Nspin)
+               Ek = Ek + matmul(E,G) / (Gmats%Nkpt*Nspin)
                !
             enddo
          enddo
-         Ek = Ek + Ek_T / Gmats%Beta
-      enddo
-      !$OMP END DO
-      !$OMP END PARALLEL
+      endif
       deallocate(E,G)
       !
    end function calc_Ek
@@ -3097,7 +3106,7 @@ contains
    function calc_Ep(Gmats,Smats) result(Ep)
       !
       use parameters
-      use linalg, only : dag, deye
+      use linalg, only : dag
       implicit none
       !
       type(FermionicField),intent(in)       :: Gmats
@@ -3116,26 +3125,21 @@ contains
       Ep=0d0
       allocate(U(Gmats%Norb,Gmats%Norb));U=czero
       allocate(G(Gmats%Norb,Gmats%Norb));G=czero
-      !$OMP PARALLEL DEFAULT(NONE),&
-      !$OMP SHARED(Gmats,Smats,Ep),&
-      !$OMP PRIVATE(iw,ik,ispin,U,G,Ep_T)
-      !$OMP DO
       do iw=1,Gmats%Npoints
          Ep_T=0d0
          do ik=1,Gmats%Nkpt
             do ispin=1,Nspin
                !
-               U = Smats%wks(:,:,iw,ik,ispin)-deye(Smats%Norb)*Gmats%mu
+               U = Smats%wks(:,:,iw,ik,ispin)
                G = Gmats%wks(:,:,iw,ik,ispin)
                !
-               Ep_T = Ep_T + ( matmul(U,G) + matmul(dag(G),dag(U)) ) / (Gmats%Nkpt*Nspin)
+               !Ep_T = Ep_T + 0.5d0 * ( matmul(U,G) + matmul(dag(G),dag(U)) ) / (Gmats%Nkpt*Nspin)
+               Ep_T = Ep_T + (matmul(U,G) + matmul(dag(U),dag(G))) / (Gmats%Nkpt*Nspin)
                !
             enddo
          enddo
          Ep = Ep + Ep_T / Gmats%Beta
       enddo
-      !$OMP END DO
-      !$OMP END PARALLEL
       deallocate(U,G)
       !
    end function calc_Ep
@@ -3263,12 +3267,17 @@ contains
             Nbulk = Hetero%Explicit(1)-1
             !
             !Connection-to and self-energy-of the first layer explicitly solved
-            ta = tz(:,:,:,Hetero%Explicit(1)-1)
+            ta = tz(:,:,:,Hetero%tzIndex(1))
             if(present(Smats)) Sa = Smats%wks(ndx(1):ndx(2),ndx(1):ndx(2),:,:,:)
             !
             !Connection-to and self-energy-of the second layer explicitly solved
-            tb = tz(:,:,:,Hetero%Explicit(1))
-            if(present(Smats)) Sb = Smats%wks(ndx(1)+Hetero%Norb:ndx(2)+Hetero%Norb,ndx(1)+Hetero%Norb:ndx(2)+Hetero%Norb,:,:,:)
+            if(Hetero%doubled_uc)then
+               tb = tz(:,:,:,Hetero%tzIndex(1)+1)
+               if(present(Smats)) Sb = Smats%wks(ndx(1)+Hetero%Norb:ndx(2)+Hetero%Norb,ndx(1)+Hetero%Norb:ndx(2)+Hetero%Norb,:,:,:)
+            else
+               tb = ta
+               if(present(Smats)) Sb = Sa
+            endif
             !
          case("right")
             !
@@ -3278,16 +3287,21 @@ contains
             Nbulk = Hetero%Nslab-Hetero%Explicit(2)
             !
             !Connection-to and self-energy-of the last layer explicitly solved
-            ta = tz(:,:,:,Hetero%Explicit(2))
+            ta = tz(:,:,:,Hetero%tzIndex(2))
             if(present(Smats)) Sa = Smats%wks(ndx(1):ndx(2),ndx(1):ndx(2),:,:,:)
             !
             !Connection-to and self-energy-of the semi-last layer explicitly solved
-            tb = tz(:,:,:,Hetero%Explicit(2)-1)
-            if(present(Smats)) Sb = Smats%wks(ndx(1)-Hetero%Norb:ndx(2)-Hetero%Norb,ndx(1)-Hetero%Norb:ndx(2)-Hetero%Norb,:,:,:)
+            if(Hetero%doubled_uc)then
+               tb = tz(:,:,:,Hetero%tzIndex(2)-1)
+               if(present(Smats)) Sb = Smats%wks(ndx(1)-Hetero%Norb:ndx(2)-Hetero%Norb,ndx(1)-Hetero%Norb:ndx(2)-Hetero%Norb,:,:,:)
+            else
+               tb = ta
+               if(present(Smats)) Sb = Sa
+            endif
             !
       end select
       !
-      if(mod(Nbulk,2).ne.0)Nbulk=Nbulk+1
+      if((Hetero%doubled_uc).and.(mod(Nbulk,2).ne.0))Nbulk=Nbulk+1
       !
       !Diagonal arrays of the first/last layer explicitly solved
       allocate(zeta_(Hetero%Norb,Hetero%Norb,Nmats));  zeta_ = zeta(ndx(1):ndx(2),ndx(1):ndx(2),:)
@@ -3374,12 +3388,17 @@ contains
             Nbulk = Hetero%Explicit(1)-1
             !
             !Connection-to and self-energy-of the first layer explicitly solved
-            ta = tz(:,:,:,Hetero%Explicit(1)-1)
+            ta = tz(:,:,:,Hetero%tzIndex(1))
             if(present(Smats)) Sa = Smats(ndx(1):ndx(2),ndx(1):ndx(2),:,:,:)
             !
             !Connection-to and self-energy-of the second layer explicitly solved
-            tb = tz(:,:,:,Hetero%Explicit(1))
-            if(present(Smats)) Sb = Smats(ndx(1)+Hetero%Norb:ndx(2)+Hetero%Norb,ndx(1)+Hetero%Norb:ndx(2)+Hetero%Norb,:,:,:)
+            if(Hetero%doubled_uc)then
+               tb = tz(:,:,:,Hetero%tzIndex(1)+1)
+               if(present(Smats)) Sb = Smats(ndx(1)+Hetero%Norb:ndx(2)+Hetero%Norb,ndx(1)+Hetero%Norb:ndx(2)+Hetero%Norb,:,:,:)
+            else
+               tb = ta
+               if(present(Smats)) Sb = Sa
+            endif
             !
          case("right")
             !
@@ -3389,16 +3408,21 @@ contains
             Nbulk = Hetero%Nslab-Hetero%Explicit(2)
             !
             !Connection-to and self-energy-of the last layer explicitly solved
-            ta = tz(:,:,:,Hetero%Explicit(2))
+            ta = tz(:,:,:,Hetero%tzIndex(2))
             if(present(Smats)) Sa = Smats(ndx(1):ndx(2),ndx(1):ndx(2),:,:,:)
             !
             !Connection-to and self-energy-of the semi-last layer explicitly solved
-            tb = tz(:,:,:,Hetero%Explicit(2)-1)
-            if(present(Smats)) Sb = Smats(ndx(1)-Hetero%Norb:ndx(2)-Hetero%Norb,ndx(1)-Hetero%Norb:ndx(2)-Hetero%Norb,:,:,:)
+            if(Hetero%doubled_uc)then
+               tb = tz(:,:,:,Hetero%tzIndex(2)-1)
+               if(present(Smats)) Sb = Smats(ndx(1)-Hetero%Norb:ndx(2)-Hetero%Norb,ndx(1)-Hetero%Norb:ndx(2)-Hetero%Norb,:,:,:)
+            else
+               tb = ta
+               if(present(Smats)) Sb = Sa
+            endif
             !
       end select
       !
-      if(mod(Nbulk,2).ne.0)Nbulk=Nbulk+1
+      if((Hetero%doubled_uc).and.(mod(Nbulk,2).ne.0))Nbulk=Nbulk+1
       !
       !Diagonal arrays of the first/last layer explicitly solved
       allocate(zeta_(Hetero%Norb,Hetero%Norb,Nmats));  zeta_ = zeta(ndx(1):ndx(2),ndx(1):ndx(2),:)

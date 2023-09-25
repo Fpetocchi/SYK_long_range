@@ -233,6 +233,8 @@ contains
       !
       dump_G0W0_bands = (FirstIteration.eq.0).and.(reg(structure).ne."None").and.(reg(SpexVersion).eq."Lund")
       !
+      if(reg(pathINPUT).ne.reg(pathINPUTtr))call createDir(reg(pathINPUTtr),verb=verbose)
+      !
       call inquireDir(reg(pathDATA)//str(FirstIteration-1),PrvItexist,hardstop=.false.,verb=.false.)
       call inquireDir(reg(pathDATA)//str(0),ZeroItexist,hardstop=.false.,verb=.false.)
       !
@@ -820,7 +822,7 @@ contains
       do isite=1,Solver%Nimp
          !
          !look for pattern given by the diagonal lattice operator
-         call get_pattern(EqvImpndxRot(isite)%SetOrbs,LocalOrbs(isite)%Eig,1e4*eps)
+         call get_pattern(EqvImpndxRot(isite)%SetOrbs,LocalOrbs(isite)%Eig,RotPrecision)
          !
          if(allocated(EqvImpndxRot(isite)%SetOrbs))then
             !
@@ -984,6 +986,11 @@ contains
                call AllocateBosonicField(Ulat,Crystal%Norb,1,Crystal%iq_gamma,Nkpt=Crystal%Nkpt,Nsite=Nsite,Beta=Beta)
                call read_U_vasp(Ulat,Crystal)
                !
+            elseif((reg(Utensor).eq."Respack"))then
+               !
+               call AllocateBosonicField(Ulat,Crystal%Norb,Nmats,Crystal%iq_gamma,Nkpt=Crystal%Nkpt,Nsite=Nsite,Beta=Beta)
+               call read_U_respack(Ulat,.false.,Crystal,pathOUTPUT=reg(pathINPUTtr))
+               !
             elseif((reg(Utensor).eq."Model"))then
                !
                if(Nphonons.gt.0)then
@@ -1035,6 +1042,8 @@ contains
                   call read_U_spex(Umat)
                elseif((reg(Utensor).eq."Vasp"))then
                   call read_U_vasp(Umat,Crystal)
+               elseif((reg(Utensor).eq."Respack"))then
+                  call read_U_respack(Umat)
                elseif((reg(Utensor).eq."Model"))then
                   call build_Umat(Umat,Uaa,Uab,J)
                elseif((reg(Utensor).eq."File"))then
@@ -1069,6 +1078,11 @@ contains
                !
                call AllocateBosonicField(Ulat,Crystal%Norb,1,Crystal%iq_gamma,Nkpt=Crystal%Nkpt,Nsite=Nsite,Beta=Beta)
                call read_U_vasp(Ulat,Crystal)
+               !
+            elseif((reg(Utensor).eq."Respack"))then
+               !
+               call AllocateBosonicField(Ulat,Crystal%Norb,Nmats,Crystal%iq_gamma,Nsite=Nsite,Beta=Beta)
+               call read_U_respack(Ulat,.true.,Crystal,pathOUTPUT=reg(pathINPUTtr))
                !
             elseif((reg(Utensor).eq."Model"))then
                !
@@ -1116,6 +1130,11 @@ contains
                !
                call AllocateBosonicField(Ulat,Crystal%Norb,1,Crystal%iq_gamma,Nkpt=Crystal%Nkpt,Nsite=Nsite,Beta=Beta)
                call read_U_vasp(Ulat,Crystal)
+               !
+            elseif((reg(Utensor).eq."Respack"))then
+               !
+               call AllocateBosonicField(Ulat,Crystal%Norb,Nmats,Crystal%iq_gamma,Nkpt=Crystal%Nkpt,Nsite=Nsite,Beta=Beta)
+               call read_U_respack(Ulat,.false.,Crystal,pathOUTPUT=reg(pathINPUTtr))
                !
             elseif((reg(Utensor).eq."Model"))then
                !
@@ -1186,6 +1205,11 @@ contains
                call AllocateBosonicField(Ulat,Crystal%Norb,1,Crystal%iq_gamma,Nkpt=Crystal%Nkpt,Nsite=Nsite,Beta=Beta)
                call read_U_vasp(Ulat,Crystal)
                !
+            elseif((reg(Utensor).eq."Respack"))then
+               !
+               call AllocateBosonicField(Ulat,Crystal%Norb,Nmats,Crystal%iq_gamma,Nkpt=Crystal%Nkpt,Nsite=Nsite,Beta=Beta)
+               call read_U_respack(Ulat,.false.,Crystal,pathOUTPUT=reg(pathINPUTtr))
+               !
             elseif((reg(Utensor).eq."Model"))then
                !
                if(Nphonons.gt.0)then
@@ -1254,7 +1278,7 @@ contains
       if(ItStart.eq.0)then
          !
          call calc_Glda(Glat%mu,Beta,Crystal)
-         if(Hetero%status)call print_potentials(pathINPUT)
+         if(Hetero%status) call print_potentials(pathINPUT,axis=linspace(-wrealMax,+wrealMax,Nreal))
          !
          Crystal%mu = Glat%mu
          if(reg(structure).ne."None")then
@@ -1415,7 +1439,7 @@ contains
       integer                               :: ik,iw,ispin,iorb,jorb
       integer                               :: iprint,Nprint
       real(8),allocatable                   :: Z_qpsc(:,:,:)
-      complex(8),allocatable                :: Vxc_loc(:,:,:)
+      !complex(8),allocatable                :: Vxc_loc(:,:,:)
       type(FermionicField)                  :: S_EMB,S_Full_R
       !
       !
@@ -1442,14 +1466,6 @@ contains
                if(addTierIII)write(*,"(A)")"     Allocating empty Vxc ( enclosed in SigmaGoWo(k,iw) )"
                allocate(Vxc(Crystal%Norb,Crystal%Norb,Crystal%Nkpt,Nspin))
                Vxc=czero
-               allocate(Vxc_loc(S_Full%Norb,S_Full%Norb,Nspin));Vxc_loc=czero
-               call read_Matrix(Vxc_loc,reg(pathINPUT)//"Vxc",paramagnet)
-            else
-               allocate(Vxc_loc(S_Full%Norb,S_Full%Norb,Nspin));Vxc_loc=czero
-               do ik=1,S_Full%Nkpt
-                  Vxc_loc = Vxc_loc + Vxc(:,:,ik,:)/S_Full%Nkpt
-               enddo
-               if(verbose)call dump_matrix(Vxc_loc,reg(ItFolder),"Vxc",paramagnet)
             endif
             !
             !
@@ -1496,12 +1512,7 @@ contains
             enddo
             call FermionicKsum(S_Full)
             !
-            !do ispin=1,Nspin
-            !   S_Full%N_s(:,:,ispin) = Vxc_loc(:,:,ispin) - VH
-            !enddo
-            !
             !deallocate(VH,Vxc) scGW needs these
-            deallocate(Vxc_loc)
             call DeallocateFermionicField(S_G0W0)
             call DeallocateFermionicField(S_G0W0dc)
             if(.not.causal_D)call DeallocateFermionicField(S_GW)
@@ -3664,30 +3675,43 @@ contains
    !---------------------------------------------------------------------------!
    !PURPOSE: Print heterostructure embedding potentials
    !---------------------------------------------------------------------------!
-   subroutine print_potentials(printpath)
+   subroutine print_potentials(printpath,axis)
       implicit none
       character(len=*),intent(in),optional  :: printpath
       type(FermionicField)                  :: Pot
+      real(8),intent(in),optional           :: axis(:)
       character(len=255)                    :: printpath_
       !
       printpath_=reg(ItFolder)
       if(present(printpath))printpath_=printpath
       !
-      call AllocateFermionicField(Pot,Hetero%Norb,Nmats,Beta=Beta)
-      !
-      call clear_attributes(Pot)
       if(allocated(Hetero%P_L))then
-         Pot%ws = Hetero%P_L
-         call dump_FermionicField(Pot,reg(printpath_),"Pot_L_w",paramagnet)
+         if(present(axis))then
+            call AllocateFermionicField(Pot,Hetero%Norb,size(axis),Beta=Beta)
+            Pot%ws = Hetero%P_L
+            call dump_FermionicField(Pot,reg(printpath_),"Pot_L_w",paramagnet,axis=axis)
+            call DeallocateField(Pot)
+         else
+            call AllocateFermionicField(Pot,Hetero%Norb,Nmats,Beta=Beta)
+            Pot%ws = Hetero%P_L
+            call dump_FermionicField(Pot,reg(printpath_),"Pot_L_w",paramagnet)
+            call DeallocateField(Pot)
+         endif
       endif
       !
-      call clear_attributes(Pot)
       if(allocated(Hetero%P_R))then
-         Pot%ws = Hetero%P_R
-         call dump_FermionicField(Pot,reg(printpath_),"Pot_R_w",paramagnet)
+         if(present(axis))then
+            call AllocateFermionicField(Pot,Hetero%Norb,size(axis),Beta=Beta)
+            Pot%ws = Hetero%P_R
+            call dump_FermionicField(Pot,reg(printpath_),"Pot_R_w",paramagnet,axis=axis)
+            call DeallocateField(Pot)
+         else
+            call AllocateFermionicField(Pot,Hetero%Norb,Nmats,Beta=Beta)
+            Pot%ws = Hetero%P_R
+            call dump_FermionicField(Pot,reg(printpath_),"Pot_R_w",paramagnet)
+            call DeallocateField(Pot)
+         endif
       endif
-      !
-      call DeallocateField(Pot)
       !
    end subroutine print_potentials
 
@@ -3964,6 +3988,14 @@ contains
             call interpolate2Beta(S_DMFT,Beta_Match,"imp",ExpandImpurity)
             call dump_FermionicField(S_DMFT,reg(PrevItFolder),"Simp_w",paramagnet)
             call DeallocateFermionicField(S_DMFT)
+            !
+            !Lattice Gf
+            write(*,"(A)") "     Interpolating impurity Green function from Beta="//str(Beta_Match%Beta_old,2)//" to Beta="//str(Beta_Match%Beta_new,2)
+            call AllocateFermionicField(Glat,Crystal%Norb,Beta_Match%Nmats_old,Nkpt=Crystal%Nkpt,Nsite=Nsite,Beta=Beta_Match%Beta_old)
+            call read_FermionicField(Glat,reg(Beta_Match%Path),"Glat_w")
+            call interpolate2Beta(Glat,Beta_Match,"imp",ExpandImpurity)
+            call dump_FermionicField(Glat,reg(PrevItFolder),"Glat_w",paramagnet)
+            call DeallocateFermionicField(Glat)
             !
          case("EDMFT")
             !

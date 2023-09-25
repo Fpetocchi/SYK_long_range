@@ -111,6 +111,7 @@ program SelfConsistency
          if(merge_P)then
             call AllocateBosonicField(P_GGdc,Crystal%Norb,Nmats,Crystal%iq_gamma,Nsite=Nsite,no_bare=.true.,Beta=Beta)
             call calc_PiGGdc(P_GGdc,Glat)
+            if(.not.Uscreen)call clear_attributes(P_GGdc)
             call dump_BosonicField(P_GGdc,reg(ItFolder),"Plat_dc_w.DAT")
             call MergeFields(Plat,P_EDMFT,P_GGdc,alphaPi,RotateHloc,LocalOrbs)
             call dump_BosonicField(Plat,reg(ItFolder),"Plat_merged_w.DAT")
@@ -131,7 +132,7 @@ program SelfConsistency
       !Fully screened interaction - only G0W0,scGW,GW+EDMFT,EDMFT
       if(calc_Wk)then
          !
-         if(calc_Wfull)  call calc_W_full(Wlat,Ulat,Plat,Epsilon,Crystal)
+         if(calc_Wfull)  call calc_W_full(Wlat,Ulat,Plat,Epsilon,Crystal)!,symQ=.true.)
          if(calc_Wedmft) call calc_W_edmft(Wlat,Ulat,P_EDMFT,Epsilon,Crystal,alpha=alphaPi)
          call dump_BosonicField(Wlat,reg(ItFolder),"Wlat_w.DAT")
          call dump_MaxEnt(Wlat,"mats",reg(ItFolder)//"Convergence/","Wlat",EqvGWndx%SetOrbs)

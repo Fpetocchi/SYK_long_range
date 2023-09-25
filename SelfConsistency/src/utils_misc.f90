@@ -132,6 +132,8 @@ module utils_misc
    public :: inquireFile
    public :: inquireDir
    public :: createDir
+   public :: removeDir
+   public :: removeFile
    public :: skip_header
    public :: check_Hermiticity
    public :: check_Symmetry
@@ -696,6 +698,73 @@ contains
       endif
       !
    end subroutine createDir
+   !
+   subroutine removeDir(dirpath,verb,list)
+      implicit none
+      character(len=*),intent(in)           :: dirpath
+      logical,intent(in),optional           :: verb
+      logical,intent(in),optional           :: list
+      character(len=256)                    :: rmdirCmd
+      logical                               :: direxists
+      logical                               :: verbose_,list_
+      !
+      verbose_=.true.
+      if(present(verb))verbose_=verb
+      list_=.false.
+      if(present(list))list_=list
+      !
+      call inquireDir(reg(dirpath),direxists,hardstop=.false.,verb=verbose_)
+      if(direxists)then
+         rmdirCmd = "rm -r "//reg(dirpath)
+         if(verbose_)write(*,"(A)") "     Removing directory: "//reg(dirpath)
+         if(verbose_)write(*,"(A)") "     "//reg(rmdirCmd)
+         call system(reg(rmdirCmd))
+         !call execute_command_line(reg(rmdirCmd))
+      else
+         if(list_)then
+            rmdirCmd = "rm -r "//reg(dirpath)
+            if(verbose_)write(*,"(A)") "     Removing directory: "//reg(dirpath)
+            if(verbose_)write(*,"(A)") "     "//reg(rmdirCmd)
+            call system(reg(rmdirCmd))
+            !call execute_command_line(reg(rmdirCmd))
+         endif
+      endif
+
+      !
+   end subroutine removeDir
+   !
+   subroutine removeFile(filepath,verb,list)
+      implicit none
+      character(len=*),intent(in)           :: filepath
+      logical,intent(in),optional           :: verb
+      logical,intent(in),optional           :: list
+      character(len=256)                    :: rmfileCmd
+      logical                               :: filexists
+      logical                               :: verbose_,list_
+      !
+      verbose_=.true.
+      if(present(verb))verbose_=verb
+      list_=.false.
+      if(present(list))list_=list
+      !
+      call inquireFile(reg(filepath),filexists,hardstop=.false.,verb=verbose_)
+      if(filexists)then
+         rmfileCmd = "rm -r "//reg(filepath)
+         if(verbose_)write(*,"(A)") "     Removing file: "//reg(filepath)
+         if(verbose_)write(*,"(A)") "     "//reg(rmfileCmd)
+         call system(reg(rmfileCmd))
+         !call execute_command_line(reg(rmfileCmd))
+      else
+         if(list_)then
+            rmfileCmd = "rm -r "//reg(filepath)
+            if(verbose_)write(*,"(A)") "     Removing file: "//reg(filepath)
+            if(verbose_)write(*,"(A)") "     "//reg(rmfileCmd)
+            call system(reg(rmfileCmd))
+            !call execute_command_line(reg(rmfileCmd))
+         endif
+      endif
+      !
+   end subroutine removeFile
 
 
    !---------------------------------------------------------------------------!
