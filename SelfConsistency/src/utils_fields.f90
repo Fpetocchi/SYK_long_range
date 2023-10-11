@@ -3087,7 +3087,6 @@ contains
             Ek = Ek + Ek_T / Gmats%Beta
          enddo
       else
-         write(*,*) shape(Lttc%Hk(:,:,1))
          do ik=1,Gmats%Nkpt
             do ispin=1,Nspin
                !

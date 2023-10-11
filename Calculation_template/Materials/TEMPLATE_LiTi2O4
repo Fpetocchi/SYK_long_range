@@ -1,9 +1,23 @@
+#
+a=97 ; b=114
+cp /home/petocchif/1_GW_EDMFT/GenericMaterial/Calculation_template/MaxEnt/Gaverage.py .
+#
+python Gaverage.py --field Obs --itlist ${a}..${b} ;
+python Gaverage.py --field  Gw      --pad lat    --orbs 1,2,3 --itlist ${a}..${b} ;
+python Gaverage.py --field  Gw      --pad qmc_Ti --orbs 1,2,3 --itlist ${a}..${b} ;
+python Gaverage.py --field  Ww      --pad lat    --orbs 1     --itlist ${a}..${b} ;
+python Gaverage.py --field  Ww      --pad imp    --orbs 1     --itlist ${a}..${b} ;
+python Gaverage.py --field  Cw      --pad imp    --orbs 1     --itlist ${a}..${b} ;
+python Gaverage.py --field  curlyUw --pad imp    --orbs 1     --itlist ${a}..${b} ;
+python Gaverage.py --field Gkw --itlist ${a}..${b} ;
+#
+#
+#
+#
 ################################################################################
-#                                USER SETTINGS                                 #
 ################################################################################
-
 GENMAT=/home/petocchif/1_GW_EDMFT/GenericMaterial/Calculation_template
-
+#
 declare -a dirindex=( "avg"  )
 for it in "${dirindex[@]}" ; do
 #for it in `seq  46 1 48` ; do
@@ -12,29 +26,91 @@ for it in "${dirindex[@]}" ; do
    cp ${GENMAT}/${MATERIAL}/MaxEnt/MaxEnt_SLURM.sh .
    chmod 700 MaxEnt_SLURM.sh
    #
-   PARAM="-e 0.0005 -w 15001 -W 300"
-   for orb in `seq  1 1 12` ; do
-      ./MaxEnt_SLURM.sh ${PARAM} -f G -o ${orb} -i lat -p ${GENMAT} -q amd
-   done
-   PARAM="-e 0.0005 -w 15001 -W 300"
-   ./MaxEnt_SLURM.sh ${PARAM} -f G -o 1 -i qmc_Ti -p ${GENMAT} -q amd
-   ./MaxEnt_SLURM.sh ${PARAM} -f G -o 2 -i qmc_Ti -p ${GENMAT} -q amd
-   ./MaxEnt_SLURM.sh ${PARAM} -f G -o 3 -i qmc_Ti -p ${GENMAT} -q amd
+   ./MaxEnt_SLURM.sh -e 0.0005 -w 15001 -W 300 -f G -o 1 -i lat    -p ${GENMAT} -q amd
+   ./MaxEnt_SLURM.sh -e 0.0005 -w 15001 -W 300 -f G -o 2 -i lat    -p ${GENMAT} -q amd
+   ./MaxEnt_SLURM.sh -e 0.0005 -w 15001 -W 300 -f G -o 3 -i lat    -p ${GENMAT} -q amd
    #
-   PARAM="-e 0.02 -w 9000 -W 600"
-  # ./MaxEnt_SLURM.sh ${PARAM} -f W -o 1 -i lat -p ${GENMAT} -q amd
+   ./MaxEnt_SLURM.sh -e 0.0005 -w 15001 -W 300 -f G -o 1 -i qmc_Ti -p ${GENMAT} -q amd
+   ./MaxEnt_SLURM.sh -e 0.0005 -w 15001 -W 300 -f G -o 2 -i qmc_Ti -p ${GENMAT} -q amd
+   ./MaxEnt_SLURM.sh -e 0.0005 -w 15001 -W 300 -f G -o 3 -i qmc_Ti -p ${GENMAT} -q amd
    #
-   #PARAM="-e 0.01 -w 9000 -W 600"
-   #./MaxEnt_SLURM.sh ${PARAM} -f C -o 1 -i imp -p ${GENMAT} -q amd
-   ##
-   #PARAM="-e 0.01 -w 9000 -W 600"
-   #./MaxEnt_SLURM.sh ${PARAM} -f P -o 1 -i imp -p ${GENMAT} -q amd
+   ./MaxEnt_SLURM.sh -e 0.01   -w  9000 -W 600 -f W -o 1 -i lat    -p ${GENMAT} -q amd
    #
-   PARAM="-e 0.01 -w 9000 -W 600"
-  # ./MaxEnt_SLURM.sh ${PARAM} -f curlyU -o 1 -i imp -p ${GENMAT} -q amd
+   ./MaxEnt_SLURM.sh -e 0.01   -w  9000 -W 600 -f C -o 1 -i imp    -p ${GENMAT} -q amd
    #
    cd ../../
 done
+#
+#
+#
+#
+################################################################################
+################################################################################
+#
+./MaxEnt_Kresolved_SLURM.sh -e 0.001 -w 6001 -W 300 -F G -N 551 -B 128 -m path
+#
+a=1
+b=551
+for kp in `seq ${a} ${b}`; do
+   echo checking $kp
+   if [ ! -f MaxEnt_Gk_path_s1/Gk_t_k${kp}.DAT_dos.dat ]; then
+       echo $kp absent
+       ./MaxEnt_Kresolved_SLURM.sh -e 0.001 -w 6001 -W 300 -F G -N 551 -B 128 -m path -i $kp -f $kp
+   fi
+done
+#
+#
+#
+./MaxEnt_Kresolved_SLURM.sh -e 0.008 -w 6001 -W 300 -F G -N 550 -B 110 -m path #-i 1 -f 551
+#
+a=1
+b=551
+for kp in `seq ${a} ${b}`; do
+   echo checking $kp
+   if [ ! -f MaxEnt_Gk_path_s1/Gk_t_k${kp}.DAT_dos.dat ]; then
+       echo $kp absent
+       ./MaxEnt_Kresolved_SLURM.sh -e 0.008 -w 6001 -W 300 -F G -N 550 -B 128 -m path -i $kp -f $kp
+   fi
+done
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 

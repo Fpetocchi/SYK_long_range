@@ -82,8 +82,11 @@ subroutine calc_Tc(pathOUTPUT,Inputs,Lttc,Wlat)
          Delta(iE) = -diff_fermidirac(Egrid(iE),0d0,(50d0/(Inputs%wrealMax*eV2DFTgrid)))
       enddo
       Delta = Delta * Inputs%DeltaInit * eV2DFTgrid / Delta(minloc(abs(Egrid),dim=1))
-      allocate(oldDelta(Ngrid));oldDelta=Delta
       !
+      !with electronic kernels Delta has to be negative at high energy
+      if(calc_Kel) Delta = Delta - Delta(minloc(abs(Egrid),dim=1))/3
+      !
+      allocate(oldDelta(Ngrid));oldDelta=Delta
       allocate(Tlist(Inputs%Tsteps));Tlist=0d0
       allocate(Delta_T(Inputs%Tsteps));Delta_T=0d0
       !
@@ -100,7 +103,7 @@ subroutine calc_Tc(pathOUTPUT,Inputs,Lttc,Wlat)
          Beta = 1d0 / (Temp*K2eV)
          Beta_DFT = 1d0 / (Temp*K2eV*eV2DFTgrid)
          !
-         printpath_T = reg(printpath)//"loops_T"//str(Temp,2)//"/"
+         printpath_T = reg(printpath)//"loops_"//str(iT)//"_T"//str(Temp,2)//"/"
          !
          write(*,"(A)") new_line("A")//"     ................................................"//new_line("A")
          write(*,"(3(A,1F12.5))") "     T(K): ",Temp,"    Beta(1/eV): ",Beta,"    Beta(1/"//DFTgrid//"): ",Beta_DFT
@@ -126,9 +129,7 @@ subroutine calc_Tc(pathOUTPUT,Inputs,Lttc,Wlat)
          !
          !Convergence loop over Delta(e)
          write(*,"(A)") new_line("A")//"     Solving gap equation."
-         !
          call dump_Field_component(oldDelta,reg(printpath_T),"0_Delta.DAT",Egrid)
-         !
          allocate(EDsq(Ngrid)); EDsq = czero
          allocate(newDelta(Ngrid));newDelta = czero
          converged=.false.
@@ -171,14 +172,18 @@ subroutine calc_Tc(pathOUTPUT,Inputs,Lttc,Wlat)
                !
             enddo
             !
+            !This is to fix the phase of Delta
+            newDelta = dcmplx(dreal(newDelta),0d0)
+            !
             !Convergence check
-            errDelta = maxval(abs(Delta-newDelta))
+            errDelta = maxval(abs(Delta-newDelta))            !<-- this error accounts for the phase fluctuation
+            !errDelta = maxval(abs(abs(Delta)-abs(newDelta))) !<-- this error accounts only for the real part
+            !
             if(errDelta.lt.Inputs%DeltaErr)then
                write(*,"(2(A,1E20.10),A3,1E20.10)")"     loop #"//str(iloop)//" Delta(0): ",abs(newDelta(minloc(abs(Egrid),dim=1))),"   error: ",errDelta," < ",Inputs%DeltaErr
                write(*,"(A)")"     Delta at T "//str(Temp,2)//"K is converged. Moving to next Temperature."
                converged=.true.
                oldDelta = Delta
-
                exit SCloop
             else
                write(*,"(2(A,1E20.10),A3,1E20.10)")"     loop #"//str(iloop)//" Delta(0): ",abs(newDelta(minloc(abs(Egrid),dim=1))),"   error: ",errDelta," > ",Inputs%DeltaErr

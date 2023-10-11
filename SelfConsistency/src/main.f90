@@ -10,7 +10,7 @@ program SelfConsistency
    !
 #ifdef _akw
    character(len=20)                        :: InputFile="input.in.akw"
-#elif defined _gap
+#elif defined _gap2
    character(len=20)                        :: InputFile="input.in.gap"
 #else
    character(len=20)                        :: InputFile="input.in"
@@ -46,11 +46,14 @@ program SelfConsistency
    call execute_command_line(" touch doSolver ")
    stop
    !
-#elif defined _gap
+#elif defined _gap2
    !
-   call AllocateBosonicField(Wlat,Crystal%Norb,Nmats,Crystal%iq_gamma,Nkpt=Crystal%Nkpt,Nsite=Nsite,Beta=Beta)
-   call calc_Tc(reg(ItFolder),gap_equation,Crystal,Wlat)
+   !TEST>>>
+   call initialize_Fields(ItStart)
+   !call AllocateBosonicField(Ulat,Crystal%Norb,Nmats,Crystal%iq_gamma,Nkpt=Crystal%Nkpt,Nsite=Nsite,Beta=Beta)
+   call calc_Tc(reg(ItFolder),gap_equation,Crystal,Ulat)
    stop
+   !>>>TEST
    !
 #endif
    !
@@ -256,7 +259,7 @@ program SelfConsistency
                   stop "Wrong entry for DC_TYPE_GW. Available: GlocWloc, Sloc."
                case("GlocWloc")
                   call calc_sigmaGWdc_GlocWloc(S_GWdc,Glat,Wlat)
-               case("Sloc")
+               case("Sloc") !<-this possibility will be removed
                   call calc_sigmaGWdc(S_GWdc,Glat,Wlat)
             end select
             call dump_FermionicField(S_GWdc,reg(ItFolder),"Slat_dc_w",paramagnet)

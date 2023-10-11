@@ -210,7 +210,7 @@ contains
       allocate(DoS_Model(Ngrid));DoS_Model=0d0
       !
       call cpu_time(start)
-      call tetrahedron_integration(reg(pathINPUT),Hk_intp,Nkpt3_Model,kpt_Model,Egrid,weights_out=weights_Model,DoS_out=DoS_Model)
+      call tetrahedron_integration(reg(pathINPUT),Hk_intp,Nkpt3_Model,kpt_Model,Egrid,weights_out=weights_Model,DoS_out=DoS_Model)!,pathOUTPUT=reg(pathINPUT))
       call cpu_time(finish)
       write(*,"(A,F)") "     Tetrahedron integration cpu timing:", finish-start
       deallocate(Hk_intp)
@@ -467,21 +467,23 @@ contains
       character(len=*),intent(in)           :: pathOUTPUT
       character(len=*),intent(in)           :: printmode
       !
+      integer                               :: iw,wndx,Nmats
       integer                               :: Ngrid,Norb,Nbp
       integer                               :: iorb,jorb,ib1,ib2,a,b,c,d
-      integer                               :: iw,wndx,Nmats!,WkDim
+      integer                               :: Wk_dim,row,col,ndx
       integer                               :: ik1,ik2,iq,Nkpt
       integer                               :: iweig,jweig,iE1,iE2
       integer                               :: ithread,Nthread
       real(8)                               :: DosWeights
-      integer,allocatable                   :: kptsum(:,:),kptdif(:,:)
+      integer,allocatable                   :: kptsum(:,:),kptdif(:,:),map(:,:)
       real(8),allocatable                   :: wmats(:)
-      complex(8),allocatable                :: Wk(:)!Wk(:,:,:,:,:)!,
       complex(8),allocatable,target         :: Wk_interp(:,:,:,:)
       complex(8),pointer                    :: Wk_used(:,:,:,:)
+      complex(8),allocatable                :: Wk_full(:,:)
       type(physicalU)                       :: PhysicalUelements
       real                                  :: start,finish
-      logical                               :: calcKernels,Kstat_exists,Kdyn_exists
+      logical                               :: Kstat_exists,Kdyn_exists
+      logical                               :: Wrot_exists,calcKernels
       !
       !
       write(*,"(A)") new_line("A")//"---- calc_energy_averages"
@@ -524,6 +526,7 @@ contains
             call read_Kel("Kel_stat.DAT","stat")
          else
             calcKernels=.true.
+            deallocate(Kel_stat)
          endif
          !
       endif
@@ -537,13 +540,13 @@ contains
             call read_Kel("Wee_w.DAT","dyn")
          else
             calcKernels=.true.
+            deallocate(Wee_dyn)
          endif
          !
       endif
       !
       if(calcKernels)then
          !
-         call cpu_time(start)
          write(*,"(A)") "     One of the required Kernels is missing. Starting operations on screened interacion in Wannier basis."
          !
          if(Interpolate2Model)then
@@ -566,88 +569,184 @@ contains
          endif
          !
          call init_Uelements(Norb,PhysicalUelements)
-         call fill_ksumkdiff(kpt_Model,kptsum,kptdif)
-         deallocate(kptsum)
          !
-         Nthread = omp_get_num_threads()
+         !rotation done externally and stored
+         Wk_dim = (Nkpt*Norb) * (Nkpt*Norb+1)/2
+         allocate(Wk_full(wndx,Wk_dim));Wk_full=czero
          !
-         if(calc_Int_static) Kel_stat=czero
-         if(calc_Int_dynamic) Wee_dyn=czero
-         call cpu_time(start)
-         !
-         allocate(Wk(wndx));Wk=czero
-         !$OMP PARALLEL DEFAULT(SHARED) COPYIN(Wk),&
-         !$OMP PRIVATE(iweig,jweig,iE1,iE2,DosWeights,ithread),&
-         !$OMP PRIVATE(iorb,jorb,ik1,ik2),&
-         !$OMP PRIVATE(iq,a,b,c,d,ib1,ib2,Wk)
-         !$OMP DO
-         do iweig=1,size(finite_weights_Model,dim=1)
+         call inquireFile(reg(pathOUTPUT)//"Wrot.DAT",Wrot_exists,hardstop=.false.,verb=verbose)
+         if(Wrot_exists)then
             !
-            ithread = omp_get_thread_num()
-            print *, "thread", ithread, " / ", Nthread, " iweig: ", iweig
+            call cpu_time(start)
+            call read_Kel("Wrot.DAT","rot")
+            call cpu_time(finish)
+            write(*,"(A,F)") "     Read interaction in band basis cpu timing:", finish-start
             !
-            iE1 = finite_weights_Model(iweig,1)
-            iorb = finite_weights_Model(iweig,2)
-            ik1 = finite_weights_Model(iweig,3)
+         else
             !
-            do jweig=1,size(finite_weights_Model,dim=1)
+            !map between upper triangular and row,col
+            call cpu_time(start)
+            allocate(map(2,Wk_dim));map=0
+            !$OMP PARALLEL DEFAULT(SHARED),&
+            !$OMP PRIVATE(row,col,ndx)
+            !$OMP DO
+            do row=1,Nkpt*Norb
+               do col=row,Nkpt*Norb
+                  !
+                  ! upper triangular map (fixed)
+                  ndx = (Nkpt*Norb)*(row-1) - (row-1)*row/2 + col
+                  !
+                  map(1,ndx) = row
+                  map(2,ndx) = col
+                  !
+               enddo
+            enddo
+            !$OMP END DO
+            !$OMP END PARALLEL
+            call cpu_time(finish)
+            write(*,"(A,F)") "     Upper triangular Wmap(dim="//str(Wk_dim)//") stored cpu timing:", finish-start
+            !
+            call fill_ksumkdiff(kpt_Model,kptsum,kptdif)
+            deallocate(kptsum)
+            !
+            !rotation of the interaction W_(ab)(cd)(q) --> W_(i.k1,j.k2)(j.k2,i.k1)
+            !W_(i.k1,j.k2)(j.k2,i.k1) = sum_abcd Zdag_ia(k1) * Z_bj(k2) * Zdag_jc(k2) * Z_di(k1) W_(ab)(cd)(q=k1-k2)
+            !NOTE: only the upper triangular (c>=r) part of W_(i.k1,j.k2)(j.k2,i.k1) is computed
+            call cpu_time(start)
+            !$OMP PARALLEL DEFAULT(SHARED),&
+            !$OMP PRIVATE(ndx,row,col,iorb,jorb,ik1,ik2,iq),&
+            !$OMP PRIVATE(a,b,c,d,ib1,ib2,ithread)
+            !Nthread = omp_get_num_threads()
+            !$OMP DO
+            do ndx=1,Wk_dim
                !
-               iE2 = finite_weights_Model(jweig,1)
-               jorb = finite_weights_Model(jweig,2)
-               ik2 = finite_weights_Model(jweig,3)
+               !ithread = omp_get_thread_num()
+               !print *, "thread", ithread, " / ", Nthread, " ndx: ", ndx, " over: ", Wk_dim
+               !
+               row = map(1,ndx)
+               col = map(2,ndx)
+               !
+               !row = ik1 + (iorb-1)*Nkpt
+               iorb = floor((row-0.01)/Nkpt)+1
+               ik1  = row - (iorb-1)*Nkpt
+               !col = ik2 + (jorb-1)*Nkpt
+               jorb = floor((col-0.01)/Nkpt)+1
+               ik2  = col - (jorb-1)*Nkpt
                !
                iq = kptdif(ik1,ik2)
                !
-               !rotation performed only for the requested indexes
-               Wk=czero
                do ib1=1,Nbp
                   !
-                  !Diagonal elements
+                  !diagonal elements
                   a = PhysicalUelements%Full_Map(ib1,ib1,1)
                   b = PhysicalUelements%Full_Map(ib1,ib1,2)
                   c = PhysicalUelements%Full_Map(ib1,ib1,3)
                   d = PhysicalUelements%Full_Map(ib1,ib1,4)
                   !
-                  Wk = Wk + Wk_used(ib1,ib1,:,iq) * conjg(Zk_Model(a,iorb,ik1)) * Zk_Model(b,jorb,ik2)     &
-                                                  * conjg(Zk_Model(c,jorb,ik2)) * Zk_Model(d,iorb,ik1)
+                  Wk_full(:,ndx) = Wk_full(:,ndx)                                                                  &
+                                 + Wk_used(ib1,ib1,1:wndx,iq) * conjg(Zk_Model(a,iorb,ik1)) * Zk_Model(b,jorb,ik2) &
+                                                              * conjg(Zk_Model(c,jorb,ik2)) * Zk_Model(d,iorb,ik1)
                   !
                   do ib2=ib1+1,Nbp
                      !
+                     !off-diagonal elements
                      a = PhysicalUelements%Full_Map(ib1,ib2,1)
                      b = PhysicalUelements%Full_Map(ib1,ib2,2)
                      c = PhysicalUelements%Full_Map(ib1,ib2,3)
                      d = PhysicalUelements%Full_Map(ib1,ib2,4)
                      !
-                     !off-diag elements
-                     Wk = Wk + Wk_used(ib1,ib2,:,iq) * conjg(Zk_Model(a,iorb,ik1)) * Zk_Model(b,jorb,ik2)  &
-                                                     * conjg(Zk_Model(c,jorb,ik2)) * Zk_Model(d,iorb,ik1)  &
-                             + Wk_used(ib2,ib1,:,iq) * conjg(Zk_Model(c,iorb,ik1)) * Zk_Model(d,jorb,ik2)  &
-                                                     * conjg(Zk_Model(a,jorb,ik2)) * Zk_Model(b,iorb,ik1)
+                     Wk_full(:,ndx) = Wk_full(:,ndx)                                                                   &
+                                    + Wk_used(ib1,ib2,1:wndx,iq) * conjg(Zk_Model(a,iorb,ik1)) * Zk_Model(b,jorb,ik2)  &
+                                                                 * conjg(Zk_Model(c,jorb,ik2)) * Zk_Model(d,iorb,ik1)  &
+                                    + Wk_used(ib2,ib1,1:wndx,iq) * conjg(Zk_Model(c,iorb,ik1)) * Zk_Model(d,jorb,ik2)  &
+                                                                 * conjg(Zk_Model(a,jorb,ik2)) * Zk_Model(b,iorb,ik1)
                      !
                   enddo
                enddo
                !
+            enddo
+            !$OMP END DO
+            !$OMP END PARALLEL
+            call cpu_time(finish)
+            deallocate(map,kptdif)
+            call dump_Kel("Wrot.DAT","rot")
+            write(*,"(A,F)") "     Rotation of the interaction to band basis cpu timing:", finish-start
+            !
+         endif
+         if(allocated(Wk_interp))deallocate(Wk_interp)
+         nullify(Wk_used)
+         !
+         !
+         !Kernels calculation
+         call cpu_time(start)
+         if(calc_Int_static)then
+            allocate(Kel_stat(Ngrid,Ngrid));Kel_stat=czero
+         endif
+         if(calc_Int_dynamic)then
+            allocate(Wee_dyn(wndx,Ngrid,Ngrid));Wee_dyn=czero
+         endif
+         !$OMP PARALLEL DEFAULT(SHARED),&
+         !$OMP PRIVATE(iweig,jweig,iE1,iE2,DosWeights),&
+         !$OMP PRIVATE(ndx,row,col,iorb,jorb,ik1,ik2)
+         !Nthread = omp_get_num_threads()
+         !$OMP DO
+         do jweig=1,size(finite_weights_Model,dim=1)
+            !
+            iE2 = finite_weights_Model(jweig,1)
+            jorb = finite_weights_Model(jweig,2)
+            ik2 = finite_weights_Model(jweig,3)
+            !
+            !ithread = omp_get_thread_num()
+            !print *, "thread", ithread, " / ", Nthread, " jweig: ", jweig, " over: ", size(finite_weights_Model,dim=1)
+            !
+            do iweig=1,size(finite_weights_Model,dim=1)
+               !
+               iE1 = finite_weights_Model(iweig,1)
+               iorb = finite_weights_Model(iweig,2)
+               ik1 = finite_weights_Model(iweig,3)
+               !
+               ! product basis map
+               row = ik1 + (iorb-1)*Nkpt
+               col = ik2 + (jorb-1)*Nkpt
+               !
+               ! upper triangular map (fixed)
+               ndx = (Nkpt*Norb)*(row-1) - (row-1)*row/2 + col
+               !
                DosWeights = (weights_Model(iE1,iorb,ik1)/DoS_Model(iE1)) * (weights_Model(iE2,jorb,ik2)/DoS_Model(iE2))
-               if(calc_Int_static)  Kel_stat(iE1,iE2) = Kel_stat(iE1,iE2) + Wk(1) * DosWeights
-               if(calc_Int_dynamic) Wee_dyn(:,iE1,iE2) = Wee_dyn(:,iE1,iE2) + (Wk(:)-Wk(1)) * DosWeights
+               !
+               if(calc_Int_static)then
+                  if(col.ge.row)then
+                     Kel_stat(iE1,iE2) = Kel_stat(iE1,iE2) + Wk_full(1,ndx) * DosWeights
+                  else
+                     Kel_stat(iE1,iE2) = Kel_stat(iE1,iE2) + conjg(Wk_full(1,ndx)) * DosWeights
+                  endif
+               endif
+               !
+               if(calc_Int_dynamic)then
+                  if(col.ge.row)then
+                     Wee_dyn(:,iE1,iE2) = Wee_dyn(:,iE1,iE2) + (Wk_full(:,ndx)-Wk_full(1,ndx)) * DosWeights
+                  else
+                     Wee_dyn(:,iE1,iE2) = Wee_dyn(:,iE1,iE2) + conjg(Wk_full(:,ndx)-Wk_full(1,ndx)) * DosWeights
+                  endif
+               endif
                !
             enddo
          enddo
          !$OMP END DO
          !$OMP END PARALLEL
-         !
-         if(calc_Int_static)  Kel_stat = Kel_stat * eV2DFTgrid
-         if(calc_Int_dynamic) Wee_dyn = Wee_dyn * eV2DFTgrid
-         !
-         deallocate(Wk)
-         deallocate(kptdif)
-         nullify(Wk_used)
-         if(allocated(Wk_interp))deallocate(Wk_interp)
+         deallocate(Wk_full,weights_Model,finite_weights_Model)
          call cpu_time(finish)
          write(*,"(A,F)") "     Calculation of static electronic Kernel cpu timing:", finish-start
          !
-         if(calc_Int_static)call dump_Kel("Kel_stat.DAT","stat")
-         if(calc_Int_dynamic)call dump_Kel("Wee_w.DAT","dyn")
+         if(calc_Int_static)then
+            Kel_stat = Kel_stat * eV2DFTgrid
+            call dump_Kel("Kel_stat.DAT","stat")
+         endif
+         !
+         if(calc_Int_dynamic)then
+            Wee_dyn = Wee_dyn * eV2DFTgrid
+            call dump_Kel("Wee_w.DAT","dyn")
+         endif
          !
       endif
       !
@@ -687,7 +786,7 @@ contains
          select case(reg(mode))
             case default
                !
-               stop "dump_Kel: Available modes are: stat, dyn."
+               stop "dump_Kel: Available modes are: stat, dyn, rot."
                !
             case("stat")
                !
@@ -717,6 +816,20 @@ contains
                      do iD1=1,D1
                         write(unit) iD1,dreal(Wee_dyn(iD1,iD2,iD3)),dimag(Wee_dyn(iD1,iD2,iD3))
                      enddo
+                  enddo
+               enddo
+               close(unit)
+               !
+            case("rot")
+               !
+               D1 = size(Kel_stat,dim=1)
+               D2 = size(Kel_stat,dim=2)
+               !
+               write(unit) D1,D2
+               do iD2=1,D2
+                  write(unit) iD2
+                  do iD1=1,D1
+                     write(unit) iD1,dreal(Wk_full(iD1,iD2)),dimag(Wk_full(iD1,iD2))
                   enddo
                enddo
                close(unit)
@@ -752,7 +865,7 @@ contains
          select case(reg(mode))
             case default
                !
-               stop "dump_Kel: Available modes are: stat, dyn."
+               stop "dump_Kel: Available modes are: stat, dyn, rot."
                !
             case("stat")
                !
@@ -800,6 +913,28 @@ contains
                         if(iD1_.ne.iD1) stop "read_Kel: wrong iD1 index."
                         Wee_dyn(iD1,iD2,iD3) = dcmplx(ReW,ImW)
                      enddo
+                  enddo
+               enddo
+               close(unit)
+               !
+            case("rot")
+               !
+               if(.not.allocated(Wk_full)) stop "read_Kel: Wk_full not allocated."
+               !
+               D1 = size(Wk_full,dim=1)
+               D2 = size(Wk_full,dim=2)
+               !
+               read(unit) D1_,D2_
+               if(D1_.ne.D1) stop "read_Kel: Wk_full from file has wrong 1st dimension."
+               if(D2_.ne.D2) stop "read_Kel: Wk_full from file has wrong 2nd dimension."
+               !
+               do iD2=1,D2
+                  read(unit) iD2_
+                  if(iD2_.ne.iD2) stop "read_Kel: wrong iD2 index."
+                  do iD1=1,D1
+                     read(unit) iD1_,ReW,ImW
+                     if(iD1_.ne.iD1) stop "read_Kel: wrong iD1 index."
+                     Wk_full(iD1,iD2) = dcmplx(ReW,ImW)
                   enddo
                enddo
                close(unit)
@@ -858,19 +993,21 @@ contains
       write(*,"(A,F10.5)") new_line("A")//"     get_Kel: Model DoS at the Fermi level:",DoS0
       if(Egrid(Efermi_ndx).ne.0d0) stop "get_Kel: the energy grid requires the E=0 point."
       !
-      Nmats = size(Wee_dyn,dim=1)
       Ngrid = size(Egrid)
       call assert_shape(Kel,[Ngrid,Ngrid],"get_Kel","Kel")
-      !
-      allocate(wmats(Nmats));wmats=BosonicFreqMesh(Beta,Nmats)
-      wmax = wmats(Nmats)
-      MatsStep = abs(wmats(2)-wmats(1))
-      write(*,"(A,F10.5)") "     Bosonic frequency step:",MatsStep
       !
       call cpu_time(start)
       Kel=czero
       !
       if(calc_Int_dynamic)then
+         !
+         Nmats = size(Wee_dyn,dim=1)
+         !this mesh is already in correct units given by the input Beta
+         allocate(wmats(Nmats));wmats=BosonicFreqMesh(Beta,Nmats)
+         wmax = wmats(Nmats)
+         MatsStep = abs(wmats(2)-wmats(1))
+         write(*,"(A,F)") "     Bosonic frequency step:",MatsStep
+         write(*,"(A,F)") "     Bosonic frequency cutoff iw["//str(Nmats)//"]:",wmax
          !
          !$OMP PARALLEL DEFAULT(PRIVATE),&
          !$OMP SHARED(Ngrid,Egrid,Efermi_ndx,Nmats,wmats,MatsStep,Beta,Kel,Wee_dyn)
@@ -878,7 +1015,7 @@ contains
          do iE1=1,Ngrid
             if(iE1.eq.Efermi_ndx)cycle
             do iE2=1,Ngrid
-               if(iE1.eq.Efermi_ndx)cycle
+               if(iE2.eq.Efermi_ndx)cycle
                !
                E1=Egrid(iE1)
                E2=Egrid(iE2)

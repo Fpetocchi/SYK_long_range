@@ -1946,3 +1946,78 @@ call dump_BosonicField(Ulat,reg(ItFolder),"Ulat_Rot_noAll_back.DAT")
 !
 stop
 !>>>TEST
+
+
+
+
+
+
+
+
+
+
+
+
+! This part below is used for on-the-flight rotations
+allocate(Wk(wndx));Wk=czero
+!$OMP PARALLEL DEFAULT(SHARED) COPYIN(Wk),&
+!$OMP PRIVATE(iweig,jweig,iE1,iE2,DosWeights,ithread),&
+!$OMP PRIVATE(iorb,jorb,ik1,ik2),&
+!$OMP PRIVATE(iq,a,b,c,d,ib1,ib2,Wk)
+!$OMP DO
+do jweig=1,size(finite_weights_Model,dim=1)
+   !
+   iE2 = finite_weights_Model(jweig,1)
+   jorb = finite_weights_Model(jweig,2)
+   ik2 = finite_weights_Model(jweig,3)
+   !
+   ithread = omp_get_thread_num()
+   print *, "thread", ithread, " / ", Nthread, " jweig: ", jweig
+   !
+   do iweig=1,size(finite_weights_Model,dim=1)
+      !
+      if(ithread.eq.1) print *, " iweig: ", iweig
+      !
+      iE1 = finite_weights_Model(iweig,1)
+      iorb = finite_weights_Model(iweig,2)
+      ik1 = finite_weights_Model(iweig,3)
+      !
+      iq = kptdif(ik1,ik2)
+      !
+      !rotation performed only for the requested indexes
+      Wk=czero
+      do ib1=1,Nbp
+         !
+         !diagonal elements
+         a = PhysicalUelements%Full_Map(ib1,ib1,1)
+         b = PhysicalUelements%Full_Map(ib1,ib1,2)
+         c = PhysicalUelements%Full_Map(ib1,ib1,3)
+         d = PhysicalUelements%Full_Map(ib1,ib1,4)
+         !
+         Wk = Wk + Wk_used(ib1,ib1,1:wndx,iq) * conjg(Zk_Model(a,iorb,ik1)) * Zk_Model(b,jorb,ik2)     &
+                                              * conjg(Zk_Model(c,jorb,ik2)) * Zk_Model(d,iorb,ik1)
+         !
+         do ib2=ib1+1,Nbp
+            !
+            a = PhysicalUelements%Full_Map(ib1,ib2,1)
+            b = PhysicalUelements%Full_Map(ib1,ib2,2)
+            c = PhysicalUelements%Full_Map(ib1,ib2,3)
+            d = PhysicalUelements%Full_Map(ib1,ib2,4)
+            !
+            !off-diagonal elements
+            Wk = Wk + Wk_used(ib1,ib2,1:wndx,iq) * conjg(Zk_Model(a,iorb,ik1)) * Zk_Model(b,jorb,ik2)  &
+                                                 * conjg(Zk_Model(c,jorb,ik2)) * Zk_Model(d,iorb,ik1)  &
+                    + Wk_used(ib2,ib1,1:wndx,iq) * conjg(Zk_Model(c,iorb,ik1)) * Zk_Model(d,jorb,ik2)  &
+                                                 * conjg(Zk_Model(a,jorb,ik2)) * Zk_Model(b,iorb,ik1)
+            !
+         enddo
+      enddo
+      !
+      DosWeights = (weights_Model(iE1,iorb,ik1)/DoS_Model(iE1)) * (weights_Model(iE2,jorb,ik2)/DoS_Model(iE2))
+      if(calc_Int_static)  Kel_stat(iE1,iE2) = Kel_stat(iE1,iE2) + Wk(1) * DosWeights
+      if(calc_Int_dynamic) Wee_dyn(:,iE1,iE2) = Wee_dyn(:,iE1,iE2) + (Wk(:)-Wk(1)) * DosWeights
+      !
+   enddo
+enddo
+!$OMP END DO
+!$OMP END PARALLEL

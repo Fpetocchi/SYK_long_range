@@ -1203,7 +1203,7 @@ contains
    !         kptsym(1:nkpt,nsym): k-point indices after performing a symmetry operation
    !         to each k: R(isym)*kpt(ik) = kpt(kptsym(ik,isym)) + gkptsym(1:3,ik,isym)
    !---------------------------------------------------------------------------!
-   subroutine calc_irredBZ(pathINPUT,nkpt3,nkpti,kptp,pkpt,nkstar,kpt_out,store)
+   subroutine calc_irredBZ(pathINPUT,nkpt3,nkpti,kptp,pkpt,nkstar,kpt_out,print)
       !
       use utils_misc
       implicit none
@@ -1215,7 +1215,7 @@ contains
       integer,allocatable,intent(out)       :: pkpt(:,:,:)
       real(8),allocatable,intent(out)       :: nkstar(:)
       real(8),allocatable,intent(out),optional :: kpt_out(:,:)
-      logical,intent(in),optional           :: store
+      logical,intent(in),optional           :: print
       !
       type(symtype),allocatable             :: sym(:)
       integer                               :: Nsym,Nkpt,ik,k1,k2,k3
@@ -1225,14 +1225,14 @@ contains
       real(8),allocatable                   :: kpt(:,:),kptw(:)
       integer,allocatable                   :: symkpt(:),iarr(:),kptsym(:,:)!,gkptsym(:,:,:)
       integer                               :: unit
-      logical                               :: store_,filexists,cond1,cond2,err
+      logical                               :: print_,filexists,cond1,cond2,err
       !
       !
       if(verbose)write(*,"(A)") "---- calc_irredBZ"
       !
       !
-      store_=.false.
-      if(present(store))store_=store
+      print_=.false.
+      if(present(print))print_=print
       !
       !reading symmetry file from SPEX
       call inquireFile(reg(pathINPUT)//"sym.DAT",filexists)
@@ -1418,7 +1418,7 @@ contains
       !
       write(*,"(A,I)") "     Total number of k-points: ",Nkpt
       write(*,"(A,I)") "     Number of k-points in IBZ: ",Nkpti
-      if(store_)then
+      if(print_)then
          unit = free_unit()
          open(unit,file=reg(pathINPUT)//"Kpoints_BZirred.DAT",form="formatted",status="unknown",position="rewind",action="write")
          write(unit,"(I5,F20.10)") Nkpti,scale
@@ -4590,7 +4590,7 @@ contains
    !      k,n                           n   e (k) = E
    !                                         n       F
    !---------------------------------------------------------------------------!
-   subroutine tetrahedron_integration(pathINPUT,Hk_orig,nkpt3,kpt,Egrid,weights_out,DoS_out,fact_intp,pathOUTPUT,store_weights)
+   subroutine tetrahedron_integration(pathINPUT,Hk_orig,nkpt3,kpt,Egrid,weights_out,DoS_out,fact_intp,pathOUTPUT)
       !
       use linalg, only : eigh
       use utils_misc
@@ -4603,7 +4603,6 @@ contains
       real(8),intent(in)                    :: Egrid(:)
       integer,intent(in),optional           :: fact_intp
       character(len=*),intent(in),optional  :: pathOUTPUT
-      logical,intent(in),optional           :: store_weights
       real(8),intent(out),optional          :: weights_out(:,:,:)
       real(8),intent(out),optional          :: DoS_out(:)
       !
@@ -4622,7 +4621,7 @@ contains
       real(8)                               :: rdum,dE,DoSnorm
       real(8)                               :: Ecube(8),Etetra(4)
       real(8)                               :: f(4),atria(2),wtria(4,2)
-      logical                               :: filexists,store_weights_
+      logical                               :: filexists
       integer,parameter                     :: tetra(4,6)=reshape( (/ 1,2,3,6, 5,3,6,7, 1,5,3,6, 8,6,7,2, 4,7,2,3, 8,4,7,2 /),(/ 4,6 /) )
       !
       !
@@ -4639,16 +4638,13 @@ contains
       Ngrid = size(Egrid)
       dE = abs(Egrid(10)-Egrid(9))
       !
-      store_weights_=.false.
-      if(present(store_weights))store_weights_=store_weights
-      !
       if(present(fact_intp))then
          !
          Nkpt3_used = Nkpt3*fact_intp
          Nkpt = product(Nkpt3_used)
          !
          !Generate K-points in the irreducible BZ (finer K-mesh)
-         call calc_irredBZ(reg(pathINPUT),Nkpt3_used,Nkpti,kptp,pkpt,nkstar,kpt_out=kpt_intp)
+         call calc_irredBZ(reg(pathINPUT),Nkpt3_used,Nkpti,kptp,pkpt,nkstar,kpt_out=kpt_intp,print=present(pathOUTPUT))
          !
          !Interpolate Hk to the new K mesh
          allocate(Hk_intp(Norb,Norb,Nkpt));Hk_intp=czero
@@ -4660,7 +4656,7 @@ contains
          Nkpt = product(Nkpt3_used)
          !
          !Generate K-points in the irreducible BZ
-         call calc_irredBZ(reg(pathINPUT),Nkpt3_used,Nkpti,kptp,pkpt,nkstar,store=store_weights_)
+         call calc_irredBZ(reg(pathINPUT),Nkpt3_used,Nkpti,kptp,pkpt,nkstar,print=present(pathOUTPUT))
          !
          !Copy input Hk
          allocate(Hk_intp(Norb,Norb,Nkpt));Hk_intp=czero
@@ -4794,7 +4790,7 @@ contains
       enddo
       deallocate(kptp,pkpt,nkstar,Ek)
       !
-      if(present(pathOUTPUT).and.store_weights_)then
+      if(present(pathOUTPUT))then
          unit = free_unit()
          open(unit,file=reg(pathOUTPUT)//"Weights_BZ.DAT",form="formatted",status="unknown",position="rewind",action="write")
          do igrid=1,Ngrid

@@ -317,7 +317,9 @@ contains
 
 
    !---------------------------------------------------------------------------!
-   !PURPOSE: Compute the two local GW self-energy components as Gloc*Wloc.
+   !PURPOSE: Compute the two local GW self-energy components as
+   !         Sloc-Gnonloc*Wnonloc. This is kept but not made available to users
+   !         as it can produce inconsistencies for multi-site calculations.
    !---------------------------------------------------------------------------!
    subroutine calc_sigmaGWdc(Smats_dc,Gmats,Wmats)
       !
@@ -560,6 +562,9 @@ contains
       call DeallocateFermionicField(Smats_X_stored)
       !
       !Eq.36 of PRM 1, 043803 (2017)
+      !BEWARE THID FORMULA IS WRONG WITH MULTIPLE SITES:
+      !Smats_loc = Slat contains also elements between the sites while Smats_outer only local self-energies for the sites actually solved.
+      !so the difference contains stuff between the sites which is removed and not replaced by DMFT
       Smats_dc%ws = Smats_loc%ws - Smats_outer%ws
       call DeallocateFermionicField(Smats_loc)
       call DeallocateFermionicField(Smats_outer)

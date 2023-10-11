@@ -21,7 +21,7 @@ subroutine interpolate2kpath_Fermionic(Sfull,Lttc,pathOUTPUT)
    type(FermionicField)                  :: Spath
    type(FermionicField)                  :: Sfermi
    type(FermionicField)                  :: Sloc
-   type(FermionicField)                  :: Gpath,Gpath_auxkz
+   type(FermionicField)                  :: Gpath
    type(FermionicField)                  :: Gfull
    type(FermionicField)                  :: Gfermi
    !
@@ -33,12 +33,19 @@ subroutine interpolate2kpath_Fermionic(Sfull,Lttc,pathOUTPUT)
    real(8)                               :: k1,k2,k3,Bx,By,Bz,Bx_old,Blat(3,3)
    character(len=256)                    :: path
    logical                               :: Kdependence
+   logical                               :: WannInterpSigma=.false.
    real                                  :: start,finish
    !
    !TEST>>>
-   integer                               :: Nkz,Nkz_,ikz
-   real(8)                               :: kz,kzfact,Bz_thresh
+   logical                               :: integrate_kz=.false.
+   logical                               :: dump_BAB=.false.
+   logical                               :: dump_unfolded=.false.,print_AB=.false.
+   integer                               :: Nkp,Nkz,Nkz_,ikz,iwig
+   integer                               :: nx,ny,nz,isite,jsite,iwig_old
+   real(8)                               :: kz,kzfact,Bz_thresh,KR,cfac
    real(8),allocatable                   :: kptpath_auxkz(:,:)
+   complex(8),allocatable                :: Gfull_R(:,:,:,:),Gfull_R_halfkz(:,:,:,:)
+   type(FermionicField)                  :: Gpath_auxkz,Gfull_aux
    !>>>TEST
    !
    !
@@ -177,10 +184,34 @@ subroutine interpolate2kpath_Fermionic(Sfull,Lttc,pathOUTPUT)
                if(paramagnet)exit
             enddo
             !
-            !Recompute the Green's function
             call AllocateFermionicField(Gpath,Norb,Nmats,Nkpt=Lttc%Nkpt_path,Nsite=Sfull%Nsite,Beta=Sfull%Beta,mu=Sfull%mu)
-            call calc_Gmats(Gpath,Lttc,Smats=Spath,along_path=.true.)
-            call DeallocateFermionicField(Spath)
+            if(WannInterpSigma)then
+               !
+               !Recompute the Green's function using interpolated Sigma and Hk
+               call calc_Gmats(Gpath,Lttc,Smats=Spath,along_path=.true.)
+               call DeallocateFermionicField(Spath)
+               !
+            else
+               !
+               !Interpolate directly the Green's function from the BZ to the path
+               call DeallocateFermionicField(Spath)
+               !
+               call AllocateFermionicField(Gfull,Norb,Nmats,Nkpt=Lttc%Nkpt,Nsite=Sfull%Nsite,Beta=Sfull%Beta,mu=Sfull%mu)
+               call calc_Gmats(Gfull,Lttc,Smats=Sfull,along_path=.false.)
+               !
+               call cpu_time(start)
+               do ispin=1,Nspin
+                  call wannierinterpolation(Lttc%Nkpt3,Lttc%kpt,Lttc%kptpath(:,1:Lttc%Nkpt_path),Gfull%wks(:,:,:,:,ispin),Gpath%wks(:,:,:,:,ispin))
+                  if(paramagnet)then
+                     Gpath%wks(:,:,:,:,Nspin) = Gpath%wks(:,:,:,:,1)
+                     exit
+                  endif
+               enddo
+               call DeallocateFermionicField(Gfull)
+               call cpu_time(finish)
+               write(*,"(A,F)") new_line("A")//new_line("A")//"     G(fullBZ,iw) --> G(Kpath,iw) cpu timing:", finish-start
+               !
+            endif
             !
          endif
          !
@@ -235,10 +266,34 @@ subroutine interpolate2kpath_Fermionic(Sfull,Lttc,pathOUTPUT)
                if(paramagnet)exit
             enddo
             !
-            !Recompute the Green's function
             call AllocateFermionicField(Gfermi,Norb,Nmats,Nkpt=Lttc%Nkpt_Plane,Nsite=Sfull%Nsite,Beta=Sfull%Beta,mu=Sfull%mu)
-            call calc_Gmats(Gfermi,Lttc,Smats=Sfermi,along_plane=.true.)
-            call DeallocateFermionicField(Sfermi)
+            if(WannInterpSigma)then
+               !
+               !Recompute the Green's function using interpolated Sigma and Hk
+               call calc_Gmats(Gfermi,Lttc,Smats=Sfermi,along_plane=.true.)
+               call DeallocateFermionicField(Sfermi)
+               !
+            else
+               !
+               !Interpolate directly the Green's function from the BZ to the plane
+               call DeallocateFermionicField(Sfermi)
+               !
+               call AllocateFermionicField(Gfull,Norb,Nmats,Nkpt=Lttc%Nkpt,Nsite=Sfull%Nsite,Beta=Sfull%Beta,mu=Sfull%mu)
+               call calc_Gmats(Gfull,Lttc,Smats=Sfull,along_path=.false.)
+               !
+               call cpu_time(start)
+               do ispin=1,Nspin
+                  call wannierinterpolation(Lttc%Nkpt3,Lttc%kpt,Lttc%kptPlane,Gfull%wks(:,:,:,:,ispin),Gfermi%wks(:,:,:,:,ispin))
+                  if(paramagnet)then
+                     Gfermi%wks(:,:,:,:,Nspin) = Gfermi%wks(:,:,:,:,1)
+                     exit
+                  endif
+               enddo
+               call DeallocateFermionicField(Gfull)
+               call cpu_time(finish)
+               write(*,"(A,F)") "     G(fullBZ,iw) --> G(kx,ky,iw) cpu timing:", finish-start
+               !
+            endif
             !
          endif
          !
@@ -268,60 +323,195 @@ subroutine interpolate2kpath_Fermionic(Sfull,Lttc,pathOUTPUT)
             call calc_Gmats(Gpath,Lttc,Smats=Sloc,along_path=.true.)
             !
             !TEST>>>
+            !!if((.not.integrate_kz).and.(.not.dump_BAB).and.(.not.dump_unfolded)) call calc_Gmats(Gpath,Lttc,Smats=Sloc,along_path=.true.)
+            !>>>TEST
             !
-            !call get_Blat(Blat)
-            !allocate(kptpath_auxkz(3,Lttc%Nkpt_path));kptpath_auxkz=0d0
-            !!
-            !Bz_thresh = 5.1
-            !Nkz = 100
-            !Nkz_ = Nkz
-            !!
-            !do ikz=1,Nkz
-            !   !
-            !   kptpath_auxkz = Lttc%kptpath(:,1:Lttc%Nkpt_path)
-            !   !
-            !   kz = (ikz-1)*1d0/Nkz - 0.5d0
-            !   kptpath_auxkz(3,:) = kptpath_auxkz(3,:) + kz
-            !   !
-            !   unit = free_unit()
-            !   open(unit,file="Ktest_"//str(ikz)//".DAT",form="formatted",status="unknown",position="rewind",action="write")
-            !   do ik=1,Lttc%Nkpt_path
-            !      !
-            !      k1 = kptpath_auxkz(1,ik)
-            !      k2 = kptpath_auxkz(2,ik)
-            !      k3 = kptpath_auxkz(3,ik)
-            !      !
-            !      Bx = k1*Blat(1,1) + k2*Blat(1,2) + k3*Blat(1,3)
-            !      By = k1*Blat(2,1) + k2*Blat(2,2) + k3*Blat(2,3)
-            !      Bz = k1*Blat(3,1) + k2*Blat(3,2) + k3*Blat(3,3)
-            !      !
-            !      write(unit,"(1I5,200E20.12)") ik,0d0,kptpath_auxkz(:,ik),Bx,By,Bz
-            !      !
-            !   enddo
-            !   close(unit)
-            !   !
-            !   kzfact = 1d0
-            !   if(abs(Bz).gt.Bz_thresh)then
-            !      kzfact = 0d0
-            !      Nkz_ = Nkz_ - 1
-            !   endif
-            !   write(*,*)ikz,"Bz",Bz,abs(Bz),kzfact,Nkz_
-            !   !
-            !   call cpu_time(start)
-            !   Lttc%Hk_path = czero
-            !   call wannierinterpolation(Lttc%Nkpt3,Lttc%kpt,kptpath_auxkz(:,1:Lttc%Nkpt_path),Lttc%Hk,Lttc%Hk_path)
-            !   call cpu_time(finish)
-            !   !write(*,"(A,F)") "     (fullBZ) --> (Kpath,kz="//str(ikz)//") cpu timing:", finish-start
-            !   !
-            !   call AllocateFermionicField(Gpath_auxkz,Norb,Nmats,Nkpt=Lttc%Nkpt_path,Nsite=Sfull%Nsite,Beta=Sfull%Beta,mu=Sfull%mu)
-            !   call calc_Gmats(Gpath_auxkz,Lttc,Smats=Sloc,along_path=.true.)
-            !   !
-            !   Gpath%wks = Gpath%wks + kzfact*Gpath_auxkz%wks
-            !   !
-            !   call DeallocateFermionicField(Gpath_auxkz)
-            !   !
-            !enddo
-            !Gpath%wks = Gpath%wks/Nkz_
+            !TEST>>> This portion is to integrate over a given thickness in kz
+            !!if(integrate_kz)then
+            !!   !
+            !!   call get_Blat(Blat)
+            !!   allocate(kptpath_auxkz(3,Lttc%Nkpt_path));kptpath_auxkz=0d0
+            !!   !
+            !!   Bz_thresh = 5.1
+            !!   Nkz = 100
+            !!   Nkz_ = Nkz
+            !!   !
+            !!   do ikz=1,Nkz
+            !!      !
+            !!      kptpath_auxkz = Lttc%kptpath(:,1:Lttc%Nkpt_path)
+            !!      !
+            !!      kz = (ikz-1)*1d0/Nkz - 0.5d0
+            !!      kptpath_auxkz(3,:) = kptpath_auxkz(3,:) + kz
+            !!      !
+            !!      unit = free_unit()
+            !!      open(unit,file="Ktest_"//str(ikz)//".DAT",form="formatted",status="unknown",position="rewind",action="write")
+            !!      do ik=1,Lttc%Nkpt_path
+            !!         !
+            !!         k1 = kptpath_auxkz(1,ik)
+            !!         k2 = kptpath_auxkz(2,ik)
+            !!         k3 = kptpath_auxkz(3,ik)
+            !!         !
+            !!         Bx = k1*Blat(1,1) + k2*Blat(1,2) + k3*Blat(1,3)
+            !!         By = k1*Blat(2,1) + k2*Blat(2,2) + k3*Blat(2,3)
+            !!         Bz = k1*Blat(3,1) + k2*Blat(3,2) + k3*Blat(3,3)
+            !!         !
+            !!         write(unit,"(1I5,200E20.12)") ik,0d0,kptpath_auxkz(:,ik),Bx,By,Bz
+            !!         !
+            !!      enddo
+            !!      close(unit)
+            !!      !
+            !!      kzfact = 1d0
+            !!      if(abs(Bz).gt.Bz_thresh)then
+            !!         kzfact = 0d0
+            !!         Nkz_ = Nkz_ - 1
+            !!      endif
+            !!      write(*,*)ikz,"Bz",Bz,abs(Bz),kzfact,Nkz_
+            !!      !
+            !!      call cpu_time(start)
+            !!      Lttc%Hk_path = czero
+            !!      call wannierinterpolation(Lttc%Nkpt3,Lttc%kpt,kptpath_auxkz(:,1:Lttc%Nkpt_path),Lttc%Hk,Lttc%Hk_path)
+            !!      call cpu_time(finish)
+            !!      !write(*,"(A,F)") "     (fullBZ) --> (Kpath,kz="//str(ikz)//") cpu timing:", finish-start
+            !!      !
+            !!      call AllocateFermionicField(Gpath_auxkz,Norb,Nmats,Nkpt=Lttc%Nkpt_path,Nsite=Sfull%Nsite,Beta=Sfull%Beta,mu=Sfull%mu)
+            !!      call calc_Gmats(Gpath_auxkz,Lttc,Smats=Sloc,along_path=.true.)
+            !!      !
+            !!      Gpath%wks = Gpath%wks + kzfact*Gpath_auxkz%wks
+            !!      !
+            !!      call DeallocateFermionicField(Gpath_auxkz)
+            !!      !
+            !!   enddo
+            !!   Gpath%wks = Gpath%wks/Nkz_
+            !!   !
+            !!endif
+            !>>>TEST
+            !
+            !TEST>>> This portion is to pass from orbital basis to B/AB basis directly on Gpath
+            !!if(dump_BAB)then
+            !!   !
+            !!   call calc_Gmats(Gpath,Lttc,Smats=Sloc,along_path=.true.)
+            !!   !
+            !!   call duplicate(Gpath_auxkz,Gpath)
+            !!   call DeallocateField(Gpath)
+            !!   !
+            !!   call AllocateFermionicField(Gpath,Norb,Nmats,Nkpt=Lttc%Nkpt_path,Nsite=Sfull%Nsite,Beta=Sfull%Beta,mu=Sfull%mu)
+            !!   !
+            !!   Gpath%wks(1,1,:,:,:) = (Gpath_auxkz%wks(1,1,:,:,:)+Gpath_auxkz%wks(2,2,:,:,:)+Gpath_auxkz%wks(1,2,:,:,:)+Gpath_auxkz%wks(2,1,:,:,:))/2d0
+            !!   Gpath%wks(2,2,:,:,:) = (Gpath_auxkz%wks(1,1,:,:,:)+Gpath_auxkz%wks(2,2,:,:,:)-Gpath_auxkz%wks(1,2,:,:,:)-Gpath_auxkz%wks(2,1,:,:,:))/2d0
+            !!   !
+            !!   call DeallocateFermionicField(Gpath_auxkz)
+            !!   !
+            !!endif
+            !>>>TEST
+            !
+            !TEST>>> This portion is to pass from orbital basis to B/AB basis directly on Gpath
+            !!if(dump_unfolded)then
+            !!   !
+            !!   call AllocateFermionicField(Gfull,Norb,Nmats,Nkpt=Lttc%Nkpt,Nsite=Sfull%Nsite,Beta=Sfull%Beta,mu=Sfull%mu)
+            !!   call calc_Gmats(Gfull,Lttc,Smats=Sfull,along_path=.false.)
+            !!   write(*,*)"Gfull(K) computed"
+            !!   !
+            !!   if(print_AB)then
+            !!      Gfull%wks(1,2,:,:,:) = -Gfull%wks(1,2,:,:,:)
+            !!      Gfull%wks(2,1,:,:,:) = -Gfull%wks(2,1,:,:,:)
+            !!   endif
+            !!   !
+            !!   allocate(Gfull_R(Norb,Norb,Nmats,Nwig));Gfull_R=czero
+            !!   call wannier_K2R(Lttc%Nkpt3,Lttc%kpt,Gfull%wks(:,:,:,:,1),Gfull_R)
+            !!   call DeallocateField(Gfull)
+            !!   write(*,*)"Gfull_AB(R) computed"
+            !!   !
+            !!   allocate(Gfull_R_halfkz(3*Norb,3*Norb,Nmats,Nwig));Gfull_R_halfkz=czero
+            !!   !
+            !!   do nx=minval(Nvecwig(1,:)),maxval(Nvecwig(1,:)),1
+            !!      do ny=minval(Nvecwig(2,:)),maxval(Nvecwig(2,:)),1
+            !!         !
+            !!         !new iwig
+            !!         iwig = find_vec([nx,ny,0],Nvecwig,hardstop=.false.)
+            !!         if(iwig.eq.0)cycle
+            !!         !
+            !!         do nz=minval(Nvecwig(3,:)),maxval(Nvecwig(3,:)),1
+            !!            !
+            !!            if(nz.eq.0)then
+            !!               !diagonals
+            !!               do ik=1,3
+            !!                  Gfull_R_halfkz(1+(ik-1)*Norb:ik*Norb,1+(ik-1)*Norb:ik*Norb,:,iwig) = Gfull_R(:,:,:,iwig)
+            !!               enddo
+            !!            elseif(nz.eq.+1)then
+            !!               !distance +1
+            !!               iwig_old = find_vec([nx,ny,+1],Nvecwig,hardstop=.false.)
+            !!               if(iwig_old.eq.0)cycle
+            !!               !
+            !!               Gfull_R_halfkz(1+Norb:2*Norb,1:Norb,:,iwig) = Gfull_R(:,:,:,iwig_old)
+            !!               Gfull_R_halfkz(1+2*Norb:3*Norb,1+Norb:2*Norb,:,iwig) = Gfull_R(:,:,:,iwig_old)
+            !!            elseif(nz.eq.-1)then
+            !!               !distance -1
+            !!               iwig_old = find_vec([nx,ny,-1],Nvecwig,hardstop=.false.)
+            !!               if(iwig_old.eq.0)cycle
+            !!               !
+            !!               Gfull_R_halfkz(1:Norb,1+Norb:2*Norb,:,iwig) = Gfull_R(:,:,:,iwig_old)
+            !!               Gfull_R_halfkz(1+Norb:2*Norb,1+2*Norb:3*Norb,:,iwig) = Gfull_R(:,:,:,iwig_old)
+            !!            elseif(nz.eq.+2)then
+            !!               !distance +2
+            !!               iwig_old = find_vec([nx,ny,+2],Nvecwig,hardstop=.false.)
+            !!               if(iwig_old.eq.0)cycle
+            !!               !
+            !!               Gfull_R_halfkz(1+2*Norb:3*Norb,1:Norb,:,iwig) = Gfull_R(:,:,:,iwig_old)
+            !!            elseif(nz.eq.-2)then
+            !!               !distance -2
+            !!               iwig_old = find_vec([nx,ny,+2],Nvecwig,hardstop=.false.)
+            !!               if(iwig_old.eq.0)cycle
+            !!               !
+            !!               Gfull_R_halfkz(1:Norb,1+2*Norb:3*Norb,:,iwig) = Gfull_R(:,:,:,iwig_old)
+            !!            endif
+            !!            !
+            !!         enddo
+            !!      enddo
+            !!   enddo
+            !!   deallocate(Gfull_R)
+            !!   write(*,*)"extraction to hetero-like"
+            !!   !
+            !!   Nkp = 151
+            !!   Nkz = 50
+            !!   !
+            !!   allocate(Gfull_R(3*Norb,3*Norb,Nmats,Lttc%Nkpt_path));Gfull_R=czero
+            !!   call wannier_R2K(Lttc%Nkpt3,Lttc%kptpath(:,1:Nkp),Gfull_R_halfkz,Gfull_R(:,:,:,1:Nkp))
+            !!   deallocate(Gfull_R_halfkz)
+            !!   write(*,*)"path-interpolation"
+            !!   !
+            !!   allocate(Gfull_R_halfkz(1,Nmats,Nkp,0:Nkz));Gfull_R_halfkz=czero
+            !!   do ik=1,Nkp
+            !!      do ikz=0,Nkz
+            !!         do isite=1,6
+            !!            do jsite=1,6
+            !!               !
+            !!               kR = 2*pi * Lttc%kptpath(3,Nkp+ikz) * (isite-jsite)
+            !!               cfac = dcmplx(cos(kR),+sin(kR))
+            !!               !
+            !!               Gfull_R_halfkz(1,:,ik,ikz) = Gfull_R_halfkz(1,:,ik,ikz) + Gfull_R(isite,jsite,:,ik)*cfac / 6
+            !!               !
+            !!            enddo
+            !!         enddo
+            !!      enddo
+            !!   enddo
+            !!   deallocate(Gfull_R)
+            !!   write(*,*)"Gamma-A filled-1"
+            !!   !
+            !!   do ispin=1,Nspin
+            !!      do iorb=1,2
+            !!         do ik=1,Nkp
+            !!            Gpath%wks(iorb,iorb,:,ik,ispin) = Gfull_R_halfkz(1,:,ik,0)
+            !!         enddo
+            !!         do ikz=0,Nkz
+            !!            Gpath%wks(iorb,iorb,:,Nkp+ikz,ispin) = Gfull_R_halfkz(1,:,Nkp,ikz)
+            !!         enddo
+            !!      enddo
+            !!   enddo
+            !!   deallocate(Gfull_R_halfkz)
+            !!   write(*,*)"Gamma-A filled-2"
+            !!   !
+            !!endif
+            !
             !>>>TEST
             !
             call DeallocateFermionicField(Sloc)
@@ -593,13 +783,15 @@ contains
                close(unit)
                !
                !print trace on imaginary frequency axis
-               path = reg(pathOUTPUT)//"MaxEnt_Gk_"//reg(mode)//"_s"//str(ispin)//"/Gk_w_k"//str(ik)//"_Tr.DAT"
-               unit = free_unit()
-               open(unit,file=reg(path),form="formatted",status="unknown",position="rewind",action="write")
-               do iw=1,Nmats_MaxEnt
-                   write(unit,"(200E20.12)") wmats(iw),Gmats_trace(ik,iw,ispin)
-               enddo
-               close(unit)
+               if(printGmats)then
+                  path = reg(pathOUTPUT)//"MaxEnt_Gk_"//reg(mode)//"_s"//str(ispin)//"/Gk_w_k"//str(ik)//"_Tr.DAT"
+                  unit = free_unit()
+                  open(unit,file=reg(path),form="formatted",status="unknown",position="rewind",action="write")
+                  do iw=1,Nmats_MaxEnt
+                      write(unit,"(200E20.12)") wmats(iw),Gmats_trace(ik,iw,ispin)
+                  enddo
+                  close(unit)
+               endif
                !
                !print all diagonal elements on real frequency axis
                if((PadeWlimit.gt.0d0).and.doPade)then

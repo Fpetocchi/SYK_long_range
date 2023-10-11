@@ -338,9 +338,9 @@ contains
             if(gap_equation%Tsteps.gt.1) dT = (iT-1)*abs(gap_equation%Tbounds(2)-gap_equation%Tbounds(1))/dble(gap_equation%Tsteps-1)
             Temp = gap_equation%Tbounds(1) + dT
             if(gap_equation%HkRenorm)then
-               call createDir(reg(Itpath)//"/Gap_Equation_QP/loops_T"//str(Temp,2)//"/",verb=verbose)
+               call createDir(reg(Itpath)//"/Gap_Equation_QP/loops_"//str(iT)//"_T"//str(Temp,2)//"/",verb=verbose)
             else
-               call createDir(reg(Itpath)//"/Gap_Equation/loops_T"//str(Temp,2)//"/",verb=verbose)
+               call createDir(reg(Itpath)//"/Gap_Equation/loops_"//str(iT)//"_T"//str(Temp,2)//"/",verb=verbose)
             endif
          enddo
       endif

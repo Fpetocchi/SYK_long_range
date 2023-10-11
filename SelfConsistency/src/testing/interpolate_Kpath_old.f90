@@ -1330,3 +1330,81 @@ subroutine smooth_ImSigma_tail(Smats)
    deallocate(wmats)
    !
 end subroutine smooth_ImSigma_tail
+
+
+
+
+
+!call AllocateFermionicField(Gfull,Norb,Nmats,Nkpt=Lttc%Nkpt,Nsite=Sfull%Nsite,Beta=Sfull%Beta,mu=Sfull%mu)
+!call calc_Gmats(Gfull,Lttc,Smats=Sfull,along_path=.false.)
+!write(*,*)"Gfull(K) computed"
+!!
+!allocate(Gfull_R(Norb,Norb,Nmats,Nwig));Gfull_R=czero
+!call wannier_K2R(Lttc%Nkpt3,Lttc%kpt,Gfull%wks(:,:,:,:,1),Gfull_R)
+!call DeallocateField(Gfull)
+!write(*,*)"Gfull(R) computed"
+!!
+!allocate(Gfull_R_red(2,Nmats,Nwig));Gfull_R_red=czero
+!do iwig=1,Nwig
+!   if(Nvecwig(3,iwig).eq.0) then
+!      Gfull_R_red(1,:,iwig) = Gfull_R(1,1,:,iwig)
+!      Gfull_R_red(2,:,iwig) = Gfull_R(2,2,:,iwig)
+!   endif
+!enddo
+!write(*,*)"Gfull_red(R) plane set"
+!!
+!write(*,*)"Max nx: ",maxval(Nvecwig(1,:))
+!write(*,*)"Min nx: ",minval(Nvecwig(1,:))
+!write(*,*)"Max ny: ",maxval(Nvecwig(2,:))
+!write(*,*)"Min ny: ",minval(Nvecwig(2,:))
+!write(*,*)"Max nz: ",maxval(Nvecwig(3,:))
+!write(*,*)"Min nz: ",minval(Nvecwig(3,:))
+!!
+!do nz=minval(Nvecwig(3,:)),maxval(Nvecwig(3,:)),1
+!   !
+!   if(nz.ne.0)then
+!      do nx=minval(Nvecwig(1,:)),maxval(Nvecwig(1,:)),1
+!         do ny=minval(Nvecwig(2,:)),maxval(Nvecwig(2,:)),1
+!            !
+!            iwig = find_vec([nx,ny,nz],Nvecwig,hardstop=.false.)
+!            if(iwig.eq.0)cycle
+!            !
+!            ! effective single band of site 1 ----------------------
+!            nz_old = ceiling(nz/2d0)
+!            iwig_old = find_vec([nx,ny,nz_old],Nvecwig,hardstop=.true.)
+!            !
+!            comp = 2
+!            if(mod(nz,2).eq.0) comp = 1
+!            !
+!            Gfull_R_red(1,:,iwig) = Gfull_R(1,comp,:,iwig_old)
+!            if((nx.eq.0).and.(ny.eq.0))then
+!               write(*,"(A,10I)")"upper- ",nz,nz_old,1,comp
+!            endif
+!            !
+!            ! effective single band of site 2 ----------------------
+!            nz_old = floor(nz/2d0)
+!            iwig_old = find_vec([nx,ny,nz_old],Nvecwig,hardstop=.true.)
+!            !
+!            comp = 1
+!            if(mod(nz,2).eq.0) comp = 2
+!            !
+!            Gfull_R_red(2,:,iwig) = Gfull_R(2,comp,:,iwig_old)
+!            if((nx.eq.0).and.(ny.eq.0))then
+!               write(*,"(A,10I)")"lower- ",nz,nz_old,2,comp
+!            endif
+!            !
+!         enddo
+!      enddo
+!   endif
+!   !
+!enddo
+!deallocate(Gfull_R)
+!write(*,*)"Gfull_red(R) out-of-plane set"
+!!
+!do iorb=1,2
+!   call wannier_R2K(Lttc%Nkpt3,Lttc%kptpath(:,1:Lttc%Nkpt_path),Gfull_R_red(iorb,:,:),Gpath%wks(iorb,iorb,:,:,1))
+!   write(*,*)"Gfull_red(K) FT orb:",iorb
+!enddo
+!Gpath%wks(:,:,:,:,2) = Gpath%wks(:,:,:,:,1)
+!deallocate(Gfull_R_red)
+!

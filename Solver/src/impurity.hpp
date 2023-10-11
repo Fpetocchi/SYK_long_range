@@ -299,7 +299,7 @@ class ct_hyb
          Gerr.resize( Nflavor, Vec( NtauF, 0.0 ) );
          nt.resize( Nflavor, Vec( NtauB, 0.0 ) );
          nnt.resize( Nflavor*(Nflavor+1)/2, Vec( NtauB, 0.0 ) );
-         Dimp.resize( Nflavor, Vec( Nflavor, 0.0 ) );
+         Dimp.resize( Norb, Vec( Norb, 0.0 ) );
          //
          RankSign=0.0;
          WorldSign=0.0;
@@ -897,7 +897,7 @@ class ct_hyb
          //
          //
          // double occupations: n(0)n(0)----------------------------------------
-         /*
+
          if(NnntMeas>0)
          {
             VecVec nntD = nnt;
@@ -907,14 +907,19 @@ class ct_hyb
             {
                for (int jfl=0; jfl<=ifl; ++jfl)
                {
-                  Dimp[ifl][jfl] = nntD[ndx][0];
-                  Dimp[jfl][ifl] = nntD[ndx][0];
+                  int iorb = ifl/2; int ispin = ifl%2;
+                  int jorb = jfl/2; int jspin = jfl%2;
+                  //
+                  if(ispin!=jspin)
+                  {
+                     Dimp[iorb][jorb] = std::accumulate( nntD[ndx].begin(), nntD[ndx].end(), 0 ) / NtauB;
+                     Dimp[jorb][jorb] = std::accumulate( nntD[ndx].begin(), nntD[ndx].end(), 0 ) / NtauB;
+                  }
                   ndx++;
                }
             }
-            dump_data( Dimp, "Dimp", pad, Nflavor, Nflavor );
+            dump_data( Dimp, "Dimp", pad, Norb, Norb );
          }
-         */
          //
          //
          // Improved estimator for the self-energy------------------------------
