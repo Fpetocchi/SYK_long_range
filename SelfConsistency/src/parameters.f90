@@ -260,7 +260,8 @@ module parameters
       real(8)                               :: DoSthresh=0d0
       real(8)                               :: wrealMax=0d0
       real(8)                               :: DeltaErr=0d0
-      real(8)                               :: DeltaInit=0d0
+      real(8)                               :: DeltaInit_M=0d0
+      real(8)                               :: DeltaInit_B=0d0
       real(8)                               :: DeltaMix=0d0
       logical                               :: HkRenorm
       character(len=255)                    :: mode_ph                          !Elk or QEspresso

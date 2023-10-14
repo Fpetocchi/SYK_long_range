@@ -10,7 +10,7 @@ program SelfConsistency
    !
 #ifdef _akw
    character(len=20)                        :: InputFile="input.in.akw"
-#elif defined _gap2
+#elif defined _gap
    character(len=20)                        :: InputFile="input.in.gap"
 #else
    character(len=20)                        :: InputFile="input.in"
@@ -46,11 +46,10 @@ program SelfConsistency
    call execute_command_line(" touch doSolver ")
    stop
    !
-#elif defined _gap2
+#elif defined _gap
    !
    !TEST>>>
-   call initialize_Fields(ItStart)
-   !call AllocateBosonicField(Ulat,Crystal%Norb,Nmats,Crystal%iq_gamma,Nkpt=Crystal%Nkpt,Nsite=Nsite,Beta=Beta)
+   call AllocateBosonicField(Ulat,Crystal%Norb,Nmats,Crystal%iq_gamma,Nkpt=Crystal%Nkpt,Nsite=Nsite,Beta=Beta)
    call calc_Tc(reg(ItFolder),gap_equation,Crystal,Ulat)
    stop
    !>>>TEST

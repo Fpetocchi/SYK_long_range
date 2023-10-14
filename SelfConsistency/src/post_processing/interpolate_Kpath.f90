@@ -3,7 +3,7 @@ subroutine interpolate2kpath_Fermionic(Sfull,Lttc,pathOUTPUT)
    use parameters
    use utils_misc
    use utils_fields
-   use linalg, only : eigh, inv, zeye, det
+   use linalg, only : eigh, inv, zeye, det, rotate
    use crystal
    use file_io
    use greens_function, only : calc_Gmats
@@ -28,12 +28,12 @@ subroutine interpolate2kpath_Fermionic(Sfull,Lttc,pathOUTPUT)
    real(8),allocatable                   :: Zk(:,:)
    complex(8),allocatable                :: correction(:,:,:)
    integer                               :: Norb,Nmats,unit!,Ntau
-   integer                               :: ik,ispin,iorb
+   integer                               :: ik,ispin,iorb,iw
    integer                               :: ikx,iky
    real(8)                               :: k1,k2,k3,Bx,By,Bz,Bx_old,Blat(3,3)
    character(len=256)                    :: path
    logical                               :: Kdependence
-   logical                               :: WannInterpSigma=.false.
+   logical                               :: WannInterpSigma=.true.
    real                                  :: start,finish
    !
    !TEST>>>
@@ -142,6 +142,22 @@ subroutine interpolate2kpath_Fermionic(Sfull,Lttc,pathOUTPUT)
          if(print_full_G)then
             call AllocateFermionicField(Gfull,Norb,Nmats,Nkpt=Lttc%Nkpt,Nsite=Sfull%Nsite,Beta=Sfull%Beta,mu=Sfull%mu)
             call calc_Gmats(Gfull,Lttc,Smats=Sfull,along_path=.false.)
+            !
+            !TEST>>>
+            do ispin=1,Nspin
+               !
+               do ik=1,Lttc%Nkpt
+                  do iw=1,Nmats
+                     Gfull%wks(:,:,iw,ik,ispin) = rotate(Gfull%wks(:,:,iw,ik,ispin),Lttc%Zk(:,:,ik))
+                  enddo
+               enddo
+               if(paramagnet)then
+                  Gfull%wks(:,:,:,:,Nspin) = Gfull%wks(:,:,:,:,1)
+                  exit
+               endif
+            enddo
+            !>>>TEST
+            !
          endif
          !
          !
@@ -605,17 +621,17 @@ contains
          case("full")
             !
             Nkpt = Lttc%Nkpt
-            write(*,"(A,I)") "     G full. Total number of K-points in the BZ:",Nkpt
+            write(*,"(A,I)") "     dump_MaxEnt_on_G_K: G full. Total number of K-points in the BZ:",Nkpt
             !
          case("path")
             !
             Nkpt = Lttc%Nkpt_path
-            write(*,"(A,I)") "     G path. Total number of K-points along path:",Nkpt
+            write(*,"(A,I)") "     dump_MaxEnt_on_G_K: G path. Total number of K-points along path:",Nkpt
             !
          case("plane")
             !
             Nkpt = Lttc%Nkpt_Plane
-            write(*,"(A,I)") "     G plane. Total number of K-points in the {kx,ky} sheet:",Nkpt
+            write(*,"(A,I)") "     dump_MaxEnt_on_G_K: G plane. Total number of K-points in the {kx,ky} sheet:",Nkpt
             !
       end select
       !

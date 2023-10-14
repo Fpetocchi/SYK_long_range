@@ -2,10 +2,12 @@
 # Written by Lewin Boehnke (lboehnke@physnet.uni-hamburg.de), 2009-2015, consulted by Hugo Strand, 2015
 
 verbose=False
-#muthres=1.0
-#muthres=0.01
-muthres=0.001
 
+muthres=1.0
+#muthres=0.01
+#muthres=0.001
+
+logMesh=2.0
 
 try:
     import Gnuplot
@@ -239,7 +241,12 @@ if __name__=="__main__":
         B=Bryan(tauMesh,omegaMesh,Beta,model,kernel='realbosonic',norm=-np.trapz(G[:,0],tauMesh)/Beta)
 
     elif arguments['--statistics']=='F':
-        omegaMesh=np.linspace(-float(arguments["--frequencyrange"])/2.0,float(arguments["--frequencyrange"])/2.0,int(arguments["--frequencies"]))
+
+        if logMesh==None:
+            omegaMesh=np.linspace(-float(arguments["--frequencyrange"])/2.0,float(arguments["--frequencyrange"])/2.0,int(arguments["--frequencies"]))
+        else:
+            omegaMesh=np.logspace(-float(arguments["--frequencyrange"])/2.0,float(arguments["--frequencyrange"])/2.0,int(arguments["--frequencies"]),base=logMesh)
+        #
         Gtau=np.loadtxt(arguments["<datafile>"],np.float128)
         tauMesh=Gtau[:,0]
         Beta=tauMesh[0]+tauMesh[-1]

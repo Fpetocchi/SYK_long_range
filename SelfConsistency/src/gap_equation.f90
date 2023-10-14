@@ -470,7 +470,7 @@ contains
       integer                               :: iw,wndx,Nmats
       integer                               :: Ngrid,Norb,Nbp
       integer                               :: iorb,jorb,ib1,ib2,a,b,c,d
-      integer                               :: Wk_dim,row,col,ndx
+      integer                               :: Wk_dim,row,col,ndx,ndx1,ndx2
       integer                               :: ik1,ik2,iq,Nkpt
       integer                               :: iweig,jweig,iE1,iE2
       integer                               :: ithread,Nthread
@@ -616,12 +616,12 @@ contains
             !$OMP PARALLEL DEFAULT(SHARED),&
             !$OMP PRIVATE(ndx,row,col,iorb,jorb,ik1,ik2,iq),&
             !$OMP PRIVATE(a,b,c,d,ib1,ib2,ithread)
-            !Nthread = omp_get_num_threads()
+            Nthread = omp_get_num_threads()
             !$OMP DO
             do ndx=1,Wk_dim
                !
-               !ithread = omp_get_thread_num()
-               !print *, "thread", ithread, " / ", Nthread, " ndx: ", ndx, " over: ", Wk_dim
+               ithread = omp_get_thread_num()
+               print *, "thread", ithread, " / ", Nthread, " ndx: ", ndx, " over: ", Wk_dim
                !
                row = map(1,ndx)
                col = map(2,ndx)
@@ -687,8 +687,9 @@ contains
          endif
          !$OMP PARALLEL DEFAULT(SHARED),&
          !$OMP PRIVATE(iweig,jweig,iE1,iE2,DosWeights),&
-         !$OMP PRIVATE(ndx,row,col,iorb,jorb,ik1,ik2)
-         !Nthread = omp_get_num_threads()
+         !$OMP PRIVATE(ndx,ndx1,ndx2,row,col),&
+         !$OMP PRIVATE(iorb,jorb,ik1,ik2,ithread)
+         Nthread = omp_get_num_threads()
          !$OMP DO
          do jweig=1,size(finite_weights_Model,dim=1)
             !
@@ -696,8 +697,8 @@ contains
             jorb = finite_weights_Model(jweig,2)
             ik2 = finite_weights_Model(jweig,3)
             !
-            !ithread = omp_get_thread_num()
-            !print *, "thread", ithread, " / ", Nthread, " jweig: ", jweig, " over: ", size(finite_weights_Model,dim=1)
+            ithread = omp_get_thread_num()
+            print *, "thread", ithread, " / ", Nthread, " jweig: ", jweig, " over: ", size(finite_weights_Model,dim=1)
             !
             do iweig=1,size(finite_weights_Model,dim=1)
                !
@@ -705,36 +706,40 @@ contains
                iorb = finite_weights_Model(iweig,2)
                ik1 = finite_weights_Model(iweig,3)
                !
-               ! product basis map
-               row = ik1 + (iorb-1)*Nkpt
-               col = ik2 + (jorb-1)*Nkpt
-               !
-               ! upper triangular map (fixed)
-               ndx = (Nkpt*Norb)*(row-1) - (row-1)*row/2 + col
-               !
                DosWeights = (weights_Model(iE1,iorb,ik1)/DoS_Model(iE1)) * (weights_Model(iE2,jorb,ik2)/DoS_Model(iE2))
                !
-               if(calc_Int_static)then
-                  if(col.ge.row)then
-                     Kel_stat(iE1,iE2) = Kel_stat(iE1,iE2) + Wk_full(1,ndx) * DosWeights
-                  else
-                     Kel_stat(iE1,iE2) = Kel_stat(iE1,iE2) + conjg(Wk_full(1,ndx)) * DosWeights
-                  endif
-               endif
+               !product basis map, the indexes spanned by iweig,jweig cover all the possible
+               !(ik1,iorb) pairs, so the whole Wk_full matrix, both LT and UT.
+               ndx1 = ik1 + (iorb-1)*Nkpt
+               ndx2 = ik2 + (jorb-1)*Nkpt
                !
-               if(calc_Int_dynamic)then
-                  if(col.ge.row)then
-                     Wee_dyn(:,iE1,iE2) = Wee_dyn(:,iE1,iE2) + (Wk_full(:,ndx)-Wk_full(1,ndx)) * DosWeights
-                  else
-                     Wee_dyn(:,iE1,iE2) = Wee_dyn(:,iE1,iE2) + conjg(Wk_full(:,ndx)-Wk_full(1,ndx)) * DosWeights
-                  endif
+               if(ndx2.ge.ndx1)then
+                  !
+                  !I'm looking for an element in the UT. ndx gives me the position
+                  row = ndx1 !this is the row
+                  col = ndx2 !this is the col
+                  ndx = (Nkpt*Norb)*(row-1) - (row-1)*row/2 + col
+                  !
+                  if(calc_Int_static) Kel_stat(iE1,iE2) = Kel_stat(iE1,iE2) + Wk_full(1,ndx) * DosWeights
+                  if(calc_Int_dynamic) Wee_dyn(:,iE1,iE2) = Wee_dyn(:,iE1,iE2) + (Wk_full(:,ndx)-Wk_full(1,ndx)) * DosWeights
+                  !
+               else
+                  !
+                  !I'm looking for an element in the LT. I look via ndx his complex conjg in the UT
+                  row = ndx2 !this is the row
+                  col = ndx1 !this is the col
+                  ndx = (Nkpt*Norb)*(row-1) - (row-1)*row/2 + col
+                  !
+                  if(calc_Int_static) Kel_stat(iE1,iE2) = Kel_stat(iE1,iE2) + conjg(Wk_full(1,ndx)) * DosWeights
+                  if(calc_Int_dynamic) Wee_dyn(:,iE1,iE2) = Wee_dyn(:,iE1,iE2) + conjg(Wk_full(:,ndx)-Wk_full(1,ndx)) * DosWeights
+                  !
                endif
                !
             enddo
          enddo
          !$OMP END DO
          !$OMP END PARALLEL
-         deallocate(Wk_full,weights_Model,finite_weights_Model)
+         deallocate(Wk_full)
          call cpu_time(finish)
          write(*,"(A,F)") "     Calculation of static electronic Kernel cpu timing:", finish-start
          !
@@ -749,6 +754,7 @@ contains
          endif
          !
       endif
+      deallocate(weights_Model,finite_weights_Model)
       !
       if(calc_Int_static.and.(reg(printmode).ne."None"))then
          call print_Kernel("electronic",reg(printmode),reg(pathOUTPUT),"Kel_stat",Egrid,Egrid,Kel_stat)
@@ -822,8 +828,8 @@ contains
                !
             case("rot")
                !
-               D1 = size(Kel_stat,dim=1)
-               D2 = size(Kel_stat,dim=2)
+               D1 = size(Wk_full,dim=1)
+               D2 = size(Wk_full,dim=2)
                !
                write(unit) D1,D2
                do iD2=1,D2

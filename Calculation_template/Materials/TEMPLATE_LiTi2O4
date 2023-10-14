@@ -73,7 +73,7 @@ for kp in `seq ${a} ${b}`; do
    fi
 done
 
-
+./MaxEnt_Kresolved_SLURM.sh -e 0.008 -w 6001 -W 300 -F G -N 512 -B 128 -m full -i 1 -f 512
 
 
 

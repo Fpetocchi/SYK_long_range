@@ -226,7 +226,7 @@ contains
          !
       endif
       !
-      interp_G = (print_path_G.or.print_plane_G) .and. (reg(structure).ne."None")
+      interp_G = (print_full_G.or.print_path_G.or.print_plane_G) .and. (reg(structure).ne."None")
       interp_Chi = print_path_Chi .and. (reg(structure).ne."None")
       interp_W = print_path_W .and. (reg(structure).ne."None")
       interp_E = print_path_E .and. (reg(structure).ne."None")

@@ -16,8 +16,8 @@ subroutine calc_Tc(pathOUTPUT,Inputs,Lttc,Wlat)
    type(BosonicField),intent(in)         :: Wlat
    !
    real(8)                               :: dE,dT
-   integer                               :: iE,iE1,iE2
-   integer                               :: Norb,Nkpt,Ngrid
+   integer                               :: iE,iE1,iE2,Ngrid,Ngrid_
+   integer                               :: Norb,Nkpt,unit
    complex(8)                            :: Kint
    real(8),allocatable                   :: Egrid_print(:)
    real(8),allocatable                   :: Tlist(:),Delta_T(:)
@@ -28,10 +28,14 @@ subroutine calc_Tc(pathOUTPUT,Inputs,Lttc,Wlat)
    !
    integer                               :: iloop,iT
    real(8)                               :: Temp,Beta,Beta_DFT,errDelta
-   real(8)                               :: tanh_b,tanh_f
+   real(8)                               :: dumE,ReD,ImD,tanh_b,tanh_f
    real(8),allocatable                   :: EDsq(:),kpt_QP(:,:)
    complex(8),allocatable                :: Delta(:),oldDelta(:),newDelta(:)
    logical                               :: converged,filexists
+   !
+   integer                               :: info
+   integer,allocatable                   :: ipv(:)
+   real(8),allocatable                   :: bcoef(:)
    !
    write(*,"(A)") new_line("A")//new_line("A")//"---- calc_Tc"
    !
@@ -78,13 +82,38 @@ subroutine calc_Tc(pathOUTPUT,Inputs,Lttc,Wlat)
       !
       Ngrid = size(Egrid)
       allocate(Delta(Ngrid));Delta = czero
-      do iE=1,Ngrid
-         Delta(iE) = -diff_fermidirac(Egrid(iE),0d0,(50d0/(Inputs%wrealMax*eV2DFTgrid)))
-      enddo
-      Delta = Delta * Inputs%DeltaInit * eV2DFTgrid / Delta(minloc(abs(Egrid),dim=1))
       !
-      !with electronic kernels Delta has to be negative at high energy
-      if(calc_Kel) Delta = Delta - Delta(minloc(abs(Egrid),dim=1))/3
+      !initialization of Delta
+      call inquireFile(reg(printpath)//"Delta_init.DAT",filexists,hardstop=.false.)
+      if(filexists)then
+         !
+         unit = free_unit()
+         open(unit,file=reg(printpath)//"Delta_init.DAT",form="formatted",status="old",position="rewind",action="read")
+         read(unit,*)Ngrid_
+         if(Ngrid_.ne.Ngrid)stop "calc_Tc: the provided Delta_init.DAT haw wrong size."
+         do iE=1,Ngrid
+            read(unit,*) dumE,ReD,ImD
+            Delta(iE) = dcmplx(ReD,ImD)
+         enddo
+         !
+      else
+         !
+         !fancy initialization
+         do iE=1,Ngrid
+            Delta(iE) = -diff_fermidirac(Egrid(iE),0d0,Inputs%DeltaInit_B/eV2DFTgrid)
+         enddo
+         Delta = Delta * Inputs%DeltaInit_M * eV2DFTgrid / Delta(minloc(abs(Egrid),dim=1))
+         !box initialization
+         !iE1 = minloc(abs(Egrid+Egrid(Ngrid)/2),dim=1)
+         !iE2 = Ngrid-iE1
+         !Delta(iE1:iE2) = Inputs%DeltaInit * eV2DFTgrid
+         !
+         !with electronic kernels Delta has to be negative at high energy
+         if(calc_Kel) Delta = Delta - Delta(minloc(abs(Egrid),dim=1))/3
+         !
+      endif
+      !
+      where(DoS_Model.lt.Inputs%DoSthresh) Delta=czero
       !
       allocate(oldDelta(Ngrid));oldDelta=Delta
       allocate(Tlist(Inputs%Tsteps));Tlist=0d0
@@ -133,10 +162,11 @@ subroutine calc_Tc(pathOUTPUT,Inputs,Lttc,Wlat)
          allocate(EDsq(Ngrid)); EDsq = czero
          allocate(newDelta(Ngrid));newDelta = czero
          converged=.false.
+         !
          SCloop: do iloop=1,Inputs%loops
             !
             do iE=1,Ngrid
-              EDsq(iE) = sqrt( Egrid(iE)**2 + conjg(Delta(iE))*Delta(iE) )
+               EDsq(iE) = sqrt( Egrid(iE)**2 + conjg(Delta(iE))*Delta(iE) )
             enddo
             !
             newDelta = czero
@@ -174,10 +204,11 @@ subroutine calc_Tc(pathOUTPUT,Inputs,Lttc,Wlat)
             !
             !This is to fix the phase of Delta
             newDelta = dcmplx(dreal(newDelta),0d0)
+            where(DoS_Model.lt.Inputs%DoSthresh) newDelta=czero
             !
             !Convergence check
-            errDelta = maxval(abs(Delta-newDelta))            !<-- this error accounts for the phase fluctuation
-            !errDelta = maxval(abs(abs(Delta)-abs(newDelta))) !<-- this error accounts only for the real part
+            !errDelta = maxval(abs(Delta-newDelta))
+            errDelta = min(maxval(abs(Delta-newDelta)),maxval(abs(Delta+newDelta)))
             !
             if(errDelta.lt.Inputs%DeltaErr)then
                write(*,"(2(A,1E20.10),A3,1E20.10)")"     loop #"//str(iloop)//" Delta(0): ",abs(newDelta(minloc(abs(Egrid),dim=1))),"   error: ",errDelta," < ",Inputs%DeltaErr
@@ -195,6 +226,13 @@ subroutine calc_Tc(pathOUTPUT,Inputs,Lttc,Wlat)
             call dump_Field_component(Delta,reg(printpath_T),str(iloop)//"_Delta.DAT",Egrid)
             !
          enddo SCloop !iloop
+         !
+         allocate(bcoef(Ngrid));bcoef=0d0
+         allocate(ipv(Ngrid));ipv=0
+         CALL DGESV( Ngrid, 1, Kel, Ngrid, ipv, bcoef, Ngrid, info )
+         deallocate(ipv,bcoef)
+         !
+         !
          deallocate(EDsq,newDelta)
          if(allocated(Zph))deallocate(Zph)
          if(allocated(Kph))deallocate(Kph)
@@ -205,7 +243,7 @@ subroutine calc_Tc(pathOUTPUT,Inputs,Lttc,Wlat)
          allocate(Egrid_print(Ngrid));Egrid_print = Egrid*DFTgrid2eV
          call dump_Field_component(Delta,reg(printpath_T),"Delta_e_T"//str(Temp,2)//".DAT",Egrid_print)
          Tlist(iT) = Temp
-         Delta_T(iT) = abs(Delta(minloc(abs(Egrid_print),dim=1)))
+         Delta_T(iT) = abs(Delta(minloc(abs(Egrid_print),dim=1)+1))
          deallocate(Egrid_print)
          !
       enddo !iT

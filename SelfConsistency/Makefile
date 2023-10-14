@@ -38,7 +38,7 @@ EXE_PP2  = Hk_fit
 ifeq ($(FC),ifort)
   FFLAGS = -assume byterecl -qopenmp -liomp5 -mkl=sequential -fpp -mcmodel=large -llapack -I$(INCLDIR)
   DBGFFLAGS = -O0 -check bounds -traceback -fpe3 -check all -fp-model precise -fp-stack-check -p -g -warn -debug extended -warn interface --heap-arrays -check all -check noarg_temp_created -qdiag-enable:sc3 -qdiag-enable:sc-parallel3 -C -D_verb
-  RELFFLAGS = -ftz -O3
+  RELFFLAGS = -ftz # -O3
   # -xAVX -xHost  -axCORE-AVX2
 endif
 ifeq ($(FC),gfortran)
