@@ -11,7 +11,7 @@ subroutine interpolate2kpath_Fermionic(Sfull,Lttc,pathOUTPUT)
    use input_vars, only : Nkpt_path_default, Nkpt_plane_default
    use input_vars, only : Nkpt_path, Nkpt_plane
    use input_vars, only : print_path_G, print_full_G , print_path_S, print_plane_G
-   use input_vars, only : paramagnet, CalculationType, Hetero
+   use input_vars, only : paramagnet, CalculationType, Hetero, gap_equation
    implicit none
    !
    type(FermionicField),intent(inout)    :: Sfull
@@ -145,21 +145,21 @@ subroutine interpolate2kpath_Fermionic(Sfull,Lttc,pathOUTPUT)
             call AllocateFermionicField(Gfull,Norb,Nmats,Nkpt=Lttc%Nkpt,Nsite=Sfull%Nsite,Beta=Sfull%Beta,mu=Sfull%mu)
             call calc_Gmats(Gfull,Lttc,Smats=Sfull,along_path=.false.)
             !
-            !TEST>>>
             !This is required for the gap equation with DMFT correction to the bandstructure
-            do ispin=1,Nspin
-               !
-               do ik=1,Lttc%Nkpt
-                  do iw=1,Nmats
-                     Gfull%wks(:,:,iw,ik,ispin) = rotate(Gfull%wks(:,:,iw,ik,ispin),Lttc%Zk(:,:,ik))
+            if(gap_equation%DMFTRenorm)then
+               do ispin=1,Nspin
+                  !
+                  do ik=1,Lttc%Nkpt
+                     do iw=1,Nmats
+                        Gfull%wks(:,:,iw,ik,ispin) = rotate(Gfull%wks(:,:,iw,ik,ispin),Lttc%Zk(:,:,ik))
+                     enddo
                   enddo
+                  if(paramagnet)then
+                     Gfull%wks(:,:,:,:,Nspin) = Gfull%wks(:,:,:,:,1)
+                     exit
+                  endif
                enddo
-               if(paramagnet)then
-                  Gfull%wks(:,:,:,:,Nspin) = Gfull%wks(:,:,:,:,1)
-                  exit
-               endif
-            enddo
-            !>>>TEST
+            endif
             !
          endif
          !
