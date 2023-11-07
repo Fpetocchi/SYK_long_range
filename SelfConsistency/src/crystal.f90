@@ -3595,6 +3595,17 @@ contains
       complex(8),allocatable                :: Akw_kz(:,:,:,:,:)
       complex(8),allocatable                :: Potential_L(:,:,:,:,:),Potential_R(:,:,:,:,:)
       !
+      !TEST>>>
+      logical                               :: dump_BAB=.false.
+      logical                               :: dump_unfolded=.false.
+      complex(8),allocatable                :: Gkw(:,:,:,:)
+      complex(8),allocatable                :: GRw(:,:,:,:,:),GRw_halfkz(:,:,:,:,:)
+      integer                               :: Nkp,Nkz,iwig,Norb
+      integer                               :: nx,ny,nz,isite,jsite,iwig_old
+      real(8)                               :: KR
+      complex(8)                            :: cfac
+      !>>>TEST
+      !
       !
       write(*,"(A)") new_line("A")//new_line("A")//"---- interpolate2Path"
       !
@@ -3805,7 +3816,8 @@ contains
          !$OMP END PARALLEL
          if(allocated(Potential_L))deallocate(Potential_L)
          if(allocated(Potential_R))deallocate(Potential_R)
-         deallocate(zeta,invGf)
+         !deallocate(zeta,invGf)
+         deallocate(invGf)
          !
          !Normalization
          allocate(Akw_print(Ndim,Nreal,Nkpt_path_tot));Akw_print=0d0
@@ -3869,6 +3881,223 @@ contains
             deallocate(Akw_kz_print)
             !
          endif
+         !
+         !TEST>>> This portion is to pass from orbital basis to B/AB basis directly on path (as it is done inside interpolate_Kpath)
+         if(dump_BAB)then
+            !
+            allocate(Akw_print(2,Nreal,Nkpt_path_tot));Akw_print=0d0
+            !$OMP PARALLEL DEFAULT(SHARED),&
+            !$OMP PRIVATE(ik,iw)
+            !$OMP DO
+            do ik=1,Nkpt_path_tot
+               do iw=1,Nreal
+                  !
+                  if(freq_dep)then
+                     Akw_print(1,iw,ik) = -dimag(1d0/(dcmplx(wreal(iw),eta)+Lttc%mu - (dataw_intp(1,1,iw,ik)+dataw_intp(2,2,iw,ik)-dataw_intp(1,2,iw,ik)-dataw_intp(2,1,iw,ik))/2d0))
+                     Akw_print(2,iw,ik) = -dimag(1d0/(dcmplx(wreal(iw),eta)+Lttc%mu - (dataw_intp(1,1,iw,ik)+dataw_intp(2,2,iw,ik)+dataw_intp(1,2,iw,ik)+dataw_intp(2,1,iw,ik))/2d0))
+                  else
+                     Akw_print(1,iw,ik) = -dimag(1d0/(dcmplx(wreal(iw),eta)+Lttc%mu - (data_intp(1,1,ik)+data_intp(2,2,ik)-data_intp(1,2,ik)-data_intp(2,1,ik))/2d0))
+                     Akw_print(2,iw,ik) = -dimag(1d0/(dcmplx(wreal(iw),eta)+Lttc%mu - (data_intp(1,1,ik)+data_intp(2,2,ik)+data_intp(1,2,ik)+data_intp(2,1,ik))/2d0))
+                  endif
+                  !
+               enddo
+            enddo
+            !$OMP END DO
+            !$OMP END PARALLEL
+            !
+            !Normalization
+            do ik=1,Nkpt_path_tot
+               do io=1,2
+                  Akw_print(io,:,ik) = Akw_print(io,:,ik)/(sum(Akw_print(io,:,ik))*abs(wreal(2)-wreal(1)))
+               enddo
+            enddo
+            !
+            !print spectral function
+            path = reg(pathOUTPUT)//"Akw_BAB_"//reg(label)//".DAT"
+            unit = free_unit()
+            open(unit,file=reg(path),form="formatted",status="unknown",position="rewind",action="write")
+            do ik=1,Nkpt_path_tot
+               do iw=1,Nreal
+                   write(unit,"(1I5,200E20.12)") ik,Kpathaxis(ik)/Kpathaxis(Nkpt_path_tot),wreal(iw),(Akw_print(io,iw,ik),io=1,Ndim)
+               enddo
+               write(unit,*)
+            enddo
+            close(unit)
+            deallocate(Akw_print)
+            !
+         endif
+         !>>>TEST
+         !
+         !TEST>>> This portion is to pass from orbital basis to B/AB basis directly on path with unfolded BZ (as it is done inside interpolate_Kpath)
+         if(dump_unfolded)then
+            !
+            allocate(Gkw(Ndim,Ndim,Nreal,Nkpt));Gkw=czero
+            allocate(invGf(Ndim,Ndim));invGf=czero
+            !$OMP PARALLEL DEFAULT(SHARED),&
+            !$OMP PRIVATE(ik,iw,invGf)
+            !$OMP DO
+            do ik=1,Nkpt
+               do iw=1,Nreal
+                  !
+                  if(freq_dep)then
+                     invGf = zeta(:,:,iw) - dataw_orig(:,:,iw,ik)
+                  else
+                     invGf = zeta(:,:,iw) - data_orig(:,:,ik)
+                  endif
+                  !
+                  call inv(invGf)
+                  Gkw(:,:,iw,ik) = invGf
+                  !
+               enddo
+            enddo
+            !$OMP END DO
+            !$OMP END PARALLEL
+            !
+            Norb = 2
+            !
+            allocate(GRw(Norb,Norb,Nreal,Nwig,2));GRw=czero
+            !Bonding state
+            call wannier_K2R(Lttc%Nkpt3,Lttc%kpt,Gkw,GRw(:,:,:,:,1))
+            !Anti-Bonding state
+            Gkw(1,2,:,:) = -Gkw(1,2,:,:)
+            Gkw(2,1,:,:) = -Gkw(2,1,:,:)
+            call wannier_K2R(Lttc%Nkpt3,Lttc%kpt,Gkw,GRw(:,:,:,:,2))
+            deallocate(Gkw)
+            write(*,*)"Afull_AB(R) computed"
+            !
+            allocate(GRw_halfkz(3*Norb,3*Norb,Nreal,Nwig,2));GRw_halfkz=czero
+            !
+            do nx=minval(Nvecwig(1,:)),maxval(Nvecwig(1,:)),1
+               do ny=minval(Nvecwig(2,:)),maxval(Nvecwig(2,:)),1
+                  !
+                  !new iwig
+                  iwig = find_vec([nx,ny,0],Nvecwig,hardstop=.false.)
+                  if(iwig.eq.0)cycle
+                  !
+                  do nz=minval(Nvecwig(3,:)),maxval(Nvecwig(3,:)),1
+                     !
+                     if(nz.eq.0)then
+                        !diagonals
+                        do ik=1,3
+                           !B
+                           GRw_halfkz(1+(ik-1)*Norb:ik*Norb,1+(ik-1)*Norb:ik*Norb,:,iwig,1) = GRw(:,:,:,iwig,1)
+                           !AB
+                           GRw_halfkz(1+(ik-1)*Norb:ik*Norb,1+(ik-1)*Norb:ik*Norb,:,iwig,2) = GRw(:,:,:,iwig,2)
+                        enddo
+                     elseif(nz.eq.+1)then
+                        !distance +1
+                        iwig_old = find_vec([nx,ny,+1],Nvecwig,hardstop=.false.)
+                        if(iwig_old.eq.0)cycle
+                        !
+                        !B
+                        GRw_halfkz(1+Norb:2*Norb,1:Norb,:,iwig,1) = GRw(:,:,:,iwig_old,1)
+                        GRw_halfkz(1+2*Norb:3*Norb,1+Norb:2*Norb,:,iwig,1) = GRw(:,:,:,iwig_old,1)
+                        !AB
+                        GRw_halfkz(1+Norb:2*Norb,1:Norb,:,iwig,2) = GRw(:,:,:,iwig_old,2)
+                        GRw_halfkz(1+2*Norb:3*Norb,1+Norb:2*Norb,:,iwig,2) = GRw(:,:,:,iwig_old,2)
+                     elseif(nz.eq.-1)then
+                        !distance -1
+                        iwig_old = find_vec([nx,ny,-1],Nvecwig,hardstop=.false.)
+                        if(iwig_old.eq.0)cycle
+                        !
+                        !B
+                        GRw_halfkz(1:Norb,1+Norb:2*Norb,:,iwig,1) = GRw(:,:,:,iwig_old,1)
+                        GRw_halfkz(1+Norb:2*Norb,1+2*Norb:3*Norb,:,iwig,1) = GRw(:,:,:,iwig_old,1)
+                        !AB
+                        GRw_halfkz(1:Norb,1+Norb:2*Norb,:,iwig,2) = GRw(:,:,:,iwig_old,2)
+                        GRw_halfkz(1+Norb:2*Norb,1+2*Norb:3*Norb,:,iwig,2) = GRw(:,:,:,iwig_old,2)
+                     elseif(nz.eq.+2)then
+                        !distance +2
+                        iwig_old = find_vec([nx,ny,+2],Nvecwig,hardstop=.false.)
+                        if(iwig_old.eq.0)cycle
+                        !
+                        !B
+                        GRw_halfkz(1+2*Norb:3*Norb,1:Norb,:,iwig,1) = GRw(:,:,:,iwig_old,1)
+                        !AB
+                        GRw_halfkz(1+2*Norb:3*Norb,1:Norb,:,iwig,2) = GRw(:,:,:,iwig_old,2)
+                     elseif(nz.eq.-2)then
+                        !distance -2
+                        iwig_old = find_vec([nx,ny,+2],Nvecwig,hardstop=.false.)
+                        if(iwig_old.eq.0)cycle
+                        !
+                        !B
+                        GRw_halfkz(1+2*Norb:3*Norb,1:Norb,:,iwig,1) = GRw(:,:,:,iwig_old,1)
+                        !AB
+                        GRw_halfkz(1+2*Norb:3*Norb,1:Norb,:,iwig,2) = GRw(:,:,:,iwig_old,2)
+                     endif
+                     !
+                  enddo
+               enddo
+            enddo
+            deallocate(GRw)
+            write(*,*)"extraction to hetero-like"
+            !
+            Nkp = 301
+            Nkz = 100
+            !
+            allocate(GRw(3*Norb,3*Norb,Nreal,Lttc%Nkpt_path,2));GRw=czero
+            !B
+            call wannier_R2K(Lttc%Nkpt3,Lttc%kptpath(:,1:Nkp),GRw_halfkz(:,:,:,:,1),GRw(:,:,:,1:Nkp,1))
+            !AB
+            call wannier_R2K(Lttc%Nkpt3,Lttc%kptpath(:,1:Nkp),GRw_halfkz(:,:,:,:,2),GRw(:,:,:,1:Nkp,2))
+            deallocate(GRw_halfkz)
+            write(*,*)"path-interpolation"
+            !
+            allocate(Gkw(2,Nreal,Nkp,0:Nkz));Gkw=czero
+            do ik=1,Nkp
+               do ikz=0,Nkz
+                  do isite=1,6
+                     do jsite=1,6
+                        !
+                        kR = 2*pi * Lttc%kptpath(3,Nkp+ikz) * (isite-jsite)
+                        cfac = dcmplx(cos(kR),+sin(kR))
+                        !
+                        !B
+                        Gkw(1,:,ik,ikz) = Gkw(1,:,ik,ikz) + GRw(isite,jsite,:,ik,1)*cfac / 6
+                        !AB
+                        Gkw(2,:,ik,ikz) = Gkw(2,:,ik,ikz) + GRw(isite,jsite,:,ik,2)*cfac / 6
+                        !
+                     enddo
+                  enddo
+               enddo
+            enddo
+            deallocate(GRw)
+            write(*,*)"Gamma-A filled-1"
+            !
+            allocate(Akw_print(2,Nreal,Nkpt_path_tot));Akw_print=0d0
+            do io=1,2
+               do ik=1,Nkp
+                  Akw_print(io,:,ik) = dimag(Gkw(io,:,ik,0))
+               enddo
+               do ikz=0,Nkz
+                  Akw_print(io,:,Nkp+ikz) = dimag(Gkw(io,:,Nkp,ikz))
+               enddo
+            enddo
+            deallocate(Gkw)
+            write(*,*)"Gamma-A filled-2"
+            !
+            !Normalization
+            do ik=1,Nkpt_path_tot
+               do io=1,2
+                  Akw_print(io,:,ik) = Akw_print(io,:,ik)/(sum(Akw_print(io,:,ik))*abs(wreal(2)-wreal(1)))
+               enddo
+            enddo
+            !
+            !print spectral function
+            path = reg(pathOUTPUT)//"Akw_unf_"//reg(label)//".DAT"
+            unit = free_unit()
+            open(unit,file=reg(path),form="formatted",status="unknown",position="rewind",action="write")
+            do ik=1,Nkpt_path_tot
+               do iw=1,Nreal
+                   write(unit,"(1I5,200E20.12)") ik,Kpathaxis(ik)/Kpathaxis(Nkpt_path_tot),wreal(iw),(Akw_print(io,iw,ik),io=1,2)
+               enddo
+               write(unit,*)
+            enddo
+            close(unit)
+            deallocate(Akw_print)
+            !
+         endif
+         !>>>TEST
          !
       else
          !

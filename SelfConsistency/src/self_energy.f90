@@ -2763,11 +2763,11 @@ contains
                Smat(:,iw,ik,ispin) = diagonal(rotate(S_G0W0%wks(:,:,iw,ik,ispin),Zk(:,:,ik)))
             enddo
          enddo
-         !
          if(paramagnet)then
             Smat(:,:,:,Nspin) = Smat(:,:,:,1)
             exit
          endif
+         !
       enddo
       !
       !interpolate to input real-frequency mesh and rotate back to Wannier basis
@@ -2786,7 +2786,6 @@ contains
                   if(ImS.gt.0d0)ImS=0d0
                   S_G0W0_interp%wks(iorb,iorb,iw,ik,ispin) = dcmplx(ReS,ImS)
                enddo
-               !
                S_G0W0_interp%wks(:,:,iw,ik,ispin) = rotate(S_G0W0_interp%wks(:,:,iw,ik,ispin),dag(Zk(:,:,ik)))
                if(paramagnet)then
                   S_G0W0_interp%wks(:,:,iw,ik,Nspin) = S_G0W0_interp%wks(:,:,iw,ik,1)
@@ -2810,7 +2809,7 @@ contains
       S_G0W0_interp%ws = S_G0W0_interp%wks(:,:,:,1,:)
       call dump_FermionicField(S_G0W0_interp,reg(pathINPUTtr)//"G0W0plots/","SGoWo_wr_interp_Gamma",paramagnet,axis=wreal)
       !
-      ! remove Vxc and add VH
+      ! remove Vxc
       do ik=1,Lttc%Nkpt
          do iw=1,Nreal
             do ispin=1,Nspin
@@ -2862,9 +2861,10 @@ contains
             !go to LDA basis and compute: w + mu - E(k) - Re{Sigma(k,w)}
             allocate(QPpole(Lttc%Norb,Nreal));QPpole=0d0
             do iw=1,Nreal
-               QPpole(:,iw) = wreal(iw) + mu_ - dreal(diagonal(rotate((Lttc%Hk(:,:,ik) + S_G0W0_interp%wks(:,:,iw,ik,ispin)),Lttc%Zk(:,:,ik))))
-               !Zk from Uwan may bring S_G0W0_interp in a different ordering in the diagonal basis with respect to Lttc%Ek
-               !QPpole(:,iw) = wreal(iw) + mu_ - Lttc%Ek(:,ik) - diagonal(dreal(rotate(S_G0W0_interp%wks(:,:,iw,ik,ispin),Zk(:,:,ik))))
+               !v1
+               !QPpole(:,iw) = wreal(iw) + mu_ - dreal(diagonal(rotate((Lttc%Hk(:,:,ik) + S_G0W0_interp%wks(:,:,iw,ik,ispin)),Lttc%Zk(:,:,ik))))
+               !v2
+               QPpole(:,iw) = wreal(iw) + mu_ - dreal(diagonal(rotate((Lttc%Hk(:,:,ik) + S_G0W0_interp%wks(:,:,iw,ik,ispin)),Zk(:,:,ik))))
             enddo
             !
             !find the zeros of the previous equation
@@ -2907,7 +2907,10 @@ contains
             deallocate(QPpole)
             !
             !rotate back to Wannier basis
-            Lttc%Hk_qp(:,:,ik,ispin) = rotate(diag(Lttc%Ek_qp(:,ik,ispin)),dag(Lttc%Zk(:,:,ik)))
+            !v1
+            !Lttc%Hk_qp(:,:,ik,ispin) = rotate(diag(Lttc%Ek_qp(:,ik,ispin)),dag(Lttc%Zk(:,:,ik)))
+            !v2
+            Lttc%Hk_qp(:,:,ik,ispin) = rotate(diag(Lttc%Ek_qp(:,ik,ispin)),dag(Zk(:,:,ik)))
             !
          enddo
          call dump_Hk(Lttc%Hk_qp(:,:,:,ispin),Lttc%kpt,reg(pathINPUTtr)//"G0W0plots/","Hk_qp_s"//str(ispin)//".DAT")
@@ -2956,11 +2959,11 @@ contains
                   Smat(:,iw,ik,ispin) = diagonal(rotate(S_G0W0dc%wks(:,:,iw,ik,ispin),Zk(:,:,ik)))
                enddo
             enddo
-            !
             if(paramagnet)then
                Smat(:,:,:,Nspin) = Smat(:,:,:,1)
                exit
             endif
+            !
          enddo
          !
          !interpolate to input real-frequency mesh and rotate back to Wannier basis
@@ -2979,7 +2982,6 @@ contains
                      if(ImS.gt.0d0)ImS=0d0
                      S_G0W0dc_interp%wks(iorb,iorb,iw,ik,ispin) = dcmplx(ReS,ImS)
                   enddo
-                  !
                   S_G0W0dc_interp%wks(:,:,iw,ik,ispin) = rotate(S_G0W0dc_interp%wks(:,:,iw,ik,ispin),dag(Zk(:,:,ik)))
                   if(paramagnet)then
                      S_G0W0dc_interp%wks(:,:,iw,ik,Nspin) = S_G0W0dc_interp%wks(:,:,iw,ik,1)

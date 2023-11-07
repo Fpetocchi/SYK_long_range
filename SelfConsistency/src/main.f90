@@ -253,14 +253,7 @@ program SelfConsistency
          !Merge GW and EDMFT
          if(merge_Sigma)then
             call AllocateFermionicField(S_GWdc,Crystal%Norb,Nmats,Nsite=Nsite,Beta=Beta)
-            select case(reg(DC_type_GW))
-               case default
-                  stop "Wrong entry for DC_TYPE_GW. Available: GlocWloc, Sloc."
-               case("GlocWloc")
-                  call calc_sigmaGWdc_GlocWloc(S_GWdc,Glat,Wlat)
-               case("Sloc") !<-this possibility will be removed
-                  call calc_sigmaGWdc(S_GWdc,Glat,Wlat)
-            end select
+            call calc_sigmaGWdc_GlocWloc(S_GWdc,Glat,Wlat)
             call dump_FermionicField(S_GWdc,reg(ItFolder),"Slat_dc_w",paramagnet)
             call MergeFields(S_GW,S_DMFT,S_GWdc,alphaSigma,RotateHloc,LocalOrbs)
             call dump_FermionicField(S_GW,reg(ItFolder),"Slat_merged_w",paramagnet)
@@ -301,7 +294,7 @@ program SelfConsistency
       if(.not.S_Full_exists) S_Full%mu = Glat%mu !if it exists I won't change mu
       !
       !
-      !Print G0W0 bandstructure - Crystal%mu is used by default
+      !Print G0W0 bandstructure - Crystal%mu is used by default - equal to the lattice one
       if(dump_G0W0_bands.and.Uwan_stored)call print_G0W0_dispersion(Crystal,Vxc)
       !
       !

@@ -1,0 +1,651 @@
+
+#setup_3 - U=0.5
+a=21 ; b=41
+cp /home/petocchif/1_GW_EDMFT/GenericMaterial/Calculation_template/MaxEnt/Gaverage.py .
+python Gaverage.py --field  Gw --pad lat --orbs 1,2,3,4 --itlist ${a}..${b} ;
+#
+#setup_3 - U=1.0
+a=55 ; b=66
+cp /home/petocchif/1_GW_EDMFT/GenericMaterial/Calculation_template/MaxEnt/Gaverage.py .
+python Gaverage.py --field  Gw --pad lat --orbs 1,2,3,4 --itlist ${a}..${b} ;
+
+################################################################################
+
+
+#
+#
+#
+#
+#
+#
+#
+################################################################################
+################################################################################
+GENMAT=/home/petocchif/1_GW_EDMFT/GenericMaterial/Calculation_template
+declare -a dirindex=( "avg" )
+for it in `seq  114 1 116 ` ; do
+#for it in "${dirindex[@]}" ; do
+   if [ -d "$it" ]; then
+   #
+   cd $it/Convergence
+   cp ${GENMAT}/${MATERIAL}/MaxEnt/MaxEnt_SLURM.sh .
+   chmod 700 MaxEnt_SLURM.sh
+   #
+   ./MaxEnt_SLURM.sh -e 0.0005 -w 5001 -W 10 -f G -o 1 -i lat -p ${GENMAT} -q new
+   #./MaxEnt_SLURM.sh -e 0.0001 -w 5001 -W 10 -f G -o 1 -i qmc_Ta -p ${GENMAT} -q new
+   #./MaxEnt_SLURM.sh -e 0.0001 -w 5001 -W 10 -f G -o 2 -i lat -p ${GENMAT} -q new
+   #./MaxEnt_SLURM.sh -e 0.0001 -w 5001 -W 10 -f G -o 3 -i lat -p ${GENMAT} -q new
+   #./MaxEnt_SLURM.sh -e 0.0001 -w 5001 -W 10 -f G -o 4 -i lat -p ${GENMAT} -q new
+   #./MaxEnt_SLURM.sh -e 0.0001 -w 5001 -W 10 -f G -o 1 -i qmc_T1 -p ${GENMAT} -q new
+   #./MaxEnt_SLURM.sh -e 0.0001 -w 5001 -W 10 -f G -o 1 -i qmc_T2 -p ${GENMAT} -q new
+   #./MaxEnt_SLURM.sh -e 0.0001 -w 5001 -W 10 -f G -o 1 -i qmc_T3 -p ${GENMAT} -q new
+   #./MaxEnt_SLURM.sh -e 0.0001 -w 5001 -W 10 -f G -o 1 -i qmc_T4 -p ${GENMAT} -q new
+   #
+   cd ../../
+   #
+   fi
+done
+#
+
+#FERMI SURFACES TEST RUN
+./MaxEnt_Kresolved_SLURM.sh -e 0.01  -w 1001 -W 10 -F G -N 40400 -B 101 -m plane # version 1
+./MaxEnt_Kresolved_SLURM.sh -e 0.001 -w 2001 -W 10 -F G -N 40400 -B 101 -m plane # version 2
+
+#K-RESOLVED SPECTRA SLAB
+./MaxEnt_Kresolved_SLURM.sh -e 0.0005 -w 5001 -W 10 -F G -N 200 -B 100 -m path
+#K-RESOLVED SPECTRA BULK
+./MaxEnt_Kresolved_SLURM.sh -e 0.0001 -w 5001 -W 10 -F G -N 200 -B 100 -m path
+#
+a=1
+b=200
+for kp in `seq ${a} ${b}`; do
+   echo checking $kp
+   if [ ! -f MaxEnt_Gk_path_s1/Gk_t_k${kp}.DAT_dos.dat ]; then
+       echo $kp absent
+       #SLAB
+       #./MaxEnt_Kresolved_SLURM.sh -e 0.0005 -w 5001 -W 10 -F G -N 200 -B 100 -m path -i $kp -f $kp
+       #BULK
+       #./MaxEnt_Kresolved_SLURM.sh -e 0.0001 -w 5001 -W 10 -F G -N 400 -B 100 -m path -i $kp -f $kp
+   fi
+done
+
+
+
+a=1
+b=200
+for kpl in `seq ${a} ${b}`; do
+   #
+   kp=`LC_ALL=en awk "BEGIN{print ${kpl} + 200 }"`
+   #
+   echo checking $kp
+   if [ ! -f MaxEnt_Gk_path_s1/Gk_t_k${kp}.DAT_dos.dat ]; then
+      kp_copy=`LC_ALL=en awk "BEGIN{print 200 - ${kpl} + 1 }"`
+      echo copying_ $kp_copy
+      cp MaxEnt_Gk_path_s1/Gk_t_k${kp_copy}.DAT_dos.dat MaxEnt_Gk_path_s1/Gk_t_k${kp}.DAT_dos.dat
+   fi
+done
+
+
+
+
+
+
+################################################################################
+#                          LAYER-RESOLVED CONVERGENCE                          #
+################################################################################
+o=1;s=1;n=4;c=5
+set xrange [0:1];h=4
+set yrange [-h:n*h];set grid
+  p for [i=1:n] '< grep " '.i.'   '.i.' " ./'.it.'/Glat_w_s'.s.'.DAT' u 1:(column(c)+(i-1)*h) w lp lw 3 t 'ImGlat '.i
+rep for [i=1:n] '< grep " '.i.'   '.i.' " ./'.it.'/Gimp_w_s'.s.'.DAT' u 1:(column(c)+(i-1)*h) w l  lw 2 lc rgb 'black' notitle
+
+################################################################################
+#                            LAYER-RESOLVED SPECTRA                            #
+################################################################################
+
+o=1;s=1;n=4
+set xrange [-1:1];h=5
+set yrange [0:n*h];set grid
+set ytics h; set xtic 0.5
+set term x11 1 size 600,900
+  p for [i=1:n] ''.it.'/Convergence/MaxEnt_Glat_o'.i.'_s1/Glat_t_o'.i.'_s1.DAT_dos.dat' u 1:($2+h*(n-i)) w l lw 3  lc rgb 'red' t ''
+rep for [i=1:n] ''.it.'/Convergence/MaxEnt_Gqmc_T'.i.'_o1_s1/Gqmc_T'.i.'_t_o1_s1.DAT_dos.dat' u 1:($2+(i-1)*h) w l lw 2 lc rgb 'black'  t ''
+
+
+
+
+
+
+
+
+
+import collections as cllct
+import numpy as np
+#
+#
+# --------------------------------------------------------------------------- #
+Nat = 156
+
+Els = ["Ta1","Ta2","Ta3","Ta4","Ta5","Ta6","Ta7","Ta8","Se"]
+#
+allDoS = cllct.defaultdict(dict)
+counts = cllct.defaultdict(dict)
+orbs = cllct.defaultdict(dict)
+#
+for i in range(1,9):
+    orbs["Ta%s"%i] = {"1":"s","2":"s","3":"p","4":"d"}
+orbs["Se"] = {"1":"s","2":"p"}
+#
+for El in Els:
+    for no,ko in orbs[El].items():
+        #
+        print("reading %s %s,%s"%(El,no,ko))
+        allDoS[El]["%s_%s"%(no,ko)] = np.zeros(3639)
+        counts[El]["%s_%s"%(no,ko)] = 0
+        #
+        for iat in range(1,Nat+1):
+            #
+            file = "1T-TaSe2_cdw.pdos_atm#%s(%s)_wfc#%s(%s)"%(iat,El,no,ko)
+            #
+            try:
+                w,Pdos = np.genfromtxt( file, dtype='double', usecols=(0,1), unpack=True, comments='#' )
+                allDoS[El]["%s_%s"%(no,ko)] += Pdos
+                counts[El]["%s_%s"%(no,ko)] += 1
+            except:
+                #print("%s not found"%file)
+                continue
+
+for El in Els:
+    for no,ko in orbs[El].items():
+        if counts[El]["%s_%s"%(no,ko)]!=0:
+            allDoS[El]["%s_%s"%(no,ko)] /= counts[El]["%s_%s"%(no,ko)]
+            np.savetxt("../DoS/DoS_%s_%s%s.DAT"%(El,no,ko),np.c_[w,allDoS[El]["%s_%s"%(no,ko)]])
+
+
+
+
+ymin=-0.65
+ymax=+0.05
+set yrange [ymin:ymax]
+set arrow from 0.2481,ymin to 0.2481,ymax nohead front lw 0.6 lc rgb "black"
+set arrow from 0.3106,ymin to 0.3106,ymax nohead front lw 0.6 lc rgb "black"
+set arrow from 0.3737,ymin to 0.3737,ymax nohead front lw 0.6 lc rgb "black"
+set arrow from 0.4987,ymin to 0.4987,ymax nohead front lw 0.6 lc rgb "black"
+set arrow from 0.6231,ymin to 0.6231,ymax nohead front lw 0.6 lc rgb "black"
+set arrow from 0.6856,ymin to 0.6856,ymax nohead front lw 0.6 lc rgb "black"
+set arrow from 0.7500,ymin to 0.7500,ymax nohead front lw 0.6 lc rgb "black"
+set xtics ('G' 0.0, 'K' 0.2481, 'M' 0.3106, 'K' 0.3737, 'G' 0.4987, 'K' 0.6231, 'M' 0.6856, 'K' 0.7500, 'G' 1.0)
+
+
+
+
+
+#
+#
+#
+#
+#
+#
+#
+#
+# BULK kz CUTS
+#
+#
+set pm3d map
+set palette defined ( 0 "white", 60 "red", 100 "black" )
+#
+set yrange [-1:1]; set ytics 0.25
+set xrange [3.3:5.2]; set xtics 0.5
+#
+#
+set title 'U=0.0'
+splot 'Fk_Hk_E0.000_U0.00.DAT' u ($9+4):8:10 pal t '' , 'Gamma' u 1:2:(100) w p pt 7 ps 2 lc rgb "red" t "G", 'Apt' u 1:2:(100) w p pt 7 ps 2 lc rgb "blue" t "A"
+set term jpeg; set output './Fk_U0.00.jpeg'; rep ; set term qt ; rep
+#
+set title 'U=0.40 - trick'
+splot 'Fk_Hk_dmft_s1_E0.000_U0.45.DAT' u ($9+4):8:10 pal t '' , 'Gamma' u 1:2:(100) w p pt 7 ps 2 lc rgb "red" t "G", 'Apt' u 1:2:(100) w p pt 7 ps 2 lc rgb "blue" t "A"
+set term jpeg; set output 'Fk_U0.40_trick.jpeg'; rep ; set term qt ; rep
+#
+set title 'U=0.45 - trick'
+splot 'Fk_Hk_dmft_s1_E0.000_U0.45.DAT' u ($9+4):8:10 pal t '' , 'Gamma' u 1:2:(100) w p pt 7 ps 2 lc rgb "red" t "G", 'Apt' u 1:2:(100) w p pt 7 ps 2 lc rgb "blue" t "A"
+set term jpeg; set output 'Fk_U0.45_trick.jpeg'; rep ; set term qt ; rep
+#
+set title 'U=0.47 - trick'
+splot 'Fk_Hk_dmft_s1_E0.000_U0.47.DAT' u ($9+4):8:10 pal t '' , 'Gamma' u 1:2:(100) w p pt 7 ps 2 lc rgb "red" t "G", 'Apt' u 1:2:(100) w p pt 7 ps 2 lc rgb "blue" t "A"
+set term jpeg; set output 'Fk_U0.47_trick.jpeg'; rep ; set term qt ; rep
+#
+set title 'U=0.48 - trick'
+splot 'Fk_Hk_dmft_s1_E0.000_U0.48.DAT' u ($9+4):8:10 pal t '' , 'Gamma' u 1:2:(0.01) w p pt 7 ps 2 lc rgb "red" t "G", 'Apt' u 1:2:(0.01) w p pt 7 ps 2 lc rgb "blue" t "A"
+set term jpeg; set output 'Fk_U0.48_trick.jpeg'; rep ; set term qt ; rep
+#
+set title 'U=0.49 - trick'
+splot 'Fk_Hk_dmft_s1_E0.000_U0.49.DAT' u ($9+4):8:10 pal t '' , 'Gamma' u 1:2:(0.01) w p pt 7 ps 2 lc rgb "red" t "G", 'Apt' u 1:2:(0.01) w p pt 7 ps 2 lc rgb "blue" t "A"
+set term jpeg; set output 'Fk_U0.49_trick.jpeg'; rep ; set term qt ; rep
+#
+set title 'U=0.45 - MaxEnt'
+splot 'Fk_Gk_s1_E0.000.DAT' u ($9+4):8:10 pal t '' , 'Gamma' u 1:2:(5) w p pt 7 ps 2 lc rgb "red" t "G", 'Apt' u 1:2:(5) w p pt 7 ps 2 lc rgb "blue" t "A"
+set term jpeg; set output 'Fk_U0.45_MaxEnt.jpeg'; rep ; set term qt ; rep
+#
+#
+#
+#
+#
+#
+#
+#
+# BULK Zqp
+#
+#
+set xrange [0:0.5]; set xtics 0.05; set grid
+set xlabel 'U'
+set ylabel 'Z'
+set yrange [0:1]
+p 'ZvsU.DAT' u 1:2 w lp lw 3 lc rgb 'black' t 'bulk
+set term jpeg; set output 'ZvsU.jpeg'; rep ; set term qt ; rep
+
+
+
+#
+#
+#
+#
+#
+#
+#
+#
+# PERFECT STACKING
+#
+#
+reset; set term x11 0; set grid
+Fermi=4.8680
+set xrange [Fermi-1:Fermi+1]
+set yrange [0:4]
+El='Ta'
+orb='4d'
+#
+h=4;set yrange [-h:n*h];set grid
+#
+p for [l=1:4] '3_GGA_6x6x1_slab/a_DFT/DoS/DoS_'.El.l.'_'.orb.'.DAT' u 1:(abs($2)+(i-1)*h) w l lw 3 lc l t ''.El.l.' '.orb
+
+
+
+
+rep '3_GGA_6x6x1_slab/a_DFT/bands/1T-TaSe2_cdw.pdos_atm#4(Ta1)_wfc#4(d)' u 1:(abs($3)) w l lw 1 lc 1 t ''
+rep '3_GGA_6x6x1_slab/a_DFT/bands/1T-TaSe2_cdw.pdos_atm#3(Ta2)_wfc#4(d)' u 1:(abs($3)) w l lw 1 lc 2 t ''
+rep '3_GGA_6x6x1_slab/a_DFT/bands/1T-TaSe2_cdw.pdos_atm#2(Ta3)_wfc#4(d)' u 1:(abs($3)) w l lw 1 lc 3 t ''
+rep '3_GGA_6x6x1_slab/a_DFT/bands/1T-TaSe2_cdw.pdos_atm#1(Ta4)_wfc#4(d)' u 1:(abs($3)) w l lw 1 lc 4 t ''
+set term jpeg; set output '/home/petocchif/1_GW_EDMFT/z_plots/DoS_DFT_3.jpeg'; rep ; set term x11 0 ; rep
+#
+#
+#
+reset; set term x11 1; set grid
+Fermi=4.8680
+set xrange [Fermi-1:Fermi+1]
+set yrange [0:2]
+p '3_GGA_6x6x1_slab/a_DFT/bands/bands.out.gnu' u 2:1 w l lw 2 t ''
+set arrow from Fermi,0 to Fermi,2 nohead front lw 0.6 lc rgb "black"
+set term jpeg; set output '/home/petocchif/1_GW_EDMFT/z_plots/Bands_DFT_3.jpeg'; rep ; set term x11 1 ; rep
+#
+#
+#
+reset; set term x11 2; set grid
+Fermi=4.8680
+set yrange [Fermi-0.4:Fermi+0.4]
+set arrow from 0.3440/0.973430,Fermi-0.4to 0.3440/0.973430,Fermi+0.4 nohead front lw 0.6 lc rgb "black"
+set arrow from 0.5497/0.973430,Fermi-0.4to 0.5497/0.973430,Fermi+0.4 nohead front lw 0.6 lc rgb "black"
+set xtics ('G' 0.00, 'M' 0.3440, 'K' 0.5497,'G' 1.000000)
+p '3_GGA_6x6x1_slab/a_DFT/bands/bands.out.gnu' u ($1/1.9561):2 w l lw 2 t ''
+rep '3_GGA_6x6x1_slab/a_DFT/wannier/1T-TaSe2_cdw_band.dat' u ($1/0.973430):2 w l lw 2 lc 3 t ''
+rep for [b=3:6] '3_GGA_6x6x1_slab/b_DMFT_mod/GWinput/Eig_Hk.DAT' u 2:(column(b)+Fermi) w l lw 2 lc rgb 'black' t ''
+set term jpeg; set output '/home/petocchif/1_GW_EDMFT/z_plots/W90_3.jpeg'; rep ; set term x11 2 ; rep
+#
+#
+#
+reset; set term jpeg size 600,1200; set output '/home/petocchif/1_GW_EDMFT/z_plots/Akw_3.jpeg'; set grid
+Fermi=4.9454
+set yrange [-0.25:+0.25]
+set zrange [0:30]
+#
+set arrow from 0.364,-0.25 to 0.364,0.25 nohead front lw 0.6 lc rgb "black"
+set arrow from 0.577,-0.25 to 0.577,0.25 nohead front lw 0.6 lc rgb "black"
+set xtics ('G' 0.00, 'M' 0.3440, 'K' 0.5497,'G' 1.000000)
+#
+set pm3d map
+set palette defined ( 0 "white", 70 "red", 100 "black" )
+#
+set multiplot layout 4,1
+#
+set title 'L1'
+splot '3_GGA_6x6x1_slab/b_DMFT_mod/GWinput/Akw_Hk.DAT' u 2:3:4 pal t '', for [b=3:6] '3_GGA_6x6x1_slab/b_DMFT_mod/GWinput/Eig_Hk.DAT' u 2:b:(15) w l lw 1 lc rgb 'black' t ''
+#
+set title 'L2'
+splot '3_GGA_6x6x1_slab/b_DMFT_mod/GWinput/Akw_Hk.DAT' u 2:3:5 pal t '', for [b=3:6] '3_GGA_6x6x1_slab/b_DMFT_mod/GWinput/Eig_Hk.DAT' u 2:b:(15) w l lw 1 lc rgb 'black' t ''
+#
+set title 'L3'
+splot '3_GGA_6x6x1_slab/b_DMFT_mod/GWinput/Akw_Hk.DAT' u 2:3:6 pal t '', for [b=3:6] '3_GGA_6x6x1_slab/b_DMFT_mod/GWinput/Eig_Hk.DAT' u 2:b:(15) w l lw 1 lc rgb 'black' t ''
+#
+set title 'L4'
+splot '3_GGA_6x6x1_slab/b_DMFT_mod/GWinput/Akw_Hk.DAT' u 2:3:7 pal t '', for [b=3:6] '3_GGA_6x6x1_slab/b_DMFT_mod/GWinput/Eig_Hk.DAT' u 2:b:(15) w l lw 1 lc rgb 'black' t ''
+#
+unset multiplot
+#
+#
+#
+#
+#
+#
+#
+#
+# STACKING FAULT
+#
+#
+reset; set term x11 0; set grid
+Fermi=4.9645
+set xrange [Fermi-1:Fermi+1]
+set yrange [0:4]
+El='Ta'
+orb='4d'
+p for [l=1:4] '4_GGA_6x6x1_slab_stacking2T1/a_DFT/DoS/DoS_'.El.l.'_'.orb.'.DAT' u 1:(abs($2)) w l lw 3 lc l t ''.El.l.' '.orb
+rep '4_GGA_6x6x1_slab_stacking2T1/a_DFT/bands/1T-TaSe2_cdw.pdos_atm#4(Ta1)_wfc#4(d)' u 1:(abs($3)) w l lw 1 lc 1 t ''
+rep '4_GGA_6x6x1_slab_stacking2T1/a_DFT/bands/1T-TaSe2_cdw.pdos_atm#3(Ta2)_wfc#4(d)' u 1:(abs($3)) w l lw 1 lc 2 t ''
+rep '4_GGA_6x6x1_slab_stacking2T1/a_DFT/bands/1T-TaSe2_cdw.pdos_atm#2(Ta3)_wfc#4(d)' u 1:(abs($3)) w l lw 1 lc 3 t ''
+rep '4_GGA_6x6x1_slab_stacking2T1/a_DFT/bands/1T-TaSe2_cdw.pdos_atm#1(Ta4)_wfc#4(d)' u 1:(abs($3)) w l lw 1 lc 4 t ''
+set term jpeg; set output '/home/petocchif/1_GW_EDMFT/z_plots/DoS_DFT_4.jpeg'; rep ; set term x11 0 ; rep
+#
+#
+#
+reset; set term x11 1; set grid
+Fermi=4.9645
+set xrange [Fermi-1:Fermi+1]
+set yrange [0:2]
+p '4_GGA_6x6x1_slab_stacking2T1/a_DFT/bands/bands.out.gnu' u 2:1 w l lw 2 t ''
+set term jpeg; set output '/home/petocchif/1_GW_EDMFT/z_plots/Bands_DFT_4.jpeg'; rep ; set term x11 1 ; rep
+#
+#
+#
+reset; set term x11 2; set grid
+Fermi=4.9645
+set yrange [Fermi-0.4:Fermi+0.4]
+set arrow from 0.3440,Fermi-0.4to 0.3440,Fermi+0.4 nohead front lw 0.6 lc rgb "black"
+set arrow from 0.5497,Fermi-0.4to 0.5497,Fermi+0.4 nohead front lw 0.6 lc rgb "black"
+set xtics ('G' 0.00, 'M' 0.3440, 'K' 0.5497,'G' 1.000000)
+p '4_GGA_6x6x1_slab_stacking2T1/a_DFT/bands/bands.out.gnu' u ($1/1.9135):2 w l lw 2 t ''
+rep '4_GGA_6x6x1_slab_stacking2T1/a_DFT/wannier/1T-TaSe2_cdw_band.dat' u ($1/0.97625047):2 w l lw 2 lc 3 t ''
+rep for [b=3:6] '4_GGA_6x6x1_slab_stacking2T1/b_DMFT/GWinput_het/Eig_Hk.DAT' u 2:(column(b)+Fermi) w l lw 2 lc rgb 'black' t ''
+set term jpeg; set output '/home/petocchif/1_GW_EDMFT/z_plots/W90_4.jpeg'; rep ; set term x11 2 ; rep
+#
+#
+#
+reset; set term jpeg size 600,1200; set output '/home/petocchif/1_GW_EDMFT/z_plots/Akw_4.jpeg'; set grid
+Fermi=4.9454
+set yrange [-0.25:+0.25]
+set zrange [0:30]
+#
+set pm3d map
+set palette defined ( 0 "white", 70 "red", 100 "black" )
+#
+set multiplot layout 3,1
+#
+set title 'L1'
+splot '4_GGA_6x6x1_slab_stacking2T1/b_DMFT/GWinput_het/Akw_Hk.DAT' u 2:3:4 pal t '', for [b=3:6] '4_GGA_6x6x1_slab_stacking2T1/b_DMFT/GWinput_het/Eig_Hk.DAT' u 2:b:(15) w l lw 1 lc rgb 'black' t ''
+#
+set title 'L2'
+splot '4_GGA_6x6x1_slab_stacking2T1/b_DMFT/GWinput_het/Akw_Hk.DAT' u 2:3:5 pal t '', for [b=3:6] '4_GGA_6x6x1_slab_stacking2T1/b_DMFT/GWinput_het/Eig_Hk.DAT' u 2:b:(15) w l lw 1 lc rgb 'black' t ''
+#
+set title 'L3'
+splot '4_GGA_6x6x1_slab_stacking2T1/b_DMFT/GWinput_het/Akw_Hk.DAT' u 2:3:6 pal t '', for [b=3:6] '4_GGA_6x6x1_slab_stacking2T1/b_DMFT/GWinput_het/Eig_Hk.DAT' u 2:b:(15) w l lw 1 lc rgb 'black' t ''
+#
+unset multiplot
+#
+#
+#
+#
+#
+#
+#
+#
+# DFT FERMI SURFACES OF BOTH SYSTEMS
+#
+#
+reset; set term jpeg size 600,600 ; set grid;
+set xrange [-0.8:+0.8]
+set yrange [-0.8:+0.8]
+set size ratio 1
+#
+set pm3d map
+set palette defined ( 0 "white", 60 "red", 100 "black" )
+#
+B_1_x=0.497597; B_1_y=0.287288; B_1_z=-0.518070
+B_2_x=0.000000; B_2_y=0.574576; B_2_z=-0.364411
+B_3_x=0.000000; B_3_y=0.000000; B_3_z=+0.168441
+#
+B1x=+B_1_x; B1y=+B_1_y
+B2x=+B_2_x; B2y=+B_2_y
+B3x=-B_1_x; B3y=-B_1_y
+B4x=-B_2_x; B4y=-B_2_y
+B5x=-B_2_x; B5y=-B_2_y
+#
+### DFT - slab
+#
+set output '/home/petocchif/1_GW_EDMFT/z_plots/Fs_3_L1_DFT.jpeg'
+set title 'L1'
+splot '3_GGA_6x6x1_slab/b_DMFT_mod/GWinput/Fk_Hk_E0.000.DAT' u ($7):($8):10 t ''        , \
+      '3_GGA_6x6x1_slab/b_DMFT_mod/GWinput/Fk_Hk_E0.000.DAT' u ($7+B1x):($8+B1y):10 t '', \
+      '3_GGA_6x6x1_slab/b_DMFT_mod/GWinput/Fk_Hk_E0.000.DAT' u ($7+B2x):($8+B2y):10 t '', \
+      '3_GGA_6x6x1_slab/b_DMFT_mod/GWinput/Fk_Hk_E0.000.DAT' u ($7+B3x):($8+B3y):10 t '', \
+      '3_GGA_6x6x1_slab/b_DMFT_mod/GWinput/Fk_Hk_E0.000.DAT' u ($7+B4x):($8+B4y):10 t ''
+#
+set output '/home/petocchif/1_GW_EDMFT/z_plots/Fs_3_L2_DFT.jpeg'
+set title 'L2'
+splot '3_GGA_6x6x1_slab/b_DMFT_mod/GWinput/Fk_Hk_E0.000.DAT' u ($7):($8):11 t ''        , \
+      '3_GGA_6x6x1_slab/b_DMFT_mod/GWinput/Fk_Hk_E0.000.DAT' u ($7+B1x):($8+B1y):11 t '', \
+      '3_GGA_6x6x1_slab/b_DMFT_mod/GWinput/Fk_Hk_E0.000.DAT' u ($7+B2x):($8+B2y):11 t '', \
+      '3_GGA_6x6x1_slab/b_DMFT_mod/GWinput/Fk_Hk_E0.000.DAT' u ($7+B3x):($8+B3y):11 t '', \
+      '3_GGA_6x6x1_slab/b_DMFT_mod/GWinput/Fk_Hk_E0.000.DAT' u ($7+B4x):($8+B4y):11 t ''
+#
+set output '/home/petocchif/1_GW_EDMFT/z_plots/Fs_3_L3_DFT.jpeg'
+set title 'L3'
+splot '3_GGA_6x6x1_slab/b_DMFT_mod/GWinput/Fk_Hk_E0.000.DAT' u ($7):($8):12 t ''        , \
+      '3_GGA_6x6x1_slab/b_DMFT_mod/GWinput/Fk_Hk_E0.000.DAT' u ($7+B1x):($8+B1y):12 t '', \
+      '3_GGA_6x6x1_slab/b_DMFT_mod/GWinput/Fk_Hk_E0.000.DAT' u ($7+B2x):($8+B2y):12 t '', \
+      '3_GGA_6x6x1_slab/b_DMFT_mod/GWinput/Fk_Hk_E0.000.DAT' u ($7+B3x):($8+B3y):12 t '', \
+      '3_GGA_6x6x1_slab/b_DMFT_mod/GWinput/Fk_Hk_E0.000.DAT' u ($7+B4x):($8+B4y):12 t ''
+#
+set output '/home/petocchif/1_GW_EDMFT/z_plots/Fs_3_L4_DFT.jpeg'
+set title 'L4'
+splot '3_GGA_6x6x1_slab/b_DMFT_mod/GWinput/Fk_Hk_E0.000.DAT' u ($7):($8):13 t ''        , \
+      '3_GGA_6x6x1_slab/b_DMFT_mod/GWinput/Fk_Hk_E0.000.DAT' u ($7+B1x):($8+B1y):13 t '', \
+      '3_GGA_6x6x1_slab/b_DMFT_mod/GWinput/Fk_Hk_E0.000.DAT' u ($7+B2x):($8+B2y):13 t '', \
+      '3_GGA_6x6x1_slab/b_DMFT_mod/GWinput/Fk_Hk_E0.000.DAT' u ($7+B3x):($8+B3y):13 t '', \
+      '3_GGA_6x6x1_slab/b_DMFT_mod/GWinput/Fk_Hk_E0.000.DAT' u ($7+B4x):($8+B4y):13 t ''
+#
+
+
+
+### DFT - no slab - w90 direct
+#
+set output '/home/petocchif/1_GW_EDMFT/z_plots/Fs_3_L1_DFT.jpeg'
+set title 'L1'
+splot '3_GGA_6x6x1_slab/b_DMFT/GWinput/Fk_Hk_E0.000.DAT' u ($7):($8):10 t ''        , \
+      '3_GGA_6x6x1_slab/b_DMFT/GWinput/Fk_Hk_E0.000.DAT' u ($7+B1x):($8+B1y):10 t '', \
+      '3_GGA_6x6x1_slab/b_DMFT/GWinput/Fk_Hk_E0.000.DAT' u ($7+B2x):($8+B2y):10 t '', \
+      '3_GGA_6x6x1_slab/b_DMFT/GWinput/Fk_Hk_E0.000.DAT' u ($7+B3x):($8+B3y):10 t '', \
+      '3_GGA_6x6x1_slab/b_DMFT/GWinput/Fk_Hk_E0.000.DAT' u ($7+B4x):($8+B4y):10 t ''
+#
+set output '/home/petocchif/1_GW_EDMFT/z_plots/Fs_3_L2_DFT.jpeg'
+set title 'L2'
+splot '3_GGA_6x6x1_slab/b_DMFT/GWinput/Fk_Hk_E0.000.DAT' u ($7):($8):11 t ''        , \
+      '3_GGA_6x6x1_slab/b_DMFT/GWinput/Fk_Hk_E0.000.DAT' u ($7+B1x):($8+B1y):11 t '', \
+      '3_GGA_6x6x1_slab/b_DMFT/GWinput/Fk_Hk_E0.000.DAT' u ($7+B2x):($8+B2y):11 t '', \
+      '3_GGA_6x6x1_slab/b_DMFT/GWinput/Fk_Hk_E0.000.DAT' u ($7+B3x):($8+B3y):11 t '', \
+      '3_GGA_6x6x1_slab/b_DMFT/GWinput/Fk_Hk_E0.000.DAT' u ($7+B4x):($8+B4y):11 t ''
+#
+set output '/home/petocchif/1_GW_EDMFT/z_plots/Fs_3_L3_DFT.jpeg'
+set title 'L3'
+splot '3_GGA_6x6x1_slab/b_DMFT/GWinput/Fk_Hk_E0.000.DAT' u ($7):($8):12 t ''        , \
+      '3_GGA_6x6x1_slab/b_DMFT/GWinput/Fk_Hk_E0.000.DAT' u ($7+B1x):($8+B1y):12 t '', \
+      '3_GGA_6x6x1_slab/b_DMFT/GWinput/Fk_Hk_E0.000.DAT' u ($7+B2x):($8+B2y):12 t '', \
+      '3_GGA_6x6x1_slab/b_DMFT/GWinput/Fk_Hk_E0.000.DAT' u ($7+B3x):($8+B3y):12 t '', \
+      '3_GGA_6x6x1_slab/b_DMFT/GWinput/Fk_Hk_E0.000.DAT' u ($7+B4x):($8+B4y):12 t ''
+#
+set output '/home/petocchif/1_GW_EDMFT/z_plots/Fs_3_L4_DFT.jpeg'
+set title 'L4'
+splot '3_GGA_6x6x1_slab/b_DMFT/GWinput/Fk_Hk_E0.000.DAT' u ($7):($8):13 t ''        , \
+      '3_GGA_6x6x1_slab/b_DMFT/GWinput/Fk_Hk_E0.000.DAT' u ($7+B1x):($8+B1y):13 t '', \
+      '3_GGA_6x6x1_slab/b_DMFT/GWinput/Fk_Hk_E0.000.DAT' u ($7+B2x):($8+B2y):13 t '', \
+      '3_GGA_6x6x1_slab/b_DMFT/GWinput/Fk_Hk_E0.000.DAT' u ($7+B3x):($8+B3y):13 t '', \
+      '3_GGA_6x6x1_slab/b_DMFT/GWinput/Fk_Hk_E0.000.DAT' u ($7+B4x):($8+B4y):13 t ''
+#
+
+
+
+### DFT - si slab - w90 direct
+#
+set output '/home/petocchif/1_GW_EDMFT/z_plots/Fs_3_L1_DFT.jpeg'
+set title 'L1'
+splot '3_GGA_6x6x1_slab/b_DMFT/GWinput_het2/Fk_Hk_E0.000.DAT' u ($7):($8):10 t ''        , \
+      '3_GGA_6x6x1_slab/b_DMFT/GWinput_het2/Fk_Hk_E0.000.DAT' u ($7+B1x):($8+B1y):10 t '', \
+      '3_GGA_6x6x1_slab/b_DMFT/GWinput_het2/Fk_Hk_E0.000.DAT' u ($7+B2x):($8+B2y):10 t '', \
+      '3_GGA_6x6x1_slab/b_DMFT/GWinput_het2/Fk_Hk_E0.000.DAT' u ($7+B3x):($8+B3y):10 t '', \
+      '3_GGA_6x6x1_slab/b_DMFT/GWinput_het2/Fk_Hk_E0.000.DAT' u ($7+B4x):($8+B4y):10 t ''
+#
+set output '/home/petocchif/1_GW_EDMFT/z_plots/Fs_3_L2_DFT.jpeg'
+set title 'L2'
+splot '3_GGA_6x6x1_slab/b_DMFT/GWinput_het2/Fk_Hk_E0.000.DAT' u ($7):($8):11 t ''        , \
+      '3_GGA_6x6x1_slab/b_DMFT/GWinput_het2/Fk_Hk_E0.000.DAT' u ($7+B1x):($8+B1y):11 t '', \
+      '3_GGA_6x6x1_slab/b_DMFT/GWinput_het2/Fk_Hk_E0.000.DAT' u ($7+B2x):($8+B2y):11 t '', \
+      '3_GGA_6x6x1_slab/b_DMFT/GWinput_het2/Fk_Hk_E0.000.DAT' u ($7+B3x):($8+B3y):11 t '', \
+      '3_GGA_6x6x1_slab/b_DMFT/GWinput_het2/Fk_Hk_E0.000.DAT' u ($7+B4x):($8+B4y):11 t ''
+#
+set output '/home/petocchif/1_GW_EDMFT/z_plots/Fs_3_L3_DFT.jpeg'
+set title 'L3'
+splot '3_GGA_6x6x1_slab/b_DMFT/GWinput_het2/Fk_Hk_E0.000.DAT' u ($7):($8):12 t ''        , \
+      '3_GGA_6x6x1_slab/b_DMFT/GWinput_het2/Fk_Hk_E0.000.DAT' u ($7+B1x):($8+B1y):12 t '', \
+      '3_GGA_6x6x1_slab/b_DMFT/GWinput_het2/Fk_Hk_E0.000.DAT' u ($7+B2x):($8+B2y):12 t '', \
+      '3_GGA_6x6x1_slab/b_DMFT/GWinput_het2/Fk_Hk_E0.000.DAT' u ($7+B3x):($8+B3y):12 t '', \
+      '3_GGA_6x6x1_slab/b_DMFT/GWinput_het2/Fk_Hk_E0.000.DAT' u ($7+B4x):($8+B4y):12 t ''
+#
+set output '/home/petocchif/1_GW_EDMFT/z_plots/Fs_3_L4_DFT.jpeg'
+set title 'L4'
+splot '3_GGA_6x6x1_slab/b_DMFT/GWinput_het2/Fk_Hk_E0.000.DAT' u ($7):($8):13 t ''        , \
+      '3_GGA_6x6x1_slab/b_DMFT/GWinput_het2/Fk_Hk_E0.000.DAT' u ($7+B1x):($8+B1y):13 t '', \
+      '3_GGA_6x6x1_slab/b_DMFT/GWinput_het2/Fk_Hk_E0.000.DAT' u ($7+B2x):($8+B2y):13 t '', \
+      '3_GGA_6x6x1_slab/b_DMFT/GWinput_het2/Fk_Hk_E0.000.DAT' u ($7+B3x):($8+B3y):13 t '', \
+      '3_GGA_6x6x1_slab/b_DMFT/GWinput_het2/Fk_Hk_E0.000.DAT' u ($7+B4x):($8+B4y):13 t ''
+#
+
+
+
+
+
+
+
+
+
+#
+reset; set term x11 size 600,600 ; set grid;
+set xrange [-0.8:+0.8]
+set yrange [-0.8:+0.8]
+set size ratio 1
+#
+set pm3d map
+set palette defined ( 0 "white", 60 "red", 100 "black" )
+#
+B_1_x=0.497597; B_1_y=0.287288; B_1_z=-0.518070
+B_2_x=0.000000; B_2_y=0.574576; B_2_z=-0.364411
+B_3_x=0.000000; B_3_y=0.000000; B_3_z=+0.168441
+#
+B1x=+B_1_x; B1y=+B_1_y
+B2x=+B_2_x; B2y=+B_2_y
+B3x=-B_1_x; B3y=-B_1_y
+B4x=-B_2_x; B4y=-B_2_y
+B5x=-B_2_x; B5y=-B_2_y
+#
+set title 'L1'
+splot 'Fk_Hk_E0.000.DAT' u ($7):($8):10 t ''        , \
+      'Fk_Hk_E0.000.DAT' u ($7+B1x):($8+B1y):10 t '', \
+      'Fk_Hk_E0.000.DAT' u ($7+B2x):($8+B2y):10 t '', \
+      'Fk_Hk_E0.000.DAT' u ($7+B3x):($8+B3y):10 t '', \
+      'Fk_Hk_E0.000.DAT' u ($7+B4x):($8+B4y):10 t ''
+
+
+
+
+#
+### DMFT
+#
+set output '/home/petocchif/1_GW_EDMFT/z_plots/Fs_3_L1_DMFT.jpeg'
+set title 'L1'
+splot '3_GGA_6x6x1_slab/b_DMFT_mod/beta_400/Results_beta400/47/K_resolved/Fk_Hk_dmft_s1_E0.000.DAT' u ($7):($8):10 t ''        , \
+      '3_GGA_6x6x1_slab/b_DMFT_mod/beta_400/Results_beta400/47/K_resolved/Fk_Hk_dmft_s1_E0.000.DAT' u ($7+B1x):($8+B1y):10 t '', \
+      '3_GGA_6x6x1_slab/b_DMFT_mod/beta_400/Results_beta400/47/K_resolved/Fk_Hk_dmft_s1_E0.000.DAT' u ($7+B2x):($8+B2y):10 t '', \
+      '3_GGA_6x6x1_slab/b_DMFT_mod/beta_400/Results_beta400/47/K_resolved/Fk_Hk_dmft_s1_E0.000.DAT' u ($7+B3x):($8+B3y):10 t '', \
+      '3_GGA_6x6x1_slab/b_DMFT_mod/beta_400/Results_beta400/47/K_resolved/Fk_Hk_dmft_s1_E0.000.DAT' u ($7+B4x):($8+B4y):10 t ''
+#
+set output '/home/petocchif/1_GW_EDMFT/z_plots/Fs_3_L2_DMFT.jpeg'
+set title 'L2'
+splot '3_GGA_6x6x1_slab/b_DMFT_mod/beta_400/Results_beta400/47/K_resolved/Fk_Hk_dmft_s1_E0.000.DAT' u ($7):($8):11 t ''        , \
+      '3_GGA_6x6x1_slab/b_DMFT_mod/beta_400/Results_beta400/47/K_resolved/Fk_Hk_dmft_s1_E0.000.DAT' u ($7+B1x):($8+B1y):11 t '', \
+      '3_GGA_6x6x1_slab/b_DMFT_mod/beta_400/Results_beta400/47/K_resolved/Fk_Hk_dmft_s1_E0.000.DAT' u ($7+B2x):($8+B2y):11 t '', \
+      '3_GGA_6x6x1_slab/b_DMFT_mod/beta_400/Results_beta400/47/K_resolved/Fk_Hk_dmft_s1_E0.000.DAT' u ($7+B3x):($8+B3y):11 t '', \
+      '3_GGA_6x6x1_slab/b_DMFT_mod/beta_400/Results_beta400/47/K_resolved/Fk_Hk_dmft_s1_E0.000.DAT' u ($7+B4x):($8+B4y):11 t ''
+#
+set output '/home/petocchif/1_GW_EDMFT/z_plots/Fs_3_L3_DMFT.jpeg'
+set title 'L3'
+splot '3_GGA_6x6x1_slab/b_DMFT_mod/beta_400/Results_beta400/47/K_resolved/Fk_Hk_dmft_s1_E0.000.DAT' u ($7):($8):12 t ''        , \
+      '3_GGA_6x6x1_slab/b_DMFT_mod/beta_400/Results_beta400/47/K_resolved/Fk_Hk_dmft_s1_E0.000.DAT' u ($7+B1x):($8+B1y):12 t '', \
+      '3_GGA_6x6x1_slab/b_DMFT_mod/beta_400/Results_beta400/47/K_resolved/Fk_Hk_dmft_s1_E0.000.DAT' u ($7+B2x):($8+B2y):12 t '', \
+      '3_GGA_6x6x1_slab/b_DMFT_mod/beta_400/Results_beta400/47/K_resolved/Fk_Hk_dmft_s1_E0.000.DAT' u ($7+B3x):($8+B3y):12 t '', \
+      '3_GGA_6x6x1_slab/b_DMFT_mod/beta_400/Results_beta400/47/K_resolved/Fk_Hk_dmft_s1_E0.000.DAT' u ($7+B4x):($8+B4y):12 t ''
+#
+set output '/home/petocchif/1_GW_EDMFT/z_plots/Fs_3_L4_DMFT.jpeg'
+set title 'L4'
+splot '3_GGA_6x6x1_slab/b_DMFT_mod/beta_400/Results_beta400/47/K_resolved/Fk_Hk_dmft_s1_E0.000.DAT' u ($7):($8):13 t ''        , \
+      '3_GGA_6x6x1_slab/b_DMFT_mod/beta_400/Results_beta400/47/K_resolved/Fk_Hk_dmft_s1_E0.000.DAT' u ($7+B1x):($8+B1y):13 t '', \
+      '3_GGA_6x6x1_slab/b_DMFT_mod/beta_400/Results_beta400/47/K_resolved/Fk_Hk_dmft_s1_E0.000.DAT' u ($7+B2x):($8+B2y):13 t '', \
+      '3_GGA_6x6x1_slab/b_DMFT_mod/beta_400/Results_beta400/47/K_resolved/Fk_Hk_dmft_s1_E0.000.DAT' u ($7+B3x):($8+B3y):13 t '', \
+      '3_GGA_6x6x1_slab/b_DMFT_mod/beta_400/Results_beta400/47/K_resolved/Fk_Hk_dmft_s1_E0.000.DAT' u ($7+B4x):($8+B4y):13 t ''
+#
+
+
+
+
+
+
+
+
+
+
+
+
+set output '/home/petocchif/1_GW_EDMFT/z_plots/Fs_4_L1.jpeg'
+set title 'L1'
+splot '4_GGA_6x6x1_slab_stacking2T1/b_DMFT/GWinput_het/Fk_Hk_E0.000.DAT' u ($7):($8):10 t ''        , \
+      '4_GGA_6x6x1_slab_stacking2T1/b_DMFT/GWinput_het/Fk_Hk_E0.000.DAT' u ($7+B1x):($8+B1y):10 t '', \
+      '4_GGA_6x6x1_slab_stacking2T1/b_DMFT/GWinput_het/Fk_Hk_E0.000.DAT' u ($7+B2x):($8+B2y):10 t '', \
+      '4_GGA_6x6x1_slab_stacking2T1/b_DMFT/GWinput_het/Fk_Hk_E0.000.DAT' u ($7+B3x):($8+B3y):10 t '', \
+      '4_GGA_6x6x1_slab_stacking2T1/b_DMFT/GWinput_het/Fk_Hk_E0.000.DAT' u ($7+B4x):($8+B4y):10 t ''
+#
+set output '/home/petocchif/1_GW_EDMFT/z_plots/Fs_4_L2.jpeg'
+set title 'L2'
+splot '4_GGA_6x6x1_slab_stacking2T1/b_DMFT/GWinput_het/Fk_Hk_E0.000.DAT' u ($7):($8):11 t ''        , \
+      '4_GGA_6x6x1_slab_stacking2T1/b_DMFT/GWinput_het/Fk_Hk_E0.000.DAT' u ($7+B1x):($8+B1y):11 t '', \
+      '4_GGA_6x6x1_slab_stacking2T1/b_DMFT/GWinput_het/Fk_Hk_E0.000.DAT' u ($7+B2x):($8+B2y):11 t '', \
+      '4_GGA_6x6x1_slab_stacking2T1/b_DMFT/GWinput_het/Fk_Hk_E0.000.DAT' u ($7+B3x):($8+B3y):11 t '', \
+      '4_GGA_6x6x1_slab_stacking2T1/b_DMFT/GWinput_het/Fk_Hk_E0.000.DAT' u ($7+B4x):($8+B4y):11 t ''
+#
+set output '/home/petocchif/1_GW_EDMFT/z_plots/Fs_4_L3.jpeg'
+set title 'L3'
+splot '4_GGA_6x6x1_slab_stacking2T1/b_DMFT/GWinput_het/Fk_Hk_E0.000.DAT' u ($7):($8):12 t ''        , \
+      '4_GGA_6x6x1_slab_stacking2T1/b_DMFT/GWinput_het/Fk_Hk_E0.000.DAT' u ($7+B1x):($8+B1y):12 t '', \
+      '4_GGA_6x6x1_slab_stacking2T1/b_DMFT/GWinput_het/Fk_Hk_E0.000.DAT' u ($7+B2x):($8+B2y):12 t '', \
+      '4_GGA_6x6x1_slab_stacking2T1/b_DMFT/GWinput_het/Fk_Hk_E0.000.DAT' u ($7+B3x):($8+B3y):12 t '', \
+      '4_GGA_6x6x1_slab_stacking2T1/b_DMFT/GWinput_het/Fk_Hk_E0.000.DAT' u ($7+B4x):($8+B4y):12 t ''
+#
+set output '/home/petocchif/1_GW_EDMFT/z_plots/Fs_4_L4.jpeg'
+set title 'L4'
+splot '4_GGA_6x6x1_slab_stacking2T1/b_DMFT/GWinput_het/Fk_Hk_E0.000.DAT' u ($7):($8):13 t ''        , \
+      '4_GGA_6x6x1_slab_stacking2T1/b_DMFT/GWinput_het/Fk_Hk_E0.000.DAT' u ($7+B1x):($8+B1y):13 t '', \
+      '4_GGA_6x6x1_slab_stacking2T1/b_DMFT/GWinput_het/Fk_Hk_E0.000.DAT' u ($7+B2x):($8+B2y):13 t '', \
+      '4_GGA_6x6x1_slab_stacking2T1/b_DMFT/GWinput_het/Fk_Hk_E0.000.DAT' u ($7+B3x):($8+B3y):13 t '', \
+      '4_GGA_6x6x1_slab_stacking2T1/b_DMFT/GWinput_het/Fk_Hk_E0.000.DAT' u ($7+B4x):($8+B4y):13 t ''

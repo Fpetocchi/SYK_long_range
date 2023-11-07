@@ -38,13 +38,15 @@ subroutine interpolate2kpath_Fermionic(Sfull,Lttc,pathOUTPUT)
    !
    !TEST>>>
    logical                               :: integrate_kz=.false.
+   logical                               :: dump_unfolded=.false.
    logical                               :: dump_BAB=.false.
-   logical                               :: dump_unfolded=.false.,print_AB=.false.
    integer                               :: Nkp,Nkz,Nkz_,ikz,iwig
    integer                               :: nx,ny,nz,isite,jsite,iwig_old
-   real(8)                               :: kz,kzfact,Bz_thresh,KR,cfac
+   real(8)                               :: kz,kzfact,Bz_thresh,KR
+   complex(8)                            :: cfac
    real(8),allocatable                   :: kptpath_auxkz(:,:)
-   complex(8),allocatable                :: Gfull_R(:,:,:,:),Gfull_R_halfkz(:,:,:,:)
+   complex(8),allocatable                :: Gkw(:,:,:,:)
+   complex(8),allocatable                :: Gfull_R(:,:,:,:,:),Gfull_R_halfkz(:,:,:,:,:)
    type(FermionicField)                  :: Gpath_auxkz,Gfull_aux
    !>>>TEST
    !
@@ -144,6 +146,7 @@ subroutine interpolate2kpath_Fermionic(Sfull,Lttc,pathOUTPUT)
             call calc_Gmats(Gfull,Lttc,Smats=Sfull,along_path=.false.)
             !
             !TEST>>>
+            !This is required for the gap equation with DMFT correction to the bandstructure
             do ispin=1,Nspin
                !
                do ik=1,Lttc%Nkpt
@@ -336,10 +339,10 @@ subroutine interpolate2kpath_Fermionic(Sfull,Lttc,pathOUTPUT)
             enddo
             !
             call AllocateFermionicField(Gpath,Norb,Nmats,Nkpt=Lttc%Nkpt_path,Nsite=Sfull%Nsite,Beta=Sfull%Beta,mu=Sfull%mu)
-            call calc_Gmats(Gpath,Lttc,Smats=Sloc,along_path=.true.)
+            !call calc_Gmats(Gpath,Lttc,Smats=Sloc,along_path=.true.)
             !
             !TEST>>>
-            !!if((.not.integrate_kz).and.(.not.dump_BAB).and.(.not.dump_unfolded)) call calc_Gmats(Gpath,Lttc,Smats=Sloc,along_path=.true.)
+            if((.not.integrate_kz).and.(.not.dump_BAB).and.(.not.dump_unfolded)) call calc_Gmats(Gpath,Lttc,Smats=Sloc,along_path=.true.)
             !>>>TEST
             !
             !TEST>>> This portion is to integrate over a given thickness in kz
@@ -403,130 +406,149 @@ subroutine interpolate2kpath_Fermionic(Sfull,Lttc,pathOUTPUT)
             !>>>TEST
             !
             !TEST>>> This portion is to pass from orbital basis to B/AB basis directly on Gpath
-            !!if(dump_BAB)then
-            !!   !
-            !!   call calc_Gmats(Gpath,Lttc,Smats=Sloc,along_path=.true.)
-            !!   !
-            !!   call duplicate(Gpath_auxkz,Gpath)
-            !!   call DeallocateField(Gpath)
-            !!   !
-            !!   call AllocateFermionicField(Gpath,Norb,Nmats,Nkpt=Lttc%Nkpt_path,Nsite=Sfull%Nsite,Beta=Sfull%Beta,mu=Sfull%mu)
-            !!   !
-            !!   Gpath%wks(1,1,:,:,:) = (Gpath_auxkz%wks(1,1,:,:,:)+Gpath_auxkz%wks(2,2,:,:,:)+Gpath_auxkz%wks(1,2,:,:,:)+Gpath_auxkz%wks(2,1,:,:,:))/2d0
-            !!   Gpath%wks(2,2,:,:,:) = (Gpath_auxkz%wks(1,1,:,:,:)+Gpath_auxkz%wks(2,2,:,:,:)-Gpath_auxkz%wks(1,2,:,:,:)-Gpath_auxkz%wks(2,1,:,:,:))/2d0
-            !!   !
-            !!   call DeallocateFermionicField(Gpath_auxkz)
-            !!   !
-            !!endif
+            if(dump_BAB)then
+               !
+               call calc_Gmats(Gpath,Lttc,Smats=Sloc,along_path=.true.)
+               !
+               call duplicate(Gpath_auxkz,Gpath)
+               call DeallocateField(Gpath)
+               !
+               call AllocateFermionicField(Gpath,Norb,Nmats,Nkpt=Lttc%Nkpt_path,Nsite=Sfull%Nsite,Beta=Sfull%Beta,mu=Sfull%mu)
+               !
+               Gpath%wks(1,1,:,:,:) = (Gpath_auxkz%wks(1,1,:,:,:)+Gpath_auxkz%wks(2,2,:,:,:)+Gpath_auxkz%wks(1,2,:,:,:)+Gpath_auxkz%wks(2,1,:,:,:))/2d0
+               Gpath%wks(2,2,:,:,:) = (Gpath_auxkz%wks(1,1,:,:,:)+Gpath_auxkz%wks(2,2,:,:,:)-Gpath_auxkz%wks(1,2,:,:,:)-Gpath_auxkz%wks(2,1,:,:,:))/2d0
+               !
+               call DeallocateFermionicField(Gpath_auxkz)
+               !
+            endif
             !>>>TEST
             !
-            !TEST>>> This portion is to pass from orbital basis to B/AB basis directly on Gpath
-            !!if(dump_unfolded)then
-            !!   !
-            !!   call AllocateFermionicField(Gfull,Norb,Nmats,Nkpt=Lttc%Nkpt,Nsite=Sfull%Nsite,Beta=Sfull%Beta,mu=Sfull%mu)
-            !!   call calc_Gmats(Gfull,Lttc,Smats=Sfull,along_path=.false.)
-            !!   write(*,*)"Gfull(K) computed"
-            !!   !
-            !!   if(print_AB)then
-            !!      Gfull%wks(1,2,:,:,:) = -Gfull%wks(1,2,:,:,:)
-            !!      Gfull%wks(2,1,:,:,:) = -Gfull%wks(2,1,:,:,:)
-            !!   endif
-            !!   !
-            !!   allocate(Gfull_R(Norb,Norb,Nmats,Nwig));Gfull_R=czero
-            !!   call wannier_K2R(Lttc%Nkpt3,Lttc%kpt,Gfull%wks(:,:,:,:,1),Gfull_R)
-            !!   call DeallocateField(Gfull)
-            !!   write(*,*)"Gfull_AB(R) computed"
-            !!   !
-            !!   allocate(Gfull_R_halfkz(3*Norb,3*Norb,Nmats,Nwig));Gfull_R_halfkz=czero
-            !!   !
-            !!   do nx=minval(Nvecwig(1,:)),maxval(Nvecwig(1,:)),1
-            !!      do ny=minval(Nvecwig(2,:)),maxval(Nvecwig(2,:)),1
-            !!         !
-            !!         !new iwig
-            !!         iwig = find_vec([nx,ny,0],Nvecwig,hardstop=.false.)
-            !!         if(iwig.eq.0)cycle
-            !!         !
-            !!         do nz=minval(Nvecwig(3,:)),maxval(Nvecwig(3,:)),1
-            !!            !
-            !!            if(nz.eq.0)then
-            !!               !diagonals
-            !!               do ik=1,3
-            !!                  Gfull_R_halfkz(1+(ik-1)*Norb:ik*Norb,1+(ik-1)*Norb:ik*Norb,:,iwig) = Gfull_R(:,:,:,iwig)
-            !!               enddo
-            !!            elseif(nz.eq.+1)then
-            !!               !distance +1
-            !!               iwig_old = find_vec([nx,ny,+1],Nvecwig,hardstop=.false.)
-            !!               if(iwig_old.eq.0)cycle
-            !!               !
-            !!               Gfull_R_halfkz(1+Norb:2*Norb,1:Norb,:,iwig) = Gfull_R(:,:,:,iwig_old)
-            !!               Gfull_R_halfkz(1+2*Norb:3*Norb,1+Norb:2*Norb,:,iwig) = Gfull_R(:,:,:,iwig_old)
-            !!            elseif(nz.eq.-1)then
-            !!               !distance -1
-            !!               iwig_old = find_vec([nx,ny,-1],Nvecwig,hardstop=.false.)
-            !!               if(iwig_old.eq.0)cycle
-            !!               !
-            !!               Gfull_R_halfkz(1:Norb,1+Norb:2*Norb,:,iwig) = Gfull_R(:,:,:,iwig_old)
-            !!               Gfull_R_halfkz(1+Norb:2*Norb,1+2*Norb:3*Norb,:,iwig) = Gfull_R(:,:,:,iwig_old)
-            !!            elseif(nz.eq.+2)then
-            !!               !distance +2
-            !!               iwig_old = find_vec([nx,ny,+2],Nvecwig,hardstop=.false.)
-            !!               if(iwig_old.eq.0)cycle
-            !!               !
-            !!               Gfull_R_halfkz(1+2*Norb:3*Norb,1:Norb,:,iwig) = Gfull_R(:,:,:,iwig_old)
-            !!            elseif(nz.eq.-2)then
-            !!               !distance -2
-            !!               iwig_old = find_vec([nx,ny,+2],Nvecwig,hardstop=.false.)
-            !!               if(iwig_old.eq.0)cycle
-            !!               !
-            !!               Gfull_R_halfkz(1:Norb,1+2*Norb:3*Norb,:,iwig) = Gfull_R(:,:,:,iwig_old)
-            !!            endif
-            !!            !
-            !!         enddo
-            !!      enddo
-            !!   enddo
-            !!   deallocate(Gfull_R)
-            !!   write(*,*)"extraction to hetero-like"
-            !!   !
-            !!   Nkp = 151
-            !!   Nkz = 50
-            !!   !
-            !!   allocate(Gfull_R(3*Norb,3*Norb,Nmats,Lttc%Nkpt_path));Gfull_R=czero
-            !!   call wannier_R2K(Lttc%Nkpt3,Lttc%kptpath(:,1:Nkp),Gfull_R_halfkz,Gfull_R(:,:,:,1:Nkp))
-            !!   deallocate(Gfull_R_halfkz)
-            !!   write(*,*)"path-interpolation"
-            !!   !
-            !!   allocate(Gfull_R_halfkz(1,Nmats,Nkp,0:Nkz));Gfull_R_halfkz=czero
-            !!   do ik=1,Nkp
-            !!      do ikz=0,Nkz
-            !!         do isite=1,6
-            !!            do jsite=1,6
-            !!               !
-            !!               kR = 2*pi * Lttc%kptpath(3,Nkp+ikz) * (isite-jsite)
-            !!               cfac = dcmplx(cos(kR),+sin(kR))
-            !!               !
-            !!               Gfull_R_halfkz(1,:,ik,ikz) = Gfull_R_halfkz(1,:,ik,ikz) + Gfull_R(isite,jsite,:,ik)*cfac / 6
-            !!               !
-            !!            enddo
-            !!         enddo
-            !!      enddo
-            !!   enddo
-            !!   deallocate(Gfull_R)
-            !!   write(*,*)"Gamma-A filled-1"
-            !!   !
-            !!   do ispin=1,Nspin
-            !!      do iorb=1,2
-            !!         do ik=1,Nkp
-            !!            Gpath%wks(iorb,iorb,:,ik,ispin) = Gfull_R_halfkz(1,:,ik,0)
-            !!         enddo
-            !!         do ikz=0,Nkz
-            !!            Gpath%wks(iorb,iorb,:,Nkp+ikz,ispin) = Gfull_R_halfkz(1,:,Nkp,ikz)
-            !!         enddo
-            !!      enddo
-            !!   enddo
-            !!   deallocate(Gfull_R_halfkz)
-            !!   write(*,*)"Gamma-A filled-2"
-            !!   !
-            !!endif
+            !TEST>>> This portion is to pass from orbital basis to B/AB basis directly on Gpath with unfolded BZ
+            if(dump_unfolded)then
+               !
+               call AllocateFermionicField(Gfull,Norb,Nmats,Nkpt=Lttc%Nkpt,Nsite=Sfull%Nsite,Beta=Sfull%Beta,mu=Sfull%mu)
+               call calc_Gmats(Gfull,Lttc,Smats=Sfull,along_path=.false.)
+               write(*,*)"Gfull(K) computed"
+               !
+               allocate(Gfull_R(Norb,Norb,Nmats,Nwig,2));Gfull_R=czero
+               call wannier_K2R(Lttc%Nkpt3,Lttc%kpt,Gfull%wks(:,:,:,:,1),Gfull_R(:,:,:,:,1))
+               Gfull%wks(1,2,:,:,:) = -Gfull%wks(1,2,:,:,:)
+               Gfull%wks(2,1,:,:,:) = -Gfull%wks(2,1,:,:,:)
+               call wannier_K2R(Lttc%Nkpt3,Lttc%kpt,Gfull%wks(:,:,:,:,1),Gfull_R(:,:,:,:,2))
+               call DeallocateField(Gfull)
+               write(*,*)"Gfull_AB(R) computed"
+               !
+               allocate(Gfull_R_halfkz(3*Norb,3*Norb,Nmats,Nwig,2));Gfull_R_halfkz=czero
+               !
+               do nx=minval(Nvecwig(1,:)),maxval(Nvecwig(1,:)),1
+                  do ny=minval(Nvecwig(2,:)),maxval(Nvecwig(2,:)),1
+                     !
+                     !new iwig
+                     iwig = find_vec([nx,ny,0],Nvecwig,hardstop=.false.)
+                     if(iwig.eq.0)cycle
+                     !
+                     do nz=minval(Nvecwig(3,:)),maxval(Nvecwig(3,:)),1
+                        !
+                        if(nz.eq.0)then
+                           !diagonals
+                           do ik=1,3
+                              !B
+                              Gfull_R_halfkz(1+(ik-1)*Norb:ik*Norb,1+(ik-1)*Norb:ik*Norb,:,iwig,1) = Gfull_R(:,:,:,iwig,1)
+                              !AB
+                              Gfull_R_halfkz(1+(ik-1)*Norb:ik*Norb,1+(ik-1)*Norb:ik*Norb,:,iwig,2) = Gfull_R(:,:,:,iwig,2)
+                           enddo
+                        elseif(nz.eq.+1)then
+                           !distance +1
+                           iwig_old = find_vec([nx,ny,+1],Nvecwig,hardstop=.false.)
+                           if(iwig_old.eq.0)cycle
+                           !
+                           !B
+                           Gfull_R_halfkz(1+Norb:2*Norb,1:Norb,:,iwig,1) = Gfull_R(:,:,:,iwig_old,1)
+                           Gfull_R_halfkz(1+2*Norb:3*Norb,1+Norb:2*Norb,:,iwig,1) = Gfull_R(:,:,:,iwig_old,1)
+                           !AB
+                           Gfull_R_halfkz(1+Norb:2*Norb,1:Norb,:,iwig,2) = Gfull_R(:,:,:,iwig_old,2)
+                           Gfull_R_halfkz(1+2*Norb:3*Norb,1+Norb:2*Norb,:,iwig,2) = Gfull_R(:,:,:,iwig_old,2)
+                        elseif(nz.eq.-1)then
+                           !distance -1
+                           iwig_old = find_vec([nx,ny,-1],Nvecwig,hardstop=.false.)
+                           if(iwig_old.eq.0)cycle
+                           !
+                           !B
+                           Gfull_R_halfkz(1:Norb,1+Norb:2*Norb,:,iwig,1) = Gfull_R(:,:,:,iwig_old,1)
+                           Gfull_R_halfkz(1+Norb:2*Norb,1+2*Norb:3*Norb,:,iwig,1) = Gfull_R(:,:,:,iwig_old,1)
+                           !AB
+                           Gfull_R_halfkz(1:Norb,1+Norb:2*Norb,:,iwig,2) = Gfull_R(:,:,:,iwig_old,2)
+                           Gfull_R_halfkz(1+Norb:2*Norb,1+2*Norb:3*Norb,:,iwig,2) = Gfull_R(:,:,:,iwig_old,2)
+                        elseif(nz.eq.+2)then
+                           !distance +2
+                           iwig_old = find_vec([nx,ny,+2],Nvecwig,hardstop=.false.)
+                           if(iwig_old.eq.0)cycle
+                           !
+                           !B
+                           Gfull_R_halfkz(1+2*Norb:3*Norb,1:Norb,:,iwig,1) = Gfull_R(:,:,:,iwig_old,1)
+                           !AB
+                           Gfull_R_halfkz(1+2*Norb:3*Norb,1:Norb,:,iwig,2) = Gfull_R(:,:,:,iwig_old,2)
+                        elseif(nz.eq.-2)then
+                           !distance -2
+                           iwig_old = find_vec([nx,ny,+2],Nvecwig,hardstop=.false.)
+                           if(iwig_old.eq.0)cycle
+                           !
+                           !B
+                           Gfull_R_halfkz(1:Norb,1+2*Norb:3*Norb,:,iwig,1) = Gfull_R(:,:,:,iwig_old,1)
+                           !AB
+                           Gfull_R_halfkz(1:Norb,1+2*Norb:3*Norb,:,iwig,2) = Gfull_R(:,:,:,iwig_old,2)
+                        endif
+                        !
+                     enddo
+                  enddo
+               enddo
+               deallocate(Gfull_R)
+               write(*,*)"extraction to hetero-like"
+               !
+               Nkp = 151
+               Nkz = 50
+               !
+               allocate(Gfull_R(3*Norb,3*Norb,Nmats,Lttc%Nkpt_path,2));Gfull_R=czero
+               call wannier_R2K(Lttc%Nkpt3,Lttc%kptpath(:,1:Nkp),Gfull_R_halfkz(:,:,:,:,1),Gfull_R(:,:,:,1:Nkp,1))
+               call wannier_R2K(Lttc%Nkpt3,Lttc%kptpath(:,1:Nkp),Gfull_R_halfkz(:,:,:,:,2),Gfull_R(:,:,:,1:Nkp,2))
+               deallocate(Gfull_R_halfkz)
+               write(*,*)"path-interpolation"
+               !
+               allocate(Gkw(2,Nmats,Nkp,0:Nkz));Gkw=czero
+               do ik=1,Nkp
+                  do ikz=0,Nkz
+                     do isite=1,6
+                        do jsite=1,6
+                           !
+                           kR = 2*pi * Lttc%kptpath(3,Nkp+ikz) * (isite-jsite)
+                           cfac = dcmplx(cos(kR),+sin(kR))
+                           !
+                           !B
+                           Gkw(1,:,ik,ikz) = Gkw(1,:,ik,ikz) + Gfull_R(isite,jsite,:,ik,1)*cfac / 6
+                           !AB
+                           Gkw(2,:,ik,ikz) = Gkw(2,:,ik,ikz) + Gfull_R(isite,jsite,:,ik,2)*cfac / 6
+                           !
+                        enddo
+                     enddo
+                  enddo
+               enddo
+               deallocate(Gfull_R)
+               write(*,*)"Gamma-A filled-1"
+               !
+               do ispin=1,Nspin
+                  do iorb=1,2
+                     do ik=1,Nkp
+                        Gpath%wks(iorb,iorb,:,ik,ispin) = Gkw(iorb,:,ik,0)
+                     enddo
+                     do ikz=0,Nkz
+                        Gpath%wks(iorb,iorb,:,Nkp+ikz,ispin) = Gkw(iorb,:,Nkp,ikz)
+                     enddo
+                  enddo
+               enddo
+               deallocate(Gkw)
+               write(*,*)"Gamma-A filled-2"
+               !
+            endif
             !
             !>>>TEST
             !

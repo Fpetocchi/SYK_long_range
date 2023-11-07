@@ -7,7 +7,6 @@ muthres=1.0
 #muthres=0.01
 #muthres=0.001
 
-logMesh=2.0
 
 try:
     import Gnuplot
@@ -242,10 +241,10 @@ if __name__=="__main__":
 
     elif arguments['--statistics']=='F':
 
-        if logMesh==None:
-            omegaMesh=np.linspace(-float(arguments["--frequencyrange"])/2.0,float(arguments["--frequencyrange"])/2.0,int(arguments["--frequencies"]))
-        else:
-            omegaMesh=np.logspace(-float(arguments["--frequencyrange"])/2.0,float(arguments["--frequencyrange"])/2.0,int(arguments["--frequencies"]),base=logMesh)
+        #if logMesh==None:
+        omegaMesh=np.linspace(-float(arguments["--frequencyrange"])/2.0,float(arguments["--frequencyrange"])/2.0,int(arguments["--frequencies"]))
+        #else:
+        #    omegaMesh=np.logspace(-float(arguments["--frequencyrange"])/2.0,float(arguments["--frequencyrange"])/2.0,int(arguments["--frequencies"]),base=logMesh)
         #
         Gtau=np.loadtxt(arguments["<datafile>"],np.float128)
         tauMesh=Gtau[:,0]

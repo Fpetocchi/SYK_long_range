@@ -33,10 +33,6 @@ subroutine calc_Tc(pathOUTPUT,Inputs,Lttc,Wlat)
    complex(8),allocatable                :: Delta(:),oldDelta(:),newDelta(:)
    logical                               :: converged,filexists
    !
-   integer                               :: info
-   integer,allocatable                   :: ipv(:)
-   real(8),allocatable                   :: bcoef(:)
-   !
    write(*,"(A)") new_line("A")//new_line("A")//"---- calc_Tc"
    !
    !
@@ -50,7 +46,7 @@ subroutine calc_Tc(pathOUTPUT,Inputs,Lttc,Wlat)
    allocate(Hk_used(Norb,Norb,Nkpt));Hk_used=czero
    if(Inputs%HkRenorm)then
       !
-      printpath=reg(pathOUTPUT)//"Gap_Equation_QP/"
+      printpath=reg(pathOUTPUT)//"Gap_Equation_HkRenorm/"
       if(.not.allocated(Lttc%Hk_qp))then
          write(*,"(A)")"     calc_Tc: QP bandstructure not allocated."
          call inquireFile(reg(pathINPUTtr)//"G0W0plots/Hk_qp_s1.DAT",filexists,hardstop=.true.,verb=.true.)
@@ -72,11 +68,30 @@ subroutine calc_Tc(pathOUTPUT,Inputs,Lttc,Wlat)
    call Initialize_inputs(reg(pathINPUT),Inputs,Lttc,Hk_used)
    deallocate(Hk_used)
    !
+   !recompute the DoS accounting for the imaginary part of the G0W0 self-energy, verbatim of print_G0W0_dispersion
+   if(Inputs%G0W0Renorm)then
+      call overload_G0W0(reg(pathINPUT),reg(pathINPUTtr),Lttc,Inputs%DoSthresh)
+      printpath=reg(pathOUTPUT)//"Gap_Equation_G0W0Renorm/"
+   endif
+   if(Inputs%DMFTRenorm)then
+      call overload_DMFT(reg(pathOUTPUT)//"K_resolved/",Lttc,Inputs%DoSthresh)
+      printpath=reg(pathOUTPUT)//"Gap_Equation_DMFRenorm/"
+   endif
+   !
    call dump_Field_component(DoS_DFT,reg(printpath),"DoS_DFT.DAT",Egrid)
    call dump_Field_component(DoS_Model,reg(printpath),"DoS_Model.DAT",Egrid)
    !
    !Store inside the module the required energy averages
-   if(calc_Kel) call calc_energy_averages(Wlat%screened,Lttc,Wlat%Beta,Inputs%Wk_cutoff,reg(printpath),reg(Inputs%printmode_el))
+   if(calc_Kel)then
+      select case(reg(Inputs%mode_avg))
+         case default
+            stop "Available entries for MODE_AVG: integral, list."
+         case("integral")
+            call calc_energy_averages(Wlat%screened,Lttc,Wlat%Beta,Inputs%Wk_cutoff,reg(printpath),reg(Inputs%printmode_el))
+         case("list")
+            call calc_energy_averages(Inputs,Wlat%screened,Lttc,Wlat%Beta,reg(printpath),reg(Inputs%printmode_el))
+      end select
+   endif
    !
    if(Inputs%calc_Tc)then
       !
@@ -98,18 +113,11 @@ subroutine calc_Tc(pathOUTPUT,Inputs,Lttc,Wlat)
          !
       else
          !
-         !fancy initialization
+         !gaussian
          do iE=1,Ngrid
-            Delta(iE) = -diff_fermidirac(Egrid(iE),0d0,Inputs%DeltaInit_B/eV2DFTgrid)
+            Delta(iE) = exp( -0.5d0*(Egrid(iE)/Inputs%DeltaInit_B)**2 )
          enddo
          Delta = Delta * Inputs%DeltaInit_M * eV2DFTgrid / Delta(minloc(abs(Egrid),dim=1))
-         !box initialization
-         !iE1 = minloc(abs(Egrid+Egrid(Ngrid)/2),dim=1)
-         !iE2 = Ngrid-iE1
-         !Delta(iE1:iE2) = Inputs%DeltaInit * eV2DFTgrid
-         !
-         !with electronic kernels Delta has to be negative at high energy
-         if(calc_Kel) Delta = Delta - Delta(minloc(abs(Egrid),dim=1))/3
          !
       endif
       !
@@ -135,7 +143,7 @@ subroutine calc_Tc(pathOUTPUT,Inputs,Lttc,Wlat)
          printpath_T = reg(printpath)//"loops_"//str(iT)//"_T"//str(Temp,2)//"/"
          !
          write(*,"(A)") new_line("A")//"     ................................................"//new_line("A")
-         write(*,"(3(A,1F12.5))") "     T(K): ",Temp,"    Beta(1/eV): ",Beta,"    Beta(1/"//DFTgrid//"): ",Beta_DFT
+         write(*,"(3(A,1F20.5))") "     T(K): ",Temp,"    Beta(1/eV): ",Beta,"    Beta(1/"//DFTgrid//"): ",Beta_DFT
          !
          write(*,"(A)") new_line("A")//"     Computing Kernels."
          !
@@ -153,7 +161,14 @@ subroutine calc_Tc(pathOUTPUT,Inputs,Lttc,Wlat)
          !get the electronic Kernel depending on the input specifications
          if(calc_Kel)then
             allocate(Kel(Ngrid,Ngrid));Kel=0d0
-            call get_Kel(Kel,Beta_DFT,reg(Inputs%printmode_el),reg(printpath_T))
+            select case(reg(Inputs%mode_avg))
+               case default
+                  stop "Available entries for MODE_AVG: integral, list."
+               case("integral")
+                  call get_Kel(Kel,Beta_DFT,reg(Inputs%printmode_el),reg(printpath_T))
+               case("list")
+                  call get_Kel(Kel,iT,Beta_DFT,reg(Inputs%printmode_el),reg(printpath_T))
+            end select
          endif
          !
          !Convergence loop over Delta(e)
@@ -197,7 +212,7 @@ subroutine calc_Tc(pathOUTPUT,Inputs,Lttc,Wlat)
                  !
                enddo
                !
-               newDelta(iE1) = - 0.5d0*Kint
+               newDelta(iE1) = - 0.5d0*dreal(Kint)
                if(calc_phonons) newDelta(iE1) = newDelta(iE1) - Zph(iE1)*Delta(iE1)
                !
             enddo
@@ -211,27 +226,19 @@ subroutine calc_Tc(pathOUTPUT,Inputs,Lttc,Wlat)
             errDelta = min(maxval(abs(Delta-newDelta)),maxval(abs(Delta+newDelta)))
             !
             if(errDelta.lt.Inputs%DeltaErr)then
-               write(*,"(2(A,1E20.10),A3,1E20.10)")"     loop #"//str(iloop)//" Delta(0): ",abs(newDelta(minloc(abs(Egrid),dim=1))),"   error: ",errDelta," < ",Inputs%DeltaErr
+               write(*,"(2(A,1E20.10),A3,1E20.10)")"     loop #"//str(iloop)//" Delta(0): ",abs(newDelta(1+minloc(abs(Egrid),dim=1))),"   error: ",errDelta," < ",Inputs%DeltaErr
                write(*,"(A)")"     Delta at T "//str(Temp,2)//"K is converged. Moving to next Temperature."
                converged=.true.
-               oldDelta = Delta
                exit SCloop
             else
-               write(*,"(2(A,1E20.10),A3,1E20.10)")"     loop #"//str(iloop)//" Delta(0): ",abs(newDelta(minloc(abs(Egrid),dim=1))),"   error: ",errDelta," > ",Inputs%DeltaErr
+               write(*,"(2(A,1E20.10),A3,1E20.10)")"     loop #"//str(iloop)//" Delta(0): ",abs(newDelta(1+minloc(abs(Egrid),dim=1))),"   error: ",errDelta," > ",Inputs%DeltaErr
+               Delta = (1d0-Inputs%DeltaMix)*newDelta + Inputs%DeltaMix*oldDelta
             endif
-            !
-            Delta = (1d0-Inputs%DeltaMix)*newDelta + Inputs%DeltaMix*oldDelta
             oldDelta = Delta
             !
             call dump_Field_component(Delta,reg(printpath_T),str(iloop)//"_Delta.DAT",Egrid)
             !
          enddo SCloop !iloop
-         !
-         allocate(bcoef(Ngrid));bcoef=0d0
-         allocate(ipv(Ngrid));ipv=0
-         CALL DGESV( Ngrid, 1, Kel, Ngrid, ipv, bcoef, Ngrid, info )
-         deallocate(ipv,bcoef)
-         !
          !
          deallocate(EDsq,newDelta)
          if(allocated(Zph))deallocate(Zph)
@@ -243,7 +250,7 @@ subroutine calc_Tc(pathOUTPUT,Inputs,Lttc,Wlat)
          allocate(Egrid_print(Ngrid));Egrid_print = Egrid*DFTgrid2eV
          call dump_Field_component(Delta,reg(printpath_T),"Delta_e_T"//str(Temp,2)//".DAT",Egrid_print)
          Tlist(iT) = Temp
-         Delta_T(iT) = abs(Delta(minloc(abs(Egrid_print),dim=1)+1))
+         Delta_T(iT) = abs(Delta(1+minloc(abs(Egrid_print),dim=1)))
          deallocate(Egrid_print)
          !
       enddo !iT

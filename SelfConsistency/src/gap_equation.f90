@@ -19,6 +19,21 @@ module gap_equation
       module procedure interpFermi_K_z
    end interface interpFermi
 
+   interface get_Kel
+      module procedure get_Kel_integral
+      module procedure get_Kel_list
+   end interface get_Kel
+
+   interface io_Kel
+      module procedure io_Kel_d2
+      module procedure io_Kel_d3
+   end interface io_Kel
+
+   interface calc_energy_averages
+      module procedure calc_energy_averages_integral
+      module procedure calc_energy_averages_list
+   end interface calc_energy_averages
+
    !---------------------------------------------------------------------------!
    !PURPOSE: Module variables
    !---------------------------------------------------------------------------!
@@ -30,8 +45,10 @@ module gap_equation
    real(8),allocatable,private              :: weights_Model(:,:,:)
    integer,allocatable,private              :: finite_weights_Model(:,:)
    !
+   real(8),allocatable,private              :: Ek_Model(:,:)
    complex(8),allocatable,private           :: Zk_Model(:,:,:)
    complex(8),allocatable,private           :: Kel_stat(:,:)
+   complex(8),allocatable,private           :: Kel_dyn_list(:,:,:)
    complex(8),allocatable,private           :: Wee_dyn(:,:,:)
    !
    logical,private                          :: initialized=.false.
@@ -41,6 +58,11 @@ module gap_equation
    logical,private                          :: Kernels_stored=.false.
    logical,private                          :: calc_Int_static=.false.
    logical,private                          :: calc_Int_dynamic=.false.
+   !
+   integer,private                          :: wmax_ndx                         !input screened interaction cutoff index
+   real(8),private                          :: wmax                             !input screened interaction cutoff
+   real(8),private                          :: MatsStep                         !input screened interaction frequency step
+   real(8),allocatable,private              :: wmats_orig(:)                    !input Matsubara gird in DFT units
    !
    !public
    character(len=2),public,protected        :: DFTgrid="eV"
@@ -64,6 +86,8 @@ module gap_equation
    !PURPOSE: Rutines available for the user. Description only for interfaces.
    !---------------------------------------------------------------------------!
    public :: Initialize_inputs
+   public :: overload_G0W0
+   public :: overload_DMFT
    public :: calc_energy_averages
    public :: get_Kel
    public :: calc_Zph_e
@@ -204,7 +228,8 @@ contains
       endif
       !
       allocate(Zk_Model(Norb,Norb,Nkpt));Zk_Model=czero
-      call calc_rotation(Hk_intp,Zk_Model)
+      allocate(Ek_Model(Norb,Nkpt));Ek_Model=0d0
+      call calc_rotation(Hk_intp,Zk_Model,Ek_Model)
       !
       allocate(weights_Model(Ngrid,Norb,Nkpt));weights_Model=0d0
       allocate(DoS_Model(Ngrid));DoS_Model=0d0
@@ -220,7 +245,7 @@ contains
       do iE=1,Ngrid
          do iorb=1,Norb
             do ik=1,Nkpt
-               keep_weight = ( abs(weights_Model(iE,iorb,ik)).gt.Inputs%DoSthresh )! .and. ( Egrid(iE).ne.0d0 ) .and. ( DoS_Model(iE).ne.0d0 )
+               keep_weight = ( abs(weights_Model(iE,iorb,ik)).gt.abs(Inputs%DoSthresh) )
                if(keep_weight) Nweights = Nweights + 1
             enddo
          enddo
@@ -231,7 +256,7 @@ contains
       do iE=1,Ngrid
          do iorb=1,Norb
             do ik=1,Nkpt
-               keep_weight = ( abs(weights_Model(iE,iorb,ik)).gt.Inputs%DoSthresh )! .and. ( Egrid(iE).ne.0d0 ) .and. ( DoS_Model(iE).ne.0d0 )
+               keep_weight = ( abs(weights_Model(iE,iorb,ik)).gt.abs(Inputs%DoSthresh) )
                if(keep_weight)then
                   Nweights = Nweights + 1
                   finite_weights_Model(Nweights,1) = iE
@@ -253,39 +278,395 @@ contains
       !
       !
       !
-      subroutine calc_rotation(H,Z)
+      subroutine calc_rotation(H,Z,E)
          !
          use linalg, only : eigh
          use utils_misc, only : assert_shape, F2Bindex
          implicit none
          complex(8),intent(in)              :: H(:,:,:)
          complex(8),intent(out)             :: Z(:,:,:)
+         real(8),intent(out)                :: E(:,:)
          !
          integer                            :: i,Ndim,Nk
-         real(8),allocatable                :: E_(:,:)
          complex(8),allocatable             :: Z_(:,:,:)
          !
          Ndim = size(H,dim=1)
          Nk = size(H,dim=3)
          call assert_shape(H,[Ndim,Ndim,Nk],"calc_rotation","H")
          call assert_shape(Z,[Ndim,Ndim,Nk],"calc_rotation","Z")
+         call assert_shape(E,[Ndim,Nk],"calc_rotation","E")
          !
-         allocate(E_(Ndim,Nk)); E_=0d0
          allocate(Z_(Ndim,Ndim,Nk)); Z_=0d0
          !
          Z_ = H
          do i=1,Nk
-            call eigh(Z_(:,:,i),E_(:,i))
+            call eigh(Z_(:,:,i),E(:,i))
          enddo
          !
          Z = Z_
-         deallocate(E_,Z_)
+         deallocate(Z_)
          !
       end subroutine calc_rotation
       !
       !
       !
    end subroutine Initialize_inputs
+
+
+   !---------------------------------------------------------------------------!
+   !PURPOSE: Overload the DoS and rotation with the results computed via the
+   !         G0W0 self-energy. Works only if all the required data are present
+   !---------------------------------------------------------------------------!
+   subroutine overload_G0W0(pathINPUT,pathINPUTtr,Lttc,DoSthresh)
+      !
+      use parameters
+      use linalg
+      use utils_misc
+      use utils_fields
+      use crystal
+      use file_io
+      implicit none
+      !
+      character(len=*),intent(in)           :: pathINPUT
+      character(len=*),intent(in)           :: pathINPUTtr
+      type(Lattice),intent(in)              :: Lttc
+      real(8),intent(in)                    :: DoSthresh
+      !
+      type(FermionicField)                  :: S_G0W0
+      complex(8),allocatable                :: Smat(:,:,:,:),SmatE(:,:,:,:)
+      complex(8),allocatable                :: Uwan(:,:,:,:),Vxc(:,:,:,:)
+      complex(8),allocatable                :: Zk(:,:,:)
+      real(8),allocatable                   :: wreal_read(:)
+      real(8)                               :: ReS,ImS,mu,eta,Norm
+      integer                               :: ik,iw,iE,iorb,ispin
+      integer                               :: Norb,Nkpt,Ngrid,Nweights
+      integer                               :: Nreal_read = 5000
+      logical                               :: paramagnet=.true.
+      logical                               :: keep_weight,UWAN_exist,Vxc_exist,G0W0_exist
+      real                                  :: start,finish
+      !
+      !
+      write(*,"(A)") new_line("A")//new_line("A")//"---- overload_G0W0"
+      !
+      !
+      if(.not.initialized) stop "overload_G0W0: gap equation module not properly initialized. Call Initialize_inputs first."
+      !
+      call inquireFile(reg(pathINPUT)//"UWAN_used_k_s1.DAT",UWAN_exist,hardstop=.false.)
+      call inquireFile(reg(pathINPUT)//"Vxc_k_s1.DAT",Vxc_exist,hardstop=.false.)
+      call inquireFile(reg(pathINPUTtr)//"SGoWo_wr_k_s1.DAT",G0W0_exist,hardstop=.false.)
+      !
+      if((.not.UWAN_exist).or.(.not.Vxc_exist).or.(.not.G0W0_exist).or.Interpolate2Model)then
+         if(.not.UWAN_exist)   write(*,"(A)")"     UWAN_used_k_s1.DAT not found. Ignoring call to subroutine."
+         if(.not.Vxc_exist)    write(*,"(A)")"     Vxc_k_s1.DAT not found. Ignoring call to subroutine."
+         if(.not.G0W0_exist)   write(*,"(A)")"     SGoWo_wr_k_s1.DAT not found. Ignoring call to subroutine."
+         if(Interpolate2Model) write(*,"(A)")"     Cannot read G0W0 quantities in another k-grid. Ignoring call to subroutine."
+         return
+      endif
+      !
+      mu = Lttc%mu
+      write(*,"(A,F)")"     Using mu=",mu
+      !
+      Norb = size(Zk_Model,dim=1)
+      Nkpt = size(Zk_Model,dim=3)
+      Ngrid = size(Egrid)
+      !
+      !read rotation matrix
+      allocate(Uwan(Norb,Norb,Nkpt,1));Uwan=czero
+      call read_matrix(Uwan(:,:,:,1),reg(pathINPUT)//"UWAN_used_k_s1.DAT")
+      allocate(Zk(Norb,Norb,Nkpt));Zk=czero
+      do ik=1,Nkpt
+         Zk(:,:,ik) = dag(Uwan(:,:,ik,1))
+      enddo
+      deallocate(Uwan)
+      write(*,"(A)")"     Rotation matrix is stored."
+      !
+      !read Vxc
+      allocate(Vxc(Norb,Norb,Nkpt,1));Uwan=czero
+      call read_matrix(Vxc(:,:,:,1),reg(pathINPUT)//"Vxc_k_s1.DAT")
+      write(*,"(A)")"     Vxc is stored."
+      !
+      !read G0W0 self-energy
+      allocate(wreal_read(Nreal_read));wreal_read=0d0
+      call AllocateFermionicField(S_G0W0,Norb,Nreal_read,Nkpt=Nkpt)
+      call read_FermionicField(S_G0W0,reg(pathINPUTtr),"SGoWo_wr",Lttc%kpt,axis=wreal_read)
+      do iw=Nreal_read,1,-1
+         if(abs(wreal_read(iw)).ne.0)exit
+      enddo
+      Nreal_read = iw-1
+      wreal_read = wreal_read(1:Nreal_read)
+      write(*,"(A)") "     Input G0W0 self-energy."
+      write(*,"(A,1I6)") "     Frequency axis updated to: ",Nreal_read
+      write(*,"(A)") "     Frequency boundaries "//str(wreal_read(1),4)//" - "//str(wreal_read(Nreal_read),4)
+      !
+      !rotate G0W0-Vxc input to LDA basis
+      allocate(Smat(Norb,Nreal_read,Nkpt,Nspin));Smat=czero
+      do ispin=1,Nspin
+         !
+         do ik=1,Nkpt
+            do iw=1,Nreal_read
+               Smat(:,iw,ik,ispin) = diagonal(rotate((S_G0W0%wks(:,:,iw,ik,ispin)-Vxc(:,:,ik,ispin)),Zk(:,:,ik)))
+            enddo
+         enddo
+         if(paramagnet)then
+            Smat(:,:,:,Nspin) = Smat(:,:,:,1)
+            exit
+         endif
+         !
+      enddo
+      call DeallocateField(S_G0W0)
+      deallocate(Zk)
+      !
+      !rescale to DFT units
+      wreal_read = wreal_read * eV2DFTgrid
+      Smat = Smat * eV2DFTgrid
+      !
+      !interpolate to logarithmic energy grid
+      call cpu_time(start)
+      allocate(SmatE(Norb,Ngrid,Nkpt,Nspin));SmatE=czero
+      !$OMP PARALLEL DEFAULT(SHARED),&
+      !$OMP PRIVATE(iE,ik,iorb,ispin,ReS,ImS)
+      !$OMP DO
+      do iE=1,Ngrid
+         do ik=1,Nkpt
+            do ispin=1,Nspin
+               !
+               do iorb=1,Norb
+                  ReS = cubic_interp( wreal_read, dreal(Smat(iorb,1:Nreal_read,ik,ispin)), Egrid(iE) )
+                  ImS = cubic_interp( wreal_read, dimag(Smat(iorb,1:Nreal_read,ik,ispin)), Egrid(iE) )
+                  if(ImS.gt.0d0)ImS=0d0
+                  SmatE(iorb,iE,ik,ispin) = dcmplx(ReS,ImS)
+               enddo
+               if(paramagnet)then
+                  SmatE(:,iE,ik,Nspin) = SmatE(:,iE,ik,1)
+                  cycle
+               endif
+               !
+            enddo
+         enddo
+      enddo
+      !$OMP END DO
+      !$OMP END PARALLEL
+      deallocate(wreal_read,Smat)
+      !
+      !the new weights are replaced the G0W0 spectral functions in the LDA basis. For now spinless.
+      eta=0d0
+      weights_Model=0d0
+      DoS_Model=0d0
+      do ik=1,Nkpt
+         do iorb=1,Norb
+            !
+            do iE=1,Ngrid
+               weights_Model(iE,iorb,ik) = -dimag( 1d0 / ( dcmplx(Egrid(iE)+mu,eta) - Ek_Model(iorb,ik) - SmatE(iorb,iE,ik,1) ) )
+            enddo
+            !
+            !normalize specific weights component
+            Norm=0d0
+            do iE=2,Ngrid
+               Norm = Norm + (weights_Model(iE,iorb,ik)+weights_Model(iE-1,iorb,ik))*(Egrid(iE)-Egrid(iE-1))/2d0
+            enddo
+            weights_Model(:,iorb,ik) = weights_Model(:,iorb,ik)/Norm
+            !
+         enddo
+      enddo
+      deallocate(SmatE)
+      !
+      !sum to get the DoS (k average, orbital sum) normalized to the particle density
+      do iE=1,Ngrid
+         do ik=1,Nkpt
+            do iorb=1,Norb
+               DoS_Model(iE) = DoS_Model(iE) + weights_Model(iE,iorb,ik)/Nkpt
+            enddo
+         enddo
+      enddo
+      !
+      !reallocate the weight above threshold
+      call cpu_time(start)
+      Nweights=0
+      do iE=1,Ngrid
+         do iorb=1,Norb
+            do ik=1,Nkpt
+               keep_weight = ( abs(weights_Model(iE,iorb,ik)).gt.abs(DoSthresh) )
+               if(keep_weight) Nweights = Nweights + 1
+            enddo
+         enddo
+      enddo
+      !
+      if(allocated(finite_weights_Model))deallocate(finite_weights_Model)
+      allocate(finite_weights_Model(Nweights,3));finite_weights_Model=0
+      Nweights=0
+      do iE=1,Ngrid
+         do iorb=1,Norb
+            do ik=1,Nkpt
+               keep_weight = ( abs(weights_Model(iE,iorb,ik)).gt.abs(DoSthresh) )
+               if(keep_weight)then
+                  Nweights = Nweights + 1
+                  finite_weights_Model(Nweights,1) = iE
+                  finite_weights_Model(Nweights,2) = iorb
+                  finite_weights_Model(Nweights,3) = ik
+               endif
+            enddo
+         enddo
+      enddo
+      call cpu_time(finish)
+      write(*,"(A,F)") "     Reduction of DoS integration points from "//str(Ngrid*Norb*Nkpt)//" to "//str(Nweights)
+      write(*,"(A,F)") "     Cpu timing:", finish-start
+      !
+   end subroutine overload_G0W0
+
+
+   !---------------------------------------------------------------------------!
+   !PURPOSE: Overload the DoS and rotation with the results computed via the
+   !         G0W0 self-energy. Works only if all the required data are present
+   !---------------------------------------------------------------------------!
+   subroutine overload_DMFT(path2MaxEnt,Lttc,DoSthresh)
+      !
+      use parameters
+      use linalg
+      use utils_misc
+      use utils_fields
+      use crystal
+      use file_io
+      implicit none
+      !
+      character(len=*),intent(in)           :: path2MaxEnt
+      type(Lattice),intent(in)              :: Lttc
+      real(8),intent(in)                    :: DoSthresh
+      !
+      real(8),allocatable                   :: wreal_read(:),ImG_read(:,:,:)
+      real(8)                               :: dw
+      integer                               :: ik,iw,iE,iorb,unit
+      integer                               :: Norb,Nkpt,Ngrid,Nweights
+      integer                               :: Nreal_read,Nreal_old,ierr
+      logical                               :: filexists,keep_weight
+      character(len=256)                    :: path
+      real                                  :: start,finish
+      !
+      !
+      write(*,"(A)") new_line("A")//new_line("A")//"---- overload_DMFT"
+      !
+      !
+      if(.not.initialized) stop "overload_DMFT: gap equation module not properly initialized. Call Initialize_inputs first."
+      if(Interpolate2Model) write(*,"(A)")"     Cannot read DMFT quantities in another k-grid. Ignoring call to subroutine."
+      !
+      Norb = size(Zk_Model,dim=1)
+      Nkpt = size(Zk_Model,dim=3)
+      Ngrid = size(Egrid)
+      !
+      !replace the rotation matrix with what is used to get the diagonal spectra
+      do ik=1,Nkpt
+         Zk_Model(:,:,ik) = Lttc%Zk(:,:,ik)
+      enddo
+      write(*,"(A)")"     Rotation matrix is stored."
+      !
+      do ik=1,Nkpt
+         !
+         path = reg(path2MaxEnt)//"MaxEnt_Gk_full_s1/Gk_t_k"//str(ik)//".DAT_dos.dat"
+         !
+         call inquireFile(reg(path),filexists,hardstop=.false.,verb=.true.)
+         if(.not.filexists)then
+            write(*,"(A,1I5)") "     Some K-points are missing in the MaxEnt folder. Ignoring call to subroutine."
+            return
+         endif
+         !
+         unit = free_unit()
+         open(unit,file=reg(path),form="formatted",status="unknown",position="rewind",action="read")
+         !
+         Nreal_read=0
+         ierr=0
+         do while (ierr.eq.0)
+            Nreal_read = Nreal_read + 1
+            read(unit,*,iostat=ierr)
+         enddo
+         close(unit)
+         !
+         !MaxEnt parameters written i the last line
+         Nreal_read = Nreal_read - 2
+         !
+         !write(*,"(A,1I5)") "     The file "//reg(path)//" contains "//str(Nreal_read)//" real frequencies."
+         if(Nreal_read.ne.Nreal_old)then
+            write(*,"(A,1I5)") "     Real frequency mesh is not consistent among K-points. Ignoring call to subroutine."
+            return
+         endif
+         Nreal_old=Nreal_read
+         !
+      enddo
+      !
+      allocate(wreal_read(Nreal_read));wreal_read=0d0
+      allocate(ImG_read(Norb,Nreal_read,Nkpt));ImG_read=0d0
+      do ik=1,Nkpt
+         !
+         path = reg(path2MaxEnt)//"MaxEnt_Gk_full_s1/Gk_t_k"//str(ik)//".DAT_dos.dat"
+         unit = free_unit()
+         open(unit,file=reg(path),form="formatted",status="unknown",position="rewind",action="read")
+         do iw=1,Nreal_read
+            read(unit,*) wreal_read(iw),(ImG_read(iorb,iw,ik),iorb=1,Norb)
+         enddo
+         close(unit)
+         !
+         !Fix normalization
+         dw = abs(wreal_read(10)-wreal_read(9))
+         do iorb=1,Norb
+            ImG_read(iorb,:,ik) = ImG_read(iorb,:,ik) / abs(sum(ImG_read(iorb,:,ik))*dw)
+         enddo
+         !
+      enddo
+      write(*,"(A)") "     MaxEnt output on Green's function is read and normalized."
+      !
+      !rescale to DFT units
+      wreal_read = wreal_read * eV2DFTgrid
+      ImG_read = ImG_read / eV2DFTgrid
+      !
+      !interpolate to logarithmic energy grid
+      weights_Model=0d0
+      DoS_Model=0d0
+      !$OMP PARALLEL DEFAULT(SHARED),&
+      !$OMP PRIVATE(iE,ik,iorb)
+      !$OMP DO
+      do iE=1,Ngrid
+         do ik=1,Nkpt
+            do iorb=1,Norb
+               weights_Model(iE,iorb,ik) = cubic_interp( wreal_read, ImG_read(iorb,:,ik), Egrid(iE) )
+            enddo
+         enddo
+         DoS_Model(iE) = DoS_Model(iE) + weights_Model(iE,iorb,ik)/Nkpt 
+      enddo
+      !$OMP END DO
+      !$OMP END PARALLEL
+      deallocate(wreal_read,ImG_read)
+      !
+      !recalculate the weight above threshold
+      call cpu_time(start)
+      Nweights=0
+      do iE=1,Ngrid
+         do iorb=1,Norb
+            do ik=1,Nkpt
+               keep_weight = ( abs(weights_Model(iE,iorb,ik)).gt.abs(DoSthresh) )
+               if(keep_weight) Nweights = Nweights + 1
+            enddo
+         enddo
+      enddo
+      !
+      if(allocated(finite_weights_Model))deallocate(finite_weights_Model)
+      allocate(finite_weights_Model(Nweights,3));finite_weights_Model=0
+      Nweights=0
+      do iE=1,Ngrid
+         do iorb=1,Norb
+            do ik=1,Nkpt
+               keep_weight = ( abs(weights_Model(iE,iorb,ik)).gt.abs(DoSthresh) )
+               if(keep_weight)then
+                  Nweights = Nweights + 1
+                  finite_weights_Model(Nweights,1) = iE
+                  finite_weights_Model(Nweights,2) = iorb
+                  finite_weights_Model(Nweights,3) = ik
+               endif
+            enddo
+         enddo
+      enddo
+      call cpu_time(finish)
+      write(*,"(A,F)") "     Reduction of DoS integration points from "//str(Ngrid*Norb*Nkpt)//" to "//str(Nweights)
+      write(*,"(A,F)") "     Cpu timing:", finish-start
+      !
+   end subroutine overload_DMFT
 
 
    !---------------------------------------------------------------------------!
@@ -449,7 +830,7 @@ contains
    !PURPOSE: Store the interpolated and rotated NaNb components of the fully
    !         screened interaction. This is the only subroutine where beta is in 1/eV
    !---------------------------------------------------------------------------!
-   subroutine calc_energy_averages(Wk_orig,Lttc,Beta,cutoff,pathOUTPUT,printmode)
+   subroutine calc_energy_averages_integral(Wk_orig,Lttc,Beta,cutoff,pathOUTPUT,printmode)
       !
       use parameters
       use utils_misc
@@ -467,7 +848,7 @@ contains
       character(len=*),intent(in)           :: pathOUTPUT
       character(len=*),intent(in)           :: printmode
       !
-      integer                               :: iw,wndx,Nmats
+      integer                               :: iw,Nmats
       integer                               :: Ngrid,Norb,Nbp
       integer                               :: iorb,jorb,ib1,ib2,a,b,c,d
       integer                               :: Wk_dim,row,col,ndx,ndx1,ndx2
@@ -476,7 +857,6 @@ contains
       integer                               :: ithread,Nthread
       real(8)                               :: DosWeights
       integer,allocatable                   :: kptsum(:,:),kptdif(:,:),map(:,:)
-      real(8),allocatable                   :: wmats(:)
       complex(8),allocatable,target         :: Wk_interp(:,:,:,:)
       complex(8),pointer                    :: Wk_used(:,:,:,:)
       complex(8),allocatable                :: Wk_full(:,:)
@@ -506,13 +886,13 @@ contains
          if(Nkpt.ne.Lttc%Nkpt)stop "calc_energy_averages: something is wrong with the K-point dimension."
       endif
       !
-      allocate(wmats(Nmats));wmats=BosonicFreqMesh(Beta,Nmats)
-      wndx = Nmats
-      if(cutoff.lt.wmats(Nmats))then
-         wndx = minloc(abs(wmats-cutoff),dim=1)
-         write(*,"(A,F)") "     Interaction frequency cut at iw_["//str(wndx)//"]=",wmats(wndx)
-      endif
-      deallocate(wmats)
+      allocate(wmats_orig(Nmats));wmats_orig=BosonicFreqMesh(Beta,Nmats)
+      wmax_ndx = minloc(abs(wmats_orig-cutoff),dim=1)
+      write(*,"(A)") "     Interaction frequency cut at iw_["//str(wmax_ndx)//"]="//str(wmats_orig(wmax_ndx),5)//" eV -> "//str(wmats_orig(wmax_ndx)*eV2DFTgrid,5)//" "//DFTgrid
+      write(*,"(A)") "     Bosonic frequency step="//str(abs(wmats_orig(2)-wmats_orig(1)),5)//" eV -> "//str(abs(wmats_orig(2)-wmats_orig(1))*eV2DFTgrid,5)//" "//DFTgrid
+      wmats_orig = wmats_orig * eV2DFTgrid
+      wmax = wmats_orig(wmax_ndx)
+      MatsStep = abs(wmats_orig(2)-wmats_orig(1))
       !
       !check if any of the needed kernels is already printed
       calcKernels=.false.
@@ -523,7 +903,7 @@ contains
          !
          call inquireFile(reg(pathOUTPUT)//"Kel_stat.DAT",Kstat_exists,hardstop=.false.,verb=verbose)
          if(Kstat_exists)then
-            call read_Kel("Kel_stat.DAT","stat")
+            call io_Kel(Kel_stat,reg(pathOUTPUT)//"Kel_stat.DAT","read")
          else
             calcKernels=.true.
             deallocate(Kel_stat)
@@ -533,11 +913,11 @@ contains
       !
       if(calc_Int_dynamic)then
          !
-         allocate(Wee_dyn(wndx,Ngrid,Ngrid));Wee_dyn=czero
+         allocate(Wee_dyn(wmax_ndx,Ngrid,Ngrid));Wee_dyn=czero
          !
          call inquireFile(reg(pathOUTPUT)//"Wee_w.DAT",Kdyn_exists,hardstop=.false.,verb=verbose)
          if(Kdyn_exists)then
-            call read_Kel("Wee_w.DAT","dyn")
+            call io_Kel(Wee_dyn,reg(pathOUTPUT)//"Wee_w.DAT","read")
          else
             calcKernels=.true.
             deallocate(Wee_dyn)
@@ -551,9 +931,9 @@ contains
          !
          if(Interpolate2Model)then
             !
-            allocate(Wk_interp(Nbp,Nbp,wndx,size(kpt_Model,dim=2)));Wk_interp=czero
+            allocate(Wk_interp(Nbp,Nbp,wmax_ndx,size(kpt_Model,dim=2)));Wk_interp=czero
             call cpu_time(start)
-            do iw=1,wndx
+            do iw=1,wmax_ndx
                call wannierinterpolation(Lttc%Nkpt3,Lttc%kpt,kpt_Model,Wk_orig(:,:,iw,:),Wk_interp(:,:,iw,:))
             enddo
             call cpu_time(finish)
@@ -572,13 +952,13 @@ contains
          !
          !rotation done externally and stored
          Wk_dim = (Nkpt*Norb) * (Nkpt*Norb+1)/2
-         allocate(Wk_full(wndx,Wk_dim));Wk_full=czero
+         allocate(Wk_full(wmax_ndx,Wk_dim));Wk_full=czero
          !
          call inquireFile(reg(pathOUTPUT)//"Wrot.DAT",Wrot_exists,hardstop=.false.,verb=verbose)
          if(Wrot_exists)then
             !
             call cpu_time(start)
-            call read_Kel("Wrot.DAT","rot")
+            call io_Kel(Wk_full,reg(pathOUTPUT)//"Wrot.DAT","read")
             call cpu_time(finish)
             write(*,"(A,F)") "     Read interaction in band basis cpu timing:", finish-start
             !
@@ -643,9 +1023,9 @@ contains
                   c = PhysicalUelements%Full_Map(ib1,ib1,3)
                   d = PhysicalUelements%Full_Map(ib1,ib1,4)
                   !
-                  Wk_full(:,ndx) = Wk_full(:,ndx)                                                                  &
-                                 + Wk_used(ib1,ib1,1:wndx,iq) * conjg(Zk_Model(a,iorb,ik1)) * Zk_Model(b,jorb,ik2) &
-                                                              * conjg(Zk_Model(c,jorb,ik2)) * Zk_Model(d,iorb,ik1)
+                  Wk_full(:,ndx) = Wk_full(:,ndx)                                                                      &
+                                 + Wk_used(ib1,ib1,1:wmax_ndx,iq) * conjg(Zk_Model(a,iorb,ik1)) * Zk_Model(b,jorb,ik2) &
+                                                                  * conjg(Zk_Model(c,jorb,ik2)) * Zk_Model(d,iorb,ik1)
                   !
                   do ib2=ib1+1,Nbp
                      !
@@ -655,11 +1035,11 @@ contains
                      c = PhysicalUelements%Full_Map(ib1,ib2,3)
                      d = PhysicalUelements%Full_Map(ib1,ib2,4)
                      !
-                     Wk_full(:,ndx) = Wk_full(:,ndx)                                                                   &
-                                    + Wk_used(ib1,ib2,1:wndx,iq) * conjg(Zk_Model(a,iorb,ik1)) * Zk_Model(b,jorb,ik2)  &
-                                                                 * conjg(Zk_Model(c,jorb,ik2)) * Zk_Model(d,iorb,ik1)  &
-                                    + Wk_used(ib2,ib1,1:wndx,iq) * conjg(Zk_Model(c,iorb,ik1)) * Zk_Model(d,jorb,ik2)  &
-                                                                 * conjg(Zk_Model(a,jorb,ik2)) * Zk_Model(b,iorb,ik1)
+                     Wk_full(:,ndx) = Wk_full(:,ndx)                                                                       &
+                                    + Wk_used(ib1,ib2,1:wmax_ndx,iq) * conjg(Zk_Model(a,iorb,ik1)) * Zk_Model(b,jorb,ik2)  &
+                                                                     * conjg(Zk_Model(c,jorb,ik2)) * Zk_Model(d,iorb,ik1)  &
+                                    + Wk_used(ib2,ib1,1:wmax_ndx,iq) * conjg(Zk_Model(c,iorb,ik1)) * Zk_Model(d,jorb,ik2)  &
+                                                                     * conjg(Zk_Model(a,jorb,ik2)) * Zk_Model(b,iorb,ik1)
                      !
                   enddo
                enddo
@@ -669,21 +1049,25 @@ contains
             !$OMP END PARALLEL
             call cpu_time(finish)
             deallocate(map,kptdif)
-            call dump_Kel("Wrot.DAT","rot")
+            !
+            !print the interaction in band basis depending explicitly of the two kpoints
+            call io_Kel(Wk_full,reg(pathOUTPUT)//"Wrot.DAT","write")
+            !
             write(*,"(A,F)") "     Rotation of the interaction to band basis cpu timing:", finish-start
             !
          endif
          if(allocated(Wk_interp))deallocate(Wk_interp)
          nullify(Wk_used)
          !
-         !
          !Kernels calculation
          call cpu_time(start)
-         if(calc_Int_static)then
-            allocate(Kel_stat(Ngrid,Ngrid));Kel_stat=czero
+         if(.not.Kstat_exists)then
+            allocate(Kel_stat(Ngrid,Ngrid))
+            Kel_stat=czero
          endif
-         if(calc_Int_dynamic)then
-            allocate(Wee_dyn(wndx,Ngrid,Ngrid));Wee_dyn=czero
+         if(.not.Kdyn_exists)then
+            allocate(Wee_dyn(wmax_ndx,Ngrid,Ngrid))
+            Wee_dyn=czero
          endif
          !$OMP PARALLEL DEFAULT(SHARED),&
          !$OMP PRIVATE(iweig,jweig,iE1,iE2,DosWeights),&
@@ -720,8 +1104,8 @@ contains
                   col = ndx2 !this is the col
                   ndx = (Nkpt*Norb)*(row-1) - (row-1)*row/2 + col
                   !
-                  if(calc_Int_static) Kel_stat(iE1,iE2) = Kel_stat(iE1,iE2) + Wk_full(1,ndx) * DosWeights
-                  if(calc_Int_dynamic) Wee_dyn(:,iE1,iE2) = Wee_dyn(:,iE1,iE2) + (Wk_full(:,ndx)-Wk_full(1,ndx)) * DosWeights
+                  if(.not.Kstat_exists) Kel_stat(iE1,iE2) = Kel_stat(iE1,iE2) + Wk_full(1,ndx) * eV2DFTgrid * DosWeights
+                  if(.not.Kdyn_exists) Wee_dyn(:,iE1,iE2) = Wee_dyn(:,iE1,iE2) + (Wk_full(:,ndx)-Wk_full(1,ndx)) * eV2DFTgrid * DosWeights
                   !
                else
                   !
@@ -730,8 +1114,8 @@ contains
                   col = ndx1 !this is the col
                   ndx = (Nkpt*Norb)*(row-1) - (row-1)*row/2 + col
                   !
-                  if(calc_Int_static) Kel_stat(iE1,iE2) = Kel_stat(iE1,iE2) + conjg(Wk_full(1,ndx)) * DosWeights
-                  if(calc_Int_dynamic) Wee_dyn(:,iE1,iE2) = Wee_dyn(:,iE1,iE2) + conjg(Wk_full(:,ndx)-Wk_full(1,ndx)) * DosWeights
+                  if(.not.Kstat_exists) Kel_stat(iE1,iE2) = Kel_stat(iE1,iE2) + conjg(Wk_full(1,ndx)) * eV2DFTgrid * DosWeights
+                  if(.not.Kdyn_exists) Wee_dyn(:,iE1,iE2) = Wee_dyn(:,iE1,iE2) + conjg(Wk_full(:,ndx)-Wk_full(1,ndx)) * eV2DFTgrid * DosWeights
                   !
                endif
                !
@@ -743,15 +1127,386 @@ contains
          call cpu_time(finish)
          write(*,"(A,F)") "     Calculation of static electronic Kernel cpu timing:", finish-start
          !
-         if(calc_Int_static)then
-            Kel_stat = Kel_stat * eV2DFTgrid
-            call dump_Kel("Kel_stat.DAT","stat")
+         if(.not.Kstat_exists) call io_Kel(Kel_stat,reg(pathOUTPUT)//"Kel_stat.DAT","write")
+         if(.not.Kdyn_exists) call io_Kel(Wee_dyn,reg(pathOUTPUT)//"Wee_w.DAT","write")
+         !
+      endif
+      deallocate(weights_Model,finite_weights_Model)
+      !
+      if(calc_Int_static.and.(reg(printmode).ne."None"))then
+         call print_Kernel("electronic",reg(printmode),reg(pathOUTPUT),"Kel_stat",Egrid,Egrid,Kel_stat)
+      endif
+      !
+      Kernels_stored = .true.
+      !
+   end subroutine calc_energy_averages_integral
+   !
+   subroutine calc_energy_averages_list(Inputs,Wk_orig,Lttc,Beta,pathOUTPUT,printmode)
+      !
+      use parameters
+      use utils_misc
+      use utils_fields
+      use file_io
+      use omp_lib
+      use linalg, only : tensor_transform
+      use crystal, only : fill_ksumkdiff, wannierinterpolation
+      implicit none
+      !
+      type(SCDFT),intent(in)                :: Inputs
+      complex(8),intent(in),target          :: Wk_orig(:,:,:,:)
+      type(Lattice),intent(in)              :: Lttc
+      real(8),intent(in)                    :: Beta
+      character(len=*),intent(in)           :: pathOUTPUT
+      character(len=*),intent(in)           :: printmode
+      !
+      integer                               :: iw,Nmats
+      integer                               :: Ngrid,Norb,Nbp
+      integer                               :: iorb,jorb,ib1,ib2,a,b,c,d
+      integer                               :: Wk_dim,row,col,ndx,ndx1,ndx2
+      integer                               :: ik1,ik2,iq,Nkpt
+      integer                               :: iweig,jweig,iE1,iE2,iT,Efermi_ndx
+      integer                               :: ithread,Nthread
+      integer                               :: Ngrid_y=100
+      real(8)                               :: E1,E2,dT,tanhs!DoS0
+      real(8)                               :: DE_m,DE_p,nF_m,nF_p
+      real(8)                               :: DosWeights,cutoff
+      integer,allocatable                   :: kptsum(:,:),kptdif(:,:),map(:,:)
+      real(8),allocatable                   :: Beta_DFT_list(:)
+      complex(8),allocatable,target         :: Wk_interp(:,:,:,:)
+      complex(8),pointer                    :: Wk_used(:,:,:,:)
+      complex(8),allocatable                :: Wk_full(:,:)
+      type(physicalU)                       :: PhysicalUelements
+      real                                  :: start,finish
+      logical                               :: Kstat_exists,Kdyn_exists
+      logical                               :: Wrot_exists,calcKernels
+      !
+      !
+      write(*,"(A)") new_line("A")//"---- calc_energy_averages_list"
+      !
+      !
+      if(.not.initialized)stop "calc_energy_averages_list: input meshes not initialized. Call Initialize_inputs."
+      !
+      !Various checks
+      Ngrid = size(Egrid)
+      Nbp = size(Wk_orig,dim=1)
+      Norb = int(sqrt(dble(Nbp)))
+      Nmats = size(Wk_orig,dim=3)
+      Nkpt = size(kpt_Model,dim=2)
+      cutoff = Inputs%Wk_cutoff
+      call assert_shape(Wk_orig,[Nbp,Nbp,Nmats,Lttc%Nkpt],"calc_energy_averages_list","Wk_orig")
+      call assert_shape(kpt_Model,[3,Nkpt],"calc_energy_averages_list","kpt_Model")
+      !
+      Efermi_ndx = minloc(abs(Egrid),dim=1)
+      !DoS0 = DoS_Model(Efermi_ndx)
+      !write(*,"(A,F10.5)") new_line("A")//"     get_Kel_integral: Model DoS at the Fermi level:",DoS0
+      if(Egrid(Efermi_ndx).ne.0d0) stop "get_Kel_integral: the energy grid requires the E=0 point."
+      !
+      if(Interpolate2Model)then
+         if(Nkpt.eq.Lttc%Nkpt)stop "calc_energy_averages_list: something is wrong with the K-point dimension (interpolation)."
+      else
+         if(Nkpt.ne.Lttc%Nkpt)stop "calc_energy_averages_list: something is wrong with the K-point dimension."
+      endif
+      !
+      allocate(wmats_orig(Nmats));wmats_orig=BosonicFreqMesh(Beta,Nmats)
+      wmax_ndx = minloc(abs(wmats_orig-cutoff),dim=1)
+      write(*,"(A)") "     Interaction frequency cut at iw_["//str(wmax_ndx)//"]="//str(wmats_orig(wmax_ndx),5)//" eV -> "//str(wmats_orig(wmax_ndx)*eV2DFTgrid,5)//" "//DFTgrid
+      write(*,"(A)") "     Bosonic frequency step="//str(abs(wmats_orig(2)-wmats_orig(1)),5)//" eV -> "//str(abs(wmats_orig(2)-wmats_orig(1))*eV2DFTgrid,5)//" "//DFTgrid
+      wmats_orig = wmats_orig * eV2DFTgrid
+      wmax = wmats_orig(wmax_ndx)
+      MatsStep = abs(wmats_orig(2)-wmats_orig(1))
+      !
+      !check if any of the needed kernels is already printed
+      calcKernels=.false.
+      !
+      if(calc_Int_static)then
+         !
+         allocate(Kel_stat(Ngrid,Ngrid));Kel_stat=czero
+         !
+         call inquireFile(reg(pathOUTPUT)//"Kel_stat.DAT",Kstat_exists,hardstop=.false.,verb=verbose)
+         if(Kstat_exists)then
+            call io_Kel(Kel_stat,reg(pathOUTPUT)//"Kel_stat.DAT","read")
+         else
+            calcKernels=.true.
+            deallocate(Kel_stat)
          endif
          !
-         if(calc_Int_dynamic)then
-            Wee_dyn = Wee_dyn * eV2DFTgrid
-            call dump_Kel("Wee_w.DAT","dyn")
+      endif
+      !
+      if(calc_Int_dynamic)then
+         !
+         allocate(Kel_dyn_list(Inputs%Tsteps,Ngrid,Ngrid));Kel_dyn_list=czero
+         !
+         call inquireFile(reg(pathOUTPUT)//"Kel_dyn_list.DAT",Kdyn_exists,hardstop=.false.,verb=verbose)
+         if(Kdyn_exists)then
+            call io_Kel(Kel_dyn_list,reg(pathOUTPUT)//"Kel_dyn_list.DAT","read")
+         else
+            calcKernels=.true.
+            deallocate(Kel_dyn_list)
+            !
+            allocate(Beta_DFT_list(Inputs%Tsteps));Beta_DFT_list=0d0
+            do iT=1,Inputs%Tsteps
+               dT=0d0
+               if(Inputs%Tsteps.gt.1) dT = (iT-1)*abs(Inputs%Tbounds(2)-Inputs%Tbounds(1))/dble(Inputs%Tsteps-1)
+               Beta_DFT_list(iT) = 1d0 / ((Inputs%Tbounds(1) + dT)*K2eV*eV2DFTgrid)
+            enddo
          endif
+         !
+      endif
+      !
+      if(calcKernels)then
+         !
+         write(*,"(A)") "     One of the required Kernels is missing. Starting operations on screened interacion in Wannier basis."
+         !
+         if(Interpolate2Model)then
+            !
+            allocate(Wk_interp(Nbp,Nbp,wmax_ndx,size(kpt_Model,dim=2)));Wk_interp=czero
+            call cpu_time(start)
+            do iw=1,wmax_ndx
+               call wannierinterpolation(Lttc%Nkpt3,Lttc%kpt,kpt_Model,Wk_orig(:,:,iw,:),Wk_interp(:,:,iw,:))
+            enddo
+            call cpu_time(finish)
+            write(*,"(A,F)") "     Interpolating Wk to the new k grid cpu timing:", finish-start
+            !
+            Wk_used => Wk_interp
+            !
+         else
+            !
+            write(*,"(A)") "     Interpolation skipped, linking to original Wk."
+            Wk_used => Wk_orig
+            !
+         endif
+         !
+         call init_Uelements(Norb,PhysicalUelements)
+         !
+         !rotation done externally and stored
+         Wk_dim = (Nkpt*Norb) * (Nkpt*Norb+1)/2
+         allocate(Wk_full(wmax_ndx,Wk_dim));Wk_full=czero
+         !
+         call inquireFile(reg(pathOUTPUT)//"Wrot.DAT",Wrot_exists,hardstop=.false.,verb=verbose)
+         if(Wrot_exists)then
+            !
+            call cpu_time(start)
+            call io_Kel(Wk_full,reg(pathOUTPUT)//"Wrot.DAT","read")
+            call cpu_time(finish)
+            write(*,"(A,F)") "     Read interaction in band basis cpu timing:", finish-start
+            !
+         else
+            !
+            !map between upper triangular and row,col
+            call cpu_time(start)
+            allocate(map(2,Wk_dim));map=0
+            !$OMP PARALLEL DEFAULT(SHARED),&
+            !$OMP PRIVATE(row,col,ndx)
+            !$OMP DO
+            do row=1,Nkpt*Norb
+               do col=row,Nkpt*Norb
+                  !
+                  ! upper triangular map (fixed)
+                  ndx = (Nkpt*Norb)*(row-1) - (row-1)*row/2 + col
+                  !
+                  map(1,ndx) = row
+                  map(2,ndx) = col
+                  !
+               enddo
+            enddo
+            !$OMP END DO
+            !$OMP END PARALLEL
+            call cpu_time(finish)
+            write(*,"(A,F)") "     Upper triangular Wmap(dim="//str(Wk_dim)//") stored cpu timing:", finish-start
+            !
+            call fill_ksumkdiff(kpt_Model,kptsum,kptdif)
+            deallocate(kptsum)
+            !
+            !rotation of the interaction W_(ab)(cd)(q) --> W_(i.k1,j.k2)(j.k2,i.k1)
+            !W_(i.k1,j.k2)(j.k2,i.k1) = sum_abcd Zdag_ia(k1) * Z_bj(k2) * Zdag_jc(k2) * Z_di(k1) W_(ab)(cd)(q=k1-k2)
+            !NOTE: only the upper triangular (c>=r) part of W_(i.k1,j.k2)(j.k2,i.k1) is computed
+            call cpu_time(start)
+            !$OMP PARALLEL DEFAULT(SHARED),&
+            !$OMP PRIVATE(ndx,row,col,iorb,jorb,ik1,ik2,iq),&
+            !$OMP PRIVATE(a,b,c,d,ib1,ib2,ithread)
+            Nthread = omp_get_num_threads()
+            !$OMP DO
+            do ndx=1,Wk_dim
+               !
+               ithread = omp_get_thread_num()
+               print *, "thread", ithread, " / ", Nthread, " ndx: ", ndx, " over: ", Wk_dim
+               !
+               row = map(1,ndx)
+               col = map(2,ndx)
+               !
+               !row = ik1 + (iorb-1)*Nkpt
+               iorb = floor((row-0.01)/Nkpt)+1
+               ik1  = row - (iorb-1)*Nkpt
+               !col = ik2 + (jorb-1)*Nkpt
+               jorb = floor((col-0.01)/Nkpt)+1
+               ik2  = col - (jorb-1)*Nkpt
+               !
+               iq = kptdif(ik1,ik2)
+               !
+               do ib1=1,Nbp
+                  !
+                  !diagonal elements
+                  a = PhysicalUelements%Full_Map(ib1,ib1,1)
+                  b = PhysicalUelements%Full_Map(ib1,ib1,2)
+                  c = PhysicalUelements%Full_Map(ib1,ib1,3)
+                  d = PhysicalUelements%Full_Map(ib1,ib1,4)
+                  !
+                  Wk_full(:,ndx) = Wk_full(:,ndx)                                                                      &
+                                 + Wk_used(ib1,ib1,1:wmax_ndx,iq) * conjg(Zk_Model(a,iorb,ik1)) * Zk_Model(b,jorb,ik2) &
+                                                                  * conjg(Zk_Model(c,jorb,ik2)) * Zk_Model(d,iorb,ik1)
+                  !
+                  do ib2=ib1+1,Nbp
+                     !
+                     !off-diagonal elements
+                     a = PhysicalUelements%Full_Map(ib1,ib2,1)
+                     b = PhysicalUelements%Full_Map(ib1,ib2,2)
+                     c = PhysicalUelements%Full_Map(ib1,ib2,3)
+                     d = PhysicalUelements%Full_Map(ib1,ib2,4)
+                     !
+                     Wk_full(:,ndx) = Wk_full(:,ndx)                                                                       &
+                                    + Wk_used(ib1,ib2,1:wmax_ndx,iq) * conjg(Zk_Model(a,iorb,ik1)) * Zk_Model(b,jorb,ik2)  &
+                                                                     * conjg(Zk_Model(c,jorb,ik2)) * Zk_Model(d,iorb,ik1)  &
+                                    + Wk_used(ib2,ib1,1:wmax_ndx,iq) * conjg(Zk_Model(c,iorb,ik1)) * Zk_Model(d,jorb,ik2)  &
+                                                                     * conjg(Zk_Model(a,jorb,ik2)) * Zk_Model(b,iorb,ik1)
+                     !
+                  enddo
+               enddo
+               !
+            enddo
+            !$OMP END DO
+            !$OMP END PARALLEL
+            call cpu_time(finish)
+            deallocate(map,kptdif)
+            !
+            !print the interaction in band basis depending explicitly of the two kpoints
+            call io_Kel(Wk_full,reg(pathOUTPUT)//"Wrot.DAT","write")
+            !
+            write(*,"(A,F)") "     Rotation of the interaction to band basis cpu timing:", finish-start
+            !
+         endif
+         if(allocated(Wk_interp))deallocate(Wk_interp)
+         nullify(Wk_used)
+         !
+         !Kernels calculation
+         call cpu_time(start)
+         if(.not.Kstat_exists)then
+            allocate(Kel_stat(Ngrid,Ngrid))
+            Kel_stat=czero
+         endif
+         if(.not.Kdyn_exists)then
+            allocate(Kel_dyn_list(Inputs%Tsteps,Ngrid,Ngrid))
+            Kel_dyn_list=czero
+         endif
+         !$OMP PARALLEL DEFAULT(SHARED),&
+         !$OMP PRIVATE(iweig,jweig,iE1,iE2,DosWeights),&
+         !$OMP PRIVATE(ndx,ndx1,ndx2,row,col),&
+         !$OMP PRIVATE(iorb,jorb,ik1,ik2,ithread),&
+         !$OMP PRIVATE(E1,E2,DE_m,DE_p,nF_m,nF_p,iT,tanhs)
+         Nthread = omp_get_num_threads()
+         !$OMP DO
+         do jweig=1,size(finite_weights_Model,dim=1)
+            !
+            iE2 = finite_weights_Model(jweig,1)
+            jorb = finite_weights_Model(jweig,2)
+            ik2 = finite_weights_Model(jweig,3)
+            !
+            ithread = omp_get_thread_num()
+            print *, "thread", ithread, " / ", Nthread, " jweig: ", jweig, " over: ", size(finite_weights_Model,dim=1)
+            !
+            do iweig=1,size(finite_weights_Model,dim=1)
+               !
+               iE1 = finite_weights_Model(iweig,1)
+               iorb = finite_weights_Model(iweig,2)
+               ik1 = finite_weights_Model(iweig,3)
+               !
+               DosWeights = (weights_Model(iE1,iorb,ik1)/DoS_Model(iE1)) * (weights_Model(iE2,jorb,ik2)/DoS_Model(iE2))
+               !
+               E1 = Ek_Model(iorb,ik1)
+               E2 = Ek_Model(jorb,ik2)
+               !
+               DE_m = E1-E2
+               nF_m = fermidirac(+E1,Beta_DFT_list(iT))-fermidirac(+E2,Beta_DFT_list(iT))
+               DE_p = E1+E2
+               nF_p = fermidirac(-E1,Beta_DFT_list(iT))-fermidirac(+E2,Beta_DFT_list(iT))
+               !
+               !product basis map, the indexes spanned by iweig,jweig cover all the possible
+               !(ik1,iorb) pairs, so the whole Wk_full matrix, both LT and UT.
+               ndx1 = ik1 + (iorb-1)*Nkpt
+               ndx2 = ik2 + (jorb-1)*Nkpt
+               !
+               if(ndx2.ge.ndx1)then
+                  !
+                  !I'm looking for an element in the UT. ndx gives me the position
+                  row = ndx1 !this is the row
+                  col = ndx2 !this is the col
+                  ndx = (Nkpt*Norb)*(row-1) - (row-1)*row/2 + col
+                  !
+                  !static Kernel
+                  if(.not.Kstat_exists) Kel_stat(iE1,iE2) = Kel_stat(iE1,iE2) + Wk_full(1,ndx) * eV2DFTgrid * DosWeights
+                  !
+                  !dynamic Kernel stored for all the required temeperatures
+                  if(.not.Kdyn_exists)then
+                     !
+                     do iT=1,Inputs%Tsteps
+                        !
+                        tanhs = 0d0
+                        if((E1*E2).ne.0d0) tanhs = 1d0/(tanh(Beta_DFT_list(iT)*E1/2d0)*tanh(Beta_DFT_list(iT)*E2/2d0))
+                        !
+                        Kel_dyn_list(iT,iE1,iE2) = Kel_dyn_list(iT,iE1,iE2) + DosWeights * eV2DFTgrid * (2d0/pi) * tanhs *  &
+                        (                                                                                                                                                             &
+                           nF_m * ( aux_integral(DE_m,(Wk_full(:,ndx)-Wk_full(1,ndx))) + (Wk_full(wmax_ndx,ndx)-Wk_full(1,ndx))*(pi/2d0-atan2(wmax,DE_m)) ) +                         &
+                           nF_p * ( aux_integral(DE_p,(Wk_full(:,ndx)-Wk_full(1,ndx))) + (Wk_full(wmax_ndx,ndx)-Wk_full(1,ndx))*(pi/2d0-atan2(wmax,DE_p)) )                           &
+                        )
+                        !
+                     enddo
+                     !
+                  endif
+                  !
+               else
+                  !
+                  !I'm looking for an element in the LT. I look via ndx his complex conjg in the UT
+                  row = ndx2 !this is the row
+                  col = ndx1 !this is the col
+                  ndx = (Nkpt*Norb)*(row-1) - (row-1)*row/2 + col
+                  !
+                  !static Kernel
+                  if(.not.Kstat_exists) Kel_stat(iE1,iE2) = Kel_stat(iE1,iE2) + conjg(Wk_full(1,ndx)) * eV2DFTgrid * DosWeights
+                  !
+                  !dynamic Kernel stored for all the required temeperatures
+                  if(.not.Kdyn_exists)then
+                     !
+                     do iT=1,Inputs%Tsteps
+                        !
+                        tanhs = 0d0
+                        if((E1*E2).ne.0d0) tanhs = 1d0/(tanh(Beta_DFT_list(iT)*E1/2d0)*tanh(Beta_DFT_list(iT)*E2/2d0))
+                        !
+                        Kel_dyn_list(iT,iE1,iE2) = Kel_dyn_list(iT,iE1,iE2) + DosWeights * eV2DFTgrid * (2d0/pi) * tanhs *  &
+                        (                                                                                                                                                             &
+                           nF_m * ( aux_integral(DE_m,conjg(Wk_full(:,ndx)-Wk_full(1,ndx))) + conjg(Wk_full(wmax_ndx,ndx)-Wk_full(1,ndx))*(pi/2d0-atan2(wmax,DE_m)) ) +               &
+                           nF_p * ( aux_integral(DE_p,conjg(Wk_full(:,ndx)-Wk_full(1,ndx))) + conjg(Wk_full(wmax_ndx,ndx)-Wk_full(1,ndx))*(pi/2d0-atan2(wmax,DE_p)) )                 &
+                        )
+                        !
+                     enddo
+                     !
+                  endif
+                  !
+               endif
+               !
+            enddo
+         enddo
+         !$OMP END DO
+         !$OMP END PARALLEL
+         deallocate(Wk_full)
+         call cpu_time(finish)
+         write(*,"(A,F)") "     Calculation of static electronic Kernel cpu timing:", finish-start
+         !
+         !Filling the Fermi lines
+         do iT=1,Inputs%Tsteps
+            call interpFermi(Kel_dyn_list(iT,:,:),Egrid,Egrid,Efermi_ndx,Efermi_ndx)
+         enddo
+         !
+         if(.not.Kstat_exists) call io_Kel(Kel_stat,reg(pathOUTPUT)//"Kel_stat.DAT","write")
+         if(.not.Kdyn_exists) call io_Kel(Kel_dyn_list,reg(pathOUTPUT)//"Kel_dyn_list.DAT","write")
          !
       endif
       deallocate(weights_Model,finite_weights_Model)
@@ -768,190 +1523,77 @@ contains
       !
       !
       !
-      subroutine dump_Kel(filename,mode)
-         !
-         use utils_misc
+      function ygrid(stop,num,ndx) result(yval)
          implicit none
+         real(8),intent(in)                    :: stop
+         integer,intent(in)                    :: num,ndx
+         real(8)                               :: yval
+         real(8)                               :: start,step
          !
-         character(len=*),intent(in)        :: filename
-         character(len=*),intent(in)        :: mode
-         integer                            :: unit
-         integer                            :: D1,D2,D3
-         integer                            :: iD1,iD2,iD3
-         character(len=256)                 :: printpath
+         if(num.lt.0)stop "ygrid: N<0, abort."
+         if(ndx.le.0)stop "ygrid: ndx<=0, abort."
+         start = -1d0
+         step = (stop-start)/(dble(num)+1d0)
+         yval = start + dble(ndx)*step
          !
-         !
-         if(verbose)write(*,"(A)") "---- dump_Kel"
-         !
-         !
-         printpath = reg(pathOUTPUT)//reg(filename)
-         write(*,"(A)") "     Dump "//reg(printpath)//" (binary)"
-         unit = free_unit()
-         open(unit,file=reg(printpath),form="unformatted",status="unknown",position="rewind",action="write")
-         !
-         select case(reg(mode))
-            case default
-               !
-               stop "dump_Kel: Available modes are: stat, dyn, rot."
-               !
-            case("stat")
-               !
-               D1 = size(Kel_stat,dim=1)
-               D2 = size(Kel_stat,dim=2)
-               !
-               write(unit) D1,D2
-               do iD2=1,D2
-                  write(unit) iD2
-                  do iD1=1,D1
-                     write(unit) iD1,dreal(Kel_stat(iD1,iD2)),dimag(Kel_stat(iD1,iD2))
-                  enddo
-               enddo
-               close(unit)
-               !
-            case("dyn")
-               !
-               D1 = size(Wee_dyn,dim=1)
-               D2 = size(Wee_dyn,dim=2)
-               D3 = size(Wee_dyn,dim=3)
-               !
-               write(unit) D1,D2,D3
-               do iD3=1,D3
-                  write(unit) iD3
-                  do iD2=1,D2
-                     write(unit) iD2
-                     do iD1=1,D1
-                        write(unit) iD1,dreal(Wee_dyn(iD1,iD2,iD3)),dimag(Wee_dyn(iD1,iD2,iD3))
-                     enddo
-                  enddo
-               enddo
-               close(unit)
-               !
-            case("rot")
-               !
-               D1 = size(Wk_full,dim=1)
-               D2 = size(Wk_full,dim=2)
-               !
-               write(unit) D1,D2
-               do iD2=1,D2
-                  write(unit) iD2
-                  do iD1=1,D1
-                     write(unit) iD1,dreal(Wk_full(iD1,iD2)),dimag(Wk_full(iD1,iD2))
-                  enddo
-               enddo
-               close(unit)
-               !
-         end select
-         !
-      end subroutine dump_Kel
+      end function ygrid
       !
-      subroutine read_Kel(filename,mode)
-         !
-         use utils_misc
+      function aux_integral(DE,W) result(Integral)
          implicit none
+         real(8),intent(in)                    :: DE
+         complex(8),intent(in)                 :: W(:)
+         complex(8)                            :: Integral
+         integer                               :: iy,wndx_a,wndx_b
+         real(8)                               :: ymax,dy,y_i,y_j,wm
+         real(8)                               :: ReW_wm_intp,ImW_wm_intp
+         complex(8)                            :: W_wm_i,W_wm_j,Int_i,Int_j
          !
-         character(len=*),intent(in)        :: filename
-         character(len=*),intent(in)        :: mode
-         integer                            :: unit
-         integer                            :: D1,D2,D3
-         integer                            :: D1_,D2_,D3_
-         integer                            :: iD1,iD2,iD3
-         integer                            :: iD1_,iD2_,iD3_
-         real(8)                            :: ReW,ImW
-         character(len=256)                 :: printpath
+         ymax = (wmax-abs(DE)) / (wmax+abs(DE))
+         dy = abs(ygrid(ymax,Ngrid_y,2)-ygrid(ymax,Ngrid_y,1))
          !
+         Integral=czero
+         if((DE.ne.0d0).and.(ymax.ne.1d0))then
+            !
+            do iy=2,Ngrid_y
+               !
+               !continous frequency correspnding to iy
+               y_i = ygrid(ymax,Ngrid_y,iy)
+               wm = abs(DE) * (1+y_i)/(1-y_i)
+               !linear interpolation of Wee between the two points on the matsubara grid enclosing wm
+               wndx_a = floor(wm/MatsStep) + 1
+               wndx_b = wndx_a + 1
+               if(wndx_b.gt.wmax_ndx) stop"aux_integral (DE)_i: the frequency index is beyond the cutoff."
+               ReW_wm_intp = linear_interp_2y( [wmats_orig(wndx_a),dreal(W(wndx_a))] , [wmats_orig(wndx_b),dreal(W(wndx_b))] , wm )
+               ImW_wm_intp = linear_interp_2y( [wmats_orig(wndx_a),dimag(W(wndx_a))] , [wmats_orig(wndx_b),dimag(W(wndx_b))] , wm )
+               W_wm_i = dcmplx(ReW_wm_intp,ImW_wm_intp)
+               !
+               !continous frequency correspnding to iy-1
+               y_j = ygrid(ymax,Ngrid_y,iy-1)
+               wm = abs(DE) * (1+y_j)/(1-y_j)
+               !linear interpolation of Wee between the two points on the matsubara grid enclosing wm
+               wndx_a = floor(wm/MatsStep) + 1
+               wndx_b = wndx_a + 1
+               if(wndx_b.gt.wmax_ndx) stop"aux_integral (DE)_j: the frequency index is beyond the cutoff."
+               ReW_wm_intp = linear_interp_2y( [wmats_orig(wndx_a),dreal(W(wndx_a))] , [wmats_orig(wndx_b),dreal(W(wndx_b))] , wm )
+               ImW_wm_intp = linear_interp_2y( [wmats_orig(wndx_a),dimag(W(wndx_a))] , [wmats_orig(wndx_b),dimag(W(wndx_b))] , wm )
+               W_wm_j = dcmplx(ReW_wm_intp,ImW_wm_intp)
+               !
+               !integrand for iy and iy-1
+               Int_i = W_wm_i / ( 1d0 + y_i**2 )
+               Int_j = W_wm_j / ( 1d0 + y_j**2 )
+               !
+               !trapezoidal integration
+               Integral = Integral + sign(1d0,DE)*(Int_i+Int_j)*(dy/2d0)
+               !
+            enddo
+            !
+         endif
          !
-         if(verbose)write(*,"(A)") "---- read_Kel"
-         !
-         !
-         printpath = reg(pathOUTPUT)//reg(filename)
-         write(*,"(A)") "     Read "//reg(printpath)
-         unit = free_unit()
-         open(unit,file=reg(printpath),form="unformatted",status="unknown",position="rewind",action="read")
-         !
-         select case(reg(mode))
-            case default
-               !
-               stop "dump_Kel: Available modes are: stat, dyn, rot."
-               !
-            case("stat")
-               !
-               if(.not.allocated(Kel_stat)) stop "read_Kel: Kel_stat not allocated."
-               !
-               D1 = size(Kel_stat,dim=1)
-               D2 = size(Kel_stat,dim=2)
-               !
-               read(unit) D1_,D2_
-               if(D1_.ne.D1) stop "read_Kel: Kel_stat from file has wrong 1st dimension."
-               if(D2_.ne.D2) stop "read_Kel: Kel_stat from file has wrong 2nd dimension."
-               !
-               do iD2=1,D2
-                  read(unit) iD2_
-                  if(iD2_.ne.iD2) stop "read_Kel: wrong iD2 index."
-                  do iD1=1,D1
-                     read(unit) iD1_,ReW,ImW
-                     if(iD1_.ne.iD1) stop "read_Kel: wrong iD1 index."
-                     Kel_stat(iD1,iD2) = dcmplx(ReW,ImW)
-                  enddo
-               enddo
-               close(unit)
-               !
-            case("dyn")
-               !
-               if(.not.allocated(Wee_dyn)) stop "read_Kel: Wee_dyn not allocated."
-               !
-               D1 = size(Wee_dyn,dim=1)
-               D2 = size(Wee_dyn,dim=2)
-               D3 = size(Wee_dyn,dim=3)
-               !
-               read(unit) D1_,D2_,D3_
-               if(D1_.ne.D1) stop "read_Kel: Kel_stat from file has wrong 1st dimension."
-               if(D2_.ne.D2) stop "read_Kel: Kel_stat from file has wrong 2nd dimension."
-               if(D3_.ne.D3) stop "read_Kel: Kel_stat from file has wrong 3nd dimension."
-               !
-               do iD3=1,D3
-                  read(unit) iD3_
-                  if(iD3_.ne.iD3) stop "read_Kel: wrong iD3 index."
-                  do iD2=1,D2
-                     read(unit) iD2_
-                     if(iD2_.ne.iD2) stop "read_Kel: wrong iD2 index."
-                     do iD1=1,D1
-                        read(unit) iD1_,ReW,ImW
-                        if(iD1_.ne.iD1) stop "read_Kel: wrong iD1 index."
-                        Wee_dyn(iD1,iD2,iD3) = dcmplx(ReW,ImW)
-                     enddo
-                  enddo
-               enddo
-               close(unit)
-               !
-            case("rot")
-               !
-               if(.not.allocated(Wk_full)) stop "read_Kel: Wk_full not allocated."
-               !
-               D1 = size(Wk_full,dim=1)
-               D2 = size(Wk_full,dim=2)
-               !
-               read(unit) D1_,D2_
-               if(D1_.ne.D1) stop "read_Kel: Wk_full from file has wrong 1st dimension."
-               if(D2_.ne.D2) stop "read_Kel: Wk_full from file has wrong 2nd dimension."
-               !
-               do iD2=1,D2
-                  read(unit) iD2_
-                  if(iD2_.ne.iD2) stop "read_Kel: wrong iD2 index."
-                  do iD1=1,D1
-                     read(unit) iD1_,ReW,ImW
-                     if(iD1_.ne.iD1) stop "read_Kel: wrong iD1 index."
-                     Wk_full(iD1,iD2) = dcmplx(ReW,ImW)
-                  enddo
-               enddo
-               close(unit)
-               !
-         end select
-         !
-      end subroutine read_Kel
+      end function aux_integral
       !
       !
       !
-   end subroutine calc_energy_averages
+   end subroutine calc_energy_averages_list
 
 
 
@@ -961,7 +1603,7 @@ contains
    !---------------------------------------------------------------------------!
    !PURPOSE:
    !---------------------------------------------------------------------------!
-   subroutine get_Kel(Kel,Beta,printmode,printKpath)
+   subroutine get_Kel_integral(Kel,Beta,printmode,printKpath)
       !
       use parameters
       use utils_misc
@@ -974,49 +1616,38 @@ contains
       !
       integer                               :: Efermi_ndx
       integer                               :: iE1,iE2,iy,Ngrid
-      integer                               :: Nmats,wndx_a,wndx_b
-      real(8)                               :: DoS0,Temp,MatsStep
-      real(8)                               :: wmax,ymax
-      real(8)                               :: E1,E2,DE
-      real(8)                               :: dy,y_i,y_j
+      integer                               :: wndx_a,wndx_b
+      real(8)                               :: Temp,E1,E2,DE!DoS0
+      real(8)                               :: ymax,dy,y_i,y_j
       real(8)                               :: wm,ReW_wm_intp,ImW_wm_intp
       complex(8)                            :: W_wm_i,W_wm_j,Int_i,Int_j
       complex(8)                            :: Kel_dyn_e_p,Kel_dyn_e_m
-      real(8),allocatable                   :: wmats(:)
       real                                  :: start,finish
       !
       !
-      if(verbose)write(*,"(A)") "---- get_Kel"
+      if(verbose)write(*,"(A)") "---- get_Kel_integral"
       !
       !
-      if(.not.calc_Kel)stop "get_Kel: inputs not initialized. call Initialize_inputs."
-      if(.not.Kernels_stored)stop "get_Kel: fully screened interaction not stored. call calc_energy_averages."
-      if(calc_Int_static.and.(.not.allocated(Kel_stat)))stop "get_Kel: strange Kel_stat should be allocated."
-      if(calc_Int_dynamic.and.(.not.allocated(Wee_dyn)))stop "get_Kel: strange Wee_dyn should be allocated."
+      if(.not.calc_Kel)stop "get_Kel_integral: inputs not initialized. call Initialize_inputs."
+      if(.not.Kernels_stored)stop "get_Kel_integral: fully screened interaction not stored. call calc_energy_averages."
+      if(calc_Int_static.and.(.not.allocated(Kel_stat)))stop "get_Kel_integral: strange Kel_stat should be allocated."
+      if(calc_Int_dynamic.and.(.not.allocated(Wee_dyn)))stop "get_Kel_integral: strange Wee_dyn should be allocated."
       !
       Efermi_ndx = minloc(abs(Egrid),dim=1)
-      DoS0 = DoS_Model(Efermi_ndx)
-      write(*,"(A,F10.5)") new_line("A")//"     get_Kel: Model DoS at the Fermi level:",DoS0
-      if(Egrid(Efermi_ndx).ne.0d0) stop "get_Kel: the energy grid requires the E=0 point."
+      !DoS0 = DoS_Model(Efermi_ndx)
+      !write(*,"(A,F10.5)") new_line("A")//"     get_Kel_integral: Model DoS at the Fermi level:",DoS0
+      if(Egrid(Efermi_ndx).ne.0d0) stop "get_Kel_integral: the energy grid requires the E=0 point."
       !
       Ngrid = size(Egrid)
-      call assert_shape(Kel,[Ngrid,Ngrid],"get_Kel","Kel")
+      call assert_shape(Kel,[Ngrid,Ngrid],"get_Kel_integral","Kel")
       !
-      call cpu_time(start)
       Kel=czero
-      !
       if(calc_Int_dynamic)then
          !
-         Nmats = size(Wee_dyn,dim=1)
-         !this mesh is already in correct units given by the input Beta
-         allocate(wmats(Nmats));wmats=BosonicFreqMesh(Beta,Nmats)
-         wmax = wmats(Nmats)
-         MatsStep = abs(wmats(2)-wmats(1))
-         write(*,"(A,F)") "     Bosonic frequency step:",MatsStep
-         write(*,"(A,F)") "     Bosonic frequency cutoff iw["//str(Nmats)//"]:",wmax
-         !
+         call cpu_time(start)
          !$OMP PARALLEL DEFAULT(PRIVATE),&
-         !$OMP SHARED(Ngrid,Egrid,Efermi_ndx,Nmats,wmats,MatsStep,Beta,Kel,Wee_dyn)
+         !$OMP SHARED(Ngrid,Egrid,Efermi_ndx,Beta,Kel,Wee_dyn),&
+         !$OMP SHARED(wmats_orig,MatsStep,wmax,wmax_ndx)
          !$OMP DO
          do iE1=1,Ngrid
             if(iE1.eq.Efermi_ndx)cycle
@@ -1033,30 +1664,32 @@ contains
                   !
                   !-------------------- first term of the sum ---------------------
                   DE = E1 - E2
-                  ymax = (wmax-DE) / (wmax+DE)
+                  ymax = (wmax-abs(DE)) / (wmax+abs(DE))
                   !
                   if((DE.ne.0d0).and.(ymax.ne.1d0))then
                      !
                      dy = abs(ygrid(ymax,Ngrid,2)-ygrid(ymax,Ngrid,1))
-                     y_i = ygrid(ymax,Ngrid,iy)
-                     y_j = ygrid(ymax,Ngrid,iy-1)
                      !
                      !continous frequency correspnding to iy
+                     y_i = ygrid(ymax,Ngrid,iy)
                      wm = abs(DE) * (1+y_i)/(1-y_i)
                      !linear interpolation of Wee between the two points on the matsubara grid enclosing wm
                      wndx_a = floor(wm/MatsStep) + 1
                      wndx_b = wndx_a + 1
-                     ReW_wm_intp = linear_interp_2y( [wmats(wndx_a),dreal(Wee_dyn(wndx_a,iE1,iE2))] , [wmats(wndx_b),dreal(Wee_dyn(wndx_b,iE1,iE2))] , wm )
-                     ImW_wm_intp = linear_interp_2y( [wmats(wndx_a),dimag(Wee_dyn(wndx_a,iE1,iE2))] , [wmats(wndx_b),dimag(Wee_dyn(wndx_b,iE1,iE2))] , wm )
+                     if(wndx_b.gt.wmax_ndx) stop"get_Kel_integral (E1-E2)_i: the frequency index is beyond the cutoff."
+                     ReW_wm_intp = linear_interp_2y( [wmats_orig(wndx_a),dreal(Wee_dyn(wndx_a,iE1,iE2))] , [wmats_orig(wndx_b),dreal(Wee_dyn(wndx_b,iE1,iE2))] , wm )
+                     ImW_wm_intp = linear_interp_2y( [wmats_orig(wndx_a),dimag(Wee_dyn(wndx_a,iE1,iE2))] , [wmats_orig(wndx_b),dimag(Wee_dyn(wndx_b,iE1,iE2))] , wm )
                      W_wm_i = dcmplx(ReW_wm_intp,ImW_wm_intp)
                      !
                      !continous frequency correspnding to iy-1
+                     y_j = ygrid(ymax,Ngrid,iy-1)
                      wm = abs(DE) * (1+y_j)/(1-y_j)
                      !linear interpolation of Wee between the two points on the matsubara grid enclosing wm
                      wndx_a = floor(wm/MatsStep) + 1
                      wndx_b = wndx_a + 1
-                     ReW_wm_intp = linear_interp_2y( [wmats(wndx_a),dreal(Wee_dyn(wndx_a,iE1,iE2))] , [wmats(wndx_b),dreal(Wee_dyn(wndx_b,iE1,iE2))] , wm )
-                     ImW_wm_intp = linear_interp_2y( [wmats(wndx_a),dimag(Wee_dyn(wndx_a,iE1,iE2))] , [wmats(wndx_b),dimag(Wee_dyn(wndx_b,iE1,iE2))] , wm )
+                     if(wndx_b.gt.wmax_ndx) stop"get_Kel_integral (E1-E2)_j: the frequency index is beyond the cutoff."
+                     ReW_wm_intp = linear_interp_2y( [wmats_orig(wndx_a),dreal(Wee_dyn(wndx_a,iE1,iE2))] , [wmats_orig(wndx_b),dreal(Wee_dyn(wndx_b,iE1,iE2))] , wm )
+                     ImW_wm_intp = linear_interp_2y( [wmats_orig(wndx_a),dimag(Wee_dyn(wndx_a,iE1,iE2))] , [wmats_orig(wndx_b),dimag(Wee_dyn(wndx_b,iE1,iE2))] , wm )
                      W_wm_j = dcmplx(ReW_wm_intp,ImW_wm_intp)
                      !
                      !integrand for iy and iy-1
@@ -1064,37 +1697,39 @@ contains
                      Int_j = W_wm_j / ( 1d0 + y_j**2 )
                      !
                      !trapezoidal integration
-                     Kel_dyn_e_m = Kel_dyn_e_m + (Int_i+Int_j)*(dy/2d0)
+                     Kel_dyn_e_m = Kel_dyn_e_m + sign(1d0,DE)*(Int_i+Int_j)*(dy/2d0)
                      !
                   endif
                   !
                   !
                   !------------------- second term of the sum ---------------------
                   DE = E1 + E2
-                  ymax = (wmax-DE) / (wmax+DE)
+                  ymax = (wmax-abs(DE)) / (wmax+abs(DE))
                   !
                   if((DE.ne.0d0).and.(ymax.ne.1d0))then
                      !
                      dy = abs(ygrid(ymax,Ngrid,2)-ygrid(ymax,Ngrid,1))
-                     y_i = ygrid(ymax,Ngrid,iy)
-                     y_j = ygrid(ymax,Ngrid,iy-1)
                      !
                      !continous frequency correspnding to iy
+                     y_i = ygrid(ymax,Ngrid,iy)
                      wm = abs(DE) * (1+y_i)/(1-y_i)
                      !linear interpolation of Wee between the two points on the matsubara grid enclosing wm
                      wndx_a = floor(wm/MatsStep) + 1
                      wndx_b = wndx_a + 1
-                     ReW_wm_intp = linear_interp_2y( [wmats(wndx_a),dreal(Wee_dyn(wndx_a,iE1,iE2))] , [wmats(wndx_b),dreal(Wee_dyn(wndx_b,iE1,iE2))] , wm )
-                     ImW_wm_intp = linear_interp_2y( [wmats(wndx_a),dimag(Wee_dyn(wndx_a,iE1,iE2))] , [wmats(wndx_b),dimag(Wee_dyn(wndx_b,iE1,iE2))] , wm )
+                     if(wndx_b.gt.wmax_ndx) stop"get_Kel_integral (E1+E2)_i: the frequency index is beyond the cutoff."
+                     ReW_wm_intp = linear_interp_2y( [wmats_orig(wndx_a),dreal(Wee_dyn(wndx_a,iE1,iE2))] , [wmats_orig(wndx_b),dreal(Wee_dyn(wndx_b,iE1,iE2))] , wm )
+                     ImW_wm_intp = linear_interp_2y( [wmats_orig(wndx_a),dimag(Wee_dyn(wndx_a,iE1,iE2))] , [wmats_orig(wndx_b),dimag(Wee_dyn(wndx_b,iE1,iE2))] , wm )
                      W_wm_i = dcmplx(ReW_wm_intp,ImW_wm_intp)
                      !
                      !continous frequency correspnding to iy-1
+                     y_j = ygrid(ymax,Ngrid,iy-1)
                      wm = abs(DE) * (1+y_j)/(1-y_j)
                      !linear interpolation of Wee between the two points on the matsubara grid enclosing wm
                      wndx_a = floor(wm/MatsStep) + 1
                      wndx_b = wndx_a + 1
-                     ReW_wm_intp = linear_interp_2y( [wmats(wndx_a),dreal(Wee_dyn(wndx_a,iE1,iE2))] , [wmats(wndx_b),dreal(Wee_dyn(wndx_b,iE1,iE2))] , wm )
-                     ImW_wm_intp = linear_interp_2y( [wmats(wndx_a),dimag(Wee_dyn(wndx_a,iE1,iE2))] , [wmats(wndx_b),dimag(Wee_dyn(wndx_b,iE1,iE2))] , wm )
+                     if(wndx_b.gt.wmax_ndx) stop"get_Kel_integral (E1+E2)_j: the frequency index is beyond the cutoff."
+                     ReW_wm_intp = linear_interp_2y( [wmats_orig(wndx_a),dreal(Wee_dyn(wndx_a,iE1,iE2))] , [wmats_orig(wndx_b),dreal(Wee_dyn(wndx_b,iE1,iE2))] , wm )
+                     ImW_wm_intp = linear_interp_2y( [wmats_orig(wndx_a),dimag(Wee_dyn(wndx_a,iE1,iE2))] , [wmats_orig(wndx_b),dimag(Wee_dyn(wndx_b,iE1,iE2))] , wm )
                      W_wm_j = dcmplx(ReW_wm_intp,ImW_wm_intp)
                      !
                      !integrand for iy and iy-1
@@ -1102,19 +1737,19 @@ contains
                      Int_j = W_wm_j / ( 1d0 + y_j**2 )
                      !
                      !trapezoidal integration
-                     Kel_dyn_e_p = Kel_dyn_e_p + (Int_i+Int_j)*(dy/2d0)
+                     Kel_dyn_e_p = Kel_dyn_e_p + sign(1d0,DE)*(Int_i+Int_j)*(dy/2d0)
                      !
                   endif
                   !
                enddo
                !
                !adding the tail to w-->inf limit of the interaction
-               Kel_dyn_e_m = Kel_dyn_e_m + Wee_dyn(Nmats,iE1,iE2) * ( pi/2d0 - atan2(wmats(Nmats),(E1-E2)) )
-               Kel_dyn_e_p = Kel_dyn_e_p + Wee_dyn(Nmats,iE1,iE2) * ( pi/2d0 - atan2(wmats(Nmats),(E1+E2)) )
+               Kel_dyn_e_m = Kel_dyn_e_m + Wee_dyn(wmax_ndx,iE1,iE2) * ( pi/2d0 - atan2(wmax,(E1-E2)) )
+               Kel_dyn_e_p = Kel_dyn_e_p + Wee_dyn(wmax_ndx,iE1,iE2) * ( pi/2d0 - atan2(wmax,(E1+E2)) )
                !
                !adding the fermi function differences
-               Kel_dyn_e_m = Kel_dyn_e_m * ( fermidirac(+E1,Beta) - fermidirac(+E2,Beta) )*(4d0/pi)
-               Kel_dyn_e_p = Kel_dyn_e_p * ( fermidirac(-E1,Beta) - fermidirac(+E2,Beta) )*(4d0/pi)
+               Kel_dyn_e_m = Kel_dyn_e_m * ( fermidirac(+E1,Beta) - fermidirac(+E2,Beta) )*(2d0/pi)
+               Kel_dyn_e_p = Kel_dyn_e_p * ( fermidirac(-E1,Beta) - fermidirac(+E2,Beta) )*(2d0/pi)
                !
                !adding the tanh in front
                Kel(iE1,iE2) = ( Kel_dyn_e_m + Kel_dyn_e_p ) / ( tanh(Beta/2d0*E1) * tanh(Beta/2d0*E2) )
@@ -1123,7 +1758,9 @@ contains
          enddo
          !$OMP END DO
          !$OMP END PARALLEL
-         deallocate(wmats)
+         !
+         !Filling the Fermi lines
+         call interpFermi(Kel,Egrid,Egrid,Efermi_ndx,Efermi_ndx)
          !
          call cpu_time(finish)
          write(*,"(A,F)") "     Calculation of dynamic electronic Kernel cpu timing:", finish-start
@@ -1164,7 +1801,49 @@ contains
       !
       !
       !
-   end subroutine get_Kel
+   end subroutine get_Kel_integral
+   !
+   subroutine get_Kel_list(Kel,iT,Beta,printmode,printKpath)
+      !
+      use parameters
+      use utils_misc
+      implicit none
+      !
+      complex(8),intent(out)                :: Kel(:,:)
+      integer,intent(in)                    :: iT
+      real(8),intent(in)                    :: Beta
+      character(len=*),intent(in)           :: printmode
+      character(len=*),intent(in)           :: printKpath
+      integer                               :: Ngrid
+      real(8)                               :: Temp
+      !
+      !
+      if(verbose)write(*,"(A)") "---- get_Kel_list"
+      !
+      !
+      if(.not.calc_Kel)stop "get_Kel_list: inputs not initialized. call Initialize_inputs."
+      if(.not.Kernels_stored)stop "get_Kel_list: fully screened interaction not stored. call calc_energy_averages."
+      if(calc_Int_static.and.(.not.allocated(Kel_stat)))stop "get_Kel_list: strange Kel_stat should be allocated."
+      if(calc_Int_dynamic.and.(.not.allocated(Kel_dyn_list)))stop "get_Kel_list: strange Kel_dyn_list should be allocated."
+      !
+      Ngrid = size(Egrid)
+      call assert_shape(Kel,[Ngrid,Ngrid],"get_Kel_list","Kel")
+      !
+      Kel=czero
+      if(calc_Int_dynamic)then
+         !
+         Kel = Kel_dyn_list(iT,:,:)
+         !
+         if(reg(printmode).ne."None")then
+            Temp = 1d0 / (K2eV*eV2DFTgrid*Beta)
+            call print_Kernel("electronic",reg(printmode),reg(printKpath),"Kel_dyn_T"//str(Temp,2),Egrid,Egrid,Kel)
+         endif
+         !
+      endif
+      !
+      if(calc_Int_static) Kel = Kel + Kel_stat
+      !
+   end subroutine get_Kel_list
 
 
    !---------------------------------------------------------------------------!
@@ -1272,7 +1951,7 @@ contains
          do iE2=2,Ngrid
             !
             dE = abs(Egrid(iE2)-Egrid(iE2-1))
-            if(reg(mode).eq."asym")then
+            if((reg(mode).eq."asym").or.(reg(mode).eq."symrenorm"))then
                Zph_e(iE1) = Zph_e(iE1) + ( a2F_int(iE2-1) + a2F_int(iE2) ) * (dE/2d0) * (DoS_DFT(iE2)/DoS0_DFT)
             else
                Zph_e(iE1) = Zph_e(iE1) + ( a2F_int(iE2-1) + a2F_int(iE2) ) * (dE/2d0)
@@ -1553,6 +2232,149 @@ contains
       end select
       !
    end subroutine print_Kernel
+
+
+   !---------------------------------------------------------------------------!
+   !PURPOSE: print/read Kernels in binary format
+   !---------------------------------------------------------------------------!
+   subroutine io_Kel_d2(K,filepath,mode)
+      !
+      use utils_misc
+      implicit none
+      !
+      complex(8),intent(inout)           :: K(:,:)
+      character(len=*),intent(in)        :: filepath
+      character(len=*),intent(in)        :: mode
+      integer                            :: unit
+      integer                            :: D1,D2,D1_,D2_
+      integer                            :: iD1,iD2,iD1_,iD2_
+      real(8)                            :: ReW,ImW
+      !
+      !
+      if(verbose)write(*,"(A)") "---- io_Kel_d2"
+      !
+      !
+      D1 = size(K,dim=1)
+      D2 = size(K,dim=2)
+      !
+      select case(reg(mode))
+         case default
+            !
+            stop "io_Kel_d2: Available modes are: read, write."
+            !
+         case("read")
+            !
+            write(*,"(A)") "     Read "//reg(filepath)
+            unit = free_unit()
+            open(unit,file=reg(filepath),form="unformatted",status="unknown",position="rewind",action="read")
+            !
+            read(unit) D1_,D2_
+            if(D1_.ne.D1) stop "io_Kel_d2(read): Kel_stat from file has wrong 1st dimension."
+            if(D2_.ne.D2) stop "io_Kel_d2(read): Kel_stat from file has wrong 2nd dimension."
+            !
+            do iD2=1,D2
+               read(unit) iD2_
+               if(iD2_.ne.iD2) stop "io_Kel_d2(read): wrong iD2 index."
+               do iD1=1,D1
+                  read(unit) iD1_,ReW,ImW
+                  if(iD1_.ne.iD1) stop "io_Kel_d2(read): wrong iD1 index."
+                  K(iD1,iD2) = dcmplx(ReW,ImW)
+               enddo
+            enddo
+            close(unit)
+            !
+         case("write")
+            !
+            write(*,"(A)") "     Dump "//reg(filepath)//" (binary)"
+            unit = free_unit()
+            open(unit,file=reg(filepath),form="unformatted",status="unknown",position="rewind",action="write")
+            !
+            write(unit) D1,D2
+            do iD2=1,D2
+               write(unit) iD2
+               do iD1=1,D1
+                  write(unit) iD1,dreal(K(iD1,iD2)),dimag(K(iD1,iD2))
+               enddo
+            enddo
+            close(unit)
+            !
+      end select
+      !
+   end subroutine io_Kel_d2
+   !
+   subroutine io_Kel_d3(K,filepath,mode)
+      !
+      use utils_misc
+      implicit none
+      !
+      complex(8),intent(inout)           :: K(:,:,:)
+      character(len=*),intent(in)        :: filepath
+      character(len=*),intent(in)        :: mode
+      integer                            :: unit
+      integer                            :: D1,D2,D3,D1_,D2_,D3_
+      integer                            :: iD1,iD2,iD3,iD1_,iD2_,iD3_
+      real(8)                            :: ReW,ImW
+      !
+      !
+      if(verbose)write(*,"(A)") "---- io_Kel_d3"
+      !
+      !
+      D1 = size(K,dim=1)
+      D2 = size(K,dim=2)
+      D3 = size(K,dim=3)
+      !
+      select case(reg(mode))
+         case default
+            !
+            stop "io_Kel_d3: Available modes are: read, write."
+            !
+         case("read")
+            !
+            write(*,"(A)") "     Read "//reg(filepath)
+            unit = free_unit()
+            open(unit,file=reg(filepath),form="unformatted",status="unknown",position="rewind",action="read")
+            !
+            read(unit) D1_,D2_,D3_
+            if(D1_.ne.D1) stop "io_Kel_d3(read): Kel_stat from file has wrong 1st dimension."
+            if(D2_.ne.D2) stop "io_Kel_d3(read): Kel_stat from file has wrong 2nd dimension."
+            if(D3_.ne.D3) stop "io_Kel_d3(read): Kel_stat from file has wrong 3rd dimension."
+            !
+            do iD3=1,D3
+               read(unit) iD3_
+               if(iD3_.ne.iD3) stop "io_Kel_d3(read): wrong iD3 index."
+               do iD2=1,D2
+                  read(unit) iD2_
+                  if(iD2_.ne.iD2) stop "io_Kel_d3(read): wrong iD2 index."
+                  do iD1=1,D1
+                     read(unit) iD1_,ReW,ImW
+                     if(iD1_.ne.iD1) stop "io_Kel_d3(read): wrong iD1 index."
+                     K(iD1,iD2,iD3) = dcmplx(ReW,ImW)
+                  enddo
+               enddo
+            enddo
+            close(unit)
+            !
+         case("write")
+            !
+            write(*,"(A)") "     Dump "//reg(filepath)//" (binary)"
+            unit = free_unit()
+            open(unit,file=reg(filepath),form="unformatted",status="unknown",position="rewind",action="write")
+            !
+            write(unit) D1,D2,D3
+            do iD3=1,D3
+               write(unit) iD3
+               do iD2=1,D2
+                  write(unit) iD2
+                  do iD1=1,D1
+                     write(unit) iD1,dreal(K(iD1,iD2,iD3)),dimag(K(iD1,iD2,iD3))
+                  enddo
+               enddo
+            enddo
+            close(unit)
+            !
+      end select
+      !
+   end subroutine io_Kel_d3
 
 
    !---------------------------------------------------------------------------!

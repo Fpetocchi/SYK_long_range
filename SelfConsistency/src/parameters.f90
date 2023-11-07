@@ -264,11 +264,13 @@ module parameters
       real(8)                               :: DeltaInit_B=0d0
       real(8)                               :: DeltaMix=0d0
       logical                               :: HkRenorm
+      logical                               :: G0W0Renorm
+      logical                               :: DMFTRenorm
       character(len=255)                    :: mode_ph                          !Elk or QEspresso
       character(len=255)                    :: mode_Zph="symrenorm"
       character(len=255)                    :: mode_el                          !static or static+dynamic
+      character(len=255)                    :: mode_avg="integral"
       integer                               :: Nkpt3_Model(3)=0
-      real(8)                               :: wstep=0d0
       real(8)                               :: Wk_cutoff=0d0
       character(len=255)                    :: printmode_ph
       character(len=255)                    :: printmode_el

@@ -173,7 +173,7 @@ module input_vars
    character(len=256),public                :: VH_type
    character(len=256),public                :: VN_type
    character(len=256),public                :: DC_type
-   character(len=256),public                :: DC_type_GW
+   !character(len=256),public                :: DC_type_GW
    !character(len=256),public                :: DC_type_GG
    logical,public                           :: DC_remove_self
    character(len=256),public                :: Embedding
@@ -599,7 +599,7 @@ contains
             FLL_wm = Nmats
          endif
       endif
-      call parse_input_variable(DC_type_GW,"DC_TYPE_GW",InputFile,default="Sloc",comment="Local GW self-energy which is replaced by the DMFT one. Avalibale: GlocWloc, Sloc.")
+      !call parse_input_variable(DC_type_GW,"DC_TYPE_GW",InputFile,default="Sloc",comment="Local GW self-energy which is replaced by the DMFT one. Avalibale: GlocWloc, Sloc.")
       !call parse_input_variable(DC_type_GG,"DC_TYPE_GG",InputFile,default="GlocGloc",comment="Local GG polarization which is replaced by the DMFT one. Avalibale: GlocGloc, Ploc.")
       call parse_input_variable(DC_remove_self,"DC_RMV_SELF",InputFile,default=.true.,comment="Keep the Fock diagrams which are removing the self-interaction and adding the Hund contribution to the Hartree term.")
       call parse_input_variable(Dyson_Imprvd_F,"DYSON_F_IMPRVD",InputFile,default=.false.,comment="Perform the fermionic Dyson equation using the improved estimators.") !See PRB,85.205106
@@ -737,6 +737,8 @@ contains
       if(gap_equation%status)then
          call parse_input_variable(gap_equation%calc_Tc,"CALC_TC",InputFile,default=.false.,comment="Solve the gap equation to compute the critical Temperature. If F sores Wlat in the band basis.")
          call parse_input_variable(gap_equation%mode_el,"MODE_EL",InputFile,default="None",comment="Whether to include electronic Kernel. Available modes: static, static+dynamic. None to avoid.")
+         !if(reg(gap_equation%mode_el).eq."static+dynamic")call parse_input_variable(gap_equation%mode_avg,"MODE_AVG",InputFile,default="integral",comment="=integral to average only the interaction, =list to average the whole dynamical Kernel")
+         gap_equation%mode_avg="integral" !the other requires new derivation for the phonons
          call parse_input_variable(gap_equation%Tbounds,"T_BOUNDS",InputFile,default=[0.1d0,10d0],comment="Lower and upper boundaries (Kelvin) of the temperature scan.")
          call parse_input_variable(gap_equation%Tsteps,"T_STEPS",InputFile,default=10,comment="Number of points in the temperature scan.")
          call parse_input_variable(gap_equation%Ngrid,"NGRID",InputFile,default=500,comment="Energy grid mesh.")
@@ -748,7 +750,9 @@ contains
          call parse_input_variable(gap_equation%DeltaInit_M,"DELTA_INIT_M",InputFile,default=0.1d0,comment="Initial guess for Delta[eV] - maximum.")
          call parse_input_variable(gap_equation%DeltaInit_B,"DELTA_INIT_B",InputFile,default=0.1d0,comment="Initial guess for Delta[eV] - spread.")
          call parse_input_variable(gap_equation%DeltaMix,"DELTA_MIX",InputFile,default=0.5d0,comment="Fraction of the old iteration Delta.")
-         call parse_input_variable(gap_equation%HkRenorm,"HK_RENORM",InputFile,default=.true.,comment="Correct the LDA DoS with the self-energy matrix at zero frequency.")
+         call parse_input_variable(gap_equation%HkRenorm,"HK_RENORM",InputFile,default=.false.,comment="Correct the LDA DoS with the DoS computed by solving the quasiparticle equation.")
+         call parse_input_variable(gap_equation%G0W0Renorm,"G0W0_RENORM",InputFile,default=.false.,comment="Correct the LDA DoS with the G0W0 spectral function. Overrides HK_RENORM.")
+         call parse_input_variable(gap_equation%DMFTRenorm,"DMFT_RENORM",InputFile,default=.false.,comment="Correct the LDA DoS with the DMFT spectral function. Overrides HK_RENORM and G0W0_RENORM.")
          call parse_input_variable(gap_equation%mode_ph,"MODE_PH",InputFile,default="None",comment="Whether to include phononic Kernel. Available modes: Elk, QEspresso. None to avoid.")
          call parse_input_variable(gap_equation%mode_Zph,"MODE_ZPH",InputFile,default="symrenorm",comment="Low energy limit of Zph. Available modes: symrenorm, sym, asym.")
          if((reg(gap_equation%mode_ph).eq."None").and.(reg(gap_equation%mode_el).eq."None"))stop "read_InputFile: Tc requested but no mode is choosen."
