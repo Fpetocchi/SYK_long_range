@@ -285,7 +285,7 @@ if __name__=="__main__":
         else:
             model=np.ones(omegaMesh.shape, np.float64)
         model*=float(arguments["--modelnorm"])/np.trapz(model,omegaMesh)
-        print("Done Pre bryan")
+        print("Done Pre bryan",muthres)
 
         ######### MAXENTING #############
 

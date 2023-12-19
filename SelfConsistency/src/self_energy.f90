@@ -2708,7 +2708,7 @@ contains
       real                                  :: start,finish
       integer                               :: ik,iw,QPndx,Ntmp
       integer                               :: Nreal_read = 5000
-      integer                               :: iorb,jorb,ispin
+      integer                               :: iorb,ispin
       logical                               :: S_G0W0exists
       logical                               :: print_all=.false.
       !
@@ -2769,12 +2769,13 @@ contains
          endif
          !
       enddo
+      call DeallocateFermionicField(S_G0W0)
       !
       !interpolate to input real-frequency mesh and rotate back to Wannier basis
       call cpu_time(start)
       call AllocateFermionicField(S_G0W0_interp,Lttc%Norb,Nreal,Nkpt=Lttc%Nkpt)
       !$OMP PARALLEL DEFAULT(SHARED),&
-      !$OMP PRIVATE(iw,ik,iorb,jorb,ispin,ReS,ImS)
+      !$OMP PRIVATE(iw,ik,iorb,ispin,ReS,ImS)
       !$OMP DO
       do iw=1,Nreal
          do ik=1,Lttc%Nkpt
@@ -2798,7 +2799,6 @@ contains
       !$OMP END DO
       !$OMP END PARALLEL
       deallocate(wreal_read,Smat)
-      call DeallocateFermionicField(S_G0W0)
       call FermionicKsum(S_G0W0_interp)
       call dump_FermionicField(S_G0W0_interp,reg(pathINPUTtr)//"G0W0plots/","SGoWo_wr_interp",.true.,axis=wreal)
       if(print_all) call dump_FermionicField(S_G0W0_interp,reg(pathINPUTtr)//"G0W0plots/SGoWo_wr_interp/","SGoWo_wr_interp",.false.,Lttc%kpt,paramagnet,axis=wreal)
@@ -2970,7 +2970,7 @@ contains
          call cpu_time(start)
          call AllocateFermionicField(S_G0W0dc_interp,Lttc%Norb,Nreal,Nkpt=Lttc%Nkpt)
          !$OMP PARALLEL DEFAULT(SHARED),&
-         !$OMP PRIVATE(iw,ik,iorb,jorb,ispin,ReS,ImS)
+         !$OMP PRIVATE(iw,ik,iorb,ispin,ReS,ImS)
          !$OMP DO
          do iw=1,Nreal
             do ik=1,Lttc%Nkpt

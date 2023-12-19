@@ -3557,7 +3557,7 @@ contains
       !
       use parameters !WHY IS THIS WORKING?
       use utils_misc
-      use linalg, only : eigh, inv, zeye
+      use linalg, only : eigh, inv, zeye, dag
       use input_vars, only : eta, Nreal, wrealMax
       use input_vars, only : Hetero
       use input_vars, only : structure
@@ -3596,12 +3596,20 @@ contains
       complex(8),allocatable                :: Potential_L(:,:,:,:,:),Potential_R(:,:,:,:,:)
       !
       !TEST>>>
-      logical                               :: dump_BAB=.false.
       logical                               :: dump_unfolded=.false.
-      complex(8),allocatable                :: Gkw(:,:,:,:)
-      complex(8),allocatable                :: GRw(:,:,:,:,:),GRw_halfkz(:,:,:,:,:)
-      integer                               :: Nkp,Nkz,iwig,Norb
+      complex(8),allocatable                :: Hr(:,:,:)
+      complex(8),allocatable                :: HR_chain(:,:,:,:),Hk_chain(:,:,:,:,:)
+      complex(8),allocatable                :: Gkw(:,:,:,:),Gkw_chain(:,:,:,:,:)
+      complex(8),allocatable                :: invGf_B(:,:),invGf_A(:,:)
+      type distances_typ
+         integer                            :: Ndist=0
+         integer                            :: coord(100000,2)=0
+      end type distances_typ
+      type(distances_typ),allocatable       :: distances(:)
+      !common vars
+      integer                               :: Nkp,Nkz,iwig
       integer                               :: nx,ny,nz,isite,jsite,iwig_old
+      integer                               :: idist,distmax,andx,bndx
       real(8)                               :: KR
       complex(8)                            :: cfac
       !>>>TEST
@@ -3882,189 +3890,167 @@ contains
             !
          endif
          !
-         !TEST>>> This portion is to pass from orbital basis to B/AB basis directly on path (as it is done inside interpolate_Kpath)
-         if(dump_BAB)then
-            !
-            allocate(Akw_print(2,Nreal,Nkpt_path_tot));Akw_print=0d0
-            !$OMP PARALLEL DEFAULT(SHARED),&
-            !$OMP PRIVATE(ik,iw)
-            !$OMP DO
-            do ik=1,Nkpt_path_tot
-               do iw=1,Nreal
-                  !
-                  if(freq_dep)then
-                     Akw_print(1,iw,ik) = -dimag(1d0/(dcmplx(wreal(iw),eta)+Lttc%mu - (dataw_intp(1,1,iw,ik)+dataw_intp(2,2,iw,ik)-dataw_intp(1,2,iw,ik)-dataw_intp(2,1,iw,ik))/2d0))
-                     Akw_print(2,iw,ik) = -dimag(1d0/(dcmplx(wreal(iw),eta)+Lttc%mu - (dataw_intp(1,1,iw,ik)+dataw_intp(2,2,iw,ik)+dataw_intp(1,2,iw,ik)+dataw_intp(2,1,iw,ik))/2d0))
-                  else
-                     Akw_print(1,iw,ik) = -dimag(1d0/(dcmplx(wreal(iw),eta)+Lttc%mu - (data_intp(1,1,ik)+data_intp(2,2,ik)-data_intp(1,2,ik)-data_intp(2,1,ik))/2d0))
-                     Akw_print(2,iw,ik) = -dimag(1d0/(dcmplx(wreal(iw),eta)+Lttc%mu - (data_intp(1,1,ik)+data_intp(2,2,ik)+data_intp(1,2,ik)+data_intp(2,1,ik))/2d0))
-                  endif
-                  !
-               enddo
-            enddo
-            !$OMP END DO
-            !$OMP END PARALLEL
-            !
-            !Normalization
-            do ik=1,Nkpt_path_tot
-               do io=1,2
-                  Akw_print(io,:,ik) = Akw_print(io,:,ik)/(sum(Akw_print(io,:,ik))*abs(wreal(2)-wreal(1)))
-               enddo
-            enddo
-            !
-            !print spectral function
-            path = reg(pathOUTPUT)//"Akw_BAB_"//reg(label)//".DAT"
-            unit = free_unit()
-            open(unit,file=reg(path),form="formatted",status="unknown",position="rewind",action="write")
-            do ik=1,Nkpt_path_tot
-               do iw=1,Nreal
-                   write(unit,"(1I5,200E20.12)") ik,Kpathaxis(ik)/Kpathaxis(Nkpt_path_tot),wreal(iw),(Akw_print(io,iw,ik),io=1,Ndim)
-               enddo
-               write(unit,*)
-            enddo
-            close(unit)
-            deallocate(Akw_print)
-            !
-         endif
-         !>>>TEST
-         !
          !TEST>>> This portion is to pass from orbital basis to B/AB basis directly on path with unfolded BZ (as it is done inside interpolate_Kpath)
          if(dump_unfolded)then
             !
-            allocate(Gkw(Ndim,Ndim,Nreal,Nkpt));Gkw=czero
-            allocate(invGf(Ndim,Ndim));invGf=czero
-            !$OMP PARALLEL DEFAULT(SHARED),&
-            !$OMP PRIVATE(ik,iw,invGf)
-            !$OMP DO
-            do ik=1,Nkpt
-               do iw=1,Nreal
-                  !
-                  if(freq_dep)then
-                     invGf = zeta(:,:,iw) - dataw_orig(:,:,iw,ik)
-                  else
-                     invGf = zeta(:,:,iw) - data_orig(:,:,ik)
-                  endif
-                  !
-                  call inv(invGf)
-                  Gkw(:,:,iw,ik) = invGf
-                  !
+            if(freq_dep)stop "interpolate2Path: freq_dep not allowed."
+            !
+            !this is hard coded because I need a clear separation between in and out of plane k-points
+            Nkp = 301
+            Nkz = 100
+            !
+            !FT to real space
+            allocate(HR(Ndim,Ndim,Nwig));HR=czero
+            call wannier_K2R(Lttc%Nkpt3,Lttc%kpt,Lttc%Hk,HR)
+            write(*,*)"H(R) computed"
+            !
+            !get the indexes of the wanted distances
+            distmax = Nkz
+            allocate(distances(-(distmax-1):+(distmax-1)))
+            do nz=-(distmax-1),+(distmax-1),1
+               do isite=1,distmax
+                  do jsite=1,distmax
+                     if(nz.eq.(isite-jsite))then
+                        distances(nz)%Ndist = distances(nz)%Ndist + 1
+                        distances(nz)%coord(distances(nz)%Ndist,1) = isite
+                        distances(nz)%coord(distances(nz)%Ndist,2) = jsite
+                     endif
+                  enddo
                enddo
             enddo
-            !$OMP END DO
-            !$OMP END PARALLEL
             !
-            Norb = 2
-            !
-            allocate(GRw(Norb,Norb,Nreal,Nwig,2));GRw=czero
-            !Bonding state
-            call wannier_K2R(Lttc%Nkpt3,Lttc%kpt,Gkw,GRw(:,:,:,:,1))
-            !Anti-Bonding state
-            Gkw(1,2,:,:) = -Gkw(1,2,:,:)
-            Gkw(2,1,:,:) = -Gkw(2,1,:,:)
-            call wannier_K2R(Lttc%Nkpt3,Lttc%kpt,Gkw,GRw(:,:,:,:,2))
-            deallocate(Gkw)
-            write(*,*)"Afull_AB(R) computed"
-            !
-            allocate(GRw_halfkz(3*Norb,3*Norb,Nreal,Nwig,2));GRw_halfkz=czero
-            !
+            allocate(HR_chain(Ndim,Ndim,Nwig,0:(distmax-1)));HR_chain=czero
             do nx=minval(Nvecwig(1,:)),maxval(Nvecwig(1,:)),1
                do ny=minval(Nvecwig(2,:)),maxval(Nvecwig(2,:)),1
                   !
-                  !new iwig
+                  !new iwig is always in the plane
                   iwig = find_vec([nx,ny,0],Nvecwig,hardstop=.false.)
                   if(iwig.eq.0)cycle
                   !
-                  do nz=minval(Nvecwig(3,:)),maxval(Nvecwig(3,:)),1
+                  !extract only the blocks of interest
+                  do nz=0,+(distmax-1)
                      !
                      if(nz.eq.0)then
-                        !diagonals
-                        do ik=1,3
-                           !B
-                           GRw_halfkz(1+(ik-1)*Norb:ik*Norb,1+(ik-1)*Norb:ik*Norb,:,iwig,1) = GRw(:,:,:,iwig,1)
-                           !AB
-                           GRw_halfkz(1+(ik-1)*Norb:ik*Norb,1+(ik-1)*Norb:ik*Norb,:,iwig,2) = GRw(:,:,:,iwig,2)
-                        enddo
-                     elseif(nz.eq.+1)then
-                        !distance +1
-                        iwig_old = find_vec([nx,ny,+1],Nvecwig,hardstop=.false.)
+                        !
+                        HR_chain(:,:,iwig,0) = HR(:,:,iwig)
+                        !
+                     else
+                        !
+                        iwig_old = find_vec([nx,ny,nz],Nvecwig,hardstop=.false.)
                         if(iwig_old.eq.0)cycle
                         !
-                        !B
-                        GRw_halfkz(1+Norb:2*Norb,1:Norb,:,iwig,1) = GRw(:,:,:,iwig_old,1)
-                        GRw_halfkz(1+2*Norb:3*Norb,1+Norb:2*Norb,:,iwig,1) = GRw(:,:,:,iwig_old,1)
-                        !AB
-                        GRw_halfkz(1+Norb:2*Norb,1:Norb,:,iwig,2) = GRw(:,:,:,iwig_old,2)
-                        GRw_halfkz(1+2*Norb:3*Norb,1+Norb:2*Norb,:,iwig,2) = GRw(:,:,:,iwig_old,2)
-                     elseif(nz.eq.-1)then
-                        !distance -1
-                        iwig_old = find_vec([nx,ny,-1],Nvecwig,hardstop=.false.)
-                        if(iwig_old.eq.0)cycle
+                        HR_chain(:,:,iwig,nz) = HR(:,:,iwig_old)
                         !
-                        !B
-                        GRw_halfkz(1:Norb,1+Norb:2*Norb,:,iwig,1) = GRw(:,:,:,iwig_old,1)
-                        GRw_halfkz(1+Norb:2*Norb,1+2*Norb:3*Norb,:,iwig,1) = GRw(:,:,:,iwig_old,1)
-                        !AB
-                        GRw_halfkz(1:Norb,1+Norb:2*Norb,:,iwig,2) = GRw(:,:,:,iwig_old,2)
-                        GRw_halfkz(1+Norb:2*Norb,1+2*Norb:3*Norb,:,iwig,2) = GRw(:,:,:,iwig_old,2)
-                     elseif(nz.eq.+2)then
-                        !distance +2
-                        iwig_old = find_vec([nx,ny,+2],Nvecwig,hardstop=.false.)
-                        if(iwig_old.eq.0)cycle
-                        !
-                        !B
-                        GRw_halfkz(1+2*Norb:3*Norb,1:Norb,:,iwig,1) = GRw(:,:,:,iwig_old,1)
-                        !AB
-                        GRw_halfkz(1+2*Norb:3*Norb,1:Norb,:,iwig,2) = GRw(:,:,:,iwig_old,2)
-                     elseif(nz.eq.-2)then
-                        !distance -2
-                        iwig_old = find_vec([nx,ny,+2],Nvecwig,hardstop=.false.)
-                        if(iwig_old.eq.0)cycle
-                        !
-                        !B
-                        GRw_halfkz(1+2*Norb:3*Norb,1:Norb,:,iwig,1) = GRw(:,:,:,iwig_old,1)
-                        !AB
-                        GRw_halfkz(1+2*Norb:3*Norb,1:Norb,:,iwig,2) = GRw(:,:,:,iwig_old,2)
                      endif
                      !
                   enddo
                enddo
             enddo
-            deallocate(GRw)
-            write(*,*)"extraction to hetero-like"
+            deallocate(HR)
+            write(*,*)"H_chain(R) computed"
             !
-            Nkp = 301
-            Nkz = 100
+            !FT to momentum within the plane for each one of the blocks of interest
+            allocate(Hk_chain(2,Ndim,Ndim,Nkp,-(distmax-1):(distmax-1)));Hk_chain=czero
             !
-            allocate(GRw(3*Norb,3*Norb,Nreal,Lttc%Nkpt_path,2));GRw=czero
-            !B
-            call wannier_R2K(Lttc%Nkpt3,Lttc%kptpath(:,1:Nkp),GRw_halfkz(:,:,:,:,1),GRw(:,:,:,1:Nkp,1))
-            !AB
-            call wannier_R2K(Lttc%Nkpt3,Lttc%kptpath(:,1:Nkp),GRw_halfkz(:,:,:,:,2),GRw(:,:,:,1:Nkp,2))
-            deallocate(GRw_halfkz)
-            write(*,*)"path-interpolation"
+            !B state gotten directly
+            do nz=0,+(distmax-1)
+               call wannier_R2K(Lttc%Nkpt3,Lttc%kptpath(:,1:Nkp),HR_chain(:,:,:,nz),Hk_chain(1,:,:,:,nz))
+               !get symmetrical blocks
+               if(nz.gt.0)then
+                  do ik=1,Nkp
+                     Hk_chain(1,:,:,ik,-nz) = dag(Hk_chain(1,:,:,ik,nz))
+                  enddo
+               endif
+            enddo
             !
+            !Modify H(R) in order to get the AB state
+            do nz=0,+(distmax-1)
+               HR_chain(1,2,wig0,nz) = -HR_chain(1,2,wig0,nz)
+               HR_chain(2,1,wig0,nz) = -HR_chain(2,1,wig0,nz)
+            enddo
+            !
+            !AB state gotten from modified H(R)
+            do nz=0,+(distmax-1)
+               call wannier_R2K(Lttc%Nkpt3,Lttc%kptpath(:,1:Nkp),HR_chain(:,:,:,nz),Hk_chain(2,:,:,:,nz))
+               !get symmetrical blocks
+               if(nz.gt.0)then
+                  do ik=1,Nkp
+                     Hk_chain(2,:,:,ik,-nz) = dag(Hk_chain(2,:,:,ik,nz))
+                  enddo
+               endif
+            enddo
+            deallocate(HR_chain)
+            write(*,*)"H_chain(Kp,Rz) computed"
+            !
+            !compute chain Gf
+            allocate(Gkw_chain(2,distmax*Ndim,distmax*Ndim,Nreal,Nkp));Gkw_chain=czero
+            allocate(invGf_B(distmax*Ndim,distmax*Ndim));invGf_B=czero
+            allocate(invGf_A(distmax*Ndim,distmax*Ndim));invGf_A=czero
+            !$OMP PARALLEL DEFAULT(SHARED),&
+            !$OMP PRIVATE(ik,iw,invGf_B,invGf_A,nz,isite,jsite,andx,bndx,idist)
+            !$OMP DO
+            do iw=1,Nreal
+               do ik=1,Nkp
+                  !
+                  invGf_B=czero;invGf_A=czero
+                  do nz=-(distmax-1),+(distmax-1),1
+                     do idist=1,distances(nz)%Ndist
+                        !
+                        isite = distances(nz)%coord(idist,1)
+                        jsite = distances(nz)%coord(idist,2)
+                        !
+                        andx = 1 + (isite-1)*Ndim
+                        bndx = 1 + (jsite-1)*Ndim
+                        !
+                        if(nz.eq.0)then
+                           invGf_B(andx:andx+Ndim-1,bndx:bndx+Ndim-1) = zeye(Ndim)*(dcmplx(wreal(iw)+Lttc%mu,eta)) - Hk_chain(1,:,:,ik,0)
+                           invGf_A(andx:andx+Ndim-1,bndx:bndx+Ndim-1) = zeye(Ndim)*(dcmplx(wreal(iw)+Lttc%mu,eta)) - Hk_chain(2,:,:,ik,0)
+                        else
+                           invGf_B(andx:andx+Ndim-1,bndx:bndx+Ndim-1) = - Hk_chain(1,:,:,ik,nz)
+                           invGf_A(andx:andx+Ndim-1,bndx:bndx+Ndim-1) = - Hk_chain(2,:,:,ik,nz)
+                        endif
+                        !
+                     enddo
+                  enddo
+                  !
+                  call inv(invGf_B)
+                  Gkw_chain(1,:,:,iw,ik) = invGf_B
+                  call inv(invGf_A)
+                  Gkw_chain(2,:,:,iw,ik) = invGf_A
+                  !
+               enddo
+            enddo
+            !$OMP END DO
+            !$OMP END PARALLEL
+            deallocate(invGf_B,invGf_A,Hk_chain,distances)
+            write(*,*)"Gw_chain(Kp,Rz) computed"
+            !
+            !extract single-site G along kz
             allocate(Gkw(2,Nreal,Nkp,0:Nkz));Gkw=czero
+            !$OMP PARALLEL DEFAULT(SHARED),&
+            !$OMP PRIVATE(ik,ikz,isite,jsite,kR,cfac)
+            !$OMP DO
             do ik=1,Nkp
                do ikz=0,Nkz
-                  do isite=1,6
-                     do jsite=1,6
+                  do isite=1,distmax*Ndim
+                     do jsite=1,distmax*Ndim
                         !
                         kR = 2*pi * Lttc%kptpath(3,Nkp+ikz) * (isite-jsite)
                         cfac = dcmplx(cos(kR),+sin(kR))
                         !
-                        !B
-                        Gkw(1,:,ik,ikz) = Gkw(1,:,ik,ikz) + GRw(isite,jsite,:,ik,1)*cfac / 6
-                        !AB
-                        Gkw(2,:,ik,ikz) = Gkw(2,:,ik,ikz) + GRw(isite,jsite,:,ik,2)*cfac / 6
+                        Gkw(1,:,ik,ikz) = Gkw(1,:,ik,ikz) + Gkw_chain(1,isite,jsite,:,ik)*cfac / (distmax*Ndim)
+                        Gkw(2,:,ik,ikz) = Gkw(2,:,ik,ikz) + Gkw_chain(2,isite,jsite,:,ik)*cfac / (distmax*Ndim)
                         !
                      enddo
                   enddo
                enddo
             enddo
-            deallocate(GRw)
-            write(*,*)"Gamma-A filled-1"
+            !$OMP END DO
+            !$OMP END PARALLEL
+            deallocate(Gkw_chain)
+            write(*,*)"G_chain(Kp,kz) computed"
             !
-            allocate(Akw_print(2,Nreal,Nkpt_path_tot));Akw_print=0d0
+            allocate(Akw_print(2,Nreal,Nkp+Nkz));Akw_print=0d0
             do io=1,2
                do ik=1,Nkp
                   Akw_print(io,:,ik) = dimag(Gkw(io,:,ik,0))
@@ -4074,20 +4060,20 @@ contains
                enddo
             enddo
             deallocate(Gkw)
-            write(*,*)"Gamma-A filled-2"
+            write(*,*)"A_chain(Kp,kz) computed"
             !
             !Normalization
-            do ik=1,Nkpt_path_tot
+            do ik=1,Nkp+Nkz
                do io=1,2
                   Akw_print(io,:,ik) = Akw_print(io,:,ik)/(sum(Akw_print(io,:,ik))*abs(wreal(2)-wreal(1)))
                enddo
             enddo
             !
             !print spectral function
-            path = reg(pathOUTPUT)//"Akw_unf_"//reg(label)//".DAT"
+            path = reg(pathOUTPUT)//"Akw_"//reg(label)//"_unfolded.DAT"
             unit = free_unit()
             open(unit,file=reg(path),form="formatted",status="unknown",position="rewind",action="write")
-            do ik=1,Nkpt_path_tot
+            do ik=1,Nkp+Nkz
                do iw=1,Nreal
                    write(unit,"(1I5,200E20.12)") ik,Kpathaxis(ik)/Kpathaxis(Nkpt_path_tot),wreal(iw),(Akw_print(io,iw,ik),io=1,2)
                enddo
@@ -5041,13 +5027,28 @@ contains
                DoSnorm = DoSnorm + ( DoS(igrid-1,iorb)+DoS(igrid,iorb) ) * (dE/2d0)
             endif
          enddo
-         write(*,"(A,F)") "     Normalization DoS_"//str(iorb)//":", DoSnorm
+         write(*,"(A,F)") "     Normalization correction orbital #"//str(iorb)//":", DoSnorm
+         !Correct all the weights so that the DoS for each band is normalized to 1
+         weights(:,iorb,:) = weights(:,iorb,:)/DoSnorm
       enddo
+      DoS=0d0
+      do iorb=1,Norb
+         DoSnorm=0d0
+         do igrid=1,Ngrid
+            DoS(igrid,iorb) = sum(weights(igrid,iorb,:))
+            if(igrid.ge.2)then
+               dE = abs(Egrid(igrid)-Egrid(igrid-1))
+               DoSnorm = DoSnorm + ( DoS(igrid-1,iorb)+DoS(igrid,iorb) ) * (dE/2d0)
+            endif
+         enddo
+         write(*,"(A,F)") "     DoS normalization orbital #"//str(iorb)//":", DoSnorm
+      enddo
+      !
       if(present(pathOUTPUT))then
          unit = free_unit()
          open(unit,file=reg(pathOUTPUT)//"DoS.DAT",form="formatted",status="unknown",position="rewind",action="write")
          do igrid=1,Ngrid
-            write(unit,"(200F20.10)")Egrid(igrid),(DoS(igrid,iorb),iorb=1,Norb)
+            write(unit,"(200F20.10)")Egrid(igrid),(DoS(igrid,iorb),iorb=1,Norb),sum(DoS(igrid,:))
          enddo
          close(unit)
       endif

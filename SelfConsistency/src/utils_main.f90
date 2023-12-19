@@ -185,6 +185,7 @@ contains
       integer,intent(out)                   :: ItStart
       integer,intent(out)                   :: Itend
       character(len=256)                    :: Itpath
+      character(len=256)                    :: Gap_folder
       integer                               :: isite,iT
       real(8)                               :: dT,Temp
       logical                               :: PrvItexist,ZeroItexist
@@ -208,7 +209,8 @@ contains
       !
       if(Hmodel)addTierIII=.false.
       !
-      mu_scan_it0 = (look4dens%mu_scan.eq.1) .and. (look4dens%TargetDensity.gt.0d0) .and. (.not.addTierIII)
+      !If requested the mu search will be done also in the 0th iteration
+      mu_scan_it0 = (look4dens%mu_scan.eq.1) .and. (look4dens%TargetDensity.gt.0d0)! .and. (.not.addTierIII)
       !
       if(addTierIII)then
          !
@@ -337,11 +339,11 @@ contains
             dT=0d0
             if(gap_equation%Tsteps.gt.1) dT = (iT-1)*abs(gap_equation%Tbounds(2)-gap_equation%Tbounds(1))/dble(gap_equation%Tsteps-1)
             Temp = gap_equation%Tbounds(1) + dT
-            if(gap_equation%HkRenorm)then
-               call createDir(reg(Itpath)//"/Gap_Equation_QP/loops_"//str(iT)//"_T"//str(Temp,2)//"/",verb=verbose)
-            else
-               call createDir(reg(Itpath)//"/Gap_Equation/loops_"//str(iT)//"_T"//str(Temp,2)//"/",verb=verbose)
-            endif
+            Gap_folder = "/Gap_Equation"
+            if(gap_equation%HkRenorm)  Gap_folder = "/Gap_Equation_Renorm_Hk"
+            if(gap_equation%G0W0Renorm)Gap_folder = "/Gap_Equation_Renorm_G0W0"
+            if(gap_equation%DMFTRenorm)Gap_folder = "/Gap_Equation_Renorm_DMFT"
+            call createDir(reg(Itpath)//reg(Gap_folder)//"/loops_"//str(iT)//"_T"//str(Temp,2)//"/",verb=verbose)
          enddo
       endif
       !
@@ -472,7 +474,7 @@ contains
       Lttc%Norb = size(Lttc%Hk,dim=1)
       Lttc%Nsite = Nsite
       !
-      call fill_ksumkdiff(Lttc%kpt,Lttc%kptsum,Lttc%kptdif,Nkpt3)
+      if(scan(reg(CalculationType),"W").gt.0) call fill_ksumkdiff(Lttc%kpt,Lttc%kptsum,Lttc%kptdif,Nkpt3)
       !
       if(Hmodel)then
          Lttc%Hk = Lttc%Hk * alphaHk
@@ -1019,8 +1021,8 @@ contains
                call read_FermionicField(Glat,reg(PrevItFolder),"Glat_w",Crystal%kpt)
             else
                Glat%mu = look4dens%mu
-               if(mu_scan_it0) call set_density(Glat%mu,Beta,Crystal,look4dens)
                call calc_Gmats(Glat,Crystal)
+               if(mu_scan_it0) call set_density(Glat,Crystal,look4dens)
             endif
             call calc_density(Glat,Crystal,Glat%N_ks)
             call calc_density(Glat,Glat%N_s)
@@ -1053,7 +1055,10 @@ contains
             !
             !Impurity Self-energy
             call AllocateFermionicField(S_DMFT,Crystal%Norb,Nmats,Nsite=Nsite,Beta=Beta)
-            if(ItStart.ne.0) call read_FermionicField(S_DMFT,reg(PrevItFolder),"Simp_w")
+            if(ItStart.ne.0)then
+               call read_FermionicField(S_DMFT,reg(PrevItFolder),"Simp_w")
+               call read_Matrix(S_DMFT%N_s,reg(PrevItFolder)//"Hartree_term",paramagnet)
+            endif
             !
             !Lattice local Gf
             call AllocateFermionicField(Glat,Crystal%Norb,Nmats,Nkpt=Crystal%Nkpt,Nsite=Nsite,Beta=Beta)
@@ -1061,8 +1066,8 @@ contains
                call read_FermionicField(Glat,reg(PrevItFolder),"Glat_w")
             else
                Glat%mu = look4dens%mu
-               if(mu_scan_it0) call set_density(Glat%mu,Beta,Crystal,look4dens)
                call calc_Gmats(Glat,Crystal)
+               if(mu_scan_it0) call set_density(Glat,Crystal,look4dens)
             endif
             call calc_density(Glat,Glat%N_s)
             !
@@ -1105,7 +1110,10 @@ contains
             !
             !Impurity Self-energy
             call AllocateFermionicField(S_DMFT,Crystal%Norb,Nmats,Nsite=Nsite,Beta=Beta)
-            if(ItStart.ne.0) call read_FermionicField(S_DMFT,reg(PrevItFolder),"Simp_w")
+            if(ItStart.ne.0)then
+               call read_FermionicField(S_DMFT,reg(PrevItFolder),"Simp_w")
+               call read_Matrix(S_DMFT%N_s,reg(PrevItFolder)//"Hartree_term",paramagnet)
+            endif
             !
             !Lattice local Gf
             call AllocateFermionicField(Glat,Crystal%Norb,Nmats,Nkpt=Crystal%Nkpt,Nsite=Nsite,Beta=Beta)
@@ -1113,8 +1121,8 @@ contains
                call read_FermionicField(Glat,reg(PrevItFolder),"Glat_w")
             else
                Glat%mu = look4dens%mu
-               if(mu_scan_it0) call set_density(Glat%mu,Beta,Crystal,look4dens)
                call calc_Gmats(Glat,Crystal)
+               if(mu_scan_it0) call set_density(Glat,Crystal,look4dens)
             endif
             call calc_density(Glat,Glat%N_s)
             !
@@ -1177,8 +1185,8 @@ contains
                call read_FermionicField(Glat,reg(PrevItFolder),"Glat_w")
             else
                Glat%mu = look4dens%mu
-               if(mu_scan_it0) call set_density(Glat%mu,Beta,Crystal,look4dens)
                call calc_Gmats(Glat,Crystal)
+               if(mu_scan_it0) call set_density(Glat,Crystal,look4dens)
             endif
             call calc_density(Glat,Glat%N_s)
             !
@@ -1248,8 +1256,8 @@ contains
                call read_FermionicField(Glat,reg(PrevItFolder),"Glat_w",Crystal%kpt)
             else
                Glat%mu = look4dens%mu
-               if(mu_scan_it0) call set_density(Glat%mu,Beta,Crystal,look4dens)
                call calc_Gmats(Glat,Crystal)
+               if(mu_scan_it0) call set_density(Glat,Crystal,look4dens)
             endif
             call calc_density(Glat,Crystal,Glat%N_ks)
             call calc_density(Glat,Glat%N_s)
@@ -3130,11 +3138,13 @@ contains
          call inquireFile(reg(PrevItFolder)//"Solver_"//reg(LocalOrbs(isite)%Name)//"/Umat_prod.DAT",filexists,verb=verbose,hardstop=.false.)
          if(filexists)then
             !
+            write(*,"(A)")"     "//reg(PrevItFolder)//"Solver_"//reg(LocalOrbs(isite)%Name)//"/Umat_prod.DAT  exists."
             if(reg(CalculationType).ne."DMFT+statU") stop "Umat_prod.DAT is present even if CalculationType == DMFT+statU. Something is wrong."
-            call read_Matrix(Uinst,reg(PrevItFolder)//"Solver_"//reg(LocalOrbs(isite)%Name)//"/Umat_prod.DAT")
+            call read_Matrix(Uinst_prod,reg(PrevItFolder)//"Solver_"//reg(LocalOrbs(isite)%Name)//"/Umat_prod.DAT")
             !
          else
             !
+            write(*,"(A)")"     "//reg(PrevItFolder)//"Solver_"//reg(LocalOrbs(isite)%Name)//"/Umat_prod.DAT  missing, using "//"curlyU_"//reg(LocalOrbs(isite)%Name)//"_w.DAT"
             call AllocateBosonicField(curlyU,LocalOrbs(isite)%Norb,Nmats,Crystal%iq_gamma,Beta=Beta)
             call read_BosonicField(curlyU,reg(PrevItFolder)//"Solver_"//reg(LocalOrbs(isite)%Name)//"/","curlyU_"//reg(LocalOrbs(isite)%Name)//"_w.DAT")
             Uinst_prod = curlyU%screened_local(:,:,FLL_wm)
@@ -3234,7 +3244,7 @@ contains
                      enddo
                   enddo
                   U_FLL = U_FLL/LocalOrbs(isite)%Norb
-                  J_FLL = J_FLL/(LocalOrbs(isite)%Norb**2-LocalOrbs(isite)%Norb)
+                  if(LocalOrbs(isite)%Norb.gt.1)J_FLL = J_FLL/(LocalOrbs(isite)%Norb**2-LocalOrbs(isite)%Norb)
                   !non-local DC is the deviation from the LDA values
                   !>>>TODO<<< READ FROM ULAT
                   !
@@ -3269,7 +3279,7 @@ contains
                         enddo
                      enddo
                      U_FLL = U_FLL/(SiteOrbs(is)%Norb**2)
-                     J_FLL = U_FLL - J_FLL/(SiteOrbs(is)%Norb**2-SiteOrbs(is)%Norb)
+                     if(SiteOrbs(is)%Norb.gt.1)J_FLL = U_FLL - J_FLL/(SiteOrbs(is)%Norb**2-SiteOrbs(is)%Norb)
                      write(*,"(A)")"     Site("//str(is)//"): FLL(U)= "//str(U_FLL,3)//" FLL(J)= "//str(J_FLL,3)
                      !
                      do ispin=1,Nspin

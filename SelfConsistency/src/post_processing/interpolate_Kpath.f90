@@ -3,7 +3,7 @@ subroutine interpolate2kpath_Fermionic(Sfull,Lttc,pathOUTPUT)
    use parameters
    use utils_misc
    use utils_fields
-   use linalg, only : eigh, inv, zeye, det, rotate
+   use linalg, only : eigh, inv, zeye, det, rotate, dag
    use crystal
    use file_io
    use greens_function, only : calc_Gmats
@@ -20,9 +20,8 @@ subroutine interpolate2kpath_Fermionic(Sfull,Lttc,pathOUTPUT)
    !
    type(FermionicField)                  :: Spath
    type(FermionicField)                  :: Sfermi
-   type(FermionicField)                  :: Sloc
-   type(FermionicField)                  :: Gpath
    type(FermionicField)                  :: Gfull
+   type(FermionicField)                  :: Gpath
    type(FermionicField)                  :: Gfermi
    !
    real(8),allocatable                   :: Zk(:,:)
@@ -42,12 +41,21 @@ subroutine interpolate2kpath_Fermionic(Sfull,Lttc,pathOUTPUT)
    logical                               :: dump_BAB=.false.
    integer                               :: Nkp,Nkz,Nkz_,ikz,iwig
    integer                               :: nx,ny,nz,isite,jsite,iwig_old
+   integer                               :: idist,distmax,andx,bndx
    real(8)                               :: kz,kzfact,Bz_thresh,KR
    complex(8)                            :: cfac
    real(8),allocatable                   :: kptpath_auxkz(:,:)
-   complex(8),allocatable                :: Gkw(:,:,:,:)
-   complex(8),allocatable                :: Gfull_R(:,:,:,:,:),Gfull_R_halfkz(:,:,:,:,:)
-   type(FermionicField)                  :: Gpath_auxkz,Gfull_aux
+   complex(8),allocatable                :: Hr(:,:,:)
+   complex(8),allocatable                :: HR_chain(:,:,:,:),Hk_chain(:,:,:,:,:)
+   complex(8),allocatable                :: Gkw(:,:,:,:),Gkw_chain(:,:,:,:,:)
+   complex(8),allocatable                :: invGf_B(:,:),invGf_A(:,:)
+   type(FermionicField)                  :: Gpath_auxkz
+   type distances_typ
+         integer                         :: Ndist=0
+         integer                         :: coord(100000,2)=0
+   end type distances_typ
+   type(distances_typ),allocatable       :: distances(:)
+   real(8),allocatable                   :: wmats(:)
    !>>>TEST
    !
    !
@@ -123,7 +131,7 @@ subroutine interpolate2kpath_Fermionic(Sfull,Lttc,pathOUTPUT)
    !
    !recalculate the internal K-meshes
    if(print_path_G)then
-      call interpolate2Path(Lttc,Nkpt_path,"Hk",store=.true.)
+      call interpolate2Path(Lttc,Nkpt_path,"Hk",store=.true.,pathOUTPUT=reg(pathOUTPUT))
       call dump_Hk(Lttc%Hk_path,Lttc%kptpath,reg(pathOUTPUT),"Hk_path.DAT")
    endif
    !
@@ -333,82 +341,82 @@ subroutine interpolate2kpath_Fermionic(Sfull,Lttc,pathOUTPUT)
          !------------------ Green's function along the path ------------------!
          if(print_path_G)then
             !
-            call AllocateFermionicField(Sloc,Norb,Nmats,Nkpt=Lttc%Nkpt_path,Nsite=Sfull%Nsite,Beta=Sfull%Beta,mu=Sfull%mu)
+            call AllocateFermionicField(Spath,Norb,Nmats,Nkpt=Lttc%Nkpt_path,Nsite=Sfull%Nsite,Beta=Sfull%Beta,mu=Sfull%mu)
             do ik=1,Lttc%Nkpt_path
-               Sloc%wks(:,:,:,ik,:) = Sfull%ws
+               Spath%wks(:,:,:,ik,:) = Sfull%ws
             enddo
             !
             call AllocateFermionicField(Gpath,Norb,Nmats,Nkpt=Lttc%Nkpt_path,Nsite=Sfull%Nsite,Beta=Sfull%Beta,mu=Sfull%mu)
-            !call calc_Gmats(Gpath,Lttc,Smats=Sloc,along_path=.true.)
+            !call calc_Gmats(Gpath,Lttc,Smats=Spath,along_path=.true.)
             !
             !TEST>>>
-            if((.not.integrate_kz).and.(.not.dump_BAB).and.(.not.dump_unfolded)) call calc_Gmats(Gpath,Lttc,Smats=Sloc,along_path=.true.)
+            if((.not.integrate_kz).and.(.not.dump_BAB).and.(.not.dump_unfolded)) call calc_Gmats(Gpath,Lttc,Smats=Spath,along_path=.true.)
             !>>>TEST
             !
             !TEST>>> This portion is to integrate over a given thickness in kz
-            !!if(integrate_kz)then
-            !!   !
-            !!   call get_Blat(Blat)
-            !!   allocate(kptpath_auxkz(3,Lttc%Nkpt_path));kptpath_auxkz=0d0
-            !!   !
-            !!   Bz_thresh = 5.1
-            !!   Nkz = 100
-            !!   Nkz_ = Nkz
-            !!   !
-            !!   do ikz=1,Nkz
-            !!      !
-            !!      kptpath_auxkz = Lttc%kptpath(:,1:Lttc%Nkpt_path)
-            !!      !
-            !!      kz = (ikz-1)*1d0/Nkz - 0.5d0
-            !!      kptpath_auxkz(3,:) = kptpath_auxkz(3,:) + kz
-            !!      !
-            !!      unit = free_unit()
-            !!      open(unit,file="Ktest_"//str(ikz)//".DAT",form="formatted",status="unknown",position="rewind",action="write")
-            !!      do ik=1,Lttc%Nkpt_path
-            !!         !
-            !!         k1 = kptpath_auxkz(1,ik)
-            !!         k2 = kptpath_auxkz(2,ik)
-            !!         k3 = kptpath_auxkz(3,ik)
-            !!         !
-            !!         Bx = k1*Blat(1,1) + k2*Blat(1,2) + k3*Blat(1,3)
-            !!         By = k1*Blat(2,1) + k2*Blat(2,2) + k3*Blat(2,3)
-            !!         Bz = k1*Blat(3,1) + k2*Blat(3,2) + k3*Blat(3,3)
-            !!         !
-            !!         write(unit,"(1I5,200E20.12)") ik,0d0,kptpath_auxkz(:,ik),Bx,By,Bz
-            !!         !
-            !!      enddo
-            !!      close(unit)
-            !!      !
-            !!      kzfact = 1d0
-            !!      if(abs(Bz).gt.Bz_thresh)then
-            !!         kzfact = 0d0
-            !!         Nkz_ = Nkz_ - 1
-            !!      endif
-            !!      write(*,*)ikz,"Bz",Bz,abs(Bz),kzfact,Nkz_
-            !!      !
-            !!      call cpu_time(start)
-            !!      Lttc%Hk_path = czero
-            !!      call wannierinterpolation(Lttc%Nkpt3,Lttc%kpt,kptpath_auxkz(:,1:Lttc%Nkpt_path),Lttc%Hk,Lttc%Hk_path)
-            !!      call cpu_time(finish)
-            !!      !write(*,"(A,F)") "     (fullBZ) --> (Kpath,kz="//str(ikz)//") cpu timing:", finish-start
-            !!      !
-            !!      call AllocateFermionicField(Gpath_auxkz,Norb,Nmats,Nkpt=Lttc%Nkpt_path,Nsite=Sfull%Nsite,Beta=Sfull%Beta,mu=Sfull%mu)
-            !!      call calc_Gmats(Gpath_auxkz,Lttc,Smats=Sloc,along_path=.true.)
-            !!      !
-            !!      Gpath%wks = Gpath%wks + kzfact*Gpath_auxkz%wks
-            !!      !
-            !!      call DeallocateFermionicField(Gpath_auxkz)
-            !!      !
-            !!   enddo
-            !!   Gpath%wks = Gpath%wks/Nkz_
-            !!   !
-            !!endif
+            if(integrate_kz)then
+               !
+               call get_Blat(Blat)
+               allocate(kptpath_auxkz(3,Lttc%Nkpt_path));kptpath_auxkz=0d0
+               !
+               Bz_thresh = 5.1
+               Nkz = 100
+               Nkz_ = Nkz
+               !
+               do ikz=1,Nkz
+                  !
+                  kptpath_auxkz = Lttc%kptpath(:,1:Lttc%Nkpt_path)
+                  !
+                  kz = (ikz-1)*1d0/Nkz - 0.5d0
+                  kptpath_auxkz(3,:) = kptpath_auxkz(3,:) + kz
+                  !
+                  unit = free_unit()
+                  open(unit,file="Ktest_"//str(ikz)//".DAT",form="formatted",status="unknown",position="rewind",action="write")
+                  do ik=1,Lttc%Nkpt_path
+                     !
+                     k1 = kptpath_auxkz(1,ik)
+                     k2 = kptpath_auxkz(2,ik)
+                     k3 = kptpath_auxkz(3,ik)
+                     !
+                     Bx = k1*Blat(1,1) + k2*Blat(1,2) + k3*Blat(1,3)
+                     By = k1*Blat(2,1) + k2*Blat(2,2) + k3*Blat(2,3)
+                     Bz = k1*Blat(3,1) + k2*Blat(3,2) + k3*Blat(3,3)
+                     !
+                     write(unit,"(1I5,200E20.12)") ik,0d0,kptpath_auxkz(:,ik),Bx,By,Bz
+                     !
+                  enddo
+                  close(unit)
+                  !
+                  kzfact = 1d0
+                  if(abs(Bz).gt.Bz_thresh)then
+                     kzfact = 0d0
+                     Nkz_ = Nkz_ - 1
+                  endif
+                  write(*,*)ikz,"Bz",Bz,abs(Bz),kzfact,Nkz_
+                  !
+                  call cpu_time(start)
+                  Lttc%Hk_path = czero
+                  call wannierinterpolation(Lttc%Nkpt3,Lttc%kpt,kptpath_auxkz(:,1:Lttc%Nkpt_path),Lttc%Hk,Lttc%Hk_path)
+                  call cpu_time(finish)
+                  !write(*,"(A,F)") "     (fullBZ) --> (Kpath,kz="//str(ikz)//") cpu timing:", finish-start
+                  !
+                  call AllocateFermionicField(Gpath_auxkz,Norb,Nmats,Nkpt=Lttc%Nkpt_path,Nsite=Sfull%Nsite,Beta=Sfull%Beta,mu=Sfull%mu)
+                  call calc_Gmats(Gpath_auxkz,Lttc,Smats=Spath,along_path=.true.)
+                  !
+                  Gpath%wks = Gpath%wks + kzfact*Gpath_auxkz%wks
+                  !
+                  call DeallocateFermionicField(Gpath_auxkz)
+                  !
+               enddo
+               Gpath%wks = Gpath%wks/Nkz_
+               !
+            endif
             !>>>TEST
             !
             !TEST>>> This portion is to pass from orbital basis to B/AB basis directly on Gpath
             if(dump_BAB)then
                !
-               call calc_Gmats(Gpath,Lttc,Smats=Sloc,along_path=.true.)
+               call calc_Gmats(Gpath,Lttc,Smats=Spath,along_path=.true.)
                !
                call duplicate(Gpath_auxkz,Gpath)
                call DeallocateField(Gpath)
@@ -426,117 +434,168 @@ subroutine interpolate2kpath_Fermionic(Sfull,Lttc,pathOUTPUT)
             !TEST>>> This portion is to pass from orbital basis to B/AB basis directly on Gpath with unfolded BZ
             if(dump_unfolded)then
                !
-               call AllocateFermionicField(Gfull,Norb,Nmats,Nkpt=Lttc%Nkpt,Nsite=Sfull%Nsite,Beta=Sfull%Beta,mu=Sfull%mu)
-               call calc_Gmats(Gfull,Lttc,Smats=Sfull,along_path=.false.)
-               write(*,*)"Gfull(K) computed"
+               !this is hard coded because I need a clear separation between in and out of plane k-points
+               Nkp = 151
+               Nkz = 50
                !
-               allocate(Gfull_R(Norb,Norb,Nmats,Nwig,2));Gfull_R=czero
-               call wannier_K2R(Lttc%Nkpt3,Lttc%kpt,Gfull%wks(:,:,:,:,1),Gfull_R(:,:,:,:,1))
-               Gfull%wks(1,2,:,:,:) = -Gfull%wks(1,2,:,:,:)
-               Gfull%wks(2,1,:,:,:) = -Gfull%wks(2,1,:,:,:)
-               call wannier_K2R(Lttc%Nkpt3,Lttc%kpt,Gfull%wks(:,:,:,:,1),Gfull_R(:,:,:,:,2))
-               call DeallocateField(Gfull)
-               write(*,*)"Gfull_AB(R) computed"
+               !FT to real space
+               allocate(HR(Norb,Norb,Nwig));HR=czero
+               call wannier_K2R(Lttc%Nkpt3,Lttc%kpt,Lttc%Hk,HR)
+               write(*,*)"H(R) computed"
                !
-               allocate(Gfull_R_halfkz(3*Norb,3*Norb,Nmats,Nwig,2));Gfull_R_halfkz=czero
+               !get the indexes of the wanted distances
+               distmax = Nkz
+               allocate(distances(-(distmax-1):+(distmax-1)))
+               do nz=-(distmax-1),+(distmax-1),1
+                  do isite=1,distmax
+                     do jsite=1,distmax
+                        if(nz.eq.(isite-jsite))then
+                           distances(nz)%Ndist = distances(nz)%Ndist + 1
+                           distances(nz)%coord(distances(nz)%Ndist,1) = isite
+                           distances(nz)%coord(distances(nz)%Ndist,2) = jsite
+                        endif
+                     enddo
+                  enddo
+               enddo
                !
+               allocate(HR_chain(Norb,Norb,Nwig,0:(distmax-1)));HR_chain=czero
                do nx=minval(Nvecwig(1,:)),maxval(Nvecwig(1,:)),1
                   do ny=minval(Nvecwig(2,:)),maxval(Nvecwig(2,:)),1
                      !
-                     !new iwig
+                     !new iwig is always in the plane
                      iwig = find_vec([nx,ny,0],Nvecwig,hardstop=.false.)
                      if(iwig.eq.0)cycle
                      !
-                     do nz=minval(Nvecwig(3,:)),maxval(Nvecwig(3,:)),1
+                     !extract only the blocks of interest
+                     do nz=0,+(distmax-1)
                         !
                         if(nz.eq.0)then
-                           !diagonals
-                           do ik=1,3
-                              !B
-                              Gfull_R_halfkz(1+(ik-1)*Norb:ik*Norb,1+(ik-1)*Norb:ik*Norb,:,iwig,1) = Gfull_R(:,:,:,iwig,1)
-                              !AB
-                              Gfull_R_halfkz(1+(ik-1)*Norb:ik*Norb,1+(ik-1)*Norb:ik*Norb,:,iwig,2) = Gfull_R(:,:,:,iwig,2)
-                           enddo
-                        elseif(nz.eq.+1)then
-                           !distance +1
-                           iwig_old = find_vec([nx,ny,+1],Nvecwig,hardstop=.false.)
+                           !
+                           HR_chain(:,:,iwig,0) = HR(:,:,iwig)
+                           !
+                        else
+                           !
+                           iwig_old = find_vec([nx,ny,nz],Nvecwig,hardstop=.false.)
                            if(iwig_old.eq.0)cycle
                            !
-                           !B
-                           Gfull_R_halfkz(1+Norb:2*Norb,1:Norb,:,iwig,1) = Gfull_R(:,:,:,iwig_old,1)
-                           Gfull_R_halfkz(1+2*Norb:3*Norb,1+Norb:2*Norb,:,iwig,1) = Gfull_R(:,:,:,iwig_old,1)
-                           !AB
-                           Gfull_R_halfkz(1+Norb:2*Norb,1:Norb,:,iwig,2) = Gfull_R(:,:,:,iwig_old,2)
-                           Gfull_R_halfkz(1+2*Norb:3*Norb,1+Norb:2*Norb,:,iwig,2) = Gfull_R(:,:,:,iwig_old,2)
-                        elseif(nz.eq.-1)then
-                           !distance -1
-                           iwig_old = find_vec([nx,ny,-1],Nvecwig,hardstop=.false.)
-                           if(iwig_old.eq.0)cycle
+                           HR_chain(:,:,iwig,nz) = HR(:,:,iwig_old)
                            !
-                           !B
-                           Gfull_R_halfkz(1:Norb,1+Norb:2*Norb,:,iwig,1) = Gfull_R(:,:,:,iwig_old,1)
-                           Gfull_R_halfkz(1+Norb:2*Norb,1+2*Norb:3*Norb,:,iwig,1) = Gfull_R(:,:,:,iwig_old,1)
-                           !AB
-                           Gfull_R_halfkz(1:Norb,1+Norb:2*Norb,:,iwig,2) = Gfull_R(:,:,:,iwig_old,2)
-                           Gfull_R_halfkz(1+Norb:2*Norb,1+2*Norb:3*Norb,:,iwig,2) = Gfull_R(:,:,:,iwig_old,2)
-                        elseif(nz.eq.+2)then
-                           !distance +2
-                           iwig_old = find_vec([nx,ny,+2],Nvecwig,hardstop=.false.)
-                           if(iwig_old.eq.0)cycle
-                           !
-                           !B
-                           Gfull_R_halfkz(1+2*Norb:3*Norb,1:Norb,:,iwig,1) = Gfull_R(:,:,:,iwig_old,1)
-                           !AB
-                           Gfull_R_halfkz(1+2*Norb:3*Norb,1:Norb,:,iwig,2) = Gfull_R(:,:,:,iwig_old,2)
-                        elseif(nz.eq.-2)then
-                           !distance -2
-                           iwig_old = find_vec([nx,ny,+2],Nvecwig,hardstop=.false.)
-                           if(iwig_old.eq.0)cycle
-                           !
-                           !B
-                           Gfull_R_halfkz(1:Norb,1+2*Norb:3*Norb,:,iwig,1) = Gfull_R(:,:,:,iwig_old,1)
-                           !AB
-                           Gfull_R_halfkz(1:Norb,1+2*Norb:3*Norb,:,iwig,2) = Gfull_R(:,:,:,iwig_old,2)
                         endif
                         !
                      enddo
                   enddo
                enddo
-               deallocate(Gfull_R)
-               write(*,*)"extraction to hetero-like"
+               deallocate(HR)
+               write(*,*)"H_chain(R) computed"
                !
-               Nkp = 151
-               Nkz = 50
+               !FT to momentum within the plane for each one of the blocks of interest
+               allocate(Hk_chain(2,Norb,Norb,Nkp,-(distmax-1):(distmax-1)));Hk_chain=czero
                !
-               allocate(Gfull_R(3*Norb,3*Norb,Nmats,Lttc%Nkpt_path,2));Gfull_R=czero
-               call wannier_R2K(Lttc%Nkpt3,Lttc%kptpath(:,1:Nkp),Gfull_R_halfkz(:,:,:,:,1),Gfull_R(:,:,:,1:Nkp,1))
-               call wannier_R2K(Lttc%Nkpt3,Lttc%kptpath(:,1:Nkp),Gfull_R_halfkz(:,:,:,:,2),Gfull_R(:,:,:,1:Nkp,2))
-               deallocate(Gfull_R_halfkz)
-               write(*,*)"path-interpolation"
+               !B state gotten directly
+               do nz=0,+(distmax-1)
+                  call wannier_R2K(Lttc%Nkpt3,Lttc%kptpath(:,1:Nkp),HR_chain(:,:,:,nz),Hk_chain(1,:,:,:,nz))
+                  !get symmetrical blocks
+                  if(nz.gt.0)then
+                     do ik=1,Nkp
+                        Hk_chain(1,:,:,ik,-nz) = dag(Hk_chain(1,:,:,ik,nz))
+                     enddo
+                  endif
+               enddo
                !
-               allocate(Gkw(2,Nmats,Nkp,0:Nkz));Gkw=czero
-               do ik=1,Nkp
-                  do ikz=0,Nkz
-                     do isite=1,6
-                        do jsite=1,6
-                           !
-                           kR = 2*pi * Lttc%kptpath(3,Nkp+ikz) * (isite-jsite)
-                           cfac = dcmplx(cos(kR),+sin(kR))
-                           !
-                           !B
-                           Gkw(1,:,ik,ikz) = Gkw(1,:,ik,ikz) + Gfull_R(isite,jsite,:,ik,1)*cfac / 6
-                           !AB
-                           Gkw(2,:,ik,ikz) = Gkw(2,:,ik,ikz) + Gfull_R(isite,jsite,:,ik,2)*cfac / 6
-                           !
+               !Modify H(R) in order to get the AB state
+               do nz=0,+(distmax-1)
+                  HR_chain(1,2,wig0,nz) = -HR_chain(1,2,wig0,nz)
+                  HR_chain(2,1,wig0,nz) = -HR_chain(2,1,wig0,nz)
+               enddo
+               !
+               !AB state gotten from modified H(R)
+               do nz=0,+(distmax-1)
+                  call wannier_R2K(Lttc%Nkpt3,Lttc%kptpath(:,1:Nkp),HR_chain(:,:,:,nz),Hk_chain(2,:,:,:,nz))
+                  !get symmetrical blocks
+                  if(nz.gt.0)then
+                     do ik=1,Nkp
+                        Hk_chain(2,:,:,ik,-nz) = dag(Hk_chain(2,:,:,ik,nz))
+                     enddo
+                  endif
+               enddo
+               deallocate(HR_chain)
+               write(*,*)"H_chain(Kp,Rz) computed"
+               !
+               allocate(wmats(Nmats));wmats=0d0
+               wmats = FermionicFreqMesh(Sfull%Beta,Nmats)
+               !
+               do ispin=1,Nspin
+                  !
+                  !compute chain Gf for each spin
+                  allocate(Gkw_chain(2,distmax*Norb,distmax*Norb,Nmats,Nkp));Gkw_chain=czero
+                  allocate(invGf_B(distmax*Norb,distmax*Norb));invGf_B=czero
+                  allocate(invGf_A(distmax*Norb,distmax*Norb));invGf_A=czero
+                  !$OMP PARALLEL DEFAULT(SHARED),&
+                  !$OMP PRIVATE(ik,iw,invGf_B,invGf_A,nz,isite,jsite,andx,bndx,idist)
+                  !$OMP DO
+                  do iw=1,Nmats
+                     do ik=1,Nkp
+                        !
+                        invGf_B=czero;invGf_A=czero
+                        do nz=-(distmax-1),+(distmax-1),1
+                           do idist=1,distances(nz)%Ndist
+                              !
+                              isite = distances(nz)%coord(idist,1)
+                              jsite = distances(nz)%coord(idist,2)
+                              !
+                              andx = 1 + (isite-1)*Norb
+                              bndx = 1 + (jsite-1)*Norb
+                              !
+                              if(nz.eq.0)then
+                                 invGf_B(andx:andx+Norb-1,bndx:bndx+Norb-1) = zeye(Norb)*(dcmplx(Sfull%mu,wmats(iw))) - Hk_chain(1,:,:,ik,0) - Spath%wks(:,:,iw,ik,ispin)
+                                 invGf_A(andx:andx+Norb-1,bndx:bndx+Norb-1) = zeye(Norb)*(dcmplx(Sfull%mu,wmats(iw))) - Hk_chain(2,:,:,ik,0) - Spath%wks(:,:,iw,ik,ispin)
+                              else
+                                 invGf_B(andx:andx+Norb-1,bndx:bndx+Norb-1) = - Hk_chain(1,:,:,ik,nz)
+                                 invGf_A(andx:andx+Norb-1,bndx:bndx+Norb-1) = - Hk_chain(2,:,:,ik,nz)
+                              endif
+                              !
+                           enddo
+                        enddo
+                        !
+                        call inv(invGf_B)
+                        Gkw_chain(1,:,:,iw,ik) = invGf_B
+                        call inv(invGf_A)
+                        Gkw_chain(2,:,:,iw,ik) = invGf_A
+                        !
+                     enddo
+                  enddo
+                  !$OMP END DO
+                  !$OMP END PARALLEL
+                  deallocate(invGf_B,invGf_A)
+                  write(*,*)"Gw_chain(Kp,Rz) computed, spin:",ispin
+                  !
+                  !extract single-site G along kz
+                  allocate(Gkw(2,Nmats,Nkp,0:Nkz));Gkw=czero
+                  !$OMP PARALLEL DEFAULT(SHARED),&
+                  !$OMP PRIVATE(ik,ikz,isite,jsite,kR,cfac)
+                  !$OMP DO
+                  do ik=1,Nkp
+                     do ikz=0,Nkz
+                        do isite=1,distmax*Norb
+                           do jsite=1,distmax*Norb
+                              !
+                              kR = 2*pi * Lttc%kptpath(3,Nkp+ikz) * (isite-jsite)
+                              cfac = dcmplx(cos(kR),+sin(kR))
+                              !
+                              Gkw(1,:,ik,ikz) = Gkw(1,:,ik,ikz) + Gkw_chain(1,isite,jsite,:,ik)*cfac / (distmax*Norb)
+                              Gkw(2,:,ik,ikz) = Gkw(2,:,ik,ikz) + Gkw_chain(2,isite,jsite,:,ik)*cfac / (distmax*Norb)
+                              !
+                           enddo
                         enddo
                      enddo
                   enddo
-               enddo
-               deallocate(Gfull_R)
-               write(*,*)"Gamma-A filled-1"
-               !
-               do ispin=1,Nspin
-                  do iorb=1,2
+                  !$OMP END DO
+                  !$OMP END PARALLEL
+                  deallocate(Gkw_chain)
+                  write(*,*)"G_chain(Kp,kz) computed"
+                  !
+                  !link to fermionic fields
+                  do iorb=1,Norb
                      do ik=1,Nkp
                         Gpath%wks(iorb,iorb,:,ik,ispin) = Gkw(iorb,:,ik,0)
                      enddo
@@ -544,15 +603,21 @@ subroutine interpolate2kpath_Fermionic(Sfull,Lttc,pathOUTPUT)
                         Gpath%wks(iorb,iorb,:,Nkp+ikz,ispin) = Gkw(iorb,:,Nkp,ikz)
                      enddo
                   enddo
-               enddo
-               deallocate(Gkw)
-               write(*,*)"Gamma-A filled-2"
+                  deallocate(Gkw)
+                  !
+                  if(paramagnet)then
+                     Gpath%wks(:,:,:,:,Nspin) = Gpath%wks(:,:,:,:,1)
+                     exit
+                  endif
+                  !
+               enddo !ispin
+               deallocate(wmats,Hk_chain,distances)
                !
-            endif
+            endif !dump_unfolded
             !
             !>>>TEST
             !
-            call DeallocateFermionicField(Sloc)
+            call DeallocateFermionicField(Spath)
             !
          endif
          !
@@ -561,15 +626,15 @@ subroutine interpolate2kpath_Fermionic(Sfull,Lttc,pathOUTPUT)
          !-------------- Green's function along the {kx,ky} plane -------------!
          if(print_plane_G)then
             !
-            call AllocateFermionicField(Sloc,Norb,Nmats,Nkpt=Lttc%Nkpt_Plane,Nsite=Sfull%Nsite,Beta=Sfull%Beta,mu=Sfull%mu)
+            call AllocateFermionicField(Sfermi,Norb,Nmats,Nkpt=Lttc%Nkpt_Plane,Nsite=Sfull%Nsite,Beta=Sfull%Beta,mu=Sfull%mu)
             do ik=1,Lttc%Nkpt_Plane
-               Sloc%wks(:,:,:,ik,:) = Sfull%ws
+               Sfermi%wks(:,:,:,ik,:) = Sfull%ws
             enddo
             !
             call AllocateFermionicField(Gfermi,Norb,Nmats,Nkpt=Lttc%Nkpt_Plane,Nsite=Sfull%Nsite,Beta=Sfull%Beta,mu=Sfull%mu)
-            call calc_Gmats(Gfermi,Lttc,Smats=Sloc,along_plane=.true.)
+            call calc_Gmats(Gfermi,Lttc,Smats=Sfermi,along_plane=.true.)
             !
-            call DeallocateFermionicField(Sloc)
+            call DeallocateFermionicField(Sfermi)
             !
          endif
          !
@@ -1100,7 +1165,7 @@ subroutine interpolate2kpath_Bosonic(Wfull,Lttc,pathOUTPUT,name,mode,remove_Gamm
    !
    !recalculate the internal K-meshes if not already stored
    if(print_path.and.(.not.Lttc%pathStored))then
-      call interpolate2Path(Lttc,Nkpt_path,"Hk",store=.true.)
+      call interpolate2Path(Lttc,Nkpt_path,"Hk",store=.true.,pathOUTPUT=reg(pathOUTPUT))
       call dump_Hk(Lttc%Hk_path,Lttc%kptpath,reg(pathOUTPUT),"Hk_path.DAT")
    endif
    if(print_plane.and.(.not.Lttc%planeStored))then

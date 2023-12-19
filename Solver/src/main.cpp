@@ -38,7 +38,7 @@ int main(int argc, char *argv[])
    int Nspin,NtauF,NtauB,Norder;
    int Nmeas,Ntherm,Nshift,Nswap,Nnnt,printTime;
    // Logical flags and compatibility typo fix
-   bool Gexp,paramagnet,retarded,removeUhalf,quickloops,Impr_F,Impr_B;
+   bool Gexp,paramagnet,retarded,removeUhalf,quickloops,Impr_F,Impr_B,restrictlookup;
    int Gexp_read,para_read,ret_read,rmvU2_read,quick_read,Impr_F_read,Impr_B_read;
    // Post-processing of the Green's function
    int binlength,binstart;
@@ -46,7 +46,7 @@ int main(int argc, char *argv[])
    bool OrbSym, full_ntOrbSym;
    int sym_read, ntOrbSym;
    // Density lookup algorithm (dichotomy)
-   int muIter;
+   int muIter, density_site;
    double density,muStep,muTime,muErr;
    // Site Dependent Vars
    int Nimp;
@@ -104,6 +104,7 @@ int main(int argc, char *argv[])
       find_param(argv[1], "BINSTART"        , binstart    );
       // Density lookup algorithm (dichotomy)
       find_param(argv[1], "N_READ_IMP"      , density     );
+      find_param(argv[1], "N_READ_LAT_LOC"  , density_site); restrictlookup = (density_site > 0) ? true : false;
       find_param(argv[1], "MU_STEP"         , muStep      );
       find_param(argv[1], "MU_ITER"         , muIter      );
       find_param(argv[1], "MU_TIME"         , muTime      );
@@ -152,6 +153,7 @@ int main(int argc, char *argv[])
             mpi.report(" muIter= "+str(muIter));
             mpi.report(" muErr= "+str(muErr));
             mpi.report(" muTime= "+str(muTime)+"min");
+            mpi.report(" restrictlookup= "+str(restrictlookup));
          }
       }
 
@@ -294,8 +296,18 @@ int main(int argc, char *argv[])
                }
             }
          }
-         trial_density = std::accumulate(Ntmp.begin(), Ntmp.end(), 0.0);
-         mpi.report(" Total density: "+str(trial_density));
+         if(restrictlookup)
+         {
+            trial_density = Ntmp[density_site-1];
+            mpi.report(" Total density: "+str(trial_density)+" on site #"+str(density_site));
+         }
+         else
+         {
+            trial_density = std::accumulate(Ntmp.begin(), Ntmp.end(), 0.0);
+            mpi.report(" Total density: "+str(trial_density));
+         }
+         //trial_density = std::accumulate(Ntmp.begin(), Ntmp.end(), 0.0);
+         //mpi.report(" Total density: "+str(trial_density));
          print_line_space(1,mpi.is_master());
 
          //
@@ -333,8 +345,18 @@ int main(int argc, char *argv[])
                      }
                   }
                }
-               trial_density = std::accumulate(Ntmp.begin(), Ntmp.end(), 0.0);
-               mpi.report(" Total density: "+str(trial_density));
+               if(restrictlookup)
+               {
+                  trial_density = Ntmp[density_site-1];
+                  mpi.report(" Total density: "+str(trial_density)+" on site #"+str(density_site));
+               }
+               else
+               {
+                  trial_density = std::accumulate(Ntmp.begin(), Ntmp.end(), 0.0);
+                  mpi.report(" Total density: "+str(trial_density));
+               }
+               //trial_density = std::accumulate(Ntmp.begin(), Ntmp.end(), 0.0);
+               //mpi.report(" Total density: "+str(trial_density));
                print_line_space(1,mpi.is_master());
                //
                if((muSign>0.0)&&(trial_density > density)) break;
@@ -385,8 +407,18 @@ int main(int argc, char *argv[])
                         }
                      }
                   }
-                  trial_density = std::accumulate(Ntmp.begin(), Ntmp.end(), 0.0);
-                  mpi.report(" Total density: "+str(trial_density)+" relative error: "+str(fabs(trial_density-density)/density));
+                  if(restrictlookup)
+                  {
+                     trial_density = Ntmp[density_site-1];
+                     mpi.report(" Total density: "+str(trial_density)+" on site #"+str(density_site));
+                  }
+                  else
+                  {
+                     trial_density = std::accumulate(Ntmp.begin(), Ntmp.end(), 0.0);
+                     mpi.report(" Total density: "+str(trial_density));
+                  }
+                  //trial_density = std::accumulate(Ntmp.begin(), Ntmp.end(), 0.0);
+                  //mpi.report(" Total density: "+str(trial_density)+" relative error: "+str(fabs(trial_density-density)/density));
                   print_line_space(1,mpi.is_master());
                   //
                   if(trial_density > density) mu_above=mu_new;

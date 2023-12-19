@@ -49,8 +49,11 @@ program SelfConsistency
 #elif defined _gap
    !
    !TEST>>>
+   Crystal%mu=1.50468
    call AllocateBosonicField(Ulat,Crystal%Norb,Nmats,Crystal%iq_gamma,Nkpt=Crystal%Nkpt,Nsite=Nsite,Beta=Beta)
    call calc_Tc(reg(ItFolder),gap_equation,Crystal,Ulat)
+   call execute_command_line(" cp used."//reg(InputFile)//" "//reg(ItFolder))
+   call execute_command_line(" touch doSolver ")
    stop
    !>>>TEST
    !

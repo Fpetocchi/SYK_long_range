@@ -19,7 +19,7 @@ module module_container
    init_Uelements                           ,&
    FermionicFreqMesh,BosonicFreqMesh        ,&
    fermidirac,diff_fermidirac               ,&
-   linspace,denspace                        ,&
+   linspace,denspace,tanspace               ,&
    FermionicFilon,BosonicFilon              ,&
    reg,str,free_unit                        ,&
    tick,tock                                ,&
@@ -33,9 +33,10 @@ module module_container
    assert_shape                             ,&
    splint,nspline                           ,&
    cubic_interp                             ,&
+   bilinear_interp                          ,&
    linear_interp_2y,linear_interp_2x        ,&
    trapezoid_integration                    ,&
-   get_pattern,sort_array,flip_array
+   get_pattern,sort_array,flip_array,rc2ut
 
 
    !(c) Lattice related quantities. Depends on (a),(b) not on specific types.

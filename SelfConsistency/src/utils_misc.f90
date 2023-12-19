@@ -110,6 +110,16 @@ module utils_misc
       module procedure F2Bindex_2
    end interface F2Bindex
 
+   interface cubic_interp
+      module procedure cubic_interp_single
+      module procedure cubic_interp_multiple
+   end interface cubic_interp
+
+   interface bilinear_interp
+      module procedure bilinear_interp_d
+      module procedure bilinear_interp_z
+   end interface bilinear_interp
+
 
    !---------------------------------------------------------------------------!
    !PURPOSE: Module variables
@@ -161,14 +171,17 @@ module utils_misc
    public :: keq
    public :: linspace
    public :: denspace
+   public :: tanspace
    public :: flip_array
    public :: free_unit
    public :: str
    public :: reg
    public :: cubic_interp
+   public :: bilinear_interp
    public :: linear_interp_2y
    public :: linear_interp_2x
    public :: trapezoid_integration
+   public :: rc2ut
 
    !===========================================================================!
 
@@ -579,6 +592,45 @@ contains
       endif
       !
    end function denspace
+
+
+   !---------------------------------------------------------------------------!
+   !PURPOSE: generates dense mesh within arbitrary boundaries with tanh function
+   !---------------------------------------------------------------------------!
+   function tanspace(left,center,right,num) result(array)
+      implicit none
+      real(8),intent(in)                    :: left
+      real(8),intent(in)                    :: center
+      real(8),intent(in)                    :: right
+      integer,intent(in)                    :: num
+      real(8)                               :: array(num)
+      !
+      integer                               :: nsimp=2
+      integer                               :: nseg,no,n
+      real(8)                               :: alpha,tanhratio
+      !
+      if(.not.( (left.lt.center).and.(center.lt.right) )) stop "tanspace: left < center < right not fulfilled."
+      !
+      nseg=(num-1)/nsimp
+      if (nseg .lt. 1) stop "tanspace: nseg < 1"
+      if (nsimp*(nseg/nsimp) .ne. nseg) stop "tanspace: nseg is not a multiple of 2 and 4"
+      !
+      tanhratio = tanh(left-center)/tanh(right-center)
+      no = num/2
+      if(tanhratio.ne.1d0) no = (tanhratio-num)/(tanhratio-1)
+      !
+      !I'm going to fix the boundary closer to the center
+      if(abs(left-center).lt.abs(right-center))then
+         alpha = tanh(left-center)/(1-no)
+      else
+         alpha = tanh(right-center)/(num-no)
+      endif
+      !
+      do n=1,num
+         array(n) = atanh( alpha * (n-no) ) + center
+      enddo
+      !
+   end function tanspace
 
 
    !---------------------------------------------------------------------------!
@@ -2089,7 +2141,7 @@ contains
    !---------------------------------------------------------------------------!
    !PURPOSE: This is a wrapper that encloses nspline and splint
    !---------------------------------------------------------------------------!
-   function cubic_interp(x,y,xp) result(yp)
+   function cubic_interp_single(x,y,xp) result(yp)
       implicit none
       real(8),intent(in)                    :: x(:)
       real(8),intent(in)                    :: y(:)
@@ -2106,7 +2158,62 @@ contains
       call splint(x,y,y2,xp,yp)
       deallocate(y2)
       !
-   end function cubic_interp
+   end function cubic_interp_single
+   !
+   function cubic_interp_multiple(x,y,xp) result(yp)
+      implicit none
+      real(8),intent(in)                    :: x(:)
+      real(8),intent(in)                    :: y(:)
+      real(8),intent(in)                    :: xp(:)
+      real(8)                               :: yp(size(xp))
+      !
+      integer                               :: n,ip
+      real(8),allocatable                   :: y2(:)
+      !
+      n=size(x)
+      if(size(y).ne.n) stop "nspline: size(y).ne.size(x)."
+      allocate(y2(n));y2=0d0
+      call nspline(x,y,y2)
+      do ip=1,size(xp)
+         call splint(x,y,y2,xp(ip),yp(ip))
+      enddo
+      deallocate(y2)
+      !
+   end function cubic_interp_multiple
+
+
+   !---------------------------------------------------------------------------!
+   !PURPOSE: Simple bilinear interpolation function
+   !---------------------------------------------------------------------------!
+   function bilinear_interp_d(x1,x2,y1,y2,f11,f12,f22,f21,x,y) result(fp)
+      implicit none
+      real(8),intent(in)                    :: x1,x2,y1,y2
+      real(8),intent(in)                    :: f11,f12,f22,f21
+      real(8),intent(in)                    :: x,y
+      real(8)                               :: fp
+      !
+      fp = (y2-y)/(y2-y1) * (  (x2-x)/(x2-x1)*f11 +  (x-x1)/(x2-x1)*f21  ) + &
+           (y-y1)/(y2-y1) * (  (x2-x)/(x2-x1)*f12 +  (x-x1)/(x2-x1)*f22  )
+      !
+   end function bilinear_interp_d
+   !
+   function bilinear_interp_z(x1,x2,y1,y2,f11,f12,f22,f21,x,y) result(fp)
+      implicit none
+      real(8),intent(in)                    :: x1,x2,y1,y2
+      complex(8),intent(in)                 :: f11,f12,f22,f21
+      real(8),intent(in)                    :: x,y
+      complex(8)                            :: fp
+      real(8)                               :: Refp,Imfp
+      !
+      Refp = (y2-y)/(y2-y1) * (  (x2-x)/(x2-x1)*dreal(f11) +  (x-x1)/(x2-x1)*dreal(f21)  ) + &
+             (y-y1)/(y2-y1) * (  (x2-x)/(x2-x1)*dreal(f12) +  (x-x1)/(x2-x1)*dreal(f22)  )
+      !
+      Imfp = (y2-y)/(y2-y1) * (  (x2-x)/(x2-x1)*dimag(f11) +  (x-x1)/(x2-x1)*dimag(f21)  ) + &
+             (y-y1)/(y2-y1) * (  (x2-x)/(x2-x1)*dimag(f12) +  (x-x1)/(x2-x1)*dimag(f22)  )
+      !
+      fp = dcmplx(Refp,Imfp)
+      !
+   end function bilinear_interp_z
 
 
    !---------------------------------------------------------------------------!
@@ -2148,21 +2255,35 @@ contains
    !---------------------------------------------------------------------------!
    !PURPOSE: function which computes the integral of an array
    !---------------------------------------------------------------------------!
-   function trapezoid_integration(fx,dx) result(Int)
+   function trapezoid_integration(fx,x) result(Int)
       implicit none
-      real(8),dimension(:),intent(in)       :: fx
-      real(8),intent(in)                    :: dx
-      real(8)                               :: Int
+      real(8),intent(in)                    :: fx(:)
+      real(8),intent(in)                    :: x(:)
+      real(8)                               :: Int,dx
       integer                               :: i
       !
       if(size(fx).le.1) stop " trapezoid_integration: function with wrong dimension."
       !
       Int=0d0
       do i=2,size(fx)
+         dx = x(i)-x(i-1)
          Int = Int + ( fx(i) + fx(i-1) ) * (dx/2d0)
       enddo
       !
    end function trapezoid_integration
+
+
+   !---------------------------------------------------------------------------!
+   !PURPOSE: function providing the UT index given the row,col coordinates.
+   !---------------------------------------------------------------------------!
+   integer function rc2ut(row,col,Dim)
+      implicit none
+      integer,intent(in)                    :: row,col,Dim
+      !standard case, UT: (row.lt.col) .or. (col.ge.row)
+      rc2ut = Dim*(row-1) - (row-1)*row/2 + col
+      !opposite case, LT: flip row and col
+      if(row.gt.col) rc2ut = Dim*(col-1) - (col-1)*col/2 + row
+   end function rc2ut
 
 
    !---------------------------------------------------------------------------!

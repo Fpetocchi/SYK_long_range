@@ -152,8 +152,8 @@ module parameters
       real(8)                               :: muStep=0d0
       integer                               :: muIter=0
       real(8)                               :: muTime=0d0
-      logical                               :: local=.false.
-      integer,allocatable                   :: orbs(:)                          !orbital restriction (has to be added to the input)
+      integer                               :: local=0
+      integer,allocatable                   :: orbs(:)
       !I'm writing this as integers due to some mismatch on how to write boolean between fortrann and c++
       integer                               :: mu_scan=0
    end type musearch
@@ -256,8 +256,10 @@ module parameters
       integer                               :: Tsteps=0
       integer                               :: loops=0
       integer                               :: Ngrid=0
+      integer                               :: Ngrid_aux=0
       real(8)                               :: expfact=1d0
       real(8)                               :: DoSthresh=0d0
+      real(8)                               :: Ebounds(3)=0d0
       real(8)                               :: wrealMax=0d0
       real(8)                               :: DeltaErr=0d0
       real(8)                               :: DeltaInit_M=0d0
@@ -269,7 +271,6 @@ module parameters
       character(len=255)                    :: mode_ph                          !Elk or QEspresso
       character(len=255)                    :: mode_Zph="symrenorm"
       character(len=255)                    :: mode_el                          !static or static+dynamic
-      character(len=255)                    :: mode_avg="integral"
       integer                               :: Nkpt3_Model(3)=0
       real(8)                               :: Wk_cutoff=0d0
       character(len=255)                    :: printmode_ph

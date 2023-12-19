@@ -74,14 +74,15 @@ def average(G,tlimit,window,log,orblist=None):
 spins = [1]; orbs = [1]; dirs=[]
 # Optional parsing
 parser = OptionParser()
-parser.add_option("--field" , dest="field"  , default="Gw"    )                # [G,W]kw, [G,W]w, Obs
-parser.add_option("--pad"   , dest="pad"    , default="None"  )                # local: lat, imp, qmc_* kresolved: _Tr, _Hetero
-parser.add_option("--axis"  , dest="axis"   , default="t"     )                # local: lat, imp, qmc_* kresolved: _Tr, _Hetero
-parser.add_option("--orbs"  , dest="orbs"   , default="1"     )                # list of orbitals separated by comma
-parser.add_option("--itlist", dest="itlist" , default="0"     )                # list of iterations separated by comma or initial and final iteration separated by ".."
-parser.add_option("--skip"  , dest="skip"   , default="0"     )                # list of iteration to be ignored separated by comma
-parser.add_option("--spin"  , dest="spin"   , default="1"     )                # spin index
-parser.add_option("--Krol"  , dest="Krol"   , default="None"  )                # string of 3 parameters separated by comma in dicating tau_max and tau_window for rolling average, if last one is ==1 then the rolling average is done in log scale
+parser.add_option("--field" , dest="field"  , default="Gw"    )                    # [G,W]kw, [G,W]w, Obs
+parser.add_option("--pad"   , dest="pad"    , default="None"  )                    # local: lat, imp, qmc_* kresolved: _Tr, _Hetero
+parser.add_option("--axis"  , dest="axis"   , default="t"     )                    # local: lat, imp, qmc_* kresolved: _Tr, _Hetero
+parser.add_option("--orbs"  , dest="orbs"   , default="1"     )                    # list of orbitals separated by comma
+parser.add_option("--itlist", dest="itlist" , default="0"     )                    # list of iterations separated by comma or initial and final iteration separated by ".."
+parser.add_option("--skip"  , dest="skip"   , default="0"     )                    # list of iteration to be ignored separated by comma
+parser.add_option("--spin"  , dest="spin"   , default="1"     )                    # spin index
+parser.add_option("--pade"  , dest="pade"   , default=False, action="store_true")  # for local observables looks for _pade files
+parser.add_option("--Krol"  , dest="Krol"   , default="None"  )                    # string of 3 parameters separated by comma in dicating tau_max and tau_window for rolling average, if last one is ==1 then the rolling average is done in log scale
 (options, args) = parser.parse_args()
 #
 #
@@ -208,7 +209,7 @@ if (stat != "Observables") and local:
     #
     for o in orbs:
         #
-        File = Folder + "_%s_o%s"%(ax,o) + "_s%s.DAT"%spin if (stat == "Fermion") else Folder + "_w_(%s,%s)(%s,%s).DAT"%(o,o,o,o)
+        File = Folder + "_%s_o%s"%(ax,o) + "_s%s%s.DAT"%(spin,"_pade" if options.pade else "" ) if (stat == "Fermion") else Folder + "_w_(%s,%s)(%s,%s).DAT"%(o,o,o,o)
         print("Averaging file: %s"%File)
         #
         dir = dirs[0]

@@ -667,3 +667,675 @@ end function rgb
 !      enddo
 !   enddo
 !enddo
+
+
+
+
+
+   if(dump_unfolded_v0)then
+      !
+      call AllocateFermionicField(Gfull,Norb,Nmats,Nkpt=Lttc%Nkpt,Nsite=Sfull%Nsite,Beta=Sfull%Beta,mu=Sfull%mu)
+      call calc_Gmats(Gfull,Lttc,Smats=Sfull,along_path=.false.)
+      write(*,*)"Gfull(K) computed"
+      !
+      allocate(Gfull_R(Norb,Norb,Nmats,Nwig,2));Gfull_R=czero
+      call wannier_K2R(Lttc%Nkpt3,Lttc%kpt,Gfull%wks(:,:,:,:,1),Gfull_R(:,:,:,:,1))
+      Gfull%wks(1,2,:,:,:) = -Gfull%wks(1,2,:,:,:)
+      Gfull%wks(2,1,:,:,:) = -Gfull%wks(2,1,:,:,:)
+      call wannier_K2R(Lttc%Nkpt3,Lttc%kpt,Gfull%wks(:,:,:,:,1),Gfull_R(:,:,:,:,2))
+      call DeallocateField(Gfull)
+      write(*,*)"Gfull_AB(R) computed"
+      !
+      allocate(Gfull_R_halfkz(3*Norb,3*Norb,Nmats,Nwig,2));Gfull_R_halfkz=czero
+      !
+      do nx=minval(Nvecwig(1,:)),maxval(Nvecwig(1,:)),1
+         do ny=minval(Nvecwig(2,:)),maxval(Nvecwig(2,:)),1
+            !
+            !new iwig
+            iwig = find_vec([nx,ny,0],Nvecwig,hardstop=.false.)
+            if(iwig.eq.0)cycle
+            !
+            do nz=minval(Nvecwig(3,:)),maxval(Nvecwig(3,:)),1
+               !
+               if(nz.eq.0)then
+                  !diagonals
+                  do ik=1,3
+                     !B
+                     Gfull_R_halfkz(1+(ik-1)*Norb:ik*Norb,1+(ik-1)*Norb:ik*Norb,:,iwig,1) = Gfull_R(:,:,:,iwig,1)
+                     !AB
+                     Gfull_R_halfkz(1+(ik-1)*Norb:ik*Norb,1+(ik-1)*Norb:ik*Norb,:,iwig,2) = Gfull_R(:,:,:,iwig,2)
+                  enddo
+               elseif(nz.eq.+1)then
+                  !distance +1
+                  iwig_old = find_vec([nx,ny,+1],Nvecwig,hardstop=.false.)
+                  if(iwig_old.eq.0)cycle
+                  !
+                  !B
+                  Gfull_R_halfkz(1+Norb:2*Norb,1:Norb,:,iwig,1) = Gfull_R(:,:,:,iwig_old,1)
+                  Gfull_R_halfkz(1+2*Norb:3*Norb,1+Norb:2*Norb,:,iwig,1) = Gfull_R(:,:,:,iwig_old,1)
+                  !AB
+                  Gfull_R_halfkz(1+Norb:2*Norb,1:Norb,:,iwig,2) = Gfull_R(:,:,:,iwig_old,2)
+                  Gfull_R_halfkz(1+2*Norb:3*Norb,1+Norb:2*Norb,:,iwig,2) = Gfull_R(:,:,:,iwig_old,2)
+               elseif(nz.eq.-1)then
+                  !distance -1
+                  iwig_old = find_vec([nx,ny,-1],Nvecwig,hardstop=.false.)
+                  if(iwig_old.eq.0)cycle
+                  !
+                  !B
+                  Gfull_R_halfkz(1:Norb,1+Norb:2*Norb,:,iwig,1) = Gfull_R(:,:,:,iwig_old,1)
+                  Gfull_R_halfkz(1+Norb:2*Norb,1+2*Norb:3*Norb,:,iwig,1) = Gfull_R(:,:,:,iwig_old,1)
+                  !AB
+                  Gfull_R_halfkz(1:Norb,1+Norb:2*Norb,:,iwig,2) = Gfull_R(:,:,:,iwig_old,2)
+                  Gfull_R_halfkz(1+Norb:2*Norb,1+2*Norb:3*Norb,:,iwig,2) = Gfull_R(:,:,:,iwig_old,2)
+               elseif(nz.eq.+2)then
+                  !distance +2
+                  iwig_old = find_vec([nx,ny,+2],Nvecwig,hardstop=.false.)
+                  if(iwig_old.eq.0)cycle
+                  !
+                  !B
+                  Gfull_R_halfkz(1+2*Norb:3*Norb,1:Norb,:,iwig,1) = Gfull_R(:,:,:,iwig_old,1)
+                  !AB
+                  Gfull_R_halfkz(1+2*Norb:3*Norb,1:Norb,:,iwig,2) = Gfull_R(:,:,:,iwig_old,2)
+               elseif(nz.eq.-2)then
+                  !distance -2
+                  iwig_old = find_vec([nx,ny,+2],Nvecwig,hardstop=.false.)
+                  if(iwig_old.eq.0)cycle
+                  !
+                  !B
+                  Gfull_R_halfkz(1:Norb,1+2*Norb:3*Norb,:,iwig,1) = Gfull_R(:,:,:,iwig_old,1)
+                  !AB
+                  Gfull_R_halfkz(1:Norb,1+2*Norb:3*Norb,:,iwig,2) = Gfull_R(:,:,:,iwig_old,2)
+               endif
+               !
+            enddo
+         enddo
+      enddo
+      deallocate(Gfull_R)
+      write(*,*)"extraction to hetero-like"
+      !
+      Nkp = 151
+      Nkz = 50
+      !
+      allocate(Gfull_R(3*Norb,3*Norb,Nmats,Lttc%Nkpt_path,2));Gfull_R=czero
+      call wannier_R2K(Lttc%Nkpt3,Lttc%kptpath(:,1:Nkp),Gfull_R_halfkz(:,:,:,:,1),Gfull_R(:,:,:,1:Nkp,1))
+      call wannier_R2K(Lttc%Nkpt3,Lttc%kptpath(:,1:Nkp),Gfull_R_halfkz(:,:,:,:,2),Gfull_R(:,:,:,1:Nkp,2))
+      deallocate(Gfull_R_halfkz)
+      write(*,*)"path-interpolation"
+      !
+      allocate(Gkw(2,Nmats,Nkp,0:Nkz));Gkw=czero
+      do ik=1,Nkp
+         do ikz=0,Nkz
+            do isite=1,6
+               do jsite=1,6
+                  !
+                  kR = 2*pi * Lttc%kptpath(3,Nkp+ikz) * (isite-jsite)
+                  cfac = dcmplx(cos(kR),+sin(kR))
+                  !
+                  !B
+                  Gkw(1,:,ik,ikz) = Gkw(1,:,ik,ikz) + Gfull_R(isite,jsite,:,ik,1)*cfac / 6
+                  !AB
+                  Gkw(2,:,ik,ikz) = Gkw(2,:,ik,ikz) + Gfull_R(isite,jsite,:,ik,2)*cfac / 6
+                  !
+               enddo
+            enddo
+         enddo
+      enddo
+      deallocate(Gfull_R)
+      write(*,*)"Gamma-A filled-1"
+      !
+      do ispin=1,Nspin
+         do iorb=1,2
+            do ik=1,Nkp
+               Gpath%wks(iorb,iorb,:,ik,ispin) = Gkw(iorb,:,ik,0)
+            enddo
+            do ikz=0,Nkz
+               Gpath%wks(iorb,iorb,:,Nkp+ikz,ispin) = Gkw(iorb,:,Nkp,ikz)
+            enddo
+         enddo
+      enddo
+      deallocate(Gkw)
+      write(*,*)"Gamma-A filled-2"
+      !
+   endif
+
+
+
+
+
+
+
+
+
+
+   interface calc_energy_averages
+      module procedure calc_energy_averages_integral
+      module procedure calc_energy_averages_list
+   end interface calc_energy_averages
+
+
+
+      !
+   subroutine calc_energy_averages_list(Inputs,Wk_orig,Lttc,Beta,pathOUTPUT,printmode)
+      !
+      use parameters
+      use utils_misc
+      use utils_fields
+      use file_io
+      use omp_lib
+      use linalg, only : tensor_transform
+      use crystal, only : fill_ksumkdiff, wannierinterpolation
+      implicit none
+      !
+      type(SCDFT),intent(in)                :: Inputs
+      complex(8),intent(in),target          :: Wk_orig(:,:,:,:)
+      type(Lattice),intent(in)              :: Lttc
+      real(8),intent(in)                    :: Beta
+      character(len=*),intent(in)           :: pathOUTPUT
+      character(len=*),intent(in)           :: printmode
+      !
+      integer                               :: iw,Nmats
+      integer                               :: Ngrid,Norb,Nbp
+      integer                               :: iorb,jorb,ib1,ib2,a,b,c,d
+      integer                               :: Wk_dim,row,col,ndx,ndx1,ndx2
+      integer                               :: ik1,ik2,iq,Nkpt
+      integer                               :: iweig,jweig,iE1,iE2,iT,Efermi_ndx
+      integer                               :: ithread,Nthread
+      integer                               :: Ngrid_y=100
+      real(8)                               :: E1,E2,dT,tanhs!DoS0
+      real(8)                               :: DE_m,DE_p,nF_m,nF_p
+      real(8)                               :: DosWeights,cutoff
+      integer,allocatable                   :: kptsum(:,:),kptdif(:,:),map(:,:)
+      real(8),allocatable                   :: Beta_DFT_list(:)
+      complex(8),allocatable,target         :: Wk_interp(:,:,:,:)
+      complex(8),pointer                    :: Wk_used(:,:,:,:)
+      complex(8),allocatable                :: Wk_full(:,:)
+      type(physicalU)                       :: PhysicalUelements
+      real                                  :: start,finish
+      logical                               :: Kstat_exists,Kdyn_exists
+      logical                               :: calc_Kel_stat,calc_Wee_dyn
+      logical                               :: Wrot_exists
+      !
+      !
+      write(*,"(A)") new_line("A")//"---- calc_energy_averages_list"
+      !
+      !
+      if(.not.initialized)stop "calc_energy_averages_list: input meshes not initialized. Call Initialize_inputs."
+      !
+      !Various checks
+      Ngrid = size(Egrid)
+      Nbp = size(Wk_orig,dim=1)
+      Norb = int(sqrt(dble(Nbp)))
+      Nmats = size(Wk_orig,dim=3)
+      Nkpt = size(kpt_Model,dim=2)
+      cutoff = Inputs%Wk_cutoff
+      call assert_shape(Wk_orig,[Nbp,Nbp,Nmats,Lttc%Nkpt],"calc_energy_averages_list","Wk_orig")
+      call assert_shape(kpt_Model,[3,Nkpt],"calc_energy_averages_list","kpt_Model")
+      !
+      Efermi_ndx = minloc(abs(Egrid),dim=1)
+      !DoS0 = DoS_Model(Efermi_ndx)
+      !write(*,"(A,F10.5)") new_line("A")//"     get_Kel_integral: Model DoS at the Fermi level:",DoS0
+      if(Egrid(Efermi_ndx).ne.0d0) stop "get_Kel_integral: the energy grid requires the E=0 point."
+      !
+      if(Interpolate2Model)then
+         if(Nkpt.eq.Lttc%Nkpt)stop "calc_energy_averages_list: something is wrong with the K-point dimension (interpolation)."
+      else
+         if(Nkpt.ne.Lttc%Nkpt)stop "calc_energy_averages_list: something is wrong with the K-point dimension."
+      endif
+      !
+      allocate(wmats_orig(Nmats));wmats_orig=BosonicFreqMesh(Beta,Nmats)
+      wmax_ndx = minloc(abs(wmats_orig-cutoff),dim=1)
+      write(*,"(A)") "     Interaction frequency cut at iw_["//str(wmax_ndx)//"]="//str(wmats_orig(wmax_ndx),5)//" eV -> "//str(wmats_orig(wmax_ndx)*eV2DFTgrid,5)//" "//DFTgrid
+      write(*,"(A)") "     Bosonic frequency step="//str(abs(wmats_orig(2)-wmats_orig(1)),5)//" eV -> "//str(abs(wmats_orig(2)-wmats_orig(1))*eV2DFTgrid,5)//" "//DFTgrid
+      wmats_orig = wmats_orig * eV2DFTgrid
+      wmax = wmats_orig(wmax_ndx)
+      MatsStep = abs(wmats_orig(2)-wmats_orig(1))
+      !
+      !check if any of the needed kernels is already printed
+      calc_Kel_stat=.false.
+      calc_Wee_dyn=.false.
+      !
+      if(calc_Int_static)then
+         !
+         allocate(Kel_stat(Ngrid,Ngrid));Kel_stat=czero
+         !
+         call inquireFile(reg(pathOUTPUT)//"Kel_stat.DAT",Kstat_exists,hardstop=.false.,verb=verbose)
+         if(Kstat_exists)then
+            call io_Kel(Kel_stat,reg(pathOUTPUT)//"Kel_stat.DAT","read")
+         else
+            calc_Kel_stat=.true.
+            deallocate(Kel_stat)
+         endif
+         !
+      endif
+      !
+      if(calc_Int_dynamic)then
+         !
+         allocate(Kel_dyn_list(Inputs%Tsteps,Ngrid,Ngrid));Kel_dyn_list=czero
+         !
+         call inquireFile(reg(pathOUTPUT)//"Kel_dyn_list.DAT",Kdyn_exists,hardstop=.false.,verb=verbose)
+         if(Kdyn_exists)then
+            call io_Kel(Kel_dyn_list,reg(pathOUTPUT)//"Kel_dyn_list.DAT","read")
+         else
+            calc_Wee_dyn=.true.
+            deallocate(Kel_dyn_list)
+            !
+            allocate(Beta_DFT_list(Inputs%Tsteps));Beta_DFT_list=0d0
+            do iT=1,Inputs%Tsteps
+               dT=0d0
+               if(Inputs%Tsteps.gt.1) dT = (iT-1)*abs(Inputs%Tbounds(2)-Inputs%Tbounds(1))/dble(Inputs%Tsteps-1)
+               Beta_DFT_list(iT) = 1d0 / ((Inputs%Tbounds(1) + dT)*K2eV*eV2DFTgrid)
+            enddo
+         endif
+         !
+      endif
+      !
+      if(calc_Kel_stat.or.calc_Wee_dyn)then
+         !
+         write(*,"(A)") "     One of the required Kernels is missing. Starting operations on screened interacion in Wannier basis."
+         !
+         if(Interpolate2Model)then
+            !
+            allocate(Wk_interp(Nbp,Nbp,wmax_ndx,size(kpt_Model,dim=2)));Wk_interp=czero
+            call cpu_time(start)
+            do iw=1,wmax_ndx
+               call wannierinterpolation(Lttc%Nkpt3,Lttc%kpt,kpt_Model,Wk_orig(:,:,iw,:),Wk_interp(:,:,iw,:))
+            enddo
+            call cpu_time(finish)
+            write(*,"(A,F)") "     Interpolating Wk to the new k grid cpu timing:", finish-start
+            !
+            Wk_used => Wk_interp
+            !
+         else
+            !
+            write(*,"(A)") "     Interpolation skipped, linking to original Wk."
+            Wk_used => Wk_orig
+            !
+         endif
+         !
+         call init_Uelements(Norb,PhysicalUelements)
+         !
+         !rotation done externally and stored
+         Wk_dim = (Nkpt*Norb) * (Nkpt*Norb+1)/2
+         allocate(Wk_full(wmax_ndx,Wk_dim));Wk_full=czero
+         !
+         call inquireFile(reg(pathOUTPUT)//"Wrot.DAT",Wrot_exists,hardstop=.false.,verb=verbose)
+         if(Wrot_exists)then
+            !
+            call cpu_time(start)
+            call io_Kel(Wk_full,reg(pathOUTPUT)//"Wrot.DAT","read")
+            call cpu_time(finish)
+            write(*,"(A,F)") "     Read interaction in band basis cpu timing:", finish-start
+            !
+         else
+            !
+            !map between upper triangular and row,col
+            call cpu_time(start)
+            allocate(map(2,Wk_dim));map=0
+            !$OMP PARALLEL DEFAULT(SHARED),&
+            !$OMP PRIVATE(row,col,ndx)
+            !$OMP DO
+            do row=1,Nkpt*Norb
+               do col=row,Nkpt*Norb
+                  !
+                  ! upper triangular map (fixed)
+                  ndx = (Nkpt*Norb)*(row-1) - (row-1)*row/2 + col
+                  !
+                  map(1,ndx) = row
+                  map(2,ndx) = col
+                  !
+               enddo
+            enddo
+            !$OMP END DO
+            !$OMP END PARALLEL
+            call cpu_time(finish)
+            write(*,"(A,F)") "     Upper triangular Wmap(dim="//str(Wk_dim)//") stored cpu timing:", finish-start
+            !
+            call fill_ksumkdiff(kpt_Model,kptsum,kptdif)
+            deallocate(kptsum)
+            !
+            !rotation of the interaction W_(ab)(cd)(q) --> W_(i.k1,j.k2)(j.k2,i.k1)
+            !W_(i.k1,j.k2)(j.k2,i.k1) = sum_abcd Zdag_ia(k1) * Z_bj(k2) * Zdag_jc(k2) * Z_di(k1) W_(ab)(cd)(q=k1-k2)
+            !NOTE: only the upper triangular (c>=r) part of W_(i.k1,j.k2)(j.k2,i.k1) is computed
+            call cpu_time(start)
+            !$OMP PARALLEL DEFAULT(SHARED),&
+            !$OMP PRIVATE(ndx,row,col,iorb,jorb,ik1,ik2,iq),&
+            !$OMP PRIVATE(a,b,c,d,ib1,ib2,ithread)
+            Nthread = omp_get_num_threads()
+            !$OMP DO
+            do ndx=1,Wk_dim
+               !
+               ithread = omp_get_thread_num()
+               print *, "thread", ithread, " / ", Nthread, " ndx: ", ndx, " over: ", Wk_dim
+               !
+               row = map(1,ndx)
+               col = map(2,ndx)
+               !
+               !row = ik1 + (iorb-1)*Nkpt
+               iorb = floor((row-0.01)/Nkpt)+1
+               ik1  = row - (iorb-1)*Nkpt
+               !col = ik2 + (jorb-1)*Nkpt
+               jorb = floor((col-0.01)/Nkpt)+1
+               ik2  = col - (jorb-1)*Nkpt
+               !
+               iq = kptdif(ik1,ik2)
+               !
+               do ib1=1,Nbp
+                  !
+                  !diagonal elements
+                  a = PhysicalUelements%Full_Map(ib1,ib1,1)
+                  b = PhysicalUelements%Full_Map(ib1,ib1,2)
+                  c = PhysicalUelements%Full_Map(ib1,ib1,3)
+                  d = PhysicalUelements%Full_Map(ib1,ib1,4)
+                  !
+                  Wk_full(:,ndx) = Wk_full(:,ndx)                                                                      &
+                                 + Wk_used(ib1,ib1,1:wmax_ndx,iq) * conjg(Zk_Model(a,iorb,ik1)) * Zk_Model(b,jorb,ik2) &
+                                                                  * conjg(Zk_Model(c,jorb,ik2)) * Zk_Model(d,iorb,ik1)
+                  !
+                  do ib2=ib1+1,Nbp
+                     !
+                     !off-diagonal elements
+                     a = PhysicalUelements%Full_Map(ib1,ib2,1)
+                     b = PhysicalUelements%Full_Map(ib1,ib2,2)
+                     c = PhysicalUelements%Full_Map(ib1,ib2,3)
+                     d = PhysicalUelements%Full_Map(ib1,ib2,4)
+                     !
+                     Wk_full(:,ndx) = Wk_full(:,ndx)                                                                       &
+                                    + Wk_used(ib1,ib2,1:wmax_ndx,iq) * conjg(Zk_Model(a,iorb,ik1)) * Zk_Model(b,jorb,ik2)  &
+                                                                     * conjg(Zk_Model(c,jorb,ik2)) * Zk_Model(d,iorb,ik1)  &
+                                    + Wk_used(ib2,ib1,1:wmax_ndx,iq) * conjg(Zk_Model(c,iorb,ik1)) * Zk_Model(d,jorb,ik2)  &
+                                                                     * conjg(Zk_Model(a,jorb,ik2)) * Zk_Model(b,iorb,ik1)
+                     !
+                  enddo
+               enddo
+               !
+            enddo
+            !$OMP END DO
+            !$OMP END PARALLEL
+            call cpu_time(finish)
+            deallocate(map,kptdif)
+            !
+            !print the interaction in band basis depending explicitly of the two kpoints
+            call io_Kel(Wk_full,reg(pathOUTPUT)//"Wrot.DAT","write")
+            !
+            write(*,"(A,F)") "     Rotation of the interaction to band basis cpu timing:", finish-start
+            !
+         endif
+         if(allocated(Wk_interp))deallocate(Wk_interp)
+         nullify(Wk_used)
+         !
+         !Kernels calculation
+         call cpu_time(start)
+         if(calc_Kel_stat)then
+            allocate(Kel_stat(Ngrid,Ngrid))
+            Kel_stat=czero
+         endif
+         if(calc_Wee_dyn)then
+            allocate(Kel_dyn_list(Inputs%Tsteps,Ngrid,Ngrid))
+            Kel_dyn_list=czero
+         endif
+         !$OMP PARALLEL DEFAULT(SHARED),&
+         !$OMP PRIVATE(iweig,jweig,iE1,iE2,DosWeights),&
+         !$OMP PRIVATE(ndx,ndx1,ndx2,row,col),&
+         !$OMP PRIVATE(iorb,jorb,ik1,ik2,ithread),&
+         !$OMP PRIVATE(E1,E2,DE_m,DE_p,nF_m,nF_p,iT,tanhs)
+         Nthread = omp_get_num_threads()
+         !$OMP DO
+         do jweig=1,size(finite_weights_Model,dim=1)
+            !
+            iE2 = finite_weights_Model(jweig,1)
+            jorb = finite_weights_Model(jweig,2)
+            ik2 = finite_weights_Model(jweig,3)
+            !
+            ithread = omp_get_thread_num()
+            print *, "thread", ithread, " / ", Nthread, " jweig: ", jweig, " over: ", size(finite_weights_Model,dim=1)
+            !
+            do iweig=1,size(finite_weights_Model,dim=1)
+               !
+               iE1 = finite_weights_Model(iweig,1)
+               iorb = finite_weights_Model(iweig,2)
+               ik1 = finite_weights_Model(iweig,3)
+               !
+               DosWeights = (weights_Model(iE1,iorb,ik1)/DoS_Model(iE1)) * (weights_Model(iE2,jorb,ik2)/DoS_Model(iE2))
+               !
+               E1 = Ek_Model(iorb,ik1)
+               E2 = Ek_Model(jorb,ik2)
+               !
+               DE_m = E1-E2
+               nF_m = fermidirac(+E1,Beta_DFT_list(iT))-fermidirac(+E2,Beta_DFT_list(iT))
+               DE_p = E1+E2
+               nF_p = fermidirac(-E1,Beta_DFT_list(iT))-fermidirac(+E2,Beta_DFT_list(iT))
+               !
+               !product basis map, the indexes spanned by iweig,jweig cover all the possible
+               !(ik1,iorb) pairs, so the whole Wk_full matrix, both LT and UT.
+               ndx1 = ik1 + (iorb-1)*Nkpt
+               ndx2 = ik2 + (jorb-1)*Nkpt
+               !
+               if(ndx2.ge.ndx1)then
+                  !
+                  !I'm looking for an element in the UT. ndx gives me the position
+                  row = ndx1 !this is the row
+                  col = ndx2 !this is the col
+                  ndx = (Nkpt*Norb)*(row-1) - (row-1)*row/2 + col
+                  !
+                  !static Kernel
+                  if(calc_Kel_stat) Kel_stat(iE1,iE2) = Kel_stat(iE1,iE2) + Wk_full(1,ndx) * eV2DFTgrid * DosWeights
+                  !
+                  !dynamic Kernel stored for all the required temeperatures
+                  if(calc_Wee_dyn)then
+                     !
+                     do iT=1,Inputs%Tsteps
+                        !
+                        tanhs = 0d0
+                        if((E1*E2).ne.0d0) tanhs = 1d0/(tanh(Beta_DFT_list(iT)*E1/2d0)*tanh(Beta_DFT_list(iT)*E2/2d0))
+                        !
+                        Kel_dyn_list(iT,iE1,iE2) = Kel_dyn_list(iT,iE1,iE2) + DosWeights * eV2DFTgrid * (2d0/pi) * tanhs *  &
+                        (                                                                                                                                                             &
+                           nF_m * ( aux_integral(DE_m,(Wk_full(:,ndx)-Wk_full(1,ndx))) + (Wk_full(wmax_ndx,ndx)-Wk_full(1,ndx))*(pi/2d0-atan2(wmax,DE_m)) ) +                         &
+                           nF_p * ( aux_integral(DE_p,(Wk_full(:,ndx)-Wk_full(1,ndx))) + (Wk_full(wmax_ndx,ndx)-Wk_full(1,ndx))*(pi/2d0-atan2(wmax,DE_p)) )                           &
+                        )
+                        !
+                     enddo
+                     !
+                  endif
+                  !
+               else
+                  !
+                  !I'm looking for an element in the LT. I look via ndx his complex conjg in the UT
+                  row = ndx2 !this is the row
+                  col = ndx1 !this is the col
+                  ndx = (Nkpt*Norb)*(row-1) - (row-1)*row/2 + col
+                  !
+                  !static Kernel
+                  if(calc_Kel_stat) Kel_stat(iE1,iE2) = Kel_stat(iE1,iE2) + conjg(Wk_full(1,ndx)) * eV2DFTgrid * DosWeights
+                  !
+                  !dynamic Kernel stored for all the required temeperatures
+                  if(calc_Wee_dyn)then
+                     !
+                     do iT=1,Inputs%Tsteps
+                        !
+                        tanhs = 0d0
+                        if((E1*E2).ne.0d0) tanhs = 1d0/(tanh(Beta_DFT_list(iT)*E1/2d0)*tanh(Beta_DFT_list(iT)*E2/2d0))
+                        !
+                        Kel_dyn_list(iT,iE1,iE2) = Kel_dyn_list(iT,iE1,iE2) + DosWeights * eV2DFTgrid * (2d0/pi) * tanhs *  &
+                        (                                                                                                                                                             &
+                           nF_m * ( aux_integral(DE_m,conjg(Wk_full(:,ndx)-Wk_full(1,ndx))) + conjg(Wk_full(wmax_ndx,ndx)-Wk_full(1,ndx))*(pi/2d0-atan2(wmax,DE_m)) ) +               &
+                           nF_p * ( aux_integral(DE_p,conjg(Wk_full(:,ndx)-Wk_full(1,ndx))) + conjg(Wk_full(wmax_ndx,ndx)-Wk_full(1,ndx))*(pi/2d0-atan2(wmax,DE_p)) )                 &
+                        )
+                        !
+                     enddo
+                     !
+                  endif
+                  !
+               endif
+               !
+            enddo
+         enddo
+         !$OMP END DO
+         !$OMP END PARALLEL
+         deallocate(Wk_full)
+         call cpu_time(finish)
+         write(*,"(A,F)") "     Calculation of static electronic Kernel cpu timing:", finish-start
+         !
+         !Filling the Fermi lines
+         do iT=1,Inputs%Tsteps
+            call interpFermi(Kel_dyn_list(iT,:,:),Egrid,Egrid,Efermi_ndx,Efermi_ndx)
+         enddo
+         !
+         if(calc_Kel_stat) call io_Kel(Kel_stat,reg(pathOUTPUT)//"Kel_stat.DAT","write")
+         if(calc_Wee_dyn) call io_Kel(Kel_dyn_list,reg(pathOUTPUT)//"Kel_dyn_list.DAT","write")
+         !
+      endif
+      deallocate(weights_Model,finite_weights_Model)
+      !
+      if(calc_Int_static.and.(reg(printmode).ne."None"))then
+         call print_Kernel("electronic",reg(printmode),reg(pathOUTPUT),"Kel_stat",Egrid,Egrid,Kel_stat)
+      endif
+      !
+      Kernels_stored = .true.
+      !
+      !
+      !
+   contains
+      !
+      !
+      !
+      function ygrid(stop,num,ndx) result(yval)
+         implicit none
+         real(8),intent(in)                    :: stop
+         integer,intent(in)                    :: num,ndx
+         real(8)                               :: yval
+         real(8)                               :: start,step
+         !
+         if(num.lt.0)stop "ygrid: N<0, abort."
+         if(ndx.le.0)stop "ygrid: ndx<=0, abort."
+         start = -1d0
+         step = (stop-start)/(dble(num)+1d0)
+         yval = start + dble(ndx)*step
+         !
+      end function ygrid
+      !
+      function aux_integral(DE,W) result(Integral)
+         implicit none
+         real(8),intent(in)                    :: DE
+         complex(8),intent(in)                 :: W(:)
+         complex(8)                            :: Integral
+         integer                               :: iy,wndx_a,wndx_b
+         real(8)                               :: ymax,dy,y_i,y_j,wm
+         real(8)                               :: ReW_wm_intp,ImW_wm_intp
+         complex(8)                            :: W_wm_i,W_wm_j,Int_i,Int_j
+         !
+         ymax = (wmax-abs(DE)) / (wmax+abs(DE))
+         dy = abs(ygrid(ymax,Ngrid_y,2)-ygrid(ymax,Ngrid_y,1))
+         !
+         Integral=czero
+         if((DE.ne.0d0).and.(ymax.ne.1d0))then
+            !
+            do iy=2,Ngrid_y
+               !
+               !continous frequency correspnding to iy
+               y_i = ygrid(ymax,Ngrid_y,iy)
+               wm = abs(DE) * (1+y_i)/(1-y_i)
+               !linear interpolation of Wee between the two points on the matsubara grid enclosing wm
+               wndx_a = floor(wm/MatsStep) + 1
+               wndx_b = wndx_a + 1
+               if(wndx_b.gt.wmax_ndx) stop"aux_integral (DE)_i: the frequency index is beyond the cutoff."
+               ReW_wm_intp = linear_interp_2y( [wmats_orig(wndx_a),dreal(W(wndx_a))] , [wmats_orig(wndx_b),dreal(W(wndx_b))] , wm )
+               ImW_wm_intp = linear_interp_2y( [wmats_orig(wndx_a),dimag(W(wndx_a))] , [wmats_orig(wndx_b),dimag(W(wndx_b))] , wm )
+               W_wm_i = dcmplx(ReW_wm_intp,ImW_wm_intp)
+               !
+               !continous frequency correspnding to iy-1
+               y_j = ygrid(ymax,Ngrid_y,iy-1)
+               wm = abs(DE) * (1+y_j)/(1-y_j)
+               !linear interpolation of Wee between the two points on the matsubara grid enclosing wm
+               wndx_a = floor(wm/MatsStep) + 1
+               wndx_b = wndx_a + 1
+               if(wndx_b.gt.wmax_ndx) stop"aux_integral (DE)_j: the frequency index is beyond the cutoff."
+               ReW_wm_intp = linear_interp_2y( [wmats_orig(wndx_a),dreal(W(wndx_a))] , [wmats_orig(wndx_b),dreal(W(wndx_b))] , wm )
+               ImW_wm_intp = linear_interp_2y( [wmats_orig(wndx_a),dimag(W(wndx_a))] , [wmats_orig(wndx_b),dimag(W(wndx_b))] , wm )
+               W_wm_j = dcmplx(ReW_wm_intp,ImW_wm_intp)
+               !
+               !integrand for iy and iy-1
+               Int_i = W_wm_i / ( 1d0 + y_i**2 )
+               Int_j = W_wm_j / ( 1d0 + y_j**2 )
+               !
+               !trapezoidal integration
+               Integral = Integral + sign(1d0,DE)*(Int_i+Int_j)*(dy/2d0)
+               !
+            enddo
+            !
+         endif
+         !
+      end function aux_integral
+      !
+      !
+      !
+   end subroutine calc_energy_averages_list
+
+!Store inside the module the required energy averages
+   if(calc_Kel)then
+      select case(reg(Inputs%mode_avg))
+         case default
+            stop "Available entries for MODE_AVG: integral, list."
+         case("integral")
+            call calc_energy_averages(Wlat%screened,Lttc,Wlat%Beta,Inputs%Wk_cutoff,reg(printpath),reg(Inputs%printmode_el))
+         case("list")
+            call calc_energy_averages(Inputs,Wlat%screened,Lttc,Wlat%Beta,reg(printpath),reg(Inputs%printmode_el))
+      end select
+   endif
+
+
+   if(calc_Kel)then
+      allocate(Kel(Ngrid,Ngrid));Kel=0d0
+      select case(reg(Inputs%mode_avg))
+         case default
+            stop "Available entries for MODE_AVG: integral, list."
+         case("integral")
+            call get_Kel(Kel,Beta_DFT,reg(Inputs%printmode_el),reg(printpath_T))
+         case("list")
+            call get_Kel(Kel,iT,Beta_DFT,reg(Inputs%printmode_el),reg(printpath_T))
+      end select
+   endif
+
+
+   !
+   subroutine get_Kel_list(Kel,iT,Beta,printmode,printKpath)
+      !
+      use parameters
+      use utils_misc
+      implicit none
+      !
+      complex(8),intent(out)                :: Kel(:,:)
+      integer,intent(in)                    :: iT
+      real(8),intent(in)                    :: Beta
+      character(len=*),intent(in)           :: printmode
+      character(len=*),intent(in)           :: printKpath
+      integer                               :: Ngrid
+      real(8)                               :: Temp
+      !
+      !
+      if(verbose)write(*,"(A)") "---- get_Kel_list"
+      !
+      !
+      if(.not.calc_Kel)stop "get_Kel_list: inputs not initialized. call Initialize_inputs."
+      if(.not.Kernels_stored)stop "get_Kel_list: fully screened interaction not stored. call calc_energy_averages."
+      if(calc_Int_static.and.(.not.allocated(Kel_stat)))stop "get_Kel_list: strange Kel_stat should be allocated."
+      if(calc_Int_dynamic.and.(.not.allocated(Kel_dyn_list)))stop "get_Kel_list: strange Kel_dyn_list should be allocated."
+      !
+      Ngrid = size(Egrid)
+      call assert_shape(Kel,[Ngrid,Ngrid],"get_Kel_list","Kel")
+      !
+      Kel=czero
+      if(calc_Int_dynamic)then
+         !
+         Kel = Kel_dyn_list(iT,:,:)
+         !
+         if(reg(printmode).ne."None")then
+            Temp = 1d0 / (K2eV*eV2DFTgrid*Beta)
+            call print_Kernel("electronic",reg(printmode),reg(printKpath),"Kel_dyn_T"//str(Temp,2),Egrid,Egrid,Kel)
+         endif
+         !
+      endif
+      !
+      if(calc_Int_static) Kel = Kel + Kel_stat
+      !
+   end subroutine get_Kel_list

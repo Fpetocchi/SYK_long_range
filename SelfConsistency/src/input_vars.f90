@@ -493,12 +493,14 @@ contains
       !Density lookup
       call add_separator("Density lookup")
       call parse_input_variable(look4dens%mu,"MU",InputFile,default=0d0,comment="Absolute chemical potential or shift with respect to the half-filling mu depending on REMOVE_HARTREE.")
-      call parse_input_variable(look4dens%TargetDensity,"N_READ_LAT",InputFile,default=0d0,comment="Target density.")
-      if(ExpandImpurity.or.AFMselfcons)then
-         call parse_input_variable(look4dens%local,"N_READ_LAT_LOC",InputFile,default=.false.,comment="Flag to restrict the lattice density lookup to the ORBS_1 indexes corresponding to the solved impurity.")
-         if(look4dens%local)then
-            look4dens%orbs = LocalOrbs(1)%Orbs
+      call parse_input_variable(look4dens%TargetDensity,"N_READ_LAT",InputFile,default=0d0,comment="Target density of the whole system if EXPAND.or.AFM, target density on the sites otherwise.")
+      call parse_input_variable(look4dens%local,"N_READ_LAT_LOC",InputFile,default=0,comment="Index of the impurity where to restrict the density constraint. If=0 the density in the whole system will be considered. ")
+      if(look4dens%local.gt.0)then
+         look4dens%orbs = LocalOrbs(look4dens%local)%Orbs
+         if(ExpandImpurity.or.AFMselfcons)then
             look4dens%TargetDensity = look4dens%TargetDensity/Nsite
+         else
+            look4dens%TargetDensity = look4dens%TargetDensity
          endif
       endif
       call parse_input_variable(Solver%mu_scan,"NSCAN_IMP",InputFile,default=1,comment="Integer flag to switch on density lookup within the solver.")
@@ -737,13 +739,12 @@ contains
       if(gap_equation%status)then
          call parse_input_variable(gap_equation%calc_Tc,"CALC_TC",InputFile,default=.false.,comment="Solve the gap equation to compute the critical Temperature. If F sores Wlat in the band basis.")
          call parse_input_variable(gap_equation%mode_el,"MODE_EL",InputFile,default="None",comment="Whether to include electronic Kernel. Available modes: static, static+dynamic. None to avoid.")
-         !if(reg(gap_equation%mode_el).eq."static+dynamic")call parse_input_variable(gap_equation%mode_avg,"MODE_AVG",InputFile,default="integral",comment="=integral to average only the interaction, =list to average the whole dynamical Kernel")
-         gap_equation%mode_avg="integral" !the other requires new derivation for the phonons
          call parse_input_variable(gap_equation%Tbounds,"T_BOUNDS",InputFile,default=[0.1d0,10d0],comment="Lower and upper boundaries (Kelvin) of the temperature scan.")
          call parse_input_variable(gap_equation%Tsteps,"T_STEPS",InputFile,default=10,comment="Number of points in the temperature scan.")
-         call parse_input_variable(gap_equation%Ngrid,"NGRID",InputFile,default=500,comment="Energy grid mesh.")
-         call parse_input_variable(gap_equation%expfact,"EXPFACT",InputFile,default=1d0,comment="Exponential factor for dense energy grid.")
-         call parse_input_variable(gap_equation%wrealMax,"EMAX",InputFile,default=10d0,comment="Energy grid boundaries [eV].")
+         call parse_input_variable(gap_equation%Ngrid,"NGRID",InputFile,default=500,comment="Energy grid mesh over which the kernels are computed.")
+         if(reg(gap_equation%mode_el).eq."static+dynamic")call parse_input_variable(gap_equation%Ngrid_aux,"NGRID_AUX",InputFile,default=5000,comment="Energy grid of the auxiliary variable related to the screening integral.")
+         call parse_input_variable(gap_equation%expfact,"EXPFACT",InputFile,default=1d0,comment="Exponential factor for dense energy grid, If =0 the arctanh grid is used.")
+         call parse_input_variable(gap_equation%Ebounds,"E_BOUNDS",InputFile,default=[-2d0,0d0,+2d0],comment="Energy grid boundaries [left,center,right] [eV].")
          call parse_input_variable(gap_equation%DoSthresh,"DOS_THRESH",InputFile,default=1d-9,comment="Threshold below which the grid ek point in the energy average towards E is not considered.")
          call parse_input_variable(gap_equation%loops,"LOOPS",InputFile,default=100,comment="Maximum number of iteration per each Temperature point.")
          call parse_input_variable(gap_equation%DeltaErr,"DELTA_ERR",InputFile,default=1d-5,comment="Convergence threshold on Delta.")
@@ -784,7 +785,7 @@ contains
          if(mod(Solver%NtauB_K,2).eq.0)Solver%NtauB_K=Solver%NtauB_K+1
          if(mod(Solver%NtauB_K-1,4).eq.0)Solver%NtauB_K=Solver%NtauB_K+mod(Solver%NtauB_K-1,4)
          Solver%TargetDensity = look4dens%TargetDensity
-         if((ExpandImpurity.or.AFMselfcons).and.(.not.look4dens%local))Solver%TargetDensity = look4dens%TargetDensity/Nsite
+         if((ExpandImpurity.or.AFMselfcons).and.(look4dens%local.eq.0))Solver%TargetDensity = look4dens%TargetDensity/Nsite
          call parse_input_variable(Solver%tau_uniform_D,"TAU_UNIF_D",InputFile,default=1,comment="Flag to use a uniform mesh on the imaginary time axis for the hybridization function.")
          call parse_input_variable(Solver%tau_uniform_K,"TAU_UNIF_K",InputFile,default=1,comment="Flag to use a uniform mesh on the imaginary time axis for the screening function.")
          call append_to_input_list(Solver%TargetDensity,"N_READ_IMP","Target density in the impurity list. User cannot set this as its the the same density on within the impurity orbitals if EXPAND=F otherwise its N_READ_LAT/NSITE.")

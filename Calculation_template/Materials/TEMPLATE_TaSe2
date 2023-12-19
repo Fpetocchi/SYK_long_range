@@ -11,6 +11,41 @@ python Gaverage.py --field  Gw --pad lat --orbs 1,2,3,4 --itlist ${a}..${b} ;
 
 ################################################################################
 
+# cutted potential slab
+a=147 ; b=163
+cp /home/petocchif/1_GW_EDMFT/GenericMaterial/Calculation_template/MaxEnt/Gaverage.py .
+python Gaverage.py --field Obs --itlist ${a}..${b} ;
+python Gaverage.py --field  Gw --pad lat --orbs 1,2,3,4 --itlist ${a}..${b} ;
+python Gaverage.py --field  Sw --pad imp --orbs 1,2,3,4 --itlist ${a}..${b} --axis w;
+python Gaverage.py --field  Sw --pad imp --orbs 1,2,3,4 --itlist "147,149,150,151,153,155,162" --pade --axis w;
+python Gaverage.py --field Gkw --itlist ${a}..${b} ;
+
+# cutted potential bulk
+a=160 ; b=172
+cp /home/petocchif/1_GW_EDMFT/GenericMaterial/Calculation_template/MaxEnt/Gaverage.py .
+python Gaverage.py --field Obs --itlist ${a}..${b} ;
+python Gaverage.py --field  Gw --pad lat --orbs 1,2,3,4 --itlist ${a}..${b} ;
+python Gaverage.py --field  Sw --pad imp --orbs 1,2,3,4 --itlist ${a}..${b} --axis w;
+python Gaverage.py --field  Sw --pad ful --orbs 1,2,3,4 --itlist ${a}..${b} --pade --axis w;
+python Gaverage.py --field Gkw --itlist ${a}..${b} ;
+
+
+#muthres=1.0
+./MaxEnt_Kresolved_SLURM.sh -e 0.0001 -w 5001 -W 10 -F G -N 400 -B 200 -m path -i 198 -f 198 -s _v1
+./MaxEnt_Kresolved_SLURM.sh -e 0.0005 -w 5001 -W 10 -F G -N 400 -B 200 -m path -i 198 -f 198 -s _v2
+./MaxEnt_Kresolved_SLURM.sh -e 0.0010 -w 5001 -W 10 -F G -N 400 -B 200 -m path -i 198 -f 198 -s _v3
+#muthres=0.01
+./MaxEnt_Kresolved_SLURM.sh -e 0.0001 -w 5001 -W 10 -F G -N 400 -B 200 -m path -i 198 -f 198 -s _v4
+./MaxEnt_Kresolved_SLURM.sh -e 0.0005 -w 5001 -W 10 -F G -N 400 -B 200 -m path -i 198 -f 198 -s _v5
+./MaxEnt_Kresolved_SLURM.sh -e 0.0010 -w 5001 -W 10 -F G -N 400 -B 200 -m path -i 198 -f 198 -s _v6
+#muthres=smallest
+./MaxEnt_Kresolved_SLURM.sh -e 0.0001 -w 5001 -W 10 -F G -N 400 -B 200 -m path -i 198 -f 198 -s _v7
+./MaxEnt_Kresolved_SLURM.sh -e 0.0005 -w 5001 -W 10 -F G -N 400 -B 200 -m path -i 198 -f 198 -s _v8
+./MaxEnt_Kresolved_SLURM.sh -e 0.0010 -w 5001 -W 10 -F G -N 400 -B 200 -m path -i 198 -f 198 -s _v9
+
+
+
+
 
 #
 #
@@ -23,15 +58,18 @@ python Gaverage.py --field  Gw --pad lat --orbs 1,2,3,4 --itlist ${a}..${b} ;
 ################################################################################
 GENMAT=/home/petocchif/1_GW_EDMFT/GenericMaterial/Calculation_template
 declare -a dirindex=( "avg" )
-for it in `seq  114 1 116 ` ; do
-#for it in "${dirindex[@]}" ; do
+#for it in `seq  114 1 116 ` ; do
+for it in "${dirindex[@]}" ; do
    if [ -d "$it" ]; then
    #
    cd $it/Convergence
    cp ${GENMAT}/${MATERIAL}/MaxEnt/MaxEnt_SLURM.sh .
    chmod 700 MaxEnt_SLURM.sh
    #
-   ./MaxEnt_SLURM.sh -e 0.0005 -w 5001 -W 10 -f G -o 1 -i lat -p ${GENMAT} -q new
+   ./MaxEnt_SLURM.sh -e 0.00005 -w 5001 -W 10 -f G -o 1 -i lat -p ${GENMAT} -q new
+   ./MaxEnt_SLURM.sh -e 0.00005 -w 5001 -W 10 -f G -o 2 -i lat -p ${GENMAT} -q new
+   ./MaxEnt_SLURM.sh -e 0.00005 -w 5001 -W 10 -f G -o 3 -i lat -p ${GENMAT} -q new
+   ./MaxEnt_SLURM.sh -e 0.00005 -w 5001 -W 10 -f G -o 4 -i lat -p ${GENMAT} -q new
    #./MaxEnt_SLURM.sh -e 0.0001 -w 5001 -W 10 -f G -o 1 -i qmc_Ta -p ${GENMAT} -q new
    #./MaxEnt_SLURM.sh -e 0.0001 -w 5001 -W 10 -f G -o 2 -i lat -p ${GENMAT} -q new
    #./MaxEnt_SLURM.sh -e 0.0001 -w 5001 -W 10 -f G -o 3 -i lat -p ${GENMAT} -q new
