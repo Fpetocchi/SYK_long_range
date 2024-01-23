@@ -130,10 +130,11 @@ subroutine dump_MaxEnt_Gfunct(G,mode,dirpath,filename,iorb,WmaxPade)
    !
 end subroutine dump_MaxEnt_Gfunct
 
-subroutine dump_MaxEnt_Gfield(G,mode,dirpath,filename,Orbs,WmaxPade)
+subroutine dump_MaxEnt_Gfield(G,mode,dirpath,filename,Orbs,WmaxPade,sigmalike)
    !
    use parameters
    use utils_misc
+   use linalg, only : inv, zeye
    use input_vars, only: Beta
    use utils_fields
    implicit none
@@ -144,9 +145,12 @@ subroutine dump_MaxEnt_Gfield(G,mode,dirpath,filename,Orbs,WmaxPade)
    character(len=*),intent(in)           :: filename
    integer,allocatable,intent(in)        :: Orbs(:,:)
    real(8),intent(in),optional           :: WmaxPade
+   integer,intent(in),optional           :: sigmalike
    !
-   integer                               :: iwan,iset
-   complex(8),allocatable                :: Gprint(:,:,:)
+   integer                               :: iw,ispin
+   integer                               :: iwan,iset,sigmalike_
+   real(8),allocatable                   :: wmats(:)
+   complex(8),allocatable                :: Gaux(:,:),Gprint(:,:,:)
    !
    !
    if(verbose)write(*,"(A)") "---- dump_MaxEnt_Gfield"
@@ -155,12 +159,40 @@ subroutine dump_MaxEnt_Gfield(G,mode,dirpath,filename,Orbs,WmaxPade)
    if(.not.G%status) stop "dump_MaxEnt_Gfield: Fermionic field not properly initialized."
    if(G%Beta.ne.Beta) stop "dump_MaxEnt_Gfield: Beta attribute of the field does not match with data from input file."
    !
+   sigmalike_=0
+   if(present(sigmalike))sigmalike_=sigmalike
+   !
    call createDir(reg(dirpath)//reg(filename)//"/",verb=verbose)
    !
    allocate(Gprint(G%Norb,G%Npoints,Nspin));Gprint=czero
-   do iwan=1,G%Norb
-      Gprint(iwan,:,:) = G%ws(iwan,iwan,:,:)
-   enddo
+   if(sigmalike_.gt.0)then
+      allocate(Gaux(G%Norb,G%Norb));Gaux=czero
+      allocate(wmats(G%Npoints));wmats=0d0
+      wmats = FermionicFreqMesh(Beta,G%Npoints)
+      !
+      do ispin=1,Nspin
+         do iw=1,G%Npoints
+            if(sigmalike_.gt.1)then
+               !remove the real-part at infinite frequency
+               Gaux = zeye(G%Norb)*dcmplx(0d0,wmats(iw)) - ( G%ws(:,:,iw,ispin) - dreal(G%ws(:,:,G%Npoints,ispin)) )
+            else
+               !the real-part at infinite frequency is already removed
+               Gaux = zeye(G%Norb)*dcmplx(0d0,wmats(iw)) - G%ws(:,:,iw,ispin)
+            endif
+            !inversion to the auxiliary Gf
+            call inv(Gaux)
+            !put back in the printed Gf
+            do iwan=1,G%Norb
+               Gprint(iwan,iw,ispin) = Gaux(iwan,iwan)
+            enddo
+         enddo
+      enddo
+      deallocate(wmats,Gaux)
+   else
+      do iwan=1,G%Norb
+         Gprint(iwan,:,:) = G%ws(iwan,iwan,:,:)
+      enddo
+   endif
    !
    if(allocated(Orbs))then
       do iset=1,size(Orbs,dim=1)

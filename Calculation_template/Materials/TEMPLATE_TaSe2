@@ -216,8 +216,8 @@ set xtics ('G' 0.0, 'K' 0.2481, 'M' 0.3106, 'K' 0.3737, 'G' 0.4987, 'K' 0.6231, 
 
 
 
-ymin=
-ymax=
+ymin=-2
+ymax=6
 set yrange [ymin:ymax]
 set xtics ('G' 0.0, 'M' 0.2733, 'K' 0.5172, 'G' 1.0)
 set arrow from 0.2733,ymin to 0.2733,ymax nohead front lw 0.6 lc rgb "black"

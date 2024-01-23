@@ -314,20 +314,29 @@ program SelfConsistency
       !
       !Print Gf: local readable and k-dep binfmt
       call dump_FermionicField(Glat,reg(ItFolder),"Glat_w",paramagnet)
-      if(dump_Gk)call dump_FermionicField(Glat,reg(ItFolder),"Glat_w",.true.,Crystal%kpt,paramagnet)
       call dump_MaxEnt(Glat,"mats",reg(ItFolder)//"Convergence/","Glat",EqvGWndx%SetOrbs,WmaxPade=PadeWlimit)
       call dump_MaxEnt(Glat,"mats2itau",reg(ItFolder)//"Convergence/","Glat",EqvGWndx%SetOrbs)
+      if(dump_Gk)call dump_FermionicField(Glat,reg(ItFolder),"Glat_w",.true.,Crystal%kpt,paramagnet)
       !
       !
       !Print Potentials if present
       if(Hetero%status)call print_potentials()
       !
       !
-      !Print the new full self-energy: local readable, k-dep binfmt (optional) and along path
+      !Print full self-energy: local readable and k-dep binfmt
       call dump_FermionicField(S_Full,reg(ItFolder),"Sfull_w",paramagnet)
-      if(dump_Sigmak)call dump_FermionicField(S_Full,reg(ItFolder),"Sfull_w",.true.,Crystal%kpt,paramagnet)
       call dump_MaxEnt(S_Full,"mats",reg(ItFolder)//"Convergence/","Sful",EqvGWndx%SetOrbs,WmaxPade=PadeWlimit)
+      if(reg(DC_type).eq."Full_Tail")then
+         call dump_MaxEnt(S_Full,"mats2itau",reg(ItFolder)//"Convergence/","Sful",EqvGWndx%SetOrbs,sigmalike=1)
+      else
+         call dump_MaxEnt(S_Full,"mats2itau",reg(ItFolder)//"Convergence/","Sful",EqvGWndx%SetOrbs,sigmalike=2)
+      endif
+      if(dump_Sigmak)call dump_FermionicField(S_Full,reg(ItFolder),"Sfull_w",.true.,Crystal%kpt,paramagnet)
+      !
+      !
+      !Print interacting bandstructure
       if(interp_G)call interpolate2kpath(S_Full,Crystal,reg(MaxEnt_K))
+      !
       !
       !Print the new full self-energy at Gamma point
       S_Full%ws = S_Full%wks(:,:,:,1,:)

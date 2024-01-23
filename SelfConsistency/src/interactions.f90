@@ -706,6 +706,12 @@ contains
                endif
             enddo
             !
+            !remove the bare limit
+            if(Nfreq.lt.5)then
+               Umats%bare_local = Ureal%screened_local(:,:,1)
+               if(.not.LocalOnly) Umats%bare = Ureal%screened(:,:,1,:)
+            endif
+            !
             close(unit)
             !
          enddo !iq
