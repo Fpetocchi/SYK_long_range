@@ -19,20 +19,21 @@ subroutine calc_Tc(pathOUTPUT,Inputs,Lttc,Wlat)
    integer                               :: iE,iE1,iE2,EE_dim,Ngrid
    integer                               :: Norb,Nkpt,unit,Ngrid_read
    complex(8)                            :: Kint
-   real(8),allocatable                   :: Egrid_print(:),DoS_Model_interp(:)
+   real(8),allocatable                   :: Egrid_print(:),EboundsDoS(:)
    real(8),allocatable                   :: Tlist(:),Delta_T(:)
    real(8),allocatable                   :: Zph(:),Kph(:)
    complex(8),allocatable                :: Kel(:)
    complex(8),allocatable                :: Hk_used(:,:,:)
    character(len=255)                    :: printpath,printpath_T
    !
-   integer                               :: iloop,iT,Q_p(2),Q_f(2)
+   integer                               :: iloop,iT,ix1,ix2,iy1,iy2
    real(8)                               :: Temp,Beta,Beta_DFT,errDelta
-   real(8)                               :: dumE,ReD,ImD,tanh_b,tanh_f
+   real(8)                               :: dumE,ReD,ImD,Emin,Emax
+   real(8)                               :: tanh_b,tanh_f,DoS_Model_b,DoS_Model_f
    complex(8)                            :: Kel_b,Kel_f
    real(8),allocatable                   :: EDsq(:),kpt_QP(:,:)
    complex(8),allocatable                :: Delta(:),oldDelta(:),newDelta(:)
-   logical                               :: converged,filexists
+   logical                               :: converged,filexists,printLoops
    !
    !
    write(*,"(A)") new_line("A")//new_line("A")//"---- calc_Tc"
@@ -75,27 +76,26 @@ subroutine calc_Tc(pathOUTPUT,Inputs,Lttc,Wlat)
    deallocate(Hk_used)
    !
    !recompute the DoS accounting for the imaginary part of the G0W0 self-energy, verbatim of print_G0W0_dispersion
+   Emin = Egrid_Phonons(1)
+   Emax = Egrid_Phonons(Ngrid)
    if(calc_Kel)then
       !
       if(Inputs%G0W0Renorm)then
-         call overload_G0W0(reg(pathINPUT),reg(pathINPUTtr),Lttc,eta,Inputs%DoSthresh)
+         call overload_G0W0(reg(pathINPUT),reg(pathINPUTtr),Lttc,eta,Inputs%DoSthresh,beta=Wlat%beta)
          printpath=reg(pathOUTPUT)//"Gap_Equation_Renorm_G0W0/"
       endif
       !
       if(Inputs%DMFTRenorm)then
-         call overload_DMFT(reg(pathOUTPUT)//"K_resolved/",Lttc,Inputs%DoSthresh)
+         call overload_DMFT(reg(pathOUTPUT)//"K_resolved/",reg(pathINPUTtr),Lttc,Inputs%DoSthresh,beta=Wlat%beta)
          printpath=reg(pathOUTPUT)//"Gap_Equation_Renorm_DMFT/"
       endif
       !
       call dump_Field_component(DoS_Model,reg(printpath),"DoS_Model.DAT",Egrid_Model)
       !
-      allocate(DoS_Model_interp(Ngrid));DoS_Model_interp=0d0
-      if(calc_phonons)then
-         DoS_Model_interp = cubic_interp( Egrid_Model, DoS_Model, Egrid_Phonons )
-         call dump_Field_component(DoS_Model_interp,reg(printpath),"DoS_Model_interp.DAT",Egrid_Phonons)
-      else
-         DoS_Model_interp = DoS_Model
-      endif
+      EboundsDoS = pack(DoS_Model,abs(DoS_Model).gt.0d0)
+      Emin = Egrid_Model(minloc(abs(DoS_Model-EboundsDoS(1)),dim=1))
+      Emax = Egrid_Model(minloc(abs(DoS_Model-EboundsDoS(size(EboundsDoS))),dim=1))
+      deallocate(EboundsDoS)
       !
    endif
    call dump_Field_component(DoS_DFT,reg(printpath),"DoS_DFT.DAT",Egrid_Phonons)
@@ -125,8 +125,10 @@ subroutine calc_Tc(pathOUTPUT,Inputs,Lttc,Wlat)
          enddo
          Delta = Delta * Inputs%DeltaInit_M * eV2DFTgrid / Delta(minloc(abs(Egrid_Phonons),dim=1))
       endif
+      printLoops = (reg(Inputs%printmode_ph).eq."all").or.(reg(Inputs%printmode_el).eq."all")
       !
-      where(DoS_Model.lt.Inputs%DoSthresh) Delta=czero
+      where(Egrid_Phonons.le.Emin) Delta=czero
+      where(Egrid_Phonons.ge.Emax) Delta=czero
       !
       allocate(oldDelta(Ngrid));oldDelta=Delta
       allocate(Tlist(Inputs%Tsteps));Tlist=0d0
@@ -173,7 +175,7 @@ subroutine calc_Tc(pathOUTPUT,Inputs,Lttc,Wlat)
          !
          !Convergence loop over Delta(e)
          write(*,"(A)") new_line("A")//"     Solving gap equation."
-         call dump_Field_component(oldDelta,reg(printpath_T),"0_Delta.DAT",Egrid_Phonons)
+         if(printLoops) call dump_Field_component(oldDelta,reg(printpath_T),"0_Delta.DAT",Egrid_Phonons)
          allocate(EDsq(Ngrid)); EDsq = czero
          allocate(newDelta(Ngrid)); newDelta = czero
          converged=.false.
@@ -188,7 +190,7 @@ subroutine calc_Tc(pathOUTPUT,Inputs,Lttc,Wlat)
             !$OMP PARALLEL DEFAULT(PRIVATE),&
             !$OMP SHARED(Ngrid,Beta_DFT,EDsq,Delta,newDelta),&
             !$OMP SHARED(calc_phonons,Egrid_Phonons,DoS_DFT,Kph,Zph),&
-            !$OMP SHARED(calc_Kel,Egrid_Model,DoS_Model_interp,Kel,bilinear_map)
+            !$OMP SHARED(calc_Kel,Egrid_Model,DoS_Model,Kel,bilinear_map)
             !$OMP DO
             do iE1=1,Ngrid
                !
@@ -213,41 +215,55 @@ subroutine calc_Tc(pathOUTPUT,Inputs,Lttc,Wlat)
                   !Integral of the electronic Kernel done with the Model DoS - bilinear interpolation to logarithmic mesh
                   if(calc_Kel)then
                      !
-                     !default values
-                     Kel_b = Kel(rc2ut(iE1,iE2-1,Ngrid))
-                     Kel_f = Kel(rc2ut(iE1,iE2,Ngrid))
-                     !
                      !the phonons are on a logarithmic mesh so bilinear interpolation is required
                      if(calc_phonons)then
                         !
-                        Q_p = bilinear_map(iE1,iE2-1,:)
-                        Kel_b = bilinear_interp( Egrid_Model(Q_p(1))             , & !x1 = y1
-                                                 Egrid_Model(Q_p(2))             , & !x2
-                                                 Egrid_Model(Q_p(1))             , & !y1
-                                                 Egrid_Model(Q_p(2))             , & !y2
-                                                 Kel(rc2ut(Q_p(1),Q_p(1),Ngrid)) , & !f(x1,y1)
-                                                 Kel(rc2ut(Q_p(1),Q_p(2),Ngrid)) , & !f(x1,y2)
-                                                 Kel(rc2ut(Q_p(2),Q_p(2),Ngrid)) , & !f(x2,y2)
-                                                 Kel(rc2ut(Q_p(2),Q_p(1),Ngrid)) , & !f(x2,y1)
-                                                 Egrid_Phonons(iE2)              , & !x
-                                                 Egrid_Phonons(iE2-1)              ) !y
+                        ix1 = bilinear_map(iE1,iE2-1,1)
+                        ix2 = bilinear_map(iE1,iE2-1,2)
+                        iy1 = bilinear_map(iE1,iE2-1,3)
+                        iy2 = bilinear_map(iE1,iE2-1,4)
+                        Kel_b = bilinear_interp( Egrid_Model(ix1)             , & !x1
+                                                 Egrid_Model(ix2)             , & !x2
+                                                 Egrid_Model(iy1)             , & !y1
+                                                 Egrid_Model(iy2)             , & !y2
+                                                 Kel(rc2ut(ix1,iy1,Ngrid))    , & !f(x1,y1)
+                                                 Kel(rc2ut(ix1,iy2,Ngrid))    , & !f(x1,y2)
+                                                 Kel(rc2ut(ix2,iy2,Ngrid))    , & !f(x2,y2)
+                                                 Kel(rc2ut(ix2,iy1,Ngrid))    , & !f(x2,y1)
+                                                 Egrid_Phonons(iE2)           , & !x
+                                                 Egrid_Phonons(iE2-1)         )   !y
                         !
-                        Q_f = bilinear_map(iE1,iE2,:)
-                        Kel_f = bilinear_interp( Egrid_Model(Q_f(1))             , & !x1 = y1
-                                                 Egrid_Model(Q_f(2))             , & !x2
-                                                 Egrid_Model(Q_f(1))             , & !y1
-                                                 Egrid_Model(Q_f(2))             , & !y2
-                                                 Kel(rc2ut(Q_f(1),Q_f(1),Ngrid)) , & !f(x1,y1)
-                                                 Kel(rc2ut(Q_f(1),Q_f(2),Ngrid)) , & !f(x1,y2)
-                                                 Kel(rc2ut(Q_f(2),Q_f(2),Ngrid)) , & !f(x2,y2)
-                                                 Kel(rc2ut(Q_f(2),Q_f(1),Ngrid)) , & !f(x2,y1)
-                                                 Egrid_Phonons(iE2)              , & !x
-                                                 Egrid_Phonons(iE2)                ) !y
+                        DoS_Model_b = linear_interp_2y([Egrid_Model(iy1),DoS_Model(iy1)],[Egrid_Model(iy2),DoS_Model(iy2)],Egrid_Phonons(iE2-1))
+                        !
+                        ix1 = bilinear_map(iE1,iE2,1)
+                        ix2 = bilinear_map(iE1,iE2,2)
+                        iy1 = bilinear_map(iE1,iE2,3)
+                        iy2 = bilinear_map(iE1,iE2,4)
+                        Kel_f = bilinear_interp( Egrid_Model(ix1)             , & !x1
+                                                 Egrid_Model(ix2)             , & !x2
+                                                 Egrid_Model(iy1)             , & !y1
+                                                 Egrid_Model(iy2)             , & !y2
+                                                 Kel(rc2ut(ix1,iy1,Ngrid))    , & !f(x1,y1)
+                                                 Kel(rc2ut(ix1,iy2,Ngrid))    , & !f(x1,y2)
+                                                 Kel(rc2ut(ix2,iy2,Ngrid))    , & !f(x2,y2)
+                                                 Kel(rc2ut(ix2,iy1,Ngrid))    , & !f(x2,y1)
+                                                 Egrid_Phonons(iE2)           , & !x
+                                                 Egrid_Phonons(iE2)           )   !y
+                        !
+                        DoS_Model_f = linear_interp_2y([Egrid_Model(iy1),DoS_Model(iy1)],[Egrid_Model(iy2),DoS_Model(iy2)],Egrid_Phonons(iE2))
+                        !
+                     else
+                        !
+                        Kel_b = Kel(rc2ut(iE1,iE2-1,Ngrid))
+                        DoS_Model_b = DoS_Model(iE2-1)
+                        !
+                        Kel_f = Kel(rc2ut(iE1,iE2,Ngrid))
+                        DoS_Model_f = DoS_Model(iE2)
                         !
                      endif
                      !
-                     Kint = Kint + ( DoS_Model_interp(iE2-1) * Kel_b * tanh_b * Delta(iE2-1) + &
-                                     DoS_Model_interp(iE2)   * Kel_f * tanh_f * Delta(iE2)   ) * (dE/2d0)
+                     Kint = Kint + ( DoS_Model_b * Kel_b * tanh_b * Delta(iE2-1) + &
+                                     DoS_Model_f * Kel_f * tanh_f * Delta(iE2)   ) * (dE/2d0)
                      !
                   endif
                   !
@@ -262,7 +278,8 @@ subroutine calc_Tc(pathOUTPUT,Inputs,Lttc,Wlat)
             !
             !This is to fix the phase of Delta
             newDelta = dcmplx(dreal(newDelta),0d0)
-            if(calc_Kel) where(DoS_Model_interp.lt.Inputs%DoSthresh) newDelta=czero
+            where(Egrid_Phonons.le.Emin) newDelta=czero
+            where(Egrid_Phonons.ge.Emax) newDelta=czero
             !
             !Convergence check
             !errDelta = maxval(abs(Delta-newDelta))
@@ -279,7 +296,7 @@ subroutine calc_Tc(pathOUTPUT,Inputs,Lttc,Wlat)
             endif
             oldDelta = Delta
             !
-            call dump_Field_component(Delta,reg(printpath_T),str(iloop)//"_Delta.DAT",Egrid_Phonons)
+            if(printLoops) call dump_Field_component(Delta,reg(printpath_T),str(iloop)//"_Delta.DAT",Egrid_Phonons)
             !
          enddo SCloop !iloop
          !
@@ -299,7 +316,7 @@ subroutine calc_Tc(pathOUTPUT,Inputs,Lttc,Wlat)
       enddo !iT
       !
       call dump_Field_component(Delta_T,reg(printpath),"Delta_T.DAT",Tlist)
-      deallocate(Tlist,Delta_T,DoS_Model_interp)
+      deallocate(Tlist,Delta_T)!,DoS_Model_interp)
       !
    endif
    !

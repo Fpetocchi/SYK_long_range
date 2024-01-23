@@ -652,6 +652,7 @@ contains
          allocate(Utmp(Nbp_spex,Nbp_spex));Utmp=czero
          allocate(wread(Nfreq));wread=0d0
          write(*,"(A,I)")"     Real frequencies: ",Nfreq
+         if(Nfreq.lt.5) write(*,"(A)") "     Warning: the number of real-frequency points is less than 5, AC will be skipped and UcRPA(iw)=UcRPA(w=0) for each iw."
          !
          ! Few checks
          if(Nspin_spex.ne.1) stop "read_U_spex_full: Nspin_spex.ne.1"
@@ -729,26 +730,35 @@ contains
             !$OMP PRIVATE(ib1,ib2,iw1,iw2,D1,D2,D3,Utmp)
             !$OMP DO
             do iw1=1,Umats%Npoints
-               Utmp=czero
-               do iw2=1,Nfreq-2,2
-                  !
-                  ! Locally D(-w)=-D(w) for all components
-                  D1 = -dimag( Ureal%screened_local(:,:,iw2)   )/pi
-                  D2 = -dimag( Ureal%screened_local(:,:,iw2+1) )/pi
-                  D3 = -dimag( Ureal%screened_local(:,:,iw2+2) )/pi
-                  !
-                  ! Integrate using Simpson method
-                  if(wread(iw2).gt.0.d0) then
-                     Utmp = Utmp + ( D1/(dcmplx(0.d0,wmats(iw1))-wread(iw2)  ) - D1/(dcmplx(0.d0,wmats(iw1))+wread(iw2)  ) ) *(wread(iw2+1)-wread(iw2))/3.d0
-                     Utmp = Utmp + ( D2/(dcmplx(0.d0,wmats(iw1))-wread(iw2+1)) - D2/(dcmplx(0.d0,wmats(iw1))+wread(iw2+1)) ) *(wread(iw2+1)-wread(iw2))*4.d0/3.d0
-                     Utmp = Utmp + ( D3/(dcmplx(0.d0,wmats(iw1))-wread(iw2+2)) - D3/(dcmplx(0.d0,wmats(iw1))+wread(iw2+2)) ) *(wread(iw2+1)-wread(iw2))/3.d0
-                  elseif(dabs(wread(iw2)).lt.1.d-12) then
-                     Utmp = Utmp + ( D2/(dcmplx(0.d0,wmats(iw1))-wread(iw2+1)) - D2/(dcmplx(0.d0,wmats(iw1))+wread(iw2+1)) ) *(wread(iw2+1)-wread(iw2))*4.d0/3.d0
-                     Utmp = Utmp + ( D3/(dcmplx(0.d0,wmats(iw1))-wread(iw2+2)) - D3/(dcmplx(0.d0,wmats(iw1))+wread(iw2+2)) ) *(wread(iw2+1)-wread(iw2))/3.d0
-                  endif
-               enddo
                !
-               Umats%screened_local(:,:,iw1) = Utmp + Umats%bare_local
+               if(Nfreq.ge.5)then
+                  !
+                  Utmp=czero
+                  do iw2=1,Nfreq-2,2
+                     !
+                     ! Locally D(-w)=-D(w) for all components
+                     D1 = -dimag( Ureal%screened_local(:,:,iw2)   )/pi
+                     D2 = -dimag( Ureal%screened_local(:,:,iw2+1) )/pi
+                     D3 = -dimag( Ureal%screened_local(:,:,iw2+2) )/pi
+                     !
+                     ! Integrate using Simpson method
+                     if(wread(iw2).gt.0.d0) then
+                        Utmp = Utmp + ( D1/(dcmplx(0.d0,wmats(iw1))-wread(iw2)  ) - D1/(dcmplx(0.d0,wmats(iw1))+wread(iw2)  ) ) *(wread(iw2+1)-wread(iw2))/3.d0
+                        Utmp = Utmp + ( D2/(dcmplx(0.d0,wmats(iw1))-wread(iw2+1)) - D2/(dcmplx(0.d0,wmats(iw1))+wread(iw2+1)) ) *(wread(iw2+1)-wread(iw2))*4.d0/3.d0
+                        Utmp = Utmp + ( D3/(dcmplx(0.d0,wmats(iw1))-wread(iw2+2)) - D3/(dcmplx(0.d0,wmats(iw1))+wread(iw2+2)) ) *(wread(iw2+1)-wread(iw2))/3.d0
+                     elseif(dabs(wread(iw2)).lt.1.d-12) then
+                        Utmp = Utmp + ( D2/(dcmplx(0.d0,wmats(iw1))-wread(iw2+1)) - D2/(dcmplx(0.d0,wmats(iw1))+wread(iw2+1)) ) *(wread(iw2+1)-wread(iw2))*4.d0/3.d0
+                        Utmp = Utmp + ( D3/(dcmplx(0.d0,wmats(iw1))-wread(iw2+2)) - D3/(dcmplx(0.d0,wmats(iw1))+wread(iw2+2)) ) *(wread(iw2+1)-wread(iw2))/3.d0
+                     endif
+                  enddo
+                  !
+                  Umats%screened_local(:,:,iw1) = Utmp + Umats%bare_local
+                  !
+               else
+                  !
+                  Umats%screened_local(:,:,iw1) = Ureal%screened_local(:,:,1)
+                  !
+               endif
                !
             enddo !iw1
             !$OMP END DO
@@ -791,29 +801,37 @@ contains
             !$OMP DO
             do iq=1,Umats%Nkpt
                !
-               !Perform analytical continuation from real to Matsubara frequency
+               !Perform analytical continuation from real to Matsubara frequency at each iq
                do iw1=1,Umats%Npoints
                   !
-                  Utmp=czero
-                  do iw2=1,Nfreq-2,2
+                  if(Nfreq.ge.5)then
                      !
-                     ! D = i/2pi * { [Uab(w)-Uab(inf)] - [Uba(w)-Uba(inf)]* }
-                     D1 = img*( (Ureal%screened(:,:,iw2,iq)  -Umats%bare(:,:,iq)) - transpose(conjg(Ureal%screened(:,:,iw2,iq)  -Umats%bare(:,:,iq))) )/(2d0*pi)
-                     D2 = img*( (Ureal%screened(:,:,iw2+1,iq)-Umats%bare(:,:,iq)) - transpose(conjg(Ureal%screened(:,:,iw2+1,iq)-Umats%bare(:,:,iq))) )/(2d0*pi)
-                     D3 = img*( (Ureal%screened(:,:,iw2+2,iq)-Umats%bare(:,:,iq)) - transpose(conjg(Ureal%screened(:,:,iw2+2,iq)-Umats%bare(:,:,iq))) )/(2d0*pi)
+                     Utmp=czero
+                     do iw2=1,Nfreq-2,2
+                        !
+                        ! D = i/2pi * { [Uab(w)-Uab(inf)] - [Uba(w)-Uba(inf)]* }
+                        D1 = img*( (Ureal%screened(:,:,iw2,iq)  -Umats%bare(:,:,iq)) - transpose(conjg(Ureal%screened(:,:,iw2,iq)  -Umats%bare(:,:,iq))) )/(2d0*pi)
+                        D2 = img*( (Ureal%screened(:,:,iw2+1,iq)-Umats%bare(:,:,iq)) - transpose(conjg(Ureal%screened(:,:,iw2+1,iq)-Umats%bare(:,:,iq))) )/(2d0*pi)
+                        D3 = img*( (Ureal%screened(:,:,iw2+2,iq)-Umats%bare(:,:,iq)) - transpose(conjg(Ureal%screened(:,:,iw2+2,iq)-Umats%bare(:,:,iq))) )/(2d0*pi)
+                        !
+                        ! Integrate using Simpson method
+                        if(wread(iw2).gt.0.d0) then
+                           Utmp = Utmp + (  D1/(dcmplx(0d0,wmats(iw1))-wread(iw2)  )  -  transpose(conjg(D1))/(dcmplx(0d0,wmats(iw1))+wread(iw2)  )  ) * (wread(iw2+1)-wread(iw2))/3d0
+                           Utmp = Utmp + (  D2/(dcmplx(0d0,wmats(iw1))-wread(iw2+1))  -  transpose(conjg(D2))/(dcmplx(0d0,wmats(iw1))+wread(iw2+1))  ) * (wread(iw2+1)-wread(iw2))*4d0/3d0
+                           Utmp = Utmp + (  D3/(dcmplx(0d0,wmats(iw1))-wread(iw2+2))  -  transpose(conjg(D3))/(dcmplx(0d0,wmats(iw1))+wread(iw2+2))  ) * (wread(iw2+1)-wread(iw2))/3d0
+                        elseif(dabs(wread(iw2)).lt.1.d-12) then
+                           Utmp = Utmp + (  D2/(dcmplx(0d0,wmats(iw1))-wread(iw2+1))  -  transpose(conjg(D2))/(dcmplx(0d0,wmats(iw1))+wread(iw2+1))  ) * (wread(iw2+1)-wread(iw2))*4d0/3d0
+                           Utmp = Utmp + (  D3/(dcmplx(0d0,wmats(iw1))-wread(iw2+2))  -  transpose(conjg(D3))/(dcmplx(0d0,wmats(iw1))+wread(iw2+2))  ) * (wread(iw2+1)-wread(iw2))/3d0
+                        endif
+                     enddo
                      !
-                     ! Integrate using Simpson method
-                     if(wread(iw2).gt.0.d0) then
-                        Utmp = Utmp + (  D1/(dcmplx(0d0,wmats(iw1))-wread(iw2)  )  -  transpose(conjg(D1))/(dcmplx(0d0,wmats(iw1))+wread(iw2)  )  ) * (wread(iw2+1)-wread(iw2))/3d0
-                        Utmp = Utmp + (  D2/(dcmplx(0d0,wmats(iw1))-wread(iw2+1))  -  transpose(conjg(D2))/(dcmplx(0d0,wmats(iw1))+wread(iw2+1))  ) * (wread(iw2+1)-wread(iw2))*4d0/3d0
-                        Utmp = Utmp + (  D3/(dcmplx(0d0,wmats(iw1))-wread(iw2+2))  -  transpose(conjg(D3))/(dcmplx(0d0,wmats(iw1))+wread(iw2+2))  ) * (wread(iw2+1)-wread(iw2))/3d0
-                     elseif(dabs(wread(iw2)).lt.1.d-12) then
-                        Utmp = Utmp + (  D2/(dcmplx(0d0,wmats(iw1))-wread(iw2+1))  -  transpose(conjg(D2))/(dcmplx(0d0,wmats(iw1))+wread(iw2+1))  ) * (wread(iw2+1)-wread(iw2))*4d0/3d0
-                        Utmp = Utmp + (  D3/(dcmplx(0d0,wmats(iw1))-wread(iw2+2))  -  transpose(conjg(D3))/(dcmplx(0d0,wmats(iw1))+wread(iw2+2))  ) * (wread(iw2+1)-wread(iw2))/3d0
-                     endif
-                  enddo
-                  !
-                  Umats%screened(:,:,iw1,iq) = Utmp + Umats%bare(:,:,iq)
+                     Umats%screened(:,:,iw1,iq) = Utmp + Umats%bare(:,:,iq)
+                     !
+                  else
+                     !
+                     Umats%screened(:,:,iw1,iq) = Ureal%screened(:,:,1,iq)
+                     !
+                  endif
                   !
                enddo !iw1
                !

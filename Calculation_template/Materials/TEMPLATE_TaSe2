@@ -57,7 +57,7 @@ python Gaverage.py --field Gkw --itlist ${a}..${b} ;
 ################################################################################
 ################################################################################
 GENMAT=/home/petocchif/1_GW_EDMFT/GenericMaterial/Calculation_template
-declare -a dirindex=( "avg" )
+declare -a dirindex=( "150_360min" )
 #for it in `seq  114 1 116 ` ; do
 for it in "${dirindex[@]}" ; do
    if [ -d "$it" ]; then
@@ -66,10 +66,10 @@ for it in "${dirindex[@]}" ; do
    cp ${GENMAT}/${MATERIAL}/MaxEnt/MaxEnt_SLURM.sh .
    chmod 700 MaxEnt_SLURM.sh
    #
-   ./MaxEnt_SLURM.sh -e 0.00005 -w 5001 -W 10 -f G -o 1 -i lat -p ${GENMAT} -q new
-   ./MaxEnt_SLURM.sh -e 0.00005 -w 5001 -W 10 -f G -o 2 -i lat -p ${GENMAT} -q new
-   ./MaxEnt_SLURM.sh -e 0.00005 -w 5001 -W 10 -f G -o 3 -i lat -p ${GENMAT} -q new
-   ./MaxEnt_SLURM.sh -e 0.00005 -w 5001 -W 10 -f G -o 4 -i lat -p ${GENMAT} -q new
+   ./MaxEnt_SLURM.sh -e 0.0001 -w 5001 -W 10 -f G -o 1 -i lat -p ${GENMAT} -q amd
+   ./MaxEnt_SLURM.sh -e 0.0001 -w 5001 -W 10 -f G -o 2 -i lat -p ${GENMAT} -q amd
+   ./MaxEnt_SLURM.sh -e 0.0001 -w 5001 -W 10 -f G -o 3 -i lat -p ${GENMAT} -q amd
+   ./MaxEnt_SLURM.sh -e 0.0001 -w 5001 -W 10 -f G -o 4 -i lat -p ${GENMAT} -q amd
    #./MaxEnt_SLURM.sh -e 0.0001 -w 5001 -W 10 -f G -o 1 -i qmc_Ta -p ${GENMAT} -q new
    #./MaxEnt_SLURM.sh -e 0.0001 -w 5001 -W 10 -f G -o 2 -i lat -p ${GENMAT} -q new
    #./MaxEnt_SLURM.sh -e 0.0001 -w 5001 -W 10 -f G -o 3 -i lat -p ${GENMAT} -q new
@@ -215,6 +215,13 @@ set arrow from 0.7500,ymin to 0.7500,ymax nohead front lw 0.6 lc rgb "black"
 set xtics ('G' 0.0, 'K' 0.2481, 'M' 0.3106, 'K' 0.3737, 'G' 0.4987, 'K' 0.6231, 'M' 0.6856, 'K' 0.7500, 'G' 1.0)
 
 
+
+ymin=
+ymax=
+set yrange [ymin:ymax]
+set xtics ('G' 0.0, 'M' 0.2733, 'K' 0.5172, 'G' 1.0)
+set arrow from 0.2733,ymin to 0.2733,ymax nohead front lw 0.6 lc rgb "black"
+set arrow from 0.5172,ymin to 0.5172,ymax nohead front lw 0.6 lc rgb "black"
 
 
 

@@ -231,6 +231,7 @@ module input_vars
    logical,public                           :: print_plane_G
    integer,public                           :: Nkpt_plane
    real(8),public                           :: KplaneMax
+   real(8),public                           :: Fermikz
    real(8),public                           :: FermiCut
    real(8),public                           :: KKcutoff
    logical,public                           :: rebuildRealPart
@@ -706,6 +707,7 @@ contains
       call parse_input_variable(print_plane_G,"PRINT_PLANE_G",InputFile,default=.false.,comment="Flag to compute the Green's function on the planar {kx,ky} sheet.")
       call parse_input_variable(Nkpt_plane,"NK_PLANE",InputFile,default=50,comment="Number of K-points in the side of the planar {kx,ky} sheet.")
       call parse_input_variable(KplaneMax,"KPLANE_MAX",InputFile,default=1d0,comment="Maximum value of the momentum in the {kx,ky} sheet.")
+      call parse_input_variable(Fermikz,"FERMI_KZ",InputFile,default=0d0,comment="kz value of the {kx,ky} sheet.")
       call parse_input_variable(FermiCut,"FERMI_CUT",InputFile,default=0d0,comment="Energy level at which the Fermi surface is computed. Used only in Akf_builder.")
       call parse_input_variable(KKcutoff,"KK_CUTOFF",InputFile,default=50d0,comment="Real frequency cutoff for Kramers Kronig integrals, should be twice the region of interest.")
       KKcutoff=abs(KKcutoff)
@@ -742,6 +744,8 @@ contains
          call parse_input_variable(gap_equation%Tbounds,"T_BOUNDS",InputFile,default=[0.1d0,10d0],comment="Lower and upper boundaries (Kelvin) of the temperature scan.")
          call parse_input_variable(gap_equation%Tsteps,"T_STEPS",InputFile,default=10,comment="Number of points in the temperature scan.")
          call parse_input_variable(gap_equation%Ngrid,"NGRID",InputFile,default=500,comment="Energy grid mesh over which the kernels are computed.")
+         if(mod(gap_equation%Ngrid,2).eq.0)gap_equation%Ngrid=gap_equation%Ngrid+1
+         if(mod(gap_equation%Ngrid-1,4).ne.0)gap_equation%Ngrid=gap_equation%Ngrid+mod(gap_equation%Ngrid-1,4)
          if(reg(gap_equation%mode_el).eq."static+dynamic")call parse_input_variable(gap_equation%Ngrid_aux,"NGRID_AUX",InputFile,default=5000,comment="Energy grid of the auxiliary variable related to the screening integral.")
          call parse_input_variable(gap_equation%expfact,"EXPFACT",InputFile,default=1d0,comment="Exponential factor for dense energy grid, If =0 the arctanh grid is used.")
          call parse_input_variable(gap_equation%Ebounds,"E_BOUNDS",InputFile,default=[-2d0,0d0,+2d0],comment="Energy grid boundaries [left,center,right] [eV].")

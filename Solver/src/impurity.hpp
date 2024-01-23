@@ -614,8 +614,8 @@ class ct_hyb
             {
                if(imeas%NspinSwap==1) // for (int iswap=0; iswap<NspinSwap; iswap++)
                {
-                  bool SpinSwap;
-                  for (int ifl=0; ifl<Nflavor; ifl++) SpinSwap = ( M[ifl].rows() == 0 ) ? false : true;
+                  bool SpinSwap=true;
+                  for (int ifl=0; ifl<Nflavor; ifl++) SpinSwap = SpinSwap && (( M[ifl].rows() == 0 ) ? false : true);
                   if(SpinSwap) swap_spins( Beta, Delta, segments, full_line, sign, M );
                }
             }

@@ -63,7 +63,7 @@ contains
       use utils_fields
       use crystal
       use fourier_transforms
-      use input_vars, only : Ntau, tau_uniform, paramagnet, pathINPUT
+      use input_vars, only : Ntau, tau_uniform, paramagnet, pathINPUT, paramagneticSPEX
       implicit none
       !
       type(FermionicField),intent(inout)    :: Smats
@@ -78,10 +78,14 @@ contains
       complex(8),allocatable                :: Zk_sigma(:,:,:)
       real(8)                               :: Beta
       integer                               :: Nbp,Nkpt,Norb,Nmats
-      integer                               :: ik1,ik2,iq,iw,itau,ispin
+      integer                               :: ik,ik1,ik2,iq,iw,itau,ispin
       integer                               :: i,j,k,l,ib1,ib2
+      integer                               :: Nspin_Uwan,Nkpt_Uwan,unit
+      integer                               :: ib_Uwan1,ib_Uwan2,Norb_Uwan
+      complex(8),allocatable                :: Uwan(:,:,:,:)
       real                                  :: start,finish
       logical                               :: filexists,LDAoffdiag_
+      character(len=256)                    :: path
       logical                               :: ZkfromHk=.false.
       !
       !
@@ -245,8 +249,35 @@ contains
                if(allocated(UwanDFT)) deallocate(UwanDFT)
                allocate(UwanDFT(Lttc%Norb,Lttc%Norb,Lttc%Nkpt,1));UwanDFT=czero
                call inquireFile(reg(pathINPUT)//"UWAN_used_k_s1.DAT",filexists,verb=verbose,hardstop=.false.)
-               if(.not.filexists) stop "calc_sigmaGW: UWAN is not stored nor printed. Re-run 0th iteration removing SGoWo_w_k_s1.DAT."
-               call read_matrix(UwanDFT(:,:,:,1),reg(pathINPUT)//"UWAN_used_k_s1.DAT")
+               if(filexists)then
+                  call read_matrix(UwanDFT(:,:,:,1),reg(pathINPUT)//"UWAN_used_k_s1.DAT")
+               else
+                  path = reg(pathINPUT)//"UWAN.DAT"
+                  if(Lttc%UseDisentangledBS) path = reg(pathINPUT)//"UWAN_NEW.DAT"
+                  call inquireFile(reg(path),filexists,verb=verbose,hardstop=.true.)
+                  write(*,"(A)") "     Opening "//reg(path)
+                  unit = free_unit()
+                  open(unit,file=reg(path),form="unformatted",action="read",position="rewind")
+                  read(unit) Nspin_Uwan,Nkpt_Uwan,ib_Uwan1,ib_Uwan2,Norb_Uwan
+                  if(paramagneticSPEX.and.(Nspin_Uwan.ne.1)) stop "calc_sigmaGW: UWAN file is not paramagnetic."
+                  if(Nkpt_Uwan.ne.Nkpt) stop "calc_sigmaGW: UWAN file has wrong number of k-points (not irreducible)."
+                  if(Norb_Uwan.ne.Norb) stop "calc_sigmaGW: UWAN file has wrong orbital dimension."
+                  write(*,"(A,2I4)") "     The band indexes in the "//reg(path)//" rotation are: ",ib_Uwan1,ib_Uwan2
+                  allocate(Uwan(ib_Uwan1:ib_Uwan2,Norb,Nkpt,Nspin_Uwan))
+                  do ispin=1,Nspin_Uwan
+                     do ik=1,Nkpt
+                        read(unit) Uwan(:,:,ik,ispin)
+                     enddo
+                  enddo
+                  close(unit)
+                  if(Lttc%UseDisentangledBS) ib_Uwan2 = ib_Uwan1 + Norb-1
+                  UwanDFT = Uwan(ib_Uwan1:ib_Uwan2,:,:,:)
+                  do ispin=1,Nspin_Uwan
+                     call dump_matrix(UwanDFT(:,:,:,ispin),.true.,reg(pathINPUT),"UWAN_used",ispin=ispin)
+                  enddo
+                  deallocate(Uwan)
+               endif
+               !               
             else
                call assert_shape(UwanDFT(:,:,:,1),[Lttc%Norb,Lttc%Norb,Lttc%Nkpt],"calc_sigmaGW","UwanDFT")
             endif

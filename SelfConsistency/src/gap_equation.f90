@@ -137,15 +137,13 @@ contains
       if(.not.Inputs%status)stop "Initialize_inputs: input container not properly initialized."
       !
       Ngrid = Inputs%Ngrid
-      if(mod(Ngrid,2).eq.0)Ngrid=Ngrid+1
-      if(mod(Ngrid-1,4).ne.0)Ngrid=Ngrid+mod(Ngrid-1,4)
       !
       allocate(Egrid_Phonons(Ngrid));Egrid_Phonons=0d0
       Egrid_Phonons = denspace(2*abs(Inputs%Ebounds(1)),Ngrid,center=.true.,expfact=Inputs%expfact)
       if(Egrid_Phonons(minloc(abs(Egrid_Phonons),dim=1)).ne.0d0) stop "Initialize_inputs: the energy grid (Egrid_Phonons) requires the E=0 point."
       !
       allocate(Egrid_Model(Ngrid));Egrid_Model=0d0
-      Egrid_Model = linspace(-abs(Inputs%Ebounds(1))+eps,+abs(Inputs%Ebounds(1))-eps,Ngrid)
+      Egrid_Model = linspace(-abs(Inputs%Ebounds(1))+eps,+abs(Inputs%Ebounds(1))-eps,Ngrid,istart=.true.,iend=.true.)
       if(Egrid_Model(minloc(abs(Egrid_Model),dim=1)).ne.0d0) stop "Initialize_inputs: the energy grid (Egrid_Model) requires the E=0 point."
       !
       !setting up global flags
@@ -317,7 +315,7 @@ contains
    !PURPOSE: Overload the DoS and rotation with the results computed via the
    !         G0W0 self-energy. Works only if all the required data are present
    !---------------------------------------------------------------------------!
-   subroutine overload_G0W0(pathINPUT,pathINPUTtr,Lttc,eta,DoSthresh)
+   subroutine overload_G0W0(pathINPUT,pathINPUTtr,Lttc,eta,DoSthresh,beta)
       !
       use parameters
       use linalg
@@ -332,6 +330,7 @@ contains
       type(Lattice),intent(in)              :: Lttc
       real(8),intent(in)                    :: eta
       real(8),intent(in)                    :: DoSthresh
+      real(8),intent(in),optional           :: beta
       !
       type(FermionicField)                  :: S_G0W0
       complex(8),allocatable                :: Uwan(:,:,:,:),Vxc(:,:,:,:),Zk(:,:,:)
@@ -339,11 +338,11 @@ contains
       complex(8),allocatable                :: Gmat(:,:,:,:,:),invGf(:,:)
       real(8),allocatable                   :: Egrid_eV(:),wreal_read(:)
       real(8),allocatable                   :: Adiag(:,:,:,:),Aloc(:,:)
-      real(8)                               :: ReS,ImS,DoSnorm,dE
+      real(8)                               :: ReS,ImS,DoSnorm,dE,Emin,Emax
       integer                               :: ik,iw,iE,iorb,ispin
       integer                               :: Norb,Nkpt,Ngrid
       integer                               :: Nreal_read = 5000
-      logical                               :: paramagnet=.true.
+      logical                               :: paramagnet=.true. !this is default for G0W0
       logical                               :: UWAN_exist,Vxc_exist,G0W0_exist
       real                                  :: start,finish
       !
@@ -352,7 +351,7 @@ contains
       !
       !
       if(.not.initialized) stop "overload_G0W0: gap equation module not properly initialized. Call Initialize_inputs first."
-      if( size(Zk_Model,dim=1).ne.Lttc%Norb) stop "overload_G0W0: orbital dimension mismatch.."
+      if(size(Zk_Model,dim=1).ne.Lttc%Norb) stop "overload_G0W0: orbital dimension mismatch."
       !
       call inquireFile(reg(pathINPUT)//"UWAN_used_k_s1.DAT",UWAN_exist,hardstop=.false.)
       call inquireFile(reg(pathINPUT)//"Vxc_k_s1.DAT",Vxc_exist,hardstop=.false.)
@@ -372,7 +371,7 @@ contains
       Nkpt = size(Zk_Model,dim=3)
       Ngrid = size(Egrid_Model)
       !
-      allocate(Egrid_eV(Ngrid));Egrid_eV = Egrid_Model/eV2DFTgrid
+      allocate(Egrid_eV(Ngrid));Egrid_eV = Egrid_Model*DFTgrid2eV
       !
       !read rotation matrix
       allocate(Uwan(Norb,Norb,Nkpt,1));Uwan=czero
@@ -485,6 +484,18 @@ contains
       enddo
       deallocate(Gmat)
       !
+      !cutoff the spectra with a smooth function
+      if(present(beta))then
+         !
+         Emin = Egrid_eV(minloc(abs(Egrid_eV - 0.9*Egrid_eV(1)),dim=1))
+         Emax = Egrid_eV(minloc(abs(Egrid_eV - 0.9*Egrid_eV(Ngrid)),dim=1))
+         write(*,"(A)")"     Smoothing the spectra with beta="//str(beta,2)//" eV^-1 between "//str(Emin,4)//" eV and "//str(Emax,4)//" eV."
+         do iE=1,Ngrid
+            Adiag(iE,:,:,:) = Adiag(iE,:,:,:) * fermidirac(Egrid_eV(iE),Emin,-beta) * fermidirac(Egrid_eV(iE),Emax,beta)
+         enddo
+         !
+      endif
+      !
       !normalize to density
       do ispin=1,Nspin
          do ik=1,Nkpt
@@ -544,7 +555,7 @@ contains
    !PURPOSE: Overload the DoS and rotation with the results computed via the
    !         G0W0 self-energy. Works only if all the required data are present
    !---------------------------------------------------------------------------!
-   subroutine overload_DMFT(path2MaxEnt,Lttc,DoSthresh)
+   subroutine overload_DMFT(path2MaxEnt,pathINPUTtr,Lttc,DoSthresh,beta)
       !
       use parameters
       use linalg
@@ -555,16 +566,22 @@ contains
       implicit none
       !
       character(len=*),intent(in)           :: path2MaxEnt
+      character(len=*),intent(in)           :: pathINPUTtr
       type(Lattice),intent(in)              :: Lttc
       real(8),intent(in)                    :: DoSthresh
+      real(8),intent(in),optional           :: beta
       !
-      real(8),allocatable                   :: wreal_read(:),ImG_read(:,:,:)
-      real(8)                               :: dw
-      integer                               :: ik,iw,iE,iorb,unit
-      integer                               :: Norb,Nkpt,Ngrid,Nweights
-      integer                               :: Nreal_read,Nreal_old,ierr
-      logical                               :: filexists,keep_weight
+      real(8),allocatable                   :: ImG_read(:,:,:)
+      real(8),allocatable                   :: Egrid_eV(:),wreal_read(:)
+      real(8),allocatable                   :: Adiag(:,:,:,:),Aloc(:,:)
+      real(8)                               :: DoSnorm,dE,Emin,Emax
+      integer                               :: ik,iw,iE,iorb,ispin
+      integer                               :: Norb,Nkpt,Ngrid
+      integer                               :: Nreal_old,Nreal_read
+      integer                               :: unit,ierr
       character(len=256)                    :: path
+      logical                               :: paramagnet=.true. !this is default not implemented otherwise
+      logical                               :: DMFT_exists
       real                                  :: start,finish
       !
       !
@@ -572,125 +589,148 @@ contains
       !
       !
       if(.not.initialized) stop "overload_DMFT: gap equation module not properly initialized. Call Initialize_inputs first."
+      if(size(Zk_Model,dim=1).ne.Lttc%Norb) stop "overload_DMFT: orbital dimension mismatch."
       if(Interpolate2Model) write(*,"(A)")"     Cannot read DMFT quantities in another k-grid. Ignoring call to subroutine."
       !
       Norb = size(Zk_Model,dim=1)
       Nkpt = size(Zk_Model,dim=3)
       Ngrid = size(Egrid_Model)
       !
-      !replace the rotation matrix with what is used to get the diagonal spectra
-      do ik=1,Nkpt
-         Zk_Model(:,:,ik) = Lttc%Zk(:,:,ik)
-      enddo
-      write(*,"(A)")"     Rotation matrix is stored."
+      allocate(Egrid_eV(Ngrid));Egrid_eV = Egrid_Model*DFTgrid2eV
+      allocate(Adiag(Ngrid,Norb,Nkpt,Nspin));Adiag=czero
       !
-      do ik=1,Nkpt
+      !read MaxEnt data and convert to local spectra
+      do ispin=1,Nspin
          !
-         path = reg(path2MaxEnt)//"MaxEnt_Gk_full_s1/Gk_t_k"//str(ik)//".DAT_dos.dat"
+         !check that all the required k-points are present
+         do ik=1,Nkpt
+            !
+            path = reg(path2MaxEnt)//"MaxEnt_Gk_full_s"//str(ispin)//"/Gk_t_k"//str(ik)//".DAT_dos.dat"
+            !
+            call inquireFile(reg(path),DMFT_exists,hardstop=.false.,verb=.true.)
+            if(.not.DMFT_exists)then
+               write(*,"(A,1I5)") "     Some K-points are missing in the MaxEnt folder. Ignoring call to subroutine."
+               return
+            endif
+            !
+            unit = free_unit()
+            open(unit,file=reg(path),form="formatted",status="unknown",position="rewind",action="read")
+            !
+            Nreal_read=0
+            ierr=0
+            do while (ierr.eq.0)
+               Nreal_read = Nreal_read + 1
+               read(unit,*,iostat=ierr)
+            enddo
+            close(unit)
+            !
+            !MaxEnt parameters written i the last line
+            Nreal_read = Nreal_read - 2
+            !
+            !write(*,"(A,1I5)") "     The file "//reg(path)//" contains "//str(Nreal_read)//" real frequencies."
+            if((ik.gt.1).and.(Nreal_read.ne.Nreal_old))then
+               write(*,"(A,1I5)") "     Real frequency mesh is not consistent among K-points. Ignoring call to subroutine."
+               return
+            endif
+            Nreal_old=Nreal_read
+            !
+         enddo
          !
-         call inquireFile(reg(path),filexists,hardstop=.false.,verb=.true.)
-         if(.not.filexists)then
-            write(*,"(A,1I5)") "     Some K-points are missing in the MaxEnt folder. Ignoring call to subroutine."
-            return
+         !read each k-point
+         allocate(wreal_read(Nreal_read));wreal_read=0d0
+         allocate(ImG_read(Norb,Nreal_read,Nkpt));ImG_read=0d0
+         do ik=1,Nkpt
+            !
+            path = reg(path2MaxEnt)//"MaxEnt_Gk_full_s"//str(ispin)//"/Gk_t_k"//str(ik)//".DAT_dos.dat"
+            unit = free_unit()
+            open(unit,file=reg(path),form="formatted",status="unknown",position="rewind",action="read")
+            do iw=1,Nreal_read
+               read(unit,*) wreal_read(iw),(ImG_read(iorb,iw,ik),iorb=1,Norb)
+            enddo
+            close(unit)
+            !
+         enddo
+         write(*,"(A)") "     MaxEnt output on Green's function is read."
+         !
+         !interpolate to the Model energy grid
+         do ik=1,Nkpt
+            do iorb=1,Norb
+               Adiag(:,iorb,ik,ispin) = cubic_interp(wreal_read, ImG_read(iorb,:,ik), Egrid_eV)
+               where(Adiag(:,iorb,ik,ispin).lt.0d0)Adiag(:,iorb,ik,ispin)=0d0
+            enddo
+         enddo
+         deallocate(wreal_read,ImG_read)
+         !
+         if(paramagnet)then
+            Adiag(:,:,:,Nspin) = Adiag(:,:,:,1)
+            exit
          endif
          !
-         unit = free_unit()
-         open(unit,file=reg(path),form="formatted",status="unknown",position="rewind",action="read")
-         !
-         Nreal_read=0
-         ierr=0
-         do while (ierr.eq.0)
-            Nreal_read = Nreal_read + 1
-            read(unit,*,iostat=ierr)
-         enddo
-         close(unit)
-         !
-         !MaxEnt parameters written i the last line
-         Nreal_read = Nreal_read - 2
-         !
-         !write(*,"(A,1I5)") "     The file "//reg(path)//" contains "//str(Nreal_read)//" real frequencies."
-         if(Nreal_read.ne.Nreal_old)then
-            write(*,"(A,1I5)") "     Real frequency mesh is not consistent among K-points. Ignoring call to subroutine."
-            return
-         endif
-         Nreal_old=Nreal_read
-         !
       enddo
       !
-      allocate(wreal_read(Nreal_read));wreal_read=0d0
-      allocate(ImG_read(Norb,Nreal_read,Nkpt));ImG_read=0d0
-      do ik=1,Nkpt
+      !cutoff the spectra with a smooth function
+      if(present(beta))then
          !
-         path = reg(path2MaxEnt)//"MaxEnt_Gk_full_s1/Gk_t_k"//str(ik)//".DAT_dos.dat"
-         unit = free_unit()
-         open(unit,file=reg(path),form="formatted",status="unknown",position="rewind",action="read")
-         do iw=1,Nreal_read
-            read(unit,*) wreal_read(iw),(ImG_read(iorb,iw,ik),iorb=1,Norb)
+         Emin = Egrid_eV(minloc(abs(Egrid_eV - 0.9*Egrid_eV(1)),dim=1))
+         Emax = Egrid_eV(minloc(abs(Egrid_eV - 0.9*Egrid_eV(Ngrid)),dim=1))
+         write(*,"(A)")"     Smoothing the spectra with beta="//str(beta,2)//" eV^-1 between "//str(Emin,4)//" eV and "//str(Emax,4)//" eV."
+         do iE=1,Ngrid
+            Adiag(iE,:,:,:) = Adiag(iE,:,:,:) * fermidirac(Egrid_eV(iE),Emin,-beta) * fermidirac(Egrid_eV(iE),Emax,beta)
          enddo
-         close(unit)
          !
-         !Fix normalization
-         dw = abs(wreal_read(10)-wreal_read(9))
-         do iorb=1,Norb
-            ImG_read(iorb,:,ik) = ImG_read(iorb,:,ik) / abs(sum(ImG_read(iorb,:,ik))*dw)
+      endif
+      !
+      !normalize to density
+      do ispin=1,Nspin
+         do ik=1,Nkpt
+            do iorb=1,Norb
+               DoSnorm=0d0
+               do iE=2,Ngrid
+                  dE = abs(Egrid_eV(iE)-Egrid_eV(iE-1))
+                  DoSnorm = DoSnorm + (Adiag(iE,iorb,ik,ispin)+Adiag(iE-1,iorb,ik,ispin)) * (dE/2d0)
+               enddo
+               Adiag(:,iorb,ik,ispin) = Adiag(:,iorb,ik,ispin)/(DoSnorm*Nkpt)
+            enddo
          enddo
+      enddo
+      !
+      !print local spectra used in LDA basis
+      allocate(Aloc(Ngrid,Norb));Aloc=0d0
+      do iorb=1,Norb
+         !
+         do ik=1,Nkpt
+            Aloc(:,iorb) = Aloc(:,iorb) + Adiag(:,iorb,ik,1)
+         enddo
+         !This is just a check that the DoS for each band is normalized to 1
+         DoSnorm=0d0
+         do iE=2,Ngrid
+            dE = abs(Egrid_eV(iE)-Egrid_eV(iE-1))
+            DoSnorm = DoSnorm + ( Aloc(iE-1,iorb)+Aloc(iE,iorb) ) * (dE/2d0)
+         enddo
+         write(*,"(A,F)") "     Spectral function normalization orbital #"//str(iorb)//":", DoSnorm
+         call dump_Field_component(Aloc(:,iorb),reg(pathINPUTtr)//"G0W0plots/Aloc_Gap_Equation_Renorm_DMFT/","Aw_DMFT_o"//str(iorb)//"_s1.DAT",Egrid_eV)
          !
       enddo
-      write(*,"(A)") "     MaxEnt output on Green's function is read and normalized."
+      deallocate(Aloc,Egrid_eV)
       !
-      !rescale to DFT units
-      wreal_read = wreal_read * eV2DFTgrid
-      ImG_read = ImG_read / eV2DFTgrid
+      !convert diagonal spectral function to DFT grid and link to weights_Model and DoS_Model
+      weights_Model = Adiag(:,:,:,1) / eV2DFTgrid
+      deallocate(Adiag)
       !
-      !interpolate to logarithmic energy grid
-      weights_Model=0d0
       DoS_Model=0d0
-      !$OMP PARALLEL DEFAULT(SHARED),&
-      !$OMP PRIVATE(iE,ik,iorb)
-      !$OMP DO
       do iE=1,Ngrid
          do ik=1,Nkpt
             do iorb=1,Norb
-               weights_Model(iE,iorb,ik) = cubic_interp( wreal_read, ImG_read(iorb,:,ik), Egrid_Model(iE) )
+               DoS_Model(iE) = DoS_Model(iE) + weights_Model(iE,iorb,ik)
             enddo
          enddo
-         DoS_Model(iE) = DoS_Model(iE) + weights_Model(iE,iorb,ik)/Nkpt 
       enddo
-      !$OMP END DO
-      !$OMP END PARALLEL
-      deallocate(wreal_read,ImG_read)
-      !
-      !recalculate the weight above threshold
+      write(*,"(A,F)")"     Smallest weight (DMFT):",minval(weights_Model)
       call cpu_time(start)
-      Nweights=0
-      do iE=1,Ngrid
-         do iorb=1,Norb
-            do ik=1,Nkpt
-               keep_weight = ( abs(weights_Model(iE,iorb,ik)).gt.abs(DoSthresh) )
-               if(keep_weight) Nweights = Nweights + 1
-            enddo
-         enddo
-      enddo
-      !
-      if(allocated(finite_weights_Model))deallocate(finite_weights_Model)
-      allocate(finite_weights_Model(Nweights,3));finite_weights_Model=0
-      Nweights=0
-      do iE=1,Ngrid
-         do iorb=1,Norb
-            do ik=1,Nkpt
-               keep_weight = ( abs(weights_Model(iE,iorb,ik)).gt.abs(DoSthresh) )
-               if(keep_weight)then
-                  Nweights = Nweights + 1
-                  finite_weights_Model(Nweights,1) = iE
-                  finite_weights_Model(Nweights,2) = iorb
-                  finite_weights_Model(Nweights,3) = ik
-               endif
-            enddo
-         enddo
-      enddo
-      call cpu_time(finish)
-      write(*,"(A,F)") "     Reduction of DoS integration points from "//str(Ngrid*Norb*Nkpt)//" to "//str(Nweights)
       write(*,"(A,F)") "     Cpu timing:", finish-start
+      !
+      !reallocate the weight above threshold
+      call set_finite_weights(DoSthresh,Norb,Ngrid,Nkpt)
       !
    end subroutine overload_DMFT
 
@@ -994,8 +1034,9 @@ contains
       integer                               :: ik1,ik2,iq,Nkpt
       integer                               :: EE_dim,Endx,iweig,jweig,iE1,iE2
       integer                               :: ithread,Nthread
-      real(8)                               :: DosWeights
-      integer,allocatable                   :: kptsum(:,:),kptdif(:,:),map(:,:)
+      real(8)                               :: DosWeights,Elog
+      integer,allocatable                   :: kptsum(:,:),kptdif(:,:)
+      integer,allocatable                   :: map(:,:),linear_map(:,:)
       complex(8),allocatable,target         :: Wk_interp(:,:,:,:)
       complex(8),pointer                    :: Wk_used(:,:,:,:)
       complex(8),allocatable                :: Wk_full(:,:)
@@ -1288,6 +1329,42 @@ contains
          call print_Kernel("electronic",reg(printmode),reg(pathOUTPUT),"Kel_stat",Egrid_Model,Kel_stat)
       endif
       !
+      !set up the bilinear map 
+      if(calc_phonons)then
+         !
+         allocate(linear_map(Ngrid,2));linear_map=0
+         do iE1=1,Ngrid!index of the phonon
+            !
+            Elog = Egrid_Phonons(iE1)
+            Endx = minloc(abs(Egrid_Model-Elog),dim=1)
+            !
+            if(Elog.le.Egrid_Model(Endx))then
+               !
+               !Elog is approaching from below or is on top
+               linear_map(iE1,1) = Endx-1
+               linear_map(iE1,2) = Endx
+               !
+            else
+               !
+               !Elog is approaching from above
+               linear_map(iE1,1) = Endx
+               linear_map(iE1,2) = Endx+1
+               !
+            endif
+            !
+         enddo
+         !
+         allocate(bilinear_map(Ngrid,Ngrid,4));bilinear_map=0
+         do iE1=1,Ngrid
+            do iE2=1,Ngrid
+               bilinear_map(iE1,iE2,1:2) = linear_map(iE1,:)
+               bilinear_map(iE1,iE2,3:4) = linear_map(iE2,:)
+            enddo
+         enddo
+         deallocate(linear_map)
+         !
+      endif
+      !
       Kernels_stored = .true.
       !
    end subroutine calc_energy_averages
@@ -1315,7 +1392,7 @@ contains
       integer                               :: EE_dim,Endx
       integer                               :: wndx_a,wndx_b
       integer,allocatable                   :: map(:,:)
-      real(8)                               :: Temp,E1,E2,DE,Elog
+      real(8)                               :: Temp,E1,E2,DE
       real(8)                               :: ymax,dy,y_i,y_j
       real(8)                               :: wm,ReW_wm_intp,ImW_wm_intp
       complex(8)                            :: W_wm_i,W_wm_j,Int_i,Int_j
@@ -1485,34 +1562,6 @@ contains
       if(calc_Int_static)then
          !
          Kel = Kel + Kel_stat
-         !
-      endif
-      !
-      !set up the bilinear map 
-      if(calc_phonons)then
-         !
-         allocate(bilinear_map(Ngrid,Ngrid,2));bilinear_map=0
-         !
-         do iE1=1,Ngrid!index of the phonon
-            !
-            Elog = Egrid_Phonons(iE1)
-            Endx = minloc(abs(Egrid_Model-Elog),dim=1)
-            !
-            if(Elog.le.Egrid_Model(Endx))then
-               !
-               !Elog is approaching from below or is on top
-               bilinear_map(iE1,iE1,1) = Endx-1
-               bilinear_map(iE1,iE1,2) = Endx
-               !
-            else
-               !
-               !Elog is approaching from above
-               bilinear_map(iE1,iE1,1) = Endx
-               bilinear_map(iE1,iE1,2) = Endx+1
-               !
-            endif
-            !
-         enddo 
          !
       endif
       !
@@ -1819,7 +1868,7 @@ contains
       !
       !
       if((reg(Kerneltype).ne."electronic").and.(reg(Kerneltype).ne."phononic"))then
-         stop "print_Kernel_d2: available Kerneltype are only electronic or phononic."
+         stop "print_Kernel_d1: available Kerneltype are only electronic or phononic."
       endif
       !
       Efermi_ndx = minloc(abs(Egrid),dim=1)

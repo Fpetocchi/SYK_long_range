@@ -3425,7 +3425,7 @@ contains
    subroutine calc_Kplane_std(kpt_plane,Nkpt_Kside)
       !
       use utils_misc
-      use input_vars, only : KplaneMax
+      use input_vars, only : KplaneMax, Fermikz
       implicit none
       !
       real(8),allocatable,intent(out)       :: kpt_plane(:,:)
@@ -3473,7 +3473,7 @@ contains
                !
                k1 = (ik1-1)*dk - KplaneMax/2d0
                k2 = (ik2-1)*dk - KplaneMax/2d0
-               k3 = -(k1*Blat(3,1)+k2*Blat(3,2)) / Blat(3,3) ! this is to ensure Bz=0
+               k3 = -(k1*Blat(3,1)+k2*Blat(3,2)) / Blat(3,3) + Fermikz ! this is to ensure Bz=0
                !
                kpt_plane(:,ik) = [k1,k2,k3]
                !
@@ -4274,7 +4274,7 @@ contains
       use parameters !WHY IS THIS WORKING?
       use utils_misc
       use linalg, only : eigh, inv, zeye
-      use input_vars, only : eta, Nreal, wrealMax, FermiCut
+      use input_vars, only : eta, Nreal, wrealMax, FermiCut, Fermikz
       use input_vars, only : Hetero
       use input_vars, only : Nkpt_path ! this is just a mesh along the Gamma-A direction
       implicit none
@@ -4432,9 +4432,13 @@ contains
       !Compute non-interacting Fermi surface------------------------------------
       if((.not.skipFk_).and.printout)then
          !
-         !compute diagonal
          FermiCut_ = FermiCut
          if(.not.Hamiltonian)FermiCut_ = 0d0
+         !
+         !just provide some info
+         write(*,"(A)") "     The Fermi surface will be provided at the energy E= "//str(FermiCut_,3)//" and kz= "//str(Fermikz,3)
+         !
+         !compute diagonal
          allocate(zeta(Ndim,Ndim,1));zeta=czero
          do io=1,Ndim
             zeta(io,io,1) = dcmplx(FermiCut_,eta)
@@ -4502,7 +4506,7 @@ contains
          deallocate(zeta,invGf)
          !
          !print Fermi surface
-         path = reg(pathOUTPUT)//"Fk_"//reg(label)//"_E"//str(FermiCut_,3)//".DAT"
+         path = reg(pathOUTPUT)//"Fk_"//reg(label)//"_E"//str(FermiCut_,3)//"_kz"//str(Fermikz,3)//".DAT"
          unit = free_unit()
          open(unit,file=reg(path),form="formatted",status="unknown",position="rewind",action="write")
          do ik=1,Nkpt_plane_tot
