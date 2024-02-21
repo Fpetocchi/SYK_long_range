@@ -2,14 +2,18 @@
 #a=258 ; b=280
 #cp /home/petocchif/1_GW_EDMFT/GenericMaterial/Calculation_template/MaxEnt/Gaverage.py .
 itlist_refined="260,261,263,264,272,277,279,282,283,284,286,287,291"
+
+
+itlist_refined="${a}..${b}"
 python Gaverage.py --field Obs --itlist ${itlist_refined} ;
 python Gaverage.py --field  Gw --pad lat --orbs 1,2,3,4,5 --itlist ${itlist_refined} ;
 python Gaverage.py --field  Gw --pad qmc_Mo --orbs 1,2,3,4,5 --itlist ${itlist_refined} ;
 python Gaverage.py --field  Sw --pad imp --orbs 1,2,3,4,5 --axis w --itlist ${itlist_refined} ;
+python Gaverage.py --field  Sw --pad imp --orbs 1,2,3,4,5 --axis w --itlist ${itlist_refined} ;
 python Gaverage.py --field  Ww --pad lat --orbs 1,4 --itlist ${itlist_refined} ;
 python Gaverage.py --field  curlyUw --pad imp --orbs 1,4 --itlist ${itlist_refined} ;
 python Gaverage.py --field Gkw --itlist 261,263,264,272,277,279,282,283,284,286,287,291 ;
-python Gaverage.py --field Ekw --pad _Trace_NaNa --itlist 261,263,264,272,277,279,282,283,284,286,287,291 ;
+#python Gaverage.py --field Ekw --pad _Trace_NaNa --itlist 261,263,264,272,277,279,282,283,284,286,287,291 ;
 ################################################################################
 #3band
 a=99 ; b=149
@@ -22,6 +26,47 @@ python Gaverage.py --field Gkw --itlist ${a}..${b} ;
 #
 #
 #
+
+
+
+
+
+itlist_refined="${a}..${b}"
+python Gaverage.py --field Obs --itlist ${itlist_refined} ;
+python Gaverage.py --field  Gw --pad lat --orbs 1,2,3,4,5,6,7,8,9,10,11,12,13,14 --itlist ${itlist_refined} ;
+python Gaverage.py --field  Gw --pad qmc_V --orbs 1,2,3,4,5 --itlist ${itlist_refined} ;
+python Gaverage.py --field  Sw --pad imp --orbs 1,2,3,4,5,6,7,8,9,10,11,12,13,14 --axis w --itlist ${itlist_refined} ;
+python Gaverage.py --field  Sw --pad imp --orbs 1,2,3,4,5,6,7,8,9,10,11,12,13,14 --axis w --itlist ${itlist_refined} ;
+python Gaverage.py --field  Ww --pad lat --orbs 1,4 --itlist ${itlist_refined} ;
+python Gaverage.py --field  curlyUw --pad imp --orbs 1,4 --itlist ${itlist_refined} ;
+#python Gaverage.py --field Gkw --itlist 261,263,264,272,277,279,282,283,284,286,287,291 ;
+#python Gaverage.py --field Ekw --pad _Trace_NaNa --itlist 261,263,264,272,277,279,282,283,284,286,287,291 ;
+
+
+################################################################################
+################################################################################
+GENMAT=/home/petocchif/1_GW_EDMFT/GenericMaterial/Calculation_template
+declare -a dirindex=( "avg" )
+for it in "${dirindex[@]}" ; do
+   if [ -d "$it" ]; then
+   #
+   cd $it/Convergence
+   cp ${GENMAT}/MaxEnt/MaxEnt_SLURM.sh .
+   chmod 700 MaxEnt_SLURM.sh
+   #
+   for orb in `seq  1 1 14` ; do
+     ./MaxEnt_SLURM.sh -e 0.0002 -w 9001 -W  300 -f G -o ${orb} -i lat -p ${GENMAT} -q new
+   done
+   #
+   cd ../../
+   #
+   fi
+done
+#
+
+
+
+
 #
 #
 #

@@ -1271,6 +1271,7 @@ contains
       allocate(density(Norb,Norb));density=czero
       density = sum(density_spin,dim=3)
       !
+      !equivalent to Ustatic_SPEX
       allocate(Vgamma(Nbp,Nbp));Vgamma=czero
       path = reg(pathINPUT)//"V_nodiv.DAT"
       call inquireFile(reg(path),filexists,verb=verbose)

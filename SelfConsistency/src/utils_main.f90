@@ -65,7 +65,7 @@ module utils_main
    complex(8),allocatable                   :: VH(:,:)
    complex(8),allocatable                   :: VH_Nlat(:,:)
    complex(8),allocatable                   :: VH_Nimp(:,:)
-   complex(8),allocatable                   :: Hartree_lat(:,:)
+   !complex(8),allocatable                   :: Hartree_lat(:,:)
    !
    complex(8),allocatable                   :: Umat(:,:)
    real(8),allocatable                      :: Kfunct(:,:)
@@ -476,12 +476,8 @@ contains
       !
       if(scan(reg(CalculationType),"W").gt.0) call fill_ksumkdiff(Lttc%kpt,Lttc%kptsum,Lttc%kptdif,Nkpt3)
       !
-      if(Hmodel)then
-         Lttc%Hk = Lttc%Hk * alphaHk
-      else
-         Lttc%Hk = Lttc%Hk * alphaHk
-         if(readHk) Lttc%Hk = Lttc%Hk * H2eV ! this will be removed comes from old implementation
-      endif
+      !this will be removed comes from old implementation
+      if(readHk.and.(.not.Hmodel)) Lttc%Hk = Lttc%Hk * H2eV 
       !
       if(allocated(E0))then
          do ik=1,Lttc%Nkpt
@@ -494,6 +490,14 @@ contains
       if(allocated(Lttc%Hloc))deallocate(Lttc%Hloc)
       allocate(Lttc%Hloc(Lttc%Norb,Lttc%Norb));Lttc%Hloc=czero
       Lttc%Hloc = sum(Lttc%Hk,dim=3)/Lttc%Nkpt
+      !
+      !rescale by a coefficient alpha the bandwidth but keeping the same local Hamiltonian
+      if(alphaHk.ne.1d0)then
+         write(*,"(A)")"     Rescaling the bandwidth by: "//str(alphaHk,2)
+         do ik=1,Lttc%Nkpt
+            Lttc%Hk(:,:,ik) = Lttc%Hloc + alphaHk*(Lttc%Hk(:,:,ik) - Lttc%Hloc)
+         enddo
+      endif
       !
       if(allocated(Lttc%Zk))deallocate(Lttc%Zk)
       if(allocated(Lttc%Ek))deallocate(Lttc%Ek)
@@ -575,9 +579,21 @@ contains
       !Store the local rotation of each site and add to the input list the Impurity equivalent orbitals
       if(RotateHloc)then
          !
-         write(*,"(A)") new_line("A")//new_line("A")//"---- Rotations of the local LDA Hamiltonian (used)"
-         call build_rotations("Hloc",LatticeOp=Lttc%Hloc)
-         call update_ImpEqvOrbs()
+         if(ItStart.eq.0)then
+            write(*,"(A)") new_line("A")//new_line("A")//"---- Rotations of the local LDA Hamiltonian (used)"
+            call build_rotations("Hloc",LatticeOp=Lttc%Hloc)
+            call update_ImpEqvOrbs()
+         else
+            if(RotateNloc)then
+               write(*,"(A)") new_line("A")//new_line("A")//"---- Rotations of the local density matrix (used)"
+               call build_rotations("Nloc",read=.true.)
+               call update_ImpEqvOrbs()
+            else
+               write(*,"(A)") new_line("A")//new_line("A")//"---- Rotations of the local LDA Hamiltonian (used)"
+               call build_rotations("Hloc",LatticeOp=Lttc%Hloc)
+               call update_ImpEqvOrbs()
+            endif
+         endif
          !
       else
          !
@@ -753,8 +769,6 @@ contains
       !
       do isite=1,Nsite_loc
          !
-         if(storeIt) Folder = reg(ItFolder)//"Solver_"//reg(LocalOrbs(isite)%Name)//"/"
-         !
          Norb = LocalOrbs(isite)%Norb
          if( ExpandImpurity .and. (Norb.ne.LocalOrbs(1)%Norb) ) stop "The orbital space is not the same among the different impurities."
          !
@@ -764,6 +778,8 @@ contains
          allocate(LocalOrbs(isite)%RotDag(Norb,Norb));LocalOrbs(isite)%RotDag=czero
          !
          if(build_)then
+            !
+            if(storeIt) Folder = reg(ItFolder)//"Solver_"//reg(LocalOrbs(isite)%Name)//"/"
             !
             !Extract then local Hamiltonian for each site
             call loc2imp(LocalOrbs(isite)%Op,LatticeOp,LocalOrbs(isite)%Orbs)
@@ -782,6 +798,8 @@ contains
             call dump_Matrix(diag(LocalOrbs(isite)%Eig),reg(Folder),reg(Opname)//"Eig_"//reg(LocalOrbs(isite)%Name)//"_"//str(isite)//".DAT")
             !
          elseif(read_)then
+            !
+            Folder = reg(PrevItFolder)//"Solver_"//reg(LocalOrbs(isite)%Name)//"/"
             !
             call read_Matrix(LocalOrbs(isite)%Op,reg(Folder)//reg(Opname)//"Site_"//reg(LocalOrbs(isite)%Name)//"_"//str(isite)//".DAT")
             call read_Matrix(LocalOrbs(isite)%Rot,reg(Folder)//reg(Opname)//"Rot_"//reg(LocalOrbs(isite)%Name)//"_"//str(isite)//".DAT")
@@ -1036,22 +1054,34 @@ contains
             !
             !Hubbard interaction
             allocate(Umat(Crystal%Norb**2,Crystal%Norb**2));Umat=czero
-            call inquireFile(reg(pathINPUT)//"Umat.DAT",filexists,hardstop=.false.,verb=verbose)
-            if(filexists)then
-               call read_Matrix(Umat,reg(pathINPUT)//"Umat.DAT")
-            else
-               if((reg(Utensor).eq."Spex"))then
-                  call read_U_spex(Umat)
-               elseif((reg(Utensor).eq."Vasp"))then
-                  call read_U_vasp(Umat,Crystal)
-               elseif((reg(Utensor).eq."Respack"))then
-                  call read_U_respack(Umat)
-               elseif((reg(Utensor).eq."Model"))then
-                  call build_Umat(Umat,Uaa,Uab,J)
-               elseif((reg(Utensor).eq."File"))then
-                  call read_U(Umat)
-               endif
+            if((reg(Utensor).eq."Spex"))then
+               call read_U_spex(Umat)
+            elseif((reg(Utensor).eq."Vasp"))then
+               call read_U_vasp(Umat,Crystal)
+            elseif((reg(Utensor).eq."Respack"))then
+               call read_U_respack(Umat)
+            elseif((reg(Utensor).eq."Model"))then
+               call build_Umat(Umat,Uaa,Uab,J)
+            elseif((reg(Utensor).eq."File"))then
+               call read_U(Umat)
             endif
+            !
+            !call inquireFile(reg(pathINPUT)//"Umat.DAT",filexists,hardstop=.false.,verb=verbose)
+            !if(filexists)then
+            !   call read_Matrix(Umat,reg(pathINPUT)//"Umat.DAT")
+            !else
+            !   if((reg(Utensor).eq."Spex"))then
+            !      call read_U_spex(Umat)
+            !   elseif((reg(Utensor).eq."Vasp"))then
+            !      call read_U_vasp(Umat,Crystal)
+            !   elseif((reg(Utensor).eq."Respack"))then
+            !      call read_U_respack(Umat)
+            !   elseif((reg(Utensor).eq."Model"))then
+            !      call build_Umat(Umat,Uaa,Uab,J)
+            !   elseif((reg(Utensor).eq."File"))then
+            !      call read_U(Umat)
+            !   endif
+            !endif
             !
             !Impurity Self-energy
             call AllocateFermionicField(S_DMFT,Crystal%Norb,Nmats,Nsite=Nsite,Beta=Beta)
@@ -1310,8 +1340,8 @@ contains
          allocate(VH_Nlat(Crystal%Norb,Crystal%Norb));VH_Nlat=czero
          allocate(VH_Nimp(Crystal%Norb,Crystal%Norb));VH_Nimp=czero
          !
-         if(allocated(Hartree_lat))deallocate(Hartree_lat)
-         allocate(Hartree_lat(Crystal%Norb,Crystal%Norb));Hartree_lat=czero
+         !if(allocated(Hartree_lat))deallocate(Hartree_lat)
+         !allocate(Hartree_lat(Crystal%Norb,Crystal%Norb));Hartree_lat=czero
          !
          if(allocated(Vxc))deallocate(Vxc)
          if(.not.Vxc_in)then
@@ -1447,8 +1477,9 @@ contains
       integer                               :: ik,iw,ispin,iorb,jorb
       integer                               :: iprint,Nprint
       real(8),allocatable                   :: Z_qpsc(:,:,:)
-      !complex(8),allocatable                :: Vxc_loc(:,:,:)
+      complex(8),allocatable                :: VH_old(:,:)
       type(FermionicField)                  :: S_EMB,S_Full_R
+      logical                               :: VH_exists
       !
       !
       write(*,"(A)") new_line("A")//new_line("A")//"---- join_SigmaFull"
@@ -1467,6 +1498,7 @@ contains
          case("G0W0","scGW","GW+EDMFT")
             !
             !
+            !Various checks
             if(.not.S_G0W0%status) stop "join_SigmaFull: S_G0W0 not properly initialized."
             if((Iteration.gt.0).and.(.not.S_GW%status)) stop "join_SigmaFull: S_GW not properly initialized."
             if((Iteration.gt.0).and.addTierIII.and.(.not.S_G0W0dc%status)) stop "join_SigmaFull: S_G0W0dc not properly initialized."
@@ -1477,10 +1509,33 @@ contains
             endif
             !
             !
-            !Check that the difference between G0W0 and scDGdc is locally causal
-            if(addTierIII.and.(Iteration.gt.0))then
-               S_G0W0%wks = S_G0W0%wks - S_G0W0dc%wks
-               call check_S_G0W0()
+            !Tier III checks
+            if(addTierIII)then
+               !
+               if(Iteration.gt.0)then
+                  !
+                  !Check that the difference between G0W0 and scDGdc is locally causal
+                  S_G0W0%wks = S_G0W0%wks - S_G0W0dc%wks
+                  call check_S_G0W0()
+                  !
+                  !Mix with previous VH
+                  if((reg(VN_type).ne."None").and.(Mixing_Delta.gt.0d0))then
+                     allocate(VH_old(Crystal%Norb,Crystal%Norb));VH_old=czero
+                     call inquireFile(reg(MixItFolder)//"VH_used.DAT",VH_exists,verb=verbose,hardstop=.false.)
+                     if(VH_exists)then
+                        write(*,"(A)")"     VH_used.DAT from previous found - mixing with "//str(Mixing_Delta,3)//" of old solution."
+                        call read_Matrix(VH_old,reg(MixItFolder)//"VH_used.DAT")
+                        VH = (1d0-Mixing_Delta)*VH + Mixing_Delta*VH_old
+                     else
+                        write(*,"(A)")"     Warning: join_SigmaFull - VH from previous iteration not found - mixing skipped."
+                     endif
+                     deallocate(VH_old)
+                  endif
+                  !
+               endif
+               !
+               if(reg(VN_type).ne."None") call dump_Matrix(VH,reg(ItFolder),"VH_used.DAT")
+               !
             endif
             !
             !
@@ -4006,6 +4061,16 @@ contains
             call interpolate2Beta(Glat,Beta_Match,"imp",ExpandImpurity)
             call dump_FermionicField(Glat,reg(PrevItFolder),"Glat_w",paramagnet)
             call DeallocateFermionicField(Glat)
+            !
+            !Read&write instead of execute_command
+            allocate(HartreeU(Crystal%Norb,Crystal%Norb,Nspin));HartreeU=czero
+            call read_Matrix(HartreeU,reg(Beta_Match%Path)//"Hartree_term",paramagnet)
+            call dump_Matrix(HartreeU,reg(PrevItFolder),"Hartree_term",paramagnet)
+            deallocate(HartreeU)
+            allocate(Nimp(Crystal%Norb,Crystal%Norb,Nspin));Nimp=czero
+            call read_Matrix(Nimp,reg(Beta_Match%Path)//"Nimp",paramagnet)
+            call dump_Matrix(Nimp,reg(PrevItFolder),"Nimp",paramagnet)
+            deallocate(Nimp)
             !
          case("EDMFT")
             !

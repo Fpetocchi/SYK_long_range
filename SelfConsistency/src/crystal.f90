@@ -563,12 +563,16 @@ contains
       character(len=*),intent(in)           :: pathOUTPUT
       character(len=*),intent(in)           :: filename
       !
+      character(len=10)                     :: prec
       integer                               :: Nkpt,Nkpt_path,Norb,unit
       integer                               :: ik,iorb,jorb
       !
       !
       if(verbose)write(*,"(A)") "---- dump_Hk"
       !
+      !
+      !prec="F20.6"   !light precision
+      prec="E20.12" 
       !
       Norb = size(Hk,dim=1)
       Nkpt = size(Hk,dim=3)
@@ -585,7 +589,7 @@ contains
          write(unit,("(2I6,3F14.8)")) 1,ik,kpt(:,ik)
          do iorb=1,Norb
             do jorb=1,Norb
-               write(unit,("(2I4,2E20.12)")) iorb,jorb,dreal(Hk(iorb,jorb,ik)),dimag(Hk(iorb,jorb,ik))
+               write(unit,("(2I4,2"//reg(prec)//")")) iorb,jorb,dreal(Hk(iorb,jorb,ik)),dimag(Hk(iorb,jorb,ik))
             enddo
          enddo
       enddo
@@ -4465,14 +4469,24 @@ contains
             !Non-interacting potential to the left/upper side of the Heterostructure
             if(Hetero%Explicit(1).ne.1)then
                allocate(Potential_L(Hetero%Norb,Hetero%Norb,1,Lttc%Nkpt_plane,Nspin));Potential_L=czero
-               call build_Potential(Potential_L,Hetero,Ln,NbulkL,zeta,Lttc%Hk_plane,Hetero%tkz_Plane,"left",.true.)
+               if(freq_dep)then
+                  call build_Potential(Potential_L,Hetero,Ln,NbulkL,zeta,dataw_intp(:,:,wndx,:),Hetero%tkz_Plane,"left",.true.)
+               else
+                  call build_Potential(Potential_L,Hetero,Ln,NbulkL,zeta,data_intp,Hetero%tkz_Plane,"left",.true.)
+               endif
+               !call build_Potential(Potential_L,Hetero,Ln,NbulkL,zeta,Lttc%Hk_plane,Hetero%tkz_Plane,"left",.true.)
                write(*,"(2(A,2I4))") "     Left potential (Kplane) orbital lattice indexes: ",Ln(1),Ln(2)," thickness: ",NbulkL
             endif
             !
             !Non-interacting potential to the right/lower side of the Heterostructure
             if(Hetero%Explicit(2).ne.Hetero%Nslab)then
                allocate(Potential_R(Hetero%Norb,Hetero%Norb,1,Lttc%Nkpt_plane,Nspin));Potential_R=czero
-               call build_Potential(Potential_R,Hetero,Rn,NbulkR,zeta,Lttc%Hk_plane,Hetero%tkz_Plane,"right",.true.)
+               if(freq_dep)then
+                  call build_Potential(Potential_R,Hetero,Rn,NbulkR,zeta,dataw_intp(:,:,wndx,:),Hetero%tkz_Plane,"right",.true.)
+               else
+                  call build_Potential(Potential_R,Hetero,Rn,NbulkR,zeta,data_intp,Hetero%tkz_Plane,"right",.true.)
+               endif
+               !call build_Potential(Potential_R,Hetero,Rn,NbulkR,zeta,Lttc%Hk_plane,Hetero%tkz_Plane,"right",.true.)
                write(*,"(2(A,2I4))") "     Right potential (Kplane) orbital lattice indexes: ",Rn(1),Rn(2)," thickness: ",NbulkR
             endif
             !

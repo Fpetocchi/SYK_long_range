@@ -119,6 +119,7 @@ module input_vars
    logical,public                           :: ExpandImpurity
    logical,public                           :: RotateHloc
    logical,public                           :: RotateUloc
+   logical,public                           :: RotateNloc
    real(8),public                           :: RotPrecision
    logical,public                           :: AFMselfcons
    type(LocalOrbitals),allocatable,public   :: LocalOrbs(:)
@@ -401,7 +402,10 @@ contains
       call parse_input_variable(ExpandImpurity,"EXPAND",InputFile,default=.false.,comment="Flag to use a single impurity solution for all the sites of the lattice. Only indexes for site 1 readed.")
       call parse_input_variable(RotateHloc,"ROTATE_F",InputFile,default=.false.,comment="Solve the Fermionic impurity problem in the basis where H(R=0) is diagonal.")
       call parse_input_variable(RotateUloc,"ROTATE_B",InputFile,default=RotateHloc,comment="Solve the Bosonic impurity problem in the basis where H(R=0) is diagonal.")
-      if(RotateHloc.or.RotateUloc) call parse_input_variable(RotPrecision,"ROT_PRECISION",InputFile,default=1e4*eps,comment="Degeneracy precision over the Hloc eigenvalues.")
+      if(RotateHloc.or.RotateUloc)then
+         call parse_input_variable(RotateNloc,"ROTATE_N",InputFile,default=.false.,comment="Solve the Fermionic impurity problem in the basis where the local density matrix is diagonal.")
+         call parse_input_variable(RotPrecision,"ROT_PRECISION",InputFile,default=1e4*eps,comment="Degeneracy precision over the Hloc eigenvalues.")
+      endif
       call parse_input_variable(AFMselfcons,"AFM",InputFile,default=.false.,comment="Flag to use the AFM self-consistency by flipping the spin. Requires input with doubled unit cell.")
       if(ExpandImpurity.or.AFMselfcons)then
          Solver%Nimp = 1
@@ -804,7 +808,7 @@ contains
          call parse_input_variable(Solver%Imprvd_B,"IMPRVD_B",InputFile,default=0,comment="If =1 the improved estimator for the polarization will be computed (NOT IMPLEMENTED).")
          if(Dyson_Imprvd_B)Solver%Imprvd_B=1
          call parse_input_variable(Solver%N_nnt,"N_NNT",InputFile,default=1,comment="Measurment for <n_a(tau)n_b(0)> evaluation. Updated according to CALC_TYPE. Should be either =1 or 2*NTAU_B_IMP if =0 measurment avoided.")
-         if(bosonicSC)Solver%N_nnt=1
+         if(bosonicSC.and.(Solver%N_nnt.eq.0))Solver%N_nnt=1
          call parse_input_variable(Solver%full_ntOrbSym,"NT_FULLSYM",InputFile,default=0,comment="If =1 and orbital symmetrization inside the solver is requested it averages <n_a(tau)> for all the orbitals.")
          if(sym_mode.le.1)Solver%full_ntOrbSym=0
          if(RotateHloc.or.RotateUloc)Solver%full_ntOrbSym=1

@@ -57,6 +57,7 @@ program Akw_builder
       !
       if(print_plane_G)then
          call rebuild_G("plane")
+         call rebuild_G("plane",suffix="Tr")
          if(PadeWlimit.gt.0d0)call rebuild_G("plane",pedix="_pade.dat",ax="w")
       endif
       !
@@ -159,6 +160,10 @@ contains
             Nkpt_Kside = int(sqrt(dble(Nkpt)))
             Norb = Crystal%Norb
             suffix_=" "
+            if(present(suffix))then
+               suffix_="_"//reg(suffix)
+               if(reg(suffix_).eq."_Tr") Norb = 1
+            endif
             write(*,"(2(A,I))") new_line("A")//new_line("A")//"     Gplane. Total number of K-points in the {kx,ky} sheet:",Nkpt," number of K-points per dimension:",Nkpt_Kside
             call get_Blat(Blat)
             !
@@ -318,8 +323,8 @@ contains
          !
          !Print cut at energy FermiCut in the {kx,ky} plane
          wndx_cut = minloc(abs(wreal-FermiCut),dim=1)
-         write(*,"(A,F)") "     Cutting Fermi surface at w_["//str(wndx_cut)//"]=",wreal(wndx_cut)
-         path = reg(MaxEnt_K)//"Fk_Gk"//reg(suffix_)//"_s"//str(ispin)//"_E"//str(FermiCut,3)//".DAT"
+         write(*,"(A)") "     Cutting Fermi surface at w_["//str(wndx_cut)//"]="//str(wreal(wndx_cut),3)//" and kz= "//str(Fermikz,3)
+         path = reg(MaxEnt_K)//"Fk_Gk"//reg(suffix_)//"_s"//str(ispin)//"_E"//str(FermiCut,3)//"_kz"//str(Fermikz,3)//".DAT"
          unit = free_unit()
          open(unit,file=reg(path),form="formatted",status="unknown",position="rewind",action="write")
          do ik=1,Nkpt
@@ -342,11 +347,11 @@ contains
          close(unit)
          !
          !TEST>>>
-         do icut=1,10
+         do icut=1,20
             FermiCut_ = -(0.02*icut)
             wndx_cut = minloc(abs(wreal - (0.02*icut) ),dim=1)
-            write(*,"(A,F)") "     Cutting Fermi surface at w_["//str(wndx_cut)//"]=",wreal(wndx_cut)
-            path = reg(MaxEnt_K)//"Fk_Gk"//reg(suffix_)//"_s"//str(ispin)//"_E"//str(FermiCut_,3)//".DAT"
+            write(*,"(A)") "     Cutting Fermi surface at w_["//str(wndx_cut)//"]="//str(wreal(wndx_cut),3)//" and kz= "//str(Fermikz,3)
+            path = reg(MaxEnt_K)//"Fk_Gk"//reg(suffix_)//"_s"//str(ispin)//"_E"//str(FermiCut_,3)//"_kz"//str(Fermikz,3)//".DAT"
             unit = free_unit()
             open(unit,file=reg(path),form="formatted",status="unknown",position="rewind",action="write")
             do ik=1,Nkpt

@@ -161,6 +161,8 @@ subroutine dump_MaxEnt_Gfield(G,mode,dirpath,filename,Orbs,WmaxPade,sigmalike)
    !
    sigmalike_=0
    if(present(sigmalike))sigmalike_=sigmalike
+   if(sigmalike_.gt.0) write(*,"(A)") "     dump_MaxEnt_Gfield: mock Gf."
+   if(sigmalike_.gt.1) write(*,"(A)") "     dump_MaxEnt_Gfield: removing bare limit."
    !
    call createDir(reg(dirpath)//reg(filename)//"/",verb=verbose)
    !

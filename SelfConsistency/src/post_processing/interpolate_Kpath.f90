@@ -37,7 +37,7 @@ subroutine interpolate2kpath_Fermionic(Sfull,Lttc,pathOUTPUT)
    !
    !TEST>>>
    logical                               :: integrate_kz=.false.
-   logical                               :: dump_unfolded=.false.
+   logical                               :: dump_unfolded=.true.
    logical                               :: dump_BAB=.false.
    integer                               :: Nkp,Nkz,Nkz_,ikz,iwig
    integer                               :: nx,ny,nz,isite,jsite,iwig_old
@@ -83,9 +83,9 @@ subroutine interpolate2kpath_Fermionic(Sfull,Lttc,pathOUTPUT)
    !
    !---------------------- LDA Hamiltonian and corrections --------------------!
    !
-   !non-interacting data (Bands, spectral function, Fermi-surface). This has the wrong chemical potential stored in Lttc. Kee the data stored in GWinput
-   call interpolate2Path(Lttc,Nkpt_path_default,"Hk",pathOUTPUT=reg(pathOUTPUT),store=.false.,skipAkw=.false.)
-   call interpolate2Plane(Lttc,Nkpt_plane_default,"Hk",pathOUTPUT=reg(pathOUTPUT),store=.false.,skipFk=.false.)
+   !Initialize internal meshes - fine k-grid
+   call interpolate2Path(Lttc,Nkpt_path_default,"Hk",store=.true.,skipAkw=.true.)
+   call interpolate2Plane(Lttc,Nkpt_plane_default,"Hk",store=.true.,skipFk=.true.)
    !
    !correction to LDA given by the real part of the local self-energy in iw=0.
    allocate(correction(Norb,Norb,Sfull%Nkpt));correction=czero
@@ -123,6 +123,10 @@ subroutine interpolate2kpath_Fermionic(Sfull,Lttc,pathOUTPUT)
       enddo
       deallocate(correction)
    endif
+   !
+   !Reinitialize internal meshes
+   call interpolate2Path(Lttc,Nkpt_path,"Hk",store=.true.,skipAkw=.true.)
+   call interpolate2Plane(Lttc,Nkpt_plane,"Hk",store=.true.,skipFk=.true.)
    !
    !
    !
@@ -350,7 +354,11 @@ subroutine interpolate2kpath_Fermionic(Sfull,Lttc,pathOUTPUT)
             !call calc_Gmats(Gpath,Lttc,Smats=Spath,along_path=.true.)
             !
             !TEST>>>
-            if((.not.integrate_kz).and.(.not.dump_BAB).and.(.not.dump_unfolded)) call calc_Gmats(Gpath,Lttc,Smats=Spath,along_path=.true.)
+            if((.not.integrate_kz).and.(.not.dump_BAB).and.(.not.dump_unfolded)) then
+               call calc_Gmats(Gpath,Lttc,Smats=Spath,along_path=.true.)
+            else
+               write(*,*)"skipping Glat calculation"
+            endif
             !>>>TEST
             !
             !TEST>>> This portion is to integrate over a given thickness in kz

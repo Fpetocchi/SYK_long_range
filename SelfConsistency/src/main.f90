@@ -178,28 +178,22 @@ program SelfConsistency
             if(MultiTier)VN_type="Nlat"
             !
             call calc_VH(VH_Nlat,densityLDA,densityGW,Ulat)
+            call dump_Matrix(VH_Nlat,reg(ItFolder),"VH_Nlat.DAT")
             call calc_VH(VH_Nimp,densityLDA,densityDMFT,Ulat,local=.true.)
+            call dump_Matrix(VH_Nimp,reg(ItFolder),"VH_Nimp.DAT")
             select case(reg(VN_type))
                case default
                   stop "Wrong entry for VN_TYPE. Available: Nlat, Nimp, None."
                case("Nlat")
                   VH = VH_Nlat
-                  call dump_Matrix(VH_Nlat,reg(ItFolder),"VH_Nlat_used.DAT")
-                  call dump_Matrix(VH_Nimp,reg(ItFolder),"VH_Nimp.DAT")
                case("Nimp")
                   VH = VH_Nimp
-                  call dump_Matrix(VH_Nlat,reg(ItFolder),"VH_Nlat.DAT")
-                  call dump_Matrix(VH_Nimp,reg(ItFolder),"VH_Nimp_used.DAT")
                case("None")
                   VH = czero
-                  call dump_Matrix(VH_Nlat,reg(ItFolder),"VH_Nlat.DAT")
-                  call dump_Matrix(VH_Nimp,reg(ItFolder),"VH_Nimp.DAT")
                   write(*,"(A)")"     VH not used."
             end select
             !
-            call calc_VH(Hartree_lat,densityGW)
-            call dump_Matrix(Hartree_lat,reg(ItFolder),"Hartree_lat.DAT")
-            if(solve_DMFT)deallocate(VH_Nlat,VH_Nimp,Hartree_lat)
+            if(solve_DMFT)deallocate(VH_Nlat,VH_Nimp)
             !
          endif
          !
@@ -312,6 +306,13 @@ program SelfConsistency
       call calc_Treal(Crystal,Glat,reg(ItFolder))
       !
       !
+      !Update basis rotation according to local density matrix
+      if(RotateNloc)then
+         call build_rotations("Nloc",LatticeOp=Glat%N_s(:,:,1))
+         call update_ImpEqvOrbs()
+      endif
+      !
+      !
       !Print Gf: local readable and k-dep binfmt
       call dump_FermionicField(Glat,reg(ItFolder),"Glat_w",paramagnet)
       call dump_MaxEnt(Glat,"mats",reg(ItFolder)//"Convergence/","Glat",EqvGWndx%SetOrbs,WmaxPade=PadeWlimit)
@@ -326,7 +327,7 @@ program SelfConsistency
       !Print full self-energy: local readable and k-dep binfmt
       call dump_FermionicField(S_Full,reg(ItFolder),"Sfull_w",paramagnet)
       call dump_MaxEnt(S_Full,"mats",reg(ItFolder)//"Convergence/","Sful",EqvGWndx%SetOrbs,WmaxPade=PadeWlimit)
-      if(reg(DC_type).eq."Full_Tail")then
+      if((reg(DC_type).eq."Full_Tail").or.(Solver%removeUhalf.eq.1))then
          call dump_MaxEnt(S_Full,"mats2itau",reg(ItFolder)//"Convergence/","Sful",EqvGWndx%SetOrbs,sigmalike=1)
       else
          call dump_MaxEnt(S_Full,"mats2itau",reg(ItFolder)//"Convergence/","Sful",EqvGWndx%SetOrbs,sigmalike=2)

@@ -29,8 +29,10 @@ EXE  = SelfConsistency
 # Post-processing
 OBJS_PP1 = $(SRCS:.f90=.o) minimize.o gap_equation.o pp_Akf_builder.o
 EXE_PP1  = Akf_builder
-OBJS_PP2 = $(SRCS:.f90=.o) minimize.o gap_equation.o pp_dispersion_fit.o
-EXE_PP2  = Hk_fit
+OBJS_PP2 = linalg.o utils_misc.o pp_Gaux2Sigma.o
+EXE_PP2  = Gaux2Sigma
+#OBJS_PP3 = $(SRCS:.f90=.o) minimize.o gap_equation.o pp_dispersion_fit.o
+#EXE_PP3  = Hk_fit
 
 
 #
@@ -100,7 +102,7 @@ all: prepREL release
 
 #
 # Debug rules-------------------------------------------------------------------
-debug: prepDBG DBGGTlib $(DBGEXE) $(DBGEXE_PP1) # $(DBGEXE_PP2)
+debug: prepDBG DBGGTlib $(DBGEXE) $(DBGEXE_PP1) $(DBGEXE_PP2)
 
 # Modules
 $(DBGDIR)/linalg.o: $(SRCDIR)/linalg.f90
@@ -164,7 +166,7 @@ $(DBGDIR)/main.o: $(SRCDIR)/main.f90
 $(DBGDIR)/pp_Akf_builder.o: $(SRCDIR)/pp_Akf_builder.f90
 	$(FC) -c $(FFLAGS) $(DBGFFLAGS) -o $@ $<
 
-$(DBGDIR)/pp_dispersion_fit.o: $(SRCDIR)/pp_dispersion_fit.f90
+$(DBGDIR)/pp_Gaux2Sigma.o: $(SRCDIR)/pp_Gaux2Sigma.f90
 	$(FC) -c $(FFLAGS) $(DBGFFLAGS) -o $@ $<
 
 # Executables
@@ -179,7 +181,7 @@ $(DBGEXE_PP2): $(DBGOBJS_PP2)
 
 #
 # Release rules-----------------------------------------------------------------
-release: prepREL RELGTlib $(RELEXE) $(RELEXE_PP1) # $(RELEXE_PP2)
+release: prepREL RELGTlib $(RELEXE) $(RELEXE_PP1) $(RELEXE_PP2)
 
 # Modules
 $(RELDIR)/linalg.o: $(SRCDIR)/linalg.f90
@@ -243,7 +245,7 @@ $(RELDIR)/main.o: $(SRCDIR)/main.f90
 $(RELDIR)/pp_Akf_builder.o: $(SRCDIR)/pp_Akf_builder.f90
 	$(FC) -c $(FFLAGS) $(RELFFLAGS) -o $@ $<
 
-$(RELDIR)/pp_dispersion_fit.o: $(SRCDIR)/pp_dispersion_fit.f90
+$(RELDIR)/pp_Gaux2Sigma.o: $(SRCDIR)/pp_Gaux2Sigma.f90
 	$(FC) -c $(FFLAGS) $(RELFFLAGS) -o $@ $<
 
 # Executables
