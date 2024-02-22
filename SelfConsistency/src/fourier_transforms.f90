@@ -14,11 +14,11 @@ module fourier_transforms
    !---------------------------------------------------------------------------!
    interface Fmats2itau_mat
       module procedure Fmats2itau_mat_Gw                                        !(beta,Gmats[Norb,Norb,Ntau],Gitau[Norb,Norb,Nmats],asympt_corr,tau_uniform)
-      module procedure Fmats2itau_mat_Gwk                                       !(beta,Gmats[Norb,Norb,Ntau,Nkpt],Gitau[Norb,Norb,Nmats,Nkpt],asympt_corr,tau_uniform)
+     !module procedure Fmats2itau_mat_Gwk                                       !(beta,Gmats[Norb,Norb,Ntau,Nkpt],Gitau[Norb,Norb,Nmats,Nkpt],asympt_corr,tau_uniform)
    end interface Fmats2itau_mat
    interface Fmats2itau_vec
       module procedure Fmats2itau_vec_Gw                                        !(beta,Gmats[Norb,Ntau],Gitau[Norb,Nmats],asympt_corr,tau_uniform)
-      module procedure Fmats2itau_vec_Gwk                                       !(beta,Gmats[Norb,Ntau,Nkpt],Gitau[Norb,Nmats,Nkpt],asympt_corr,tau_uniform)
+     !module procedure Fmats2itau_vec_Gwk                                       !(beta,Gmats[Norb,Ntau,Nkpt],Gitau[Norb,Nmats,Nkpt],asympt_corr,tau_uniform)
    end interface Fmats2itau_vec
 
    interface Fitau2mats_mat
@@ -40,6 +40,16 @@ module fourier_transforms
       module procedure Bitau2mats_Uw                                            !(beta,Uitau[Nbp,Nbp,Ntau],Umats[Nbp,Nbp,Nmats],tau_uniform)
       module procedure Bitau2mats_Uwk                                           !(beta,Uitau[Nbp,Nbp,Ntau,Nkpt],Umats[Nbp,Nbp,Nmats,Nkpt],tau_uniform)
    end interface Bitau2mats
+
+   interface linspace
+      module procedure linspace_i
+      module procedure linspace_d
+   end interface linspace
+
+   interface trapezoid_integration
+      module procedure trapezoid_integration_d
+      module procedure trapezoid_integration_z
+   end interface trapezoid_integration
 
    !---------------------------------------------------------------------------!
    !PURPOSE: Module variables
@@ -65,6 +75,23 @@ module fourier_transforms
    public :: Fitau2mats
    public :: Bmats2itau
    public :: Bitau2mats
+   public :: FermionicFilon
+   public :: BosonicFilon
+   public :: inquireFile
+   public :: inquireDir
+   public :: createDir
+   public :: removeDir
+   public :: removeFile
+   public :: tick
+   public :: tock
+   !functions
+   public :: FermionicFreqMesh
+   public :: BosonicFreqMesh
+   public :: denspace
+   public :: linspace
+   public :: trapezoid_integration
+   public :: free_unit
+   public :: reg
 
    !===========================================================================!
 
@@ -127,7 +154,7 @@ contains
    !---------------------------------------------------------------------------!
    subroutine mats2itau_FermionicCoeff(tau,coswt,sinwt,correct)
       !
-      use utils_misc
+      ! use utils_misc
       use linalg, only : inv
       implicit none
       !
@@ -152,8 +179,8 @@ contains
       !
       Ntau = size(tau)
       Nmats = size(coswt,dim=1)
-      call assert_shape(coswt,[Nmats,Ntau],"mats2itau_FermionicCoeff","coswt")
-      call assert_shape(sinwt,[Nmats,Ntau],"mats2itau_FermionicCoeff","sinwt")
+      !call assert_shape(coswt,[Nmats,Ntau],"mats2itau_FermionicCoeff","coswt")
+      !call assert_shape(sinwt,[Nmats,Ntau],"mats2itau_FermionicCoeff","sinwt")
       beta = tau(Ntau)
       !
       allocate(wmats(Nmats));wmats=0d0
@@ -237,20 +264,20 @@ contains
          do iw=1,Nmats
             if(coswt(iw,itau).ne.coswt(iw,itau))then
                !NaN condition
-               write(*,"(A)")"mats2itau_FermionicCoeff: coswt["//str(iw)//","//str(itau)//"] is NaN."
+               write(*,"(A)")"mats2itau_FermionicCoeff: coswt is NaN."
                abort=.true.
             elseif(abs(coswt(iw,itau)).ge.huge(1d0))then
                !Infinity condition
-               write(*,"(A)")"mats2itau_FermionicCoeff: coswt["//str(iw)//","//str(itau)//"] is Infinity."
+               write(*,"(A)")"mats2itau_FermionicCoeff: coswt is Infinity."
                abort=.true.
             endif
             if(sinwt(iw,itau).ne.sinwt(iw,itau))then
                !NaN condition
-               write(*,"(A)")"mats2itau_FermionicCoeff: sinwt["//str(iw)//","//str(itau)//"] is NaN."
+               write(*,"(A)")"mats2itau_FermionicCoeff: sinwt is NaN."
                abort=.true.
             elseif(abs(sinwt(iw,itau)).ge.huge(1d0))then
                !Infinity condition
-               write(*,"(A)")"mats2itau_FermionicCoeff: sinwt["//str(iw)//","//str(itau)//"] is Infinity."
+               write(*,"(A)")"mats2itau_FermionicCoeff: sinwt is Infinity."
                abort=.true.
             endif
          enddo
@@ -324,7 +351,7 @@ contains
    !---------------------------------------------------------------------------!
    subroutine mats2itau_BosonicCoeff(tau,coswt,correct)
       !
-      use utils_misc
+      ! use utils_misc
       implicit none
       !
       real(8),intent(in)                    :: tau(:)
@@ -344,7 +371,7 @@ contains
       !
       Ntau = size(tau)
       Nmats = size(coswt,dim=1)
-      call assert_shape(coswt,[Nmats,Ntau],"mats2itau_BosonicCoeff","coswt")
+      !call assert_shape(coswt,[Nmats,Ntau],"mats2itau_BosonicCoeff","coswt")
       beta = tau(Ntau)
       !
       allocate(wmats(Nmats));wmats=0d0
@@ -382,11 +409,11 @@ contains
          do iw=1,Nmats
             if(coswt(iw,itau).ne.coswt(iw,itau))then
                !NaN condition
-               write(*,"(A)")"mats2itau_BosonicCoeff: coswt["//str(iw)//","//str(itau)//"] is NaN."
+               write(*,"(A)")"mats2itau_BosonicCoeff: coswt is NaN."
                abort=.true.
             elseif(abs(coswt(iw,itau)).ge.huge(1d0))then
                !Infinity condition
-               write(*,"(A)")"mats2itau_BosonicCoeff: coswt["//str(iw)//","//str(itau)//"] is Infinity."
+               write(*,"(A)")"mats2itau_BosonicCoeff: coswt is Infinity."
                abort=.true.
             endif
          enddo
@@ -401,7 +428,7 @@ contains
    !---------------------------------------------------------------------------!
    subroutine Fmats2itau_mat_Gw(beta,Gmats,Gitau,asympt_corr,tau_uniform,atBeta)
       !
-      use utils_misc
+      ! use utils_misc
       implicit none
       !
       real(8),intent(in)                    :: beta
@@ -428,7 +455,7 @@ contains
       Nmats = size(Gmats,dim=3)
       Ntau = size(Gitau,dim=3)
       if(size(Gmats,dim=1).ne.size(Gmats,dim=2)) stop "Fmats2itau_mat_Gw: Gmats not square."
-      call assert_shape(Gitau,[Norb,Norb,Ntau],"Fmats2itau_mat_Gw","Gitau")
+      !call assert_shape(Gitau,[Norb,Norb,Ntau],"Fmats2itau_mat_Gw","Gitau")
       !
       asympt_corr_ = .true.
       if(present(asympt_corr)) asympt_corr_ = asympt_corr
@@ -473,127 +500,6 @@ contains
       deallocate(coswt,sinwt,Ge,Go)
       !
    end subroutine Fmats2itau_mat_Gw
-   !
-   subroutine Fmats2itau_mat_Gwk(beta,Gmats,Gitau,asympt_corr,tau_uniform,nkpt3,kpt,atBeta)
-      !
-      use utils_misc
-      use crystal
-      implicit none
-      !
-      real(8),intent(in)                    :: beta
-      complex(8),intent(in),target          :: Gmats(:,:,:,:)
-      complex(8),intent(inout),target       :: Gitau(:,:,:,:)
-      logical,intent(in),optional           :: asympt_corr
-      logical,intent(in),optional           :: tau_uniform
-      integer,intent(in),optional           :: nkpt3(3)
-      real(8),intent(in),optional           :: kpt(:,:)
-      logical,intent(in),optional           :: atBeta
-      !
-      real(8),allocatable                   :: coswt(:,:),sinwt(:,:)
-      real(8),allocatable                   :: tau(:)
-      complex(8),allocatable,target         :: Gmats_rs(:,:,:,:),Gitau_rs(:,:,:,:)
-      complex(8),pointer                    :: Gft_in(:,:,:,:),Gft_out(:,:,:,:)
-      complex(8),allocatable                :: Ge(:,:),Go(:,:)
-      integer                               :: iw,itau,idat
-      integer,pointer                       :: Ndat
-      integer,target                        :: Nrs
-      integer,target                        :: Nkpt
-      integer                               :: Ntau,Norb,Nmats
-      logical                               :: asympt_corr_
-      logical                               :: tau_uniform_
-      logical                               :: real_space
-      logical                               :: atBeta_
-      !
-      !
-      if(verbose)write(*,"(A)") "---- Fmats2itau_mat_Gwk"
-      !
-      !
-      Norb = size(Gmats,dim=1)
-      Nmats = size(Gmats,dim=3)
-      Nkpt = size(Gmats,dim=4)
-      Ntau = size(Gitau,dim=3)
-      if(size(Gmats,dim=1).ne.size(Gmats,dim=2)) stop "Fmats2itau_mat_Gwk: Gmats not square."
-      call assert_shape(Gitau,[Norb,Norb,Ntau,Nkpt],"Fmats2itau_mat_Gwk","Gitau")
-      !
-      real_space=.false.
-      if(present(nkpt3).and.present(kpt))then
-         real_space=.true.
-         if(verbose)write(*,"(A)") "     Performing FT iw->itau in real space."
-      else
-         if(verbose)write(*,"(A)") "     Performing FT iw->itau in momentum space."
-      endif
-      !
-      asympt_corr_ = .true.
-      if(present(asympt_corr)) asympt_corr_ = asympt_corr
-      tau_uniform_ = .false.
-      if(present(tau_uniform)) tau_uniform_ = tau_uniform
-      atBeta_ = .false.
-      if(present(atBeta)) atBeta_ = atBeta
-      !
-      allocate(tau(Ntau));tau=0d0
-      if(tau_uniform_)then
-         tau = linspace(0d0,beta,Ntau)
-      else
-         tau = denspace(beta,Ntau)
-      endif
-      !
-      allocate(coswt(Nmats,Ntau));coswt=0d0
-      allocate(sinwt(Nmats,Ntau));sinwt=0d0
-      call mats2itau_FermionicCoeff(tau,coswt,sinwt,asympt_corr_)
-      deallocate(tau)
-      !
-      !connect to the wanted Gf
-      if(real_space)then
-         !
-         call wannier_K2R(nkpt3,kpt,Gmats,Gmats_rs)
-         Nrs = size(Gmats_rs,dim=4)
-         allocate(Gitau_rs(Norb,Norb,Ntau,Nrs));Gitau_rs=czero
-         !
-         Gft_in  => Gmats_rs
-         Gft_out => Gitau_rs
-         Ndat => Nrs
-         !
-      else
-         !
-         Gft_in  => Gmats
-         Gft_out => Gitau
-         Ndat => Nkpt
-         !
-      endif
-      !
-      Gitau=czero
-      allocate(Ge(Norb,Norb));Ge=czero
-      allocate(Go(Norb,Norb));Go=czero
-      !$OMP PARALLEL DEFAULT(NONE),&
-      !$OMP SHARED(atBeta_,Ndat,Ntau,Nmats,coswt,sinwt,Gft_in,Gft_out),&
-      !$OMP PRIVATE(idat,itau,iw,Ge,Go)
-      !$OMP DO
-      do itau=1,Ntau
-         if(atBeta_.and.(itau.ne.Ntau))cycle
-         do idat=1,Ndat
-            do iw=1,Nmats
-               !
-               !Universal Gf paroty: Gab(-iw) = Gba*(iwn)
-               Ge = Gft_in(:,:,iw,idat) + transpose(conjg(Gft_in(:,:,iw,idat)))
-               Go = Gft_in(:,:,iw,idat) - transpose(conjg(Gft_in(:,:,iw,idat)))
-               !
-               Gft_out(:,:,itau,idat) = Gft_out(:,:,itau,idat) + coswt(iw,itau)*Ge -dcmplx(0d0,1d0)*sinwt(iw,itau)*Go
-               !
-            enddo
-         enddo
-      enddo
-      !$OMP END DO
-      !$OMP END PARALLEL
-      deallocate(coswt,sinwt,Ge,Go)
-      !
-      if(real_space)then
-         deallocate(Gmats_rs)
-         call wannier_R2K(nkpt3,kpt,Gitau_rs,Gitau)
-         deallocate(Gitau_rs)
-      endif
-      nullify(Gft_in,Gft_out,Ndat)
-      !
-   end subroutine Fmats2itau_mat_Gwk
 
 
    !---------------------------------------------------------------------------!
@@ -601,7 +507,7 @@ contains
    !---------------------------------------------------------------------------!
    subroutine Fmats2itau_vec_Gw(beta,Gmats,Gitau,asympt_corr,tau_uniform,atBeta)
       !
-      use utils_misc
+      ! use utils_misc
       implicit none
       !
       real(8),intent(in)                    :: beta
@@ -627,7 +533,7 @@ contains
       Norb = size(Gmats,dim=1)
       Nmats = size(Gmats,dim=2)
       Ntau = size(Gitau,dim=2)
-      call assert_shape(Gitau,[Norb,Ntau],"Fmats2itau_vec_Gw","Gitau")
+      !call assert_shape(Gitau,[Norb,Ntau],"Fmats2itau_vec_Gw","Gitau")
       !
       asympt_corr_ = .true.
       if(present(asympt_corr)) asympt_corr_ = asympt_corr
@@ -672,126 +578,6 @@ contains
       deallocate(coswt,sinwt,Ge,Go)
       !
    end subroutine Fmats2itau_vec_Gw
-   !
-   subroutine Fmats2itau_vec_Gwk(beta,Gmats,Gitau,asympt_corr,tau_uniform,nkpt3,kpt,atBeta)
-      !
-      use utils_misc
-      use crystal
-      implicit none
-      !
-      real(8),intent(in)                    :: beta
-      complex(8),intent(in),target          :: Gmats(:,:,:)
-      complex(8),intent(inout),target       :: Gitau(:,:,:)
-      logical,intent(in),optional           :: asympt_corr
-      logical,intent(in),optional           :: tau_uniform
-      integer,intent(in),optional           :: nkpt3(3)
-      real(8),intent(in),optional           :: kpt(:,:)
-      logical,intent(in),optional           :: atBeta
-      !
-      real(8),allocatable                   :: coswt(:,:),sinwt(:,:)
-      real(8),allocatable                   :: tau(:)
-      complex(8),allocatable,target         :: Gmats_rs(:,:,:),Gitau_rs(:,:,:)
-      complex(8),pointer                    :: Gft_in(:,:,:),Gft_out(:,:,:)
-      complex(8),allocatable                :: Ge(:),Go(:)
-      integer                               :: iw,itau,idat
-      integer,pointer                       :: Ndat
-      integer,target                        :: Nrs
-      integer,target                        :: Nkpt
-      integer                               :: Ntau,Norb,Nmats
-      logical                               :: asympt_corr_
-      logical                               :: tau_uniform_
-      logical                               :: real_space
-      logical                               :: atBeta_
-      !
-      !
-      if(verbose)write(*,"(A)") "---- Fmats2itau_vec_Gwk"
-      !
-      !
-      Norb = size(Gmats,dim=1)
-      Nmats = size(Gmats,dim=2)
-      Nkpt = size(Gmats,dim=3)
-      Ntau = size(Gitau,dim=2)
-      call assert_shape(Gitau,[Norb,Ntau,Nkpt],"Fmats2itau_vec_Gwk","Gitau")
-      !
-      real_space=.false.
-      if(present(nkpt3).and.present(kpt))then
-         real_space=.true.
-         if(verbose)write(*,"(A)") "     Performing FT iw->itau in real space."
-      else
-         if(verbose)write(*,"(A)") "     Performing FT iw->itau in momentum space."
-      endif
-      !
-      asympt_corr_ = .true.
-      if(present(asympt_corr)) asympt_corr_ = asympt_corr
-      tau_uniform_ = .false.
-      if(present(tau_uniform)) tau_uniform_ = tau_uniform
-      atBeta_ = .false.
-      if(present(atBeta)) atBeta_ = atBeta
-      !
-      allocate(tau(Ntau));tau=0d0
-      if(tau_uniform_)then
-         tau = linspace(0d0,beta,Ntau)
-      else
-         tau = denspace(beta,Ntau)
-      endif
-      !
-      allocate(coswt(Nmats,Ntau));coswt=0d0
-      allocate(sinwt(Nmats,Ntau));sinwt=0d0
-      call mats2itau_FermionicCoeff(tau,coswt,sinwt,asympt_corr_)
-      deallocate(tau)
-      !
-      !connect to the wanted Gf
-      if(real_space)then
-         !
-         call wannier_K2R(nkpt3,kpt,Gmats,Gmats_rs)
-         Nrs = size(Gmats_rs,dim=3)
-         allocate(Gitau_rs(Norb,Ntau,Nrs));Gitau_rs=czero
-         !
-         Gft_in  => Gmats_rs
-         Gft_out => Gitau_rs
-         Ndat => Nrs
-         !
-      else
-         !
-         Gft_in  => Gmats
-         Gft_out => Gitau
-         Ndat => Nkpt
-         !
-      endif
-      !
-      Gitau=czero
-      allocate(Ge(Norb));Ge=czero
-      allocate(Go(Norb));Go=czero
-      !$OMP PARALLEL DEFAULT(NONE),&
-      !$OMP SHARED(atBeta_,Ndat,Ntau,Nmats,coswt,sinwt,Gft_in,Gft_out),&
-      !$OMP PRIVATE(idat,itau,iw,Ge,Go)
-      !$OMP DO
-      do itau=1,Ntau
-         if(atBeta_.and.(itau.ne.Ntau))cycle
-         do idat=1,Ndat
-            do iw=1,Nmats
-               !
-               !Gaa(-iw) = Gaa*(iwn)
-               Ge = Gft_in(:,iw,idat) + conjg(Gft_in(:,iw,idat))
-               Go = Gft_in(:,iw,idat) - conjg(Gft_in(:,iw,idat))
-               !
-               Gft_out(:,itau,idat) = Gft_out(:,itau,idat) + coswt(iw,itau)*Ge -dcmplx(0d0,1d0)*sinwt(iw,itau)*Go
-               !
-            enddo
-         enddo
-      enddo
-      !$OMP END DO
-      !$OMP END PARALLEL
-      deallocate(coswt,sinwt,Ge,Go)
-      !
-      if(real_space)then
-         deallocate(Gmats_rs)
-         call wannier_R2K(nkpt3,kpt,Gitau_rs,Gitau)
-         deallocate(Gitau_rs)
-      endif
-      nullify(Gft_in,Gft_out,Ndat)
-      !
-   end subroutine Fmats2itau_vec_Gwk
 
 
    !---------------------------------------------------------------------------!
@@ -799,7 +585,7 @@ contains
    !---------------------------------------------------------------------------!
    subroutine Fmats2itau(beta,Gmats,Gitau,asympt_corr,tau_uniform,atBeta)
       !
-      use utils_misc
+      ! use utils_misc
       implicit none
       !
       real(8),intent(in)                    :: beta
@@ -824,7 +610,7 @@ contains
       !
       Nmats = size(Gmats)
       Ntau = size(Gitau)
-      call assert_shape(Gitau,[Ntau],"Fmats2itau","Gitau")
+      !call assert_shape(Gitau,[Ntau],"Fmats2itau","Gitau")
       !
       asympt_corr_ = .true.
       if(present(asympt_corr)) asympt_corr_ = asympt_corr
@@ -876,7 +662,7 @@ contains
    !---------------------------------------------------------------------------!
    subroutine Fitau2mats_mat_Gw(beta,Gitau,Gmats,tau_uniform)
       !
-      use utils_misc
+      ! use utils_misc
       implicit none
       !
       real(8),intent(in)                    :: beta
@@ -899,7 +685,7 @@ contains
       Ntau = size(Gitau,dim=3)
       Nmats = size(Gmats,dim=3)
       if(size(Gitau,dim=1).ne.size(Gitau,dim=2)) stop "Fitau2mats_mat_Gw: Gitau not square."
-      call assert_shape(Gmats,[Norb,Norb,Nmats],"Fitau2mats_mat_Gw","Gmats")
+      !call assert_shape(Gmats,[Norb,Norb,Nmats],"Fitau2mats_mat_Gw","Gmats")
       if(mod(Ntau,2).eq.0) stop "Fitau2mats_mat_Gw: Required Filon routines are not working with odd segments."
       !
       tau_uniform_ = .false.
@@ -944,7 +730,7 @@ contains
    !
    subroutine Fitau2mats_mat_Gwk(beta,Gitau,Gmats,tau_uniform)
       !
-      use utils_misc
+      ! use utils_misc
       implicit none
       !
       real(8),intent(in)                    :: beta
@@ -968,7 +754,7 @@ contains
       Nkpt = size(Gitau,dim=4)
       Nmats = size(Gmats,dim=3)
       if(size(Gitau,dim=1).ne.size(Gitau,dim=2)) stop "Fitau2mats_mat_Gwk: Gitau not square."
-      call assert_shape(Gmats,[Norb,Norb,Nmats,Nkpt],"Fitau2mats_mat_Gwk","Gmats")
+      !call assert_shape(Gmats,[Norb,Norb,Nmats,Nkpt],"Fitau2mats_mat_Gwk","Gmats")
       if(mod(Ntau,2).eq.0) stop "Fitau2mats_mat_Gwk: Required Filon routines are not working with odd segments."
       !
       tau_uniform_ = .false.
@@ -1019,7 +805,7 @@ contains
    !---------------------------------------------------------------------------!
    subroutine Fitau2mats_vec_Gw(beta,Gitau,Gmats,tau_uniform)
       !
-      use utils_misc
+      ! use utils_misc
       implicit none
       !
       real(8),intent(in)                    :: beta
@@ -1041,7 +827,7 @@ contains
       Norb = size(Gitau,dim=1)
       Ntau = size(Gitau,dim=2)
       Nmats = size(Gmats,dim=2)
-      call assert_shape(Gmats,[Norb,Nmats],"Fitau2mats_vec_Gw","Gmats")
+      !call assert_shape(Gmats,[Norb,Nmats],"Fitau2mats_vec_Gw","Gmats")
       if(mod(Ntau,2).eq.0) stop "Fitau2mats_vec_Gw: Required Filon routines are not working with odd segments."
       !
       tau_uniform_ = .false.
@@ -1084,7 +870,7 @@ contains
    !
    subroutine Fitau2mats_vec_Gwk(beta,Gitau,Gmats,tau_uniform)
       !
-      use utils_misc
+      ! use utils_misc
       implicit none
       !
       real(8),intent(in)                    :: beta
@@ -1107,7 +893,7 @@ contains
       Ntau = size(Gitau,dim=2)
       Nkpt = size(Gitau,dim=3)
       Nmats = size(Gmats,dim=2)
-      call assert_shape(Gmats,[Norb,Nmats,Nkpt],"Fitau2mats_vec_Gwk","Gmats")
+      !call assert_shape(Gmats,[Norb,Nmats,Nkpt],"Fitau2mats_vec_Gwk","Gmats")
       if(mod(Ntau,2).eq.0) stop "Fitau2mats_vec_Gwk: Required Filon routines are not working with odd segments."
       !
       tau_uniform_ = .false.
@@ -1156,7 +942,7 @@ contains
    !---------------------------------------------------------------------------!
    subroutine Fitau2mats(beta,Gitau,Gmats,tau_uniform)
       !
-      use utils_misc
+      ! use utils_misc
       implicit none
       !
       real(8),intent(in)                    :: beta
@@ -1177,7 +963,7 @@ contains
       !
       Ntau = size(Gitau)
       Nmats = size(Gmats)
-      call assert_shape(Gmats,[Nmats],"Fitau2mats","Gmats")
+      !call assert_shape(Gmats,[Nmats],"Fitau2mats","Gmats")
       if(mod(Ntau,2).eq.0) stop "Fitau2mats: Required Filon routines are not working with odd segments."
       !
       tau_uniform_ = .false.
@@ -1222,7 +1008,7 @@ contains
    !---------------------------------------------------------------------------!
    subroutine Bmats2itau_Uw_component(beta,Umats,Uitau,asympt_corr,tau_uniform,Umats_bare)
       !
-      use utils_misc
+      ! use utils_misc
       implicit none
       !
       real(8),intent(in)                    :: beta
@@ -1286,7 +1072,7 @@ contains
    !
    subroutine Bmats2itau_Uw(beta,Umats,Uitau,asympt_corr,tau_uniform,Umats_bare)
       !
-      use utils_misc
+      ! use utils_misc
       implicit none
       !
       real(8),intent(in)                    :: beta
@@ -1311,7 +1097,7 @@ contains
       Nmats = size(Umats,dim=3)
       Ntau = size(Uitau,dim=3)
       if(size(Umats,dim=1).ne.size(Umats,dim=2)) stop "Bmats2itau_Uw: Umats not square."
-      call assert_shape(Uitau,[Nbp,Nbp,Ntau],"Bmats2itau_Uw","Uitau")
+      !call assert_shape(Uitau,[Nbp,Nbp,Ntau],"Bmats2itau_Uw","Uitau")
       !
       asympt_corr_ = .true.
       if(present(asympt_corr)) asympt_corr_ = asympt_corr
@@ -1367,7 +1153,7 @@ contains
    !
    subroutine Bmats2itau_Uwk(beta,Umats,Uitau,asympt_corr,tau_uniform,Umats_bare)
       !
-      use utils_misc
+      ! use utils_misc
       implicit none
       !
       real(8),intent(in)                    :: beta
@@ -1393,7 +1179,7 @@ contains
       Nkpt = size(Umats,dim=4)
       Ntau = size(Uitau,dim=3)
       if(size(Umats,dim=1).ne.size(Umats,dim=2)) stop "Bmats2itau_Uwk: Umats not square."
-      call assert_shape(Uitau,[Nbp,Nbp,Ntau,Nkpt],"Bmats2itau_Uwk","Uitau")
+      !call assert_shape(Uitau,[Nbp,Nbp,Ntau,Nkpt],"Bmats2itau_Uwk","Uitau")
       !
       asympt_corr_ = .true.
       if(present(asympt_corr)) asympt_corr_ = asympt_corr
@@ -1457,7 +1243,7 @@ contains
    !---------------------------------------------------------------------------!
    subroutine Bitau2mats_Uw_component(beta,Uitau,Umats,tau_uniform)
       !
-      use utils_misc
+      ! use utils_misc
       implicit none
       !
       real(8),intent(in)                    :: beta
@@ -1523,7 +1309,7 @@ contains
    !
    subroutine Bitau2mats_Uw(beta,Uitau,Umats,tau_uniform)
       !
-      use utils_misc
+      ! use utils_misc
       implicit none
       !
       real(8),intent(in)                    :: beta
@@ -1546,7 +1332,7 @@ contains
       Ntau = size(Uitau,dim=3)
       Nmats = size(Umats,dim=3)
       if(size(Uitau,dim=1).ne.size(Uitau,dim=2)) stop "Bitau2mats_Uw: Uitau not square."
-      call assert_shape(Umats,[Nbp,Nbp,Nmats],"Bitau2mats_Uw","Umats")
+      !call assert_shape(Umats,[Nbp,Nbp,Nmats],"Bitau2mats_Uw","Umats")
       if(mod(Ntau,2).eq.0) stop "Bitau2mats_Uw: Required Filon routines are not working with odd segments."
       !
       tau_uniform_ = .false.
@@ -1596,7 +1382,7 @@ contains
    !
    subroutine Bitau2mats_Uwk(beta,Uitau,Umats,tau_uniform)
       !
-      use utils_misc
+      ! use utils_misc
       implicit none
       !
       real(8),intent(in)                    :: beta
@@ -1620,7 +1406,7 @@ contains
       Nkpt = size(Uitau,dim=4)
       Nmats = size(Umats,dim=3)
       if(size(Uitau,dim=1).ne.size(Uitau,dim=2)) stop "Bitau2mats_Uwk: Uitau not square."
-      call assert_shape(Umats,[Nbp,Nbp,Nmats,Nkpt],"Bitau2mats_Uwk","Umats")
+      !call assert_shape(Umats,[Nbp,Nbp,Nmats,Nkpt],"Bitau2mats_Uwk","Umats")
       if(mod(Ntau,2).eq.0) stop "Bitau2mats_Uwk: Required Filon routines are not working with odd segments."
       !
       tau_uniform_ = .false.
@@ -1669,6 +1455,842 @@ contains
       deallocate(wcos,wsin,tau,wmats)
       !
    end subroutine Bitau2mats_Uwk
+
+
+   !---------------------------------------------------------------------------!
+   !PURPOSE: General Filon integration
+   ! I[x1,x2] dx f(x) cos(kx) and I[x1,x2] dx f(x) sin(kx)
+   ! where f(x) is smooth but cos(kx) and sin(kx) can oscillate rapidly,
+   ! i.e., k can be very large.
+   !
+   ! Divide the integration range into N segments which are NOT necessarily
+   ! uniform. Each segment is divided further into two EQUAL segments of
+   ! size h each. The input mesh is x(i), i=1, 2*nseg+1
+   !
+   ! The integral for the n-th segment centred at xn=x(2*n) is
+   ! Icos(n) = I[xn-h, xn+h] dx f(x) cos(kx)
+   ! = I[-h,+h] dy f(y+xn) cos(ky+ kxn)
+   ! = I[-h,+h] dy g(y) [cos(ky) cos(kxn) - sin(ky) sin(kxn)]
+   !
+   ! Similarly
+   ! Isin(n) = I[xn-h, xn+h] dx f(x) sin(kx)
+   ! = I[-h,+h] dy f(y+xn) sin(ky+ kxn)
+   ! = I[-h,+h] dy g(y) [sin(ky) cos(kxn) + cos(ky) sin(kxn)]
+   !
+   ! where y = x - x(n) and
+   ! g(-h) = f(-h+xn), g(0) = f(xn), and g(h) = f(h+xn).
+   !
+   ! Fitting g(y) to an exponential + a square:
+   ! g(y) = a  exp(b*y) + cy^2, we obtain
+   ! a = g(0)
+   ! B = [g(h)-g(-h)]/g(0)
+   ! y+= [B + sqrt(B^2+4)] / 2 = exp(b*h) -> b*h = ln(y+)
+   ! c = g(h) - a*exp(b*h)
+   !   = g(-h) - a*exp(-b*h)
+   !
+   ! We need
+   ! Ic0  = I[-h,h] dy exp(by) cos(ky)
+   !      = [ (b*cos(kh) + k*sin(kh)) exp(bh)
+   !         -(b*cos(kh) - k*sin(kh)) exp(-bh) ] / (b^2 + k^2)
+   ! Ic2  = I[-h,h] dy y^2 cos(ky)
+   !      = 2y cos(ky)/k^2 +   (y^2/k - 2/k^3) sin(ky) |y=-h,h
+   !      = 4h cos(kh)/k^2 + 2 (h^2/k - 2/k^3) sin(kh)
+   !
+   ! Is1  = I[-h,h] dy exp(by) sin(ky)
+   !      = [  (b*sin(kh) - k*cos(kh)) exp(bh)
+   !         -(-b*sin(kh) - k*cos(kh)) exp(-bh) ] / (b^2 + k^2)
+   !
+   ! For small k:
+   ! cos(ky) = 1 - (ky)^2/2 + (ky)^4/24 - (ky)^6/720 + ...
+   ! sin(ky) =     (ky)     - (ky)^3/6  + (ky)^5/120 - ...
+   !
+   ! Ic2  = I[-h,h] dy y^2 cos(ky)
+   !      = I[-h,h] dy y^2 [ 1 - (ky)^2/2 + (ky)^4/24 - (ky)^6/720 ]
+   !      = 2h^3/3 - k^2 h^5/5 + k^4 h^7/84 - k^6 h^9/(9*360)
+   !      = h^3 [ 2/3 - (kh)^2/5 + (kh)^4/84 - (kh)^6/(9*360) ]
+   !
+   ! Icos = I[-h,h] dy g(y) cos(ky)
+   !      = a*Ic0 + c*Ic2
+   ! Isin = I[-h,h] dy g(y) sin(ky)
+   !      = a*Is1
+   !
+   ! Therefore
+   ! Icos(n) =
+   ! = I[-h,+h] dy g(y) [cos(ky) cos(kxn) - sin(ky) sin(kxn)]
+   ! = cos(kxn) * Icos - sin(kxn) * Isin
+   !
+   ! Isin(n) =
+   ! = I[-h,+h] dy g(y) [sin(ky) cos(kxn) + cos(ky) sin(kxn)]
+   ! = cos(kxn) * Isin + sin(kxn) * Icos
+   !
+   ! Weight for Icos(n) and Isin(n)
+   ! cos(kxn) * Icos - sin(kxn) * Isin
+   ! = cos(kxn) * (a*Ic0 + c*Ic2) - sin(kxn) * a * Is1
+   ! wcos(2*n)   = cos(kxn)*(Ic0 - Ic2/h^2)
+   ! wcos(2*n-1) = cos(kxn)*Ic2/(2h^2) + sin(kxn)*Is1/(2h)
+   ! wcos(2*n+1) = cos(kxn)*Ic2/(2h^2) - sin(kxn)*Is1/(2h)
+   !
+   ! cos(kxn) * Isin + sin(kxn) * Icos
+   ! = cos(kxn) * a * Is1 + sin(kxn) * (a*Ic0 + c*Ic2)
+   ! wsin(2*n)   = sin(kxn)*(Ic0 - Ic2/h^2)
+   ! wsin(2*n-1) = sin(kxn)*Ic2/(2h^2) - cos(kxn)*Is1/(2h)
+   ! wcos(2*n+1) = sin(kxn)*Ic2/(2h^2) + cos(kxn)*Is1/(2h)
+   !
+   ! 1) nseg is the number of segments.
+   !    The number of mesh points MUST be odd (2*nseg+1).
+   !    q = k, x = mesh with x(i) = [x(i-1) + x(i+1)]/2
+   ! 2) Make sure that each segment is divided into two EQUAL segments.
+   ! 3) The weights for cos and sin integration are in wcos and wsin.
+   !---------------------------------------------------------------------------!
+   subroutine FermionicFilon(q,x,fx,wcos,wsin)
+      implicit none
+      real(8),intent(in)                    :: q
+      real(8),intent(in)                    :: x(:)
+      real(8),intent(in)                    :: fx(:)
+      real(8),intent(out)                   :: wcos
+      real(8),intent(out)                   :: wsin
+      !
+      integer                               :: npoints,nseg
+      integer                               :: n,n2
+      real(8)                               :: oq,oq2,oq3,h,h2
+      real(8)                               :: coskh,sinkh,coskx,sinkx
+      real(8)                               :: c0,c2,s1,oh,oh2
+      real(8)                               :: a,b,c,bb,yy
+      real(8)                               :: expbh1,expbh2,scos,ssin
+      logical                               :: abort
+      real(8),parameter                     :: precision=1d-9
+      !
+      npoints = size(x)
+      if(mod(npoints,2).eq.0) stop "FermionicFilon: npoints is even."
+      nseg = (npoints-1)/2
+      !
+      wcos=0d0;wsin=0d0
+      !
+      oq=1.d0/q
+      oq2=oq*oq
+      oq3=oq*oq2
+      !
+      do n=1,nseg
+         !
+         n2 = 2*n
+         h = x(n2) - x(n2-1)
+         !
+         if(dabs(x(n2+1)-x(n2)-h) .gt. 1d-10) then
+            write(*,"(A,I)") "Segment= ",n
+            stop "FermionicFilon: the above segment is not equally divided"
+         endif
+         !
+         ! check that fx is not "zero"
+         scos = ( fx(n2-1) + 4.d0*fx(n2) + fx(n2+1) )*h/3.d0
+         !
+         if(dabs(scos).lt.precision) cycle
+         !
+         h2    = h * h
+         oh    = 1.d0/h
+         oh2   = oh * oh
+         coskx = dcos( q*x(n2) )
+         sinkx = dsin( q*x(n2) )
+         coskh = dcos( q*h )
+         sinkh = dsin( q*h )
+         !
+         ! g(y) = a  exp(b*y) + cy^2, we obtain
+         ! a = g(0)
+         ! B = [g(h)-g(-h)]/g(0)
+         ! y+= [B + sqrt(B^2+4)] / 2 = exp(b*h) -> b*h = ln(y+)
+         ! c = [ g(h) - a*exp(b*h) ] / h^2 = [ g(-h) - a*exp(-b*h) ] / h^2
+         a      = fx(n2)
+         bb     = ( fx(n2+1) - fx(n2-1) ) / a
+         yy     = 0.5d0 * ( bb + dsqrt(bb*bb+4.d0) )
+         b      = dlog(yy) * oh
+         expbh1 = yy
+         expbh2 = 1.d0 / yy
+         c      = ( fx(n2-1) - a * expbh2 ) * oh2
+         !
+         ! Ic0  = I[-h,h] dy exp(by) cos(ky)
+         !      = [ (b*cos(kh) + k*sin(kh)) exp(bh) - (b*cos(kh) - k*sin(kh)) exp(-bh) ] / (b^2 + k^2)
+         !
+         ! Ic2  = I[-h,h] dy y^2 cos(ky)
+         !      = 2y cos(ky)/k^2 +   (y^2/k - 2/k^3) sin(ky) |y=-h,h
+         !      = 4h cos(kh)/k^2 + 2 (h^2/k - 2/k^3) sin(kh)
+         !
+         ! Is1  = I[-h,h] dy exp(by) sin(ky)
+         !      = [  (b*sin(kh) - k*cos(kh)) exp(bh) - (-b*sin(kh) - k*cos(kh)) exp(-bh) ] / (b^2 + k^2)
+         c0 = (b*coskh + q*sinkh) * expbh1 - (b*coskh - q*sinkh) * expbh2
+         c0 = c0 / (b*b + q*q)
+         c2 = 4.d0 * h * oq2 * coskh + 2.d0 * (oq*h2 - 2.d0*oq3) * sinkh
+         s1 = (b*sinkh - q*coskh) * expbh1 + (b*sinkh + q*coskh) * expbh2
+         s1 = s1 / (b*b + q*q)
+         !
+         ! Icos = I[-h,h] dy g(y) cos(ky) = a*Ic0 + c*Ic2
+         ! Isin = I[-h,h] dy g(y) sin(ky) = a*Is1
+         scos = a*c0 + c*c2
+         ssin = a*s1
+         !
+         ! Icos(n) = I[-h,+h] dy g(y) [cos(ky) cos(kxn) - sin(ky) sin(kxn)] = cos(kxn) * Icos - sin(kxn) * Isin
+         ! Isin(n) = I[-h,+h] dy g(y) [sin(ky) cos(kxn) + cos(ky) sin(kxn)] = cos(kxn) * Isin + sin(kxn) * Icos
+         wcos = wcos + coskx*scos - sinkx*ssin
+         wsin = wsin + coskx*ssin + sinkx*scos
+         !1111   continue
+      enddo
+      !
+      abort=.false.
+      if(wcos.ne.wcos)then
+         !NaN condition
+         write(*,"(A)")"FermionicFilon: wcos is NaN."
+         abort=.true.
+      elseif(abs(wcos).ge.huge(1d0))then
+         !Infinity condition
+         write(*,"(A)")"FermionicFilon: wcos is Infinity."
+         abort=.true.
+      endif
+      if(wsin.ne.wsin)then
+         !NaN condition
+         write(*,"(A)")"FermionicFilon: wsin is NaN."
+         abort=.true.
+      elseif(abs(wsin).ge.huge(1d0))then
+         !Infinity condition
+         write(*,"(A)")"FermionicFilon: wsin is Infinity."
+         abort=.true.
+      endif
+      if(abort) stop "FermionicFilon: coefficient error. Increase precision and recompile."
+      !
+   end subroutine FermionicFilon
+
+
+   !---------------------------------------------------------------------------!
+   !PURPOSE: General Filon integration:
+   ! I[x1,x2] dx f(x) cos(kx) and I[x1,x2] dx f(x) sin(kx)
+   ! where f(x) is smooth but cos(kx) and sin(kx) can oscillate rapidly,
+   ! i.e., k can be very large.
+   !
+   ! Divide the integration range into N segments which are NOT necessarily
+   ! uniform. Each segment is divided further into two EQUAL segments of
+   ! size h each. The input mesh is x(i), i=1, 2*nseg+1
+   !
+   ! The integral for the n-th segment centred at xn=x(2*n) is
+   ! Icos(n) = I[xn-h, xn+h] dx f(x) cos(kx)
+   ! = I[-h,+h] dy f(y+xn) cos(ky+ kxn)
+   ! = I[-h,+h] dy g(y) [cos(ky) cos(kxn) - sin(ky) sin(kxn)]
+   !
+   ! Similarly
+   ! Isin(n) = I[xn-h, xn+h] dx f(x) sin(kx)
+   ! = I[-h,+h] dy f(y+xn) sin(ky+ kxn)
+   ! = I[-h,+h] dy g(y) [sin(ky) cos(kxn) + cos(ky) sin(kxn)]
+   !
+   ! where y = x - x(n) and
+   ! g(-h) = f(-h+xn), g(0) = f(xn), and g(h) = f(h+xn).
+   !
+   ! Fitting g(y) to a parabola g(y) = a + by + cy^2, we obtain
+   ! a = g(0)
+   ! b = [g(h)-g(-h)]/(2h)
+   ! c = [g(-h)-2g(0)+g(h)] / (2h^2)
+   !
+   ! We need
+   ! Ic0  = I[-h,h] dy cos(ky) = 2sin(kh)/k
+   ! Ic2  = I[-h,h] dy y^2 cos(ky)
+   !      = 2y cos(ky)/k^2 +   (y^2/k - 2/k^3) sin(ky) |y=-h,h
+   !      = 4h cos(kh)/k^2 + 2 (h^2/k - 2/k^3) sin(kh)
+   !
+   ! Is1  = I[-h,h] dy y sin(ky)
+   !      = sin(ky)/k^2 - y cos(ky)/k |y=-h,h
+   !      = 2 sin(kh)/k^2 - 2h cos(kh)/k
+   !
+   ! For small k:
+   ! cos(ky) = 1 - (ky)^2/2 + (ky)^4/24 - (ky)^6/720 + ...
+   ! sin(ky) =     (ky)     - (ky)^3/6  + (ky)^5/120 - ...
+   !
+   ! Ic0  = I[-h,h] dy cos(ky) = 2sin(kh)/k
+   !      = I[-h,h] dy [ 1 - (ky)^2/2 + (ky)^4/24 - (ky)^6/720 ]
+   !      = 2h - k^2 h^3/3 + k^4 h^5/60 - k^6 h^7/(7*360)
+   !      = h [ 2 - (kh)^2/3 + (kh)^4/60 - (kh)^6/(7*360) ]
+   !
+   ! Ic2  = I[-h,h] dy y^2 cos(ky)
+   !      = I[-h,h] dy y^2 [ 1 - (ky)^2/2 + (ky)^4/24 - (ky)^6/720 ]
+   !      = 2h^3/3 - k^2 h^5/5 + k^4 h^7/84 - k^6 h^9/(9*360)
+   !      = h^3 [ 2/3 - (kh)^2/5 + (kh)^4/84 - (kh)^6/(9*360) ]
+   !
+   ! Is1  = I[-h,h] dy y sin(ky)
+   !      = I[-h,h] dy y [ (ky) - (ky)^3/6  + (ky)^5/120 ]
+   !      = 2k h^3/3 - k^3 h^5/15 + k^5 h^7/420
+   !      = h^2 [ 2 (kh)/3 - (kh)^3/15 + (kh)^5/420 ]
+   !
+   ! Icos = I[-h,h] dy g(y) cos(ky)
+   !      = a*Ic0 + c*Ic2
+   ! Isin = I[-h,h] dy g(y) sin(ky)
+   !      = b*Is1
+   !
+   ! Therefore
+   ! Icos(n) =
+   ! = I[-h,+h] dy g(y) [cos(ky) cos(kxn) - sin(ky) sin(kxn)]
+   ! = cos(kxn) * Icos - sin(kxn) * Isin
+   !
+   ! Isin(n) =
+   ! = I[-h,+h] dy g(y) [sin(ky) cos(kxn) + cos(ky) sin(kxn)]
+   ! = cos(kxn) * Isin + sin(kxn) * Icos
+   !
+   ! Weight for Icos(n) and Isin(n)
+   ! cos(kxn) * Icos - sin(kxn) * Isin
+   ! = cos(kxn) * (a*Ic0 + c*Ic2) - sin(kxn) * b * Is1
+   ! wcos(2*n)   = cos(kxn)*(Ic0 - Ic2/h^2)
+   ! wcos(2*n-1) = cos(kxn)*Ic2/(2h^2) + sin(kxn)*Is1/(2h)
+   ! wcos(2*n+1) = cos(kxn)*Ic2/(2h^2) - sin(kxn)*Is1/(2h)
+   !
+   ! cos(kxn) * Isin + sin(kxn) * Icos
+   ! = cos(kxn) * b * Is1 + sin(kxn) * (a*Ic0 + c*Ic2)
+   ! wsin(2*n)   = sin(kxn)*(Ic0 - Ic2/h^2)
+   ! wsin(2*n-1) = sin(kxn)*Ic2/(2h^2) - cos(kxn)*Is1/(2h)
+   ! wcos(2*n+1) = sin(kxn)*Ic2/(2h^2) + cos(kxn)*Is1/(2h)
+   !
+   !
+   ! 1) nseg is the number of segments.
+   !    The number of mesh points MUST be odd (2*nseg+1).
+   !    q = k, x = mesh with x(i) = [x(i-1) + x(i+1)]/2
+   ! 2) Make sure that each segment is divided into two EQUAL segments.
+   ! 3) The weights for cos and sin integration are in wcos and wsin.
+   !---------------------------------------------------------------------------!
+   subroutine BosonicFilon(q,x,wcos,wsin)
+      implicit none
+      real(8),intent(in)                    :: q
+      real(8),intent(in)                    :: x(:)
+      real(8),intent(inout)                 :: wcos(:)
+      real(8),intent(inout)                 :: wsin(:)
+      !
+      integer                               :: npoints,nseg
+      integer                               :: n,n2
+      real(8)                               :: oq,oq2,oq3,h,h2,h3
+      real(8)                               :: coskh,sinkh,coskx,sinkx
+      real(8)                               :: c0,c2,s1,oh,oh2,qh,qh2,qh3,qh4,qh5,qh6
+      logical                               :: abort
+      real(8),parameter                     :: precision=1d-9
+      !
+      npoints = size(x)
+      if(mod(npoints,2).eq.0) stop "BosonicFilon: npoints is even."
+      nseg = (npoints-1)/2
+      !
+      !call assert_shape(wcos,[npoints],"BosonicFilon","wcos")
+      !call assert_shape(wsin,[npoints],"BosonicFilon","wsin")
+      !
+      wcos=0d0;wsin=0d0
+      !
+      if(dabs(q).lt.precision)then
+         !
+         !Small q
+         do n=1,nseg
+            !
+            n2 = 2 * n
+            h = x(n2) - x(n2-1)
+            !
+            if(dabs(x(n2+1)-x(n2)-h).gt.1d-10) then
+               write(*,"(A,I)") "Segment= ",n
+               stop "BosonicFilon: the above segment is not equally divided"
+            endif
+            !
+            h2  = h * h
+            h3  = h * h2
+            oh  = 1.d0/h
+            oh2 = oh * oh
+            qh  = q * h
+            qh2 = qh * qh
+            qh3 = qh * qh2
+            qh4 = qh * qh3
+            qh5 = qh * qh4
+            qh6 = qh * qh5
+            !
+            coskx = dcos( q*x(n2) )
+            sinkx = dsin( q*x(n2) )
+            coskh = dcos( qh )
+            sinkh = dsin( qh )
+            !
+            ! For small k:
+            ! Ic0  = h [ 2 - (kh)^2/3 + (kh)^4/60 - (kh)^6/(7*360) ]
+            ! Ic2  = h^3 [ 2/3 - (kh)^2/5 + (kh)^4/84 - (kh)^6/(9*360) ]
+            ! Is1  = h^2 [ 2 (kh)/3 - (kh)^3/15 + (kh)^5/420 ]
+            c0 = h *  (2.d0 - qh2/3.d0 + qh4/60.d0 - qh6/2520.d0 )
+            c2 = h3 * (2.d0/3.d0 - qh2/5.d0 + qh4/84.d0 - qh6/3240.d0)
+            s1 = h2 * (2.d0*qh/3.d0 - qh3/15.d0 + qh5/420.d0)
+            !
+            ! Weight for Icos(n) and Isin(n)
+            wcos(n2)   = wcos(n2)   + coskx * (c0 - oh2*c2)
+            wcos(n2-1) = wcos(n2-1) + coskx * 0.5d0*oh2*c2+ sinkx * 0.5d0*oh *s1
+            wcos(n2+1) = wcos(n2+1) + coskx * 0.5d0*oh2*c2- sinkx * 0.5d0*oh *s1
+            !
+            wsin(n2)   = wsin(n2)   + sinkx * (c0 - oh2*c2)
+            wsin(n2-1) = wsin(n2-1) + sinkx * 0.5d0*oh2*c2 - coskx * 0.5d0*oh *s1
+            wsin(n2+1) = wsin(n2+1) + sinkx * 0.5d0*oh2*c2 + coskx * 0.5d0*oh *s1
+            !
+         enddo
+         !
+      else
+         !
+         ! Not small q
+         oq  = 1.d0/q
+         oq2 = oq * oq
+         oq3 = oq * oq2
+         !
+         do n=1,nseg
+            n2 = 2 * n
+            h = x(n2) - x(n2-1)
+            !
+            if(dabs(x(n2+1)-x(n2)-h).gt.1d-10) then
+               write(*,"(A,I)") "Segment= ",n
+               stop "BosonicFilon: the above segment is not equally divided"
+            endif
+            !
+            h2    = h * h
+            oh    = 1.d0/h
+            oh2   = oh * oh
+            coskx = dcos( q*x(n2) )
+            sinkx = dsin( q*x(n2) )
+            coskh = dcos( q*h )
+            sinkh = dsin( q*h )
+            !
+            ! Ic0  = 2sin(kh)/k
+            ! Ic2  = 4h cos(kh)/k^2 + 2 (h^2/k - 2/k^3) sin(kh)
+            ! Is1  = 2 sin(kh)/k^2 - 2h cos(kh)/k
+            c0 = 2.d0 * oq * sinkh
+            c2 = 4.d0 * h * oq2 * coskh + 2.d0 * (oq*h2 - 2.d0*oq3) * sinkh
+            s1 = 2.d0 * oq2 * sinkh - 2.d0 * h * oq * coskh
+            !
+            ! Weight for Icos(n) and Isin(n)
+            wcos(n2)   = wcos(n2)   + coskx * (c0 - oh2*c2)
+            wcos(n2-1) = wcos(n2-1) + coskx * 0.5d0*oh2*c2+ sinkx * 0.5d0*oh *s1
+            wcos(n2+1) = wcos(n2+1) + coskx * 0.5d0*oh2*c2- sinkx * 0.5d0*oh *s1
+            !
+            wsin(n2)   = wsin(n2)   + sinkx * (c0 - oh2*c2)
+            wsin(n2-1) = wsin(n2-1) + sinkx * 0.5d0*oh2*c2- coskx * 0.5d0*oh *s1
+            wsin(n2+1) = wsin(n2+1) + sinkx * 0.5d0*oh2*c2+ coskx * 0.5d0*oh *s1
+            !
+         enddo
+         !
+      endif
+      !
+      abort=.false.
+      do n=1,npoints
+         if(wcos(n).ne.wcos(n))then
+            !NaN condition
+            write(*,"(A)")"BosonicFilon: wcos is NaN."
+            abort=.true.
+         elseif(abs(wcos(n)).ge.huge(1d0))then
+            !Infinity condition
+            write(*,"(A)")"BosonicFilon: wcos is Infinity."
+            abort=.true.
+         endif
+         if(wsin(n).ne.wsin(n))then
+            !NaN condition
+            write(*,"(A)")"BosonicFilon: wsin is NaN."
+            abort=.true.
+         elseif(abs(wsin(n)).ge.huge(1d0))then
+            !Infinity condition
+            write(*,"(A)")"BosonicFilon: wsin is Infinity."
+            abort=.true.
+         endif
+      enddo
+      if(abort) stop "BosonicFilon: coefficient error. Increase precision and recompile."
+      !
+   end subroutine BosonicFilon
+
+
+   !---------------------------------------------------------------------------!
+   !PURPOSE: Creates the bosonic/fermionic Matsubara frequancy mesh
+   !---------------------------------------------------------------------------!
+   function FermionicFreqMesh(Beta,Nfreq,full) result(wmats)
+      implicit none
+      real(8),intent(in)                    :: Beta
+      integer,intent(in)                    :: Nfreq
+      logical,intent(in),optional           :: full
+      real(8),dimension(Nfreq)              :: wmats
+      integer                               :: iw,Npos
+      logical                               :: full_
+      !
+      full_=.false.
+      if(present(full))full_=full
+      !
+      wmats=0d0
+      if(full_)then
+         Npos = (Nfreq-1)/2
+         do iw=1,Npos
+            wmats(iw+Npos+1)=(2d0*dble(iw-1)+1d0)*pi/Beta
+            wmats(Npos+1-iw)=-wmats(iw+Npos+1)
+         enddo
+      else
+         do iw=1,Nfreq
+            wmats(iw)=(2d0*dble(iw-1)+1d0)*pi/Beta
+         enddo
+      endif
+      !
+   end function FermionicFreqMesh
+   !
+   function BosonicFreqMesh(Beta,Nfreq,full) result(wmats)
+      implicit none
+      real(8),intent(in)                    :: Beta
+      integer,intent(in)                    :: Nfreq
+      logical,intent(in),optional           :: full
+      real(8),dimension(Nfreq)              :: wmats
+      integer                               :: iw,Npos
+      logical                               :: full_
+      !
+      full_=.false.
+      if(present(full))full_=full
+      !
+      wmats=0d0
+      if(full_)then
+         Npos = (Nfreq-1)/2
+         do iw=1,Npos
+            wmats(iw+Npos+1)=2d0*dble(iw)*pi/Beta
+            wmats(Npos+1-iw)=-wmats(iw+Npos+1)
+         enddo
+      else
+         do iw=1,Nfreq
+            wmats(iw)=2d0*dble(iw-1)*pi/Beta
+         enddo
+      endif
+      !
+   end function BosonicFreqMesh
+
+
+   !---------------------------------------------------------------------------!
+   !PURPOSE: analogous of python numpy.linspace
+   !---------------------------------------------------------------------------!
+   function linspace_i(start,stop) result(array)
+      implicit none
+      integer,intent(in)                    :: start,stop
+      integer                               :: array(stop-start+1)
+      !
+      integer                               :: i,num
+      !
+      num = stop-start+1
+      if(num<0)stop "linspace_i: N<0, abort."
+      forall(i=1:num)array(i)=start + (i-1)
+      !
+   end function linspace_i
+   !
+   function linspace_d(start,stop,num,istart,iend,mesh) result(array)
+      implicit none
+      real(8),intent(in)                    :: start,stop
+      integer,intent(in)                    :: num
+      logical,intent(in),optional           :: istart,iend
+      real(8)                               :: array(num)
+      real(8),optional                      :: mesh
+      !
+      integer                               :: i
+      real(8)                               :: step
+      logical                               :: startpoint_,endpoint_
+      !
+      if(num<0)stop "linspace_d: N<0, abort."
+      !
+      startpoint_=.true.;if(present(istart))startpoint_=istart
+      endpoint_=.true.;if(present(iend))endpoint_=iend
+      !
+      if(startpoint_.AND.endpoint_)then
+         if(num<2)stop "linspace_d: N<2 with both start and end points"
+         step = (stop-start)/(dble(num)-1d0)
+         forall(i=1:num)array(i)=start + (dble(i)-1d0)*step
+      elseif(startpoint_.AND.(.not.endpoint_))then
+         step = (stop-start)/dble(num)
+         forall(i=1:num)array(i)=start + (dble(i)-1d0)*step
+      elseif(.not.startpoint_.AND.endpoint_)then
+         step = (stop-start)/dble(num)
+         forall(i=1:num)array(i)=start + dble(i)*step
+      else
+         step = (stop-start)/(dble(num)+1d0)
+         forall(i=1:num)array(i)=start + dble(i)*step
+      endif
+      if(present(mesh))mesh=step
+      !
+   end function linspace_d
+
+
+   !---------------------------------------------------------------------------!
+   !PURPOSE: generates imaginary time tau between 0 and beta
+   ! the mesh is divided into segements where the end of the segments
+   ! are distributed according to a shifted exponential mesh
+   ! the mesh is symmetric about tau=beta/2, i.e., the mesh is densed
+   ! around tau=0 and tau=beta
+   ! Each segment is divided into two EQUAL mesh so in total there are
+   ! 2*nseg+1 points.
+   ! tau(2*i-1) = b * {exp[a*(i-1)] -1}, i=1, nseg+1
+   ! tau(1) = 0
+   ! tau(2*nseg+1) = beta  => b = beta/ {exp[a*nseg] -1}
+   ! choose a = dtau*dE, where dE is about 1 eV.
+   ! a test on Cu for P(iw) shows that de=1 eV gives the best result
+   ! at least for T=500 and 1000K.
+   ! beta and tau are in atomic unit.
+   ! nseg = number of segments, must be even.
+   ! nsimp fixed to 2
+   !---------------------------------------------------------------------------!
+   function denspace(end,num,center,expfact) result(array)
+      implicit none
+      real(8),intent(in)                    :: end
+      integer,intent(in)                    :: num
+      logical,intent(in),optional           :: center
+      real(8),intent(in),optional           :: expfact
+      real(8)                               :: array(num)
+      !
+      integer                               :: nsimp=2
+      integer                               :: nseg
+      integer                               :: i,n,n2,nseg2
+      real(8)                               :: mesh,de,a,b
+      logical                               :: center_
+      !data de /1.0d0/
+      de = 1.0d0
+      if(present(expfact))de=expfact
+      !
+      nseg=(num-1)/nsimp
+      if (nseg .lt. 1) stop "denspace: nseg < 1"
+      if (nsimp*(nseg/nsimp) .ne. nseg) stop "denspace: nseg is not a multiple of 2 and 4"
+      nseg2 = nseg/2
+      mesh = end/nseg
+      a = mesh * de!/27.2d0
+      b = (end/2.d0)/(dexp(a*nseg2)-1.d0)
+      array(1) = 0.d0
+      do n=1,nseg2
+         n2 = nsimp * n
+         array(n2+1) = b * (dexp(a*n)-1.d0)
+         mesh = ( array(n2+1) - array(n2-nsimp+1) ) / dble(nsimp)
+         do i=0,nsimp-2
+            array(n2-i) = array(n2-i+1) - mesh
+         enddo
+      enddo
+      do n=nseg2*nsimp+2,nsimp*nseg+1
+         array(n) = end-array(nsimp*nseg+1-n+1)
+      enddo
+      if( dabs(array(nsimp*nseg+1)-end).gt.1.d-9) stop "denspace: wrong endpoint"
+      !
+      center_=.false.
+      if(present(center))center_=center
+      if(center_)then
+         n = (num+1)/2
+         array(n:num) = array(1:n)
+         do i=1,num/2
+            array(n-i) = -array(n+i)
+         enddo
+      endif
+      !
+   end function denspace
+
+
+   !---------------------------------------------------------------------------!
+   !PURPOSE: function which computes the integral of an array
+   !---------------------------------------------------------------------------!
+   function trapezoid_integration_d(fx,x) result(Int)
+      implicit none
+      real(8),intent(in)                    :: fx(:)
+      real(8),intent(in)                    :: x(:)
+      real(8)                               :: Int,dx
+      integer                               :: i
+      !
+      if(size(fx).le.1) stop " trapezoid_integration_d: function with wrong dimension."
+      !
+      Int=0d0
+      do i=2,size(fx)
+         dx = x(i)-x(i-1)
+         Int = Int + ( fx(i) + fx(i-1) ) * (dx/2d0)
+      enddo
+      !
+   end function trapezoid_integration_d
+   !
+   function trapezoid_integration_z(fx,x) result(Int)
+      implicit none
+      complex(8),intent(in)                 :: fx(:)
+      real(8),intent(in)                    :: x(:)
+      complex(8)                            :: Int
+      real(8)                               :: dx
+      integer                               :: i
+      !
+      if(size(fx).le.1) stop " trapezoid_integration_z: function with wrong dimension."
+      !
+      Int=0d0
+      do i=2,size(fx)
+         dx = x(i)-x(i-1)
+         Int = Int + ( fx(i) + fx(i-1) ) * (dx/2d0)
+      enddo
+      !
+   end function trapezoid_integration_z
+
+
+   !---------------------------------------------------------------------------!
+   !PURPOSE: Regularize string
+   !---------------------------------------------------------------------------!
+   function reg(string_in) result(string_out)
+      implicit none
+      character(len=*)                      :: string_in
+      character(len=len_trim(trim(adjustl(trim(string_in))))) :: string_out
+      string_out=trim(adjustl(trim(string_in)))
+   end function reg
+
+
+   !---------------------------------------------------------------------------!
+   !PURPOSE: Looks for a free unit
+   !---------------------------------------------------------------------------!
+   function free_unit(n) result(unit_)
+      implicit none
+      integer,optional                      :: n
+      integer                               :: unit_,ios
+      logical                               :: opened
+      unit_=100
+      do
+         unit_=unit_+1
+         inquire(unit=unit_,OPENED=opened,iostat=ios)
+         if(.not.opened.AND.ios==0)exit
+         if(unit_>900) stop "free_unit: no unit free smaller than 900. Possible BUG"
+      enddo
+      if(present(n))n=unit_
+   end function free_unit
+
+   !---------------------------------------------------------------------------!
+   !PURPOSE: Returns true if a file/directory exists
+   !---------------------------------------------------------------------------!
+   subroutine inquireFile(file,exists,hardstop,verb)
+      implicit none
+      character(len=*),intent(in)           :: file
+      logical,intent(in),optional           :: hardstop
+      logical,intent(in),optional           :: verb
+      logical,intent(out)                   :: exists
+      logical                               :: hardstop_,verbose_
+      !
+      hardstop_=.true.
+      if(present(hardstop))hardstop_=hardstop
+      verbose_=.true.
+      if(present(verb))verbose_=verb
+      !
+      inquire(file=reg(file),exist=exists)
+      if(.not.exists) then
+         if(verbose_.or.hardstop_)write(*,"(A)")"     Unable to find file: "//reg(file)
+         if(hardstop_) stop "inquireFile: Stop."
+      endif
+      !
+   end subroutine inquireFile
+   !
+   subroutine inquireDir(dir,exists,hardstop,verb)
+      implicit none
+      character(len=*),intent(in)           :: dir
+      logical,intent(in),optional           :: hardstop
+      logical,intent(in),optional           :: verb
+      logical,intent(out)                   :: exists
+      logical                               :: hardstop_,verbose_
+      !
+      hardstop_=.true.
+      if(present(hardstop))hardstop_=hardstop
+      verbose_=.true.
+      if(present(verb))verbose_=verb
+      !
+      inquire(directory=reg(dir),exist=exists)                                  !<===IFORT
+      !inquire(file=reg(dir),exist=exists)                                      !<===GFORTRAN
+      if(.not.exists) then
+         if(verbose_.or.hardstop_)write(*,"(A)")"     Unable to find directory: "//reg(dir)
+         if(hardstop_) stop "inquireDir: Stop."
+      endif
+      !
+   end subroutine inquireDir
+
+
+   !---------------------------------------------------------------------------!
+   !PURPOSE: Creat directory in path
+   !---------------------------------------------------------------------------!
+   subroutine createDir(dirpath,verb)
+      implicit none
+      character(len=*),intent(in)           :: dirpath
+      logical,intent(in),optional           :: verb
+      character(len=256)                    :: mkdirCmd
+      logical                               :: direxists
+      logical                               :: verbose_
+      !
+      verbose_=.true.
+      if(present(verb))verbose_=verb
+      !
+      call inquireDir(reg(dirpath),direxists,hardstop=.false.,verb=verbose_)
+      if(.not.direxists)then
+         mkdirCmd = "mkdir -p "//reg(dirpath)
+         if(verbose_)write(*,"(A)") "     Creating new directory: "//reg(dirpath)
+         if(verbose_)write(*,"(A)") "     "//reg(mkdirCmd)
+         call system(reg(mkdirCmd))
+         !call execute_command_line(reg(mkdirCmd))
+      endif
+      !
+   end subroutine createDir
+   !
+   subroutine removeDir(dirpath,verb,list)
+      implicit none
+      character(len=*),intent(in)           :: dirpath
+      logical,intent(in),optional           :: verb
+      logical,intent(in),optional           :: list
+      character(len=256)                    :: rmdirCmd
+      logical                               :: direxists
+      logical                               :: verbose_,list_
+      !
+      verbose_=.true.
+      if(present(verb))verbose_=verb
+      list_=.false.
+      if(present(list))list_=list
+      !
+      call inquireDir(reg(dirpath),direxists,hardstop=.false.,verb=verbose_)
+      if(direxists)then
+         rmdirCmd = "rm -r "//reg(dirpath)
+         if(verbose_)write(*,"(A)") "     Removing directory: "//reg(dirpath)
+         if(verbose_)write(*,"(A)") "     "//reg(rmdirCmd)
+         call system(reg(rmdirCmd))
+         !call execute_command_line(reg(rmdirCmd))
+      else
+         if(list_)then
+            rmdirCmd = "rm -r "//reg(dirpath)
+            if(verbose_)write(*,"(A)") "     Removing directory: "//reg(dirpath)
+            if(verbose_)write(*,"(A)") "     "//reg(rmdirCmd)
+            call system(reg(rmdirCmd))
+            !call execute_command_line(reg(rmdirCmd))
+         endif
+      endif
+
+      !
+   end subroutine removeDir
+   !
+   subroutine removeFile(filepath,verb,list)
+      implicit none
+      character(len=*),intent(in)           :: filepath
+      logical,intent(in),optional           :: verb
+      logical,intent(in),optional           :: list
+      character(len=256)                    :: rmfileCmd
+      logical                               :: filexists
+      logical                               :: verbose_,list_
+      !
+      verbose_=.true.
+      if(present(verb))verbose_=verb
+      list_=.false.
+      if(present(list))list_=list
+      !
+      call inquireFile(reg(filepath),filexists,hardstop=.false.,verb=verbose_)
+      if(filexists)then
+         rmfileCmd = "rm -r "//reg(filepath)
+         if(verbose_)write(*,"(A)") "     Removing file: "//reg(filepath)
+         if(verbose_)write(*,"(A)") "     "//reg(rmfileCmd)
+         call system(reg(rmfileCmd))
+         !call execute_command_line(reg(rmfileCmd))
+      else
+         if(list_)then
+            rmfileCmd = "rm -r "//reg(filepath)
+            if(verbose_)write(*,"(A)") "     Removing file: "//reg(filepath)
+            if(verbose_)write(*,"(A)") "     "//reg(rmfileCmd)
+            call system(reg(rmfileCmd))
+            !call execute_command_line(reg(rmfileCmd))
+         endif
+      endif
+      !
+   end subroutine removeFile
+
+
+   !---------------------------------------------------------------------------!
+   !PURPOSE: Returns time in seconds from now to time described by t
+   !---------------------------------------------------------------------------!
+   subroutine tick(t)
+      integer, intent(out)                  :: t
+      call system_clock(t)
+   end subroutine tick
+   !
+   real function tock(t)
+      integer, intent(in)                   :: t
+      integer                               :: now, clock_rate
+      call system_clock(now,clock_rate)
+      tock = real(dble(now)-dble(t))/real(clock_rate)
+   end function tock
 
 
 end module fourier_transforms

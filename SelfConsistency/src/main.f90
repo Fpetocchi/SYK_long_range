@@ -1,384 +1,388 @@
-program SelfConsistency
+program Syk
    !
-   use module_container
-   use utils_main
+   use fourier_transforms
+   use omp_lib
    implicit none
    !
-   integer                                  :: TimeStart
-   integer                                  :: isite
-   integer                                  :: Iteration,ItStart,Itend
+   !parameters
+   real(8),parameter                        :: eps=1e-12
+   real(8),parameter                        :: pi=3.14159265358979323846d0
+   complex(8),parameter                     :: czero=dcmplx(0.d0,0.d0)
+   complex(8),parameter                     :: img=dcmplx(0.d0,1.d0)
    !
-#ifdef _akw
-   character(len=20)                        :: InputFile="input.in.akw"
-#elif defined _gap
-   character(len=20)                        :: InputFile="input.in.gap"
-#else
+   !input file variables
    character(len=20)                        :: InputFile="input.in"
-#endif
+   integer                                  :: Ntau,NR,Nk,NE,Qpower,Nloops
+   real(8)                                  :: Beta,alpha,wmatsMax
+   real(8)                                  :: Emin,Emax,error_thr
+   logical                                  :: logtau,verbose
    !
+   !generic variables
+   integer                                  :: Nthread,TimeStart,unit
+   character(len=1024)                      :: path,filename,alphapad
+   character(len=1)                         :: gnupad
+   logical                                  :: filexists
+   !
+   !DoS variables
+   integer                                  :: iE,iR,ik
+   integer                                  :: NR_,Nk_,NE_
+   real(8)                                  :: L_alpha,tk,Norm
+   real(8)                                  :: alpha_,Emin_,Emax_
+   real(8),allocatable                      :: Egrid(:),DoS(:)
+   !
+   !Fields variables
+   integer                                  :: Nmats
+   real(8),allocatable                      :: wmats(:)
+   complex(8),allocatable                   :: Gmats(:),Smats(:)
+   !
+   !self-consistency variables
+   integer                                  :: iloop
+   character(len=1024)                      :: iloopad
+   real(8)                                  :: error
+   logical                                  :: converged
+   complex(8),allocatable                   :: Gmats_old(:)
    !
    !
    !
    !---------------------------------------------------------------------------!
    !     READING INPUT FILE, INITIALIZING OMP, AND CHECK FOLDER STRUCTURE      !
    !---------------------------------------------------------------------------!
-   call tick(TimeStart)
-   call read_InputFile(reg(InputFile))
-   call printHeader()
-   call initialize_DataStructure(ItStart,Itend)
-   call initialize_Lattice(Crystal,ItStart)
    !
+   Nthread = omp_get_max_threads()
+   write(*,"(A,1I4)") new_line("A")//"Setting Nthread:",Nthread
    !
-#ifdef _akw
+   path = reg("./"//InputFile)
    !
-   call inquireFile(reg(ItFolder)//"Sfull_w_k_s1.DAT",S_Full_exists,hardstop=.true.,verb=verbose)
+   call inquireFile(path,filexists,verb=.true.)
+   if(filexists)then
+      !
+      write(*,"(A)") "Reading InputFile: "//reg(path)//new_line("A")
+      unit = free_unit()
+      open(unit,file=reg(path),form="formatted",status="old",position="rewind",action="read")
+      read(unit,*) !"VERBOSE"
+      read(unit,*) verbose
+      read(unit,*) !"BETA  MAXWMATS  NTAU"
+      read(unit,*) Beta, wmatsMax, Ntau
+      read(unit,*) !"ALPHA    NR     NK"
+      read(unit,*) alpha, NR, Nk
+      read(unit,*) !"EMIN     EMAX   NE"
+      read(unit,*) Emin, Emax, NE
+      read(unit,*) !"QPOWER   LOGTAU"
+      read(unit,*) Qpower, logtau
+      read(unit,*) !"NLOOPS  ERROR_THR"
+      read(unit,*) Nloops, error_thr
+      close(unit)
+      !
+   else
+      !
+      stop "unable to find input file"
+      !
+   endif
    !
-   call AllocateFermionicField(S_Full,Crystal%Norb,Nmats,Nkpt=Crystal%Nkpt,Nsite=Nsite,Beta=Beta)
-   call read_FermionicField(S_Full,reg(ItFolder),"Sfull_w",Crystal%kpt)
-   call dump_MaxEnt(S_Full,"mats",reg(ItFolder)//"Convergence/","Sful",EqvGWndx%SetOrbs,WmaxPade=PadeWlimit)
-   if(interp_G) call interpolate2kpath(S_Full,Crystal,reg(MaxEnt_K))
-   !
-   ! get self-energy at Gamma
-   S_Full%ws = S_Full%wks(:,:,:,1,:)
-   call dump_FermionicField(S_Full,reg(ItFolder),"Sfull_w_Gamma",paramagnet)
-   call dump_MaxEnt(S_Full,"mats",reg(ItFolder)//"Convergence/","Sful_Gamma",EqvGWndx%SetOrbs,WmaxPade=PadeWlimit)
-   call DeallocateFermionicField(S_Full)
-   call execute_command_line(" touch doSolver ")
-   stop
-   !
-#elif defined _gap
-   !
-   !TEST>>>
-   Crystal%mu=1.50468
-   call AllocateBosonicField(Ulat,Crystal%Norb,Nmats,Crystal%iq_gamma,Nkpt=Crystal%Nkpt,Nsite=Nsite,Beta=Beta)
-   call calc_Tc(reg(ItFolder),gap_equation,Crystal,Ulat)
-   call execute_command_line(" cp used."//reg(InputFile)//" "//reg(ItFolder))
-   call execute_command_line(" touch doSolver ")
-   stop
-   !>>>TEST
-   !
-#endif
-   !
+   if(logtau)then
+      if(mod(Ntau,2).eq.0)Ntau=Ntau+1
+      if(mod(Ntau-1,4).ne.0)Ntau=Ntau+mod(Ntau-1,4)
+   endif
+   if(mod(Nk,2).eq.0)then
+      write(*,"(A)") "Adding 1 to Nk in order to make it odd"
+      Nk = Nk + 1
+   endif
+   Nmats = int(Beta*wmatsMax/(2d0*pi))
+   write(*,"(A,I)") "Number of Matsubara frequencies:",Nmats
    !
    !
    !
    !
    !---------------------------------------------------------------------------!
-   !       COLLECTING RESULTS FROM THE SOLVER AND SOLVING DYSON EQUATION       !
+   !                               BUILD/READ DOS                              !
    !---------------------------------------------------------------------------!
-   if(ItStart.gt.0)then
-      if(Beta_Match%status)then
-         call interpolate_from_oldBeta()
-      else
-         if(collect_QMC) call collect_QMC_results()
-      endif
+   !
+   allocate(Egrid(NE));Egrid=0d0
+   allocate(DoS(NE));DoS=0d0
+   !
+   write(alphapad,"(1F8.2)") alpha
+   write(filename,"(1A30)") "DoS_alpha"//reg(alphapad)//".DAT"
+   call inquireFile(reg(filename),filexists,verb=.true.,hardstop=.false.)
+   if(filexists)then
+      !
+      write(*,"(A)") "Reading DoS from: "//reg(filename)
+      unit = free_unit()
+      open(unit,file=reg(filename),form="formatted",status="old",position="rewind",action="read")
+      read(unit,*) !"-------------------"
+      read(unit,*) !"ALPHA    NR     NK"
+      read(unit,*) gnupad, alpha_, NR_, Nk_
+      read(unit,*) !"EMIN     EMAX   NE"
+      read(unit,*) gnupad, Emin_, Emax_, NE_
+      read(unit,*) !"-------------------"
+      if(alpha_.ne.alpha) stop "DoS from file has the wrong alpha"
+      if(NR_.ne.NR) stop "DoS from file has the wrong NR"
+      if(Nk_.ne.Nk) stop "DoS from file has the wrong Nk"
+      if(Emin_.ne.Emin) stop "DoS from file has the wrong Emin"
+      if(Emax_.ne.Emax) stop "DoS from file has the wrong Emax"
+      if(NE_.ne.NE) stop "DoS from file has the wrong NE"
+      !
+      do iE=1,NE
+         read(unit,"(2E20.12)") Egrid(iE),DoS(iE)
+      enddo
+      close(unit)
+      !
+   else
+      !
+      write(*,"(A)") "Building DoS from scratch"
+      call tick(TimeStart)
+      !
+      !Computing the DoS energy grid
+      Egrid = linspace(Emin,Emax,NE,istart=.true.,iend=.true.)
+      !
+      !Computing the normalization factor
+      L_alpha=0d0
+      do iR=1,NR
+         L_alpha = L_alpha + 1 / ( iR**alpha)
+      enddo
+      write(*,"(A,F)") "Dispersion normalization factor:",L_alpha
+      !
+      !optimized on the larger number
+      !$OMP PARALLEL DEFAULT(SHARED),&
+      !$OMP PRIVATE(ik,iR,tk,iE)
+      !$OMP DO
+      do ik=-floor(Nk/2d0),+floor(Nk/2d0)
+         !
+         tk = 0d0
+         do iR=1,NR
+            tk =  tk + cos( (2*pi*ik/Nk) * iR ) / ( iR**alpha )
+         enddo
+         tk = tk/L_alpha
+         !
+         iE = minloc(abs(  Egrid - ( 1d0 - tk ) ),dim=1)
+         DoS(iE) =  DoS(iE) + 1
+         !
+      enddo
+      !$OMP END DO
+      !$OMP END PARALLEL
+      !
+      !Normalization
+      Norm = trapezoid_integration(DoS,Egrid)
+      write(*,"(A,F)") "DoS normalization factor:,",Norm
+      DoS = DoS/Norm
+      Norm = trapezoid_integration(DoS,Egrid)
+      write(*,"(A,F)") "DoS normalization factor:,",Norm
+      !
+      !Write to file
+      unit = free_unit()
+      open(unit,file=reg(filename),form="formatted",status="unknown",position="rewind",action="write")
+      write(unit,*) "#-------------------"
+      write(unit,*) "# ALPHA    NR     NK"
+      write(unit,"(A2,1F10.5,2I10)") " #",alpha, NR, Nk
+      write(unit,*) "#EMIN     EMAX   NE   LOGRID"
+      write(unit,"(A2,2F10.5,1I10,1L)") " #",Emin, Emax, NE
+      write(unit,*) "#-------------------"
+      do iE=1,NE
+         write(unit,"(2E20.12)") Egrid(iE),DoS(iE)
+      enddo
+      close(unit)
+      !
+      write(*,"(A,F)") new_line("A")//"DoS construction finished. Total timing (s): ",tock(TimeStart)
+      !
    endif
    !
    !
    !
    !
+   !---------------------------------------------------------------------------!
+   !                             INITIALIZE FIELDS                             !
+   !---------------------------------------------------------------------------!
+   !
+   allocate(wmats(Nmats));wmats=0d0
+   wmats = FermionicFreqMesh(Beta,Nmats)
+   !
+   !Non interacting Green's function
+   allocate(Gmats(Nmats));Gmats=czero
+   call calcGmats()
+   call dumpField(Gmats,"./G",pad="it0")
+   !
+   !Zeroth iteration self-energy
+   allocate(Smats(Nmats));Smats=czero
+   call calcSmats()
+   call dumpField(Smats,"./S",pad="it0")
+   !
+   !
+   !
    !
    !---------------------------------------------------------------------------!
-   !SOLVING THE LATTICE PROBLEM AND PRODUCING INPUTS FOR NEXT IMPURITY SOLUTION!
+   !                             SELF-CONSISTENCY LOOP                         !
    !---------------------------------------------------------------------------!
-   call initialize_Fields(ItStart)
-   if(solve_DMFT.and.(ItStart.gt.0))call show_Densities(ItStart-1)
    !
-   !
-   !
-   !
-   do Iteration=ItStart,Itend,1
+   allocate(Gmats_old(Nmats));Gmats_old=czero
+   converged = .false.
+   SCloops: do iloop=1,Nloops
       !
+      write(*,"(A,1I5,A)")new_line("A")//new_line("A")//"---- Loop #",iloop," ----"
+      write(iloopad,"(1I100)") iloop
       !
-      call printHeader(Iteration)
-      call update_DataStructure(Iteration)
+      !Store old Green's function for convergence check
+      Gmats_old = Gmats
       !
+      call calcGmats(Sigma=Smats)
+      if(verbose) call dumpField(Gmats,"./G",pad="it"//reg(iloopad))
       !
-      !Check if needed fields are already present
-      call inquireFile(reg(ItFolder)//"Sfull_w_k_s1.DAT",S_Full_exists,hardstop=.false.,verb=verbose)
-      if(S_Full_exists)then
-         write(*,"(A)") new_line("A")//new_line("A")//"---- skipping S_Full calculation."
-         calc_Sigmak=.false.
-         call AllocateFermionicField(S_Full,Crystal%Norb,Nmats,Nkpt=Crystal%Nkpt,Nsite=Nsite,Beta=Beta)
-         call read_FermionicField(S_Full,reg(ItFolder),"Sfull_w",Crystal%kpt)
-      endif
-      !
-      !
-      !K-dependent Polarization - only G0W0,scGW,GW+EDMFT
-      if(calc_Pk)then
-         !
-         if(Uscreen)then
-            call calc_PiGG(Plat,Glat,Crystal)
-            call dump_BosonicField(Plat,reg(ItFolder),"Plat_w.DAT")
-            call dump_MaxEnt(Plat,"mats",reg(ItFolder)//"Convergence/","Plat",EqvGWndx%SetOrbs)
-         endif
-         !
-         if(merge_P)then
-            call AllocateBosonicField(P_GGdc,Crystal%Norb,Nmats,Crystal%iq_gamma,Nsite=Nsite,no_bare=.true.,Beta=Beta)
-            call calc_PiGGdc(P_GGdc,Glat)
-            if(.not.Uscreen)call clear_attributes(P_GGdc)
-            call dump_BosonicField(P_GGdc,reg(ItFolder),"Plat_dc_w.DAT")
-            call MergeFields(Plat,P_EDMFT,P_GGdc,alphaPi,RotateHloc,LocalOrbs)
-            call dump_BosonicField(Plat,reg(ItFolder),"Plat_merged_w.DAT")
-            call DeallocateBosonicField(P_GGdc)
-         elseif(calc_Pguess)then
-            P_EDMFT%screened_local = dreal(Plat%screened_local)*alphaPi
-         endif
-         !
-         if(interp_Chi) then
-            call calc_chi(Chi,Ulat,Plat,Crystal)!,pathPk=reg(MaxEnt_K)//"/MaxEnt_Chik_path_t")
-            call interpolate2kpath(Chi,Crystal,reg(MaxEnt_K),name="C",mode="NaNb")
-            call DeallocateBosonicField(Chi)
-         endif
-         !
-      endif
-      !
-      !
-      !Fully screened interaction - only G0W0,scGW,GW+EDMFT,EDMFT
-      if(calc_Wk)then
-         !
-         if(calc_Wfull)  call calc_W_full(Wlat,Ulat,Plat,Epsilon,Crystal)!,symQ=.true.)
-         if(calc_Wedmft) call calc_W_edmft(Wlat,Ulat,P_EDMFT,Epsilon,Crystal,alpha=alphaPi)
-         call dump_BosonicField(Wlat,reg(ItFolder),"Wlat_w.DAT")
-         call dump_MaxEnt(Wlat,"mats",reg(ItFolder)//"Convergence/","Wlat",EqvGWndx%SetOrbs)
-         !
-         if(interp_W) call interpolate2kpath(Wlat,Crystal,reg(MaxEnt_K),name="W",mode="NaNa")
-         if(interp_E) call interpolate2kpath(Epsilon,Crystal,reg(MaxEnt_K),name="E",mode="EigvProd_NaNb")
-         call DeallocateBosonicField(Epsilon)
-         !
-         !Solve the Gap equation
-         if(gap_equation%status)call calc_Tc(reg(ItFolder),gap_equation,Crystal,Wlat)
-         !
-      endif
-      !
-      !Causality correction on curlyU
-      if(causal_U) call calc_causality_curlyU_correction(reg(causal_U_type))
-      if(solve_DMFT) call DeallocateBosonicField(Plat)
-      !
-      !
-      !Matching the lattice and impurity problems: Bosons
-      if(solve_DMFT)then
-         !
-         !Compute local effective interaction
-         do isite=1,Solver%Nimp
-            call calc_Interaction(isite,Iteration,ExpandImpurity)
-         enddo
-         call DeallocateBosonicField(P_EDMFT)
-         !
-      endif
-      !
-      !
-      !K-dependent self-energy - only G0W0,scGW,GW+EDMFT
-      if(calc_Sigmak)then
-         !
-         !Hartree shift between G0W0 and scGW
-         if(addTierIII)then
-            !
-            if(Iteration.eq.0)VN_type="None"
-            if(MultiTier)VN_type="Nlat"
-            !
-            call calc_VH(VH_Nlat,densityLDA,densityGW,Ulat)
-            call dump_Matrix(VH_Nlat,reg(ItFolder),"VH_Nlat.DAT")
-            call calc_VH(VH_Nimp,densityLDA,densityDMFT,Ulat,local=.true.)
-            call dump_Matrix(VH_Nimp,reg(ItFolder),"VH_Nimp.DAT")
-            select case(reg(VN_type))
-               case default
-                  stop "Wrong entry for VN_TYPE. Available: Nlat, Nimp, None."
-               case("Nlat")
-                  VH = VH_Nlat
-               case("Nimp")
-                  VH = VH_Nimp
-               case("None")
-                  VH = czero
-                  write(*,"(A)")"     VH not used."
-            end select
-            !
-            if(solve_DMFT)deallocate(VH_Nlat,VH_Nimp)
-            !
-         endif
-         !
-         if(solve_DMFT.and.bosonicSC.and.(.not.Ustart))call DeallocateBosonicField(Ulat)
-         !
-         !read from SPEX G0W0 self-energy, double counting and Vexchange
-         call AllocateFermionicField(S_G0W0,Crystal%Norb,Nmats,Nkpt=Crystal%Nkpt,Nsite=Nsite,Beta=Beta)
-         if(addTierIII) then
-            !
-            !G0W0 self-energy: used as self-energy in the 0th iteration or in model calculations
-            call read_Sigma_spex(SpexVersion,S_G0W0,Crystal,verbose,RecomputeG0W0,Vxc)
-            !
-            !G0W0 double counting: this is used only for ab-initio calculations
-            call AllocateFermionicField(S_G0W0dc,Crystal%Norb,Nmats,Nkpt=Crystal%Nkpt,Nsite=Nsite,Beta=Beta)
-            !
-            !read if exists otherwise compute a new one
-            call inquireFile(reg(pathINPUTtr)//"SGoWo_dc_w_k_s1.DAT",S_G0W0dc_exist,hardstop=.false.,verb=verbose)
-            if(S_G0W0dc_exist)then
-               call read_FermionicField(S_G0W0dc,reg(pathINPUTtr),"SGoWo_dc_w",Crystal%kpt)
-            else
-               if(calc_S_G0W0dc)then
-                  if(Iteration.gt.0) stop "The internal G0W0dc calculation must be performed in the 0th iteration."
-                  write(*,"(A,F)")"     Computing dc between G0W0 and scGW."
-                  call calc_sigmaGW(S_G0W0dc,Glat,Wlat,Crystal)
-                  call dump_FermionicField(S_G0W0dc,reg(pathINPUTtr),"SGoWo_dc_w",.true.,Crystal%kpt,paramagnet)
-                  call dump_FermionicField(S_G0W0dc,reg(pathINPUTtr),"SGoWo_dc_w",paramagnet)
-               elseif(spex_S_G0W0dc)then
-                  write(*,"(A,F)")"     Reading dc between G0W0 and scGW from SPEX_VERSION: "//reg(SpexVersion)
-                  call read_Sigma_spex(SpexVersion,S_G0W0dc,Crystal,verbose,RecomputeG0W0,Vxc,DC=.true.)
-               endif
-            endif
-            !
-         endif
-         !
-         !scGW
-         if(Iteration.eq.0)then
-            !
-            !Use directly the GW formula since G0W0 is absent for model calculations
-            if(.not.addTierIII) call calc_sigmaGW(S_G0W0,Glat,Wlat,Crystal)
-            !
-            call dump_FermionicField(S_G0W0,reg(ItFolder),"Slat_w",paramagnet)
-            call dump_MaxEnt(S_G0W0,"mats",reg(ItFolder)//"Convergence/","Slat",EqvGWndx%SetOrbs,WmaxPade=PadeWlimit)
-            !
-         elseif(Iteration.gt.0)then
-            !
-            !Compute the scGW self-energy
-            call AllocateFermionicField(S_GW,Crystal%Norb,Nmats,Nkpt=Crystal%Nkpt,Nsite=Nsite,Beta=Beta)
-            call calc_sigmaGW(S_GW,Glat,Wlat,Crystal)
-            call dump_FermionicField(S_GW,reg(ItFolder),"Slat_w",paramagnet)
-            call dump_MaxEnt(S_GW,"mats",reg(ItFolder)//"Convergence/","Slat",EqvGWndx%SetOrbs,WmaxPade=PadeWlimit)
-            !
-         endif
-         !
-         !Merge GW and EDMFT
-         if(merge_Sigma)then
-            call AllocateFermionicField(S_GWdc,Crystal%Norb,Nmats,Nsite=Nsite,Beta=Beta)
-            call calc_sigmaGWdc_GlocWloc(S_GWdc,Glat,Wlat)
-            call dump_FermionicField(S_GWdc,reg(ItFolder),"Slat_dc_w",paramagnet)
-            call MergeFields(S_GW,S_DMFT,S_GWdc,alphaSigma,RotateHloc,LocalOrbs)
-            call dump_FermionicField(S_GW,reg(ItFolder),"Slat_merged_w",paramagnet)
-            call DeallocateFermionicField(S_GWdc)
-         endif
-         !
-      endif
-      if(solve_DMFT) call DeallocateBosonicField(Wlat)
-      !
-      !
-      !Initial Guess for the impurity self-energy only in the 0th iteration
-      if(calc_Sguess) call calc_SigmaGuess()
-      !
-      !
-      !Put together all the contributions to the full self-energy and deallocate all non-local components: S_G0W0, S_G0W0dc, S_GW
-      if(.not.S_Full_exists) call join_SigmaFull(Iteration)
-      !
-      !
-      !Compute the Full Green's function and set the density
-      if(look4dens%mu_scan.eq.1)then
-         call calc_Gmats(Glat,Crystal,S_Full)
-         if(Hetero%status)then
-            call set_density(Glat,Crystal,look4dens,S_Full)
-         else
-            call set_density(Glat,Crystal,look4dens)
-         endif
+      error = check_error(Gmats,Gmats_old)
+      if(error.gt.error_thr)then
+         write(*,"(2(A,1E10.3))")"Error: ",error," > ",error_thr
       else
-         write(*,*)
-         Glat%mu = look4dens%mu
-         call calc_Gmats(Glat,Crystal,S_Full)
-         write(*,"(A,F)")"     Chemical potential:",Glat%mu
-         write(*,"(A,F)")"     Lattice density:",trace(Glat%N_s(:,:,1)+Glat%N_s(:,:,2))
+         write(*,"(2(A,1E10.3),A)")"Error: ",error," < ",error_thr," Converged!"
+         converged = .true.
+         exit SCloops
       endif
-      call dump_Matrix(Glat%N_s,reg(ItFolder),"Nlat",paramagnet)
+      if(iloop.gt.Nloops)write(*,"(A)")"WARNING: self-consistency cylce not converged, increase NLOOP."
       !
-      densityGW = Glat%N_s
-      Crystal%mu = Glat%mu
-      if(.not.S_Full_exists) S_Full%mu = Glat%mu !if it exists I won't change mu
+      !Compute self-energy for next iteration
+      call calcSmats()
+      if(verbose) call dumpField(Smats,"./S",pad="it"//reg(iloopad))
       !
-      !
-      !Print G0W0 bandstructure - Crystal%mu is used by default - equal to the lattice one
-      if(dump_G0W0_bands.and.Uwan_stored)call print_G0W0_dispersion(Crystal,Vxc)
-      !
-      !
-      !Total energy calculation
-      Ek = calc_Ek(Glat,Crystal)
-      Ep = calc_Ep(Glat,S_Full)
-      write(*,"(A,F)")"     Kinetic energy [eV]:",trace(Ek)
-      write(*,"(A,F)")"     Potential energy [eV]:",trace(Ep)
-      call dump_Matrix(Ek,reg(ItFolder),"Ek.DAT")
-      call dump_Matrix(Ep,reg(ItFolder),"Ep.DAT")
-      call check_QP_poles(Crystal,S_Full)
-      call calc_Treal(Crystal,Glat,reg(ItFolder))
-      !
-      !
-      !Update basis rotation according to local density matrix
-      if(RotateNloc)then
-         call build_rotations("Nloc",LatticeOp=Glat%N_s(:,:,1))
-         call update_ImpEqvOrbs()
-      endif
-      !
-      !
-      !Print Gf: local readable and k-dep binfmt
-      call dump_FermionicField(Glat,reg(ItFolder),"Glat_w",paramagnet)
-      call dump_MaxEnt(Glat,"mats",reg(ItFolder)//"Convergence/","Glat",EqvGWndx%SetOrbs,WmaxPade=PadeWlimit)
-      call dump_MaxEnt(Glat,"mats2itau",reg(ItFolder)//"Convergence/","Glat",EqvGWndx%SetOrbs)
-      if(dump_Gk)call dump_FermionicField(Glat,reg(ItFolder),"Glat_w",.true.,Crystal%kpt,paramagnet)
-      !
-      !
-      !Print Potentials if present
-      if(Hetero%status)call print_potentials()
-      !
-      !
-      !Print full self-energy: local readable and k-dep binfmt
-      call dump_FermionicField(S_Full,reg(ItFolder),"Sfull_w",paramagnet)
-      call dump_MaxEnt(S_Full,"mats",reg(ItFolder)//"Convergence/","Sful",EqvGWndx%SetOrbs,WmaxPade=PadeWlimit)
-      if((reg(DC_type).eq."Full_Tail").or.(Solver%removeUhalf.eq.1))then
-         call dump_MaxEnt(S_Full,"mats2itau",reg(ItFolder)//"Convergence/","Sful",EqvGWndx%SetOrbs,sigmalike=1)
-      else
-         call dump_MaxEnt(S_Full,"mats2itau",reg(ItFolder)//"Convergence/","Sful",EqvGWndx%SetOrbs,sigmalike=2)
-      endif
-      if(dump_Sigmak)call dump_FermionicField(S_Full,reg(ItFolder),"Sfull_w",.true.,Crystal%kpt,paramagnet)
-      !
-      !
-      !Print interacting bandstructure
-      if(interp_G)call interpolate2kpath(S_Full,Crystal,reg(MaxEnt_K))
-      !
-      !
-      !Print the new full self-energy at Gamma point
-      S_Full%ws = S_Full%wks(:,:,:,1,:)
-      call dump_FermionicField(S_Full,reg(ItFolder),"Sfull_w_Gamma",paramagnet)
-      call dump_MaxEnt(S_Full,"mats",reg(ItFolder)//"Convergence/","Sful_Gamma",EqvGWndx%SetOrbs,WmaxPade=PadeWlimit)
-      call DeallocateFermionicField(S_Full)
-      !
-      !
-      !Matching the lattice and impurity problems: Fermions
-      if(solve_DMFT)then
-         !
-         !The local problem must give the same density in the same subset
-         if(MultiTier)then
-            write(*,*)
-            write(*,"(A,1I3)") "     N_READ_IMP updated from "//str(Solver%TargetDensity,4)//" to "//str(get_Tier_occupation(densityGW,LocalOrbs),4)
-            Solver%TargetDensity = get_Tier_occupation(densityGW,LocalOrbs)
-            call save_InputFile(reg(InputFile))
-         endif
-         !
-         ! Causality correction on Delta
-         if(causal_D) call calc_causality_Delta_correction()
-         !
-         !Extract the hybridization functions and local energies (always diagonal)
-         do isite=1,Solver%Nimp
-            call calc_Delta(isite,Iteration)
-         enddo
-         !
-      endif
-      !
-      if(.not.solve_DMFT)call show_Densities(Iteration)
-      !
-      !
-   enddo !Iteration
+   enddo SCloops
+   deallocate(Gmats_old)
    !
-   call DeallocateAllFields()
-   !
-   write(*,"(A,F)") new_line("A")//new_line("A")//"Self-Consistency finished. Total timing (s): ",tock(TimeStart)
-   !
-   if(ItStart.ne.LastIteration)then
-      call execute_command_line(" cp used."//reg(InputFile)//" "//reg(ItFolder))
-      if(solve_DMFT)call execute_command_line(" touch doSolver ")
+   if(converged)then
+      call dumpField(Gmats,"./G",pad="converged")
+      call dumpField(Smats,"./S",pad="converged")
    endif
    !
-end program SelfConsistency
+   !
+   !
+   contains
+   !
+   !
+   !
+   subroutine calcGmats(Sigma)
+      !
+      implicit none
+      !
+      complex(8),intent(in),optional        :: Sigma(:)
+      integer                               :: iw
+      complex(8),allocatable                :: GwE(:)
+      complex(8),allocatable                :: zeta(:)
+      !
+      Gmats=czero
+      !
+      allocate(GwE(NE));GwE=czero
+      allocate(zeta(Nmats));zeta=czero
+      !
+      zeta = img*wmats
+      if(present(Sigma)) zeta =  zeta - Sigma
+      !
+      !$OMP PARALLEL DEFAULT(SHARED),&
+      !$OMP PRIVATE(iw,iE,GwE)
+      !$OMP DO
+      do iw=1,Nmats
+         !
+         GwE = czero
+         do iE=1,NE
+            GwE(iE) = DoS(iE) / ( zeta(iw) - Egrid(iE) )
+         enddo
+         !
+         Gmats(iw) = trapezoid_integration(GwE,Egrid)
+         !
+      enddo
+      !$OMP END DO
+      !$OMP END PARALLEL
+      deallocate(GwE,zeta)
+      !
+   end subroutine calcGmats
+   !
+   subroutine calcSmats()
+      !
+      implicit none
+      !
+      integer                               :: itau
+      real(8)                               :: tau2
+      real(8),allocatable                   :: tau(:)
+      complex(8),allocatable                :: Gitau(:),Sitau(:)
+      !
+      Smats=czero
+      !
+      allocate(tau(Ntau));tau=0d0
+      if(logtau)then
+         tau = denspace(beta,Ntau)
+      else
+         tau = linspace(0d0,Beta,Ntau)
+      endif
+      !
+      !Compute G(tau)
+      call tick(TimeStart)
+      allocate(Gitau(Ntau));Gitau=czero
+      call Fmats2itau(Beta,Gmats,Gitau,asympt_corr=.true.,tau_uniform=logtau)
+      if(verbose)write(*,"(A,F)") new_line("A")//"G(iw) --> G(tau). Total timing (s): ",tock(TimeStart)
+      !
+      !Compute S(tau)
+      call tick(TimeStart)
+      allocate(Sitau(Ntau));Sitau=czero
+      !$OMP PARALLEL DEFAULT(SHARED),&
+      !$OMP PRIVATE(itau,tau2)
+      !$OMP DO
+      do itau=1,Ntau
+         !
+         tau2 = tau(Ntau)-tau(itau)
+         if (dabs(tau2-tau(Ntau-itau+1)).gt.eps) stop "calcSmats: itau2 not found."
+         !
+         !Note that G(-tau) = -G(beta-tau)
+         Sitau(itau) = (-1)**(Qpower+1) * (Gitau(itau)**Qpower) * (-Gitau(Ntau-itau+1)**(Qpower-1))
+         !
+      enddo
+      !$OMP END DO
+      !$OMP END PARALLEL
+      deallocate(Gitau)
+      if(verbose)write(*,"(A,F)") "S(tau) calculation. Total timing (s): ",tock(TimeStart)
+      !
+      !Compute S(iw)
+      call tick(TimeStart)
+      call Fitau2mats(Beta,Sitau,Smats,tau_uniform=logtau)
+      if(verbose)write(*,"(A,F)") "G(iw) --> G(tau). Total timing (s): ",tock(TimeStart)
+      deallocate(tau,Sitau)
+      !
+   end subroutine calcSmats
+   !
+   subroutine dumpField(Field,header,pad)
+      !
+      implicit none
+      !
+      complex(8),intent(in)                 :: Field(:)
+      character(len=*),intent(in)           :: header
+      character(len=*),intent(in),optional  :: pad
+      integer                               :: iw
+      character(len=1024)                   :: fname,betapad
+      !
+      write(betapad,"(1F8.2)") beta
+      write(fname,"(1A100)") reg(header)//"mats_alpha"//reg(alphapad)//"_beta"//reg(betapad)
+      if(present(pad)) fname = reg(fname)//"_"//reg(pad)
+      fname = reg(fname)//".DAT"
+      !
+      unit = free_unit()
+      open(unit,file=reg(fname),form="formatted",status="unknown",position="rewind",action="write")
+      do iw=1,Nmats
+         write(unit,"(3E20.12)") wmats(iw),dreal(Field(iw)),dimag(Field(iw))
+      enddo
+      close(unit)
+      !
+   end subroutine dumpField
+   !
+   function check_error(fnew,fold) result(err)
+      implicit none
+      complex(8),intent(in)                 :: fnew(:)
+      complex(8),intent(in)                 :: fold(:)
+      real(8)                               :: err
+      real(8)                               :: S,M
+      integer                               :: i
+      !
+      S=0.d0 ; M=0.d0
+      do i=1,size(fnew)
+         M = M + abs(fnew(i)-fold(i))
+         S = S + abs(fnew(i))
+      enddo
+      !
+      err = M / S
+      !
+   end function check_error
+   !
+   !
+   !
+end program Syk
