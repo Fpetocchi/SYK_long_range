@@ -30,6 +30,10 @@ program Syk
    real(8)                                  :: alpha_,Emin_,Emax_
    real(8),allocatable                      :: Egrid(:),DoS(:)
    !
+   !Bands variables
+   integer                                  :: Nkpath
+   real(8),allocatable                      :: dispersion(:)
+   !
    !Fields variables
    integer                                  :: in,Nmats
    real(8),allocatable                      :: wmats(:)
@@ -104,6 +108,7 @@ program Syk
    allocate(Egrid(NE));Egrid=0d0
    allocate(DoS(NE));DoS=0d0
    !
+   !DoS
    write(alphapad,"(1F8.2)") alpha
    write(filename,"(1A30)") "DoS_alpha"//reg(alphapad)//".DAT"
    call inquireFile(reg(filename),filexists,verb=.true.,hardstop=.false.)
@@ -145,7 +150,6 @@ program Syk
       enddo
       write(*,"(A,F)") "Dispersion normalization factor:",L_alpha
       !
-      !optimized on the larger number
       !$OMP PARALLEL DEFAULT(SHARED),&
       !$OMP PRIVATE(ik,iR,tk,iE)
       !$OMP DO
@@ -186,6 +190,44 @@ program Syk
       close(unit)
       !
       write(*,"(A,F)") new_line("A")//"DoS construction finished. Total timing (s): ",tock(TimeStart)
+      !
+   endif
+   !
+   !Bands, this is just for fun
+   if(verbose)then
+      !
+      !Computing the normalization factor
+      L_alpha=0d0
+      do iR=1,NR
+         L_alpha = L_alpha + 1 / ( iR**alpha)
+      enddo
+      write(*,"(A,F)") "Dispersion normalization factor:",L_alpha
+      !
+      Nkpath=201
+      allocate(dispersion(Nkpath));dispersion=0d0
+      !
+      !$OMP PARALLEL DEFAULT(SHARED),&
+      !$OMP PRIVATE(ik,iR,tk,iE)
+      !$OMP DO
+      do ik=-floor(Nkpath/2d0),+floor(Nkpath/2d0)
+         !
+         tk = 0d0
+         do iR=1,NR
+            tk =  tk + cos( (2*pi*ik/Nkpath) * iR ) / ( iR**alpha )
+         enddo
+         dispersion(ik+1+floor(Nkpath/2d0)) = 1d0 - tk/L_alpha
+         !
+      enddo
+      !$OMP END DO
+      !$OMP END PARALLEL
+      !
+      write(filename,"(1A30)") "Ek_alpha"//reg(alphapad)//".DAT"
+      unit = free_unit()
+      open(unit,file=reg(filename),form="formatted",status="unknown",position="rewind",action="write")
+      do ik=-floor(Nkpath/2d0),+floor(Nkpath/2d0)
+         write(unit,"(2E20.12)") 2*pi*ik/Nkpath,dispersion(ik+1+floor(Nkpath/2d0))
+      enddo
+      close(unit)
       !
    endif
    !
