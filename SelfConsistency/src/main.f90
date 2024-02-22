@@ -31,7 +31,7 @@ program Syk
    real(8),allocatable                      :: Egrid(:),DoS(:)
    !
    !Fields variables
-   integer                                  :: Nmats
+   integer                                  :: in,Nmats
    real(8),allocatable                      :: wmats(:)
    complex(8),allocatable                   :: Gmats(:),Smats(:)
    !
@@ -41,6 +41,10 @@ program Syk
    real(8)                                  :: error
    logical                                  :: converged
    complex(8),allocatable                   :: Gmats_old(:)
+   !
+   !Free energy variables
+   complex(8),allocatable                   :: KE(:)
+   complex(8)                               :: K,U,Etot
    !
    !
    !
@@ -246,6 +250,43 @@ program Syk
       call dumpField(Gmats,"./G",pad="converged")
       call dumpField(Smats,"./S",pad="converged")
    endif
+   !
+   !
+   !
+   !
+   !---------------------------------------------------------------------------!
+   !                                FREE ENERGY                                !
+   !---------------------------------------------------------------------------!
+   !
+   !Kinetic term
+   allocate(KE(NE));KE=czero
+   !$OMP PARALLEL DEFAULT(SHARED),&
+   !$OMP PRIVATE(iE,in)
+   !$OMP DO
+   do iE=1,NE
+      do in=1,Nmats
+         KE(iE) = KE(iE) - zlog( -img*wmats(in) + Egrid(iE) + Smats(in) ) * DoS(iE) / Beta
+      enddo
+   enddo
+   !$OMP END DO
+   !$OMP END PARALLEL
+   K = czero
+   K = trapezoid_integration(KE,Egrid)
+   deallocate(KE)
+   !
+   !Potential term
+   U=czero
+   do in=1,Nmats
+      U = U - ( (2*Qpower-1d0)/(2*Qpower) ) * Smats(in)*Gmats(in) / Beta
+   enddo
+   !
+   !Total energy
+   Etot = K + U
+   !
+   !Report values
+   write(*,"(A,2E20.12)")"Ekin: ", dreal(K), dimag(K)
+   write(*,"(A,2E20.12)")"Epot: ", dreal(U), dimag(U)
+   write(*,"(A,2E20.12)")"Epot: ", dreal(Etot), dimag(Etot)
    !
    !
    !
