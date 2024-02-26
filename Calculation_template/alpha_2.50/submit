@@ -1,0 +1,38 @@
+#!/bin/bash
+#SBATCH --job-name=alpha_2.50
+#SBATCH --nodes=1
+#SBATCH --ntasks=128
+#SBATCH --ntasks-per-node=128
+#SBATCH --time=7-24:00:00
+#SBATCH --partition=amd
+#SBATCH --mem-per-cpu=5800M
+#SBATCH --account=unifr
+
+export OMP_NUM_THREADS=$SLURM_NTASKS_PER_NODE
+
+ulimit -c 0           #The maximum size of core files created
+ulimit -s unlimited   #The maximum stack size
+ulimit -v unlimited   #The maximum amount of virtual memory available to the shell
+ulimit -f unlimited   #The maximum size of files written by the shell and its children
+
+
+
+
+################################################################################
+#                                 USER SETTINGS                                #
+################################################################################
+
+GENMAT=/home/petocchif/3_SKY/sky
+
+
+################################################################################
+#                             AUTO-SETUP SETTINGS                              #
+################################################################################
+LOCAL=$(pwd)
+BINsc=${GENMAT}/SelfConsistency/bin
+
+export l0=`grep -n "# ALPHA" input.in | awk -F  ":" '{print $1+1 }'`
+#sed -ei ${l0}'1 s/'"*"'/'"${ALPHA}"'/' input.txt
+
+srun --ntasks=1 ${BINsc}/SYK > report_alpha${ALPHA} 2> err_alpha${ALPHA}
+
