@@ -7,19 +7,24 @@ program Syk
    !parameters
    real(8),parameter                        :: eps=1e-12
    real(8),parameter                        :: pi=3.14159265358979323846d0
+   real(8),parameter                        :: K2eV=8.617333262d-5
    complex(8),parameter                     :: czero=dcmplx(0.d0,0.d0)
    complex(8),parameter                     :: img=dcmplx(0.d0,1.d0)
    !
    !input file variables
    character(len=20)                        :: InputFile="input.in"
-   integer                                  :: Ntau,NR,Nk,NE,Qpower,Nloops
-   real(8)                                  :: Beta,alpha,wmatsMax
+   integer                                  :: Ntau,NR,Nk,NE
+   integer                                  :: Qpower,Nloops
+   integer                                  :: NT,NT_inf,NT_intp
+   real(8)                                  :: alpha,wmatsMax,mu,Wband
    real(8)                                  :: Emin,Emax,error_thr
+   real(8)                                  :: Tmin,Tmax
    logical                                  :: logtau,verbose
    !
    !generic variables
    integer                                  :: Nthread,TimeStart,unit
-   character(len=1024)                      :: path,filename,alphapad
+   character(len=1024)                      :: path,filename
+   character(len=1024)                      :: alphapad,iloopad,Tpad
    character(len=1)                         :: gnupad
    logical                                  :: filexists
    !
@@ -34,6 +39,11 @@ program Syk
    integer                                  :: Nkpath
    real(8),allocatable                      :: dispersion(:)
    !
+   !Temperature variables
+   integer                                  :: iT
+   real(8)                                  :: T,dT,Beta
+   real(8),allocatable                      :: Ts(:),Ts_intp(:)
+   !
    !Fields variables
    integer                                  :: in,Nmats
    real(8),allocatable                      :: wmats(:)
@@ -41,20 +51,24 @@ program Syk
    !
    !self-consistency variables
    integer                                  :: iloop
-   character(len=1024)                      :: iloopad
    real(8)                                  :: error
    logical                                  :: converged
    complex(8),allocatable                   :: Gmats_old(:)
    !
    !Free energy variables
-   complex(8),allocatable                   :: KE(:)
-   complex(8)                               :: K,U,Etot
+   integer                                  :: fact
+   complex(8)                               :: logarg,K,U,Cv_intp_last
+   complex(8),allocatable                   :: KE(:),Energy(:,:)
+   real(8),allocatable                      :: Energy_intp(:)
+   real(8),allocatable                      :: Cv_intp(:)
+   real(8),allocatable                      :: Ds_intp(:)
    !
    !
    !
-   !---------------------------------------------------------------------------!
-   !     READING INPUT FILE, INITIALIZING OMP, AND CHECK FOLDER STRUCTURE      !
-   !---------------------------------------------------------------------------!
+   !
+   !###########################################################################!
+   !#    READING INPUT FILE, INITIALIZING OMP, AND CHECK FOLDER STRUCTURE     #!
+   !###########################################################################!
    !
    Nthread = omp_get_max_threads()
    write(*,"(A,1I4)") new_line("A")//"Setting Nthread:",Nthread
@@ -67,18 +81,20 @@ program Syk
       write(*,"(A)") "Reading InputFile: "//reg(path)//new_line("A")
       unit = free_unit()
       open(unit,file=reg(path),form="formatted",status="old",position="rewind",action="read")
-      read(unit,*) !"VERBOSE"
+      read(unit,*) !#VERBOSE
       read(unit,*) verbose
-      read(unit,*) !"BETA  MAXWMATS  NTAU"
-      read(unit,*) Beta, wmatsMax, Ntau
-      read(unit,*) !"ALPHA    NR     NK"
-      read(unit,*) alpha, NR, Nk
-      read(unit,*) !"EMIN     EMAX   NE"
+      read(unit,*) !# ALPHA     NR        NK      WBAND
+      read(unit,*) alpha, NR, Nk, Wband
+      read(unit,*) !# EMIN      EMAX      NE
       read(unit,*) Emin, Emax, NE
-      read(unit,*) !"QPOWER   LOGTAU"
-      read(unit,*) Qpower, logtau
-      read(unit,*) !"NLOOPS  ERROR_THR"
+      read(unit,*) !# QPOWER    LOGTAU    MU
+      read(unit,*) Qpower, logtau, mu
+      read(unit,*) !# MAXWMATS  NTAU
+      read(unit,*) wmatsMax, Ntau
+      read(unit,*) !# NLOOPS    ERROR_THR
       read(unit,*) Nloops, error_thr
+      read(unit,*) !# TMIN      TMAX      NT     NT_inf    NT_intp
+      read(unit,*) Tmin, Tmax, NT, NT_inf, NT_intp
       close(unit)
       !
    else
@@ -95,15 +111,13 @@ program Syk
       write(*,"(A)") "Adding 1 to Nk in order to make it odd"
       Nk = Nk + 1
    endif
-   Nmats = int(Beta*wmatsMax/(2d0*pi))
-   write(*,"(A,I)") "Number of Matsubara frequencies:",Nmats
    !
    !
    !
    !
-   !---------------------------------------------------------------------------!
-   !                               BUILD/READ DOS                              !
-   !---------------------------------------------------------------------------!
+   !###########################################################################!
+   !#                             BUILD/READ DOS                              #!
+   !###########################################################################!
    !
    allocate(Egrid(NE));Egrid=0d0
    allocate(DoS(NE));DoS=0d0
@@ -194,141 +208,210 @@ program Syk
    endif
    !
    !Bands, this is just for fun
-   if(verbose)then
-      !
-      !Computing the normalization factor
-      L_alpha=0d0
-      do iR=1,NR
-         L_alpha = L_alpha + 1 / ( iR**alpha)
-      enddo
-      write(*,"(A,F)") "Dispersion normalization factor:",L_alpha
-      !
-      Nkpath=201
-      allocate(dispersion(Nkpath));dispersion=0d0
-      !
-      !$OMP PARALLEL DEFAULT(SHARED),&
-      !$OMP PRIVATE(ik,iR,tk,iE)
-      !$OMP DO
-      do ik=-floor(Nkpath/2d0),+floor(Nkpath/2d0)
-         !
-         tk = 0d0
-         do iR=1,NR
-            tk =  tk + cos( (2*pi*ik/Nkpath) * iR ) / ( iR**alpha )
-         enddo
-         dispersion(ik+1+floor(Nkpath/2d0)) = 1d0 - tk/L_alpha
-         !
-      enddo
-      !$OMP END DO
-      !$OMP END PARALLEL
-      !
-      write(filename,"(1A30)") "Ek_alpha"//reg(alphapad)//".DAT"
-      unit = free_unit()
-      open(unit,file=reg(filename),form="formatted",status="unknown",position="rewind",action="write")
-      do ik=-floor(Nkpath/2d0),+floor(Nkpath/2d0)
-         write(unit,"(2E20.12)") 2*pi*ik/Nkpath,dispersion(ik+1+floor(Nkpath/2d0))
-      enddo
-      close(unit)
-      !
-   endif
+   L_alpha=0d0
+   do iR=1,NR
+      L_alpha = L_alpha + 1 / ( iR**alpha)
+   enddo
+   write(*,"(A,F)") "Dispersion normalization factor:",L_alpha
    !
+   Nkpath=201
+   allocate(dispersion(Nkpath));dispersion=0d0
    !
-   !
-   !
-   !---------------------------------------------------------------------------!
-   !                             INITIALIZE FIELDS                             !
-   !---------------------------------------------------------------------------!
-   !
-   allocate(wmats(Nmats));wmats=0d0
-   wmats = FermionicFreqMesh(Beta,Nmats)
-   !
-   !Non interacting Green's function
-   allocate(Gmats(Nmats));Gmats=czero
-   call calcGmats()
-   call dumpField(Gmats,"./G",pad="it0")
-   !
-   !Zeroth iteration self-energy
-   allocate(Smats(Nmats));Smats=czero
-   call calcSmats()
-   call dumpField(Smats,"./S",pad="it0")
-   !
-   !
-   !
-   !
-   !---------------------------------------------------------------------------!
-   !                             SELF-CONSISTENCY LOOP                         !
-   !---------------------------------------------------------------------------!
-   !
-   allocate(Gmats_old(Nmats));Gmats_old=czero
-   converged = .false.
-   SCloops: do iloop=1,Nloops
-      !
-      write(*,"(A,1I5,A)")new_line("A")//new_line("A")//"---- Loop #",iloop," ----"
-      write(iloopad,"(1I100)") iloop
-      !
-      !Store old Green's function for convergence check
-      Gmats_old = Gmats
-      !
-      call calcGmats(Sigma=Smats)
-      if(verbose) call dumpField(Gmats,"./G",pad="it"//reg(iloopad))
-      !
-      error = check_error(Gmats,Gmats_old)
-      if(error.gt.error_thr)then
-         write(*,"(2(A,1E10.3))")"Error: ",error," > ",error_thr
-      else
-         write(*,"(2(A,1E10.3),A)")"Error: ",error," < ",error_thr," Converged!"
-         converged = .true.
-         exit SCloops
-      endif
-      if(iloop.gt.Nloops)write(*,"(A)")"WARNING: self-consistency cylce not converged, increase NLOOP."
-      !
-      !Compute self-energy for next iteration
-      call calcSmats()
-      if(verbose) call dumpField(Smats,"./S",pad="it"//reg(iloopad))
-      !
-   enddo SCloops
-   deallocate(Gmats_old)
-   !
-   if(converged)then
-      call dumpField(Gmats,"./G",pad="converged")
-      call dumpField(Smats,"./S",pad="converged")
-   endif
-   !
-   !
-   !
-   !
-   !---------------------------------------------------------------------------!
-   !                                FREE ENERGY                                !
-   !---------------------------------------------------------------------------!
-   !
-   !Kinetic term
-   allocate(KE(NE));KE=czero
    !$OMP PARALLEL DEFAULT(SHARED),&
-   !$OMP PRIVATE(iE,in)
+   !$OMP PRIVATE(ik,iR,tk,iE)
    !$OMP DO
-   do iE=1,NE
-      do in=1,Nmats
-         KE(iE) = KE(iE) - zlog( -img*wmats(in) + Egrid(iE) + Smats(in) ) * DoS(iE) / Beta
+   do ik=-floor(Nkpath/2d0),+floor(Nkpath/2d0)
+      !
+      tk = 0d0
+      do iR=1,NR
+         tk =  tk + cos( (2*pi*ik/Nkpath) * iR ) / ( iR**alpha )
       enddo
+      dispersion(ik+1+floor(Nkpath/2d0)) = 1d0 - tk/L_alpha
+      !
    enddo
    !$OMP END DO
    !$OMP END PARALLEL
-   K = czero
-   K = trapezoid_integration(KE,Egrid)
-   deallocate(KE)
    !
-   !Potential term
-   U=czero
-   do in=1,Nmats
-      U = U - ( (2*Qpower-1d0)/(2*Qpower) ) * Smats(in)*Gmats(in) / Beta
+   write(filename,"(1A30)") "Ek_alpha"//reg(alphapad)//".DAT"
+   unit = free_unit()
+   open(unit,file=reg(filename),form="formatted",status="unknown",position="rewind",action="write")
+   do ik=-floor(Nkpath/2d0),+floor(Nkpath/2d0)
+      write(unit,"(2E20.12)") 2*pi*ik/Nkpath,dispersion(ik+1+floor(Nkpath/2d0))
+   enddo
+   close(unit)
+   !
+   !
+   !
+   !
+   !###########################################################################!
+   !#                             TEMPERATURE LOOP                            #!
+   !###########################################################################!
+   !
+   allocate(Ts(NT+NT_inf));Ts=0d0
+   allocate(Energy(3,NT+NT_inf));Energy=czero
+   do iT=1,NT+NT_inf
+      !
+      !adaptive T increment
+      dT=0d0
+      if(NT.gt.1)then
+         if(iT.le.NT)then
+            dT = (iT-1)*abs(Tmax-Tmin)/dble(NT-1)
+         else
+            dT = abs(Tmax-Tmin) + (iT-NT)*abs(Wband/K2eV-Tmax)/dble(NT_inf)
+         endif
+      endif
+      !
+      T = Tmin + dT
+      Beta = 1d0 / (T*K2eV)
+      Nmats = int(Beta*wmatsMax/(2d0*pi))
+      Ts(iT) = T
+      !
+      write(Tpad,"(1F30.2)") T
+      write(path,"(1A30)") "./loops_T"//reg(Tpad)//"/"
+      call createDir(reg(path),verb=verbose)
+      !
+      write(*,"(A)") new_line("A")//new_line("A")//".................................................."//new_line("A")
+      write(*,"(1A6,1F12.5,2(A16,1F12.5),A16,I)") "T(K): ",T,"En(eV): ",1d0/Beta,"Beta(1/eV): ",Beta,"Nmats: ",Nmats
+      write(*,"(A)")"Data sored in: "//reg(path)
+      !
+      !------------------------------------------------------------------------!
+      !                            INITIALIZE FIELDS                           !
+      !------------------------------------------------------------------------!
+      !
+      if(allocated(wmats))deallocate(wmats)
+      allocate(wmats(Nmats));wmats=0d0
+      wmats = FermionicFreqMesh(Beta,Nmats)
+      !
+      !Non interacting Green's function
+      if(allocated(Gmats))deallocate(Gmats)
+      allocate(Gmats(Nmats));Gmats=czero
+      call calcGmats()
+      call dumpField(Gmats,reg(path)//"G",pad="it0")
+      !
+      !Zeroth iteration self-energy
+      if(allocated(Smats))deallocate(Smats)
+      allocate(Smats(Nmats));Smats=czero
+      call calcSmats()
+      call dumpField(Smats,reg(path)//"S",pad="it0")
+      !
+      !------------------------------------------------------------------------!
+      !                          SELF-CONSISTENCY LOOP                         !
+      !------------------------------------------------------------------------!
+      !
+      allocate(Gmats_old(Nmats));Gmats_old=czero
+      converged = .false.
+      SCloops: do iloop=1,Nloops
+         !
+         write(*,"(A,1I5,A)")new_line("A")//"---- Loop #",iloop," ----"
+         write(iloopad,"(1I1000)") iloop
+         !
+         !Store old Green's function for convergence check
+         Gmats_old = Gmats
+         !
+         call calcGmats(Sigma=Smats)
+         if(verbose) call dumpField(Gmats,reg(path)//"G",pad="it"//reg(iloopad))
+         !
+         error = check_error(Gmats,Gmats_old)
+         if(error.gt.error_thr)then
+            write(*,"(2(A,1E10.3))")"Error: ",error," > ",error_thr
+         else
+            write(*,"(2(A,1E10.3),A)")"Error: ",error," < ",error_thr," Converged!"
+            converged = .true.
+            exit SCloops
+         endif
+         if(iloop.gt.Nloops)write(*,"(A)")"WARNING: self-consistency cylce not converged, increase NLOOP."
+         !
+         !Compute self-energy for next iteration
+         call calcSmats()
+         if(verbose) call dumpField(Smats,reg(path)//"/S",pad="it"//reg(iloopad))
+         !
+      enddo SCloops
+      deallocate(Gmats_old)
+      !
+      if(converged)then
+         call dumpField(Gmats,reg(path)//"G",pad="converged")
+         call dumpField(Smats,reg(path)//"S",pad="converged")
+      endif
+      !
+      !------------------------------------------------------------------------!
+      !                         FREE ENERGY CALCULATION                        !
+      !------------------------------------------------------------------------!
+      !
+      !Kinetic term
+      allocate(KE(NE));KE=czero
+      !$OMP PARALLEL DEFAULT(SHARED),&
+      !$OMP PRIVATE(iE,in,logarg)
+      !$OMP DO
+      do iE=1,NE
+         do in=1,Nmats
+            logarg = ( img*wmats(in) + mu - Egrid(iE) - Smats(in) )/( img*wmats(in) + mu )
+            KE(iE) = KE(iE) - zlog( logarg ) * DoS(iE) / Beta
+         enddo
+      enddo
+      !$OMP END DO
+      !$OMP END PARALLEL
+      K = czero
+      K = trapezoid_integration(KE,Egrid)
+      deallocate(KE)
+      !
+      !Potential term
+      U=czero
+      do in=1,Nmats
+         U = U - ( (2*Qpower-1d0)/(2*Qpower) ) * Smats(in)*Gmats(in) / Beta
+      enddo
+      !
+      !Store energy components for a given temperature
+      Energy(1,iT) = K
+      Energy(2,iT) = U
+      Energy(3,iT) = K + U
+      !
+   enddo ! end of Tloop
+   !
+   !
+   !
+   !
+   !###########################################################################!
+   !#                              SPECIFIC HEAT                              #!
+   !###########################################################################!
+   !
+   !Cubic interpolation for better derivative
+   allocate(Ts_intp(NT_intp));Ts_intp=0d0
+   allocate(Energy_intp(NT_intp));Energy_intp=0d0
+   !
+   if(NT_inf.eq.0)then
+      Ts_intp = linspace(Tmin,Tmax,NT_intp,istart=.true.,iend=.true.)
+   else
+      Ts_intp = linspace(Tmin,Wband/K2eV,NT_intp,istart=.true.,iend=.true.)
+   endif
+   Energy_intp = cubic_interp( Ts, dreal(Energy(3,:)), Ts_intp )
+   !
+   !Specific Heat obtained by central difference
+   allocate(Cv_intp(NT_intp));Cv_intp=0d0
+   do iT=2,NT_intp-1
+      Cv_intp(iT) = ( Energy_intp(iT+1) - Energy_intp(iT-1) ) / ( Ts_intp(iT+1) - Ts_intp(iT-1) )
+   enddo
+   Cv_intp(1) = cubic_interp( Ts_intp(2:NT_intp-1), Cv_intp(2:NT_intp-1), Tmin )
+   Cv_intp_last = Tmax
+   if(NT_inf.gt.0)Cv_intp_last = Wband/K2eV
+   Cv_intp(NT_intp) = cubic_interp( Ts_intp(2:NT_intp-1), Cv_intp(2:NT_intp-1), Cv_intp_last )
+   !
+   !Entropy difference: S_f(T) - S_i(T) = int ^f _i Cv/T dT
+   allocate(Ds_intp(NT_intp));Ds_intp=0d0
+   do iT=NT_intp-1,1,-1
+      Ds_intp(iT) = trapezoid_integration( Cv_intp(iT:NT_intp)/Ts_intp(iT:NT_intp) ,Ts_intp(iT:NT_intp))
    enddo
    !
-   !Total energy
-   Etot = K + U
-   !
-   !Report values
-   write(*,"(A,2E20.12)")"Ekin: ", dreal(K), dimag(K)
-   write(*,"(A,2E20.12)")"Epot: ", dreal(U), dimag(U)
-   write(*,"(A,2E20.12)")"Epot: ", dreal(Etot), dimag(Etot)
+   !Print results
+   write(filename,"(1A30)") "DeltaS_alpha"//reg(alphapad)//".DAT"
+   unit = free_unit()
+   open(unit,file=reg(filename),form="formatted",status="unknown",position="rewind",action="write")
+   write(unit,"(4A20,1A4)") "# Temp"," Energy"," Specific Heat"," Entropy Diff"
+   do iT=1,NT_intp
+      fact=0
+      if( any( abs(Ts-Ts_intp(iT)).le.eps )  )fact=1
+      write(unit,"(4E20.12,1I4)") Ts_intp(iT),Energy_intp(iT),Cv_intp(iT),Ds_intp(iT),fact
+   enddo
+   close(unit)
    !
    !
    !
@@ -419,7 +502,7 @@ program Syk
       !Compute S(iw)
       call tick(TimeStart)
       call Fitau2mats(Beta,Sitau,Smats,tau_uniform=logtau)
-      if(verbose)write(*,"(A,F)") "G(iw) --> G(tau). Total timing (s): ",tock(TimeStart)
+      if(verbose)write(*,"(A,F)") "S(tau) --> S(iw). Total timing (s): ",tock(TimeStart)
       deallocate(tau,Sitau)
       !
    end subroutine calcSmats
