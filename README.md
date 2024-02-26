@@ -28,5 +28,9 @@ col 2: total energy per particle
 col 3: specific heat
 col 4: entropy difference 1/N int ^{Tinf} _{T}  Cv/T dT
 
-In order to visualize the absolute entropy in the T-> limit one has to plot col1 against log(2)-col4.
+In order to visualize the absolute entropy in the T-> limit one has to plot col1 against log(2)-col4. 
+
+For each temperature a folder is created where the initial (non interacting) G(iw) and the inital S(iw) are stored. Upon convergence also the final G(iw) and S(iw) are stored. If the VERBOSE parameter is set to "T" then also the G(iw) and S(iw) for each self-consistency loop are printed.
+
+
 
