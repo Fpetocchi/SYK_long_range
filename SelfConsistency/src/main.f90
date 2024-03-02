@@ -13,18 +13,20 @@ program Syk
    !
    !input file variables
    character(len=20)                        :: InputFile="input.in"
-   integer                                  :: Ntau,NR,Nk,NE
+   integer                                  :: Ntau_in,NR,Nk,NE
    integer                                  :: Qpower,Nloops
-   integer                                  :: NT,NT_inf,NT_intp
+   integer                                  :: NT,NT_inf,NT_intp,Nmats_cutoff
    real(8)                                  :: alpha,wmatsMax,mu,Wband
    real(8)                                  :: Emin,Emax,error_thr
+   real(8)                                  :: thop,Uloc
    real(8)                                  :: Tmin,Tmax
    logical                                  :: logtau,verbose
    !
    !generic variables
    integer                                  :: Nthread,TimeStart,unit
    character(len=1024)                      :: path,filename
-   character(len=1024)                      :: alphapad,iloopad,Tpad
+   character(len=1024)                      :: alphapad,betapad
+   character(len=1024)                      :: iloopad,Tpad
    character(len=1)                         :: gnupad
    logical                                  :: filexists
    !
@@ -32,7 +34,7 @@ program Syk
    integer                                  :: iE,iR,ik
    integer                                  :: NR_,Nk_,NE_
    real(8)                                  :: L_alpha,tk,Norm
-   real(8)                                  :: alpha_,Emin_,Emax_
+   real(8)                                  :: alpha_,Emin_,Emax_,thop_
    real(8),allocatable                      :: Egrid(:),DoS(:)
    !
    !Bands variables
@@ -45,19 +47,22 @@ program Syk
    real(8),allocatable                      :: Ts(:),Ts_intp(:)
    !
    !Fields variables
-   integer                                  :: in,Nmats
+   integer                                  :: in,Nmats,Ntau
    real(8),allocatable                      :: wmats(:)
    complex(8),allocatable                   :: Gmats(:),Smats(:)
    !
    !self-consistency variables
    integer                                  :: iloop
-   real(8)                                  :: error
+   real(8)                                  :: error,mixing
    logical                                  :: converged
-   complex(8),allocatable                   :: Gmats_old(:)
+   complex(8),allocatable                   :: Gmats_old(:),Smats_old(:)
+   real(8),allocatable                      :: ReSmats(:),ImSmats(:)
+   real(8),allocatable                      :: wmats_old(:)
    !
    !Free energy variables
    integer                                  :: fact
-   complex(8)                               :: logarg,K,U,Cv_intp_last
+   real(8)                                  :: Cv_intp_last
+   complex(8)                               :: logarg,K,U
    complex(8),allocatable                   :: KE(:),Energy(:,:)
    real(8),allocatable                      :: Energy_intp(:)
    real(8),allocatable                      :: Cv_intp(:)
@@ -89,10 +94,12 @@ program Syk
       read(unit,*) Emin, Emax, NE
       read(unit,*) !# QPOWER    LOGTAU    MU
       read(unit,*) Qpower, logtau, mu
-      read(unit,*) !# MAXWMATS  NTAU
-      read(unit,*) wmatsMax, Ntau
-      read(unit,*) !# NLOOPS    ERROR_THR
-      read(unit,*) Nloops, error_thr
+      read(unit,*) !# THOP      ULOC
+      read(unit,*) thop, Uloc
+      read(unit,*) !# MAXWMATS  NTAU      NMATS_CUTOFF
+      read(unit,*) wmatsMax, Ntau_in, Nmats_cutoff
+      read(unit,*) !# NLOOPS    ERROR     MIXING
+      read(unit,*) Nloops, error_thr, mixing
       read(unit,*) !# TMIN      TMAX      NT     NT_inf    NT_intp
       read(unit,*) Tmin, Tmax, NT, NT_inf, NT_intp
       close(unit)
@@ -103,10 +110,6 @@ program Syk
       !
    endif
    !
-   if(logtau)then
-      if(mod(Ntau,2).eq.0)Ntau=Ntau+1
-      if(mod(Ntau-1,4).ne.0)Ntau=Ntau+mod(Ntau-1,4)
-   endif
    if(mod(Nk,2).eq.0)then
       write(*,"(A)") "Adding 1 to Nk in order to make it odd"
       Nk = Nk + 1
@@ -125,24 +128,25 @@ program Syk
    !DoS
    write(alphapad,"(1F8.2)") alpha
    write(filename,"(1A30)") "DoS_alpha"//reg(alphapad)//".DAT"
-   call inquireFile(reg(filename),filexists,verb=.true.,hardstop=.false.)
+   call inquireFile(reg(filename),filexists,verb=verbose,hardstop=.false.)
    if(filexists)then
       !
       write(*,"(A)") "Reading DoS from: "//reg(filename)
       unit = free_unit()
       open(unit,file=reg(filename),form="formatted",status="old",position="rewind",action="read")
-      read(unit,*) !"-------------------"
+      read(unit,*) !"#-------------------------------------------#"
       read(unit,*) !"ALPHA    NR     NK"
       read(unit,*) gnupad, alpha_, NR_, Nk_
-      read(unit,*) !"EMIN     EMAX   NE"
-      read(unit,*) gnupad, Emin_, Emax_, NE_
-      read(unit,*) !"-------------------"
+      read(unit,*) !"EMIN     EMAX   NE    THOP"
+      read(unit,*) gnupad, Emin_, Emax_, NE_, thop_
+      read(unit,*) !"#-------------------------------------------#"
       if(alpha_.ne.alpha) stop "DoS from file has the wrong alpha"
       if(NR_.ne.NR) stop "DoS from file has the wrong NR"
       if(Nk_.ne.Nk) stop "DoS from file has the wrong Nk"
       if(Emin_.ne.Emin) stop "DoS from file has the wrong Emin"
       if(Emax_.ne.Emax) stop "DoS from file has the wrong Emax"
       if(NE_.ne.NE) stop "DoS from file has the wrong NE"
+      if(thop_.ne.thop) stop "DoS from file has the wrong thop"
       !
       do iE=1,NE
          read(unit,"(2E20.12)") Egrid(iE),DoS(iE)
@@ -192,12 +196,12 @@ program Syk
       !Write to file
       unit = free_unit()
       open(unit,file=reg(filename),form="formatted",status="unknown",position="rewind",action="write")
-      write(unit,*) "#-------------------"
+      write(unit,*) "#------------------------------------------------#"
       write(unit,*) "# ALPHA    NR     NK"
       write(unit,"(A2,1F10.5,2I10)") " #",alpha, NR, Nk
-      write(unit,*) "#EMIN     EMAX   NE   LOGRID"
-      write(unit,"(A2,2F10.5,1I10,1L)") " #",Emin, Emax, NE
-      write(unit,*) "#-------------------"
+      write(unit,*) "# EMIN     EMAX   NE    THOP"
+      write(unit,"(A2,2F10.5,1I10,1F10.5)") " #",Emin, Emax, NE, thop
+      write(unit,*) "#------------------------------------------------#"
       do iE=1,NE
          write(unit,"(2E20.12)") Egrid(iE),DoS(iE)
       enddo
@@ -224,7 +228,7 @@ program Syk
       !
       tk = 0d0
       do iR=1,NR
-         tk =  tk + cos( (2*pi*ik/Nkpath) * iR ) / ( iR**alpha )
+         tk =  tk + thop*cos( (2*pi*ik/Nkpath) * iR ) / ( iR**alpha )
       enddo
       dispersion(ik+1+floor(Nkpath/2d0)) = 1d0 - tk/L_alpha
       !
@@ -261,12 +265,25 @@ program Syk
          endif
       endif
       !
+      !adaptive Matsubara mesh
       T = Tmin + dT
       Beta = 1d0 / (T*K2eV)
       Nmats = int(Beta*wmatsMax/(2d0*pi))
+      if(Nmats.gt.Nmats_cutoff)then
+         write(*,"(2(A,I),A,1F12.4,A)") "Nmats: ",Nmats,"   cutoffed to: ",Nmats_cutoff, "   corresponding to: ",Nmats_cutoff*pi/beta," eV "
+         Nmats = Nmats_cutoff
+      endif
       Ts(iT) = T
       !
-      write(Tpad,"(1F30.2)") T
+      !adaptive tau mesh
+      Ntau = Ntau_in
+      if(Ntau_in.eq.0) Ntau = Nmats
+      if(logtau)then
+         if(mod(Ntau,2).eq.0)Ntau=Ntau+1
+         if(mod(Ntau-1,4).ne.0)Ntau=Ntau+mod(Ntau-1,4)
+      endif
+      !
+      write(Tpad,"(1F30.4)") T
       write(path,"(1A30)") "./loops_T"//reg(Tpad)//"/"
       call createDir(reg(path),verb=verbose)
       !
@@ -291,13 +308,34 @@ program Syk
       !Zeroth iteration self-energy
       if(allocated(Smats))deallocate(Smats)
       allocate(Smats(Nmats));Smats=czero
-      call calcSmats()
-      call dumpField(Smats,reg(path)//"S",pad="it0")
+      if(iT.eq.1)then
+         !look for user-provided initial guess
+         write(betapad,"(1F8.2)") beta
+         write(filename,"(1A100)") "Smats_alpha"//reg(alphapad)//"_beta"//reg(betapad)//"_init.DAT"
+         call inquireFile(reg(path)//"../"//reg(filename),filexists,verb=verbose,hardstop=.false.)
+         if(filexists)then
+            write(*,"(A)")"Reading starting Sigma."
+            call readField(Smats,reg(path)//"../S",pad="init")
+         else
+            write(*,"(A)")"Initializing Sigma from bare G."
+            call calcSmats()
+         endif
+         call dumpField(Smats,reg(path)//"S",pad="it0")
+      else
+         allocate(ReSmats(Nmats));ReSmats=0d0
+         allocate(ImSmats(Nmats));ImSmats=0d0
+         ReSmats = cubic_interp( wmats_old, dreal(Smats_old), wmats )
+         ImSmats = cubic_interp( wmats_old, dimag(Smats_old), wmats )
+         Smats = dcmplx(ReSmats,ImSmats)
+         deallocate(ReSmats,ImSmats)
+      endif
       !
       !------------------------------------------------------------------------!
       !                          SELF-CONSISTENCY LOOP                         !
       !------------------------------------------------------------------------!
       !
+      if(allocated(Smats_old))deallocate(Smats_old)
+      allocate(Smats_old(Nmats));Smats_old=czero
       allocate(Gmats_old(Nmats));Gmats_old=czero
       converged = .false.
       SCloops: do iloop=1,Nloops
@@ -311,7 +349,10 @@ program Syk
          call calcGmats(Sigma=Smats)
          if(verbose) call dumpField(Gmats,reg(path)//"G",pad="it"//reg(iloopad))
          !
-         error = check_error(Gmats,Gmats_old)
+         !Store old self-energy for mixing
+         Smats_old = Smats
+         !
+         error = check_error(Gmats,Gmats_old) !the first error is always with respect to G0
          if(error.gt.error_thr)then
             write(*,"(2(A,1E10.3))")"Error: ",error," > ",error_thr
          else
@@ -323,6 +364,7 @@ program Syk
          !
          !Compute self-energy for next iteration
          call calcSmats()
+         Smats = (1d0-mixing)*Smats + mixing*Smats_old
          if(verbose) call dumpField(Smats,reg(path)//"/S",pad="it"//reg(iloopad))
          !
       enddo SCloops
@@ -332,6 +374,12 @@ program Syk
          call dumpField(Gmats,reg(path)//"G",pad="converged")
          call dumpField(Smats,reg(path)//"S",pad="converged")
       endif
+      !
+      !Store for nex Temperature interpolation
+      if(allocated(wmats_old))deallocate(wmats_old)
+      allocate(wmats_old(Nmats));wmats_old=0d0
+      wmats_old = wmats
+      Smats_old = Smats
       !
       !------------------------------------------------------------------------!
       !                         FREE ENERGY CALCULATION                        !
@@ -361,9 +409,9 @@ program Syk
       enddo
       !
       !Store energy components for a given temperature
-      Energy(1,iT) = K
-      Energy(2,iT) = U
-      Energy(3,iT) = K + U
+      Energy(1,iT) = 2*K
+      Energy(2,iT) = 2*U
+      Energy(3,iT) = 2*( K + U)
       !
    enddo ! end of Tloop
    !
@@ -409,7 +457,7 @@ program Syk
    do iT=1,NT_intp
       fact=0
       if( any( abs(Ts-Ts_intp(iT)).le.eps )  )fact=1
-      write(unit,"(4E20.12,1I4)") Ts_intp(iT),Energy_intp(iT),Cv_intp(iT),Ds_intp(iT),fact
+      write(unit,"(5E20.12,1I4)") Ts_intp(iT),Ts_intp(iT)*K2eV,Energy_intp(iT),Cv_intp(iT),Ds_intp(iT),fact
    enddo
    close(unit)
    !
@@ -491,7 +539,7 @@ program Syk
          if (dabs(tau2-tau(Ntau-itau+1)).gt.eps) stop "calcSmats: itau2 not found."
          !
          !Note that G(-tau) = -G(beta-tau)
-         Sitau(itau) = (-1)**(Qpower+1) * (Gitau(itau)**Qpower) * (-Gitau(Ntau-itau+1)**(Qpower-1))
+         Sitau(itau) = (-1)**(Qpower+1) * (Uloc**2) * (Gitau(itau)**Qpower) * ((-Gitau(Ntau-itau+1))**(Qpower-1))
          !
       enddo
       !$OMP END DO
@@ -515,10 +563,10 @@ program Syk
       character(len=*),intent(in)           :: header
       character(len=*),intent(in),optional  :: pad
       integer                               :: iw
-      character(len=1024)                   :: fname,betapad
+      character(len=1024)                   :: fname,bpad
       !
-      write(betapad,"(1F8.2)") beta
-      write(fname,"(1A100)") reg(header)//"mats_alpha"//reg(alphapad)//"_beta"//reg(betapad)
+      write(bpad,"(1F8.2)") beta
+      write(fname,"(1A100)") reg(header)//"mats_alpha"//reg(alphapad)//"_beta"//reg(bpad)
       if(present(pad)) fname = reg(fname)//"_"//reg(pad)
       fname = reg(fname)//".DAT"
       !
@@ -530,6 +578,39 @@ program Syk
       close(unit)
       !
    end subroutine dumpField
+   !
+   subroutine readField(Field,header,pad)
+      !
+      implicit none
+      !
+      complex(8),intent(inout)              :: Field(:)
+      character(len=*),intent(in)           :: header
+      character(len=*),intent(in),optional  :: pad
+      real(8)                               :: wmats_read,ReF,ImF
+      integer                               :: iw
+      character(len=1024)                   :: fname,bpad
+      !
+      write(bpad,"(1F8.2)") beta
+      write(fname,"(1A100)") reg(header)//"mats_alpha"//reg(alphapad)//"_beta"//reg(bpad)
+      if(present(pad)) fname = reg(fname)//"_"//reg(pad)
+      fname = reg(fname)//".DAT"
+      !
+      Field=czero
+      !
+      unit = free_unit()
+      open(unit,file=reg(fname),form="formatted",status="unknown",position="rewind",action="read")
+      do iw=1,Nmats
+         read(unit,*) wmats_read,ReF,ImF
+         Field(iw) = dcmplx(ReF,ImF)
+         !if(wmats_read.eq.wmats(iw))then
+         !   Field(iw) = dcmplx(ReF,ImF)
+         !else
+         !   stop "readField: wrong imaginary frequency point."
+         !endif
+      enddo
+      close(unit)
+      !
+   end subroutine readField
    !
    function check_error(fnew,fold) result(err)
       implicit none
