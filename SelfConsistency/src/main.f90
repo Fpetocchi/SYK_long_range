@@ -437,7 +437,7 @@ program Syk
       !$OMP END DO
       !$OMP END PARALLEL
       K = czero
-      K = trapezoid_integration(KE,Egrid) - log( 1d0 + exp(Beta*mu) )/Beta
+      K = trapezoid_integration(KE,Egrid)
       deallocate(KE)
       !
       !Potential term
@@ -461,7 +461,7 @@ program Syk
       !$OMP PRIVATE(itau)
       !$OMP DO
       do itau=1,Ntau
-         Ut(itau) = Ut(itau) - (Gitau(Ntau-itau+1)**Qpower)*(Gitau(itau)**Qpower) + Sitau(itau)*Gitau(Ntau-itau+1)
+         Ut(itau) = (Gitau(Ntau-itau+1)**Qpower)*(Gitau(itau)**Qpower) + Sitau(itau)*Gitau(Ntau-itau+1)
       enddo
       !$OMP END DO
       !$OMP END PARALLEL
@@ -476,13 +476,13 @@ program Syk
       endif
       !
       U = czero
-      U = trapezoid_integration(Ut,tau) * (Uloc**2)/(2*Qpower)
+      U = - (Uloc**2)/(2*Qpower) * trapezoid_integration(Ut,tau)
       deallocate(Ut,tau)
       !
       !Store energy components for a given temperature
-      Energy(1,iT) = 2*K   !the 2 comes from the fact that the intergral is only for iw>0
-      Energy(2,iT) = U     !this is a tau convolution so no factors
-      Energy(3,iT) = K + U
+      Energy(1,iT) = 2*K - log( 1d0 + exp(Beta*mu) )/Beta   !the 2 comes from the fact that the intergral is only for iw>0
+      Energy(2,iT) = U                                      !this is a tau convolution so no factors
+      Energy(3,iT) = Energy(1,iT) + Energy(2,iT)
       !
    enddo ! end of Tloop
    !
