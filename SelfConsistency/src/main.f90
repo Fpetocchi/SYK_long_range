@@ -15,10 +15,10 @@ program Syk
    character(len=20)                        :: InputFile="input.in"
    integer                                  :: Ntau_in,NR,Nk,NE
    integer                                  :: Qpower,Nloops
-   integer                                  :: NT,NT_inf,NT_intp
+   integer                                  :: NT,NT_inf,NT_intp_in
    integer                                  :: min_Nmats,max_Nmats
    real(8)                                  :: alpha,wmatsMax,mu,Wband
-   real(8)                                  :: Emin,Emax,error_thr
+   real(8)                                  :: Emin,Emax,error_thr,powtau
    real(8)                                  :: thop,Uloc
    real(8)                                  :: Tmin,Tmax
    logical                                  :: logtau,verbose
@@ -62,8 +62,9 @@ program Syk
    real(8),allocatable                      :: wmats_old(:)
    !
    !Free energy variables
-   integer                                  :: fact
+   integer                                  :: fact,NT_intp
    real(8)                                  :: Cv_intp_last
+   complex(8)                               :: wm,Sfunct,Gfunct
    complex(8)                               :: logarg,K,U
    complex(8),allocatable                   :: KE(:),Ut(:),Energy(:,:)
    real(8),allocatable                      :: Energy_intp(:,:)
@@ -94,8 +95,8 @@ program Syk
       read(unit,*) alpha, NR, Nk, Wband
       read(unit,*) !# EMIN      EMAX     NE
       read(unit,*) Emin, Emax, NE
-      read(unit,*) !# QPOWER    LOGTAU   MU
-      read(unit,*) Qpower, logtau, mu
+      read(unit,*) !# QPOWER    LOGTAU   MU   POWTAU
+      read(unit,*) Qpower, logtau, mu, powtau
       read(unit,*) !# THOP      ULOC
       read(unit,*) thop, Uloc
       read(unit,*) !# MAXWMATS  NTAU     MIN_NMATS   MAX_NAMTS
@@ -103,7 +104,7 @@ program Syk
       read(unit,*) !# NLOOPS    ERROR    MIXING
       read(unit,*) Nloops, error_thr, mixing
       read(unit,*) !# TMIN      TMAX     NT     NT_inf    NT_intp
-      read(unit,*) Tmin, Tmax, NT, NT_inf, NT_intp
+      read(unit,*) Tmin, Tmax, NT, NT_inf, NT_intp_in
       close(unit)
       !
    else
@@ -112,6 +113,7 @@ program Syk
       !
    endif
    !
+   if(logtau)call set_powtau(powtau)
    if(mod(Nk,2).eq.0)then
       write(*,"(A)") "Adding 1 to Nk in order to make it odd"
       Nk = Nk + 1
@@ -173,7 +175,8 @@ program Syk
       !$OMP PARALLEL DEFAULT(SHARED),&
       !$OMP PRIVATE(ik,iR,tk,iE)
       !$OMP DO
-      do ik=-floor(Nk/2d0),+floor(Nk/2d0)
+      !do ik=-floor(Nk/2d0),+floor(Nk/2d0) !everything that happens in k occurs also in -k.
+      do ik=0,Nk
          !
          tk = 0d0
          do iR=1,NR
@@ -271,11 +274,11 @@ program Syk
       T = Tmin + dT
       Beta = 1d0 / (T*K2eV)
       Nmats = int(Beta*wmatsMax/(2d0*pi))
-      if(Nmats.gt.max_Nmats)then
+      if((max_Nmats.gt.0).and.(Nmats.gt.max_Nmats))then
          write(*,"(2(A,I),A,1F12.4,A)") "Nmats: ",Nmats,"   cutoffed to: ",max_Nmats, "   corresponding to: ",max_Nmats*pi/beta," eV "
          Nmats = max_Nmats
       endif
-      if(Nmats.lt.min_Nmats)then
+      if((min_Nmats.gt.0).and.(Nmats.lt.min_Nmats))then
          write(*,"(2(A,I),A,1F12.4,A)") "Nmats: ",Nmats,"   increased to: ",max_Nmats, "   corresponding to: ",min_Nmats*pi/beta," eV "
          Nmats = min_Nmats
       endif
@@ -283,7 +286,7 @@ program Syk
       !
       !adaptive tau mesh
       Ntau = Ntau_in
-      if(Ntau_in.eq.0) Ntau = int(Nmats)/2
+      if(Ntau_in.eq.0) Ntau = int(Nmats)/8
       if(logtau)then
          if(mod(Ntau,2).eq.0)Ntau=Ntau+1
          if(mod(Ntau-1,4).ne.0)Ntau=Ntau+mod(Ntau-1,4)
@@ -417,72 +420,100 @@ program Syk
       !                         FREE ENERGY CALCULATION                        !
       !------------------------------------------------------------------------!
       !
-      !Kinetic term
+      !
+      !--- Kinetic term ---
+      K = czero
       allocate(KE(NE));KE=czero
       !$OMP PARALLEL DEFAULT(SHARED),&
-      !$OMP PRIVATE(iE,in,logarg)
+      !$OMP PRIVATE(iE,in,logarg,Sfunct,wm)
       !$OMP DO
       do iE=1,NE
-         do in=1,Nmats
+         do in=-Nmats,Nmats
+            !
+            if(in.eq.0)cycle
+            !
+            if(in<0)then
+               Sfunct = conjg(Smats(-in))
+               wm = -wmats(-in)
+            else
+               Sfunct = Smats(in)
+               wm = wmats(in)
+            endif
             !
             !Eq.35
-            !logarg = ( -img*wmats(in) + Egrid(iE) + Smats(in) )
+            !logarg = ( -img*wm + Egrid(iE) + Sfunct )
             !
             !Eq.37
-            logarg = ( img*wmats(in) + mu - Egrid(iE) - Smats(in) )/( img*wmats(in) + mu )
+            logarg = ( img*wm + mu - Egrid(iE) - Sfunct )/( img*wm + mu )
             KE(iE) = KE(iE) - zlog( logarg ) * DoS(iE) / Beta
             !
          enddo
       enddo
       !$OMP END DO
       !$OMP END PARALLEL
-      K = czero
-      K = trapezoid_integration(KE,Egrid)
+      !
+      K = trapezoid_integration(KE,Egrid) - log( 1d0 + exp(Beta*mu) )/Beta
       deallocate(KE)
       !
-      !Potential term
+      !
+      !--- Potential term ---
       !
       !Eq.35
-      !U=czero
-      !do in=1,Nmats
-      !   U = U - ( (2*Qpower-1d0)/(2*Qpower) ) * Smats(in)*Gmats(in) / Beta
-      !enddo
+      U=czero
+      do in=-Nmats,Nmats
+         !
+         if(in.eq.0)cycle
+         !
+         if(in<0)then
+            Sfunct = conjg(Smats(-in))
+            Gfunct = conjg(Gmats(-in))
+         else
+            Sfunct = Smats(in)
+            Gfunct = Gmats(in)
+         endif
+         !
+         U = U - ( (2*Qpower-1d0)/(2*Qpower) ) * (Sfunct*Gfunct) / Beta
+         !
+      enddo
       !
       !Eq.37
-      if(allocated(Gitau))deallocate(Gitau)
-      allocate(Gitau(Ntau));Gitau=czero
-      call Fmats2itau(Beta,Gmats,Gitau,asympt_corr=.true.,tau_uniform=logtau)
-      if(allocated(Sitau))deallocate(Sitau)
-      allocate(Sitau(Ntau));Sitau=czero
-      call Fmats2itau(Beta,Smats,Sitau,asympt_corr=.true.,tau_uniform=logtau)
-      !
-      allocate(Ut(Ntau));Ut=czero
-      !$OMP PARALLEL DEFAULT(SHARED),&
-      !$OMP PRIVATE(itau)
-      !$OMP DO
-      do itau=1,Ntau
-         Ut(itau) = (Gitau(Ntau-itau+1)**Qpower)*(Gitau(itau)**Qpower) + Sitau(itau)*Gitau(Ntau-itau+1)
-      enddo
-      !$OMP END DO
-      !$OMP END PARALLEL
-      deallocate(Gitau,Sitau)
-      !
-      if(allocated(tau))deallocate(tau)
-      allocate(tau(Ntau));tau=0d0
-      if(logtau)then
-         tau = denspace(beta,Ntau)
-      else
-         tau = linspace(0d0,Beta,Ntau)
-      endif
-      !
-      U = czero
-      U = - (Uloc**2)/(2*Qpower) * trapezoid_integration(Ut,tau)
-      deallocate(Ut,tau)
+      !if(allocated(Gitau))deallocate(Gitau)
+      !allocate(Gitau(Ntau));Gitau=czero
+      !call Fmats2itau(Beta,Gmats,Gitau,asympt_corr=.true.,tau_uniform=.not.logtau)
+      !if(allocated(Sitau))deallocate(Sitau)
+      !allocate(Sitau(Ntau));Sitau=czero
+      !call Fmats2itau(Beta,Smats,Sitau,asympt_corr=.true.,tau_uniform=.not.logtau)
+      !!
+      !allocate(Ut(Ntau));Ut=czero
+      !!$OMP PARALLEL DEFAULT(SHARED),&
+      !!$OMP PRIVATE(itau)
+      !!$OMP DO
+      !do itau=1,Ntau
+      !   Ut(itau) = (Gitau(Ntau-itau+1)**Qpower)*(Gitau(itau)**Qpower) + Sitau(itau)*Gitau(Ntau-itau+1)
+      !enddo
+      !!$OMP END DO
+      !!$OMP END PARALLEL
+      !deallocate(Gitau,Sitau)
+      !!
+      !if(allocated(tau))deallocate(tau)
+      !allocate(tau(Ntau));tau=0d0
+      !if(logtau)then
+      !   tau = denspace(beta,Ntau)
+      !else
+      !   tau = linspace(0d0,Beta,Ntau)
+      !endif
+      !!
+      !U = czero
+      !U = - (Uloc**2)/(2*Qpower) * trapezoid_integration(Ut,tau)
+      !deallocate(Ut,tau)
       !
       !Store energy components for a given temperature
-      Energy(1,iT) = 2*K - log( 1d0 + exp(Beta*mu) )/Beta   !the 2 comes from the fact that the intergral is only for iw>0
-      Energy(2,iT) = U                                      !this is a tau convolution so no factors
+      Energy(1,iT) = K
+      Energy(2,iT) = U
       Energy(3,iT) = Energy(1,iT) + Energy(2,iT)
+      !
+      write(*,"(A,2E15.3)")"Ekin: ",dreal(Energy(1,iT)),dimag(Energy(1,iT))
+      write(*,"(A,2E15.3)")"Epot: ",dreal(Energy(2,iT)),dimag(Energy(2,iT))
       !
    enddo ! end of Tloop
    !
@@ -493,19 +524,39 @@ program Syk
    !#                              SPECIFIC HEAT                              #!
    !###########################################################################!
    !
-   !Cubic interpolation for better derivative
-   allocate(Ts_intp(NT_intp));Ts_intp=0d0
-   allocate(Energy_intp(3,NT_intp));Energy_intp=0d0
-   !
-   if(NT_inf.eq.0)then
-      Ts_intp = linspace(Tmin,Tmax,NT_intp,istart=.true.,iend=.true.)
+   if(NT_intp_in.eq.0)then
+      !
+      write(*,"(A)")"Interpolation skipped"
+      !
+      NT_intp = NT+NT_inf
+      !
+      allocate(Ts_intp(NT_intp));Ts_intp=0d0
+      allocate(Energy_intp(3,NT_intp));Energy_intp=0d0
+      !
+      Ts_intp = Ts
+      !
+      Energy_intp = dreal(Energy)
+      !
    else
-      Ts_intp = linspace(Tmin,Wband/K2eV,NT_intp,istart=.true.,iend=.true.)
+      !
+      write(*,"(A)")"Cubic spline interpolation"
+      !
+      NT_intp = NT_intp_in
+      !
+      allocate(Ts_intp(NT_intp));Ts_intp=0d0
+      allocate(Energy_intp(3,NT_intp));Energy_intp=0d0
+      !
+      if(NT_inf.eq.0)then
+         Ts_intp = linspace(Tmin,Tmax,NT_intp,istart=.true.,iend=.true.)
+      else
+         Ts_intp = linspace(Tmin,Wband/K2eV,NT_intp,istart=.true.,iend=.true.)
+      endif
+      !
+      Energy_intp(1,:) = cubic_interp( Ts, dreal(Energy(1,:)), Ts_intp )
+      Energy_intp(2,:) = cubic_interp( Ts, dreal(Energy(2,:)), Ts_intp )
+      Energy_intp(3,:) = cubic_interp( Ts, dreal(Energy(3,:)), Ts_intp )
+      !
    endif
-   !interpolate energy components (Real parts only)
-   Energy_intp(1,:) = cubic_interp( Ts, dreal(Energy(1,:)), Ts_intp )
-   Energy_intp(2,:) = cubic_interp( Ts, dreal(Energy(2,:)), Ts_intp )
-   Energy_intp(3,:) = cubic_interp( Ts, dreal(Energy(3,:)), Ts_intp )
    !
    !Specific Heat obtained by central difference
    allocate(Cv_intp(NT_intp));Cv_intp=0d0
@@ -527,7 +578,7 @@ program Syk
    write(filename,"(1A30)") "DeltaS_alpha"//reg(alphapad)//".DAT"
    unit = free_unit()
    open(unit,file=reg(filename),form="formatted",status="unknown",position="rewind",action="write")
-   write(unit,"(6A20)") "# Temp"," Energy"," Specific Heat"," Entropy Diff", " Re Ek", " Re Ep"
+   write(unit,"(6A20)") "# Temp"," Energy"," d(Energy)/dTemp"," Entropy Diff", " Re Ek", " Re Ep"
    do iT=1,NT_intp
       fact=0
       write(unit,"(6E20.12)") Ts_intp(iT)       , &
@@ -601,7 +652,7 @@ program Syk
       call tick(TimeStart)
       if(allocated(Gitau))deallocate(Gitau)
       allocate(Gitau(Ntau));Gitau=czero
-      call Fmats2itau(Beta,Gmats,Gitau,asympt_corr=.true.,tau_uniform=logtau)
+      call Fmats2itau(Beta,Gmats,Gitau,asympt_corr=.true.,tau_uniform=.not.logtau)
       if(verbose)write(*,"(A,F)") new_line("A")//"G(iw) --> G(tau). Total timing (s): ",tock(TimeStart)
       !
       !Compute S(tau)
@@ -627,7 +678,7 @@ program Syk
       !
       !Compute S(iw)
       call tick(TimeStart)
-      call Fitau2mats(Beta,Sitau,Smats,tau_uniform=logtau)
+      call Fitau2mats(Beta,Sitau,Smats,tau_uniform=.not.logtau)
       if(verbose)write(*,"(A,F)") "S(tau) --> S(iw). Total timing (s): ",tock(TimeStart)
       deallocate(tau,Sitau)
       !

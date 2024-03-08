@@ -61,6 +61,7 @@ module fourier_transforms
    !---------------------------------------------------------------------------!
    real(8),parameter,private                :: pi=3.14159265358979323846d0
    complex(8),parameter,private             :: czero=dcmplx(0.d0,0.d0)
+   real(8),private,protected                :: de_default=1d0
    !
 #ifdef _verb
    logical,private                          :: verbose=.true.
@@ -88,6 +89,7 @@ module fourier_transforms
    public :: createDir
    public :: removeDir
    public :: removeFile
+   public :: set_powtau
    public :: tick
    public :: tock
    !functions
@@ -102,6 +104,16 @@ module fourier_transforms
    !===========================================================================!
 
 contains
+
+
+   !---------------------------------------------------------------------------!
+   !PURPOSE: Creates fermionic weights (cos,sin) and add asymptotic correction
+   !---------------------------------------------------------------------------!
+   subroutine set_powtau(de_external)
+      implicit none
+      real(8),intent(in) :: de_external
+      de_default = de_external
+   end subroutine set_powtau
 
 
    !---------------------------------------------------------------------------!
@@ -539,7 +551,7 @@ contains
       Norb = size(Gmats,dim=1)
       Nmats = size(Gmats,dim=2)
       Ntau = size(Gitau,dim=2)
-      !call assert_shape(Gitau,[Norb,Ntau],"Fmats2itau_vec_Gw","Gitau")
+      !call assert_shape(Gitau,[Norb,Nt:au],"Fmats2itau_vec_Gw","Gitau")
       !
       asympt_corr_ = .true.
       if(present(asympt_corr)) asympt_corr_ = asympt_corr
@@ -2038,8 +2050,8 @@ contains
       real(8)                               :: mesh,de,a,b
       logical                               :: center_
       !data de /1.0d0/
-      de = 1.0d0
-      if(present(expfact))de=expfact
+      de = de_default ! 1.0d0
+      if(present(expfact)) de = expfact
       !
       nseg=(num-1)/nsimp
       if (nseg .lt. 1) stop "denspace: nseg < 1"
