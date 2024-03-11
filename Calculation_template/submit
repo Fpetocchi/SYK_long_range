@@ -1,5 +1,5 @@
 #!/bin/bash
-#SBATCH --job-name=alpha_1.20
+#SBATCH --job-name=test_1.0
 #SBATCH --nodes=1
 #SBATCH --ntasks=128
 #SBATCH --ntasks-per-node=128
@@ -23,7 +23,7 @@ ulimit -f unlimited   #The maximum size of files written by the shell and its ch
 ################################################################################
 
 GENMAT=/home/petocchif/3_SKY/sky
-ALPHA="1.20"
+
 
 ################################################################################
 #                             AUTO-SETUP SETTINGS                              #
@@ -34,5 +34,5 @@ BINsc=${GENMAT}/SelfConsistency/bin
 export l0=`grep -n "# ALPHA" input.in | awk -F  ":" '{print $1+1 }'`
 #sed -ei ${l0}'1 s/'"*"'/'"${ALPHA}"'/' input.txt
 
-srun --ntasks=1 ${BINsc}/SYK > report_alpha${ALPHA} 2> err_alpha${ALPHA}
+srun --ntasks=1 ${BINsc}/SYK > report 2> err
 
