@@ -2097,13 +2097,19 @@ contains
       real(8)                               :: Int,dx
       integer                               :: i
       !
-      if(size(fx).le.1) stop " trapezoid_integration_d: function with wrong dimension."
-      !
-      Int=0d0
-      do i=2,size(fx)
-         dx = x(i)-x(i-1)
-         Int = Int + ( fx(i) + fx(i-1) ) * (dx/2d0)
-      enddo
+      if(size(fx).gt.1) then
+         !
+         Int=0d0
+         do i=2,size(fx)
+            dx = x(i)-x(i-1)
+            Int = Int + ( fx(i) + fx(i-1) ) * (dx/2d0)
+         enddo
+         !
+      else
+         !
+         Int = fx(1)
+         !
+      endif
       !
    end function trapezoid_integration_d
    !
@@ -2115,13 +2121,19 @@ contains
       real(8)                               :: dx
       integer                               :: i
       !
-      if(size(fx).le.1) stop " trapezoid_integration_z: function with wrong dimension."
-      !
-      Int=0d0
-      do i=2,size(fx)
-         dx = x(i)-x(i-1)
-         Int = Int + ( fx(i) + fx(i-1) ) * (dx/2d0)
-      enddo
+      if(size(fx).gt.1) then
+         !
+         Int=0d0
+         do i=2,size(fx)
+            dx = x(i)-x(i-1)
+            Int = Int + ( fx(i) + fx(i-1) ) * (dx/2d0)
+         enddo
+         !
+      else
+         !
+         Int = fx(1)
+         !
+      endif
       !
    end function trapezoid_integration_z
 

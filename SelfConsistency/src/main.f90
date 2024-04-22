@@ -17,8 +17,9 @@ program Syk
    integer                                  :: Qpower,Nloops
    integer                                  :: NT,NT_inf,NT_intp_in
    integer                                  :: min_Nmats,max_Nmats
-   real(8)                                  :: alpha,wmatsMax,mu,Wband
-   real(8)                                  :: Emin,Emax,error_thr,powtau
+   real(8)                                  :: alpha,wmatsMax,fakemu,Wband,mu
+   real(8)                                  :: Emin,Emax,error_thr
+   real(8)                                  :: powtau,smoothDoS
    real(8)                                  :: thop,Uloc
    real(8)                                  :: Tmin,Tmax
    logical                                  :: logtau,verbose
@@ -32,11 +33,11 @@ program Syk
    logical                                  :: filexists
    !
    !DoS variables
-   integer                                  :: iE,iR,ik
+   integer                                  :: iE,iR,ik,Endx
    integer                                  :: NR_,Nk_,NE_
-   real(8)                                  :: L_alpha,tk,Norm
-   real(8)                                  :: alpha_,Emin_,Emax_,thop_
-   real(8),allocatable                      :: Egrid(:),DoS(:)
+   real(8)                                  :: L_alpha,tk,Norm,dDval,Cval
+   real(8)                                  :: alpha_,Emin_,Emax_,thop_,mu_
+   real(8),allocatable                      :: Egrid(:),DoS(:),dDoS(:)
    !
    !Bands variables
    integer                                  :: Nkpath
@@ -93,10 +94,10 @@ program Syk
       read(unit,*) verbose
       read(unit,*) !# ALPHA     NR       NK      WBAND
       read(unit,*) alpha, NR, Nk, Wband
-      read(unit,*) !# EMIN      EMAX     NE
-      read(unit,*) Emin, Emax, NE
-      read(unit,*) !# QPOWER    LOGTAU   MU   POWTAU
-      read(unit,*) Qpower, logtau, mu, powtau
+      read(unit,*) !# EMIN      EMAX     NE      MU
+      read(unit,*) Emin, Emax, NE, mu
+      read(unit,*) !# QPOWER    LOGTAU   FAKEMU   POWTAU   SMOOTHDOS
+      read(unit,*) Qpower, logtau, fakemu, powtau, smoothDoS
       read(unit,*) !# THOP      ULOC
       read(unit,*) thop, Uloc
       read(unit,*) !# MAXWMATS  NTAU     MIN_NMATS   MAX_NAMTS
@@ -141,8 +142,8 @@ program Syk
       read(unit,*) !"#-------------------------------------------#"
       read(unit,*) !"ALPHA    NR     NK"
       read(unit,*) gnupad, alpha_, NR_, Nk_
-      read(unit,*) !"EMIN     EMAX   NE    THOP"
-      read(unit,*) gnupad, Emin_, Emax_, NE_, thop_
+      read(unit,*) !"EMIN     EMAX   NE    THOP      MU"
+      read(unit,*) gnupad, Emin_, Emax_, NE_, thop_, mu_
       read(unit,*) !"#-------------------------------------------#"
       if(alpha_.ne.alpha) stop "DoS from file has the wrong alpha"
       if(NR_.ne.NR) stop "DoS from file has the wrong NR"
@@ -151,6 +152,7 @@ program Syk
       if(Emax_.ne.Emax) stop "DoS from file has the wrong Emax"
       if(NE_.ne.NE) stop "DoS from file has the wrong NE"
       if(thop_.ne.thop) stop "DoS from file has the wrong thop"
+      if(mu_.ne.mu) stop "DoS from file has the wrong mu"
       !
       do iE=1,NE
          read(unit,"(2E20.12)") Egrid(iE),DoS(iE)
@@ -180,16 +182,73 @@ program Syk
          !
          tk = 0d0
          do iR=1,NR
-            tk =  tk + cos( (2*pi*ik/Nk) * iR ) / ( iR**alpha )
+            tk =  tk + thop*cos( (2*pi*ik/Nk) * iR ) / ( iR**alpha )
          enddo
          tk = tk/L_alpha
          !
-         iE = minloc(abs(  Egrid - ( 1d0 - tk ) ),dim=1)
+         iE = minloc(abs(  Egrid - ( mu - tk ) ),dim=1)
          DoS(iE) =  DoS(iE) + 1
          !
       enddo
       !$OMP END DO
       !$OMP END PARALLEL
+      !
+      !Smoothing the DoS with the analytical form
+      if(smoothDoS.gt.0d0)then
+         !
+         if(alpha.le.1)then
+            !
+            write(*,"(A)") "alpha <= 1 analytical interpolation ignored."
+            !
+         elseif(alpha.ge.3.0)then
+            !
+            allocate(dDoS(NE));dDoS=0d0
+            do iE=2,NE-1
+               !this is the DoS derivative
+               dDval = ( DoS(iE+1)-DoS(iE-1) ) / ( Egrid(iE+1)-Egrid(iE-1) )
+               !this is the function that needs to get close to 1
+               dDoS(iE) = (Egrid(iE)*dDval) / (DoS(iE)*(-0.5d0))
+            enddo
+            !
+            !find the best matching index in the high energy region only
+            Endx = 0
+            iE = minloc(abs( Egrid - smoothDoS ),dim=1)
+            Endx = iE + minloc(abs( dDoS(iE:NE) - 1d0 ),dim=1)
+            !Endx = minloc(abs( Egrid - smoothDoS ),dim=1)
+            deallocate(dDoS)
+            !
+            Cval = DoS(Endx) * sqrt(Egrid(Endx))
+            write(*,"(2(A,F))") "Smoothing DoS factor: ",Cval," matching energy: ",Egrid(Endx)
+            do iE=1,Endx
+               if(Egrid(iE).gt.0d0) DoS(iE) = Cval / sqrt(Egrid(iE))
+            enddo
+            !
+         else
+            !
+            allocate(dDoS(NE));dDoS=0d0
+            do iE=2,NE-1
+               !this is the DoS derivative
+               dDval = ( DoS(iE+1)-DoS(iE-1) ) / ( Egrid(iE+1)-Egrid(iE-1) )
+               !this is the function that needs to get close to 1
+               dDoS(iE) = (Egrid(iE)*dDval) / (DoS(iE)*( -1d0 + 1d0/(alpha-1d0)))
+            enddo
+            !
+            !find the best matching index in the high energy region only
+            Endx = 0
+            iE = minloc(abs( Egrid - smoothDoS ),dim=1)
+            Endx = iE + minloc(abs( dDoS(iE:NE) - 1d0 ),dim=1)
+            !Endx = minloc(abs( Egrid - smoothDoS ),dim=1)
+            deallocate(dDoS)
+            !
+            Cval = DoS(Endx) / Egrid(Endx)**( -1d0 + 1d0/(alpha-1d0))
+            write(*,"(2(A,F))") "Smoothing DoS factor: ",Cval," matching energy: ",Egrid(Endx)
+            do iE=1,Endx
+               if(Egrid(iE).gt.0d0) DoS(iE) = Cval * Egrid(iE)**( -1d0 + 1d0/(alpha-1d0))
+            enddo
+            !
+         endif
+         !
+      endif
       !
       !Normalization
       Norm = trapezoid_integration(DoS,Egrid)
@@ -202,8 +261,8 @@ program Syk
       unit = free_unit()
       open(unit,file=reg(filename),form="formatted",status="unknown",position="rewind",action="write")
       write(unit,*) "#------------------------------------------------#"
-      write(unit,*) "# ALPHA    NR     NK"
-      write(unit,"(A2,1F10.5,2I10)") " #",alpha, NR, Nk
+      write(unit,*) "# ALPHA    NR     NK     MU"
+      write(unit,"(A2,1F10.5,2I10,1F10.5)") " #",alpha, NR, Nk, mu
       write(unit,*) "# EMIN     EMAX   NE    THOP"
       write(unit,"(A2,2F10.5,1I10,1F10.5)") " #",Emin, Emax, NE, thop
       write(unit,*) "#------------------------------------------------#"
@@ -235,7 +294,7 @@ program Syk
       do iR=1,NR
          tk =  tk + thop*cos( (2*pi*ik/Nkpath) * iR ) / ( iR**alpha )
       enddo
-      dispersion(ik+1+floor(Nkpath/2d0)) = 1d0 - tk/L_alpha
+      dispersion(ik+1+floor(Nkpath/2d0)) = mu - tk/L_alpha
       !
    enddo
    !$OMP END DO
@@ -248,6 +307,15 @@ program Syk
       write(unit,"(2E20.12)") 2*pi*ik/Nkpath,dispersion(ik+1+floor(Nkpath/2d0))
    enddo
    close(unit)
+   !
+   !Removing kinetic part completely for zero hopping
+   !if(thop.eq.0d0)then
+   !   write(*,"(A)") "Removing the kinetic part completely"
+   !   NE=1
+   !   deallocate(DoS,Egrid)
+   !   allocate(DoS(NE));DoS=1d0
+   !   allocate(Egrid(NE));Egrid=0d0
+   !endif
    !
    !
    !
@@ -324,11 +392,11 @@ program Syk
       allocate(Smats(Nmats));Smats=czero
       if(iT.eq.1)then
          !look for user-provided initial guess
-         write(filename,"(1A100)") "Smats_alpha"//reg(alphapad)//"_beta"//reg(betapad)//"_init.DAT"
+         write(filename,"(1A100)") "Smats_alpha"//reg(alphapad)//"_beta"//reg(betapad)//".init"
          call inquireFile(reg(path)//"../"//reg(filename),filexists,verb=verbose,hardstop=.false.)
          if(filexists)then
             write(*,"(A)")"Reading starting Sigma."
-            call readField(Smats,reg(path)//"../S",pad="init")
+            call readField(Smats,reg(path)//"../S",ext="init")
          else
             write(*,"(A)")"Initializing Sigma from bare G."
             call calcSmats()
@@ -444,7 +512,7 @@ program Syk
             !logarg = ( -img*wm + Egrid(iE) + Sfunct )
             !
             !Eq.37
-            logarg = ( img*wm + mu - Egrid(iE) - Sfunct )/( img*wm + mu )
+            logarg = ( img*wm + fakemu - Egrid(iE) - Sfunct )/( img*wm + fakemu )
             KE(iE) = KE(iE) - zlog( logarg ) * DoS(iE) / Beta
             !
          enddo
@@ -452,7 +520,7 @@ program Syk
       !$OMP END DO
       !$OMP END PARALLEL
       !
-      K = trapezoid_integration(KE,Egrid) - log( 1d0 + exp(Beta*mu) )/Beta
+      K = trapezoid_integration(KE,Egrid) - log( 1d0 + exp(Beta*fakemu) )/Beta
       deallocate(KE)
       !
       !
@@ -708,13 +776,14 @@ program Syk
       !
    end subroutine dumpField
    !
-   subroutine readField(Field,header,pad)
+   subroutine readField(Field,header,pad,ext)
       !
       implicit none
       !
       complex(8),intent(inout)              :: Field(:)
       character(len=*),intent(in)           :: header
       character(len=*),intent(in),optional  :: pad
+      character(len=*),intent(in),optional  :: ext
       real(8)                               :: wmats_read,ReF,ImF
       integer                               :: iw
       character(len=1024)                   :: fname,bpad
@@ -723,6 +792,11 @@ program Syk
       write(fname,"(1A100)") reg(header)//"mats_alpha"//reg(alphapad)//"_beta"//reg(bpad)
       if(present(pad)) fname = reg(fname)//"_"//reg(pad)
       fname = reg(fname)//".DAT"
+      if(present(ext))then
+        fname = reg(fname)//reg(ext)
+      else
+        fname = reg(fname)//".DAT"
+      endif
       !
       Field=czero
       !
