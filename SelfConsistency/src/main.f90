@@ -143,7 +143,7 @@ program Syk
       read(unit,*) !"ALPHA    NR     NK"
       read(unit,*) gnupad, alpha_, NR_, Nk_
       read(unit,*) !"EMIN     EMAX   NE    THOP      MU"
-      read(unit,*) gnupad, Emin_, Emax_, NE_, thop_, mu_
+      read(unit,*) gnupad, Emin_, Emax_, NE_ !, thop_, mu_
       read(unit,*) !"#-------------------------------------------#"
       if(alpha_.ne.alpha) stop "DoS from file has the wrong alpha"
       if(NR_.ne.NR) stop "DoS from file has the wrong NR"
@@ -151,8 +151,8 @@ program Syk
       if(Emin_.ne.Emin) stop "DoS from file has the wrong Emin"
       if(Emax_.ne.Emax) stop "DoS from file has the wrong Emax"
       if(NE_.ne.NE) stop "DoS from file has the wrong NE"
-      if(thop_.ne.thop) stop "DoS from file has the wrong thop"
-      if(mu_.ne.mu) stop "DoS from file has the wrong mu"
+      !if(thop_.ne.thop) stop "DoS from file has the wrong thop"
+      !if(mu_.ne.mu) stop "DoS from file has the wrong mu"
       !
       do iE=1,NE
          read(unit,"(2E20.12)") Egrid(iE),DoS(iE)
@@ -196,9 +196,9 @@ program Syk
       !Smoothing the DoS with the analytical form
       if(smoothDoS.gt.0d0)then
          !
-         if(alpha.le.1)then
+         if(alpha.lt.1)then
             !
-            write(*,"(A)") "alpha <= 1 analytical interpolation ignored."
+            write(*,"(A)") "alpha < 1 analytical interpolation ignored."
             !
          elseif(alpha.ge.3.0)then
             !
@@ -396,7 +396,7 @@ program Syk
          call inquireFile(reg(path)//"../"//reg(filename),filexists,verb=verbose,hardstop=.false.)
          if(filexists)then
             write(*,"(A)")"Reading starting Sigma."
-            call readField(Smats,reg(path)//"../S",ext="init")
+            call readField(Smats,reg(path)//"../S",ext=".init")
          else
             write(*,"(A)")"Initializing Sigma from bare G."
             call calcSmats()
@@ -476,6 +476,7 @@ program Syk
       if(converged)then
          call dumpField(Gmats,reg(path)//"G",pad="converged")
          call dumpField(Smats,reg(path)//"S",pad="converged")
+         if(iT.eq.1) call dumpField(Smats,reg(path)//"../S",ext=".init")
       endif
       !
       !Store for nex Temperature interpolation
@@ -752,20 +753,25 @@ program Syk
       !
    end subroutine calcSmats
    !
-   subroutine dumpField(Field,header,pad)
+   subroutine dumpField(Field,header,pad,ext)
       !
       implicit none
       !
       complex(8),intent(in)                 :: Field(:)
       character(len=*),intent(in)           :: header
       character(len=*),intent(in),optional  :: pad
+      character(len=*),intent(in),optional  :: ext
       integer                               :: iw
       character(len=1024)                   :: fname,bpad
       !
       write(bpad,"(1F8.2)") beta
       write(fname,"(1A100)") reg(header)//"mats_alpha"//reg(alphapad)//"_beta"//reg(bpad)
       if(present(pad)) fname = reg(fname)//"_"//reg(pad)
-      fname = reg(fname)//".DAT"
+      if(present(ext))then
+         fname = reg(fname)//reg(ext)
+      else
+         fname = reg(fname)//".DAT"
+      endif
       !
       unit = free_unit()
       open(unit,file=reg(fname),form="formatted",status="unknown",position="rewind",action="write")
@@ -785,32 +791,39 @@ program Syk
       character(len=*),intent(in),optional  :: pad
       character(len=*),intent(in),optional  :: ext
       real(8)                               :: wmats_read,ReF,ImF
-      integer                               :: iw
+      integer                               :: iw,ierr
       character(len=1024)                   :: fname,bpad
       !
       write(bpad,"(1F8.2)") beta
       write(fname,"(1A100)") reg(header)//"mats_alpha"//reg(alphapad)//"_beta"//reg(bpad)
       if(present(pad)) fname = reg(fname)//"_"//reg(pad)
-      fname = reg(fname)//".DAT"
       if(present(ext))then
-        fname = reg(fname)//reg(ext)
+         fname = reg(fname)//reg(ext)
       else
-        fname = reg(fname)//".DAT"
+         fname = reg(fname)//".DAT"
       endif
       !
       Field=czero
       !
       unit = free_unit()
       open(unit,file=reg(fname),form="formatted",status="unknown",position="rewind",action="read")
-      do iw=1,Nmats
-         read(unit,*) wmats_read,ReF,ImF
+      !
+      ierr=0
+      iw=0
+      do while (ierr.eq.0)
+         iw = iw + 1
+         read(unit,*,iostat=ierr) wmats_read,ReF,ImF
          Field(iw) = dcmplx(ReF,ImF)
-         !if(wmats_read.eq.wmats(iw))then
-         !   Field(iw) = dcmplx(ReF,ImF)
-         !else
-         !   stop "readField: wrong imaginary frequency point."
-         !endif
       enddo
+      !do iw=1,Nmats
+      !   read(unit,*) wmats_read,ReF,ImF
+      !   Field(iw) = dcmplx(ReF,ImF)
+      !   !if(wmats_read.eq.wmats(iw))then
+      !   !   Field(iw) = dcmplx(ReF,ImF)
+      !   !else
+      !   !   stop "readField: wrong imaginary frequency point."
+      !   !endif
+      !enddo
       close(unit)
       !
    end subroutine readField
