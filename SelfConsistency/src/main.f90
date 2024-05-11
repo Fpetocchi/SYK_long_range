@@ -56,8 +56,11 @@ program Syk
    !
    !self-consistency variables
    integer                                  :: iloop
-   real(8)                                  :: error,mixing
-   logical                                  :: converged,Smatsexists,Gmatsexists
+   real(8)                                  :: error,errorG,errorS,mixing
+   logical                                  :: Gcheck=.false.
+   logical                                  :: Scheck=.true.
+   logical                                  :: converged,SigmaConv
+   logical                                  :: Smatsexists,Gmatsexists
    complex(8),allocatable                   :: Gmats_old(:),Smats_old(:)
    real(8),allocatable                      :: ReSmats(:),ImSmats(:)
    real(8),allocatable                      :: wmats_old(:)
@@ -166,6 +169,7 @@ program Syk
       !
       !Computing the DoS energy grid
       Egrid = linspace(Emin,Emax,NE,istart=.true.,iend=.true.)
+      !Egrid = denspace(Wband,NE) this looks like shit
       !
       !Computing the normalization factor
       L_alpha=0d0
@@ -196,9 +200,9 @@ program Syk
       !Smoothing the DoS with the analytical form
       if(smoothDoS.gt.0d0)then
          !
-         if(alpha.lt.1)then
+         if(alpha.le.1)then
             !
-            write(*,"(A)") "alpha < 1 analytical interpolation ignored."
+            write(*,"(A)") "alpha <= 1 analytical interpolation ignored."
             !
          elseif(alpha.ge.3.0)then
             !
@@ -419,6 +423,7 @@ program Syk
       allocate(Smats_old(Nmats));Smats_old=czero
       allocate(Gmats_old(Nmats));Gmats_old=czero
       converged = .false.
+      SigmaConv = .false.
       SCloops: do iloop=1,Nloops
          !
          write(*,"(A,1I5,A)")new_line("A")//"---- Loop #",iloop," ----"
@@ -448,27 +453,44 @@ program Syk
          !
          !Store old Green's function for convergence check
          Gmats_old = Gmats
-         !
          call calcGmats(Sigma=Smats)
          if(verbose) call dumpField(Gmats,reg(path)//"G",pad="it"//reg(iloopad))
+         if(SigmaConv) exit SCloops
          !
-         !Store old self-energy for mixing
-         Smats_old = Smats
-         !
-         error = check_error(Gmats,Gmats_old) !the first error is always with respect to G0
-         if(error.gt.error_thr)then
-            write(*,"(2(A,1E10.3))")"Error: ",error," > ",error_thr
-         else
-            write(*,"(2(A,1E10.3),A)")"Error: ",error," < ",error_thr," Converged!"
-            converged = .true.
-            exit SCloops
+         !Error on the Green's function
+         errorG = check_error(Gmats,Gmats_old) !the first error is always with respect to G0
+         if(Gcheck)then
+            error = errorG
+            if(error.gt.error_thr)then
+               write(*,"(2(A,1E10.3))")"Error (Gf): ",error," > ",error_thr
+            else
+               write(*,"(2(A,1E10.3),A)")"Error (Gf): ",error," < ",error_thr," Converged!"
+               converged = .true.
+               exit SCloops
+            endif
          endif
          if(iloop.gt.Nloops)write(*,"(A)")"WARNING: self-consistency cylce not converged, increase NLOOP."
          !
-         !Compute self-energy for next iteration
+         !Compute self-energy for next iteration. Mixing on the self-energy
+         Smats_old = Smats
          call calcSmats()
          Smats = (1d0-mixing)*Smats + mixing*Smats_old
          if(verbose) call dumpField(Smats,reg(path)//"/S",pad="it"//reg(iloopad))
+         !
+         !Error on the self-energy
+         errorS = check_error(Smats,Smats_old)
+         if(Scheck)then
+            error = errorS
+            if(error.gt.error_thr)then
+               write(*,"(2(A,1E10.3))")"Error (S): ",error," > ",error_thr
+            else
+               write(*,"(2(A,1E10.3),A)")"Error (S): ",error," < ",error_thr," Converged!"
+               converged = .true.
+               !exit SCloops 
+               !loops are not exited directly bc I need to print the G stemming from the converged Sigma
+               SigmaConv = .true.
+            endif
+         endif
          !
       enddo SCloops
       deallocate(Gmats_old)
@@ -675,15 +697,13 @@ program Syk
       complex(8),allocatable                :: zeta(:)
       !
       Gmats=czero
-      !
-      allocate(GwE(NE));GwE=czero
       allocate(zeta(Nmats));zeta=czero
-      !
       zeta = img*wmats
       if(present(Sigma)) zeta =  zeta - Sigma
       !
       !$OMP PARALLEL DEFAULT(SHARED),&
       !$OMP PRIVATE(iw,iE,GwE)
+      allocate(GwE(NE));GwE=czero
       !$OMP DO
       do iw=1,Nmats
          !
@@ -696,8 +716,9 @@ program Syk
          !
       enddo
       !$OMP END DO
+      deallocate(GwE)
       !$OMP END PARALLEL
-      deallocate(GwE,zeta)
+      deallocate(zeta)
       !
    end subroutine calcGmats
    !
@@ -813,7 +834,7 @@ program Syk
       do while (ierr.eq.0)
          iw = iw + 1
          read(unit,*,iostat=ierr) wmats_read,ReF,ImF
-         Field(iw) = dcmplx(ReF,ImF)
+         if(ierr.eq.0) Field(iw) = dcmplx(ReF,ImF)
       enddo
       !do iw=1,Nmats
       !   read(unit,*) wmats_read,ReF,ImF
