@@ -57,8 +57,8 @@ program Syk
    !self-consistency variables
    integer                                  :: iloop
    real(8)                                  :: error,errorG,errorS,mixing
-   logical                                  :: Gcheck=.false.
-   logical                                  :: Scheck=.true.
+   logical                                  :: Gcheck=.true.
+   logical                                  :: Scheck=.false.
    logical                                  :: converged,SigmaConv
    logical                                  :: Smatsexists,Gmatsexists
    complex(8),allocatable                   :: Gmats_old(:),Smats_old(:)
@@ -71,8 +71,8 @@ program Syk
    complex(8)                               :: wm,Sfunct,Gfunct
    complex(8)                               :: logarg,K,U
    complex(8),allocatable                   :: KE(:),Ut(:),Energy(:,:)
-   real(8),allocatable                      :: Energy_intp(:,:)
-   real(8),allocatable                      :: Cv_intp(:)
+   real(8),allocatable                      :: Energy_intp(:,:),Cv_intp(:)
+   real(8),allocatable                      :: occupations(:),occupations_intp(:)
    real(8),allocatable                      :: Ds_intp(:)
    !
    !
@@ -313,13 +313,13 @@ program Syk
    close(unit)
    !
    !Removing kinetic part completely for zero hopping
-   !if(thop.eq.0d0)then
-   !   write(*,"(A)") "Removing the kinetic part completely"
-   !   NE=1
-   !   deallocate(DoS,Egrid)
-   !   allocate(DoS(NE));DoS=1d0
-   !   allocate(Egrid(NE));Egrid=0d0
-   !endif
+   if(thop.eq.0d0)then
+      write(*,"(A)") "Removing the kinetic part completely"
+      NE=1
+      deallocate(DoS,Egrid)
+      allocate(DoS(NE));DoS=1d0
+      allocate(Egrid(NE));Egrid=mu
+   endif
    !
    !
    !
@@ -330,6 +330,7 @@ program Syk
    !
    allocate(Ts(NT+NT_inf));Ts=0d0
    allocate(Energy(3,NT+NT_inf));Energy=czero
+   allocate(occupations(NT+NT_inf));occupations=0d0
    do iT=1,NT+NT_inf
       !
       !adaptive T increment
@@ -443,7 +444,7 @@ program Syk
             !
             write(filename,"(1A100)") "Gmats_alpha"//reg(alphapad)//"_beta"//reg(betapad)//"_converged.DAT"
             write(*,"(A)")"Reading converged Gmats from: "//reg(path)//reg(filename)
-            call readField(Gmats,reg(path)//"S",pad="converged")
+            call readField(Gmats,reg(path)//"G",pad="converged")
             Gmats_old = Gmats
             !
             write(*,"(A)")"Skipping self-consistency."
@@ -513,6 +514,7 @@ program Syk
       !
       !
       !--- Kinetic term ---
+      !
       K = czero
       allocate(KE(NE));KE=czero
       !$OMP PARALLEL DEFAULT(SHARED),&
@@ -598,6 +600,11 @@ program Syk
       !U = - (Uloc**2)/(2*Qpower) * trapezoid_integration(Ut,tau)
       !deallocate(Ut,tau)
       !
+      !
+      !--- Occupations ---
+      !
+      occupations(iT) = calcNloc(Gmats)
+      !
       !Store energy components for a given temperature
       Energy(1,iT) = K
       Energy(2,iT) = U
@@ -605,6 +612,7 @@ program Syk
       !
       write(*,"(A,2E15.3)")"Ekin: ",dreal(Energy(1,iT)),dimag(Energy(1,iT))
       write(*,"(A,2E15.3)")"Epot: ",dreal(Energy(2,iT)),dimag(Energy(2,iT))
+      write(*,"(A,1E15.3)")"Nloc: ",occupations(iT)
       !
    enddo ! end of Tloop
    !
@@ -622,11 +630,13 @@ program Syk
       NT_intp = NT+NT_inf
       !
       allocate(Ts_intp(NT_intp));Ts_intp=0d0
-      allocate(Energy_intp(3,NT_intp));Energy_intp=0d0
-      !
       Ts_intp = Ts
       !
+      allocate(Energy_intp(3,NT_intp));Energy_intp=0d0
       Energy_intp = dreal(Energy)
+      !
+      allocate(occupations_intp(NT_intp));occupations_intp=0d0
+      occupations_intp = occupations
       !
    else
       !
@@ -635,17 +645,19 @@ program Syk
       NT_intp = NT_intp_in
       !
       allocate(Ts_intp(NT_intp));Ts_intp=0d0
-      allocate(Energy_intp(3,NT_intp));Energy_intp=0d0
-      !
       if(NT_inf.eq.0)then
          Ts_intp = linspace(Tmin,Tmax,NT_intp,istart=.true.,iend=.true.)
       else
          Ts_intp = linspace(Tmin,Wband/K2eV,NT_intp,istart=.true.,iend=.true.)
       endif
       !
+      allocate(Energy_intp(3,NT_intp));Energy_intp=0d0
       Energy_intp(1,:) = cubic_interp( Ts, dreal(Energy(1,:)), Ts_intp )
       Energy_intp(2,:) = cubic_interp( Ts, dreal(Energy(2,:)), Ts_intp )
       Energy_intp(3,:) = cubic_interp( Ts, dreal(Energy(3,:)), Ts_intp )
+      !
+      allocate(occupations_intp(NT_intp));occupations_intp=0d0
+      occupations_intp = cubic_interp( Ts, occupations, Ts_intp )
       !
    endif
    !
@@ -669,15 +681,17 @@ program Syk
    write(filename,"(1A30)") "DeltaS_alpha"//reg(alphapad)//".DAT"
    unit = free_unit()
    open(unit,file=reg(filename),form="formatted",status="unknown",position="rewind",action="write")
-   write(unit,"(6A20)") "# Temp"," Energy"," d(Energy)/dTemp"," Entropy Diff", " Re Ek", " Re Ep"
+   write(unit,"(7A20)") "# Temp"," Energy"," d(Energy)/dTemp"," Entropy Diff", " Re Ek", " Re Ep", " Nloc"
    do iT=1,NT_intp
       fact=0
-      write(unit,"(6E20.12)") Ts_intp(iT)       , &
+      write(unit,"(7E20.12)") Ts_intp(iT)       , &
                               Energy_intp(3,iT) , &
                               Cv_intp(iT)       , &
                               Ds_intp(iT)       , &
                               Energy_intp(1,iT) , &
-                              Energy_intp(2,iT)
+                              Energy_intp(2,iT) , &
+                              occupations_intp(iT)
+
    enddo
    close(unit)
    !
@@ -850,7 +864,9 @@ program Syk
    end subroutine readField
    !
    function check_error(fnew,fold) result(err)
+      !
       implicit none
+      !
       complex(8),intent(in)                 :: fnew(:)
       complex(8),intent(in)                 :: fold(:)
       real(8)                               :: err
@@ -866,6 +882,44 @@ program Syk
       err = M / S
       !
    end function check_error
+   !
+   function calcNloc(Gin) result(Nloc)
+      !
+      implicit none
+      !
+      complex(8),intent(in)                 :: Gin(:)
+      real(8)                               :: Nloc
+      !
+      integer                               :: iw
+      complex(8)                            :: Ge,Go
+      real(8),allocatable                   :: coswt(:,:),sinwt(:,:)
+      !
+      if(allocated(tau))deallocate(tau)
+      allocate(tau(Ntau));tau=0d0
+      if(logtau)then
+         tau = denspace(beta,Ntau)
+      else
+         tau = linspace(0d0,Beta,Ntau)
+      endif
+      !
+      allocate(coswt(size(Gin),Ntau));coswt=0d0
+      allocate(sinwt(size(Gin),Ntau));sinwt=0d0
+      call mats2itau_FermionicCoeff(tau,coswt,sinwt,.true.)
+      deallocate(tau)
+      !
+      Nloc=0d0
+      do iw=1,size(Gin)
+         !
+         ! Gab(iw) = Gba*(-iwn) --> Gab(-iw) = Gba*(iwn)
+         Ge = Gin(iw) + conjg(Gin(iw))
+         Go = Gin(iw) - conjg(Gin(iw))
+         !
+         Nloc = Nloc - (coswt(iw,Ntau)*Ge -dcmplx(0d0,1d0)*sinwt(iw,Ntau)*Go)
+         !
+      enddo
+      deallocate(coswt,sinwt)
+      !
+   end function calcNloc 
    !
    !
    !

@@ -73,6 +73,7 @@ module fourier_transforms
    !PURPOSE: Rutines available for the user. Description only for interfaces.
    !---------------------------------------------------------------------------!
    !subroutines
+   public :: mats2itau_FermionicCoeff
    public :: Fmats2itau_mat
    public :: Fmats2itau_vec
    public :: Fmats2itau
