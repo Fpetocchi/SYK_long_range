@@ -23,12 +23,6 @@ S(T)/N = log(2) -  1/N int ^{Tinf} _{T}  Cv/T dT
 From the plot we can see that S reaches finite values for every alpha < 3/2 while it starts to deviate for higher alphas. The Fermi-liquid regime, where S goes to zero at T=0 is then reached for alpha > 3.
 
 The code provides the data on the interpolated fine energy grid in the DeltaS_alpha[**].DAT file.
-col 1: temperature in Kelvin
-col 2: total energy per particle
-col 3: specific heat
-col 4: entropy difference 1/N int ^{Tinf} _{T}  Cv/T dT
-
-In order to visualize the absolute entropy in the T-> limit one has to plot col1 against log(2)-col4. 
 
 For each temperature a folder is created where the initial (non interacting) G(iw) and the inital S(iw) are stored. Upon convergence also the final G(iw) and S(iw) are stored. If the VERBOSE parameter is set to "T" then also the G(iw) and S(iw) for each self-consistency loop are printed.
 
